@@ -1,338 +1,285 @@
-# Wave 49 — verified normative corpus promotion
+# Wave 49 — identity: e-mail accounts, full names, a role set, registration requests, user management
 
-**Status:** queued behind `alpha-w48`; not dispatchable.
-**Release target:** `alpha-w49`, bound to both an exact code SHA and a retained data manifest.
-**Product boundary:** internal data-plane only; no public corpus-backed route or screen.
+**Status:** planned; dispatchable after `W48-CLOSE` exits and `W49-FREEZE-01` records an exact base.
+**Controlling rulings:** `R-55`, `R-56`, `R-57`, `R-59`, `R-60`, `R-61` (provisional numbers,
+`IDENTITY-WAVES.md` §4). Nothing in this wave is dispatchable before they are recorded.
+**Exit:** the resealed contract, migration, backend and BFF session on `origin/dev` with literal
+`GATE OK`. No screens beyond the sign-in refusal sentences; screens are W50/W51.
 
-## 1. Objective and demonstrable result
+## 1. Objective
 
-W49 turns the already accepted normative designs into a recoverable alpha data-plane. At the
-end of the wave, and only if every gate is green:
+The alpha gets accounts a person can hold: e-mail as the sign-in identifier, a full name shown
+where a login used to be, roles as a set `{expert, admin}` enforced on the server by a written
+register, registration requests an administrator approves or rejects with a reason, and
+administrator management of accounts (edit, archive, restore, reset password). Everything is
+reachable through the existing BFF; the browser still never sees a credential.
 
-- all 674 source PDFs and 28,246 crop inputs are accounted for by confirmed immutable custody
-  bindings, with no implicit filesystem serving dependency;
-- all 121 ruled pages have an immutable, provider-measured repair outcome and no page disappears
-  through a fallback;
-- one repaired canonical snapshot is loaded atomically into PostgreSQL with fresh measured
-  counts and digests;
-- one complete `bge-m3-dense-v1` embedding build for that exact repaired snapshot is visible in
-  pgvector, while incomplete builds remain invisible;
-- backup, restore, dispatcher retry and reconciliation are exercised against the same code and
-  storage topology used by alpha;
-- a checkpoint manifest binds code SHA, deployment SHA, storage version, object inventory,
-  repair ledger, snapshot and embedding build.
+## 2. Entry conditions
 
-W49 does **not** expose search. It creates the evidence W50 needs before W50 may define an exact
-retrieval/citation contract or make an audit run pin and consume a normative snapshot.
+| Condition | Evidence |
+| --- | --- |
+| `W48-INT-CLOSE` done | `origin/dev` names the W48 candidate; `CURRENT_STATE.md` says so |
+| migration head is `0014_durable_analysis_effects` on a fresh database | `PYTHONPATH=src .venv/bin/alembic -c db/migrations/alembic.ini heads` |
+| rulings `R-55`…`R-61` recorded | `grep -n 'R-55' docs/program/OWNER_RULINGS_2026-09-17.md` |
+| contract set measured at the base | API 17 / 20 / 61 at the recorded SHA-256; error catalog 22; identifiers 27 |
+| no other writer on `contracts/**`, migrations, `bootstrap/**`, `web/FRONTEND_LOCK.json` | branch inventory in the freeze report |
 
-## 2. Why this is not yet the search wave
+## 3. Design decisions bound by this plan
 
-Four facts prevent an honest end-to-end retrieval release today:
+Every decision below was taken by the owner's polls of 2026-10-05 (`IDENTITY-WAVES.md` §3);
+the ruling numbers are provisional until `W48-RULE-01`/`W49-FREEZE-01` record them.
 
-1. The corpus has been projected read-only but not promoted to the alpha database or private
-   object store.
-2. The 121 source defects precede paid embedding; their corrected output changes content keys,
-   paragraph/chunk counts and the number of tokenizer windows.
-3. The BGE bake-off used a warm isolated environment. It did not measure cold model load,
-   single-query latency, full HNSW recall or index overhead on the target runtime.
-4. `NORM-Q04` authorizes internal use with attribution, not an externally available
-   corpus-backed feature.
+### 3.1 Account
 
-Adding a route first would either search a missing/stale snapshot or create an external release
-right the programme has explicitly not claimed.
+- `app_user.login` **is** the sign-in identifier and holds the normalised e-mail (trimmed,
+  zero-width characters removed, lower-cased). Its CHECK widens from `LOGIN_PATTERN` to
+  "an e-mail shape, or the seed constant `admin` from migration `0006`". `R-59`: the seeded
+  account completes its profile at its first sign-in after the upgrade and chooses its e-mail
+  there; `login` is rewritten in that one UPDATE together with the names.
+- Full name: `last_name`, `first_name`, `middle_name` (nullable), letters/hyphen/apostrophe/space,
+  no mixed Cyrillic/Latin inside one word (the `technic` rule). `display_label` becomes
+  "Фамилия И. О." when names exist, else `display_name`, else `login`. The `display_name` column
+  stays for this wave (it is `author_label` on decisions, `R-37`); its retirement is registered.
+- `archived_at`, `archived_by`: archive is the normal removal (`R-61`). `uq_app_user_login`
+  becomes a partial unique index `WHERE archived_at IS NULL`; sign-in and `credential_standing`
+  refuse an archived account with the generic refusal.
+- **Purge** (`R-61`, P-12): an archived account that nothing references may be deleted
+  irreversibly. "References" is a **written register** in `access` of the columns that may name
+  a `user_uid`: `app_user.archived_by`, `app_user_role.granted_by`,
+  `registration_request.decided_by`, `registration_request.created_user_uid`, and
+  `expert_decision_event.author_user_uid` — a **new nullable column** this wave adds, written
+  from the subject on every new decision event and NULL for history, because today the event
+  stores only `author_label`, a display string (migration `0002`, `D-78`/`R-37`) that cannot
+  identify an account (`AGENTS.md` §4). Every new column is a real foreign key to
+  `app_user(user_uid)` with `ON DELETE RESTRICT`, so the database refuses what the register
+  misses; a test enumerates the schema's foreign keys to `app_user` and asserts equality with
+  the register. Purge of a referenced or non-archived account answers `conflict` with
+  `conflict_reason: account_referenced` / `state_transition_not_allowed` respectively.
+- `profile_completed_at`: NULL means the account must complete names/e-mail before it reaches
+  anything but `getMe`, `updateMyProfile`, `changePassword`.
+- `is_default_credential` keeps its wire name and widens its meaning to "must change password":
+  seeded, or reset by an administrator. Registered as a naming debt, not renamed now.
 
-## 3. Entry conditions
+### 3.2 Roles
 
-| Gate | Required evidence | If absent |
+- Table `app_user_role (user_uid, role, granted_at, granted_by)`, `role IN ('expert','admin')`,
+  primary key `(user_uid, role)`. A set, per P-4.
+- Backfill at upgrade: every existing account receives `expert`; the seed `admin` also receives
+  `admin`.
+- Enforcement: a register `OPERATION_ROLES: Mapping[operationId, frozenset[role]]` in
+  `src/auditmanager/api/security.py`, every operation named, no defaults. Product mutations
+  (`createProject`, uploads, `startRun`, verdicts, comments, export) require `expert`; account
+  management requires `admin`; `getMe`, `updateMyProfile`, `changePassword` require an active
+  account only. Reads of product data (`R-60`): any active account may read.
+- Refusal: `permission_denied` with `required_capability` `role:expert` or `role:admin`.
+- Any role change bumps `token_epoch` so every credential and BFF session of that account dies.
+- Invariants, enforced in `auditmanager.access` and tested without the router: an account cannot
+  archive or demote itself; the last active account holding `admin` cannot be archived or lose
+  `admin`.
+
+### 3.3 Registration requests
+
+- Table `registration_request (request_id 'reg_<ULID>', login, last_name, first_name,
+  middle_name, password_algorithm/iterations/salt/hash, status IN ('pending','approved',
+  'rejected'), submitted_at, decided_at, decided_by, rejection_reason, created_user_uid)`, plus
+  the three sign-in-throttle columns of `app_user`. One `pending` row per `login` (partial unique).
+  Decided rows are immutable (an `am_guard_*` trigger in the programme's existing style).
+- Submit is unauthenticated (`UNAUTHENTICATED_OPERATIONS` grows to `{issueToken,
+  submitRegistration}`); the password is validated by the R-48 policy at submission and stored
+  hashed; approval creates the account **in the same transaction** under `FOR UPDATE`, with the
+  roles the administrator chose (at least one). Two concurrent approvals: one wins, the other
+  answers `state_transition_not_allowed`.
+- A request for a login held by an active account, or already pending, answers `conflict`.
+  Queue cap: more than 100 pending requests answers `conflict` as well. The reasons are
+  distinguished by a new safe detail key `conflict_reason ∈ {login_taken, request_pending,
+  queue_full, account_referenced}` — a catalog reseal inside `W49-CONTRACT-01`. Revealing that a
+  login is taken is an accepted limitation, registered.
+- Status at sign-in (`R-56`): `issueToken` with a pair that matches no active account but
+  matches a request's login and password answers `permission_denied` with `required_capability`
+  `registration_approval` (pending) or `registration_rejected` plus the safe detail key
+  `rejection_reason`. The request's throttle columns count these attempts.
+- No mail, no verification, no captcha (`R-56`; `IDENTITY-WAVES.md` §9).
+
+### 3.4 Operations added (names are the contract task's to confirm)
+
+| operationId | Method and path | Roles | Registers |
+| --- | --- | --- | --- |
+| `getMe` | `GET /me` | active account | default-credential reachable |
+| `updateMyProfile` | `PATCH /me` | active account | default-credential reachable; `login` writable only while `profile_completed_at IS NULL` |
+| `submitRegistration` | `POST /registrations` | none | unauthenticated |
+| `listRegistrations` | `GET /registrations?status=` | admin | response carries `pending_total` for the badge |
+| `approveRegistration` | `POST /registrations/{request_id}/approve` | admin | body: roles; idempotency key as other mutations |
+| `rejectRegistration` | `POST /registrations/{request_id}/reject` | admin | body: reason, 1–500 chars |
+| `listUsers` | `GET /users?include_archived=` | admin | |
+| `getUser` | `GET /users/{user_uid}` | admin | |
+| `updateUser` | `PATCH /users/{user_uid}` | admin | names, roles; invariants of §3.2 |
+| `archiveUser` | `POST /users/{user_uid}/archive` | admin | not self; not the last admin |
+| `restoreUser` | `POST /users/{user_uid}/restore` | admin | `conflict` if the login is now held by an active account |
+| `resetUserPassword` | `POST /users/{user_uid}/password` | admin | temporary password under the R-48 policy; sets must-change; bumps epoch; not self |
+| `purgeUser` | `DELETE /users/{user_uid}` | admin | archived and unreferenced only (§3.1); not self; irreversible |
+
+`issueToken` and `changePassword` keep their shapes; `issueToken` gains the refusal semantics of
+§3.3. Identifiers `usr` and `reg` enter `contracts/domain/v1/identifiers.json` because both now
+cross the wire. Error catalog stays at 22 codes; two safe detail keys are added
+(`conflict_reason`, `rejection_reason`). `DecisionEvent` on the wire is unchanged: the new
+`author_user_uid` column is internal. The surface triple after the reseal is **measured by
+`W49-CONTRACT-01`**, never quoted from this plan.
+
+### 3.5 BFF session
+
+- After the exchange the BFF calls `getMe` with the minted credential and stores a subject
+  `{login, displayLabel, initials, roles, isDefaultCredential, profileComplete, openedAt,
+  expiresAt}`; `credentialOf` stays the forwarder's alone.
+- The register file format gets a version field; rows of the old shape are dropped at start,
+  which signs everyone in once (`R-47`/`R-51` durability semantics unchanged).
+- A reserved `POST /bff/v1/registration` forwards `submitRegistration` **without** a credential;
+  it is the only credential-less forward and is named in the reserved-segment list and its test.
+- The sign-in refusal set in `web/src/features/sign-in/model/exchange.ts` gains `pending` and
+  `rejected`; the sign-in screen renders the two sentences (Russian). The full screens are W51.
+
+## 4. Tasks
+
+### `W49-FREEZE-01`
+Records base SHA, contract set and migration head; writes task files from
+`TASK_TEMPLATE.md` with exact `allowed_paths`; replaces every provisional ruling number with the
+recorded one; takes ports in `PORT_REGISTRY.md`; owns the initial `origin/dev` bookkeeping only.
+Checks: full `make gate` at the base; `test_doc_prose_facts.py`; `git diff --check`.
+
+### `W49-CONTRACT-01` — the single contract slot
+- **Allowed paths:** `contracts/api/v1/openapi.json`, `contracts/api/v1/README.md`,
+  `contracts/domain/v1/identifiers.json`, `contracts/domain/v1/error-codes.json`,
+  `contracts/domain/v1/README.md`, `web/openapi/openapi.json`, `web/src/shared/api/generated/**`
+  (via `npm --prefix web run api:generate`), `web/FRONTEND_LOCK.json`,
+  `tests/contract/api_v1/**`, `tests/contract/domain_p02/**`, `web/tests/contract/**`,
+  `docs/program/W49-CONTRACT-01.md`.
+- **Deliverables:** §3.4 operations and schemas; `info.description` paragraph superseding the
+  "no role vocabulary may be added" sentence under `R-55`; detail keys; identifiers; regenerated
+  client; measured triple and SHA-256 in the report; compatibility statement (every existing
+  operation unchanged on the wire).
+- **Required tests:** `.venv/bin/python -m pytest tests/contract -q`;
+  `npm --prefix web run api:verify`; `npm --prefix web test -- --run tests/contract`.
+- **Stop:** a 23rd error code, or a change to an existing operation's shape.
+
+### `W49-ACCESS-01` — domain, repository, migration
+- **Allowed paths:** `src/auditmanager/access/**`, `db/migrations/versions/<0015>*.py`,
+  `tests/integration/access/**`, `tests/integration/db/test_schema_shape.py`,
+  `tests/integration/db/test_migration_lifecycle.py`, a new
+  `tests/integration/db/test_accounts_migration.py`, `docs/program/W49-ACCESS-01.md`.
+- **Deliverables:** §3.1–§3.3 model, normalisation and name rules in `access/models.py`, ports
+  in `access/ports.py`, repository methods (profile, roles, registration lifecycle, archive,
+  restore, purge with the reference register, admin reset), invariants, migration `0015` with
+  upgrade/downgrade (downgrade refuses while `registration_request` or `app_user_role` hold
+  rows, in the `0013`/`0014` style; it also adds `expert_decision_event.author_user_uid` with its
+  foreign key — the column, not its writer), backfill of §3.2, CLI
+  `python -m auditmanager.access.grant` to grant/revoke a role for recovery (the way out if the
+  last admin is locked), `access/README.md`.
+- **Required tests:** fresh upgrade to `0015` and downgrade on an empty tree; upgrade from a
+  `0014` database holding the seeded `admin` with a changed password; every invariant tested at
+  repository level; `am_guard` trigger refuses an UPDATE of a decided request; partial unique
+  index proven by two rows; `make gate`.
+
+### `W49-DECISIONS-01` — the decision event names its author's account
+- **Allowed paths:** `src/auditmanager/decisions/**`, `tests/integration/decisions/**`,
+  `docs/program/W49-DECISIONS-01.md`.
+- **Deliverables:** `ledger` and `journal` take and persist `author_user_uid` beside
+  `author_label`; `author_label` keeps its `R-37` meaning; history rows stay NULL and are read as
+  "author account unknown", never as a fault. The router wiring is `W49-API-01`'s.
+- **Required tests:** the column is written on every new event; a NULL history row is listed
+  without error; `make gate`.
+- **Sequence:** after `W49-ACCESS-01` (the column exists), before `W49-API-01`.
+
+### `W49-API-01` — routers, security register, composition
+- **Allowed paths:** `src/auditmanager/api/**`, `src/auditmanager/bootstrap/adapters.py`,
+  `src/auditmanager/bootstrap/composition.py` (this wave's composition-root owner),
+  `tests/integration/api/**`, `tests/integration/auth/**`, `docs/program/W49-API-01.md`.
+- **Deliverables:** routers `me.py`, `registrations.py`, `users.py`; the decisions router passes
+  the subject's `user_uid` to the ledger; `OPERATION_ROLES` register;
+  `UNAUTHENTICATED_OPERATIONS` and `OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES` extended exactly as
+  §3.4; the subject gains roles read from the row on every request; sweep tests: for each
+  operation × role set in `{∅, {expert}, {admin}, {expert, admin}}` the served application's
+  answer equals the register; the open set and the default-credential set equal theirs.
+- **Required tests:** `tests/integration/api/test_authorization.py` extended; new
+  `test_role_register.py`, `test_registration_flow.py`, `test_user_management.py`;
+  `tests/contract/api_v1/test_openapi_conformance.py`; `make gate`.
+- **Non-goals:** no business rule in a router; refusals come from `access`.
+
+### `W49-BFF-01` — session subject, registration forward, refusal sentences
+- **Allowed paths:** `web/src/app/bff/**`, `web/src/shared/api/credentialed-forward.ts`,
+  `web/src/shared/config/session-store.ts`, `web/src/features/sign-in/**`,
+  `web/src/_pages/sign-in/**`, `web/scripts/reserved-forwarder.mjs`, `web/tests/unit/session/**`,
+  `web/tests/guards/reserved-scripts.guard.test.ts`,
+  `web/tests/guards/session-durability.guard.test.ts`,
+  `web/tests/guards/server-credential.guard.test.ts`, `docs/program/W49-BFF-01.md`.
+- **Deliverables:** §3.5. `layout.tsx` and the frame are untouched (W50).
+- **Required tests:** `npm --prefix web test -- --run`; lint; typecheck; mutation: a forward of
+  `submitRegistration` through the catch-all must be refused; a session row of the old format
+  must be dropped, not read.
+
+### `W49-QA-01` — independent verification
+- **Allowed paths:** new files only under `tests/integration/api/qa_w50/**`,
+  `tests/integration/access/qa_w50/**`, `docs/program/W49-QA-01.md`.
+- **Brief:** written without reading the lane reports: approve race; archive-self; last-admin
+  removal through `updateUser` and `archiveUser`; token after role removal; restore collision;
+  queue cap at 100 and 101; registration with a taken login; sign-in as pending/rejected
+  applicant and the throttle on those attempts; archived account sign-in equals the generic
+  refusal byte-for-byte; `is_default_credential` after admin reset forces the change; purge of
+  a non-archived account, of an account that authored one decision event, of one that decided a
+  request, and of self — each refused; purge of an archived unreferenced account succeeds and the
+  login is free.
+
+### `W49-JUDGE-X` (attacker) and `W49-JUDGE-Y` (architecture)
+- Subjects: the merged candidate. Allowed paths: `docs/program/reviews/W49-JUDGE-X.md`,
+  `docs/program/reviews/W49-JUDGE-Y.md`.
+- X: privilege escalation across every operation with every role set; default credential
+  against the new operations; enumeration via `conflict_reason`; flooding to the cap; timing
+  of the generic refusal; BFF: credential-less forward reaches only `submitRegistration`.
+- Y: routers free of SQL/logic (`rg` queries recorded); invariants live in `access`; no new
+  ALR-05 import (the W48 guard stays green; AST walk reads 0 / 0); migration fresh and upgrade
+  paths; partial unique; the reference register equals the schema's foreign keys to `app_user`;
+  four reseal documents in one commit; registers equal sweeps; `AGENTS.md` §4: no dual-write
+  (approval is one transaction), no silent fallback, no display-string identity.
+- Cross-examination as in `W48-JUDGES.md`.
+
+### `W49-FIX`, `W49-INT-CLOSE`
+Standard: one bounded repair slot with explicit grants; integration in the order of §5; full
+gate; `CURRENT_STATE.md` live section (contract triple and migration head by measured value);
+`DEBT_REGISTER.md` rows (display_name retirement, `is_default_credential` naming,
+login-taken disclosure); `PORT_REGISTRY.md` release; fast-forward `origin/dev`; stop.
+
+## 5. Integration order
+
+1. `W49-FREEZE-01`.
+2. Stage A: `W49-CONTRACT-01` alone (it owns every contract hotspot).
+3. Stage B: `W49-ACCESS-01` ∥ `W49-BFF-01` from the Stage-A SHA.
+4. Stage C: `W49-DECISIONS-01` from the ACCESS merge.
+5. Stage D: `W49-API-01` from the DECISIONS merge.
+6. Stage E: `W49-QA-01` on the merged candidate; judges X and Y in parallel; cross-examination.
+7. `W49-FIX` for upheld release-blocking findings only.
+8. `W49-INT-CLOSE`.
+
+## 6. Ownership matrix
+
+| Hotspot / path family | Owner | Parallel writer |
 | --- | --- | --- |
-| W48 released | `alpha-w48` names the exact `origin/dev` candidate that was separately authorised for `origin/main`; deployed verification and public manual pass are attached | do not freeze W49 |
-| clean base | no pending task or unowned working-tree change; full `make gate` prints `GATE OK` | stop |
-| D-70 live provider | alpha acceptance A04 records `provider_mode=live`; endpoint and credential are supplied only through the approved secret boundary | repair execution blocked |
-| source inventory | read-only inventory proves 674 PDFs, 28,246 crops and stable input digests without committing source bytes | custody batch blocked |
-| alpha backup capacity | PostgreSQL backup, MinIO inventory and free-space estimate cover source/crop admission plus retained pre/post state | external mutation blocked |
-| internal-only boundary | routing, authentication and deployment configuration expose no normative corpus consumer | release blocked if violated |
-
-Entry does not pretend the two owner choices in §4 are already answered. It permits only the
-freeze and decision slots that make them answerable.
-
-## 4. Stage 0 — freeze and owner decisions
-
-### `W49-FREEZE-01` — exact successor base
-
-**Depends on:** completed `W48-INT-CLOSE`.
-
-Records the exact `alpha-w48` SHA, re-measures the frozen API/domain/error/migration set, captures
-source inventory without content, and creates every executable W49 task file from
-`TASK_TEMPLATE.md`. It owns only W49 programme documents and integration bookkeeping; it cannot
-push `main`, mutate alpha or edit product code.
-
-Freeze stops if W48 introduced a contract, migration or storage fact that this plan assumes
-unchanged. Symbolic candidate paths below become exact file lists here.
-
-### `W49-DECIDE-01` — two decisions that code cannot make
-
-**Depends on:** `W49-FREEZE-01`.
-
-The owner records both choices before implementation dispatch:
-
-1. **D-119 storage lifecycle:** rehearse and accept the source-pinned final MinIO security
-   release, or select and qualify another S3-compatible implementation. Custody writes cannot
-   enlarge an unmaintained storage commitment first and ask the question later.
-2. **Blob identity conflict:** the current product contract describes `blob_id` as derived from
-   `(sha256, size)` and re-upload as content-idempotent, while `NORM-Q05` requires every PDF and
-   crop admission — even equal bytes — to receive its own `blob_id`. The owner must choose a
-   coherent contract: reseal Blob identity across all consumers, or revise the custody ruling
-   and introduce a distinct admission identity while preserving content Blob semantics.
-
-The same task freezes the retry ceiling/poison transition, confirms full retention/no TTL, and
-reaffirms that corpus-backed external release remains forbidden. It records trade-offs; it does
-not hide either decision in a migration implementation.
-
-## 5. Stage A — measurement and contract seal
-
-After `W49-DECIDE-01`, the two lanes below may run in parallel because one writes only a report
-and the other owns the complete shared contract/migration slot.
-
-### `W49-RUNTIME-EVAL` — target-like BGE and pgvector measurement
-
-**Outcome:** a report selects a reproducible offline worker boundary for the fixed BGE profile.
-
-**Allowed path:** `docs/program/reviews/W49-RUNTIME-EVAL.md` only. Temporary environments,
-download caches and generated vectors remain outside the repository.
-
-**Required measurements:** exact model artifact/revision/license and digest inventory; cold and
-warm load; single-query p50/p95; batch throughput; peak RSS; full repaired-or-base rehearsal
-window build time; PostgreSQL rows/index bytes; exact-scan versus HNSW recall at declared
-parameters; restart behaviour; and a no-network inference run from the packaged artifact.
-
-The existing 4.866-second 24-query batch is not accepted as interactive latency. The existing
-1.252 passage windows/s and 3,177.9 MiB peak RSS are planning baselines, not a pass threshold.
-Any dependency/image recommendation remains isolated and pinned; it does not edit a root lock.
-
-### `W49-CUSTODY-SEAL` — one identity and migration owner
-
-**Outcome:** the chosen identity model, custody state machine, persistence schema and caller-safe
-faults are frozen before code branches.
-
-**Sole ownership:** the exact domain contract files affected by `W49-DECIDE-01`, their generated
-domain consumers, the next migration (expected `0014`, re-measured at freeze), custody schema
-tests and decision/current-state records. Public API operations remain 17/20/61 unless a new
-owner ruling explicitly replans the wave.
-
-The migration must represent intent/outbox, independent target/anchor, expected checksum/size/
-media type, attempt/poison state, confirmation and visible binding. It must preserve the
-invariant that neither object existence alone nor a pending database row is publication.
-Fresh-upgrade, existing-volume upgrade and retained-data downgrade refusal are required.
-
-`W49-JUDGE-A` attacks this seal before storage or corpus implementation starts.
-
-## 6. Stage B — two exclusive implementation lanes
-
-Both lanes start from the accepted seal and runtime report. Their exact files are disjoint at
-freeze; neither has alpha credentials or remote-ref authority.
-
-### `W49-STORAGE` — maintained object store plus recoverable custody
-
-**Sole ownership:** `src/auditmanager/storage/**`, the concrete custody dispatcher/reconciler
-adapters, `infra/minio/**` or the owner-selected successor, its exact compose entries, focused
-storage/migration integration tests and operator storage runbook. It owns no norms projection,
-provider, public API, UI or root application dependency.
-
-**Deliverables:**
-
-- D-119's chosen source/image pin and an upgrade rehearsal from a restored alpha-volume copy;
-- intent dispatcher with bounded retry, read-back SHA/size/media verification and idempotent
-  confirmation in a second transaction;
-- reconciler outcomes for missing staging, checksum mismatch, verified/unconfirmed object,
-  confirmed/missing object, poison and orphan;
-- private object-key layout that no caller or domain identity can observe;
-- exact replay returning the same result and conflicting replay writing nothing.
-
-### `W49-CORPUS` — one owner for batch, repair, load and embedding tools
-
-**Sole ownership:** exact files under `src/auditmanager/norms/**`, `tools/norms/**`, a dedicated
-offline embedding-worker image/lock area, focused norms tests and the corpus-promotion runbook.
-It does not own storage internals, the sealed migration/contract, public API/UI, raw corpus bytes
-or root dependency locks.
-
-**Deliverables:**
-
-- a resumable inventory-to-custody command that creates intents but never direct-writes S3;
-- a repair command that reads only confirmed crop bindings, accounts for all 121 targets,
-  writes the immutable ledger after every attempt and records cost after every provider call;
-- fail-closed handling for degenerate, truncated, too-short and source-mismatched output;
-- a DB-only repaired-snapshot promotion command whose replay returns the same IDs and whose
-  conflict rolls back the whole transaction;
-- a pinned, no-network-at-runtime BGE worker that writes through the existing transaction-local
-  embedding repository and makes only complete builds visible;
-- dry-run/inventory modes that emit digests and counts, never corpus text or credentials.
-
-The USD 5 ceiling is a hard resumable stop. All 121 rows must have an explicit terminal outcome.
-Promotion requires 121 acceptable applied repairs; any unresolved outcome blocks it unless the
-owner records a new, narrower ruling. Keeping old bad text silently is not acceptance.
-
-## 7. Counts and identities after repair
-
-The base facts remain immutable historical evidence:
-
-```text
-674 documents
-348,777 canonical paragraphs
-55,702 character chunks
-62,325 BGE windows
-content key 2026-07-23..2026-08-20+17d.4b74348debf7
-```
-
-W49 must not assert those same projection counts for repaired text. The repair can change text
-length, segmentation, chunk packing and tokenizer windows. Acceptance records a new content key,
-opaque snapshot ID, document/paragraph/chunk/window counts, projection digest and build digest
-computed from the repaired source. Document membership is expected to remain 674; any difference
-is a stop and investigation, not an automatic correction.
-
-IDs remain opaque and exact replay must reuse them. Path, filename, source reference, object key,
-checksum and display ordinal remain attributes, never identity.
-
-## 8. Stage C — disposable full rehearsal and judging
-
-The integrator first combines the accepted seal, storage and corpus lanes on one candidate SHA.
-All stateful tests use disposable PostgreSQL/S3 instances and a private copy of the inventory.
-No alpha mutation occurs here.
-
-Required rehearsal, in order:
-
-1. upgrade a restored storage/database copy and prove all pre-existing objects still read;
-2. interrupt custody before object write, after object write and before confirmation; resume and
-   reconcile each state;
-3. admit the complete PDF/crop inventory twice; the second pass creates no new admission;
-4. run repair with a deterministic provider fixture, forced timeout and budget stop/resume;
-5. load the repaired projection twice and inject a conflicting digest;
-6. interrupt embedding before completion, resume/rebuild and prove incomplete rows are invisible;
-7. restart services, reconcile, restore from backup and compare the whole manifest.
-
-`W49-JUDGE-X` and `W49-JUDGE-Y` then inspect the same SHA from different entry points and
-cross-examine each other. Only the integrator may open one bounded `W49-FIX` slot for upheld
-release blockers, with newly explicit paths and repeated mutations.
-
-## 9. Ownership matrix
-
-| Shared hotspot | Sole W49 owner | Parallel writer |
-| --- | --- | --- |
-| W49 task files and frozen base | `W49-FREEZE-01` | none |
-| owner decisions / decision backlog | `W49-DECIDE-01` | none |
-| affected domain identity contract/generated domain consumer | `W49-CUSTODY-SEAL` | none |
-| migration head / next custody migration | `W49-CUSTODY-SEAL` | none |
-| storage adapters, dispatcher, reconciler, S3 image/composition | `W49-STORAGE` | none |
-| norms batch/repair/load/embed tools and dedicated worker packaging | `W49-CORPUS` | none |
-| public API/router/UI/global styles | frozen, no owner | none |
-| root dependency/lock files | frozen, no owner | none |
-| whole-tree repair after judges | `W49-FIX`, only explicit upheld paths | none |
-| alpha DB/S3/provider, final `origin/dev`, tag | `W49-INT-CLOSE` | none |
-| `origin/main` auto-deploy publication | separately assigned integration task after direct owner instruction | none |
-| judge reports | each named judge, report-only | none |
-
-If exact file enumeration reveals overlap between `W49-STORAGE` and `W49-CORPUS`, freeze moves
-the seam to one owner or serializes a named handoff. It does not let both tasks write it.
-
-## 10. Automated acceptance gate
-
-At minimum, the final code candidate must show:
-
-```text
-make gate                                      -> literal GATE OK
-fresh PostgreSQL upgrade                       -> exact sealed head
-restored-copy PostgreSQL + object-store upgrade -> all retained reads green
-custody fault/retry/reconcile suite             -> no partial visible binding
-norm repair/load/embed integration suite         -> all mutations green
-dedicated worker no-network inference            -> exact frozen profile
-full disposable inventory rehearsal              -> expected input inventory, zero silent skips
-git diff --check and clean git status             -> green
-```
-
-The gate remains credential-free. Live provider and alpha data operations are release steps
-with separately signed evidence; a missing credential is `BLOCKED`, never `SKIP` or `PASS`.
-
-## 11. Alpha promotion and checkpoint sequence
-
-`W49-INT-CLOSE` owns final development publication and mutable alpha work after deployment is
-separately authorised. It executes this serialized sequence:
-
-1. Freeze the final clean candidate SHA; run the full code gate and disposable rehearsal.
-2. Fast-forward `origin/dev`; prove equality to the gated SHA.
-3. Back up alpha PostgreSQL and object storage, capture inventory/digests and prove a disposable
-   restore before any upgrade.
-4. Stop and report the exact development candidate. Only after a separate direct owner
-   instruction may an assigned integration action re-read `origin/main` and fast-forward that
-   exact candidate. Auto-deploy may install code/schema only: it must not import corpus, call the
-   provider or build embeddings.
-5. Verify the deployed SHA and schema/storage version; prove existing alpha objects and PC-01
-   still work.
-6. Run the custody batch to convergence: 674 PDF inputs and 28,246 crop inputs each have an
-   explicit confirmed or failed status; release requires zero failed/unresolved bindings.
-7. Price the 121-page provider plan before spend. Run/resume it under the USD 5 ceiling, recording
-   each cost and ledger transition without logging body text or credentials.
-8. Validate 121 acceptable ledger outcomes, derive the new content key, then atomically load the
-   repaired snapshot. A mismatch publishes nothing.
-9. Build embeddings in the isolated worker, verify the complete-build digest/count/index, and
-   expose no incomplete build.
-10. Restart/reconcile, run read-only integrity checks, PC-01 regression and a second backup/restore
-    comparison. Confirm there is still no corpus-backed public route.
-11. Commit the redacted checkpoint manifest, re-run documentary guards, and create/push annotated
-    `alpha-w49` at the exact deployed code SHA only after all data evidence is accepted.
-
-The tag alone never claims mutable data state. The retained checkpoint manifest is the binding
-between that tag and the measured snapshot/build/object inventory.
-
-## 12. Checkpoint manifest
-
-The final manifest contains no source text, URLs with credentials, provider bodies or object
-keys. It records:
-
-- code candidate, `origin/dev`, `origin/main`, workflow and deployed SHAs;
-- API/domain/error counts and exact migration head;
-- object-store implementation/release and configuration digest;
-- expected/confirmed/failed counts separately for PDFs and crops plus inventory digest;
-- repair base snapshot, ledger version/digest, 121 outcome counts, measured calls and total cost;
-- repaired content key, opaque snapshot ID, fresh document/paragraph/chunk counts and digest;
-- embedding profile/revision, complete build ID/digest, fresh window count, index bytes and
-  exact-scan/HNSW measurement;
-- backup IDs/digests, restore/restart/reconciler outcomes and timestamps;
-- explicit assertion that search/API/UI/run pinning remain absent.
-
-## 13. Rollback and forward recovery
-
-- Before custody data exists, failed code/storage rehearsal is reverted normally and no alpha
-  state changes.
-- After intent creation, retry/reconciliation resumes the same identity; it never allocates a
-  replacement silently.
-- A provider or budget stop leaves confirmed custody intact and a resumable immutable ledger;
-  no snapshot is promoted.
-- Snapshot loading and embedding visibility are each all-or-nothing transactions. An aborted
-  build is private rebuildable state and cannot be selected by consumers.
-- Full retention means confirmed Blobs, snapshots and repair ledgers are not deleted for rollback.
-  After promotion, recovery is forward repair or restore to a separately named environment,
-  never destructive downgrade against retained data.
-- A failed post-main alpha operation leaves W49 untagged. Recovery uses a new gated commit or
-  resumable operator command; branches are never force-pushed and evidence is never rewritten.
-
-## 14. Stop conditions
-
-Stop the affected stage when:
-
-- D-119 or Blob identity has no signed owner decision;
-- public API count changes, a new external route appears or licensing scope expands;
-- any code path directly dual-writes PostgreSQL plus object storage;
-- alpha runtime reads `.local/norms/corpus/**` or downloads a floating model;
-- an input is missing, extra or silently deduplicated contrary to the sealed identity model;
-- any of 121 repairs is unaccounted, unacceptable or would exceed USD 5;
-- repaired digests/counts are assumed from the base rather than measured;
-- model/runtime resource use exceeds the accepted target envelope;
-- incomplete binding, snapshot or embedding build is visible;
-- restore, reconciliation, exact-SHA deployment or PC-01 regression fails.
-
-## 15. Following wave
-
-W50 is the earliest candidate for normative retrieval. Its planning inputs will be the accepted
-W49 checkpoint, measured target-runtime latency/recall and a fresh licensing ruling for the
-intended audience. W50 must separately contract result ordering, exact canonical citations,
-empty/degraded behaviour, authorization, snapshot selection and the moment an audit run pins a
-snapshot. W49 supplies none of those semantics by implication.
+| `contracts/**`, `web/openapi/**`, generated client, `web/FRONTEND_LOCK.json` | `W49-CONTRACT-01` | none |
+| migration `0015`, `src/auditmanager/access/**` | `W49-ACCESS-01` | none |
+| `src/auditmanager/decisions/**` | `W49-DECISIONS-01` | none |
+| `src/auditmanager/api/**`, `src/auditmanager/bootstrap/**` | `W49-API-01` | none |
+| `web/src/app/bff/**`, `features/sign-in/**`, `_pages/sign-in/**`, session tests | `W49-BFF-01` | none |
+| `web/src/_app/**`, `web/src/app/layout.tsx`, `globals.css`, `shared/ui/**` | frozen (W50) | none |
+| root locks (`uv.lock`, `web/package-lock.json`) | frozen | none |
+| `CURRENT_STATE.md`, `DEBT_REGISTER.md`, `origin/dev` | `W49-INT-CLOSE` | none |
+| `origin/main`, tags | nobody without a direct owner instruction | none |
+
+## 7. Stop conditions
+
+Those of `W48-PLAN.md` §14, plus: a rule of §3 turns out to need a decision the polls did not
+take; a 23rd error code; an existing operation changes shape; the migration cannot upgrade a
+`0014` database holding the seeded account; the sweep finds an operation outside every register;
+a refusal is computed in a router or a schema validator instead of `access`.
+
+## 8. Non-goals
+
+Screens (W50/W51); mail; verification; captcha; avatar upload; multi-tenancy; retiring
+`display_name`; a version endpoint; any change to analysis, runs, findings or decisions beyond
+reading the author label as before.

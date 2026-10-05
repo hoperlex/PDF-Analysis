@@ -1,0 +1,230 @@
+# Identity programme — W48 closure, then accounts, roles, registration and the shell
+
+**Status:** plan, written 2026-10-05 from the owner's instruction of the same day. Not yet
+frozen; no wave below is dispatchable until its own `*-FREEZE-01` records an exact base.
+**Supersedes:** the withdrawn normative-corpus plan for wave 49. The owner withdrew it on
+2026-10-05 and chose to reuse the number: `dispatch/W49-PLAN.md`, `dispatch/W49-JUDGES.md`,
+`W49-PLAN-01.md` and `tasks/W49-PLAN-01.md` of that plan are removed in the commit that adds this
+one (their content remains in Git history at `c11f1b6`), and `W49-PLAN.md` below is the identity
+wave. `W48-RULE-01` records the withdrawal as `R-54`.
+**Handoff:** this document and the four plans it names are the complete brief for the executing
+agent. Nothing the executor needs is in a chat transcript.
+
+## 1. What the owner ordered, in the owner's order
+
+1. Close the W48 debts.
+2. Rework the user: e-mail is the sign-in identifier; full name (surname, name, patronymic);
+   display name; generated avatar; password change stays.
+3. Routing: lazy loading, redirects, guards.
+4. Screens: sign-in, registration, account.
+5. Registration requests, with administrator approval, editing and removal of accounts.
+6. Separate the administrator and expert roles.
+7. Navigation split into logical groups with dropdowns.
+8. A real home page; "Projects" becomes one navigation item.
+9. Account actions (sign-in, sign-out, password, future items) under an avatar in the top-right
+   corner: a generated coloured circle with initials, a dropdown with an account header.
+
+The sibling repository `/root/projects/technic` is a source of **ideas only**. Its stack
+(Vite, Ant Design, Fastify, Drizzle, a shared TypeScript contracts package) does not transfer;
+the ideas that do are listed in §6.
+
+## 2. Stage sequence
+
+| Stage | Plan | Enters when | Exits when |
+| --- | --- | --- | --- |
+| 0 | `W48-CLOSE.md` | now; the unpublished W48 branches are backed up | W48 candidate is on `origin/dev` with literal `GATE OK`; W49 marked withdrawn; new debts registered |
+| 1 | `W49-PLAN.md` — identity: contract, migration, backend, BFF session | Stage 0 exit; rulings of §4 recorded | resealed contract with roles, profile, registration and user management on `origin/dev` |
+| 2 | `W50-PLAN.md` — shell: route registry, server guards, redirects, lazy loading, grouped navigation, home page, account menu | Stage 1 exit | shell on `origin/dev`; every screen is behind the registry |
+| 3 | `W51-PLAN.md` — screens: sign-in/registration/account and administration, end-to-end evidence | Stage 2 exit | screens on `origin/dev`; alpha acceptance pack covers identity |
+
+The stages are sequential because each consumes the previous one's frozen output: W49's
+contract, W50's registry and primitives, W51's screens. A second executor may start W50's
+dependency-free lanes (`W50-LAZY-01`, the dropdown/avatar primitives of `W50-SHELL-01`) from the
+W49 freeze commit, but their integration still waits for W49's reseal.
+
+Tags `alpha-w49`, `alpha-w50`, `alpha-w51` follow the two-level gate of `W48-PLAN.md` §4 and §12
+unchanged: `make gate` is hermetic and mandatory; deployed acceptance is mandatory for a tag;
+`origin/main` moves only on a separate direct owner instruction naming the exact candidate.
+A wave's exit criterion in this programme is **publication to `origin/dev`**, not a tag.
+
+## 3. Decisions already taken (direct poll, 2026-10-05)
+
+| # | Question | Decision |
+| --- | --- | --- |
+| P-1 | W48 durable effects and migration `0014` | record the owner's migration authority as a ruling, then an **independent** re-judge of the repair before merge |
+| P-2 | registration notifications | none by mail; status is visible in the interface; SMTP is a later task |
+| P-3 | avatar | generated circle with initials only; file upload is a later wave |
+| P-4 | roles | **a set**: one account may hold expert, administrator or both |
+
+### 3.1 Decisions from the second poll (2026-10-05, before the judging gate of this plan)
+
+| # | Question | Decision | Binds |
+| --- | --- | --- | --- |
+| P-5 | numbering after the withdrawal | reuse: identity is W49, shell W50, screens W51; the old W49 documents are deleted | all plans |
+| P-6 | where the plan lives | branch `plan/identity-waves` from `c11f1b6`, documents only | this commit |
+| P-7 | `alpha-w48` | **included** in W48 closure: the owner supplies the provider credential (outside the repository) and the direct `origin/main` instruction naming the exact candidate | `W48-CLOSE.md` §4 `W48-MAIN-01`, §9 |
+| P-8 | A-03, the ALR-05 imports | **repair all now** in W48 closure: per-context public modules, every cross-context import rewritten, an executable guard; no waiver | `W48-CLOSE.md` `W48-PUBLIC-01`; `R-58` |
+| P-9 | the seeded `admin` | completes its profile at first sign-in after the upgrade and chooses its e-mail there | `W49-PLAN.md` §3.1; `R-59` |
+| P-10 | administrator without the expert role | reads everything, changes nothing | `W49-PLAN.md` §3.2; `R-60` |
+| P-11 | navigation groups | as proposed: Главная; Работа; Знания; Система; Администрирование | `W50-PLAN.md` §3.1 |
+| P-12 | "delete an account" | archive with restore, **plus** irreversible purge when nothing references the account | `W49-PLAN.md` §3.1; `R-61` |
+
+P-12 has a consequence the poll could not see: decision events store `author_label` (a display
+string, migration `0002`, `D-78`/`R-37`) and nothing names the account. "No decisions by this
+account" cannot be evaluated by identity without a column, and evaluating it by label would be
+display-string identity (`AGENTS.md` §4). W49 therefore adds `expert_decision_event.author_user_uid`
+(internal column, written from the subject on every new event, NULL for history, no wire change)
+and defines "referenced" over a written register of columns compared with the schema.
+
+## 4. Rulings to record before Stage 1 freezes
+
+The current rulings exclude what this programme builds: `R-18` keeps "roles, user management"
+out of the alpha; `R-42` says "this programme has no role vocabulary and `T-6` forbids inventing
+one here"; `contracts/api/v1/openapi.json` `info.description` says no role, subject or capability
+vocabulary "may be added"; `ALPHA_ROADMAP.md` §1 lists user management and roles as "not in this
+road". A contract that adds them while those sentences stand violates the programme's own rule
+that a document must not outlive what it describes (`OPERATING_CONSTRAINTS.md` §4.7).
+
+`W48-RULE-01` (Stage 0) records the first two; `W49-FREEZE-01` records the rest once the second
+poll has answered. Numbers are provisional — the recording task takes the next free `R-` number
+in `OWNER_RULINGS_2026-09-17.md` and updates the references in these plans in the same commit.
+
+| Provisional | Content | Source |
+| --- | --- | --- |
+| `R-53` | migration `0014_durable_analysis_effects` was authorised by the owner on 2026-10-02 as a separate contract/migration grant for audit findings `A-01`/`A-02`; `W48-PLAN.md` §9's "frozen/no owner" row is superseded for that one migration; the in-place edit of `0014` means every database migrated to the earlier shape must be recreated, not upgraded | P-1; `tasks/W48-DURABLE-01.md` |
+| `R-54` | W49 is withdrawn; the normative corpus stays at migrations `0012`/`0013` with no promotion, no custody writes and no retrieval; its open questions `NORM-Q01..Q09`, `D-59`, `D-71`, `D-119` remain registered, not decided | owner, 2026-10-05 |
+| `R-55` | the alpha gains accounts with e-mail sign-in, full names, a role set `{expert, admin}`, registration requests and administrator management of accounts; `R-18`'s exclusion of roles/user management, `R-42`'s role sentence and `T-6`'s "implementation deferred" are superseded for exactly this scope; multi-tenancy stays excluded | owner, 2026-10-05; P-4 |
+| `R-56` | registration carries no mail; the applicant learns the status at sign-in; SMTP is a later task | P-2 |
+| `R-57` | the avatar is generated from the account's initials and e-mail; no upload | P-3 |
+| `R-58` | the sixteen ALR-05 deep imports and the twenty-two package-root imports are repaired in W48 closure through `auditmanager.<context>.public` modules and an executable guard; no waiver is granted, `api/composition.py` included | P-8 |
+| `R-59` | the seeded `admin` keeps its login until its first sign-in after the upgrade, where the forced completion screen takes an e-mail and the names in one save and rewrites `login` to the e-mail; from then on every account's login is an e-mail | P-9 |
+| `R-60` | an active account with any role reads product data; product mutations require `expert`; account management requires `admin` | P-10 |
+| `R-61` | "delete an account" is archive with restore; an archived account that nothing references may be purged irreversibly; "references" is the written register of §3.1's consequence, including `author_user_uid` on decision events | P-12 |
+
+## 5. Cross-wave invariants the executor must keep
+
+These are the programme's existing rules restated where this work will meet them. Each has a
+guard that already exists or a task below that adds one.
+
+- **`make gate` stays hermetic** and ends with the literal `GATE OK`. No wave adds a secret,
+  network or deployed host to it (`W48-PLAN.md` §4).
+- **A reseal is four documents in one change:** `contracts/api/v1/openapi.json`, the generated
+  client under `web/src/shared/api/generated/`, the mirror `web/openapi/openapi.json`, and
+  `web/FRONTEND_LOCK.json` (`CURRENT_STATE.md`, `D-18`). A new error code or detail key is a
+  second reseal of `contracts/domain/v1/error-codes.json` in the same slot.
+- **Registers, not rules.** Which operations answer without a credential, which a default
+  credential reaches, and now which roles each operation requires, are written sets in
+  `src/auditmanager/api/security.py` that a sweep test compares against the served
+  application. A new operation is closed by default.
+- **Identity by content or opaque id, never by path, filename or display string**
+  (`AGENTS.md` §4). E-mail is a sign-in identifier and a unique key; `user_uid` remains the
+  identity every row references.
+- **No silent fallback.** An unknown role, status or vocabulary value renders a typed fault
+  (`W48-WEB` precedent). No `?? rawValue`.
+- **Business logic lives in the bounded context**, not in the router, the Pydantic schema or
+  the React component. Invariants such as "the last administrator cannot be archived" are
+  enforced in `auditmanager.access` and proven by a test that bypasses the router.
+- **One owner per hotspot per wave:** `contracts/**`, migration head, root locks, composition
+  root (`src/auditmanager/bootstrap/**`, `src/auditmanager/api/composition.py`,
+  `web/src/_app/providers.tsx`), `web/src/app/globals.css`, `CURRENT_STATE.md`,
+  `DEBT_REGISTER.md`.
+- **No new frontend dependency without a decision.** `web/package.json` holds four runtime
+  dependencies, all pinned exactly, and `pinned-versions.guard.test.ts` plus
+  `frontend-lock.guard.test.ts` enforce it. Dropdown, menu and avatar are written in
+  `web/src/shared/ui/`; a library would be a separate owner decision and a lock update.
+- **The interface is Russian** (`R-18`); `rendered-language.guard.test.ts` and
+  `presentation-language.guard.test.ts` fail on English in rendered screens.
+- **Every new `page.tsx`** is registered in `web/tests/unit/screens/route-screens.ts` `SEEDS`,
+  calls the server guard or is named in the open-screen register of
+  `web/tests/guards/default-credential-screens.guard.test.ts`, and (from W50) has a row in the
+  route registry.
+- **A judge is never the author.** The durable-effects repair was judged by its own author
+  (`W48-DURABLE-REPAIR.md` admits it); P-1 reverses that. Every judge below runs in a fresh
+  context that has not read the author's report before its black-box pass.
+- **Measured figures carry their method.** Any count in a report names the command and the
+  tree it was run on.
+
+## 6. Ideas taken from `technic`, and what is not
+
+Taken as ideas, rewritten for Next.js and Python:
+
+- one declarative section registry drives the menu, the route guards and the start page
+  (`packages/contracts/src/portal-sections.ts`); here it becomes
+  `web/src/shared/config/routes.ts` (W50);
+- full name as three columns with a derived display form and a rule against mixed
+  Cyrillic/Latin words (`person-name.ts`); here in `auditmanager.access.models` (W49);
+- the avatar palette and hash (`shared/lib/avatar.ts`): fourteen dark colours chosen for white
+  text; here hashed from the **e-mail**, not the name, so a corrected name does not recolour
+  the account (W50);
+- a registration request approved in one transaction under a row lock; rejection is recorded
+  with a reason; a race between two identical requests answers a conflict, not a 500 (W49);
+- soft deletion with a partial unique index so an archived address can be re-registered and
+  sign-in must filter the archive (W49);
+- one generic refusal for a wrong e-mail/password pair; the account's existence is not
+  revealed (already the rule here);
+- a manifest of each operation's required protection with a test that sweeps the served
+  application (`route-authorization.test.ts`); here the role register in `security.py` (W49);
+- the account menu in one place for desktop and mobile; the trigger is a real `<button>` with
+  `aria-expanded` — `technic`'s desktop trigger is a `div` and cannot be opened by keyboard,
+  which is the mistake not to copy (W50).
+
+Not taken: Ant Design, react-router gates, the zod contracts package, the fourteen-role
+permission catalogue, in-memory access tokens (this BFF keeps the credential server-side and
+the browser holds an opaque session id — `app/bff/session/store.ts`), e-mail verification,
+captcha, and `technic`'s return-after-login that drops `search` and `hash`.
+
+## 7. Debts to register at Stage 0
+
+Found by the 2026-10-05 revision; registered by `W48-INT-CLOSE` with the next free `D-`
+numbers. Each row names its check so the register stays measured, not compiled.
+
+| Finding | Check that shows it | Owner |
+| --- | --- | --- |
+| deploy is not bound to a gate: any commit on `main` deploys; the workflow proves only ancestry | `sed -n 1,12p .github/workflows/deploy-auto.yml`; `grep -c 'make gate' .github/workflows/deploy-auto.yml` → 0 | owner decision; W48-CLOSE registers |
+| `test_deploy_auto_workflow.py` matches substrings; `pull_request_target:` added to the workflow stays green | mutation: add the trigger in a copy, run the test | `W48-GUARDS-2` |
+| `ALPHA ACCEPTANCE PASS` attests the deployed SHA from operator input; no endpoint or served file names the running revision | `grep -n 'deployed-sha' scripts/manual-alpha-check.sh tests/e2e/pc01/journey/verify-acceptance.mjs` | `W48-GUARDS-2` rewords; endpoint deferred |
+| sixteen ALR-05 deep imports, plus twenty-two through package `__init__` — **repaired, not registered**: the guard `tests/contract/architecture/test_alr05_boundaries.py` is the check | AST walk in `reviews/W48-AUDIT.md` A-03; re-run at `c11f1b6`: 16 / 22; must read 0 / 0 after `W48-PUBLIC-01` | `W48-PUBLIC-01` |
+| nine remaining fail-open vocabulary lookups outside the two repaired widgets | `rg -n 'LABELS\[|_LABEL\[|as ProviderMode' web/src/widgets web/src/entities` | `W48-TAILS` |
+| `norms` HNSW index is one per table, filtered after the scan, `hnsw.ef_search` never set; a second snapshot shrinks `nearest()` results | `git grep -n 'ef_search\|iterative_scan' -- src tools tests db docs` → empty | register; W49 withdrawn |
+| corpus load re-reads files after `snapshot_of` hashed them without re-verifying | `src/auditmanager/norms/corpus_source.py` `iter_documents` | register |
+| snapshot `content_key` excludes `segmentation_profile`; raising the version makes `ensure_snapshot` conflict | `rg -n 'segmentation_profile' src/auditmanager/norms/repository.py src/auditmanager/norms/loader.py` | register |
+| embedding build completeness accepts a one-character window; `embedding_set_sha256` includes a private bigint | `src/auditmanager/norms/embedding_repository.py` `ensure_build` | register |
+| `infra/local/README.md` and `bucket-init.sh` still name `FOUNDATION_S3_IMAGE` as a live input | `rg -n 'FOUNDATION_S3_IMAGE' infra/local` | `W48-TAILS` |
+| D-52 is repaired (`web/NOTICE`) but open in the register | `rg -n 'D-52' docs/program/DEBT_REGISTER.md` | `W48-TAILS` addendum |
+| `W48-PLAN-01.md` cites unreachable `cf63d31` and says both deploy runs failed | `git merge-base --is-ancestor cf63d31 HEAD` → false | `W48-TAILS` addendum |
+| `is_default_credential` will also mean "administrator reset this password"; the wire name is kept, the meaning widens | `W49-CONTRACT-01` documents it | register at W49 |
+
+## 8. Protocol for the executing agent
+
+1. **Read first:** `AGENTS.md`, `docs/program/CURRENT_STATE.md`, this file, the stage plan,
+   `docs/program/dispatch/OPERATING_CONSTRAINTS.md` §1–§10, `docs/program/dispatch/PORT_REGISTRY.md`.
+2. **Worktree per task** from the frozen base, under `.local/worktrees/<task>`, provisioned with
+   `make bootstrap FOUNDATION_PYTHON=<python3.12 path>` and `npm --prefix web ci`; a unique
+   `FOUNDATION_INSTANCE`, `POSTGRES_PORT`, `S3_API_PORT`, `S3_CONSOLE_PORT`, `POSTGRES_DB` and
+   `S3_BUCKET`; the ports taken from `PORT_REGISTRY.md` and written there in the dispatch
+   commit. The ignored real corpus under `.local/norms/corpus` must be attached read-only to a
+   worktree before `make gate`, or the gate fails on a precondition that is not a defect
+   (`W48-FREEZE-01.md`).
+3. **One measurement per lane.** Never edit a tree while its gate runs. A gate result is tied to
+   the SHA it measured; a commit after the gate needs a new gate.
+4. **Never kill a process by pattern.** The host runs other projects' test suites. Kill only a
+   PID this task started and recorded.
+5. **Reports:** every task ends with the six items of `AGENTS.md` §5 in
+   `docs/program/<TASK_ID>.md`; judges write `docs/program/reviews/<TASK_ID>.md` and change
+   nothing else. Reports to the owner are in Russian; repository artifacts stay English.
+6. **Publication:** `origin/dev` after literal `GATE OK` on the exact candidate, fast-forward
+   only. `origin/main` never without a direct owner instruction naming the candidate
+   (`AGENTS.md` §6, `MAIN_AUTODEPLOY_POLICY.md`). P-7 is the owner's intent, not that
+   instruction: `W48-MAIN-01` asks for it quoting the exact SHA once the candidate exists.
+   The provider credential (`D-70`) is placed by the owner in the host's `provider.env`; it
+   never enters the repository, a worktree, a report or a chat.
+7. **Stop conditions** are per plan; on any of them the executor stops, writes what it found and
+   asks. "Continue" is not an instruction to publish `main` or to widen a contract.
+8. **Questions** are collected and asked in one batch at the gate the plan names; a lane does not
+   decide a product question by choosing the convenient default.
+
+## 9. Not in this programme
+
+SMTP and any mail; avatar upload; e-mail verification; captcha; password reset by link;
+multi-tenancy; the normative corpus promotion, custody and retrieval (withdrawn with W49);
+a MinIO successor; a version endpoint for the deployed SHA (registered, not built).
