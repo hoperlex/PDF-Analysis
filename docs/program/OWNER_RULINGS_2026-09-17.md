@@ -1064,3 +1064,31 @@ global `SET token_epoch = 2` is indistinguishable from `+1` on one row and obvio
 script named both accounts by login and **exited 0** — it reported and did not refuse, which is
 the clause the owner chose. And `revoke` really does run in a deployment: the stub's named blind
 spot, closed by driving the documented command in the `api` image.
+
+## 3.18 — `R-53` and `R-54`, ruled 2026-10-05 for W48 closure and programme succession
+
+The repository owner ordered the identity programme on 2026-10-05 and directed that its prepared
+rulings be recorded. These two rulings settle the two preconditions that W48 closure cannot infer
+from implementation history.
+
+### `R-53` — migration `0014_durable_analysis_effects` is the separately authorised W48 repair
+
+Migration `0014_durable_analysis_effects` was authorised by the owner on 2026-10-02 as a
+separate contract/migration grant for audit findings `A-01` and `A-02`.
+`docs/program/dispatch/W48-PLAN.md` section 9's “frozen/no owner” row is superseded for that one
+migration only. The migration was edited in place during the repair: every database migrated to
+an earlier shape of `0014` must be recreated rather than treated as upgradeable from that shape.
+
+This ruling grants no API, error-catalog, earlier-migration, publication or deployment change.
+An independent judge who did not author the repair must re-judge it before merge.
+
+### `R-54` — the normative-corpus W49 is withdrawn and the number is reused for identity
+
+The former W49 normative-corpus plan is withdrawn. Commit
+`096638814765dccbc778f72458ffe32030974d54` on `plan/identity-waves` removed its planning and
+task documents and introduced the replacement programme. The number W49 is reused for the
+identity wave.
+
+The normative corpus remains at migrations `0012` and `0013`, with no promotion, custody writes
+or retrieval. Its open questions `NORM-Q01` through `NORM-Q09` and debts `D-59`, `D-71` and
+`D-119` remain registered rather than decided.

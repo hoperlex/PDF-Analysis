@@ -365,3 +365,21 @@ W49 is now queued as the prerequisite data-plane vertical: maintained storage, v
 source/crop custody, the ruled 121-page repair, repaired snapshot promotion and its complete
 embedding build. Retrieval with exact citations and audit-run snapshot consumption moves to W50
 or later, after W49 evidence and an external-use licensing ruling exist.
+
+## 16. Addendum — 2026-10-05 closure authority and successor
+
+This addendum supersedes only the clauses named below. Historical section text is retained so
+the change in authority remains reviewable.
+
+- **Section 9:** under `R-53`, `W48-DURABLE-01` owns the one migration
+  `0014_durable_analysis_effects`; no other migration or contract slot opens. Under owner poll
+  P-8 (the prepared `R-58` text), `W48-PUBLIC-01` owns import-line-only changes in
+  `src/auditmanager/api/composition.py` and the new bounded-context public modules. The release
+  tag is no longer an `W48-INT-CLOSE` action: `W48-INT-MAIN-01`, an integration task, alone owns
+  `origin/main` and `alpha-w48`, and only after the owner's separate direct instruction naming
+  the exact gated candidate.
+- **Section 11:** the expected migration head for the repaired closure candidate is
+  `0014_durable_analysis_effects`. The W48 contract surface and error catalog remain frozen.
+- **Section 15:** under `R-54`, the former normative-corpus W49 is withdrawn. The successor is
+  `docs/program/dispatch/IDENTITY-WAVES.md`: identity in W49, shell in W50 and screens in W51.
+  The normative-corpus questions and debts remain registered and unscheduled.
