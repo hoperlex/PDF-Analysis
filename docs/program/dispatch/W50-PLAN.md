@@ -69,6 +69,10 @@ order, each a redirect or a normal return, never a thrown framework error:
    the role the registry requires for `from`;
 5. a session visiting `/login` → `redirect('/')`.
 
+After a successful sign-in the browser lands on `/`, not `/projects`: `AFTER_SIGN_IN` in the BFF
+handler, the mirror constant in `features/sign-in/model/exchange.ts` and `session.lands_on` in
+`tests/e2e/pc01/journey/manifest.json` move together in `W50-REGISTRY-01`.
+
 `next`/`from` validation (one function, unit-tested): a string that starts with exactly one `/`,
 is not `//…` or `/\…`, has no scheme, is at most 512 characters, and whose path matches a
 registry address shape; anything else is dropped, never echoed. The sign-in form carries the
@@ -122,9 +126,10 @@ application (the existing argument in `screen-lock.ts`). No redirect cycle exist
   closes, focus returns to the trigger); `Avatar` (initials from `displayLabel`; colour from a
   hash of the **e-mail**, so a corrected name does not recolour the account; **fourteen token
   pairs** `--am-avatar-NN` with a light-theme and a dark-theme value each, white or near-black
-  text chosen per pair, and every pair meeting the existing contrast test for text and **3:1
-  against the page background in both themes** — `R-33` applies to the circle as a meaningful
-  graphic).
+  text chosen per pair). The existing contrast census measures only pairs a seeded screen
+  happens to render, so `SHELL-UI` adds a dedicated test that enumerates all 14 × 2 token values
+  and asserts the text contrast floor and **3:1 of the circle against the page background in both
+  themes** — a new check in the spirit of `R-33`, not a claim that `R-33` already covers it.
 - Navigation (`SHELL-FRAME`): groups of §3.1 filtered by the session's roles; the current group
   and item carry `aria-current`; at the 780 px floor the groups either fit in one row or collapse
   into one stacked list behind a «Меню» disclosure — both states are tested and neither overflows
@@ -166,12 +171,21 @@ baseline.
   them), `web/src/_pages/forbidden/**`, `web/src/_pages/account/**` (the placeholder of §3.2
   step 3), `web/src/app/account/page.tsx` (new placeholder route), `web/src/features/sign-in/**`
   and `web/src/_pages/sign-in/**` (the hidden `next` field), `web/src/entities/account/**`,
-  `tests/e2e/pc01/journey/manifest.json`, `web/tests/unit/screens/route-screens.ts`,
+  `web/src/_pages/home/**` (placeholder module exporting `HomePage`; HOME replaces its content
+  and keeps the named export and its props), `tests/e2e/pc01/journey/manifest.json`,
+  `web/src/shared/api/query-keys.ts`, `web/docs/PC01_UI_SEAM.md` (§6 only),
+  `web/tests/unit/api/configuration-and-cache-keys.test.ts`,
+  `web/tests/contract/narrow-sets.contract.test.ts`,
+  `web/tests/guards/query-key-shape.guard.test.ts` (the query namespaces `account`, `users`,
+  `registrations` are a closed set checked against `PC01_UI_SEAM.md` §6 and a unit literal —
+  they enter once, here, so no later lane touches them), `web/tests/unit/screens/route-screens.ts`,
   `web/tests/guards/default-credential-screens.guard.test.ts` → `screen-guard.guard.test.ts`,
   `web/tests/guards/screen-registry.guard.test.ts` (new), `web/tests/unit/session/**`,
   `web/tests/unit/entities/account.test.ts` (new), `docs/program/W50-REGISTRY-01.md`.
 - **Deliverables:** §3.1–§3.3 and §3.6's entity; `app/page.tsx` becomes a registered
-  `session` placeholder (`RoutePlaceholder`) that HOME replaces.
+  `session` placeholder (`RoutePlaceholder`) rendered from `_pages/home`, and the `root-redirect`
+  opt-out seed in `route-screens.ts` becomes an ordinary seed, so HOME later changes content
+  only; the three query namespaces and their key factories.
 - **Required tests and mutations:** a `page.tsx` without `requireScreen` is red naming its
   address; a registry row without a page is red; a page without a row is red; a page missing
   from `manifest.json` is red (`test_pc01_journey_conformance.py`); `next=//evil.example`,
@@ -189,7 +203,7 @@ baseline.
 - **HOME allowed paths:** `web/src/app/page.tsx`, `web/src/_pages/home/**`,
   `web/src/widgets/home-*/**`, `web/tests/unit/screens/home.test.ts`, `docs/program/W50-HOME-01.md`.
   Mutations: the admin tile is absent for an expert-only session; an unknown role label is a
-  typed fault; a maximum-length `displayLabel` (67 characters) does not widen the page at 780 px.
+  typed fault; a maximum-length `displayLabel` (66 characters) does not widen the page at 780 px.
 - **LAZY allowed paths:** `web/src/_pages/**` except `home`, `sign-in`, `account`, `forbidden`;
   the `loading.tsx` files REGISTRY created; `web/src/widgets/knowledge-base/**` and
   `web/src/entities/expert-decision/**` (only to move `CATEGORY_LABELS`);
@@ -206,7 +220,7 @@ baseline.
   `web/tests/guards/rendered-language.guard.test.ts` (fixtures only), `docs/program/W50-SHELL-FRAME.md`.
 - **Deliverables:** navigation, account menu, footer sentence of §3.5.
 - **Mutations:** the menu rendered for `roles: []` shows no admin group; a group with no
-  openable row is absent; the account header for a 67-character label and a 254-character e-mail
+  openable row is absent; the account header for a 66-character label and a 254-character e-mail
   does not widen the frame at 780 px; the stacked state has no horizontal overflow.
 
 ### `W50-QA-01` (executor, fresh context)
@@ -243,7 +257,7 @@ Standard forms.
 | Hotspot / path family | Owner | Role | Parallel writer |
 | --- | --- | --- | --- |
 | `contracts/**`, migrations, backend, root locks | frozen | — | none |
-| `shared/config/screen-registry.ts`, `screen-lock.ts`, every `page.tsx` guard call, BFF after-sign-in redirect, sign-in form, `entities/account/**`, `manifest.json` | `W50-REGISTRY-01` (Stage A) | executor | none |
+| `shared/config/screen-registry.ts`, `screen-lock.ts`, every `page.tsx` guard call, BFF after-sign-in redirect, sign-in form, `entities/account/**`, `_pages/home` placeholder, `manifest.json`, query namespaces (`query-keys.ts`, `PC01_UI_SEAM.md` §6, their tests) | `W50-REGISTRY-01` (Stage A) | executor | none |
 | `shared/ui/**`, `globals.css`, style tests | `W50-SHELL-UI` | executor | HOME, LAZY on disjoint paths |
 | `app/page.tsx`, `_pages/home/**`, `widgets/home-*/**` | `W50-HOME-01` | executor | SHELL-UI, LAZY |
 | `_pages/**` (not home, sign-in, account, forbidden), `loading.tsx` bodies, `widgets/knowledge-base/**`, `entities/expert-decision/**` | `W50-LAZY-01` | executor | SHELL-UI, HOME |

@@ -38,9 +38,8 @@ the ideas that do are listed in §6.
 | 3 | `W51-PLAN.md` — screens: sign-in/registration/account and administration, end-to-end evidence | Stage 2 exit | screens on `origin/dev`; alpha acceptance pack covers identity |
 
 The stages are sequential because each consumes the previous one's frozen output: W49's
-contract, W50's registry and primitives, W51's screens. The one lane with no dependency on W49 is
-`W50-SHELL-UI` (primitives and tokens under `web/src/shared/ui/**` and `globals.css`); a second
-executor may start it from the W49 freeze commit, but it integrates only in W50.
+contract, W50's registry and primitives, W51's screens. No lane starts before its own wave's
+freeze; the plans' `Depends on` lines are the only schedule.
 
 Tags `alpha-w49`, `alpha-w50`, `alpha-w51` follow the two-level gate of `W48-PLAN.md` §4 and §12
 unchanged: `make gate` is hermetic and mandatory; deployed acceptance is mandatory for a tag;
@@ -92,8 +91,9 @@ Three consequences the polls could not see, each stated where it binds:
 
 The current rulings exclude what this programme builds: `R-18` keeps "roles, user management"
 out of the alpha; `R-42` says "this programme has no role vocabulary and `T-6` forbids inventing
-one here"; the `bearerAuth` description in `contracts/api/v1/openapi.json` states that no role,
-subject or capability vocabulary appears on this surface and ties that to `T-6`;
+one here"; `contracts/api/v1/openapi.json` says in four places that no role, subject or
+capability vocabulary exists on this surface (`info.description` twice, the `/auth/password`
+operation description, and the `bearerAuth` scheme description, the latter naming `T-6`);
 `ALPHA_ROADMAP.md` §1 lists user management and roles as "not in this road". A contract that adds them while those sentences stand violates the programme's own rule
 that a document must not outlive what it describes (`OPERATING_CONSTRAINTS.md` §4.7).
 
@@ -108,7 +108,7 @@ in `OWNER_RULINGS_2026-09-17.md` and updates the references in these plans in th
 | `R-55` | the alpha gains accounts with e-mail sign-in, full names, a role set `{expert, admin}`, registration requests and administrator management of accounts; `R-18`'s exclusion of roles/user management, `R-42`'s role sentence and `T-6`'s "implementation deferred" are superseded for exactly this scope; multi-tenancy stays excluded; the derived name form "Фамилия И. О." takes precedence over `R-37`'s chosen `display_name` where both exist | owner, 2026-10-05; P-4 |
 | `R-56` | registration carries no mail; the applicant learns the status at sign-in; SMTP is a later task | P-2 |
 | `R-57` | the avatar is generated from the account's initials and e-mail; no upload | P-3 |
-| `R-58` | the sixteen ALR-05 deep imports and the twenty-two package-root imports are repaired in W48 closure through `auditmanager.<context>.public` modules and an executable guard; no waiver is granted, `api/composition.py` included | P-8 |
+| `R-58` | every cross-context import the ALR-05 walk lists on the W48 closure line (16 deep / 22 package-root at `c11f1b6`; 18 / 24 at `411c6d0`) is repaired through `auditmanager.<context>.public` modules and an executable guard; no waiver is granted, `api/composition.py` included | P-8 |
 | `R-59` | the seeded `admin` keeps its login until its first sign-in after the upgrade, where the forced completion screen takes an e-mail and the names in one save and rewrites `login` to the e-mail; from then on every account's login is an e-mail | P-9 |
 | `R-60` | an active account with any role reads product data; product mutations require `expert`; account management requires `admin` | P-10 |
 | `R-61` | "delete an account" is archive with restore; an archived account that nothing references may be purged irreversibly; "references" is the written register of foreign keys in `W49-PLAN.md` §3.1 (`archived_by`, `granted_by`, `decided_by`, `author_user_uid` restrict; the creating request is history) | P-12 |
@@ -146,10 +146,10 @@ guard that already exists or a task below that adds one.
   `web/src/shared/ui/`; a library would be a separate owner decision and a lock update.
 - **The interface is Russian** (`R-18`); `rendered-language.guard.test.ts` and
   `presentation-language.guard.test.ts` fail on English in rendered screens.
-- **Every new `page.tsx`** is registered in `web/tests/unit/screens/route-screens.ts` `SEEDS`,
-  calls the server guard or is named in the open-screen register of
-  `web/tests/guards/default-credential-screens.guard.test.ts`, and (from W50) has a row in the
-  route registry.
+- **Every new `page.tsx`** is registered in `web/tests/unit/screens/route-screens.ts` `SEEDS`
+  and in `tests/e2e/pc01/journey/manifest.json`, calls the server guard or is named in the
+  open-screen register of `web/tests/guards/default-credential-screens.guard.test.ts` (renamed
+  `screen-guard.guard.test.ts` by W50), and (from W50) has a row in the screen registry.
 - **A judge is never the author.** The durable-effects repair was judged by its own author
   (`W48-DURABLE-REPAIR.md` admits it); P-1 reverses that. Every judge below runs in a fresh
   context that has not read the author's report before its black-box pass.
@@ -201,14 +201,14 @@ numbers. Each row names its check so the register stays measured, not compiled.
 | migration `0015` cannot be downgraded on any real database after its backfill | `W49-PLAN.md` §4 `ACCESS-01a` | register at W49 |
 | sixteen ALR-05 deep imports, plus twenty-two through package `__init__` — **repaired, not registered**: the guard `tests/contract/architecture/test_alr05_boundaries.py` is the check | AST walk in `reviews/W48-AUDIT.md` A-03; re-run at `c11f1b6`: 16 / 22; must read 0 / 0 after `W48-PUBLIC-01` | `W48-PUBLIC-01` |
 | fail-open closed-vocabulary lookups outside the two widgets W48-WEB repaired | `rg -n 'LABELS\[|_LABEL\[|as ProviderMode' web/src/widgets web/src/entities web/src/shared/ui -l` → 12 files at `c11f1b6`, two of them already repaired on `03c04a1`; TAILS classifies every hit | `W48-TAILS` |
-| `norms` HNSW index is one per table, filtered after the scan, `hnsw.ef_search` never set; a second snapshot shrinks `nearest()` results | `git grep -n 'ef_search\|iterative_scan' -- src tools tests db docs` → empty | register; W49 withdrawn |
+| `norms` HNSW index is one per table, filtered after the scan, `hnsw.ef_search` never set; a second snapshot shrinks `nearest()` results | `git grep -n 'ef_search\|iterative_scan' -- src tools tests db` → empty | register; the old W49 withdrawn |
 | corpus load re-reads files after `snapshot_of` hashed them without re-verifying | `src/auditmanager/norms/corpus_source.py` `iter_documents` | register |
 | snapshot `content_key` excludes `segmentation_profile`; raising the version makes `ensure_snapshot` conflict | `rg -n 'segmentation_profile' src/auditmanager/norms/repository.py src/auditmanager/norms/loader.py` | register |
 | embedding build completeness accepts a one-character window; `embedding_set_sha256` includes a private bigint | `src/auditmanager/norms/embedding_repository.py` `ensure_build` | register |
 | `infra/local/README.md` and `bucket-init.sh` still name `FOUNDATION_S3_IMAGE` as a live input | `rg -n 'FOUNDATION_S3_IMAGE' infra/local` | `W48-TAILS` |
-| D-52 is repaired (`web/NOTICE`) but open in the register | `rg -n 'D-52' docs/program/DEBT_REGISTER.md` | `W48-TAILS` addendum |
-| `W48-PLAN-01.md` cites unreachable `cf63d31` and says both deploy runs failed | `git merge-base --is-ancestor cf63d31 HEAD` → false | `W48-TAILS` addendum |
-| `is_default_credential` will also mean "administrator reset this password"; the wire name is kept, the meaning widens | `W49-CONTRACT-01` documents it | register at W49 |
+| D-52 is repaired (`web/NOTICE`) but open in the register | `rg -n 'D-52' docs/program/DEBT_REGISTER.md` | `W48-INT-CLOSE` addendum |
+| `W48-PLAN-01.md` cites unreachable `cf63d31` and says both deploy runs failed | `git merge-base --is-ancestor cf63d31 HEAD` → false | `W48-INT-CLOSE` addendum |
+| `is_default_credential` will also mean "administrator reset this password"; the wire name is kept, the meaning widens | `W49-SEAL-01` documents it | register at W49 |
 
 ## 8. Roles and protocol
 
@@ -224,7 +224,12 @@ Two roles, fixed by the owner on 2026-10-05:
 - **The integrator** (the owner's own session) runs every `*-FREEZE-01`, `W48-SAFE-01`,
   `W48-RULE-01`, every merge, the final full `make gate` on each merged candidate, every
   `*-INT-CLOSE`, `W48-INT-MAIN-01`, publication to `origin/dev` and — on instruction —
-  `origin/main` and tags.
+  `origin/main` and tags. Publication rules bind the integrator: `origin/dev` only after literal
+  `GATE OK` on the exact candidate, fast-forward only; `origin/main` never without a direct owner
+  instruction naming the candidate (`AGENTS.md` §6, `MAIN_AUTODEPLOY_POLICY.md`) — P-7 is the
+  owner's intent, not that instruction, and `W48-INT-MAIN-01` asks for it quoting the exact SHA
+  once the candidate exists. The provider credential (`D-70`) is placed by the owner in the
+  host's `provider.env`; it never enters the repository, a worktree, a report or a chat.
 
 Hand-back format, per task: branch and SHA; the report with the six items of `AGENTS.md` §5;
 the lane gate's literal `GATE OK` tied to that SHA (or the focused commands the task names);
@@ -249,12 +254,9 @@ Protocol for the executor:
 5. **Reports:** every task ends with the six items of `AGENTS.md` §5 in
    `docs/program/<TASK_ID>.md`; judges write `docs/program/reviews/<TASK_ID>.md` and change
    nothing else. Reports to the owner are in Russian; repository artifacts stay English.
-6. **Publication:** `origin/dev` after literal `GATE OK` on the exact candidate, fast-forward
-   only. `origin/main` never without a direct owner instruction naming the candidate
-   (`AGENTS.md` §6, `MAIN_AUTODEPLOY_POLICY.md`). P-7 is the owner's intent, not that
-   instruction: `W48-INT-MAIN-01` asks for it quoting the exact SHA once the candidate exists.
-   The provider credential (`D-70`) is placed by the owner in the host's `provider.env`; it
-   never enters the repository, a worktree, a report or a chat.
+6. **Hand-back, not publication:** the executor's work ends at the branch and report of the
+   hand-back format above; merging, gating the merged candidate and publishing are the
+   integrator's.
 7. **Stop conditions** are per plan; on any of them the executor stops, writes what it found and
    asks. "Continue" is not an instruction to publish `main` or to widen a contract.
 8. **Questions** are collected and asked in one batch at the gate the plan names; a lane does not

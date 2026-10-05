@@ -38,8 +38,7 @@ refusal the API gives is shown as a typed state in Russian; no rule is computed 
 Behaviour:
 
 - **Sign-in:** e-mail and password; the validated `next` in a hidden field (W50); refusals
-  `credentials`, `validation`, `unconfigured`, `upstream`, `revoked`, `pending`, `rejected` each a
-  sentence; for `pending`/`rejected` the page reads the one-time notice named by `?notice=` from
+  `credentials`, `validation`, `unconfigured`, `upstream`, `pending`, `rejected` each a sentence; for `pending`/`rejected` the page reads the one-time notice named by `?notice=` from
   the register (W49 §3.5) and shows the status and, for a rejection, the reason (≤ 256
   characters); a missing or used notice shows the status sentence without a reason. One generic
   sentence for a wrong pair.
@@ -71,17 +70,24 @@ Depends on: `W50-INT-CLOSE`. Standard form.
 
 ### `W51-ROUTES-01` — Stage A, alone (executor)
 - **Depends on:** `W51-FREEZE-01`.
-- **Allowed paths:** `web/src/shared/config/screen-registry.ts`, the six new `page.tsx` of §3 as
-  `RoutePlaceholder` pages with `requireScreen` (`/register`, `/register/submitted`,
-  `/admin/users`, `/admin/users/[user_uid]`, `/admin/registrations`; `/account` already exists),
-  `web/src/app/admin/loading.tsx`, `tests/e2e/pc01/journey/manifest.json`,
-  `web/tests/unit/screens/route-screens.ts` (seeds), `web/tests/guards/screen-guard.guard.test.ts`
-  (open-screen register), `web/src/shared/api/query-keys.ts` (the `users`, `user`,
-  `registrations` key factories, so the two ADMIN lanes never touch a shared file),
-  `web/tests/guards/query-key-shape.guard.test.ts`, `docs/program/W51-ROUTES-01.md`.
-- **Seed convention:** every seed renders the `_pages/<screen>` module's default export with no
-  props; AUTH and ADMIN keep that export signature, so the seeds are never edited again in this
-  wave.
+- **Allowed paths:** `web/src/shared/config/screen-registry.ts`, the five new `page.tsx` of §3
+  (`/register`, `/register/submitted`, `/admin/users`, `/admin/users/[user_uid]`,
+  `/admin/registrations`; `/account` exists since W50) as `RoutePlaceholder` pages with
+  `requireScreen`, the placeholder modules `web/src/_pages/register/**`,
+  `web/src/_pages/register-submitted/**`, `web/src/_pages/admin-users/**`,
+  `web/src/_pages/admin-user/**`, `web/src/_pages/admin-registrations/**` (each exporting a named
+  `<Screen>Page` that renders `RoutePlaceholder`; `AdminUserPage` takes `userUid`),
+  `web/src/app/admin/loading.tsx`,
+  `tests/e2e/pc01/journey/manifest.json`, `web/tests/unit/screens/route-screens.ts` (seeds),
+  `web/tests/guards/screen-guard.guard.test.ts` (open-screen register),
+  `docs/program/W51-ROUTES-01.md`. The query namespaces `users` and `registrations` exist since
+  W50; the Stage-B lanes add key factories inside them in their own `entities/*` modules, so
+  `query-keys.ts` is not touched in this wave.
+- **Seed convention:** as `route-screens.ts` does today, every seed renders the named
+  `<Screen>Page` export of its `_pages` module and passes only the identities of its dynamic
+  segments (`userUid` for `/admin/users/[user_uid]`), never state; AUTH and the ADMIN lanes
+  replace the module's content and keep the export name and its props, so the seeds are never
+  edited again in this wave.
 - **Required tests:** registry completeness both directions; manifest equality; guard sweep;
   `npm --prefix web test -- --run`.
 
@@ -99,8 +105,8 @@ Depends on: `W50-INT-CLOSE`. Standard form.
 - **ADMIN-USERS allowed paths:** `web/src/app/admin/users/**`, `web/src/_pages/admin-users/**`,
   `web/src/widgets/user-list/**`, `web/src/widgets/user-card/**`,
   `web/src/features/manage-user/**`, `web/src/entities/user/**`,
-  `web/tests/unit/screens/admin-users*.test.ts`, `web/tests/unit/widgets/user-*.test.ts`,
-  `docs/program/W51-ADMIN-USERS.md`. Mutations: the self-archive and last-admin refusals from the
+  `web/src/_pages/admin-user/**`, `web/tests/unit/screens/admin-users*.test.ts`,
+  `web/tests/unit/widgets/user-*.test.ts`, `docs/program/W51-ADMIN-USERS.md`. Mutations: the self-archive and last-admin refusals from the
   API render as typed states; purge is not offered for an active account; a maximum-length name
   (60 characters) in the list does not widen the table at 780 px; after archive, the list is
   refetched (invalidation guard red if removed).
@@ -122,10 +128,10 @@ Depends on: `W50-INT-CLOSE`. Standard form.
   `docs/program/W51-E2E-01.md`.
 - **Deliverables:** journey: register → admin approves with `expert` → the new account signs in
   (its profile came from the request), records a verdict whose author label is "Фамилия И. О."
-  → admin removes `expert` → the account's next request is `authentication_required`, the BFF
-  closes its session and sends it to `/login?refusal=revoked` → it signs in again → the next
-  mutation is `permission_denied` → archive → sign-in is the generic refusal → purge is refused
-  (`account_referenced`, it authored a decision). Refusal cases: pending/rejected status with and
+  → admin removes `expert` → the account's next BFF call answers the 401 envelope, the session
+  row is gone and the screen shows the signed-out state with the sign-in link → it signs in again
+  → the next mutation is `permission_denied` → archive → sign-in is the generic refusal → purge is
+  refused (`account_referenced`, it authored a decision). Refusal cases: pending/rejected status with and
   without a notice, self-archive, last admin, zero roles. Manual steps A13–A20 added to the pack
   with expected sentences.
 - **Required tests:** the journey against a built stand with `provider_mode=recorded`; the
@@ -160,9 +166,10 @@ Depends on: `W50-INT-CLOSE`. Standard form.
 | Hotspot / path family | Owner | Role | Parallel writer |
 | --- | --- | --- | --- |
 | `contracts/**`, migrations, backend, root locks, `globals.css`, `_app/**`, `shared/ui/**`, `screen-lock.ts` | frozen | — | none |
-| `screen-registry.ts`, `route-screens.ts`, `screen-guard.guard.test.ts`, `manifest.json`, `query-keys.ts` | `W51-ROUTES-01` (Stage A) | executor | none |
+| `screen-registry.ts`, `route-screens.ts`, `screen-guard.guard.test.ts`, `manifest.json`, the five placeholder `_pages` modules | `W51-ROUTES-01` (Stage A) | executor | none |
+| `shared/api/query-keys.ts` | frozen (namespaces entered in W50) | — | none |
 | `app/{login,register,account}/**`, `_pages/{sign-in,register,account}/**`, `features/{sign-in,register,change-password,edit-profile}/**` | `W51-AUTH-01` | executor | the two ADMIN lanes |
-| `app/admin/users/**`, `_pages/admin-users/**`, `widgets/{user-list,user-card}/**`, `features/manage-user/**`, `entities/user/**` | `W51-ADMIN-USERS` | executor | AUTH, ADMIN-REQUESTS |
+| `app/admin/users/**`, `_pages/{admin-users,admin-user}/**`, `widgets/{user-list,user-card}/**`, `features/manage-user/**`, `entities/user/**` | `W51-ADMIN-USERS` | executor | AUTH, ADMIN-REQUESTS |
 | `app/admin/registrations/**`, `_pages/admin-registrations/**`, `widgets/registration-queue/**`, `features/decide-registration/**`, `entities/registration-request/**` | `W51-ADMIN-REQUESTS` | executor | AUTH, ADMIN-USERS |
 | `tests/e2e/**`, `scripts/manual-alpha-check.sh`, acceptance docs | `W51-E2E-01` (Stage C) | executor | none |
 | `CURRENT_STATE.md`, `DEBT_REGISTER.md`, `origin/dev` | `W51-INT-CLOSE` | integrator | none |
