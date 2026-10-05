@@ -86,19 +86,24 @@ Three consequences the polls could not see, each stated where it binds:
 - **P-9.** The forced completion applies to every account that exists at upgrade, not only to
   `admin`; the stand stays usable between W49 and the W51 screens through an operator command
   (`W49-PLAN.md` §3.1).
+- **P-2, again.** A registration form open to anyone needs a throttle, and a throttle needs a
+  refusal the catalog can name: the catalog has no 429 and forbids inventing a code at the edge.
+  W49 adds exactly one code, `rate_limited`, as the second reseal of its seal slot
+  (`W49-PLAN.md` §3.4).
 
 ## 4. Rulings to record before Stage 1 freezes
 
 The current rulings exclude what this programme builds: `R-18` keeps "roles, user management"
 out of the alpha; `R-42` says "this programme has no role vocabulary and `T-6` forbids inventing
 one here"; `contracts/api/v1/openapi.json` says in four places that no role, subject or
-capability vocabulary exists on this surface (`info.description` twice, the `/auth/password`
-operation description, and the `bearerAuth` scheme description, the latter naming `T-6`);
+capability vocabulary exists on this surface (`info.description` twice — one of them naming
+`T-6` — the `/auth/password` operation description, and the `bearerAuth` scheme description),
+and once that it has no rate limiting;
 `ALPHA_ROADMAP.md` §1 lists user management and roles as "not in this road". A contract that adds them while those sentences stand violates the programme's own rule
 that a document must not outlive what it describes (`OPERATING_CONSTRAINTS.md` §4.7).
 
-`W48-RULE-01` (Stage 0) records the first two; `W49-FREEZE-01` records the rest once the second
-poll has answered. Numbers are provisional — the recording task takes the next free `R-` number
+`W48-RULE-01` (Stage 0) records the first two; `W49-RULE-01` records the rest before the W49
+freeze. Numbers are provisional — the recording task takes the next free `R-` number
 in `OWNER_RULINGS_2026-09-17.md` and updates the references in these plans in the same commit.
 
 | Provisional | Content | Source |
@@ -123,7 +128,8 @@ guard that already exists or a task below that adds one.
 - **A reseal is four documents in one change:** `contracts/api/v1/openapi.json`, the generated
   client under `web/src/shared/api/generated/`, the mirror `web/openapi/openapi.json`, and
   `web/FRONTEND_LOCK.json` (`CURRENT_STATE.md`, `D-18`). A new error code or detail key is a
-  second reseal of `contracts/domain/v1/error-codes.json` in the same slot.
+  second reseal of `contracts/domain/v1/error-codes.json` in the same slot; this programme adds
+  one code (`rate_limited`) and one detail key (`conflict_reason`), both in W49.
 - **Registers, not rules.** Which operations answer without a credential, which a default
   credential reaches, and now which roles each operation requires, are written sets in
   `src/auditmanager/api/security.py` that a sweep test compares against the served
@@ -277,6 +283,15 @@ The wave plans name these tasks by role and do not repeat their fields; `*-FREEZ
 each task file from `docs/templates/TASK_TEMPLATE.md` with the fields below plus the wave's exact
 SHAs. Rollback for every form is the revert of the task's commits; none changes stored data,
 except where a form says otherwise.
+
+### `W*-RULE-01` (integrator)
+- **Outcome:** the rulings a wave depends on exist in `OWNER_RULINGS_2026-09-17.md` with their
+  dates and sources, after the owner has confirmed the text; every provisional `R-` number in the
+  plans is replaced by the recorded one.
+- **Allowed paths:** `docs/program/OWNER_RULINGS_2026-09-17.md`, the plan documents under
+  `docs/program/dispatch/` (number replacement only), `docs/program/W*-RULE-01.md`.
+- **Required checks:** each new `R-` number is found once in the rulings file; `git diff --check`.
+- **Integration contract:** no task of the wave starts before this one hands back.
 
 ### `W*-FREEZE-01` (integrator)
 - **Outcome:** the exact base is recorded, the plan's provisional numbers are replaced, task

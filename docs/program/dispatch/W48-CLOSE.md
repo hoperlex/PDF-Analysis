@@ -86,15 +86,26 @@ items marked ✓ were re-measured by the integrator on the tree).
   (`git log --oneline alpha-w47..origin/main | wc -l`).
 - T-6 A-03 (sixteen ALR-05 deep imports, twenty-two more through package `__init__`) — decided
   by P-8 on 2026-10-05: repaired in full here (`W48-PUBLIC-01`), no waiver.
-- T-7 `infra/local/README.md` and `bucket-init.sh` still describe `FOUNDATION_S3_IMAGE` as live.
+- T-7 `infra/local/README.md` still describes `FOUNDATION_S3_IMAGE`, and `infra/local/bucket-init.sh`
+  `FOUNDATION_S3_MC_IMAGE`, as live inputs; both are reserved legacy names (`Makefile:77`).
 - T-8 inherited out-of-grant edits: `e3fedd0..411c6d0` also changes `CURRENT_STATE.md`,
   `docs/manual-tests/PC-01_prototype.md`, `tests/contract/api_v1/test_doc_prose_facts.py`,
   `docs/program/CONTRACT_PIN_REGISTRY.md`, `docs/program/P02_SEAMS.md`,
   `docs/program/PROTOTYPE_EXECUTION_PLAN.md`, `docs/program/PROTOTYPE_PROFILE.md`,
-  `tests/integration/p02_journey/journey.py` and `tests/contract/domain_p02/**` — none in
-  `tasks/W48-DURABLE-01.md`'s `allowed_paths`. They were
-  forced by the migration head moving to `0014` (the prose pins) and are acknowledged, not
-  reverted; DJ-R2 generalises to them.
+  `tests/integration/p02_journey/journey.py`, `tests/contract/domain_p02/**`,
+  `src/auditmanager/shared/identity/ids.py`, `src/auditmanager/runs/__init__.py`,
+  `src/auditmanager/runs/repository.py`,
+  `tests/integration/composition/test_the_run_leaves_the_request_thread.py` and
+  `tests/integration/shared_kernel/test_topology_guard.py` — none in the `allowed_paths` of
+  `tasks/W48-DURABLE-01.md` **as dispatched at `03c04a1`**. Most were forced by the migration
+  head moving to `0014` (the prose and schema pins) and are acknowledged, not reverted; DJ-R2
+  generalises to them.
+- DJ-R8 the task files were widened in-lane: `tasks/W48-DURABLE-01.md` was edited by seven lane
+  commits after dispatch (`921aaf4` … `26d45e1`) and `tasks/W48-DURABLE-REPAIR.md` by three
+  (`fede3fc`, `b1d7c97`, `5a26b69`), each adding paths the lane had already touched. An
+  `allowed_paths` claim is therefore read against the dispatched version (`03c04a1`, `fd9881c`),
+  never against the last commit. A task file is frozen at dispatch; widening it is a request to
+  the integrator, not an edit.
 
 Files named in G-4, G-5 and §4 that exist only on the W48 branches (`03c04a1` and descendants),
 not at `c11f1b6`: `tests/contract/program/test_wave_governance.py`,
@@ -125,8 +136,11 @@ SHAs. The fields below are the content those files must carry.
   `docs/program/tasks/W48-RULE-01.md`, `docs/program/tasks/W48-DURABLE-JUDGE-2.md`,
   `docs/program/tasks/W48-DURABLE-FIX-2.md`, `docs/program/tasks/W48-GUARDS-2.md`,
   `docs/program/tasks/W48-TAILS.md`, `docs/program/tasks/W48-JUDGE-Z.md`,
-  `docs/program/tasks/W48-INT-CLOSE.md`, `docs/program/W48-SAFE-01.md`,
-  `docs/program/dispatch/PORT_REGISTRY.md` (rows for the lanes below).
+  `docs/program/tasks/W48-PUBLIC-01.md`, `docs/program/tasks/W48-INT-CLOSE.md`,
+  `docs/program/tasks/W48-INT-MAIN-01.md`, `docs/program/tasks/W48-FIX-C.md` (only if opened),
+  `docs/program/W48-SAFE-01.md`, `docs/program/dispatch/PORT_REGISTRY.md` (rows for the lanes
+  below; the registry has no W48 rows today although sixteen worktrees exist, so the task
+  measures `ss -ltn` before allocating and records what it finds).
 - **Deliverables:** backup refs and bundle; a table of every `agent/w48-*` tip with SHA and
   ancestry; task files for every task of §4 including `W48-PUBLIC-01` and `W48-INT-MAIN-01`;
   `integration/w48-close` created at `411c6d0` **and `plan/identity-waves` merged into it at
@@ -170,7 +184,9 @@ SHAs. The fields below are the content those files must carry.
   blob and does not reject a live one; (c) a direct `INSERT` that must be refused by the composite
   FK and the transition trigger; (d) `alembic downgrade` on an occupied `0014` database must
   refuse; (e) fresh database upgrade to `0014`, then the full battery; (f) `git diff --name-only
-  e3fedd0..411c6d0` against the two task files' `allowed_paths`.
+  e3fedd0..411c6d0` against the two task files' `allowed_paths` **as dispatched**
+  (`git show 03c04a1:docs/program/tasks/W48-DURABLE-01.md`,
+  `git show fd9881c:docs/program/tasks/W48-DURABLE-REPAIR.md`), not as last committed (DJ-R8).
 - **Verdict shape:** release-blocking / must-fix-before-merge / register. Repairs nothing.
 
 ### `W48-DURABLE-FIX-2` — repair what the judge upheld (executor)
@@ -201,6 +217,8 @@ SHAs. The fields below are the content those files must carry.
   `tests/contract/test_deploy_auto_workflow.py`, `tests/e2e/pc01/journey/verify-acceptance.mjs`,
   `scripts/manual-alpha-check.sh`, `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md` (the prose
   guard scans this directory: no migration-head or surface number in the new text),
+  `tests/contract/api_v1/test_doc_prose_facts.py` (only its head-discovery literal, which at
+  `411c6d0` still searches for `"0013` while the head is `0014`: derive it from the tree),
   `docs/program/W48-GUARDS-2.md`.
 - **Required mutations, each must fail for its stated reason:** G-1 a sixth screen file with a
   private `AppRouterContext.Provider`; G-2 `invalidateQueries` replaced by `getQueryData`, and a
@@ -246,7 +264,9 @@ SHAs. The fields below are the content those files must carry.
   `ingest`, `jobs`, `runs`; `access` is imported only by `bootstrap`, which ALR-05 exempts); the
   **import lines only** of every importing module the AST walk lists on the subject SHA (the
   task's report carries the list with the command; 16 / 22 at `c11f1b6`, 18 / 24 at `411c6d0`,
-  possibly more after `W48-DURABLE-FIX-2`); `src/auditmanager/api/composition.py` (its two
+  possibly more after `W48-DURABLE-FIX-2`; the importers include `api/app.py`,
+  `api/routers/errors.py`, `dashboard/repository.py`, `decisions/ledger.py`, `documents/*.py`
+  and the `runs`, `analysis`, `ingest`, `jobs`, `norms` modules the audit named); `src/auditmanager/api/composition.py` (its two
   `bootstrap` imports move to `bootstrap.public`; this task is the composition-root owner of its
   stage); `tests/contract/architecture/test_alr05_boundaries.py` (new);
   `docs/architecture/ARCHITECTURE_LINT_RULES.md` (only to name the guard as the enforcement);
@@ -272,7 +292,8 @@ SHAs. The fields below are the content those files must carry.
   when the fix is reverted; run the ALR-05 AST walk independently and reintroduce one deep import
   to prove the new guard red; verify `contracts/**` and root locks are byte-identical to
   `6118e66` and that `W48-PUBLIC-01` changed nothing but imports, public modules, the guard and
-  two documents; verify migration head is `0014_durable_analysis_effects` on a fresh database;
+  two documents; verify migration head is `0014_durable_analysis_effects` on a fresh database and
+  that `test_doc_prose_facts.py` derives it rather than searching for a literal;
   drive the hostile-string screens (200-character project names, 400-character unbroken
   comments) in a built stand at 780 × 900 and record the measurement W48-WEB deferred.
 - Judges own report files only.
@@ -349,7 +370,8 @@ SHAs. The fields below are the content those files must carry.
 | Hotspot / path family | Owner | Role | Parallel writer |
 | --- | --- | --- | --- |
 | `db/migrations/versions/20261002_0014_*` | `W48-DURABLE-FIX-2` only if JUDGE-2 upholds a schema defect | executor | none |
-| `contracts/**`, root locks, `src/auditmanager/bootstrap/**` | frozen | — | none |
+| `contracts/**`, root locks, `src/auditmanager/bootstrap/**` except the new `bootstrap/public.py` | frozen | — | none |
+| `src/auditmanager/bootstrap/public.py` (new) | `W48-PUBLIC-01` | executor | none |
 | `src/auditmanager/api/composition.py` | `W48-PUBLIC-01` (import lines only, under the RULE-01 addendum) | executor | none |
 | inherited out-of-grant edits of `e3fedd0..411c6d0` (T-8) | acknowledged by `W48-DURABLE-FIX-2`'s addendum; not reverted | executor | none |
 | `web/src/app/globals.css` | `W48-TAILS` | executor | none |

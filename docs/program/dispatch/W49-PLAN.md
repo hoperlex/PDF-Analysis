@@ -2,7 +2,8 @@
 
 **Status:** planned; dispatchable after `W48-CLOSE` exits and `W49-FREEZE-01` records an exact base.
 **Controlling rulings:** `R-55`, `R-56`, `R-57`, `R-59`, `R-60`, `R-61` (provisional numbers,
-`IDENTITY-WAVES.md` §4). Nothing in this wave is dispatchable before they are recorded.
+`IDENTITY-WAVES.md` §4), recorded by `W49-RULE-01` before the freeze. Nothing in this wave is
+dispatchable before they are recorded.
 **Roles:** lanes, QA, judges and FIX are the executor's; freeze, merges, the final gate and
 publication are the integrator's (`IDENTITY-WAVES.md` §8).
 **Exit:** the resealed contract, migration, backend, edge throttle and BFF session on `origin/dev`
@@ -22,7 +23,7 @@ Everything is reachable through the existing BFF; the browser still never sees a
 | --- | --- |
 | `W48-INT-CLOSE` done | `origin/dev` names the W48 candidate; `CURRENT_STATE.md` says so |
 | migration head is `0014_durable_analysis_effects` on a fresh database | `PYTHONPATH=src .venv/bin/alembic -c db/migrations/alembic.ini heads` |
-| rulings `R-55`…`R-61` recorded | `grep -n 'R-55' docs/program/OWNER_RULINGS_2026-09-17.md` |
+| rulings `R-55`…`R-61` recorded by `W49-RULE-01` | `grep -n 'R-55' docs/program/OWNER_RULINGS_2026-09-17.md` |
 | contract set measured at the base | API 17 / 20 / 61 at the recorded SHA-256; error catalog 22; identifiers 27 |
 | `docs/program/CONTRACT_PIN_REGISTRY.md` (from the W48 line) lists every independent pin and its test is green | `.venv/bin/python -m pytest tests/contract/api_v1/test_doc_prose_facts.py -q` |
 | no other writer on `contracts/**`, migrations, `bootstrap/**`, `web/FRONTEND_LOCK.json` | branch inventory in the freeze report |
@@ -82,6 +83,11 @@ is stated with its reason.
   cannot identify an account (`AGENTS.md` §4); "no decisions by this account" needs a column.
 - `is_default_credential` keeps its wire name and widens its meaning to "must change password":
   seeded, or reset by an administrator. Registered as a naming debt, not renamed now.
+- Identifiers before the seal: `tests/contract/domain_p02/test_identifier_catalog.py` asserts
+  that the shared identity registry (`shared/identity/ids.py`) equals `identifiers.json`, so
+  ACCESS mints `reg_<ULID>` exactly as `usr_<ULID>` is minted today — a local pattern outside the
+  shared registry (`access/models.py` explains why `usr` is outside it). `W49-SEAL-01a` adds
+  both prefixes to `identifiers.json` and to the registry in the same commit.
 
 ### 3.2 Roles and the registers
 
@@ -177,11 +183,17 @@ enter `contracts/domain/v1/identifiers.json` because both now cross the wire. Tw
 enter `contracts/domain/v1/state-machines.json`, because `state_transition_not_allowed` is defined
 against that file: `app_user` (`active → archived → active | purged`) and `registration_request`
 (`pending → approved | rejected`); their `machine`/`current_state`/`requested_state` details are
-then honest. Error catalog stays at 22 codes; one safe detail key is added (`conflict_reason` on
-`conflict`). `DecisionEvent` on the wire is unchanged. The four sentences in `openapi.json` that
-deny a role vocabulary (`info.description` twice, the `/auth/password` description, the
-`bearerAuth` description) are superseded under `R-55`. The surface triple after the reseal is
-**measured by `W49-SEAL-01`**, never quoted from this plan.
+then honest. The error catalog grows by **one code, `rate_limited`** (HTTP 429, `retryable:
+true`, category `policy`, no detail keys): the edge and the BFF throttles of §3.5 have to answer
+with a catalog code, because the safety rules forbid inventing one at the edge and the catalog has
+no 429 today (the only non-business statuses are the two 503 dependency codes). That is the
+second reseal of the slot `IDENTITY-WAVES.md` §5 allows; no other code is added. One safe detail
+key is added (`conflict_reason` on `conflict`). `DecisionEvent` on the wire is unchanged. Five
+sentences in `openapi.json` are superseded under `R-55`: the four that deny a role vocabulary
+(`info.description` twice — one of them naming `T-6` — the `/auth/password` description and the
+`bearerAuth` description) and the `info.description` clause that says the surface has no rate
+limiting. The surface triple after the reseal is **measured by `W49-SEAL-01`**, never quoted from
+this plan.
 
 ### 3.5 BFF session
 
@@ -201,30 +213,43 @@ deny a role vocabulary (`info.description` twice, the `/auth/password` descripti
   `requireScreen` (W50) sends the browser to `/login`. A mutation test removes the row-closing and
   must go red.
 - A reserved `POST /bff/v1/registration` forwards `submitRegistration` **exactly as the exchange
-  is forwarded** (same credential handling, body read here, never returned); it is named in the
-  reserved-segment list and its test. The catch-all refuses the `registrations` first segment to
-  the browser exactly as it refuses `auth`, so `submitRegistration` and `readRegistrationStatus`
-  are reachable only through the reserved handlers and their bucket, never with a session's
-  credential.
+  is forwarded** (same credential handling, body read here, never returned). The reservation
+  mechanism is the one the route handler already has — the `SESSION_SEGMENT`/`EXCHANGE_SEGMENT`
+  constants in `web/src/app/bff/v1/[...path]/route.ts` and their tests in
+  `web/tests/unit/session/bff-session.test.ts` — not `web/scripts/reserved-forwarder.mjs`, which
+  reserves npm script names. The catch-all refuses the `registrations` first segment to the
+  browser exactly as it refuses `auth` today (`not_found` before the session is read), so
+  `submitRegistration` and `readRegistrationStatus` are reachable only through the reserved
+  handlers and their bucket, never with a session's credential.
 - On a failed exchange the session handler calls `readRegistrationStatus` with the same pair; a
   `pending`/`rejected` answer is stored as a **one-time notice** row in the register (status,
   reason, five-minute TTL, opaque id) and the browser is sent to
   `/login?refusal=pending|rejected&notice=<id>`; `app/login/page.tsx` reads and deletes the notice
   server-side (it already reads `searchParams` and the register). **The reason never travels in
   a URL**, so it cannot be spoofed by one.
-- **Edge throttle for guests:** the BFF applies a per-client token bucket to `POST
-  /bff/v1/registration` and `POST /bff/v1/session`. A Next 15 route handler has no peer address,
-  so the client key is **`X-Real-IP`** — the header both proxy configurations set from
-  `$remote_addr` (`nginx.conf:85`, `tls-server.conf:82`) — and it is trusted only under
-  `AUDITMANAGER_BEHIND_PROXY=1`, an environment flag `W49-EDGE-01` sets on the `web` service in
-  `infra/deploy/compose.server.yml` (the container publishes no port; only the proxy reaches it).
-  Without the flag every request shares one bucket. `X-Forwarded-For` is never the key: its
-  first element is client-supplied. A mutation with a forged `X-Forwarded-For` must not escape
-  the bucket. Because `/api/v1/` is public behind nginx, the API is also covered: `W49-EDGE-01`
-  adds `limit_req` for `POST /api/v1/registrations` and `POST /api/v1/registrations/status` in
-  **both** `nginx.conf` and `tls-server.conf`, POST-only through a `map $request_method`, and
-  answers the limit with the envelope shape the configuration already uses for 413 — never raw
-  HTML. The 100-request cap stays the last line. Bulk rejection and request retention are
+- **Throttle for guests, in the BFF:** a per-client token bucket on `POST /bff/v1/registration`
+  and `POST /bff/v1/session`, refusing with a synthesized `rate_limited` envelope. A Next 15
+  route handler has no peer address, so the client key is **`X-Real-IP`** — the header both
+  proxy configurations set from `$remote_addr` (`nginx.conf:85`, `tls-server.conf:82`) — trusted
+  only under `AUDITMANAGER_BEHIND_PROXY=1`, an environment flag `W49-EDGE-01` sets on the `web`
+  service in `infra/deploy/compose.server.yml` (the container publishes no port; only the proxy
+  reaches it). The flag is read in `web/src/shared/config/` the way `session-store.ts` reads
+  `AUDITMANAGER_SESSION_STORE`; it is not a secret and is **not** added to `SERVER_ONLY_VARIABLES`,
+  which is pinned literally in three test files. Without the flag every request shares one
+  bucket. `X-Forwarded-For` is never the key: its first element is client-supplied; a mutation
+  with a forged `X-Forwarded-For` must not escape the bucket.
+- **Throttle for guests, at the proxy:** because `/api/v1/` is public behind nginx,
+  `W49-EDGE-01` adds `limit_req` for `POST /api/v1/registrations` and
+  `POST /api/v1/registrations/status`. Both proxy files are loaded at once when TLS is on
+  (`nginx.conf` is mounted as `conf.d/default.conf`; `enable-tls.sh` copies `tls-server.conf`
+  beside it), so the `limit_req_zone` and the `map $request_method` — `http`-level directives —
+  are declared **once, in `nginx.conf`**, and `limit_req` plus `limit_req_status 429` plus
+  `error_page 429 = @rate_limited` go into **both** `server` bodies inside the existing
+  `location /api/v1/` (no new location, so `test_every_api_location_puts_the_prefix_back` and
+  `test_the_two_server_bodies_do_not_drift` stay true). The named location returns the
+  `rate_limited` envelope as JSON with `$request_id` as `correlation_id` — nginx's own 429 is an
+  HTML page, exactly as its 413 is (the comment at `nginx.conf:37-42` is why the body cap is
+  32m). The 100-request cap stays the last line. Bulk rejection and request retention are
   registered debts.
 - The sign-in refusal set in `web/src/features/sign-in/model/exchange.ts` gains `pending` and
   `rejected`; the sign-in screen renders the sentences (Russian). The full screens are W51.
@@ -241,13 +266,21 @@ migration head as literals and scans `CURRENT_STATE.md`, `ALPHA_ROADMAP.md` and
 pin to be listed in `docs/program/CONTRACT_PIN_REGISTRY.md` with a live needle. Therefore:
 
 - **the contract, the registers and the routers land in one slot, `W49-SEAL-01`** (as `W46-SEAL`
-  did), and that slot owns the triple pin, every needle file the registry names, the registry
-  rows for the surface, and the exact triple sentences in `CURRENT_STATE.md` (two) and
-  `ALPHA_ROADMAP.md` (one);
-- **`W49-ACCESS-01a` owns the migration head's pins:** the head-pin line in
+  did), and that slot owns every surface pin: the triple pin in `test_doc_prose_facts.py`; the
+  needle files the registry names, including `tests/e2e/pc01/test_acceptance.py` (one assertion
+  on the route count) and the three pins under `tests/integration/composition/**`; the two
+  prose counts `test_surface_counts_in_prose.py` reads out of `web/src` — the comment at
+  `web/src/app/bff/v1/[...path]/route.ts:22` ("twenty operations across seventeen paths") and
+  `web/src/shared/api/authorization.ts:24` ("the twenty operations") — as one-line grants; the
+  registry rows for the surface; and the live triple sentences in `CURRENT_STATE.md` and
+  `ALPHA_ROADMAP.md` **as the freeze measures them** (the guard reads only the section before
+  the first historical heading; at `411c6d0` that is one sentence in each file);
+- **`W49-ACCESS-01a` owns the migration head's and the schema's pins:** the head-pin line in
   `test_doc_prose_facts.py`, the registry rows for the head, the schema-inventory digests under
-  `tests/integration/db/**`, and the exact head sentences in `CURRENT_STATE.md` and
-  `docs/manual-tests/PC-01_prototype.md`;
+  `tests/integration/db/**`, `P02_TABLES` in `tests/integration/p02_journey/journey.py` (its
+  `assert_table_list_is_complete` fails on any table it does not list — the mechanism that
+  produced the W48 durable line's out-of-grant edits), and the live head sentences in
+  `CURRENT_STATE.md` and `docs/manual-tests/PC-01_prototype.md` as the freeze measures them;
 - `KNOWN_OUTSTANDING_CLAIMS` stays **empty** (`test_no_known_outstanding_live_claim_is_normalised`
   requires it); nothing is registered as outstanding, the sentences are corrected in the same
   commit that changes the fact;
@@ -262,17 +295,27 @@ task files.
 Each task lists `Depends on`. The standard forms of FREEZE, QA, JUDGE, FIX and INT-CLOSE are in
 `IDENTITY-WAVES.md` §10 and are not repeated.
 
+### `W49-RULE-01` (integrator)
+- **Depends on:** `W48-INT-CLOSE`; the owner's confirmation of the ruling texts of
+  `IDENTITY-WAVES.md` §4.
+- **Allowed paths:** `docs/program/OWNER_RULINGS_2026-09-17.md` (section `3.18`, continuing
+  after `R-53`/`R-54`), `docs/program/dispatch/IDENTITY-WAVES.md`, `W49-PLAN.md`, `W50-PLAN.md`,
+  `W51-PLAN.md` (replacing every provisional `R-` number with the recorded one, nothing else),
+  `docs/program/W49-RULE-01.md`.
+- **Required checks:** `grep -c 'R-55' docs/program/OWNER_RULINGS_2026-09-17.md` ≥ 1;
+  `git diff --check`.
+
 ### `W49-FREEZE-01` (integrator)
-Depends on: `W48-INT-CLOSE`, `W48-RULE-01`, recorded `R-55`…`R-61`. Standard form; also replaces
-every provisional ruling number in this plan with the recorded one and copies the exact pinned
-sentences of §3.6 into the ACCESS and SEAL task files.
+Depends on: `W49-RULE-01`. Standard form; also copies the exact pinned sentences of §3.6, as
+measured at the base, into the ACCESS and SEAL task files.
 
 ### `W49-ACCESS-01a/b/c` — migration, domain, repository (executor; one owner, three reports)
 - **Depends on:** `W49-FREEZE-01`.
 - **Allowed paths (all three):** `src/auditmanager/access/**`,
   `db/migrations/versions/<0015>*.py`, `tests/integration/access/**`, `tests/integration/db/**`
   (schema shape, lifecycle, inventories and digests, `test_app_user_migration.py`,
-  `test_reviewer_display_name.py`, a new `test_accounts_migration.py`), the head-pin line of
+  `test_reviewer_display_name.py`, a new `test_accounts_migration.py`),
+  `tests/integration/p02_journey/journey.py` (`P02_TABLES` only), the head-pin line of
   `tests/contract/api_v1/test_doc_prose_facts.py`, the migration-head rows of
   `docs/program/CONTRACT_PIN_REGISTRY.md`, the exact head sentences of
   `docs/program/CURRENT_STATE.md` and `docs/manual-tests/PC-01_prototype.md` named by the task
@@ -294,19 +337,26 @@ sentences of §3.6 into the ACCESS and SEAL task files.
   `0014` database holding the seeded `admin` with a changed password **and** from one holding a
   legacy non-e-mail test login; the trigger refuses a second decision, a password-column write
   after decision and a manual `created_user_uid` UPDATE; partial unique proven by two rows;
-  `make gate` on the 01c hand-back (01a and 01b hand back with the focused suites green).
+  `make gate` on the 01c hand-back; 01a hands back with `.venv/bin/python -m pytest
+  tests/integration/db tests/integration/p02_journey tests/contract/api_v1/test_doc_prose_facts.py -q`
+  green, 01b with `tests/integration/access -q` green.
 
 ### `W49-EDGE-01` — proxy rate limit and the proxy flag (executor)
-- **Depends on:** `W49-FREEZE-01`. Parallel with ACCESS; disjoint paths.
+- **Depends on:** `W49-SEAL-01` (the `rate_limited` code must exist before the proxy answers
+  with it). Parallel with `W49-BFF-01`; disjoint paths.
 - **Allowed paths:** `infra/deploy/proxy/nginx.conf`, `infra/deploy/proxy/tls-server.conf`,
   `infra/deploy/compose.server.yml` (the one `AUDITMANAGER_BEHIND_PROXY=1` line on `web`),
   `tests/contract/test_proxy_rate_limits.py` (new), `docs/program/W49-EDGE-01.md`.
-- **Deliverables:** §3.5's `limit_req` in both configurations, POST-only, envelope-shaped answer;
-  the flag; a contract test that reads both files and the compose file and fails when any of the
-  three loses its line. No other proxy or compose change.
+- **Deliverables:** §3.5's proxy throttle exactly as described (zone and map once, `limit_req`
+  and the named location in both server bodies, the `rate_limited` envelope); the flag line.
+- **Required tests:** the new contract test reads both proxy files and the compose file and fails
+  when any of the three loses its line, and checks the returned `error_code` against the
+  catalog; `nginx -t` inside the pinned nginx image with both files mounted as `conf.d/` entries
+  (the configuration must load with both present); the existing proxy tests under
+  `tests/contract/`; `make gate`.
 
 ### `W49-DECISIONS-01` — the decision event names its author's account (executor)
-- **Depends on:** `W49-ACCESS-01a`.
+- **Depends on:** `W49-ACCESS-01c` merged (ACCESS is one branch; the column exists from 01a).
 - **Allowed paths:** `src/auditmanager/decisions/**`, `tests/integration/decisions/**`,
   `docs/program/W49-DECISIONS-01.md`.
 - **Deliverables:** `ledger` and `journal` take and persist `author_user_uid` beside
@@ -327,19 +377,26 @@ sentences of §3.6 into the ACCESS and SEAL task files.
   `web/tests/contract/**`, `src/auditmanager/api/**`, `src/auditmanager/bootstrap/adapters.py`,
   `src/auditmanager/bootstrap/composition.py` (this wave's composition-root owner),
   `tests/integration/api/**`, `tests/integration/auth/**`, `tests/integration/composition/**`,
-  `docs/program/CONTRACT_PIN_REGISTRY.md` (all rows but the head's), the exact triple sentences
-  of `docs/program/CURRENT_STATE.md` (two) and `docs/program/ALPHA_ROADMAP.md` (one) named by the
-  task file, `docs/program/W49-SEAL-01{a,b,c}.md`.
-- **01a — the documents:** §3.4 operations and schemas; `conflict_reason`; identifiers; the two
-  state machines; the four role-vocabulary sentences superseded under `R-55`; regenerated client,
-  mirror and lock; the triple pin, every needle file the registry names, the registry rows, and
-  the three sentences; measured triple and SHA-256 in the report; compatibility statement (every
-  existing operation unchanged on the wire).
+  `tests/e2e/pc01/test_acceptance.py` (the route-count assertion only),
+  `web/src/app/bff/v1/[...path]/route.ts` and `web/src/shared/api/authorization.ts` (the one
+  count comment in each, §3.6), `docs/program/CONTRACT_PIN_REGISTRY.md` (all rows but the
+  head's), the exact live triple sentences of `docs/program/CURRENT_STATE.md` and
+  `docs/program/ALPHA_ROADMAP.md` named by the task file, `docs/program/W49-SEAL-01{a,b,c}.md`.
+- **01a — the documents:** §3.4 operations and schemas; `conflict_reason`; `rate_limited`;
+  identifiers (`usr`, `reg`, and their registry types); the two state machines; the five
+  superseded sentences; regenerated client, mirror and lock; every surface pin of §3.6; the
+  registry rows; the live sentences; measured triple and SHA-256 in the report; compatibility
+  statement (every existing operation unchanged on the wire). Hands back with
+  `.venv/bin/python -m pytest tests/contract -q`, `npm --prefix web run api:verify` and
+  `npm --prefix web test -- --run tests/contract` green; the integration suites are expected red
+  until 01c.
 - **01b — the seam:** the three registers and `OPERATION_ROLES`; `AccountStanding`, its protocol
   and the adapter widened with roles, archive state and profile completeness; the evaluation
   order of §3.2; sweep tests: for every operation × role set in
   `{∅, {expert}, {admin}, {expert, admin}}` × {complete, incomplete} × {default, changed} the
-  served application's answer equals the registers.
+  served application's answer equals the registers. Hands back with
+  `.venv/bin/python -m pytest tests/integration/api/test_authorization.py tests/integration/auth -q`
+  green.
 - **01c — the routers:** `me.py`, `registrations.py`, `users.py`; the decisions router passes the
   subject's `user_uid` to the ledger; the status read with constant work. The suite's own logins
   change where the plan changes the rule: `tests/integration/api/driver.py` (`SUITE_LOGIN`
@@ -351,17 +408,16 @@ sentences of §3.6 into the ACCESS and SEAL task files.
   `tests/integration/api/test_authorization.py` extended; new `test_role_register.py`,
   `test_registration_flow.py`, `test_user_management.py`;
   `tests/contract/api_v1/test_openapi_conformance.py`; `make gate` at the final SHA.
-- **Stop:** a 23rd error code; a change to an existing operation's shape; a free-text detail key;
-  a business rule in a router.
+- **Stop:** any new error code other than `rate_limited`; a change to an existing operation's
+  shape; a free-text detail key; a business rule in a router.
 
 ### `W49-BFF-01` — session subject, notice, throttle, refusal sentences (executor)
-- **Depends on:** `W49-SEAL-01` (generated client, registers).
+- **Depends on:** `W49-SEAL-01` (generated client, registers, `rate_limited`). Parallel with
+  `W49-EDGE-01`.
 - **Allowed paths:** `web/src/app/bff/**`, `web/src/app/login/page.tsx` (reads and deletes the
-  notice), `web/src/shared/api/credentialed-forward.ts`, `web/src/shared/config/session-store.ts`,
-  `web/src/shared/config/server-env.ts` (the proxy flag), `web/src/features/sign-in/**`,
-  `web/src/_pages/sign-in/**`, `web/scripts/reserved-forwarder.mjs`, `web/tests/unit/session/**`,
-  `web/tests/guards/reserved-scripts.guard.test.ts`,
-  `web/tests/guards/session-durability.guard.test.ts`,
+  notice), `web/src/shared/api/credentialed-forward.ts`, `web/src/shared/config/**` (the session
+  store format and the proxy flag), `web/src/features/sign-in/**`, `web/src/_pages/sign-in/**`,
+  `web/tests/unit/session/**`, `web/tests/guards/session-durability.guard.test.ts`,
   `web/tests/guards/server-credential.guard.test.ts`, `docs/program/W49-BFF-01.md`.
 - **Deliverables:** §3.5 in full. `layout.tsx` and the frame are untouched (W50).
 - **Required tests and mutations:** `npm --prefix web test -- --run`; lint; typecheck; a forward
@@ -372,7 +428,7 @@ sentences of §3.6 into the ACCESS and SEAL task files.
   flag the bucket is global.
 
 ### `W49-QA-01` (executor, fresh context)
-Depends on: `W49-BFF-01` merged. Standard form, files under `tests/integration/api/qa_w49/**`,
+Depends on: `W49-BFF-01` and `W49-EDGE-01` merged. Standard form, files under `tests/integration/api/qa_w49/**`,
 `tests/integration/access/qa_w49/**`, `web/tests/unit/qa_w49/**`. Brief: approve race;
 archive/purge/demote/reset of self; last-admin removal through `updateUser` and `archiveUser`;
 token after role removal → 401 → the BFF closes the row and answers the envelope; restore
@@ -406,11 +462,11 @@ temporary password known to the administrator, `0015` forward-only).
 
 ## 5. Integration order
 
-1. `W49-FREEZE-01`.
-2. Stage A: `W49-ACCESS-01a → 01b → 01c` ∥ `W49-EDGE-01` from the freeze SHA.
+1. `W49-RULE-01`, then `W49-FREEZE-01`.
+2. Stage A: `W49-ACCESS-01a → 01b → 01c` from the freeze SHA.
 3. Stage B: `W49-DECISIONS-01` from the ACCESS merge.
 4. Stage C: `W49-SEAL-01` (a → b → c, one gate) from the DECISIONS merge.
-5. Stage D: `W49-BFF-01` from the SEAL merge.
+5. Stage D: `W49-BFF-01` ∥ `W49-EDGE-01` from the SEAL merge; merge BFF, then EDGE.
 6. Stage E: `W49-QA-01`; judges X and Y in parallel; cross-examination.
 7. `W49-FIX` for upheld release-blocking findings only.
 8. `W49-INT-CLOSE`.
@@ -419,11 +475,12 @@ temporary password known to the administrator, `0015` forward-only).
 
 | Hotspot / path family | Owner | Role | Parallel writer |
 | --- | --- | --- | --- |
-| migration `0015`, `src/auditmanager/access/**`, `tests/integration/db/**`, head pin and head sentences | `W49-ACCESS-01a/b/c` | executor | EDGE on disjoint paths |
-| `infra/deploy/proxy/*.conf`, the compose flag line | `W49-EDGE-01` | executor | ACCESS |
-| `src/auditmanager/decisions/**` | `W49-DECISIONS-01` | executor | none |
-| `contracts/**`, `web/openapi/**`, generated client, `web/FRONTEND_LOCK.json`, `src/auditmanager/api/**`, `src/auditmanager/bootstrap/**`, `tests/contract/**`, `tests/integration/{api,auth,composition}/**`, `CONTRACT_PIN_REGISTRY.md`, triple pin and triple sentences | `W49-SEAL-01` | executor | none |
-| `web/src/app/bff/**`, `app/login/page.tsx`, `features/sign-in/**`, `_pages/sign-in/**`, session tests | `W49-BFF-01` | executor | none |
+| `OWNER_RULINGS_2026-09-17.md` §3.18, provisional numbers in the four plans | `W49-RULE-01` | integrator | none |
+| migration `0015`, `src/auditmanager/access/**`, `tests/integration/access/**`, `tests/integration/db/**`, `P02_TABLES`, head pin, head registry rows, head sentences | `W49-ACCESS-01a/b/c` | executor | none |
+| `src/auditmanager/decisions/**`, `tests/integration/decisions/**` | `W49-DECISIONS-01` | executor | none |
+| `contracts/**`, `web/openapi/**`, generated client, `web/FRONTEND_LOCK.json`, `src/auditmanager/api/**`, `bootstrap/adapters.py`, `bootstrap/composition.py`, `tests/contract/**` except `test_proxy_rate_limits.py`, `tests/integration/{api,auth,composition}/**`, the `test_acceptance.py` pin line, the two `web/src` count comments, `CONTRACT_PIN_REGISTRY.md` surface rows, triple pin and triple sentences | `W49-SEAL-01` | executor | none |
+| `web/src/app/bff/**`, `app/login/page.tsx`, `shared/config/**`, `features/sign-in/**`, `_pages/sign-in/**`, session tests | `W49-BFF-01` | executor | EDGE |
+| `infra/deploy/proxy/*.conf`, the compose flag line, `tests/contract/test_proxy_rate_limits.py` | `W49-EDGE-01` | executor | BFF |
 | `web/src/_app/**`, `web/src/app/layout.tsx`, `globals.css`, `shared/ui/**` | frozen (W50) | — | none |
 | root locks (`uv.lock`, `web/package-lock.json`) | frozen | — | none |
 | `CURRENT_STATE.md` live section, `DEBT_REGISTER.md`, `origin/dev` | `W49-INT-CLOSE` | integrator | none |
@@ -432,7 +489,7 @@ temporary password known to the administrator, `0015` forward-only).
 ## 7. Stop conditions
 
 Those of `W48-PLAN.md` §14, plus: a rule of §3 turns out to need a decision the polls did not
-take; a 23rd error code or a free-text detail key; an existing operation changes shape; the
+take; any new error code other than `rate_limited`, or a free-text detail key; an existing operation changes shape; the
 migration cannot upgrade a `0014` database holding the seeded account; the sweep finds an
 operation outside every register; a refusal is computed in a router or a schema validator
 instead of `access`; a lane's gate is red on a pin this plan did not assign.
