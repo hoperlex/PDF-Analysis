@@ -1092,3 +1092,58 @@ identity wave.
 The normative corpus remains at migrations `0012` and `0013`, with no promotion, custody writes
 or retrieval. Its open questions `NORM-Q01` through `NORM-Q09` and debts `D-59`, `D-71` and
 `D-119` remain registered rather than decided.
+
+## 3.19 — `R-55` … `R-61`, ruled 2026-10-05 by direct poll for the identity programme
+
+The owner ordered the identity programme on 2026-10-05 (accounts, roles, registration, account
+management, routing, navigation, home page and the account menu), answered two direct polls the
+same day, and confirmed the seven texts below as drafted in
+`docs/program/dispatch/IDENTITY-WAVES.md` §4. They supersede earlier exclusions only within the
+scope each one names.
+
+### `R-55` — the alpha gains accounts, a role set and account management
+
+The alpha gains accounts with e-mail sign-in, full names (surname, name, optional patronymic), a
+role set `{expert, admin}` — one account may hold either or both — registration requests and
+administrator management of accounts. `R-18`'s exclusion of roles and user management, `R-42`'s
+sentence that this programme has no role vocabulary, and `T-6`'s "implementation deferred" are
+superseded for exactly this scope. Multi-tenancy stays excluded. Where both exist, the derived
+name form «Фамилия И. О.» takes precedence over the `display_name` `R-37` let a reviewer choose.
+
+### `R-56` — registration carries no mail
+
+A registration request sends no mail. The applicant learns the status — pending, or rejected
+with the administrator's reason — at sign-in. SMTP and notifications are a later task.
+
+### `R-57` — the avatar is generated
+
+The avatar is a coloured circle with initials, generated from the account's names and e-mail.
+There is no upload in this programme.
+
+### `R-58` — every cross-context import goes through a public module
+
+Every cross-context import the ALR-05 walk listed on the W48 closure line (16 deep / 22
+package-root at `c11f1b6`; 18 / 24 at `411c6d0`) is repaired through
+`auditmanager.<context>.public` modules and an executable guard. No waiver is granted,
+`api/composition.py` included. Done by `W48-PUBLIC-01`; the walk reads 0 / 0.
+
+### `R-59` — the seeded account becomes an e-mail account at its first sign-in
+
+The seeded `admin` keeps its login until its first sign-in after the identity upgrade, where the
+forced completion screen takes an e-mail and the names in one save and rewrites `login` to the
+e-mail. From then on every account's login is an e-mail. Every account that exists at the
+upgrade follows the same path; an operator command completes a profile from the host.
+
+### `R-60` — who may read and who may change
+
+An active account with any role reads product data. Product mutations — projects, uploads, runs,
+verdicts, comments, export — require `expert`. Account and request management requires `admin`.
+
+### `R-61` — removing an account is archive, and purge only when nothing references it
+
+"Delete an account" is archive with restore. An archived account that nothing references may be
+purged irreversibly. "References" is the written register of foreign keys in
+`docs/program/dispatch/W49-PLAN.md` §3.1: `archived_by`, `granted_by`, `decided_by` and the new
+`expert_decision_event.author_user_uid` restrict; the request that created an account is history,
+not a reference. An administrator who archived, granted or decided anything, and an expert who
+authored a decision, are therefore never purgeable.
