@@ -370,13 +370,16 @@ def test_the_tag_is_compared_in_constant_time() -> None:
     assert "== self._tag" not in source
 
 
-def test_the_register_of_open_operations_holds_only_the_exchange() -> None:
+def test_the_register_of_open_operations_holds_the_exchange_and_the_registration_pair() -> None:
     """The one place an operation can be exempted, pinned as a literal.
 
     A test that read the register and compared it to itself would pass whatever was in it.
-    This is the sentence an owner would have to read and agree with.
+    This is the sentence an owner would have to read and agree with: the exchange, and --
+    since `W49-SEAL-01`, `R-56` -- the two operations an applicant with no account uses.
     """
-    assert UNAUTHENTICATED_OPERATIONS == frozenset({"issueToken"})
+    assert UNAUTHENTICATED_OPERATIONS == frozenset(
+        {"issueToken", "submitRegistration", "readRegistrationStatus"}
+    )
 
 
 def test_the_module_states_no_token_format_in_anything_a_caller_reads() -> None:

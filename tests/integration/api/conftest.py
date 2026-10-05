@@ -68,6 +68,8 @@ Answer = _driver.Answer
 Request = _driver.Request
 Surface = _driver.Surface
 SuiteCredentialAdapter = _driver.SuiteCredentialAdapter
+SuiteAccountAdapter = _driver.SuiteAccountAdapter
+SuiteRegistrationAdapter = _driver.SuiteRegistrationAdapter
 TEST_TOKEN = _driver.TEST_TOKEN
 dispatch = _driver.dispatch
 from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
@@ -826,6 +828,10 @@ def router(ingest: IngestService, session: Session) -> Surface:
         decisions=LedgerDecisionAdapter(session),
         exports=SeamExportAdapter(session),
         credentials=SuiteCredentialAdapter(),
+        # `W49-SEAL-01`. Stand-ins that answer what the seam lets through with a refusal of
+        # the operation's own kind, never a 403: see `driver.SuiteAccountAdapter`.
+        accounts=SuiteAccountAdapter(),
+        registrations=SuiteRegistrationAdapter(),
     ))
 
 
@@ -876,6 +882,8 @@ def shipped_router(
         # `decisions` above: `getDashboardSummary` has no test-only seam shape to
         # compare against, so this is the only fixture that can exercise it.
         dashboard=DashboardAdapter(session_factory),
+        accounts=SuiteAccountAdapter(),
+        registrations=SuiteRegistrationAdapter(),
     ))
 
 

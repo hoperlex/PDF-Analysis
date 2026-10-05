@@ -4,12 +4,15 @@ The contract declares one scheme at its root since `W13-SEAL`'s reseal (`a5f4001
 
     "bearerAuth": {"type": "http", "scheme": "bearer"}
 
-and ``security: [{"bearerAuth": []}]`` over every operation but one. **That declares the
-seam, not its implementation.** No issuer, no discovery URL, no flow, no token format, and
-no role, subject or capability vocabulary appears in the document, and none may be added
-here: the deployment decides all of them and the same operations must keep working when it
-does. The alpha's implementation was one static token; this is the replacement, and it
-touches neither the operations nor the contract.
+and ``security: [{"bearerAuth": []}]`` over every operation but three -- the exchange and,
+since `W49-SEAL-01`, the two registration operations an applicant with no account uses.
+**That declares the seam, not its implementation.** No issuer, no discovery URL, no flow and
+no token format appears in the document, and none may be added here: the deployment decides
+them and the same operations must keep working when it does. The alpha's implementation was
+one static token; this is the replacement, and it touches neither the operations nor the
+contract. What a subject may *do* is, since `R-55`, the account's role set -- read from the
+row on every request and decided against the written registers below, never carried in the
+credential.
 
 **What replaced the static token.** A credential is now *minted* by this module, for a
 subject this deployment authenticated, and *verified* by this module on every other
@@ -37,33 +40,37 @@ Four things this module does **not** do, each because the contract or `T-6` says
   ``X-Correlation-Id`` beyond what the middleware appends. `W13-SEAL` section 8.1 names this
   trap by name: **401 is ``authentication_required`` in an ``ErrorEnvelope``, and nothing
   else is acceptable.** So ``auto_error=False``, and the refusal is a ``DomainError``;
-* **it does not decide what a subject may do**, with one exception the owner ruled in and
-  which is written out below rather than left as a footnote. It decides *who* the subject
-  is and refuses everyone else. A verified subject is published on
-  ``request.state.subject``, and since wave 39 exactly one operation reads it --
-  ``changePassword``, which needs to know whose password it is changing and must not be
-  told by the body.
+* **it decides what a subject may do only by written registers**, never by a rule over
+  paths or names. Until `W49-SEAL-01` it decided *who* the subject was and, under `R-50`,
+  one precondition; `R-55` ... `R-61` superseded `T-6`'s exclusion of a role vocabulary for
+  exactly this scope, and the seam now refuses a request by four registers, evaluated in a
+  fixed order on every guarded request (see :func:`build_authorization_dependency`):
 
-  The exception is `R-50`, and it arrived in wave 47: **a credential minted for an account
-  still on the password the deployment seeded it with reaches only the exchange and the
-  change.** Everything else answers ``permission_denied`` with
-  ``required_capability: password_changed``. This sentence used to say that
-  ``permission_denied`` was *"reachable and unraised by this application"*; that is no
-  longer true and is corrected here rather than left standing beside the code that raises
-  it. **It is still not a role model and still not `T-6`'s forbidden capability
-  vocabulary**: there is no group, no grant, no list of who may do what, and the rule is
-  the same for every subject on the surface -- it is a *precondition on the credential*,
-  not a statement about a class of user. The refusal carries a capability *name* because
-  the catalog's ``permission_denied`` already declares ``required_capability`` as a safe
-  detail key and a caller refused for a reason has to be told which one; naming it after
-  the act (``password_changed``) rather than after the credential is the integrator's
-  decision, and its reason is that the client already reads ``is_default_credential`` --
-  one fact with two names would be one name too many;
+  1. the credential's signature and expiry, then the account's **standing** read from its
+     row -- no such account, an **archived** one, or a stale ``token_epoch`` is
+     ``authentication_required``;
+  2. `R-50`: an account still on a **default credential** (seeded, or reset by an
+     administrator) reaches :data:`OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES` and nothing
+     else -- ``permission_denied``, ``required_capability: password_changed``;
+  3. an **incomplete profile** -- an account that has not given its names and e-mail yet
+     (`R-59`) -- reaches :data:`OPERATIONS_AN_INCOMPLETE_PROFILE_REACHES` and nothing else
+     -- ``permission_denied``, ``required_capability: profile_completed``;
+  4. :data:`OPERATION_ROLES`: the subject holds **at least one** role of the operation's
+     set, and the empty set means any active account with a complete profile (`R-60`) --
+     ``permission_denied``, ``required_capability: role:expert`` or ``role:admin``.
+
+  A verified subject is published on ``request.state.subject`` with the login and display
+  label **its row** holds now, not the ones minted into the credential: a profile completed
+  or renamed since the credential was minted is visible on the next request, and the
+  decision ledger, which writes ``author_label`` from it, writes the name form a complete
+  profile has (`W49-PLAN.md` section 3.1);
 * **it does not choose which operations it guards, except by a written register.**
-  :data:`UNAUTHENTICATED_OPERATIONS` is the exception list, by ``operationId``, and it holds
-  exactly the operation that hands a credential out. A route whose ``operationId`` the seam
-  cannot read is guarded, not exempted, so a new operation is closed by default and an
-  operation opens only by being written into a set a test compares.
+  :data:`UNAUTHENTICATED_OPERATIONS` is the exception list, by ``operationId``: the exchange,
+  which hands a credential out, and the two registration operations an applicant reaches
+  with no account. A route whose ``operationId`` the seam cannot read is guarded, not
+  exempted; an operation that is guarded and named in no role register is refused to
+  everyone, so a new operation is closed by default and opens only by being written into a
+  set a test compares.
 
 **Where the key comes from, and why there is no new variable.** The seam derives its
 signing key from ``AUDITMANAGER_API_TOKEN`` -- the one deployment secret this surface
@@ -119,12 +126,13 @@ takes effect in a little while. The request that follows a revocation is refused
 one after that.
 
 **The port is narrow on purpose.** :class:`AccountStandings` has one method, takes a
-``user_uid`` and returns two scalars or ``None``. It cannot read a password, cannot list
+``user_uid`` and returns one standing or ``None``. It cannot read a password, cannot list
 accounts and cannot write. ``None`` -- no such account -- is a refusal and never a
 permissive default, which is how deleting a row revokes that account's credentials for free.
 
 It answered one integer until `R-50`, and the second scalar was added to the *answer* and
-not to the number of questions. The alternative was a second method called beside it on
+not to the number of questions -- as were, under `W49-SEAL-01`, the archive state, the
+profile completeness, the role set, and the login and display label the row holds now. The alternative was a second method called beside it on
 every request, which is two reads of one row inside one decision -- and the two values are
 the two halves of one decision, so a disagreement between them would be a request served
 under a stale reading of the account. The cost of the widening is nothing measurable: the
@@ -160,6 +168,7 @@ import hmac
 import json
 import time
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Annotated, Any, Final, Mapping, Protocol, runtime_checkable
 
 from fastapi import Depends, Request, Security
@@ -171,9 +180,16 @@ __all__ = [
     "API_TOKEN_VARIABLE",
     "SCHEME_NAME",
     "TOKEN_LIFETIME_SECONDS",
+    "OPERATIONS_AN_INCOMPLETE_PROFILE_REACHES",
     "OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES",
+    "OPERATION_ROLES",
     "PASSWORD_CHANGED_CAPABILITY",
+    "PROFILE_COMPLETED_CAPABILITY",
+    "ROLES_OF_A_ROUTE_WITHOUT_AN_OPERATION",
+    "ROLE_ADMIN",
+    "ROLE_EXPERT",
     "UNAUTHENTICATED_OPERATIONS",
+    "role_capability",
     "AuthorizationDependency",
     "AccountStanding",
     "AccountStandings",
@@ -208,8 +224,16 @@ API_TOKEN_VARIABLE: Final[str] = "AUDITMANAGER_API_TOKEN"
 #: whose path contains token" -- would open the next operation somebody put there without
 #: anybody deciding to. ``test_the_open_surface_is_exactly_the_register`` sweeps the served
 #: application and asserts the set of operations that answer without a credential **equals**
-#: this one, so a second open operation is reported rather than tolerated.
-UNAUTHENTICATED_OPERATIONS: Final[frozenset[str]] = frozenset({"issueToken"})
+#: this one, so a fourth open operation is reported rather than tolerated.
+#:
+#: `W49-SEAL-01`, `R-56`: an applicant for an account holds no credential, so submitting an
+#: application and reading whether a pair proves a pending one are open too. Neither hands
+#: out a credential, neither names an account by anything but the pair the caller typed, and
+#: the status read answers every pair it cannot prove with the exchange's own
+#: ``authentication_required``.
+UNAUTHENTICATED_OPERATIONS: Final[frozenset[str]] = frozenset(
+    {"issueToken", "submitRegistration", "readRegistrationStatus"}
+)
 
 #: `R-50`. The operations a credential minted for an account **still on its seeded
 #: password** may reach, by ``operationId``. Everything else answers ``permission_denied``.
@@ -229,10 +253,109 @@ UNAUTHENTICATED_OPERATIONS: Final[frozenset[str]] = frozenset({"issueToken"})
 #:
 #: ``test_a_default_credential_reaches_exactly_the_register`` sweeps the served application
 #: and asserts the operations that answer for such a credential **equal** this set, so a
-#: third one is reported rather than tolerated.
+#: fourth one is reported rather than tolerated.
+#:
+#: `W49-SEAL-01` added ``getMe``: a client has to be able to read the state it must send the
+#: person out of -- the default credential, and whether the profile is complete -- and a
+#: read of one's own account is the one way to learn it without meeting a refusal.
 OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES: Final[frozenset[str]] = frozenset(
-    {"issueToken", "changePassword"}
+    {"issueToken", "changePassword", "getMe"}
 )
+
+#: `W49-SEAL-01`, `R-59`. The operations an account whose profile is **incomplete** -- no
+#: names yet, and for an account created before the identity upgrade a legacy login -- may
+#: reach. Everything else answers ``permission_denied`` with ``required_capability:
+#: profile_completed``.
+#:
+#: The three are the way out and nothing more: reading the account, completing it, and
+#: changing the password (which the seeded account must do first, so a default credential
+#: on an incomplete profile reaches only ``getMe`` and ``changePassword``, the intersection
+#: of the two registers). It is also what makes `W49-PLAN.md` section 3.1's "a decision
+#: event is written only by a complete profile" hold by construction: ``appendDecision``
+#: is in neither set, so an account whose label could still be a 254-character e-mail never
+#: reaches the ledger, whose ``author_label`` is bounded at 128.
+OPERATIONS_AN_INCOMPLETE_PROFILE_REACHES: Final[frozenset[str]] = frozenset(
+    {"getMe", "updateMyProfile", "changePassword"}
+)
+
+#: `W49-SEAL-01`. The capability an incomplete profile is told it lacks.
+PROFILE_COMPLETED_CAPABILITY: Final[str] = "profile_completed"
+
+#: `R-55`. The seam's own role vocabulary. Spelled again in ``auditmanager.access`` --
+#: this module imports nothing of that boundary -- and the composition root's adapter
+#: translates between the two by an explicit table that refuses a value it does not know.
+ROLE_EXPERT: Final[str] = "expert"
+ROLE_ADMIN: Final[str] = "admin"
+
+_ANY_COMPLETE_ACCOUNT: Final[frozenset[str]] = frozenset()
+_EXPERT: Final[frozenset[str]] = frozenset({ROLE_EXPERT})
+_ADMIN: Final[frozenset[str]] = frozenset({ROLE_ADMIN})
+
+#: `R-60`, `W49-PLAN.md` section 3.2. What each guarded operation requires, by
+#: ``operationId``: **any of** the roles in its set, and the empty set means any active
+#: account with a complete profile, whatever roles it holds -- none included. Every guarded
+#: operation is named and nothing has a default: an ``operationId`` absent from this map is
+#: refused to everyone, so an operation added to the surface is closed until somebody
+#: writes its line here. ``tests/integration/api/test_role_register.py`` sweeps the served
+#: application with every role set and asserts the answers equal this map.
+#:
+#: The three open operations of :data:`UNAUTHENTICATED_OPERATIONS` are not here: no
+#: account is read for them, so there is no role set to compare.
+OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
+    {
+        # Reads of product data: any complete account (R-60).
+        "listProjects": _ANY_COMPLETE_ACCOUNT,
+        "listDocuments": _ANY_COMPLETE_ACCOUNT,
+        "getDocumentVersion": _ANY_COMPLETE_ACCOUNT,
+        "streamDocumentVersionContent": _ANY_COMPLETE_ACCOUNT,
+        "getVersionBlocks": _ANY_COMPLETE_ACCOUNT,
+        "listVersions": _ANY_COMPLETE_ACCOUNT,
+        "listRuns": _ANY_COMPLETE_ACCOUNT,
+        "getRunStatus": _ANY_COMPLETE_ACCOUNT,
+        "listRunFindings": _ANY_COMPLETE_ACCOUNT,
+        "getFinding": _ANY_COMPLETE_ACCOUNT,
+        "listDecisionHistory": _ANY_COMPLETE_ACCOUNT,
+        "listDecisions": _ANY_COMPLETE_ACCOUNT,
+        "getDashboardSummary": _ANY_COMPLETE_ACCOUNT,
+        # The account itself.
+        "getMe": _ANY_COMPLETE_ACCOUNT,
+        "updateMyProfile": _ANY_COMPLETE_ACCOUNT,
+        "changePassword": _ANY_COMPLETE_ACCOUNT,
+        # Product changes -- projects, uploads, runs, verdicts, comments, the export.
+        "createProject": _EXPERT,
+        "uploadDocument": _EXPERT,
+        "startRun": _EXPERT,
+        "appendDecision": _EXPERT,
+        "exportRunCsv": _EXPERT,
+        # Account and registration-request management.
+        "listRegistrations": _ADMIN,
+        "approveRegistration": _ADMIN,
+        "rejectRegistration": _ADMIN,
+        "listUsers": _ADMIN,
+        "getUser": _ADMIN,
+        "updateUser": _ADMIN,
+        "archiveUser": _ADMIN,
+        "restoreUser": _ADMIN,
+        "purgeUser": _ADMIN,
+        "resetUserPassword": _ADMIN,
+    }
+)
+
+#: What a route **without** an ``operationId`` requires. Exactly four routes have none --
+#: the documentation routes of ``api/app.py`` (``DOCUMENTATION_PATHS``,
+#: ``test_the_four_declare_no_operation_id``) -- and they describe the surface any complete
+#: account reads: the empty set. They stay behind the default-credential and
+#: incomplete-profile registers like everything else that is not named in them.
+ROLES_OF_A_ROUTE_WITHOUT_AN_OPERATION: Final[frozenset[str]] = _ANY_COMPLETE_ACCOUNT
+
+
+def role_capability(required: frozenset[str]) -> str:
+    """The ``required_capability`` a role refusal carries: ``role:`` and the set's members.
+
+    One member today in every set (``role:expert``, ``role:admin``); a set of more would
+    name them all, sorted and joined by ``|``, because the refusal is "any of these".
+    """
+    return "role:" + "|".join(sorted(required))
 
 #: `R-50`. The capability a refused caller is told they are missing, in the
 #: ``required_capability`` detail the catalog already declares safe for
@@ -298,10 +421,12 @@ class Subject:
 
     Four fields, all already known to the caller: their own identity, their own login, the
     generation of credentials their account accepts, and the name other reviewers read on
-    their decisions. Nothing else is carried, because everything else -- a role, a group, a
-    permission, an expiry the client could act on -- would be this module inventing the
-    identity model `T-6` says it must not have. The fourth arrived with `R-37` and the
-    paragraph on it says why it is not one of those.
+    their decisions. **No role is carried**, not even since `R-55` gave accounts one: what a
+    subject may do is read from its row on every request (:class:`AccountStanding`) and
+    decided by the registers before a handler runs, so a role in the subject would be a
+    second, older answer to a question only the row can answer now. The fourth field arrived
+    with `R-37`; since `W49-SEAL-01` the seam publishes the login and the label the row
+    holds rather than the credential's copies.
 
     ``token_epoch`` has **no default**, and that is the point of it being a field rather than
     an argument with one. A caller that could omit it would mint a credential under an epoch
@@ -326,12 +451,15 @@ class Subject:
     #: Every construction of this class has therefore had to get the name from somewhere,
     #: and the only place it comes from is the account's row.
     #:
-    #: **Is this `T-6`'s forbidden identity model?** No, and the line is worth drawing.
-    #: `T-6` forbids this module inventing a *role, group, permission or capability*
-    #: vocabulary -- statements about what a subject may **do**. A display name says
-    #: nothing about that; it is the same kind of fact as ``login``, which has travelled
-    #: here since wave 34, and the seam still decides *who* the caller is and never *what
-    #: they may do*.
+    #: **Is this a statement about what the subject may do?** No, and the line is worth
+    #: drawing. A display name says nothing about that; it is the same kind of fact as
+    #: ``login``, which has travelled here since wave 34. What a subject may do is the role
+    #: set `R-55` ruled in, which is read from the row by :class:`AccountStanding` and never
+    #: carried on this object.
+    #:
+    #: **Since `W49-SEAL-01` the published value is the row's**, not the credential's: the
+    #: seam replaces the minted label with :attr:`AccountStanding.display_label` before it
+    #: publishes the subject, so the label a decision records is the account's current one.
     display_label: str
 
 
@@ -365,10 +493,15 @@ class IssuedCredential:
 class AccountStanding:
     """What the seam re-reads about an account on every request it guards.
 
-    Two facts, both about the account and neither about the credential's bytes: the
-    generation of credentials it accepts, and whether it is still on the password the
-    deployment seeded it with. They travel together because they are read together, in one
-    statement, and are the two halves of one decision -- whether this request is served.
+    Facts about the account, none about the credential's bytes, read together in one
+    statement because they are the parts of one decision -- whether this request is served,
+    and as whom: the generation of credentials it accepts, whether it is still on a default
+    password, whether it is archived, whether its profile is complete, the role set it
+    holds, and the login and display label its row holds now (`W49-SEAL-01`).
+
+    **No field has a default**, for :attr:`Subject.token_epoch`'s reason: a constructor that
+    could omit ``roles`` or ``archived`` would serve a request under a standing it assumed
+    rather than one it read, and the assumable value is the permissive one.
 
     It is the seam's own vocabulary and not the ``access`` boundary's. The adapter between
     them translates, exactly as it does for :class:`Subject`: this module does not import
@@ -376,8 +509,23 @@ class AccountStanding:
     """
 
     token_epoch: int
-    #: `R-50`. ``True`` while the account's password is the one it was seeded with.
+    #: `R-50`. ``True`` while the account must change its password: still the one it was
+    #: seeded with, or one an administrator reset (`W49-PLAN.md` section 3.1).
     is_default_credential: bool
+    #: `R-61`. An archived account has no standing a request may be served under: it is
+    #: refused as ``authentication_required``, exactly like a revoked credential.
+    archived: bool
+    #: `R-59`. ``False`` until the account gave its names (and, for a legacy login, its
+    #: e-mail); such an account reaches :data:`OPERATIONS_AN_INCOMPLETE_PROFILE_REACHES` only.
+    profile_complete: bool
+    #: `R-55`. The role set, in this module's vocabulary (:data:`ROLE_EXPERT`,
+    #: :data:`ROLE_ADMIN`). Empty is a valid set.
+    roles: frozenset[str]
+    #: The login and the display label the row holds **now**. Published on the subject in
+    #: place of the ones minted into the credential, so a completed or renamed profile is
+    #: visible on the next request rather than after the credential expires.
+    login: str
+    display_label: str
 
 
 @runtime_checkable
@@ -486,19 +634,15 @@ class TokenSigner:
             "sub": subject.user_uid,
             "login": subject.login,
             # `R-37`. The name other reviewers read, already resolved by the account's own
-            # record before this method was reached. It travels here rather than being
-            # looked up per request for three reasons, in order: it is the mechanism
-            # `D-78` already established for `login`, and `R-37` changes only the *source*
-            # of the label; reading it per request would mean widening `AccountStandings`,
-            # which the module note argues at length must stay one integer on the path of
-            # every request; and a decisions router reaching the `access` boundary for a
-            # name would be the deep import `AGENTS.md` section 4 forbids.
-            #
-            # The price, stated rather than left to be found: a rename is visible on the
-            # next credential, so a reviewer holding one goes on recording decisions under
-            # the old name for at most `TOKEN_LIFETIME_SECONDS`. For an append-only ledger
-            # that is arguably the better reading -- the row records who decided, under the
-            # name they had then -- but it is a consequence and not the goal.
+            # record before this method was reached. Still minted and still required by
+            # `verify` -- it is part of the `am2` body, and dropping a required field would
+            # be a new format that signs everybody out -- but since `W49-SEAL-01` it is not
+            # what a request is served under: `AccountStanding` now carries the row's label
+            # on the read the seam makes anyway, and `require_authorization` publishes
+            # that one. The price this comment used to state -- a rename visible only on
+            # the next credential -- is gone with it, and it mattered more than a rename:
+            # an account that completes its profile changes its label from a login to the
+            # name form, and the decision ledger writes the label it is handed.
             "name": subject.display_label,
             "iat": issued_at,
             "exp": expires_at,
@@ -677,6 +821,14 @@ def build_authorization_dependency(
         with the one password that will produce the same answer for ever. It says nothing
         an attacker could not already work out, either -- that a deployment's seeded
         password is its seeded password is in the migration's own docstring.
+
+        **Since `W49-SEAL-01`, the four registers in their fixed order** (the module note
+        lists them): the standing -- archived or stale is ``authentication_required`` --
+        then the default credential, then the incomplete profile, then the role set. Each
+        later refusal is a 403 for the 401's reason above: the subject is known, and the
+        refusal names what it lacks. The order is the plan's (`W49-PLAN.md` section 3.2),
+        and it is what makes an account that is both seeded and incomplete reach exactly
+        the intersection of the two registers.
         """
         operation = _operation_of(request)
         if operation in UNAUTHENTICATED_OPERATIONS:
@@ -691,15 +843,21 @@ def build_authorization_dependency(
         # forged credential must not cost a database round trip, or an unauthenticated
         # caller can make this deployment query on demand.
         standing = standings.standing_of(subject.user_uid)
-        if standing is None or standing.token_epoch != subject.token_epoch:
+        # 1. Standing. No such account, an archived one (`R-61`), or a credential minted
+        #    under another generation: one refusal for all three, for the reason the
+        #    exchange gives one answer -- telling a caller *which* would tell them the
+        #    account exists.
+        if (
+            standing is None
+            or standing.archived
+            or standing.token_epoch != subject.token_epoch
+        ):
             raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
-        # `R-50`, and the order matters here too: a revoked credential on a default password
-        # is refused as revoked, because "this deployment does not accept this credential"
-        # is the stronger and less informative answer, and a caller must not learn from a
-        # 403 that a credential the deployment has already stopped accepting names a real
-        # account. An unreadable operation reached this line only by not being in the
-        # register above, and it is not in this one either: it is refused, like everything
-        # else this seam cannot identify.
+        # 2. `R-50`, and the order matters: a revoked credential on a default password is
+        #    refused as revoked, because "this deployment does not accept this credential"
+        #    is the stronger and less informative answer. An unreadable operation reached
+        #    this line only by not being in the open register, and it is not in this one
+        #    either: it is refused, like everything else this seam cannot identify.
         if standing.is_default_credential and (
             operation not in OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES
         ):
@@ -707,14 +865,39 @@ def build_authorization_dependency(
                 ErrorCode.PERMISSION_DENIED,
                 required_capability=PASSWORD_CHANGED_CAPABILITY,
             )
-        # Published. `T-6`: the seam says who the caller is, and -- since `R-50`, above and
-        # only there -- whether this deployment will serve a credential whose account has
-        # never changed its password. What a subject may *otherwise* do is still not this
-        # module's question, and there is still no role, group or grant anywhere in it.
-        # `changePassword` is the one operation that reads this subject, and it reads the
-        # identity rather than being handed one in a body -- a body could name somebody
-        # else.
-        request.state.subject = subject
+        # 3. `R-59`. An account that has not given its names and e-mail reaches the way out
+        #    of that state and nothing else.
+        if not standing.profile_complete and (
+            operation not in OPERATIONS_AN_INCOMPLETE_PROFILE_REACHES
+        ):
+            raise DomainError(
+                ErrorCode.PERMISSION_DENIED,
+                required_capability=PROFILE_COMPLETED_CAPABILITY,
+            )
+        # 4. `R-60`. Any of the operation's roles; the empty set is any complete account.
+        #    A named operation with no line in the register is refused to everyone -- the
+        #    register has no default -- and says nothing about what would open it.
+        if operation is None:
+            required = ROLES_OF_A_ROUTE_WITHOUT_AN_OPERATION
+        elif operation in OPERATION_ROLES:
+            required = OPERATION_ROLES[operation]
+        else:
+            raise DomainError(ErrorCode.PERMISSION_DENIED)
+        if required and required.isdisjoint(standing.roles):
+            raise DomainError(
+                ErrorCode.PERMISSION_DENIED,
+                required_capability=role_capability(required),
+            )
+        # Published, with the login and display label the row holds now: the credential's
+        # copies were true when it was minted, and a profile completed or renamed since is
+        # what every later request must act on. The identity and the epoch are the
+        # credential's own, which the checks above have just proved current.
+        request.state.subject = Subject(
+            user_uid=subject.user_uid,
+            login=standing.login,
+            token_epoch=subject.token_epoch,
+            display_label=standing.display_label,
+        )
 
     # `R-31`. The stamp that lets a guard find this seam inside an assembled application's
     # dependant trees without matching on a function name. `D-73` is closed by attaching

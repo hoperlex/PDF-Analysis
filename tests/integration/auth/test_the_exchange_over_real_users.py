@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from starlette.testclient import TestClient
 
 from auditmanager.access.models import UserRecord
+from auditmanager.access.accounts import AccountRepository
 from auditmanager.access.repository import UserRepository
 from auditmanager.api.app import create_asgi_app
 from auditmanager.api.routers import build_router
@@ -83,7 +84,10 @@ def client(session_factory: sessionmaker[Session]) -> TestClient:
         decisions=None,  # type: ignore[arg-type]
         exports=None,  # type: ignore[arg-type]
         credentials=CredentialAdapter(
-            session_factory, users=UserRepository(), signer=signer
+            session_factory,
+            users=UserRepository(),
+            accounts=AccountRepository(),
+            signer=signer,
         ),
     )
 

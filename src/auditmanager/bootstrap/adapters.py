@@ -40,6 +40,8 @@ from auditmanager.api.schemas.findings import (
 from auditmanager.api.schemas.projects import ProjectView
 from auditmanager.api.schemas.runs import RunStatusView, StageStateView
 from auditmanager.api.security import (
+    ROLE_ADMIN,
+    ROLE_EXPERT,
     AccountStanding,
     IssuedCredential,
     Subject,
@@ -909,13 +911,14 @@ class CredentialAdapter(_SessionHolder):
     only object that holds both halves.
     """
 
-    __slots__ = ("_users", "_signer")
+    __slots__ = ("_users", "_accounts", "_signer")
 
     def __init__(
         self,
         session_factory: sessionmaker[Session],
         *,
         users: Any,
+        accounts: Any,
         signer: TokenSigner,
     ) -> None:
         super().__init__(session_factory)
@@ -924,6 +927,13 @@ class CredentialAdapter(_SessionHolder):
         #: the application is in -- does not import the ``access`` boundary's internals to
         #: name a type it only passes through.
         self._users = users
+        #: `W49-SEAL-01`. ``auditmanager.access.ports.AccountRepository``: the standing the
+        #: seam reads on every guarded request -- epoch, default credential, archive state,
+        #: profile completeness, roles, and the row's login and label -- comes from one
+        #: statement of the management half, not from the sign-in half's two-column read.
+        #: Required, not defaulted: an adapter wired without it could not refuse an archived
+        #: or roleless account, and would serve them.
+        self._accounts = accounts
         self._signer = signer
 
     def issue(self, *, login: str, password: str) -> IssuedCredential | None:
@@ -1008,17 +1018,43 @@ class CredentialAdapter(_SessionHolder):
 
         **This is where the two vocabularies meet**, and the translation is the point of the
         method rather than an overhead. The ``access`` boundary answers its own
-        :class:`~auditmanager.access.models.CredentialStanding`; the seam is handed its own
+        :class:`~auditmanager.access.models.Account`; the seam is handed its own
         :class:`~auditmanager.api.security.AccountStanding`. Neither module imports the
         other, exactly as for :class:`~auditmanager.api.security.Subject`, and this adapter
         stays the only object in the tree that holds both halves.
+
+        `W49-SEAL-01`. One statement (``get_account``: the account's public columns and its
+        role set, joined) answers every field: the epoch and the default credential as
+        before, and the archive state, the profile completeness, the roles and the row's
+        login and display label. The roles cross by :data:`_SEAM_ROLE_OF`, which refuses a
+        value it does not know rather than dropping it -- a role set that silently lost a
+        member would be a privilege decision made by a dictionary.
         """
-        standing = self._read(
-            lambda session: self._users.credential_standing(session, user_uid)
-        )
-        if standing is None:
+        account = self._read(lambda session: self._accounts.get_account(session, user_uid))
+        if account is None:
             return None
+        record = account.record
         return AccountStanding(
-            token_epoch=standing.token_epoch,
-            is_default_credential=standing.is_default_credential,
+            token_epoch=record.token_epoch,
+            is_default_credential=record.is_default_credential,
+            archived=record.archived,
+            profile_complete=record.profile_complete,
+            roles=frozenset(_seam_role(role) for role in account.roles),
+            login=record.login,
+            display_label=record.display_label,
         )
+
+
+#: `W49-SEAL-01`. The ``access`` boundary's role vocabulary to the seam's, written out: the
+#: two spell the same words today, and a table rather than an identity is what keeps a new
+#: role on one side from reaching the other without a decision.
+_SEAM_ROLE_OF: dict[str, str] = {"expert": ROLE_EXPERT, "admin": ROLE_ADMIN}
+
+
+def _seam_role(role: str) -> str:
+    try:
+        return _SEAM_ROLE_OF[role]
+    except KeyError:
+        raise DomainError(
+            ErrorCode.INTERNAL_ERROR, message="an account holds a role the seam does not know"
+        ) from None

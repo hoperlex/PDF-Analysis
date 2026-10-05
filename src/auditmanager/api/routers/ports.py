@@ -484,11 +484,13 @@ class CredentialPort(Protocol):
     def standing_of(self, user_uid: str) -> AccountStanding | None:
         """What the seam re-reads about this account, or ``None`` for no account.
 
-        Two facts, read together: the generation of credentials this account accepts, and
-        whether it is still on the password the deployment seeded it with (`R-50`). Read by
-        the authorization seam on every request it guards; see
-        :class:`auditmanager.api.security.AccountStandings` for why ``None`` refuses rather
-        than admits, why the two travel together, and why nothing caches the answer.
+        Read together, in one statement: the generation of credentials this account
+        accepts, whether it must change its password (`R-50`), and -- since `W49-SEAL-01`
+        -- whether it is archived, whether its profile is complete, its role set, and the
+        login and display label its row holds now. Read by the authorization seam on every
+        request it guards; see :class:`auditmanager.api.security.AccountStandings` for why
+        ``None`` refuses rather than admits, why the facts travel together, and why nothing
+        caches the answer.
         """
 
 

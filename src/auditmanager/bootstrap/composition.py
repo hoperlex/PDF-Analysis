@@ -107,6 +107,7 @@ def build_application(
     # The import is here rather than at module scope for the reason the four imports above
     # are: the composition root is the only thing that knows which boundaries this
     # application is made of, and ``access`` is a boundary the routers must not import.
+    from auditmanager.access.public import AccountRepository as AccountAccessRepository
     from auditmanager.access.repository import UserRepository as UserAccessRepository
 
     try:
@@ -149,7 +150,10 @@ def build_application(
         decisions=DecisionAdapter(sessions),
         exports=CsvExportAdapter(sessions),
         credentials=CredentialAdapter(
-            sessions, users=UserAccessRepository(), signer=signer
+            sessions,
+            users=UserAccessRepository(),
+            accounts=AccountAccessRepository(),
+            signer=signer,
         ),
         # `W45-BLOCKS`. Reads the same store and session factory as everything else here;
         # nothing new is opened for it.
