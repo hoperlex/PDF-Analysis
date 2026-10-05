@@ -64,8 +64,20 @@ The resealed contract, the three access registers plus `OPERATION_ROLES`, and th
 - `src/auditmanager/api/**`, `src/auditmanager/bootstrap/adapters.py`, `src/auditmanager/bootstrap/composition.py`
 - `tests/integration/api/**`, `tests/integration/auth/**`, `tests/integration/composition/**`
 - `tests/e2e/pc01/test_acceptance.py` — the route-count assertion only
+- granted after the stop of 2026-10-06 (`W49-SEAL-01a.md` at `2fae883`), exact sites only:
+  `src/auditmanager/shared/errors/codes.py` (the `rate_limited` member and its count sentence);
+  `web/src/shared/api/errors.ts` (count sentence); `web/src/shared/api/catalog-message.ts` (the
+  `rate_limited` sentence and count sentences); `web/src/entities/audit-run/model/terminal-reason.ts`
+  (the `rate_limited` entry); `web/tests/unit/screens/run-terminal-reason.test.ts`;
+  `web/tests/unit/api/failure-surface.test.ts`; `web/tests/unit/api/authorization-state.test.ts`;
+  `docs/program/P02_SEAMS.md`, `infra/deploy/README.md`, `infra/deploy/serve.py`,
+  `infra/deploy/proxy/nginx.conf` (sentences naming the surface triple or the code count only);
+  `tests/support/accounts.py`; `tests/e2e/pc01/driver.py`; `tests/characterization/w13_baseline/**`
+  (records 10 and 11 with `permitted_change`); `tests/integration/ingest/test_size_guard_boundary.py`;
+  `tests/integration/p02_journey/test_truncated_end_to_end.py`;
+  `tests/integration/p02_journey/test_query_surface_over_the_corpus.py`
 - `docs/program/CONTRACT_PIN_REGISTRY.md` — all rows but the migration head's
-- `docs/program/CURRENT_STATE.md` and `docs/program/ALPHA_ROADMAP.md` — the live surface-triple sentence in each
+- `docs/program/CURRENT_STATE.md` and `docs/program/ALPHA_ROADMAP.md` — the live surface-triple sentence in each, which may also move the catalog count, identity count and domain revision it names
 - `docs/program/W49-SEAL-01a.md`, `docs/program/W49-SEAL-01b.md`, `docs/program/W49-SEAL-01c.md`
 
 ## Forbidden hotspots
@@ -103,7 +115,7 @@ Revert the slot's commits together; the reseal is atomic.
 
 ## Handoff
 
-- changed files: listed in `docs/program/W49-SEAL-01.md` with `git diff --name-only <base>..<sha>`
+- changed files: listed in `docs/program/W49-SEAL-01c.md` with `git diff --name-only <base>..<sha>`
 - commands/results: verbatim with exit status; every mutation with its red output
 - known limits: listed, never decided silently
 - integration notes: hand back branch `agent/w49-seal-01` at a recorded SHA
