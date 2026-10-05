@@ -44,7 +44,7 @@
 
 import { useState } from 'react';
 
-import type { ProviderMode, RunStatus, StageStatus, VersionUid } from '@/shared/api';
+import type { RunStatus, StageStatus, VersionUid } from '@/shared/api';
 import type { ComparedFact, ComparedStage, Comparison, FactId } from '@/entities/audit-run';
 import {
   COST_BASIS_LABELS,
@@ -67,6 +67,7 @@ import {
   differenceCount,
   formatCostMicros,
   formatElapsed,
+  hasKnownRunVocabulary,
   providerModeLabel,
   terminalDetailKeys,
   terminalDetailDigest,
@@ -78,6 +79,8 @@ import styles from './stage-comparison.module.css';
 export interface StageComparisonProps {
   readonly versionUid: VersionUid;
 }
+
+const UNKNOWN_COMPARISON_TITLE = 'Сравнение содержит неизвестное значение.';
 
 /**
  * What each row of the run table is, in the reader's language.
@@ -125,7 +128,7 @@ function providerModeText(value: string | number | null): string {
   const label = providerModeLabel(value);
   return label === 'unknown'
     ? PROVIDER_MODE_UNKNOWN_LABEL
-    : PROVIDER_MODE_LABELS[label as ProviderMode];
+    : PROVIDER_MODE_LABELS[label];
 }
 
 /** One run's side of one fact. The machine value stays in the cell's `data-` attribute. */
@@ -260,6 +263,17 @@ export function StageComparison({ versionUid }: StageComparisonProps) {
   }
 
   const runs = query.data.items;
+
+  if (runs.some((run) => !hasKnownRunVocabulary(run))) {
+    return (
+      <div data-stage-comparison-fault="closed-vocabulary">
+        <ErrorState
+          title={UNKNOWN_COMPARISON_TITLE}
+          detail="Состояние прогона или этапа нельзя показать достоверно — сравнение скрыто."
+        />
+      </div>
+    );
+  }
 
   if (runs.length === 0) {
     return (

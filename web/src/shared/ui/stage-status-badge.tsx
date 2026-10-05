@@ -9,6 +9,7 @@
  */
 
 import type { StageStatus } from '@/shared/api';
+import { STAGE_STATUS_VALUES } from '@/shared/api';
 import { assertNever } from '@/shared/lib';
 
 function toneFor(status: StageStatus): string {
@@ -44,6 +45,18 @@ const STAGE_STATUS_LABELS: Readonly<Record<StageStatus, string>> = {
 };
 
 export function StageStatusBadge({ status, errorCode }: StageStatusBadgeProps) {
+  if (!(STAGE_STATUS_VALUES as readonly unknown[]).includes(status)) {
+    return (
+      <span
+        className="am-badge am-badge--failed"
+        role="alert"
+        data-closed-vocabulary-fault="stage-status"
+      >
+        <span className="am-badge__label">Неизвестный статус этапа</span>
+      </span>
+    );
+  }
+
   const reason = status === 'succeeded' ? null : (errorCode ?? null);
   return (
     <span className={`am-badge am-badge--${toneFor(status)}`} data-stage-status={status}>

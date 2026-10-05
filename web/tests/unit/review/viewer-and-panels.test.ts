@@ -335,3 +335,20 @@ describe('the history shows every event, with its verdict and its comment', () =
     expect(markup).not.toContain('am-history__comment');
   });
 });
+
+describe('the history fails closed on unknown transport vocabulary', () => {
+  it.each([
+    ['event type', { event_type: 'future_event' }],
+    ['verdict', { event_type: 'accept', verdict: 'future_verdict' }],
+  ])('renders one typed fault for an unknown %s', (_name, mutation) => {
+    const malformed = {
+      ...decisionEvent(),
+      ...mutation,
+    } as unknown as DecisionEvent;
+    const markup = render(createElement(DecisionHistory, { events: [malformed] }));
+    expect(markup).toContain('data-history-fault="closed-vocabulary"');
+    expect(markup).toContain('Событие решения содержит неизвестное значение.');
+    expect(markup).not.toContain('class="am-history__event"');
+    expect(markup).not.toContain('future_');
+  });
+});

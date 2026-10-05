@@ -1622,9 +1622,11 @@ li.am-state .am-state__detail {
  */
 .am-history__event {
   position: relative;
+  min-width: 0;
   margin: 0;
   border-left: 2px solid var(--am-line);
   padding: 0 0 var(--am-gap-sm) var(--am-gap);
+  overflow-wrap: anywhere;
 }
 
 .am-history__event::before {
@@ -1679,9 +1681,11 @@ li.am-state .am-state__detail {
 }
 
 .am-history__comment {
+  min-width: 0;
   margin: 6px 0 0;
   line-height: var(--am-leading-base);
   font-size: var(--am-text-md);
+  overflow-wrap: anywhere;
 }
 
 /* ---- export ---------------------------------------------------------------------- */

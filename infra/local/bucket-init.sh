@@ -1,8 +1,9 @@
 #!/bin/sh
 # P1-INF-01 / Gate A session A2 - idempotent private-bucket initialization.
 #
-# Runs inside the pinned minio/mc container (FOUNDATION_S3_MC_IMAGE), on the lane network,
-# against the `s3` service. Mounted read-only at /usr/local/lib/foundation/bucket-init.sh.
+# Runs inside the repository-owned `client` image built by infra/minio/Dockerfile from the
+# checksum-pinned official mc source, on the lane network against the `s3` service. Mounted
+# read-only at /usr/local/lib/foundation/bucket-init.sh.
 #
 # IDEMPOTENT BY CONSTRUCTION. Every step is "make it so", never "create it":
 #   - the bucket is created only when `mc stat` says it is absent;

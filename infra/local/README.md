@@ -44,13 +44,15 @@ bucket initialization have all reported healthy. There is no manual follow-up st
 volumes, so database contents and stored objects survive `down` and are still there after
 the next `up`.
 
-Do not invoke `docker compose` directly for `up`/`down`. The Makefile is the only thing
-that exports the pinned image digests, and the compose file refuses to interpolate
-without them:
+Do not invoke `docker compose` directly for `up`/`down`. The Makefile supplies the pinned
+PostgreSQL base digest. The repository-owned MinIO server and client images are built from
+`infra/minio/Dockerfile`, whose base images, source commits and archive checksums are fixed
+in that file and expose no call-site image argument. Direct Compose invocation therefore
+fails before it can substitute the PostgreSQL base:
 
 ```
-error while interpolating services.s3-init.image: required variable
-FOUNDATION_S3_MC_IMAGE is missing a value
+error while interpolating services.postgres.build.args.POSTGRES_BASE_IMAGE:
+required variable FOUNDATION_POSTGRES_IMAGE is missing a value
 ```
 
 That refusal is deliberate — see "Images are pinned" below.
@@ -60,8 +62,8 @@ That refusal is deliberate — see "Images are pinned" below.
 | compose service | image | published on |
 | --- | --- | --- |
 | `postgres` | repository Dockerfile: `FOUNDATION_POSTGRES_IMAGE` base + pgvector 0.8.6 | `127.0.0.1:$POSTGRES_PORT` -> 5432 |
-| `s3` | `FOUNDATION_S3_IMAGE` (MinIO) | `127.0.0.1:$S3_API_PORT` -> 9000, `127.0.0.1:$S3_CONSOLE_PORT` -> 9001 |
-| `s3-init` | `FOUNDATION_S3_MC_IMAGE` (`mc`) | nothing published |
+| `s3` | repository Dockerfile target `server` (MinIO) | `127.0.0.1:$S3_API_PORT` -> 9000, `127.0.0.1:$S3_CONSOLE_PORT` -> 9001 |
+| `s3-init` | repository Dockerfile target `client` (`mc`) | nothing published |
 
 Ports bind to `127.0.0.1` only. These services hold disposable credentials and must not
 be reachable from the network.
@@ -98,15 +100,13 @@ docker network ls --filter name=$FOUNDATION_INSTANCE
 
 ### Images are pinned
 
-FF-01 forbids a floating tag anywhere in the foundation. The three third-party input digests live in the
-`Makefile`'s `override FOUNDATION_*_IMAGE :=` lines and in
-`docs/program/FOUNDATION_LOCK.json`; `make` reads them out of its own bytes and exports
-them. PostgreSQL uses its pin only as the base of `infra/postgres/Dockerfile`, whose
-pgvector source commit and archive checksum are also locked; MinIO consumes its pins
-directly. This compose file consumes the values with `${...:?}`, so an unset pin is a loud failure
-and never silently falls back to a tag. A lane configures instance, ports, database and
-bucket — never which image runs. **Changing an image is a pin request back to
-`P1-INT-00`, not a local edit.**
+FF-01 forbids a floating tag anywhere in the foundation. PostgreSQL consumes the exact base
+digest that the Makefile and `docs/program/FOUNDATION_LOCK.json` record, then
+`infra/postgres/Dockerfile` adds checksum-pinned pgvector. The repository-owned MinIO
+Dockerfile pins both build/runtime bases by digest and both official source archives by commit
+and SHA-256; the compose file selects only its fixed `server` and `client` targets. A lane
+configures instance, ports, database and bucket — never which image runs. **Changing an image
+or source pin is a pin request back to `P1-INT-00`, not a local edit.**
 
 ## The bucket is private
 
@@ -157,7 +157,7 @@ is explicit and non-zero; there is no partial pass.
 
 ## Troubleshooting
 
-**`make up` fails with `required variable FOUNDATION_S3_MC_IMAGE is missing a value`.**
+**`make up` fails with `required variable FOUNDATION_POSTGRES_IMAGE is missing a value`.**
 You ran `docker compose` directly. Use `make up` / `make down`.
 
 **`.env is missing and no default is assumed`.** `cp .env.example .env`, then set this

@@ -15,6 +15,7 @@
  */
 
 import type { RunState } from '@/shared/api';
+import { PROVIDER_MODE_VALUES, RUN_STATE_VALUES } from '@/shared/api';
 import { assertNever } from '@/shared/lib';
 
 /** Presentation tone per contract state. Nothing here renames a state. */
@@ -87,6 +88,23 @@ export const PROVIDER_MODE_LABELS: Readonly<Record<'live' | 'recorded', string>>
 };
 
 export function RunStateBadge({ state, providerMode }: RunStateBadgeProps) {
+  const unknownState = !(RUN_STATE_VALUES as readonly unknown[]).includes(state);
+  const unknownProviderMode =
+    providerMode !== undefined &&
+    !(PROVIDER_MODE_VALUES as readonly unknown[]).includes(providerMode);
+
+  if (unknownState || unknownProviderMode) {
+    return (
+      <span
+        className="am-badge am-badge--failed"
+        role="alert"
+        data-closed-vocabulary-fault={unknownState ? 'run-state' : 'provider-mode'}
+      >
+        <span className="am-badge__label">Неизвестное состояние прогона</span>
+      </span>
+    );
+  }
+
   return (
     <span className={`am-badge am-badge--${toneFor(state)}`} data-run-state={state}>
       <span className="am-badge__label">{STATE_LABELS[state]}</span>

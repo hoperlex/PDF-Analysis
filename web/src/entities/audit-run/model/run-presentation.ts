@@ -18,8 +18,15 @@
  *    contract says it has stopped.
  */
 
-import type { CostBasis, RunState, RunStatus, StageId, StageStatus } from '@/shared/api';
-import { PROVIDER_MODE_VALUES, isExportableRunState, isTerminalRunState } from '@/shared/api';
+import type { CostBasis, ProviderMode, RunState, RunStatus, StageId, StageStatus } from '@/shared/api';
+import {
+  PROVIDER_MODE_VALUES,
+  RUN_STATE_VALUES,
+  STAGE_ID_VALUES,
+  STAGE_STATUS_VALUES,
+  isExportableRunState,
+  isTerminalRunState,
+} from '@/shared/api';
 
 // ------------------------------------------------------------------------------------
 // Provider mode
@@ -33,11 +40,44 @@ export type ProviderModeLabel = (typeof PROVIDER_MODE_VALUES)[number] | typeof P
 
 const PROVIDER_MODES: ReadonlySet<string> = new Set<string>(PROVIDER_MODE_VALUES);
 
+function isProviderMode(value: unknown): value is ProviderMode {
+  return typeof value === 'string' && PROVIDER_MODES.has(value);
+}
+
 /** Narrow an arbitrary value to a contract provider mode, or to `unknown`. */
 export function providerModeLabel(value: unknown): ProviderModeLabel {
-  return typeof value === 'string' && PROVIDER_MODES.has(value)
-    ? (value as ProviderModeLabel)
-    : PROVIDER_MODE_UNKNOWN;
+  return isProviderMode(value) ? value : PROVIDER_MODE_UNKNOWN;
+}
+
+/**
+ * Whether every run/stage value used as a label-table key belongs to its closed contract
+ * vocabulary. Provider mode is deliberately excluded: `providerModeLabel` narrows any
+ * unrecognised value to the explicit `unknown` presentation before a table is indexed.
+ */
+export function hasKnownRunVocabulary(status: RunStatus): boolean {
+  const candidate = status as RunStatus & {
+    readonly state: unknown;
+    readonly degradation_set?: unknown;
+    readonly stages: unknown;
+  };
+  const runStates: readonly unknown[] = RUN_STATE_VALUES;
+  const stageIds: readonly unknown[] = STAGE_ID_VALUES;
+  const stageStatuses: readonly unknown[] = STAGE_STATUS_VALUES;
+
+  if (!runStates.includes(candidate.state) || !Array.isArray(candidate.stages)) return false;
+  if (
+    candidate.degradation_set !== undefined &&
+    (!Array.isArray(candidate.degradation_set) ||
+      !candidate.degradation_set.every((stageId) => stageIds.includes(stageId)))
+  ) {
+    return false;
+  }
+
+  return candidate.stages.every((stage) => {
+    if (stage === null || typeof stage !== 'object') return false;
+    const value = stage as { readonly stage_id?: unknown; readonly status?: unknown };
+    return stageIds.includes(value.stage_id) && stageStatuses.includes(value.status);
+  });
 }
 
 /**

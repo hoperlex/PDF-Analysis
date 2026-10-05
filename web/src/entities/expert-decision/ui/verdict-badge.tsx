@@ -17,6 +17,7 @@
  */
 
 import type { Verdict } from '@/shared/api';
+import { VERDICT_VALUES } from '@/shared/api';
 import { assertNever } from '@/shared/lib';
 
 function toneFor(verdict: Verdict): string {
@@ -58,6 +59,18 @@ export const VERDICT_LABELS: Readonly<Record<Verdict, string>> = {
 };
 
 export function VerdictBadge({ verdict }: VerdictBadgeProps) {
+  if (!(VERDICT_VALUES as readonly unknown[]).includes(verdict)) {
+    return (
+      <span
+        className="am-badge am-badge--failed"
+        role="alert"
+        data-closed-vocabulary-fault="verdict"
+      >
+        <span className="am-badge__label">Неизвестный вердикт</span>
+      </span>
+    );
+  }
+
   return (
     <span className={`am-badge am-badge--${toneFor(verdict)}`} data-verdict={verdict}>
       <span className="am-badge__label">{VERDICT_LABELS[verdict]}</span>

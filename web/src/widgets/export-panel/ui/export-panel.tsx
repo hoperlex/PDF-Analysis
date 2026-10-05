@@ -28,7 +28,13 @@
  */
 
 import type { ProviderMode, RunId, RunState } from '@/shared/api';
-import { CSV_COLUMNS, CSV_ENCODING, csvFileName, isExportableRunState } from '@/shared/api';
+import {
+  CSV_COLUMNS,
+  CSV_ENCODING,
+  RUN_STATE_VALUES,
+  csvFileName,
+  isExportableRunState,
+} from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, NotApplicableState, RunStateBadge, STATE_LABELS } from '@/shared/ui';
 
@@ -42,6 +48,8 @@ export interface ExportPanelProps {
   readonly lastFileName?: string | null | undefined;
 }
 
+const UNKNOWN_RUN_STATE_TITLE = 'Прогон содержит неизвестное состояние.';
+
 export function ExportPanel({
   runId,
   runState,
@@ -51,6 +59,17 @@ export function ExportPanel({
   error,
   lastFileName,
 }: ExportPanelProps) {
+  if (!(RUN_STATE_VALUES as readonly unknown[]).includes(runState)) {
+    return (
+      <section className="am-export" data-export-fault="closed-vocabulary">
+        <ErrorState
+          title={UNKNOWN_RUN_STATE_TITLE}
+          detail="Выгрузку нельзя предложить достоверно — панель скрыта."
+        />
+      </section>
+    );
+  }
+
   const exportable = isExportableRunState(runState);
 
   return (
