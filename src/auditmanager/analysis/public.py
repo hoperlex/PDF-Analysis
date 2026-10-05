@@ -35,6 +35,7 @@ from auditmanager.analysis.ports.artifacts import (
     ROLE_PAGE_INVENTORY,
     ROLE_SOURCE_DOCUMENT,
     ROLE_TEXT_LAYER,
+    publish_artifact,
     read_artifact,
 )
 from auditmanager.analysis.ports.stage import StageContext, StageHandler, StageProduction
@@ -43,9 +44,29 @@ from auditmanager.analysis.stages.extraction import (
     NORMALIZATION_ID,
 )
 from auditmanager.analysis.stages.source_preparation import document_text
+from auditmanager.analysis.text import (
+    AR_TEXT_PROFILE,
+    ARTIFACT_ROLE,
+    CostMeter,
+    ModelAdapter,
+    ModelCallJournal,
+    ModelCallRecord,
+    ModelRequest,
+    ModelResponse,
+    ProviderConfig,
+    ProviderMode,
+    ProxyAdapter,
+    ProxySettings,
+    TextAnalysisOutcome,
+    load_provider_config,
+    run_text_analysis,
+)
+from auditmanager.analysis.text.stage import STAGE_VERSION
 
 __all__ = [
     "ARTIFACT_VERSION",
+    "ARTIFACT_ROLE",
+    "AR_TEXT_PROFILE",
     "CONTRACT_VERSION",
     "NORMALIZATION_DESCRIPTION",
     "NORMALIZATION_ID",
@@ -56,6 +77,17 @@ __all__ = [
     "ROLE_SOURCE_DOCUMENT",
     "ROLE_TEXT_LAYER",
     "ArtifactRef",
+    "CostMeter",
+    "ModelAdapter",
+    "ModelCallJournal",
+    "ModelCallRecord",
+    "ModelRequest",
+    "ModelResponse",
+    "ProviderConfig",
+    "ProviderMode",
+    "ProxyAdapter",
+    "ProxySettings",
+    "STAGE_VERSION",
     "StageContext",
     "StageDefinition",
     "StageError",
@@ -64,8 +96,12 @@ __all__ = [
     "StageRegistry",
     "StageResult",
     "StageStatus",
+    "TextAnalysisOutcome",
     "default_registry",
     "document_text",
+    "load_provider_config",
+    "publish_artifact",
     "read_artifact",
     "run_stage",
+    "run_text_analysis",
 ]

@@ -90,11 +90,11 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
-from auditmanager.documents import DocumentRepository
+from auditmanager.documents.public import DocumentRepository
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import CommandId, VersionUid
-from auditmanager.storage import (
+from auditmanager.storage.public import (
     BlobId,
     BlobNotFoundError,
     BlobStore,
@@ -104,7 +104,7 @@ from auditmanager.storage import (
     parse_blob_role,
     sha256_of,
 )
-from auditmanager.storage.blob_repository import BlobMetadataRepository
+from auditmanager.storage.public import BlobMetadataRepository
 
 from .commands import CommandRepository
 from .failures import domain_error_from_storage

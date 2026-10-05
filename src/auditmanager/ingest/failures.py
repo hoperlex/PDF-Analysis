@@ -25,7 +25,7 @@ from __future__ import annotations
 from typing import Any
 
 from auditmanager.shared.errors import DomainError, from_internal
-from auditmanager.storage import StorageError
+from auditmanager.storage.public import StorageError
 
 __all__ = ["domain_error_from_storage"]
 

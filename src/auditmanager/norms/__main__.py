@@ -106,7 +106,7 @@ class ProxyPageRecogniser:
     __slots__ = ("_adapter", "_model", "_max_output_tokens", "_dpi")
 
     def __init__(self, *, base_url: str, token: str, model: str, max_output_tokens: int, dpi: int) -> None:
-        from auditmanager.analysis.text import ProxyAdapter, ProxySettings
+        from auditmanager.analysis.public import ProxyAdapter, ProxySettings
 
         self._adapter = ProxyAdapter(ProxySettings(base_url=base_url, token=token, model=model))
         self._model = model
@@ -114,7 +114,7 @@ class ProxyPageRecogniser:
         self._dpi = dpi
 
     def recognise(self, page: PageToRecognise) -> RecognisedPage:
-        from auditmanager.analysis.text import ModelRequest
+        from auditmanager.analysis.public import ModelRequest
 
         png = render_crop_png(page.crop, dpi=self._dpi)
         encoded = base64.b64encode(png).decode("ascii")

@@ -20,7 +20,7 @@ from typing import Any, Final
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from auditmanager.documents.repository import DocumentRepository
+from auditmanager.documents.public import DocumentRepository
 
 from .models import (
     DashboardSummaryRecord,

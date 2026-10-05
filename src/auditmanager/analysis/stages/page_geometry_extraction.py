@@ -122,7 +122,7 @@ def run(context: StageContext) -> StageProduction:
 
 
 def _source_blob_from(inventory: dict[str, Any]) -> Any:
-    from auditmanager.storage.models import parse_blob_id
+    from auditmanager.storage.public import parse_blob_id
 
     reference = inventory.get("source_blob_id")
     if not isinstance(reference, str):

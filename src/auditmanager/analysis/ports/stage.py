@@ -22,8 +22,8 @@ from typing import Any, Mapping, Protocol
 from auditmanager.analysis.engine.registry import StageDefinition
 from auditmanager.analysis.engine.result import ArtifactRef, MetricValue
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.storage import BlobStore
-from auditmanager.storage.models import BlobId
+from auditmanager.storage.public import BlobStore
+from auditmanager.storage.public import BlobId
 
 
 @dataclass(frozen=True, slots=True)

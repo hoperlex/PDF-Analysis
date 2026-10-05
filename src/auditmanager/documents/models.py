@@ -27,7 +27,7 @@ import json
 from pathlib import Path
 
 from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
-from auditmanager.storage import BlobId
+from auditmanager.storage.public import BlobId
 
 __all__ = [
     "MANIFEST_ROLE_SOURCE_DOCUMENT",

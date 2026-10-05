@@ -45,8 +45,8 @@ from typing import Any, Final, Mapping
 
 from sqlalchemy.orm import Session
 
-from auditmanager.documents import DocumentRepository
-from auditmanager.ingest import (
+from auditmanager.documents.public import DocumentRepository
+from auditmanager.ingest.public import (
     CommandReplay,
     CommandRepository,
     CommandStarted,
@@ -71,7 +71,7 @@ COMMAND_TYPE_START_RUN: Final[str] = "start_audit_run"
 # storage blob role `source_document`, this module's own copy of the contract's
 # `source.document`, and what ingest actually wrote into the manifest - which was the blob
 # spelling, so the real upload path could not start a run while every fixture could.
-from auditmanager.documents import MANIFEST_ROLE_SOURCE_DOCUMENT
+from auditmanager.documents.public import MANIFEST_ROLE_SOURCE_DOCUMENT
 
 ROLE_SOURCE_DOCUMENT: Final[str] = MANIFEST_ROLE_SOURCE_DOCUMENT
 

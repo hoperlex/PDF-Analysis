@@ -25,8 +25,8 @@ from auditmanager.analysis.engine.serialization import (
     sha256_hex,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.storage import BlobStore, parse_blob_role
-from auditmanager.storage.models import BlobId
+from auditmanager.storage.public import BlobStore, parse_blob_role
+from auditmanager.storage.public import BlobId
 
 # --- roles -------------------------------------------------------------------
 
