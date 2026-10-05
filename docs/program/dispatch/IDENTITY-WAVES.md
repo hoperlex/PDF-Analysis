@@ -95,10 +95,10 @@ Three consequences the polls could not see, each stated where it binds:
 
 The current rulings exclude what this programme builds: `R-18` keeps "roles, user management"
 out of the alpha; `R-42` says "this programme has no role vocabulary and `T-6` forbids inventing
-one here"; `contracts/api/v1/openapi.json` says in four places that no role, subject or
-capability vocabulary exists on this surface (`info.description` twice — one of them naming
-`T-6` — the `/auth/password` operation description, and the `bearerAuth` scheme description),
-and once that it has no rate limiting;
+one here"; `contracts/api/v1/openapi.json` says in at least six sentences across
+`info.description`, the `/auth/password` operation description and the `bearerAuth` scheme
+description that no role, subject or capability vocabulary — and no rate limiting — exists on
+this surface (`rg -n -i -e role -e 'rate limit' contracts/api/v1/openapi.json`);
 `ALPHA_ROADMAP.md` §1 lists user management and roles as "not in this road". A contract that adds them while those sentences stand violates the programme's own rule
 that a document must not outlive what it describes (`OPERATING_CONSTRAINTS.md` §4.7).
 
@@ -238,6 +238,9 @@ Two roles, fixed by the owner on 2026-10-05:
   owner's intent, not that instruction, and `W48-INT-MAIN-01` asks for it quoting the exact SHA
   once the candidate exists. The provider credential (`D-70`) is placed by the owner in the
   host's `provider.env`; it never enters the repository, a worktree, a report or a chat.
+
+The integrator hands the executor `docs/program/dispatch/EXECUTOR-PROMPT.md` verbatim with the
+first task file; it restates this section for an agent that has nothing but the repository.
 
 Hand-back format, per task: branch and SHA; the report with the six items of `AGENTS.md` §5;
 the lane gate's literal `GATE OK` tied to that SHA (or the focused commands the task names);

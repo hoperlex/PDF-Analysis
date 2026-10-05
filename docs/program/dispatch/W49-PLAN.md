@@ -185,8 +185,9 @@ against that file: `app_user` (`active → archived → active | purged`) and `r
 (`pending → approved | rejected`); their `machine`/`current_state`/`requested_state` details are
 then honest. The error catalog grows by **one code, `rate_limited`** (HTTP 429, `retryable:
 true`, category `policy`, no detail keys): the edge and the BFF throttles of §3.5 have to answer
-with a catalog code, because the safety rules forbid inventing one at the edge and the catalog has
-no 429 today. That is the second reseal of the slot `IDENTITY-WAVES.md` §5 allows; no other code
+with a catalog code — the proxy throttle of §3.5 answers direct callers of `/api/v1/` and the
+safety rules forbid inventing a code at the edge, while the catalog has no 429 today. That is the
+second reseal of the slot `IDENTITY-WAVES.md` §5 allows; no other code
 is added. A code lives in three places at once — `error-codes.json`,
 `error-envelope.schema.json` (its `enum` and the per-code `retryable` `allOf`) and the literal
 `== 22` in `tests/contract/domain_p02/test_openapi_document.py` — and in the Russian sentence
@@ -195,9 +196,18 @@ is added. A code lives in three places at once — `error-codes.json`,
 in `W49-SEAL-01a`. One safe detail key is added (`conflict_reason` on `conflict`).
 `DecisionEvent` on the wire is unchanged. Every sentence in `openapi.json` that denies a role,
 subject or capability vocabulary, or rate limiting, is superseded under `R-55` — not a counted
-list: the seal's required check is `rg -n 'role\|rate limit' contracts/api/v1/openapi.json`
-showing no denial (`InputManifestEntry.role` is a field, not a denial). The surface triple after
-the reseal is **measured by `W49-SEAL-01`**, never quoted from this plan.
+list: the seal's required check is
+
+```sh
+rg -n -i -e role -e 'rate limit' contracts/api/v1/openapi.json
+```
+
+(two patterns with `-e`; a `\|` inside one pattern is a literal bar to ripgrep and matches
+nothing, which is how a check stops being able to fail). At the base it prints six lines in
+three places; after the seal the only admissible hits are the `InputManifestEntry.role` field
+(its description, `required` entry and property) and the new role-vocabulary sentences the seal
+writes, each named in the report. The surface triple after the reseal is **measured by
+`W49-SEAL-01`**, never quoted from this plan.
 
 ### 3.5 BFF session
 
@@ -240,8 +250,10 @@ the reseal is **measured by `W49-SEAL-01`**, never quoted from this plan.
   closed `?refusal=` set (`route.ts` `refuseSignIn`, `exchange.ts`), so the bucket refuses with
   `303` to `/login?refusal=throttled` or `/register?refusal=throttled` — a new value in each
   closed set with its Russian sentence — never with a JSON body a form would render raw. The
-  `rate_limited` envelope is what the **API and the proxy** answer to direct callers; the
-  catch-all forwards it unchanged to the JSON client. A Next 15
+  `rate_limited` envelope is what the **proxy** answers to direct callers of `/api/v1/`; the BFF's
+  own forwards go to `http://api:8000` inside the compose network (`compose.server.yml`,
+  `AUDITMANAGER_API_UPSTREAM`) and never pass the proxy, so a signed-in client never meets it.
+  A Next 15
   route handler has no peer address, so the client key is **`X-Real-IP`** — the header both
   proxy configurations set from `$remote_addr` (`nginx.conf:85`, `tls-server.conf:82`) — trusted
   only under `AUDITMANAGER_BEHIND_PROXY=1`, an environment flag `W49-EDGE-01` sets on the `web`
@@ -269,9 +281,13 @@ the reseal is **measured by `W49-SEAL-01`**, never quoted from this plan.
   envelope as JSON with `$request_id` as `correlation_id` — nginx's own 429 is an HTML page,
   exactly as its 413 is (the comment at `nginx.conf:37-42` is why the body cap is 32m). The
   100-request cap stays the last line. Bulk rejection and request retention are registered debts.
-- The sign-in refusal set in `web/src/features/sign-in/model/exchange.ts` gains `pending`,
-  `rejected` and `throttled`; the sign-in screen renders the sentences (Russian). The full
-  screens are W51.
+- The sign-in refusal set gains `pending`, `rejected` and `throttled` in both of its mirrors —
+  `SIGN_IN_REFUSALS` in `web/src/features/sign-in/model/exchange.ts` and `type Refusal` in
+  `web/src/app/bff/v1/[...path]/route.ts` — and the sign-in screen renders the sentences
+  (Russian). `exchange.ts` records the `W40-LIMIT` decision **not** to add a `throttled` value,
+  because a per-account throttle would tell a stranger that the account exists and is under
+  attack; the value added here is **per-client** (the caller's own bucket), says nothing about any
+  account, and `W49-BFF-01` rewrites that header comment to say so. The full screens are W51.
 
 ### 3.6 Pins that this wave moves, and who moves them
 
