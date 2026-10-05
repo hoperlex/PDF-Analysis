@@ -83,6 +83,14 @@ describe('which runs are offered an export', () => {
       expect(exportable).toBe(isExportableRunState(state));
     }
   });
+
+  it('renders a typed fault instead of treating an unknown state as not exportable', () => {
+    const markup = panel('future_state' as RunState);
+    expect(markup).toContain('data-export-fault="closed-vocabulary"');
+    expect(markup).toContain('Прогон содержит неизвестное состояние.');
+    expect(markup).not.toContain('data-exportable=');
+    expect(markup).not.toContain('future_state');
+  });
 });
 
 describe('the column contract is consumed, not restated', () => {

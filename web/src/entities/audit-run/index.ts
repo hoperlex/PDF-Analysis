@@ -17,6 +17,7 @@ export {
   elapsedMs,
   formatCostMicros,
   formatElapsed,
+  hasKnownRunVocabulary,
   interruptedReason,
   isRunAnimating,
   providerModeCaption,

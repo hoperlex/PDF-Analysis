@@ -259,6 +259,32 @@ describe('the machine vocabulary stays in the attributes', () => {
   });
 });
 
+describe('unknown label-table keys fail the comparison closed', () => {
+  it.each([
+    ['run state', { ...NEWER_RUN, state: 'future_state' }],
+    [
+      'stage id',
+      {
+        ...NEWER_RUN,
+        stages: [stage({ stage_id: 'future_stage' as never, status: 'succeeded' })],
+      },
+    ],
+    [
+      'stage status',
+      {
+        ...NEWER_RUN,
+        stages: [stage({ stage_id: 'source_preparation', status: 'future_status' as never })],
+      },
+    ],
+  ])('renders a typed fault for an unknown %s', (_name, malformed) => {
+    const markup = screen(seedRuns([malformed as unknown as RunStatus, OLDER_RUN]));
+    expect(markup).toContain('data-stage-comparison-fault="closed-vocabulary"');
+    expect(markup).toContain('Сравнение содержит неизвестное значение.');
+    expect(markup).not.toContain('data-fact=');
+    expect(markup).not.toContain('future_');
+  });
+});
+
 describe('the comparison reads the server order rather than re-deriving it', () => {
   it('puts the newest run on the right, whatever the timestamps say', () => {
     // The OLDER-stamped run is served first here, which no real answer would do -- and

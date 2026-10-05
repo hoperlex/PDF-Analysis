@@ -70,6 +70,7 @@ import {
   elapsedMs,
   formatCostMicros,
   formatElapsed,
+  hasKnownRunVocabulary,
   interruptedReason,
   isRunAnimating,
   providerModeCaption,
@@ -86,6 +87,8 @@ export interface RunProgressProps {
   readonly projectUid: string;
   readonly runId: string;
 }
+
+const UNKNOWN_RUN_TITLE = 'Прогон содержит неизвестное значение.';
 
 function Outcome({ status }: { readonly status: RunStatus }) {
   const outcome = runOutcome(status);
@@ -274,6 +277,17 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
   }
 
   if (status === null) return <LoadingState what="прогон" />;
+
+  if (!hasKnownRunVocabulary(status)) {
+    return (
+      <div data-run-progress-fault="closed-vocabulary">
+        <ErrorState
+          title={UNKNOWN_RUN_TITLE}
+          detail="Состояние прогона или этапа нельзя показать достоверно — показание скрыто."
+        />
+      </div>
+    );
+  }
 
   const mode = runProviderMode(status);
   const animating = isRunAnimating(status);

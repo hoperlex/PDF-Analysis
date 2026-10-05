@@ -264,6 +264,47 @@ describe('the run state is labelled in Russian and carries the contract value', 
   });
 });
 
+describe('unknown label-table keys fail the whole run reading closed', () => {
+  it.each([
+    ['run state', { state: 'future_state' }],
+    ['degraded stage', { state: 'partial', degradation_set: ['future_stage'] }],
+    [
+      'reported stage id',
+      {
+        stages: [
+          {
+            stage_id: 'future_stage',
+            status: 'succeeded',
+            started_at: null,
+            finished_at: null,
+            error_code: null,
+          },
+        ],
+      },
+    ],
+    [
+      'reported stage status',
+      {
+        stages: [
+          {
+            stage_id: 'source_preparation',
+            status: 'future_status',
+            started_at: null,
+            finished_at: null,
+            error_code: null,
+          },
+        ],
+      },
+    ],
+  ])('renders a typed fault for an unknown %s', (_name, mutation) => {
+    const markup = screen(mutation as unknown as Partial<RunStatus>);
+    expect(markup).toContain('data-run-progress-fault="closed-vocabulary"');
+    expect(markup).toContain('Прогон содержит неизвестное значение.');
+    expect(markup).not.toContain('data-run-outcome=');
+    expect(markup).not.toContain('future_');
+  });
+});
+
 /** `published` is the success terminal; `partial` and `failed` borrow nothing from it. */
 describe('the three terminals are three different claims', () => {
   it('published states its finding count', () => {

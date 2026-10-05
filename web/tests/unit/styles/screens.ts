@@ -36,13 +36,22 @@ import { RunList } from '@/widgets/run-list';
 import { RunProgress } from '@/widgets/run-progress';
 import { UploadPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
-import type { DecisionRecord, ErrorCode, ErrorEnvelope, Finding, RunState, RunStatus } from '@/shared/api';
+import type {
+  DecisionEvent,
+  DecisionRecord,
+  ErrorCode,
+  ErrorEnvelope,
+  Finding,
+  RunState,
+  RunStatus,
+} from '@/shared/api';
 import type { DocumentVersion, Project } from '@/shared/api';
 import { ApiError, queryKeys } from '@/shared/api';
 import { groupByCategory } from '@/entities/finding';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
 import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
-import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
+import type { StageRow } from '@/entities/audit-run';
+import { RUN_PAGE_LIMIT, StageTable } from '@/entities/audit-run';
 
 import {
   DOCUMENT_UID,
@@ -293,6 +302,10 @@ export function screens(): Screen[] {
   add('RunProgress validating', runScreen('validating'));
   add('RunProgress queued', runScreen('queued'));
   add('RunProgress cancelled', runScreen('cancelled'));
+  add(
+    'RunProgress unknown vocabulary',
+    runScreen('future_state' as RunState),
+  );
 
   // ------------------------------------------------------------------ the widgets
   add('ProjectList cold', withRouter(createElement(ProjectList, {})));
@@ -400,6 +413,39 @@ export function screens(): Screen[] {
     ),
   );
   add('DecisionHistory empty', render(createElement(DecisionHistory, { events: [] })));
+  add(
+    'DecisionHistory unknown vocabulary',
+    render(
+      createElement(DecisionHistory, {
+        events: [
+          {
+            ...decisionEvent(),
+            event_type: 'future_event',
+          } as unknown as DecisionEvent,
+        ],
+      }),
+    ),
+  );
+
+  add(
+    'StageTable unknown vocabulary',
+    render(
+      createElement(StageTable, {
+        rows: [
+          {
+            stageId: 'future_stage',
+            status: 'succeeded',
+            errorCode: null,
+            startedAt: null,
+            finishedAt: null,
+            expected: false,
+            ordinal: null,
+            dependsOn: [],
+          } as unknown as StageRow,
+        ],
+      }),
+    ),
+  );
 
   // The export panel, having already produced a file — `.am-export__last`.
   add(
@@ -425,6 +471,17 @@ export function screens(): Screen[] {
       createElement(ExportPanel, {
         runId: RUN_ID, runState: 'published', providerMode: 'live', onExport: noop, isPending: true,
         error: { title: 'Выгрузка не удалась', detail: 'Файл не создан.', correlationId: 'cid-contrast-1' },
+      }),
+    ),
+  );
+  add(
+    'ExportPanel unknown vocabulary',
+    render(
+      createElement(ExportPanel, {
+        runId: RUN_ID,
+        runState: 'future_state' as RunState,
+        providerMode: 'recorded',
+        onExport: noop,
       }),
     ),
   );
@@ -546,6 +603,24 @@ export function screens(): Screen[] {
    */
   // The cold screen and its two malformed-address shapes are derived above. What is left
   // here is the one state a derivation cannot reach: the loaded PAIR.
+  {
+    const client = populatedClient();
+    client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), {
+      items: [
+        { ...runStatus({ run_id: RUN_ID }), state: 'future_state' } as unknown as RunStatus,
+        runStatus({ run_id: `${RUN_ID.slice(0, -1)}C` }),
+      ],
+      page: { next_cursor: null },
+    });
+    add(
+      'StageComparisonPage unknown vocabulary',
+      renderScreen(
+        client,
+        createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+      ),
+    );
+  }
+
   {
     const client = populatedClient();
     // A SECOND run of the same version: the screen renders its tables only for a pair,

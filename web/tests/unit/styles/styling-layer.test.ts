@@ -130,7 +130,7 @@ export function colourLiteralsOutsideTokens(css: string): string[] {
   return withoutTokenBlocks.match(/#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)|\bhsla?\([^)]*\)/g) ?? [];
 }
 
-/** Declarations in one exact flat selector; enough for the two containment roots below. */
+/** Declarations in one exact flat selector; enough for the containment roots below. */
 export function declarationsOf(css: string, selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`(?:^|\\n)\\s*${escaped}\\s*\\{([^}]*)\\}`, 'm').exec(css)?.[1] ?? '';
@@ -249,8 +249,13 @@ describe('contract-length user text cannot widen its screen', () => {
     expect(body).not.toMatch(/min-width\s*:\s*0/);
   });
 
-  it('contains project names and knowledge-base comments at their row roots', () => {
-    for (const selector of ['.am-state', '.am-kb__record']) {
+  it('contains project names, knowledge-base comments and decision history text at their roots', () => {
+    for (const selector of [
+      '.am-state',
+      '.am-kb__record',
+      '.am-history__event',
+      '.am-history__comment',
+    ]) {
       const body = declarationsOf(globals, selector);
       expect(body, `${selector} has no overflow-wrap containment`).toMatch(
         /overflow-wrap\s*:\s*anywhere/,

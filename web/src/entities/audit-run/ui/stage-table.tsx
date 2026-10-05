@@ -55,10 +55,11 @@
  */
 
 import type { StageId, StageStatus } from '@/shared/api';
+import { STAGE_ID_VALUES, STAGE_STATUS_VALUES } from '@/shared/api';
 import { formatInstant } from '@/shared/lib';
 
 import { elapsedMs, formatElapsed } from '../model/run-presentation';
-import { STAGE_LABELS, StageStatusBadge } from '@/shared/ui';
+import { ErrorState, STAGE_LABELS, StageStatusBadge } from '@/shared/ui';
 
 import styles from './stage-table.module.css';
 
@@ -66,6 +67,19 @@ import type { StageRow } from '../model/run-presentation';
 
 export interface StageTableProps {
   readonly rows: readonly StageRow[];
+}
+
+const UNKNOWN_STAGE_TITLE = 'Этап содержит неизвестное значение.';
+
+function hasKnownVocabulary(row: StageRow): boolean {
+  const stageIds: readonly unknown[] = STAGE_ID_VALUES;
+  const statuses: readonly unknown[] = STAGE_STATUS_VALUES;
+  return (
+    stageIds.includes(row.stageId) &&
+    (row.status === null || statuses.includes(row.status)) &&
+    Array.isArray(row.dependsOn) &&
+    row.dependsOn.every((stageId) => stageIds.includes(stageId))
+  );
 }
 
 function StatusCell({
@@ -103,6 +117,17 @@ function DependencyNote({ dependsOn }: { readonly dependsOn: readonly StageId[] 
 }
 
 export function StageTable({ rows }: StageTableProps) {
+  if (rows.some((row) => !hasKnownVocabulary(row))) {
+    return (
+      <div data-stage-table-fault="closed-vocabulary">
+        <ErrorState
+          title={UNKNOWN_STAGE_TITLE}
+          detail="Название, зависимость или статус этапа нельзя показать достоверно — таблица скрыта."
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={styles.scroller}>
       <table>

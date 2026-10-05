@@ -33,6 +33,7 @@
  */
 
 import type { DecisionEvent, DecisionEventType } from '@/shared/api';
+import { DECISION_EVENT_TYPE_VALUES, VERDICT_VALUES } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, LoadingState, NotApplicableState } from '@/shared/ui';
 import { formatInstant } from '@/shared/lib';
@@ -55,6 +56,17 @@ const EVENT_TYPE_LABELS: Readonly<Record<DecisionEventType, string>> = {
   revoke: 'отзыв',
 };
 
+const UNKNOWN_HISTORY_TITLE = 'Событие решения содержит неизвестное значение.';
+
+function hasKnownVocabulary(event: DecisionEvent): boolean {
+  const eventTypes: readonly unknown[] = DECISION_EVENT_TYPE_VALUES;
+  const verdicts: readonly unknown[] = VERDICT_VALUES;
+  return (
+    eventTypes.includes(event.event_type) &&
+    (event.verdict === null || event.verdict === undefined || verdicts.includes(event.verdict))
+  );
+}
+
 /*
  * The local copy of `VERDICT_LABELS` that stood here is deleted, not merged. Two sessions
  * repaired this widget within the hour; one exported the entity's table and imported it, the
@@ -66,6 +78,17 @@ const EVENT_TYPE_LABELS: Readonly<Record<DecisionEventType, string>> = {
 export function DecisionHistory({ events, isLoading, error }: DecisionHistoryProps) {
   if (isLoading === true) return <LoadingState what="историю решений" />;
   if (error !== undefined && error !== null) return <ErrorState {...error} />;
+
+  if (events.some((event) => !hasKnownVocabulary(event))) {
+    return (
+      <section className="am-history" data-history-fault="closed-vocabulary">
+        <ErrorState
+          title={UNKNOWN_HISTORY_TITLE}
+          detail="Тип события или вердикт нельзя показать достоверно — история скрыта целиком."
+        />
+      </section>
+    );
+  }
 
   const ordered = orderEvents(events);
 
