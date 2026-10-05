@@ -111,6 +111,11 @@ const dependencyUnavailable = currentRunReadings.some(
     body?.terminal_reason === 'dependency_unavailable' ||
     (body?.stages ?? []).some((stage) => stage?.error_code === 'dependency_unavailable'),
 );
+const failedTextAnalysis = currentRunReadings.some(({ body }) =>
+  (body?.stages ?? []).some(
+    (stage) => stage?.stage_id === 'text_analysis' && stage?.status === 'failed',
+  ),
+);
 
 if (journey !== null) {
   expect(journey.phase === 'all', `journey phase is ${JSON.stringify(journey.phase)}, expected "all"`);
@@ -142,6 +147,7 @@ if (journey !== null) {
     terminalReading?.body?.provider_mode === 'live',
     `the newly created run reports provider_mode ${JSON.stringify(terminalReading?.body?.provider_mode ?? null)}, expected "live"`,
   );
+  expect(!failedTextAnalysis, 'the newly created run has a failed text_analysis stage');
 }
 
 if (refusals !== null) {
@@ -182,6 +188,7 @@ const widthComplete =
 const providerComplete =
   journeyExit === 0 &&
   journeyFailuresClean &&
+  !failedTextAnalysis &&
   terminalReading?.body?.provider_mode === 'live' &&
   ['published', 'partial'].includes(terminalReading?.body?.state);
 const refusalRecordsValid =

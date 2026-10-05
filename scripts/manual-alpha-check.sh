@@ -27,7 +27,7 @@ usage() {
   --preflight-only    Проверить PDF, TLS/redirect/login и закрытый API (по умолчанию).
   --automated         Выполнить sign-in, 3 записи, 16 cold routes и 6 отказов.
   --candidate-sha SHA Полный SHA проверяемого чистого checkout.
-  --deployed-sha SHA  Полный SHA, доказанный deployment workflow/verify-deployed.
+  --deployed-sha SHA  Полный SHA, засвидетельствованный оператором из deployment evidence.
   --interactive       После preflight записать ручные A01-A12 как PASS/FAIL/BLOCKED.
   --files-only        Проверить только локальные PDF; сеть не используется.
   --evidence-dir DIR  Каталог отчёта (по умолчанию .local/manual-alpha/<UTC timestamp>-<pid>).
@@ -164,7 +164,8 @@ cat >"$REPORT" <<EOF
 - local_head: $HEAD_SHA
 - local_origin_dev: $DEV_SHA
 - candidate_sha: ${CANDIDATE_SHA:-not-required}
-- deployed_sha: ${DEPLOYED_SHA:-not-required}
+- attested_deployed_sha: ${DEPLOYED_SHA:-not-required}
+- deployed_sha_attestation: operator_input; this command does not identify the served revision
 - runbook: $RUNBOOK_REL
 - credentials_recorded: no
 
