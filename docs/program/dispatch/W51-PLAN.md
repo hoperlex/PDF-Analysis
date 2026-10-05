@@ -38,14 +38,17 @@ refusal the API gives is shown as a typed state in Russian; no rule is computed 
 Behaviour:
 
 - **Sign-in:** e-mail and password; the validated `next` in a hidden field (W50); refusals
-  `credentials`, `validation`, `unconfigured`, `upstream`, `pending`, `rejected` each a sentence; for `pending`/`rejected` the page reads the one-time notice named by `?notice=` from
+  `credentials`, `validation`, `unconfigured`, `upstream`, `pending`, `rejected`, `throttled` each
+  a sentence; for `pending`/`rejected` the page reads the one-time notice named by `?notice=` from
   the register (W49 §3.5) and shows the status and, for a rejection, the reason (≤ 256
   characters); a missing or used notice shows the status sentence without a reason. One generic
   sentence for a wrong pair.
-- **Registration:** surname, name, patronymic (optional), e-mail, password twice; each name ≤ 60
-  characters; the R-48 policy explained before submission; `conflict_reason` rendered as three
-  different sentences; `/register/submitted` says what happens next (an administrator decides;
-  the status is shown at sign-in) — no mail is promised (`R-56`).
+- **Registration:** a plain HTML form posted to the W49 reserved handler, like sign-in: surname,
+  name, patronymic (optional), e-mail, password twice; each name ≤ 60 characters; the R-48
+  policy explained before submission; the handler's closed refusal set `{validation,
+  login_taken, request_pending, queue_full, throttled, upstream}` rendered as six sentences;
+  `/register/submitted` says what happens next (an administrator decides; the status is shown at
+  sign-in) — no mail is promised (`R-56`).
 - **Account:** completion for a legacy account (names and e-mail, one save; `R-59`), then
   profile view/edit (names only), the avatar preview, roles read-only, a link to the password
   screen. Order for the seeded account: password first (`/account/password`), then `/account`,

@@ -92,12 +92,15 @@ items marked ✓ were re-measured by the integrator on the tree).
   `docs/manual-tests/PC-01_prototype.md`, `tests/contract/api_v1/test_doc_prose_facts.py`,
   `docs/program/CONTRACT_PIN_REGISTRY.md`, `docs/program/P02_SEAMS.md`,
   `docs/program/PROTOTYPE_EXECUTION_PLAN.md`, `docs/program/PROTOTYPE_PROFILE.md`,
-  `tests/integration/p02_journey/journey.py`, `tests/contract/domain_p02/**`,
-  `src/auditmanager/shared/identity/ids.py`, `src/auditmanager/runs/__init__.py`,
-  `src/auditmanager/runs/repository.py`,
+  `tests/contract/domain_p02/**`, `src/auditmanager/shared/identity/ids.py`,
+  `src/auditmanager/runs/__init__.py`, `src/auditmanager/runs/repository.py`,
+  `src/auditmanager/storage/port.py`, `src/auditmanager/storage/s3.py`,
+  `src/auditmanager/storage/README.md`, `tests/integration/storage/test_publication.py`,
+  `tests/integration/foundation/test_real_providers.py`,
   `tests/integration/composition/test_the_run_leaves_the_request_thread.py` and
   `tests/integration/shared_kernel/test_topology_guard.py` — none in the `allowed_paths` of
-  `tasks/W48-DURABLE-01.md` **as dispatched at `03c04a1`**. Most were forced by the migration
+  `tasks/W48-DURABLE-01.md` **as dispatched at `03c04a1`** (`tests/integration/p02_journey/**`
+  was in that grant and is not on this list). Most were forced by the migration
   head moving to `0014` (the prose and schema pins) and are acknowledged, not reverted; DJ-R2
   generalises to them.
 - DJ-R8 the task files were widened in-lane: `tasks/W48-DURABLE-01.md` was edited by seven lane
@@ -264,9 +267,9 @@ SHAs. The fields below are the content those files must carry.
   `ingest`, `jobs`, `runs`; `access` is imported only by `bootstrap`, which ALR-05 exempts); the
   **import lines only** of every importing module the AST walk lists on the subject SHA (the
   task's report carries the list with the command; 16 / 22 at `c11f1b6`, 18 / 24 at `411c6d0`,
-  possibly more after `W48-DURABLE-FIX-2`; the importers include `api/app.py`,
-  `api/routers/errors.py`, `dashboard/repository.py`, `decisions/ledger.py`, `documents/*.py`
-  and the `runs`, `analysis`, `ingest`, `jobs`, `norms` modules the audit named); `src/auditmanager/api/composition.py` (its two
+  possibly more after `W48-DURABLE-FIX-2`; the importers include `api/routers/errors.py`,
+  `api/composition.py`, `dashboard/repository.py`, `decisions/ledger.py`, `documents/*.py` and
+  the `runs`, `analysis`, `ingest`, `jobs`, `norms` modules the audit named); `src/auditmanager/api/composition.py` (its two
   `bootstrap` imports move to `bootstrap.public`; this task is the composition-root owner of its
   stage); `tests/contract/architecture/test_alr05_boundaries.py` (new);
   `docs/architecture/ARCHITECTURE_LINT_RULES.md` (only to name the guard as the enforcement);

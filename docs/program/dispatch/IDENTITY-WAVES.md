@@ -33,7 +33,7 @@ the ideas that do are listed in §6.
 | Stage | Plan | Enters when | Exits when |
 | --- | --- | --- | --- |
 | 0 | `W48-CLOSE.md` | now; the unpublished W48 branches are backed up | W48 candidate is on `origin/dev` with literal `GATE OK`; new debts registered; then, on the owner's direct instruction naming that SHA, `origin/main`, live acceptance and `alpha-w48` (P-7) |
-| 1 | `W49-PLAN.md` — identity: contract, migration, backend, BFF session | Stage 0 exit; rulings of §4 recorded | resealed contract with roles, profile, registration and user management on `origin/dev` |
+| 1 | `W49-PLAN.md` — identity: contract, migration, backend, BFF session, edge throttle | Stage 0 exit; rulings of §4 recorded | resealed contract with roles, profile, registration, user management and the `rate_limited` code on `origin/dev` |
 | 2 | `W50-PLAN.md` — shell: route registry, server guards, redirects, lazy loading, grouped navigation, home page, account menu | Stage 1 exit | shell on `origin/dev`; every screen is behind the registry |
 | 3 | `W51-PLAN.md` — screens: sign-in/registration/account and administration, end-to-end evidence | Stage 2 exit | screens on `origin/dev`; alpha acceptance pack covers identity |
 
@@ -128,8 +128,10 @@ guard that already exists or a task below that adds one.
 - **A reseal is four documents in one change:** `contracts/api/v1/openapi.json`, the generated
   client under `web/src/shared/api/generated/`, the mirror `web/openapi/openapi.json`, and
   `web/FRONTEND_LOCK.json` (`CURRENT_STATE.md`, `D-18`). A new error code or detail key is a
-  second reseal of `contracts/domain/v1/error-codes.json` in the same slot; this programme adds
-  one code (`rate_limited`) and one detail key (`conflict_reason`), both in W49.
+  second reseal in the same slot, and a code lives in four places — `error-codes.json`,
+  `error-envelope.schema.json`, the `== 22` literal in `test_openapi_document.py`, and the
+  Russian sentence in `web/src/shared/api/catalog-message.ts`; this programme adds one code
+  (`rate_limited`) and one detail key (`conflict_reason`), both in W49.
 - **Registers, not rules.** Which operations answer without a credential, which a default
   credential reaches, and now which roles each operation requires, are written sets in
   `src/auditmanager/api/security.py` that a sweep test compares against the served

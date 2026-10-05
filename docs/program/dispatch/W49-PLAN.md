@@ -186,14 +186,18 @@ against that file: `app_user` (`active → archived → active | purged`) and `r
 then honest. The error catalog grows by **one code, `rate_limited`** (HTTP 429, `retryable:
 true`, category `policy`, no detail keys): the edge and the BFF throttles of §3.5 have to answer
 with a catalog code, because the safety rules forbid inventing one at the edge and the catalog has
-no 429 today (the only non-business statuses are the two 503 dependency codes). That is the
-second reseal of the slot `IDENTITY-WAVES.md` §5 allows; no other code is added. One safe detail
-key is added (`conflict_reason` on `conflict`). `DecisionEvent` on the wire is unchanged. Five
-sentences in `openapi.json` are superseded under `R-55`: the four that deny a role vocabulary
-(`info.description` twice — one of them naming `T-6` — the `/auth/password` description and the
-`bearerAuth` description) and the `info.description` clause that says the surface has no rate
-limiting. The surface triple after the reseal is **measured by `W49-SEAL-01`**, never quoted from
-this plan.
+no 429 today. That is the second reseal of the slot `IDENTITY-WAVES.md` §5 allows; no other code
+is added. A code lives in three places at once — `error-codes.json`,
+`error-envelope.schema.json` (its `enum` and the per-code `retryable` `allOf`) and the literal
+`== 22` in `tests/contract/domain_p02/test_openapi_document.py` — and in the Russian sentence
+`web/src/shared/api/catalog-message.ts` carries for every code
+(`catalog-message.contract.test.ts` "describes every code the catalog declares"); all four move
+in `W49-SEAL-01a`. One safe detail key is added (`conflict_reason` on `conflict`).
+`DecisionEvent` on the wire is unchanged. Every sentence in `openapi.json` that denies a role,
+subject or capability vocabulary, or rate limiting, is superseded under `R-55` — not a counted
+list: the seal's required check is `rg -n 'role\|rate limit' contracts/api/v1/openapi.json`
+showing no denial (`InputManifestEntry.role` is a field, not a denial). The surface triple after
+the reseal is **measured by `W49-SEAL-01`**, never quoted from this plan.
 
 ### 3.5 BFF session
 
@@ -220,7 +224,11 @@ this plan.
   reserves npm script names. The catch-all refuses the `registrations` first segment to the
   browser exactly as it refuses `auth` today (`not_found` before the session is read), so
   `submitRegistration` and `readRegistrationStatus` are reachable only through the reserved
-  handlers and their bucket, never with a session's credential.
+  handlers and their bucket, never with a session's credential. The registration handler, like
+  the session handler, answers the form with `303`: to `/register/submitted` on success, else to
+  `/register?refusal=<value>` with the closed set `{validation, login_taken, request_pending,
+  queue_full, throttled, upstream}` mapped from the API's `conflict_reason` and status (the W51
+  screen renders each value as a sentence; an unknown value is a typed fault).
 - On a failed exchange the session handler calls `readRegistrationStatus` with the same pair; a
   `pending`/`rejected` answer is stored as a **one-time notice** row in the register (status,
   reason, five-minute TTL, opaque id) and the browser is sent to
@@ -228,7 +236,12 @@ this plan.
   server-side (it already reads `searchParams` and the register). **The reason never travels in
   a URL**, so it cannot be spoofed by one.
 - **Throttle for guests, in the BFF:** a per-client token bucket on `POST /bff/v1/registration`
-  and `POST /bff/v1/session`, refusing with a synthesized `rate_limited` envelope. A Next 15
+  and `POST /bff/v1/session`. Both are plain HTML forms answered with `303` to a screen and a
+  closed `?refusal=` set (`route.ts` `refuseSignIn`, `exchange.ts`), so the bucket refuses with
+  `303` to `/login?refusal=throttled` or `/register?refusal=throttled` — a new value in each
+  closed set with its Russian sentence — never with a JSON body a form would render raw. The
+  `rate_limited` envelope is what the **API and the proxy** answer to direct callers; the
+  catch-all forwards it unchanged to the JSON client. A Next 15
   route handler has no peer address, so the client key is **`X-Real-IP`** — the header both
   proxy configurations set from `$remote_addr` (`nginx.conf:85`, `tls-server.conf:82`) — trusted
   only under `AUDITMANAGER_BEHIND_PROXY=1`, an environment flag `W49-EDGE-01` sets on the `web`
@@ -242,17 +255,23 @@ this plan.
   `W49-EDGE-01` adds `limit_req` for `POST /api/v1/registrations` and
   `POST /api/v1/registrations/status`. Both proxy files are loaded at once when TLS is on
   (`nginx.conf` is mounted as `conf.d/default.conf`; `enable-tls.sh` copies `tls-server.conf`
-  beside it), so the `limit_req_zone` and the `map $request_method` — `http`-level directives —
-  are declared **once, in `nginx.conf`**, and `limit_req` plus `limit_req_status 429` plus
+  beside it), so the `limit_req_zone` and the `map` — `http`-level directives — are declared
+  **once, in `nginx.conf`**. The map key is `"$request_method:$uri"`: it yields
+  `$binary_remote_addr` for exactly `POST:/api/v1/registrations` and
+  `POST:/api/v1/registrations/status` and the empty string (no limit) for everything else, so
+  uploads, runs and verdicts are never throttled. `limit_req` plus `limit_req_status 429` plus
   `error_page 429 = @rate_limited` go into **both** `server` bodies inside the existing
-  `location /api/v1/` (no new location, so `test_every_api_location_puts_the_prefix_back` and
-  `test_the_two_server_bodies_do_not_drift` stay true). The named location returns the
-  `rate_limited` envelope as JSON with `$request_id` as `correlation_id` — nginx's own 429 is an
-  HTML page, exactly as its 413 is (the comment at `nginx.conf:37-42` is why the body cap is
-  32m). The 100-request cap stays the last line. Bulk rejection and request retention are
-  registered debts.
-- The sign-in refusal set in `web/src/features/sign-in/model/exchange.ts` gains `pending` and
-  `rejected`; the sign-in screen renders the sentences (Russian). The full screens are W51.
+  `location /api/v1/` — no new `/api/v1` location, so
+  `test_every_api_location_puts_the_prefix_back_on_the_way_out` and
+  `test_the_two_server_bodies_do_not_drift` (both in
+  `tests/integration/composition/test_proxy_tls_path.py`) stay true; the named location
+  `@rate_limited` is the one new block, identical in both files. It returns the `rate_limited`
+  envelope as JSON with `$request_id` as `correlation_id` — nginx's own 429 is an HTML page,
+  exactly as its 413 is (the comment at `nginx.conf:37-42` is why the body cap is 32m). The
+  100-request cap stays the last line. Bulk rejection and request retention are registered debts.
+- The sign-in refusal set in `web/src/features/sign-in/model/exchange.ts` gains `pending`,
+  `rejected` and `throttled`; the sign-in screen renders the sentences (Russian). The full
+  screens are W51.
 
 ### 3.6 Pins that this wave moves, and who moves them
 
@@ -278,8 +297,8 @@ pin to be listed in `docs/program/CONTRACT_PIN_REGISTRY.md` with a live needle. 
 - **`W49-ACCESS-01a` owns the migration head's and the schema's pins:** the head-pin line in
   `test_doc_prose_facts.py`, the registry rows for the head, the schema-inventory digests under
   `tests/integration/db/**`, `P02_TABLES` in `tests/integration/p02_journey/journey.py` (its
-  `assert_table_list_is_complete` fails on any table it does not list — the mechanism that
-  produced the W48 durable line's out-of-grant edits), and the live head sentences in
+  `assert_table_list_is_complete` fails on any table it does not list), and the live head
+  sentences in
   `CURRENT_STATE.md` and `docs/manual-tests/PC-01_prototype.md` as the freeze measures them;
 - `KNOWN_OUTSTANDING_CLAIMS` stays **empty** (`test_no_known_outstanding_live_claim_is_normalised`
   requires it); nothing is registered as outstanding, the sentences are corrected in the same
@@ -352,8 +371,9 @@ measured at the base, into the ACCESS and SEAL task files.
 - **Required tests:** the new contract test reads both proxy files and the compose file and fails
   when any of the three loses its line, and checks the returned `error_code` against the
   catalog; `nginx -t` inside the pinned nginx image with both files mounted as `conf.d/` entries
-  (the configuration must load with both present); the existing proxy tests under
-  `tests/contract/`; `make gate`.
+  and a throwaway self-signed pair at `/etc/nginx/tls/{fullchain,privkey}.pem` (the TLS server
+  block requires them; the configuration must load with both files present);
+  `tests/integration/composition/test_proxy_tls_path.py`; `make gate`.
 
 ### `W49-DECISIONS-01` — the decision event names its author's account (executor)
 - **Depends on:** `W49-ACCESS-01c` merged (ACCESS is one branch; the column exists from 01a).
@@ -371,8 +391,9 @@ measured at the base, into the ACCESS and SEAL task files.
   green.
 - **Allowed paths:** `contracts/api/v1/openapi.json`, `contracts/api/v1/README.md`,
   `contracts/domain/v1/identifiers.json`, `contracts/domain/v1/error-codes.json`,
-  `contracts/domain/v1/state-machines.json`, `contracts/domain/v1/README.md`,
-  `web/openapi/openapi.json`, `web/src/shared/api/generated/**` (via
+  `contracts/domain/v1/error-envelope.schema.json`, `contracts/domain/v1/state-machines.json`,
+  `contracts/domain/v1/README.md`, `web/src/shared/api/catalog-message.ts` (the one sentence for
+  `rate_limited`), `web/openapi/openapi.json`, `web/src/shared/api/generated/**` (via
   `npm --prefix web run api:generate`), `web/FRONTEND_LOCK.json`, `tests/contract/**`,
   `web/tests/contract/**`, `src/auditmanager/api/**`, `src/auditmanager/bootstrap/adapters.py`,
   `src/auditmanager/bootstrap/composition.py` (this wave's composition-root owner),
@@ -382,9 +403,10 @@ measured at the base, into the ACCESS and SEAL task files.
   count comment in each, §3.6), `docs/program/CONTRACT_PIN_REGISTRY.md` (all rows but the
   head's), the exact live triple sentences of `docs/program/CURRENT_STATE.md` and
   `docs/program/ALPHA_ROADMAP.md` named by the task file, `docs/program/W49-SEAL-01{a,b,c}.md`.
-- **01a — the documents:** §3.4 operations and schemas; `conflict_reason`; `rate_limited`;
-  identifiers (`usr`, `reg`, and their registry types); the two state machines; the five
-  superseded sentences; regenerated client, mirror and lock; every surface pin of §3.6; the
+- **01a — the documents:** §3.4 operations and schemas; `conflict_reason`; `rate_limited` in
+  the catalog, the envelope schema, the `== 22` literal and `catalog-message.ts`; identifiers
+  (`usr`, `reg`, and their registry types); the two state machines; the superseded denials with
+  the `rg` check; regenerated client, mirror and lock; every surface pin of §3.6; the
   registry rows; the live sentences; measured triple and SHA-256 in the report; compatibility
   statement (every existing operation unchanged on the wire). Hands back with
   `.venv/bin/python -m pytest tests/contract -q`, `npm --prefix web run api:verify` and
@@ -419,7 +441,8 @@ measured at the base, into the ACCESS and SEAL task files.
   store format and the proxy flag), `web/src/features/sign-in/**`, `web/src/_pages/sign-in/**`,
   `web/tests/unit/session/**`, `web/tests/guards/session-durability.guard.test.ts`,
   `web/tests/guards/server-credential.guard.test.ts`, `docs/program/W49-BFF-01.md`.
-- **Deliverables:** §3.5 in full. `layout.tsx` and the frame are untouched (W50).
+- **Deliverables:** §3.5 in full, including the `throttled` value and sentence in both closed
+  refusal sets and the registration handler's set. `layout.tsx` and the frame are untouched (W50).
 - **Required tests and mutations:** `npm --prefix web test -- --run`; lint; typecheck; a forward
   under the `registrations` segment through the catch-all is refused with and without a session;
   a version-1 register file is replaced, not read; the notice is deleted on first read and absent
@@ -478,7 +501,7 @@ temporary password known to the administrator, `0015` forward-only).
 | `OWNER_RULINGS_2026-09-17.md` §3.18, provisional numbers in the four plans | `W49-RULE-01` | integrator | none |
 | migration `0015`, `src/auditmanager/access/**`, `tests/integration/access/**`, `tests/integration/db/**`, `P02_TABLES`, head pin, head registry rows, head sentences | `W49-ACCESS-01a/b/c` | executor | none |
 | `src/auditmanager/decisions/**`, `tests/integration/decisions/**` | `W49-DECISIONS-01` | executor | none |
-| `contracts/**`, `web/openapi/**`, generated client, `web/FRONTEND_LOCK.json`, `src/auditmanager/api/**`, `bootstrap/adapters.py`, `bootstrap/composition.py`, `tests/contract/**` except `test_proxy_rate_limits.py`, `tests/integration/{api,auth,composition}/**`, the `test_acceptance.py` pin line, the two `web/src` count comments, `CONTRACT_PIN_REGISTRY.md` surface rows, triple pin and triple sentences | `W49-SEAL-01` | executor | none |
+| `contracts/**`, `web/openapi/**`, generated client, `web/FRONTEND_LOCK.json`, `src/auditmanager/api/**`, `bootstrap/adapters.py`, `bootstrap/composition.py`, `catalog-message.ts`, `tests/contract/**` except `test_proxy_rate_limits.py`, `web/tests/contract/**`, `tests/integration/{api,auth,composition}/**`, the `test_acceptance.py` pin line, the two `web/src` count comments, `CONTRACT_PIN_REGISTRY.md` surface rows, triple pin and triple sentences | `W49-SEAL-01` | executor | none |
 | `web/src/app/bff/**`, `app/login/page.tsx`, `shared/config/**`, `features/sign-in/**`, `_pages/sign-in/**`, session tests | `W49-BFF-01` | executor | EDGE |
 | `infra/deploy/proxy/*.conf`, the compose flag line, `tests/contract/test_proxy_rate_limits.py` | `W49-EDGE-01` | executor | BFF |
 | `web/src/_app/**`, `web/src/app/layout.tsx`, `globals.css`, `shared/ui/**` | frozen (W50) | — | none |
