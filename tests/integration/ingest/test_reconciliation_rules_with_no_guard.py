@@ -271,7 +271,7 @@ def test_a_version_whose_stored_size_disagrees_with_its_manifest_is_refused(
 # --- an available blob no manifest references ---------------------------------
 
 
-def test_an_available_blob_that_no_manifest_references_is_reported_as_an_orphan(
+def test_an_available_blob_without_w48_authority_is_legacy_unattributed(
     store, session_factory, reconciler, track, engine
 ) -> None:
     """The ``detached`` half of ``report()``, which nothing reached.
@@ -326,19 +326,24 @@ def test_an_available_blob_that_no_manifest_references_is_reported_as_an_orphan(
 
     report = reconciler.report()
 
-    assert [item.blob_id for item in report.orphan_objects] == [verified.blob_id]
-    orphan = report.orphan_objects[0]
+    assert report.orphan_objects == ()
+    assert [item.blob_id for item in report.legacy_unattributed_blobs] == [
+        verified.blob_id
+    ]
+    orphan = report.legacy_unattributed_blobs[0]
     # ``recorded_state`` is what tells an operator which of the two orphan shapes this is.
     # ``verifying`` is the interrupted publication; ``available`` is this one. A report
     # that flattened them would not distinguish "finish it" from "look at it".
     assert orphan.recorded_state == "available"
     assert orphan.sha256 == digest
     assert orphan.size_bytes == len(content)
+    assert orphan.object_present is True
     assert report.unpublished_records == ()
     assert report.missing_objects == ()
     assert not report.is_clean
     assert report.describe() == (
-        "orphan_objects=1 unpublished_records=0 missing_objects=0 "
+        "orphan_objects=0 unpublished_records=0 legacy_unattributed_blobs=1 "
+        "missing_objects=0 "
         "missing_analysis_artifacts=0 unbound_analysis_artifacts=0 stale_commands=0"
     )
 

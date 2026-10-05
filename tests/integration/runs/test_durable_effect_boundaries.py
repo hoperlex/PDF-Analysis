@@ -61,6 +61,21 @@ class FailingLiveAdapter:
         )
 
 
+class ExitAfterLiveResponse:
+    """Lose the process after the provider returns but before response journalling."""
+
+    provider_mode = ProviderMode.LIVE
+
+    def __init__(self, response_source) -> None:
+        self._response_source = response_source
+        self.calls = 0
+
+    def complete(self, request):
+        self.calls += 1
+        self._response_source.complete(request)
+        raise ProcessExit("provider_returned_before_response_checkpoint")
+
+
 class MissingOneObject:
     """Point-inspection view of a missing object; no bucket list or delete operation."""
 
@@ -327,10 +342,158 @@ def test_provider_crash_boundaries_are_visible_from_a_new_transaction(
 
     with factory() as observer:
         report = reconcile(observer, older_than="0 seconds")
-        assert effect["model_call_id"] in {
-            item.model_call_id for item in report.unresolved_provider_effects
+        assert report.unresolved_provider_effects == ()
+        settled = {
+            item.model_call_id: item for item in report.settled_provider_effects
         }
-        observer.rollback()
+        assert settled[effect["model_call_id"]].previous_state == expected_state
+        assert settled[effect["model_call_id"]].state == "abandoned"
+        observer.commit()
+
+    with factory() as observer:
+        state, error_code = observer.execute(
+            text(
+                "SELECT state, error_code FROM provider_call_effect "
+                "WHERE model_call_id = :model_call_id"
+            ),
+            {"model_call_id": effect["model_call_id"]},
+        ).one()
+        second = reconcile(observer, older_than="0 seconds")
+    assert (state, error_code) == ("abandoned", ErrorCode.ANALYSIS_FAILED.value)
+    assert second.settled_provider_effects == ()
+    assert second.unresolved_provider_effects == ()
+
+
+def test_live_response_lost_before_checkpoint_is_diagnosable_and_never_replayed(
+    engine,
+    blob_store,
+    recorded_adapter,
+    helpers,
+) -> None:
+    factory = _factory(engine)
+    adapter = ExitAfterLiveResponse(recorded_adapter)
+    session = factory()
+    try:
+        _seeded, started = _start(
+            session, helpers, blob_store, provider_mode="live"
+        )
+        with pytest.raises(
+            ProcessExit, match="provider_returned_before_response_checkpoint"
+        ):
+            execute_run(
+                session,
+                started.run_id,
+                blob_store=blob_store,
+                adapter=adapter,
+                provider_config=_live_config(),
+            )
+    finally:
+        session.close()
+
+    with factory() as observer:
+        before = observer.execute(
+            text(
+                "SELECT model_call_id, state, response_sha256 FROM provider_call_effect "
+                "WHERE run_id = :run_id"
+            ),
+            {"run_id": started.run_id},
+        ).mappings().one()
+        assert dict(before) == {
+            "model_call_id": before["model_call_id"],
+            "state": "prepared",
+            "response_sha256": None,
+        }
+        assert observer.execute(
+            text("SELECT count(*) FROM model_call WHERE run_id = :run_id"),
+            {"run_id": started.run_id},
+        ).scalar_one() == 0
+
+        report = reconcile(observer, older_than="0 seconds")
+        observer.commit()
+
+    assert adapter.calls == 1
+    assert report.unresolved_provider_effects == ()
+    settled = {
+        item.model_call_id: item for item in report.settled_provider_effects
+    }
+    assert settled[before["model_call_id"]].previous_state == "prepared"
+    assert settled[before["model_call_id"]].state == "abandoned"
+
+    with factory() as observer:
+        assert observer.execute(
+            text(
+                "SELECT state FROM provider_call_effect "
+                "WHERE model_call_id = :model_call_id"
+            ),
+            {"model_call_id": before["model_call_id"]},
+        ).scalar_one() == "abandoned"
+    assert adapter.calls == 1
+
+
+def test_provider_effect_settlement_is_bounded_and_resumable(
+    engine,
+    blob_store,
+    recorded_adapter,
+    helpers,
+) -> None:
+    factory = _factory(engine)
+    call_ids: set[str] = set()
+    for _index in range(2):
+        session = factory()
+        try:
+            _seeded, started = _start(
+                session, helpers, blob_store, provider_mode="live"
+            )
+
+            def stop_after_intent(boundary: str) -> None:
+                if boundary == "provider_intent_committed":
+                    raise ProcessExit(boundary)
+
+            with pytest.raises(ProcessExit, match="provider_intent_committed"):
+                execute_run(
+                    session,
+                    started.run_id,
+                    blob_store=blob_store,
+                    adapter=CountingLiveAdapter(recorded_adapter),
+                    provider_config=_live_config(),
+                    effect_checkpoint=stop_after_intent,
+                )
+        finally:
+            session.close()
+        with factory() as observer:
+            call_ids.add(
+                str(
+                    observer.execute(
+                        text(
+                            "SELECT model_call_id FROM provider_call_effect "
+                            "WHERE run_id = :run_id"
+                        ),
+                        {"run_id": started.run_id},
+                    ).scalar_one()
+                )
+            )
+
+    with factory() as observer:
+        first = reconcile(
+            observer,
+            older_than="0 seconds",
+            provider_effect_batch_size=1,
+        )
+        observer.commit()
+    assert len(first.settled_provider_effects) == 1
+    assert {item.model_call_id for item in first.unresolved_provider_effects} == (
+        call_ids - {first.settled_provider_effects[0].model_call_id}
+    )
+
+    with factory() as observer:
+        second = reconcile(
+            observer,
+            older_than="0 seconds",
+            provider_effect_batch_size=1,
+        )
+        observer.commit()
+    assert len(second.settled_provider_effects) == 1
+    assert second.unresolved_provider_effects == ()
 
 
 def test_an_ambiguous_live_failure_is_journalled_once_and_not_retried(
@@ -373,7 +536,6 @@ def test_an_ambiguous_live_failure_is_journalled_once_and_not_retried(
         "blob_state_expected",
         "object_exists",
         "temporary_exists",
-        "report_field",
     ),
     [
         (
@@ -381,21 +543,18 @@ def test_an_ambiguous_live_failure_is_journalled_once_and_not_retried(
             "temporary",
             False,
             False,
-            "unpublished_records",
         ),
         (
             "source_preparation:artifact_intent_committed",
             "verifying",
             False,
             False,
-            "unpublished_records",
         ),
         (
             "source_preparation:artifact_published",
             "verifying",
             True,
             False,
-            "orphan_objects",
         ),
     ],
 )
@@ -409,7 +568,6 @@ def test_artifact_crash_boundaries_leave_enumerable_breadcrumbs(
     blob_state_expected: str,
     object_exists: bool,
     temporary_exists: bool,
-    report_field: str,
 ) -> None:
     factory = _factory(engine)
     session = factory()
@@ -457,8 +615,14 @@ def test_artifact_crash_boundaries_leave_enumerable_breadcrumbs(
     assert observed_exists is object_exists
 
     report = Reconciler(blob_store, session_factory=factory).report()
-    enumerated = getattr(report, report_field)
-    assert publication["blob_id"] in {str(item.blob_id) for item in enumerated}
+    assert publication["blob_id"] not in {
+        str(item.blob_id)
+        for item in (
+            *report.orphan_objects,
+            *report.unpublished_records,
+            *report.legacy_unattributed_blobs,
+        )
+    }
     unbound = [
         item
         for item in report.unbound_analysis_artifacts
@@ -466,6 +630,9 @@ def test_artifact_crash_boundaries_leave_enumerable_breadcrumbs(
     ]
     assert len(unbound) == 1
     assert unbound[0].stage_id == "source_preparation"
+    assert unbound[0].attempt_state == "running"
+    assert unbound[0].is_stale is False
+    assert unbound[0].rejection_eligible is False
     assert unbound[0].object_present is object_exists
     assert unbound[0].temporary_present is temporary_exists
 
@@ -519,8 +686,13 @@ def test_process_loss_after_temporary_verification_keeps_a_pre_upload_breadcrumb
         assert blob_state == "temporary"
 
         report = Reconciler(blob_store, session_factory=factory).report()
-        assert publication["blob_id"] in {
-            str(item.blob_id) for item in report.unpublished_records
+        assert publication["blob_id"] not in {
+            str(item.blob_id)
+            for item in (
+                *report.orphan_objects,
+                *report.unpublished_records,
+                *report.legacy_unattributed_blobs,
+            )
         }
         unbound = [
             item
@@ -529,11 +701,90 @@ def test_process_loss_after_temporary_verification_keeps_a_pre_upload_breadcrumb
             and str(item.blob_id) == publication["blob_id"]
         ]
         assert len(unbound) == 1
+        assert unbound[0].attempt_state == "running"
+        assert unbound[0].is_stale is False
+        assert unbound[0].rejection_eligible is False
         assert unbound[0].object_present is False
         assert unbound[0].temporary_present is True
         assert not hasattr(unbound[0], "upload_token")
+
+        reconciler = Reconciler(blob_store, session_factory=factory)
+        with pytest.raises(DomainError) as refusal:
+            reconciler.reject_unpublished(
+                parse_blob_id(publication["blob_id"]), older_than="0 seconds"
+            )
+        assert refusal.value.code is ErrorCode.STATE_TRANSITION_NOT_ALLOWED
+        with factory() as observer:
+            blob_state_after = observer.execute(
+                text("SELECT state FROM blob WHERE blob_id = :blob_id"),
+                {"blob_id": publication["blob_id"]},
+            ).scalar_one()
+            attempt_state_after = observer.execute(
+                text(
+                    "SELECT state FROM attempt WHERE attempt_id = "
+                    "(SELECT attempt_id FROM analysis_artifact_publication "
+                    " WHERE blob_id = :blob_id LIMIT 1)"
+                ),
+                {"blob_id": publication["blob_id"]},
+            ).scalar_one()
+        assert (blob_state_after, attempt_state_after) == ("temporary", "running")
     finally:
         blob_store.discard_temporary(killing_store.temporary)
+
+
+def test_only_stale_terminal_analysis_publication_without_bytes_can_be_rejected(
+    engine,
+    blob_store,
+    recorded_adapter,
+    provider_config,
+    helpers,
+) -> None:
+    factory = _factory(engine)
+    killing_store = ExitAfterVerification(blob_store)
+    session = factory()
+    try:
+        _seeded, started = _start(
+            session, helpers, blob_store, provider_mode="recorded"
+        )
+        with pytest.raises(ProcessExit, match="artifact_verified_before_checkpoint"):
+            execute_run(
+                session,
+                started.run_id,
+                blob_store=killing_store,
+                adapter=recorded_adapter,
+                provider_config=provider_config,
+            )
+    finally:
+        session.close()
+
+    assert killing_store.temporary is not None
+    verified = blob_store.verify_temporary(killing_store.temporary)
+    blob_store.discard_temporary(killing_store.temporary)
+
+    with factory() as controller:
+        reconcile(controller, older_than="0 seconds")
+        controller.commit()
+
+    reconciler = Reconciler(blob_store, session_factory=factory)
+    report = reconciler.report(unbound_artifact_age="0 seconds")
+    item = next(
+        entry
+        for entry in report.unbound_analysis_artifacts
+        if entry.run_id == started.run_id and entry.blob_id == verified.blob_id
+    )
+    assert item.attempt_state == "lost"
+    assert item.is_stale is True
+    assert item.object_present is False
+    assert item.temporary_present is False
+    assert item.rejection_eligible is True
+
+    reconciler.reject_unpublished(verified.blob_id, older_than="0 seconds")
+    with factory() as observer:
+        state = observer.execute(
+            text("SELECT state FROM blob WHERE blob_id = :blob_id"),
+            {"blob_id": str(verified.blob_id)},
+        ).scalar_one()
+    assert state == "rejected"
 
 
 def test_a_wrong_execution_token_and_a_superseded_attempt_fail_closed(

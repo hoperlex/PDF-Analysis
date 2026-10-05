@@ -44,7 +44,11 @@ from typing import Any, Final
 from sqlalchemy.orm import Session
 
 from auditmanager.ingest import CommandRepository
-from auditmanager.jobs import JobRepository, UnresolvedProviderEffect
+from auditmanager.jobs import (
+    JobRepository,
+    SettledProviderEffect,
+    UnresolvedProviderEffect,
+)
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.scope import RECONCILIATION_TERMINAL
 from auditmanager.shared.errors import ErrorCode
@@ -89,6 +93,7 @@ class ReconciliationReport:
 
     runs: tuple[ReconciledRun, ...] = ()
     abandoned_command_ids: tuple[str, ...] = ()
+    settled_provider_effects: tuple[SettledProviderEffect, ...] = ()
     unresolved_provider_effects: tuple[UnresolvedProviderEffect, ...] = ()
 
     @property
@@ -174,6 +179,7 @@ def reconcile(
     runs: RunRepository | None = None,
     jobs: JobRepository | None = None,
     commands: CommandRepository | None = None,
+    provider_effect_batch_size: int = 100,
 ) -> ReconciliationReport:
     """Both clauses, in the order a startup wants them.
 
@@ -186,10 +192,16 @@ def reconcile(
         session, older_than=older_than, runs=runs, jobs=job_repo
     )
     abandoned = abandon_stale_commands(session, older_than=older_than, commands=commands)
+    settled = job_repo.settle_terminal_provider_effects(
+        session,
+        older_than=older_than,
+        batch_size=provider_effect_batch_size,
+    )
     unresolved = job_repo.unresolved_provider_effects(session)
     return ReconciliationReport(
         runs=reconciled,
         abandoned_command_ids=abandoned,
+        settled_provider_effects=settled,
         unresolved_provider_effects=unresolved,
     )
 

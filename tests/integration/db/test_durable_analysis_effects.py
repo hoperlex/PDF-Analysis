@@ -2,10 +2,23 @@
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
 from auditmanager.shared.db.migrations import head_revision
 from auditmanager.shared.errors import ErrorCode
+from auditmanager.shared.identity import (
+    AnalysisProfileId,
+    AttemptId,
+    DocumentUid,
+    JobId,
+    ModelCallId,
+    ProjectUid,
+    PromptBundleId,
+    RunId,
+    VersionUid,
+)
 
 
 NEW_TABLES = {
@@ -48,6 +61,53 @@ ATTEMPT_EDGES = {
     ("running", "lost"),
     ("running", "cancelled"),
 }
+
+
+def _seed_run(connection, *, label: str) -> dict[str, str]:
+    identities = {
+        "project_uid": str(ProjectUid.new()),
+        "document_uid": str(DocumentUid.new()),
+        "version_uid": str(VersionUid.new()),
+        "run_id": str(RunId.new()),
+    }
+    connection.execute(
+        text("INSERT INTO project (project_uid, name) VALUES (:project_uid, :name)"),
+        {**identities, "name": f"durable-{label}"},
+    )
+    connection.execute(
+        text(
+            "INSERT INTO document (document_uid, project_uid, display_title) "
+            "VALUES (:document_uid, :project_uid, :title)"
+        ),
+        {**identities, "title": f"durable-{label}"},
+    )
+    connection.execute(
+        text(
+            "INSERT INTO document_version (version_uid, document_uid, version_ordinal, "
+            "media_type, byte_size, sha256, page_count) "
+            "VALUES (:version_uid, :document_uid, 1, 'application/pdf', 1, :sha256, 1)"
+        ),
+        {**identities, "sha256": "a" * 64},
+    )
+    connection.execute(
+        text(
+            "INSERT INTO audit_run (run_id, project_uid, version_uid, "
+            "analysis_profile_id, prompt_bundle_id, provider_mode, frozen_input_digest) "
+            "VALUES (:run_id, :project_uid, :version_uid, :profile_id, :bundle_id, "
+            "'recorded', :digest)"
+        ),
+        {
+            **identities,
+            "profile_id": str(AnalysisProfileId.new()),
+            "bundle_id": str(PromptBundleId.new()),
+            "digest": "b" * 64,
+        },
+    )
+    return identities
+
+
+def _assert_database_refusal(error: pytest.ExceptionInfo[DBAPIError], *, sqlstate: str) -> None:
+    assert getattr(error.value.orig, "sqlstate", None) == sqlstate
 
 
 def test_0014_creates_exactly_the_owned_relations_and_topologies(migrated_engine) -> None:
@@ -155,6 +215,104 @@ def test_final_model_call_is_composite_bound_to_the_effect_run(migrated_engine) 
     assert unique == "UNIQUE (run_id, model_call_id)"
 
 
+def test_cross_run_final_model_call_insert_is_refused_by_the_composite_fk(
+    migrated_engine,
+) -> None:
+    with migrated_engine.begin() as connection:
+        owner = _seed_run(connection, label="owner")
+        foreign = _seed_run(connection, label="foreign")
+        job_id = str(JobId.new())
+        attempt_id = str(AttemptId.new())
+        connection.execute(
+            text("INSERT INTO job (job_id, run_id) VALUES (:job_id, :run_id)"),
+            {"job_id": job_id, "run_id": owner["run_id"]},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO attempt (attempt_id, job_id, execution_token) "
+                "VALUES (:attempt_id, :job_id, 'test-token')"
+            ),
+            {"attempt_id": attempt_id, "job_id": job_id},
+        )
+        foreign_call_id = str(ModelCallId.new())
+        connection.execute(
+            text(
+                "INSERT INTO model_call (model_call_id, run_id, stage_id, provider, "
+                "model_identity, provider_mode, request_sha256, response_sha256, "
+                "input_tokens, output_tokens, latency_ms, cost_micros, status) "
+                "VALUES (:call_id, :run_id, 'text_analysis', 'anthropic', 'a-model', "
+                "'recorded', :request_sha, :response_sha, 1, 1, 1, 0, 'succeeded')"
+            ),
+            {
+                "call_id": foreign_call_id,
+                "run_id": foreign["run_id"],
+                "request_sha": "c" * 64,
+                "response_sha": "d" * 64,
+            },
+        )
+
+        with pytest.raises(DBAPIError) as refused:
+            with connection.begin_nested():
+                connection.execute(
+                    text(
+                        "INSERT INTO provider_call_effect (model_call_id, run_id, job_id, "
+                        "attempt_id, stage_id, provider, model_identity, provider_mode, "
+                        "parameters, request_sha256, state, response_sha256, input_tokens, "
+                        "output_tokens, latency_ms, final_model_call_id) "
+                        "VALUES (:effect_id, :run_id, :job_id, :attempt_id, "
+                        "'text_analysis', 'anthropic', 'a-model', 'recorded', '{}'::jsonb, "
+                        ":request_sha, 'completed', :response_sha, 1, 1, 1, :foreign_call_id)"
+                    ),
+                    {
+                        "effect_id": foreign_call_id,
+                        "run_id": owner["run_id"],
+                        "job_id": job_id,
+                        "attempt_id": attempt_id,
+                        "request_sha": "e" * 64,
+                        "response_sha": "f" * 64,
+                        "foreign_call_id": foreign_call_id,
+                    },
+                )
+        _assert_database_refusal(refused, sqlstate="23503")
+        assert (
+            getattr(getattr(refused.value.orig, "diag", None), "constraint_name", None)
+            == "fk_provider_effect_final_call_belongs_to_run"
+        )
+
+
+def test_invalid_initial_job_and_attempt_states_are_refused_by_the_trigger(
+    migrated_engine,
+) -> None:
+    with migrated_engine.begin() as connection:
+        seeded = _seed_run(connection, label="initial-state")
+        with pytest.raises(DBAPIError) as job_refused:
+            with connection.begin_nested():
+                connection.execute(
+                    text(
+                        "INSERT INTO job (job_id, run_id, state) "
+                        "VALUES (:job_id, :run_id, 'running')"
+                    ),
+                    {"job_id": str(JobId.new()), "run_id": seeded["run_id"]},
+                )
+        _assert_database_refusal(job_refused, sqlstate="AM001")
+
+        job_id = str(JobId.new())
+        connection.execute(
+            text("INSERT INTO job (job_id, run_id) VALUES (:job_id, :run_id)"),
+            {"job_id": job_id, "run_id": seeded["run_id"]},
+        )
+        with pytest.raises(DBAPIError) as attempt_refused:
+            with connection.begin_nested():
+                connection.execute(
+                    text(
+                        "INSERT INTO attempt (attempt_id, job_id, state, execution_token) "
+                        "VALUES (:attempt_id, :job_id, 'running', 'invalid-initial-state')"
+                    ),
+                    {"attempt_id": str(AttemptId.new()), "job_id": job_id},
+                )
+        _assert_database_refusal(attempt_refused, sqlstate="AM001")
+
+
 def test_analysis_upload_handle_is_opaque_unique_and_frozen(migrated_engine) -> None:
     with migrated_engine.connect() as connection:
         check = connection.execute(
@@ -242,3 +400,38 @@ def test_empty_0014_downgrades_to_0013_and_upgrades_back(
         assert connection.execute(
             text("SELECT version_num FROM alembic_version")
         ).scalar_one() == head_revision()
+
+
+def test_occupied_0014_downgrade_refuses_without_moving_the_head(
+    migrated_database, migrated_engine, foundation_command
+) -> None:
+    with migrated_engine.begin() as connection:
+        seeded = _seed_run(connection, label="occupied-downgrade")
+        connection.execute(
+            text("INSERT INTO job (job_id, run_id) VALUES (:job_id, :run_id)"),
+            {"job_id": str(JobId.new()), "run_id": seeded["run_id"]},
+        )
+
+    url = migrated_database.url.render_as_string(hide_password=False)
+    result = foundation_command(
+        [
+            ".venv/bin/python",
+            "-m",
+            "alembic",
+            "--config",
+            "db/migrations/alembic.ini",
+            "downgrade",
+            "0013_norm_embeddings",
+        ],
+        url,
+    )
+    assert result.returncode != 0
+    assert "downgrade refused: durable execution evidence would be discarded" in (
+        result.stdout + result.stderr
+    )
+    assert "job=1" in (result.stdout + result.stderr)
+    with migrated_engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one() == head_revision()
+        assert connection.execute(text("SELECT count(*) FROM job")).scalar_one() == 1

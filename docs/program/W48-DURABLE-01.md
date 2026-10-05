@@ -183,3 +183,46 @@ composition root, API router, authentication code, workflow, global style, deplo
 credential, immutable audit/judge report or unrelated task brief changed. No tag or remote ref
 was created or moved. The local `.venv` convenience symlink and local norms-corpus symlink are
 untracked/ignored operator state and are excluded from every commit.
+
+## 2026-10-05 DJ-R2/DJ-R8 scope-compliance addendum
+
+The final paragraph above is not a truthful dispatched-scope proof and is superseded by this
+addendum. `W48-DURABLE-JUDGE-2` compared the implementation delta with the two task files as
+they existed at dispatch, rather than with later edits to those task files. That audit found
+20 product, programme-prose or test paths outside the union of the exact dispatched grants:
+
+```text
+docs/manual-tests/PC-01_prototype.md
+docs/program/CONTRACT_PIN_REGISTRY.md
+docs/program/CURRENT_STATE.md
+docs/program/P02_SEAMS.md
+docs/program/PROTOTYPE_EXECUTION_PLAN.md
+docs/program/PROTOTYPE_PROFILE.md
+src/auditmanager/analysis/text/__init__.py
+src/auditmanager/runs/__init__.py
+src/auditmanager/runs/repository.py
+src/auditmanager/shared/identity/ids.py
+src/auditmanager/storage/README.md
+src/auditmanager/storage/port.py
+src/auditmanager/storage/s3.py
+tests/contract/api_v1/test_doc_prose_facts.py
+tests/contract/domain_p02/test_identifier_catalog.py
+tests/contract/domain_p02/test_seam_register.py
+tests/integration/composition/test_the_run_leaves_the_request_thread.py
+tests/integration/foundation/test_real_providers.py
+tests/integration/shared_kernel/test_topology_guard.py
+tests/integration/storage/test_publication.py
+```
+
+The original implementation task file also changed seven times after dispatch and the repair
+task file changed three times after its dispatch. Those in-lane changes cannot retroactively
+grant ownership, so neither the file list above nor any later task-file edit is treated as
+executor authorization. The paths may contain necessary and technically correct consequences
+of the migration and public-port work, but necessity is not a substitute for a dispatched
+grant. The W48 integrator must explicitly accept the exact inherited bytes or exclude them from
+the candidate; this executor addendum does not make that integration decision.
+
+This correction changes the historical scope/accounting claim only. It does not alter the
+recorded implementation or gate measurements, does not rewrite either frozen task file, and
+does not assert that the 20 inherited paths are defective. The repair in
+`W48-DURABLE-FIX-2` is evaluated solely against its own pre-dispatched allowed paths.

@@ -9,10 +9,9 @@ dollars. This module is where those three meet, and it is deliberately the only 
     PYTHONPATH=src .venv/bin/python -m auditmanager.norms \\
         --corpus /path/to/corpus --ledger /path/to/repairs.json --dry-run
 
-    # the real run, with the credential injected for that command only
-    set -a; . infra/deploy/env/provider.env; set +a
+    # live mode is fail-closed until this command owns a durable per-call journal
     PYTHONPATH=src .venv/bin/python -m auditmanager.norms \\
-        --corpus /path/to/corpus --ledger /path/to/repairs.json --ceiling-usd 5.00
+        --corpus /path/to/corpus --ledger /path/to/repairs.json
 
 **The credential is read from the process environment and from nowhere else.** Not from a
 path this module knows, not from a lane `.env`, and it is never printed — not into the
@@ -38,17 +37,16 @@ each call against what it actually cost, which is ``cost.py``'s rule and catches
 failures: a run already at the ceiling never issues another request, and one call far more
 expensive than expected halts the run rather than being noticed in a bill.
 
-**A partially completed run is resumable and never re-spends.** The ledger is written after
-every page, and a re-run skips every block already in it. Five waves of this programme have
-lost work to a session that died mid-task; a paid run that has to start over is that lesson
-with an invoice attached.
+**Live mode is refused before transport construction.** A page ledger written only after the
+provider returns cannot prove whether a process-loss window spent money. Until a durable
+pre-call journal exists for this command, only ``--dry-run`` is executable; this is an explicit
+operator-visible refusal rather than a false "never re-spends" promise.
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
-import datetime as _datetime
 import io
 import json
 import os
@@ -58,17 +56,10 @@ from pathlib import Path
 from typing import Any
 
 from auditmanager.norms.corpus_source import degenerate_pages
-from auditmanager.norms.repair import (
-    LEDGER_VERSION,
-    PageRepair,
-    RepairLedger,
-    ledger_of,
-)
 from auditmanager.norms.rerecognition import (
     RECOGNITION_SYSTEM_PROMPT,
     PageToRecognise,
     RecognisedPage,
-    rerecognise,
 )
 
 #: `R-29`'s first stopping condition, as the default rather than as a paragraph.
@@ -85,10 +76,6 @@ ENV_MODEL = "PROXY_LLM_MODEL"
 
 class RunRefused(RuntimeError):
     """The run stopped before or during spending, and says why in words, never in values."""
-
-
-def _now() -> str:
-    return _datetime.datetime.now(tz=_datetime.timezone.utc).isoformat(timespec="seconds")
 
 
 def render_crop_png(crop: bytes, *, dpi: int = RENDER_DPI) -> bytes:
@@ -185,17 +172,6 @@ def resolve_transport(environment: dict[str, str] | None = None) -> tuple[str, s
     return base_url, token, model
 
 
-def _load_ledger(path: Path) -> RepairLedger | None:
-    if not path.is_file():
-        return None
-    return RepairLedger.from_document(json.loads(path.read_text(encoding="utf-8")))
-
-
-def _write_ledger(path: Path, ledger: RepairLedger) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(ledger.as_json(), encoding="utf-8")
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="auditmanager.norms", description=__doc__)
     parser.add_argument("--corpus", type=Path, required=True, help="the corpus root directory")
@@ -247,76 +223,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    base_url, token, model = resolve_transport()
-    recogniser = ProxyPageRecogniser(
-        base_url=base_url,
-        token=token,
-        model=model,
-        max_output_tokens=args.max_output_tokens,
-        dpi=args.dpi,
+    raise RunRefused(
+        "live re-recognition is disabled: durable_call_journal_required. "
+        "No provider transport was constructed and no call was made."
     )
-
-    existing = _load_ledger(args.ledger)
-    repairs: list[PageRepair] = list(existing.repairs) if existing is not None else []
-    done = {repair.key for repair in repairs}
-    snapshot_id = args.snapshot_id or (existing.base_snapshot_id if existing else "")
-    spent = sum(repair.cost_usd for repair in repairs)
-    attempted = 0
-    stopped = ""
-
-    for page in pages:
-        if (page.document_slug, page.block_id) in done:
-            continue
-        if args.limit and attempted >= args.limit:
-            stopped = "limit reached"
-            break
-        if spent >= args.ceiling_usd:
-            # Before the call, so a run already at the ceiling never issues another request.
-            stopped = "ceiling reached before the call"
-            break
-
-        repair = rerecognise(page, recogniser, now=_now())
-        repairs.append(repair)
-        attempted += 1
-        spent += repair.cost_usd
-        _write_ledger(
-            args.ledger, ledger_of(snapshot_id, _now(), repairs)
-        )
-
-        if repair.unpriced_attempts and not args.allow_unpriced:
-            stopped = (
-                "the transport priced nothing for this call, so this run cannot state what it "
-                "spent. Re-run with --allow-unpriced only if the transport is known not to "
-                "charge."
-            )
-            break
-        if spent > args.ceiling_usd:
-            # After the call, on measured usage, so one unexpectedly expensive call halts.
-            stopped = "ceiling exceeded by the last call"
-            break
-
-    ledger = ledger_of(snapshot_id, _now(), repairs)
-    _write_ledger(args.ledger, ledger)
-    print(
-        json.dumps(
-            {
-                "version": LEDGER_VERSION,
-                "ledger": str(args.ledger),
-                "pages_in_ledger": len(ledger.repairs),
-                "attempted_this_run": attempted,
-                "repaired": len(ledger.applied),
-                "still_degenerate": len(ledger.still_degenerate),
-                "unusable": len(ledger.unusable),
-                "unpriced_attempts": ledger.unpriced_attempts,
-                "spent_usd": round(ledger.total_cost_usd, 4),
-                "ceiling_usd": args.ceiling_usd,
-                "stopped": stopped or "every page in scope was read",
-            },
-            indent=2,
-            ensure_ascii=False,
-        )
-    )
-    return 0 if not stopped or stopped.startswith(("limit", "every")) else 2
 
 
 if __name__ == "__main__":

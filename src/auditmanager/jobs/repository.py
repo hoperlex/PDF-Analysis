@@ -155,8 +155,40 @@ _UNRESOLVED_PROVIDER_EFFECTS = text(
     SELECT model_call_id, run_id, job_id, attempt_id, state, request_sha256,
            response_sha256, error_code
       FROM provider_call_effect
-     WHERE state <> 'completed'
+     WHERE state IN ('prepared', 'response_received')
      ORDER BY prepared_at, model_call_id
+    """
+)
+_SETTLE_TERMINAL_PROVIDER_EFFECTS = text(
+    """
+    WITH candidates AS (
+        SELECT effect.model_call_id, effect.state AS previous_state
+          FROM provider_call_effect effect
+          JOIN attempt execution_attempt
+            ON execution_attempt.attempt_id = effect.attempt_id
+           AND execution_attempt.job_id = effect.job_id
+          JOIN job execution_job
+            ON execution_job.job_id = effect.job_id
+           AND execution_job.run_id = effect.run_id
+          JOIN audit_run run ON run.run_id = effect.run_id
+         WHERE effect.state IN ('prepared', 'response_received')
+           AND execution_attempt.state IN (
+               'succeeded', 'failed', 'superseded', 'lost', 'cancelled'
+           )
+           AND execution_job.state IN ('succeeded', 'failed', 'cancelled', 'dead_letter')
+           AND run.state IN ('published', 'partial', 'failed', 'cancelled')
+           AND effect.prepared_at <= statement_timestamp() - CAST(:older_than AS interval)
+         ORDER BY effect.prepared_at, effect.model_call_id
+         LIMIT :batch_size
+         FOR UPDATE OF effect SKIP LOCKED
+    )
+    UPDATE provider_call_effect effect
+       SET state = 'abandoned', error_code = :error_code,
+           updated_at = statement_timestamp()
+      FROM candidates
+     WHERE effect.model_call_id = candidates.model_call_id
+    RETURNING effect.model_call_id, effect.run_id, effect.job_id, effect.attempt_id,
+              candidates.previous_state, effect.state
     """
 )
 
@@ -183,6 +215,18 @@ class UnresolvedProviderEffect:
     request_sha256: str
     response_sha256: str | None
     error_code: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class SettledProviderEffect:
+    """One non-repeatable call whose owning execution ended without completion."""
+
+    model_call_id: str
+    run_id: str
+    job_id: str
+    attempt_id: str
+    previous_state: str
+    state: str
 
 
 class JobRepository:
@@ -473,6 +517,34 @@ class JobRepository:
             for row in session.execute(_UNRESOLVED_PROVIDER_EFFECTS).mappings().all()
         )
 
+    def settle_terminal_provider_effects(
+        self,
+        session: Session,
+        *,
+        older_than: str = "1 hour",
+        batch_size: int = 100,
+    ) -> tuple[SettledProviderEffect, ...]:
+        """Bound one reconciliation pass and preserve ambiguous calls as abandoned.
+
+        Only effects owned by a terminal Run, Job and Attempt are eligible.  Both a
+        pre-dispatch ``prepared`` row and a durable ``response_received`` row may be
+        abandoned: neither is safe to repeat, and neither contains enough evidence to
+        invent the immutable canonical ``model_call``.  The previous state remains in
+        the returned report while the row retains any response checksum/token counts it
+        had already recorded.
+        """
+        if batch_size < 1:
+            raise ValueError("provider effect reconciliation batch_size must be positive")
+        rows = session.execute(
+            _SETTLE_TERMINAL_PROVIDER_EFFECTS,
+            {
+                "older_than": older_than,
+                "batch_size": batch_size,
+                "error_code": ErrorCode.ANALYSIS_FAILED.value,
+            },
+        ).mappings().all()
+        return tuple(SettledProviderEffect(**dict(row)) for row in rows)
+
     def _advance_job(
         self, session: Session, job_id: str, from_state: str, to_state: str
     ) -> None:
@@ -516,5 +588,6 @@ class JobRepository:
 __all__ = [
     "AttemptAuthority",
     "JobRepository",
+    "SettledProviderEffect",
     "UnresolvedProviderEffect",
 ]
