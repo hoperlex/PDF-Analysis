@@ -78,6 +78,17 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56490`, `60090/60091`; API `56491`, Next `56493` | `gate-w48public` — `W48-PUBLIC-01` | 2026-10-05 | merged into W48 closure |
 | `56500`, `60100/60101`; API `56501`, Next `56503` | `gate-w48judgez` — `W48-JUDGE-Z` | 2026-10-05 | W48 closes |
 | `56510`, `60110/60111`; API `56511`, Next `56513` | `gate-w48close` — `W48-INT-CLOSE` | 2026-10-05 | candidate published to `origin/dev` |
+| `56520`, `60120/60121`; API `58520/58521`, web `53020` | `gate-w48judgez` — `W48-JUDGE-Z` as actually run (the `56500` row was allocated, not used) | 2026-10-05 | **released** — stand stopped by the judge |
+| `56530`, `60130/60131` | `gate-w48fixc` — `W48-FIX-C` | 2026-10-05 | **released** — merged at `70f6c9e`, `make down` |
+| `56540`, `60140/60141` | `gate-w49int` — W49 integration and its gates | 2026-10-05 | W49 closes |
+| `56550`, `60150/60151` | `gate-w49access` — `W49-ACCESS-01` | 2026-10-05 | merged |
+| `56560`, `60160/60161` | `gate-w49dec` — `W49-DECISIONS-01` | 2026-10-05 | merged |
+| `56570`, `60170/60171` | `gate-w49seal` — `W49-SEAL-01` | 2026-10-05 | merged |
+| `56580`, `60180/60181` | `gate-w49bff` — `W49-BFF-01` | 2026-10-05 | merged |
+| `56590`, `60190/60191` | `gate-w49edge` — `W49-EDGE-01` | 2026-10-05 | merged |
+| `56600`, `60200/60201` | `gate-w49qa` — `W49-QA-01` | 2026-10-05 | merged |
+| `56610`, `60210/60211` | `gate-w49jx` — `W49-JUDGE-X` | 2026-10-05 | W49 closes |
+| `56620`, `60220/60221` | `gate-w49jy` — `W49-JUDGE-Y` | 2026-10-05 | W49 closes |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,

@@ -1,0 +1,89 @@
+# Task W49-JUDGE-X — judge of the identity wave, attacker entry point
+
+## Outcome
+
+A report-only, author-independent verdict on the merged W49 candidate.
+
+## Depends on
+
+- `W49-QA-01`
+
+## Frozen inputs
+
+- domain contract: revision 8, 27 opaque identities (moves only in `W49-SEAL-01`)
+- API contract: 17 / 20 / 61 (moves only in `W49-SEAL-01`)
+- error catalog: 22 codes (moves only in `W49-SEAL-01`: `rate_limited`)
+- migration head: `0014_durable_analysis_effects` (moves only in `W49-ACCESS-01`)
+- code base: `23e0579`, the W48 closure published to `origin/dev`
+- controlling plan: `docs/program/dispatch/W49-PLAN.md` at the freeze commit
+
+## Enumerator ownership
+
+- enumerated_set_changed: no
+- enumerator_path: not_applicable
+- enumerator_owner: not_applicable
+- totality_query: not_applicable
+
+## Captured premise evidence
+
+- premise: judges read only this task file and the subject SHA before their own pass
+
+### P-01 — base measurement
+
+- captured_at: 2026-10-05
+- command: `git log --oneline -1`
+- captured_output:
+  ```text
+  (the merged W49 candidate)
+  ```
+- interpretation: measured on the code base before dispatch; the lane re-measures it first.
+
+## Historical evidence
+
+- correction_mode: none
+- source_record: `docs/program/dispatch/W49-PLAN.md`
+- addendum_path: not_applicable
+
+## Publication authority
+
+- development_target: none
+- origin_main_authority: none
+
+## Allowed paths
+
+- `docs/program/reviews/W49-JUDGE-X.md`
+
+## Forbidden hotspots
+
+- every other tracked path, every ref, tag and deployment action
+
+## Non-goals
+
+- no repair, merge, ruling or register edit
+
+## Deliverables
+
+- attacker entry point: privilege escalation across every operation × role set × profile state; default credential against the new operations; enumeration via `conflict_reason` and timing; flooding through the BFF, through `/api/v1/` and from two addresses; forged `notice`, `refusal` and `X-Forwarded-For`; the catch-all refuses `registrations` with or without a session; findings classed release-blocking / must-fix-before-merge / register; cross-examination with the other judge
+
+## Required tests
+
+- every probe restored; final `git diff --name-only <subject>..HEAD` names only the report
+
+## Integration contract
+
+The integrator opens `W49-FIX` only for release-blocking findings.
+
+## Failure/idempotency/security cases
+
+- unique lane ports taken with `ss -ltn` and recorded; owned disposable services only; never kill a process by pattern; no credential in evidence
+
+## Rollback / feature flag
+
+Report-only; revert the report commit.
+
+## Handoff
+
+- changed files: listed in `docs/program/W49-JUDGE-X.md` with `git diff --name-only <base>..<sha>`
+- commands/results: verbatim with exit status; every mutation with its red output
+- known limits: listed, never decided silently
+- integration notes: hand back branch `agent/w49-judge-x` at a recorded SHA
