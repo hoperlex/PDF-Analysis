@@ -51,8 +51,8 @@ from auditmanager.analysis.engine.result import (
 )
 from auditmanager.analysis.ports.stage import StageContext, StageHandler, StageProduction
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.storage import BlobStore
-from auditmanager.storage.models import BlobId
+from auditmanager.storage.public import BlobStore
+from auditmanager.storage.public import BlobId
 
 #: Injected in tests so a result's timestamps are not a source of flake.
 Clock = Callable[[], datetime]

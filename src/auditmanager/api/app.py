@@ -292,7 +292,7 @@ def _run_lifespan(application: Application) -> Any:
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        from auditmanager.runs import reconcile_at_startup
+        from auditmanager.runs.public import reconcile_at_startup
 
         report = reconcile_at_startup(application.session_factory)
         if report.run_count or report.abandoned_count:

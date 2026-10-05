@@ -39,7 +39,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from auditmanager.documents import UNIQUE_VIOLATION, sqlstate_of
+from auditmanager.documents.public import UNIQUE_VIOLATION, sqlstate_of
 from auditmanager.shared.db import nested_transaction
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import CommandId, IdempotencyKey, PayloadFingerprint

@@ -43,8 +43,8 @@ from typing import Any, Final
 
 from sqlalchemy.orm import Session
 
-from auditmanager.ingest import CommandRepository
-from auditmanager.jobs import (
+from auditmanager.ingest.public import CommandRepository
+from auditmanager.jobs.public import (
     JobRepository,
     SettledProviderEffect,
     UnresolvedProviderEffect,

@@ -45,7 +45,7 @@ from typing import Any, Final, Mapping
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from auditmanager.documents import (
+from auditmanager.documents.public import (
     MANIFEST_ROLE_SOURCE_DOCUMENT,
     ROLE_SOURCE_DOCUMENT,
     DocumentRepository,
@@ -63,7 +63,7 @@ from auditmanager.shared.identity import (
     ProjectUid,
     VersionUid,
 )
-from auditmanager.storage import (
+from auditmanager.storage.public import (
     BlobNotFoundError,
     BlobStore,
     StorageError,
@@ -72,7 +72,7 @@ from auditmanager.storage import (
     parse_blob_role,
     sha256_of,
 )
-from auditmanager.storage.blob_repository import BlobMetadataRepository
+from auditmanager.storage.public import BlobMetadataRepository
 
 from .commands import (
     COMMAND_TYPE_CREATE_PROJECT,

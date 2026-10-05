@@ -158,6 +158,7 @@ Every rule appears once in this table and once, in more detail, in section 5.
 - **Source:** AGENTS.md section 4 bullet 3; ADR-0004 Decision; ADR-0002 Boundary; REPOSITORY_LAYOUT.md backend module shape
 - **Scope:** `src/auditmanager/**`
 - **Enforcement / severity:** `static` / `error`
+- **Executable enforcement:** `tests/contract/architecture/test_alr05_boundaries.py` rejects both deep and package-root cross-context imports.
 - **Covers:** AG4-03
 - **Detection:** Resolve every absolute and relative import in src/auditmanager/A/** that targets src/auditmanager/B/** with A different from B and B not equal to shared. The only admissible target module is auditmanager.B.public. Any import of auditmanager.B.domain, .application, .ports, .adapters or a submodule of them is a violation, including an import guarded by TYPE_CHECKING.
 - **Not a violation:** auditmanager.shared is cross-cutting and importable by every context; its own direction is governed by ALR-07. src/auditmanager/bootstrap/** is the composition root and wires concrete adapters of every context by design. A contract event payload type published under contracts/** is a contract, not a context internal.

@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import AttemptId, JobId, LeaseId, ModelCallId
-from auditmanager.storage.models import BlobDeclaration, BlobId, parse_blob_id
+from auditmanager.storage.public import BlobDeclaration, BlobId, parse_blob_id
 
 _INSERT_JOB = text(
     "INSERT INTO job (job_id, run_id, state) VALUES (:job_id, :run_id, 'queued')"

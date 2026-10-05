@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
-from auditmanager.storage import BlobId, parse_blob_id
+from auditmanager.storage.public import BlobId, parse_blob_id
 
 from .models import (
     ROLE_SOURCE_DOCUMENT,

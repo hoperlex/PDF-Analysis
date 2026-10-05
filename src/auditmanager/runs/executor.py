@@ -80,8 +80,8 @@ from auditmanager.analysis.public import (
     read_artifact,
     run_stage,
 )
-from auditmanager.analysis.ports.artifacts import publish_artifact
-from auditmanager.analysis.text import (
+from auditmanager.analysis.public import publish_artifact
+from auditmanager.analysis.public import (
     AR_TEXT_PROFILE,
     ARTIFACT_ROLE as ROLE_TEXT_OBSERVATIONS,
     CostMeter,
@@ -96,9 +96,9 @@ from auditmanager.analysis.text import (
     load_provider_config,
     run_text_analysis,
 )
-from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
-from auditmanager.documents import DocumentRepository
-from auditmanager.findings import (
+from auditmanager.analysis.public import STAGE_VERSION as TEXT_STAGE_VERSION
+from auditmanager.documents.public import DocumentRepository
+from auditmanager.findings.public import (
     BlockIndex,
     ObservationSet,
     PublicationResult,
@@ -108,7 +108,7 @@ from auditmanager.findings import (
     run_grounding_gate,
     select_terminal,
 )
-from auditmanager.jobs import AttemptAuthority, JobRepository
+from auditmanager.jobs.public import AttemptAuthority, JobRepository
 from auditmanager.runs.repository import (
     INITIAL_STATE,
     PC01_STAGES,
@@ -123,9 +123,9 @@ from auditmanager.runs.retry import (
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId, RunId, VersionUid
-from auditmanager.storage import BlobStore, DurablePublicationStore
-from auditmanager.storage.blob_repository import BlobMetadataRepository
-from auditmanager.storage.models import BlobDeclaration, VerifiedBlob, parse_blob_id
+from auditmanager.storage.public import BlobStore, DurablePublicationStore
+from auditmanager.storage.public import BlobMetadataRepository
+from auditmanager.storage.public import BlobDeclaration, VerifiedBlob, parse_blob_id
 
 Clock = Callable[[], datetime]
 

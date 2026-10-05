@@ -58,7 +58,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
-from auditmanager.findings.queries import finding_exists, observation_belongs_to_finding
+from auditmanager.findings.public import finding_exists, observation_belongs_to_finding
 from auditmanager.shared.db import SQLSTATE_TO_CATALOG_CODE, nested_transaction
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import DecisionId
@@ -324,7 +324,7 @@ def append_decision_under_key(
 
     The caller owns the transaction; this opens no engine and commits nothing.
     """
-    from auditmanager.ingest import CommandReplay, CommandRepository, payload_fingerprint
+    from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
 
     # The canonical primitive, the one `B1` and `B5` already claim with, so all three
     # write paths compare payloads the same way rather than three ways.

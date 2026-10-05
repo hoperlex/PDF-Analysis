@@ -86,7 +86,7 @@ from typing import Any, Final, Protocol
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.runs.executor import execute_run
-from auditmanager.jobs import JobRepository
+from auditmanager.jobs.public import JobRepository
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.scope import RECONCILIATION_TERMINAL
 from auditmanager.shared.errors import ErrorCode

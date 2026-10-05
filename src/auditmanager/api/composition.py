@@ -8,7 +8,7 @@ imports the bootstrap package and the bootstrap package never imports a router i
 
 from __future__ import annotations
 
-from auditmanager.bootstrap.composition import Application, build_application
-from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
+from auditmanager.bootstrap.public import Application, build_application
+from auditmanager.bootstrap.public import AppSettings, ConfigurationError
 
 __all__ = ["Application", "AppSettings", "ConfigurationError", "build_application"]
