@@ -55,6 +55,7 @@ The resealed contract, the three access registers plus `OPERATION_ROLES`, and th
 - `contracts/api/v1/openapi.json`, `contracts/api/v1/README.md`
 - `contracts/domain/v1/identifiers.json`, `contracts/domain/v1/error-codes.json`, `contracts/domain/v1/error-envelope.schema.json`, `contracts/domain/v1/state-machines.json`, `contracts/domain/v1/README.md`
 - `src/auditmanager/shared/identity/ids.py` — the `usr` and `reg` registry types only
+- `src/auditmanager/access/**` — only (a) attaching `conflict_reason` to the `conflict` raises once the catalog declares it, (b) moving `usr`/`reg` into the shared registry, (c) removing `access/name.py`, which `access.profile` replaces
 - `web/openapi/openapi.json`, `web/src/shared/api/generated/**` (via `npm --prefix web run api:generate`), `web/FRONTEND_LOCK.json`
 - `web/src/shared/api/catalog-message.ts` — the `rate_limited` sentence only
 - `web/src/app/bff/v1/[...path]/route.ts` and `web/src/shared/api/authorization.ts` — the one count comment in each
@@ -68,7 +69,7 @@ The resealed contract, the three access registers plus `OPERATION_ROLES`, and th
 
 ## Forbidden hotspots
 
-- every path not listed above; `contracts/**` outside `W49-SEAL-01`; root locks; refs, tags, deployment and secrets; `CURRENT_STATE.md`, `DEBT_REGISTER.md`, `OWNER_RULINGS_*.md`, `PORT_REGISTRY.md` except an exact sentence named here; `src/auditmanager/access/**` (call it through its public module), migrations, `web/src/**` beyond the lines named
+- every path not listed above; `contracts/**` outside `W49-SEAL-01`; root locks; refs, tags, deployment and secrets; `CURRENT_STATE.md`, `DEBT_REGISTER.md`, `OWNER_RULINGS_*.md`, `PORT_REGISTRY.md` except an exact sentence named here; `src/auditmanager/access/**` beyond the three edits named above (call it through its public module), migrations, `web/src/**` beyond the lines named
 
 ## Non-goals
 

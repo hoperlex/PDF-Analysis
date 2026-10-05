@@ -1115,6 +1115,13 @@ name form «Фамилия И. О.» takes precedence over the `display_name` `R
 A registration request sends no mail. The applicant learns the status — pending, or rejected
 with the administrator's reason — at sign-in. SMTP and notifications are a later task.
 
+> **`R-56` addendum, ruled 2026-10-06 by direct poll at the `W49-ACCESS-01` merge.** The plan
+> nulls a request's password hash at the decision, so after a rejection nothing can prove the
+> applicant's pair. Asked how a rejected applicant learns of the decision, the owner ruled:
+> **nothing is shown** — sign-in answers the generic refusal as if no request existed, the reason
+> is visible only to administrators, and a mail notification will inform the applicant once SMTP
+> exists. Sign-in shows only *pending*.
+
 ### `R-57` — the avatar is generated
 
 The avatar is a coloured circle with initials, generated from the account's names and e-mail.

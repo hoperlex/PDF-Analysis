@@ -63,7 +63,7 @@ A report-only, author-independent verdict on the merged W49 candidate.
 
 ## Deliverables
 
-- attacker entry point: privilege escalation across every operation × role set × profile state; default credential against the new operations; enumeration via `conflict_reason` and timing; flooding through the BFF, through `/api/v1/` and from two addresses; forged `notice`, `refusal` and `X-Forwarded-For`; the catch-all refuses `registrations` with or without a session; findings classed release-blocking / must-fix-before-merge / register; cross-examination with the other judge
+- attacker entry point: privilege escalation across every operation × role set × profile state; default credential against the new operations; enumeration via `conflict_reason` and timing; flooding through the BFF, through `/api/v1/` and from two addresses; a rejected applicant learning anything at sign-in; forged `refusal` and `X-Forwarded-For`; the catch-all refuses `registrations` with or without a session; findings classed release-blocking / must-fix-before-merge / register; cross-examination with the other judge
 
 ## Required tests
 

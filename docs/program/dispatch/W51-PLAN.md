@@ -38,11 +38,9 @@ refusal the API gives is shown as a typed state in Russian; no rule is computed 
 Behaviour:
 
 - **Sign-in:** e-mail and password; the validated `next` in a hidden field (W50); refusals
-  `credentials`, `validation`, `unconfigured`, `upstream`, `pending`, `rejected`, `throttled` each
-  a sentence; for `pending`/`rejected` the page reads the one-time notice named by `?notice=` from
-  the register (W49 §3.5) and shows the status and, for a rejection, the reason (≤ 256
-  characters); a missing or used notice shows the status sentence without a reason. One generic
-  sentence for a wrong pair.
+  `credentials`, `validation`, `unconfigured`, `upstream`, `pending`, `throttled` each a
+  sentence. One generic sentence for a wrong pair — and for a rejected applicant, who sees
+  nothing more at sign-in (`R-56` addendum, 2026-10-06; mail will tell them later).
 - **Registration:** a plain HTML form posted to the W49 reserved handler, like sign-in: surname,
   name, patronymic (optional), e-mail, password twice; each name ≤ 60 characters; the R-48
   policy explained before submission; the handler's closed refusal set `{validation,
@@ -103,8 +101,7 @@ Depends on: `W50-INT-CLOSE`. Standard form.
   `web/tests/unit/screens/{sign-in,register,account}*.test.ts`, `web/tests/unit/session/**`,
   `docs/program/W51-AUTH-01.md`. Mutations: an unknown refusal value is a typed fault, not a
   blank; the password mismatch is caught before the request; the e-mail field is disabled once
-  the profile is complete; a 256-character reason wraps at 780 px; a forged `?notice=` shows
-  the status sentence and no reason.
+  the profile is complete; a forged `?refusal=pending` shows only the pending sentence.
 - **ADMIN-USERS allowed paths:** `web/src/app/admin/users/**`, `web/src/_pages/admin-users/**`,
   `web/src/widgets/user-list/**`, `web/src/widgets/user-card/**`,
   `web/src/features/manage-user/**`, `web/src/entities/user/**`,
@@ -134,8 +131,9 @@ Depends on: `W50-INT-CLOSE`. Standard form.
   → admin removes `expert` → the account's next BFF call answers the 401 envelope, the session
   row is gone and the screen shows the signed-out state with the sign-in link → it signs in again
   → the next mutation is `permission_denied` → archive → sign-in is the generic refusal → purge is
-  refused (`account_referenced`, it authored a decision). Refusal cases: pending/rejected status with and
-  without a notice, self-archive, last admin, zero roles. Manual steps A13–A20 added to the pack
+  refused (`account_referenced`, it authored a decision). Refusal cases: a pending applicant sees the pending
+  sentence; a rejected applicant's sign-in equals the generic refusal byte-for-byte; self-archive,
+  last admin, zero roles. Manual steps A13–A20 added to the pack
   with expected sentences.
 - **Required tests:** the journey against a built stand with `provider_mode=recorded`; the
   conformance test; `shellcheck scripts/manual-alpha-check.sh`.
@@ -144,8 +142,8 @@ Depends on: `W50-INT-CLOSE`. Standard form.
 - QA: standard form, files under `web/tests/unit/qa_w51/**`: every screen with every role set,
   profile state and the guest; every API refusal of W49 §3.2–§3.3 rendered.
 - X (built stand, black-box first): enumeration through registration; flooding to the cap from
-  the form and from `/api/v1/` directly; open redirect via `next` and `from`; the rejected
-  applicant's reason cannot be read without the pair or with a forged notice; role removal takes
+  the form and from `/api/v1/` directly; open redirect via `next` and `from`; a rejected
+  applicant learns nothing at sign-in and the reason is visible only to administrators; role removal takes
   effect on the next request as a closed session; keyboard-only completion of registration and
   approval; 780 × 900 with maximum-length names and a 256-character reason; console clean.
 - Y: no business rule in a component (`rg -n 'roles.length|isLastAdmin|=== me' web/src` finds
