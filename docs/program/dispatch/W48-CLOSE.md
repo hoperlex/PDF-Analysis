@@ -253,7 +253,7 @@ SHAs. The fields below are the content those files must carry.
   `npm --prefix web run typecheck`; `.venv/bin/python -m pytest tests/contract/api_v1 -q`;
   `git diff --check`.
 
-### `W48-PUBLIC-01` — every cross-context import goes through a public module
+### `W48-PUBLIC-01` — every cross-context import goes through a public module (executor)
 
 - **Depends on:** `W48-DURABLE-FIX-2`, `W48-GUARDS-2`, `W48-TAILS` merged into
   `integration/w48-close`.

@@ -184,9 +184,9 @@ enter `contracts/domain/v1/state-machines.json`, because `state_transition_not_a
 against that file: `app_user` (`active → archived → active | purged`) and `registration_request`
 (`pending → approved | rejected`); their `machine`/`current_state`/`requested_state` details are
 then honest. The error catalog grows by **one code, `rate_limited`** (HTTP 429, `retryable:
-true`, category `policy`, no detail keys): the edge and the BFF throttles of §3.5 have to answer
-with a catalog code — the proxy throttle of §3.5 answers direct callers of `/api/v1/` and the
-safety rules forbid inventing a code at the edge, while the catalog has no 429 today. That is the
+true`, category `policy`, no detail keys): the proxy throttle of §3.5 has to answer with a
+catalog code — it answers direct callers of `/api/v1/`, the safety rules forbid inventing a code
+at the edge, and the catalog has no 429 today. That is the
 second reseal of the slot `IDENTITY-WAVES.md` §5 allows; no other code
 is added. A code lives in three places at once — `error-codes.json`,
 `error-envelope.schema.json` (its `enum` and the per-code `retryable` `allOf`) and the literal
@@ -203,9 +203,10 @@ rg -n -i -e role -e 'rate limit' contracts/api/v1/openapi.json
 ```
 
 (two patterns with `-e`; a `\|` inside one pattern is a literal bar to ripgrep and matches
-nothing, which is how a check stops being able to fail). At the base it prints six lines in
-three places; after the seal the only admissible hits are the `InputManifestEntry.role` field
-(its description, `required` entry and property) and the new role-vocabulary sentences the seal
+nothing, which is how a check stops being able to fail). At the base it prints six lines: the
+three denial descriptions (`info.description`, `/auth/password`, `bearerAuth`) and the three
+`InputManifestEntry.role` lines (description, `required` entry, property); after the seal the only
+admissible hits are those three field lines and the new role-vocabulary sentences the seal
 writes, each named in the report. The surface triple after the reseal is **measured by
 `W49-SEAL-01`**, never quoted from this plan.
 
