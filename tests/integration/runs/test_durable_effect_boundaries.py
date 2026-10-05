@@ -18,7 +18,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from auditmanager.analysis.text import ProviderConfig, ProviderMode
 from auditmanager.ingest.reconciliation import Reconciler
 from auditmanager.jobs import JobRepository
-from auditmanager.runs import execute_run, reconcile, start_audit_run
+from auditmanager.runs import (
+    execute_run,
+    reconcile,
+    reconcile_interrupted_runs,
+    start_audit_run,
+)
 from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdempotencyKey
@@ -938,3 +943,192 @@ def test_bound_analysis_artifacts_are_not_detached_and_missing_bytes_are_named(
     assert named[0].run_id == started.run_id
     assert named[0].stage_id == missing_stage
     assert named[0].role == missing_role
+
+
+# --- W48-FIX-C: regressions for W48-JUDGE-Z findings F-8 and F-9 -----------------------
+#
+# Each refusal below already existed and behaved correctly; what was missing was a test
+# that fails when the refusal is removed. The existing tests assert only the error code,
+# and every refusal of ``reject_unpublished`` shares one code, so a removed check was
+# masked by the next one. These assert the refusal's own reason.
+
+
+def _rejection_reason(refusal: pytest.ExceptionInfo[DomainError]) -> object:
+    assert refusal.value.code is ErrorCode.STATE_TRANSITION_NOT_ALLOWED
+    return refusal.value.detail_fields.get("current_state")
+
+
+def _interrupted_publication(factory, helpers, blob_store, recorded_adapter, provider_config):
+    """A verified, never-published analysis blob whose temporary bytes are gone."""
+    killing_store = ExitAfterVerification(blob_store)
+    session = factory()
+    try:
+        _seeded, started = _start(
+            session, helpers, blob_store, provider_mode="recorded"
+        )
+        with pytest.raises(ProcessExit, match="artifact_verified_before_checkpoint"):
+            execute_run(
+                session,
+                started.run_id,
+                blob_store=killing_store,
+                adapter=recorded_adapter,
+                provider_config=provider_config,
+            )
+    finally:
+        session.close()
+    assert killing_store.temporary is not None
+    verified = blob_store.verify_temporary(killing_store.temporary)
+    blob_store.discard_temporary(killing_store.temporary)
+    return started, verified
+
+
+def _blob_state(factory, blob_id) -> str:
+    with factory() as observer:
+        return str(
+            observer.execute(
+                text("SELECT state FROM blob WHERE blob_id = :blob_id"),
+                {"blob_id": str(blob_id)},
+            ).scalar_one()
+        )
+
+
+def test_a_live_attempts_blob_is_refused_as_attempt_not_terminal_even_without_bytes(
+    engine,
+    blob_store,
+    recorded_adapter,
+    provider_config,
+    helpers,
+) -> None:
+    """F-8, first half: the producing Attempt is still ``running``.
+
+    The bytes are gone and the age threshold is zero, so every later check would let the
+    rejection through: only ``attempt_not_terminal`` stands between a live Attempt and a
+    permanently burned content identity.
+    """
+    factory = _factory(engine)
+    _started, verified = _interrupted_publication(
+        factory, helpers, blob_store, recorded_adapter, provider_config
+    )
+    reconciler = Reconciler(blob_store, session_factory=factory)
+    with pytest.raises(DomainError) as refusal:
+        reconciler.reject_unpublished(verified.blob_id, older_than="0 seconds")
+    assert _rejection_reason(refusal) == "attempt_not_terminal"
+    assert _blob_state(factory, verified.blob_id) == "temporary"
+
+
+def test_a_fresh_terminal_publication_is_refused_as_publication_not_stale(
+    engine,
+    blob_store,
+    recorded_adapter,
+    provider_config,
+    helpers,
+) -> None:
+    """F-8, second half: the Attempt is terminal, but the publication is younger than asked.
+
+    Bytes are gone and the Attempt is ``lost``, so only ``publication_not_stale`` refuses;
+    the same blob is then rejectable once the threshold admits it.
+    """
+    factory = _factory(engine)
+    _started, verified = _interrupted_publication(
+        factory, helpers, blob_store, recorded_adapter, provider_config
+    )
+    with factory() as controller:
+        reconcile(controller, older_than="0 seconds")
+        controller.commit()
+    reconciler = Reconciler(blob_store, session_factory=factory)
+    with pytest.raises(DomainError) as refusal:
+        reconciler.reject_unpublished(verified.blob_id, older_than="1 hour")
+    assert _rejection_reason(refusal) == "publication_not_stale"
+    assert _blob_state(factory, verified.blob_id) == "temporary"
+
+    reconciler.reject_unpublished(verified.blob_id, older_than="0 seconds")
+    assert _blob_state(factory, verified.blob_id) == "rejected"
+
+
+def _prepared_provider_effect(factory, helpers, blob_store, recorded_adapter):
+    """A live run stopped right after its provider intent was committed."""
+    session = factory()
+    try:
+        _seeded, started = _start(session, helpers, blob_store, provider_mode="live")
+
+        def stop_after_intent(boundary: str) -> None:
+            if boundary == "provider_intent_committed":
+                raise ProcessExit(boundary)
+
+        with pytest.raises(ProcessExit, match="provider_intent_committed"):
+            execute_run(
+                session,
+                started.run_id,
+                blob_store=blob_store,
+                adapter=CountingLiveAdapter(recorded_adapter),
+                provider_config=_live_config(),
+                effect_checkpoint=stop_after_intent,
+            )
+    finally:
+        session.close()
+    return started
+
+
+def _effect_state(factory, run_id: str) -> str:
+    with factory() as observer:
+        return str(
+            observer.execute(
+                text("SELECT state FROM provider_call_effect WHERE run_id = :run_id"),
+                {"run_id": run_id},
+            ).scalar_one()
+        )
+
+
+def test_the_sweep_leaves_a_live_attempts_provider_effect_alone(
+    engine,
+    blob_store,
+    recorded_adapter,
+    helpers,
+) -> None:
+    """F-9, first half: Run, Job and Attempt are all still executing.
+
+    With the age threshold at zero, only the terminal-owner conditions keep the sweep from
+    marking a call that may still be in flight as ``abandoned``.
+    """
+    factory = _factory(engine)
+    started = _prepared_provider_effect(factory, helpers, blob_store, recorded_adapter)
+    with factory() as controller:
+        settled = JobRepository().settle_terminal_provider_effects(
+            controller, older_than="0 seconds"
+        )
+        controller.commit()
+    assert started.run_id not in {item.run_id for item in settled}
+    assert _effect_state(factory, started.run_id) == "prepared"
+
+
+def test_the_sweep_leaves_a_terminal_effect_younger_than_its_threshold(
+    engine,
+    blob_store,
+    recorded_adapter,
+    helpers,
+) -> None:
+    """F-9, second half: the owners are terminal, but the effect is younger than asked.
+
+    The run is terminated without settling its effects, so only the age condition refuses;
+    the same effect is then settled once the threshold admits it.
+    """
+    factory = _factory(engine)
+    started = _prepared_provider_effect(factory, helpers, blob_store, recorded_adapter)
+    with factory() as controller:
+        reconcile_interrupted_runs(controller, older_than="0 seconds")
+        controller.commit()
+    with factory() as controller:
+        young = JobRepository().settle_terminal_provider_effects(
+            controller, older_than="1 hour"
+        )
+        controller.commit()
+    assert started.run_id not in {item.run_id for item in young}
+    assert _effect_state(factory, started.run_id) == "prepared"
+
+    with factory() as controller:
+        old = JobRepository().settle_terminal_provider_effects(
+            controller, older_than="0 seconds"
+        )
+        controller.commit()
+    assert started.run_id in {item.run_id for item in old}
+    assert _effect_state(factory, started.run_id) == "abandoned"
