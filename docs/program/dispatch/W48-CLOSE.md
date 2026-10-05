@@ -3,6 +3,8 @@
 **Status:** amendment to `W48-PLAN.md`; Stage A and Stage B are executed but unpublished.
 **Controlling rulings:** `R-49`; `R-53` (to be recorded by `W48-RULE-01`, see
 `IDENTITY-WAVES.md` §4).
+**Roles:** `W48-SAFE-01`, `W48-RULE-01`, `W48-INT-CLOSE` and `W48-INT-MAIN-01` are the
+integrator's; the judges, repairs and `W48-PUBLIC-01` are the executor's (`IDENTITY-WAVES.md` §8).
 **Exit:** the merged W48 candidate on `origin/dev` with literal `GATE OK`, then — on the owner's
 direct instruction naming that SHA — published to `origin/main`, deployed, accepted live and
 tagged `alpha-w48` (§9, P-7).
@@ -14,7 +16,7 @@ tagged `alpha-w48` (§9, P-7).
 | `origin/dev` | `9b5219e` — the docs-only freeze/dispatch tip |
 | `origin/main` | `608632a` — last auto-deploy publication, 2026-10-01 |
 | main checkout branch | `agent/w47-close` at `c11f1b6`, one commit ahead of `origin/dev` (the audit report) |
-| W48 work | 17 branches `agent/w48-*` in `.local/worktrees/`, **none pushed**; every worktree clean except `w48-freeze-6118e66` (untracked `.venv`, `web/node_modules`) |
+| W48 work | the `agent/w48-*` branches, each in a worktree under `.local/worktrees/`, **none pushed**; every worktree clean except `w48-freeze-6118e66` (untracked `.venv`, `web/node_modules`). `W48-SAFE-01` records the counts: `git branch --list 'agent/w48-*' | wc -l`; `git worktree list | grep -c w48` |
 | furthest tip | `agent/w48-durable-repair` = `411c6d0`, 46 commits ahead of `c11f1b6`, a linear descendant of `agent/w48-stage-a` = `03c04a1` |
 | Stage A/B integration | `03c04a1` contains PROSE, GUARDS, FIX, PORTS, WEB, LIVE, GOV, JUDGE-X/Y, FIX-B merged |
 | durable effects | `afc6fcb` (DURABLE-01), rejected by `b431850` (DURABLE-JUDGE), repaired by `0e88589`, reported by `411c6d0`; judge and repairer were the same agent |
@@ -67,19 +69,36 @@ items marked ✓ were re-measured by the integrator on the tree).
 
 **Audit tails**
 
-- T-1 A-04 residue: fail-open lookups in `decision-history.tsx`, `verdict-badge.tsx`,
-  `run-state-badge.tsx`, `stage-status-badge.tsx`, `run-progress.tsx`, `stage-comparison.tsx`,
-  `export-panel.tsx`.
+- T-1 A-04 residue: `rg -n 'LABELS\[|_LABEL\[|as ProviderMode' web/src/widgets web/src/entities
+  web/src/shared/ui -l` lists 12 files at `c11f1b6`; `knowledge-base.tsx` and
+  `run-activity-panel.tsx` are repaired on `03c04a1`; the other ten (`decision-history.tsx`,
+  `verdict-badge.tsx`, `verdicts-panel.tsx`, `run-state-badge.tsx`, `stage-status-badge.tsx`,
+  `stage-table.tsx`, `run-presentation.ts`, `run-progress.tsx`, `stage-comparison.tsx`,
+  `export-panel.tsx`) are classified one by one: typed fault, or a documented reason the lookup
+  cannot miss.
 - T-2 `.am-history__comment` has no `overflow-wrap`/`min-width: 0`; hostile-text containment
   covers two selectors.
 - T-3 ✓ D-52 is repaired by `web/NOTICE` and open in `DEBT_REGISTER.md` (rows 59 and 3683).
 - T-4 `infra/deploy/proxy/nginx.conf` comment misquotes `api/app.py`.
 - T-5 ✓ `W48-PLAN-01.md` cites `cf63d31` (unreachable) and "both observed workflow runs
   failed"; `W48-FREEZE-01.md` records the success. `CURRENT_STATE.md` says `origin/main`
-  "remains unchanged" while it moved seven times after `alpha-w47`.
+  "remains unchanged" while it advanced by eight commits after `alpha-w47`
+  (`git log --oneline alpha-w47..origin/main | wc -l`).
 - T-6 A-03 (sixteen ALR-05 deep imports, twenty-two more through package `__init__`) — decided
   by P-8 on 2026-10-05: repaired in full here (`W48-PUBLIC-01`), no waiver.
 - T-7 `infra/local/README.md` and `bucket-init.sh` still describe `FOUNDATION_S3_IMAGE` as live.
+- T-8 inherited out-of-grant edits: `e3fedd0..411c6d0` also changes `CURRENT_STATE.md`,
+  `docs/manual-tests/PC-01_prototype.md`, `tests/contract/api_v1/test_doc_prose_facts.py`,
+  `docs/program/CONTRACT_PIN_REGISTRY.md`, `docs/program/P02_SEAMS.md` and
+  `tests/contract/domain_p02/**` — none in `tasks/W48-DURABLE-01.md`'s `allowed_paths`. They were
+  forced by the migration head moving to `0014` (the prose pins) and are acknowledged, not
+  reverted; DJ-R2 generalises to them.
+
+Files named in G-4, G-5 and §4 that exist only on the W48 branches (`03c04a1` and descendants),
+not at `c11f1b6`: `tests/contract/program/test_wave_governance.py`,
+`tests/contract/test_alpha_acceptance_command.py`, `tests/e2e/pc01/journey/verify-acceptance.mjs`,
+`docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md`, and `scripts/manual-alpha-check.sh`'s
+`--deployed-sha`. Every path in §4 is read against `03c04a1`.
 
 ## 3. Entry conditions
 
@@ -115,20 +134,25 @@ SHAs. The fields below are the content those files must carry.
 
 - **Allowed paths:** `docs/program/OWNER_RULINGS_2026-09-17.md`, `docs/program/dispatch/W48-PLAN.md`
   (an addendum section only; §9 and §15 are not rewritten), `docs/program/W48-RULE-01.md`.
-- **Deliverables:** `R-53`, `R-54` with their dates and sources (`R-54` names the commit on
-  `plan/identity-waves` that removed the withdrawn W49 documents and says the number is reused);
-  a W48-PLAN addendum "2026-10-05: migration slot owned by `W48-DURABLE-01` under `R-53`;
-  successor plan is `IDENTITY-WAVES.md`; §15's W49 paragraph is superseded".
-- **Required checks:** `.venv/bin/python -m pytest tests/contract/api_v1/test_doc_prose_facts.py -q`;
+- **Deliverables:** `R-53`, `R-54` with their dates and sources (`R-54` names commit `0966388`
+  on `plan/identity-waves`, which removed the withdrawn W49 documents, and says the number is
+  reused); a W48-PLAN addendum dated 2026-10-05 that supersedes, by section: §9 — the migration
+  slot is owned by `W48-DURABLE-01` under `R-53`, `api/composition.py` is granted to
+  `W48-PUBLIC-01`, and `alpha-w48` is created by `W48-INT-MAIN-01` (an `INT` task, as
+  `AGENTS.md` §5 requires) rather than by `W48-INT-CLOSE`; §11 — the expected head is
+  `0014_durable_analysis_effects`; §15 — the successor plan is `IDENTITY-WAVES.md`.
+- **Required checks:** `grep -c 'R-53' docs/program/OWNER_RULINGS_2026-09-17.md` ≥ 1;
   `git diff --check`.
 - **Stop:** if the owner does not confirm the ruling text, nothing else in this stage proceeds.
 
 ### `W48-DURABLE-JUDGE-2` — independent judge of `agent/w48-durable-repair`
 
 - **Subject:** `411c6d0`. **Allowed path:** `docs/program/reviews/W48-DURABLE-JUDGE-2.md`.
-- **Independence:** a fresh context that has not read `W48-DURABLE-REPAIR.md`,
-  `reviews/W48-DURABLE-JUDGE.md` or §2 above before its own pass. It reads them afterwards and
-  cross-examines each DJ-R item: upheld, narrowed or falsified, with a new measurement.
+- **Independence:** a fresh context that receives **only** `tasks/W48-DURABLE-JUDGE-2.md` and the
+  subject SHA — not this plan, not `W48-DURABLE-REPAIR.md`, not `reviews/W48-DURABLE-JUDGE.md` —
+  until its own pass is written. It then reads them and cross-examines each DJ-R item: upheld,
+  narrowed or falsified, with a new measurement. The task file carries the probes below and
+  nothing from §2.
 - **Required probes:** (a) kill after `adapter.complete` returns and before the checkpoint
   commit, against owned disposable services, prove what the journal holds; (b) kill after
   `put_blob` verification and before the stage commit, prove the reconciliation report names the
@@ -162,7 +186,8 @@ SHAs. The fields below are the content those files must carry.
   `tests/contract/api_v1/test_surface_counts_in_prose.py`,
   `tests/contract/program/test_wave_governance.py`, `tests/contract/test_alpha_acceptance_command.py`,
   `tests/contract/test_deploy_auto_workflow.py`, `tests/e2e/pc01/journey/verify-acceptance.mjs`,
-  `scripts/manual-alpha-check.sh`, `docs/program/ALPHA_PUBLIC_ACCEPTANCE.md`,
+  `scripts/manual-alpha-check.sh`, `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md` (the prose
+  guard scans this directory: no migration-head or surface number in the new text),
   `docs/program/W48-GUARDS-2.md`.
 - **Required mutations, each must fail for its stated reason:** G-1 a sixth screen file with a
   private `AppRouterContext.Provider`; G-2 `invalidateQueries` replaced by `getQueryData`, and a
@@ -179,16 +204,16 @@ SHAs. The fields below are the content those files must carry.
 
 ### `W48-TAILS` — audit tails, by addendum where history is involved
 
-- **Allowed paths:** `web/src/widgets/**`, `web/src/entities/**`, `web/src/app/globals.css`
-  (one global-style slot: `.am-history__comment`, `.am-history__event` containment),
-  `web/tests/unit/**`, `infra/deploy/proxy/nginx.conf` (comment only), `infra/local/README.md`,
-  `infra/local/bucket-init.sh` (comment only), `docs/program/DEBT_REGISTER.md` (D-52 close
-  addendum and the A-03 row only), `docs/program/W48-PLAN-01.md` (addendum only),
-  `docs/program/CURRENT_STATE.md` (the `origin/main` sentence only), `docs/program/W48-TAILS.md`.
-- **Deliverables:** typed faults for the nine T-1 sites with a test per site that injects an
-  unknown value; T-2 containment with a style test; D-52 close addendum pointing at
-  `web/NOTICE` and `4a602ba`; A-03 debt row with the AST command and the two counts (16 / 22);
-  T-4, T-5, T-7 corrections.
+- **Allowed paths:** `web/src/widgets/**`, `web/src/entities/**`,
+  `web/src/shared/ui/run-state-badge.tsx`, `web/src/shared/ui/stage-status-badge.tsx`,
+  `web/src/app/globals.css` (one global-style slot: `.am-history__comment`, `.am-history__event`
+  containment), `web/tests/unit/**`, `infra/deploy/proxy/nginx.conf` (comment only),
+  `infra/local/README.md`, `infra/local/bucket-init.sh` (comment only), `docs/program/W48-TAILS.md`.
+  The documentary tails (D-52 addendum, `W48-PLAN-01.md` addendum, the `CURRENT_STATE.md`
+  sentence) belong to `W48-INT-CLOSE`, because those files are the integrator's.
+- **Deliverables:** every T-1 hit classified, with a typed fault and a test that injects an
+  unknown value where the lookup can miss; T-2 containment with a style test; T-4, T-7
+  corrections.
 - **Required tests:** `npm --prefix web test -- --run`; `npm --prefix web run lint -- --quiet`;
   `npm --prefix web run typecheck`; `.venv/bin/python -m pytest tests/contract/api_v1 -q`;
   `git diff --check`.
@@ -227,41 +252,47 @@ SHAs. The fields below are the content those files must carry.
   when the fix is reverted; run the ALR-05 AST walk independently and reintroduce one deep import
   to prove the new guard red; verify `contracts/**` and root locks are byte-identical to
   `6118e66` and that `W48-PUBLIC-01` changed nothing but imports, public modules, the guard and
-  two documents; verify migration head is `0014_durable_analysis_effects` on a fresh database.
+  two documents; verify migration head is `0014_durable_analysis_effects` on a fresh database;
+  drive the hostile-string screens (200-character project names, 400-character unbroken
+  comments) in a built stand at 780 × 900 and record the measurement W48-WEB deferred.
 - Judges own report files only.
 
 ### `W48-INT-CLOSE` — gate, register, publish to `dev`
 
 - **Allowed paths:** `integration/w48-close` merges, `docs/program/CURRENT_STATE.md`,
-  `docs/program/DEBT_REGISTER.md`, `docs/program/dispatch/PORT_REGISTRY.md`,
-  `docs/program/W48-INT-CLOSE.md`, `origin/dev`.
+  `docs/program/DEBT_REGISTER.md`, `docs/program/W48-PLAN-01.md` (addendum only),
+  `docs/program/dispatch/PORT_REGISTRY.md`, `docs/program/W48-INT-CLOSE.md`, `origin/dev`.
 - **Steps:** merge in the order of §5; full `make gate` on the exact candidate with the real
-  corpus attached; register the debts of `IDENTITY-WAVES.md` §7 with their check commands;
-  rewrite the live section of `CURRENT_STATE.md` (W48 closed on `dev`, W49 withdrawn, next is
-  `IDENTITY-WAVES.md`, migration head named by command not by sentence where the guard allows);
-  release the W48 port rows; fast-forward `origin/dev`; remove the merged worktrees only after
-  the push is verified (`git ls-remote origin dev` equals the candidate); keep the backup refs
-  until `alpha-w48` or the owner's say-so.
+  corpus attached; the D-52 close addendum pointing at `web/NOTICE` and `4a602ba`; the
+  `W48-PLAN-01.md` addendum (T-5); register the debts of `IDENTITY-WAVES.md` §7 with their check
+  commands (A-03 is repaired, so no row); rewrite the live section of `CURRENT_STATE.md` (W48
+  closed on `dev`, the old W49 withdrawn, next is `IDENTITY-WAVES.md`, the `origin/main` sentence
+  corrected, migration head and surface triple by measured value — the prose guard reads this
+  file); release the W48 port rows; fast-forward `origin/dev`; remove the merged worktrees only
+  after the push is verified (`git ls-remote origin dev` equals the candidate); keep the backup
+  refs until `alpha-w48` or the owner's say-so.
 - **Required evidence:** literal `GATE OK` tied to the SHA; counts by test id against the
   `W48-FREEZE-01` baseline (backend 2641 / 5 skipped, frontend 1162 in 82 files) with every delta
   explained; `git status --porcelain` empty; `git diff --check`.
-- **Stops here** and hands over to `W48-MAIN-01`.
+- **Stops here** and hands over to `W48-INT-MAIN-01`.
 
-### `W48-MAIN-01` — publication to `origin/main`, auto-deploy, live acceptance, `alpha-w48`
+### `W48-INT-MAIN-01` — publication to `origin/main`, auto-deploy, live acceptance, `alpha-w48` (integrator)
 
 - **Preconditions, each proven before the first step:** `W48-INT-CLOSE` done and `origin/dev`
   equals the candidate; the owner's **direct instruction naming the exact candidate SHA** for
   `origin/main` (P-7 is the intent; this task asks for the instruction quoting the SHA and does
   not proceed on "continue"); the provider credential placed by the owner in the host's
-  `provider.env` (`D-70`) — the executor never sees, copies or records it; `origin/main` re-read
-  and still `608632a`, the candidate its fast-forward descendant; `make gate` evidence for the
-  exact SHA; `MAIN_AUTODEPLOY_POLICY.md` read in full.
+  `provider.env` (`D-70`) — nobody sees, copies or records it; `origin/main` re-read and still
+  `608632a`, the candidate its fast-forward descendant; `make gate` evidence for the exact SHA;
+  `MAIN_AUTODEPLOY_POLICY.md` read in full and its "before" list executed literally, including
+  re-measuring the surface triple, the error catalog, the migration head and the deployment
+  inputs against the candidate.
 - **Steps:** `W48-PLAN.md` §12 items 5–8 exactly: fast-forward `origin/main`; wait for the
   serialised workflow run and require success; host-side `infra/deploy/verify-deployed.sh` for
   the triggering SHA; public preflight, PC-01 browser journey and refusals, manual A01–A12 with
   `provider_mode=live`, 3/3 writes, 16/16 routes, no auth/console failures, no unexplained
   `BLOCKED`; only then the annotated tag `alpha-w48` at that exact commit.
-- **Allowed paths:** `origin/main` (one fast-forward), the tag, `docs/program/W48-MAIN-01.md`,
+- **Allowed paths:** `origin/main` (one fast-forward), the tag, `docs/program/W48-INT-MAIN-01.md`,
   `docs/program/CURRENT_STATE.md` (the "last closed release" sentence), `docs/program/CHECKPOINT_REGISTRY.md`,
   `docs/program/dispatch/PORT_REGISTRY.md` (release of the integration lane).
 - **Stop conditions:** the workflow fails or the host verification disagrees → no tag, no
@@ -284,25 +315,27 @@ SHAs. The fields below are the content those files must carry.
 6. `W48-JUDGE-Z`. Upheld release-blocking findings reopen one bounded `W48-FIX-C` slot with an
    explicit path grant; otherwise proceed.
 7. `W48-INT-CLOSE` — exits at `origin/dev`.
-8. `W48-MAIN-01` — only on the owner's direct instruction naming the exact SHA.
+8. `W48-INT-MAIN-01` — only on the owner's direct instruction naming the exact SHA.
 
 ## 6. Ownership matrix
 
-| Hotspot / path family | Owner | Parallel writer |
-| --- | --- | --- |
-| `db/migrations/versions/20261002_0014_*` | `W48-DURABLE-FIX-2` only if JUDGE-2 upholds a schema defect | none |
-| `contracts/**`, root locks, composition | frozen | none |
-| `web/src/app/globals.css` | `W48-TAILS` | none |
-| `web/tests/guards/**` named files | `W48-GUARDS-2` | none |
-| `web/src/widgets/**`, `web/src/entities/**`, `web/tests/unit/**` | `W48-TAILS` | none |
-| `tests/contract/**` named files, `scripts/manual-alpha-check.sh`, `tests/e2e/pc01/journey/verify-acceptance.mjs` | `W48-GUARDS-2` | none |
-| `src/auditmanager/{jobs,runs,storage}/**`, `ingest/reconciliation.py`, `analysis/text/**`, `norms/__main__.py` | `W48-DURABLE-FIX-2` | none |
-| `OWNER_RULINGS_2026-09-17.md`, W48-PLAN addendum | `W48-RULE-01` | none |
-| `src/auditmanager/*/public.py`, import lines of every cross-context importer, `api/composition.py`, the ALR-05 guard | `W48-PUBLIC-01` (after step 4 of §5) | none |
-| `CURRENT_STATE.md` (one sentence) | `W48-TAILS`; the live section rewrite is `W48-INT-CLOSE` after TAILS merged | sequential |
-| `DEBT_REGISTER.md` | `W48-TAILS` (D-52, A-03 rows), then `W48-INT-CLOSE` | sequential |
-| `origin/dev` | `W48-INT-CLOSE` | none |
-| `origin/main`, `alpha-w48`, `CHECKPOINT_REGISTRY.md` | `W48-MAIN-01`, only after the owner's direct instruction naming the exact SHA | none |
+| Hotspot / path family | Owner | Role | Parallel writer |
+| --- | --- | --- | --- |
+| `db/migrations/versions/20261002_0014_*` | `W48-DURABLE-FIX-2` only if JUDGE-2 upholds a schema defect | executor | none |
+| `contracts/**`, root locks, `src/auditmanager/bootstrap/**` | frozen | — | none |
+| `src/auditmanager/api/composition.py` | `W48-PUBLIC-01` (import lines only, under the RULE-01 addendum) | executor | none |
+| inherited out-of-grant edits of `e3fedd0..411c6d0` (T-8) | acknowledged by `W48-DURABLE-FIX-2`'s addendum; not reverted | executor | none |
+| `web/src/app/globals.css` | `W48-TAILS` | executor | none |
+| `web/tests/guards/**` named files | `W48-GUARDS-2` | executor | none |
+| `web/src/widgets/**`, `web/src/entities/**`, two `shared/ui` badges, `web/tests/unit/**` | `W48-TAILS` | executor | none |
+| `tests/contract/**` named files, `scripts/manual-alpha-check.sh`, `tests/e2e/pc01/journey/verify-acceptance.mjs`, `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md` | `W48-GUARDS-2` | executor | none |
+| `src/auditmanager/{jobs,runs,storage}/**`, `ingest/reconciliation.py`, `analysis/text/**`, `norms/__main__.py` | `W48-DURABLE-FIX-2` | executor | none |
+| `OWNER_RULINGS_2026-09-17.md`, W48-PLAN addendum | `W48-RULE-01` | integrator | none |
+| `src/auditmanager/*/public.py`, import lines of every cross-context importer, the ALR-05 guard | `W48-PUBLIC-01` (after step 4 of §5) | executor | none |
+| `CURRENT_STATE.md`, `DEBT_REGISTER.md`, `W48-PLAN-01.md` addendum | `W48-INT-CLOSE` | integrator | none |
+| `refs/backup/**`, task files, `integration/w48-close` | `W48-SAFE-01`, then `W48-INT-CLOSE` | integrator | none |
+| `origin/dev` | `W48-INT-CLOSE` | integrator | none |
+| `origin/main`, `alpha-w48`, `CHECKPOINT_REGISTRY.md` | `W48-INT-MAIN-01`, only after the owner's direct instruction naming the exact SHA | integrator | none |
 
 ## 7. Stop conditions
 
@@ -318,21 +351,22 @@ Those of `W48-PLAN.md` §14, plus:
 ## 8. Judging and evidence
 
 Two judges: `W48-DURABLE-JUDGE-2` before the repair, `W48-JUDGE-Z` after the merge. Each is a
-fresh context; neither is an author of what it judges. Reports carry subject SHA, environment,
+fresh context that receives only its task file and the subject SHA; neither is an author of what
+it judges. Reports carry subject SHA, environment,
 commands with exit status, findings with path/line/consequence/reproduction, mutation results,
 untested questions, verdict, and `git diff --name-only <subject>..HEAD` proving report-only.
 
 ## 9. `alpha-w48` and `origin/main`
 
 P-7 (2026-10-05): the owner will supply the provider credential and the direct `origin/main`
-instruction, so the tag is in scope and `W48-MAIN-01` owns it. Two things stay true regardless:
+instruction, so the tag is in scope and `W48-INT-MAIN-01` owns it. Two things stay true regardless:
 the instruction must name the exact gated SHA and arrives after `W48-INT-CLOSE` has produced it
 (`AGENTS.md` §6: "continue" and "close the wave" are not that instruction); and the credential
 lives only on the host. If either does not materialise, the stage still exits complete at
-`origin/dev` and `W48-MAIN-01` waits — nothing in §4 before it depends on it.
+`origin/dev` and `W48-INT-MAIN-01` waits — nothing in §4 before it depends on it.
 
 ## 10. Non-goals
 
 No new product behaviour; no normative corpus work; no version endpoint; no workflow or deploy
-script change; no `origin/main` publication outside `W48-MAIN-01`; no change to the frozen
+script change; no `origin/main` publication outside `W48-INT-MAIN-01`; no change to the frozen
 `6118e66` contract set.
