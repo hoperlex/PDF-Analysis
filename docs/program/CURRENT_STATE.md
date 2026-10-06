@@ -1,10 +1,9 @@
 # Current state
 
-> **Updated 2026-10-05 by `W48-INT-CLOSE`.** W48 is closed on `origin/dev` without a release
-> tag; wave 47 remains the last tagged release. The identity programme
-> (`docs/program/dispatch/IDENTITY-WAVES.md`) is next. Development candidates publish to
-> `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
-> external deployment.
+> **Updated 2026-10-06 by `W48-INT-MAIN-01`.** W48 is released as `alpha-w48` (under `R-64`);
+> W49, the first wave of the identity programme (`docs/program/dispatch/IDENTITY-WAVES.md`), is in
+> integration. Development candidates publish to `origin/dev`; `origin/main` requires a separate
+> direct owner instruction because it triggers external deployment.
 >
 > **What is deployed is deliberately not stated here.** A sentence naming a sha and a date is
 > true only until somebody redeploys, and `D-104` is the row about exactly that: every prose
@@ -31,32 +30,14 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Active development, 2026-10-05 — W48 closed on `dev`; the identity programme is next
+## Active development, 2026-10-06 — W49 identity in integration; W48 released as `alpha-w48`
 
-W48 (correction, debt closure and a whole-tree audit, `R-49`) is integrated on
-`integration/w48-close` and published to `origin/dev` by `W48-INT-CLOSE`. On the owner's direct
-instruction naming `23e0579`, `W48-INT-MAIN-01` fast-forwarded `origin/main`, the auto-deploy
-workflow deployed and verified it, and it is tagged `alpha-w48` under `R-64`: the automated
-acceptance passed every phase but the live provider (`D-70` — the stand runs `recorded`), and the
-manual A01–A12 pass is owed (`W48-INT-MAIN-01.md`). Development candidates publish to
-`origin/dev`; `origin/main` is the auto-deploy ref and moves only on a direct owner instruction.
-
-What W48 changed, by owner ruling and by lane:
-
-- **durable analysis effects** (`R-53`): migration `0014_durable_analysis_effects` records every
-  paid provider attempt and every analysis object before the external effect, reconciles them
-  after a crash, and settles terminal effects; it was edited in place, so a database that applied
-  an earlier `0014` shape is recreated, not upgraded;
-- **guards that can fail**: the prose, surface, migration-inventory, invalidation, governance and
-  acceptance guards were mutated until each failed for its stated reason (`W48-PROSE`,
-  `W48-GUARDS`, `W48-FIX`, `W48-FIX-B`, `W48-GUARDS-2`, `W48-GOV`);
-- **context boundaries** (`R-58`): every cross-context import goes through
-  `auditmanager.<context>.public`; `tests/contract/architecture/test_alr05_boundaries.py` fails on
-  a deep or package-root import;
-- **screens**: unknown closed-vocabulary values render a typed fault and hostile user strings
-  wrap (`W48-WEB`, `W48-TAILS`);
-- **external acceptance**: `make alpha-acceptance` is the repository-owned deployed check beside,
-  not inside, the hermetic gate (`W48-LIVE`).
+W49 — accounts with e-mail sign-in, a role set, registration requests and account management
+(`R-55` … `R-61`) — is integrated on `integration/w49`: every lane of `dispatch/W49-PLAN.md` §5
+through Stage E is merged, both judges passed it, and `W49-FIX` repairs the two release-blocking
+findings (the identifier schema enums, and a deployed proxy that keeps a stale configuration)
+together with the owner rulings `R-62` and `R-63`. `W49-INT-CLOSE` follows. W50 (the shell) and
+W51 (the screens) wait behind it.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:
@@ -65,8 +46,9 @@ with no promotion. W49 now means identity, W50 the shell and W51 the screens:
 
 The frozen API surface is **27 paths / 34 operations / 77 schemas** since `W49-SEAL-01`, the
 error catalog **23**, domain candidate revision 9 with **29** opaque identities, and the
-migration head is **`0015_accounts_roles_registration`**. The last closed release is `alpha-w48`. This section
-makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is deployed.
+migration head is **`0015_accounts_roles_registration`**. The last closed release is `alpha-w48`.
+This section makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is
+deployed.
 
 ### Normative-corpus persistence and the alpha runtime boundary (integrated before W48, unchanged)
 
@@ -115,6 +97,37 @@ over digest-pinned Go and Alpine inputs. Local and alpha composition still mount
 `s3-data` volume and initialize the same private bucket; this is an image-acquisition repair, not
 an S3 identity or persisted-data migration. `D-119` records the separate security/lifecycle
 decision rather than smuggling a MinIO release upgrade into recovery work.
+
+## Previous release state — wave 48 (historical record)
+
+W48 (correction, debt closure and a whole-tree audit, `R-49`) is integrated on
+`integration/w48-close` and published to `origin/dev` by `W48-INT-CLOSE`. On the owner's direct
+instruction naming `23e0579`, `W48-INT-MAIN-01` fast-forwarded `origin/main`, the auto-deploy
+workflow deployed and verified it, and it is tagged `alpha-w48` under `R-64`: the automated
+acceptance passed every phase but the live provider (`D-70` — the stand runs `recorded`), and the
+manual A01–A12 pass is owed (`W48-INT-MAIN-01.md`). Development candidates publish to
+`origin/dev`; `origin/main` is the auto-deploy ref and moves only on a direct owner instruction.
+
+What W48 changed, by owner ruling and by lane:
+
+- **durable analysis effects** (`R-53`): migration `0014_durable_analysis_effects` records every
+  paid provider attempt and every analysis object before the external effect, reconciles them
+  after a crash, and settles terminal effects; it was edited in place, so a database that applied
+  an earlier `0014` shape is recreated, not upgraded;
+- **guards that can fail**: the prose, surface, migration-inventory, invalidation, governance and
+  acceptance guards were mutated until each failed for its stated reason (`W48-PROSE`,
+  `W48-GUARDS`, `W48-FIX`, `W48-FIX-B`, `W48-GUARDS-2`, `W48-GOV`);
+- **context boundaries** (`R-58`): every cross-context import goes through
+  `auditmanager.<context>.public`; `tests/contract/architecture/test_alr05_boundaries.py` fails on
+  a deep or package-root import;
+- **screens**: unknown closed-vocabulary values render a typed fault and hostile user strings
+  wrap (`W48-WEB`, `W48-TAILS`);
+- **external acceptance**: `make alpha-acceptance` is the repository-owned deployed check beside,
+  not inside, the hermetic gate (`W48-LIVE`).
+
+The W48 surface was **17 paths / 20 operations / 61 schemas**, error catalog **22**, domain
+candidate revision 8, migration head `0014_durable_analysis_effects`. Release record:
+`docs/program/W48-INT-MAIN-01.md`.
 
 ## Previous release state — wave 47 (historical record)
 
