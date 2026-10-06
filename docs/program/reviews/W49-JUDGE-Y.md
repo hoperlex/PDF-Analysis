@@ -432,6 +432,128 @@ except the identifier catalog's schema validity.
 
 ---
 
+# Part two — cross-examination and verdict
+
+Written after the own pass was committed (`b9544d7`). Read for it, all at the subject unless
+stated: `docs/program/dispatch/W49-PLAN.md` (whole); `docs/program/W49-ACCESS-01{a,b,c}.md`,
+`W49-SEAL-01{a,b,c}.md`, `W49-DECISIONS-01.md`, `W49-EDGE-01.md`, `W49-BFF-01.md` (their risk,
+limit and open-question sections); `W49-QA-01.md` from `agent/w49-qa-01` at `bcad663`; the
+peer judge's `docs/program/reviews/W49-JUDGE-X.md` from `agent/w49-judge-x` at `fe20de3`
+(its black-box pass `b24dc29` and its cross-examination). Both branches were read with
+`git show <branch>:<path>`; no other worktree was opened.
+
+## 10. Cross-examination
+
+### 10.1 This pass's findings against the plan and the lane reports
+
+| Own item | What the plan and the lanes say | Standing after cross-examination |
+|---|---|---|
+| **F-1** identifier catalog fails its schema | `W49-PLAN.md` §4 `W49-SEAL-01` grants the seal "the `candidate_revision` const in `contracts/domain/v1/*.schema.json`" and nothing else of those files. The seal then measured exactly this defect and stopped at its grant: `W49-SEAL-01c.md` §7.4 **Q12** ("`identifiers.schema.json` does not validate the revision-9 catalog … the proposed edit adds `user_uid` and `request_id` to both enums … outside grant (e), which is the const only, so it is not edited"), committed in `220638d` at 05:44, after the integrator's last settlement of the seal's questions (`addbe6c`, 05:28). It was merged in `2a31edf` unsettled, and `contracts/domain/v1/README.md` still carries the seal's *earlier* statement (schemas pin 8). | **Upheld, must-fix-before-merge.** Not a new discovery — an open question the slot owner raised, measured and could not close, that reached the merged candidate as a caveat rather than a stop (`OPERATING_CONSTRAINTS.md` §12, sixth shape: "a stated non-measurement was passed along as a caveat instead of being treated as a blocker" — here a stated *defect*). This pass's contribution is the independent reproduction, the README contradiction, the base comparison (0 errors at `23e0579`) and the repair proof (M5). The plan's own entry condition ("contract set measured at the base") and the README's verification block both presuppose a catalog that validates. |
+| **F-2** live schema comment / `0009` log instruct `access.name` | `W49-SEAL-01c.md` §4 item 7 lists the remaining references to the deleted module, "migration `0009`'s comments name it (migrations are forbidden)". The plan's task for ACCESS-01a owned migration `0015` and could have re-commented the column; nobody did. | **Upheld, register.** The lane saw the source comments; this pass adds that the *live* `COMMENT ON COLUMN app_user.display_name` instructs the removed command and states a login bound `0015` made false. Repair is a later migration's `COMMENT ON COLUMN`. |
+| **F-3** `name_label` exceeds 66 | Plan §3.1: "`display_label` is 'Фамилия И. О.' (at most 66 characters)"; `W49-SEAL-01c` pinned `RegistrationRequest.display_label` `maxLength: 66`. No lane mentions multi-character upper-case initials. | **Upheld, register.** The plan's own bound is the claim falsified; `author_label` (128) is unaffected. |
+| **F-4** unused `account_standing` | `W49-ACCESS-01b.md` §5 told the seal to wire `account_standing`; `W49-SEAL-01c.md` §4 item 4 records that it read `get_account` instead ("Both are one statement"). | **Upheld, register** — known to the seal; what remains is the dead method and a comment calling it the per-request read. |
+| **F-5** docstrings contradicting the code | The rejected-applicant question was ruled (`R-56` addendum, plan §3.3); the peer judge independently reports the same documentation lag (`W49-JUDGE-X.md` §5.4). The `complete_profile` code and the `update_account` sentence are not discussed by any lane. | **Upheld, register.** |
+| **F-6** archived targets | Plan §3.4: `updateUser` "names, roles; invariants of §3.2" — silent on archived accounts; `archiveUser`/`purgeUser`/`restoreUser` define their archived behaviour. No lane discusses it. | **Upheld, register.** No standing consequence; a restore brings back whatever roles an administrator set meanwhile, which may be intended. A one-line ruling would settle it. |
+| **F-7** `errors.py` imports `sqlalchemy.exc` | Pre-existing; not in any W49 grant. | **Upheld, register (information).** |
+| **Q-1** "with any role" | Plan §3.2: `OPERATION_ROLES` is any-of and "the empty set means any active, complete account"; reads, `getMe`, `updateMyProfile`, `changePassword` → `∅` (`R-60`). The contract text says the same. | **Closed — no finding.** The plan read `R-60`'s "with any role" as "whatever its roles, none included", the code and the contract follow the plan, and the sweep measured the served behaviour. A roleless complete account reads every product read; if the owner meant "at least one role", that is a one-line register change and a re-sweep, and W51's user screens are where a roleless account first becomes visible. Noted for `W49-INT-CLOSE`, not raised as a defect. |
+
+### 10.2 The plan's claims this pass can check, against its measurements
+
+- §3.1 "`standing_of` returns no standing for an archived account": the adapter returns a
+  standing with `archived=True` and the seam refuses it; the outcome is the generic
+  `authentication_required` either way (C9, archived standing with a current-epoch credential).
+  A wording difference, not a behaviour one.
+- §3.1 "`uq_app_user_login` becomes a partial unique index"; the reference register "a test
+  enumerates the schema's foreign keys … and asserts equality" — measured (§5.5, §5.6, M2, M3).
+- §3.2 "the empty set means any active, complete account", the order of evaluation, the three
+  registers — measured over the real composition root (§5.8, 342/0) and shown able to fail (M4).
+- §3.2 "Any role change, archive, restore, purge or administrator reset bumps `token_epoch`":
+  purge deletes the row instead (`accounts.py` module docstring says so); the effect on
+  credentials is the same. Not a finding.
+- §3.3 "Approval creates the account in the same transaction under `FOR UPDATE`" — measured by
+  fault injection (§5.9, C11) and by the concurrent-approval probe (§5.5).
+- §3.6 "the contract, the registers and the routers land in one slot" — measured (§5.7).
+- §4 `W49-ACCESS-01a` required tests "upgrade from a `0014` database holding the seeded `admin`
+  with a changed password **and** from one holding a legacy non-e-mail test login" — reproduced
+  independently with the W48 code writing the `0014` rows (§5.4), not only with the lane's
+  fixtures.
+- §7 stop conditions in this lane's scope ("a refusal is computed in a router or a schema
+  validator instead of `access`"; "the sweep finds an operation outside every register"): neither
+  occurred (§5.1, §5.2, §5.8).
+
+### 10.3 The peer judge (`W49-JUDGE-X`)
+
+- **Agreement on the register.** Its 34-operation sweep and 4×2×2 matrix (black box, served
+  stand) and this pass's 9-standing sweep (real composition root, archived standing isolated
+  from the epoch) reach the same answer by different routes: no operation outside a register,
+  no escalation. The two are independent instruments; together they cover the seam's logic and
+  the standing adapter.
+- **B-1 (release-blocking for the live deployment — the proxy keeps serving the old
+  `nginx.conf`).** Outside this entry point, but its mechanism has a data-path half this judge
+  could check without starting anything. Measured here: `git checkout --detach` (the deploy
+  workflow's step, `.github/workflows/deploy-auto.yml:105`) **replaces** a tracked file with a new
+  inode — with the old file held open, the held inode was `145877` and still read `one`, while the
+  path's inode became `145911` and read `two` (git 2.43.0, scratch repository). Read in the tree:
+  the proxy mounts `./proxy/nginx.conf` as a single file (`infra/deploy/compose.server.yml:260`),
+  `deploy.sh` keeps the proxy container across deploys (its own header, measured by
+  `W23-DEPLOY`), and `reload-proxy.sh:70` only runs `nginx -s reload` inside it. The Docker half
+  (a single-file bind mount stays on the inode it was started with) was **not** measured here:
+  available memory was 1 GB when this was examined, under the brief's 2 GB floor for starting
+  anything. On that basis this judge **concurs** with B-1 and with its scope: it does not block the
+  `integration/w49` merge or the `origin/dev` publication; it blocks publishing W49 to the live
+  host until the proxy is recreated on a proxy-file change and the deployed check probes the
+  throttle. It also predates W49 (any earlier `nginx.conf` change, e.g. `1f723db`, met the same
+  path); W49 is the first wave whose new *control* lives there.
+- **Its R-1…R-5** are edge, enumeration and BFF items outside this entry point; nothing here
+  contradicts them. Its §5.4 (the ACCESS-01c "open question" is a documentation lag on a ruled
+  behaviour) is the same observation as this pass's F-5, reached independently.
+- **What this pass has that the peer did not check:** F-1 (catalog schema validity), F-2
+  (live schema comment), F-3 (label bound), F-6 (archived targets), the upgrade paths over
+  W48-written rows, approval atomicity under fault injection, and the reference register against
+  `pg_constraint`.
+
+### 10.4 QA (`W49-QA-01`)
+
+- **QA Q-1 (a pending applicant's brake is spent twice per BFF sign-in attempt).** Confirmed by
+  reading: `access/repository.py` `authenticate` runs `_NOTE_A_FAILED_REQUEST_ATTEMPT` for a
+  login no active account holds, `access/registrations.py` `read_status` counts its own refusal,
+  and the BFF calls both for one failed sign-in. It is the plan's §3.3 sentence ("the request's
+  throttle columns count both kinds of attempts") composed with §3.5. From the data side this
+  judge adds one fact to QA's: the exchange never compares the pair with the request's digest,
+  so the exchange-side count guards no secret of the request and only spends the applicant's
+  allowance. **Register**, for a ruling; not release-blocking (the request's brake gates only the
+  `pending` sentence, never an account).
+- **QA Q-2 (last administrator reachable through the API only as a race)** is the same
+  conclusion as this pass's §8 first bullet and `W49-SEAL-01c.md` §4 item 11. No finding.
+- QA records no finding; nothing in its twelve items contradicts a measurement here.
+
+## 11. Verdict
+
+**PASS for the architecture and data-integrity entry point, conditional on F-1 being repaired
+before the candidate is merged and published.**
+
+- **Release-blocking (this lane):** none. Routers carry no SQL and no rule; every §3.2 invariant
+  is raised in `access` and refused again by the database where the schema can; ALR-05 reads
+  0 / 0 by two instruments; `0015` applies to an empty database and over both `0014` shapes the
+  W48 code writes; the partial unique indexes, the registration guard and the reference register
+  hold and are each shown able to fail; the reseal landed in one slot; the served application
+  equals the registers; approval is one transaction; `KNOWN_OUTSTANDING_CLAIMS` is empty and
+  every pin is live.
+- **Concurrence with the peer:** `W49-JUDGE-X` **B-1** is upheld as release-blocking for the
+  **live deployment only** (`origin/main` / the alpha host), not for the merge or `origin/dev`.
+- **Must-fix-before-merge:** **F-1** — `contracts/domain/v1/identifiers.schema.json` must admit
+  `user_uid` and `request_id` in its two identifier enums (M5 proves that is sufficient), and
+  `contracts/domain/v1/README.md:8-10` and `:753` must stop saying the schemas pin `8`. It is a
+  `contracts/**` edit, so it needs the contract slot's owner; the integration contract reserves
+  `W49-FIX` for release-blocking findings, so the integrator chooses the vehicle.
+- **Register:** F-2, F-3, F-4, F-5, F-6, F-7 (this pass); QA Q-1 (double brake, for a ruling);
+  Q-1 of this pass noted for `W49-INT-CLOSE` (the permissive reading of `R-60` is what ships).
+- **Untested** (§8): real concurrency of the last-administrator rule beyond the repository's
+  threaded tests; the submit/approve race on one login; migration cost on a large ledger; the
+  edge, the BFF, the frontend battery and the browser journey; the Docker half of B-1.
+
+---
+
 ## Appendix A — the probes
 
 The probes ran from the session scratchpad, which does not survive a restart, so their
