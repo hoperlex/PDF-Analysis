@@ -11,6 +11,10 @@
  *      not assumed.
  *   2. **an identifier that was not minted here reaches nothing.** The cookie is attacker
  *      input; anything outside the minted shape is treated as absent rather than looked up.
+ *
+ * Since `W49-BFF-01` a row also carries the subject `getMe` described, and the third property
+ * is that **the subject is copied field by field**: whatever else the caller's object carried
+ * — a credential included — never reaches the row, the file or a screen's props.
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -29,14 +33,27 @@ import {
   openSession,
   openSessionCount,
   readSessionId,
+  refreshSubject,
   requestIsSecure,
   sessionCookie,
   subjectOf,
 } from '@/app/bff/session/store';
+import type { SessionAccount } from '@/app/bff/session/store';
+import { accountFromMe, initialsOf } from '@/app/bff/session/subject';
 
 const CREDENTIAL = 'minted-token-9f3c';
 const LOGIN = 'проверяющий';
 const HOUR = 3600;
+
+/** A subject as `getMe` would describe it. */
+const ACCOUNT: SessionAccount = {
+  login: 'reviewer@example.test',
+  displayLabel: 'Проверяющая А. Б.',
+  initials: 'ПА',
+  roles: ['expert'],
+  isDefaultCredential: false,
+  profileComplete: true,
+};
 
 beforeEach(() => {
   forgetEverySession();
@@ -50,7 +67,7 @@ describe('a session is an opaque number here and a credential there', () => {
   });
 
   it('hands the credential to the forwarder and to nothing else', () => {
-    const id = openSession(LOGIN, CREDENTIAL, HOUR, false);
+    const id = openSession(ACCOUNT, CREDENTIAL, HOUR);
     expect(credentialOf(id)).toBe(CREDENTIAL);
 
     const subject = subjectOf(id);
@@ -58,12 +75,63 @@ describe('a session is an opaque number here and a credential there', () => {
     // The whole record, as a set of keys: a token added as a convenience field is red here
     // rather than discovered in a payload.
     expect(Object.keys(subject as object).sort()).toEqual([
+      'displayLabel',
       'expiresAt',
+      'initials',
       'isDefaultCredential',
       'login',
       'openedAt',
+      'profileComplete',
+      'roles',
     ]);
     expect(JSON.stringify(subject)).not.toContain(CREDENTIAL);
+  });
+
+  it('copies the six subject fields and nothing else the caller’s object carried', () => {
+    const smuggled = { ...ACCOUNT, credential: 'smuggled-credential', token: 'smuggled-token' };
+    const id = openSession(smuggled as SessionAccount, CREDENTIAL, HOUR);
+    const subject = subjectOf(id);
+    expect(subject).toMatchObject(ACCOUNT);
+    expect(JSON.stringify(subject)).not.toContain('smuggled');
+    expect(refreshSubject(id, smuggled as SessionAccount)).toBe(true);
+    expect(JSON.stringify(subjectOf(id))).not.toContain('smuggled');
+  });
+
+  it('rewrites the subject in place and keeps the credential and both instants', () => {
+    const opened = 1_000_000;
+    const id = openSession({ ...ACCOUNT, profileComplete: false, login: 'admin' }, CREDENTIAL, HOUR, opened);
+    const before = subjectOf(id, opened + 1000);
+    expect(refreshSubject(id, ACCOUNT, opened + 2000)).toBe(true);
+    const after = subjectOf(id, opened + 3000);
+    expect(after).toMatchObject(ACCOUNT);
+    expect(after?.openedAt).toBe(before?.openedAt);
+    expect(after?.expiresAt).toBe(before?.expiresAt);
+    expect(credentialOf(id, opened + 3000)).toBe(CREDENTIAL);
+    expect(openSessionCount(opened + 3000)).toBe(1);
+  });
+
+  it('refreshes nothing for an identifier that names no live session', () => {
+    const opened = 1_000_000;
+    const id = openSession(ACCOUNT, CREDENTIAL, MIN_LIFETIME_SECONDS, opened);
+    expect(refreshSubject(id, ACCOUNT, opened + MIN_LIFETIME_SECONDS * 1000)).toBe(false);
+    for (const bogus of [null, '', '0'.repeat(64), 'нет']) {
+      expect(refreshSubject(bogus, ACCOUNT)).toBe(false);
+    }
+    expect(openSessionCount()).toBe(0);
+  });
+
+  it('fills the legacy form’s unknown fields with the restrictive values, never the permissive ones', () => {
+    // The one caller of this form is a guard outside this task's grant; the route handler
+    // never uses it. No roles, an incomplete profile, the login as the label.
+    const id = openSession(LOGIN, CREDENTIAL, HOUR, true);
+    expect(subjectOf(id)).toMatchObject({
+      login: LOGIN,
+      displayLabel: LOGIN,
+      roles: [],
+      isDefaultCredential: true,
+      profileComplete: false,
+    });
+    expect(subjectOf(openSession(LOGIN, CREDENTIAL, HOUR, false))?.isDefaultCredential).toBe(false);
   });
 
   it('treats an unminted, malformed or absent identifier as no session at all', () => {
@@ -157,5 +225,63 @@ describe('the cookie carries the number and nothing else', () => {
     expect(requestIsSecure(plain)).toBe(false);
     expect(requestIsSecure(behindTls)).toBe(true);
     expect(requestIsSecure(direct)).toBe(true);
+  });
+});
+
+describe('getMe’s answer becomes a subject only when every field is the contract’s type', () => {
+  const BODY = {
+    user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+    login: 'reviewer@example.test',
+    display_label: 'Проверяющая А. Б.',
+    last_name: 'Проверяющая',
+    first_name: 'Анна',
+    middle_name: 'Борисовна',
+    roles: ['admin', 'expert'],
+    is_default_credential: false,
+    profile_complete: true,
+    archived_at: null,
+  };
+
+  it('reads the six fields and derives the initials from the label', () => {
+    expect(accountFromMe(BODY)).toEqual({
+      login: 'reviewer@example.test',
+      displayLabel: 'Проверяющая А. Б.',
+      initials: 'ПА',
+      roles: ['admin', 'expert'],
+      isDefaultCredential: false,
+      profileComplete: true,
+    });
+  });
+
+  it('refuses a body with any field missing, mistyped or outside the closed role set', () => {
+    const broken: readonly unknown[] = [
+      null,
+      [],
+      'account',
+      { ...BODY, login: '' },
+      { ...BODY, login: undefined },
+      { ...BODY, display_label: '   ' },
+      { ...BODY, roles: ['expert', 'owner'] },
+      { ...BODY, roles: ['expert', 'expert'] },
+      { ...BODY, roles: null },
+      { ...BODY, is_default_credential: undefined },
+      { ...BODY, is_default_credential: 0 },
+      { ...BODY, profile_complete: 'true' },
+    ];
+    for (const body of broken) expect(accountFromMe(body), JSON.stringify(body)).toBeNull();
+  });
+
+  it('accepts the empty role set, which the contract says is a valid set', () => {
+    expect(accountFromMe({ ...BODY, roles: [] })?.roles).toEqual([]);
+  });
+
+  it('gives the avatar two capital letters from the first two words, and never a blank', () => {
+    expect(initialsOf('Петрова А.')).toBe('ПА');
+    expect(initialsOf('Смирнов Б. И.')).toBe('СБ');
+    expect(initialsOf('admin')).toBe('A');
+    expect(initialsOf('reviewer@example.test')).toBe('R');
+    expect(initialsOf('  ёлкина  е.  ')).toBe('ЁЕ');
+    expect(initialsOf('«Кавычкин» —')).toBe('К');
+    expect(initialsOf('42')).toBe('4');
   });
 });
