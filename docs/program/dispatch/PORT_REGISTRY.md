@@ -89,6 +89,7 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56600`, `60200/60201` | `gate-w49qa` — `W49-QA-01` | 2026-10-05 | merged |
 | `56610`, `60210/60211` | `gate-w49jx` — `W49-JUDGE-X` | 2026-10-05 | W49 closes |
 | `56620`, `60220/60221` | `gate-w49jy` — `W49-JUDGE-Y` | 2026-10-05 | W49 closes |
+| `56630`, `60230/60231` | `gate-w49fix` — `W49-FIX` | 2026-10-06 | merged |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,
