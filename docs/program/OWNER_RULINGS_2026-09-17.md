@@ -1200,5 +1200,11 @@ registered as a debt.
 
 From the W49 release on, release acceptance accepts `provider_mode` `live` **or** `proxy` — both
 call a real model through the owner's credential — and never `recorded`. `OD-02` already made the
-proxy the provider of record (2026-09-14). The owner switches the stand to `proxy` on the host. The
-acceptance verifier and its runbook are changed in `W49-FIX`.
+proxy the provider of record (2026-09-14). The owner switches the stand to `proxy` on the host.
+
+> **`R-65` note, measured by the integrator the same day.** No verifier change is needed: a run
+> records the *provenance* mode, not the transport. `bootstrap/composition.py` `_provenance_mode`
+> records every transport but `recorded` as `live`, the database CHECK on
+> `audit_run.provider_mode` admits only `live` and `recorded`, and `execute_run` refuses a declared
+> mode that disagrees with its adapter, whose proxy variant reports `live`. A proxy run therefore
+> already passes the `providerLive` phase. `W49-FIX` only makes the runbook say so.

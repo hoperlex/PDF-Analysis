@@ -6,8 +6,8 @@
 deployed proxy serves the configuration of the checkout it was deployed from, and
 `infra/deploy/verify-deployed.sh` refuses a deployment whose proxy does not. An archived account
 cannot be changed until it is restored (`R-62`), and a pending applicant's sign-in costs one
-attempt, not two (`R-63`). Release acceptance passes a run whose `provider_mode` is `live` or
-`proxy` and never `recorded` (`R-65`).
+attempt, not two (`R-63`). The acceptance runbook says that a proxy run records
+`provider_mode` `live` (`R-65`).
 
 ## Depends on
 
@@ -126,16 +126,13 @@ Part E — `R-63` (a failed exchange does not count against a request):
   does) and is never throttled; wrong passwords through `readRegistrationStatus` still throttle
   at the allowance; derivation counts per path unchanged (constant work)
 
-Part F — `R-65` (proxy counts as live in release acceptance):
+Part F — `R-65` (proxy counts as live in release acceptance) — runbook only:
 
-- `tests/e2e/pc01/journey/verify-acceptance.mjs` — the `providerLive` phase passes for
-  `provider_mode` `live` or `proxy` and fails for `recorded`, `null` or any other value; the phase
-  id and the `w48-alpha-acceptance/v1` evidence schema stay as they are
-- `tests/contract/test_alpha_acceptance_command.py` — regressions: `proxy` passes, `recorded` and
-  an unknown value fail
-- `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md` — only the sentences that name
-  `provider_mode=live` (§3 and A04, A05's "live-провайдера"), in Russian like the rest of the file
-- `scripts/manual-alpha-check.sh` — only the A04 prompt line that names `provider_mode=live`
+- `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md` — one sentence at A04 (in Russian, like the rest
+  of the file): a run through the model proxy records `provider_mode` `live`, because the field is
+  the provenance, not the transport; `recorded` is still a `FAIL`. The verifier
+  `tests/e2e/pc01/journey/verify-acceptance.mjs` is **not** changed: a `proxy` branch could never
+  fire (`OWNER_RULINGS_2026-09-17.md` `R-65` note).
 
 Tests that assert behaviour `R-62` or `R-63` supersedes — in `tests/integration/access/test_roles.py`,
 `tests/integration/api/qa_w49/**`, `tests/integration/access/qa_w49/**` or
@@ -175,8 +172,7 @@ Report:
 - Part C: the rewritten bullet
 - Part D and Part E: the code changes above with their regressions; each regression red on the
   unrepaired code (two mutations: restore the old branch → red)
-- Part F: the verifier change with its regressions; one mutation that drops `proxy` from the
-  accepted set turns the `proxy` regression red
+- Part F: the A04 sentence; no code change
 
 ## Required tests
 

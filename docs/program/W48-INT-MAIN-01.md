@@ -71,7 +71,8 @@ were recorded; its message names the `D-70` exception and `R-64`.
 ## Risks and known limitations
 
 - `D-70` stays open: the stand serves recorded analysis until the owner switches it to `proxy`
-  (`R-65`) and redeploys.
+  (`R-65`) and redeploys. A proxy run records `provider_mode` `live` (provenance, not transport),
+  so the existing verifier passes it unchanged.
 - The deployed proxy keeps a stale `nginx.conf` inode (`W49-JUDGE-X` B-1); harmless for W48,
   whose proxy changes were comments only, and repaired in `W49-FIX` before W49 reaches `main`.
 - The acceptance journey has no retry for a transient browser network error.
