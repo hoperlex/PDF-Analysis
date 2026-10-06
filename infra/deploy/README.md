@@ -145,6 +145,23 @@ infra/deploy/reload-proxy.sh          # the proxy re-resolves its upstreams
 infra/deploy/verify-deployed.sh       # and then: is this stack that tree?
 ```
 
+**A reload does not pick up a changed `proxy/nginx.conf`, and `reload-proxy.sh` no longer
+pretends it does** (`W49-FIX`, `B-1`). The proxy bind-mounts that file as a single file, and a
+single-file bind mount keeps the inode the file had when the container started. `git
+checkout` replaces a changed file with a new inode, so after a deploy the running proxy read
+— and `nginx -t` and `nginx -s reload` inside it re-read — the old configuration, measured by
+`W49-JUDGE-X` (`docs/program/reviews/W49-JUDGE-X.md` §7.4). So `reload-proxy.sh` first asks
+the running proxy what it reads: for every single-file mount it compares the SHA-256 of the
+host file with the SHA-256 inside the container. When they differ it tests the checkout's
+configuration in a throwaway container (same image, network and mounts, read-only), and
+only if that passes it **restarts** the proxy — a restart re-resolves every mount and keeps
+the container, its ports and any overlay mounts such as `proxy/compose.tls.yml`'s — and asks
+again. A broken configuration is refused (exit 5) with the running proxy untouched; a proxy
+that still reads other bytes, or was created from another checkout, is refused (exit 6) and
+named. When nothing differs it only reloads, so a second `deploy.sh` of the same tree
+restarts nothing. A restart drops the proxy's open connections for the moment it takes; it
+happens only on a deploy that changed a mounted file.
+
 One port is published, and it is the proxy's. PostgreSQL, MinIO, the API and the web app
 are reachable only on the compose network.
 
@@ -498,6 +515,17 @@ it cannot parse, a container that is not there, a proxy that does not answer.
 for exactly the paths the two Dockerfiles copy — read out of the Dockerfiles' own `COPY`
 lines, so a newly copied path is covered without anyone remembering. It also asks the proxy
 first, which is how the 502 above is told apart from a stale image.
+
+**It also asks the running proxy what configuration it reads** (`B-1`). The mounts are read
+from the container, so an overlay is seen too; each source must be this checkout's
+`infra/deploy/proxy/`, and every tracked file under it is compared by SHA-256 inside the
+container. A difference exits **6** with *the running proxy is NOT serving this tree's
+configuration* and the file named, as does a proxy that does not mount
+`proxy/nginx.conf` at all or mounts it from another checkout. It sends no request burst:
+whether the throttle answers 429 is a property of the configuration this compares, and a
+burst against the live stand on every deploy would be a side effect. The burst is driven
+on a disposable stand instead, by the opt-in class in
+`tests/integration/composition/test_proxy_config_follows_checkout.py`.
 
 **It deliberately does not compare the served `/openapi.json`,** and that was measured
 rather than assumed:

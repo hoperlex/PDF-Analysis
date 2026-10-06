@@ -19,6 +19,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
+from auditmanager.access import passwords
+from auditmanager.access.repository import FAILED_SIGN_IN_ALLOWANCE
 from w13_api_driver import Surface
 
 from .identity_surface import ADMIN_ROLES, credential_for, identity_surface, make_account
@@ -71,6 +73,29 @@ def _status(surface: Surface, login: str, password: str = PASSWORD) -> Any:
         body=json.dumps({"login": login, "password": password}).encode("utf-8"),
         credential=None,
     )
+
+
+def _exchange(surface: Surface, login: str, password: str = PASSWORD) -> Any:
+    """``issueToken``, unauthenticated -- the first half of a BFF sign-in."""
+    return surface.send(
+        "POST",
+        "/auth/token",
+        headers={"Content-Type": "application/json"},
+        body=json.dumps({"login": login, "password": password}).encode("utf-8"),
+        credential=None,
+    )
+
+
+def _brake(session: Session, login: str) -> tuple[int, bool]:
+    """The request's counter, and whether it is shut."""
+    failed, blocked_until = session.execute(
+        text(
+            "SELECT failed_sign_ins, sign_in_blocked_until FROM registration_request "
+            "WHERE login = :l"
+        ),
+        {"l": login},
+    ).one()
+    return int(failed), blocked_until is not None
 
 
 def _request_id(session: Session, login: str) -> str:
@@ -178,6 +203,75 @@ class TestTheApplicant:
         )
         assert answer.status == 422, answer.body
         assert answer.json()["details"]["constraint"] == "required"
+
+
+class TestAPendingApplicantSigningIn:
+    """`R-63` (`W49-QA-01` Q-1), through the served operations in the BFF's shape: a refused
+    ``issueToken`` followed by ``readRegistrationStatus`` with the same pair. Only the status
+    read counts against the request; the exchange spends its derivation and writes nothing."""
+
+    def test_correct_sign_ins_beyond_the_allowance_are_never_throttled(
+        self, surface: Surface, session: Session
+    ) -> None:
+        login = _email()
+        assert _submit(surface, login).status == 201
+        for attempt in range(FAILED_SIGN_IN_ALLOWANCE + 2):
+            assert _exchange(surface, login).status == 401
+            assert _brake(session, login) == (0, False), f"exchange {attempt} was counted"
+            answer = _status(surface, login)
+            assert answer.status == 200, (attempt, answer.body)
+            assert answer.json() == {"status": "pending"}
+
+    def test_a_wrong_sign_in_costs_one_attempt_and_the_allowance_still_brakes(
+        self, surface: Surface, session: Session
+    ) -> None:
+        login = _email()
+        assert _submit(surface, login).status == 201
+        for attempt in range(FAILED_SIGN_IN_ALLOWANCE - 1):
+            assert _exchange(surface, login, f"wrong-{attempt}").status == 401
+            assert _status(surface, login, f"wrong-{attempt}").status == 401
+        assert _brake(session, login) == (FAILED_SIGN_IN_ALLOWANCE - 1, False)
+        # Q-1's sign-in: the right password after wrong ones, short of the allowance.
+        assert _exchange(surface, login).status == 401
+        assert _status(surface, login).status == 200, "a correct sign-in was refused"
+        assert _brake(session, login) == (0, False)
+        # The brake itself is unchanged: the allowance in wrong status reads shuts it.
+        for attempt in range(FAILED_SIGN_IN_ALLOWANCE):
+            assert _exchange(surface, login, f"again-{attempt}").status == 401
+            assert _status(surface, login, f"again-{attempt}").status == 401
+        assert _brake(session, login) == (FAILED_SIGN_IN_ALLOWANCE, True)
+        assert _exchange(surface, login).status == 401
+        assert _status(surface, login).status == 401
+
+    def test_a_sign_in_costs_the_same_derivations_with_or_without_a_request(
+        self, surface: Surface, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Constant work, unchanged by `R-63`: each half of a sign-in spends one PBKDF2
+        derivation whether or not a request exists, and whichever password is offered."""
+        calls: list[int] = []
+        original = passwords._derive
+
+        def counting(*args: Any, **kwargs: Any) -> Any:
+            result = original(*args, **kwargs)
+            calls.append(1)
+            return result
+
+        login = _email()
+        assert _submit(surface, login).status == 201
+        monkeypatch.setattr(passwords, "_derive", counting)
+        cost: dict[str, tuple[int, int]] = {}
+        for name, (who, password) in {
+            "pending-right": (login, PASSWORD),
+            "pending-wrong": (login, "not-the-password-2"),
+            "no-request": (_email(), PASSWORD),
+        }.items():
+            calls.clear()
+            assert _exchange(surface, who, password).status == 401
+            exchanged = len(calls)
+            calls.clear()
+            _status(surface, who, password)
+            cost[name] = (exchanged, len(calls))
+        assert cost == {name: (1, 1) for name in cost}, cost
 
 
 class TestTheAdministrator:

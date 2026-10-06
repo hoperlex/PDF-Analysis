@@ -4,7 +4,10 @@
 answers ``{status: pending}`` for a pair that matches a pending request, "and the same generic
 refusal for every other pair -- including a decided request ... A rejected applicant sees
 nothing at sign-in". "The request's throttle columns count both kinds of attempts" -- the
-failed exchange and the status read -- with the account brake's rules.
+failed exchange and the status read -- with the account brake's rules. *(Amended by `R-63`,
+2026-10-06, after this suite's Q-1: only the status read counts; a failed exchange counts
+nothing. The throttle test below keeps its name, which `W49-QA-01.md` cites, and asserts the
+amended rule.)*
 
 "Exactly like an unknown pair" is checked byte for byte: the same status, the same headers
 and the same body, with the caller's correlation id fixed so the one value that is allowed to
@@ -102,24 +105,31 @@ def test_five_refused_attempts_of_either_kind_brake_the_request(
     unknown = status_read(surface, fresh_login("nobody"), PASSWORD, correlation=_CORRELATION)
 
     # Four refusals -- two status reads, two exchanges -- leave the right pair working, and
-    # the right pair clears what they recorded.
+    # the right pair clears what they recorded. `R-63`: only the two status reads count.
     login = fresh_login("braked")
     assert submit(surface, login).status == 201
     for attempt in range(2):
         assert status_read(surface, login, f"qa49-wrong-{attempt}").status == 401
         assert exchange(surface, login, f"qa49-wrong-x-{attempt}").status == 401
     session.expire_all()
-    assert request_row(session, login)["failed_sign_ins"] == 4  # type: ignore[index]
+    assert request_row(session, login)["failed_sign_ins"] == 2  # type: ignore[index]
     assert status_read(surface, login, PASSWORD).status == 200
     session.expire_all()
     assert request_row(session, login)["failed_sign_ins"] == 0  # type: ignore[index]
 
-    # Five refusals of either kind shut it: the right pair is now refused, and refused
-    # exactly as an unknown pair is.
+    # Five refused status reads shut it: the right pair is now refused, and refused
+    # exactly as an unknown pair is. `R-63`: the three exchanges count nothing, so after
+    # them and two status reads the request is at two and open; three more reads shut it.
     for attempt in range(3):
         assert exchange(surface, login, f"qa49-wrong-y-{attempt}").status == 401
     for attempt in range(2):
         assert status_read(surface, login, f"qa49-wrong-z-{attempt}").status == 401
+    session.expire_all()
+    open_still = request_row(session, login)
+    assert open_still is not None and open_still["failed_sign_ins"] == 2
+    assert open_still["sign_in_blocked_until"] is None
+    for attempt in range(3):
+        assert status_read(surface, login, f"qa49-wrong-w-{attempt}").status == 401
     session.expire_all()
     braked = request_row(session, login)
     assert braked is not None and braked["sign_in_blocked_until"] is not None

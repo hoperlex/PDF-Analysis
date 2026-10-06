@@ -203,7 +203,9 @@
           "export_id",
           "worker_id",
           "audit_event_id",
-          "erasure_request_id"
+          "erasure_request_id",
+          "user_uid",
+          "request_id"
         ]
       }
     },
@@ -258,7 +260,9 @@
                 "export_id",
                 "worker_id",
                 "audit_event_id",
-                "erasure_request_id"
+                "erasure_request_id",
+                "user_uid",
+                "request_id"
               ]
             }
           },

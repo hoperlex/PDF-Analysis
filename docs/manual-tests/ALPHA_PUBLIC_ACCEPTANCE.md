@@ -143,7 +143,10 @@ stand и требует credential, второй остаётся воспрои
 `state: queued`, затем дождитесь терминального состояния не более 150 секунд.
 
 **PASS:** итог `published` или `partial`; polling остановился; на экране нет
-`data-run-failure`; видны результаты четырёх стадий; `provider_mode` — **`live`**. Значение
+`data-run-failure`; видны результаты четырёх стадий; `provider_mode` — **`live`**. Прогон через
+модельный прокси (`AUDITMANAGER_PROVIDER_MODE=proxy`, `R-65`) тоже записывает **`live`**: поле
+фиксирует происхождение результата — его выдала модель, а не воспроизведение, — а не транспорт
+вызова; `recorded` остаётся **FAIL**. Значение
 `recorded` на публичной альфе, `failed`, зависание, либо `dependency_unavailable` — **FAIL** и
 основание проверить D-70/provider connectivity. Сохраните correlation id сбойного запроса, но не
 его Authorization header.

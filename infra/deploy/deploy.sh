@@ -704,6 +704,15 @@ echo
 # It is INTERMITTENT -- a replacement usually gets its old address back -- so "the last
 # deploy was fine" is not evidence about this one. `reload-proxy.sh` is its own script and
 # is reused here rather than copied.
+#
+# IT IS ALSO WHERE A CHANGED `proxy/**` IS PICKED UP, and that is `W49-FIX` / `B-1`. `up -d`
+# does not recreate the proxy for a changed configuration file -- the service definition
+# did not change, only the bytes behind a bind mount -- and the single-file mount keeps the
+# inode the container started with, which the checkout before this script replaced. So
+# `reload-proxy.sh` compares what the running proxy reads with this checkout's files and
+# restarts it, after testing the new configuration in a throwaway container, when they
+# differ. When they are the same it only reloads, so a second run of this script restarts
+# nothing. A proxy it could not bring onto this checkout fails this run, with its reason.
 echo "-- reloading the proxy --"
 "$HERE/reload-proxy.sh" --env-file "$ENV_FILE"
 echo

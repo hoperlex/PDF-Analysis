@@ -498,12 +498,15 @@ class AccountRepository:
 
         Never completes a profile and never touches the login: an administrator naming a
         legacy account leaves it a legacy account until it gives its own e-mail. Not a
-        revocation either -- a name is not a right.
+        revocation either -- a name is not a right. An archived account answers
+        ``not_found``, as :meth:`reset_password` does: its names change only after
+        ``restoreUser`` (`R-62`).
         """
         last = normalize_person_name(last_name, field="last_name", required=True)
         first = normalize_person_name(first_name, field="first_name", required=True)
         middle = normalize_person_name(middle_name, field="middle_name", required=False)
-        if self._lock(session, user_uid) is None:
+        current = self._lock(session, user_uid)
+        if current is None or current.archived:
             raise _no_such_account()
         row = session.execute(
             _UPDATE_NAMES,
@@ -746,18 +749,21 @@ class AccountRepository:
         and ``token_epoch`` is raised **once** when anything changed. An empty set is
         allowed: an account with no role reaches only what every complete account reaches
         (`R-60`). Removing a role from oneself is refused even when another is added in
-        the same call -- "demote" is any loss, not a net count.
+        the same call -- "demote" is any loss, not a net count. An archived account answers
+        ``not_found``, as :meth:`reset_password` and :meth:`grant_role` do: its roles change
+        only after ``restoreUser`` (`R-62`), so a restore never brings back a role granted
+        while it was archived.
         """
         wanted = frozenset(parse_role(role) for role in roles)
         current = self._lock_admins_then(session, user_uid)
-        if current is None:
+        if current is None or current.archived:
             raise _no_such_account()
         held = self.roles_of(session, user_uid)
         losing = held - wanted
         gaining = wanted - held
         if losing:
             _refuse_self(actor_uid, user_uid, "demote")
-            if ROLE_ADMIN in losing and not current.archived:
+            if ROLE_ADMIN in losing:
                 self._refuse_last_admin(session, user_uid, "lose the role admin")
         for role in sorted(losing):
             session.execute(_DELETE_ROLE, {"user_uid": user_uid, "role": role})
