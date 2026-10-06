@@ -174,7 +174,14 @@ class TestNoRouteEscapesTheSeam:
         route. If closing these had needed a register entry, the register would have grown
         -- and a register that grows is how the next open operation arrives.
         """
-        assert UNAUTHENTICATED_OPERATIONS == frozenset({"issueToken"})
+        # `W49-SEAL-01` added the registration pair, which an applicant reaches with no
+        # account; still nothing for these four, which need no register entry because
+        # since the same seal a route with no `operationId` requires any complete account
+        # (`ROLES_OF_A_ROUTE_WITHOUT_AN_OPERATION`), exactly as before it required a
+        # credential.
+        assert UNAUTHENTICATED_OPERATIONS == frozenset(
+            {"issueToken", "submitRegistration", "readRegistrationStatus"}
+        )
 
     def test_the_four_declare_no_operation_id(self, router: Surface) -> None:
         by_path = {route.path: route for route in _effective_routes(router.app)}

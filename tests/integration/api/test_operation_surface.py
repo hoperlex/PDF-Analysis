@@ -80,6 +80,9 @@ def test_every_declared_operation_is_reachable(
         "version_uid": "ver_01M2545JSD15ETSNNV904X991J",
         "run_id": "run_01M2545JSD15ETSNNV904X991K",
         "finding_uid": "fnd_01M2545JSD15ETSNNV904X991M",
+        # `W49-SEAL-01`.
+        "request_id": "reg_01M2545JSD15ETSNNV904X991R",
+        "user_uid": "usr_01M2545JSD15ETSNNV904X991S",
     }
     for operation_id, method, template in sorted(declared_operations(openapi_document)):
         path = template

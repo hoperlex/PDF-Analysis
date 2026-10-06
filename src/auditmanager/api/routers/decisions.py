@@ -92,6 +92,10 @@ def build_decision_routes(
             comment=body.comment,
             idempotency_key=idempotency_key,
             author_label=subject.display_label,
+            # `W49-SEAL-01`. The account, beside its label: the identity a decision event
+            # names (`expert_decision_event.author_user_uid`, migration 0015), from the
+            # verified subject and never from the body.
+            author_user_uid=subject.user_uid,
         )
         payload = append_decision_body(appended.event, appended.current_verdict)
         return json_response(201, encode_json(payload))

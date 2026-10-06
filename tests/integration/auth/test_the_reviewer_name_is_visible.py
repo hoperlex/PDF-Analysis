@@ -1,19 +1,18 @@
-"""`R-37`: naming a reviewer, and the four places the login fallback says it is happening.
+"""`R-37` and `R-55`: the name a reviewer is shown under, and where the fallback says so.
 
-The ruling left one thing to be decided: **what an account with no display name writes.**
-The answer is its login, and the load-bearing half of that answer is not the value -- it is
-that the fallback is *not silent*. ``AGENTS.md`` §4 forbids a silent fallback, and a
-fallback that lives inside one ``or`` expression is one.
+`R-37` asked what an account with no display name writes, and the answer -- its login -- had
+to be *visible*, because ``AGENTS.md`` §4 forbids a silent fallback. `R-55` then gave every
+account a full name and made the name form "Фамилия И. О." outrank both the display name and
+the login, and `W49-SEAL-01` removed ``python -m auditmanager.access.name``: a person's name is
+now set by **completing the profile** -- the account itself through ``updateMyProfile``, or the
+operator from the host through ``python -m auditmanager.access.profile`` (`R-59`). A decision
+event is written only by a complete profile, so the label it records is the name form, at most
+66 characters, inside ``author_label``'s 1..128 by construction.
 
-So it is said in four places, and this module drives the three that a person can reach:
+This module drives what a person can reach:
 
-1. the nullable column, so the state is a query -- driven in
-   ``tests/integration/db/test_reviewer_display_name.py``;
-2. ``python -m auditmanager.access.check``, one line per account, its own stable prefix;
-3. ``python -m auditmanager.access.name``, which is the only thing in the tree that writes
-   a display name and therefore the only way out of the fallback;
-4. the warning ``0009_reviewer_display_name`` writes into the deployment log, driven in the
-   migration suite beside (1).
+1. ``python -m auditmanager.access.profile``, the operator's way out of the fallback;
+2. ``python -m auditmanager.access.check``, one line per account still on it, naming the way out.
 
 **The commands are driven as subprocesses**, the way an operator runs them, and the tree
 they run against is derived from ``auditmanager.__file__`` rather than from this file --
@@ -34,20 +33,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.access.check import CLEAN_SENTINEL, UNNAMED_PREFIX
-from auditmanager.access.models import MAX_DISPLAY_NAME_LENGTH, UserRecord
-from auditmanager.access.name import (
-    CLEARED_PREFIX,
-    NAMED_PREFIX,
-    NO_SUCH_ACCOUNT_SENTINEL,
-)
+from auditmanager.access.models import MAX_NAME_LABEL_LENGTH, UserRecord
+from auditmanager.access.profile import COMPLETED_PREFIX, NO_SUCH_ACCOUNT_SENTINEL
 from auditmanager.access.repository import UserRepository
 
 PASSWORD = "correct-horse-battery-staple-4471"
-
-#: A name in the script the interface is actually written in. `R-37` exists because
-#: ``author_label`` is read by people, and an ASCII-only test would not notice a boundary
-#: that had quietly kept the login rule's alphabet.
-DISPLAY_NAME = "Анна Петрова"
 
 
 def _tree_under_test() -> Path:
@@ -76,8 +66,8 @@ def _run(module: str, *arguments: str) -> subprocess.CompletedProcess[str]:
 def user(
     app_user_table: object, session_factory: sessionmaker[Session]
 ) -> Iterator[UserRecord]:
-    """One real account with no display name, removed afterwards."""
-    login = f"w42seal-{secrets.token_hex(6)}"
+    """One real legacy account -- no names, no display name -- removed afterwards."""
+    login = f"w49name-{secrets.token_hex(6)}"
     with session_factory() as session:
         record = UserRepository().create_user(session, login, PASSWORD)
         session.commit()
@@ -86,153 +76,146 @@ def user(
     finally:
         with session_factory() as session:
             session.execute(
-                text("DELETE FROM app_user WHERE login = :login"), {"login": login}
+                text("DELETE FROM app_user WHERE user_uid = :uid"),
+                {"uid": str(record.user_uid)},
             )
             session.commit()
 
 
-def _row(session_factory: sessionmaker[Session], login: str) -> UserRecord:
+def _by_uid(session_factory: sessionmaker[Session], user: UserRecord) -> UserRecord:
+    from auditmanager.access.accounts import AccountRepository
+
     with session_factory() as session:
-        found = UserRepository().find_by_login(session, login)
-    assert found is not None, login
-    return found
+        found = AccountRepository().get_account(session, str(user.user_uid))
+    assert found is not None, user.user_uid
+    return found.record
+
+
+def _complete(user: UserRecord, *names: str) -> subprocess.CompletedProcess[str]:
+    arguments = [
+        "--login",
+        user.login,
+        "--email",
+        f"{user.login}@suite.invalid",
+        "--last-name",
+        names[0],
+        "--first-name",
+        names[1],
+    ]
+    if len(names) > 2:
+        arguments += ["--middle-name", names[2]]
+    return _run("auditmanager.access.profile", *arguments)
 
 
 # =======================================================================================
-# The command that writes a name.
+# The fallback, and the command that ends it.
 # =======================================================================================
 
 
-def test_a_new_account_starts_on_the_fallback_and_that_is_not_a_failure(
-    user: UserRecord,
-) -> None:
-    """`R-37`'s empty case is the **ordinary** state of a fresh installation.
+def test_a_new_legacy_account_starts_on_the_login_fallback(user: UserRecord) -> None:
+    """The ordinary state of an account no person has named yet -- an incomplete profile.
 
-    ``0006`` seeds one account and names nobody, and nothing in this wave invents a name,
-    because inventing one is what the ruling forbids. So an account records decisions under
-    its login until somebody says otherwise, and everything works meanwhile.
+    Such an account reaches no product change since `W49-SEAL-01`, so its login never
+    reaches the ledger; the fallback is still a real, non-empty label for every place the
+    account is shown.
     """
     assert user.display_name is None
+    assert user.profile_complete is False
     assert user.display_label == user.login
-    assert 1 <= len(user.display_label) <= MAX_DISPLAY_NAME_LENGTH, (
-        "the fallback must fit author_label's 1..128 by construction, which it does "
-        "because ck_app_user_login_format bounds a login at 1..100"
-    )
 
 
-def test_the_command_names_an_account_and_says_what_it_wrote(
+def test_completing_the_profile_gives_the_name_form_and_says_what_it_wrote(
     user: UserRecord, session_factory: sessionmaker[Session]
 ) -> None:
-    result = _run(
-        "auditmanager.access.name", "--login", user.login, "--display-name", DISPLAY_NAME
-    )
+    result = _complete(user, "Петрова", "Анна", "Сергеевна")
     assert result.returncode == 0, result.stderr
-    assert NAMED_PREFIX in result.stdout
-    assert DISPLAY_NAME in result.stdout
+    assert COMPLETED_PREFIX in result.stdout
+    assert "Петрова А. С." in result.stdout
 
-    named = _row(session_factory, user.login)
-    assert named.display_name == DISPLAY_NAME
-    assert named.display_label == DISPLAY_NAME
+    completed = _by_uid(session_factory, user)
+    assert completed.profile_complete is True
+    assert completed.login == f"{user.login}@suite.invalid"
+    assert completed.display_label == "Петрова А. С."
 
 
-def test_naming_does_not_revoke_anything(
+def test_the_name_form_is_bounded_at_66_characters(
     user: UserRecord, session_factory: sessionmaker[Session]
 ) -> None:
-    """A rename is not a revocation, and this is the assertion that keeps it that way.
+    """The longest names the rules accept give the longest label, inside 1..128."""
+    longest = "Ф" * 60
+    result = _complete(user, longest, "Анна", "Сергеевна")
+    assert result.returncode == 0, result.stderr
+    label = _by_uid(session_factory, user).display_label
+    assert len(label) == MAX_NAME_LABEL_LENGTH == 66
+    assert 1 <= len(label) <= 128
 
-    Raising ``token_epoch`` here would sign every reviewer's browser out because somebody
-    corrected a spelling. The price of not raising it is stated rather than hidden: the
-    name travels in the signed credential, so a reviewer holding one goes on recording
-    under the old name until it expires.
+
+def test_completing_does_not_revoke_anything(
+    user: UserRecord, session_factory: sessionmaker[Session]
+) -> None:
+    """A name is not a right: no epoch moves, and the password still works.
+
+    The seam publishes the label the row holds now (`W49-SEAL-01`), so a credential the
+    account already holds needs no replacement to be shown under the new name.
     """
-    before = _row(session_factory, user.login)
-    result = _run(
-        "auditmanager.access.name", "--login", user.login, "--display-name", DISPLAY_NAME
-    )
-    assert result.returncode == 0, result.stderr
-    after = _row(session_factory, user.login)
+    before = _by_uid(session_factory, user)
+    assert _complete(user, "Петрова", "Анна").returncode == 0
+    after = _by_uid(session_factory, user)
     assert after.token_epoch == before.token_epoch
     assert after.password_updated_at == before.password_updated_at
-    assert after.is_default_credential == before.is_default_credential
-    assert after.failed_sign_ins == before.failed_sign_ins
-    assert after.sign_in_blocked_until == before.sign_in_blocked_until
-    # And the password still works, which is the property an operator actually cares about.
     with session_factory() as session:
-        assert UserRepository().authenticate(session, user.login, PASSWORD) is not None
+        assert UserRepository().authenticate(session, after.login, PASSWORD) is not None
         session.commit()
 
 
-def test_clearing_returns_the_account_to_the_fallback(
-    user: UserRecord, session_factory: sessionmaker[Session]
-) -> None:
-    _run("auditmanager.access.name", "--login", user.login, "--display-name", DISPLAY_NAME)
-    result = _run("auditmanager.access.name", "--login", user.login, "--clear")
-    assert result.returncode == 0, result.stderr
-    assert CLEARED_PREFIX in result.stdout
-    cleared = _row(session_factory, user.login)
-    assert cleared.display_name is None
-    assert cleared.display_label == user.login
-
-
-def test_naming_a_login_nobody_holds_is_a_fact_and_not_a_success(
+def test_completing_a_login_nobody_holds_is_a_fact_and_not_a_success(
     app_user_table: object,
 ) -> None:
     result = _run(
-        "auditmanager.access.name",
+        "auditmanager.access.profile",
         "--login",
         f"ghost-{secrets.token_hex(4)}",
-        "--display-name",
-        "X",
+        "--email",
+        "ghost@suite.invalid",
+        "--last-name",
+        "Призракова",
+        "--first-name",
+        "Ия",
     )
     assert result.returncode == 1, result.stdout
     assert NO_SUCH_ACCOUNT_SENTINEL in result.stdout
 
 
 @pytest.mark.parametrize(
-    ("label", "value"),
+    ("label", "last_name"),
     [
-        ("blank", "   "),
-        ("too long", "x" * (MAX_DISPLAY_NAME_LENGTH + 1)),
-        ("a newline", "Анна\nПетрова"),
+        ("too long", "Ф" * 61),
+        ("a word that mixes Cyrillic and Latin", "Иванoв"),
+        ("a digit", "Иванов2"),
     ],
 )
 def test_a_refused_name_is_exit_two_and_writes_nothing(
-    user: UserRecord, session_factory: sessionmaker[Session], label: str, value: str
+    user: UserRecord, session_factory: sessionmaker[Session], label: str, last_name: str
 ) -> None:
-    """A refusal is the operator's own input being refused, which is not "no such account".
-
-    Each of the three would become a defect at the moment an expert records a verdict: a
-    blank fails ``author_label``'s ``minLength: 1``, an over-long one fails its
-    ``maxLength: 128``, and a newline reaches a CSV export and a screen.
-    """
-    result = _run("auditmanager.access.name", "--login", user.login, "--display-name", value)
-    assert result.returncode == 2, (result.returncode, result.stdout, result.stderr)
-    assert NAMED_PREFIX not in result.stdout
-    assert _row(session_factory, user.login).display_name is None
+    result = _complete(user, last_name, "Анна")
+    assert result.returncode == 2, (label, result.returncode, result.stdout, result.stderr)
+    assert COMPLETED_PREFIX not in result.stdout
+    assert _by_uid(session_factory, user).profile_complete is False
 
 
 def test_the_command_refuses_to_run_bare(app_user_table: object) -> None:
-    """There is no default name, and the reason is the ruling's own words.
-
-    *"Inventing one is not"* defensible: in an append-only ledger a fabricated name is, a
-    year later, indistinguishable from one a person chose.
-    """
-    result = _run("auditmanager.access.name")
+    """There is no default name: a fabricated one is, a year later, indistinguishable from
+    one a person chose."""
+    result = _run("auditmanager.access.profile")
     assert result.returncode == 2
-    assert NAMED_PREFIX not in result.stdout
+    assert COMPLETED_PREFIX not in result.stdout
 
 
-def test_the_command_refuses_a_name_and_a_clear_at_once(user: UserRecord) -> None:
-    result = _run(
-        "auditmanager.access.name",
-        "--login",
-        user.login,
-        "--display-name",
-        DISPLAY_NAME,
-        "--clear",
-    )
-    assert result.returncode == 2
-    assert NAMED_PREFIX not in result.stdout
+def test_the_retired_naming_command_is_gone() -> None:
+    """`W49-SEAL-01`: ``access.name`` is removed; ``access.profile`` replaces it."""
+    result = _run("auditmanager.access.name", "--login", "anyone", "--clear")
+    assert result.returncode != 0
+    assert "No module named auditmanager.access.name" in result.stderr
 
 
 # =======================================================================================
@@ -245,19 +228,32 @@ def test_access_check_names_every_account_on_the_fallback(user: UserRecord) -> N
     assert result.returncode in (0, 1), result.stderr
     assert UNNAMED_PREFIX in result.stdout
     assert user.login in result.stdout
-    assert f"--login {user.login}" in result.stdout, (
-        "the report names the state but not the way out of it; an operator reading it "
-        "still has to go and find the command"
+    line = next(
+        line
+        for line in result.stdout.splitlines()
+        if line.startswith(UNNAMED_PREFIX) and user.login in line
+    )
+    assert f"auditmanager.access.profile --login {user.login}" in line, (
+        "the report names the state but not the way out of it -- or names a command that "
+        "no longer exists; an operator reading it still has to go and find the command"
     )
 
 
-def test_a_named_account_drops_out_of_the_report(user: UserRecord) -> None:
+def test_a_named_account_drops_out_of_the_report(
+    user: UserRecord, session_factory: sessionmaker[Session]
+) -> None:
     """The half that makes the line above mean something.
 
     A report that printed every account would satisfy the assertion above for ever and
     would be telling nobody anything.
     """
-    _run("auditmanager.access.name", "--login", user.login, "--display-name", DISPLAY_NAME)
+    # The display name `R-37` introduced, set through the repository: its command is
+    # retired, and the column is what the report reads.
+    with session_factory() as session:
+        UserRepository().set_display_name(
+            session, login=user.login, display_name="Анна Петрова"
+        )
+        session.commit()
     result = _run("auditmanager.access.check")
     assert result.returncode in (0, 1), result.stderr
     named_lines = [

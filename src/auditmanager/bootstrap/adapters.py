@@ -1,9 +1,9 @@
 """The port adapters: frozen API shapes on one side, real modules on the other.
 
-`B6` wrote `build_router` to take six protocols and construct none of them. Three more
-were added later with a default rather than a seventh, eighth and ninth required
-argument -- `credentials` at wave 39, `blocks` at `W45-BLOCKS`, `dashboard` at `W46-SEAL`
--- so this file now carries nine adapter classes. Each adapter is thin on purpose - it
+`B6` wrote `build_router` to take six protocols and construct none of them. Five more
+were added later with a default rather than a required argument -- `credentials` at wave
+39, `blocks` at `W45-BLOCKS`, `dashboard` at `W46-SEAL`, `accounts` and `registrations` at
+`W49-SEAL-01` -- so this file now carries eleven adapter classes. Each adapter is thin on purpose - it
 opens a session, calls one module, maps the result into the view the frozen schema
 declares, and does nothing else. A rule that lives here rather than in a module is a rule
 the module's own tests cannot reach.
@@ -19,6 +19,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
 from auditmanager.api.schemas.blocks import VersionBlockIndexView
 from auditmanager.api.schemas.dashboard import (
     DashboardSummaryView,
@@ -38,6 +39,7 @@ from auditmanager.api.schemas.findings import (
     ProvenanceView,
 )
 from auditmanager.api.schemas.projects import ProjectView
+from auditmanager.api.schemas.registrations import RegistrationListingView, RegistrationView
 from auditmanager.api.schemas.runs import RunStatusView, StageStateView
 from auditmanager.api.security import (
     ROLE_ADMIN,
@@ -711,6 +713,7 @@ class DecisionAdapter(_SessionHolder):
         event_type: str,
         idempotency_key: str,
         author_label: str,
+        author_user_uid: str,
         comment: str | None = None,
     ) -> Any:
         """`D-78`. ``author_label`` is named, not swallowed, and has no default.
@@ -733,6 +736,7 @@ class DecisionAdapter(_SessionHolder):
                 idempotency_key=idempotency_key,
                 comment=comment,
                 author_label=author_label,
+                author_user_uid=author_user_uid,
             )
             verdict = current_verdict(session, finding_uid)
             return _AppendedDecision(_event_view(event), getattr(verdict, "current_verdict", "pending"))
@@ -1058,3 +1062,303 @@ def _seam_role(role: str) -> str:
         raise DomainError(
             ErrorCode.INTERNAL_ERROR, message="an account holds a role the seam does not know"
         ) from None
+
+
+# --------------------------------------------------------------------------------------
+# `W49-SEAL-01`: the account and registration ports, over `auditmanager.access`.
+# --------------------------------------------------------------------------------------
+
+
+def _account_view(account: Any) -> AccountView:
+    """``auditmanager.access.models.Account`` as the frozen ``Account`` shape."""
+    record = account.record
+    return AccountView(
+        user_uid=str(record.user_uid),
+        login=record.login,
+        display_label=record.display_label,
+        last_name=record.last_name,
+        first_name=record.first_name,
+        middle_name=record.middle_name,
+        roles=tuple(sorted(account.roles)),
+        profile_complete=record.profile_complete,
+        is_default_credential=record.is_default_credential,
+        archived_at=record.archived_at,
+    )
+
+
+def _registration_view(record: Any) -> RegistrationView:
+    """``auditmanager.access.registrations.RegistrationRecord`` as ``RegistrationRequest``."""
+    return RegistrationView(
+        request_id=record.request_id,
+        login=record.login,
+        display_label=record.display_label,
+        last_name=record.last_name,
+        first_name=record.first_name,
+        middle_name=record.middle_name,
+        status=record.status,
+        submitted_at=record.submitted_at,
+        decided_at=record.decided_at,
+        decided_by=record.decided_by,
+        rejection_reason=record.rejection_reason,
+        created_user_uid=record.created_user_uid,
+    )
+
+
+class AccountAdapter(_SessionHolder):
+    """``AccountPort`` over the access boundary's management half.
+
+    Thin in the way every adapter here is: one session, the access method that owns the
+    rule, the account read back in the **same** session so the answer is the state the
+    change produced, and the view. Every invariant -- no act on oneself, the last
+    administrator, a fixed login, a referenced purge -- is raised by
+    ``auditmanager.access``; nothing here decides one.
+    """
+
+    __slots__ = ("_accounts",)
+
+    def __init__(self, session_factory: sessionmaker[Session], *, accounts: Any) -> None:
+        super().__init__(session_factory)
+        #: ``auditmanager.access.ports.AccountRepository``; ``Any`` for the reason
+        #: ``CredentialAdapter._users`` gives.
+        self._accounts = accounts
+
+    def _view_of(self, session: Session, user_uid: str) -> AccountView:
+        account = self._accounts.get_account(session, user_uid)
+        if account is None:
+            raise _not_found("User")
+        return _account_view(account)
+
+    def get_account(self, *, user_uid: str) -> AccountView:
+        return self._read(lambda session: self._view_of(session, user_uid))
+
+    def list_accounts(self, *, include_archived: bool) -> Sequence[AccountView]:
+        return self._read(
+            lambda session: tuple(
+                _account_view(account)
+                for account in self._accounts.list_accounts(
+                    session, include_archived=include_archived
+                )
+            )
+        )
+
+    def update_my_profile(
+        self,
+        *,
+        user_uid: str,
+        last_name: str,
+        first_name: str,
+        middle_name: str | None,
+        email: str | None,
+    ) -> AccountView:
+        def work(session: Session) -> AccountView:
+            self._accounts.update_my_profile(
+                session,
+                user_uid=user_uid,
+                last_name=last_name,
+                first_name=first_name,
+                middle_name=middle_name,
+                email=email,
+            )
+            return self._view_of(session, user_uid)
+
+        return self._write(work)
+
+    def update_account(
+        self,
+        *,
+        actor_uid: str,
+        user_uid: str,
+        names: PersonNamesView | None,
+        roles: frozenset[str] | None,
+    ) -> AccountView:
+        """Names, then roles, in one transaction: a refused role change keeps the names."""
+
+        def work(session: Session) -> AccountView:
+            if names is not None:
+                self._accounts.update_names(
+                    session,
+                    user_uid=user_uid,
+                    last_name=names.last_name,
+                    first_name=names.first_name,
+                    middle_name=names.middle_name,
+                )
+            if roles is not None:
+                self._accounts.set_roles(
+                    session, actor_uid=actor_uid, user_uid=user_uid, roles=roles
+                )
+            return self._view_of(session, user_uid)
+
+        return self._write(work)
+
+    def archive_account(self, *, actor_uid: str, user_uid: str) -> AccountView:
+        def work(session: Session) -> AccountView:
+            self._accounts.archive_account(session, actor_uid=actor_uid, user_uid=user_uid)
+            return self._view_of(session, user_uid)
+
+        return self._write(work)
+
+    def restore_account(self, *, actor_uid: str, user_uid: str) -> AccountView:
+        def work(session: Session) -> AccountView:
+            self._accounts.restore_account(session, actor_uid=actor_uid, user_uid=user_uid)
+            return self._view_of(session, user_uid)
+
+        return self._write(work)
+
+    def purge_account(self, *, actor_uid: str, user_uid: str) -> None:
+        self._write(
+            lambda session: self._accounts.purge_account(
+                session, actor_uid=actor_uid, user_uid=user_uid
+            )
+        )
+
+    def reset_password(
+        self, *, actor_uid: str, user_uid: str, temporary_password: str
+    ) -> AccountView:
+        def work(session: Session) -> AccountView:
+            self._accounts.reset_password(
+                session,
+                actor_uid=actor_uid,
+                user_uid=user_uid,
+                temporary_password=temporary_password,
+            )
+            return self._view_of(session, user_uid)
+
+        return self._write(work)
+
+
+#: `W49-SEAL-01`. The command type an approval claims its idempotency key under, beside
+#: `append_decision` and the run and upload commands that share `command_record`.
+APPROVE_REGISTRATION_COMMAND = "approve_registration"
+
+
+class RegistrationAdapter(_SessionHolder):
+    """``RegistrationPort`` over ``auditmanager.access.registrations``.
+
+    **The status read commits.** ``read_status`` counts a refused read on the request's
+    own brake, and the caller owns the transaction: a read session would discard the count
+    on the way out, and the brake would be applied in the log and nowhere else -- the
+    reason ``CredentialAdapter.issue`` writes.
+
+    **The approval claims its key in the same transaction as the approval**, through
+    ``auditmanager.ingest``'s ``CommandRepository`` -- the primitive every keyed create on
+    this surface claims with -- so an identical repeat replays the decided request and a
+    reused key with another payload is ``idempotency_key_reuse``. The approval itself, and
+    every rule of it, is ``auditmanager.access``'s.
+    """
+
+    __slots__ = ("_registrations",)
+
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, registrations: Any
+    ) -> None:
+        super().__init__(session_factory)
+        #: ``auditmanager.access.ports.RegistrationRepository``.
+        self._registrations = registrations
+
+    def submit(
+        self,
+        *,
+        login: str,
+        password: str,
+        last_name: str,
+        first_name: str,
+        middle_name: str | None,
+    ) -> str:
+        record = self._write(
+            lambda session: self._registrations.submit(
+                session,
+                login=login,
+                password=password,
+                last_name=last_name,
+                first_name=first_name,
+                middle_name=middle_name,
+            )
+        )
+        return record.status
+
+    def read_status(self, *, login: str, password: str) -> str | None:
+        answer = self._write(
+            lambda session: self._registrations.read_status(
+                session, login=login, password=password
+            )
+        )
+        if answer is None:
+            return None
+        if answer.status != "pending":
+            # `R-56` addendum: only `pending` is ever shown. The access boundary can prove
+            # a pair only for a pending request; anything else reaching here is a defect,
+            # reported as one rather than shown to the applicant.
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="the status read proved a request that is not pending",
+            )
+        return answer.status
+
+    def list_requests(self, *, status: str | None) -> RegistrationListingView:
+        def work(session: Session) -> RegistrationListingView:
+            items = self._registrations.list_requests(session, status=status)
+            return RegistrationListingView(
+                items=tuple(_registration_view(record) for record in items),
+                pending_total=self._registrations.pending_total(session),
+            )
+
+        return self._read(work)
+
+    def approve(
+        self,
+        *,
+        actor_uid: str,
+        request_id: str,
+        roles: frozenset[str],
+        idempotency_key: str,
+    ) -> RegistrationView:
+        from auditmanager.ingest.public import (
+            CommandReplay,
+            CommandRepository,
+            payload_fingerprint,
+        )
+
+        def work(session: Session) -> RegistrationView:
+            commands = CommandRepository()
+            claim = commands.begin(
+                session,
+                command_type=APPROVE_REGISTRATION_COMMAND,
+                idempotency_key=idempotency_key,
+                fingerprint=payload_fingerprint(
+                    {
+                        "command": "approve_registration.v1",
+                        "request_id": request_id,
+                        "roles": sorted(roles),
+                        "actor_uid": actor_uid,
+                    }
+                ),
+            )
+            if isinstance(claim, CommandReplay):
+                recorded = claim.outcome.get("request_id")
+                record = (
+                    self._registrations.get(session, recorded)
+                    if isinstance(recorded, str)
+                    else None
+                )
+                if record is None:
+                    raise DomainError(
+                        ErrorCode.IDEMPOTENCY_KEY_STALE,
+                        command_type=APPROVE_REGISTRATION_COMMAND,
+                    )
+                return _registration_view(record)
+            decided, _account = self._registrations.approve(
+                session, actor_uid=actor_uid, request_id=request_id, roles=roles
+            )
+            commands.succeed(session, claim.command_id, {"request_id": decided.request_id})
+            return _registration_view(decided)
+
+        return self._write(work)
+
+    def reject(self, *, actor_uid: str, request_id: str, reason: str) -> RegistrationView:
+        return self._write(
+            lambda session: _registration_view(
+                self._registrations.reject(
+                    session, actor_uid=actor_uid, request_id=request_id, reason=reason
+                )
+            )
+        )

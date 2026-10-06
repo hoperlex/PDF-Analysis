@@ -132,9 +132,11 @@ def run_check(settings: DatabaseSettings | None = None) -> int:
         # `UNNAMED_PREFIX`.
         print(
             f"{UNNAMED_PREFIX}: login={user.login} user_uid={user.user_uid} "
-            f"label={user.display_label!r} (the login, by fallback) "
-            f"set_name='python -m auditmanager.access.name --login {user.login} "
-            "--display-name <name>'",
+            f"label={user.display_label!r} "
+            # `W49-SEAL-01` removed `access.name`; a person's name is set by completing the
+            # profile, which `access.profile` does from the host (`R-59`).
+            f"set_name='python -m auditmanager.access.profile --login {user.login} "
+            "--email <email> --last-name <last> --first-name <first>'",
             flush=True,
         )
 

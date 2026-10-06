@@ -348,6 +348,7 @@ class DecisionPort(Protocol):
         comment: str | None,
         idempotency_key: str,
         author_label: str,
+        author_user_uid: str,
     ) -> AppendedDecision:
         """Append exactly one event, whatever a replay under one key does.
 
@@ -366,6 +367,11 @@ class DecisionPort(Protocol):
         It has no default, here or in the ledger. A decision with no named author is a
         refusal, and every operation that can reach this method is one the seam guards, so
         there is always a subject to name.
+
+        ``author_user_uid`` is `W49-SEAL-01`'s: the verified subject's **identity**, which
+        the ledger persists beside the label (`expert_decision_event.author_user_uid`) so
+        "no decisions by this account" is a query and not a guess from a display string.
+        It has no default either, here or in the ledger.
         """
 
     def decision_history(self, *, finding_uid: str) -> Sequence[DecisionEventView]:

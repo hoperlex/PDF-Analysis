@@ -1,4 +1,4 @@
-"""The seven operations of account management -- an administrator's (`R-55`, `R-61`).
+"""Account management, an administrator's surface (`R-55`, `R-61`).
 
 `W49-SEAL-01`. Every operation here is ``{admin}`` in
 :data:`~auditmanager.api.security.OPERATION_ROLES`, so the seam has refused everyone else

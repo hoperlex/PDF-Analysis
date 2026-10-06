@@ -66,6 +66,7 @@ def test_an_accepted_finding_carries_its_verdict_into_the_csv(
         event_type="accept",
         comment="Подтверждено при проверке.",
         author_label="reviewer-1",
+        author_user_uid=None,
     )
 
     rows = _rows(export_run_csv(session, run_id).content)
@@ -104,6 +105,7 @@ def test_a_later_comment_moves_the_timestamp_without_moving_the_verdict(
         finding_observation_id=judged.finding_observation_id,
         event_type="reject",
         author_label="reviewer-1",
+        author_user_uid=None,
     )
     after_verdict = _rows(export_run_csv(session, run_id).content)
     verdict_row = next(
@@ -118,6 +120,7 @@ def test_a_later_comment_moves_the_timestamp_without_moving_the_verdict(
         event_type="comment",
         comment="Требует повторного рассмотрения.",
         author_label="reviewer-1",
+        author_user_uid=None,
     )
     after_comment = _rows(export_run_csv(session, run_id).content)
     comment_row = next(
@@ -151,6 +154,7 @@ def test_the_export_changes_when_a_decision_is_appended_and_is_stable_otherwise(
         finding_observation_id=judged.finding_observation_id,
         event_type="accept",
         author_label="reviewer-1",
+        author_user_uid=None,
     )
 
     after = export_run_csv(session, run_id).content
@@ -180,6 +184,7 @@ def test_a_quote_containing_a_comma_or_quote_survives_the_round_trip(
         event_type="comment",
         comment=hostile,
         author_label="reviewer-1",
+        author_user_uid=None,
     )
 
     rows = _rows(export_run_csv(session, run_id).content)

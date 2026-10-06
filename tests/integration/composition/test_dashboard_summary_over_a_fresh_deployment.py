@@ -34,7 +34,6 @@ from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 from starlette.testclient import TestClient
 
-from auditmanager.access.repository import UserRepository
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_signer
 from auditmanager.dashboard.repository import PROJECT_SECTIONS, RUN_STATES, VERDICTS
@@ -55,7 +54,6 @@ from auditmanager.shared.identity import (
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 DEPLOYMENT_SECRET = "dashboard-spend-fresh-deployment-token"
 SUITE_LOGIN = "w46-spend-dashboard-fresh"
-SUITE_PASSWORD = "w46-spend-suite-account-password"
 
 #: The literal command this suite runs to bring its own throwaway database to head, the
 #: same invocation ``tests/integration/db/conftest.py`` runs and
@@ -159,12 +157,13 @@ def token(engine: Engine) -> str:
     *this* fresh database rather than the lane's shared one, which that shared helper has
     no parameter for.
     """
+    # `W49-SEAL-01`: a complete `expert` account, made by the shared helper's own function
+    # against this fresh database -- an incomplete one is refused the dashboard.
+    from am_test_accounts import complete_expert_account
+
     with Session(engine) as session:
-        users = UserRepository()
-        record = users.find_by_login(session, SUITE_LOGIN)
-        if record is None:
-            record = users.create_user(session, SUITE_LOGIN, SUITE_PASSWORD)
-            session.commit()
+        record = complete_expert_account(session, SUITE_LOGIN)
+        session.commit()
     signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
     assert signer is not None
     return signer.issue(

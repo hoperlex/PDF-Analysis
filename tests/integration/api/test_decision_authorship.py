@@ -33,6 +33,16 @@ module wires its own credential port over three accounts -- two named, one not -
 drives the **shipped** ``DecisionAdapter``: a fixture adapter that wrote the label would
 prove that the fixture writes it. The third account is `R-37`'s empty case, which the
 ruling left to be decided and which :class:`TestTheAccountWithNoDisplayName` states.
+
+**What `W49-SEAL-01` changed.** Two things, both about the accounts and neither about the
+rule. An event now names its author's **account** beside the label
+(``expert_decision_event.author_user_uid``), so every account here is a real row this
+module writes in the test's transaction -- the column is a foreign key. And an account
+that has not completed its profile reaches only its own profile and password, so the
+"no name" case is no longer a login written into the ledger: it is a refusal that writes
+nothing (`W49-PLAN.md` section 3.1, "a decision event is written only by a complete
+profile"). The two named reviewers are complete profiles, so their labels are the name form
+"Фамилия И. О." -- at most 66 characters, inside ``author_label``'s 1..128 by construction.
 """
 
 from __future__ import annotations
@@ -72,16 +82,16 @@ assert _SIGNER is not None, "this module's secret derives a signing key"
 class _Account:
     """One reviewer this module's credential port knows about.
 
-    ``display_name`` is what the reviewer chose; ``None`` means they chose nothing, and the
-    label then falls back to the login -- the case `R-37` made this module decide, and the
-    one :class:`TestTheAccountWithNoDisplayName` is about.
+    ``names`` are the person's (last, first, middle) once the profile is complete; ``None``
+    means an incomplete profile -- a legacy login and no names -- the case
+    :class:`TestTheAccountWithNoDisplayName` is about since `W49-SEAL-01`.
     """
 
     user_uid: str
     login: str
     epoch: int
     password: str
-    display_name: str | None
+    names: tuple[str, str, str | None] | None
 
     @property
     def display_label(self) -> str:
@@ -92,7 +102,11 @@ class _Account:
         thing under test being wrong. The assertions below go further and compare against
         the literals this module declares rather than against this property.
         """
-        return self.display_name or self.login
+        if self.names is None:
+            return self.login
+        last, first, middle = self.names
+        label = f"{last} {first[0]}."
+        return f"{label} {middle[0]}." if middle else label
 
 
 #: Two accounts with **different logins and different epochs**. Different epochs so that a
@@ -105,21 +119,20 @@ class _Account:
 #: that chose no name writes its login rather than a blank or something invented.
 ANNA = _Account(
     "usr_01M2545JSD15ETSNNV904X991Q",
-    "anna.petrova",
+    "anna.petrova@suite.invalid",
     7,
     "anna-password",
-    "Анна Петрова",
+    ("Петрова", "Анна", None),
 )
 BORIS = _Account(
     "usr_01M2545JSD15ETSNNV904X992R",
-    "boris.smirnov",
+    "boris.smirnov@suite.invalid",
     3,
     "boris-password",
-    "Борис Смирнов",
+    ("Смирнов", "Борис", "Игоревич"),
 )
-#: The empty case. No display name, so the ledger must record ``clara.jones`` -- which is a
-#: real string this reviewer typed, is unique, and is 1..100 characters by
-#: ``ck_app_user_login_format``, i.e. inside ``author_label``'s 1..128 by construction.
+#: The empty case: a legacy login and no names -- an incomplete profile, which reaches no
+#: product change since `W49-SEAL-01`.
 CLARA = _Account(
     "usr_01M2545JSD15ETSNNV904X993T",
     "clara.jones",
@@ -181,9 +194,52 @@ class TwoAccountCredentialAdapter:
         for account in ACCOUNTS:
             if account.user_uid == user_uid:
                 return AccountStanding(
-                    token_epoch=account.epoch, is_default_credential=False
+                    token_epoch=account.epoch,
+                    is_default_credential=False,
+                    archived=False,
+                    profile_complete=account.names is not None,
+                    roles=frozenset({"expert"}),
+                    login=account.login,
+                    display_label=account.display_label,
                 )
         return None
+
+
+def _write_the_accounts(session: Session) -> None:
+    """The three rows the credential port answers for, in this test's transaction.
+
+    `W49-SEAL-01`: the ledger writes the author's ``user_uid`` into a ``RESTRICT`` foreign
+    key, so an account this module only imagined would be a refused append. Rolled back
+    with the test, like every row this suite writes.
+    """
+    from auditmanager.access.passwords import hash_password
+
+    for account in ACCOUNTS:
+        stored = hash_password(account.password)
+        last, first, middle = account.names if account.names else (None, None, None)
+        session.execute(
+            text(
+                "INSERT INTO app_user (user_uid, login, password_algorithm, "
+                "password_iterations, password_salt, password_hash, is_default_credential, "
+                "token_epoch, last_name, first_name, middle_name, profile_completed_at) "
+                "VALUES (:uid, :login, :algorithm, :iterations, :salt, :digest, false, "
+                ":epoch, :last, :first, :middle, "
+                "CASE WHEN :complete THEN now() ELSE NULL END)"
+            ),
+            {
+                "uid": account.user_uid,
+                "login": account.login,
+                "algorithm": stored.algorithm,
+                "iterations": stored.iterations,
+                "salt": stored.salt,
+                "digest": stored.digest,
+                "epoch": account.epoch,
+                "last": last,
+                "first": first,
+                "middle": middle,
+                "complete": account.names is not None,
+            },
+        )
 
 
 @pytest.fixture
@@ -199,6 +255,7 @@ def two_reviewer_router(
     """
     from auditmanager.bootstrap.adapters import DecisionAdapter, FindingAdapter
 
+    _write_the_accounts(session)
     return Surface(
         build_router(
             projects=IngestProjectAdapter(ingest),
@@ -237,6 +294,18 @@ def _append(
     )
 
 
+def _stored_accounts(session: Session, finding_uid: str) -> list[str | None]:
+    """The author accounts the database really holds, in append order (`W49-SEAL-01`)."""
+    rows = session.execute(
+        text(
+            "SELECT author_user_uid FROM expert_decision_event "
+            "WHERE finding_uid = :f ORDER BY sequence_no"
+        ),
+        {"f": finding_uid},
+    ).scalars()
+    return list(rows)
+
+
 def _stored_labels(session: Session, finding_uid: str) -> list[str]:
     """The labels the database really holds, read back rather than taken from a response."""
     rows = session.execute(
@@ -272,18 +341,24 @@ class TestTwoReviewersAreTwoAuthors:
         )
         assert second.status == 201, second.body
 
-        assert first.json()["event"]["author_label"] == "Анна Петрова"
-        assert second.json()["event"]["author_label"] == "Борис Смирнов"
+        assert first.json()["event"]["author_label"] == "Петрова А."
+        assert second.json()["event"]["author_label"] == "Смирнов Б. И."
         assert _stored_labels(session, published_run.finding_uid) == [
-            "Анна Петрова",
-            "Борис Смирнов",
+            "Петрова А.",
+            "Смирнов Б. И.",
         ]
         # `R-37`: the *name* and not the login. Stated as its own assertion rather than
         # left implicit in the two above, because "two labels differ" was already true
         # under `D-78` and is not what this ruling changed.
         assert _stored_labels(session, published_run.finding_uid) != [
-            "anna.petrova",
-            "boris.smirnov",
+            "anna.petrova@suite.invalid",
+            "boris.smirnov@suite.invalid",
+        ]
+        # `W49-SEAL-01`: and each event names its author's ACCOUNT, the identity a label
+        # cannot be -- two reviewers may share a name form, never a `user_uid`.
+        assert _stored_accounts(session, published_run.finding_uid) == [
+            ANNA.user_uid,
+            BORIS.user_uid,
         ]
 
     def test_the_history_carries_who_said_what(
@@ -304,71 +379,52 @@ class TestTwoReviewersAreTwoAuthors:
         )
         assert answer.status == 200, answer.body
         labels = [item["author_label"] for item in answer.json()["items"]]
-        assert labels == ["Борис Смирнов", "Анна Петрова"]
+        assert labels == ["Смирнов Б. И.", "Петрова А."]
 
 
 class TestTheAccountWithNoDisplayName:
-    """`R-37`'s empty case, decided and then asserted.
+    """`R-37`'s empty case, as `W49-SEAL-01` decides it: **an account with no names writes
+    no decision at all.**
 
-    An account that has chosen no display name records **its login**. The two alternatives
-    were refused and the refusals are what this class holds in place:
-
-    * **a blank** -- ``author_label`` is ``minLength: 1`` in the frozen contract and the
-      ledger refuses an empty label outright, so a blank stored upstream is a refused write
-      at the exact moment an expert records a verdict;
-    * **an invented name** -- "Reviewer 3", a prefix of the opaque identity, a mail-address
-      local part. In an append-only ledger a fabricated name is, a year later,
-      indistinguishable from one a person chose, and `P04` exists to learn whose judgement
-      was whose.
-
-    The login is not a compromise between those two. It is a real string the reviewer
-    typed, it is unique, and ``ck_app_user_login_format`` bounds it at 1..100 characters --
-    inside ``author_label``'s 1..128 **by construction**, which is what makes "this label
-    can never be empty and can never be too long" a proof rather than a hope.
+    Until this wave the empty case recorded the login. An account without names is now an
+    incomplete profile, and the seam refuses it every operation but its own profile and
+    password (``permission_denied``, ``required_capability: profile_completed``), so the
+    ledger only ever receives the name form a complete profile has -- which is what makes
+    "``author_label`` is never empty and never longer than 128" true by construction even
+    for an account whose login is a 254-character e-mail address.
     """
 
-    def test_it_records_the_login_and_not_a_blank(
+    def test_it_is_refused_and_writes_nothing(
         self, two_reviewer_router: Surface, published_run: PublishedRun, session: Session
     ) -> None:
         answer = _append(
             two_reviewer_router, published_run, credential=credential_for(CLARA)
         )
-        assert answer.status == 201, answer.body
-        assert answer.json()["event"]["author_label"] == "clara.jones"
-        assert _stored_labels(session, published_run.finding_uid) == ["clara.jones"]
+        assert answer.status == 403, (answer.status, answer.body)
+        envelope = answer.json()
+        assert envelope["error_code"] == "permission_denied"
+        assert envelope["details"] == {"required_capability": "profile_completed"}
+        assert _stored_labels(session, published_run.finding_uid) == []
 
-    def test_it_records_nothing_that_looks_invented(
+    def test_a_complete_label_is_the_name_form_and_fits_the_ledger(self) -> None:
+        """The bound, restated: 60 + 6 characters at most, inside 1..128."""
+        for account in (ANNA, BORIS):
+            assert 1 <= len(account.display_label) <= 66, account.display_label
+            assert account.display_label != account.login
+
+    def test_the_named_reviewer_still_writes_beside_the_refused_one(
         self, two_reviewer_router: Surface, published_run: PublishedRun, session: Session
     ) -> None:
-        """The label is one of the account's own two strings and nothing else.
-
-        Stated as an exclusion because the defect this guards against is not "the wrong
-        name" but "a name from nowhere", and a positive assertion against one literal would
-        not notice a second fallback being introduced beside the first.
-        """
-        _append(two_reviewer_router, published_run, credential=credential_for(CLARA))
-        (label,) = _stored_labels(session, published_run.finding_uid)
-        assert label == CLARA.login
-        assert label not in {"", " ", "local-reviewer", CLARA.user_uid}
-        assert CLARA.user_uid not in label, (
-            "the opaque identity has leaked into a field every reviewer reads"
-        )
-
-    def test_the_named_and_the_unnamed_are_still_two_authors(
-        self, two_reviewer_router: Surface, published_run: PublishedRun, session: Session
-    ) -> None:
-        """The fallback does not collapse anybody together, which is `D-78`'s whole point."""
+        """The refusal of one account does not touch another's decision."""
         _append(two_reviewer_router, published_run, credential=credential_for(ANNA))
-        _append(
+        refused = _append(
             two_reviewer_router,
             published_run,
             credential=credential_for(CLARA),
             event="reject",
         )
-        assert _stored_labels(session, published_run.finding_uid) == [
-            "Анна Петрова",
-            "clara.jones",
-        ]
+        assert refused.status == 403, refused.body
+        assert _stored_labels(session, published_run.finding_uid) == ["Петрова А."]
 
     def test_a_credential_carrying_an_empty_label_is_refused_and_writes_nothing(
         self, two_reviewer_router: Surface, published_run: PublishedRun, session: Session
@@ -388,7 +444,7 @@ class TestTheAccountWithNoDisplayName:
         payload = _json.loads(
             base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)).decode("utf-8")
         )
-        assert payload["name"] == "Анна Петрова", payload
+        assert payload["name"] == "Петрова А.", payload
         payload["name"] = ""
         forged = _resign(version, payload)
         assert forged != genuine
@@ -545,15 +601,33 @@ class TestThereIsNoConfiguredDefaultToFallBackInto:
     """
 
     def test_the_ledger_declares_no_default_author(self) -> None:
+        """Neither the label nor -- since `W49-SEAL-01` -- the account has a default.
+
+        ``author_user_uid`` defaulted to ``None`` between `W49-DECISIONS-01` and the seal,
+        while the router did not yet pass the subject; with the default gone a call that
+        forgets the account is a ``TypeError`` and never a silently NULL author.
+        """
         from auditmanager.decisions import append_decision_under_key, record_decision
 
         for function in (record_decision, append_decision_under_key):
-            parameter = inspect.signature(function).parameters["author_label"]
-            assert parameter.default is inspect.Parameter.empty, (
-                f"{function.__name__} gives `author_label` the default "
-                f"{parameter.default!r}. A decision with no named author must be a refusal, "
-                "not a row attributed to a configuration constant."
-            )
+            for name in ("author_label", "author_user_uid"):
+                parameter = inspect.signature(function).parameters[name]
+                assert parameter.default is inspect.Parameter.empty, (
+                    f"{function.__name__} gives `{name}` the default "
+                    f"{parameter.default!r}. A decision with no named author must be a "
+                    "refusal, not a row attributed to a configuration constant."
+                )
+                assert parameter.kind is inspect.Parameter.KEYWORD_ONLY, (function, name)
+
+    def test_the_router_passes_the_subjects_account(self) -> None:
+        """The other half: the one caller names the account from the verified subject."""
+        import auditmanager.api.routers.decisions as module
+
+        source = inspect.getsource(module)
+        assert "author_user_uid=subject.user_uid" in source, (
+            "the decisions router no longer passes the verified subject's account; every "
+            "event appended through the API would name no author account"
+        )
 
     def test_the_configured_label_constant_is_gone(self) -> None:
         import auditmanager.decisions as package

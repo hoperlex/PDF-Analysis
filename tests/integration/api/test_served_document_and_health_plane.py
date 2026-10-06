@@ -109,6 +109,14 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "startRun",
             "streamDocumentVersionContent",
             "uploadDocument",
+            # `W49-SEAL-01`: every new GET or POST that takes a query or a body.
+            "approveRegistration",
+            "listRegistrations",
+            "listUsers",
+            "readRegistrationStatus",
+            "rejectRegistration",
+            "resetUserPassword",
+            "submitRegistration",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

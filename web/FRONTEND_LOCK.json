@@ -17,9 +17,9 @@
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
     "sha256": "633a58a53baf6652625b59d3db9438ae01e8c4ac8da788160882f031123f2e37",
-    "content_commit": "f6d1fa6",
-    "content_commit_subject": "repair(W47-FIX): D-101 closed -- the shipped default joins the contextual blocklist",
-    "dispatch_named_commit": "9783e73",
+    "content_commit": "e86bfbe",
+    "content_commit_subject": "feat(W49-SEAL-01a): reseal the contract for accounts, roles and registration",
+    "dispatch_named_commit": "7912504",
     "commit_note": "Resealed 2026-10-06 by `W49-SEAL-01` under owner rulings R-55 ... R-61 (docs/program/OWNER_RULINGS_2026-09-17.md section 3.19) and the seal decisions recorded in docs/program/W49-SEAL-01a.md. Fourteen operations on ten new paths -- getMe, updateMyProfile, submitRegistration, readRegistrationStatus, listRegistrations, approveRegistration, rejectRegistration, listUsers, getUser, updateUser, archiveUser, restoreUser, purgeUser, resetUserPassword -- and sixteen component schemas; the ErrorCode enum gains rate_limited (the domain catalog's twenty-third code, answered only by the edge), and the denials of a role vocabulary and of rate limiting are superseded under R-55. No existing operation changes shape. The client was regenerated with `npm --prefix web run api:generate` from these bytes.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
