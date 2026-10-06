@@ -1154,3 +1154,28 @@ purged irreversibly. "References" is the written register of foreign keys in
 `expert_decision_event.author_user_uid` restrict; the request that created an account is history,
 not a reference. An administrator who archived, granted or decided anything, and an expert who
 authored a decision, are therefore never purgeable.
+
+## 3.20 — `R-62`, `R-63`, ruled 2026-10-06 by direct poll at the `W49-FIX` dispatch
+
+Stage E of W49 (`W49-QA-01`, `W49-JUDGE-X`, `W49-JUDGE-Y`, all on `1b25955`) left two questions
+only the owner could answer. The integrator put both to a direct poll on 2026-10-06; the owner
+chose the recommended option each time and ordered both repairs into `W49-FIX`.
+
+### `R-62` — an archived account is not changed until it is restored
+
+`updateUser` on an archived account answers `not_found`, as `resetUserPassword` and the access
+layer's role grant (`AccountRepository.grant_role`) already do: an archived account's names and
+roles change only after `restoreUser`. Raised as
+`W49-JUDGE-Y` F-6, widened by `W49-JUDGE-X` M-X6 (the role direction works too and survives a
+restore). Repaired in `W49-FIX`.
+
+### `R-63` — a failed token exchange does not count against a registration request
+
+A failed `issueToken` for a login that has no account no longer notes an attempt against a
+registration request for that login; only `readRegistrationStatus` counts against the request's
+throttle. The exchange never compares the request's hash, so that count protected nothing, while
+the BFF's status read after every refused exchange made one sign-in cost two attempts and refused
+a pending applicant's third correct password for 300 seconds (`W49-QA-01` Q-1, confirmed by
+`W49-JUDGE-Y`). Constant work is unchanged: both paths still perform the same derivations whether
+or not a request exists. This amends `W49-PLAN.md` §3.3 "The request's throttle columns count both
+kinds of attempts". Repaired in `W49-FIX`.

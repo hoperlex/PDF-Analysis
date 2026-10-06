@@ -1,10 +1,12 @@
-# Task W49-FIX — the two release-blocking findings of Stage E, and one stale seam sentence
+# Task W49-FIX — the release-blocking findings of Stage E, two owner rulings, and one stale seam sentence
 
 ## Outcome
 
 `contracts/domain/v1/identifiers.json` validates against its own schema inside `make gate`, the
 deployed proxy serves the configuration of the checkout it was deployed from, and
-`infra/deploy/verify-deployed.sh` refuses a deployment whose proxy does not.
+`infra/deploy/verify-deployed.sh` refuses a deployment whose proxy does not. An archived account
+cannot be changed until it is restored (`R-62`), and a pending applicant's sign-in costs one
+attempt, not two (`R-63`).
 
 ## Depends on
 
@@ -22,6 +24,8 @@ deployed proxy serves the configuration of the checkout it was deployed from, an
   findings only")
 - findings: `docs/program/reviews/W49-JUDGE-Y.md` F-1 and `docs/program/reviews/W49-JUDGE-X.md`
   B-1, both upheld in cross-examination (`W49-JUDGE-X.md` §5, §7)
+- owner rulings `R-62` (F-6) and `R-63` (QA Q-1), `OWNER_RULINGS_2026-09-17.md` §3.20, recorded
+  in this task file's commit; `W49-PLAN.md` §3.3 amended by `R-63` in the same commit
 
 ## Enumerator ownership
 
@@ -100,6 +104,31 @@ Part C — stale seam prose:
   which operations declare `security: []`, and replace the `T-6` "no role vocabulary" clause with
   what `R-55`…`R-61` now establish. State counts by command or by name, never by a bare number.
 
+Part D — `R-62` (archived account is not changed):
+
+- `src/auditmanager/access/accounts.py` — only `update_names` and `set_roles`: an archived account
+  answers `not_found` exactly as `reset_password` does; no other method changes
+- `tests/integration/access/test_account_management.py`, `tests/integration/api/test_user_management.py`
+  — regressions: `updateUser` (names and roles) on an archived account → 404 `not_found` and no
+  row changes; after `restoreUser` the same call succeeds
+
+Part E — `R-63` (a failed exchange does not count against a request):
+
+- `src/auditmanager/access/repository.py` — only the `credential is None` branch of the exchange
+  (stop executing `_NOTE_A_FAILED_REQUEST_ATTEMPT`; keep `spend_a_verification`), and the
+  statement constant itself if it becomes unused
+- `src/auditmanager/access/registrations.py` — only docstring sentences that `R-63` makes false
+- `tests/integration/access/test_registrations.py`, `tests/integration/api/test_registration_flow.py`
+  — regressions through the served path: a pending applicant signs in with the correct password
+  more times in a row than `FAILED_SIGN_IN_ALLOWANCE` (refused exchange + status read, as the BFF
+  does) and is never throttled; wrong passwords through `readRegistrationStatus` still throttle
+  at the allowance; derivation counts per path unchanged (constant work)
+
+Tests that assert behaviour `R-62` or `R-63` supersedes — in `tests/integration/access/test_roles.py`,
+`tests/integration/api/qa_w49/**`, `tests/integration/access/qa_w49/**` or
+`web/tests/unit/qa_w49/**` — may change only those assertions, each named in the report with the
+ruling that supersedes it.
+
 Report:
 
 - `docs/program/W49-FIX.md`
@@ -108,15 +137,14 @@ Report:
 
 - every path not listed above; every other byte of `contracts/**`; `contracts/api/v1/openapi.json`;
   `infra/deploy/proxy/**` (the configuration itself is `W49-EDGE-01`'s and is not changed);
-  `.github/**`; migrations; `src/**`; `web/**`; root locks; refs, tags, `origin/*`;
+  `.github/**`; migrations; `src/**` and `web/**` outside the files Parts D and E name; root locks; refs, tags, `origin/*`;
   `CURRENT_STATE.md`, `DEBT_REGISTER.md`, `OWNER_RULINGS_*.md`, `PORT_REGISTRY.md`
 - a digest, pin or prose guard that turns red because of a Part A edit is a stop: report it, do
   not edit the pin
 
 ## Non-goals
 
-- F-2 … F-7, R-1 … R-5 and QA Q-1: they go to the register at `W49-INT-CLOSE`; F-6 waits for an
-  owner ruling
+- F-2 … F-5, F-7 and R-1 … R-5: they go to the register at `W49-INT-CLOSE`
 - no request-burst probe in `verify-deployed.sh`: that script runs on every production deploy,
   and a 429 burst against the live stand is a side effect. A burst probe may exist in a test
   against a disposable stand only.
@@ -132,6 +160,8 @@ Report:
   configuration file as seen inside the running proxy differs from the checkout's file.
   `reload-proxy.sh` must no longer report success while the container reads a stale inode.
 - Part C: the rewritten bullet
+- Part D and Part E: the code changes above with their regressions; each regression red on the
+  unrepaired code (two mutations: restore the old branch → red)
 
 ## Required tests
 

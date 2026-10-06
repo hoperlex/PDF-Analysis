@@ -162,7 +162,9 @@ is stated with its reason.
   the safety rules exclude from `details`. The owner's "1–500" becomes 1–256 as a consequence.
 - Constant work: a failed exchange and a status read each perform the same number of PBKDF2
   derivations whether or not a request exists, so timing does not reveal one. The request's
-  throttle columns count both kinds of attempts.
+  throttle columns count both kinds of attempts. *(Amended by `R-63`, 2026-10-06: only the status
+  read counts against a request; a failed exchange performs its derivations and notes nothing on
+  the request.)*
 - No mail, no verification, no captcha (`R-56`; `IDENTITY-WAVES.md` §9).
 
 ### 3.4 Operations added (names are the seal task's to confirm)
