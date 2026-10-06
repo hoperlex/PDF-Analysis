@@ -76,6 +76,17 @@ The resealed contract, the three access registers plus `OPERATION_ROLES`, and th
   (records 10 and 11 with `permitted_change`); `tests/integration/ingest/test_size_guard_boundary.py`;
   `tests/integration/p02_journey/test_truncated_end_to_end.py`;
   `tests/integration/p02_journey/test_query_surface_over_the_corpus.py`
+- granted after the second stop of 2026-10-06 (`W49-SEAL-01c.md` at `48099d9`), exact sites only:
+  `docs/program/P02_SEAMS.md` §7 (the operation table rows for the new operations and the
+  idempotency sentence, which now names the writes that take `Idempotency-Key`);
+  `tests/contract/domain_p02/test_seam_register.py`; `tests/e2e/pc01/test_acceptance.py`
+  (`test_c3_the_surface_declares_no_operation_that_can_mutate_a_version`: the mutating set is exactly
+  `updateMyProfile`, `updateUser`, `purgeUser`, none under `/versions` or `/documents`);
+  `tests/integration/access/test_password_hashing.py` (the prefix test inverted: `usr` is in the shared
+  registry); `tests/integration/db/test_durable_analysis_effects.py` (`rate_limited` is edge-only and
+  absent from migration `0014`'s CHECK); `contracts/domain/v1/*.schema.json` (the `candidate_revision`
+  const 8 → 9 only); `src/auditmanager/access/repository.py` (the "unnamed account" predicate
+  `access.check` reads: a complete profile is named)
 - `docs/program/CONTRACT_PIN_REGISTRY.md` — all rows but the migration head's
 - `docs/program/CURRENT_STATE.md` and `docs/program/ALPHA_ROADMAP.md` — the live surface-triple sentence in each, which may also move the catalog count, identity count and domain revision it names
 - `docs/program/W49-SEAL-01a.md`, `docs/program/W49-SEAL-01b.md`, `docs/program/W49-SEAL-01c.md`

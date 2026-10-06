@@ -451,7 +451,13 @@ measured at the base, into the ACCESS and SEAL task files.
   `permitted_change` naming the derived name form as the only difference),
   `tests/integration/ingest/test_size_guard_boundary.py`,
   `tests/integration/p02_journey/test_truncated_end_to_end.py` and
-  `tests/integration/p02_journey/test_query_surface_over_the_corpus.py`; `docs/program/CONTRACT_PIN_REGISTRY.md` (all rows but the
+  `tests/integration/p02_journey/test_query_surface_over_the_corpus.py`, and after the seal's second stop (`W49-SEAL-01c.md` at `48099d9`): `P02_SEAMS.md` §7's
+  operation table and idempotency sentence, `tests/contract/domain_p02/test_seam_register.py`,
+  `test_c3_the_surface_declares_no_operation_that_can_mutate_a_version`, the inverted prefix test
+  in `tests/integration/access/test_password_hashing.py`, the edge-only `rate_limited` in
+  `tests/integration/db/test_durable_analysis_effects.py`, the `candidate_revision` const in
+  `contracts/domain/v1/*.schema.json`, and the "unnamed account" predicate in
+  `src/auditmanager/access/repository.py`; `docs/program/CONTRACT_PIN_REGISTRY.md` (all rows but the
   head's), the exact live triple sentences of `docs/program/CURRENT_STATE.md` and
   `docs/program/ALPHA_ROADMAP.md` named by the task file, `docs/program/W49-SEAL-01{a,b,c}.md`.
 - **01a — the documents:** §3.4 operations and schemas; `conflict_reason`; `rate_limited` in
