@@ -6,7 +6,8 @@
 deployed proxy serves the configuration of the checkout it was deployed from, and
 `infra/deploy/verify-deployed.sh` refuses a deployment whose proxy does not. An archived account
 cannot be changed until it is restored (`R-62`), and a pending applicant's sign-in costs one
-attempt, not two (`R-63`).
+attempt, not two (`R-63`). The acceptance runbook says that a proxy run records
+`provider_mode` `live` (`R-65`).
 
 ## Depends on
 
@@ -26,6 +27,7 @@ attempt, not two (`R-63`).
   B-1, both upheld in cross-examination (`W49-JUDGE-X.md` §5, §7)
 - owner rulings `R-62` (F-6) and `R-63` (QA Q-1), `OWNER_RULINGS_2026-09-17.md` §3.20, recorded
   in this task file's commit; `W49-PLAN.md` §3.3 amended by `R-63` in the same commit
+- owner ruling `R-65` (§3.21): the model proxy counts as a live provider in release acceptance
 
 ## Enumerator ownership
 
@@ -124,6 +126,14 @@ Part E — `R-63` (a failed exchange does not count against a request):
   does) and is never throttled; wrong passwords through `readRegistrationStatus` still throttle
   at the allowance; derivation counts per path unchanged (constant work)
 
+Part F — `R-65` (proxy counts as live in release acceptance) — runbook only:
+
+- `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md` — one sentence at A04 (in Russian, like the rest
+  of the file): a run through the model proxy records `provider_mode` `live`, because the field is
+  the provenance, not the transport; `recorded` is still a `FAIL`. The verifier
+  `tests/e2e/pc01/journey/verify-acceptance.mjs` is **not** changed: a `proxy` branch could never
+  fire (`OWNER_RULINGS_2026-09-17.md` `R-65` note).
+
 Tests that assert behaviour `R-62` or `R-63` supersedes — in `tests/integration/access/test_roles.py`,
 `tests/integration/api/qa_w49/**`, `tests/integration/access/qa_w49/**` or
 `web/tests/unit/qa_w49/**` — may change only those assertions, each named in the report with the
@@ -162,6 +172,7 @@ Report:
 - Part C: the rewritten bullet
 - Part D and Part E: the code changes above with their regressions; each regression red on the
   unrepaired code (two mutations: restore the old branch → red)
+- Part F: the A04 sentence; no code change
 
 ## Required tests
 
