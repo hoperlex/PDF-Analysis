@@ -24,6 +24,7 @@ rebuilt from current code.
 from __future__ import annotations
 
 import os
+import re
 import stat
 import subprocess
 from pathlib import Path
@@ -49,7 +50,10 @@ ALPHA_HTTP_PORT=31599
 #: A `docker` that answers from the staged fixture and reaches nothing. It serves three
 #: shapes the probe uses -- `compose ps --quiet <service>`, `exec <id> sh -c '...sha256sum'`
 #: fed a NUL-separated list on stdin, and `exec <id> sh -c 'find ...'` -- plus `nginx -t`
-#: and `nginx -s reload` for `reload-proxy.sh`.
+#: and `nginx -s reload` for `reload-proxy.sh`, and since `W49-FIX` the proxy's bind mounts
+#: (`inspect --format '{{range .Mounts}}...'`, answered from `STUB_MOUNTS`) and a `restart`
+#: that changes nothing -- which is the shape of a restart that did not help. The inode
+#: behaviour itself is modelled in `test_proxy_config_follows_checkout.py`.
 DOCKER_STUB = r'''#!/usr/bin/env python3
 """A `docker` that plays a container's filesystem out of a directory, and reaches nothing."""
 import hashlib, os, pathlib, sys
@@ -73,7 +77,16 @@ def inside(container_path):
 if "ps" in argv and "--quiet" in argv:
     if os.environ.get("STUB_NO_CONTAINER") == "yes":
         sys.exit(0)
+    if argv[-1] == "proxy" and os.environ.get("STUB_NO_PROXY") == "yes":
+        sys.exit(0)
     print("c0ffee" + argv[-1])
+    sys.exit(0)
+
+if argv[:1] == ["inspect"] and ".Mounts" in line:
+    sys.stdout.write(os.environ.get("STUB_MOUNTS", ""))
+    sys.exit(0)
+
+if argv[:1] == ["restart"]:
     sys.exit(0)
 
 if "nginx" in argv:
@@ -146,6 +159,12 @@ COPY --from=build /web /web
 """
 
 
+#: The proxy's configuration, the same bytes in the tree, in the staged `infra/deploy/proxy/`
+#: the running container mounts, and inside the "container".
+PROXY_CONF = "server { listen 8080; }\n"
+PROXY_CONF_INSIDE = "/etc/nginx/conf.d/default.conf"
+
+
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -167,6 +186,7 @@ def world(tmp_path: Path):
     _write(repo / "infra/deploy/serve.py", "one application, two ports\n")
     _write(repo / "web/package.json", '{"name": "web"}\n')
     _write(repo / "web/app/page.tsx", "export default function () {}\n")
+    _write(repo / "infra/deploy/proxy/nginx.conf", PROXY_CONF)
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
     subprocess.run(
@@ -183,6 +203,7 @@ def world(tmp_path: Path):
     (deploy / "Dockerfile.api").write_text(FAKE_DOCKERFILE_API, encoding="utf-8")
     (deploy / "Dockerfile.web").write_text(FAKE_DOCKERFILE_WEB, encoding="utf-8")
     _write(deploy / "env/alpha.env", ENV_FILE)
+    _write(deploy / "proxy/nginx.conf", PROXY_CONF)
 
     # The image: what the Dockerfiles above say goes into it, and it agrees to begin with.
     image = tmp_path / "image"
@@ -197,6 +218,8 @@ def world(tmp_path: Path):
     _write(image / "app/serve.py", (repo / "infra/deploy/serve.py").read_text())
     # A build product that was never in the tree: the reason `/web` is not extras-checked.
     _write(image / "web/node_modules/left-pad/index.js", "//\n")
+    # The proxy's view of its single-file bind mount.
+    _write(image / PROXY_CONF_INSIDE.lstrip("/"), PROXY_CONF)
 
     return repo, deploy, image
 
@@ -225,6 +248,9 @@ def _run(
     environment["PATH"] = f"{binary}{os.pathsep}{environment['PATH']}"
     environment["STUB_LOG"] = str(log)
     environment["STUB_HTTP_CODE"] = code
+    # The proxy as `compose.server.yml` creates it: one single-file bind mount, from the
+    # staged `infra/deploy/proxy/` beside the script under test.
+    environment["STUB_MOUNTS"] = f"{script.parent}/proxy/nginx.conf\t{PROXY_CONF_INSIDE}\n"
     environment.update(stub_environment)
     if env_file is not None:
         environment["ALPHA_ENV_FILE"] = str(env_file)
@@ -435,6 +461,121 @@ class TestEveryWayItCannotTellIsAFailure:
         assert completed.returncode == UNANSWERABLE, (completed.stdout, completed.stderr)
 
 
+class TestWhatTheProxyReadsIsComparedToo:
+    """`W49-FIX` / `B-1`. The proxy's configuration is a bind mount, not an image file, and a
+    checkout replaces a mounted file with a new inode the running container never sees.
+    Until this section existed the probe compared only the images and called such a stack
+    this tree. The inode mechanism is modelled in `test_proxy_config_follows_checkout.py`;
+    these cases pin every way this section can say no."""
+
+    def test_a_proxy_reading_other_bytes_than_the_tree_is_named(
+        self, world, tmp_path: Path
+    ) -> None:
+        repo, deploy, image = world
+        completed, _ = _run(
+            deploy / "verify-deployed.sh",
+            tmp_path=tmp_path,
+            repo=repo,
+            STUB_IMAGE=str(image),
+            STUB_CORRUPT=PROXY_CONF_INSIDE,
+        )
+        assert completed.returncode == DRIFT, (completed.stdout, completed.stderr)
+        assert f"{PROXY_CONF_INSIDE}  DIFFERENT BYTES" in completed.stdout, completed.stdout
+        assert "NOT serving this tree's configuration" in completed.stderr, completed.stderr
+        assert "reload-proxy.sh" in completed.stderr, completed.stderr
+        # The images agree, so the failure is the proxy's alone and says so.
+        assert "is NOT this tree --" not in completed.stderr, completed.stderr
+
+    def test_a_proxy_that_cannot_read_its_configuration_is_named(
+        self, world, tmp_path: Path
+    ) -> None:
+        repo, deploy, image = world
+        completed, _ = _run(
+            deploy / "verify-deployed.sh",
+            tmp_path=tmp_path,
+            repo=repo,
+            STUB_IMAGE=str(image),
+            STUB_OMIT=PROXY_CONF_INSIDE,
+        )
+        assert completed.returncode == DRIFT, (completed.stdout, completed.stderr)
+        assert f"{PROXY_CONF_INSIDE}  MISSING FROM THE PROXY" in completed.stdout
+
+    def test_a_proxy_mounted_from_another_checkout_is_not_this_tree(
+        self, world, tmp_path: Path
+    ) -> None:
+        """Equal bytes from somewhere else are still not this tree's configuration."""
+        repo, deploy, image = world
+        elsewhere = tmp_path / "another-clone/infra/deploy/proxy/nginx.conf"
+        _write(elsewhere, PROXY_CONF)
+        completed, _ = _run(
+            deploy / "verify-deployed.sh",
+            tmp_path=tmp_path,
+            repo=repo,
+            STUB_IMAGE=str(image),
+            STUB_MOUNTS=f"{elsewhere}\t{PROXY_CONF_INSIDE}\n",
+        )
+        assert completed.returncode == DRIFT, (completed.stdout, completed.stderr)
+        assert "NOT FROM THIS CHECKOUT" in completed.stdout, completed.stdout
+        assert "nginx.conf  NOT MOUNTED BY THE RUNNING PROXY" in completed.stdout
+
+    def test_a_proxy_that_mounts_nothing_from_the_tree_is_not_a_pass(
+        self, world, tmp_path: Path
+    ) -> None:
+        """The section's own blind spot: with no mount it would compare nothing. It may
+        never be blind to `proxy/nginx.conf`, so an empty mount list is drift."""
+        repo, deploy, image = world
+        completed, _ = _run(
+            deploy / "verify-deployed.sh",
+            tmp_path=tmp_path,
+            repo=repo,
+            STUB_IMAGE=str(image),
+            STUB_MOUNTS="",
+        )
+        assert completed.returncode == DRIFT, (completed.stdout, completed.stderr)
+        assert "nginx.conf  NOT MOUNTED BY THE RUNNING PROXY" in completed.stdout
+
+    def test_a_mount_the_tree_does_not_track_is_named(self, world, tmp_path: Path) -> None:
+        repo, deploy, image = world
+        _write(deploy / "proxy/local-only.conf", "# not in git\n")
+        completed, _ = _run(
+            deploy / "verify-deployed.sh",
+            tmp_path=tmp_path,
+            repo=repo,
+            STUB_IMAGE=str(image),
+            STUB_MOUNTS=(
+                f"{deploy}/proxy/nginx.conf\t{PROXY_CONF_INSIDE}\n"
+                f"{deploy}/proxy/local-only.conf\t/etc/nginx/local-only.conf\n"
+            ),
+        )
+        assert completed.returncode == DRIFT, (completed.stdout, completed.stderr)
+        assert "WHICH THE TREE DOES NOT TRACK" in completed.stdout, completed.stdout
+
+    def test_no_proxy_container_is_not_a_pass(self, world, tmp_path: Path) -> None:
+        repo, deploy, image = world
+        completed, _ = _run(
+            deploy / "verify-deployed.sh",
+            tmp_path=tmp_path,
+            repo=repo,
+            STUB_IMAGE=str(image),
+            STUB_NO_PROXY="yes",
+        )
+        assert completed.returncode == UNANSWERABLE, (completed.stdout, completed.stderr)
+        assert "no running container for the 'proxy' service" in completed.stderr
+
+    def test_it_sends_no_request_burst(self) -> None:
+        """`verify-deployed.sh` runs on every production deploy. A throttle probe that
+        floods the registration endpoints would be a side effect on the live stand, so the
+        script asks the proxy what it reads and sends exactly one request: the liveness
+        `GET` above. The burst lives in a test against a disposable stand."""
+        script = PROBE.read_text(encoding="utf-8")
+        code = "\n".join(
+            line for line in script.splitlines() if not line.lstrip().startswith("#")
+        )
+        invocations = re.findall(r"\bcurl\s+-", code)
+        assert len(invocations) == 1, invocations
+        assert "registrations" not in code
+
+
 class TestItReadsTheRealDockerfiles:
     """The cases above run against small stand-ins, so this is what ties the probe to the
     Dockerfiles that are actually shipped. A path added to either image without a row here
@@ -504,6 +645,59 @@ class TestTheProxyReload:
         assert completed.returncode == 5, (completed.stdout, completed.stderr)
         assert "not valid" in completed.stderr, completed.stderr
         assert "nginx -s reload" not in calls, calls
+
+    def test_unchanged_configuration_restarts_nothing(self, world, tmp_path: Path) -> None:
+        """`W24-IDEM`'s rule for the `W49-FIX` restart: the comparison is the only thing
+        that decides one, and here it finds the proxy reading the checkout's bytes."""
+        repo, deploy, image = world
+        completed, calls = _run(
+            deploy / "reload-proxy.sh",
+            tmp_path=tmp_path,
+            env_file=deploy / "env/alpha.env",
+            STUB_IMAGE=str(image),
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "sha256sum" in calls, "it did not ask the proxy what it reads"
+        verbs = [line.split()[0] for line in calls.splitlines() if line.strip()]
+        assert "restart" not in verbs and "run" not in verbs, calls
+
+    def test_a_restart_that_did_not_help_is_not_a_success(
+        self, world, tmp_path: Path
+    ) -> None:
+        """`reload-proxy.sh` used to test and reload the OLD file and say it had reloaded.
+        Here the restart changes nothing the proxy reads, so it must fail, by name."""
+        repo, deploy, image = world
+        completed, calls = _run(
+            deploy / "reload-proxy.sh",
+            tmp_path=tmp_path,
+            env_file=deploy / "env/alpha.env",
+            STUB_IMAGE=str(image),
+            STUB_CORRUPT=PROXY_CONF_INSIDE,
+        )
+        assert completed.returncode == 6, (completed.stdout, completed.stderr)
+        assert "still does not read this checkout's configuration" in completed.stderr
+        assert PROXY_CONF_INSIDE in completed.stderr, completed.stderr
+        assert "restart c0ffeeproxy" in calls, calls
+        assert "nginx -s reload" not in calls, calls
+
+    def test_a_proxy_from_another_checkout_is_refused_and_not_restarted(
+        self, world, tmp_path: Path
+    ) -> None:
+        """A restart re-reads the same foreign path, so it is not attempted; the operator
+        is told to recreate the container from this checkout instead."""
+        repo, deploy, image = world
+        completed, calls = _run(
+            deploy / "reload-proxy.sh",
+            tmp_path=tmp_path,
+            env_file=deploy / "env/alpha.env",
+            STUB_IMAGE=str(image),
+            STUB_MOUNTS=f"/srv/another-clone/infra/deploy/proxy/nginx.conf\t{PROXY_CONF_INSIDE}\n",
+        )
+        assert completed.returncode == 6, (completed.stdout, completed.stderr)
+        assert "not created from this checkout" in completed.stderr, completed.stderr
+        assert "--force-recreate proxy" in completed.stderr, completed.stderr
+        verbs = [line.split()[0] for line in calls.splitlines() if line.strip()]
+        assert "restart" not in verbs and "nginx -s reload" not in calls, calls
 
     def test_no_proxy_container_is_not_a_success(self, world, tmp_path: Path) -> None:
         repo, deploy, image = world
