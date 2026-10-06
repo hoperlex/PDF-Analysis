@@ -164,6 +164,58 @@
   --am-inert: #666c7a;
   --am-inert-light: #eef0f3;
 
+  /*
+   * ---- the avatar palette (`W50-SHELL-UI`, `R-57`) ------------------------------
+   *
+   * Fourteen pairs: `--am-avatar-NN` is the circle and `--am-avatar-NN-ink` is the
+   * initials on it. Which pair an account wears is `avatarColourIndex()` in
+   * `web/src/shared/ui/avatar-colour.ts`: a hash of the account's E-MAIL modulo fourteen,
+   * so correcting a name never recolours anybody.
+   *
+   * DERIVED, NOT PICKED. Hue k (k = 0 … 13) is OKLCH hue 20° + k × 360°/14, at chroma 0.13
+   * here and 0.10 in the dark palette (lowered only where sRGB cannot hold it), and the
+   * OKLCH lightness of each is solved so that the WCAG relative luminance of the circle
+   * is 0.12 here and 0.36 in the dark palette. Equal luminance is the point: every circle
+   * then sits the same distance from the page and from its initials, so no account is
+   * harder to read than another. The ink is whichever of white and near-black reads
+   * better on that circle; at these two luminances that is white for every light pair and
+   * near-black for every dark one.
+   *
+   * WHAT IS ASSERTED, by `tests/unit/styles/avatar-palette.test.ts`, which reads these
+   * declarations rather than a list: exactly the indices 01 … 14, a circle and an ink in
+   * each of the three palette blocks, the two dark blocks equal, the initials at 4.5:1 or
+   * better on their circle and the circle at 3:1 or better against the page background
+   * and the application bar, in both palettes. That file prints the measured table.
+   */
+  --am-avatar-01: #a34145;
+  --am-avatar-01-ink: #ffffff;
+  --am-avatar-02: #9f4716;
+  --am-avatar-02-ink: #ffffff;
+  --am-avatar-03: #885703;
+  --am-avatar-03-ink: #ffffff;
+  --am-avatar-04: #716004;
+  --am-avatar-04-ink: #ffffff;
+  --am-avatar-05: #536a03;
+  --am-avatar-05-ink: #ffffff;
+  --am-avatar-06: #107030;
+  --am-avatar-06-ink: #ffffff;
+  --am-avatar-07: #066f5b;
+  --am-avatar-07-ink: #ffffff;
+  --am-avatar-08: #026c71;
+  --am-avatar-08-ink: #ffffff;
+  --am-avatar-09: #036a87;
+  --am-avatar-09-ink: #ffffff;
+  --am-avatar-10: #1a64a8;
+  --am-avatar-10-ink: #ffffff;
+  --am-avatar-11: #535aac;
+  --am-avatar-11-ink: #ffffff;
+  --am-avatar-12: #744fa2;
+  --am-avatar-12-ink: #ffffff;
+  --am-avatar-13: #8c478a;
+  --am-avatar-13-ink: #ffffff;
+  --am-avatar-14: #9d416b;
+  --am-avatar-14-ink: #ffffff;
+
   /* ---- elevation --------------------------------------------------------------- */
   --am-shadow-0: none;
   --am-shadow-1: 0 1px 2px rgba(22, 25, 29, 0.06);
@@ -297,6 +349,36 @@
     --am-inert: #98a2b3;
     --am-inert-light: #182029;
 
+    /* ---- the avatar palette: same derivation, luminance 0.36, near-black ink --- */
+    --am-avatar-01: #dd8c8b;
+    --am-avatar-01-ink: #0d1219;
+    --am-avatar-02: #d9916f;
+    --am-avatar-02-ink: #0d1219;
+    --am-avatar-03: #ca995a;
+    --am-avatar-03-ink: #0d1219;
+    --am-avatar-04: #b3a154;
+    --am-avatar-04-ink: #0d1219;
+    --am-avatar-05: #95aa63;
+    --am-avatar-05-ink: #0d1219;
+    --am-avatar-06: #71b07c;
+    --am-avatar-06-ink: #0d1219;
+    --am-avatar-07: #50b29a;
+    --am-avatar-07-ink: #0d1219;
+    --am-avatar-08: #41b2b7;
+    --am-avatar-08-ink: #0d1219;
+    --am-avatar-09: #51accf;
+    --am-avatar-09-ink: #0d1219;
+    --am-avatar-10: #72a6de;
+    --am-avatar-10-ink: #0d1219;
+    --am-avatar-11: #939de2;
+    --am-avatar-11-ink: #0d1219;
+    --am-avatar-12: #b195d9;
+    --am-avatar-12-ink: #0d1219;
+    --am-avatar-13: #c88fc5;
+    --am-avatar-13-ink: #0d1219;
+    --am-avatar-14: #d88caa;
+    --am-avatar-14-ink: #0d1219;
+
     /* ---- elevation ---------------------------------------------------------------- */
     --am-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
     --am-shadow-2: 0 2px 6px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -337,6 +419,36 @@
   --am-failed-light: #2a1316;
   --am-inert: #98a2b3;
   --am-inert-light: #182029;
+
+  /* ---- the avatar palette: same derivation, luminance 0.36, near-black ink --- */
+  --am-avatar-01: #dd8c8b;
+  --am-avatar-01-ink: #0d1219;
+  --am-avatar-02: #d9916f;
+  --am-avatar-02-ink: #0d1219;
+  --am-avatar-03: #ca995a;
+  --am-avatar-03-ink: #0d1219;
+  --am-avatar-04: #b3a154;
+  --am-avatar-04-ink: #0d1219;
+  --am-avatar-05: #95aa63;
+  --am-avatar-05-ink: #0d1219;
+  --am-avatar-06: #71b07c;
+  --am-avatar-06-ink: #0d1219;
+  --am-avatar-07: #50b29a;
+  --am-avatar-07-ink: #0d1219;
+  --am-avatar-08: #41b2b7;
+  --am-avatar-08-ink: #0d1219;
+  --am-avatar-09: #51accf;
+  --am-avatar-09-ink: #0d1219;
+  --am-avatar-10: #72a6de;
+  --am-avatar-10-ink: #0d1219;
+  --am-avatar-11: #939de2;
+  --am-avatar-11-ink: #0d1219;
+  --am-avatar-12: #b195d9;
+  --am-avatar-12-ink: #0d1219;
+  --am-avatar-13: #c88fc5;
+  --am-avatar-13-ink: #0d1219;
+  --am-avatar-14: #d88caa;
+  --am-avatar-14-ink: #0d1219;
 
   /* ---- elevation ---------------------------------------------------------------- */
   --am-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -798,6 +910,342 @@ input[type='file']::file-selector-button:hover {
 .am-theme__option:focus-visible {
   outline: 2px solid var(--am-accent);
   outline-offset: 1px;
+}
+
+/* ---- shell primitives: disclosure, menu, avatar ------------------------------------
+ *
+ * `W50-SHELL-UI`. The three primitives in `web/src/shared/ui/` that the grouped navigation
+ * and the account menu are built from. Nothing renders them yet: `W50-SHELL-FRAME`
+ * composes them, and every rule below exists before its first use so that the frame
+ * needs no rule of its own here.
+ *
+ * Every colour is a token read, as everywhere in this file, and each rule is reached by a
+ * seed in `tests/unit/styles/screens.ts`, which renders each primitive closed and open, so
+ * the contrast census measures the states and not only the resting markup.
+ *
+ * `hidden` is the closed state of both panels. A `display` declared on a panel would beat
+ * the browser's own `[hidden] { display: none }`, so the closed state is stated here
+ * rather than trusted to the user-agent stylesheet.
+ */
+
+.am-disclosure {
+  position: relative;
+  display: inline-block;
+}
+
+/* A group inside another panel — the stacked menu — opens in the flow, not over it. */
+.am-disclosure--inline {
+  display: block;
+}
+
+.am-disclosure__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--am-radius-sm);
+  background: none;
+  color: var(--am-accent);
+  font: inherit;
+  font-size: 13px;
+  line-height: var(--am-leading-tight);
+  cursor: pointer;
+  transition: background var(--am-motion-fast) var(--am-ease);
+}
+
+/* The chevron. Drawn from the button's own ink, so it adds no colour to measure. */
+.am-disclosure__button::after {
+  content: '';
+  width: 0.4em;
+  height: 0.4em;
+  margin-top: -0.2em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform var(--am-motion-fast) var(--am-ease);
+}
+
+.am-disclosure__button[aria-expanded='true']::after {
+  margin-top: 0.2em;
+  transform: rotate(225deg);
+}
+
+.am-disclosure__button:hover {
+  background: var(--am-surface-sunken);
+}
+
+.am-disclosure__button[aria-expanded='true'] {
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+}
+
+/* The group that holds the current page: a mark, not a colour, so it composes with open. */
+.am-disclosure__button[aria-current='true'] {
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+}
+
+.am-disclosure__button:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+.am-disclosure__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 13rem;
+  max-width: calc(100vw - 32px);
+  padding: var(--am-gap-xs);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-3);
+}
+
+/* A group at the right edge of the bar opens leftwards, so it cannot leave the viewport. */
+.am-disclosure--end > .am-disclosure__panel {
+  left: auto;
+  right: 0;
+}
+
+.am-disclosure--inline > .am-disclosure__panel {
+  position: static;
+  min-width: 0;
+  padding: 0 0 0 var(--am-gap-sm);
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.am-disclosure__panel[hidden] {
+  display: none;
+}
+
+.am-disclosure__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.am-disclosure__item {
+  margin: 0;
+}
+
+.am-disclosure__link {
+  display: block;
+  min-width: 0;
+  padding: 6px var(--am-gap-sm);
+  border-radius: var(--am-radius-sm);
+  color: var(--am-accent);
+  font-size: 13px;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.am-disclosure__link:hover {
+  background: var(--am-accent-light);
+  text-decoration: underline;
+}
+
+.am-disclosure__link:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: -2px;
+}
+
+.am-disclosure__link[aria-current='page'] {
+  color: var(--am-ink);
+  font-weight: 650;
+}
+
+.am-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.am-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--am-radius-pill);
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  transition: box-shadow var(--am-motion-fast) var(--am-ease);
+}
+
+.am-menu__trigger:hover,
+.am-menu__trigger[aria-expanded='true'] {
+  box-shadow: var(--am-ring);
+}
+
+.am-menu__trigger:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+/*
+ * Anchored to the trigger's right edge and capped by the viewport: the account menu sits
+ * at the right of the bar, and a header carrying a 254-character address must wrap inside
+ * the panel rather than push the page sideways.
+ */
+.am-menu__popup {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: max-content;
+  min-width: 14rem;
+  max-width: min(20rem, calc(100vw - 32px));
+  padding: var(--am-gap-xs) 0;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+}
+
+.am-menu__popup[hidden] {
+  display: none;
+}
+
+.am-menu__header {
+  min-width: 0;
+  padding: var(--am-gap-sm) var(--am-gap);
+  border-bottom: 1px solid var(--am-line-soft);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.am-menu__list {
+  margin: 0;
+  padding: var(--am-gap-xs) 0 0;
+  list-style: none;
+}
+
+.am-menu__entry,
+.am-menu__form {
+  margin: 0;
+}
+
+.am-menu__item {
+  display: block;
+  width: 100%;
+  padding: 6px var(--am-gap);
+  border: 0;
+  background: none;
+  color: var(--am-ink);
+  font: inherit;
+  font-size: var(--am-text-sm);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* Focus arrives by script as the arrow keys move, so `:focus` marks it, not only `:focus-visible`. */
+.am-menu__item:hover,
+.am-menu__item:focus {
+  background: var(--am-accent-light);
+}
+
+.am-menu__item:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: -2px;
+}
+
+.am-avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: 50%;
+  font-size: var(--am-text-sm);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* One rule per pair. `avatarColourIndex()` picks the modifier; these wire it to its tokens. */
+.am-avatar--01 {
+  background: var(--am-avatar-01);
+  color: var(--am-avatar-01-ink);
+}
+
+.am-avatar--02 {
+  background: var(--am-avatar-02);
+  color: var(--am-avatar-02-ink);
+}
+
+.am-avatar--03 {
+  background: var(--am-avatar-03);
+  color: var(--am-avatar-03-ink);
+}
+
+.am-avatar--04 {
+  background: var(--am-avatar-04);
+  color: var(--am-avatar-04-ink);
+}
+
+.am-avatar--05 {
+  background: var(--am-avatar-05);
+  color: var(--am-avatar-05-ink);
+}
+
+.am-avatar--06 {
+  background: var(--am-avatar-06);
+  color: var(--am-avatar-06-ink);
+}
+
+.am-avatar--07 {
+  background: var(--am-avatar-07);
+  color: var(--am-avatar-07-ink);
+}
+
+.am-avatar--08 {
+  background: var(--am-avatar-08);
+  color: var(--am-avatar-08-ink);
+}
+
+.am-avatar--09 {
+  background: var(--am-avatar-09);
+  color: var(--am-avatar-09-ink);
+}
+
+.am-avatar--10 {
+  background: var(--am-avatar-10);
+  color: var(--am-avatar-10-ink);
+}
+
+.am-avatar--11 {
+  background: var(--am-avatar-11);
+  color: var(--am-avatar-11-ink);
+}
+
+.am-avatar--12 {
+  background: var(--am-avatar-12);
+  color: var(--am-avatar-12-ink);
+}
+
+.am-avatar--13 {
+  background: var(--am-avatar-13);
+  color: var(--am-avatar-13-ink);
+}
+
+.am-avatar--14 {
+  background: var(--am-avatar-14);
+  color: var(--am-avatar-14-ink);
 }
 
 

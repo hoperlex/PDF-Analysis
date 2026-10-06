@@ -47,6 +47,10 @@ import type {
 } from '@/shared/api';
 import type { DocumentVersion, Project } from '@/shared/api';
 import { ApiError, queryKeys } from '@/shared/api';
+import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, Menu, avatarColourIndex } from '@/shared/ui';
+import type { DisclosureProps, MenuProps } from '@/shared/ui';
+import { DisclosureView } from '@/shared/ui/disclosure';
+import { MenuView } from '@/shared/ui/menu';
 import { groupByCategory } from '@/entities/finding';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
 import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
@@ -662,6 +666,116 @@ export function screens(): Screen[] {
       renderScreen(
         client,
         createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+      ),
+    );
+  }
+
+  /*
+   * ------------------------------------------- the shell primitives (`W50-SHELL-UI`)
+   *
+   * `Disclosure`, `Menu` and `Avatar` render nowhere yet -- `W50-SHELL-FRAME` composes them --
+   * so without these seeds every rule they brought would be reached by no screen, and the
+   * unreached-rule case above would say so. Each is rendered in each state its rules select:
+   * the disclosure closed and open (its current group, its current link, the right-aligned
+   * and the inline layout), the menu closed and open with its header, and one avatar per
+   * colour pair. The closed states are the client islands' own server render; the open ones
+   * are the views those islands render once a reader has opened them, which a static pass
+   * cannot do. They sit in the application bar where the frame will put them, so the census
+   * measures them on the surface they will really meet.
+   */
+  {
+    const inBar = (...children: ReactElement[]): string =>
+      render(createElement('header', { className: 'am-app__bar' }, ...children));
+    const work: DisclosureProps = {
+      label: 'Работа',
+      links: [
+        { href: '/projects', label: 'Проекты', current: true },
+        { href: '/dashboard', label: 'Дашборд' },
+      ],
+    };
+    const system: DisclosureProps = {
+      label: 'Система',
+      links: [
+        { href: '/logs', label: 'Журнал выполнения' },
+        { href: '/workers', label: 'Исполнители' },
+      ],
+    };
+    add('Disclosure closed', inBar(createElement(Disclosure, work)));
+    add(
+      'Disclosure open, the current group, aligned to the end',
+      inBar(
+        createElement(DisclosureView, { ...work, current: true, align: 'end', open: true, panelId: 'seed-work' }),
+      ),
+    );
+    add(
+      'Disclosure open, the stacked menu holding inline groups',
+      inBar(
+        createElement(DisclosureView, {
+          label: 'Меню',
+          open: true,
+          panelId: 'seed-stacked',
+          children: [
+            createElement(DisclosureView, {
+              ...work,
+              key: 'work',
+              layout: 'inline',
+              current: true,
+              open: true,
+              panelId: 'seed-stacked-work',
+            }),
+            createElement(DisclosureView, {
+              ...system,
+              key: 'system',
+              layout: 'inline',
+              open: false,
+              panelId: 'seed-stacked-system',
+            }),
+          ],
+        }),
+      ),
+    );
+
+    const items: MenuProps['items'] = [
+      { kind: 'link', label: 'Профиль', href: '/account' },
+      { kind: 'link', label: 'Сменить пароль', href: '/account/password' },
+      { kind: 'submit', label: 'Выйти', action: '/bff/v1/session/end' },
+    ];
+    const account = (): MenuProps => ({
+      label: 'Учётная запись: Петрова А. С.',
+      trigger: createElement(Avatar, { initials: 'ПА', colourKey: 'petrova@example.test' }),
+      header: createElement('p', null, 'Петрова А. С.'),
+      items,
+    });
+    add('Menu closed', inBar(createElement(Menu, account())));
+    add(
+      'Menu open, with its header',
+      inBar(
+        createElement(MenuView, {
+          ...account(),
+          state: { open: true, active: 0 },
+          triggerId: 'seed-account-trigger',
+          menuId: 'seed-account-menu',
+        }),
+      ),
+    );
+
+    // One avatar per pair. The addresses are FOUND, by hashing invented ones until every
+    // pair is worn, because the pair is a property of the address and not of anything a
+    // seed could name directly.
+    const byPair = new Map<number, string>();
+    for (let n = 1; byPair.size < AVATAR_PALETTE_SIZE && n < 1000; n += 1) {
+      const address = `seed-${n}@example.test`;
+      const index = avatarColourIndex(address);
+      if (!byPair.has(index)) byPair.set(index, address);
+    }
+    add(
+      'Avatar, one per colour pair',
+      inBar(
+        ...[...byPair]
+          .sort(([a], [b]) => a - b)
+          .map(([index, address]) =>
+            createElement(Avatar, { key: address, initials: 'ПА', colourKey: address, label: `Пара ${index + 1}` }),
+          ),
       ),
     );
   }
