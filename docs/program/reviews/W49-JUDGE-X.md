@@ -343,5 +343,150 @@ administrator to notice"). No compromise of confidentiality or integrity.
 
 ---
 
-<!-- The cross-examination against W49-PLAN.md and the lane/QA reports, and the verdict,
-     are appended in the second commit of this branch, as the task directs. -->
+## 5. Cross-examination (second commit)
+
+Written after the black-box pass was committed (`b24dc29`), against
+`docs/program/dispatch/W49-PLAN.md` §3 and the lane reports
+`W49-EDGE-01`, `W49-BFF-01`, `W49-ACCESS-01c`, `W49-SEAL-01{a,b,c}`. The peer judge's review
+(`W49-JUDGE-Y`) is **not present in the subject tree** (`1b25955`) — it runs on a parallel,
+unmerged branch — so cross-examination is against the plan and the lane reports, which this
+task names. Other worktrees were not touched.
+
+### 5.1 The plan's claims, checked against the black-box evidence
+
+Every design claim my pass could reach is confirmed:
+
+- The three registers and `OPERATION_ROLES` (§3.2), and the evaluation **order** signature/expiry
+  → standing → default-credential → incomplete-profile → roles — confirmed by the 34-op sweep and
+  the matrix (§2.1).
+- "No role lives in the signed token" (§3.2) — confirmed: role is read from the row; forgery of
+  identity/epoch fails closed (§2.2).
+- `is_default_credential` = "must change password", reaching only `{issueToken, changePassword,
+  getMe}` (§3.1/§3.2) — confirmed (§2.3).
+- Constant-work timing for the exchange and the status read (§3.3) — confirmed empirically; no
+  usable oracle (§2.5).
+- "A rejected applicant sees nothing at sign-in" (§3.3, `R-56` addendum) — confirmed end to end
+  (§2.8).
+- `rate_limited` is edge-only, answered as an `ErrorEnvelope`, catalog grows by exactly one code
+  (§3.4) — the envelope and status confirmed (§2.6); the catalog delta was not independently
+  recounted (it is the seal lane's measured number).
+- The BFF catch-all refuses exactly the two public ops and forwards the admin's, and the guest
+  bucket keys on `X-Real-IP`/shared, never `X-Forwarded-For` (§3.5) — confirmed (§2.9, §2.10).
+
+### 5.2 The EDGE lane's own open questions, re-examined as an attacker
+
+The edge lane (`W49-EDGE-01` §5) listed eleven open questions. Three bear on security; I
+re-examined each.
+
+- **OQ-1 — the deployed proxy does not pick up a changed `nginx.conf` (ELEVATED).** The proxy
+  bind-mounts `./proxy/nginx.conf` as a **single file**; `deploy.sh` keeps the proxy container,
+  and `.github/workflows/deploy-auto.yml` updates the tree with `git checkout --detach`, which
+  replaces the file with a **new inode**. A single-file bind mount is pinned to the inode present
+  at container start, so the running container keeps serving the **old** config, and
+  `reload-proxy.sh`'s `nginx -s reload` reloads the old file; only a container
+  restart/recreate re-resolves the mount. `verify-deployed.sh` checks that the proxy answers, not
+  what it loaded. **Consequence:** after an ordinary auto-deploy of W49, the two public
+  registration endpoints are served with **no throttle** — the wave's headline edge control is
+  absent — on a green gate and a passing deployed check. This is the "control present in the file,
+  absent in the running system" trap. I could not re-measure the inode behaviour in my own
+  scratch (it is under `/tmp`, invisible to the snap Docker daemon per OPERATING_CONSTRAINTS §1,
+  so the mount degraded to a directory); it is a well-documented Docker single-file bind-mount
+  property and the lane measured it rigorously under `.local/`. Scope: this does not block the
+  merge or the `origin/dev` publication; it is a **release-blocker for the live deployment**
+  (`origin/main` / the alpha host), which must recreate the proxy on `infra/deploy/proxy/**`
+  changes and add a throttle probe to `verify-deployed.sh` before the W49 edge control can be
+  trusted. See finding **B-1**.
+- **OQ-6 — trailing slash not counted at the edge (RESOLVED, not a bypass).** `POST
+  /api/v1/registrations/` yields a `$uri` the map does not match, so it is not throttled and is
+  proxied. But the API answers it `307` to the slashless spelling and **does not create a
+  request** — I verified directly against the API: `POST /registrations/` → `307`, and the login
+  was never stored (its status read returned the generic `401`). Only the slashless spelling
+  creates a request, and that spelling **is** throttled. So the unthrottled trailing-slash path
+  cannot fill the queue. `POST /registrations//status` → `404`; `//` elsewhere is merged by
+  nginx's `merge_slashes` and **is** counted (§2.7 EXP-E).
+- **OQ-5 / OQ-2 (confirmed, benign).** The case variant `POST /api/v1/REGISTRATIONS` is counted
+  (map is case-insensitive) and the app 404s it, so it only spends the caller's own budget
+  (§2.7 EXP-F). On the default `127.0.0.1` binding all direct callers appear as the bridge
+  gateway and share one bucket — so "flooding from two addresses" through `/api/v1/` is one
+  shared budget on the shipped binding, stricter than per-address, and only a publicly bound host
+  sees distinct peers.
+- **OQ-3 (register).** The served document declares no `429` on the two operations; a generated
+  client meets an undeclared status. The body conforms to `ErrorEnvelope`, so the client's decoder
+  still classifies it; declaring it is the contract owner's call at the next reseal. Finding R-5.
+- **OQ-4 (register).** `$request_id` is on the 429 body but in no access log, so an operator
+  cannot trace a throttle event — operational, log-format change outside the lane's grant.
+
+### 5.3 The BFF lane
+
+- **Open question 1 was ruled by the integrator** (`W49-BFF-01` §4, resolution note): the plan's
+  "refuse the whole `registrations` segment" was wrong because it closed the administrator's
+  `listRegistrations`/`approve`/`reject` to the screens that need them; the catch-all now refuses
+  **only** the two public ops. My black-box pass confirms the corrected behaviour is the one
+  shipped at `1b25955` (§2.10): the two public POSTs are `404` with or without a session, and the
+  admin ops are forwarded and gated by the API's `admin` role.
+- **BFF Q4 (register, confirmed).** The exchange, the status read and `submitRegistration` are
+  forwarded carrying the deployment's `Authorization: Bearer <secret>` header, which those
+  `security: []` operations ignore. I confirmed the forward attaches it. It travels web→api
+  inside the compose network only (never to the browser — that was the `W37CERT4-3` / §4.7 defect,
+  already fixed), and is registered as a debt. Not a new finding.
+
+### 5.4 The ACCESS lane's status-read open question
+
+`W49-ACCESS-01c` (and the module docstring) frame "answer `rejected` with the reason, or answer
+`None`" as an **open question** the lane could not close, and ship the conservative `None`
+(generic `401`). The plan records that the **owner ruled** this on 2026-10-06 (§3.3: "A rejected
+applicant sees nothing at sign-in … the applicant will learn of a rejection by mail once SMTP
+exists"). So the behaviour the code ships is the owner's final decision; the lane report's "open
+question" framing is a documentation lag, not an undecided behaviour. My pass confirms the shipped
+behaviour matches the ruling (§2.8). No action beyond letting the ACCESS-01c note catch up.
+
+---
+
+## 6. Verdict
+
+**PASS on the merged application code, with one release-blocker scoped to the live deployment.**
+
+The identity wave's authorization, enumeration, throttle-configuration, forgery-resistance and
+BFF-boundary behaviour are, as merged at `1b259556`, correct and match the controlling plan:
+
+- No privilege escalation anywhere across every operation × role set × profile state × credential
+  — proven by a full 34-operation sweep and a 4×2×2 matrix, and by failed credential forgery.
+- The default credential is confined to `{issueToken, changePassword, getMe}`, including against
+  the new administrator registration operations.
+- Enumeration is bounded to the already-accepted `conflict_reason` disclosure; the exchange and
+  the status read show no usable timing oracle.
+- A rejected applicant learns nothing at sign-in; only a prover of a pending request learns
+  `pending`.
+- The nginx map throttles exactly the two public registration POSTs and nothing else, keyed by the
+  peer address and immune to forged `X-Forwarded-For`, with no normalisation/case/trailing-slash
+  bypass; the 429 is the `rate_limited` envelope with no sensitive detail.
+- The BFF catch-all refuses exactly the two public operations with or without a session and
+  forwards the administrator's, which the API gates by role; the guest bucket cannot be reset by a
+  client-written header.
+
+**Findings by class:**
+
+- **Release-blocking (deployment): B-1** — the auto-deploy will not load the new `nginx.conf`, so
+  the W49 edge throttle is absent on the deployed stand until the proxy container is recreated, and
+  `verify-deployed.sh` does not detect it (§5.2 OQ-1). This is a deploy-process gap, not a defect
+  in the merged application files, and it does not block the `origin/dev` publication. It **must**
+  be closed — recreate the proxy on `infra/deploy/proxy/**` changes and add a throttle probe to
+  the deployed check — before W49 is published to `origin/main` / the live host, or the wave ships
+  its central new control switched off behind a green gate. The edge lane measured and flagged it;
+  the integrator owns the fix (a `W49-FIX` candidate, or an explicit pre-deploy step under
+  `MAIN_AUTODEPLOY_POLICY`).
+- **Must-fix-before-merge:** none.
+- **Register** (known/accepted/deferred): **R-1** `conflict_reason` existence oracle (accepted,
+  §2.4); **R-2** status-read timing claim marginally overstated but true in practice (§2.5);
+  **R-3** BFF `X-Real-IP` trust is deployment-boundary dependent (§2.9); **R-4** distributed flood
+  can reach `queue_full` (accepted debt, §2.6/§3); **R-5** `429` undeclared in the served document
+  (contract-owner call, §5.2 OQ-3); plus the already-registered BFF Q4 service-token forward
+  (§5.3) and the ACCESS-01c documentation lag on a now-ruled question (§5.4).
+
+**Untested questions** are listed in §4; the most material is that the live compose stack and the
+auto-deploy's proxy-reload path were reasoned about and (for B-1) relied on the edge lane's own
+measurement rather than rebuilt here, and that two genuinely distinct peer addresses at the nginx
+edge were not produced.
+
+The integration contract opens `W49-FIX` only for release-blocking findings; **B-1 is the one such
+finding**, and it is a deployment-activation gap rather than an application-code defect.
