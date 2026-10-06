@@ -309,6 +309,67 @@ class TestAccountManagement:
         assert _json(answer)["details"] == {"aggregate_type": "User"}
 
 
+def _stored(session: Session, user_uid: str) -> tuple[Any, ...]:
+    """Every column ``updateUser`` could write, and the role set, as the database holds them."""
+    row = session.execute(
+        text(
+            "SELECT last_name, first_name, middle_name, token_epoch, "
+            "ARRAY(SELECT role FROM app_user_role r WHERE r.user_uid = u.user_uid "
+            "ORDER BY role) FROM app_user u WHERE user_uid = :u"
+        ),
+        {"u": user_uid},
+    ).one()
+    return tuple(row)
+
+
+#: `updateUser`'s bodies: each half alone, both together, and the role set emptied.
+ARCHIVED_UPDATES = {
+    "names": {"names": {"last_name": "Призраков", "first_name": "Иван"}},
+    "grant-admin": {"roles": ["expert", "admin"]},
+    "remove-all-roles": {"roles": []},
+    "names-and-roles": {
+        "names": {"last_name": "Призраков", "first_name": "Иван"},
+        "roles": ["admin"],
+    },
+}
+
+
+class TestAnArchivedAccountIsNotChanged:
+    """`R-62`. ``updateUser`` on an archived account answers ``404 not_found`` -- the
+    contract already declares 404 for the operation -- and writes nothing, as
+    ``resetUserPassword`` already did; after ``restoreUser`` the same call succeeds.
+    `W49-JUDGE-X` M-X6 measured the defect this closes: an archived expert granted
+    ``admin`` came back from ``restoreUser`` as an administrator."""
+
+    @pytest.mark.parametrize("change", sorted(ARCHIVED_UPDATES))
+    def test_update_user_on_an_archived_account_is_not_found_and_writes_nothing(
+        self, surface: Surface, session: Session, admin: str, expert: str, change: str
+    ) -> None:
+        credential = credential_for(session, admin)
+        assert _send(surface, "POST", f"/users/{expert}/archive", credential).status == 200
+        before = _stored(session, expert)
+        answer = _send(surface, "PATCH", f"/users/{expert}", credential, ARCHIVED_UPDATES[change])
+        assert answer.status == 404, answer.body
+        assert _json(answer)["error_code"] == "not_found"
+        assert _stored(session, expert) == before
+
+    def test_after_restore_user_the_same_change_succeeds(
+        self, surface: Surface, session: Session, admin: str, expert: str
+    ) -> None:
+        credential = credential_for(session, admin)
+        change = ARCHIVED_UPDATES["names-and-roles"]
+        assert _send(surface, "POST", f"/users/{expert}/archive", credential).status == 200
+        refused = _send(surface, "PATCH", f"/users/{expert}", credential, change)
+        assert refused.status == 404, refused.body
+        restored = _send(surface, "POST", f"/users/{expert}/restore", credential)
+        assert restored.status == 200, restored.body
+        assert _json(restored)["roles"] == ["expert"], "a refused change came back on restore"
+        answer = _send(surface, "PATCH", f"/users/{expert}", credential, change)
+        assert answer.status == 200, answer.body
+        assert _json(answer)["display_label"] == "Призраков И."
+        assert _json(answer)["roles"] == ["admin"]
+
+
 class TestARepeatWithoutAKey:
     """What each account write does when it is sent twice. None takes ``Idempotency-Key``.
 

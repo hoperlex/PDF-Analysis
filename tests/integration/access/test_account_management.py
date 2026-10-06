@@ -576,6 +576,75 @@ class TestReset:
         assert caught.value.code is ErrorCode.VALIDATION_FAILED
 
 
+# =======================================================================================
+# `R-62`: an archived account is not changed until it is restored.
+# =======================================================================================
+
+
+def _names_epoch_and_roles(session: Session, uid: str) -> tuple[tuple, frozenset[str]]:
+    """Everything ``updateUser`` could write, read in the caller's own transaction -- so a
+    write that was made and not committed would still show."""
+    row = session.execute(
+        text(
+            "SELECT last_name, first_name, middle_name, token_epoch FROM app_user "
+            "WHERE user_uid = :u"
+        ),
+        {"u": uid},
+    ).one()
+    return tuple(row), accounts.roles_of(session, uid)
+
+
+class TestAnArchivedAccountIsNotChanged:
+    """`R-62` (`W49-JUDGE-Y` F-6, widened by `W49-JUDGE-X` M-X6). ``updateUser``'s two
+    halves answer ``not_found`` for an archived account, as :meth:`reset_password` and
+    :meth:`grant_role` already did, so a restore can never bring back a role granted -- or
+    lose one removed -- while the account was archived."""
+
+    @staticmethod
+    def _archived(session: Session) -> tuple[str, str]:
+        seed = _seed(session)
+        uid = _create(session, "anna@example.com")
+        accounts.archive_account(session, actor_uid=seed, user_uid=uid)
+        session.commit()
+        return seed, uid
+
+    def test_its_names_are_not_found_and_not_written(self, session: Session) -> None:
+        _, uid = self._archived(session)
+        before = _names_epoch_and_roles(session, uid)
+        with pytest.raises(DomainError) as caught:
+            accounts.update_names(
+                session, user_uid=uid, last_name="Призракова", first_name="Анна"
+            )
+        assert caught.value.code is ErrorCode.NOT_FOUND
+        assert _names_epoch_and_roles(session, uid) == before
+
+    @pytest.mark.parametrize(
+        "roles",
+        [frozenset({"expert", "admin"}), frozenset({"admin"}), frozenset()],
+        ids=["grant", "swap", "remove-all"],
+    )
+    def test_its_roles_are_not_found_and_not_written(
+        self, session: Session, roles: frozenset[str]
+    ) -> None:
+        seed, uid = self._archived(session)
+        before = _names_epoch_and_roles(session, uid)
+        with pytest.raises(DomainError) as caught:
+            accounts.set_roles(session, actor_uid=seed, user_uid=uid, roles=roles)
+        assert caught.value.code is ErrorCode.NOT_FOUND
+        assert _names_epoch_and_roles(session, uid) == before
+
+    def test_after_restore_both_halves_succeed(self, session: Session) -> None:
+        seed, uid = self._archived(session)
+        accounts.restore_account(session, actor_uid=seed, user_uid=uid)
+        session.commit()
+        accounts.update_names(session, user_uid=uid, last_name="Возвращённая", first_name="Анна")
+        accounts.set_roles(session, actor_uid=seed, user_uid=uid, roles={"expert", "admin"})
+        session.commit()
+        (last, first, _, _), roles = _names_epoch_and_roles(session, uid)
+        assert (last, first) == ("Возвращённая", "Анна")
+        assert roles == frozenset({"expert", "admin"})
+
+
 def test_list_accounts_hides_the_archived_unless_asked(session: Session) -> None:
     seed = _seed(session)
     uid = _create(session, "anna@example.com")
