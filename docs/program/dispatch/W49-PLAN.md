@@ -246,10 +246,14 @@ writes, each named in the report. The surface triple after the reseal is **measu
   mechanism is the one the route handler already has — the `SESSION_SEGMENT`/`EXCHANGE_SEGMENT`
   constants in `web/src/app/bff/v1/[...path]/route.ts` and their tests in
   `web/tests/unit/session/bff-session.test.ts` — not `web/scripts/reserved-forwarder.mjs`, which
-  reserves npm script names. The catch-all refuses the `registrations` first segment to the
-  browser exactly as it refuses `auth` today (`not_found` before the session is read), so
-  `submitRegistration` and `readRegistrationStatus` are reachable only through the reserved
-  handlers and their bucket, never with a session's credential. The registration handler, like
+  reserves npm script names. The catch-all refuses exactly the two public operations —
+  `POST /registrations` and `POST /registrations/status` — to the browser, as it refuses `auth`
+  today (`not_found` before the session is read), so `submitRegistration` and
+  `readRegistrationStatus` are reachable only through the reserved handlers and their bucket,
+  never with a session's credential. The administrator's operations under the same segment
+  (`listRegistrations`, `approveRegistration`, `rejectRegistration`) are forwarded with the
+  session's credential like every other operation — W50's home tile and W51's queue use them.
+  (Corrected at the BFF-01 hand-back, 2026-10-06: refusing the whole segment closed them too.) The registration handler, like
   the session handler, answers the form with `303`: to `/register/submitted` on success, else to
   `/register?refusal=<value>` with the closed set `{validation, login_taken, request_pending,
   queue_full, throttled, upstream}` mapped from the API's `conflict_reason` and status (the W51
@@ -503,7 +507,8 @@ measured at the base, into the ACCESS and SEAL task files.
 - **Deliverables:** §3.5 in full, including the `throttled` value and sentence in both closed
   refusal sets and the registration handler's set. `layout.tsx` and the frame are untouched (W50).
 - **Required tests and mutations:** `npm --prefix web test -- --run`; lint; typecheck; a forward
-  under the `registrations` segment through the catch-all is refused with and without a session;
+  of `POST /registrations` or `POST /registrations/status` through the catch-all is refused with and
+  without a session, while `GET /registrations` and the approve/reject paths are forwarded;
   a version-1 register file is replaced, not read; a rejected or unknown pair lands on the
   generic `credentials` refusal, never on `pending`; removing the upstream-401 row-closing is red; the bucket refuses the N+1th guest
   request within the window; a forged `X-Forwarded-For` does not escape the bucket; without the
@@ -530,7 +535,8 @@ login is free.
   `/api/v1/` directly and from two addresses; a rejected applicant learning anything at sign-in;
   a forged `refusal` value;
   a forged `X-Forwarded-For`; BFF: the reserved registration handlers reach only the two public
-  operations, and the catch-all refuses the `registrations` segment with or without a session.
+  operations, the catch-all refuses those two with or without a session, and the administrator's
+  registration operations still require the `admin` role through the catch-all.
 - Y: routers free of SQL/logic (`rg` queries recorded); invariants live in `access`; the ALR-05
   guard green (AST walk 0 / 0); migration fresh and both upgrade paths; partial unique; the
   reference register equals the schema's foreign keys to `app_user`; the reseal documents and
