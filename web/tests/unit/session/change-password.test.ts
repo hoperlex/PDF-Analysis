@@ -15,6 +15,10 @@
  * And one property neither sign-in test could have: the session row is **replaced**. The old
  * credential is dead the moment the API answers, so a handler that left it in the register
  * would leave a row authorising nothing behind a cookie the browser still sends.
+ *
+ * Since `W49-BFF-01` both the sign-in and a successful change are followed by `getMe`, so the
+ * stub answers `GET /me` from `me` and every other call from the `answers` queue, and the
+ * replacement row carries the subject `getMe` describes when asked with the replacement.
  */
 
 import { readFileSync } from 'node:fs';
@@ -34,7 +38,10 @@ import {
   changePasswordOutcomeUrl,
 } from '@/features/change-password';
 import { SIGN_IN_PATH } from '@/features/sign-in';
-import { forgetEverySession, openSessionCount } from '@/app/bff/session/store';
+import { forgetEveryGuestBucket } from '@/app/bff/session/guest-throttle';
+import { forgetEverySession, openSessionCount, subjectOf } from '@/app/bff/session/store';
+
+import { ACCOUNT_LOGIN, accountAnswer } from './account-fixture';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
 import { render } from '../review/fixtures';
@@ -65,6 +72,8 @@ interface Seen {
 
 let seen: Seen[] = [];
 let answers: (() => Response)[] = [];
+/** `getMe`, `GET /me`: asked after the sign-in and after a successful change. */
+let me: () => Response;
 
 const ORIGINAL = {
   upstream: process.env.AUDITMANAGER_API_UPSTREAM,
@@ -94,19 +103,23 @@ function refusal(status: number): Response {
 
 beforeEach(() => {
   forgetEverySession();
+  forgetEveryGuestBucket();
   seen = [];
   answers = [];
+  me = () => accountAnswer();
   process.env.AUDITMANAGER_API_UPSTREAM = UPSTREAM;
   process.env.AUDITMANAGER_API_TOKEN = DEPLOYMENT_TOKEN;
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const headers = new Headers(init?.headers ?? {});
     const raw = init?.body;
+    const method = init?.method ?? 'GET';
     seen.push({
       url: String(input),
-      method: init?.method ?? 'GET',
+      method,
       authorization: headers.get('authorization'),
       body: raw === undefined || raw === null ? '' : new TextDecoder().decode(raw as ArrayBuffer),
     });
+    if (method === 'GET' && new URL(String(input)).pathname === '/me') return me();
     const next = answers.shift();
     return next === undefined ? jsonAnswer(MINTED) : next();
   });
@@ -115,6 +128,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   forgetEverySession();
+  forgetEveryGuestBucket();
   if (ORIGINAL.upstream === undefined) delete process.env.AUDITMANAGER_API_UPSTREAM;
   else process.env.AUDITMANAGER_API_UPSTREAM = ORIGINAL.upstream;
   if (ORIGINAL.token === undefined) delete process.env.AUDITMANAGER_API_TOKEN;
@@ -183,7 +197,13 @@ describe('the change happens on the server, and the replacement stops there', ()
     const response = await changePassword(cookie);
     expect(response.status).toBe(303);
 
-    expect(seen).toHaveLength(1);
+    // The change, then `getMe` asked with the replacement -- and the passwords only in the first.
+    expect(seen).toHaveLength(2);
+    expect(seen.filter((entry) => entry.body.includes(PASSWORD))).toHaveLength(1);
+    expect(seen[1]?.url).toBe(`${UPSTREAM}/me`);
+    expect(seen[1]?.method).toBe('GET');
+    expect(seen[1]?.authorization).toBe(`Bearer ${REPLACEMENT}`);
+    expect(seen[1]?.body).toBe('');
     const call = seen[0] as Seen;
     // `AUDITMANAGER_API_UPSTREAM` already carries the version prefix in a deployment;
     // the forwarder appends the contract path to whatever it is given, and this test
@@ -499,5 +519,39 @@ describe('the outcome sentences are Russian and name no half of the pair', () =>
       'Change',
       'password',
     ]);
+  });
+});
+
+describe('W49: the replacement row carries the subject getMe describes now', () => {
+  it('opens the new row with getMe’s answer, read with the replacement credential', async () => {
+    me = () => accountAnswer({ is_default_credential: true, login: 'admin', profile_complete: false });
+    const before = await openASession();
+    expect(subjectOf(before.split('=')[1] as string)?.isDefaultCredential).toBe(true);
+
+    answers = [() => jsonAnswer(REPLACEMENT)];
+    me = () => accountAnswer({ is_default_credential: false, roles: ['admin', 'expert'] });
+    const after = cookieFrom(await changePassword(before));
+
+    const subject = subjectOf(after.split('=')[1] as string);
+    expect(subject).toMatchObject({
+      login: ACCOUNT_LOGIN,
+      roles: ['admin', 'expert'],
+      isDefaultCredential: false,
+      profileComplete: true,
+    });
+  });
+
+  it('ends the session and sends the reviewer to sign in when getMe cannot say who it is', async () => {
+    const before = await openASession();
+    answers = [() => jsonAnswer(REPLACEMENT)];
+    me = () => new Response('{}', { status: 503 });
+
+    const response = await changePassword(before);
+    // The password HAS changed: the API committed it. So not `upstream` -- the reviewer signs
+    // in again with the new password, and that sign-in reads the subject.
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe(SIGN_IN_PATH);
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
+    expect(openSessionCount()).toBe(0);
   });
 });

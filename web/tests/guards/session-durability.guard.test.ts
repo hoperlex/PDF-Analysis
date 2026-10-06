@@ -35,21 +35,29 @@
  *
  * **What this file holds** is the third invariant — the *cookie itself* carries none of the
  * credential's bytes — and `R-51`'s durability, driven against a real file.
+ *
+ * **And, since `W49-BFF-01`, the register's format version 2**: a row carries the subject
+ * `getMe` described, the whole subject survives a restart, and a version-1 file is replaced
+ * at the first read rather than read — `W49-PLAN.md` §3.5 — which signs everyone out once.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SESSION_STORE_VARIABLE } from '@/shared/config/session-store';
+import type { SessionAccount } from '@/app/bff/session/store';
 import {
+  REGISTER_FORMAT_VERSION,
   closeSession,
   credentialOf,
   dropTheInMemoryRegister,
   forgetEverySession,
+  mintSessionId,
   openSession,
+  refreshSubject,
   sessionCookie,
   sessionDurability,
   subjectOf,
@@ -337,5 +345,132 @@ describe('R-51: a deployment that names no store still loses them, and says so',
     expect(subjectOf(id)).toBeNull();
     expect(credentialOf(id)).toBeNull();
     expect(closeSession(id)).toBe(false);
+  });
+});
+
+describe('W49: the register is format version 2, and a version-1 file is replaced, not read', () => {
+  const ACCOUNT: SessionAccount = {
+    login: 'reviewer@example.test',
+    displayLabel: 'Проверяющая А. Б.',
+    initials: 'ПА',
+    roles: ['admin', 'expert'],
+    isDefaultCredential: false,
+    profileComplete: true,
+  };
+
+  let directory: string;
+  let path: string;
+
+  beforeEach(() => {
+    directory = mkdtempSync(join(tmpdir(), 'w49bff-register-'));
+    path = join(directory, 'register.json');
+    process.env[SESSION_STORE_VARIABLE] = path;
+    dropTheInMemoryRegister();
+    forgetEverySession();
+  });
+
+  afterEach(() => {
+    delete process.env[SESSION_STORE_VARIABLE];
+    dropTheInMemoryRegister();
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  function onDisk(): { version: unknown; sessions: Record<string, unknown>[] } {
+    return JSON.parse(readFileSync(path, 'utf8')) as {
+      version: unknown;
+      sessions: Record<string, unknown>[];
+    };
+  }
+
+  it('writes version 2, and the whole subject survives the container being recreated', () => {
+    expect(REGISTER_FORMAT_VERSION).toBe(2);
+    const id = openSession(ACCOUNT, CREDENTIAL, HOUR);
+    expect(onDisk().version).toBe(2);
+
+    dropTheInMemoryRegister();
+
+    expect(subjectOf(id)).toMatchObject(ACCOUNT);
+    expect(credentialOf(id)).toBe(CREDENTIAL);
+  });
+
+  it('persists a refreshed subject, so a restart does not bring the old one back', () => {
+    const id = openSession({ ...ACCOUNT, login: 'admin', profileComplete: false }, CREDENTIAL, HOUR);
+    expect(refreshSubject(id, ACCOUNT)).toBe(true);
+    dropTheInMemoryRegister();
+    expect(subjectOf(id)?.login).toBe(ACCOUNT.login);
+    expect(subjectOf(id)?.profileComplete).toBe(true);
+  });
+
+  it('replaces a version-1 file at the first read: no session in it opens, and its credentials leave the volume', () => {
+    // Exactly what the register wrote before rows carried a subject: a live, well-formed row.
+    const id = mintSessionId();
+    const now = Date.now();
+    writeFileSync(
+      path,
+      JSON.stringify({
+        version: 1,
+        sessions: [
+          {
+            id,
+            login: 'проверяющий',
+            credential: CREDENTIAL,
+            openedAt: now,
+            expiresAt: now + HOUR * 1000,
+            isDefaultCredential: false,
+          },
+        ],
+      }),
+      { encoding: 'utf8', mode: 0o600 },
+    );
+    dropTheInMemoryRegister();
+
+    const notice = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(subjectOf(id)).toBeNull();
+      expect(credentialOf(id)).toBeNull();
+      // Said out loud, naming the file: everyone signs in again, once.
+      expect(notice.mock.calls.map((call) => String(call[0])).join('\n')).toContain(path);
+    } finally {
+      notice.mockRestore();
+    }
+    // Replaced on the spot, not at the next sign-in: version 2, empty, and the old
+    // credential's bytes are no longer on the volume.
+    expect(onDisk()).toEqual({ version: 2, sessions: [] });
+    expect(readFileSync(path, 'utf8')).not.toContain(CREDENTIAL);
+    // The replacement is not world-readable either.
+    expect(statSync(path).mode & 0o077).toBe(0);
+  });
+
+  it('skips a version-2 row with any subject field of the wrong type, and keeps the others', () => {
+    const good = openSession(ACCOUNT, CREDENTIAL, HOUR);
+    const stored = onDisk();
+    const template = stored.sessions[0] as Record<string, unknown>;
+    const broken: Record<string, unknown>[] = [
+      { roles: ['expert', 'owner'] },
+      { roles: 'expert' },
+      { profileComplete: 'yes' },
+      { isDefaultCredential: undefined },
+      { displayLabel: '' },
+      { initials: 7 },
+      { login: '' },
+      { openedAt: 'now' },
+    ].map((change) => ({ ...template, ...change, id: mintSessionId() }));
+    writeFileSync(path, JSON.stringify({ version: 2, sessions: [template, ...broken] }), 'utf8');
+    dropTheInMemoryRegister();
+
+    expect(subjectOf(good)).toMatchObject(ACCOUNT);
+    for (const row of broken) expect(subjectOf(row.id as string), JSON.stringify(row)).toBeNull();
+  });
+
+  it('reports a version it does not know and serves no session, as for any unreadable file', () => {
+    writeFileSync(path, JSON.stringify({ version: 3, sessions: [] }), 'utf8');
+    dropTheInMemoryRegister();
+    const complaint = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(subjectOf('0'.repeat(64))).toBeNull();
+      expect(String(complaint.mock.calls[0]?.[0])).toContain('version 3');
+    } finally {
+      complaint.mockRestore();
+    }
   });
 });

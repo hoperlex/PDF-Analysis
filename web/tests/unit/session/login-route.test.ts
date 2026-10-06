@@ -41,7 +41,18 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
 
   it('names the reviewer when the cookie points at a live session', async () => {
     forgetEverySession();
-    jar.value = openSession('проверяющий', MINTED, 3600, false);
+    jar.value = openSession(
+      {
+        login: 'проверяющий',
+        displayLabel: 'Проверяющая А. Б.',
+        initials: 'ПА',
+        roles: ['expert'],
+        isDefaultCredential: false,
+        profileComplete: true,
+      },
+      MINTED,
+      3600,
+    );
     const element = await LoginRoute(query());
     expect(element.props).toEqual({ login: 'проверяющий', refusal: null });
     // The one assertion this route exists to make: no credential reaches the payload.
@@ -62,6 +73,10 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
       login: null,
       refusal: 'credentials',
     });
+    // The two values `W49-BFF-01` added reach the screen like the other four.
+    for (const added of ['pending', 'throttled']) {
+      expect((await LoginRoute(query({ refusal: added }))).props.refusal).toBe(added);
+    }
     // A hand-typed or injected value renders no sentence at all.
     for (const hostile of ['boom', '<script>', '', 'CREDENTIALS']) {
       expect((await LoginRoute(query({ refusal: hostile }))).props.refusal).toBeNull();

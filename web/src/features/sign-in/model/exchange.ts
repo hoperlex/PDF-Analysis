@@ -57,31 +57,55 @@ export const SIGN_IN_REFUSAL_PARAM = 'refusal';
 /**
  * Every way the exchange can refuse.
  *
+ * **A mirror, held to its copy by a test.** The route handler that answers the form,
+ * `web/src/app/bff/v1/[...path]/route.ts`, declares the same values as its own
+ * `type Refusal` rather than importing this module (its comment says why), and
+ * `web/tests/unit/session/refusal-mirrors.test.ts` reads that union out of the handler's
+ * source and asserts the two sets are equal. A value added on one side alone is red there.
+ *
  * `credentials` is deliberately one value and not two. The API is required not to say
  * whether the login or the password was the wrong half, and a screen that said so would
  * put back the account-enumeration oracle the API refuses to be: an attacker who can tell
  * "no such user" from "wrong password" can harvest logins at leisure.
  *
- * **`W40-LIMIT` added a rate limit and a lockout to the exchange and did NOT add a fifth
- * value here**, which is the decision rather than an oversight. The API answers a shut
- * account with exactly the `401 authentication_required` it answers a wrong password with,
- * so this tier could not tell them apart if it wanted to — and it must not want to. A
- * `throttled` refusal on this screen would say "this account exists and somebody is
- * attacking it right now" to anybody who can type a login, which is the same oracle one
- * level out.
+ * **The account's throttle is still not a value here (`W40-LIMIT`), and `throttled` below is
+ * not that throttle.** `W40-LIMIT` added a per-**account** rate limit and lockout to the
+ * exchange and decided not to name it on this screen. The API answers a shut account with
+ * exactly the `401 authentication_required` it answers a wrong password with, so this tier
+ * could not tell them apart if it wanted to — and it must not want to: a refusal saying an
+ * account is throttled would say "this account exists and somebody is attacking it right
+ * now" to anybody who can type a login. That decision stands. What the `credentials`
+ * sentence gained instead is a statement of the **policy**, which is public knowledge and
+ * says nothing about any particular account: it is shown on every credentials refusal,
+ * whether or not the account in front of it is anywhere near its allowance. A reviewer who
+ * has mistyped five times and then types their real password needs to be told that waiting
+ * is the answer, or they will conclude their password is broken — and the screen is the
+ * only place that can be said.
  *
- * What the `credentials` sentence gained instead is a statement of the **policy**, which
- * is public knowledge and says nothing about any particular account: it is shown on every
- * refusal, whether or not the account in front of it is anywhere near its allowance. A
- * reviewer who has mistyped five times and then types their real password needs to be told
- * that waiting is the answer, or they will conclude their password is broken — and the
- * screen is the only place that can be said.
+ * `throttled` (`W49-BFF-01`, `W49-PLAN.md` §3.5) is a per-**client** limit: the web tier's
+ * guest bucket on this form and the registration form, keyed by the caller's address behind
+ * the proxy. It refuses before any login is read, so it comes back the same whichever login
+ * was typed, or none — it describes the person reading it and says nothing about any account.
+ *
+ * `pending` (`R-56` and its 2026-10-06 addendum) is the one registration status sign-in
+ * shows: the pair proves an application an administrator has not decided yet. A rejected or
+ * approved application proves nothing at sign-in and is answered `credentials`, as if none
+ * existed. A stranger who types `?refusal=pending` by hand sees the pending sentence and
+ * learns nothing about any application, which is why no reason and no notice ever travels in
+ * this parameter.
  */
-export const SIGN_IN_REFUSALS = ['credentials', 'validation', 'unconfigured', 'upstream'] as const;
+export const SIGN_IN_REFUSALS = [
+  'credentials',
+  'validation',
+  'unconfigured',
+  'upstream',
+  'pending',
+  'throttled',
+] as const;
 
 export type SignInRefusal = (typeof SIGN_IN_REFUSALS)[number];
 
-/** True for exactly the four values above, so a hand-typed query string renders nothing. */
+/** True for exactly the six values above, so a hand-typed query string renders nothing. */
 export function isSignInRefusal(value: string | null | undefined): value is SignInRefusal {
   return typeof value === 'string' && (SIGN_IN_REFUSALS as readonly string[]).includes(value);
 }
@@ -109,6 +133,17 @@ export function signInRefusalMessage(refusal: SignInRefusal): string {
       return (
         'Обмен учётных данных не состоялся: сервер не получил ответа, который он ожидал. ' +
         'Ничего не изменено, попытку можно повторить.'
+      );
+    case 'pending':
+      return (
+        'Заявка на регистрацию ещё не рассмотрена: войти можно будет, когда администратор ' +
+        'её одобрит. Подавать заявку повторно не нужно.'
+      );
+    case 'throttled':
+      return (
+        'Слишком много попыток входа и подачи заявок за короткое время. Ничего не изменено: ' +
+        'подождите немного и попробуйте снова. Это ограничение относится к подключению, ' +
+        'с которого идут попытки, а не к учётной записи.'
       );
   }
 }
