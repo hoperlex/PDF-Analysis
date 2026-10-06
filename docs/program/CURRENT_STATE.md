@@ -34,11 +34,12 @@
 ## Active development, 2026-10-05 — W48 closed on `dev`; the identity programme is next
 
 W48 (correction, debt closure and a whole-tree audit, `R-49`) is integrated on
-`integration/w48-close` and published to `origin/dev` by `W48-INT-CLOSE`. It is not tagged:
-`alpha-w48` needs the deployed two-level evidence of `dispatch/W48-PLAN.md` §12 — a live provider
-run (`D-70`) and a direct owner instruction naming the exact candidate for `origin/main` — and
-`W48-INT-MAIN-01` owns that step. Development candidates publish to `origin/dev`; `origin/main`
-is the auto-deploy ref and moves only on that instruction.
+`integration/w48-close` and published to `origin/dev` by `W48-INT-CLOSE`. On the owner's direct
+instruction naming `23e0579`, `W48-INT-MAIN-01` fast-forwarded `origin/main`, the auto-deploy
+workflow deployed and verified it, and it is tagged `alpha-w48` under `R-64`: the automated
+acceptance passed every phase but the live provider (`D-70` — the stand runs `recorded`), and the
+manual A01–A12 pass is owed (`W48-INT-MAIN-01.md`). Development candidates publish to
+`origin/dev`; `origin/main` is the auto-deploy ref and moves only on a direct owner instruction.
 
 What W48 changed, by owner ruling and by lane:
 
@@ -64,7 +65,7 @@ with no promotion. W49 now means identity, W50 the shell and W51 the screens:
 
 The frozen API surface is **27 paths / 34 operations / 77 schemas** since `W49-SEAL-01`, the
 error catalog **23**, domain candidate revision 9 with **29** opaque identities, and the
-migration head is **`0015_accounts_roles_registration`**. The last closed release remains `alpha-w47`. This section
+migration head is **`0015_accounts_roles_registration`**. The last closed release is `alpha-w48`. This section
 makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is deployed.
 
 ### Normative-corpus persistence and the alpha runtime boundary (integrated before W48, unchanged)

@@ -1179,3 +1179,26 @@ a pending applicant's third correct password for 300 seconds (`W49-QA-01` Q-1, c
 `W49-JUDGE-Y`). Constant work is unchanged: both paths still perform the same derivations whether
 or not a request exists. This amends `W49-PLAN.md` §3.3 "The request's throttle columns count both
 kinds of attempts". Repaired in `W49-FIX`.
+
+## 3.21 — `R-64`, `R-65`, ruled 2026-10-06 by direct poll after the W48 alpha acceptance
+
+`W48-INT-MAIN-01` deployed `23e0579` (workflow run `37428566874`) and ran `make alpha-acceptance`
+against it. Every automated phase passed except the provider: the stand runs
+`AUDITMANAGER_PROVIDER_MODE=recorded`, and the credential the owner placed on the host is a model
+proxy credential (`PROXY_LLM_*`), not an `ANTHROPIC_API_KEY`. The owner answered two direct polls.
+
+### `R-64` — `alpha-w48` is tagged without live-provider evidence
+
+`alpha-w48` is created now at `23e0579` on the automated acceptance of run
+`20261006T085651Z-1448500` (sign-in, 3/3 writes, 16/16 cold routes, width 780, 6/6 refusals), with
+one named exception: `D-70` — no run on the deployed stand used a real model, so `W48-PLAN.md`
+§12's live-provider condition and the manual A01–A12 pass are not met. This is a one-time
+exception for `alpha-w48`, not a change to the release rule; the manual pass is owed and is
+registered as a debt.
+
+### `R-65` — the model proxy counts as a live provider in release acceptance
+
+From the W49 release on, release acceptance accepts `provider_mode` `live` **or** `proxy` — both
+call a real model through the owner's credential — and never `recorded`. `OD-02` already made the
+proxy the provider of record (2026-09-14). The owner switches the stand to `proxy` on the host. The
+acceptance verifier and its runbook are changed in `W49-FIX`.
