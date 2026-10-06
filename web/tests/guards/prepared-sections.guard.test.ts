@@ -46,21 +46,35 @@ import type { ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 /*
- * `R-50`. The three prepared sections' route files read the session cookie before they
- * render. An empty jar is no session, which the lock passes through: what this guard is
- * about -- that each address renders its own screen -- is unchanged by it.
+ * `W50-PLAN.md` §3.2. The prepared sections' route files await `requireScreen` before they
+ * render, and since `W50` an empty jar is a guest the guard sends to sign in. The route-file
+ * case below therefore puts a session in the jar -- an account every section admits -- and
+ * what this guard is about, that each address renders its own screen, is unchanged by it.
  */
+const jar = vi.hoisted(() => ({ value: null as string | null }));
+
 vi.mock('next/headers', () => ({
-  cookies: async () => ({ get: () => undefined }),
+  cookies: async () => ({
+    get: (name: string) => (jar.value === null ? undefined : { name, value: jar.value }),
+  }),
 }));
 
 import { AppFrame } from '@/_app';
+import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
 import { LogsPage } from '@/_pages/logs';
+import { NormsPage } from '@/_pages/norms';
 import { OptimisationPage } from '@/_pages/optimisation';
+import { QueuePage } from '@/_pages/queue';
+import { SectionOptimisationPage } from '@/_pages/section-optimisation';
 import { WorkersPage } from '@/_pages/workers';
 import { RoutePlaceholder } from '@/shared/ui';
+import { forgetEverySession, openSession } from '@/app/bff/session/store';
+import AnalysisSettingsRoute from '@/app/analysis-settings/page';
 import LogsRoute from '@/app/logs/page';
+import NormsRoute from '@/app/norms/page';
 import OptimisationRoute from '@/app/optimisation/page';
+import QueueRoute from '@/app/queue/page';
+import SectionOptimisationRoute from '@/app/section-optimisation/page';
 import WorkersRoute from '@/app/workers/page';
 import { newClient, renderScreen } from '../unit/screens/harness';
 
@@ -93,6 +107,12 @@ export function visibleText(markup: string): string[] {
 
 // ------------------------------------------------------------------------- the subjects
 
+/*
+ * `R-66` adds four sections, each an honest stub on its way, and holds them to the same
+ * three rules as the original three: no digit, a promise of their own, and the "yet" wording
+ * (they ARE coming, unlike workers). `stub: true` marks them for the one case that is not
+ * theirs yet -- the frame links them only from `W50-SHELL-FRAME` on.
+ */
 const SECTIONS = [
   {
     name: 'optimisation',
@@ -100,15 +120,42 @@ const SECTIONS = [
     title: 'Оптимизация',
     screen: OptimisationPage,
     routeFile: OptimisationRoute,
+    stub: false,
   },
-  { name: 'logs', route: '/logs', title: 'Журнал выполнения', screen: LogsPage, routeFile: LogsRoute },
+  {
+    name: 'logs',
+    route: '/logs',
+    title: 'Журнал выполнения',
+    screen: LogsPage,
+    routeFile: LogsRoute,
+    stub: false,
+  },
   {
     name: 'workers',
     route: '/workers',
     title: 'Исполнители',
     screen: WorkersPage,
     routeFile: WorkersRoute,
+    stub: false,
   },
+  {
+    name: 'section-optimisation',
+    route: '/section-optimisation',
+    title: 'Оптимизация разделов',
+    screen: SectionOptimisationPage,
+    routeFile: SectionOptimisationRoute,
+    stub: true,
+  },
+  { name: 'norms', route: '/norms', title: 'Нормы', screen: NormsPage, routeFile: NormsRoute, stub: true },
+  {
+    name: 'analysis-settings',
+    route: '/analysis-settings',
+    title: 'Настройки анализа',
+    screen: AnalysisSettingsPage,
+    routeFile: AnalysisSettingsRoute,
+    stub: true,
+  },
+  { name: 'queue', route: '/queue', title: 'Очередь', screen: QueuePage, routeFile: QueueRoute, stub: true },
 ] as const;
 
 /**
@@ -251,19 +298,34 @@ describe('R-23: each prepared section has a place in the navigation', () => {
     // there, otherwise "contains /blocks" could pass on a frame that lost everything else.
     expect(targets).toContain('/knowledge-base');
     expect(targets).toContain('/account/password');
-    for (const { route } of SECTIONS) expect(targets).toContain(route);
+    for (const { route } of SECTIONS.filter((section) => !section.stub)) expect(targets).toContain(route);
   });
 
   it('each address is served by a route file that renders its own screen and no other', async () => {
+    // `W50-PLAN.md` §3.2. Each route file awaits `requireScreen` before it renders, with the
+    // page props Next hands it, so a route is an async function and what it returns is
+    // awaited here. The jar holds a session of an account every section admits, so the
+    // guard returns and the route decides exactly what it decided before.
+    forgetEverySession();
+    jar.value = openSession(
+      {
+        login: 'petrova@example.org',
+        displayLabel: 'Петрова А. С.',
+        initials: 'ПА',
+        roles: ['expert'],
+        isDefaultCredential: false,
+        profileComplete: true,
+      },
+      'a-credential',
+      3600,
+    );
     for (const { title, routeFile, screen } of SECTIONS) {
-      // `R-50`. Each of these route files now awaits the default-credential lock before it
-      // renders, so a route is an async function and what it returns is awaited here. The
-      // jar this file mocks is empty -- no session, so the lock returns and the route
-      // decides exactly what it decided before, which is what this case is about.
-      const viaRoute = render(await routeFile());
+      const viaRoute = render(await routeFile({ searchParams: Promise.resolve({}) }));
       expect(viaRoute).toBe(render(createElement(screen)));
       expect(visibleText(viaRoute)).toContain(title);
     }
+    forgetEverySession();
+    jar.value = null;
   });
 
   it('the three screens are three different screens', () => {

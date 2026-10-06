@@ -9,6 +9,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 function parseArgs(argv) {
   const args = {};
@@ -77,6 +78,20 @@ const journey = journeyRead.value;
 const refusals = refusalsRead.value;
 const findings = [];
 
+// How many cold routes a complete read phase walks: the number the journey manifest beside
+// this file declares, not a literal. Until W50 this was `16` written six times, and a wave that
+// added a screen left the gate green while this release check would have failed on the stand.
+// `tests/e2e/test_pc01_journey_conformance.py` holds the manifest's routes to the `page.tsx`
+// set in every gate, so this is the number of screens the checked-out candidate has. An
+// unreadable manifest declares nothing, and nothing equals it: the verdict is FAIL.
+const manifestRead = readJson(fileURLToPath(new URL('./manifest.json', import.meta.url)));
+const declaredRoutes = Array.isArray(manifestRead.value?.routes)
+  ? manifestRead.value.routes.length
+  : null;
+if (declaredRoutes === null) {
+  findings.push(`journey manifest is unavailable: ${manifestRead.error ?? 'it declares no routes'}`);
+}
+
 const expect = (condition, message) => {
   if (!condition) findings.push(message);
 };
@@ -126,10 +141,19 @@ if (journey !== null) {
   expect(journey.write?.stepsDeclared === 3, 'write phase does not declare exactly 3 steps');
   expect(journey.write?.stepsChecked === 3, 'write phase did not check 3/3 steps');
   expect(journey.write?.stoppedAt === null, 'write phase stopped before completion');
-  expect(journey.routesDeclared === 16, 'read phase does not declare exactly 16 routes');
-  expect(journey.routesChecked === 16, 'read phase did not check 16/16 cold routes');
+  expect(
+    journey.routesDeclared === declaredRoutes,
+    `read phase does not declare exactly the ${declaredRoutes} routes of the manifest`,
+  );
+  expect(
+    journey.routesChecked === declaredRoutes,
+    `read phase did not check ${declaredRoutes}/${declaredRoutes} cold routes`,
+  );
   expect(Array.isArray(journey.failures) && journey.failures.length === 0, 'journey contains findings');
-  expect(Array.isArray(journey.records) && journey.records.length === 16, 'journey has no record for every route');
+  expect(
+    Array.isArray(journey.records) && journey.records.length === declaredRoutes,
+    'journey has no record for every route',
+  );
   for (const record of journey.records ?? []) {
     expect(record?.width?.innerWidth === 780, `${record?.name ?? 'unknown route'} was not measured at 780px`);
     expect(
@@ -173,12 +197,14 @@ const writeComplete =
   journey?.write?.stoppedAt === null;
 const routesComplete =
   journey?.phase === 'all' &&
-  journey?.routesChecked === 16 &&
-  journey?.routesDeclared === 16;
+  declaredRoutes !== null &&
+  journey?.routesChecked === declaredRoutes &&
+  journey?.routesDeclared === declaredRoutes;
 const widthComplete =
   journey?.viewport?.width === 780 &&
   journey?.viewport?.height === 900 &&
-  journey?.records?.length === 16 &&
+  declaredRoutes !== null &&
+  journey?.records?.length === declaredRoutes &&
   journey.records.every(
     (record) =>
       record?.width?.innerWidth === 780 &&

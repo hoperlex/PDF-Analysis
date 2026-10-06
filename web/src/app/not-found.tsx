@@ -14,9 +14,13 @@
  *
  * Each dynamic route now checks the shape of its own segments against the contract's
  * pattern and calls `notFound()`, which lands here with a real 404. The mechanism was
- * already proven in this tree: `app/page.tsx` calls `redirect()` from a server component
- * and that produces a genuine **307** on the wire — measured, not assumed. `notFound()` is
- * the same mechanism at the same seam.
+ * already proven in this tree: until `W50` `app/page.tsx` called `redirect()` from a server
+ * component and that produced a genuine **307** on the wire — measured, not assumed — and
+ * every route's `requireScreen` now redirects the same way. `notFound()` is the same
+ * mechanism at the same seam.
+ *
+ * It renders inside the frame (the root layout wraps it like any screen), in Russian, and
+ * shows no error text of any kind: there is no error, only an address nothing serves.
  *
  * The message is written for whoever reached it, and it says what was *not* done — no
  * request was made — because "nothing was requested" and "the server said no" are

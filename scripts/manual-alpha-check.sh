@@ -25,7 +25,7 @@ usage() {
 Параметры:
   --origin URL        Проверяемый origin без пути. Обязателен, кроме --files-only.
   --preflight-only    Проверить PDF, TLS/redirect/login и закрытый API (по умолчанию).
-  --automated         Выполнить sign-in, 3 записи, 16 cold routes и 6 отказов.
+  --automated         Выполнить sign-in, 3 записи, все cold routes из journey manifest и 6 отказов.
   --candidate-sha SHA Полный SHA проверяемого чистого checkout.
   --deployed-sha SHA  Полный SHA, засвидетельствованный оператором из deployment evidence.
   --interactive       После preflight записать ручные A01-A12 как PASS/FAIL/BLOCKED.
@@ -242,12 +242,12 @@ http_status() {
     --max-time 20 --connect-timeout 10 --write-out '%{http_code}' "$url"
 }
 
-root_redirect_is_same_origin_projects() {
+root_redirect_is_same_origin_sign_in() {
   local origin="$1"
   local location="$2"
   python3 - "$origin" "$location" <<'PY'
 import sys
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qs, urljoin, urlsplit
 
 
 def normalized_origin(value: str) -> tuple[str, str, int] | None:
@@ -270,7 +270,9 @@ if not location:
     raise SystemExit(1)
 target = urlsplit(urljoin(f"{origin}/", location))
 same_origin = normalized_origin(origin) == normalized_origin(target.geturl())
-exact_route = target.path == "/projects" and not target.query and not target.fragment
+# W50: a guest's `/` is sent to sign in and back to `/` -- exactly `/login?next=/`.
+query = parse_qs(target.query, keep_blank_values=True)
+exact_route = target.path == "/login" and query == {"next": ["/"]} and not target.fragment
 raise SystemExit(0 if same_origin and exact_route else 1)
 PY
 }
@@ -278,12 +280,12 @@ PY
 ROOT_STATUS="$(http_status "$ORIGIN/" "$TMP_DIR/root.headers")" || ROOT_STATUS="curl-error"
 ROOT_LOCATION="$(awk 'BEGIN {IGNORECASE=1} /^location:/ {sub(/^[^:]+:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit}' "$TMP_DIR/root.headers")"
 if [[ ("$ROOT_STATUS" == "307" || "$ROOT_STATUS" == "308") ]] && \
-  root_redirect_is_same_origin_projects "$ORIGIN" "$ROOT_LOCATION"; then
+  root_redirect_is_same_origin_sign_in "$ORIGIN" "$ROOT_LOCATION"; then
   record_auto "HTTP-root" "PASS" "$ROOT_STATUS -> $ROOT_LOCATION"
 elif [[ "$ROOT_STATUS" == "curl-error" ]]; then
   record_auto "HTTP-root" "BLOCKED" "origin недоступен по сети/TLS"
 else
-  record_auto "HTTP-root" "FAIL" "expected 307/308 -> /projects; got status=$ROOT_STATUS location=${ROOT_LOCATION:-none}"
+  record_auto "HTTP-root" "FAIL" "expected 307/308 -> /login?next=%2F; got status=$ROOT_STATUS location=${ROOT_LOCATION:-none}"
 fi
 
 LOGIN_STATUS="$(http_status "$ORIGIN/login" "$TMP_DIR/login.headers")" || LOGIN_STATUS="curl-error"
@@ -435,7 +437,7 @@ printf '\nОткройте %s и выполняйте шаг перед запи
 printf 'Скрипт не просит и не сохраняет credentials.\n'
 
 record_manual "A01" "deploy SHA и вход" \
-  "Workflow/verify-deployed подтверждает deployed SHA, равный проверенному candidate SHA; вход приводит на /projects."
+  "Workflow/verify-deployed подтверждает deployed SHA, равный проверенному candidate SHA; вход приводит на /."
 record_manual "A02" "проект" \
   "Создан один проект с уникальным именем; project_uid переживает cold reload."
 record_manual "A03" "положительный PDF" \
@@ -450,8 +452,8 @@ record_manual "A07" "CSV" \
   "UTF-8 BOM, 17 колонок, одна строка на evidence; повторная выгрузка побайтно стабильна."
 record_manual "A08" "сравнение" \
   "Второй прогон той же версии сравнивается с первым; four-way verdict не смешивает absence и same."
-record_manual "A09" "16 экранов и 780px" \
-  "Все 16 маршрутов открываются после cold reload; нет console error и горизонтального overflow."
+record_manual "A09" "все экраны и 780px" \
+  "Все маршруты из списка A09 в runbook открываются после cold reload; нет console error и горизонтального overflow."
 record_manual "A10" "отрицательные PDF" \
   "Четыре PDF отклонены точными правилами; oversize не отправлен; новых документов/версий нет."
 record_manual "A11" "dashboard и сохранность" \

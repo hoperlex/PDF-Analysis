@@ -6,7 +6,7 @@
  * owner, and `web/docs/PC01_UI_SEAM.md` records which Gate B session uses which.
  *
  * Rules:
- *   - every key starts with one of the four root namespaces below;
+ *   - every key starts with one of the eight root namespaces below;
  *   - a key is built by calling a function here, never by writing an array literal;
  *   - invalidation targets a prefix — `queryKeys.runs.all()` invalidates every run key;
  *   - a key filled by more than one site carries its value type, as a `DataTag`. See
@@ -41,14 +41,31 @@ import type {
   FindingCategory,
   FindingUid,
   ProjectUid,
+  RegistrationStatus,
   RunId,
   RunStatus,
+  UserUid,
   Verdict,
   VersionUid,
 } from './generated/types.gen';
 
-/** The five root namespaces. Nothing else is a legal first key segment. */
-export const QUERY_NAMESPACES = ['projects', 'versions', 'runs', 'findings', 'dashboard'] as const;
+/**
+ * The eight root namespaces. Nothing else is a legal first key segment.
+ *
+ * `account`, `users` and `registrations` entered together, once, in `W50-REGISTRY-01`
+ * (`W50-PLAN.md` §3.6): the signed-in account, the administrator's account list and the
+ * registration requests. Later lanes add key factories inside them and no new root.
+ */
+export const QUERY_NAMESPACES = [
+  'projects',
+  'versions',
+  'runs',
+  'findings',
+  'dashboard',
+  'account',
+  'users',
+  'registrations',
+] as const;
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
 
@@ -56,6 +73,20 @@ export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
 export interface DecisionJournalFilters {
   readonly category?: FindingCategory;
   readonly verdict?: Verdict;
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
+/** Filters that make a page of `listUsers` a distinct cache entry. */
+export interface UserListFilters {
+  readonly includeArchived?: boolean;
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
+/** Filters that make a page of `listRegistrations` a distinct cache entry. */
+export interface RegistrationListFilters {
+  readonly status?: RegistrationStatus;
   readonly cursor?: string;
   readonly limit?: number;
 }
@@ -178,5 +209,34 @@ export const queryKeys = {
    */
   dashboard: {
     summary: () => ['dashboard', 'summary'] as const,
+  },
+  /**
+   * `getMe`. The signed-in account as the API describes it now — its name, roles and profile
+   * state. Its own root, because it belongs to no product resource: it changes when the
+   * account does (`updateMyProfile`, an administrator's role change), and nothing a project,
+   * run or finding does reaches it.
+   */
+  account: {
+    all: () => ['account'] as const,
+    me: () => ['account', 'me'] as const,
+  },
+  /**
+   * `listUsers` and `getUser` — the administrator's view of the accounts (`W51`). A root of
+   * its own, apart from `account`: one is *who am I*, the other is *who is there*, and an
+   * administrator changing another account must not invalidate their own.
+   */
+  users: {
+    all: () => ['users'] as const,
+    list: (filters: UserListFilters = {}) => ['users', 'list', filters] as const,
+    detail: (userUid: UserUid) => ['users', 'detail', userUid] as const,
+  },
+  /**
+   * `listRegistrations` — the requests waiting for, or past, an administrator's decision
+   * (`W51`; the home page's count of pending requests reads the same page). A decision
+   * invalidates `registrations.all()` and, because it creates an account, `users.all()`.
+   */
+  registrations: {
+    all: () => ['registrations'] as const,
+    list: (filters: RegistrationListFilters = {}) => ['registrations', 'list', filters] as const,
   },
 } as const;

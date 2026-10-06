@@ -353,12 +353,61 @@ describe('the sign-in screen is told what happened without being told which half
     // The pin the handler's own copy of these three strings is held to. A rename on either
     // side is red here rather than a redirect to a screen that shows nothing.
     expect(SIGN_IN_PATH).toBe('/login');
-    expect(SIGN_IN_LANDING_PATH).toBe('/projects');
+    // `W50-PLAN.md` §3.2: a completed sign-in lands on the front door, not the project list.
+    expect(SIGN_IN_LANDING_PATH).toBe('/');
     expect(SESSION_OPEN_PATH).toBe(`${BFF_BASE_PATH}/session`);
     expect(SESSION_CLOSE_PATH).toBe(`${BFF_BASE_PATH}/session/end`);
     for (const refusal of SIGN_IN_REFUSALS) {
       expect(signInRefusalUrl(refusal)).toBe(`${SIGN_IN_PATH}?refusal=${refusal}`);
     }
+  });
+});
+
+describe('W50: a validated next survives sign-in, and an invalid one is dropped', () => {
+  it('lands on next, with its query', async () => {
+    const response = await signIn({ login: LOGIN, password: PASSWORD, next: '/projects?x=1' });
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/projects?x=1');
+  });
+
+  it('lands on next for a dynamic address too', async () => {
+    const address = '/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+    expect((await signIn({ login: LOGIN, password: PASSWORD, next: address })).headers.get('location')).toBe(
+      address,
+    );
+  });
+
+  it.each([
+    '//evil.example',
+    'https://evil.example',
+    '/\\evil',
+    `/projects?q=${'a'.repeat(513 - '/projects?q='.length)}`,
+    '/nowhere',
+    '/projects#top',
+  ])('drops %s, lands on / and echoes nothing of it', async (next) => {
+    const response = await signIn({ login: LOGIN, password: PASSWORD, next });
+    expect(response.headers.get('location')).toBe(SIGN_IN_LANDING_PATH);
+    for (const [, value] of response.headers) expect(value).not.toContain('evil');
+    expect(await response.text()).toBe('');
+  });
+
+  it('lands a default credential on the change screen whatever next says', async () => {
+    answer = () => mintedAnswer(3600, true);
+    const response = await signIn({ login: LOGIN, password: PASSWORD, next: '/projects?x=1' });
+    expect(response.headers.get('location')).toBe('/account/password');
+  });
+
+  it('is idempotent: the same next lands on the same address every time', async () => {
+    const first = await signIn({ login: LOGIN, password: PASSWORD, next: '/dashboard' });
+    const second = await signIn({ login: LOGIN, password: PASSWORD, next: '/dashboard' });
+    expect(first.headers.get('location')).toBe('/dashboard');
+    expect(second.headers.get('location')).toBe(first.headers.get('location'));
+  });
+
+  it('never forwards next upstream: the exchange carries the pair and nothing else', async () => {
+    await signIn({ login: LOGIN, password: PASSWORD, next: '/projects?x=1' });
+    const exchange = seen.find((call) => call.path === '/auth/token');
+    expect(JSON.parse(exchange?.body ?? '{}')).toEqual({ login: LOGIN, password: PASSWORD });
   });
 });
 

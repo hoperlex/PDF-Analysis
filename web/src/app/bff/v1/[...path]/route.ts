@@ -148,6 +148,7 @@
 
 import { getApiToken, getApiUpstreamUrl } from '@/shared/config/server-env';
 import { isBehindProxy } from '@/shared/config/proxy-trust';
+import { safeReturnPath } from '@/shared/config/screen-registry';
 import {
   envelopeResponse,
   forwardWithCredential,
@@ -224,8 +225,18 @@ const REGISTRATION_STATUS_SEGMENTS = ['registrations', 'status'] as const;
  * them is red there rather than invisible here.
  */
 const SIGN_IN_SCREEN = '/login';
-const AFTER_SIGN_IN = '/projects';
+const AFTER_SIGN_IN = '/';
 const REFUSAL_PARAM = 'refusal';
+
+/**
+ * `W50-PLAN.md` §3.2. The sign-in form's hidden field that carries where the guest was going.
+ * The value is validated again here, by the screen registry's own validator, before this
+ * handler redirects to it: the field is part of a form the browser posts. An invalid value is
+ * dropped — the redirect falls back to {@link AFTER_SIGN_IN} and the value is echoed nowhere.
+ * The registry module is pure data and one function, so importing it brings no component
+ * tree into the module that holds the credential.
+ */
+const NEXT_FIELD = 'next';
 
 /**
  * The password screen's own three, held here for the reason the four above are: this module
@@ -583,7 +594,7 @@ function reportChange(outcome: ChangeOutcome, cookie?: string): Response {
  */
 async function postedCredentials(
   request: Request,
-): Promise<{ readonly login: string; readonly password: string } | null> {
+): Promise<{ readonly login: string; readonly password: string; readonly next: unknown } | null> {
   let form: FormData;
   try {
     form = await request.formData();
@@ -594,7 +605,8 @@ async function postedCredentials(
   const password = form.get('password');
   if (typeof login !== 'string' || typeof password !== 'string') return null;
   if (login.trim().length === 0 || password.length === 0) return null;
-  return { login: login.trim(), password };
+  // Read, never trusted: `openTheSession` validates it before it becomes an address.
+  return { login: login.trim(), password, next: form.get(NEXT_FIELD) };
 }
 
 /**
@@ -698,12 +710,18 @@ async function openTheSession(request: Request): Promise<Response> {
   }
 
   // `R-50`, the signpost half. A reviewer whose account is still on the password this
-  // deployment was seeded with lands on the change screen rather than on the project list:
-  // the API refuses them every other operation, so the project list they would otherwise
+  // deployment was seeded with lands on the change screen rather than on the application:
+  // the API refuses them every other operation, so any other screen they would otherwise
   // land on is a screen that can only fail to load. The refusal is the lock and this is the
   // sign on it; neither stands in for the other, which is why the owner bought both.
+  //
+  // `W50-PLAN.md` §3.2. Everybody else lands where they were going — the form's `next`,
+  // validated again here — or on `/`. Validation is the same pure function every time, so
+  // repeating a sign-in with the same `next` lands on the same address.
   return seeOther(
-    account.isDefaultCredential ? CHANGE_PASSWORD_SCREEN : AFTER_SIGN_IN,
+    account.isDefaultCredential
+      ? CHANGE_PASSWORD_SCREEN
+      : (safeReturnPath(credentials.next) ?? AFTER_SIGN_IN),
     sessionCookie(id, minted.expires_in, requestIsSecure(request)),
   );
 }

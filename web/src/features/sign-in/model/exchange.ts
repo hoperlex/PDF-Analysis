@@ -29,8 +29,23 @@
 /** The screen that offers the exchange. */
 export const SIGN_IN_PATH = '/login';
 
-/** Where a completed sign-in lands. The application's own front door. */
-export const SIGN_IN_LANDING_PATH = '/projects';
+/**
+ * Where a completed sign-in lands when it carries no `next`: the application's front door.
+ *
+ * `/` since `W50-PLAN.md` §3.2, which moved it from `/projects` together with the BFF's own
+ * copy (`AFTER_SIGN_IN` in `web/src/app/bff/v1/[...path]/route.ts`) and the journey's
+ * `session.lands_on`. A default credential still lands on `/account/password`.
+ */
+export const SIGN_IN_LANDING_PATH = '/';
+
+/**
+ * The form field that carries the address a guest was sent to sign in from.
+ *
+ * Filled by the screen with a value the screen registry's `safeReturnPath` has already
+ * accepted, and validated **again** by the BFF before it redirects there: the field is part of
+ * a form the browser posts, so the server never trusts what comes back in it.
+ */
+export const SIGN_IN_NEXT_FIELD = 'next';
 
 /**
  * The BFF mount, written as the address it is.
