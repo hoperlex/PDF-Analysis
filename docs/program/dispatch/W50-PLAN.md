@@ -45,10 +45,14 @@ One array of entries `{ address, label, group, access, roles, inMenu }`:
   equals the registry's addresses, both directions; `tests/e2e/pc01/journey/manifest.json`
   (which `test_pc01_journey_conformance.py` compares with `web/src/app`) lists the same set.
 
-Groups (P-11): Главная `/`; **Работа** — Проекты `/projects`, Дашборд `/dashboard`; **Знания** —
-База знаний `/knowledge-base`, Блоки `/blocks`; **Система** — Оптимизация `/optimisation`,
-Журнал выполнения `/logs`, Исполнители `/workers`; **Администрирование** — rows are added by
-W51; the group renders only when it has rows the session may open.
+Groups (P-11 as amended by `R-66` at `W50-FREEZE-01`): Главная `/`; **Работа** — Проекты
+`/projects`, Дашборд `/dashboard`, «Оптимизация разделов» `/section-optimisation` (stub);
+**Знания** — База знаний `/knowledge-base`, Блоки `/blocks`, «Нормы» `/norms` (stub);
+**Система** — Журнал выполнения `/logs`, Исполнители `/workers`, «Настройки анализа»
+`/analysis-settings` (stub), «Очередь» `/queue` (stub); `/optimisation` is registered in group
+`hidden` until W59; **Администрирование** — rows are added by W51; the group renders only when it
+has rows the session may open. The four stubs and their wording are `W50-REGISTRY-01`'s
+(`R-66`).
 
 ### 3.2 Server guard — `requireScreen(address, { params, searchParams })`
 
@@ -242,6 +246,19 @@ overflow for every menu state; the `/403` screen for every role-gated row.
 ### `W50-FIX` (executor), `W50-INT-CLOSE` (integrator)
 Standard forms.
 
+### Grants widened at `W50-FREEZE-01`
+
+The task files are the grants. At the freeze the integrator widened four of them beyond §4, each
+for a file the task's own change makes false (measured at `ead639f`): `W50-REGISTRY-01` gets the
+four `R-66` stub routes and their `_pages` modules, the `PC01_UI_SEAM.md` §2 `/` row, and the
+release-acceptance files that pin sixteen routes and `/` → `/projects`
+(`verify-acceptance.mjs`, `test_alpha_acceptance_command.py`, `manual-alpha-check.sh`,
+`ALPHA_PUBLIC_ACCEPTANCE.md`, the `redden*` manifests); `W50-HOME-01` gets the `root` and
+`sign-in` `expects_api` entries of the journey manifest; `W50-SHELL-FRAME` gets three test files
+that pin the old frame; `W50-QA-01` gets `tests/e2e/pc01/qa_w50/**`. The `next build` route table
+`W50-LAZY-01` compares against is measured on its own base (the Stage-A merge), with the freeze's
+reading quoted where one exists.
+
 ## 5. Integration order
 
 1. `W50-FREEZE-01`.
@@ -263,7 +280,7 @@ Standard forms.
 | `_pages/**` (not home, sign-in, account, forbidden), `loading.tsx` bodies, `widgets/knowledge-base/**`, `entities/expert-decision/**` | `W50-LAZY-01` | executor | SHELL-UI, HOME |
 | `_app/**` except `providers.tsx`, `layout.tsx` | `W50-SHELL-FRAME` (Stage C) | executor | none |
 | `web/src/_app/providers.tsx` (composition root), `web/package.json`, `web/package-lock.json` | frozen | — | none |
-| `CURRENT_STATE.md`, `origin/dev` | `W50-INT-CLOSE` | integrator | none |
+| `CURRENT_STATE.md`, `DEBT_REGISTER.md`, `origin/dev` | `W50-INT-CLOSE` | integrator | none |
 
 ## 7. Stop conditions
 

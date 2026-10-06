@@ -1806,6 +1806,12 @@ green.
 
 ### D-70 — the owner's stand is running a certification stub — **and since wave 41 it will not start**
 
+> **2026-10-06, `W50-FREEZE-01`.** The stand now starts: `W48-INT-MAIN-01` deployed `23e0579` with
+> `provider_mode=recorded`, and the owner then switched it to `proxy` (`R-65`; a proxy run records
+> `live`). The re-acceptance that would close this row is **deferred by the owner** while the
+> proxy's availability is investigated; `alpha-w48` stays tagged under `R-64`. The row stays open
+> until an acceptance run on the stand reports `provider_mode` `live`.
+
 > **Escalated 2026-09-23 by `D-72`'s own repair, at the wave-41 redeploy.** The stub is
 > `PROXY_LLM_BASE_URL=http://:59990` — no hostname. `D-72` made `ProxySettings` refuse exactly
 > that **at construction**, so `composition.py:197` now raises before the application is built

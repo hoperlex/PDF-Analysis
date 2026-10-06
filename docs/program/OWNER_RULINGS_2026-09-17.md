@@ -1208,3 +1208,30 @@ proxy the provider of record (2026-09-14). The owner switches the stand to `prox
 > `audit_run.provider_mode` admits only `live` and `recorded`, and `execute_run` refuses a declared
 > mode that disagrees with its adapter, whose proxy variant reports `live`. A proxy run therefore
 > already passes the `providerLive` phase. `W49-FIX` only makes the runbook say so.
+
+## 3.22 — `R-66`, the navigation amendment, ruled 2026-10-06 at `W50-FREEZE-01`
+
+The owner answered the roadmap poll's question A-6 on 2026-10-06 (`dispatch/ROADMAP-TO-BETA.md`
+§10.1, relayed by the planning session; accepted by the integrator for this freeze) and settled the
+stub wording by two direct polls the same day.
+
+### `R-66` — navigation is split by meaning, and the four new sections are honest stubs
+
+It amends `P-11` (`dispatch/W50-PLAN.md` §3.1):
+
+- **Работа** — Проекты `/projects`, Дашборд `/dashboard`, «Оптимизация разделов»
+  `/section-optimisation` (stub);
+- **Знания** — База знаний `/knowledge-base`, Блоки `/blocks`, «Нормы» `/norms` (stub);
+- **Система** — Журнал выполнения `/logs`, Исполнители `/workers`, «Настройки анализа»
+  `/analysis-settings` (stub), «Очередь» `/queue` (stub);
+- `/optimisation` leaves the menu and stays a registered, reachable screen (group `hidden`) until
+  project optimisation becomes a project tab «Оптимизация» (planned W59). This supersedes, for
+  `/optimisation` only and until then, `R-23`'s requirement that a prepared section has a place in
+  the navigation.
+
+Each stub follows `R-23`: it is *on its way*, and its promise says what will be there and when,
+**the "when" named by an event in words, never by a number** (the prepared-sections guard's
+no-digits rule stands; wave numbers move). The events: «Очередь» — with durable execution of
+analyses; «Нормы» — after the normative corpus moves onto the stand; «Настройки анализа» — together
+with the АР section in working order; «Оптимизация разделов» — after all sections are implemented.
+The owner may reword the sentences at acceptance.

@@ -80,7 +80,7 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56510`, `60110/60111`; API `56511`, Next `56513` | `gate-w48close` — `W48-INT-CLOSE` | 2026-10-05 | candidate published to `origin/dev` |
 | `56520`, `60120/60121`; API `58520/58521`, web `53020` | `gate-w48judgez` — `W48-JUDGE-Z` as actually run (the `56500` row was allocated, not used) | 2026-10-05 | **released** — stand stopped by the judge |
 | `56530`, `60130/60131` | `gate-w48fixc` — `W48-FIX-C` | 2026-10-05 | **released** — merged at `70f6c9e`, `make down` |
-| `56540`, `60140/60141` | `gate-w49int` — W49 integration and its gates | 2026-10-05 | W50 closes (the W50 integration lane reuses it) |
+| `56540`, `60140/60141` | `gate-w49int` — W49 integration and its gates | 2026-10-05 | after the full gate on `ead639f` is recorded |
 | `56550`, `60150/60151` | `gate-w49access` — `W49-ACCESS-01` | 2026-10-05 | **released** — merged, worktree and volumes removed |
 | `56560`, `60160/60161` | `gate-w49dec` — `W49-DECISIONS-01` | 2026-10-05 | **released** — merged, worktree and volumes removed |
 | `56570`, `60170/60171` | `gate-w49seal` — `W49-SEAL-01` | 2026-10-05 | **released** — merged, worktree and volumes removed |
@@ -90,6 +90,15 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56610`, `60210/60211` | `gate-w49jx` — `W49-JUDGE-X` | 2026-10-05 | **released** — merged, volumes removed |
 | `56620`, `60220/60221` | `gate-w49jy` — `W49-JUDGE-Y` | 2026-10-05 | **released** — merged, volumes removed |
 | `56630`, `60230/60231` | `gate-w49fix` — `W49-FIX` | 2026-10-06 | **released** — merged, volumes removed |
+| `56640`, `60240/60241` | `gate-w50reg` — `W50-REGISTRY-01` | 2026-10-06 | merged |
+| `56650`, `60250/60251` | `gate-w50ui` — `W50-SHELL-UI` | 2026-10-06 | merged |
+| `56660`, `60260/60261` | `gate-w50home` — `W50-HOME-01` | 2026-10-06 | merged |
+| `56670`, `60270/60271` | `gate-w50lazy` — `W50-LAZY-01` | 2026-10-06 | merged |
+| `56680`, `60280/60281` | `gate-w50frame` — `W50-SHELL-FRAME` | 2026-10-06 | merged |
+| `56690`, `60290/60291` | `gate-w50qa` — `W50-QA-01` | 2026-10-06 | merged |
+| `56700`, `60300/60301` | `gate-w50jx` — `W50-JUDGE-X` | 2026-10-06 | W50 closes |
+| `56710`, `60310/60311` | `gate-w50jy` — `W50-JUDGE-Y` | 2026-10-06 | W50 closes |
+| `56720`, `60320/60321` | `gate-w50int` — W50 integration and its gates | 2026-10-06 | W50 closes |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,
