@@ -106,6 +106,14 @@ registry access is not `public` (one mutation that restores a deleted file turns
 record on the lane stand, for every registered `session` screen, a guest request answering `307`
 with `Location: /login?next=…` (the command and its output in the report).
 
+Widened again by the integrator on the lane's request (2026-10-06): in
+`web/tests/guards/screen-guard.guard.test.ts` — no other Stage-B lane writes it — **only** delete
+the `LOADING` map (lines 57–61 at `96a1653`) and its `it.each` case (lines 410–414), and drop "and
+loading" from the `describe` title at line 391; the "typed loading state, in Russian" check moves
+into `lazy-boundary.guard.test.ts`, which renders every lazy wrapper's loading state through the
+harness (`am-state--neutral`, no Latin) — one mutation that renders an untyped fallback turns it
+red.
+
 ## Forbidden hotspots
 
 - every path not listed above; `contracts/**`; `web/src/shared/**`; `web/src/app/**` except the
