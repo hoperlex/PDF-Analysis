@@ -490,3 +490,163 @@ edge were not produced.
 
 The integration contract opens `W49-FIX` only for release-blocking findings; **B-1 is the one such
 finding**, and it is a deployment-activation gap rather than an application-code defect.
+
+---
+
+## 7. Cross-examination of W49-JUDGE-Y (third commit)
+
+Read with `git show agent/w49-judge-y:docs/program/reviews/W49-JUDGE-Y.md` (commits `b9544d7`
+own pass, `4eeb4ca` cross-examination and verdict). For each of Y's findings this pass took
+**one new measurement of its own on the subject `1b25955`** (the worktree's tracked files are the
+subject's: `HEAD~2 = 1b25955`, only this report differs), chose a route different from Y's
+wherever one existed, and states what the two methods still share.
+
+### 7.1 Environment for this round
+
+- `free -g` before starting anything: 3 GB available (≥ 2 GB floor). Ports 56610, 60210, 60211,
+  8770, 8771, 8091 checked free with `ss -ltn`.
+- `make up` → 0; `make migrate` → 0 (head `0015`); the account matrix re-seeded into the
+  disposable database (same fixtures as §1); subject `infra/deploy/serve.py` on `127.0.0.1:8770`
+  (`wired, operations=34`).
+- Afterwards: own API processes killed by confirmed cwd; `make down` → 0; volumes
+  `gate-w49jx-postgres-data`, `gate-w49jx-s3-data` and container `w49jx-b1` removed by exact
+  name; no `w49jx` container, volume or network left; `git status --porcelain -uall` empty.
+
+### 7.2 Per-finding results
+
+| Y | Y's class | This judge | One new measurement (subject `1b25955`) | Shared assumption with Y | Smallest safe path grant for the repair |
+|---|---|---|---|---|---|
+| F-1 | must-fix-before-merge | **Upheld**, class agreed | plain set difference, no validator library (M-X1) | none on the instrument (Y: jsonschema Draft 2020-12; here: set arithmetic); both take the two enums to be the only name constraint — the walker found exactly two 27-name enums, at Y's two locations | `contracts/domain/v1/identifiers.schema.json` (the two `enum` arrays only) and `contracts/domain/v1/README.md` (lines 8–10 and 753); contract slot owner |
+| F-2 | register | **Upheld** | live comment + migration census + head CHECK + import (M-X2) | both read the live database; the census and import are additional | one new migration file carrying only `COMMENT ON COLUMN app_user.display_name` (needs the migration-head owner of a later wave); `0009` untouched |
+| F-3 | register | **Upheld exactly** (the set of three letters is complete in the BMP) | exhaustive scan of U+0000–U+FFFF against `_LETTER` through the real functions (M-X3) | different route (Y: served `listRegistrations`; here: unit functions); both take `str.upper()` as the label rule — which is the code | `src/auditmanager/access/models.py` (`name_label`: use the upper case only when it is one character, else the letter itself — the 66 bound then holds by construction) plus one test file under `tests/integration/access/`; no contract change |
+| F-4 | register | **Upheld, narrowed** — unused by the served path but not orphaned: it is a member of the access port protocol and has seven test call sites | `git grep` of every caller (M-X4) | both infer the production call graph statically; neither traced dynamic dispatch (the adapter's explicit `get_account` call is measured) | comment-only: `src/auditmanager/access/accounts.py:141-145` and the method docstring at `:336`; removal would need `accounts.py`, `src/auditmanager/access/ports.py:175`, `tests/integration/access/test_account_management.py`, `tests/integration/access/test_roles.py` |
+| F-5 | register | (a) **Upheld**; (b) **Upheld** (this report's §5.4 is the same observation); (c) **Narrowed** — behaviour is atomic as Y measured, but the sentence is self-contradictory ("in one transaction" vs "keeps the names") rather than unambiguously the opposite | (a) direct repository call; (c) served-API self-demotion (M-X5) | (c) both drive the self-demotion refusal (the same rule fires in both); (a) none — Y read the code | docstrings only: `src/auditmanager/access/accounts.py` (`complete_profile`), `src/auditmanager/access/registrations.py` (module docstring 40–46), `src/auditmanager/bootstrap/adapters.py` (`update_account`) — the last is composition-root territory and needs its slot owner even for a docstring |
+| F-6 | register | **Upheld and widened** — the grant direction works too, and survives restore | served-HTTP archive → updateUser → reset → restore (M-X6) | both act as an administrator and assume `updateUser` is the only path that writes an archived account's roles/names; different stack (Y: in-process composition root; here: uvicorn over HTTP) | after a one-line ruling: `src/auditmanager/access/accounts.py` (`update_names` `:488`, `set_roles` `:735` answer `not_found` for an archived account, as `reset_password` `:643` and `grant_role` `:687` do) plus `tests/integration/access/test_account_management.py`; if the contract text must say so, `contracts/api/v1/openapi.json` (seal slot) |
+| F-7 | register (information, pre-existing) | **Upheld** | import at subject and base, and a SQL-use count (M-X7) | same instrument class (literal grep, ALR-01's own detection); the base comparison and the zero-SQL count are additional | none required; if ruled an exception, a note in `docs/architecture/ARCHITECTURE_LINT_RULES.json` / `.md` (ALR-01 has no enforcing test at `1b25955`) |
+
+No finding of Y's is falsified.
+
+### 7.3 The measurements
+
+**M-X1 (F-1)** — `.venv/bin/python` walking `identifiers.schema.json` for every string `enum` of
+more than 20 names and comparing with the names `identifiers.json` uses (exit 0):
+
+```text
+enum at /properties/entities/additionalProperties: 27 names; used-but-not-admitted = ['request_id', 'user_uid']
+enum at /properties/distinct_identities/items/properties/identifiers/items: 27 names; used-but-not-admitted = ['request_id', 'user_uid']
+schema candidate_revision const: {'const': 9, ...}
+catalog candidate_revision: 9
+README.md:9   "(The three family schemas still pin `candidate_revision` `8` ...)"
+README.md:753 "**The three family schemas still pin `const: 8`:** ..."
+```
+
+**M-X2 (F-2)** — one command: `psql … col_description(display_name)`; `git grep 'COMMENT ON COLUMN
+app_user.display_name' 1b25955 -- db/migrations`; the head `ck_app_user_login_format`; `import
+auditmanager.access.name` (exit 0 for the chain up to the import):
+
+```text
+live: "... falls back to the login, which is unique and is 1-100 characters, so it always fits
+       author_label ... Set with python -m auditmanager.access.name --login <login> --display-name <name>."
+writers: db/migrations/versions/20260923_0009_reviewer_display_name.py:110   (the only one)
+head CHECK, e-mail arm: char_length(login) <= 254
+import: ModuleNotFoundError: No module named 'auditmanager.access.name'
+```
+
+The "always fits `author_label`" clause is false in the abstract (254 > 128) but not reachable on
+the ledger path: only a complete profile writes a decision (`OPERATIONS_AN_INCOMPLETE_PROFILE_REACHES`
+excludes `appendDecision`), and a complete profile's label is the name form.
+
+**M-X3 (F-3)** — scan of every BMP code point that `_LETTER` admits, then
+`normalize_person_name` + `name_label` (exit 0):
+
+```text
+admitted letters with multi-char upper(): [('U+00DF','ß','SS'), ('U+0149','ŉ','ʼN'), ('U+01F0','ǰ','J̌')]
+of those, accepted as a name's first letter: ['ß', 'ŉ', 'ǰ']
+label len=68 vs MAX_NAME_LABEL_LENGTH=66; tail=' SS. SS.'
+openapi.json:4320  "maxLength": 66      (the only such bound)
+```
+
+Note for the repair: taking `upper()[0]` is **not** safe — it turns `ŉ` into a bare `ʼ` and drops
+the caron of `ǰ`; keeping the letter itself when its upper case is not one character is.
+
+**M-X4 (F-4)** — `git grep -nE '\baccount_standing\b|_SELECT_STANDING' 1b25955 -- src tests`
+and the adapter's call (exit 0): definitions at `access/accounts.py:146,335,342` and the protocol
+member `access/ports.py:175`; callers only `tests/integration/access/test_account_management.py`
+(6) and `tests/integration/access/test_roles.py:74`; `bootstrap/adapters.py:1037`
+`standing_of` reads `self._accounts.get_account(...)`.
+
+**M-X5 (F-5)** — `probe_y_f5_f6.py` against the lane database and the served API (exit 0):
+
+```text
+F-5a complete_profile on an already-complete profile (direct repository call)
+  raised validation_failed          (docstring: state_transition_not_allowed)
+F-5c admin PATCH /users/<self> {new names, roles without admin}
+  PATCH self -> 403 permission_denied
+  GET /me names after -> last='Tester' first='Casey' label='Tester C.'   (names not changed)
+```
+
+**M-X6 (F-6)** — same script, an archived complete expert as the target (exit 0):
+
+```text
+archive -> 200
+PATCH archived {names, roles:[admin]} -> 200 roles=['admin'] archived=2026-10-06T08:40:03Z
+POST archived /password -> 404 not_found
+GET archived -> 200 last='Ghost' roles=['admin']
+restore -> 200 roles=['admin']        (an archived expert comes back as an administrator)
+```
+
+Not a privilege escalation — the actor is already an administrator and may grant `admin` to an
+active account directly; an archived account has no standing meanwhile. It is one refusal surface
+that is two rules, now shown in both directions; it wants the one-line ruling Y asks for, and the
+ruling should name the grant direction.
+
+**M-X7 (F-7)** — `git grep '^\s*(from|import) sqlalchemy'` over `api/routers/` at `1b25955` and
+`23e0579`, and a count of `.execute(` / `Session` / `text(` in `errors.py` (exit 0 / 1):
+
+```text
+1b25955: src/auditmanager/api/routers/errors.py:39:from sqlalchemy.exc import DBAPIError
+23e0579: src/auditmanager/api/routers/errors.py:39:from sqlalchemy.exc import DBAPIError
+errors.py: 0 lines with execute/Session/text(
+```
+
+### 7.4 B-1 after Y's endorsement
+
+Y concurred with B-1 and its scope, measured the **git half** (a `git checkout --detach` replaces
+the file with a new inode), and left the **Docker half** unmeasured (1 GB available). This judge
+had also not measured it (§5.2: the `/tmp` scratch is invisible to the snap daemon). It is now
+measured end to end with the pinned image, a scratch repository under the worktree's ignored
+`.local/`, a single-file bind mount exactly as `compose.server.yml` mounts the proxy file, and
+the reload `reload-proxy.sh` performs:
+
+```text
+host inode at A: 2132108
+1 fresh container answers:          version-A
+host inode after checkout B: 2132118 host content: version-B
+2 after checkout + nginx -s reload:  version-A      <- the running proxy keeps the old file
+  container's own view of the file:  version-A
+3 after docker restart:              version-B
+```
+
+(Exit 1 of that command is its final `pwd` after the scratch directory was removed; every probe
+line printed.) Both halves of B-1 are therefore measured, by two judges with different
+instruments for the git half.
+
+**Y's endorsement does not change the classification.** B-1 stays **release-blocking for the live
+deployment only** (`origin/main` / the alpha host), not for the `integration/w49` merge or the
+`origin/dev` publication. What changes is its evidence: it no longer rests on the edge lane's
+measurement. Y's added point — the mechanism predates W49 (any earlier `nginx.conf` change met
+it), and W49 is the first wave whose new *control* lives in that file — is accepted and does not
+lower the class, because the consequence (the registration throttle absent behind a green gate
+and a passing `verify-deployed.sh`) is W49's. Smallest repair grant, unchanged: the deploy path
+(`infra/deploy/deploy.sh` and/or `infra/deploy/reload-proxy.sh`: recreate or restart the proxy
+when `infra/deploy/proxy/**` changed) and `infra/deploy/verify-deployed.sh` (a throttle probe:
+the twelfth `POST /api/v1/registrations/status` in a burst answers `429 rate_limited`).
+
+### 7.5 Effect on this report's verdict
+
+Unchanged: **PASS on the merged application code; B-1 release-blocking for the live deployment.**
+Y's **F-1** is accepted as a **must-fix-before-merge** in Y's entry point (a contract-integrity
+defect with no runtime or security effect, which this attacker pass could not have reached), so
+the combined position of the two judges is: merge after F-1 is repaired in the contract slot;
+publish to the live host only after B-1 is repaired; F-2…F-7 and this report's R-1…R-5 to the
+register.
