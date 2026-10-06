@@ -100,7 +100,7 @@ From `W50-PLAN.md` §4 Stage C `W50-SHELL-FRAME`, verbatim:
 - `web/src/app/layout.tsx` (passing the full subject)
 - `web/tests/unit/shell/**` (new)
 - `web/tests/guards/screen-claims-about-the-system.guard.test.ts`
-- `web/tests/guards/rendered-language.guard.test.ts` (fixtures only)
+- `web/tests/guards/rendered-language.guard.test.ts` (fixtures, and — granted at the `W50-REGISTRY-01` merge — adding `web/src/app/error.tsx` to the hand-written list of boundaries it renders, beside `not-found`)
 - `docs/program/W50-SHELL-FRAME.md`
 
 Granted by the integrator at the freeze (Stage C; `W50-SHELL-UI` is already merged, so no

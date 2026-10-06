@@ -97,6 +97,15 @@ From `W50-PLAN.md` §4 Stage B, `LAZY allowed paths`, verbatim:
 - `web/tests/guards/lazy-boundary.guard.test.ts` (new)
 - `docs/program/W50-LAZY-01.md`
 
+Widened by the integrator at the `W50-REGISTRY-01` merge (`W50-PLAN.md`, "Integrator rulings at
+the `W50-REGISTRY-01` merge", item 1): **delete** the four segment `loading.tsx` files listed above
+— a guest must get a real `307` from `requireScreen`, not a 200 with a streamed redirect — and
+keep the typed loading states inside `_pages/**` around the lazy widgets. Add to
+`lazy-boundary.guard.test.ts` a rule that no `loading.tsx` sits at or above a `page.tsx` whose
+registry access is not `public` (one mutation that restores a deleted file turns it red), and
+record on the lane stand, for every registered `session` screen, a guest request answering `307`
+with `Location: /login?next=…` (the command and its output in the report).
+
 ## Forbidden hotspots
 
 - every path not listed above; `contracts/**`; `web/src/shared/**`; `web/src/app/**` except the

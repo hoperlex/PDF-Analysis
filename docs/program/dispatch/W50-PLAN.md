@@ -259,6 +259,37 @@ that pin the old frame; `W50-QA-01` gets `tests/e2e/pc01/qa_w50/**`. The `next b
 `W50-LAZY-01` compares against is measured on its own base (the Stage-A merge), with the freeze's
 reading quoted where one exists.
 
+### Integrator rulings at the `W50-REGISTRY-01` merge (2026-10-06)
+
+`W50-REGISTRY-01` (merged at the commit after `8e9706b`) handed back seven questions:
+
+1. **A guest must get a real redirect, not a 200 with a redirect in the stream.** The segment
+   `loading.tsx` files above guarded pages turn `requireScreen`'s redirect into a streamed
+   `NEXT_REDIRECT` with status 200. `W50-LAZY-01` deletes the four segment `loading.tsx` files
+   (`app/projects`, `app/projects/[project_uid]`, `app/dashboard`, `app/knowledge-base`), keeps
+   typed loading states inside `_pages/**` around the lazy widgets, adds to its new
+   `lazy-boundary.guard.test.ts` a rule that no `loading.tsx` sits at or above a `page.tsx` whose
+   registry access is not `public`, and records on its lane stand, for every registered
+   `session` screen, that a guest gets `307` with `Location: /login?next=…`.
+2. The error boundary's texts are covered by `screen-guard.guard.test.ts`; adding `error.tsx` to
+   `rendered-language.guard.test.ts`'s hand-written list is granted to `W50-SHELL-FRAME`, which
+   already owns that file's fixtures in Stage C.
+3. The registry keeps literal addresses typed by `ScreenAddress` instead of importing
+   `routes.ts` (§3.1 said "imports it"): a compile-time check on every literal is accepted as
+   equivalent; §3.1's sentence is read that way.
+4. `next` is lost after a refused sign-in and after the forced default-password change: carried
+   to W51, whose sign-in and password screens own those redirects (`W51-FREEZE-01` input).
+5. Stale prose outside the grant (`routes.ts:30`, `journey.mjs:304`, the journey README, the
+   legacy `openSession` docstring in `store.ts`, `$comment` and root's `listProjects` in the
+   `redden-write` fixtures, "three" in `prepared-sections.guard.test.ts` titles): collected for
+   `W50-FIX`, which gets an explicit grant for them.
+6. `configuration-and-cache-keys.test.ts:224` counts decision cache keys, not namespaces: no
+   change needed.
+7. `UserListFilters` and `RegistrationListFilters` are not re-exported from `@/shared/api`:
+   carried to W51, whose admin lanes consume them (`W51-FREEZE-01` input).
+
+The Stage-B lane base is the commit that carries this section.
+
 ## 5. Integration order
 
 1. `W50-FREEZE-01`.
