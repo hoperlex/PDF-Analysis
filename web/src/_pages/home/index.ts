@@ -1,8 +1,9 @@
 /**
  * Public API of the `home` page slice — the screen at `/`.
  *
- * `HomePage` and `HomePageProps` are the contract `W50-HOME-01` keeps: it replaces what the
- * screen shows and changes neither the export nor the props (`W50-REGISTRY-01`).
+ * `HomePage` and `HomePageProps` are `W50-REGISTRY-01`'s contract, which `W50-HOME-01` kept
+ * when it built the page: it replaced what the screen shows and changed neither the export
+ * nor the props.
  */
 
 export type { HomePageProps } from './ui/home-page';

@@ -1,0 +1,43 @@
+/*
+ * Layout for the home page's tiles. Colour is deliberately absent, the discipline of
+ * `widgets/dashboard/ui/dashboard.module.css`: every tile's content renders through the
+ * mandatory states (`am-state`), the page body and the global `dl`, `h2` and link rules, so
+ * a colour declared here would be a second declaration of a colour the contrast census
+ * already measures where it is actually carried. This file places things; it does not paint.
+ *
+ * A project name is a user's string (up to the contract's length, unbroken if the user wrote
+ * it so), and it wraps rather than widening its tile — `R-33`/`D-93`'s width case.
+ */
+
+.tile {
+  min-width: 0;
+}
+
+.tile > h2 {
+  margin-top: 0;
+}
+
+.projects {
+  display: grid;
+  gap: var(--am-gap-sm);
+  margin: 0;
+  padding-left: var(--am-gap-lg);
+}
+
+.project {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.created {
+  display: block;
+  font-size: var(--am-text-sm);
+}
+
+.figures {
+  margin-top: 0;
+}
+
+.more {
+  margin: var(--am-gap) 0 0;
+}

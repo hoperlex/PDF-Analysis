@@ -1,0 +1,34 @@
+/*
+ * Layout for the home page. Colour is deliberately absent: the page is built from the global
+ * `am-page` frame and the mandatory states, which carry every colour the contrast census
+ * measures; this file only places them.
+ *
+ * `.greeting` is the width rule `W50-HOME-01` exists for. The heading carries the account's
+ * name, whose last name may be sixty letters in one word — wider than the 780 px floor at the
+ * title's size — and `overflow-wrap: anywhere` lets it break inside that word. Unlike
+ * `break-word`, `anywhere` also lowers the element's min-content width, so the flex row of
+ * `am-page__header` can shrink it; `min-width: 0` on the heading's box lets that row do so.
+ */
+
+.heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.greeting {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--am-gap-lg);
+  align-items: start;
+}
+
+@media (max-width: 780px) {
+  .tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
