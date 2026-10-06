@@ -73,7 +73,7 @@
         "text": "Войти"
       }
     ],
-    "lands_on": "/projects",
+    "lands_on": "/",
     "bound_ms": 30000,
     "refusal_marker": "data-sign-in-refusal"
   },
@@ -111,15 +111,17 @@
       "name": "root",
       "path": "/",
       "page_module": "web/src/app/page.tsx",
-      "redirects_to": "/projects",
-      "$comment": "A redirect is not a blank page: the browser lands on /projects and that screen lists. Measured -- declaring no call here made the route red, correctly.",
-      "expects_api": [
-        {
-          "method": "GET",
-          "path": "/projects",
-          "operationId": "listProjects"
-        }
+      "$comment": [
+        "The front door. Until W50 this was a redirect to /projects and declared the list the",
+        "browser landed on; W50-REGISTRY-01 made `/` a screen of its own -- where a completed",
+        "sign-in lands (`session.lands_on`) -- so it no longer redirects and declares no",
+        "`redirects_to`.",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission: until W50-HOME-01 the",
+        "screen is a `RoutePlaceholder` rendered from `_pages/home` and calls nothing. HOME",
+        "declares the calls the home page makes when it builds it."
       ],
+      "expects_api": [],
       "follow": null
     },
     {
@@ -272,18 +274,25 @@
       "name": "sign-in",
       "path": "/login",
       "page_module": "web/src/app/login/page.tsx",
+      "redirects_to": "/",
       "$comment": [
         "The sign-in screen, added by W34-WEB because this manifest is where a new screen",
         "is declared: `test_the_journey_walks_every_screen_the_application_offers` reddens",
         "the moment `web/src/app` offers one the journey does not walk, which is the point",
         "of that check and not a side effect of it.",
         "",
-        "`expects_api` is EMPTY and that is the claim, not an omission. The screen renders a",
-        "`<form>` and asks the API nothing until it is submitted: the exchange is a POST the",
-        "browser makes on navigation, to `/bff/v1/session`, which is this tier's own address",
-        "and not an operation of `contracts/api/v1/openapi.json`. Declaring a contract",
-        "operation here would name a call the browser does not make on load, and the walk",
-        "asserts in both directions -- every declared call observed, and no undeclared one.",
+        "Walked like every route here, with the session cookie -- and since W50 the guard sends",
+        "a session that opens `/login` to `/` (`W50-PLAN.md` section 3.2, decision five), so",
+        "the browser lands on the front door: `redirects_to` says so. The sign-in form itself",
+        "is what the `session` half above drives, as a guest.",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission. The screen the walk",
+        "lands on is the home placeholder, which calls nothing (see `root`); and a guest's",
+        "sign-in screen renders a `<form>` and asks the API nothing until it is submitted: the",
+        "exchange is a POST the browser makes on navigation, to `/bff/v1/session`, which is",
+        "this tier's own address and not an operation of `contracts/api/v1/openapi.json`.",
+        "The walk asserts in both directions -- every declared call observed, and no",
+        "undeclared one.",
         "",
         "It is LAST so the read walk's follow-chain is untouched: `root` hands `/projects`",
         "the first project uid and each route after it captures the next identifier. A route",
@@ -446,6 +455,88 @@
           "operationId": "getDashboardSummary"
         }
       ],
+      "follow": null
+    },
+    {
+      "name": "forbidden",
+      "path": "/403",
+      "page_module": "web/src/app/403/page.tsx",
+      "$comment": [
+        "The screen a session lacking a role is sent to (`W50-PLAN.md` section 3.2, decision",
+        "four). Registered `public`; walked with the session cookie and no `from`, so it",
+        "renders without naming a role. `expects_api` is EMPTY: it reads the screen registry,",
+        "never the API."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "account",
+      "path": "/account",
+      "page_module": "web/src/app/account/page.tsx",
+      "$comment": [
+        "The account's profile, a placeholder until W51 (`W50-PLAN.md` section 3.2, decision",
+        "three, sends an incomplete profile here). Walked with a complete profile, so it",
+        "renders the promise of the profile screen. `expects_api` is EMPTY: the placeholder",
+        "reads the session's subject on the server and calls nothing."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "section-optimisation",
+      "path": "/section-optimisation",
+      "page_module": "web/src/app/section-optimisation/page.tsx",
+      "$comment": [
+        "Оптимизация разделов -- an honest stub on its way, R-66 (W50-REGISTRY-01).",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
+        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this entry",
+        "gains operations and the assertion starts carrying weight."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "norms",
+      "path": "/norms",
+      "page_module": "web/src/app/norms/page.tsx",
+      "$comment": [
+        "Нормы -- an honest stub on its way, R-66 (W50-REGISTRY-01).",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
+        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this entry",
+        "gains operations and the assertion starts carrying weight."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "analysis-settings",
+      "path": "/analysis-settings",
+      "page_module": "web/src/app/analysis-settings/page.tsx",
+      "$comment": [
+        "Настройки анализа -- an honest stub on its way, R-66 (W50-REGISTRY-01).",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
+        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this entry",
+        "gains operations and the assertion starts carrying weight."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "queue",
+      "path": "/queue",
+      "page_module": "web/src/app/queue/page.tsx",
+      "$comment": [
+        "Очередь -- an honest stub on its way, R-66 (W50-REGISTRY-01).",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
+        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this entry",
+        "gains operations and the assertion starts carrying weight."
+      ],
+      "expects_api": [],
       "follow": null
     }
   ],

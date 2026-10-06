@@ -171,15 +171,20 @@ const PROJECT_UID = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const RUN_ID = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const FINDING_UID = 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const VERSION_UID = 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+const USER_UID = 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 
 describe('every cache key starts in its own namespace', () => {
-  it('declares exactly the five roots', () => {
+  it('declares exactly the eight roots', () => {
+    // `account`, `users` and `registrations` entered once, in `W50-REGISTRY-01`.
     expect([...QUERY_NAMESPACES]).toEqual([
       'projects',
       'versions',
       'runs',
       'findings',
       'dashboard',
+      'account',
+      'users',
+      'registrations',
     ]);
   });
 
@@ -193,6 +198,17 @@ describe('every cache key starts in its own namespace', () => {
     expect(queryKeys.findings.detail(FINDING_UID)[0]).toBe('findings');
     expect(queryKeys.findings.decisions(FINDING_UID)[0]).toBe('findings');
     expect(queryKeys.dashboard.summary()[0]).toBe('dashboard');
+    expect(queryKeys.account.me()[0]).toBe('account');
+    expect(queryKeys.users.list()[0]).toBe('users');
+    expect(queryKeys.users.detail(USER_UID)[0]).toBe('users');
+    expect(queryKeys.registrations.list()[0]).toBe('registrations');
+  });
+
+  it('keeps who-am-I apart from who-is-there: account.me is not under users', () => {
+    // An administrator changing another account invalidates `users.all()`, and must not
+    // refetch their own account by accident -- or miss it, the other way round.
+    expect(JSON.stringify(queryKeys.account.me())).not.toContain('users');
+    expect(JSON.stringify(queryKeys.users.all())).toBe(JSON.stringify(['users']));
   });
 
   it('keeps a finding detail and a run detail apart even for the same identity string', () => {
@@ -212,6 +228,10 @@ describe('every cache key starts in its own namespace', () => {
       queryKeys.findings.detail(FINDING_UID),
       queryKeys.findings.decisions(FINDING_UID),
       queryKeys.dashboard.summary(),
+      queryKeys.account.me(),
+      queryKeys.users.detail(USER_UID),
+      queryKeys.users.list(),
+      queryKeys.registrations.list(),
     ].map((key) => JSON.stringify(key));
     expect(new Set(keys).size).toBe(keys.length);
   });

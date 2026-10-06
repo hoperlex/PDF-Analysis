@@ -16,16 +16,25 @@
 import { ErrorState } from '@/shared/ui';
 
 import type { SignInRefusal } from '../model/exchange';
-import { SESSION_OPEN_PATH, signInRefusalMessage } from '../model/exchange';
+import { SESSION_OPEN_PATH, SIGN_IN_NEXT_FIELD, signInRefusalMessage } from '../model/exchange';
 
 export interface SignInFormProps {
   /** The refusal the previous attempt was redirected back with, if there was one. */
   readonly refusal?: SignInRefusal | null | undefined;
+  /**
+   * Where to go once signed in: an address the route has already passed through the screen
+   * registry's `safeReturnPath`, or nothing. Posted back in a hidden field; the BFF validates
+   * it again before it redirects there.
+   */
+  readonly next?: string | null | undefined;
 }
 
-export function SignInForm({ refusal }: SignInFormProps) {
+export function SignInForm({ refusal, next }: SignInFormProps) {
   return (
     <form className="am-form" method="post" action={SESSION_OPEN_PATH}>
+      {typeof next === 'string' && next.length > 0 ? (
+        <input type="hidden" name={SIGN_IN_NEXT_FIELD} value={next} />
+      ) : null}
       <div className="am-form__field">
         <label htmlFor="sign-in-login">
           <strong>Имя пользователя</strong>

@@ -22,9 +22,11 @@ export interface SignInPageProps {
   readonly login?: string | null | undefined;
   /** The refusal the last attempt was redirected back with, if there was one. */
   readonly refusal?: SignInRefusal | null | undefined;
+  /** The validated address to return to once signed in (`W50-PLAN.md` §3.2), if any. */
+  readonly next?: string | null | undefined;
 }
 
-export function SignInPage({ login, refusal }: SignInPageProps) {
+export function SignInPage({ login, refusal, next }: SignInPageProps) {
   const signedIn = typeof login === 'string' && login.length > 0;
 
   return (
@@ -36,7 +38,7 @@ export function SignInPage({ login, refusal }: SignInPageProps) {
           : 'Имя пользователя и пароль уходят на сервер приложения и обмениваются на пропуск там же.'
       }
     >
-      {signedIn ? <SignOutForm login={login} /> : <SignInForm refusal={refusal} />}
+      {signedIn ? <SignOutForm login={login} /> : <SignInForm refusal={refusal} next={next} />}
       <p className="am-note">
         Проверка пары имени и пароля целиком на стороне сервера. Эта страница не хранит
         ни пароль, ни пропуск и не обращается к хранилищу браузера.

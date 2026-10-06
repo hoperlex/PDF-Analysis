@@ -13,6 +13,13 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "manual-alpha-check.sh"
 VERIFY = ROOT / "tests" / "e2e" / "pc01" / "journey" / "verify-acceptance.mjs"
 MAKEFILE = ROOT / "Makefile"
+MANIFEST = ROOT / "tests" / "e2e" / "pc01" / "journey" / "manifest.json"
+
+# The cold routes a complete read phase walks: the journey manifest's own count, which the
+# verifier reads the same way. Since W50 neither side writes the number down, so a wave that
+# adds a screen moves both by adding it to the manifest. That the verifier still refuses a
+# shorter walk is shown with a one-route-short envelope (`W50-REGISTRY-01` report).
+ROUTES = len(json.loads(MANIFEST.read_text(encoding="utf-8"))["routes"])
 
 
 def run(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -115,15 +122,15 @@ def _journey(*, phase: str = "all", provider_mode: str = "live", dependency: boo
             "captured": {"run_id": run_id},
             "steps": steps if phase != "read" else [],
         },
-        "routesChecked": 16 if phase != "write" else 0,
-        "routesDeclared": 16,
+        "routesChecked": ROUTES if phase != "write" else 0,
+        "routesDeclared": ROUTES,
         "failures": ["start-run: dependency_unavailable"] if dependency else [],
         "records": [
             {
                 "name": f"route-{index}",
                 "width": {"innerWidth": 780, "scrollWidth": 780},
             }
-            for index in range(16 if phase != "write" else 0)
+            for index in range(ROUTES if phase != "write" else 0)
         ],
     }
 
@@ -153,7 +160,7 @@ if url.endswith('/api/v1/openapi.json'):
 elif url.endswith('/login'):
     status, extra = '200', ''
 else:
-    location = os.environ.get('ALPHA_STUB_ROOT_LOCATION', '/projects')
+    location = os.environ.get('ALPHA_STUB_ROOT_LOCATION', '/login?next=%2F')
     status, extra = '307', f'Location: {location}\\r\\n'
 headers.write_text(f'HTTP/1.1 {status} test\\r\\n{extra}\\r\\n', encoding='utf-8')
 print(status, end='')
@@ -212,13 +219,13 @@ if target.endswith('journey.mjs'):
             'captured': {{'run_id': run_id}},
             'steps': steps if phase != 'read' else [],
         }},
-        'routesChecked': 16,
-        'routesDeclared': 16,
+        'routesChecked': {ROUTES},
+        'routesDeclared': {ROUTES},
         'failures': ['start-run: dependency_unavailable'] if dependency else [],
         'records': [{{
             'name': 'route-' + str(i),
             'width': {{'innerWidth': 780, 'scrollWidth': 780}},
-        }} for i in range(16)],
+        }} for i in range({ROUTES})],
     }}
     (out / 'journey.json').write_text(json.dumps(body), encoding='utf-8')
     sys.exit(1 if dependency else 0)
@@ -413,19 +420,26 @@ def test_partial_with_failed_text_analysis_is_not_provider_live_pass(tmp_path: P
 @pytest.mark.parametrize(
     ("location", "passes"),
     (
-        ("/projects", True),
-        ("https://alpha.example.test/projects", True),
-        ("https://ALPHA.EXAMPLE.TEST:443/projects", True),
-        ("https://attacker.invalid/projects", False),
-        ("http://alpha.example.test/projects", False),
-        ("https://alpha.example.test:444/projects", False),
-        ("https://reviewer@alpha.example.test/projects", False),
-        ("https://alpha.example.test.evil/projects", False),
-        ("/projects/other", False),
-        ("/projects?next=/", False),
+        # W50: a guest's `/` is sent to sign in and back to `/`, on the same origin.
+        ("/login?next=%2F", True),
+        ("/login?next=/", True),
+        ("https://alpha.example.test/login?next=%2F", True),
+        ("https://ALPHA.EXAMPLE.TEST:443/login?next=%2F", True),
+        ("https://attacker.invalid/login?next=%2F", False),
+        ("http://alpha.example.test/login?next=%2F", False),
+        ("https://alpha.example.test:444/login?next=%2F", False),
+        ("https://reviewer@alpha.example.test/login?next=%2F", False),
+        ("https://alpha.example.test.evil/login?next=%2F", False),
+        ("/login/other?next=%2F", False),
+        ("/login", False),
+        ("/login?next=%2F%2Fevil.example", False),
+        ("/login?next=%2F&next=%2Fprojects", False),
+        ("/login?next=%2F#top", False),
+        # The pre-W50 answer is now the wrong one.
+        ("/projects", False),
     ),
 )
-def test_root_redirect_must_resolve_to_projects_on_the_declared_origin(
+def test_root_redirect_must_resolve_to_sign_in_on_the_declared_origin(
     tmp_path: Path, location: str, passes: bool
 ) -> None:
     real_node = shutil.which("node")

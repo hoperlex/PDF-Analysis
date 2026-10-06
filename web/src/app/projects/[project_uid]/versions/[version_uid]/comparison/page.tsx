@@ -15,12 +15,12 @@
  * a route that validated the child and trusted the parent answers 200 for
  * `/projects/nonsense/versions/<real>/comparison`.
  *
- * `R-50`: the route awaits `requireAChangedPassword()` before it renders. A session still
- * on the password this deployment was seeded with is sent to `/account/password` instead,
- * and the API refuses this screen's data calls independently -- so what the reviewer would
- * otherwise meet here is a screen that cannot load. Declared `force-dynamic` because the
- * check reads a cookie, and a screen served from a cache is a screen showing somebody
- * else's session.
+ * `W50-PLAN.md` §3.2: the route awaits `requireScreen` with its own address, `params` and
+ * `searchParams` before it renders, and the screen registry's row for that address decides
+ * who may open it: a guest is sent to sign in and comes back here, a default credential
+ * goes to `/account/password`, an incomplete profile to `/account`. Declared
+ * `force-dynamic` because the guard reads a cookie, and a screen served from a cache is a
+ * screen showing somebody else's session.
  */
 
 import { notFound } from 'next/navigation';
@@ -29,16 +29,20 @@ import { looksLikeProjectUid } from '@/entities/project';
 import { looksLikeVersionUid } from '@/entities/document-version';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 
-import { requireAChangedPassword } from '../../../../../bff/session/screen-lock';
+import type { RouteParams } from '@/shared/config';
+
+import { requireScreen } from '../../../../../bff/session/screen-lock';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ComparisonRoute({
   params,
+  searchParams,
 }: {
   params: Promise<{ project_uid: string; version_uid: string }>;
+  searchParams?: Promise<RouteParams> | undefined;
 }) {
-  await requireAChangedPassword();
+  await requireScreen('/projects/[project_uid]/versions/[version_uid]/comparison', { params, searchParams });
   const { project_uid, version_uid } = await params;
   if (!looksLikeProjectUid(project_uid) || !looksLikeVersionUid(version_uid)) notFound();
   return <StageComparisonPage projectUid={project_uid} versionUid={version_uid} />;

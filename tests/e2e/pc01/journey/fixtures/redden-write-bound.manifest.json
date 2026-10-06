@@ -49,7 +49,7 @@
         "text": "Войти"
       }
     ],
-    "lands_on": "/projects",
+    "lands_on": "/",
     "bound_ms": 30000,
     "refusal_marker": "data-sign-in-refusal"
   },
@@ -69,7 +69,6 @@
       "name": "root",
       "path": "/",
       "page_module": "web/src/app/page.tsx",
-      "redirects_to": "/projects",
       "$comment": "A redirect is not a blank page: the browser lands on /projects and that screen lists. Measured -- declaring no call here made the route red, correctly.",
       "expects_api": [
         {

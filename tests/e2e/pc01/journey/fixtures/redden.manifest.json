@@ -49,7 +49,7 @@
         "text": "Войти"
       }
     ],
-    "lands_on": "/projects",
+    "lands_on": "/",
     "bound_ms": 30000,
     "refusal_marker": "data-sign-in-refusal"
   },

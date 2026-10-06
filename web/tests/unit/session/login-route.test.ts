@@ -36,10 +36,10 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
     jar.value = null;
     const element = await LoginRoute(query());
     expect(element.type).toBe(SignInPage);
-    expect(element.props).toEqual({ login: null, refusal: null });
+    expect(element.props).toEqual({ login: null, refusal: null, next: null });
   });
 
-  it('names the reviewer when the cookie points at a live session', async () => {
+  it('sends a live session to /, rendering nothing (W50-PLAN.md §3.2, decision five)', async () => {
     forgetEverySession();
     jar.value = openSession(
       {
@@ -53,17 +53,22 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
       MINTED,
       3600,
     );
-    const element = await LoginRoute(query());
-    expect(element.props).toEqual({ login: 'проверяющий', refusal: null });
-    // The one assertion this route exists to make: no credential reaches the payload.
-    expect(JSON.stringify(element.props)).not.toContain(MINTED);
+    // Until W50 this route named the reviewer and rendered the sign-out panel; the frame
+    // carries the way out now, and the sign-in screen has nothing to offer a session. The
+    // redirect is the whole answer, so no payload -- and no credential -- is produced.
+    const thrown = await LoginRoute(query({ next: '/projects' })).then(
+      () => null,
+      (error: unknown) => String((error as { digest?: unknown }).digest ?? error),
+    );
+    expect(thrown).toMatch(/^NEXT_REDIRECT;[a-z]+;\/;/);
+    expect(thrown).not.toContain(MINTED);
   });
 
   it('treats a cookie that names no session as no session', async () => {
     forgetEverySession();
     jar.value = '0'.repeat(64);
     const element = await LoginRoute(query());
-    expect(element.props).toEqual({ login: null, refusal: null });
+    expect(element.props).toEqual({ login: null, refusal: null, next: null });
   });
 
   it('renders only a refusal the feature publishes, whatever the query string says', async () => {
@@ -72,6 +77,7 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
     expect((await LoginRoute(query({ refusal: 'credentials' }))).props).toEqual({
       login: null,
       refusal: 'credentials',
+      next: null,
     });
     // The two values `W49-BFF-01` added reach the screen like the other four.
     for (const added of ['pending', 'throttled']) {
@@ -88,10 +94,22 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
     expect((await LoginRoute(query({ refusal: ['boom'] }))).props.refusal).toBeNull();
   });
 
+  it('hands the form a next the registry accepts, and drops every other', async () => {
+    forgetEverySession();
+    jar.value = null;
+    expect((await LoginRoute(query({ next: '/projects?x=1' }))).props.next).toBe('/projects?x=1');
+    for (const hostile of ['//evil.example', 'https://evil.example', '/\\evil', '/nowhere', '']) {
+      expect((await LoginRoute(query({ next: hostile }))).props.next).toBeNull();
+    }
+    expect((await LoginRoute(query({ next: ['/dashboard', '//evil.example'] }))).props.next).toBe(
+      '/dashboard',
+    );
+  });
+
   it('works when Next hands it no query at all', async () => {
     forgetEverySession();
     jar.value = null;
     const element = await LoginRoute({});
-    expect(element.props).toEqual({ login: null, refusal: null });
+    expect(element.props).toEqual({ login: null, refusal: null, next: null });
   });
 });
