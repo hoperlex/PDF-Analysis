@@ -27,7 +27,61 @@ import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
 
+import { DashboardEagerSeam } from '@/_pages/dashboard';
+import { KnowledgeBaseEagerSeam } from '@/_pages/knowledge-base';
+import { EvidenceViewerEagerSeam } from '@/_pages/review';
+import { RunProgressEagerSeam } from '@/_pages/run';
+import { StageComparisonEagerSeam } from '@/_pages/stage-comparison';
+import { Dashboard } from '@/widgets/dashboard';
+import { EvidenceViewer } from '@/widgets/evidence-viewer';
+import { KnowledgeBase } from '@/widgets/knowledge-base';
+import { RunProgress } from '@/widgets/run-progress';
+import { StageComparison } from '@/widgets/stage-comparison';
+
 import { render } from '../review/fixtures';
+
+/**
+ * THE EAGER SEAM, `W50-LAZY-01` — `W50-PLAN.md` §3.4's second requirement.
+ *
+ * Five heavy widgets reach their pages through `next/dynamic` wrappers
+ * (`_pages/<slice>/ui/lazy-*.tsx`). A dynamic import never resolves inside one synchronous
+ * `renderToStaticMarkup` pass, so without this every instrument that renders a page here —
+ * the contrast census (`tests/unit/styles/screens.ts`), the language guards
+ * (`rendered-language`, `gender-agreement`), `screen-set`, and the screen tests — would
+ * read the wrapper's «Загрузка…» fallback where the widget used to be, and would keep
+ * passing. That is `D-88` returning: an instrument whose silence reads as coverage.
+ *
+ * Each wrapper reads a context its slice exports, and renders the component it finds
+ * there instead of the lazy one. This function is the ONLY provider of those contexts: it
+ * supplies the eager widgets this file imports itself, around every render that goes
+ * through `renderWith` — and therefore through `renderScreen`. Nothing under `web/src`
+ * provides them, so no production render takes the eager branch;
+ * `tests/guards/lazy-boundary.guard.test.ts` holds that, holds the census' screen and pair
+ * counts at or above the baseline measured before the wrappers existed, and finds each of
+ * the five widgets in the census markup.
+ *
+ * The wrappers' OWN loading state is not lost to the instruments: the boundary guard
+ * renders every wrapper's `loading` through this harness and judges it (typed, Russian).
+ */
+function withEagerWidgets(element: ReactElement): ReactElement {
+  return createElement(
+    DashboardEagerSeam.Provider,
+    { value: Dashboard },
+    createElement(
+      KnowledgeBaseEagerSeam.Provider,
+      { value: KnowledgeBase },
+      createElement(
+        EvidenceViewerEagerSeam.Provider,
+        { value: EvidenceViewer },
+        createElement(
+          RunProgressEagerSeam.Provider,
+          { value: RunProgress },
+          createElement(StageComparisonEagerSeam.Provider, { value: StageComparison }, element),
+        ),
+      ),
+    ),
+  );
+}
 
 /**
  * A client with retries off and no background refetching, so a query that is not seeded
@@ -53,9 +107,12 @@ export function newClient(): QueryClient {
   });
 }
 
-/** Render `element` inside a provider over `client`, to static markup. */
+/**
+ * Render `element` inside a provider over `client`, to static markup — with the eager seam
+ * above it, so a page's lazy widget renders as the widget (see `withEagerWidgets`).
+ */
 export function renderWith(client: QueryClient, element: ReactElement): string {
-  return render(createElement(QueryClientProvider, { client }, element));
+  return render(createElement(QueryClientProvider, { client }, withEagerWidgets(element)));
 }
 
 /**
