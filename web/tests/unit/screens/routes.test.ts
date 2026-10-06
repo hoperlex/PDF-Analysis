@@ -69,6 +69,7 @@ import { routes } from '@/shared/lib';
 import { forgetEverySession, openSession } from '@/app/bff/session/store';
 
 import { DOCUMENT_UID, PROJECT_UID, RUN_ID, VERSION_UID } from '../review/fixtures';
+import { newClient, renderScreen } from './harness';
 import { routeAddresses } from './route-screens';
 import { screens as censusScreens } from '../styles/screens';
 
@@ -282,6 +283,13 @@ describe('/ is the front door, and renders a screen of its own', () => {
     });
     // The props come from the subject, which never holds the credential.
     expect(JSON.stringify(element.props)).not.toContain('a-credential');
+  });
+
+  it('greets by the name form without doubling the period it ends with', async () => {
+    // `Петрова А. С.` ends in a period; the lane stand's journey read «С.. Начальная» once.
+    const markup = renderScreen(newClient(), await RootPage(NO_QUERY));
+    expect(markup).toContain(`Здравствуйте, ${SIGNED_IN.displayLabel}`);
+    expect(markup).not.toMatch(/\.\./);
   });
 
   it('sends a guest to sign in, and back to / afterwards', async () => {

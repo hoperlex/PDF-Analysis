@@ -28,7 +28,9 @@ export function HomePage({ displayLabel }: HomePageProps) {
     <RoutePlaceholder
       screen="Главная"
       route="/"
-      headline={`Здравствуйте, ${displayLabel}. Начальная страница ещё не готова.`}
+      // An exclamation and not a period: the server's name form ends in one (`Петрова А. С.`),
+      // and a period after it reads `С..` — measured on the lane stand's journey.
+      headline={`Здравствуйте, ${displayLabel}! Начальная страница ещё не готова.`}
       promise="Здесь будут последние проекты, общая сводка по ним и, для администратора, заявки на регистрацию, которые ждут решения."
     />
   );
