@@ -232,6 +232,7 @@ services:
       # and says so in the container's log on the first sign-in; that is the developer's
       # `next dev` and never this file.
       AUDITMANAGER_SESSION_STORE: /var/lib/auditmanager/sessions/register.json
+      AUDITMANAGER_BEHIND_PROXY: "1"  # W49-EDGE-01: no published port, so X-Real-IP is the proxy's and may key the guest throttle
     volumes:
       # The ONLY service that mounts it. `R-51` says so and this line is where it is true:
       # the credential this file holds must not be reachable from the API container, the
