@@ -692,13 +692,24 @@ Rules that hold across the whole surface:
   link: a URL into object storage is the internal address the contract forbids in a
   response, and it would outlive the request that authorized it;
 * growing lists — projects, findings, decision history — are cursor-paginated;
-* every operation but `issueToken` requires a bearer credential **and** a credential
-  generation the account still accepts. `changePassword` raises that generation, which is
-  how a credential already issued is taken back: see `src/auditmanager/api/security.py`.
-  There is no revocation operation and there deliberately is not one — revoking an account
-  whose password nobody is changing is an operator's action
-  (`python -m auditmanager.access.revoke`), and publishing it would require deciding who
-  may revoke whom, which is the role vocabulary `T-6` forbids inventing at this seam.
+* every operation requires a bearer credential **and** a credential generation the account
+  still accepts, except those the sealed contract declares with `security: []` —
+  `issueToken`, `submitRegistration` and `readRegistrationStatus`, listed by
+  `python3 -c "import json; d = json.load(open('contracts/api/v1/openapi.json')); print(sorted(o['operationId'] for p in d['paths'].values() for o in p.values() if isinstance(o, dict) and o.get('security') == []))"`
+  and held in code as `UNAUTHENTICATED_OPERATIONS` in `src/auditmanager/api/security.py`.
+  `changePassword` raises that generation, which is how a credential already issued is taken
+  back: see the same module. Who may take back whom is no longer an open vocabulary:
+  `R-55` gives every account a role set drawn from `expert` and `admin`, and `R-60` decides
+  what each set reaches — product data is read by any active account with a complete
+  profile, product changes require `expert`, and account and registration-request
+  management require `admin` — per `operationId` in `OPERATION_ROLES` of the same module.
+  So an administrator takes back another account's credentials through `archiveUser`,
+  `resetUserPassword` or a change of its role set in `updateUser`, each of which raises the
+  generation, as `restoreUser` does. An administrator may not archive itself, reset its own
+  password or remove a role of its own, and the last active administrator can neither be
+  archived nor lose `admin` (`W49-PLAN.md` §3.2). There is still no operation whose only
+  effect is to revoke: taking credentials back from a shell — one account's, or everyone's —
+  remains an operator's action (`python -m auditmanager.access.revoke`).
 
 ## 8. Owner decisions this seam register encodes
 
