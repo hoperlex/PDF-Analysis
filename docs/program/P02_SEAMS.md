@@ -597,7 +597,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Twenty operations, sealed. `A5` generates the typed client from this document; `B6`
+Thirty-four operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -606,8 +606,10 @@ listings below and made published work reachable after a page reload (`DEBT_REGI
 D-16). Sixteen after `W34-CONTRACT` added `issueToken` on 2026-09-22, seventeen after
 `W38-KB` added `listDecisions` under `R-24` the same day, eighteen after `W39-REVOKE`
 added `changePassword` under `R-26` on 2026-09-23, and nineteen after `W45-BLOCKS` added
-`getVersionBlocks` under `R-29` on 2026-09-25, and twenty after `W46-SEAL` added
-`getDashboardSummary` under `R-44` on 2026-09-25.
+`getVersionBlocks` under `R-29` on 2026-09-25, twenty after `W46-SEAL` added
+`getDashboardSummary` under `R-44` on 2026-09-25, and thirty-four after `W49-SEAL-01` added
+the account, registration and account-management operations under `R-55` ... `R-61` on
+2026-10-06.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -645,11 +647,44 @@ could.
 | `changePassword` | `POST /auth/password` |
 | `getVersionBlocks` | `GET /versions/{version_uid}/blocks` |
 | `getDashboardSummary` | `GET /dashboard` |
+| `getMe` | `GET /me` |
+| `updateMyProfile` | `PATCH /me` |
+| `submitRegistration` | `POST /registrations` |
+| `readRegistrationStatus` | `POST /registrations/status` |
+| `listRegistrations` | `GET /registrations` |
+| `approveRegistration` | `POST /registrations/{request_id}/approve` |
+| `rejectRegistration` | `POST /registrations/{request_id}/reject` |
+| `listUsers` | `GET /users` |
+| `getUser` | `GET /users/{user_uid}` |
+| `updateUser` | `PATCH /users/{user_uid}` |
+| `archiveUser` | `POST /users/{user_uid}/archive` |
+| `restoreUser` | `POST /users/{user_uid}/restore` |
+| `purgeUser` | `DELETE /users/{user_uid}` |
+| `resetUserPassword` | `POST /users/{user_uid}/password` |
 
 Rules that hold across the whole surface:
 
-* every write takes a required `Idempotency-Key` header, passed through to the owning
-  command handler and never re-derived in the router;
+* the writes that take a required `Idempotency-Key` header are `createProject`,
+  `uploadDocument`, `startRun`, `appendDecision` and `approveRegistration`, and no others.
+  The key is passed through to the owning command handler and never re-derived in the
+  router: an identical repeat replays the first answer, and another payload under the same
+  key is `idempotency_key_reuse`. The other writes take no key. What a repeat of each does
+  was measured at `W49-SEAL-01` (`tests/integration/api/test_user_management.py::TestARepeatWithoutAKey`,
+  `test_registration_flow.py`, `tests/integration/auth/test_revocation.py`):
+  * `issueToken` and `readRegistrationStatus` write nothing but the brakes' counters. A
+    repeat of the first mints another credential; a repeat of the second answers the
+    same status again;
+  * `changePassword`: a repeat presents the credential the change revoked, and is
+    `authentication_required`;
+  * `updateMyProfile` and `updateUser` state the result, so a repeat writes the same names
+    and role set again. An unchanged role set raises no credential epoch;
+  * `submitRegistration`: a repeat while the first application is pending is `conflict`
+    with `conflict_reason: request_pending`;
+  * `rejectRegistration`, `archiveUser` and `restoreUser`: a repeat is
+    `state_transition_not_allowed` on the `registration_request` or `app_user` machine;
+  * `purgeUser`: a repeat is `not_found`;
+  * `resetUserPassword` repeats its effect: the temporary password is set again, and every
+    credential issued in between is refused;
 * every response carries `X-Correlation-Id`;
 * every non-2xx body is the `ErrorEnvelope`, with `retryable` pinned to the catalog
   value for the reported code;

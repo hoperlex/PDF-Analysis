@@ -63,8 +63,12 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 #: `GET`. `W46-SEAL`'s ``getDashboardSummary`` is the third unaddressed one, and it is
 #: **not** a third collection: see :data:`AGGREGATE_OPERATIONS` below for why this module's
 #: rule -- "no parent identity means a page" -- does not extend to it.
-EXPECTED_ADDRESSED = 11
-EXPECTED_UNADDRESSED = 3
+#:
+#: `W49-SEAL-01` added one addressed ``GET`` (``getUser``) and three unaddressed ones: two
+#: collections (``listRegistrations``, ``listUsers``) and ``getMe``, which is neither a
+#: collection nor an aggregate -- see :data:`SELF_OPERATIONS`.
+EXPECTED_ADDRESSED = 12
+EXPECTED_UNADDRESSED = 6
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -79,6 +83,12 @@ EXPECTED_UNADDRESSED = 3
 #: module's collection rule to it would assert a shape the contract does not declare,
 #: which is the reverse of what this file exists to catch.
 AGGREGATE_OPERATIONS = frozenset({"getDashboardSummary"})
+
+#: `W49-SEAL-01`. Unaddressed ``GET`` operations that read **the caller's own** resource:
+#: ``getMe`` addresses the account the credential names, so it has no parent identity to be
+#: missing and nothing to page. Exempt from the page check, and checked for its own shape by
+#: :func:`test_the_callers_own_account_answers_its_own_shape`.
+SELF_OPERATIONS = frozenset({"getMe"})
 
 
 def _prefixes() -> dict[str, str]:
@@ -114,8 +124,31 @@ def app() -> Composed:
 
 
 def _credential() -> str:
-    from am_test_accounts import provisioned_credential
+    """The sweep's account, holding ``admin`` beside ``expert`` (`W49-SEAL-01`).
 
+    The sweep asks every ``GET`` what it answers an identity that names nothing, and an
+    administrator's ``GET`` (``getUser``) answers a non-administrator the seam's ``403``
+    before it can answer ``404``. The grant is this module's own account's, idempotent, and
+    made through the access boundary; the credential is minted after it, because a grant
+    that changes the role set raises the epoch.
+    """
+    from am_test_accounts import database_url, provisioned_credential, provisioned_record
+    from sqlalchemy.orm import Session
+
+    from auditmanager.access.accounts import AccountRepository
+    from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
+    from auditmanager.shared.db.engine import create_database_engine
+
+    record = provisioned_record("absent-parent-sweep")
+    engine = create_database_engine(DatabaseSettings(url=parse_database_url(database_url())))
+    try:
+        with Session(engine) as session:
+            AccountRepository().grant_role(
+                session, user_uid=str(record.user_uid), role="admin", granted_by=None
+            )
+            session.commit()
+    finally:
+        engine.dispose()
     return provisioned_credential(DEPLOYMENT_SECRET, "absent-parent-sweep")
 
 
@@ -207,7 +240,7 @@ def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None
     "excluded from this page check" is not the same claim as "unchecked".
     """
     for operation_id, template in _unaddressed(_get_routes(app)):
-        if operation_id in AGGREGATE_OPERATIONS:
+        if operation_id in AGGREGATE_OPERATIONS or operation_id in SELF_OPERATIONS:
             continue
         status, body = _get(app, template)
         assert status == 200, f"{operation_id} answered {status}: {body}"
@@ -241,3 +274,20 @@ def test_the_one_unaddressed_aggregate_answers_its_own_fixed_shape(app: Composed
             "section_breakdown",
         ):
             assert panel in body, f"{operation_id} answered with no {panel!r} panel: {body}"
+
+
+def test_the_callers_own_account_answers_its_own_shape(app: Composed) -> None:
+    """``getMe``, the operation :data:`SELF_OPERATIONS` excuses from the page check.
+
+    Not a page and not empty: the account the credential names, every required property
+    present -- exempt from *paging*, not from *shape*.
+    """
+    unaddressed = _unaddressed(_get_routes(app))
+    own = [(op, path) for op, path in unaddressed if op in SELF_OPERATIONS]
+    assert own, "no unaddressed operation is registered in SELF_OPERATIONS"
+    for operation_id, template in own:
+        status, body = _get(app, template)
+        assert status == 200, f"{operation_id} answered {status}: {body}"
+        assert isinstance(body, dict) and "items" not in body, body
+        for key in ("user_uid", "login", "display_label", "roles", "profile_complete"):
+            assert key in body, f"{operation_id} answered without {key!r}: {body}"

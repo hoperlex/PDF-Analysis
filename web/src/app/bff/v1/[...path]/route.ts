@@ -19,8 +19,9 @@
  * knows how many operations there are. Swapping the credential later is an edit to the
  * credential selection below, not a sweep through a handler per operation.
  *
- * Those figures are **twenty operations across seventeen paths**, which is what the
- * frozen document declares after the `W46-SEAL` reseal that added `getDashboardSummary`.
+ * Those figures are **thirty-four operations across twenty-seven paths**, which is what the
+ * frozen document declares after the `W49-SEAL-01` reseal that added the account and
+ * registration operations.
  * This file said fifteen and twelve once, sixteen and thirteen after that, and nineteen and
  * sixteen after `W45-BLOCKS`, each true until the next reseal, and it is the fifth stale count in this programme, so it is no
  * longer corrected by hand:

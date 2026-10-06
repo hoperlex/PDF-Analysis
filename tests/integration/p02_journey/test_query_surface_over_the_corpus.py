@@ -77,6 +77,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from auditmanager.access.accounts import AccountRepository as AccountAccessRepository
 from auditmanager.access.repository import UserRepository as UserAccessRepository
 from auditmanager.api.routers import build_router
 from auditmanager.bootstrap.adapters import CredentialAdapter
@@ -138,6 +139,7 @@ def router(session_factory):
         credentials=CredentialAdapter(
             session_factory,
             users=UserAccessRepository(),
+            accounts=AccountAccessRepository(),
             signer=_credential_signer(),
         ),
     )
@@ -291,6 +293,7 @@ def verdicts(corpus, session_factory, router):
             event_type="accept",
             comment="w2-qa: accepted for the verdict filter",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         record_decision(
             session,
@@ -299,6 +302,7 @@ def verdicts(corpus, session_factory, router):
             event_type="reject",
             comment="w2-qa: rejected for the verdict filter",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         session.commit()
         return {

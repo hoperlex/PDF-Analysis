@@ -36,12 +36,12 @@ why a rename of either changes nothing about who somebody is.
   :attr:`UserRecord.display_label` prefers to ``display_name`` and to the login (`R-55`);
 * the **role vocabulary** :data:`ROLES`, a closed set read back from the database by
   :func:`parse_role`, which refuses an unknown value rather than dropping it;
-* ``reg_<ULID>`` (:class:`RegistrationId`), minted exactly as ``usr_<ULID>`` is -- a local
-  pattern outside the shared identity registry, for the reason :data:`USER_UID_PREFIX`
-  gives. ``W49-SEAL-01a`` adds both prefixes to ``identifiers.json`` and to the registry in
-  one commit; until then neither may enter the registry, because
-  ``tests/contract/domain_p02/test_identifier_catalog.py`` asserts the registry equals the
-  catalog.
+* ``reg_<ULID>`` (:class:`RegistrationId`), minted exactly as ``usr_<ULID>`` is. Since
+  ``W49-SEAL-01`` both prefixes are contracted in ``identifiers.json`` and owned by the
+  shared registry (:class:`auditmanager.shared.identity.ids.UserUid` and
+  :class:`~auditmanager.shared.identity.ids.RegistrationRequestId`); the two classes here
+  validate and mint **through** them and keep only this boundary's refusal --
+  ``validation_failed`` -- so no caller of this boundary changes.
 """
 
 from __future__ import annotations
@@ -53,7 +53,11 @@ from datetime import datetime
 from typing import Final
 
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity.ulid import is_valid_ulid, new_ulid
+from auditmanager.shared.identity.errors import IdentifierFormatError
+from auditmanager.shared.identity.ids import RegistrationRequestId as _SharedRegistrationId
+from auditmanager.shared.identity.ids import UserUid as _SharedUserUid
+from auditmanager.shared.identity.ids import pattern_for
+from auditmanager.shared.identity.ulid import is_valid_ulid
 
 __all__ = [
     "EMAIL_LOGIN_PATTERN",
@@ -87,22 +91,16 @@ __all__ = [
     "parse_role",
 ]
 
-#: The prefix this boundary allocates its identities under.
+#: The prefix this boundary allocates its identities under -- the shared registry's.
 #:
-#: ``app_user`` is **not** in ``contracts/domain/v1/identifiers.json``: that catalog is
-#: frozen and describes the PC-01 analysis domain, which has no user aggregate. So this
-#: type deliberately does **not** subclass
-#: :class:`auditmanager.shared.identity.OpaqueId` -- doing so would register ``usr`` in
-#: the contract's global prefix registry and quietly add a twenty-sixth identity to a
-#: catalog a contract test pins. It copies the catalog's *shape* (``<prefix>_<ULID>``,
-#: opaque, no decoding of the body) so that when users are contracted, adopting the base
-#: class is a renaming rather than a data migration.
-USER_UID_PREFIX: Final[str] = "usr"
+#: Until ``W49-SEAL-01`` ``app_user`` was **not** in ``contracts/domain/v1/identifiers.json``
+#: and this type copied the catalog's shape without registering the prefix. The account now
+#: crosses the wire, so the catalog declares ``user_uid`` / ``usr`` (entity ``User``) and the
+#: registry owns the type; these constants are read from it rather than restated.
+USER_UID_PREFIX: Final[str] = _SharedUserUid.prefix
 
 #: Same body alphabet and length as every other identity in this system.
-USER_UID_PATTERN: Final[str] = r"^usr_[0-9A-HJKMNP-TV-Z]{26}$"
-
-_USER_UID_RE: Final[re.Pattern[str]] = re.compile(USER_UID_PATTERN)
+USER_UID_PATTERN: Final[str] = pattern_for(USER_UID_PREFIX)
 
 #: The login rule, restated in the migration as a CHECK.
 #:
@@ -167,11 +165,10 @@ ROLE_EXPERT: Final[str] = "expert"
 ROLE_ADMIN: Final[str] = "admin"
 ROLES: Final[frozenset[str]] = frozenset({ROLE_EXPERT, ROLE_ADMIN})
 
-#: ``reg_<ULID>``: a registration request's identity. Outside the shared registry for the
-#: reason :data:`USER_UID_PREFIX` gives; ``W49-SEAL-01a`` moves both in one commit.
-REGISTRATION_ID_PREFIX: Final[str] = "reg"
-REGISTRATION_ID_PATTERN: Final[str] = r"^reg_[0-9A-HJKMNP-TV-Z]{26}$"
-_REGISTRATION_ID_RE: Final[re.Pattern[str]] = re.compile(REGISTRATION_ID_PATTERN)
+#: ``reg_<ULID>``: a registration request's identity, owned by the shared registry since
+#: ``W49-SEAL-01`` (``request_id`` / ``reg``, entity ``RegistrationRequest``).
+REGISTRATION_ID_PREFIX: Final[str] = _SharedRegistrationId.prefix
+REGISTRATION_ID_PATTERN: Final[str] = pattern_for(REGISTRATION_ID_PREFIX)
 
 #: The longest display name this boundary stores, and the number is **not** this
 #: boundary's own.
@@ -204,16 +201,20 @@ class UserUid:
     value: str
 
     def __post_init__(self) -> None:
-        if not isinstance(self.value, str) or not _USER_UID_RE.match(self.value):
+        # Validated by the shared registry's type, which owns the prefix and its pattern;
+        # its refusal becomes this boundary's own, so no caller sees a second error type.
+        try:
+            _SharedUserUid.parse(self.value)
+        except IdentifierFormatError:
             raise DomainError(
                 ErrorCode.VALIDATION_FAILED,
                 message=f"a user identity must match {USER_UID_PATTERN}",
-            )
+            ) from None
 
     @classmethod
     def new(cls) -> "UserUid":
         """Allocate a fresh identity. Generated once; never reused, never re-issued."""
-        return cls(f"{USER_UID_PREFIX}_{new_ulid()}")
+        return cls(str(_SharedUserUid.new()))
 
     @classmethod
     def parse(cls, value: str) -> "UserUid":
@@ -389,15 +390,17 @@ class RegistrationId:
     value: str
 
     def __post_init__(self) -> None:
-        if not isinstance(self.value, str) or not _REGISTRATION_ID_RE.match(self.value):
+        try:
+            _SharedRegistrationId.parse(self.value)
+        except IdentifierFormatError:
             raise DomainError(
                 ErrorCode.VALIDATION_FAILED,
                 message=f"a registration request identity must match {REGISTRATION_ID_PATTERN}",
-            )
+            ) from None
 
     @classmethod
     def new(cls) -> "RegistrationId":
-        return cls(f"{REGISTRATION_ID_PREFIX}_{new_ulid()}")
+        return cls(str(_SharedRegistrationId.new()))
 
     @classmethod
     def parse(cls, value: str) -> "RegistrationId":

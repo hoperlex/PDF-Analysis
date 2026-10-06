@@ -111,6 +111,38 @@ GUARDED = (
     # every project, so an unauthenticated caller reaching it would see more in one
     # request than any other operation on this surface discloses without a credential.
     ("getDashboardSummary", "GET", "/dashboard"),
+    # `W49-SEAL-01`, `R-55` ... `R-61`. The account itself and an administrator's
+    # management of accounts and registration requests: all behind the seam. Only the
+    # two registration operations an applicant uses are open, and they are in `OPEN`
+    # below with the exchange.
+    ("getMe", "GET", "/me"),
+    ("updateMyProfile", "PATCH", "/me"),
+    ("listRegistrations", "GET", "/registrations"),
+    (
+        "approveRegistration",
+        "POST",
+        "/registrations/reg_01M2545JSD15ETSNNV904X991R/approve",
+    ),
+    (
+        "rejectRegistration",
+        "POST",
+        "/registrations/reg_01M2545JSD15ETSNNV904X991R/reject",
+    ),
+    ("listUsers", "GET", "/users"),
+    ("getUser", "GET", "/users/usr_01M2545JSD15ETSNNV904X991S"),
+    ("updateUser", "PATCH", "/users/usr_01M2545JSD15ETSNNV904X991S"),
+    ("archiveUser", "POST", "/users/usr_01M2545JSD15ETSNNV904X991S/archive"),
+    ("restoreUser", "POST", "/users/usr_01M2545JSD15ETSNNV904X991S/restore"),
+    ("purgeUser", "DELETE", "/users/usr_01M2545JSD15ETSNNV904X991S"),
+    ("resetUserPassword", "POST", "/users/usr_01M2545JSD15ETSNNV904X991S/password"),
+)
+
+#: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
+#: exchange, and the two registration operations an applicant with no account uses.
+OPEN = (
+    ("issueToken", "POST", "/auth/token"),
+    ("submitRegistration", "POST", "/registrations"),
+    ("readRegistrationStatus", "POST", "/registrations/status"),
 )
 
 #: The catalog's own summary for the code, as a literal. `W13-SEAL` section 8.1 requires
@@ -176,7 +208,7 @@ def _envelope(answer) -> dict:
 
 
 def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) -> None:
-    """One request per guarded operation, with no credential. Nineteen, not eighteen.
+    """One request per guarded operation, with no credential. Thirty-one of thirty-four.
 
     The set comparison is what makes this a sweep rather than a list: a twentieth
     operation is either written into ``GUARDED`` and swept, or named in
@@ -184,8 +216,12 @@ def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) ->
     ``test_the_open_surface_is_exactly_the_register`` -- there is no third place for it to
     be, and an operation that is in neither fails here.
     """
-    assert len(GUARDED) == 19
-    assert UNAUTHENTICATED_OPERATIONS == {"issueToken"}
+    assert len(GUARDED) == 31
+    assert UNAUTHENTICATED_OPERATIONS == {
+        "issueToken",
+        "submitRegistration",
+        "readRegistrationStatus",
+    }
     assert {operation for operation, _, _ in GUARDED} | UNAUTHENTICATED_OPERATIONS == (
         router.operation_ids
     )
@@ -382,34 +418,37 @@ def test_the_environment_variable_is_the_one_the_deployment_will_set() -> None:
 def test_the_open_surface_is_exactly_the_register(router: Surface) -> None:
     """Sweep every operation with no credential; the ones that answer are the register.
 
-    The sweep is the assertion, not the list: this is what reports a second operation
+    The sweep is the assertion, not the list: this is what reports a fourth operation
     that opened itself, whoever opened it and whichever module it lives in. It is the
     runtime twin of the document sweep above, and the two are deliberately written
     against different sources -- one reads the served document, one sends requests.
+
+    **Every request carries the body ``{}``**, which no operation's body model accepts, so
+    an operation the seam lets through answers its own ``422`` -- a refusal that cannot be
+    mistaken for the seam's ``401``. Until `W49-SEAL-01` the exchange was sent a refused
+    pair instead, and the sweep could not tell its own ``401`` from the seam's; with three
+    open operations that ambiguity would have hidden the two new ones.
     """
     samples = {
-        operation: (method, path) for operation, method, path in (*GUARDED, EXCHANGE)
+        operation: (method, path) for operation, method, path in (*GUARDED, *OPEN)
     }
     assert set(samples) == router.operation_ids
 
-    answered = set()
+    opened = set()
     for operation, (method, path) in samples.items():
-        body = b'{"login":"nobody","password":"nothing"}' if operation == "issueToken" else b""
-        headers = {"Content-Type": "application/json"} if body else {}
         answer = dispatch(
             router,
-            Request.build(method, path, headers=headers, body=body),
+            Request.build(
+                method, path, headers={"Content-Type": "application/json"}, body=b"{}"
+            ),
             credential=None,
         )
         if answer.status != 401 or _envelope(answer)["error_code"] != AUTHENTICATION_REQUIRED:
-            answered.add(operation)
-    # ``issueToken`` above is deliberately sent a pair the suite's port refuses, so that a
-    # 401 from *the exchange's own rule* would put it in this set and be reported. It is
-    # not here because the exchange refused it with the same code -- see the next test,
-    # which is where "the exchange answers at all" is asserted.
-    assert answered == set(), (
-        f"these operations did not answer authentication_required without a credential: "
-        f"{sorted(answered)}"
+            opened.add(operation)
+    assert opened == UNAUTHENTICATED_OPERATIONS, (
+        "the operations that answered something other than authentication_required with "
+        f"no credential are {sorted(opened)}; the register is "
+        f"{sorted(UNAUTHENTICATED_OPERATIONS)}"
     )
 
 
@@ -587,8 +626,8 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
 
     * no router reaches into ``request.state`` itself, because a router that read the
       request's state bag could read anything the seam ever puts there;
-    * exactly two router modules depend on the seam's accessor, and both read it to answer
-      a question about *identity* rather than about permission;
+    * the router modules that depend on the seam's accessor are named, and each reads it to
+      answer a question about *identity* rather than about permission;
     * the value on the request is the whole verified subject, epoch included.
 
     **The second reader arrived with `D-78`.** ``appendDecision`` records which reviewer
@@ -596,9 +635,15 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
     -- ``"local-reviewer"`` -- for every verdict by every reviewer, which made `P04`'s
     question *whose judgement was this* unanswerable. It reads ``subject.login`` and writes
     it; it reads no role, grants nothing and refuses nothing on the strength of who the
-    caller is. **The count in the assertion below is the thing to defend.** A third module
-    reaching for the subject is where an invented role model would start, and the
-    assertion's job is to make that a decision somebody takes on purpose.
+    caller is. **The set in the assertion below is the thing to defend.**
+
+    **`W49-SEAL-01` added three, and none of them decides a permission.** ``me.py`` reads
+    whose account to read or complete; ``registrations.py`` and ``users.py`` read the
+    administrator acting, as ``actor_uid``, which the access boundary records (who
+    archived, who decided) and checks against the target (no act on oneself). Who may call
+    them at all is decided before any handler runs, by the seam's registers -- a router that
+    refused on the strength of the subject's roles would be the business rule in a router
+    `W49-PLAN.md` forbids, and this set is where it would first show.
     """
     import pathlib
 
@@ -627,11 +672,17 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         for path in routers.rglob("*.py")
         if _imports_the_seam_accessor(path)
     )
-    assert subject_readers == ["auth.py", "decisions.py"], (
+    assert subject_readers == [
+        "auth.py",
+        "decisions.py",
+        "me.py",
+        "registrations.py",
+        "users.py",
+    ], (
         f"{subject_readers} depend on the verified subject. Reading WHO the caller is is "
-        "the seam's own vocabulary and two operations need it; deciding WHAT they may do "
-        "is the roles work `T-6` says must not be invented here, and a third operation "
-        "reaching for the subject is where that would start."
+        "the seam's own vocabulary; deciding WHAT they may do is the seam's registers, "
+        "decided before a handler runs, and a module reaching for the subject to decide it "
+        "is a business rule in a router."
     )
 
     seen: list = []
@@ -897,7 +948,7 @@ def _on_a_default_credential(router: Surface) -> None:
 
 
 def test_a_default_credential_reaches_exactly_the_register(router: Surface) -> None:
-    """The sweep. Every operation but the two in the register answers 403.
+    """The sweep. Every guarded operation but the two in the register answers 403.
 
     A set comparison and not a list of the ones somebody remembered: the refused set is
     computed from the surface's own ``operation_ids`` minus the register, so an operation
@@ -905,11 +956,17 @@ def test_a_default_credential_reaches_exactly_the_register(router: Surface) -> N
     :data:`~auditmanager.api.security.OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES` by somebody
     deciding that it should be reachable. There is no third place for it to be.
     """
-    assert OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES == {"issueToken", "changePassword"}
+    assert OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES == {"issueToken", "changePassword", "getMe"}
     assert OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES <= router.operation_ids
     _on_a_default_credential(router)
 
-    expected_to_be_refused = router.operation_ids - OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES
+    # The open operations are not asked: no account is read for them, so no credential's
+    # state can refuse them (`W49-SEAL-01`).
+    expected_to_be_refused = (
+        router.operation_ids
+        - OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES
+        - UNAUTHENTICATED_OPERATIONS
+    )
     refused: set[str] = set()
     served: list[tuple[str, int]] = []
     for operation, method, path in GUARDED:

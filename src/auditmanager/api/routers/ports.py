@@ -31,16 +31,19 @@ from __future__ import annotations
 
 from typing import Protocol, Sequence, runtime_checkable
 
+from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
 from auditmanager.api.schemas.blocks import VersionBlockIndexView
 from auditmanager.api.schemas.dashboard import DashboardSummaryView
 from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
 from auditmanager.api.schemas.documents import DocumentVersionView
 from auditmanager.api.schemas.findings import FindingDetailView, FindingView
 from auditmanager.api.schemas.projects import ProjectView
+from auditmanager.api.schemas.registrations import RegistrationListingView, RegistrationView
 from auditmanager.api.schemas.runs import RunStatusView
 from auditmanager.api.security import AccountStanding, IssuedCredential
 
 __all__ = [
+    "AccountPort",
     "AppendedDecision",
     "BlockPort",
     "CredentialPort",
@@ -50,6 +53,7 @@ __all__ = [
     "DocumentPort",
     "FindingPort",
     "ProjectPort",
+    "RegistrationPort",
     "RunPort",
     "UploadedDocument",
 ]
@@ -344,6 +348,7 @@ class DecisionPort(Protocol):
         comment: str | None,
         idempotency_key: str,
         author_label: str,
+        author_user_uid: str,
     ) -> AppendedDecision:
         """Append exactly one event, whatever a replay under one key does.
 
@@ -362,6 +367,11 @@ class DecisionPort(Protocol):
         It has no default, here or in the ledger. A decision with no named author is a
         refusal, and every operation that can reach this method is one the seam guards, so
         there is always a subject to name.
+
+        ``author_user_uid`` is `W49-SEAL-01`'s: the verified subject's **identity**, which
+        the ledger persists beside the label (`expert_decision_event.author_user_uid`) so
+        "no decisions by this account" is a query and not a guess from a display string.
+        It has no default either, here or in the ledger.
         """
 
     def decision_history(self, *, finding_uid: str) -> Sequence[DecisionEventView]:
@@ -480,9 +490,132 @@ class CredentialPort(Protocol):
     def standing_of(self, user_uid: str) -> AccountStanding | None:
         """What the seam re-reads about this account, or ``None`` for no account.
 
-        Two facts, read together: the generation of credentials this account accepts, and
-        whether it is still on the password the deployment seeded it with (`R-50`). Read by
-        the authorization seam on every request it guards; see
-        :class:`auditmanager.api.security.AccountStandings` for why ``None`` refuses rather
-        than admits, why the two travel together, and why nothing caches the answer.
+        Read together, in one statement: the generation of credentials this account
+        accepts, whether it must change its password (`R-50`), and -- since `W49-SEAL-01`
+        -- whether it is archived, whether its profile is complete, its role set, and the
+        login and display label its row holds now. Read by the authorization seam on every
+        request it guards; see :class:`auditmanager.api.security.AccountStandings` for why
+        ``None`` refuses rather than admits, why the facts travel together, and why nothing
+        caches the answer.
         """
+
+
+@runtime_checkable
+class AccountPort(Protocol):
+    """``getMe``, ``updateMyProfile`` and the account management of `W49-SEAL-01`.
+
+    Every rule is behind this port, in ``auditmanager.access``: that an account cannot
+    archive, purge, demote or reset itself, that the last active administrator stays one,
+    that a complete profile's login is fixed, that a purge refuses a referenced account.
+    A router calls one method and renders what comes back; a refusal arrives as a
+    ``DomainError`` the access boundary raised, with the code and the detail it chose.
+
+    **Whose account is being changed is always an identity, never a login.** ``user_uid``
+    comes from the path (an administrator's operation) or from the verified subject (the
+    account's own), and ``actor_uid`` -- the administrator acting -- always from the
+    verified subject, never from a body.
+    """
+
+    def get_account(self, *, user_uid: str) -> AccountView:
+        """One account with its roles, archived or not; ``not_found`` for no such account."""
+
+    def list_accounts(self, *, include_archived: bool) -> Sequence[AccountView]:
+        """Every active account -- or every account -- ordered by ``(login, user_uid)``.
+
+        The order is part of this declaration for the reason ``ProjectPort.list_projects``
+        gives: the router pages what this returns and never re-sorts it.
+        """
+
+    def update_my_profile(
+        self,
+        *,
+        user_uid: str,
+        last_name: str,
+        first_name: str,
+        middle_name: str | None,
+        email: str | None,
+    ) -> AccountView:
+        """The account's own names, and -- while its profile is incomplete -- its e-mail.
+
+        Completion is one UPDATE of names, login and timestamp (`R-59`); a complete
+        profile's login is fixed.
+        """
+
+    def update_account(
+        self,
+        *,
+        actor_uid: str,
+        user_uid: str,
+        names: PersonNamesView | None,
+        roles: frozenset[str] | None,
+    ) -> AccountView:
+        """An administrator's change of names, role set, or both, in one transaction.
+
+        ``None`` leaves that half unchanged. A role change raises the account's
+        ``token_epoch``; a name change does not.
+        """
+
+    def archive_account(self, *, actor_uid: str, user_uid: str) -> AccountView:
+        """Archive the account (`R-61`); every credential it holds stops being accepted."""
+
+    def restore_account(self, *, actor_uid: str, user_uid: str) -> AccountView:
+        """Return an archived account to active."""
+
+    def purge_account(self, *, actor_uid: str, user_uid: str) -> None:
+        """Delete an archived, unreferenced account irreversibly (`R-61`)."""
+
+    def reset_password(
+        self, *, actor_uid: str, user_uid: str, temporary_password: str
+    ) -> AccountView:
+        """Set a temporary password the account must change at its next sign-in."""
+
+
+@runtime_checkable
+class RegistrationPort(Protocol):
+    """The five registration operations of `W49-SEAL-01` (`R-56`).
+
+    Two of them are reached without a credential (``submitRegistration`` and
+    ``readRegistrationStatus``), so their methods take nothing a caller could use to name an
+    account other than the pair it typed. The other three are an administrator's, and the
+    administrator is ``actor_uid``, from the verified subject.
+    """
+
+    def submit(
+        self,
+        *,
+        login: str,
+        password: str,
+        last_name: str,
+        first_name: str,
+        middle_name: str | None,
+    ) -> str:
+        """Record a request and answer its status, which is ``pending`` by construction."""
+
+    def read_status(self, *, login: str, password: str) -> str | None:
+        """``pending`` for a pair that proves a pending request, else ``None``.
+
+        ``None`` is the same single answer a refused exchange gets -- no such login, a wrong
+        password, a decided request whose password was nulled at the decision -- and the
+        router turns it into the generic ``authentication_required``. The implementation
+        spends the same work on every path, so the timing says nothing either.
+        """
+
+    def list_requests(self, *, status: str | None) -> RegistrationListingView:
+        """Every request (or those in one status), oldest first, and the pending total."""
+
+    def approve(
+        self,
+        *,
+        actor_uid: str,
+        request_id: str,
+        roles: frozenset[str],
+        idempotency_key: str,
+    ) -> RegistrationView:
+        """Create the account and decide the request, in one transaction, or replay it.
+
+        The same key with the same payload replays the recorded outcome; with another
+        payload it is ``idempotency_key_reuse`` and changes nothing.
+        """
+
+    def reject(self, *, actor_uid: str, request_id: str, reason: str) -> RegistrationView:
+        """Decide the request as rejected with a reason of 1-256 characters."""

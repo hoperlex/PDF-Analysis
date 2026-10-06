@@ -70,15 +70,49 @@ REQUIRED_OPERATIONS = {
     # over three client-side walks because `R-24` was ruled for a listing operation and
     # against a walk.
     "getDashboardSummary",
+    # `W49-SEAL-01`, `R-55` ... `R-61`. The account itself, registration requests and an
+    # administrator's account management. Like the exchange, the account operations
+    # implement no PC-01 product capability and are listed because this set is the whole
+    # surface.
+    "getMe",
+    "updateMyProfile",
+    "submitRegistration",
+    "readRegistrationStatus",
+    "listRegistrations",
+    "approveRegistration",
+    "rejectRegistration",
+    "listUsers",
+    "getUser",
+    "updateUser",
+    "archiveUser",
+    "restoreUser",
+    "purgeUser",
+    "resetUserPassword",
 }
 
-#: The operations a caller reaches while holding no credential. Exactly one, and it is
-#: the one that hands a credential out. `UNAUTHENTICATED_OPERATIONS` is a register of
-#: *deliberate* exceptions, not a tolerance: anything else that opts itself out of the
-#: root requirement is reported by `test_every_operation_requires_the_bearer_scheme`.
-UNAUTHENTICATED_OPERATIONS = {"issueToken"}
+#: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
+#: is a register of *deliberate* exceptions, not a tolerance: anything else that opts itself
+#: out of the root requirement is reported by `test_every_operation_requires_the_bearer_scheme`.
+#: One until `W49-SEAL-01` -- the exchange, which hands a credential out -- and three since:
+#: an applicant for an account has none, so submitting an application and reading whether
+#: a pair proves a pending one are reached without a credential too (`R-56`).
+UNAUTHENTICATED_OPERATIONS = {"issueToken", "submitRegistration", "readRegistrationStatus"}
 
-WRITE_OPERATIONS = {"createProject", "uploadDocument", "startRun", "appendDecision"}
+#: The open operation that has **no credential to refuse** at all: `submitRegistration`
+#: takes none and checks none, so it declares neither `401` nor `403`. The other two open
+#: operations answer a refused pair with `401` -- the exchange's and the status read's one
+#: refusal -- and have no subject a `403` could deny.
+OPERATIONS_WITH_NO_CREDENTIAL_TO_REFUSE = {"submitRegistration"}
+
+#: The keyed writes: every one requires `Idempotency-Key` and declares the `409` a key
+#: conflict answers. `approveRegistration` (`W49-SEAL-01`) creates an account, so it is one.
+WRITE_OPERATIONS = {
+    "createProject",
+    "uploadDocument",
+    "startRun",
+    "appendDecision",
+    "approveRegistration",
+}
 
 PAGINATED_OPERATIONS = {
     "listProjects",
@@ -88,7 +122,16 @@ PAGINATED_OPERATIONS = {
     "listDocuments",
     "listVersions",
     "listRuns",
+    # `W49-SEAL-01`.
+    "listRegistrations",
+    "listUsers",
 }
+
+#: Page-level properties a paginated response may carry beside `items` and `page`, by
+#: operation. `listRegistrations` carries `pending_total`, the administrator's badge: the
+#: number of pending requests whatever the filter, a property of the queue and not of the
+#: page. Anything else beside the two is still reported.
+PAGE_AGGREGATES: dict[str, set[str]] = {"listRegistrations": {"pending_total"}}
 
 
 def _walk(node: Any, path: str = "$"):
@@ -355,7 +398,7 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
 #: pinned as a literal so a second input-less operation is a decision someone makes
 #: rather than a drift nobody notices. Moves on a reseal that adds or removes every
 #: parameter, header and body an operation takes.
-INPUT_LESS_OPERATIONS: frozenset[str] = frozenset({"getDashboardSummary"})
+INPUT_LESS_OPERATIONS: frozenset[str] = frozenset({"getDashboardSummary", "getMe"})
 
 
 def test_every_operation_that_takes_input_can_report_a_client_fault(
@@ -694,10 +737,24 @@ def test_the_unauthenticated_operation_is_the_one_that_hands_out_a_credential(
     """The register is only worth something if what it admits is what it says it admits.
 
     A name in `UNAUTHENTICATED_OPERATIONS` excuses an operation from the requirement the
-    whole surface is built on, so this pins what that one operation actually is: it takes
-    a credential and returns one, and it is the only path in the document that does.
+    whole surface is built on, so this pins what each one actually is. The exchange takes
+    a credential pair and returns a credential, and it is the only path in the document
+    that does. Since `W49-SEAL-01` the other two are the registration pair: the status read
+    takes the same pair the exchange takes and answers nothing but ``pending``, and the
+    submission takes an application and answers the same -- neither returns a credential,
+    an identity or a reason (`R-56` and its 2026-10-06 addendum).
     """
     operations = _operations(openapi_document)
+    assert UNAUTHENTICATED_OPERATIONS == {
+        "issueToken",
+        "submitRegistration",
+        "readRegistrationStatus",
+    }
+    expected_success = {
+        "issueToken": ("200", "IssueTokenResponse"),
+        "readRegistrationStatus": ("200", "RegistrationStatusResponse"),
+        "submitRegistration": ("201", "RegistrationStatusResponse"),
+    }
     for name in UNAUTHENTICATED_OPERATIONS:
         operation = operations[name]
         assert operation["_method"] == "post", name
@@ -705,28 +762,38 @@ def test_the_unauthenticated_operation_is_the_one_that_hands_out_a_credential(
             openapi_document,
             operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
         )
-        assert set(body["required"]) == {"login", "password"}, name
-        success = _resolve(
-            openapi_document,
-            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
-        )
-        # `R-50`: three, all required. `is_default_credential` is required rather
-        # than optional because a client that could not see it would have to assume
-        # a value, and the assumable one is the permissive one.
-        assert set(success["required"]) == {
-            "token",
-            "expires_in",
-            "is_default_credential",
-        }, name
-        # `T-6`: the document describes the exchange and never the credential. A format,
-        # an issuer or a flow would be a promise the deployment has to keep for ever.
-        assert "bearerFormat" not in openapi_document["components"]["securitySchemes"][
-            BEARER_SCHEME
-        ], "the token format is back in the document"
-        assert set(success["properties"]["token"]) <= {"type", "description", "minLength"}, (
-            "the token schema constrains its own structure, which pins the credential "
-            "format the scheme deliberately leaves open"
-        )
+        assert {"login", "password"} <= set(body["required"]), name
+        status, schema_name = expected_success[name]
+        reference = operation["responses"][status]["content"]["application/json"]["schema"]
+        assert reference == {"$ref": f"#/components/schemas/{schema_name}"}, name
+    # The two registration operations read the exchange's own pair, or an application.
+    status_body = operations["readRegistrationStatus"]["requestBody"]["content"][
+        "application/json"
+    ]["schema"]
+    assert status_body == {"$ref": "#/components/schemas/IssueTokenRequest"}
+    answer = _resolve(openapi_document, "#/components/schemas/RegistrationStatusResponse")
+    assert answer["required"] == ["status"]
+    assert answer["properties"] == {"status": {"const": "pending"}}, (
+        "the status read shows an applicant `pending` and nothing else (R-56 addendum)"
+    )
+    success = _resolve(openapi_document, "#/components/schemas/IssueTokenResponse")
+    # `R-50`: three, all required. `is_default_credential` is required rather
+    # than optional because a client that could not see it would have to assume
+    # a value, and the assumable one is the permissive one.
+    assert set(success["required"]) == {
+        "token",
+        "expires_in",
+        "is_default_credential",
+    }
+    # `T-6`: the document describes the exchange and never the credential. A format,
+    # an issuer or a flow would be a promise the deployment has to keep for ever.
+    assert "bearerFormat" not in openapi_document["components"]["securitySchemes"][
+        BEARER_SCHEME
+    ], "the token format is back in the document"
+    assert set(success["properties"]["token"]) <= {"type", "description", "minLength"}, (
+        "the token schema constrains its own structure, which pins the credential "
+        "format the scheme deliberately leaves open"
+    )
 
 
 def test_every_operation_can_report_401_and_403(openapi_document: dict) -> None:
@@ -735,10 +802,18 @@ def test_every_operation_can_report_401_and_403(openapi_document: dict) -> None:
     `W34-CONTRACT`: the 403 is `permission_denied`, which the response component defines
     as *"the authenticated subject is not permitted"*. The credential exchange has no
     authenticated subject -- it is the operation that produces one -- so it declares the
-    401 and must **not** declare a 403, and that is asserted rather than skipped.
+    401 and must **not** declare a 403, and that is asserted rather than skipped. The
+    registration status read is the same (`W49-SEAL-01`): a refused pair is its `401`.
+    The submission has no credential to refuse at all, so it declares **neither**.
     """
     for name, operation in _operations(openapi_document).items():
         responses = operation["responses"]
+        if name in OPERATIONS_WITH_NO_CREDENTIAL_TO_REFUSE:
+            assert name in UNAUTHENTICATED_OPERATIONS, name
+            assert "401" not in responses and "403" not in responses, (
+                f"{name} takes no credential, so it has none to refuse and no subject to deny"
+            )
+            continue
         assert responses["401"]["$ref"] == "#/components/responses/AuthenticationRequired", name
         if name in UNAUTHENTICATED_OPERATIONS:
             assert "403" not in responses, (
@@ -785,7 +860,7 @@ def test_the_error_code_enum_equals_the_frozen_catalog(
 ) -> None:
     declared = openapi_document["components"]["schemas"]["ErrorCode"]["enum"]
     assert set(declared) == set(error_codes_contract["codes"])
-    assert len(declared) == len(set(declared)) == 22
+    assert len(declared) == len(set(declared)) == 23
 
 
 # ---------------------------------------------------------------------------
@@ -884,6 +959,10 @@ ADMITTED_SECRET_PROPERTIES = frozenset(
     {
         "IssueTokenRequest.properties.password",
         "IssueTokenResponse.properties.token",
+        # `W49-SEAL-01`. An application carries the applicant's future password, stored
+        # hashed until the decision removes it; the schema could not describe the
+        # operation without the name.
+        "SubmitRegistrationRequest.properties.password",
     }
 )
 
@@ -1013,7 +1092,7 @@ def test_growing_lists_are_cursor_paginated(openapi_document: dict) -> None:
         assert {"cursor", "limit"} <= parameters, f"{name} is not cursor-paginated"
         schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
         page = _resolve(openapi_document, schema["$ref"])
-        assert set(page["required"]) == {"items", "page"}
+        assert set(page["required"]) == {"items", "page"} | PAGE_AGGREGATES.get(name, set())
 
 
 @pytest.mark.parametrize(

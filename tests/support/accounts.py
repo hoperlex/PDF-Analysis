@@ -25,6 +25,14 @@ that assumed an empty ``app_user`` would fail on its second run and on every par
 ``provisioned_credential`` creates the account when it is absent and re-reads it when it is
 there, and it never changes a password or an epoch -- a suite that revoked something here
 would sign out every other suite running against the same lane.
+
+**`W49-SEAL-01`: every suite account is a complete ``expert`` account.** The authorization
+seam now refuses an incomplete profile everything but its own profile and password, and
+every product change needs the ``expert`` role (`R-59`, `R-60`). So the label a suite passes
+is no longer the login itself: it is the local part of an e-mail login
+(``<label>@suite.invalid``), the account is created with fixed names -- its display label is
+therefore the name form :data:`SUITE_DISPLAY_LABEL` -- and it holds ``expert``. One helper
+does it for every suite, so a later rule about accounts changes this file and not seven.
 """
 
 from __future__ import annotations
@@ -35,9 +43,13 @@ from typing import Any
 
 __all__ = [
     "REPOSITORY_ROOT",
+    "SUITE_DISPLAY_LABEL",
+    "SUITE_NAMES",
+    "complete_expert_account",
     "database_url",
     "provisioned_credential",
     "provisioned_record",
+    "suite_login",
 ]
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -47,6 +59,52 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 #: so this value only has to satisfy the column's own constraints. It is a literal so that
 #: reading this file tells you everything the row contains.
 SUITE_PASSWORD = "w39-suite-account-password"
+
+#: The names every suite account carries (`W49-SEAL-01`): a complete profile needs them, and
+#: they are fixed rather than derived from the label so the label a decision records is one
+#: known literal. The name form is what `R-55` shows a complete profile under.
+SUITE_NAMES = ("Сьютова", "Ева")
+SUITE_DISPLAY_LABEL = "Сьютова Е."
+
+#: The domain of every suite login. ``.invalid`` is reserved (RFC 2606), so no suite login
+#: can ever be somebody's address.
+SUITE_DOMAIN = "suite.invalid"
+
+
+def suite_login(label: str) -> str:
+    """The e-mail login a suite label becomes: ``<label>@suite.invalid``."""
+    return f"{label}@{SUITE_DOMAIN}"
+
+
+def complete_expert_account(session: Any, label: str) -> Any:
+    """The complete ``expert`` account for ``label`` in ``session``'s database, created if absent.
+
+    Idempotent: an account this helper made before is returned as it is -- its epoch may
+    have moved, and minting under what the row says now is the point. Created, it is three
+    steps of the access boundary's own: the row, the profile completion (one UPDATE), the
+    role grant. The caller commits.
+    """
+    from auditmanager.access.accounts import AccountRepository
+    from auditmanager.access.repository import UserRepository
+
+    users = UserRepository()
+    login = suite_login(label)
+    existing = users.find_by_login(session, login)
+    if existing is not None:
+        return existing
+    created = users.create_user(session, login, SUITE_PASSWORD)
+    accounts = AccountRepository()
+    accounts.complete_profile(
+        session,
+        user_uid=str(created.user_uid),
+        email=None,
+        last_name=SUITE_NAMES[0],
+        first_name=SUITE_NAMES[1],
+    )
+    accounts.grant_role(session, user_uid=str(created.user_uid), role="expert", granted_by=None)
+    # Re-read: the grant raised the epoch, and a credential minted under the creation's
+    # epoch would be refused by the very next request.
+    return users.find_by_login(session, login)
 
 
 def database_url() -> str:
@@ -83,7 +141,11 @@ def database_url() -> str:
 
 
 def provisioned_record(login: str) -> Any:
-    """The ``UserRecord`` for ``login``, creating the account if this lane has none.
+    """The ``UserRecord`` for the suite label ``login``, creating the account if absent.
+
+    ``login`` is the suite's label (``pc01-acceptance``, ``composition-suite``): the account
+    signs in as ``<label>@suite.invalid`` and is complete and ``expert``
+    (:func:`complete_expert_account`).
 
     Opens its own engine and disposes of it. That costs a connection per call and is worth
     it: the alternative is a module-level engine held for the whole session by a helper
@@ -91,7 +153,6 @@ def provisioned_record(login: str) -> Any:
     """
     from sqlalchemy.orm import Session
 
-    from auditmanager.access.repository import UserRepository
     from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
     from auditmanager.shared.db.engine import create_database_engine
 
@@ -99,17 +160,13 @@ def provisioned_record(login: str) -> Any:
         DatabaseSettings(url=parse_database_url(database_url()))
     )
     try:
-        users = UserRepository()
         with Session(engine) as session:
-            existing = users.find_by_login(session, login)
-            if existing is not None:
-                # Deliberately returned as-is. Its epoch may be above 1 because an earlier
-                # run of this very suite, or a revocation test in another one, moved it --
-                # and minting under what the row says now is the whole point of reading it.
-                return existing
-            created = users.create_user(session, login, SUITE_PASSWORD)
+            # Returned as-is when it exists. Its epoch may be above 1 because an earlier run
+            # of this very suite, or a revocation test in another one, moved it -- and
+            # minting under what the row says now is the whole point of reading it.
+            record = complete_expert_account(session, login)
             session.commit()
-            return created
+            return record
     finally:
         engine.dispose()
 
@@ -134,9 +191,9 @@ def provisioned_credential(deployment_secret: str, login: str) -> str:
             # works until the first time anything in this lane revokes anything.
             token_epoch=record.token_epoch,
             # `R-37`, and the same rule one field along: the label is the record's own
-            # answer -- the chosen display name, or the login when there is none. A literal
-            # here would make this helper mint credentials that disagree with the rows it
-            # just read, which is the whole defect this module exists to have stopped.
+            # answer -- the name form of a complete profile (`R-55`). A literal here would
+            # make this helper mint credentials that disagree with the rows it just read,
+            # which is the whole defect this module exists to have stopped.
             display_label=record.display_label,
         ),
         is_default_credential=False,

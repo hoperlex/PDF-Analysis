@@ -48,6 +48,9 @@ PORT_FOR_ARGUMENT = {
     "credentials": "CredentialPort",
     "blocks": "BlockPort",
     "dashboard": "DashboardPort",
+    # `W49-SEAL-01`.
+    "accounts": "AccountPort",
+    "registrations": "RegistrationPort",
 }
 
 

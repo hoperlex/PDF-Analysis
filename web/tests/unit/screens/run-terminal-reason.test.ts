@@ -7,7 +7,7 @@
  * the repair at the place a person meets it: the HTML, not the selector.
  *
  * **Each catalog code is asserted by its own case.** `it.each` over the whole catalog
- * means replacing the sentence table with one constant reddens twenty-two named tests,
+ * means replacing the sentence table with one constant reddens twenty-three named tests,
  * not one, and replacing a single sentence reddens exactly the case that names its code.
  * `W12-WEB`'s U-01 is the precedent: `terminal_reason` reached a user in one line of this
  * application and that line could be made to print `redacted` with 498 tests green.
@@ -47,10 +47,10 @@ function failedWith(reason: ErrorCode | null): string {
  * the module under test.
  *
  * The first draft of this file asserted `markup).toContain(terminalReasonNote(code).sentence)`,
- * which is a re-capture and not an assertion: replacing all twenty-two sentences with one
+ * which is a re-capture and not an assertion: replacing all twenty-three sentences with one
  * constant left every case green, because the expectation moved with the implementation.
  * `MEMORY: characterization can freeze a defect` is the same shape. Each phrase below is
- * chosen to be specific to its own code, so one constant reddens twenty-two named cases.
+ * chosen to be specific to its own code, so one constant reddens twenty-three named cases.
  */
 const MUST_SAY: Readonly<Record<ErrorCode, string>> = {
   validation_failed: 'Нарушены объявленная схема, перечисление, формат или инвариант',
@@ -74,6 +74,7 @@ const MUST_SAY: Readonly<Record<ErrorCode, string>> = {
   cost_budget_exceeded: 'бюджет стоимости или токенов для этого прогона исчерпан',
   stale_attempt: 'больше не является для неё публикующей инстанцией',
   execution_token_invalid: 'отсутствовал, был искажён или не был',
+  rate_limited: 'Прогон таким кодом завершиться не может',
   internal_error: 'неклассифицированная серверная неисправность',
 };
 

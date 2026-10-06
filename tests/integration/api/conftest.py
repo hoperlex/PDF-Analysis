@@ -68,6 +68,8 @@ Answer = _driver.Answer
 Request = _driver.Request
 Surface = _driver.Surface
 SuiteCredentialAdapter = _driver.SuiteCredentialAdapter
+SuiteAccountAdapter = _driver.SuiteAccountAdapter
+SuiteRegistrationAdapter = _driver.SuiteRegistrationAdapter
 TEST_TOKEN = _driver.TEST_TOKEN
 dispatch = _driver.dispatch
 from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
@@ -611,6 +613,7 @@ class LedgerDecisionAdapter:
         comment: str | None,
         idempotency_key: str,
         author_label: str,
+        author_user_uid: str,
     ) -> _Appended:
         # `D-78`. The author is part of the fingerprint, as it is in the shipped
         # `append_decision_under_key`: two reviewers presenting one idempotency key are two
@@ -627,6 +630,7 @@ class LedgerDecisionAdapter:
                     "event_type": event_type,
                     "comment": comment,
                     "author_label": author_label,
+                    "author_user_uid": author_user_uid,
                 }
             ),
         )
@@ -638,6 +642,7 @@ class LedgerDecisionAdapter:
             comment=comment,
             command_id=str(claim.command_id),
             author_label=author_label,
+            author_user_uid=author_user_uid,
         )
         if isinstance(claim, CommandStarted):
             self._commands.succeed(
@@ -810,7 +815,49 @@ class SeamExportAdapter:
 
 
 @pytest.fixture
-def router(ingest: IngestService, session: Session) -> Surface:
+def suite_account(session: Session) -> str:
+    """The row behind the suite's credential, inside this test's rolled-back transaction.
+
+    `W49-SEAL-01`: a decision event names its author's **account**
+    (``expert_decision_event.author_user_uid``, a ``RESTRICT`` foreign key to ``app_user``),
+    and the decisions router now passes the verified subject's ``user_uid``. The suite's
+    subject was an identity nothing held; it is now a real, complete, ``expert`` account,
+    written in the same transaction the test runs in and rolled back with it, so a shared
+    lane keeps no residue and no other suite can see it.
+    """
+    from auditmanager.access.passwords import hash_password
+
+    stored = hash_password(_driver.SUITE_PASSWORD)
+    last, first, middle = _driver.SUITE_NAMES
+    session.execute(
+        text(
+            "INSERT INTO app_user (user_uid, login, password_algorithm, password_iterations, "
+            "password_salt, password_hash, is_default_credential, token_epoch, last_name, "
+            "first_name, middle_name, profile_completed_at) VALUES (:uid, :login, :algorithm, "
+            ":iterations, :salt, :digest, false, :epoch, :last, :first, :middle, now())"
+        ),
+        {
+            "uid": _driver.TEST_SUBJECT.user_uid,
+            "login": _driver.SUITE_LOGIN,
+            "algorithm": stored.algorithm,
+            "iterations": stored.iterations,
+            "salt": stored.salt,
+            "digest": stored.digest,
+            "epoch": _driver.TEST_EPOCH,
+            "last": last,
+            "first": first,
+            "middle": middle,
+        },
+    )
+    session.execute(
+        text("INSERT INTO app_user_role (user_uid, role) VALUES (:uid, 'expert')"),
+        {"uid": _driver.TEST_SUBJECT.user_uid},
+    )
+    return _driver.TEST_SUBJECT.user_uid
+
+
+@pytest.fixture
+def router(ingest: IngestService, session: Session, suite_account: str) -> Surface:
     """The twelve operations over this suite's seam adapters, and the app that serves them.
 
     A :class:`~tests.integration.api.driver.Surface` rather than the bare ``APIRouter``,
@@ -826,6 +873,10 @@ def router(ingest: IngestService, session: Session) -> Surface:
         decisions=LedgerDecisionAdapter(session),
         exports=SeamExportAdapter(session),
         credentials=SuiteCredentialAdapter(),
+        # `W49-SEAL-01`. Stand-ins that answer what the seam lets through with a refusal of
+        # the operation's own kind, never a 403: see `driver.SuiteAccountAdapter`.
+        accounts=SuiteAccountAdapter(),
+        registrations=SuiteRegistrationAdapter(),
     ))
 
 
@@ -834,6 +885,7 @@ def shipped_router(
     ingest: IngestService,
     session: Session,
     session_factory: sessionmaker[Session],
+    suite_account: str,
 ) -> Surface:
     """The surface over the adapters the application actually ships.
 
@@ -857,11 +909,14 @@ def shipped_router(
     fixture-only implementation of it to fall back on -- so this is the only fixture able
     to exercise ``getDashboardSummary`` against real SQL.
     """
+    from auditmanager.access.public import AccountRepository, RegistrationRepository
     from auditmanager.bootstrap.adapters import (
+        AccountAdapter,
         DashboardAdapter,
         DecisionAdapter,
         FindingAdapter,
         ProjectAdapter,
+        RegistrationAdapter,
     )
 
     return Surface(build_router(
@@ -876,6 +931,13 @@ def shipped_router(
         # `decisions` above: `getDashboardSummary` has no test-only seam shape to
         # compare against, so this is the only fixture that can exercise it.
         dashboard=DashboardAdapter(session_factory),
+        # `W49-SEAL-01`. Both new ports declare query parameters (`include_archived`,
+        # `status`, `cursor`, `limit`), so both are the shipped adapters here, for the
+        # reason this fixture exists.
+        accounts=AccountAdapter(session_factory, accounts=AccountRepository()),
+        registrations=RegistrationAdapter(
+            session_factory, registrations=RegistrationRepository()
+        ),
     ))
 
 

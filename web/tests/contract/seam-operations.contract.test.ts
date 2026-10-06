@@ -3,7 +3,7 @@
  *
  * The drift guard next door proves the client matches the document. This one proves the
  * document still says what `docs/program/P02_SEAMS.md` section 7 says it says — the
- * nineteen operations at their frozen methods and paths, the field sets a review screen depends on,
+ * thirty-four operations at their frozen methods and paths, the field sets a review screen depends on,
  * and the safety rules that must survive any future edit to the contract.
  *
  * A P02 change that breaks the seam fails here, before any UI task is blamed for it.
@@ -72,7 +72,32 @@ const SEAM_OPERATIONS: ReadonlyArray<readonly [string, string, string]> = [
   ['getVersionBlocks', 'GET', '/versions/{version_uid}/blocks'],
   // `W46-SEAL`, `R-44`: one aggregate read serving all four dashboard panels.
   ['getDashboardSummary', 'GET', '/dashboard'],
+  // `W49-SEAL-01`, `R-55` ... `R-61`: the account itself, registration requests and an
+  // administrator's account management.
+  ['getMe', 'GET', '/me'],
+  ['updateMyProfile', 'PATCH', '/me'],
+  ['submitRegistration', 'POST', '/registrations'],
+  ['readRegistrationStatus', 'POST', '/registrations/status'],
+  ['listRegistrations', 'GET', '/registrations'],
+  ['approveRegistration', 'POST', '/registrations/{request_id}/approve'],
+  ['rejectRegistration', 'POST', '/registrations/{request_id}/reject'],
+  ['listUsers', 'GET', '/users'],
+  ['getUser', 'GET', '/users/{user_uid}'],
+  ['updateUser', 'PATCH', '/users/{user_uid}'],
+  ['archiveUser', 'POST', '/users/{user_uid}/archive'],
+  ['restoreUser', 'POST', '/users/{user_uid}/restore'],
+  ['purgeUser', 'DELETE', '/users/{user_uid}'],
+  ['resetUserPassword', 'POST', '/users/{user_uid}/password'],
 ];
+
+/**
+ * `W49-SEAL-01`. The operations a caller reaches without a credential, by name: the
+ * exchange, and the two an applicant with no account uses. The first and the status read
+ * answer a refused pair with `401` and have no subject a `403` could deny; the submission
+ * takes no credential at all, so it declares neither.
+ */
+const OPEN_OPERATIONS = ['issueToken', 'readRegistrationStatus', 'submitRegistration'] as const;
+const NO_CREDENTIAL_TO_REFUSE = ['submitRegistration'] as const;
 
 const document = JSON.parse(readText(CONTRACT_PATH)) as {
   components: { schemas: Record<string, { required?: string[]; properties?: Record<string, unknown> }> };
@@ -87,7 +112,7 @@ const schema = (name: string) => {
   return found as { required?: string[]; properties?: Record<string, unknown> };
 };
 
-describe('the twenty seam operations', () => {
+describe('the seam operations', () => {
   it('are exactly the operations the client exposes', () => {
     expect([...OPERATION_IDS].sort()).toEqual(SEAM_OPERATIONS.map(([id]) => id).sort());
   });
@@ -107,12 +132,20 @@ describe('the twenty seam operations', () => {
     expect(OPERATIONS.issueToken.requiresIdempotencyKey).toBe(false);
   });
 
-  it('requires an idempotency key on exactly the four writes', () => {
+  it('requires an idempotency key on exactly the five keyed writes', () => {
     const writes = Object.values(OPERATIONS)
       .filter((op) => op.requiresIdempotencyKey)
       .map((op) => op.operationId)
       .sort();
-    expect(writes).toEqual(['appendDecision', 'createProject', 'startRun', 'uploadDocument']);
+    // `approveRegistration` (`W49-SEAL-01`) creates an account, so it is keyed like every
+    // other create on this surface.
+    expect(writes).toEqual([
+      'appendDecision',
+      'approveRegistration',
+      'createProject',
+      'startRun',
+      'uploadDocument',
+    ]);
   });
 
   it('returns bytes, not JSON, from the viewer and the export', () => {
@@ -206,12 +239,15 @@ describe('the run vocabulary', () => {
 });
 
 describe('the error catalog', () => {
-  it('is the closed twenty-two-code set', () => {
-    // Twenty-two since round 7: owner ruling `R-8`, reinstated by `R-13`, added
-    // `staged_upload_lost` so one 409 stopped meaning two opposite things (`D-18`).
-    // Twenty-one before it, since the wave-13 reseal, where `R-3` added
-    // `dependency_credential_refused` so one 403 stopped meaning two things (`D-7`).
-    expect(ERROR_CODE_VALUES).toHaveLength(22);
+  it('is the closed twenty-three-code set', () => {
+    // Twenty-three since `W49-SEAL-01` added `rate_limited`, the code the edge answers
+    // when it throttles the registration operations. Twenty-two since round 7: owner
+    // ruling `R-8`, reinstated by `R-13`, added `staged_upload_lost` so one 409 stopped
+    // meaning two opposite things (`D-18`). Twenty-one before it, since the wave-13
+    // reseal, where `R-3` added `dependency_credential_refused` so one 403 stopped
+    // meaning two things (`D-7`).
+    expect(ERROR_CODE_VALUES).toHaveLength(23);
+    expect(ERROR_CODE_VALUES).toContain('rate_limited');
     expect(ERROR_CODE_VALUES).toContain('idempotency_key_in_progress');
     expect(ERROR_CODE_VALUES).toContain('state_transition_not_allowed');
     expect(ERROR_CODE_VALUES).toContain('dependency_credential_refused');
@@ -253,13 +289,20 @@ describe('the error catalog', () => {
     }
     expect(withResponses).toHaveLength(SEAM_OPERATIONS.length);
     for (const [operationId, statuses] of withResponses) {
+      // `W49-SEAL-01`: the submission takes no credential, so it has none to refuse.
+      if ((NO_CREDENTIAL_TO_REFUSE as readonly string[]).includes(operationId)) {
+        expect(statuses, `${operationId} takes no credential to refuse`).not.toContain('401');
+        expect(statuses, `${operationId} has no authenticated subject to deny`).not.toContain('403');
+        continue;
+      }
       expect(statuses, `${operationId} declares no 401`).toContain('401');
       // `W34-CONTRACT`: 403 is `permission_denied`, which needs an authenticated subject.
       // `issueToken` is the operation that produces one and presents none itself, so it
-      // declares the 401 and not the 403. That exception is pinned by name here and
-      // derived from the document's `security` in `pc01-error-codes.contract.test.ts`.
-      if (operationId === 'issueToken') {
-        expect(statuses, 'issueToken has no authenticated subject to deny').not.toContain('403');
+      // declares the 401 and not the 403, and so does `readRegistrationStatus`
+      // (`W49-SEAL-01`). The exceptions are pinned by name here and derived from the
+      // document's `security` in `pc01-error-codes.contract.test.ts`.
+      if ((OPEN_OPERATIONS as readonly string[]).includes(operationId)) {
+        expect(statuses, `${operationId} has no authenticated subject to deny`).not.toContain('403');
       } else {
         expect(statuses, `${operationId} declares no 403`).toContain('403');
       }

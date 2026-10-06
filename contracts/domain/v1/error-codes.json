@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.errors",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 8,
-  "revision_note": "Seventh review round of the unreleased 1.0.0-draft.1 candidate. Round 7 carries owner ruling R-8 of 2026-09-18 (OWNER_RULINGS_2026-09-17.md section 3.6) and settles DEBT_REGISTER.md D-18. One code is added: staged_upload_lost, 503, RETRYABLE TRUE, category dependency, safe_detail_keys exactly [dependency]. It exists because two storage failures that demand opposite operator responses -- stop, the instance was restored wrong, against retry the upload -- both raised conflict with aggregate_type Blob and produced envelopes that were byte-identical apart from correlation_id. The owner was offered a widened safe_detail_keys on conflict instead and rejected it: a detail key cannot fix retryable. That flag is a property of the code, conflict's false is correct for an immutable blob already published and wrong for a staged upload the store lost, and only a separate code carries a separate value. conflict keeps the contract's meaning and is otherwise untouched, byte for byte. The dependency category description is widened to admit a dependency that failed to retain staged bytes alongside a transient outage, a refused credential and an unresolvable reference; the category set is unchanged. This is an addition to a draft candidate, not a freeze-break: status is draft_candidate and frozen is false, and D-8 records that the programme's prose had been calling this catalog frozen. contract_version stays 1.0.0-draft.1: the candidate is unreleased, so the addition does not supersede a released version. Nothing else changed -- the other twenty-one codes and every http status, retryable flag, category, summary, safe detail key list and evidence list are exactly those of round 6, and the envelope declaration, safety rules, internal_mapping and the open decision and question registers are untouched. The family carries one candidate_revision, so all three catalogs and all three schemas move to 7; identifiers.json and state-machines.json carry only that integer in this round and their revision notes still describe round 4, as in rounds 5 and 6, because W0-DOM-02 permits no other byte in those files.",
+  "candidate_revision": 9,
+  "revision_note": "Candidate revision 9 of the unreleased 1.0.0-draft.1 candidate, written by W49-SEAL-01 under owner rulings R-55, R-56, R-60 and R-61 (OWNER_RULINGS_2026-09-17.md section 3.19) and the seal decisions of 2026-10-06. Two changes and nothing else. One code is added: rate_limited, 429, retryable true, category policy, safe_detail_keys empty. It exists because the edge in front of /api/v1 now throttles the two unauthenticated registration operations per client address, the safety rules forbid a code invented at the edge, and the catalog had no 429. It is answered only by that edge and is never stored, so the database's own code vocabulary (the error_code and terminal_reason CHECKs of migration 0002) deliberately does not grow: tests/contract/domain_p02/test_contract_vocabulary.py declares the edge-only set and asserts the stored vocabulary equals the catalog minus it. And conflict gains one safe detail key, conflict_reason, an enum-like classifier whose values are login_taken, request_pending, queue_full, account_referenced and last_admin, so the account and registration refusals that share conflict can be told apart without a free-text detail. Nothing else changed: the other twenty-two codes and every http status, retryable flag, category, summary, evidence list and the other safe detail keys are exactly those of revision 8, and the envelope declaration, the safety rules, internal_mapping and the decision and question registers are untouched. The family carries one candidate_revision, so identifiers.json and state-machines.json move to 9 in the same change; their own revision notes say what they gained. The three family schemas (error-codes.schema.json, identifiers.schema.json, state-machines.schema.json) pin candidate_revision with const and are outside W49-SEAL-01's grant, so their pins were not moved by this slot; that is recorded as an open question in docs/program/W49-SEAL-01a.md rather than decided here. contract_version stays 1.0.0-draft.1: the candidate is unreleased, so the addition does not supersede a released version.",
   "status": "draft_candidate",
   "frozen": false,
   "envelope": {
@@ -157,11 +157,15 @@
       "summary": "A concurrent write lost the optimistic-concurrency check or a uniqueness invariant would be violated. Used only when no more specific conflict code applies.",
       "safe_detail_keys": [
         "aggregate_type",
-        "expected_revision"
+        "expected_revision",
+        "conflict_reason"
       ],
       "evidence": [
         "WS-02",
         "DW-02"
+      ],
+      "notes": [
+        "conflict_reason (W49-SEAL-01, R-55/R-61) classifies the account and registration conflicts: login_taken (an active account holds the login), request_pending (a registration request for the login is already pending), queue_full (the pending registration queue is at its cap), account_referenced (a purge was refused because something references the account) and last_admin (the change would leave no active account holding admin). It is an enum-like classifier and never raw input; the values are the closed set above, and a refusal of an act on oneself is permission_denied with no detail, not a conflict. That login_taken and request_pending tell a submitter that a login is known is an accepted, registered limitation (W49-PLAN.md section 3.3)."
       ]
     },
     "state_transition_not_allowed": {
@@ -409,6 +413,22 @@
       "decision_dependency": "PD-03",
       "notes": [
         "The capability is named execution_token. fencing_token and authority_token are legacy evidence names and are forbidden detail keys, so neither the value nor a legacy field name can appear in the envelope."
+      ]
+    },
+    "rate_limited": {
+      "http": 429,
+      "retryable": true,
+      "category": "policy",
+      "summary": "Too many requests of this kind arrived from this client within the throttle window. Nothing was created or changed; the same request may be sent again later.",
+      "safe_detail_keys": [],
+      "evidence": [
+        "OWNER_RULINGS_2026-09-17.md R-56",
+        "W49-PLAN.md section 3.5"
+      ],
+      "notes": [
+        "Answered only by the edge in front of /api/v1 (the proxy's limit_req on POST /registrations and POST /registrations/status, W49-EDGE-01). The application itself never raises it and no column stores it, which is why the database's code vocabulary is the catalog minus this code.",
+        "The throttle is per client address and says nothing about any account or request, so the refusal carries no detail key: a key naming what was throttled would tell a stranger which login is under attack.",
+        "retryable is true because the same request succeeds once the window has passed; the status is 429 because the refusal is a rate, not a conflict with durable state."
       ]
     },
     "internal_error": {

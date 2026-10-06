@@ -176,6 +176,15 @@ NON_TERMINAL_RUN_STATES = ("created", "queued", "running", "validating")
 #: into a field it has always written. The frozen document's *description* of that field
 #: still calls it "one configured local reviewer label" and is now wrong; correcting it is
 #: a reseal and the owner's, and `W41-AUTHOR` reported it rather than doing it.
+#:
+#: **`W49-SEAL-01` moved records 10 and 11 for the first time since `D-78`**, and by one
+#: value: the account this journey provisions is now a complete ``expert`` account, so the
+#: label it records is the name form ``Сьютова Е.`` instead of the login ``w13-baseline``
+#: it fell back to. The debt is still `D-78`'s subject -- who a decision is attributed to --
+#: and the two entries below did not change; what changed is each block's cited decision
+#: (`2894951`) and its `permitted_change`, and
+#: :func:`test_the_two_author_records_moved_by_the_label_and_nothing_else` asserts the move
+#: is that label and nothing else.
 PERMITTED_EXCEPTIONS = {
     "03-startRun.success": ("D-19", "D-21", "D-20"),
     "04-startRun.replay": ("D-19", "D-21"),
@@ -226,6 +235,11 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     label falls back to the login these records already pin. The exception blocks were
     amended rather than the records re-captured, because nothing about the bytes is
     different and a re-capture would have recorded that fact as a change.
+
+    `W49-SEAL-01` then **did** move both, by the label alone: the journey's account became a
+    complete profile, whose name form outranks its login (`R-55`). The blocks cite that
+    decision and the move is asserted by digest in
+    ``test_the_two_author_records_moved_by_the_label_and_nothing_else``.
     """
     marked = {
         path.stem: json.loads(path.read_text(encoding="utf-8"))["exception"]
@@ -252,6 +266,41 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     # `R-5` explicitly did not, which is why `W18-SEAL` left this field unfilled; citing
     # it here would be citing an authority that was declined.
     assert "R-10" in exceptions["16-listProjects.success"]["ruling"]
+
+
+#: `W49-SEAL-01`. The SHA-256 of records 10 and 11's body text as captured before the seal
+#: (`7912504`), when the label was the login ``w13-baseline``. Read from the record files at
+#: that commit, never from the files now: an expectation computed from the files it checks
+#: could not report that something besides the label moved.
+_PRE_SEAL_AUTHOR_BODIES = {
+    "10-appendDecision.success": (
+        "ec1ada99cfea1cc92697bf7d4687b150cf491e196a040c6dc22008c5ddc77172"
+    ),
+    "11-listDecisionHistory.success": (
+        "b269ac56a19d2e9b90cc7f209c114704b588a88c2789aa935fa42f4200c28231"
+    ),
+}
+
+
+def test_the_two_author_records_moved_by_the_label_and_nothing_else() -> None:
+    """The re-capture asserted, not merely made: substitute the old label back and the
+    bytes are the previous capture's, digest for digest.
+
+    `MEMORY: characterization can freeze a defect` is why a re-capture is not evidence by
+    itself -- a record rewritten wholesale would pin whatever the server said. This pins the
+    *difference*: one value, the name form a complete profile records (`R-55`).
+    """
+    import hashlib
+
+    for case, digest in _PRE_SEAL_AUTHOR_BODIES.items():
+        record = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+        text = record["response"]["body"]["text"]
+        assert text.count('"author_label": "Сьютова Е."') == 1, case
+        restored = text.replace('"author_label": "Сьютова Е."', '"author_label": "w13-baseline"')
+        assert hashlib.sha256(restored.encode("utf-8")).hexdigest() == digest, (
+            f"{case} moved by more than its author label"
+        )
+        assert "W49-SEAL-01" in record["exception"]["permitted_change"], case
 
 
 #: The four `RunStatus` records that report a **finished** run. Record 03 was the fifth

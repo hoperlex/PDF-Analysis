@@ -97,18 +97,22 @@ class AccountInvariantViolation(DomainError):
       ``permission_denied``. The subject is authenticated and may hold ``admin``; it is
       refused *this operation on this resource*, which is that code's definition.
     * :data:`LAST_ADMIN` -- the last active account holding ``admin`` may not be archived
-      or lose ``admin``: ``conflict`` (an invariant would be violated).
+      or lose ``admin``: ``conflict`` with ``conflict_reason: last_admin``, the detail key
+      the catalog declares for ``conflict`` since `W49-SEAL-01` (the ACCESS-01 merge added
+      ``last_admin`` to the closed set of `W49-PLAN.md` §3.3).
 
-    Neither carries a detail key: the catalog's closed ``conflict_reason`` set of
-    `W49-PLAN.md` §3.3 has no member for either, and inventing one is the seal's decision,
-    not this boundary's. ``invariant`` is for the seal and the tests, never the wire.
+    An act on oneself carries no detail: the screens never offer it, and the catalog's
+    ``permission_denied`` has no classifier for it. ``invariant`` is for the seal and the
+    tests, never the wire.
     """
 
     __slots__ = ("invariant",)
 
     def __init__(self, invariant: str, *, message: str) -> None:
-        code = ErrorCode.PERMISSION_DENIED if invariant == SELF_ACTION else ErrorCode.CONFLICT
-        super().__init__(code, message=message)
+        if invariant == SELF_ACTION:
+            super().__init__(ErrorCode.PERMISSION_DENIED, message=message)
+        else:
+            super().__init__(ErrorCode.CONFLICT, message=message, conflict_reason=LAST_ADMIN)
         self.invariant = invariant
 
 _SELECT_BY_UID_FOR_UPDATE = text(

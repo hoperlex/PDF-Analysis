@@ -4,7 +4,7 @@
     "title": "AuditManager PC-01 API",
     "version": "1.0.0-draft.1",
     "summary": "The exact PC-01 journey: one project, one AR PDF, one text-consistency run, one CSV.",
-    "description": "Frozen at Gate A so `A5` can generate a typed client and `B6` can implement routers against a fixed shape, without either waiting on the other.\n\nResealed 2026-09-18 under owner ruling `R-3`: every operation here requires a bearer credential, declared once at the document root under `components.securitySchemes.bearerAuth`. The scheme names the seam and never its implementation. The operational liveness and readiness plane is outside `/api/v1`, carries no product meaning and needs no credential.\n\nWhat this surface deliberately does not have: tenancy, roles, rate limiting, WebSocket or server-sent events; an export resource, export identity or export polling, because a synchronous read creates nothing; and any endpoint outside the eleven capabilities `P2-API-01` enumerates, other than the credential exchange the authorization seam needs, which `W34-CONTRACT` adds below, and the aggregate dashboard read `R-44` adds in `W46-SEAL`, further below still.\n\nThree rules hold everywhere and are not repeated per operation:\n\n1. **Opaque identity.** Every identifier is `<prefix>_<ULID>` from `contracts/domain/v1/identifiers.json`, and every path parameter carries the pattern for its entity. No response body, header or error detail ever contains a bucket name, object key, filesystem path, URL to internal storage, credential, prompt or model payload.\n2. **One failure shape.** Every non-2xx response is the `ErrorEnvelope` of `contracts/domain/v1/error-envelope.schema.json`, its `error_code` drawn from the twenty-two-code catalog and its `retryable` pinned to the catalog value for that code. A caller never infers retryability from the HTTP status.\n3. **Correlation.** Every response carries `X-Correlation-Id`. A caller may supply one on the request; the edge assigns one when the caller does not.\n\nRun state uses the contract vocabulary. The success terminal of an `AuditRun` is `published`. `succeeded` is a `StageResult` status on a different aggregate and never appears as a run state.\n\nResealed 2026-09-18 under owner ruling `R-5`, which closes `DEBT_REGISTER.md` `D-16` and `D-21` together. Three list operations -- `listDocuments`, `listVersions` and `listRuns` -- make published work reachable after a page reload: before them every read below the project list needed an identifier the client was already holding, so a reloaded screen could reach nothing that survived in the database and the store. And `RunStatus` gained `cost_micros`, `cost_basis` and `model_call_count`, so what a run spent is readable by a user for the first time. Each listing is a `GET` of the collection its parent creates into, pages with the same `cursor` and `limit` and returns the same `{items, page}` envelope as `listProjects`. No error code was added: an unknown parent is the catalog's `not_found` and a malformed cursor is `validation_failed`.\n\nAmended 2026-09-18 under owner ruling `R-8`, which closes `DEBT_REGISTER.md` `D-18`. The domain catalog gains one code, `staged_upload_lost`, and the `ErrorCode` enum below carries it: twenty-one becomes twenty-two. Two blob-store failures demanding opposite operator responses -- *stop, the instance was restored wrong* against *retry the upload* -- both answered `conflict` with `aggregate_type` `Blob`, so their envelopes were byte-identical apart from `correlation_id`. A widened `safe_detail_keys` was offered and rejected, because a detail key cannot fix `retryable`: the envelope reads that flag from the catalog for the reported code, so only a separate code carries a separate value. **No path, operation or schema changed** -- that amendment moved none of the three counts -- and the new code travels on the `503` every staging write already declares.\n\nResealed 2026-09-22 by `W34-CONTRACT`. `R-3` declared the seam and left no way to get through it: the document required a bearer credential on every operation and described no operation that hands one out, so the only caller this surface admitted was one already holding a credential from somewhere the document does not name. One operation closes that -- `issueToken`, `POST /auth/token` -- and it is a credential *exchange* and nothing more: a login and a password in, an opaque credential and its lifetime out. It is the single operation whose `security` is the empty requirement, because requiring a credential to obtain one is a closed door with a handle on the inside.\n\n**What this reseal deliberately does not add, because `T-6` forbids it.** No issuer, no discovery URL, no flow, no `bearerFormat`, and no role, subject or capability vocabulary. The returned `token` is a string this document states no structure for; the deployment decides what it is, and the operations keep working when that decision changes. No error code was added either: an unaccepted login and password pair is the catalog's `authentication_required`, a malformed body is `validation_failed`. `permission_denied` is **not** declared here, because it means an authenticated subject refused a resource and this operation has no authenticated subject in it -- it is the operation that produces one. That reseal added one path, one operation and two schemas, and the sentence that stated the totals it produced has been rewritten as this delta: a reseal's own arithmetic stops being true at the next reseal, and `tests/contract/api_v1/test_surface_counts_in_prose.py` reads every such claim in this block against the live document. The totals are stated once, below.\n\nResealed 2026-09-22 by `W38-KB` under owner ruling `R-24`, which was ruled against the recommendation the owner was given: a client-side walk over runs and findings is cheaper and lives only as long as the alpha, and a listing operation costs a reseal and outlives it. One operation closes it -- `listDecisions`, `GET /decisions` -- because `listDecisionHistory` reads the history of **one** finding and nothing in this document enumerated decisions at all, so the knowledge base `R-23` requires had no source but a walk over every run. It is a projection in the sense `ADR-0012` fixes and creates nothing. Two component schemas were added, `DecisionRecord` and `DecisionRecordPage`; no parameter was, because `category` and `verdict` already exist and already mean the finding's category and the finding's current verdict. No error code was added: a malformed cursor is the catalog's `validation_failed`, an absent or refused credential is `authentication_required`, and there is no `404` on it at all -- the path addresses no parent identity, so an empty journal is an empty page. That reseal added one path, one operation and two schemas.\n\nResealed 2026-09-23 by `W39-REVOKE` under owner ruling `R-26`, which rules four account guards into the alpha. This is the one of them that **cannot be added later**: the other three make an account weak now and are fixed by adding them, while a credential already issued is permanent until it expires, and no later work reaches one sitting in somebody's browser. One operation closes it -- `changePassword`, `POST /auth/password` -- and it carries revocation with it, because the two share a mechanism: the account's credential generation is raised by the same write that stores the new digest, which is what makes every credential minted under the old password stop being accepted.\n\n**What this does not add.** No response schema: a credential and its lifetime is one shape and `IssueTokenResponse` already names it. No error code: a wrong current password is the catalog's `authentication_required` and a new password that is the current one is `validation_failed`. No revocation operation: taking credentials away from accounts whose passwords nobody is changing is an operator's action on the deployment, and publishing it would require deciding who may revoke whom -- the role vocabulary `T-6` forbids inventing here. One path, one operation and one schema. The surface moved to 15 / 18 / 51.\n\nResealed 2026-09-23 by `W42-SEAL` under owner rulings `R-37` and `R-29`, and it is the first reseal here that adds no path and no operation. **No path, operation or schema moved: still 15 / 18 / 51, exactly as before.** Three things change and each is a *description* or a *property of an existing schema*, which is precisely why it still costs a reseal -- the conformance gate drops descriptions as annotation under `N4`, so nothing but this document carries them to a reader, and `D-18`'s four documents move together or the frontend reads a contract the backend does not serve.\n\n`R-37`, and `DEBT_REGISTER.md` `D-86`: `DecisionEvent.author_label` and `DecisionRecord.author_label` described themselves as *\"one configured local reviewer label ... a label, not a subject identity\"*. Since wave 41 that was false -- the server writes the authenticated reviewer, not a constant -- and the owner has now ruled that what it writes is the reviewer's **display name** rather than their login, because this is the field another reviewer reads on a decision somebody else took. **The schema does not move**: same type, same `minLength: 1`, same `maxLength: 128`. The sentence was wrong twice over and is corrected in both copies; `DecisionRecord` restates `DecisionEvent`'s properties rather than composing them with `allOf`, so a reseal that corrected one would have left `listDecisions` still describing the field falsely. An account that has chosen no display name records its login, which is a server-held string the reviewer typed and is 1..100 characters, inside this field's bounds by construction.\n\n`R-29`, and `D-46`: `RunStatus` gains one optional property, `terminal_detail`. A `failed` run could say that a dependency was unavailable and could not say **which**, because the catalog's `safe_detail_keys` live on the `ErrorEnvelope` and a 200 run reading is not an error envelope. It is the same shape and the same rule as `ErrorEnvelope.details` -- safe scalar classifiers, restricted to the keys the domain catalog declares for the reported code -- applied to the code in `terminal_reason` instead of to the one in `error_code`, and it is present only beside a `terminal_reason` because the allowlist that bounds it is a property of that code. **No component schema was added**, because the shape is declared inline exactly as `ErrorEnvelope.details` is, and **no error code was added**: a distinct code for a replay miss was the row's other option and is a second reseal, which the owner did not take. The domain catalog stays at twenty-two codes and stays frozen. The true sentence this makes sayable is *your document is fine, the provider is fine, this deployment has no recording for it*, which `R-30` made the ordinary case by putting the alpha stand in `recorded` mode. Two migrations carry the storage: `0009_reviewer_display_name` and `0010_run_terminal_detail`.\n\nResealed 2026-09-25 by `W45-BLOCKS`. One operation is added -- `getVersionBlocks`, `GET /versions/{version_uid}/blocks` -- the first half of `R-23`'s block markup: `page_geometry_extraction` writes a real `bbox` per extracted text line and this operation reads it back, keyed by `version_uid` rather than by `run_id` because the stage carries no model and no provider reference and its output is a deterministic property of the version, identical across every run that reaches it. It answers `404` for an unknown version and, for a known one, `status: \"produced\"` or `status: \"not_produced\"` -- absent is not empty, and a version whose geometry has not yet been derived answers the same `blocks: []` as one that genuinely has none, distinguished only by `status`. It carries no crops: the stage's second artifact, the page-crop manifest, is unconditionally empty in this pipeline and is not exposed here at all. Two component schemas are added, `VersionBlockIndex` and `BlockGeometry`; no error code was added, because the only refusal this operation needs, `not_found`, is already in the twenty-two-code catalog.\n\nResealed 2026-09-25 by `W46-SEAL` under owner rulings `R-40` and `R-44` (`docs/program/OWNER_RULINGS_2026-09-17.md` section 3.15). Two things land together because `R-40` ruled both halves in, against the cheaper recommendation the drafting session gave: the field and its aggregation in one wave.\n\n`UploadDocumentRequest.section` and `DocumentVersion.section` are added, both optional, drawing from the new `ProjectSection` enum -- legacy's fourteen project sections (`D-56`). The field lives on the document, not the version or the project: it classifies what a document is, not which revision of its bytes is being read, and a project holds many sections rather than being one. It is optional rather than required because this column starts with no rows to backfill and forcing every caller, `tests/e2e/**` among them, to name a section it may not know would fabricate a classification -- a document nobody has classified yet is a real state and is never defaulted to one of the fourteen.\n\nOne operation is added -- `getDashboardSummary`, `GET /dashboard` -- under `R-44`, the integrator's decision against the cheaper path: three of the four dashboard panels are already reachable by walking `listProjects`, `listDecisions` and `listRuns`, and the ruling is that the reseal this wave opens anyway should carry one aggregate read serving all four rather than three client-side walks a later aggregate read would only delete. It takes no parameter at all -- not a `project_uid`, not a date range, not a filter -- because a parameterised version of this operation would be a second, generic query surface over data three narrower operations already answer; what it answers is fixed: the operational shape of the whole deployment, right now. Every panel preserves absent is not empty: every `Verdict` and every `RunState` appears even at a count of zero, every one of the fourteen frozen sections appears in `section_breakdown` even with no documents, and the documents nobody has classified yet are their own row rather than folded into one of the fourteen. Seven component schemas are added -- `ProjectDocumentCount`, `VerdictCount`, `RunStateCount`, `RunActivitySpend`, `RunActivity`, `SectionDocumentCount` and `DashboardSummary` -- plus `ProjectSection`, eight in total. No error code was added: `getDashboardSummary` declares no `404`, because it names no parent identity to be missing, and no `422`, because it takes no parameter a caller could get wrong. The surface moves to seventeen paths, twenty operations and sixty-one schemas.\n\nResealed 2026-09-29 by `W47-LOCK` under owner ruling `R-50` (`docs/program/OWNER_RULINGS_2026-09-17.md` section 3.17). `IssueTokenResponse` gains `is_default_credential`, boolean and required, answered by both operations that mint a credential. **No path, operation or schema moves: still seventeen paths, twenty operations and sixty-one schemas**, because a property on a schema this document already carries adds no schema; the domain catalog stays at twenty-two codes and stays frozen. That is why it is a reseal rather than an edit -- `D-18`'s four documents move together or the frontend reads a contract the backend does not serve.\n\n**The owner took the expensive option on purpose, and this field is only half of it.** A deployment's seeded account is published in a migration's own docstring, so an unchanged password is a password everyone who has read the runbook already has. The field is the signpost: a client learns the state at the moment it signs in and can send that reviewer to a password screen. The lock is the other half and it is behaviour, not shape: while this field is `true`, every operation except `issueToken` and `changePassword` answers the `permission_denied` it already declares, carrying the detail key `required_capability` the domain catalog already permits it, with the value `password_changed`. **No error code was added and none was needed** -- naming the capability after the act rather than after the credential tells a caller what to do, and the credential already has a name in this response. A field without the refusal would leave the API open to the seeded password for any caller that skips the screens; a refusal without the field would leave the screens to discover the state by failing.",
+    "description": "Frozen at Gate A so `A5` can generate a typed client and `B6` can implement routers against a fixed shape, without either waiting on the other.\n\nResealed 2026-09-18 under owner ruling `R-3`: every operation here requires a bearer credential, declared once at the document root under `components.securitySchemes.bearerAuth`. The scheme names the seam and never its implementation. The operational liveness and readiness plane is outside `/api/v1`, carries no product meaning and needs no credential.\n\nWhat this surface deliberately does not have: tenancy, WebSocket or server-sent events; an export resource, export identity or export polling, because a synchronous read creates nothing; and any endpoint outside the eleven capabilities `P2-API-01` enumerates, other than the credential exchange the authorization seam needs, which `W34-CONTRACT` adds below, the aggregate dashboard read `R-44` adds in `W46-SEAL`, further below still, and the account and registration operations `W49-SEAL-01` adds at the end. Roles and a per-client throttle on the unauthenticated registration operations were on this list until `R-55` and `R-56` ruled them in; the last reseal below says what each is.\n\nThree rules hold everywhere and are not repeated per operation:\n\n1. **Opaque identity.** Every identifier is `<prefix>_<ULID>` from `contracts/domain/v1/identifiers.json`, and every path parameter carries the pattern for its entity. No response body, header or error detail ever contains a bucket name, object key, filesystem path, URL to internal storage, credential, prompt or model payload.\n2. **One failure shape.** Every non-2xx response is the `ErrorEnvelope` of `contracts/domain/v1/error-envelope.schema.json`, its `error_code` drawn from the twenty-three-code catalog and its `retryable` pinned to the catalog value for that code. A caller never infers retryability from the HTTP status.\n3. **Correlation.** Every response carries `X-Correlation-Id`. A caller may supply one on the request; the edge assigns one when the caller does not.\n\nRun state uses the contract vocabulary. The success terminal of an `AuditRun` is `published`. `succeeded` is a `StageResult` status on a different aggregate and never appears as a run state.\n\nResealed 2026-09-18 under owner ruling `R-5`, which closes `DEBT_REGISTER.md` `D-16` and `D-21` together. Three list operations -- `listDocuments`, `listVersions` and `listRuns` -- make published work reachable after a page reload: before them every read below the project list needed an identifier the client was already holding, so a reloaded screen could reach nothing that survived in the database and the store. And `RunStatus` gained `cost_micros`, `cost_basis` and `model_call_count`, so what a run spent is readable by a user for the first time. Each listing is a `GET` of the collection its parent creates into, pages with the same `cursor` and `limit` and returns the same `{items, page}` envelope as `listProjects`. No error code was added: an unknown parent is the catalog's `not_found` and a malformed cursor is `validation_failed`.\n\nAmended 2026-09-18 under owner ruling `R-8`, which closes `DEBT_REGISTER.md` `D-18`. The domain catalog gains one code, `staged_upload_lost`, and the `ErrorCode` enum below carries it: twenty-one becomes twenty-two. Two blob-store failures demanding opposite operator responses -- *stop, the instance was restored wrong* against *retry the upload* -- both answered `conflict` with `aggregate_type` `Blob`, so their envelopes were byte-identical apart from `correlation_id`. A widened `safe_detail_keys` was offered and rejected, because a detail key cannot fix `retryable`: the envelope reads that flag from the catalog for the reported code, so only a separate code carries a separate value. **No path, operation or schema changed** -- that amendment moved none of the three counts -- and the new code travels on the `503` every staging write already declares.\n\nResealed 2026-09-22 by `W34-CONTRACT`. `R-3` declared the seam and left no way to get through it: the document required a bearer credential on every operation and described no operation that hands one out, so the only caller this surface admitted was one already holding a credential from somewhere the document does not name. One operation closes that -- `issueToken`, `POST /auth/token` -- and it is a credential *exchange* and nothing more: a login and a password in, an opaque credential and its lifetime out. It is the single operation whose `security` is the empty requirement, because requiring a credential to obtain one is a closed door with a handle on the inside.\n\n**What this reseal deliberately did not add, because `T-6` forbade it.** No issuer, no discovery URL, no flow, no `bearerFormat`; and, until `R-55` superseded that part of `T-6` for the scope the `W49-SEAL-01` reseal below describes, no vocabulary of what a subject may do. The returned `token` is a string this document states no structure for; the deployment decides what it is, and the operations keep working when that decision changes. No error code was added either: an unaccepted login and password pair is the catalog's `authentication_required`, a malformed body is `validation_failed`. `permission_denied` is **not** declared here, because it means an authenticated subject refused a resource and this operation has no authenticated subject in it -- it is the operation that produces one. That reseal added one path, one operation and two schemas, and the sentence that stated the totals it produced has been rewritten as this delta: a reseal's own arithmetic stops being true at the next reseal, and `tests/contract/api_v1/test_surface_counts_in_prose.py` reads every such claim in this block against the live document. The totals are stated once, below.\n\nResealed 2026-09-22 by `W38-KB` under owner ruling `R-24`, which was ruled against the recommendation the owner was given: a client-side walk over runs and findings is cheaper and lives only as long as the alpha, and a listing operation costs a reseal and outlives it. One operation closes it -- `listDecisions`, `GET /decisions` -- because `listDecisionHistory` reads the history of **one** finding and nothing in this document enumerated decisions at all, so the knowledge base `R-23` requires had no source but a walk over every run. It is a projection in the sense `ADR-0012` fixes and creates nothing. Two component schemas were added, `DecisionRecord` and `DecisionRecordPage`; no parameter was, because `category` and `verdict` already exist and already mean the finding's category and the finding's current verdict. No error code was added: a malformed cursor is the catalog's `validation_failed`, an absent or refused credential is `authentication_required`, and there is no `404` on it at all -- the path addresses no parent identity, so an empty journal is an empty page. That reseal added one path, one operation and two schemas.\n\nResealed 2026-09-23 by `W39-REVOKE` under owner ruling `R-26`, which rules four account guards into the alpha. This is the one of them that **cannot be added later**: the other three make an account weak now and are fixed by adding them, while a credential already issued is permanent until it expires, and no later work reaches one sitting in somebody's browser. One operation closes it -- `changePassword`, `POST /auth/password` -- and it carries revocation with it, because the two share a mechanism: the account's credential generation is raised by the same write that stores the new digest, which is what makes every credential minted under the old password stop being accepted.\n\n**What this does not add.** No response schema: a credential and its lifetime is one shape and `IssueTokenResponse` already names it. No error code: a wrong current password is the catalog's `authentication_required` and a new password that is the current one is `validation_failed`. No revocation operation: taking credentials away from accounts whose passwords nobody is changing is an operator's action on the deployment, and publishing it would have required deciding who may revoke whom, which this document then had no way to say. Since `W49-SEAL-01` an administrator's changes that take an account's rights away -- archive, a role change, a password reset -- revoke that account's credentials as part of the change, still without an operation of its own. One path, one operation and one schema. The surface moved to 15 / 18 / 51.\n\nResealed 2026-09-23 by `W42-SEAL` under owner rulings `R-37` and `R-29`, and it is the first reseal here that adds no path and no operation. **No path, operation or schema moved: still 15 / 18 / 51, exactly as before.** Three things change and each is a *description* or a *property of an existing schema*, which is precisely why it still costs a reseal -- the conformance gate drops descriptions as annotation under `N4`, so nothing but this document carries them to a reader, and `D-18`'s four documents move together or the frontend reads a contract the backend does not serve.\n\n`R-37`, and `DEBT_REGISTER.md` `D-86`: `DecisionEvent.author_label` and `DecisionRecord.author_label` described themselves as *\"one configured local reviewer label ... a label, not a subject identity\"*. Since wave 41 that was false -- the server writes the authenticated reviewer, not a constant -- and the owner has now ruled that what it writes is the reviewer's **display name** rather than their login, because this is the field another reviewer reads on a decision somebody else took. **The schema does not move**: same type, same `minLength: 1`, same `maxLength: 128`. The sentence was wrong twice over and is corrected in both copies; `DecisionRecord` restates `DecisionEvent`'s properties rather than composing them with `allOf`, so a reseal that corrected one would have left `listDecisions` still describing the field falsely. An account that has chosen no display name records its login, which is a server-held string the reviewer typed and is 1..100 characters, inside this field's bounds by construction.\n\n`R-29`, and `D-46`: `RunStatus` gains one optional property, `terminal_detail`. A `failed` run could say that a dependency was unavailable and could not say **which**, because the catalog's `safe_detail_keys` live on the `ErrorEnvelope` and a 200 run reading is not an error envelope. It is the same shape and the same rule as `ErrorEnvelope.details` -- safe scalar classifiers, restricted to the keys the domain catalog declares for the reported code -- applied to the code in `terminal_reason` instead of to the one in `error_code`, and it is present only beside a `terminal_reason` because the allowlist that bounds it is a property of that code. **No component schema was added**, because the shape is declared inline exactly as `ErrorEnvelope.details` is, and **no error code was added**: a distinct code for a replay miss was the row's other option and is a second reseal, which the owner did not take. The domain catalog did not grow in that reseal. The true sentence this makes sayable is *your document is fine, the provider is fine, this deployment has no recording for it*, which `R-30` made the ordinary case by putting the alpha stand in `recorded` mode. Two migrations carry the storage: `0009_reviewer_display_name` and `0010_run_terminal_detail`.\n\nResealed 2026-09-25 by `W45-BLOCKS`. One operation is added -- `getVersionBlocks`, `GET /versions/{version_uid}/blocks` -- the first half of `R-23`'s block markup: `page_geometry_extraction` writes a real `bbox` per extracted text line and this operation reads it back, keyed by `version_uid` rather than by `run_id` because the stage carries no model and no provider reference and its output is a deterministic property of the version, identical across every run that reaches it. It answers `404` for an unknown version and, for a known one, `status: \"produced\"` or `status: \"not_produced\"` -- absent is not empty, and a version whose geometry has not yet been derived answers the same `blocks: []` as one that genuinely has none, distinguished only by `status`. It carries no crops: the stage's second artifact, the page-crop manifest, is unconditionally empty in this pipeline and is not exposed here at all. Two component schemas are added, `VersionBlockIndex` and `BlockGeometry`; no error code was added, because the only refusal this operation needs, `not_found`, was already in the catalog.\n\nResealed 2026-09-25 by `W46-SEAL` under owner rulings `R-40` and `R-44` (`docs/program/OWNER_RULINGS_2026-09-17.md` section 3.15). Two things land together because `R-40` ruled both halves in, against the cheaper recommendation the drafting session gave: the field and its aggregation in one wave.\n\n`UploadDocumentRequest.section` and `DocumentVersion.section` are added, both optional, drawing from the new `ProjectSection` enum -- legacy's fourteen project sections (`D-56`). The field lives on the document, not the version or the project: it classifies what a document is, not which revision of its bytes is being read, and a project holds many sections rather than being one. It is optional rather than required because this column starts with no rows to backfill and forcing every caller, `tests/e2e/**` among them, to name a section it may not know would fabricate a classification -- a document nobody has classified yet is a real state and is never defaulted to one of the fourteen.\n\nOne operation is added -- `getDashboardSummary`, `GET /dashboard` -- under `R-44`, the integrator's decision against the cheaper path: three of the four dashboard panels are already reachable by walking `listProjects`, `listDecisions` and `listRuns`, and the ruling is that the reseal this wave opens anyway should carry one aggregate read serving all four rather than three client-side walks a later aggregate read would only delete. It takes no parameter at all -- not a `project_uid`, not a date range, not a filter -- because a parameterised version of this operation would be a second, generic query surface over data three narrower operations already answer; what it answers is fixed: the operational shape of the whole deployment, right now. Every panel preserves absent is not empty: every `Verdict` and every `RunState` appears even at a count of zero, every one of the fourteen frozen sections appears in `section_breakdown` even with no documents, and the documents nobody has classified yet are their own row rather than folded into one of the fourteen. Seven component schemas are added -- `ProjectDocumentCount`, `VerdictCount`, `RunStateCount`, `RunActivitySpend`, `RunActivity`, `SectionDocumentCount` and `DashboardSummary` -- plus `ProjectSection`, eight in total. No error code was added: `getDashboardSummary` declares no `404`, because it names no parent identity to be missing, and no `422`, because it takes no parameter a caller could get wrong. That reseal added `/dashboard`, `getDashboardSummary` and the schemas named above.\n\nResealed 2026-09-29 by `W47-LOCK` under owner ruling `R-50` (`docs/program/OWNER_RULINGS_2026-09-17.md` section 3.17). `IssueTokenResponse` gains `is_default_credential`, boolean and required, answered by both operations that mint a credential. **No path, operation or schema moved**, because a property on a schema this document already carries adds no schema, and the domain catalog did not grow. That is why it is a reseal rather than an edit -- `D-18`'s four documents move together or the frontend reads a contract the backend does not serve.\n\n**The owner took the expensive option on purpose, and this field is only half of it.** A deployment's seeded account is published in a migration's own docstring, so an unchanged password is a password everyone who has read the runbook already has. The field is the signpost: a client learns the state at the moment it signs in and can send that reviewer to a password screen. The lock is the other half and it is behaviour, not shape: while this field is `true`, every operation except `issueToken` and `changePassword` answers the `permission_denied` it already declares, carrying the detail key `required_capability` the domain catalog already permits it, with the value `password_changed`. **No error code was added and none was needed** -- naming the capability after the act rather than after the credential tells a caller what to do, and the credential already has a name in this response. A field without the refusal would leave the API open to the seeded password for any caller that skips the screens; a refusal without the field would leave the screens to discover the state by failing.\n\nResealed 2026-10-06 by `W49-SEAL-01` under owner rulings `R-55`, `R-56`, `R-59`, `R-60` and `R-61` (`docs/program/OWNER_RULINGS_2026-09-17.md` section 3.19). The alpha gains accounts a person can hold: an e-mail address as the sign-in identifier, a full name, a role set, registration requests an administrator decides, and account management. The operations named below are added with their paths and schemas, and the domain catalog gains one code and one safe detail key; no existing operation changes shape.\n\n**Roles.** An account holds a set of `Role` values, `expert` and `admin`, and the server decides on every request what that set reaches -- a written register in the authorization seam, not a property of the credential and not a claim in it. Reading product data needs any active account with a complete profile; product changes (projects, uploads, runs, verdicts, comments, the export) need `expert`; account and request management needs `admin`. A refusal is the `403 permission_denied` every guarded operation already declares, with `required_capability` naming what is missing: `password_changed` (`R-50`), `profile_completed` (an account that has not given its names and e-mail yet reaches only `getMe`, `updateMyProfile` and `changePassword`), `role:expert` or `role:admin`. A change of an account's rights -- a role change, an archive, a restore, an administrator's password reset -- revokes every credential it holds, so it signs in again before it meets the new rights.\n\n**The account itself:** `getMe` and `updateMyProfile` (`R-59`: an account created before this reseal keeps its login until it gives its e-mail and names, in one write). **Registration:** `submitRegistration` and `readRegistrationStatus` are reachable without a credential, like `issueToken`; the status read shows an applicant `pending` and nothing else, and answers every other pair -- a rejected application included -- with the generic `401` (`R-56` and its addendum of 2026-10-06). `listRegistrations`, `approveRegistration` and `rejectRegistration` are an administrator's. **Management:** `listUsers`, `getUser`, `updateUser`, `archiveUser`, `restoreUser`, `purgeUser` and `resetUserPassword`, all `admin`; archive is the normal removal and purge deletes only an archived account that nothing references (`R-61`).\n\n**The catalog.** `rate_limited` (`429`, retryable) is added because the edge in front of `/api/v1` now throttles the unauthenticated registration operations per client, and a code invented at the edge is what the catalog's safety rules forbid; this application never raises it, and it is not declared on the operations: like the edge's own body-size refusal, it is answered before any operation is reached. `conflict` gains the safe detail key `conflict_reason`, an enum-like classifier -- `login_taken`, `request_pending`, `queue_full`, `account_referenced`, `last_admin` -- so the account and registration conflicts can be told apart without a free-text detail. Identities `usr` and `reg` enter `contracts/domain/v1/identifiers.json`, and the `app_user` and `registration_request` machines enter `state-machines.json`, which is what `state_transition_not_allowed` names. The surface moves to twenty-seven paths, thirty-four operations and seventy-seven schemas, and the domain catalog to twenty-three codes.",
     "contact": {
       "name": "docs/program/P02_SEAMS.md - seam S8"
     },
@@ -56,6 +56,18 @@
     {
       "name": "dashboard",
       "description": "One aggregate read across the whole deployment: documents per project, findings by verdict, run activity and spend, and the per-section breakdown."
+    },
+    {
+      "name": "account",
+      "description": "The signed-in account reading and naming itself."
+    },
+    {
+      "name": "registrations",
+      "description": "Applying for an account, and an administrator deciding the application."
+    },
+    {
+      "name": "users",
+      "description": "An administrator managing accounts: names, roles, archive, restore, purge and password reset."
     }
   ],
   "paths": {
@@ -121,7 +133,7 @@
           "auth"
         ],
         "summary": "Change the signed-in account's password and revoke its old credentials.",
-        "description": "Two things happen here and they are one write. The account's password becomes the one supplied, and every credential this deployment ever minted for that account stops being accepted -- **including the credential this request presented**. A password change that leaves the old password's credentials working is a password change in name only, so the two are not offered separately and cannot land separately.\n\n**Whose password changes is decided by the credential, never by the body.** There is no login property and there will not be one: the caller may change their own password and no other, and a login in the body would be an operation one caller could aim at another.\n\n**The response is the replacement credential**, minted after the change, and the only one this account now accepts. It is answered rather than left to a second exchange because the caller's own credential was revoked by this very request: a `204` would leave them holding something already dead with no way to tell that from a failure.\n\nThe `403` is declared because every operation behind the seam declares it: `permission_denied` means an authenticated subject was refused, a generated client needs a typed shape for it on every authorized operation, and an operation that omitted it would be claiming a property about a role model this document does not describe. This surface raises it nowhere, here included.\n\nNothing is created, so there is no idempotency key. A repeat of the same request is refused by its own `current_password`, which is no longer current -- it is not replayed and there is no `409` here.\n\nRevocation has no operation of its own on this surface. Ending a pilot -- taking credentials away from accounts whose passwords nobody is changing -- is an operator's action taken on the deployment, and publishing it would require deciding who may revoke whom, which is the role vocabulary this document deliberately does not have.",
+        "description": "Two things happen here and they are one write. The account's password becomes the one supplied, and every credential this deployment ever minted for that account stops being accepted -- **including the credential this request presented**. A password change that leaves the old password's credentials working is a password change in name only, so the two are not offered separately and cannot land separately.\n\n**Whose password changes is decided by the credential, never by the body.** There is no login property and there will not be one: the caller may change their own password and no other, and a login in the body would be an operation one caller could aim at another.\n\n**The response is the replacement credential**, minted after the change, and the only one this account now accepts. It is answered rather than left to a second exchange because the caller's own credential was revoked by this very request: a `204` would leave them holding something already dead with no way to tell that from a failure.\n\nThe `403` is declared because every operation behind the seam declares it: `permission_denied` means an authenticated subject was refused, and a generated client needs a typed shape for it on every authorized operation. This operation does not raise it today: an account still on a default credential reaches it, so does an incomplete profile, and it needs no role.\n\nNothing is created, so there is no idempotency key. A repeat of the same request is refused by its own `current_password`, which is no longer current -- it is not replayed and there is no `409` here.\n\nRevocation has no operation of its own on this surface. Ending a pilot -- taking credentials away from accounts whose passwords nobody is changing -- is an operator's action taken on the deployment; an administrator's changes that take an account's rights away (`archiveUser`, a role change through `updateUser`, `resetUserPassword`) revoke that account's credentials as part of the change.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -1251,6 +1263,796 @@
           }
         }
       }
+    },
+    "/me": {
+      "get": {
+        "operationId": "getMe",
+        "tags": [
+          "account"
+        ],
+        "summary": "Read the signed-in account.",
+        "description": "The account the presented credential names: its login, names, role set and state. Reachable by an account still on a default credential and by an incomplete profile, because it is how a client learns either state; every operation that is not this one, `updateMyProfile` or `changePassword` answers an incomplete profile with `permission_denied` and `required_capability: profile_completed`. Nothing is created or changed.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The signed-in account.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateMyProfile",
+        "tags": [
+          "account"
+        ],
+        "summary": "Set the signed-in account's names, and complete its profile.",
+        "description": "**Completion** (R-59): an account whose profile is incomplete gives its names and -- unless its login already is one -- its e-mail address, and the names, the login and the completion are written in **one** update, so there is no instant at which the account has one without the other. **A complete profile** changes its names only; its login is fixed. An e-mail another active account holds is `conflict` with `details.conflict_reason: login_taken`. The account is the one the credential names, never one named in the body. No credential is revoked: names are not rights.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMyProfileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The account after the change.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/registrations": {
+      "post": {
+        "operationId": "submitRegistration",
+        "tags": [
+          "registrations"
+        ],
+        "summary": "Apply for an account.",
+        "description": "Reachable without a credential: `security` is the empty requirement, as on `issueToken`. Records an application an administrator then approves or rejects; no mail is sent (R-56). The e-mail, the names and the password are validated first, then: an active account holding the login is `conflict` with `conflict_reason: login_taken`, a pending request for it `request_pending`, and 100 pending requests in all `queue_full`. That the first two tell a submitter a login is known is an accepted, registered limitation. Neither `401` nor `403` is declared: there is no credential to refuse and no subject to deny. The edge in front of this surface throttles it per client and answers `rate_limited` (`429`) itself, before the operation is reached; like the edge's own body-size refusal, that answer is not a response of the operation and is not declared here.",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitRegistrationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The application was recorded and is pending.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationStatusResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      },
+      "get": {
+        "operationId": "listRegistrations",
+        "tags": [
+          "registrations"
+        ],
+        "summary": "List registration requests, oldest first.",
+        "description": "Requires `admin`. Every request, or those in one status, ordered by `(submitted_at, request_id)`, with `pending_total` -- the number of pending requests whatever the filter.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RegistrationStatusFilter"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of registration requests.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationRequestPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/registrations/status": {
+      "post": {
+        "operationId": "readRegistrationStatus",
+        "tags": [
+          "registrations"
+        ],
+        "summary": "Read whether a login and password pair proves a pending application.",
+        "description": "Reachable without a credential, like `issueToken`, and called by a client after an exchange was refused. A pair that proves a **pending** application answers `{\"status\": \"pending\"}`. **Every other pair answers the same `401 authentication_required` a refused exchange gets** -- an unknown login, a wrong password, and a decided application, whose password was removed at the decision so that nothing can prove the pair. A rejected applicant is told nothing here (R-56 addendum of 2026-10-06); the reason is for administrators. Every path costs the same work, so the timing reveals nothing either, and refused reads are counted on the request with the sign-in brake's rules. `403` is not declared: there is no subject to deny. The edge throttles it per client and answers `rate_limited` (`429`) itself, before the operation is reached.",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The pair proves a pending application.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/registrations/{request_id}/approve": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RequestId"
+        }
+      ],
+      "post": {
+        "operationId": "approveRegistration",
+        "tags": [
+          "registrations"
+        ],
+        "summary": "Approve a registration request and create the account.",
+        "description": "Requires `admin`. In one transaction, with the request locked: the account is created from the request's login, names and password, with a complete profile and the roles the body names (at least one); the request is decided and its password removed. The same `Idempotency-Key` with the same payload replays the recorded outcome; with another payload it is `idempotency_key_reuse`.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveRegistrationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request as decided, naming the account it created, or the recorded outcome of an identical earlier request.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApprovalConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/registrations/{request_id}/reject": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RequestId"
+        }
+      ],
+      "post": {
+        "operationId": "rejectRegistration",
+        "tags": [
+          "registrations"
+        ],
+        "summary": "Reject a registration request with a reason.",
+        "description": "Requires `admin`. Decides the request as rejected with the reason, which is stored for administrators only, and removes its password. A request that is no longer pending is `state_transition_not_allowed` against `registration_request`. No account is created.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectRegistrationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request as decided.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "operationId": "listUsers",
+        "tags": [
+          "users"
+        ],
+        "summary": "List accounts, ordered by login.",
+        "description": "Requires `admin`. Every active account, or every account with `include_archived=true`, ordered by `(login, user_uid)`.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IncludeArchived"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of accounts.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/users/{user_uid}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserUid"
+        }
+      ],
+      "get": {
+        "operationId": "getUser",
+        "tags": [
+          "users"
+        ],
+        "summary": "Read one account.",
+        "description": "Requires `admin`. One account, archived or not.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The account.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateUser",
+        "tags": [
+          "users"
+        ],
+        "summary": "Change an account's names, its role set, or both.",
+        "description": "Requires `admin`. Names change without revoking anything; a change of the role set revokes every credential the account holds, so it signs in again and only then meets its new rights. An administrator cannot remove a role from themselves (`permission_denied`, no detail), and the last active account holding `admin` cannot lose it (`conflict`, `conflict_reason: last_admin`). An administrator naming an account whose profile is incomplete does not complete it: only the account itself gives its e-mail.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The account after the change.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "purgeUser",
+        "tags": [
+          "users"
+        ],
+        "summary": "Purge an archived, unreferenced account.",
+        "description": "Requires `admin`. Irreversible (R-61): an **archived** account that nothing references is deleted with its roles; the request that created it keeps its row, and the login becomes free. An account that is not archived is `state_transition_not_allowed` against `app_user`; one that archived, granted or decided anything, or authored a decision, is `conflict` with `conflict_reason: account_referenced` and stays archived; oneself is `permission_denied`.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The account was deleted.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/users/{user_uid}/archive": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserUid"
+        }
+      ],
+      "post": {
+        "operationId": "archiveUser",
+        "tags": [
+          "users"
+        ],
+        "summary": "Archive an account.",
+        "description": "Requires `admin`. Archive is the normal removal (R-61) and is reversible: the account cannot sign in and every credential it holds is refused from its next request. Oneself is `permission_denied`; an archived account is `state_transition_not_allowed` against `app_user`; the last active account holding `admin` is `conflict` with `conflict_reason: last_admin`.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The account, archived.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/users/{user_uid}/restore": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserUid"
+        }
+      ],
+      "post": {
+        "operationId": "restoreUser",
+        "tags": [
+          "users"
+        ],
+        "summary": "Restore an archived account.",
+        "description": "Requires `admin`. Returns an archived account to active; it signs in again with its own password. An active account is `state_transition_not_allowed` against `app_user`; a login another active account took meanwhile is `conflict` with `conflict_reason: login_taken`.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The account, active.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/users/{user_uid}/password": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserUid"
+        }
+      ],
+      "post": {
+        "operationId": "resetUserPassword",
+        "tags": [
+          "users"
+        ],
+        "summary": "Set a temporary password for an account.",
+        "description": "Requires `admin`. The account's password becomes the temporary one, held to the password policy; the account must change it at its next sign-in (`is_default_credential` becomes true), its sign-in brake is cleared, and every credential it holds is refused. Not oneself (`permission_denied`): an administrator changes their own password with `changePassword`. That the administrator knows the temporary password is a registered limitation.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetUserPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The account, which must now change its password.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1258,7 +2060,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "The authorization seam. Every operation in this document requires a bearer credential presented as `Authorization: Bearer <token>`, except `issueToken`, the credential exchange, whose own `security` is the empty requirement because it is what a caller with no credential uses to obtain one.\n\n**This declares the seam, not its implementation.** No issuer, no discovery URL, no flow, no token format, no role, subject or capability vocabulary appears here, and none may be added: the deployment decides all of them and the same operations must keep working when it does. `bearerFormat` is deliberately absent for that reason -- an opaque deployment token and an OIDC-issued JWT are both bearer credentials, and naming the format would pin the document to whichever one is current.\n\nA request with no credential, or one the deployment does not accept, is `401 authentication_required`; so is an exchange whose login and password the deployment does not accept, which is the same refusal and not a second one. A credential the deployment accepts, for a subject not permitted this operation on this resource, is `403 permission_denied`; authorization is decided server-side and the response never reveals the existence of a resource the caller may not see, so absence and refusal are reported as this surface's `404 not_found` where revealing them would leak.\n\nNothing outside `/api/v1` is covered. The operational liveness and readiness plane answers on its own port, carries no product meaning and needs no credential."
+        "description": "The authorization seam. Every operation in this document requires a bearer credential presented as `Authorization: Bearer <token>`, except `issueToken`, `submitRegistration` and `readRegistrationStatus`, whose own `security` is the empty requirement: the credential exchange because it is what a caller with no credential uses to obtain one, and the registration pair because an applicant has no account yet.\n\n**This declares the seam, not its implementation.** No issuer, no discovery URL, no flow and no token format appears here, and none may be added: the deployment decides them and the same operations must keep working when it does. What a subject may do is not carried by the scheme or the credential either: since `R-55` it is the account's role set (`Role`), which the server reads from the account on every request. `bearerFormat` is deliberately absent for that reason -- an opaque deployment token and an OIDC-issued JWT are both bearer credentials, and naming the format would pin the document to whichever one is current.\n\nA request with no credential, or one the deployment does not accept, is `401 authentication_required`; so is an exchange whose login and password the deployment does not accept, which is the same refusal and not a second one. A credential the deployment accepts, for a subject not permitted this operation on this resource, is `403 permission_denied`, its `required_capability` naming what is missing (`password_changed`, `profile_completed`, `role:expert` or `role:admin`); authorization is decided server-side and the response never reveals the existence of a resource the caller may not see, so absence and refusal are reported as this surface's `404 not_found` where revealing them would leak.\n\nNothing outside `/api/v1` is covered. The operational liveness and readiness plane answers on its own port, carries no product meaning and needs no credential."
       }
     },
     "parameters": {
@@ -1357,6 +2159,41 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/FindingUid"
+        }
+      },
+      "UserUid": {
+        "name": "user_uid",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/UserUid"
+        }
+      },
+      "RequestId": {
+        "name": "request_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/RegistrationRequestId"
+        }
+      },
+      "IncludeArchived": {
+        "name": "include_archived",
+        "in": "query",
+        "required": false,
+        "description": "Include archived accounts. Absent is `false`.",
+        "schema": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "RegistrationStatusFilter": {
+        "name": "status",
+        "in": "query",
+        "required": false,
+        "description": "Restrict the page to requests in this status.",
+        "schema": {
+          "$ref": "#/components/schemas/RegistrationStatus"
         }
       }
     },
@@ -1534,6 +2371,36 @@
             }
           }
         }
+      },
+      "StateConflict": {
+        "description": "The change conflicts with durable state. `conflict` carries `details.conflict_reason`: `login_taken` (an active account holds the login), `request_pending` (a request for the login is already pending), `queue_full` (the pending queue is at its cap of 100), `account_referenced` (the account is referenced and cannot be purged) or `last_admin` (no active account would hold `admin`). `state_transition_not_allowed` names the `app_user` or `registration_request` machine with `details.machine`, `current_state` and `requested_state`. On an operation that takes an idempotency key the idempotency-key codes are reported here too.",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "ApprovalConflict": {
+        "description": "One of: `idempotency_key_reuse`, `idempotency_key_in_progress` or `idempotency_key_stale`, as on every keyed create; `state_transition_not_allowed` against `registration_request` when the request is no longer pending (of two concurrent approvals one wins and the other gets this); or `conflict` with `details.conflict_reason: login_taken` when an active account took the login meanwhile, which leaves the request pending.",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
       }
     },
     "schemas": {
@@ -1679,6 +2546,7 @@
           "cost_budget_exceeded",
           "stale_attempt",
           "execution_token_invalid",
+          "rate_limited",
           "internal_error"
         ]
       },
@@ -3114,6 +3982,477 @@
             "items": {
               "$ref": "#/components/schemas/SectionDocumentCount"
             }
+          }
+        }
+      },
+      "UserUid": {
+        "type": "string",
+        "description": "Opaque account identity. An e-mail address is the sign-in identifier and a unique key among active accounts; this is the identity every reference names.",
+        "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$",
+        "examples": [
+          "usr_01M2545JSD15ETSNNV904X991Q"
+        ]
+      },
+      "RegistrationRequestId": {
+        "type": "string",
+        "description": "Opaque registration request identity.",
+        "pattern": "^reg_[0-9A-HJKMNP-TV-Z]{26}$",
+        "examples": [
+          "reg_01M2545JSD15ETSNNV904X991R"
+        ]
+      },
+      "Role": {
+        "type": "string",
+        "description": "One role an account may hold; an account holds a set of them (R-55, R-60). `expert` makes product changes -- projects, uploads, runs, verdicts, comments and the export. `admin` manages accounts and registration requests. Reading product data needs no role: any active account with a complete profile reads it.",
+        "enum": [
+          "expert",
+          "admin"
+        ]
+      },
+      "RegistrationStatus": {
+        "type": "string",
+        "description": "The states of the `registration_request` machine in `contracts/domain/v1/state-machines.json`: `pending` until an administrator decides, then `approved` or `rejected`, both terminal.",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected"
+        ]
+      },
+      "Account": {
+        "type": "object",
+        "description": "One account, as the account itself reads it through `getMe` and an administrator reads it through the account operations. No credential material.",
+        "additionalProperties": false,
+        "required": [
+          "user_uid",
+          "login",
+          "display_label",
+          "last_name",
+          "first_name",
+          "middle_name",
+          "roles",
+          "profile_complete",
+          "is_default_credential",
+          "archived_at"
+        ],
+        "properties": {
+          "user_uid": {
+            "$ref": "#/components/schemas/UserUid"
+          },
+          "login": {
+            "type": "string",
+            "description": "The sign-in identifier: the normalised e-mail address (trimmed, lower-case, ASCII, an internationalised domain in its `xn--` form, at most 254 characters) once the profile is complete, or the legacy login an account created before the identity upgrade keeps until it completes its profile. Not an identity of this surface.",
+            "minLength": 1,
+            "maxLength": 254
+          },
+          "display_label": {
+            "type": "string",
+            "description": "The name to show for this account, resolved by the server and never empty: the name form `Last F. M.` when the account has a last and a first name, else the display name an operator chose, else the login. A complete profile always has the name form (R-55).",
+            "minLength": 1,
+            "maxLength": 254
+          },
+          "last_name": {
+            "description": "Null until somebody gives the names.",
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "first_name": {
+            "description": "Null until somebody gives the names.",
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "middle_name": {
+            "description": "Optional; null when the person has none.",
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roles": {
+            "type": "array",
+            "description": "The role set, sorted. Empty is a valid set: such an account reads product data and changes nothing.",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Role"
+            }
+          },
+          "profile_complete": {
+            "type": "boolean",
+            "description": "False for an account that has not given its names and e-mail yet. Such an account reaches only `getMe`, `updateMyProfile` and `changePassword`; every other operation answers `permission_denied` with `required_capability: profile_completed`."
+          },
+          "is_default_credential": {
+            "type": "boolean",
+            "description": "True while the account must change its password: it is still on the password the deployment seeded it with, or an administrator reset it. The same fact `IssueTokenResponse.is_default_credential` reports at sign-in."
+          },
+          "archived_at": {
+            "description": "Null for an active account. An archived account cannot sign in and none of its credentials is accepted; an administrator may restore it.",
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "AccountPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "page"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Account"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          }
+        }
+      },
+      "PersonNames": {
+        "type": "object",
+        "description": "A person's names, set together. 1-60 characters of letters, separated by single spaces, hyphens or apostrophes, with no word mixing Cyrillic and Latin letters. Surrounding whitespace and invisible characters are removed before the rule is applied.",
+        "additionalProperties": false,
+        "required": [
+          "last_name",
+          "first_name"
+        ],
+        "properties": {
+          "last_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "first_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "middle_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "description": "Optional; absent when the person has none."
+          }
+        }
+      },
+      "UpdateMyProfileRequest": {
+        "type": "object",
+        "description": "The signed-in account's own names, and -- while its profile is incomplete -- the e-mail address that becomes its login. 1-60 characters of letters, separated by single spaces, hyphens or apostrophes, with no word mixing Cyrillic and Latin letters. Surrounding whitespace and invisible characters are removed before the rule is applied.",
+        "additionalProperties": false,
+        "required": [
+          "last_name",
+          "first_name"
+        ],
+        "properties": {
+          "last_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "first_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "middle_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "description": "Optional; absent when the person has none."
+          },
+          "email": {
+            "type": "string",
+            "description": "Required to complete a profile whose login is not yet an e-mail address; it becomes the login in the same write that stores the names. A complete profile's login is fixed: an `email` other than the current login is `validation_failed` with `details.field: login`.",
+            "minLength": 1,
+            "maxLength": 320
+          }
+        }
+      },
+      "UpdateUserRequest": {
+        "type": "object",
+        "description": "An administrator's change of an account's names, its role set, or both. An absent property leaves that half unchanged.",
+        "additionalProperties": false,
+        "properties": {
+          "names": {
+            "$ref": "#/components/schemas/PersonNames"
+          },
+          "roles": {
+            "type": "array",
+            "description": "The whole new role set, not a delta. Removing a role from oneself is `permission_denied`; leaving no active account holding `admin` is `conflict` with `details.conflict_reason: last_admin`.",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Role"
+            }
+          }
+        }
+      },
+      "ResetUserPasswordRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "temporary_password"
+        ],
+        "properties": {
+          "temporary_password": {
+            "type": "string",
+            "description": "The password the account signs in with next and must then change. It is held to the deployment's password policy against the account's login, and it appears in no response body, no error detail and no diagnostic record.",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        }
+      },
+      "SubmitRegistrationRequest": {
+        "type": "object",
+        "description": "An application for an account. 1-60 characters of letters, separated by single spaces, hyphens or apostrophes, with no word mixing Cyrillic and Latin letters. Surrounding whitespace and invisible characters are removed before the rule is applied.",
+        "additionalProperties": false,
+        "required": [
+          "login",
+          "password",
+          "last_name",
+          "first_name"
+        ],
+        "properties": {
+          "login": {
+            "type": "string",
+            "description": "The applicant's e-mail address, which becomes the account's login on approval. Normalised by the server (trimmed, lower-case, ASCII, at most 254 characters).",
+            "minLength": 1,
+            "maxLength": 320
+          },
+          "password": {
+            "type": "string",
+            "description": "The account's future password, held to the deployment's password policy with the applicant's names and e-mail local part added to its blocklist. Stored hashed until the decision, which removes it; it appears in no response body, no error detail and no diagnostic record.",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "last_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "first_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "middle_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "description": "Optional; absent when the person has none."
+          }
+        }
+      },
+      "RegistrationStatusResponse": {
+        "type": "object",
+        "description": "What an applicant is told: that the application is pending. This is the only status this surface ever shows an applicant (R-56 and its addendum of 2026-10-06); a decided application is answered like an unknown pair.",
+        "additionalProperties": false,
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "const": "pending"
+          }
+        }
+      },
+      "RegistrationRequest": {
+        "type": "object",
+        "description": "One registration request, as an administrator reads it. No credential material.",
+        "additionalProperties": false,
+        "required": [
+          "request_id",
+          "login",
+          "display_label",
+          "last_name",
+          "first_name",
+          "middle_name",
+          "status",
+          "submitted_at",
+          "decided_at",
+          "decided_by",
+          "rejection_reason",
+          "created_user_uid"
+        ],
+        "properties": {
+          "request_id": {
+            "$ref": "#/components/schemas/RegistrationRequestId"
+          },
+          "login": {
+            "type": "string",
+            "description": "The normalised e-mail address the applicant gave.",
+            "minLength": 1,
+            "maxLength": 254
+          },
+          "display_label": {
+            "type": "string",
+            "description": "The applicant's name form, `Last F. M.`, resolved by the server.",
+            "minLength": 1,
+            "maxLength": 66
+          },
+          "last_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "first_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "middle_name": {
+            "description": "Null when the applicant gave none.",
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/RegistrationStatus"
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decided_at": {
+            "description": "Null while the request is pending.",
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decided_by": {
+            "description": "The administrator who decided; null while pending.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UserUid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rejection_reason": {
+            "description": "The administrator's reason, present only on a rejected request. It is read by administrators only and is never shown to the applicant.",
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_user_uid": {
+            "description": "The account an approval created. Null while pending, on a rejected request, and after that account was purged.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UserUid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "RegistrationRequestPage": {
+        "type": "object",
+        "description": "One page of requests and the number of pending requests in all, whatever the filter -- the administrator's badge.",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "page",
+          "pending_total"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegistrationRequest"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          },
+          "pending_total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ApproveRegistrationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "roles"
+        ],
+        "properties": {
+          "roles": {
+            "type": "array",
+            "description": "The roles the new account receives: at least one.",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Role"
+            }
+          }
+        }
+      },
+      "RejectRegistrationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Why the request is rejected, 1-256 characters after surrounding whitespace is removed, with no control character but a line feed. Stored for administrators; the applicant is not shown it.",
+            "minLength": 1,
+            "maxLength": 256
           }
         }
       }

@@ -63,12 +63,11 @@ expert who authored a decision cannot be purged (`R-61`).
 * **A value is never coerced.** The ledger writes what it is given. A malformed identity
   fails ``ck_expert_decision_event_author_user_uid_format`` and an unknown one fails the
   foreign key, so either is a refused append and neither becomes NULL.
-* **``None`` is accepted only until `W49-SEAL-01` wires the subject.** The router that
-  reaches this module through the composition root does not pass the account yet; that
-  wiring is `W49-SEAL-01`'s (it passes ``Subject.user_uid``). Until then the argument
-  defaults to ``None`` so that call keeps working without anything here inventing a value,
-  and an event appended through it stores NULL -- exactly what a history row stores.
-  `W49-SEAL-01` removes the default once its caller passes the account.
+* **The argument has no default** since `W49-SEAL-01`, which wired the subject: the
+  decisions router passes ``Subject.user_uid`` through the composition root, and every
+  caller names the account -- or says ``None`` out loud, meaning "author account unknown",
+  the NULL a history row holds. A call that forgot the argument is a ``TypeError``, never a
+  silently NULL author.
 * **It is part of the idempotency fingerprint when it is given.** Two accounts with one
   display name presenting one key are two payloads, and answering the second with the
   first one's event would attribute a decision to somebody who did not take it. When it
@@ -217,7 +216,7 @@ def record_decision(
     command_id: str | None = None,
     correlation_id: str | None = None,
     author_label: str,
-    author_user_uid: str | None = None,
+    author_user_uid: str | None,
 ) -> DecisionEvent:
     """Append one expert decision event. Never updates and never deletes.
 
@@ -228,10 +227,9 @@ def record_decision(
 
     ``author_user_uid`` is the ``user_uid`` of that same verified subject, persisted beside
     the label. It is written exactly as given: a malformed or unknown identity is refused by
-    the database and the append fails; nothing turns it into NULL. ``None`` -- "author
-    account unknown", the same NULL a pre-``0015`` row holds -- is accepted **only until
-    `W49-SEAL-01` wires the subject**, so the composition root's present call keeps working
-    without this module inventing a value. See the module docstring.
+    the database and the append fails; nothing turns it into NULL. It has **no default**
+    (`W49-SEAL-01`): ``None`` -- "author account unknown", the same NULL a pre-``0015`` row
+    holds -- has to be passed explicitly. See the module docstring.
 
     Replaying the same command under one idempotency key appends exactly one event: the
     unique index on ``command_id`` is the enforcement, and a second attempt returns the
@@ -353,7 +351,7 @@ def append_decision_under_key(
     comment: str | None = None,
     correlation_id: str | None = None,
     author_label: str,
-    author_user_uid: str | None = None,
+    author_user_uid: str | None,
 ) -> tuple[DecisionEvent, bool]:
     """Append one decision event under an idempotency key, or replay the first one.
 
@@ -361,9 +359,9 @@ def append_decision_under_key(
 
     ``author_user_uid`` is persisted beside ``author_label``, as in :func:`record_decision`,
     and is part of the payload fingerprint whenever it is given: one key presented by two
-    accounts that share a display name is a reused key, not a replay. ``None`` is accepted
-    only until `W49-SEAL-01` wires the subject; with it, the fingerprint is the one this
-    function computed before the column existed.
+    accounts that share a display name is a reused key, not a replay. It has no default
+    (`W49-SEAL-01`); an explicit ``None`` keeps the fingerprint this function computed
+    before the column existed.
 
     ``record_decision`` accepts a ``command_id`` but nothing claimed one, while
     ``expert_decision_event.command_id`` is a **foreign key into ``command_record``** — so

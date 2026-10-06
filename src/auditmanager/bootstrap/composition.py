@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from auditmanager.api.routers import Router, build_router
 from auditmanager.api.security import TokenSigner, derive_signing_key
 from auditmanager.bootstrap.adapters import (
+    AccountAdapter,
     BlockAdapter,
     CredentialAdapter,
     CsvExportAdapter,
@@ -30,6 +31,7 @@ from auditmanager.bootstrap.adapters import (
     DocumentAdapter,
     FindingAdapter,
     ProjectAdapter,
+    RegistrationAdapter,
     RunAdapter,
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
@@ -107,6 +109,10 @@ def build_application(
     # The import is here rather than at module scope for the reason the four imports above
     # are: the composition root is the only thing that knows which boundaries this
     # application is made of, and ``access`` is a boundary the routers must not import.
+    from auditmanager.access.public import AccountRepository as AccountAccessRepository
+    from auditmanager.access.public import (
+        RegistrationRepository as RegistrationAccessRepository,
+    )
     from auditmanager.access.repository import UserRepository as UserAccessRepository
 
     try:
@@ -149,13 +155,21 @@ def build_application(
         decisions=DecisionAdapter(sessions),
         exports=CsvExportAdapter(sessions),
         credentials=CredentialAdapter(
-            sessions, users=UserAccessRepository(), signer=signer
+            sessions,
+            users=UserAccessRepository(),
+            accounts=AccountAccessRepository(),
+            signer=signer,
         ),
         # `W45-BLOCKS`. Reads the same store and session factory as everything else here;
         # nothing new is opened for it.
         blocks=BlockAdapter(sessions, blob_store=store),
         # `W46-SEAL`, `R-44`. Reads the same session factory too.
         dashboard=DashboardAdapter(sessions),
+        # `W49-SEAL-01`. The account itself, account management and registration.
+        accounts=AccountAdapter(sessions, accounts=AccountAccessRepository()),
+        registrations=RegistrationAdapter(
+            sessions, registrations=RegistrationAccessRepository()
+        ),
     )
     return Application(
         router=router,

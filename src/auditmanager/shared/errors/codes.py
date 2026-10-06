@@ -15,7 +15,7 @@ from auditmanager.shared.errors.catalog import CODES, UNKNOWN_INTERNAL_CODE
 
 
 class ErrorCode(str, Enum):
-    """Exactly the twenty-two codes of ``contracts/domain/v1/error-codes.json``."""
+    """Exactly the twenty-three codes of ``contracts/domain/v1/error-codes.json``."""
 
     VALIDATION_FAILED = "validation_failed"
     NOT_FOUND = "not_found"
@@ -38,6 +38,10 @@ class ErrorCode(str, Enum):
     COST_BUDGET_EXCEEDED = "cost_budget_exceeded"
     STALE_ATTEMPT = "stale_attempt"
     EXECUTION_TOKEN_INVALID = "execution_token_invalid"
+    #: `W49-SEAL-01`. Answered only by the edge in front of ``/api/v1`` (the proxy's throttle
+    #: on the two unauthenticated registration operations); this application never raises
+    #: it. A member nonetheless, because this enum is exactly the catalog.
+    RATE_LIMITED = "rate_limited"
     INTERNAL_ERROR = "internal_error"
 
     @property

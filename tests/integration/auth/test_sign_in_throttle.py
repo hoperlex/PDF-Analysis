@@ -53,6 +53,7 @@ from starlette.testclient import TestClient
 from auditmanager.access import passwords
 from auditmanager.access.check import BLOCKED_PREFIX, FINDING_PREFIX
 from auditmanager.access.models import UserRecord
+from auditmanager.access.accounts import AccountRepository
 from auditmanager.access.repository import SIGN_IN_BLOCKED, UserRepository
 from auditmanager.access.unlock import (
     NO_SUCH_ACCOUNT_SENTINEL,
@@ -131,7 +132,10 @@ def client(session_factory: sessionmaker[Session]) -> TestClient:
         decisions=None,  # type: ignore[arg-type]
         exports=None,  # type: ignore[arg-type]
         credentials=CredentialAdapter(
-            session_factory, users=UserRepository(), signer=signer
+            session_factory,
+            users=UserRepository(),
+            accounts=AccountRepository(),
+            signer=signer,
         ),
     )
 

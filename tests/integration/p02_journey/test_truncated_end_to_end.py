@@ -478,6 +478,7 @@ def test_the_api_run_body_reports_partial_through_the_shipped_adapter(
     shipped one reports the same thing. This dispatches a real request at the adapter
     the composition root wires.
     """
+    from auditmanager.access.accounts import AccountRepository as AccountAccessRepository
     from auditmanager.access.repository import UserRepository as UserAccessRepository
     from auditmanager.api.routers import build_router
     from auditmanager.bootstrap.adapters import (
@@ -513,7 +514,10 @@ def test_the_api_run_body_reports_partial_through_the_shipped_adapter(
         # rather than a stub, because it is the object the composition root wires and it is
         # the one that answers for the account this suite provisioned.
         credentials=CredentialAdapter(
-            session_factory, users=UserAccessRepository(), signer=_credential_signer()
+            session_factory,
+            users=UserAccessRepository(),
+            accounts=AccountAccessRepository(),
+            signer=_credential_signer(),
         ),
     )
     response = _request(router, f"/runs/{truncated_run['run_id']}")

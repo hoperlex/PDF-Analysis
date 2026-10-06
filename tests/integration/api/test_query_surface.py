@@ -859,6 +859,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
     ladder: Ladder,
     paged: Catalogue,
     contract: dict[str, Any],
+    session: Session,
 ) -> None:
     """The guard against the defect this session exists for.
 
@@ -893,6 +894,10 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         # `R-24`. The only target here with no parent identity in it: the journal is
         # deployment-wide, which is also why its `verdict` case below is not the shared one.
         "listDecisions": "/decisions",
+        # `W49-SEAL-01`. An administrator's two listings; the rows they page are written
+        # below, in this test's transaction, and the caller is given `admin` to reach them.
+        "listRegistrations": "/registrations",
+        "listUsers": "/users",
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -906,7 +911,11 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listVersions": {"cursor", "limit"},
         "listRuns": {"cursor", "limit"},
         "listDecisions": {"category", "cursor", "limit", "verdict"},
+        "listRegistrations": {"status", "cursor", "limit"},
+        "listUsers": {"include_archived", "cursor", "limit"},
     }, f"the contract's query surface moved: {declared}"
+
+    accounts_and_requests = _seed_accounts_and_requests(session, shipped_router)
 
     # One supplied value per parameter that the answer must be visibly different for, and
     # the difference each one has to make. Literals, not derived: a case computed from the
@@ -1010,6 +1019,25 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             if not everything["items"] or nothing["items"]:
                 inert.setdefault(operation_id, []).append("verdict")
 
+        if "status" in names:
+            # `W49-SEAL-01`: one pending and one rejected request exist (seeded above), so
+            # each value must return a non-empty page of exactly that status.
+            for status in ("pending", "rejected"):
+                filtered = ok(get(shipped_router, f"{target}?status={status}&limit=200"))
+                carried = {item["status"] for item in filtered["items"]}
+                if carried != {status}:
+                    inert.setdefault(operation_id, []).append(f"status={status}")
+
+        if "include_archived" in names:
+            # One account was archived above: absent by default, present when asked for.
+            archived_uid = accounts_and_requests["archived"]
+            default = ok(get(shipped_router, f"{target}?limit=200"))
+            asked = ok(get(shipped_router, f"{target}?include_archived=true&limit=200"))
+            if archived_uid in {item["user_uid"] for item in default["items"]} or (
+                archived_uid not in {item["user_uid"] for item in asked["items"]}
+            ):
+                inert.setdefault(operation_id, []).append("include_archived")
+
         if "verdict" in names and operation_id == "listDecisions":
             # The journal is deployment-wide and only decided findings are in it, so
             # neither half of the shared case holds: `pending` is not everything, and
@@ -1030,6 +1058,59 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "the contract declares these query parameters and supplying one changes nothing, "
         f"so a caller has it silently ignored: {inert}"
     )
+
+
+def _seed_accounts_and_requests(session: Session, router: Surface) -> dict[str, str]:
+    """Rows for the two administrator listings, in this test's rolled-back transaction.
+
+    Two registration requests -- one left pending, one rejected -- and two accounts, one of
+    them archived by the suite's own account (a real row, ``conftest.suite_account``). The
+    caller is given ``admin`` so the seam lets it read them.
+    """
+    import secrets
+
+    from auditmanager.access.public import (
+        AccountRepository,
+        RegistrationRepository,
+        UserRepository,
+    )
+    from w13_api_driver import TEST_SUBJECT
+
+    router.router.credentials.roles = frozenset({"expert", "admin"})
+    registrations = RegistrationRepository()
+    token = secrets.token_hex(4)
+    pending = registrations.submit(
+        session,
+        login=f"qs-pending-{token}@suite.invalid",
+        password="query-surface-applicant-1",
+        last_name="Ожидаева",
+        first_name="Вера",
+    )
+    rejected = registrations.submit(
+        session,
+        login=f"qs-rejected-{token}@suite.invalid",
+        password="query-surface-applicant-2",
+        last_name="Отказова",
+        first_name="Нина",
+    )
+    registrations.reject(
+        session,
+        actor_uid=TEST_SUBJECT.user_uid,
+        request_id=rejected.request_id,
+        reason="query surface",
+    )
+    users = UserRepository()
+    kept = users.create_user(session, f"qs-kept-{token}", "query-surface-password-1")
+    gone = users.create_user(session, f"qs-gone-{token}", "query-surface-password-2")
+    AccountRepository().archive_account(
+        session, actor_uid=TEST_SUBJECT.user_uid, user_uid=str(gone.user_uid)
+    )
+    return {
+        "pending": pending.request_id,
+        "rejected": rejected.request_id,
+        "kept": str(kept.user_uid),
+        "archived": str(gone.user_uid),
+    }
 
 
 def test_the_filter_vocabularies_are_the_frozen_ones(contract: dict[str, Any]) -> None:

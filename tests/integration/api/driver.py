@@ -50,9 +50,12 @@ __all__ = [
     "DEPLOYMENT_SECRET",
     "Request",
     "SUITE_LOGIN",
+    "SUITE_NAMES",
     "SUITE_PASSWORD",
     "Surface",
+    "SuiteAccountAdapter",
     "SuiteCredentialAdapter",
+    "SuiteRegistrationAdapter",
     "TEST_DISPLAY_LABEL",
     "TEST_EPOCH",
     "TEST_SUBJECT",
@@ -88,11 +91,23 @@ TEST_EPOCH = 7
 #: whose label happened to be its login could not tell "the ledger writes the display name"
 #: from "the ledger writes the login", which is the same vacuity ``TEST_EPOCH`` avoids by
 #: not being 1.
-TEST_DISPLAY_LABEL = "Испытательный стенд"
+#:
+#: `W49-SEAL-01`: the suite's account is an **e-mail account with a complete profile**,
+#: because an incomplete one reaches only ``getMe``, ``updateMyProfile`` and
+#: ``changePassword`` now. Its label is therefore the name form `R-55` gives a complete
+#: profile -- "Фамилия И. О." -- of the names below, and its login is an e-mail address.
+SUITE_NAMES = ("Стендова", "Анна", "Ивановна")
+TEST_DISPLAY_LABEL = "Стендова А. И."
+
+#: The one pair the suite's credential port accepts. There is no user table behind this
+#: suite -- it wires the six ports itself -- so the exchange is answered by the adapter
+#: below rather than by `W34-DOM`'s repository, which is exercised where rows exist.
+SUITE_LOGIN = "api-suite@suite.invalid"
+SUITE_PASSWORD = "w13-api-suite-password"
 
 TEST_SUBJECT = Subject(
     user_uid="usr_01M2545JSD15ETSNNV904X991Q",
-    login="api-suite",
+    login=SUITE_LOGIN,
     token_epoch=TEST_EPOCH,
     display_label=TEST_DISPLAY_LABEL,
 )
@@ -103,13 +118,6 @@ TEST_SUBJECT = Subject(
 _SIGNER = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
 assert _SIGNER is not None, "the suite's own secret derives a signing key"
 TEST_TOKEN = _SIGNER.issue(TEST_SUBJECT, is_default_credential=False).token
-
-#: The one pair the suite's credential port accepts. There is no user table behind this
-#: suite -- it wires the six ports itself -- so the exchange is answered by the adapter
-#: below rather than by `W34-DOM`'s repository, which is exercised where rows exist.
-SUITE_LOGIN = "api-suite"
-SUITE_PASSWORD = "w13-api-suite-password"
-
 
 class SuiteCredentialAdapter:
     """``CredentialPort`` for this suite: one account, in memory, with a credential epoch.
@@ -128,15 +136,33 @@ class SuiteCredentialAdapter:
     real one is driven where rows exist, in ``tests/integration/auth``.
     """
 
-    __slots__ = ("epoch", "password", "is_default_credential")
+    __slots__ = (
+        "epoch",
+        "password",
+        "is_default_credential",
+        "archived",
+        "profile_complete",
+        "roles",
+        "display_label",
+    )
 
-    def __init__(self) -> None:
+    def __init__(self, *, roles: frozenset[str] = frozenset({"expert"})) -> None:
         self.password = SUITE_PASSWORD
         self.epoch = TEST_EPOCH
         #: `R-50`. This suite's account has changed its password, like every account a
         #: deployment is meant to have. A test that wants the other state sets it and puts
         #: it back, which is how the refusal gets driven against the real seam.
         self.is_default_credential = False
+        #: `W49-SEAL-01`. Active, complete, and an ``expert`` -- the account every product
+        #: operation this suite drives is meant for. The role sweep
+        #: (``test_role_register.py``) sets each field to each value it can take.
+        self.archived = False
+        self.profile_complete = True
+        self.roles = roles
+        #: The label the account's row holds. Equal to the one minted into
+        #: :data:`TEST_TOKEN` until a test renames the account, which is how the suite
+        #: shows the seam publishing the row's label rather than the credential's.
+        self.display_label = TEST_DISPLAY_LABEL
 
     def _subject(self) -> Subject:
         return Subject(
@@ -174,13 +200,81 @@ class SuiteCredentialAdapter:
         return _SIGNER.issue(self._subject(), is_default_credential=False)
 
     def standing_of(self, user_uid: str) -> AccountStanding | None:
-        """`R-50`. Two facts, and ``is_default_credential`` is a field rather than a
-        constant so a test in this suite can flip it and watch the seam refuse."""
+        """`R-50` and `W49-SEAL-01`. Every fact is a field rather than a constant, so a test
+        in this suite can set it and watch the seam decide."""
         if user_uid != TEST_SUBJECT.user_uid:
             return None
         return AccountStanding(
-            token_epoch=self.epoch, is_default_credential=self.is_default_credential
+            token_epoch=self.epoch,
+            is_default_credential=self.is_default_credential,
+            archived=self.archived,
+            profile_complete=self.profile_complete,
+            roles=frozenset(self.roles),
+            login=TEST_SUBJECT.login,
+            display_label=self.display_label,
         )
+
+
+class SuiteAccountAdapter:
+    """``AccountPort`` for this suite's seam tests: no account table behind it.
+
+    The account operations are driven against real rows in ``test_user_management.py``
+    and ``test_registration_flow.py``, through the shipped adapter. What this suite asks of
+    them is the **seam's** answer -- who is let through to the handler -- so the port only
+    has to answer something that is not a refusal of the seam's kind: an addressed account
+    is ``not_found`` and a listing is empty. It refuses nothing as ``permission_denied``,
+    which is what keeps a 403 in the sweep the seam's alone.
+    """
+
+    def get_account(self, *, user_uid: str) -> Any:
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="User")
+
+    def list_accounts(self, *, include_archived: bool) -> Any:
+        return ()
+
+    def update_my_profile(self, **_: Any) -> Any:
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="User")
+
+    def update_account(self, **_: Any) -> Any:
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="User")
+
+    def archive_account(self, **_: Any) -> Any:
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="User")
+
+    def restore_account(self, **_: Any) -> Any:
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="User")
+
+    def purge_account(self, **_: Any) -> None:
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="User")
+
+    def reset_password(self, **_: Any) -> Any:
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="User")
+
+
+class SuiteRegistrationAdapter:
+    """``RegistrationPort`` for this suite's seam tests, on the same terms as above.
+
+    ``read_status`` proves nothing -- every pair is the generic refusal -- and ``submit``
+    records nothing: an application reaching it answers ``conflict`` with ``queue_full``,
+    a refusal of the operation's own kind and not the seam's.
+    """
+
+    def submit(self, **_: Any) -> str:
+        raise DomainError(ErrorCode.CONFLICT, conflict_reason="queue_full")
+
+    def read_status(self, *, login: str, password: str) -> str | None:
+        return None
+
+    def list_requests(self, *, status: str | None) -> Any:
+        from auditmanager.api.schemas.registrations import RegistrationListingView
+
+        return RegistrationListingView(items=(), pending_total=0)
+
+    def approve(self, **_: Any) -> Any:
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="RegistrationRequest")
+
+    def reject(self, **_: Any) -> Any:
+        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="RegistrationRequest")
 
 
 @dataclass(frozen=True, slots=True)
@@ -428,7 +522,11 @@ def probe_surface(handler: Any) -> Surface:
     """
     router = Router(credentials=SuiteCredentialAdapter())
 
-    @router.get("/probe", operation_id="probe", tags=["probe"])
+    # No ``operation_id``, since `W49-SEAL-01`: an operation the role register does not
+    # name is refused to everyone, and a probe is not an operation of the surface. A route
+    # with no ``operationId`` requires what the documentation routes require -- any
+    # complete account -- which is what lets a probe's handler run behind the real seam.
+    @router.get("/probe", tags=["probe"])
     def probe() -> Any:
         return handler()
 

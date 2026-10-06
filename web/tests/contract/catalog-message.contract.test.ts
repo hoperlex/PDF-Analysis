@@ -4,7 +4,7 @@
  * `R-18` requires the alpha in Russian. `W31-UI` translated what `web/src` owns and
  * reported the wall: a failure `detail` is often `error.envelope.message`, which the
  * backend renders from `contracts/domain/v1/error-codes.json`'s `summary` fields — and
- * measured on `ae2adf5` **not one of the 22 carries a Cyrillic character**.
+ * measured on `ae2adf5` **not one of the 22 then (23 since `W49-SEAL-01`) carries a Cyrillic character**.
  * `catalog-message.ts` is the repair. This guard is what keeps it from rotting the way
  * `PC01_ERROR_CODES` did twice: `W15-AUTH` found that list missing both authorization
  * codes and `W25-SEAL` found it missing `staged_upload_lost`, each time because a
@@ -13,7 +13,7 @@
  *
  * **What licenses the set: the whole catalog, not `PC01_ERROR_CODES`.** `transport.ts`'s
  * `decodeFailure` builds an `ApiError` exactly when `isErrorCode()` passes, and that tests
- * `ERROR_CODE_VALUES` — all 22. Every classifier consuming this map has a `default:` arm
+ * `ERROR_CODE_VALUES` — all 23. Every classifier consuming this map has a `default:` arm
  * that fires for any code it has no branch for, and six catalog codes sit outside
  * `PC01_ERROR_CODES`. The field is constrained by the catalog, so this guard reads the
  * catalog document rather than the narrower list, and rather than the generated enum the
@@ -125,7 +125,7 @@ describe('every sentence is Russian, and a sentence', () => {
 
 describe('it is not a second copy of terminal-reason.ts', () => {
   /**
-   * The two tables restate the same 22 summaries and are read in different places:
+   * The two tables restate the same 23 summaries and are read in different places:
    * `terminal_reason` is a field on a **200** and is phrased for a run that has stopped;
    * this one stands where an **error envelope's** message was and is read by four
    * classifiers, only one of which is about a run. If a later editor collapses them, the

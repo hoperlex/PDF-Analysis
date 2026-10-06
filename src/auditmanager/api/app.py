@@ -77,7 +77,7 @@ __all__ = [
 #: So the four built-in routes are suppressed (``openapi_url=None`` and the three below it
 #: in :func:`_assemble`) and the same four routes are declared as ``APIRoute``s, which do
 #: carry the application's dependencies. They stay out of the document --
-#: ``include_in_schema=False`` -- because the contract declares seventeen paths and these are
+#: ``include_in_schema=False`` -- because the contract declares twenty-seven paths and these are
 #: not among them.
 OPENAPI_PATH: Final[str] = "/openapi.json"
 _DOCS_PATH: Final[str] = "/docs"
@@ -99,7 +99,7 @@ DOCUMENTATION_PATHS: Final[tuple[str, ...]] = (
 #: is the same string.
 _TITLE: Final[str] = "AuditManager API"
 _DESCRIPTION: Final[str] = (
-    "The twenty operations of the PC-01 surface. Every failure is one `ErrorEnvelope` "
+    "The thirty-four operations of the PC-01 surface. Every failure is one `ErrorEnvelope` "
     "carrying a catalog `error_code`, and every response carries `X-Correlation-Id`."
 )
 
@@ -148,7 +148,7 @@ def create_asgi_app(
     *,
     application: Application | None = None,
 ) -> FastAPI:
-    """The ASGI application: the twenty operations, the seam, and the four middlewares.
+    """The ASGI application: the thirty-four operations, the seam, and the four middlewares.
 
     ``application`` lets a caller that has already built one -- a test driving two
     applications in one process, for instance -- avoid building it twice. When it is omitted
@@ -162,7 +162,7 @@ def create_asgi_app(
 def create_documentation_app(environ: Mapping[str, str] | None = None) -> FastAPI:
     """The same application shape, with nothing wired behind the six ports.
 
-    The served document is a function of the twenty declarations and the 61 models and not
+    The served document is a function of the thirty-four declarations and the 77 models and not
     of what sits behind the ports, so this builds it without a database, an object store or
     a credential -- which is what lets the conformance gate read
     ``create_documentation_app().openapi()`` on any checkout. It **cannot serve a request**:
@@ -199,38 +199,42 @@ def _drop_the_422_this_surface_cannot_answer(document: dict[str, Any]) -> dict[s
     **Why this is not document surgery, and how you can tell.** `W13-CONF` measured that
     FastAPI's own 422 must be *displaced, not deleted*: declaring the contract's own
     ``422: {"model": ErrorEnvelope, ...}`` replaces it and keeps ``HTTPValidationError`` and
-    ``ValidationError`` out of ``components.schemas``. **Fourteen** of the twenty
+    ``ValidationError`` out of ``components.schemas``. **Twenty-three** of the thirty-four
     operations do exactly that -- measured from the contract, not recalled: this paragraph
     read *"Twelve of the seventeen"* until wave 39, and twelve plus the four below is
     sixteen, which was never the size of this surface. It was thirteen of seventeen before
     ``changePassword``, which declares its own 422 like every other operation with a body,
     and it stayed fourteen through `W46-SEAL`'s ``getDashboardSummary`` -- a sixth
-    operation joined the group below rather than this one growing.
-    **Six cannot**, because the contract declares no ``422`` for them:
+    operation joined the group below rather than this one growing. `W49-SEAL-01` added
+    nine to it (every one of its operations with a body or a query) and five to the group
+    below.
+    **Eleven cannot**, because the contract declares no ``422`` for them:
     ``getRunStatus``, ``getDocumentVersion``, ``getFinding``, ``exportRunCsv``,
-    ``getVersionBlocks`` (`W45-BLOCKS`, the same shape as ``getDocumentVersion``) and
-    ``getDashboardSummary`` (`W46-SEAL`: no parameter at all, so a fortiori nothing a 422
-    could ever be about). FastAPI
+    ``getVersionBlocks`` (`W45-BLOCKS`, the same shape as ``getDocumentVersion``),
+    ``getUser``, ``archiveUser``, ``restoreUser`` and ``purgeUser`` (`W49-SEAL-01`: a path
+    identity and nothing else), and ``getDashboardSummary`` (`W46-SEAL`) and ``getMe``
+    (`W49-SEAL-01`), which take no parameter at all, so a fortiori nothing a 422 could
+    ever be about. FastAPI
     injects one anyway, for any operation with parameters, and there is no switch
     (``fastapi/openapi/utils.py:517-535`` -- the condition is on the *absence* of a declared
     422, ``4XX`` or ``default``).
 
-    Five of the six take a path identity and the optional correlation header and nothing
+    Nine of the eleven take a path identity and the optional correlation header and nothing
     else. A malformed path identity is ``404 not_found`` by design -- the frozen
     ``NotFound`` response says this surface "never reveals the existence of a resource
     the caller may not see" -- and the correlation header is declared but deliberately
-    not enforced. **So a 422 is unreachable on all five, and FastAPI's claim that they
+    not enforced. **So a 422 is unreachable on all nine, and FastAPI's claim that they
     answer one is false.** What is removed here is a false statement about this
     application, not a difference from the contract, and the narrowness is what makes
     that checkable: an operation's 422 is removed only when the response object is
     byte-for-byte :data:`_FASTAPIS_OWN_422`, so a declared one is never touched.
-    ``getDashboardSummary`` is the sixth and takes no path identity at all -- only the
-    optional correlation header -- and FastAPI does not inject a 422 for it in the first
+    ``getDashboardSummary`` and ``getMe`` take no path identity at all -- only the
+    optional correlation header -- and FastAPI does not inject a 422 for them in the first
     place: measured, not assumed (a bare unconstrained header carries nothing for
-    ``fastapi/openapi/utils.py`` to validate). So it reaches ``responses`` below with no
-    422 already, and this function removes nothing from it; it is named here only so
-    that "six cannot" is checkable against the served document rather than against five
-    names and an implicit sixth. The two schemas go only if nothing still references them, and the
+    ``fastapi/openapi/utils.py`` to validate). So they reach ``responses`` below with no
+    422 already, and this function removes nothing from them; they are named here only so
+    that "eleven cannot" is checkable against the served document rather than against nine
+    names and two implicit ones. The two schemas go only if nothing still references them, and the
     function refuses rather than leave a dangling ``$ref``.
     """
     removed = 0
@@ -320,8 +324,9 @@ def _declare_the_documentation_routes(app: FastAPI) -> None:
     ``app.router.dependencies``, instead of a ``starlette.routing.Route``, which carries
     nothing.
 
-    ``include_in_schema=False`` on all four. The contract declares seventeen paths and these
-    are not among them; a documentation route that described itself would be a seventeenth.
+    ``include_in_schema=False`` on all four. The contract declares twenty-seven paths and
+    these are not among them; a documentation route that described itself would be a
+    twenty-eighth.
 
     None of them declares an ``operation_id``, so
     :func:`auditmanager.api.security._operation_of` answers ``None`` for each, ``None`` is
@@ -416,7 +421,7 @@ def _assemble(
             ),
         ],
         # A model with a default would otherwise be emitted twice, as `X-Input` and
-        # `X-Output`. The 61 schema names are pinned by the contract and by the frontend's
+        # `X-Output`. The 77 schema names are pinned by the contract and by the frontend's
         # generated client, so the split is a conformance failure -- and the fix belongs
         # here, in the application, never in the gate's normalization. `W13-CONF` measured
         # it: `test_the_gate_catches_a_split_input_and_output_schema`.
