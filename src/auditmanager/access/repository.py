@@ -388,34 +388,6 @@ _NOTE_A_FAILED_SIGN_IN = text(
     """
 )
 
-#: `W49-ACCESS-01c`, `W49-PLAN.md` §3.3: **a failed exchange for a login that no active
-#: account holds is counted against that login's registration request**, so the request's
-#: brake sees both kinds of attempt -- the exchange and the status read -- as the plan
-#: requires. Same expression, same columns (``0015`` names them as ``0008`` does), and no
-#: derivation: the exchange has already spent its one. The request addressed is the one a
-#: status read would answer about -- the pending one, else the latest -- and an attempt
-#: against a request inside its cooling-off period is not counted, as on ``app_user``.
-_NOTE_A_FAILED_REQUEST_ATTEMPT = text(
-    f"""
-    UPDATE registration_request SET
-        failed_sign_ins = {_NEXT_FAILED_SIGN_INS},
-        last_failed_sign_in_at = now(),
-        sign_in_blocked_until = CASE
-            WHEN ({_NEXT_FAILED_SIGN_INS}) >= :allowance
-                THEN now() + (:cooling * interval '1 second')
-            WHEN sign_in_blocked_until IS NOT NULL AND sign_in_blocked_until <= now()
-                THEN NULL
-            ELSE sign_in_blocked_until
-        END
-    WHERE request_id = (
-        SELECT request_id FROM registration_request WHERE login = :login
-        ORDER BY (status = 'pending') DESC, submitted_at DESC, request_id DESC LIMIT 1
-    )
-      AND COALESCE(sign_in_blocked_until <= now(), true)
-    RETURNING request_id
-    """
-)
-
 #: The brake released, for one account. The predicate is what keeps a clean sign-in from
 #: writing a row: the overwhelmingly common case is an account with nothing to clear, and
 #: an UPDATE that matched it would put a new row version on the hot path of every sign-in
@@ -586,19 +558,14 @@ class UserRepository:
 
         credential = session.execute(_SELECT_CREDENTIAL, {"login": normalized}).first()
         if credential is None:
+            # One derivation, request or no request, and nothing is written. `R-63`: a
+            # failed exchange no longer counts against a registration request for this
+            # login -- the exchange never compares the request's hash, so the count
+            # protected nothing, while the status read the BFF sends after every refused
+            # exchange made one sign-in cost a pending applicant two attempts. Only
+            # `readRegistrationStatus` counts against the request (`W49-PLAN.md` §3.3 as
+            # amended).
             spend_a_verification(password)
-            # `W49-PLAN.md` §3.3: the attempt counts against a registration request for
-            # this login, if there is one. A statement, never a derivation -- the one
-            # above is the whole of this path's work, request or no request.
-            session.execute(
-                _NOTE_A_FAILED_REQUEST_ATTEMPT,
-                {
-                    "login": normalized,
-                    "window": ATTEMPT_WINDOW_SECONDS,
-                    "allowance": FAILED_SIGN_IN_ALLOWANCE,
-                    "cooling": COOLING_OFF_SECONDS,
-                },
-            )
             return None
 
         algorithm, iterations, salt, digest, blocked_now = credential

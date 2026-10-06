@@ -32,8 +32,10 @@ request, and ``None`` -- the same generic refusal as a failed exchange -- otherw
 performs exactly one PBKDF2 derivation on every path**, request or no request, blocked or
 not, so its timing says nothing; and :meth:`auditmanager.access.repository.UserRepository.
 authenticate` likewise spends exactly one on a login no account holds, whether or not a
-request exists. Every failed attempt of either kind is counted on the request's own
-throttle columns, with the account brake's rules (`W40-LIMIT`).
+request exists. Only a failed status read is counted on the request's own throttle
+columns, with the account brake's rules (`W40-LIMIT`); a failed exchange spends its
+derivation and writes nothing on the request (`R-63`), so a pending applicant's sign-in --
+a refused exchange followed by this read, as the BFF sends them -- costs one attempt.
 
 **A decided request cannot be matched by a password**, because the decision nulls the
 password columns (§3.3, and the guard trigger refuses any later write). So this read

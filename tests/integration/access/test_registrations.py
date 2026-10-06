@@ -454,10 +454,64 @@ class TestTheStatusRead:
         assert tuple(_stored(session, request.request_id))[4] == 0
 
     def test_a_failed_exchange_counts_against_the_request(self, session: Session) -> None:
+        """SUPERSEDED BY `R-63`, and the name is kept because `W49-ACCESS-01c.md` (M01c-14)
+        cites it: a failed exchange for a login no account holds now counts NOTHING
+        against that login's request. Only the status read counts."""
         request = _submit(session)
         assert users.authenticate(session, "anna@example.com", PASSWORD) is None
         session.commit()
-        assert tuple(_stored(session, request.request_id))[4] == 1
+        *_, failed, blocked_until = _stored(session, request.request_id)
+        assert (failed, blocked_until) == (0, None)
+
+
+class TestAPendingApplicantSigningIn:
+    """`R-63` (`W49-QA-01` Q-1). The BFF answers a refused exchange by reading the status
+    with the same pair, so one human sign-in is an exchange and a status read. Before
+    `R-63` both counted on the request: two wrong sign-ins left it at four, and the correct
+    password on the third tipped it to five and was refused for five minutes. Driven here in
+    exactly that shape, against the repositories the routers call."""
+
+    @staticmethod
+    def _sign_in(session: Session, password: str) -> bool:
+        """One BFF-shaped sign-in; ``True`` when the status read answered ``pending``."""
+        assert users.authenticate(session, "anna@example.com", password) is None
+        session.commit()
+        status = registrations.read_status(session, login="anna@example.com", password=password)
+        session.commit()
+        return status is not None and status.status == "pending"
+
+    def test_correct_sign_ins_beyond_the_allowance_are_never_throttled(
+        self, session: Session
+    ) -> None:
+        request = _submit(session)
+        for _ in range(FAILED_SIGN_IN_ALLOWANCE + 2):
+            assert users.authenticate(session, "anna@example.com", PASSWORD) is None
+            session.commit()
+            *_, failed, blocked_until = _stored(session, request.request_id)
+            assert (failed, blocked_until) == (0, None), "the refused exchange was counted"
+            assert registrations.read_status(
+                session, login="anna@example.com", password=PASSWORD
+            ) is not None
+            session.commit()
+
+    def test_a_wrong_sign_in_costs_one_attempt_and_the_allowance_still_brakes(
+        self, session: Session
+    ) -> None:
+        request = _submit(session)
+        for _ in range(FAILED_SIGN_IN_ALLOWANCE - 1):
+            assert not self._sign_in(session, WRONG)
+        *_, failed, blocked_until = _stored(session, request.request_id)
+        assert (failed, blocked_until) == (FAILED_SIGN_IN_ALLOWANCE - 1, None)
+        # Q-1's sign-in: the right password after wrong ones, short of the allowance.
+        assert self._sign_in(session, PASSWORD), "a correct sign-in was refused"
+        assert tuple(_stored(session, request.request_id))[4] == 0
+        # The brake is unchanged: the allowance in wrong status reads shuts the request,
+        # and then the right password is refused too.
+        for _ in range(FAILED_SIGN_IN_ALLOWANCE):
+            assert not self._sign_in(session, WRONG)
+        *_, failed, blocked_until = _stored(session, request.request_id)
+        assert failed == FAILED_SIGN_IN_ALLOWANCE and blocked_until is not None
+        assert not self._sign_in(session, PASSWORD)
 
 
 class TestConstantWork:
