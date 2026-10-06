@@ -47,7 +47,13 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 #: entirely - so a wrong slug here is silent rather than refused.
 MODEL_STUBS: Final[frozenset[str]] = frozenset({"proxy", "default", "auto"})
 
-_PATH: Final[str] = "/api/v1/chat/completions"
+#: Appended to an origin-only base URL: the proxy's portal endpoint, which is the path every
+#: installation called before `W48-PROXY-01` and still calls when it names no path.
+_PORTAL_PATH: Final[str] = "/api/v1/chat/completions"
+#: Appended to a base URL that names its own API prefix, such as the agent gateway's
+#: `https://<proxy>/agent/v1` -- the OpenAI `base_url` convention the proxy's client guide
+#: documents for that gateway.
+_COMPLETIONS_PATH: Final[str] = "/chat/completions"
 _TIMEOUT_SECONDS: Final[int] = 200  # the proxy's own deadline is ~190s
 
 
@@ -91,6 +97,20 @@ class ProxySettings:
                     "indistinguishable from a provider outage"
                 ),
             )
+        # `W48-PROXY-01`. The call path is appended to this string, so a query or a fragment
+        # would swallow it: `https://<proxy>/agent/v1/chat/completions?x=` reaches the agent
+        # gateway with `/api/v1/chat/completions` riding in the query, and works only for as
+        # long as the gateway ignores what it is sent. The character test rather than
+        # `urlsplit().query`, because a bare trailing `?` parses as an empty query and still
+        # swallows the path.
+        if "?" in self.base_url or "#" in self.base_url:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message=(
+                    "the proxy base URL carries a query or a fragment; the call path is "
+                    "appended to the base URL, so a base URL must end in its path"
+                ),
+            )
         if not self.token:
             raise DomainError(
                 ErrorCode.INTERNAL_ERROR,
@@ -120,7 +140,7 @@ class ProxyAdapter(ModelAdapter):
         payload = json.dumps(body, ensure_ascii=False, sort_keys=True).encode("utf-8")
 
         http = urllib.request.Request(
-            self._settings.base_url.rstrip("/") + _PATH,
+            _completions_url(self._settings.base_url),
             data=payload,
             method="POST",
             headers={
@@ -156,6 +176,28 @@ class ProxyAdapter(ModelAdapter):
                 message=f"the model proxy answered with an unexpected status {status}",
             )
         return _from_openai_response(json.loads(raw), latency_ms)
+
+
+def _completions_url(base_url: str) -> str:
+    """The URL a call is POSTed to, read off the shape of the configured base URL.
+
+    The proxy serves the same contract at two addresses. Its portal endpoint lives under
+    `/api/`, which the proxy's nginx IP-allowlists; its agent gateway lives at
+    `/agent/v1/chat/completions` and authenticates by key alone. An installation names the
+    first by its origin and the second by its prefix, so the rule is the path:
+
+    * no path (or a bare `/`) - `<origin>/api/v1/chat/completions`, exactly what every
+      installation called before `W48-PROXY-01`;
+    * any other path - `<base>/chat/completions`, the OpenAI `base_url` convention.
+
+    `W48-PROXY-01`: the stand's IP is not on the portal's allowlist, and the only key it holds
+    is an agent-gateway key, so before this rule nothing the stand could configure reached a
+    model.
+    """
+    base = base_url.rstrip("/")
+    if not urllib.parse.urlsplit(base_url).path.strip("/"):
+        return base + _PORTAL_PATH
+    return base + _COMPLETIONS_PATH
 
 
 def _idempotency_key(payload: bytes, model: str) -> str:

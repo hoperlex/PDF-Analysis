@@ -310,6 +310,55 @@ class TestItRefusesToBeBuiltWrong:
             ProxySettings(base_url="proxy.example", token="t")
 
 
+class TestTheBaseUrlNamesTheEndpoint:
+    """`W48-PROXY-01`. The proxy serves one contract at two addresses, and the stand can reach
+    only one of them.
+
+    The portal endpoint lives under `/api/`, which the proxy's nginx IP-allowlists; the agent
+    gateway lives at `/agent/v1/chat/completions` and authenticates by key alone. The adapter
+    used to append `/api/v1/chat/completions` to whatever it was given, so a base URL of
+    `.../agent/v1` was called as `.../agent/v1/api/v1/chat/completions` and the gateway was
+    unreachable by configuration. The rule is now the path of the base URL.
+    """
+
+    @pytest.mark.parametrize(
+        "base_url", ["https://proxy.example", "https://proxy.example/"]
+    )
+    def test_an_origin_keeps_the_portal_path_it_always_called(self, base_url: str) -> None:
+        """The pin: every installation configured before this task names an origin."""
+        capture = _Captured()
+        ProxyAdapter(ProxySettings(base_url=base_url, token="t"), opener=capture).complete(
+            ModelRequest(model_id="m", body=ANTHROPIC_BODY)
+        )
+        assert capture.request.full_url == "https://proxy.example/api/v1/chat/completions"
+
+    @pytest.mark.parametrize(
+        "base_url", ["https://proxy.example/agent/v1", "https://proxy.example/agent/v1/"]
+    )
+    def test_a_base_with_a_path_is_called_at_its_completions(self, base_url: str) -> None:
+        capture = _Captured()
+        ProxyAdapter(ProxySettings(base_url=base_url, token="t"), opener=capture).complete(
+            ModelRequest(model_id="m", body=ANTHROPIC_BODY)
+        )
+        assert capture.request.full_url == "https://proxy.example/agent/v1/chat/completions"
+
+    @pytest.mark.parametrize(
+        "base_url",
+        [
+            # The workaround this task replaces: the portal path rides in the query.
+            "https://proxy.example/agent/v1/chat/completions?x=",
+            "https://proxy.example?x=1",
+            "https://proxy.example?",  # an empty query still swallows the appended path
+            "https://proxy.example#f",
+            "https://proxy.example/agent/v1#f",
+        ],
+    )
+    def test_a_query_or_a_fragment_is_refused_at_construction(self, base_url: str) -> None:
+        with pytest.raises(DomainError) as caught:
+            ProxySettings(base_url=base_url, token="t")
+        assert caught.value.code is ErrorCode.INTERNAL_ERROR
+
+
 class TestAHostlessUrlIsAConfigurationErrorNotAnOutage:
     """`D-72`. ``http://:59990`` is a lane pointed at nothing, and it used to look like rain.
 
