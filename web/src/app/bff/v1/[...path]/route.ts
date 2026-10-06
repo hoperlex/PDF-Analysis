@@ -424,9 +424,14 @@ function noDirectExchange(request: Request): Response {
  *
  * `submitRegistration` and `readRegistrationStatus` take no credential and cost the API a
  * password derivation each, so through the catch-all they would be reachable past the guest
- * throttle; the other three under the segment are an administrator's and are refused here
- * too, because one rule per segment is a rule that cannot be half-applied. Refused before the
- * session is read, so a signed-in browser is refused exactly like a guest.
+ * throttle. `W49-PLAN.md` §3.5 refuses the whole first segment, as `auth` is refused, and
+ * this does exactly that. Refused before the session is read, so a signed-in browser is
+ * refused exactly like a guest.
+ *
+ * **Known consequence, raised and not decided here** (`docs/program/W49-BFF-01.md`, open
+ * question 1): the segment also holds the administrator's `listRegistrations`,
+ * `approveRegistration` and `rejectRegistration`, which this rule refuses to the browser too,
+ * and which the screens of `W50`/`W51` will call through this catch-all.
  *
  * `not_found` rather than a new code, for `D-18`'s reason: a seam does not invent codes.
  */

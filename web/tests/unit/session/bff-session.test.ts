@@ -590,6 +590,7 @@ describe('an upstream 401 on a held credential closes the session and answers th
     const envelope = (await response.json()) as { error_code: string; correlation_id: string };
     expect(envelope.error_code).toBe('authentication_required');
     expect(envelope.correlation_id).toBe('api-epoch-raised');
+    expect(response.headers.get('set-cookie'), 'the cookie is cleared in the same answer').not.toBeNull();
     expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
     expect(response.headers.get('set-cookie')).toContain(`${SESSION_COOKIE}=;`);
 
@@ -678,6 +679,7 @@ describe('W49: a successful profile change rewrites the subject without a new si
     // The change itself was made and is reported as made; the session is closed so the next
     // sign-in reads the subject again, rather than this tier keeping one it knows is stale.
     expect(response.status).toBe(200);
+    expect(response.headers.get('set-cookie'), 'the cookie is cleared in the same answer').not.toBeNull();
     expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
     expect(openSessionCount()).toBe(0);
   });
