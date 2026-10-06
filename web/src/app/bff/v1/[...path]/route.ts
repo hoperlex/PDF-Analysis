@@ -116,15 +116,21 @@
  * `fetch`, which would follow a `303` into a page of HTML. The client's 401 handling renders
  * the signed-out state; the next server render finds no session.
  *
- * ## The registration door, and why `registrations` is refused here
+ * ## The registration door, and what the catch-all refuses under `registrations`
  *
  * `POST /bff/v1/registration` forwards `submitRegistration` exactly as the exchange is
  * forwarded: the form is read here, the password goes upstream once in a JSON body, and
  * nothing of the answer but a redirect reaches the browser — `303` to `/register/submitted`,
  * or to `/register?refusal=<value>` with a closed set of six values. The catch-all refuses
- * the contract's `registrations` segment to the browser as it refuses `auth` — `not_found`,
- * before the session is read — so the two public registration operations are reachable only
- * through the reserved doors and their throttle, and never with a session's credential.
+ * exactly the two public registration operations — `POST /registrations` and
+ * `POST /registrations/status`, by method and path — as it refuses `auth`: `not_found`,
+ * before the session is read. So those two are reachable only through the reserved doors and
+ * their throttle, and never with a session's credential. **Everything else under the segment
+ * is forwarded like any operation** — the administrator's `listRegistrations`,
+ * `approveRegistration` and `rejectRegistration`, which `W50`'s home tile and `W51`'s queue
+ * call through here, and which the API refuses to anyone without `admin`. (Corrected at this
+ * task's hand-back, `W49-PLAN.md` §3.5 at `83987e5`: refusing the whole segment closed them
+ * too.)
  *
  * ## The guest throttle
  *
@@ -179,14 +185,9 @@ const EXCHANGE_SEGMENT = 'auth';
 
 /**
  * The second door this tier answers itself: an application for an account. No contract path
- * begins with it — the contract's own segment is the plural, below.
+ * begins with it — the contract's own segment is the plural, `registrations`.
  */
 const REGISTRATION_SEGMENT = 'registration';
-/**
- * The contract's two public registration operations live under this segment. Reachable from
- * this tier, through the two reserved doors, and never from a browser through the catch-all.
- */
-const REGISTRATIONS_SEGMENT = 'registrations';
 
 /** The second segment that ends a session, so the two intents are two addresses. */
 const SESSION_END_SEGMENT = 'end';
@@ -420,18 +421,13 @@ function noDirectExchange(request: Request): Response {
 }
 
 /**
- * The answer to a browser asking for a registration operation directly.
+ * The answer to a browser asking for one of the two public registration operations directly.
  *
  * `submitRegistration` and `readRegistrationStatus` take no credential and cost the API a
  * password derivation each, so through the catch-all they would be reachable past the guest
- * throttle. `W49-PLAN.md` §3.5 refuses the whole first segment, as `auth` is refused, and
- * this does exactly that. Refused before the session is read, so a signed-in browser is
- * refused exactly like a guest.
- *
- * **Known consequence, raised and not decided here** (`docs/program/W49-BFF-01.md`, open
- * question 1): the segment also holds the administrator's `listRegistrations`,
- * `approveRegistration` and `rejectRegistration`, which this rule refuses to the browser too,
- * and which the screens of `W50`/`W51` will call through this catch-all.
+ * throttle — and, from a signed-in browser, with a session's credential attached to an
+ * operation that wants none. Refused before the session is read, so a signed-in browser is
+ * refused exactly like a guest. Only these two: see {@link isPublicRegistrationOperation}.
  *
  * `not_found` rather than a new code, for `D-18`'s reason: a seam does not invent codes.
  */
@@ -1044,7 +1040,7 @@ async function handle(request: Request, context: RouteContext): Promise<Response
   if (segments[0] === SESSION_SEGMENT) return ownDoor(request, segments);
   if (segments[0] === REGISTRATION_SEGMENT) return registrationDoor(request, segments);
   if (segments[0] === EXCHANGE_SEGMENT) return noDirectExchange(request);
-  if (segments[0] === REGISTRATIONS_SEGMENT) return noDirectRegistration(request);
+  if (isPublicRegistrationOperation(request, segments)) return noDirectRegistration(request);
 
   let upstream: string;
   try {
@@ -1073,12 +1069,36 @@ async function handle(request: Request, context: RouteContext): Promise<Response
   return noSession(request);
 }
 
+/** True when the catch-all's segments are exactly `expected`, segment for segment. */
+function sameSegments(segments: readonly string[], expected: readonly string[]): boolean {
+  return (
+    segments.length === expected.length &&
+    segments.every((segment, index) => segment === expected[index])
+  );
+}
+
 /** `PATCH /me` — `updateMyProfile`, after which the row's subject is read again. */
 function isProfileChange(request: Request, segments: readonly string[]): boolean {
+  return request.method === 'PATCH' && sameSegments(segments, ME_SEGMENTS);
+}
+
+/**
+ * `POST /registrations` (`submitRegistration`) or `POST /registrations/status`
+ * (`readRegistrationStatus`): under this segment, exactly the ones the contract publishes with
+ * an empty security requirement, refused to the browser by **method and path**.
+ *
+ * Nothing else under `registrations` matches, deliberately: `GET /registrations`
+ * (`listRegistrations`) and `POST /registrations/{request_id}/approve` and `…/reject` are
+ * the administrator's, take the session's credential like every operation, and are refused by
+ * the API to anyone without `admin` (`OPERATION_ROLES`). A rule here that matched the whole
+ * segment would close them to the screens that need them, which is what `W49-PLAN.md` §3.5
+ * said until `83987e5`.
+ */
+function isPublicRegistrationOperation(request: Request, segments: readonly string[]): boolean {
   return (
-    request.method === 'PATCH' &&
-    segments.length === ME_SEGMENTS.length &&
-    segments.every((segment, index) => segment === ME_SEGMENTS[index])
+    request.method === 'POST' &&
+    (sameSegments(segments, SUBMIT_REGISTRATION_SEGMENTS) ||
+      sameSegments(segments, REGISTRATION_STATUS_SEGMENTS))
   );
 }
 

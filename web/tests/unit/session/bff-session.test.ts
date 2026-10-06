@@ -695,22 +695,31 @@ describe('W49: a successful profile change rewrites the subject without a new si
   });
 });
 
-describe('the registrations segment is refused to the browser, with or without a session', () => {
-  const ADDRESSES: readonly (readonly string[])[] = [
-    ['registrations'],
-    ['registrations', 'status'],
-    ['registrations', 'reg_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', 'approve'],
-    ['registrations', 'reg_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', 'reject'],
+describe('the two public registration operations are refused to the browser; the administrator’s are forwarded', () => {
+  /** `submitRegistration` and `readRegistrationStatus`: refused by method and path. */
+  const PUBLIC: readonly (readonly string[])[] = [['registrations'], ['registrations', 'status']];
+
+  /**
+   * The administrator's operations under the same segment, each as the generated client
+   * sends it. Forwarded with the session's credential like any operation; the API refuses
+   * them to anyone without `admin`.
+   */
+  const ADMINISTRATIVE: readonly { readonly verb: 'GET' | 'POST'; readonly path: readonly string[]; readonly search?: string }[] = [
+    { verb: 'GET', path: ['registrations'], search: '?status=pending' },
+    { verb: 'GET', path: ['registrations'] },
+    { verb: 'POST', path: ['registrations', 'reg_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', 'approve'] },
+    { verb: 'POST', path: ['registrations', 'reg_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', 'reject'] },
   ];
 
   async function ask(
-    method: typeof GET,
-    verb: string,
+    verb: 'GET' | 'POST',
     path: readonly string[],
     cookie?: string,
+    search = '',
   ): Promise<Response> {
+    const method = verb === 'GET' ? GET : POST;
     return method(
-      new Request(`http://web.test/bff/v1/${path.join('/')}`, {
+      new Request(`http://web.test/bff/v1/${path.join('/')}${search}`, {
         method: verb,
         headers: {
           'content-type': 'application/json',
@@ -722,42 +731,65 @@ describe('the registrations segment is refused to the browser, with or without a
     );
   }
 
-  it('answers not_found and forwards nothing without a session', async () => {
-    for (const path of ADDRESSES) {
-      for (const [method, verb] of [
-        [GET, 'GET'],
-        [POST, 'POST'],
-      ] as const) {
-        const response = await ask(method, verb, path);
-        expect(response.status, `${verb} ${path.join('/')}`).toBe(404);
-        expect(((await response.json()) as { error_code: string }).error_code).toBe('not_found');
-      }
+  it('refuses POST /registrations and POST /registrations/status without a session, forwarding nothing', async () => {
+    for (const path of PUBLIC) {
+      const response = await ask('POST', path);
+      expect(response.status, `POST ${path.join('/')}`).toBe(404);
+      expect(((await response.json()) as { error_code: string }).error_code).toBe('not_found');
     }
     expect(seen).toEqual([]);
   });
 
-  it('answers not_found and forwards nothing with a live session either', async () => {
+  it('refuses them with a live session too, before the session is read', async () => {
     const cookie = cookieFrom(await signIn());
     seen = [];
-    for (const path of ADDRESSES) {
-      for (const [method, verb] of [
-        [GET, 'GET'],
-        [POST, 'POST'],
-      ] as const) {
-        const response = await ask(method, verb, path, cookie);
-        expect(response.status, `${verb} ${path.join('/')}`).toBe(404);
-        // Refused before the session is read: the session is untouched, not cleared.
-        expect(response.headers.get('set-cookie')).toBeNull();
-      }
+    for (const path of PUBLIC) {
+      const response = await ask('POST', path, cookie);
+      expect(response.status, `POST ${path.join('/')}`).toBe(404);
+      // Refused before the session is read: the session is untouched, not cleared.
+      expect(response.headers.get('set-cookie')).toBeNull();
     }
     // Not one request went out under the reviewer's credential.
     expect(seen).toEqual([]);
     expect(openSessionCount()).toBe(1);
   });
 
+  it('forwards the administrator’s list, approve and reject with the session’s own credential', async () => {
+    const cookie = cookieFrom(await signIn());
+    for (const { verb, path, search } of ADMINISTRATIVE) {
+      seen = [];
+      const response = await ask(verb, path, cookie, search);
+      const where = `${verb} ${path.join('/')}${search ?? ''}`;
+      expect(response.status, where).toBe(200);
+      expect(seen.map((call) => `${call.method} ${call.path}`), where).toEqual([
+        `${verb} /${path.join('/')}`,
+      ]);
+      expect(seen[0]?.url, where).toBe(`${UPSTREAM}/${path.join('/')}${search ?? ''}`);
+      expect(seen[0]?.authorization, where).toBe(`Bearer ${MINTED}`);
+    }
+  });
+
+  it('treats them like any operation without a session: nothing is forwarded, the answer is 401', async () => {
+    for (const { verb, path, search } of ADMINISTRATIVE) {
+      const response = await ask(verb, path, undefined, search);
+      expect(response.status, `${verb} ${path.join('/')}`).toBe(401);
+    }
+    expect(seen).toEqual([]);
+  });
+
+  it('passes the API’s own refusal of a non-administrator through, and keeps the session', async () => {
+    // `role:admin` is the API's to enforce; this tier forwards and reports what it said.
+    const cookie = cookieFrom(await signIn());
+    other = () => new Response(JSON.stringify({ error_code: 'permission_denied' }), { status: 403 });
+    const response = await ask('GET', ['registrations'], cookie, '?status=pending');
+    expect(response.status).toBe(403);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(openSessionCount()).toBe(1);
+  });
+
   it('still forwards a segment that merely starts with the same letters', async () => {
-    // The control: the refusal is of the segment, not of a prefix. A path the contract
-    // does not have is the API's to refuse, and it is forwarded like any other.
+    // The control: the refusal is of two exact addresses, not of a prefix. A path the
+    // contract does not have is the API's to refuse, and it is forwarded like any other.
     const cookie = cookieFrom(await signIn());
     seen = [];
     await GET(new Request('http://web.test/bff/v1/registrationsx', { headers: { cookie } }), {
