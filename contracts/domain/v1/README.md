@@ -5,9 +5,9 @@ owner); the additive norm-identity amendment is owned by
 [NORM-ID-01](../../../docs/program/tasks/NORM-ID-01.md). Status: **candidate draft —
 working-tree amendment, not frozen, not ratified.** Every
 catalog in this directory declares `contract_version` `1.0.0-draft.1`,
-`candidate_revision` `9`, `status` `draft_candidate` and `frozen` `false`. (The three
-family schemas still pin `candidate_revision` `8`: see
-[What changed in revision 9](#what-changed-in-revision-9-and-what-breaks-for-a-reader-of-revision-8).)
+`candidate_revision` `9`, `status` `draft_candidate` and `frozen` `false`, and the three
+family schemas pin `candidate_revision` `const: 9` to match: see
+[What changed in revision 9](#what-changed-in-revision-9-and-what-breaks-for-a-reader-of-revision-8).
 
 This family defines three primitives that every other bounded context depends on:
 opaque identity, durable lifecycle and the externally visible failure shape. It is a
@@ -750,7 +750,7 @@ reseal that puts the account and the registration request on the wire.
 | machines `app_user` (`active → archived → active \| purged`) and `registration_request` (`pending → approved \| rejected`) | **Additive.** `state_transition_not_allowed` now has declared machines to name for the account and registration operations. Neither is seeded into `contract_state_transition`. |
 | error code `rate_limited` (`429`, retryable, `policy`, no detail keys) | **Additive.** Answered only by the edge in front of `/api/v1`; never stored, so the database's code vocabulary stays the other twenty-two (`EDGE_ONLY_CODES` in `tests/contract/domain_p02/test_contract_vocabulary.py`). Closed code enums must add the member. |
 | `conflict` gains safe detail key `conflict_reason` | **Additive.** Values `login_taken`, `request_pending`, `queue_full`, `account_referenced`, `last_admin`; an enum-like classifier, never raw input. |
-| `candidate_revision` `8` → `9` in all three catalogs | Readers pinning the candidate revision must move. **The three family schemas still pin `const: 8`:** they are outside `W49-SEAL-01`'s grant, so the catalogs and their schemas disagree until an owner of those files moves the pins -- recorded as an open question in `docs/program/W49-SEAL-01a.md`, not decided here. |
+| `candidate_revision` `8` → `9` in all three catalogs | Readers pinning the candidate revision must move. The three family schemas pin `const: 9` as well, and since `W49-FIX` the two identifier-name enums of `identifiers.schema.json` admit `user_uid` and `request_id`, so every catalog validates against its schema again (`tests/contract/test_domain_identifiers_schema.py`). |
 
 No existing identifier, state, transition, guard, code, summary or detail key is removed or
 renamed. `contract_version` remains `1.0.0-draft.1` and `frozen` remains `false`.

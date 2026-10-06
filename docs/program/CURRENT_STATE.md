@@ -1,9 +1,10 @@
 # Current state
 
-> **Updated 2026-10-06 by `W48-INT-MAIN-01`.** W48 is released as `alpha-w48` (under `R-64`);
-> W49, the first wave of the identity programme (`docs/program/dispatch/IDENTITY-WAVES.md`), is in
-> integration. Development candidates publish to `origin/dev`; `origin/main` requires a separate
-> direct owner instruction because it triggers external deployment.
+> **Updated 2026-10-06 by `W49-INT-CLOSE`.** W49, the first wave of the identity programme
+> (`docs/program/dispatch/IDENTITY-WAVES.md`), is closed on `origin/dev` without a release tag;
+> `alpha-w48` is the last tagged release. W50 is next. Development candidates publish to
+> `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
+> external deployment.
 >
 > **What is deployed is deliberately not stated here.** A sentence naming a sha and a date is
 > true only until somebody redeploys, and `D-104` is the row about exactly that: every prose
@@ -30,14 +31,17 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Active development, 2026-10-06 — W49 identity in integration; W48 released as `alpha-w48`
+## Active development, 2026-10-06 — W49 closed on `dev`; W50 (the shell) is next
 
-W49 — accounts with e-mail sign-in, a role set, registration requests and account management
-(`R-55` … `R-61`) — is integrated on `integration/w49`: every lane of `dispatch/W49-PLAN.md` §5
-through Stage E is merged, both judges passed it, and `W49-FIX` repairs the two release-blocking
-findings (the identifier schema enums, and a deployed proxy that keeps a stale configuration)
-together with the owner rulings `R-62` and `R-63`. `W49-INT-CLOSE` follows. W50 (the shell) and
-W51 (the screens) wait behind it.
+W49 — accounts with e-mail sign-in, a role set `{expert, admin}`, registration requests and
+administrator account management (`R-55` … `R-61`) — is integrated on `integration/w49` and
+published to `origin/dev` by `W49-INT-CLOSE`. Both judges passed it; `W49-FIX` repaired the two
+release-blocking findings (the identifier schema enums, and a deployed proxy that kept a stale
+configuration: `reload-proxy.sh` now restarts a drifted proxy and `verify-deployed.sh` refuses
+one) and applied `R-62` (an archived account is not changed) and `R-63` (a failed token exchange
+costs a registration request nothing). It is not tagged: the W49 release to `origin/main` needs a
+direct owner instruction, the release acceptance (`R-65`: the stand's proxy provider counts as
+live) and the manual A01–A12 pass that `D-132` carries over from `alpha-w48`.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:

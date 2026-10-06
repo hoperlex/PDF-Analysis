@@ -3,7 +3,8 @@
 Written 2026-09-17 by the integrator. **Reconciled by `W47-CLOSE` against the gated wave-47
 tree at `b0e5ae5` on 2026-09-30, and by `W48-INT-CLOSE` against the W48 closure candidate on
 2026-10-05:** fifteen rows closed, six narrowed, nine opened (`D-120` … `D-128`); every closure
-carries its check.
+carries its check. **`W49-INT-CLOSE` (2026-10-06) opened `D-129` … `D-132`** from the W49 judges,
+QA, `W49-FIX` and the W48 acceptance.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
 register that had been entirely obsolete while still reading as the list of what was open, and this
@@ -26,6 +27,10 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-126 | a snapshot's `content_key` excludes the segmentation profile | raising the profile version makes `ensure_snapshot` conflict |
 | D-127 | an embedding build counts as complete with a one-character window; its digest includes a private bigint | completeness and digest are weaker than `NORM-VECTOR-01` claims |
 | D-128 | nine `W48-JUDGE-Z` findings classed *register*: guard blind spots and two naming/reporting gaps | each with its path:line in `reviews/W48-JUDGE-Z.md` |
+| D-129 | the W49 judges' and `W49-FIX`'s register findings: comments, docstrings, a 68-character label, edge assumptions | each with its path:line in the two reviews and `W49-FIX.md` |
+| D-130 | the identity debts `W49-PLAN.md` §3 registers by design | owner-visible limits of the identity model, scheduled with W52 |
+| D-131 | the alpha acceptance journey has no retry for a transient browser network error | one co-tenant Docker bridge event failed a whole run |
+| **D-132** | `alpha-w48` was tagged without the manual A01–A12 pass (`R-64`) | the manual pass at the W49 release closes it |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
@@ -105,6 +110,61 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-132 — `alpha-w48` was tagged without the manual A01–A12 pass
+
+**Opened 2026-10-06 by `W49-INT-CLOSE` under `R-64`.** `W48-INT-MAIN-01` tagged `alpha-w48` on
+the automated acceptance alone; the manual pass of `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md`
+§4 was not run. The owner scheduled it for the W49 release (direct poll, 2026-10-06), where W49's
+own manual pass closes this row.
+
+**Check:** a manual-pass `report.md` under `.local/manual-alpha/` for the W49 release SHA with
+every A01–A12 recorded.
+
+### D-131 — the acceptance journey has no retry for a transient browser network error
+
+**Opened 2026-10-06 by `W49-INT-CLOSE`.** Run `20261006T083425Z-1338396` of the W48 acceptance
+failed at start-run with `net::ERR_NETWORK_CHANGED` while another tenant's Docker bridge on this
+host dropped veths (08:36:09–08:36:19Z); no run was created and the next run passed that phase.
+`tests/e2e/pc01/journey/journey.mjs` treats any navigation error as final.
+
+**Check:** `grep -n "ERR_NETWORK_CHANGED\|retry" tests/e2e/pc01/journey/*.mjs`.
+
+### D-130 — the identity debts `W49-PLAN.md` §3 registers by design
+
+**Opened 2026-10-06 by `W49-INT-CLOSE`, as `W49-PLAN.md` §4 (`W49-INT-CLOSE`) requires.** `display_name` is not yet
+retired (the derived «Фамилия И. О.» takes precedence, `R-55`); the column
+`is_default_credential` keeps its name although it now also marks an administrator's temporary
+password; a submitted login is disclosed as taken to whoever submits a request (`conflict_reason`
+`login_taken`, accepted); rejection is one request at a time (no bulk); decided requests are kept
+with no retention rule; the administrator knows the temporary password a reset sets; migration
+`0015` is forward-only.
+
+**Check:** `grep -n -i "registered" docs/program/dispatch/W49-PLAN.md` (§3.1, §3.3, §3.4 and §3.5).
+
+### D-129 — the W49 register findings
+
+**Opened 2026-10-06 by `W49-INT-CLOSE`** from `reviews/W49-JUDGE-Y.md`, `reviews/W49-JUDGE-X.md`
+(both upheld each other's findings) and `W49-FIX.md`:
+
+- Y F-2: the live comment on `app_user.display_name` and migration `0009`'s log name the removed
+  `auditmanager.access.name` and claim login ≤ 100 characters; repair is one future
+  `COMMENT ON COLUMN` migration, `0009` untouched;
+- Y F-3: `name_label` reaches 68 characters against `maxLength` 66 for names starting with ß, ŉ or
+  ǰ, the only three BMP letters whose upper case expands (`access/models.py`);
+- Y F-4: `account_standing` is unused by the served path (a port member with seven test callers);
+- Y F-5: three docstrings contradict their code — `access/accounts.py` `complete_profile`,
+  `access/registrations.py` module docstring, `bootstrap/adapters.py` `update_account`;
+- Y F-7: `api/routers/errors.py` imports `sqlalchemy.exc` (pre-W49; ALR-01's letter only);
+- X R-1 `conflict_reason` is a login oracle (accepted); R-2 the status-read timing wording; R-3
+  `X-Real-IP` trust depends on the network boundary; R-4 a distributed flood can reach
+  `queue_full`; R-5 `429` is not declared in the OpenAPI document;
+- `W49-FIX`: the `required` lists of `identifiers.schema.json` still hold the 27 earlier names;
+  `access/revoke.py` still says "this system has no roles"; `deploy.sh` brings the stack up with
+  `compose.server.yml` alone, so on a TLS-overlay host `up -d` would recreate the proxy without
+  the overlay (pre-existing; the deployed stand serves TLS, so verify how before changing it).
+
+**Check:** each finding's path:line and reproduction in its review or report.
 
 ### D-128 — the closure judge's register findings
 
