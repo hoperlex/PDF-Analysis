@@ -78,6 +78,8 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56490`, `60090/60091`; API `56491`, Next `56493` | `gate-w48public` — `W48-PUBLIC-01` | 2026-10-05 | merged into W48 closure |
 | `56500`, `60100/60101`; API `56501`, Next `56503` | `gate-w48judgez` — `W48-JUDGE-Z` | 2026-10-05 | W48 closes |
 | `56510`, `60110/60111`; API `56511`, Next `56513` | `gate-w48close` — `W48-INT-CLOSE` | 2026-10-05 | candidate published to `origin/dev` |
+| `56730`, `60330/60331` | `gate-w48proxy` — `W48-PROXY-01` | 2026-10-06 | merged |
+| `56740`, `60340/60341` | `gate-w481int` — the `integration/w48-1` hotfix line and its gates | 2026-10-06 | the hotfix merges into W50 |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,
