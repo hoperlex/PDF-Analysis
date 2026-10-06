@@ -297,6 +297,10 @@ export function safeReturnPath(
   if (typeof candidate !== 'string') return null;
   if (candidate.length === 0 || candidate.length > RETURN_PATH_MAX_LENGTH) return null;
   if (!candidate.startsWith('/')) return null;
+  // Two independent layers refuse `//host` and `/\host`: this line, and the shape check
+  // below — an empty segment or a backslash never matches a registered segment. Either alone
+  // suffices, so removing one changes no answer; removing both is red in
+  // `web/tests/unit/session/return-path.test.ts` (`W50-REGISTRY-01` report, mutation M05g).
   if (candidate.startsWith('//') || candidate.startsWith('/\\')) return null;
   const queryAt = candidate.indexOf('?');
   const path = queryAt === -1 ? candidate : candidate.slice(0, queryAt);
