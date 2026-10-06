@@ -437,13 +437,22 @@ def test_c3_the_surface_declares_no_operation_that_can_mutate_a_version(
     The database refuses UPDATE and DELETE on ``document_version`` with SQLSTATE AM003.
     The API's own half of that promise is that it offers no way to ask: a caller that
     wanted to edit a published version would have to find a route, and there is none.
+
+    `W49-SEAL-01` added the surface's first mutating methods, all on accounts: the account's
+    own profile (``PATCH /me``), an administrator's account change (``PATCH /users/{uid}``)
+    and purge (``DELETE /users/{uid}``). The set is pinned exactly, so a fourth is a
+    decision someone has to make here, and none of them may address a document or a
+    version.
     """
     mutating = {
-        route.operation_id
+        route.operation_id: route.path
         for route in client.app.router.routes
         if route.methods & {"PUT", "PATCH", "DELETE"}
     }
-    assert mutating == set(), mutating
+    assert set(mutating) == {"updateMyProfile", "updateUser", "purgeUser"}, mutating
+    assert not [
+        path for path in mutating.values() if "/versions" in path or "/documents" in path
+    ], mutating
     # Addressed at the version that really exists, so a 404 here can only mean "no such
     # route" and never "no such resource" -- which is the whole point of the assertion.
     assert client.get_version(journey.version_uid).status == 200

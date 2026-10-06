@@ -309,6 +309,84 @@ class TestAccountManagement:
         assert _json(answer)["details"] == {"aggregate_type": "User"}
 
 
+class TestARepeatWithoutAKey:
+    """What each account write does when it is sent twice. None takes ``Idempotency-Key``.
+
+    `docs/program/P02_SEAMS.md` §7 states these outcomes beside the writes that do take a
+    key; this class is where they are measured, so the sentence cannot describe a surface
+    that does something else.
+    """
+
+    def test_a_repeated_profile_completion_writes_the_same_state(
+        self, surface: Surface, session: Session
+    ) -> None:
+        legacy = make_account(
+            session, login=f"um-legacy-{secrets.token_hex(4)}", names=None, roles=("expert",)
+        )
+        credential = credential_for(session, legacy)
+        body = {
+            "email": f"um-repeat-{secrets.token_hex(4)}@suite.invalid",
+            "last_name": "Повторова",
+            "first_name": "Анна",
+        }
+        first = _send(surface, "PATCH", "/me", credential, body)
+        assert first.status == 200, first.body
+        epoch = _epoch(session, legacy)
+        # The completion moved the login, not the epoch, so the same credential still works
+        # -- and the repeat names the login the account now has, which is allowed.
+        again = _send(surface, "PATCH", "/me", credential, body)
+        assert again.status == 200, again.body
+        assert _json(again) == _json(first)
+        assert _epoch(session, legacy) == epoch
+
+    def test_a_repeated_role_change_writes_the_same_set_and_revokes_once(
+        self, surface: Surface, session: Session, admin: str, expert: str
+    ) -> None:
+        credential = credential_for(session, admin)
+        before = _epoch(session, expert)
+        first = _send(surface, "PATCH", f"/users/{expert}", credential, {"roles": ["expert", "admin"]})
+        assert first.status == 200, first.body
+        again = _send(surface, "PATCH", f"/users/{expert}", credential, {"roles": ["expert", "admin"]})
+        assert again.status == 200, again.body
+        assert _json(again) == _json(first)
+        assert _epoch(session, expert) == before + 1
+
+    def test_a_repeated_archive_or_restore_is_a_refused_transition(
+        self, surface: Surface, session: Session, admin: str, expert: str
+    ) -> None:
+        credential = credential_for(session, admin)
+        assert _send(surface, "POST", f"/users/{expert}/archive", credential).status == 200
+        assert _send(surface, "POST", f"/users/{expert}/restore", credential).status == 200
+        again = _send(surface, "POST", f"/users/{expert}/restore", credential)
+        assert again.status == 409, again.body
+        assert _json(again)["details"] == {
+            "machine": "app_user",
+            "current_state": "active",
+            "requested_state": "active",
+        }
+
+    def test_a_repeated_purge_is_not_found(
+        self, surface: Surface, session: Session, admin: str, expert: str
+    ) -> None:
+        credential = credential_for(session, admin)
+        assert _send(surface, "POST", f"/users/{expert}/archive", credential).status == 200
+        assert _send(surface, "DELETE", f"/users/{expert}", credential).status == 204
+        again = _send(surface, "DELETE", f"/users/{expert}", credential)
+        assert again.status == 404, again.body
+        assert _json(again)["error_code"] == "not_found"
+
+    def test_a_repeated_reset_repeats_its_effect(
+        self, surface: Surface, session: Session, admin: str, expert: str
+    ) -> None:
+        credential = credential_for(session, admin)
+        before = _epoch(session, expert)
+        body = {"temporary_password": "temporary-pass-91"}
+        assert _send(surface, "POST", f"/users/{expert}/password", credential, body).status == 200
+        again = _send(surface, "POST", f"/users/{expert}/password", credential, body)
+        assert again.status == 200, again.body
+        assert _epoch(session, expert) == before + 2
+
+
 def test_the_last_admin_refusal_carries_its_closed_reason() -> None:
     """`conflict_reason: last_admin` is a value the catalog admits on ``conflict``.
 

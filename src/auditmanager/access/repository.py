@@ -480,8 +480,15 @@ _SET_DISPLAY_NAME = text(
 #: The query the nullable ``display_name`` exists to make possible. See
 #: ``0009_reviewer_display_name``: the alternative was a ``NOT NULL`` backfill that would
 #: have made the fallback permanently invisible.
+#:
+#: `W49-SEAL-01`: "unnamed" is exactly when :attr:`UserRecord.display_label` falls back to
+#: the login -- no display name **and** no last-and-first name pair (`R-55`). A complete
+#: profile always has the pair (``ck_app_user_complete_profile_has_names``), so it is named
+#: and drops out of ``access.check``'s report, which until the seal listed it under its name
+#: form as if it were on the fallback.
 _SELECT_WITHOUT_DISPLAY_NAME = text(
-    f"SELECT {_PUBLIC_COLUMNS} FROM app_user WHERE display_name IS NULL ORDER BY login"
+    f"SELECT {_PUBLIC_COLUMNS} FROM app_user WHERE display_name IS NULL "
+    "AND (last_name IS NULL OR first_name IS NULL) ORDER BY login"
 )
 
 
@@ -1014,7 +1021,11 @@ class UserRepository:
         return record
 
     def accounts_without_a_display_name(self, session: Session) -> tuple[UserRecord, ...]:
-        """Every account whose decisions are attributed to its login.
+        """Every account whose decisions would be attributed to its login.
+
+        That is: no display name and no last-and-first name pair, the one case in which
+        :attr:`UserRecord.display_label` answers with the login. A complete profile is
+        therefore never here (`W49-SEAL-01`).
 
         The query the nullable column exists for. It is what makes the fallback something
         an operator can **see** rather than something they have to know about, which is the

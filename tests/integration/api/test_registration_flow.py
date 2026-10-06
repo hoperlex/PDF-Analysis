@@ -321,6 +321,34 @@ class TestTheAdministrator:
         assert rejected.status == unknown.status == 401
         assert _without_correlation(rejected) == _without_correlation(unknown)
 
+    def test_a_repeated_rejection_is_a_refused_transition(
+        self, surface: Surface, session: Session, admin: str
+    ) -> None:
+        """Rejection takes no ``Idempotency-Key`` (`P02_SEAMS.md` §7): a repeat is the
+        machine's refusal, never a second decision."""
+        login = _email()
+        assert _submit(surface, login).status == 201
+        request_id = _request_id(session, login)
+        credential = credential_for(session, admin)
+
+        def reject() -> Any:
+            return surface.send(
+                "POST",
+                f"/registrations/{request_id}/reject",
+                headers={"Content-Type": "application/json"},
+                body=json.dumps({"reason": "Повтор."}).encode("utf-8"),
+                credential=credential,
+            )
+
+        assert reject().status == 200
+        again = reject()
+        assert again.status == 409, again.body
+        assert again.json()["details"] == {
+            "machine": "registration_request",
+            "current_state": "rejected",
+            "requested_state": "rejected",
+        }
+
     def test_a_reason_over_256_characters_is_refused(
         self, surface: Surface, session: Session, admin: str
     ) -> None:

@@ -264,6 +264,43 @@ def test_a_named_account_drops_out_of_the_report(
     assert named_lines == [], named_lines
 
 
+def test_a_completed_profile_drops_out_of_the_report(
+    user: UserRecord, session_factory: sessionmaker[Session]
+) -> None:
+    """`W49-SEAL-01`: a complete profile is named, by its names, with no display name.
+
+    Until the seal the report's query read ``display_name IS NULL`` alone, so every account
+    that completed its profile -- which shows the name form "Фамилия И." everywhere and
+    can never fall back to its login -- was still listed as being on the fallback.
+    """
+    from auditmanager.access.accounts import AccountRepository
+
+    email = f"w49named-{secrets.token_hex(5)}@suite.invalid"
+    repository = UserRepository()
+    with session_factory() as session:
+        before = {str(u.user_uid) for u in repository.accounts_without_a_display_name(session)}
+        assert str(user.user_uid) in before, "the legacy account starts on the fallback"
+        AccountRepository().complete_profile(
+            session,
+            user_uid=str(user.user_uid),
+            email=email,
+            last_name="Названова",
+            first_name="Ирина",
+        )
+        session.commit()
+    with session_factory() as session:
+        after = {str(u.user_uid) for u in repository.accounts_without_a_display_name(session)}
+    assert str(user.user_uid) not in after
+    result = _run("auditmanager.access.check")
+    assert result.returncode in (0, 1), result.stderr
+    listed = [
+        line
+        for line in result.stdout.splitlines()
+        if line.startswith(UNNAMED_PREFIX) and str(user.user_uid) in line
+    ]
+    assert listed == [], listed
+
+
 def test_an_unnamed_account_does_not_move_the_exit_status(user: UserRecord) -> None:
     """Information beside a status about something else, which is ``check.py``'s own shape.
 

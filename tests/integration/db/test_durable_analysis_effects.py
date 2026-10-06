@@ -349,7 +349,21 @@ def test_analysis_upload_handle_is_opaque_unique_and_frozen(migrated_engine) -> 
     assert "upload_token" in frozen
 
 
+#: Catalog codes the application never stores, so no CHECK admits them. `rate_limited`
+#: (`W49-SEAL-01`, the integrator's decision on the seal's stop report) is answered only by
+#: the edge in front of ``/api/v1``; no provider call can end with it, and widening this
+#: CHECK would need a migration for a value nothing writes. The same named exception as
+#: ``tests/contract/domain_p02/test_contract_vocabulary.py::EDGE_ONLY_CODES``.
+EDGE_ONLY_CODES: frozenset[str] = frozenset({"rate_limited"})
+
+
 def test_provider_effect_error_code_is_the_closed_catalog(migrated_engine) -> None:
+    """The CHECK admits every stored catalog code, and the edge-only ones it must not.
+
+    Both halves are asserted: an edge-only code that the CHECK admitted would be a widened
+    schema, and a stored code put into ``EDGE_ONLY_CODES`` would make the loop skip a code
+    the database must admit -- which the exact count below then reports.
+    """
     with migrated_engine.connect() as connection:
         definition = connection.execute(
             text(
@@ -359,9 +373,13 @@ def test_provider_effect_error_code_is_the_closed_catalog(migrated_engine) -> No
                 "AND c.conname = 'ck_provider_effect_error_code'"
             )
         ).scalar_one()
-    for code in ErrorCode:
+    assert EDGE_ONLY_CODES <= {code.value for code in ErrorCode}, sorted(EDGE_ONLY_CODES)
+    stored = [code for code in ErrorCode if code.value not in EDGE_ONLY_CODES]
+    for code in stored:
         assert f"'{code.value}'" in definition
-    assert definition.count("::text") == len(ErrorCode), definition
+    for value in sorted(EDGE_ONLY_CODES):
+        assert f"'{value}'" not in definition, (value, definition)
+    assert definition.count("::text") == len(stored), definition
 
 
 def test_empty_0014_downgrades_to_0013_and_upgrades_back(

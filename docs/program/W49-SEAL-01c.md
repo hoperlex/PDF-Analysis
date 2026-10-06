@@ -412,3 +412,153 @@ The slot did not touch:
 * `web/src/**` beyond the named lines;
 * a ref or tag;
 * a push.
+
+## 7. Addendum: the second grant (after `48099d9`)
+
+The integrator ruled on this report's §4 at `addbe6c`, merged here as `549042c`.
+
+* **Granted:** Q1's four edits exactly as proposed, plus (e) and (f) below.
+* **Confirmed as built:** Q3 (the subject's login and label come from the row), Q4
+  (`get_account`), Q5 (approval idempotency through `ingest.public.CommandRepository`), Q6
+  (no `429` on any operation) and Q7 (the `check.py` hint).
+* **Accepted as stated:** Q9–Q12. The remaining stale references named in Q7 are registered
+  at INT-CLOSE.
+
+### 7.1 What changed
+
+* **(a)** `docs/program/P02_SEAMS.md` §7 changes in two places.
+  * The operation table gains the fourteen rows.
+  * The rule "every write takes a required `Idempotency-Key` header" is rewritten. It now
+    names the keyed writes (`createProject`, `uploadDocument`, `startRun`, `appendDecision`,
+    `approveRegistration`, "and no others") and says what a repeat of every other write
+    does.
+
+  The repeat outcomes are measured, not read off the code. They are measured by
+  `tests/integration/api/test_user_management.py::TestARepeatWithoutAKey`, which is new and
+  covers profile completion, role change, restore, purge and reset. The rejection is
+  measured by `test_registration_flow.py::test_a_repeated_rejection_is_a_refused_transition`,
+  also new. The outcomes already covered elsewhere are:
+  * `request_pending` (`test_a_second_pending_application_for_one_login_is_request_pending`);
+  * the stale credential after `changePassword`
+    (`tests/integration/auth/test_revocation.py::test_a_credential_minted_under_a_stale_epoch_is_refused`);
+  * the status read's counter (`test_a_refused_pair_is_counted_on_the_request`).
+
+  `readRegistrationStatus` is a `POST`, so the rule names it too, beside `issueToken`.
+
+  **New guard:**
+  `tests/contract/domain_p02/test_seam_register.py::test_the_idempotency_rule_names_exactly_the_keyed_writes`.
+  It checks the rule against the frozen document in two ways:
+  * the rule's first sentence names exactly the operations that declare a required
+    `Idempotency-Key` header;
+  * the rest of the rule names exactly the other writes.
+* **(b)** `tests/integration/access/test_password_hashing.py`:
+  `test_it_does_not_register_a_prefix_in_the_frozen_contract_catalog` becomes
+  `test_its_prefix_is_the_shared_registry_s`. It checks that `usr` maps to
+  `shared.identity.ids.UserUid` (entity `User`) in both the snapshot and the live registry.
+  It also checks that the boundary's class still wraps that type rather than subclassing it.
+* **(c)** `tests/e2e/pc01/test_acceptance.py::test_c3_…`: the set of mutating routes is
+  exactly `{updateMyProfile, updateUser, purgeUser}`, and none of their paths contains
+  `/versions` or `/documents`.
+* **(d)** `tests/integration/db/test_durable_analysis_effects.py`: `EDGE_ONLY_CODES =
+  {"rate_limited"}`. The test asserts three things:
+  * every other `ErrorCode` is in migration `0014`'s `ck_provider_effect_error_code`;
+  * every edge-only code is **absent** from it;
+  * the count of literals equals the number of stored codes.
+* **(e)** `contracts/domain/v1/{error-codes,identifiers,state-machines}.schema.json`: the
+  `candidate_revision` const moves from 8 to 9 and nothing else. See Q12 for what that
+  revealed.
+* **(f)** `src/auditmanager/access/repository.py`: `_SELECT_WITHOUT_DISPLAY_NAME`, the
+  predicate `access.check` reads, is now `display_name IS NULL AND (last_name IS NULL OR
+  first_name IS NULL)`. That is exactly the case in which `UserRecord.display_label` falls
+  back to the login. A complete profile always has both names
+  (`ck_app_user_complete_profile_has_names`), so it counts as named. The method docstring
+  says so.
+
+  **New test:**
+  `tests/integration/auth/test_the_reviewer_name_is_visible.py::test_a_completed_profile_drops_out_of_the_report`.
+  It completes a legacy account's profile. Then it asserts that the account leaves
+  `accounts_without_a_display_name`, and that `python -m auditmanager.access.check`, run
+  as a subprocess, prints no `UNNAMED` line for it.
+
+### 7.2 Checks
+
+| Command (tree: the amended working tree, before this commit) | Result |
+| --- | --- |
+| `pytest tests/integration/api/test_user_management.py tests/integration/api/test_registration_flow.py tests/integration/access/test_password_hashing.py tests/integration/db/test_durable_analysis_effects.py` | `100 passed` (after one correction: a repeated purge's `not_found` carries no `aggregate_type`, Q14) |
+| `pytest tests/e2e/pc01/test_acceptance.py::test_c3_…` | `1 passed` |
+| `pytest tests/integration/auth/test_the_reviewer_name_is_visible.py tests/integration/db/test_reviewer_display_name.py` | `33 passed` |
+| `pytest tests/contract/domain_p02/test_seam_register.py tests/contract/api_v1/test_surface_counts_in_prose.py` | `53 passed` |
+| unmutated copy, every target below | `135 passed` |
+
+### 7.3 Mutations (copy rebuilt with `FULL=1`; same discipline as §2; `diff -rq` of `src`, `tests`, `contracts`, `db` and `docs` empty after)
+
+| id | mutation | red | summary |
+| --- | --- | --- | --- |
+| **Mf1** | (f) predicate reverted to `display_name IS NULL` | `test_a_completed_profile_drops_out_of_the_report`: `assert 'usr_01M47AJ1KB4PY6687X8KN9JH47' not in {…}` | 1 failed |
+| Ms1 | `approveRegistration` dropped from the rule's first sentence | `test_the_idempotency_rule_names_exactly_the_keyed_writes`: "must name exactly the writes that require Idempotency-Key: missing ['approveRegistration'], extra []" | 1 failed, 19 passed |
+| Ms2 | the `purgeUser` repeat clause deleted | same test: "must say what a repeat of every unkeyed write does: missing ['purgeUser']" | 1 failed, 19 passed |
+| Ms3 | the contract makes `rejectRegistration` keyed | same test: "missing ['rejectRegistration'], extra []" | 1 failed, 19 passed |
+| Md1 | `EDGE_ONLY_CODES` gains the stored `not_found` | `test_provider_effect_error_code_is_the_closed_catalog`: `AssertionError: ('not_found', "CHECK (…'not_found'::text…")` | 1 failed |
+| Md2 | migration `0014`'s `ERROR_CODES` gains `rate_limited` | same test: `AssertionError: ('rate_limited', "CHECK (…'rate_lim…")` | 1 failed |
+| Mp1 | the shared `UserUid` registered as entity `Account` | `test_its_prefix_is_the_shared_registry_s`: `assert 'Account' == 'User'` | 1 failed, 4 passed |
+| Mt1 | `archiveUser` served as `DELETE` | `test_c3_…`: `{'updateMyProfile': '/me', 'updateUser': …, 'archiveUser': '/users/{user_uid}/archive', 'purgeUser': …}` | 1 failed |
+| Mr1 | `set_roles` raises the epoch even when nothing changed | `test_a_repeated_role_change_writes_the_same_set_and_revokes_once`: `assert 3 == (1 + 1)` | 1 failed, 4 passed |
+| Mr2 | a complete profile refuses any `email`, even its own login | `test_a_repeated_profile_completion_writes_the_same_state`: `validation_failed` "a complete profile's login is fixed" | 1 failed, 4 passed |
+| Mr3 | restoring an active account returns it | `test_a_repeated_archive_or_restore_is_a_refused_transition`: answered `200` with the account | 1 failed, 4 passed |
+| Mr4 | purging an absent account returns | `test_a_repeated_purge_is_not_found`: answered `204` (`b''`) | 1 failed, 4 passed |
+| Mr5 | the reset no longer raises the epoch | `test_a_repeated_reset_repeats_its_effect`: `assert 1 == (1 + 2)` | 1 failed, 4 passed |
+| Mr6 | rejecting a decided request returns it | `test_a_repeated_rejection_is_a_refused_transition`: answered `200` with the request | 1 failed, 18 passed |
+
+### 7.4 New open questions (numbered after §4's eleven)
+
+12. **`contracts/domain/v1/identifiers.schema.json` does not validate the revision-9
+    catalog.** Moving the const was not enough. Measured with
+    `.venv/bootstrap/bin/python` and `jsonschema`, `identifiers.json` fails at:
+    * `properties.entities.additionalProperties.enum`, for the entities `User` and
+      `RegistrationRequest`;
+    * `properties.distinct_identities.items.properties.identifiers.items.enum`, for
+      `user_uid` and `request_id`.
+
+    Both enums list the 27 names of revision 8. `error-codes.json` and
+    `state-machines.json` validate. The proposed edit adds `"user_uid"` and `"request_id"`
+    to both enums. Optionally, it also adds them to `properties.identifiers.required` and
+    adds `User` and `RegistrationRequest` to the entities' `required` list. This is outside
+    grant (e), which is the const only, so it is not edited. No test in the gate reads
+    these schemas; only the excluded `test_cp00_candidate.py` does.
+13. In `P02_SEAMS.md` §7, the bullet "every operation but `issueToken` requires a bearer
+    credential … the role vocabulary `T-6` forbids inventing" is false since the seal:
+    `submitRegistration` and `readRegistrationStatus` are open, and `R-55` ruled the role
+    vocabulary. It is outside the grant, which covers the table and the idempotency
+    sentence.
+14. `not_found` for an account that the access boundary cannot find carries no
+    `aggregate_type`. This covers the writes: archive, restore, purge, update and reset. The
+    adapter's own reads (`getUser`) carry `aggregate_type: User`. Both are legal, because
+    the key is optional in the catalog. Making them uniform would mean either the adapter
+    adding the key or `access` raising it.
+
+### 7.5 Files added since `48099d9`
+
+`git diff --name-only 48099d9..HEAD`:
+
+```text
+contracts/domain/v1/error-codes.schema.json
+contracts/domain/v1/identifiers.schema.json
+contracts/domain/v1/state-machines.schema.json
+docs/program/P02_SEAMS.md
+docs/program/W49-SEAL-01c.md
+docs/program/dispatch/W49-PLAN.md
+docs/program/tasks/W49-SEAL-01.md
+src/auditmanager/access/repository.py
+tests/contract/domain_p02/test_seam_register.py
+tests/e2e/pc01/test_acceptance.py
+tests/integration/access/test_password_hashing.py
+tests/integration/api/test_registration_flow.py
+tests/integration/api/test_user_management.py
+tests/integration/auth/test_the_reviewer_name_is_visible.py
+tests/integration/db/test_durable_analysis_effects.py
+```
+
+`docs/program/dispatch/W49-PLAN.md` and `docs/program/tasks/W49-SEAL-01.md` are the
+integrator's, merged at `549042c`. Every other path is a site of the second grant, plus
+this report and the two granted test files the repeat measurements live in
+(`tests/integration/api/**`).

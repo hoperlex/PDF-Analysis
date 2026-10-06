@@ -278,23 +278,28 @@ class TestTheUserIdentity:
             UserUid.parse(str(ProjectUid.new()))
         assert caught.value.code is ErrorCode.VALIDATION_FAILED
 
-    def test_it_does_not_register_a_prefix_in_the_frozen_contract_catalog(self) -> None:
-        """``usr`` is not in ``contracts/domain/v1/identifiers.json``. Subclassing the
-        contract's ``OpaqueId`` would have registered it globally and added a
-        twenty-sixth identity to a catalog a contract test pins at twenty-five."""
+    def test_its_prefix_is_the_shared_registry_s(self) -> None:
+        """Since `W49-SEAL-01` ``usr`` is contracted (``identifiers.json``: ``user_uid``,
+        entity ``User``) and owned by the shared registry. Until then this test asserted
+        the opposite, because the catalog did not declare it.
+
+        This boundary's class still wraps the shared one rather than subclassing it, so its
+        refusal stays ``validation_failed`` and no caller of the boundary changes.
+        """
         from auditmanager.shared.identity import (
             IDENTITY_TYPES_BY_PREFIX,
-            IdentifierFormatError,
             OpaqueId,
             identity_type_for_prefix,
         )
+        from auditmanager.shared.identity.ids import UserUid as SharedUserUid
 
-        assert "usr" not in IDENTITY_TYPES_BY_PREFIX
+        assert IDENTITY_TYPES_BY_PREFIX["usr"] is SharedUserUid
+        # The live registry as well as the snapshot taken at import time.
+        assert identity_type_for_prefix("usr") is SharedUserUid
+        assert SharedUserUid.entity == "User"
+        assert models.USER_UID_PREFIX == SharedUserUid.prefix == "usr"
         assert not issubclass(UserUid, OpaqueId)
-        # The live registry, not only the snapshot taken at import time: a subclass
-        # defined anywhere would have written itself into this one.
-        with pytest.raises(IdentifierFormatError):
-            identity_type_for_prefix("usr")
+        assert str(SharedUserUid.parse(str(UserUid.new()))).startswith("usr_")
 
     def test_the_identity_is_not_derived_from_the_login(self) -> None:
         assert "admin" not in str(UserUid.new()).lower()
