@@ -81,7 +81,8 @@ not product changes in this task.
 - `tests/e2e/pc01/journey/README.md` — stale route/count/landing prose only
 - `web/src/app/bff/session/store.ts` — stale legacy `openSession` docstring only
 - `tests/e2e/pc01/journey/fixtures/redden-write.manifest.json` — stale `$comment` and root read expectation only
-- `tests/e2e/pc01/journey/fixtures/redden-write-bound.manifest.json` — root read expectation only
+- `tests/e2e/pc01/journey/fixtures/redden-write-bound.manifest.json` — root read expectation
+  and its adjacent stale `$comment` describing `/` as a redirect to `/projects` only
 - `web/tests/guards/prepared-sections.guard.test.ts` — stale title/comment count only
 - `docs/program/W50-FIX.md` — completion report
 
