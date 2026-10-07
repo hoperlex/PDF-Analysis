@@ -47,8 +47,8 @@ export const SCREEN_ACCESS_LEVELS = ['public', 'open-to-default-credential', 'se
 export type ScreenAccess = (typeof SCREEN_ACCESS_LEVELS)[number];
 
 /**
- * The navigation groups (`W50-PLAN.md` §3.1, `R-66`). `admin` has no row in W50 — `W51`
- * adds them — and a group with no row the session may open does not render.
+ * The navigation groups (`W50-PLAN.md` §3.1, `R-66`). A group with no row the session may
+ * open does not render.
  */
 export const SCREEN_GROUPS = ['home', 'work', 'knowledge', 'system', 'admin', 'account', 'hidden'] as const;
 export type ScreenGroup = (typeof SCREEN_GROUPS)[number];
@@ -185,7 +185,41 @@ export const SCREEN_REGISTRY = [
     inMenu: false,
   },
 
+  {
+    address: '/admin/users',
+    label: 'Пользователи',
+    group: 'admin',
+    access: 'session',
+    roles: ['admin'],
+    inMenu: true,
+  },
+  {
+    address: '/admin/users/[user_uid]',
+    label: 'Пользователь',
+    group: 'admin',
+    access: 'session',
+    roles: ['admin'],
+    inMenu: false,
+  },
+  {
+    address: '/admin/registrations',
+    label: 'Заявки на регистрацию',
+    group: 'admin',
+    access: 'session',
+    roles: ['admin'],
+    inMenu: true,
+  },
+
   { address: '/login', label: 'Вход', group: 'account', access: 'public', roles: 'any', inMenu: false },
+  { address: '/register', label: 'Регистрация', group: 'account', access: 'public', roles: 'any', inMenu: false },
+  {
+    address: '/register/submitted',
+    label: 'Заявка на регистрацию',
+    group: 'account',
+    access: 'public',
+    roles: 'any',
+    inMenu: false,
+  },
   {
     address: '/account',
     label: 'Профиль',

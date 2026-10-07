@@ -23,6 +23,7 @@ import {
 import { newClient, renderScreen } from '../screens/harness';
 
 const A_PROJECT = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+const A_USER = 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 
 describe('a same-application address passes, as it was given', () => {
   it.each([
@@ -34,6 +35,11 @@ describe('a same-application address passes, as it was given', () => {
     '/knowledge-base?category=%D0%90&verdict=accepted',
     '/login',
     '/403',
+    '/register',
+    '/register/submitted',
+    '/admin/users',
+    `/admin/users/${A_USER}?tab=all`,
+    '/admin/registrations',
   ])('%s', (candidate) => {
     expect(safeReturnPath(candidate)).toBe(candidate);
   });
@@ -149,7 +155,8 @@ describe('/403 names the role the registry requires for from', () => {
     expect(requiredRolesFor('/', FIXTURE)).toBeNull();
     expect(requiredRolesFor('//evil.example/admin/users', FIXTURE)).toBeNull();
     expect(requiredRolesFor(undefined, FIXTURE)).toBeNull();
-    // The live registry has no role-gated row in W50 (`R-60`).
-    expect(requiredRolesFor('/admin/users')).toBeNull();
+    expect(requiredRolesFor('/admin/users')).toEqual(['admin']);
+    expect(requiredRolesFor(`/admin/users/${A_USER}`)).toEqual(['admin']);
+    expect(requiredRolesFor('/admin/registrations')).toEqual(['admin']);
   });
 });

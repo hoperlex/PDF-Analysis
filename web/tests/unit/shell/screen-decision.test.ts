@@ -5,7 +5,7 @@
  *
  * `web/tests/guards/screen-guard.guard.test.ts` proves, unedited, that the guard decides as it
  * did before the function moved out of it; this file drives the function directly, including
- * the role-gated row the live registry does not have in W50.
+ * the synthetic role-gated row and the live W51 administrator rows.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -80,17 +80,19 @@ describe('the four decisions, in order', () => {
 });
 
 describe('the live registry', () => {
-  it('has no role-gated row in W50 (R-60; W51 adds the administration rows)', () => {
-    // The day this changes, the menu's role filter starts to matter on the live registry and
-    // the cases above stop being the only ones that exercise it — so the set is asserted.
-    expect(SCREEN_REGISTRY.filter((screen) => screen.roles !== 'any').map((screen) => screen.address)).toEqual([]);
+  it('has exactly three administrator-only rows', () => {
+    expect(SCREEN_REGISTRY.filter((screen) => screen.roles !== 'any').map((screen) => screen.address)).toEqual([
+      '/admin/users', '/admin/users/[user_uid]', '/admin/registrations',
+    ]);
   });
 
-  it('opens every menu row to a complete expert and none to a guest or a default credential', () => {
+  it('admits admins to every menu row, and an expert only to non-admin rows', () => {
     const menu = SCREEN_REGISTRY.filter((screen) => screen.inMenu);
     expect(menu.length).toBeGreaterThan(0);
     for (const screen of menu) {
-      expect(screenDecision(screen, EXPERT), screen.address).toBe('open');
+      expect(screenDecision(screen, ADMIN_ONLY), screen.address).toBe('open');
+      expect(screenDecision(screen, EXPERT), screen.address).toBe(screen.group === 'admin' ? 'forbidden' : 'open');
+      expect(screenDecision(screen, NO_ROLES), screen.address).toBe(screen.group === 'admin' ? 'forbidden' : 'open');
       expect(screenDecision(screen, null), screen.address).toBe('sign-in');
       expect(screenDecision(screen, DEFAULT_CREDENTIAL), screen.address).toBe('change-password');
     }

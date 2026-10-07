@@ -41,16 +41,24 @@ const R66 = [
   'Знания: База знаний /knowledge-base, Блоки /blocks, Нормы /norms',
   'Система: Журнал выполнения /logs, Исполнители /workers, Настройки анализа /analysis-settings, Очередь /queue',
 ];
+const ADMIN_MENU = 'Администрирование: Пользователи /admin/users, Заявки на регистрацию /admin/registrations';
 
 describe('the live registry gives exactly R-66', () => {
   it('to a complete expert: Главная, then Работа, Знания, Система, in that order and with those items', () => {
     expect(outline(buildNavigation(EXPERT))).toEqual(R66);
   });
 
-  it('to every complete session whatever its roles, because no W50 row is role-gated', () => {
-    for (const who of [ADMIN_AND_EXPERT, ADMIN_ONLY, NO_ROLES, UNKNOWN_ROLE]) {
+  it('keeps the R-66 groups for a complete session without admin', () => {
+    for (const who of [NO_ROLES, UNKNOWN_ROLE]) {
       expect(outline(buildNavigation(who)), who.displayLabel).toEqual(R66);
     }
+  });
+
+  it('adds the two administrator links last only for a complete admin', () => {
+    for (const who of [ADMIN_AND_EXPERT, ADMIN_ONLY]) {
+      expect(outline(buildNavigation(who)), who.displayLabel).toEqual([...R66, ADMIN_MENU]);
+    }
+    expect(outline(buildNavigation(EXPERT))).toEqual(R66);
   });
 
   it('never offers /optimisation: it left the menu and stays a hidden, reachable screen', () => {
@@ -99,9 +107,9 @@ describe('a session that may open no session screen sees no group', () => {
   });
 });
 
-/** A registry with what W51 will add: an admin-only row in the administration group. */
+/** A reduced fixture keeps the one-row synthetic role control from W50. */
 const WITH_ADMIN_ROW: readonly ScreenEntry[] = [
-  ...SCREEN_REGISTRY,
+  ...SCREEN_REGISTRY.filter((screen) => screen.group !== 'admin'),
   {
     address: '/admin/registrations',
     label: 'Заявки на регистрацию',

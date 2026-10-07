@@ -577,6 +577,63 @@
       ],
       "expects_api": [],
       "follow": null
+    },
+    {
+      "name": "register",
+      "path": "/register",
+      "page_module": "web/src/app/register/page.tsx",
+      "$comment": [
+        "Public registration placeholder. It makes no API call; the future form is owned by W51-AUTH-01."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "register-submitted",
+      "path": "/register/submitted",
+      "page_module": "web/src/app/register/submitted/page.tsx",
+      "$comment": [
+        "Public confirmation placeholder. It does not claim a request was submitted and makes no API call."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "admin-users",
+      "path": "/admin/users",
+      "page_module": "web/src/app/admin/users/page.tsx",
+      "$comment": [
+        "Admin-only no-call placeholder. The journey account holds admin and opens it directly;",
+        "an expert is sent to /403 and a guest to /login with validated next."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "admin-user",
+      "path": "/admin/users/{user_uid}",
+      "page_module": "web/src/app/admin/users/[user_uid]/page.tsx",
+      "$comment": [
+        "Admin-only no-call placeholder. Until the users list offers a real link, the read walk",
+        "uses this well-formed sample solely to check a cold load of the guarded address.",
+        "W51-ADMIN-USERS replaces it with a captured real user identity when the list is built."
+      ],
+      "sample_identifiers": {
+        "user_uid": "usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F"
+      },
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "admin-registrations",
+      "path": "/admin/registrations",
+      "page_module": "web/src/app/admin/registrations/page.tsx",
+      "$comment": [
+        "Admin-only no-call placeholder. The journey account holds admin and opens it directly;",
+        "an expert is sent to /403 and a guest to /login with validated next."
+      ],
+      "expects_api": [],
+      "follow": null
     }
   ],
   "write": {

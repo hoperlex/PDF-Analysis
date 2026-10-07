@@ -84,6 +84,7 @@ async function routeAt(address: string): Promise<Route> {
 /** The contract's identity shapes: `<prefix>_<26 Crockford base-32>`. One value per segment name. */
 const IDENTIFIERS: Readonly<Record<string, string>> = {
   project_uid: 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8A',
+  user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
   document_uid: 'doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8C',
   version_uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8D',
   run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8E',

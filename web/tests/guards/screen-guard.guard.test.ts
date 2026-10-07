@@ -200,7 +200,7 @@ async function sentTo(call: Promise<unknown>): Promise<string | null> {
 
 const A_PROJECT = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 
-/** A role-gated row W50's registry does not have (`R-60`), for decision four. */
+/** A synthetic role-gated row keeps the mechanism control independent of live registry data. */
 const ADMIN_USERS: ScreenEntry = {
   address: '/admin/users',
   label: 'Учётные записи',
@@ -241,6 +241,8 @@ describe('decision 1: a guest is sent to sign in, carrying the address it asked 
 
   it('lets a guest open a public screen, and returns no subject', async () => {
     expect(await requireScreen('/login', props())).toBeNull();
+    expect(await requireScreen('/register', props())).toBeNull();
+    expect(await requireScreen('/register/submitted', props())).toBeNull();
     expect(await requireScreen('/403', props())).toBeNull();
   });
 
@@ -291,6 +293,26 @@ describe('decision 3: an incomplete profile opens only the screens that complete
 });
 
 describe('decision 4: a session lacking every role a screen lists is sent to /403', () => {
+  const liveAdmin = [
+    ['/admin/users', {}],
+    ['/admin/users/[user_uid]', { user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F' }],
+    ['/admin/registrations', {}],
+  ] as const;
+
+  it('applies the live admin rows to expert, empty, unknown and admin sessions', async () => {
+    for (const [address, params] of liveAdmin) {
+      for (const roles of [['expert'], [], ['superuser']] as const) {
+        signIn({ roles: [...roles] as Role[] });
+        const concrete = address.replace('[user_uid]', 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F');
+        expect(await sentTo(requireScreen(address, props(params))), `${address}: ${roles.join(',')}`).toBe(
+          `/403?from=${encodeURIComponent(concrete)}`,
+        );
+      }
+      signIn({ roles: ['admin'] });
+      expect(await sentTo(requireScreen(address, props(params))), address).toBeNull();
+    }
+  });
+
   it('sends an expert from an administrator screen, carrying where it was going in from', async () => {
     signIn({ roles: ['expert'] });
     expect(await sentTo(enforceScreen(ADMIN_USERS, props()))).toBe(

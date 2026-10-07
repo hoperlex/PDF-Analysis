@@ -44,6 +44,7 @@ vi.mock('next/headers', () => ({
 import { WEB_ROOT } from '../../guards/lib/repo';
 
 import { DocumentDetailPage } from '@/_pages/document-detail';
+import { AdminUserPage } from '@/_pages/admin-user';
 import { HomePage } from '@/_pages/home';
 import { ReviewPage } from '@/_pages/review';
 import { ProjectDetailPage } from '@/_pages/project-detail';
@@ -60,6 +61,7 @@ import ProjectsRoute from '@/app/projects/page';
 import ReviewRoute from '@/app/projects/[project_uid]/runs/[run_id]/review/page';
 import RootPage from '@/app/page';
 import RunRoute from '@/app/projects/[project_uid]/runs/[run_id]/page';
+import AdminUserRoute from '@/app/admin/users/[user_uid]/page';
 
 import { GET, POST } from '@/app/bff/v1/[...path]/route';
 import RootLayout, { metadata } from '@/app/layout';
@@ -96,6 +98,7 @@ const A_PROJECT = PROJECT_UID;
 const A_RUN = RUN_ID.replace(/.$/, 'C');
 const A_DOCUMENT = DOCUMENT_UID.replace(/.$/, 'D');
 const A_VERSION = VERSION_UID.replace(/.$/, 'E');
+const A_USER = 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 
 describe('each route delegates to its screen and to no other', () => {
   it('/projects renders the projects screen', async () => {
@@ -152,6 +155,14 @@ describe('each route delegates to its screen and to no other', () => {
     });
     expect(element.type).toBe(StageComparisonPage);
     expect(element.props).toEqual({ projectUid: A_PROJECT, versionUid: A_VERSION });
+  });
+
+  it('/admin/users/{user_uid} delegates the opaque identity unchanged', async () => {
+    jar.value = openSession({ ...SIGNED_IN, roles: ['admin'] }, 'a-credential', 3600);
+    const element = await AdminUserRoute({ params: Promise.resolve({ user_uid: A_USER }), ...NO_QUERY });
+    expect(element.type).toBe(AdminUserPage);
+    expect(element.props).toEqual({ userUid: A_USER });
+    expect(routes.user(A_USER)).toBe(`/admin/users/${A_USER}`);
   });
 
   it('comparison is mounted under the version, not under a run', () => {
@@ -553,12 +564,17 @@ describe('every screen address is built once and matches a route file on disk', 
       comparison: routes.comparison(PROJECT_UID, VERSION_UID),
       run: routes.run(PROJECT_UID, RUN_ID),
       review: routes.review(PROJECT_UID, RUN_ID),
+      user: routes.user(A_USER),
     };
     // The names are checked against the module rather than trusted, so a builder added
     // without a line here is red rather than silently unlinked.
     expect(Object.keys(built).sort()).toEqual(Object.keys(routes).sort());
     expect(
       Object.entries(built)
+        // The Stage-A users list is a no-call placeholder and has no real user identity
+        // to link. W51-ADMIN-USERS owns that first rendered link; the builder's route
+        // totality and opaque value are asserted above meanwhile.
+        .filter(([builder]) => builder !== 'user')
         .filter(([, url]) => !drawn.has(url))
         .map(([builder, url]) => `routes.${builder}() -> ${url}`)
         .sort(),
