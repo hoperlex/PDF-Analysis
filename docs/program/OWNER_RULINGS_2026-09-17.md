@@ -1268,3 +1268,26 @@ sentences tests and scripts pin), the owner ruled that it does, and that they ar
 separate lane of W52 (the quality wave), not in W50. That lane's grant names every test and script
 that pins a runbook sentence, re-swept at `W52-FREEZE-01`. Communication with the owner stays
 Russian.
+
+## 3.25 — `R-70`, ruled 2026-10-07 by direct poll on the cost of the complete gate
+
+### `R-70` — light acceptance by default; the complete gate at named points
+
+The owner observed that complete gates and their reruns slow development badly and consume the
+shared host (the `W50-SHELL-FRAME` gate was voided once by storage under load and passed on the
+second run after forty minutes), and asked for separate gates before heavy waves, in assigned
+windows, with acceptance by a lighter procedure. Settled by a direct poll the same day:
+
+- a complete `make gate` with the literal `GATE OK` is required only in a window assigned before a
+  heavy wave, before every publication to `origin/main` (`AGENTS.md` §6 unchanged), and for a
+  change that touches contracts, migrations, `infra/**`, the `Makefile`, a dependency manifest or
+  lock, the composition root or shared test fixtures;
+- everything else — lane hand-backs, merges into `integration/*`, publication to `origin/dev` — is
+  accepted by light acceptance: the container-free checks (whitespace, frontend lint, types and
+  tests, the contract tests and the static end-to-end checks) plus, by the diff, the integration
+  directories of each changed backend context and the live journey for a changed screen;
+- the `make` target that derives light acceptance from the diff is built in `W50-FIX`, not deferred
+  to W52.
+
+`AGENTS.md` §8 is the operating text. `W52-PLAN.md` §3.7's exclusion of impacted-test selection is
+superseded; its battery speed-up stands.

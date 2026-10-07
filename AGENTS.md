@@ -147,3 +147,36 @@ and hands the role over once the budget is spent.
   the user the ready first sentence for the new integrator — "You are the exclusive integrator of
   this project. Continue from `.local/handoff/integrator-<YYYY-MM-DD>.md`." — and stops writing.
   The user appoints the new session; until then nobody integrates.
+
+## 8. Checks: light acceptance by default, the full gate at named points
+
+Owner ruling `R-70` (2026-10-07). A complete `make gate` occupies this shared host for the better
+part of an hour and is repeated whenever load voids it; most changes do not need it.
+
+- **Light acceptance is the default** for a lane's hand-back, for every merge into an
+  `integration/*` branch and for publication to `origin/dev`. On the exact tree being accepted:
+  1. always, without containers: `git diff --check`; `npm --prefix web run lint -- --quiet`,
+     `npm --prefix web run typecheck` and `npm --prefix web test -- --run`; `pytest
+     tests/contract` and the static end-to-end checks (the journey manifest's conformance and the
+     documentation prose guards);
+  2. by the diff against the last tree that passed a complete gate: changed Python under
+     `src/auditmanager/<context>/` → the `tests/integration/` directories that exercise that
+     context, on the lane's own containers; a changed screen (rendered copy, markup, routes, the
+     calls a screen makes) → the live journey `npm --prefix web run e2e:pc01 -- --phase all` on
+     the lane's own stand;
+  3. every new guard shown failing under a quoted mutation, as before.
+
+  The `make` target that derives this list from the diff arrives with `W50-FIX`; until then the
+  agent runs it by hand and quotes every command with its exit status.
+- **A complete `make gate` with the literal `GATE OK` is required only:**
+  1. in a window the owner assigns before a heavy wave, on that wave's base;
+  2. before every publication to `origin/main` (§6 and `MAIN_AUTODEPLOY_POLICY.md`, unchanged);
+  3. for a change that touches `contracts/**`, `db/migrations/**`, `infra/**`, the `Makefile`, a
+     dependency manifest or lock (`pyproject.toml`, `uv.lock`, `web/package.json`,
+     `web/package-lock.json`, `web/FRONTEND_LOCK.json`), the composition root
+     (`src/auditmanager/bootstrap/**`, `web/src/_app/providers.tsx`) or shared test fixtures
+     (`tests/support/**`, any `conftest.py`) — once, on the lane that makes the change.
+- A complete gate voided by host load (exit `137`, `StorageUnavailableError` under load) is not
+  rerun merely to accept a change that light acceptance covers.
+- A task file whose required checks name `make gate` for a change outside the three cases above
+  reads as light acceptance.
