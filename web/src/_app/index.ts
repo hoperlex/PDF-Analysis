@@ -6,8 +6,8 @@
 export type { AppProvidersProps } from './providers';
 export { AppProviders } from './providers';
 
-export type { AppFrameProps } from './app-frame';
-export { AppFrame } from './app-frame';
+export type { AppFrameProps, AppFrameSession } from './app-frame';
+export { AppFrame, FRAME_FOOTER } from './app-frame';
 
 export { ThemeToggle } from './theme-toggle';
 

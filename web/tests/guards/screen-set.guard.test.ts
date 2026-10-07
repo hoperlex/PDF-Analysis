@@ -191,8 +191,15 @@ describe('the set of screens is read off web/src/app, not out of a list', () => 
   it('every derived screen renders real markup, and none of them throws', () => {
     const screens = derivedScreens();
     expect(screens.length, 'the derived set renders nothing').toBeGreaterThan(10);
-    // A relationship, never a literal: the count is `every address minus the excused`.
-    expect(screens.length).toBe(routeAddresses().length - optOuts().length);
+    // A relationship, never a literal: every address minus the excused is rendered at least
+    // once. Per ADDRESS since `W50-SHELL-FRAME` seeds `/` twice (expert, administrator) — the
+    // integrator's ruling of 2026-10-07 (Q4); the unique-names check below still holds.
+    const expected = routeAddresses().length - optOuts().length;
+    const renderedAddresses = (list: readonly { readonly address: string }[]): number =>
+      new Set(list.map((s) => s.address)).size;
+    expect(renderedAddresses(screens)).toBe(expected);
+    // Can fail: every seed of one address dropped is one address short.
+    expect(renderedAddresses(screens.filter((s) => s.address !== '/'))).toBe(expected - 1);
     for (const screen of screens) {
       const markup = renderCold(screen.make(wellFormed(IDENTITIES)));
       expect(markup.length, `${screen.name} (${screen.address}) rendered nothing`)

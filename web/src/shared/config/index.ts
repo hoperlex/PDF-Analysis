@@ -15,6 +15,8 @@ export type {
   ScreenAccess,
   ScreenAccessOf,
   ScreenAddress,
+  ScreenDecision,
+  ScreenDecisionSubject,
   ScreenEntry,
   ScreenGroup,
   ScreenRoles,
@@ -35,5 +37,6 @@ export {
   requiredRolesFor,
   safeReturnPath,
   screenAt,
+  screenDecision,
   screenMatching,
 } from './screen-registry';

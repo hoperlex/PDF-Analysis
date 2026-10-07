@@ -229,6 +229,19 @@ export const SEEDS: readonly Seed[] = [
     discipline: {},
   },
   {
+    /*
+     * `W50-SHELL-FRAME`, granted at the Stage-B merges and widened by the integrator's ruling
+     * of 2026-10-07 (Q3): the same address for a session holding `admin`. The expert's seed
+     * above cannot mount the administrator tile, so without this one the language guard and
+     * the census never read it. A second seed for one address is why `derivedScreens()`
+     * yields every seed of an address, in this order.
+     */
+    address: '/',
+    name: 'home-admin',
+    make: () => createElement(HomePage, { displayLabel: 'Проверкина А. С.', roles: ['admin', 'expert'] }),
+    discipline: {},
+  },
+  {
     // `R-60` gives no W50 screen a role, so the live `/403` names none; a seed that names one
     // is the screen a role-gated row will send a session to, and it is the one the
     // instruments should read.
@@ -426,7 +439,9 @@ function seedFor(address: string): Seed | undefined {
 }
 
 /**
- * Every derived address that has a rendering seed, joined to what the tree says about it.
+ * Every rendering seed of every derived address, joined to what the tree says about it — one
+ * entry per seed, so an address seeded twice (`/`, for an expert and for an administrator) is
+ * rendered twice.
  *
  * An address with no seed is NOT silently dropped: it is reported by `unseededAddresses()`
  * and the guard names it. This function is what the two instruments consume, so a screen
@@ -435,16 +450,18 @@ function seedFor(address: string): Seed | undefined {
 export function derivedScreens(): readonly DerivedScreen[] {
   const out: DerivedScreen[] = [];
   for (const route of routeAddresses()) {
-    const seed = seedFor(route.address);
-    if (seed === undefined || seed.make === undefined) continue;
-    out.push({
-      address: route.address,
-      name: seed.name,
-      file: route.file,
-      segments: route.segments,
-      discipline: seed.discipline,
-      make: seed.make,
-    });
+    // Every seed of the address, in `SEEDS` order: `/` has two (`W50-SHELL-FRAME`).
+    for (const seed of SEEDS.filter((entry) => entry.address === route.address)) {
+      if (seed.make === undefined) continue;
+      out.push({
+        address: route.address,
+        name: seed.name,
+        file: route.file,
+        segments: route.segments,
+        discipline: seed.discipline,
+        make: seed.make,
+      });
+    }
   }
   return out;
 }

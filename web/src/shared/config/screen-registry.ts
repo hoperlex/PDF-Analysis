@@ -226,6 +226,54 @@ export const FORBIDDEN_SCREEN = '/403' satisfies ScreenAddress;
 export const NEXT_PARAM = 'next';
 export const FROM_PARAM = 'from';
 
+// ---------------------------------------------------------------- who may open a screen
+
+/**
+ * What a session is, as far as opening a screen goes: its roles and the two states that keep
+ * it out of `session` screens. A role this tier does not know is a plain string here, so it
+ * reaches {@link screenDecision} and matches no row instead of being dropped on the way.
+ */
+export interface ScreenDecisionSubject {
+  readonly roles: readonly string[];
+  readonly isDefaultCredential: boolean;
+  readonly profileComplete: boolean;
+}
+
+/**
+ * What happens when `subject` (or a guest, `null`) asks for `screen`: it opens, or the
+ * browser is sent to sign in, to change a default password, to complete the profile, or to
+ * `/403`.
+ */
+export type ScreenDecision = 'open' | 'sign-in' | 'change-password' | 'complete-profile' | 'forbidden';
+
+/**
+ * **The one answer to "may this session open this screen".** `requireScreen` maps each
+ * answer to its redirect (`web/src/app/bff/session/screen-lock.ts`), and the frame's
+ * navigation offers exactly the rows whose answer is `open` — one function, so the menu
+ * cannot offer a screen the guard refuses, or hide one it opens (`W50-SHELL-FRAME`; the
+ * integrator's grant of 2026-10-07 moved it here out of `enforceScreen`, unchanged).
+ *
+ * In order, and the order is the behaviour:
+ *
+ *   1. a guest opens only `public` screens, and is sent to sign in from any other;
+ *   2. `R-50`: a default credential opens no `session` screen — only the ones that change it;
+ *   3. `R-59`: nor does an incomplete profile — only the ones that complete it;
+ *   4. a `session` screen with roles needs any one of them; a role value this tier does not
+ *      know matches no row, so it is refused like a missing one and never read as `any`.
+ *
+ * It decides where a browser is *sent* and what a menu *offers*; it authorises nothing. The
+ * API refuses every operation on its own evidence.
+ */
+export function screenDecision(screen: ScreenEntry, subject: ScreenDecisionSubject | null): ScreenDecision {
+  if (subject === null) return screen.access === 'public' ? 'open' : 'sign-in';
+  if (screen.access === 'session') {
+    if (subject.isDefaultCredential) return 'change-password';
+    if (!subject.profileComplete) return 'complete-profile';
+    if (screen.roles !== 'any' && !screen.roles.some((role) => subject.roles.includes(role))) return 'forbidden';
+  }
+  return 'open';
+}
+
 /** The registry row for an address, or `undefined` for one that is not registered. */
 export function screenAt(
   address: string,

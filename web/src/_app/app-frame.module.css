@@ -1,0 +1,105 @@
+/*
+ * The frame's own layout — `W50-SHELL-FRAME`.
+ *
+ * The bar, its colours and the primitives' looks are global (`globals.css`, `.am-app__*`,
+ * `.am-disclosure*`, `.am-menu*`, `.am-avatar*`); this module only arranges what the frame
+ * adds, and declares no colour of its own beyond the existing tokens.
+ *
+ * ## One row, or «Меню»
+ *
+ * At or above the breakpoint the groups sit in the bar in one row (`.row`); below it they
+ * collapse into one stacked list behind a «Меню» disclosure (`.stacked`). Both are always in
+ * the markup and exactly one is displayed. The 780 px floor is below the breakpoint, so the
+ * floor shows «Меню»: the brand, the five navigation entries, the instance label, the theme
+ * control and the avatar do not fit one row there. Neither state may widen the page; each is
+ * measured in a browser in `docs/program/W50-SHELL-FRAME.md`.
+ */
+
+.nav {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.stacked {
+  display: none;
+}
+
+@media (max-width: 959.98px) {
+  .row {
+    display: none;
+  }
+
+  .stacked {
+    display: block;
+  }
+}
+
+.home {
+  padding: 4px 8px;
+}
+
+.home[aria-current='page'] {
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+}
+
+.stackedList {
+  display: grid;
+  gap: 2px;
+  min-width: 12rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stackedItem {
+  margin: 0;
+}
+
+/* The right-hand cluster: instance label, theme control, then the account menu or «Вход». */
+.end {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.accountMenu {
+  display: inline-flex;
+  align-items: center;
+}
+
+/*
+ * The account header. A 66-character name and a 254-character address are single words as
+ * far as line breaking goes; the menu's popup has a fixed maximum width, and these break
+ * anywhere inside it instead of widening it.
+ */
+.account {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.accountName,
+.accountLogin,
+.accountRoles {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.accountName {
+  font-weight: 650;
+}

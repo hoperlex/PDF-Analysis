@@ -22,6 +22,9 @@ import { ReviewPage } from '@/_pages/review';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { AppFrame } from '@/_app';
+import { accountMenuProps } from '@/_app/account-menu';
+import { FrameNavigationView } from '@/_app/frame-navigation';
+import { buildNavigation } from '@/_app/navigation';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { SignInPage } from '@/_pages/sign-in';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
@@ -189,6 +192,17 @@ const RECORDS: readonly DecisionRecord[] = (
   decision_event_count: index + 1,
 }));
 
+/** The frame's sessions (`W50-SHELL-FRAME`): the whole subject the layout hands it. */
+const FRAME_EXPERT = {
+  login: 'эксперт@пример.испытание',
+  displayLabel: 'Экспертова А. С.',
+  initials: 'ЭА',
+  roles: ['expert'],
+  isDefaultCredential: false,
+  profileComplete: true,
+} as const;
+const FRAME_ADMIN = { ...FRAME_EXPERT, displayLabel: 'Проверкина А. С.', initials: 'ПА', roles: ['admin', 'expert'] } as const;
+
 export function screens(): Screen[] {
   const out: Screen[] = [];
   /**
@@ -210,12 +224,48 @@ export function screens(): Screen[] {
    * -- `.am-app__signin` -- and a census that rendered only the link would be measuring the
    * rule on an `<a>` while a `<button>` somewhere else wore it.
    */
-  add(
-    'AppFrame with an open session',
-    render(
-      createElement(AppFrame, { children: 'экран', session: { login: 'проверяющий' } }),
-    ),
-  );
+  add('AppFrame with an open session', render(createElement(AppFrame, { children: 'экран', session: FRAME_EXPERT })));
+
+  /*
+   * `W50-SHELL-FRAME`. The frame's islands render closed in one pass, so the states a reader
+   * opens are seeded the way `W50-SHELL-UI`'s primitives are: the account menu OPEN with the
+   * very props the bar gives it (`accountMenuProps`, not a copy), its header carrying the
+   * frame's own rules; and the navigation drawn with every disclosure open — the one-row
+   * groups and the stacked «Меню» with its inline groups — once with `Главная` as the current
+   * page and once with a page under a group current, which is the only way the current-page
+   * rules are reached by a pass that has no router.
+   */
+  {
+    const inBar = (child: ReactElement): string => render(createElement('header', { className: 'am-app__bar' }, child));
+    let seedPanel = 0;
+    const drawnOpen = (props: DisclosureProps): ReactElement => {
+      seedPanel += 1;
+      return createElement(DisclosureView, { ...props, open: true, panelId: `seed-frame-${seedPanel}` });
+    };
+    add(
+      'AppFrame, the account menu open',
+      inBar(
+        createElement(MenuView, {
+          ...accountMenuProps(FRAME_ADMIN),
+          state: { open: true, active: 0 },
+          triggerId: 'seed-frame-account-trigger',
+          menuId: 'seed-frame-account-menu',
+        }),
+      ),
+    );
+    for (const pathname of ['/', '/blocks']) {
+      add(
+        `AppFrame, the navigation open, ${pathname} current`,
+        inBar(
+          createElement(FrameNavigationView, {
+            navigation: buildNavigation(FRAME_ADMIN),
+            pathname,
+            disclosure: drawnOpen,
+          }),
+        ),
+      );
+    }
+  }
 
   /*
    * The same shell WITH an instance label, which is the whole of `.am-app__instance`.
