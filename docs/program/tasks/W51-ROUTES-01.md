@@ -107,6 +107,13 @@ registry while retaining the W50 synthetic role controls.
 - `tests/e2e/pc01/journey/manifest.json` — five route entries with placeholder-accurate
   no-call expectations; role-aware redirects and a well-formed `user_uid` sample; the W51
   journey account holds `admin`, as the freeze decides
+- `tests/e2e/pc01/journey/journey.mjs` — `W51-ROUTES-01-G1` only: resolve the
+  manifest-declared `user_uid` sample for the placeholder detail route when no earlier
+  screen provides an actual identity; preserve captured-link precedence, cold loads and
+  all request/response checks
+- `tests/e2e/test_pc01_journey_conformance.py` — `W51-ROUTES-01-G1` only: statically
+  validate that the sample is a well-formed `usr_<ULID>`, names exactly the route's
+  dynamic segment, and is allowed only while that detail route has no API expectations
 - `web/tests/unit/screens/route-screens.ts` — one seed per new address, preserving existing
   names/props; Stage B keeps those export names and props
 - `web/tests/guards/screen-registry.guard.test.ts`,
@@ -147,6 +154,8 @@ registry while retaining the W50 synthetic role controls.
 
 - Registry/page/seed/manifest equality, guard sweep, builder totality, home tile link,
   W50 QA live rows and dynamic `user_uid`, frontend lint/typecheck/full Vitest suite.
+- `W51-ROUTES-01-G1`: conformance must reject a missing, malformed or misnamed
+  `user_uid` sample, and a mutation removing its use from the journey must go red.
 - Mutations: remove a new registry row; omit a guard call; offer an admin row to an expert;
   break `routes.user` or remove its well-formed QA sample. Each controlling check must go red.
 - On the clean committed lane tree, `make light-acceptance
@@ -164,6 +173,20 @@ The integrator checks the grant, accepts and merges the exact tree, runs post-me
 acceptance and alone may publish `origin/dev`. Stage-B AUTH begins from the accepted Stage-A
 merge; ADMIN-USERS and ADMIN-REQUESTS follow sequentially. An extra needed path is a finding,
 not a silent edit.
+
+### Integrator written grant `W51-ROUTES-01-G1`, 2026-10-07
+
+The executor stopped before an out-of-grant edit: `journey.mjs` fills
+`/admin/users/{user_uid}` only from earlier rendered links, while the Stage-A
+`/admin/users` placeholder has no API call and cannot provide a real user link. A
+fabricated product link would violate this task's no-invented-data rule. The two test
+instrument paths above are granted solely for a manifest-declared sample on the
+no-call placeholder route. It must never substitute for a captured real identifier or
+make a later `getUser` call appear covered. When ADMIN-USERS makes the list and detail
+real, it replaces this sample with link capture and restores the journey's real-ID
+rule. This grant does not change the frozen base, contracts, migrations or product scope.
+The executor names this grant in its report; the integrator merges its lane onto the
+grant-bearing `integration/w51` tip.
 
 ## Failure/idempotency/security cases
 

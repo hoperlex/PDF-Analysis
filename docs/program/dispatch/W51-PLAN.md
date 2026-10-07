@@ -121,6 +121,9 @@ Depends on: `W50-INT-CLOSE`. Standard form.
   `web/src/_pages/admin-user/**`, `web/src/_pages/admin-registrations/**` (each exporting a named
   `<Screen>Page` that renders `RoutePlaceholder`; `AdminUserPage` takes `userUid`),
   `tests/e2e/pc01/journey/manifest.json`, `web/tests/unit/screens/route-screens.ts` (seeds),
+  `tests/e2e/pc01/journey/journey.mjs` and
+  `tests/e2e/test_pc01_journey_conformance.py` (`W51-ROUTES-01-G1`: only a validated
+  manifest-declared `user_uid` sample for the no-call detail placeholder),
   `web/src/shared/api/index.ts` (two filter re-exports),
   `web/src/shared/lib/routes.ts` (user-detail builder),
   `web/tests/unit/screens/routes.test.ts` (builder totality),
@@ -145,7 +148,9 @@ Depends on: `W50-INT-CLOSE`. Standard form.
   including the W50 QA live-row cases and dynamic route builder; `npm --prefix web test --
   --run`; `make light-acceptance` from the last full-gate ancestor, including the live PC-01
   journey on the lane stand. Mutations of an omitted guard, a missing registry row, a wrong
-  `user_uid` builder and an expert-offered admin row must make the owning checks red.
+  `user_uid` builder, an expert-offered admin row and a missing or ignored placeholder
+  `user_uid` sample must make the owning checks red. ADMIN-USERS replaces the sample
+  with a real link capture once the list and detail make API calls.
 
 ### Stage B — `W51-AUTH-01` → `W51-ADMIN-USERS` → `W51-ADMIN-REQUESTS` (executor; sequential)
 - **Depends on:** ROUTES for AUTH, AUTH for ADMIN-USERS, ADMIN-USERS for ADMIN-REQUESTS.
