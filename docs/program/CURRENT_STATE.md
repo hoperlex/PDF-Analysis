@@ -43,7 +43,9 @@ one) and applied `R-62` (an archived account is not changed) and `R-63` (a faile
 costs a registration request nothing). It is not tagged: the W49 release to `origin/main` needs a
 direct owner instruction and the release acceptance (`R-65`: the stand's proxy provider counts as
 live). W50 (the shell) is in integration: `W50-REGISTRY-01`, `W50-SHELL-UI`, `W50-HOME-01` and
-`W50-LAZY-01` are merged, and `W50-SHELL-FRAME` (Stage C) is with the executor.
+`W50-LAZY-01` are merged, `W50-SHELL-FRAME` (Stage C) is merged, and Stage E (QA, then two judges)
+is next. From `R-70` on, changes are accepted by light acceptance and the complete gate runs only
+at the points `AGENTS.md` §8 names.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:

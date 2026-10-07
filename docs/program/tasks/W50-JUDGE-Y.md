@@ -22,7 +22,11 @@ and the guards.
   «Настройки анализа» `/analysis-settings`, «Очередь» `/queue`; `/optimisation` in no menu
   group, registered `hidden` and reachable; the four stubs honest `RoutePlaceholder`s, access
   `session`, roles `any`)
-- the lazy baseline: the `next build` route table recorded by `W50-FREEZE-01`
+- the lazy baseline: `W50-FREEZE-01` did **not** measure a route table (its §Baselines says
+  why); the judge measures its own — exact gzip first-load bytes per route (the sum of the gzip-9
+  sizes of every `.js` file the route's entry lists in `.next/app-build-manifest.json`) for
+  `96a1653` (the Stage-A merge, `W50-LAZY-01`'s base), `d0d71ad` (`W50-LAZY-01`'s code) and the
+  subject, all three built in one clone directory (integrator's correction at the Stage-C merge)
 
 ## Enumerator ownership
 
@@ -90,7 +94,11 @@ and the guards.
     the fourteen avatar pairs are complete in both themes and each clears its floors
   - no new dependency; `web/package.json`, `web/package-lock.json` and `web/FRONTEND_LOCK.json`
     byte-identical to P-01; `providers.tsx` unchanged; `contracts/**` unchanged
-  - the `next build` route table did not regress against the freeze baseline, route by route
+  - the `next build` route table: `W50-PLAN.md` §3.4 as amended holds on the `96a1653` →
+    `d0d71ad` pair (the four routes that carry their widget on first load fall; no other route
+    grows by more than 1,536 bytes); the subject against `d8112cb` (the Stage-B merge) is reported
+    route by route with the cause of every delta — the frame's own code is expected growth, not a
+    regression; a delta with no cause in a merged lane is a finding
   - `AGENTS.md` §4 on the new code: no business logic in UI components beyond presentation, no
     silent fallback (an unknown role is a typed fault), no identity by display string (the avatar
     colour is keyed on the e-mail, not the label), no deep import into another slice

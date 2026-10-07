@@ -312,6 +312,28 @@ The Stage-B lane base is the commit that carries this section.
   and QA in a browser; `DisclosureView`/`MenuView` stay out of the public index, and the frame
   uses the islands.
 
+### Integrator rulings at the Stage-C merge (2026-10-07)
+
+`W50-SHELL-FRAME` (merged at the commit after `9e8d5da`) handed back four questions:
+
+1. **The census lost one pair** (`text|--am-accent|--am-paper|hover|-`): its only site was the
+   bar's old «Выйти» button, which this task removed by design. §7's "the census shrinks" is
+   about coverage lost while the element stays; here the element is gone. Accepted as an expected
+   delta; the screen count rose (86 → 90). The lazy guard's `BASELINE` still reads below the
+   merged counts and is raised in `W50-FIX`.
+2. **The footer** «Альфа-версия. Изменять данные может эксперт, управлять учётными записями —
+   администратор.» — confirmed by the owner's direct poll the same day.
+3. The account menu's item says «Сменить пароль» (an action) while the screen's title says
+   «Смена пароля» (a name): both stay.
+4. The account header for an empty role set says «Роли не назначены.», as the home page does:
+   accepted.
+
+Two process changes from the owner's direct polls of the same day apply from here on: `R-70`
+(`AGENTS.md` §8) — light acceptance by default, the complete gate only at named points; and
+Stage E runs as fresh background subagents launched by the integrator. `W50-JUDGE-Y`'s lazy
+baseline is corrected: `W50-FREEZE-01` did not measure a route table, so the judge measures its
+own (see that task file).
+
 ## 5. Integration order
 
 1. `W50-FREEZE-01`.
