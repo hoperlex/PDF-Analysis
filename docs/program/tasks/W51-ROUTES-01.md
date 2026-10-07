@@ -118,6 +118,9 @@ registry while retaining the W50 synthetic role controls.
   names/props; Stage B keeps those export names and props
 - `web/tests/guards/screen-registry.guard.test.ts`,
   `web/tests/guards/screen-guard.guard.test.ts`
+- `web/tests/guards/lazy-boundary.guard.test.ts` — `W51-ROUTES-01-G2` only: keep the
+  anti-vacuity case and its protected-loading checks, extending its exact public-route
+  expectation with `/register` and `/register/submitted`
 - `web/tests/unit/screens/home.test.ts`, `web/tests/unit/screens/routes.test.ts`
 - `web/tests/unit/session/return-path.test.ts`
 - `web/tests/unit/shell/navigation.test.ts`,
@@ -187,6 +190,16 @@ real, it replaces this sample with link capture and restores the journey's real-
 rule. This grant does not change the frozen base, contracts, migrations or product scope.
 The executor names this grant in its report; the integrator merges its lane onto the
 grant-bearing `integration/w51` tip.
+
+### Integrator written grant `W51-ROUTES-01-G2`, 2026-10-07
+
+The full Vitest run on the Stage-A working tree reported one failure in 105 files:
+`lazy-boundary.guard.test.ts` pins the W50-only public route list to `/403` and
+`/login`. Its anti-vacuity assertion must name the two new public registration
+addresses as well. The executor may edit only that exact expectation in the newly
+allowed test path; it must retain the guard against `loading.tsx` above protected
+screens and every negative control. The run's other 1671 tests passed. This is a
+test-pin grant, not permission for a public admin route or a loading boundary.
 
 ## Failure/idempotency/security cases
 

@@ -129,6 +129,8 @@ Depends on: `W50-INT-CLOSE`. Standard form.
   `web/tests/unit/screens/routes.test.ts` (builder totality),
   `web/tests/guards/screen-guard.guard.test.ts`,
   `web/tests/guards/screen-registry.guard.test.ts`,
+  `web/tests/guards/lazy-boundary.guard.test.ts` (`W51-ROUTES-01-G2`: extend only the
+  W50-only exact public-route expectation with the two registration addresses),
   `web/tests/unit/screens/home.test.ts`,
   `web/tests/unit/session/return-path.test.ts`,
   `web/tests/unit/shell/navigation.test.ts`,
