@@ -34,7 +34,8 @@ import { PageShell, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { looksLikeProjectUid } from '@/entities/project';
 import { looksLikeVersionUid } from '@/entities/document-version';
-import { StageComparison } from '@/widgets/stage-comparison';
+
+import { LazyStageComparison } from './lazy-stage-comparison';
 
 export interface StageComparisonPageProps {
   readonly projectUid: string;
@@ -73,7 +74,7 @@ export function StageComparisonPage({ projectUid, versionUid }: StageComparisonP
         Версия документа неизменяема, поэтому два её прогона отличаются только тем, как
         прошёл анализ. Ниже — то, что о каждом прогоне записала система.
       </p>
-      <StageComparison versionUid={versionUid} />
+      <LazyStageComparison versionUid={versionUid} />
     </PageShell>
   );
 }

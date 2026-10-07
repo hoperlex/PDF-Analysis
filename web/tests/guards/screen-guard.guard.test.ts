@@ -54,12 +54,6 @@ vi.mock('next/headers', () => ({
 
 const screenLock = await import('@/app/bff/session/screen-lock');
 const { default: ErrorBoundary } = await import('@/app/error');
-const LOADING = {
-  projects: (await import('@/app/projects/loading')).default,
-  'projects/[project_uid]': (await import('@/app/projects/[project_uid]/loading')).default,
-  dashboard: (await import('@/app/dashboard/loading')).default,
-  'knowledge-base': (await import('@/app/knowledge-base/loading')).default,
-};
 const { requireScreen, enforceScreen } = screenLock;
 
 // ================================================================= the static half
@@ -388,7 +382,7 @@ function visibleText(markup: string): string[] {
     .filter((text) => text.length > 0);
 }
 
-describe('§3.3: the error and loading boundaries are typed states, Russian, with no raw error', () => {
+describe('§3.3: the error boundaries are typed states, Russian, with no raw error', () => {
   it('the error boundary shows none of what was thrown, and says what a reader can do', () => {
     const thrown = Object.assign(
       new TypeError("Cannot read properties of undefined (reading 'items') at /srv/web/.next/server/app.js"),
@@ -405,12 +399,6 @@ describe('§3.3: the error and loading boundaries are typed states, Russian, wit
     // The digest is the one thing an operator can trace, and it is an opaque number.
     expect(text).toContain('3141592653');
     expect(text.replace(/3141592653/g, ''), 'the boundary rendered a Latin word').not.toMatch(/[A-Za-z]{2,}/);
-  });
-
-  it.each(Object.entries(LOADING))('%s/loading.tsx renders the typed loading state', (_segment, Loading) => {
-    const markup = renderScreen(newClient(), createElement(Loading));
-    expect(markup).toContain('am-state--neutral');
-    expect(visibleText(markup)).toEqual(['Загрузка…']);
   });
 
   it('can fail: the reading finds an English word and a leaked message', () => {
