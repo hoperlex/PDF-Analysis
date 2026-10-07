@@ -1,8 +1,9 @@
 # Current state
 
-> **Updated 2026-10-06 by `W49-INT-CLOSE`.** W49, the first wave of the identity programme
-> (`docs/program/dispatch/IDENTITY-WAVES.md`), is closed on `origin/dev` without a release tag;
-> `alpha-w48` is the last tagged release. W50 is next. Development candidates publish to
+> **Updated 2026-10-07 at the `alpha-w48.1` merge into W50.** W49, the first wave of the identity
+> programme (`docs/program/dispatch/IDENTITY-WAVES.md`), is closed on `origin/dev`; W50 is in
+> integration; `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release
+> and its line is merged into `integration/w50`. Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
 > external deployment.
 >
@@ -40,8 +41,9 @@ release-blocking findings (the identifier schema enums, and a deployed proxy tha
 configuration: `reload-proxy.sh` now restarts a drifted proxy and `verify-deployed.sh` refuses
 one) and applied `R-62` (an archived account is not changed) and `R-63` (a failed token exchange
 costs a registration request nothing). It is not tagged: the W49 release to `origin/main` needs a
-direct owner instruction, the release acceptance (`R-65`: the stand's proxy provider counts as
-live) and the manual A01–A12 pass that `D-132` carries over from `alpha-w48`.
+direct owner instruction and the release acceptance (`R-65`: the stand's proxy provider counts as
+live). W50 (the shell) is in integration: `W50-REGISTRY-01`, `W50-SHELL-UI`, `W50-HOME-01` and
+`W50-LAZY-01` are merged, and `W50-SHELL-FRAME` (Stage C) is with the executor.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:
@@ -50,7 +52,7 @@ with no promotion. W49 now means identity, W50 the shell and W51 the screens:
 
 The frozen API surface is **27 paths / 34 operations / 77 schemas** since `W49-SEAL-01`, the
 error catalog **23**, domain candidate revision 9 with **29** opaque identities, and the
-migration head is **`0015_accounts_roles_registration`**. The last closed release is `alpha-w48`.
+migration head is **`0015_accounts_roles_registration`**. The last closed release is `alpha-w48.1`.
 This section makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is
 deployed.
 

@@ -4,7 +4,8 @@ Written 2026-09-17 by the integrator. **Reconciled by `W47-CLOSE` against the ga
 tree at `b0e5ae5` on 2026-09-30, and by `W48-INT-CLOSE` against the W48 closure candidate on
 2026-10-05:** fifteen rows closed, six narrowed, nine opened (`D-120` … `D-128`); every closure
 carries its check. **`W49-INT-CLOSE` (2026-10-06) opened `D-129` … `D-132`** from the W49 judges,
-QA, `W49-FIX` and the W48 acceptance.
+QA, `W49-FIX` and the W48 acceptance; the `alpha-w48.1` release (2026-10-07) closed `D-70` and
+`D-132` and opened `D-133`.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
 register that had been entirely obsolete while still reading as the list of what was open, and this
@@ -30,7 +31,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-129 | the W49 judges' and `W49-FIX`'s register findings: comments, docstrings, a 68-character label, edge assumptions | each with its path:line in the two reviews and `W49-FIX.md` |
 | D-130 | the identity debts `W49-PLAN.md` §3 registers by design | owner-visible limits of the identity model, scheduled with W52 |
 | D-131 | the alpha acceptance journey has no retry for a transient browser network error | one co-tenant Docker bridge event failed a whole run |
-| **D-132** | `alpha-w48` was tagged without the manual A01–A12 pass (`R-64`) | the manual pass at the W49 release closes it |
+| ~~D-132~~ | `alpha-w48` was tagged without the manual A01–A12 pass (`R-64`) | **closed 2026-10-07** by the owner's attestation (`R-68`) |
+| **D-133** | the proxy adapter folds every non-400/401 HTTP failure into `analysis_failed`, discards the error body, and no operator can read why a stage failed | found by the `alpha-w48.1` acceptance; W52 debt lane |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
@@ -65,7 +67,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | ~~D-97~~ | five screen-wide renderer copies remained and a sixth helper was added while prose claimed four remained | **closed by `W48-WEB`**: every screen-wide consumer renders through `harness.ts::renderScreen` (`996b546`) |
 | ~~D-74~~ | an existence check costs a full parent read | **closed by `W48-PORTS`**: `run_exists`/`finding_exists` on both ports since `8877d5d` |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
-| **D-70** | the stand's API **will not start** since wave 41: the stub URL has no host and `D-72` now refuses it | **owner: a real credential, or a hostname** |
+| ~~D-70~~ | the stand had no live provider | **closed 2026-10-07**: `alpha-w48.1` acceptance ran a live model on the stand (`W48-INT-MAIN-02.md`) |
 | D-71 | `D-59` is 121 blocks not 79, and 25 of them are a different defect | **owner: widen `R-19`?** |
 | D-72 | a URL with no host becomes a retryable outage | argue it from the catalog, as `D-13` was |
 | D-68 | the certification's criterion-4 selector is too wide | use `span.am-badge[data-run-state]` |
@@ -111,7 +113,25 @@ Every row names how to check it. A row nobody can re-measure is a row that will 
 
 ## 1. Open, and mine to schedule
 
-### D-132 — `alpha-w48` was tagged without the manual A01–A12 pass
+### D-133 — a proxy failure is mis-classified, its reason discarded, and invisible to operators
+
+**Opened 2026-10-07 by the integrator from the `alpha-w48.1` acceptance (`W48-INT-MAIN-02.md`).**
+`_map_http_failure` in `src/auditmanager/analysis/text/proxy.py` folds 403, 402, 404 and 5xx into
+`analysis_failed` ("the model answered", not retryable) although no model answered — the IP
+allowlist's 403 looked exactly like a model failure; the proxy's error body is discarded except
+for 400/401, although the proxy passes OpenRouter's own errors through un-enveloped and the guide
+says to read the status first; `stage_result.error.message` is exposed in neither the API nor the
+UI, so the cause of a failed stage needs database access on the host. Also: the agent gateway's
+default model for the owner's key was not Claude, and whether it honours `PROXY_LLM_MODEL`
+depends on the operator's per-key policy (`.local/handoff/connect-proxy-llm-SKILL.md`, the
+proxy's client guide, untracked).
+
+**Check:** `sed -n '/def _map_http_failure/,/^def /p' src/auditmanager/analysis/text/proxy.py`.
+
+### D-132 — `alpha-w48` was tagged without the manual A01–A12 pass — **CLOSED**
+
+> **Closed 2026-10-07 by `R-68`:** the owner attested the manual check of `3a54108`
+> (`alpha-w48.1`) with no deviation found; no scripted per-item report exists.
 
 **Opened 2026-10-06 by `W49-INT-CLOSE` under `R-64`.** `W48-INT-MAIN-01` tagged `alpha-w48` on
 the automated acceptance alone; the manual pass of `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md`
@@ -1804,7 +1824,12 @@ one is mutation plumbing. **Written as three because a row overstating its own r
 The fix is proved loaded rather than assumed: the same mutation against the **old** seed is
 green.
 
-### D-70 — the owner's stand is running a certification stub — **and since wave 41 it will not start**
+### D-70 — the owner's stand is running a certification stub — **and since wave 41 it will not start** — **CLOSED**
+
+> **Closed 2026-10-07.** `alpha-w48.1` (`3a54108`) was accepted on the stand with `providerLive`
+> observed `live`: run `run_01M4AHC903YDHQQGY2BCN7GDV2` published in 26.2 s and found the three
+> planted issues with no false positive (`W48-INT-MAIN-02.md`). **Check:** the
+> `automated-verdict.json` named there, phase `providerLive`.
 
 > **2026-10-06, `W50-FREEZE-01`.** The stand now starts: `W48-INT-MAIN-01` deployed `23e0579` with
 > `provider_mode=recorded`, and the owner then switched it to `proxy` (`R-65`; a proxy run records

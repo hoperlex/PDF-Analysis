@@ -121,6 +121,32 @@ Granted by the integrator at the Stage-B merges (2026-10-07): `web/tests/unit/sc
 the rendered-language guard and the census reach the home page's administrator tile and its
 recent-projects branch; one mutation that drops the seed turns the guard's coverage check red.
 
+Granted by the integrator by message during Stage C (2026-10-07), recorded here before the merge:
+
+- **Q1 — one access predicate.** `web/src/shared/config/screen-registry.ts`: add the pure
+  `screenDecision(screen, subject | null): 'open' | 'sign-in' | 'change-password' |
+  'complete-profile' | 'forbidden'` (`enforceScreen`'s decisions 1–4 in their order; an unknown
+  role matches no row); export it from `web/src/shared/config/index.ts`; in
+  `web/src/app/bff/session/screen-lock.ts` `enforceScreen` calls it and maps each decision to its
+  existing redirect, decision 5 stays there. No behaviour change: `screen-guard.guard.test.ts`
+  stays green unedited; one mutation (a reordered decision) turns it red. The frame keeps rows
+  whose decision is `'open'`; `web/tests/unit/shell/**` drives the function, with a fixture
+  registry holding an admin-only row and an assertion on the live registry's role-gated set.
+- **Q2.** Grants are read by content; line numbers measured at `ead639f` drifted.
+  `prepared-sections.guard.test.ts`: only the navigation case changes (a signed-in session,
+  `/optimisation` dropped, the four stubs included); the `SECTIONS` rows stay.
+- **Q3 — option A.** `route-screens.ts`: the `home-admin` seed (roles `['admin','expert']`) and
+  `derivedScreens()` yielding every seed of an address in `SEEDS` order;
+  `rendered-language.guard.test.ts`: the loaded cache state seeds the two home keys (a 5-project
+  page; a pending page with `pending_total` 2) and one new case asserts some rendered state carries
+  `data-home-tile="registrations"` and `data-recent-project-count="5"`, with its can-fail; the
+  mutation "drop `home-admin`" turns it red; the report gives the census delta.
+- **Q4 — option 1.** `screen-set.guard.test.ts`: only the assertion that counted one screen per
+  address becomes `new Set(screens.map((s) => s.address)).size` against the same expected count;
+  the unique-names check stays; one can-fail (an address's seeds dropped); the report states that
+  the relationship moved from "exactly one screen per address" to "every non-excused address
+  rendered at least once, names unique".
+
 ## Forbidden hotspots
 
 - every path not listed above; `web/src/_app/providers.tsx` (composition root);

@@ -1235,3 +1235,24 @@ no-digits rule stands; wave numbers move). The events: «Очередь» — wi
 analyses; «Нормы» — after the normative corpus moves onto the stand; «Настройки анализа» — together
 with the АР section in working order; «Оптимизация разделов» — after all sections are implemented.
 The owner may reword the sentences at acceptance.
+
+## 3.23 — `R-67`, `R-68`, ruled 2026-10-06/07 by direct poll for the `alpha-w48.1` hotfix
+
+### `R-67` — the model proxy is reached through its agent gateway, fixed in code, as a hotfix
+
+The stand's calls to the proxy's `/api/` endpoint are refused by the proxy's nginx IP allowlist
+before any key is read; the owner's key works on the agent gateway
+(`https://proxyllm.fvds.ru/agent/v1`). The owner ruled (2026-10-06, two polls — one taken by the
+acceptance session, one by the integrator) that the repair is made in code, not by a query-string
+URL workaround and not by waiting for the proxy operator's allowlist, and that it is delivered as a
+hotfix of `alpha-w48` before the identity waves reach the stand. `W48-PROXY-01` implements it: a
+base URL with a path is called at `<base>/chat/completions`, an origin-only URL keeps
+`/api/v1/chat/completions`, and a base URL with a query or fragment is refused.
+
+### `R-68` — the owner's attestation is the manual record for `alpha-w48.1`
+
+After the automated acceptance of `3a54108` passed with a live provider, the owner declined the
+scripted A01–A12 protocol and attested, verbatim (2026-10-07): «Чек лист заполнять не буду, ручная
+проверка уже проводилась, отклонений от ожидаемого поведения не выявленно.» That attestation is the
+manual record for `alpha-w48.1` and closes `D-132`. It is recorded as the owner's own evidence, not
+as a scripted PASS; the release rule itself is unchanged for later releases.

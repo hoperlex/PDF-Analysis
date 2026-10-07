@@ -99,6 +99,8 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56700`, `60300/60301` | `gate-w50jx` — `W50-JUDGE-X` | 2026-10-06 | W50 closes |
 | `56710`, `60310/60311` | `gate-w50jy` — `W50-JUDGE-Y` | 2026-10-06 | W50 closes |
 | `56720`, `60320/60321` | `gate-w50int` — W50 integration and its gates | 2026-10-06 | W50 closes |
+| `56730`, `60330/60331` | `gate-w48proxy` — `W48-PROXY-01` | 2026-10-06 | **released** — merged without a lane gate; no services started |
+| `56740`, `60340/60341` | `gate-w481int` — the `integration/w48-1` hotfix line and its gates | 2026-10-06 | **released** — `alpha-w48.1`; `make down` |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,
