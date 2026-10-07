@@ -78,9 +78,16 @@ import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
 import { AppFrame } from '@/_app';
+import { accountMenuProps } from '@/_app/account-menu';
+import { FrameNavigationView } from '@/_app/frame-navigation';
+import { buildNavigation } from '@/_app/navigation';
+import type { DisclosureProps } from '@/shared/ui';
+import { DisclosureView } from '@/shared/ui/disclosure';
+import { MenuView } from '@/shared/ui/menu';
 import { SignInPage } from '@/_pages/sign-in';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import NotFound from '@/app/not-found';
+import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
@@ -90,6 +97,14 @@ import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
 import { newClient, renderScreen, seedError } from '../unit/screens/harness';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
+import {
+  ADMIN_AND_EXPERT,
+  DEFAULT_CREDENTIAL,
+  EXPERT,
+  INCOMPLETE_PROFILE,
+  NO_ROLES,
+  UNKNOWN_ROLE,
+} from '../unit/shell/subjects';
 
 // ===================================================================== the vocabulary
 
@@ -1048,15 +1063,47 @@ const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => React
    */
   { name: 'app-frame', make: () => createElement(AppFrame, { children: null, session: null }) },
   /*
-   * `D-113`. The frame's OTHER state, for the reason the sign-in screen's two other shapes
+   * `D-113`. The frame's OTHER states, for the reason the sign-in screen's two other shapes
    * are below: the signed-in bar is selected by a prop and not by an address, so the
-   * derivation cannot reach it and an English word in it would redden nothing. `Выйти` and
-   * the reviewer's own login are the two strings it adds.
+   * derivation cannot reach it and an English word in it would redden nothing.
+   *
+   * `W50-SHELL-FRAME`: the frame is handed the whole subject, and what it renders depends on
+   * it — the navigation groups a session may open, the account menu's header (name, e-mail,
+   * roles, or the typed fault for a role it cannot name) — so each state is its own entry.
+   * The menus a reader opens are drawn open here, with the bar's own props: the account
+   * menu's `MenuView` from `accountMenuProps`, and the navigation with every disclosure open.
    */
+  { name: 'app-frame-with-a-session', make: () => createElement(AppFrame, { children: null, session: EXPERT }) },
+  { name: 'app-frame-admin', make: () => createElement(AppFrame, { children: null, session: ADMIN_AND_EXPERT }) },
+  { name: 'app-frame-no-roles', make: () => createElement(AppFrame, { children: null, session: NO_ROLES }) },
+  { name: 'app-frame-unknown-role', make: () => createElement(AppFrame, { children: null, session: UNKNOWN_ROLE }) },
   {
-    name: 'app-frame-with-a-session',
+    name: 'app-frame-default-credential',
+    make: () => createElement(AppFrame, { children: null, session: DEFAULT_CREDENTIAL }),
+  },
+  {
+    name: 'app-frame-incomplete-profile',
+    make: () => createElement(AppFrame, { children: null, session: INCOMPLETE_PROFILE }),
+  },
+  {
+    name: 'app-frame-account-menu-open',
     make: () =>
-      createElement(AppFrame, { children: null, session: { login: 'проверяющий' } }),
+      createElement(MenuView, {
+        ...accountMenuProps(ADMIN_AND_EXPERT),
+        state: { open: true, active: 0 },
+        triggerId: 'language-account-trigger',
+        menuId: 'language-account-menu',
+      }),
+  },
+  {
+    name: 'app-frame-navigation-open',
+    make: () =>
+      createElement(FrameNavigationView, {
+        navigation: buildNavigation(ADMIN_AND_EXPERT),
+        pathname: '/blocks',
+        disclosure: (props: DisclosureProps) =>
+          createElement(DisclosureView, { ...props, open: true, panelId: `language-${props.label}` }),
+      }),
   },
   /*
    * The sign-in screen's two OTHER shapes. The credentials form itself is derived, because
@@ -1109,6 +1156,19 @@ const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => React
    * again, on a screen nobody had rendered, three waves after `D-53` was closed.
    */
   { name: 'not-found', make: () => createElement(NotFound, {}) },
+  /*
+   * `app/error.tsx`, for the same reason as `not-found` (granted at the `W50-REGISTRY-01`
+   * merge, ruling 2): a file in the route tree, not an address. Rendered with a thrown error
+   * whose message is English and a numeric digest, so a leak of the message would read here.
+   */
+  {
+    name: 'error-boundary',
+    make: () =>
+      createElement(ErrorBoundary, {
+        error: Object.assign(new TypeError('Cannot read properties of undefined'), { digest: '3141592653' }),
+        reset: () => {},
+      }),
+  },
   /*
    * The evidence viewer and the decision history are rendered here as widgets rather
    * than through the review page, because their failure branches are chosen by props

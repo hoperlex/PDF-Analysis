@@ -62,6 +62,7 @@ import {
   concreteAddress,
   safeReturnPath,
   screenAt,
+  screenDecision,
 } from '@/shared/config';
 
 import type { SessionAccount } from './store';
@@ -113,27 +114,30 @@ export async function enforceScreen(
   const jar = await cookies();
   const subject = subjectOf(jar.get(SESSION_COOKIE)?.value ?? null);
 
+  // Decisions 1–4 are `screenDecision`'s, in its order (`@/shared/config`): the frame's menu
+  // asks the same function, so it offers exactly the screens this guard opens. Each answer
+  // here has one redirect.
+  const decision = screenDecision(screen, subject);
+
   // 1. A guest, on anything but a public screen.
-  if (subject === null) {
-    if (screen.access === 'public') return null;
+  if (decision === 'sign-in') {
     const next = await askedFor(screen, props);
     redirect(next === null ? SIGN_IN_SCREEN : `${SIGN_IN_SCREEN}?${NEXT_PARAM}=${encodeURIComponent(next)}`);
   }
-
-  if (screen.access === 'session') {
-    // 2. `R-50`: a default credential opens nothing but the screens that change it.
-    if (subject.isDefaultCredential) redirect(CHANGE_PASSWORD_SCREEN);
-    // 3. `R-59`: an incomplete profile opens nothing but the screens that complete it.
-    if (!subject.profileComplete) redirect(PROFILE_SCREEN);
-    // 4. Any one of the row's roles. A role value this tier does not know matches no row,
-    //    so it is refused like a missing one and is never read as `any`.
-    if (screen.roles !== 'any' && !screen.roles.some((role) => subject.roles.includes(role))) {
-      const from = await askedFor(screen, props);
-      redirect(
-        from === null ? FORBIDDEN_SCREEN : `${FORBIDDEN_SCREEN}?${FROM_PARAM}=${encodeURIComponent(from)}`,
-      );
-    }
+  // 2. `R-50`: a default credential opens nothing but the screens that change it.
+  if (decision === 'change-password') redirect(CHANGE_PASSWORD_SCREEN);
+  // 3. `R-59`: an incomplete profile opens nothing but the screens that complete it.
+  if (decision === 'complete-profile') redirect(PROFILE_SCREEN);
+  // 4. Any one of the row's roles; a role value this tier does not know matches no row.
+  if (decision === 'forbidden') {
+    const from = await askedFor(screen, props);
+    redirect(
+      from === null ? FORBIDDEN_SCREEN : `${FORBIDDEN_SCREEN}?${FROM_PARAM}=${encodeURIComponent(from)}`,
+    );
   }
+
+  // The decision let the request through: a guest got here only on a public screen.
+  if (subject === null) return null;
 
   // 5. A session has nothing to do on the sign-in screen; the frame carries the way out.
   if (screen.address === SIGN_IN_SCREEN) redirect(HOME_SCREEN);

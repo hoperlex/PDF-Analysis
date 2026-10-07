@@ -31,13 +31,25 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const jar = await cookies();
   const subject = subjectOf(jar.get(SESSION_COOKIE)?.value ?? null);
+  // The whole subject the frame renders from (`W50-SHELL-FRAME`): who the account is, its
+  // roles, and the two states that decide what its menu offers. Named field by field, so the
+  // register's instants — and anything a later row gains — do not ride into the chrome.
+  const session =
+    subject === null
+      ? null
+      : {
+          login: subject.login,
+          displayLabel: subject.displayLabel,
+          initials: subject.initials,
+          roles: subject.roles,
+          isDefaultCredential: subject.isDefaultCredential,
+          profileComplete: subject.profileComplete,
+        };
   return (
     <html lang="ru">
       <body>
         <AppProviders>
-          <AppFrame session={subject === null ? null : { login: subject.login }}>
-            {children}
-          </AppFrame>
+          <AppFrame session={session}>{children}</AppFrame>
         </AppProviders>
       </body>
     </html>

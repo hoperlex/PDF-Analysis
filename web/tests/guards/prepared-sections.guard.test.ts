@@ -292,13 +292,28 @@ describe('R-23: each prepared section has a place in the navigation', () => {
     expect(navTargets('<a href="/projects">П</a>')).not.toContain('/blocks');
   });
 
-  it('the frame links to all three addresses', () => {
-    const targets = navTargets(render(createElement(AppFrame, { children: null, session: null })));
+  it('the frame links every section in the menu, for a session that may open them', () => {
+    // `W50-SHELL-FRAME`: the menu is the registry's rows the session may open, so a guest
+    // sees only «Вход» and the case renders a complete session. Under `R-66` `/optimisation`
+    // left the menu (it stays a registered, reachable screen in `hidden`), and the four stubs
+    // are linked from here on.
+    const session = {
+      login: 'проверяющий@пример.испытание',
+      displayLabel: 'Проверяющий П. П.',
+      initials: 'ПП',
+      roles: ['expert'],
+      isDefaultCredential: false,
+      profileComplete: true,
+    };
+    const targets = navTargets(render(createElement(AppFrame, { children: null, session })));
     // Non-vacuous in both factors: the two links that predate this wave must still be
     // there, otherwise "contains /blocks" could pass on a frame that lost everything else.
     expect(targets).toContain('/knowledge-base');
     expect(targets).toContain('/account/password');
-    for (const { route } of SECTIONS.filter((section) => !section.stub)) expect(targets).toContain(route);
+    for (const { route } of SECTIONS.filter((section) => section.route !== '/optimisation')) {
+      expect(targets).toContain(route);
+    }
+    expect(targets).not.toContain('/optimisation');
   });
 
   it('each address is served by a route file that renders its own screen and no other', async () => {
