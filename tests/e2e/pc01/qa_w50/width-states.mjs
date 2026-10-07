@@ -66,7 +66,11 @@ async function openAccount(page) {
 const failures = [];
 const readings = [];
 
-async function measure(r, where, { cookies = [], path, act = null, viewport = FLOOR }) {
+async function measure(
+  r,
+  where,
+  { cookies = [], path, act = null, viewport = FLOOR, expectedPath = null, expectedState = {} },
+) {
   await withColdBrowser(
     async (page) => {
       await page.goto(`${ORIGIN}${path}`);
@@ -74,9 +78,14 @@ async function measure(r, where, { cookies = [], path, act = null, viewport = FL
       await settle();
       const measurement = await page.evaluate(MEASUREMENT);
       const state = await page.evaluate(STATE);
+      const landedOn = await page.location();
       const findings = widthFindings(where, measurement, viewport);
-      readings.push({ where, landedOn: await page.location(), state, scrollWidth: measurement.scrollWidth, innerWidth: measurement.innerWidth });
-      r.check(`${where} @${viewport.width}×${viewport.height} on ${await page.location()} ${JSON.stringify(state)}`, [], findings);
+      readings.push({ where, landedOn, state, scrollWidth: measurement.scrollWidth, innerWidth: measurement.innerWidth });
+      r.check(`${where} @${viewport.width}×${viewport.height} on ${landedOn} ${JSON.stringify(state)}`, [], findings);
+      if (expectedPath !== null) r.check(`${where}: landed path`, expectedPath, landedOn);
+      for (const [key, value] of Object.entries(expectedState)) {
+        r.check(`${where}: ${key}`, value, state[key]);
+      }
     },
     { cookies, viewport },
   );
@@ -105,32 +114,69 @@ await measure(r, 'expert, one-row state, account menu open', {
 
 if (all.long !== undefined) {
   const long = await signIn(ORIGIN, 'long');
-  await measure(r, '66-char name + 254-char e-mail, closed', { cookies: long.cookies, path: '/' });
-  await measure(r, '66-char name + 254-char e-mail, account menu open', { cookies: long.cookies, path: '/', act: openAccount });
-  await measure(r, '66-char name + 254-char e-mail, «Меню» open', { cookies: long.cookies, path: '/', act: openStacked });
+  const expectedLongState = { nameLength: 66, loginLength: 254 };
+  await measure(r, '66-char name + 254-char e-mail, closed', {
+    cookies: long.cookies,
+    path: '/',
+    expectedState: expectedLongState,
+  });
+  await measure(r, '66-char name + 254-char e-mail, account menu open', {
+    cookies: long.cookies,
+    path: '/',
+    act: openAccount,
+    expectedState: expectedLongState,
+  });
+  await measure(r, '66-char name + 254-char e-mail, «Меню» open', {
+    cookies: long.cookies,
+    path: '/',
+    act: openStacked,
+    expectedState: expectedLongState,
+  });
   await measure(r, '66-char name + 254-char e-mail, one-row, account menu open', {
     cookies: long.cookies,
     path: '/',
     viewport: { width: ROW_WIDTH, height: 900 },
     act: openAccount,
+    expectedState: expectedLongState,
   });
 } else r.check('the long-label account is in the accounts file', true, false);
 
 for (const kind of ['incomplete', 'incomplete-long']) {
   if (all[kind] === undefined) {
-    r.note(`no '${kind}' account in the accounts file`, null);
+    r.check(`the '${kind}' account is in the accounts file`, true, false);
     continue;
   }
   const s = await signIn(ORIGIN, kind);
-  await measure(r, `${kind} profile, closed`, { cookies: s.cookies, path: s.landedOn ?? '/account' });
-  await measure(r, `${kind} profile, account menu open`, { cookies: s.cookies, path: s.landedOn ?? '/account', act: openAccount });
+  const expectedState = kind === 'incomplete-long' ? { nameLength: 254, loginLength: 254 } : {};
+  await measure(r, `${kind} profile, closed`, {
+    cookies: s.cookies,
+    path: s.landedOn ?? '/account',
+    expectedPath: '/account',
+    expectedState,
+  });
+  await measure(r, `${kind} profile, account menu open`, {
+    cookies: s.cookies,
+    path: s.landedOn ?? '/account',
+    act: openAccount,
+    expectedPath: '/account',
+    expectedState,
+  });
 }
 
 if (all.default !== undefined) {
   const d = await signIn(ORIGIN, 'default');
-  await measure(r, 'default credential, closed', { cookies: d.cookies, path: d.landedOn ?? '/account/password' });
-  await measure(r, 'default credential, account menu open', { cookies: d.cookies, path: d.landedOn ?? '/account/password', act: openAccount });
-}
+  await measure(r, 'default credential, closed', {
+    cookies: d.cookies,
+    path: d.landedOn ?? '/account/password',
+    expectedPath: '/account/password',
+  });
+  await measure(r, 'default credential, account menu open', {
+    cookies: d.cookies,
+    path: d.landedOn ?? '/account/password',
+    act: openAccount,
+    expectedPath: '/account/password',
+  });
+} else r.check("the 'default' account is in the accounts file", true, false);
 
 failures.push(...r.failed());
 console.log(JSON.stringify(readings, null, 1));

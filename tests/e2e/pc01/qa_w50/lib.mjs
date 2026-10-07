@@ -161,13 +161,30 @@ class KeyConnection {
  * current callback. Call inside the callback, after the first `goto`.
  */
 export async function keyboardFor(origin) {
-  const profiles = readdirSync(tmpdir()).filter((name) => name.startsWith('e2e-pc01-'));
-  if (profiles.length !== 1) {
+  const profiles = readdirSync(tmpdir())
+    .filter((name) => name.startsWith('e2e-pc01-'))
+    .filter((name) => {
+      try {
+        return statSync(join(tmpdir(), name, 'DevToolsActivePort')).isFile();
+      } catch {
+        return false;
+      }
+    })
+    .sort(
+      (left, right) =>
+        statSync(join(tmpdir(), right, 'DevToolsActivePort')).mtimeMs -
+        statSync(join(tmpdir(), left, 'DevToolsActivePort')).mtimeMs,
+    );
+  if (profiles.length === 0) {
     throw new Error(
-      `keyboard: expected exactly one browser profile under ${tmpdir()}, found ${profiles.length}. ` +
+      `keyboard: expected a live browser profile under ${tmpdir()}, found none. ` +
         'Run the QA drives with TMPDIR set to a directory of their own.',
     );
   }
+  // `withColdBrowser` kills its Chrome before recursively removing the profile, but the kill is
+  // asynchronous: the previous cold browser can leave its directory visible for a moment. The
+  // browser opened for this callback has the newest DevToolsActivePort in this drive's private
+  // TMPDIR, so stale profiles from earlier callbacks cannot make the second keyboard pass fail.
   const [port, path] = readFileSync(join(tmpdir(), profiles[0], 'DevToolsActivePort'), 'utf8').trim().split('\n');
   const socket = new WebSocket(`ws://127.0.0.1:${port}${path}`);
   await new Promise((resolve, reject) => {
