@@ -106,7 +106,13 @@ application (the existing argument in `screen-lock.ts`). No redirect cycle exist
 `widgets/dashboard`. Two things must both hold, and each has a check:
 
 - **the bundle really splits:** the `next build` route table's first-load JS per route is
-  recorded before and after in the report, and no measured route gets worse;
+  recorded before and after in the report, and no measured route gets worse; *(amended by the
+  owner's direct poll of 2026-10-07: the five target routes' first-load JS falls, and no other
+  route grows by more than the measured fixed cost of the async-chunk runtime — at most 1.5 kB
+  gzip per route on this toolchain — with the exact-byte table in the report. Any `import()`
+  adds webpack's chunk-id map to the runtime every route loads, so "no route grows" was
+  unsatisfiable by any lazy loading; `W50-LAZY-01` measured −25 / −10 / −8 / −2 kB on the heavy
+  routes against +0.7 … +1.4 kB elsewhere.)*
 - **the instruments keep seeing the widgets:** the screen harness
   (`web/tests/unit/screens/harness.ts`, `renderToStaticMarkup`), the contrast census and the
   language guards render `_pages` synchronously, where a dynamic import yields only its
@@ -290,6 +296,22 @@ reading quoted where one exists.
 
 The Stage-B lane base is the commit that carries this section.
 
+### Integrator rulings at the Stage-B merges (2026-10-07)
+
+- `W50-HOME-01`: the journey manifest's `root` and `sign-in` declare the home page's
+  `listProjects` and `getDashboardSummary`, and `listRegistrations` as `optional_api` (only an
+  administrator makes it) — moved by the integrator, as the task's integration contract says.
+  The rendered-language guard cannot reach the administrator tile or the recent-projects
+  branches (its `/` seed is an expert's): `W50-SHELL-FRAME` adds an administrator `/` seed to
+  `web/tests/unit/screens/route-screens.ts` (granted below; REGISTRY's zone is merged and free).
+  The registrations link stays registry-driven and appears when W51 registers
+  `/admin/registrations`.
+- `W50-SHELL-UI`'s notes for the frame: the avatar's 3:1 circle check covers the page and the bar
+  surfaces only — the frame places the avatar on the bar; the group at the bar's right edge
+  passes `align: 'end'`; real focus, outside click and Tab-away are first exercised by the frame
+  and QA in a browser; `DisclosureView`/`MenuView` stay out of the public index, and the frame
+  uses the islands.
+
 ## 5. Integration order
 
 1. `W50-FREEZE-01`.
@@ -317,7 +339,7 @@ The Stage-B lane base is the commit that carries this section.
 
 `W48-PLAN.md` §14, plus: a screen needs a contract the W49 reseal did not provide; a primitive
 cannot meet the contrast or keyboard requirement without a dependency; a route's first-load JS
-gets worse or the census shrinks; `next` validation cannot be made exact for an address shape;
+grows beyond the amended bound of §3.4 or the census shrinks; `next` validation cannot be made exact for an address shape;
 a page needs `params` the guard cannot receive.
 
 ## 8. Non-goals

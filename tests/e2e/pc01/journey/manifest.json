@@ -117,11 +117,31 @@
         "sign-in lands (`session.lands_on`) -- so it no longer redirects and declares no",
         "`redirects_to`.",
         "",
-        "`expects_api` is EMPTY and that is the claim, not an omission: until W50-HOME-01 the",
-        "screen is a `RoutePlaceholder` rendered from `_pages/home` and calls nothing. HOME",
-        "declares the calls the home page makes when it builds it."
+        "Since W50-HOME-01 the home page reads the five newest projects (`listProjects`) and the",
+        "dashboard summary (`getDashboardSummary`); a session holding `admin` also reads the",
+        "pending registration count (`listRegistrations`), so that call is optional -- the walk",
+        "asserts declared calls in both directions, and an expert-only walk makes no such call."
       ],
-      "expects_api": [],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/projects",
+          "operationId": "listProjects"
+        },
+        {
+          "method": "GET",
+          "path": "/dashboard",
+          "operationId": "getDashboardSummary"
+        }
+      ],
+      "optional_api": [
+        {
+          "method": "GET",
+          "path": "/registrations",
+          "operationId": "listRegistrations",
+          "$why_optional": "only a session holding `admin` reads the pending-request count"
+        }
+      ],
       "follow": null
     },
     {
@@ -286,9 +306,9 @@
         "the browser lands on the front door: `redirects_to` says so. The sign-in form itself",
         "is what the `session` half above drives, as a guest.",
         "",
-        "`expects_api` is EMPTY and that is the claim, not an omission. The screen the walk",
-        "lands on is the home placeholder, which calls nothing (see `root`); and a guest's",
-        "sign-in screen renders a `<form>` and asks the API nothing until it is submitted: the",
+        "The calls declared below are the home page's (see `root`), because the walk lands there;",
+        "a guest's sign-in screen renders a `<form>` and asks the API nothing until it is",
+        "submitted: the",
         "exchange is a POST the browser makes on navigation, to `/bff/v1/session`, which is",
         "this tier's own address and not an operation of `contracts/api/v1/openapi.json`.",
         "The walk asserts in both directions -- every declared call observed, and no",
@@ -305,7 +325,26 @@
         "session report of W34-WEB names it as the open half rather than declaring a step",
         "here that no stack can satisfy."
       ],
-      "expects_api": [],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/projects",
+          "operationId": "listProjects"
+        },
+        {
+          "method": "GET",
+          "path": "/dashboard",
+          "operationId": "getDashboardSummary"
+        }
+      ],
+      "optional_api": [
+        {
+          "method": "GET",
+          "path": "/registrations",
+          "operationId": "listRegistrations",
+          "$why_optional": "only a session holding `admin` reads the pending-request count"
+        }
+      ],
       "follow": null
     },
     {

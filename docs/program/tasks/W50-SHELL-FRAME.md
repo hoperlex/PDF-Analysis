@@ -116,6 +116,11 @@ parallel writer), each only for what the frame change makes false, measured at `
   `/account/password` among its links; under `R-66` `/optimisation` leaves the menu and a guest
   sees only «Вход») — the case keeps its meaning for a signed-in session
 
+Granted by the integrator at the Stage-B merges (2026-10-07): `web/tests/unit/screens/route-screens.ts`
+— only an additional `/` seed rendered for a session holding `admin` (with a project list), so
+the rendered-language guard and the census reach the home page's administrator tile and its
+recent-projects branch; one mutation that drops the seed turns the guard's coverage check red.
+
 ## Forbidden hotspots
 
 - every path not listed above; `web/src/_app/providers.tsx` (composition root);
