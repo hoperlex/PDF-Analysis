@@ -91,6 +91,7 @@ import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
+import { RECENT_PROJECT_LIMIT } from '@/widgets/home-tiles';
 
 import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles } from './lib/repo';
 import { join } from 'node:path';
@@ -694,6 +695,10 @@ const KEYS = {
   decisions: queryKeys.findings.decisions(FINDING_UID),
   journal: queryKeys.findings.journal({ limit: JOURNAL_PAGE_LIMIT }),
   dashboardSummary: queryKeys.dashboard.summary(),
+  // The home page's own two reads (`W50-HOME-01`), seeded by `W50-SHELL-FRAME` so the recent
+  // list and the administrator's tile render loaded rather than pending in every state.
+  recentProjects: queryKeys.projects.list(undefined, RECENT_PROJECT_LIMIT),
+  pendingRegistrations: queryKeys.registrations.list({ status: 'pending', limit: 1 }),
 } as const;
 
 /**
@@ -759,6 +764,21 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
     page,
   });
   client.setQueryData(KEYS.dashboardSummary, dashboardSummary());
+  /*
+   * `W50-SHELL-FRAME` (the integrator's ruling of 2026-10-07, Q3): the home page reads five
+   * recent projects and, for an administrator, the count of pending requests — keys no other
+   * state seeds, so both tiles were pending in every state. Five projects, so the list is the
+   * full one; a page whose `pending_total` is two, of which the tile renders the count only.
+   */
+  client.setQueryData(KEYS.recentProjects, {
+    items: Array.from({ length: RECENT_PROJECT_LIMIT }, (_, index) => ({
+      ...project(),
+      project_uid: `prj_${ULID.slice(0, -1)}${'ABCDE'[index] as string}`,
+      name: `Договор поставки ${index + 1}`,
+    })),
+    page,
+  });
+  client.setQueryData(KEYS.pendingRegistrations, { items: [], page, pending_total: 2 });
   return client;
 }
 
@@ -2160,6 +2180,35 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
       '-- reported in docs/program/W45-BLOCKS.md rather than manufactured here.',
   },
 ];
+
+/**
+ * The home page's two branches no literal names (`W50-SHELL-FRAME`, the integrator's ruling of
+ * 2026-10-07, Q3): the administrator's tile and the loaded recent-projects list. Their words are
+ * constants (`HOME_TILE_COPY`), so {@link branchLabelsInSource} cannot require them; this case
+ * requires the two MARKERS instead, so the `home-admin` seed and the loaded state's home keys
+ * cannot be dropped in silence.
+ */
+export function homeBranchesMissing(markups: readonly string[]): string[] {
+  const markers = ['data-home-tile="registrations"', 'data-recent-project-count="5"'];
+  return markers.filter((marker) => !markups.some((markup) => markup.includes(marker)));
+}
+
+describe("the home page's administrator tile and recent-projects list are rendered by some state", () => {
+  it('can fail: a matrix without them names both', () => {
+    expect(homeBranchesMissing(['<section data-home-tile="summary"></section>'])).toEqual([
+      'data-home-tile="registrations"',
+      'data-recent-project-count="5"',
+    ]);
+  });
+
+  it('renders both', () => {
+    expect(
+      homeBranchesMissing(renderedScreens().map((screen) => screen.markup)),
+      'no state renders this home-page branch: the `home-admin` seed in route-screens.ts or ' +
+        "the loaded state's home keys are gone, and the language guard no longer reads it",
+    ).toEqual([]);
+  });
+});
 
 describe('every branch the widgets have is rendered by some state in this matrix', () => {
   const labels = branchLabelsInSource();
