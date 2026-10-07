@@ -1,9 +1,9 @@
 # Current state
 
-> **Updated 2026-10-07 at the `alpha-w48.1` merge into W50.** W49, the first wave of the identity
-> programme (`docs/program/dispatch/IDENTITY-WAVES.md`), is closed on `origin/dev`; W50 is in
-> integration; `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release
-> and its line is merged into `integration/w50`. Development candidates publish to
+> **Updated 2026-10-07 by `W50-INT-CLOSE`.** W49 and W50 of the identity programme
+> (`docs/program/dispatch/IDENTITY-WAVES.md`) are closed on `origin/dev`; W51 (the screens) is
+> next. `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
+> Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
 > external deployment.
 >
@@ -32,20 +32,20 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Active development, 2026-10-06 — W49 closed on `dev`; W50 (the shell) is next
+## Active development, 2026-10-07 — W50 closed on `dev`; W51 (the screens) is next
 
 W49 — accounts with e-mail sign-in, a role set `{expert, admin}`, registration requests and
-administrator account management (`R-55` … `R-61`) — is integrated on `integration/w49` and
-published to `origin/dev` by `W49-INT-CLOSE`. Both judges passed it; `W49-FIX` repaired the two
-release-blocking findings (the identifier schema enums, and a deployed proxy that kept a stale
-configuration: `reload-proxy.sh` now restarts a drifted proxy and `verify-deployed.sh` refuses
-one) and applied `R-62` (an archived account is not changed) and `R-63` (a failed token exchange
-costs a registration request nothing). It is not tagged: the W49 release to `origin/main` needs a
-direct owner instruction and the release acceptance (`R-65`: the stand's proxy provider counts as
-live). W50 (the shell) is in integration: `W50-REGISTRY-01`, `W50-SHELL-UI`, `W50-HOME-01` and
-`W50-LAZY-01` are merged, `W50-SHELL-FRAME` (Stage C) is merged, and Stage E (QA, then two judges)
-is next. From `R-70` on, changes are accepted by light acceptance and the complete gate runs only
-at the points `AGENTS.md` §8 names.
+administrator account management (`R-55` … `R-61`) — was published to `origin/dev` by
+`W49-INT-CLOSE`. W50 (the shell) adds one registry for **22** real screens, guards and validated
+return paths, a home page, grouped navigation and an account menu, four honest route placeholders,
+and lazy loading for five heavy widgets. The production build's 23rd page row is Next's synthetic
+`/_not-found`, not a registered screen. `W50-QA-01` and both independent judges accepted the
+merged candidate; the three upheld register-only findings are open as `D-134` … `D-136`.
+`W50-FIX` corrected accepted prose and fixtures and added the R-70 light-acceptance command.
+Its clean lane tree passed a full `make gate`; the FIX merge and the docs-only close candidate
+passed light acceptance under `R-70` (`AGENTS.md` §8). W50 is closed on the development line
+without a release tag. W51 starts from this `origin/dev` candidate; its scope is the identity
+screens, with its own freeze and grants.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:
@@ -54,7 +54,7 @@ with no promotion. W49 now means identity, W50 the shell and W51 the screens:
 
 The frozen API surface is **27 paths / 34 operations / 77 schemas** since `W49-SEAL-01`, the
 error catalog **23**, domain candidate revision 9 with **29** opaque identities, and the
-migration head is **`0015_accounts_roles_registration`**. The last closed release is `alpha-w48.1`.
+migration head is **`0015_accounts_roles_registration`**. The last tagged release is `alpha-w48.1`.
 This section makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is
 deployed.
 

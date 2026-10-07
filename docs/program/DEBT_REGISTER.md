@@ -5,7 +5,8 @@ tree at `b0e5ae5` on 2026-09-30, and by `W48-INT-CLOSE` against the W48 closure 
 2026-10-05:** fifteen rows closed, six narrowed, nine opened (`D-120` … `D-128`); every closure
 carries its check. **`W49-INT-CLOSE` (2026-10-06) opened `D-129` … `D-132`** from the W49 judges,
 QA, `W49-FIX` and the W48 acceptance; the `alpha-w48.1` release (2026-10-07) closed `D-70` and
-`D-132` and opened `D-133`.
+`D-132` and opened `D-133`. **`W50-INT-CLOSE` (2026-10-07) opened `D-134` … `D-136`** from
+the two independent W50 judges; all three are register-only and remain open.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
 register that had been entirely obsolete while still reading as the list of what was open, and this
@@ -33,6 +34,9 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-131 | the alpha acceptance journey has no retry for a transient browser network error | one co-tenant Docker bridge event failed a whole run |
 | ~~D-132~~ | `alpha-w48` was tagged without the manual A01–A12 pass (`R-64`) | **closed 2026-10-07** by the owner's attestation (`R-68`) |
 | **D-133** | the proxy adapter folds every non-400/401 HTTP failure into `analysis_failed`, discards the error body, and no operator can read why a stage failed | found by the `alpha-w48.1` acceptance; W52 debt lane |
+| D-134 | invalid `next`/`from` is escaped into Next Flight router metadata despite the absolute “never echoed” wording | W50 Judge X R1, upheld by Judge Y; prose/transport boundary |
+| D-135 | the registry comment says the menu cannot hide an open screen, but `/optimisation` is open by address and intentionally hidden | W50 Judge Y JY-1, upheld by Judge X; comment correction |
+| D-136 | W50-PLAN §3.4 says five first-load routes shrink; the measured count is four | W50 Judge Y JY-2, independently measured by Judge X; plan correction |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
@@ -112,6 +116,48 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-134 — invalid return input appears in escaped Next Flight metadata
+
+**Opened 2026-10-07 by `W50-INT-CLOSE` from W50 Judge X R1, independently upheld by Judge Y.**
+`safeReturnPath` excludes an invalid `next`/`from` from the visible `/login` and `/403` text,
+the hidden field and the BFF redirect target. Next still serializes the raw query value into
+escaped `__PAGE__` router-state metadata in the HTML response. The absolute “never echoed”
+wording in `web/src/shared/config/screen-registry.ts:40` and `:326-329` is therefore false
+for transport bytes. Neither judge observed a visible injection, external redirect or protected
+data leak. A future grant should correct the application prose; removing framework metadata
+would be a separate behavior change.
+
+**Check:** on a production Next stand set `W50_WEB_ORIGIN` to its loopback origin, then run
+`curl -fsS "$W50_WEB_ORIGIN/login?next=https%3A%2F%2Fattacker.example%2Fx" | rg '__PAGE__'`
+and the analogous `/403?from=` request; inspect the escaped raw value and compare with the
+visible text, form and redirect observations in `reviews/W50-JUDGE-X.md` R1 and
+`reviews/W50-JUDGE-Y.md` cross-examination.
+
+### D-135 — the menu comment claims every open screen appears
+
+**Opened 2026-10-07 by `W50-INT-CLOSE` from W50 Judge Y JY-1, upheld by Judge X.**
+`web/src/shared/config/screen-registry.ts:250-254` says the frame cannot hide a screen that
+`screenDecision` opens. Its `/optimisation` row is `session`/`any`, `hidden` and `inMenu: false`;
+`web/src/_app/navigation.ts` filters on `inMenu`. Direct navigation works while the menu omits
+the address, as `R-66` requires. Correct only the comment under a future grant.
+
+**Check:** `rg -n -A5 -B3 'cannot offer a screen|/optimisation' web/src/shared/config/screen-registry.ts`
+and `rg -n -A5 'inMenu' web/src/_app/navigation.ts`; the Judge X route/menu browser results
+and Judge Y JY-1 give the independent runtime and source checks.
+
+### D-136 — W50's first-load plan claims five decreases instead of four
+
+**Opened 2026-10-07 by `W50-INT-CLOSE` from W50 Judge Y JY-2, independently measured by Judge X.**
+`docs/program/dispatch/W50-PLAN.md` §3.4 says five target routes' first-load JS falls. The
+Stage A to LAZY build tables show decreases for `/dashboard`, `/knowledge-base`, the run page
+and the comparison page. The review page grew 1,370 bytes, within the 1,536-byte runtime-cost
+bound. The plan wording should name four decreasing routes and explain review's case; no
+product change follows from this finding.
+
+**Check:** `rg -n 'five target routes|first-load JS falls' docs/program/dispatch/W50-PLAN.md`
+and `sed -n '28,55p' docs/program/reviews/W50-JUDGE-Y.md`; Judge X's JY-2 cross-examination
+in `reviews/W50-JUDGE-X.md` records an independent rebuild.
 
 ### D-133 — a proxy failure is mis-classified, its reason discarded, and invisible to operators
 
