@@ -133,6 +133,8 @@ grant is a finding to the integrator, never a silent edit.
 
 ## Failure/idempotency/security cases
 
+- Dedicated lane `gate-w50fix`: PostgreSQL `56750`, MinIO `60350/60351`, unique database and
+  bucket; check every port free immediately before use. `PORT_REGISTRY.md` reserves this row.
 - One full gate on the shared host at a time. Check available memory (at least 3 GB) and no
   other gate before build/gate. Do not edit the measured tree while a suite runs.
 - Use only the executor's disposable lane; stop only confirmed-own PIDs and remove only its
