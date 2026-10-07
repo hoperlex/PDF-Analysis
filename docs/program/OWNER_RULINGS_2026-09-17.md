@@ -1256,3 +1256,15 @@ scripted A01–A12 protocol and attested, verbatim (2026-10-07): «Чек лис
 проверка уже проводилась, отклонений от ожидаемого поведения не выявленно.» That attestation is the
 manual record for `alpha-w48.1` and closes `D-132`. It is recorded as the owner's own evidence, not
 as a scripted PASS; the release rule itself is unchanged for later releases.
+
+## 3.24 — `R-69`, ruled 2026-10-07 by direct poll on the scope of the English translation
+
+### `R-69` — the human runbooks are translated too, in a lane of W52
+
+The owner's 2026-10-07 instruction to write `AGENTS.md`, `README.md` "and similar" in English was
+carried out for those two files at the W50 integration. Asked whether it also covers the human
+runbooks `docs/manual-tests/*.md` (fourteen files, `ALPHA_PUBLIC_ACCEPTANCE.md` among them, whose
+sentences tests and scripts pin), the owner ruled that it does, and that they are translated as a
+separate lane of W52 (the quality wave), not in W50. That lane's grant names every test and script
+that pins a runbook sentence, re-swept at `W52-FREEZE-01`. Communication with the owner stays
+Russian.
