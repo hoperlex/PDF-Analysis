@@ -445,7 +445,7 @@ function censusRules(): Rule[] {
  *
  * The figures may rise; a fall is a stop (`W50-PLAN.md` §7: "the census shrinks").
  */
-const BASELINE = { screens: 80, pairsLight: 150, pairsDark: 150 } as const;
+const BASELINE = { screens: 90, pairsLight: 171, pairsDark: 171 } as const;
 
 function censusCounts(rendered: ReturnType<typeof screens>): {
   screens: number;

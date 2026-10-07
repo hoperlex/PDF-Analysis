@@ -27,7 +27,7 @@ export interface RouteIdentities {
 }
 
 export const routes = {
-  /** The project list. The journey starts here and `/` redirects to it. */
+  /** The project list. The home screen at `/` links here. */
   projects: (): string => '/projects',
 
   /** One project: its documents, and the upload that adds one. */

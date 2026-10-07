@@ -11,7 +11,7 @@ A sign-in, two phases, one instrument, one envelope, one exit code.
 app's own controls, on the public origin — then waits for the run's terminal by reading
 what the run screen's own poller renders.
 
-**The read walk** then visits all **fifteen** routes, each in a cold browser, discovering every
+**The read walk** then visits all **22** routes, each in a cold browser, discovering every
 identifier by following links the pages render.
 
 Exit `0` means both halves did what `manifest.json` says they do. Non-zero prints every
@@ -147,9 +147,9 @@ reviewer.
 credential minted for an account that has never changed its password reaches `issueToken`
 and `changePassword` and nothing else: every other operation answers `403 permission_denied`
 with `required_capability: password_changed`, and the sign-in screen sends that reviewer to
-`/account/password` rather than to the project list. So a journey run with the seeded
+`/account/password` rather than to the home screen. So a journey run with the seeded
 `admin`/`password` pair stops at the sign-in with *"the browser was at `/account/password`
-and not at `/projects`"* — and that is the feature working, not the instrument breaking.
+and not at `/`"* — and that is the feature working, not the instrument breaking.
 
 Give it an account whose password has been changed, which is what every deployment is
 required to do anyway. On a stand that is the one command:
@@ -330,7 +330,7 @@ Re-measured 2026-09-24 against `http://127.0.0.1:31500`, both halves, with the s
 read routes**, each route in its own cold browser.
 
 **The route count is the number to distrust first.** It was seven when this paragraph was
-written and is fifteen now, and it changes whenever `web/src/app` gains a screen — which
+written and is 22 now, and it changes whenever `web/src/app` gains a screen — which
 is exactly what `test_the_journey_walks_every_screen_the_application_offers` reddens on.
 The seconds are a property of this host under whatever else it was running.
 

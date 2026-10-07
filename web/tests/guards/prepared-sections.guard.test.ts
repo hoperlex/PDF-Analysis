@@ -1,5 +1,5 @@
 /**
- * The three sections `R-23`'s addendum ruled prepared, held to the four rules it set.
+ * The prepared sections, held to the four rules `R-23`'s addendum set.
  *
  * `blocks` was the fourth. `W45-BLOCKS` built it a real operation and a real screen, so
  * it graduated out of this file rather than being held to a placeholder's rules it no
@@ -32,7 +32,7 @@
  *
  * ## What this file deliberately does NOT do
  *
- * It does not add these three screens to `rendered-language.guard.test.ts`'s `SCREENS` or
+ * It does not add these screens to `rendered-language.guard.test.ts`'s `SCREENS` or
  * to `tests/unit/styles/screens.ts`. Wave 43 is the first wave to add a screen since wave
  * 41 repaired the language guard's coverage and wave 42 widened the contrast census, and
  * `W43-PLAN.md` puts the question *"do the instruments reach the new screens"* to the
@@ -109,9 +109,8 @@ export function visibleText(markup: string): string[] {
 
 /*
  * `R-66` adds four sections, each an honest stub on its way, and holds them to the same
- * three rules as the original three: no digit, a promise of their own, and the "yet" wording
- * (they ARE coming, unlike workers). `stub: true` marks them for the one case that is not
- * theirs yet -- the frame links them only from `W50-SHELL-FRAME` on.
+ * rules as the original three: no digit, a promise of their own, and the "yet" wording
+ * (they ARE coming, unlike workers). `stub: true` identifies the four new stubs.
  */
 const SECTIONS = [
   {
@@ -207,7 +206,7 @@ describe('R-23: no invented number reaches a reviewer from a prepared section', 
 // ------------------------------------------------- 2. a promise, and one nobody shares
 
 describe('R-23: each section promises something of its own, and none of them is the default', () => {
-  it('can fail: three screens sharing the component default', () => {
+  it('can fail: screens sharing the component default', () => {
     const generic = 'Раздел появится в одной из следующих версий.';
     expect(unpromised([generic, generic], generic)).toEqual([generic, generic]);
     expect(unpromised(['Своё обещание', generic], generic)).toEqual([generic]);
@@ -215,7 +214,7 @@ describe('R-23: each section promises something of its own, and none of them is 
     expect(longest(['Блоки', 'Раздел пока недоступен', generic])).toBe(generic);
   });
 
-  it('none of the three falls back to the generic sentence', () => {
+  it('none of the sections falls back to the generic sentence', () => {
     expect(GENERIC.length, 'the component rendered no default sentence to compare against')
       .toBeGreaterThan(80);
     for (const { name, screen } of SECTIONS) {
@@ -224,7 +223,7 @@ describe('R-23: each section promises something of its own, and none of them is 
     }
   });
 
-  it('the three promises are pairwise distinct', () => {
+  it('the promises are pairwise distinct', () => {
     // Longest visible string on each screen: on a RoutePlaceholder that is the promise.
     const promises = SECTIONS.map(({ screen }) =>
       longest(visibleText(render(createElement(screen)))),
@@ -268,7 +267,7 @@ describe('R-18: the workers stub does not say a thing is coming that nobody deci
     expect(text.some((s) => s.includes('в альфе'))).toBe(true);
   });
 
-  it('the other two still carry them, so the exemption is one screen and not a hole', () => {
+  it('the other sections still carry them, so the exemption is one screen and not a hole', () => {
     // The ratchet's other direction. If this ever fails, either a section was newly
     // deferred -- in which case say so here -- or the component's default moved.
     for (const { name, screen } of SECTIONS.filter((s) => s.name !== 'workers')) {
@@ -343,7 +342,7 @@ describe('R-23: each prepared section has a place in the navigation', () => {
     jar.value = null;
   });
 
-  it('the three screens are three different screens', () => {
+  it('the sections are different screens', () => {
     const titles = SECTIONS.map(({ screen }) => visibleText(render(createElement(screen)))[0]);
     expect(new Set(titles).size).toBe(SECTIONS.length);
   });

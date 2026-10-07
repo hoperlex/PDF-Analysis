@@ -301,7 +301,7 @@ for (const route of PHASE === 'write' ? [] : manifest.routes) {
   }
 
   // ---- the document itself, redirects included -------------------------------------
-  // `/` is a redirect, so "the document" is a chain and not one response. Every hop is
+  // A route may redirect, so "the document" is a chain and not one response. Every hop is
   // kept with its own status and `location`: a 200 reached through a 307 and a 200 served
   // directly are different facts, and collapsing them is how a journey stops being
   // evidence.

@@ -69,12 +69,25 @@
       "name": "root",
       "path": "/",
       "page_module": "web/src/app/page.tsx",
-      "$comment": "A redirect is not a blank page: the browser lands on /projects and that screen lists. Measured -- declaring no call here made the route red, correctly.",
+      "$comment": "The home screen at `/` reads recent projects and the dashboard summary; an admin session also reads the pending registration count. This fixture keeps its deliberate terminal-bound findings below.",
       "expects_api": [
         {
           "method": "GET",
           "path": "/projects",
           "operationId": "listProjects"
+        },
+        {
+          "method": "GET",
+          "path": "/dashboard",
+          "operationId": "getDashboardSummary"
+        }
+      ],
+      "optional_api": [
+        {
+          "method": "GET",
+          "path": "/registrations",
+          "operationId": "listRegistrations",
+          "$why_optional": "only a session holding `admin` reads the pending-request count"
         }
       ],
       "follow": null

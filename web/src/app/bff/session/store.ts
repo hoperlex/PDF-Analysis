@@ -485,10 +485,10 @@ export function openSession(
 /**
  * The form this function had before sessions carried a subject: a login and the `R-50` flag.
  *
- * **Kept for exactly one caller, which this task may not edit:**
+ * **Kept for legacy guard callers:**
  * `web/tests/guards/default-credential-screens.guard.test.ts` drives the change-password lock
- * with `openSession(login, credential, lifetime, isDefaultCredential)`. The route handler never
- * uses this form — every session it opens carries the account `getMe` described.
+ * with `openSession(login, credential, lifetime, isDefaultCredential)`. The route handler uses
+ * the account form, carrying the account returned by `getMe`.
  *
  * The fields this form cannot know are filled with the **restrictive** values, never the
  * permissive ones: no roles, an incomplete profile, and the login as the label. A screen
