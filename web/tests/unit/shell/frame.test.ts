@@ -144,12 +144,15 @@ describe('every address the frame links is a registry row', () => {
     }
   });
 
-  it('and a complete session reaches every R-66 menu row from the bar', () => {
-    const links = new Set(hrefs(frame(EXPERT)));
+  it('offers administrator links only to an admin and keeps every R-66 row visible', () => {
+    const expert = new Set(hrefs(frame(EXPERT)));
+    const admin = new Set(hrefs(frame(ADMIN_ONLY)));
     for (const screen of SCREEN_REGISTRY.filter((entry) => entry.inMenu)) {
-      expect(links.has(screen.address), screen.address).toBe(true);
+      expect(admin.has(screen.address), screen.address).toBe(true);
+      expect(expert.has(screen.address), screen.address).toBe(screen.group !== 'admin');
     }
-    expect(links.has('/optimisation')).toBe(false);
+    expect(expert.has('/optimisation')).toBe(false);
+    expect(admin.has('/optimisation')).toBe(false);
   });
 });
 

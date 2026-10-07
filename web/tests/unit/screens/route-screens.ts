@@ -89,6 +89,9 @@ import { createElement } from 'react';
 import type { ReactElement } from 'react';
 
 import { AccountPage } from '@/_pages/account';
+import { AdminRegistrationsPage } from '@/_pages/admin-registrations';
+import { AdminUserPage } from '@/_pages/admin-user';
+import { AdminUsersPage } from '@/_pages/admin-users';
 import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
 import { BlocksPage } from '@/_pages/blocks';
 import { ChangePasswordPage } from '@/_pages/change-password';
@@ -103,6 +106,8 @@ import { OptimisationPage } from '@/_pages/optimisation';
 import { ProjectDetailPage } from '@/_pages/project-detail';
 import { ProjectsPage } from '@/_pages/projects';
 import { QueuePage } from '@/_pages/queue';
+import { RegisterPage } from '@/_pages/register';
+import { RegisterSubmittedPage } from '@/_pages/register-submitted';
 import { ReviewPage } from '@/_pages/review';
 import { RunPage } from '@/_pages/run';
 import { SectionOptimisationPage } from '@/_pages/section-optimisation';
@@ -264,6 +269,36 @@ export const SEEDS: readonly Seed[] = [
     discipline: {},
   },
   {
+    address: '/register',
+    name: 'register',
+    make: () => createElement(RegisterPage, {}),
+    discipline: {},
+  },
+  {
+    address: '/register/submitted',
+    name: 'register-submitted',
+    make: () => createElement(RegisterSubmittedPage, {}),
+    discipline: {},
+  },
+  {
+    address: '/admin/users',
+    name: 'admin-users',
+    make: () => createElement(AdminUsersPage, {}),
+    discipline: {},
+  },
+  {
+    address: '/admin/users/[user_uid]',
+    name: 'admin-user',
+    make: (s) => createElement(AdminUserPage, { userUid: s['user_uid'] as string }),
+    discipline: { user_uid: 'defers-to-route' },
+  },
+  {
+    address: '/admin/registrations',
+    name: 'admin-registrations',
+    make: () => createElement(AdminRegistrationsPage, {}),
+    discipline: {},
+  },
+  {
     address: '/blocks',
     name: 'blocks',
     make: () => createElement(BlocksPage, {}),
@@ -407,6 +442,7 @@ export function wellFormed(identities: {
     document_uid: identities.documentUid,
     version_uid: identities.versionUid,
     run_id: identities.runId,
+    user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
   };
 }
 

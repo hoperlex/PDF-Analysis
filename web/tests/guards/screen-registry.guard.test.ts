@@ -126,7 +126,7 @@ const R66: Partial<Record<ScreenGroup, string[]>> = {
   work: ['/projects', '/dashboard', '/section-optimisation'],
   knowledge: ['/knowledge-base', '/blocks', '/norms'],
   system: ['/logs', '/workers', '/analysis-settings', '/queue'],
-  admin: [],
+  admin: ['/admin/users', '/admin/registrations'],
   account: [],
   hidden: [],
 };
@@ -147,8 +147,8 @@ describe('the registry is the route tree: every page has a row and every row a p
   });
 
   it('reads a tree and a registry of a credible size', () => {
-    expect(routeAddresses().length).toBeGreaterThanOrEqual(22);
-    expect(REGISTRY.length).toBeGreaterThanOrEqual(22);
+    expect(routeAddresses().length).toBe(27);
+    expect(REGISTRY.length).toBe(27);
   });
 
   it('has no page without a row and no row without a page', () => {
@@ -203,8 +203,17 @@ describe('every row has the shape §3.1 gives it', () => {
     expect(cycleFindings(REGISTRY)).toEqual([]);
   });
 
-  it('R-60: the role-gated set is as measured — empty in W50, W51 adds the administrator rows', () => {
-    expect(REGISTRY.filter((row) => row.roles !== 'any').map((row) => row.address)).toEqual([]);
+  it('R-60: exactly the three administrator screens require admin', () => {
+    expect(REGISTRY.filter((row) => row.roles !== 'any').map((row) => [row.address, row.roles])).toEqual([
+      ['/admin/users', ['admin']],
+      ['/admin/users/[user_uid]', ['admin']],
+      ['/admin/registrations', ['admin']],
+    ]);
+    for (const address of ['/register', '/register/submitted']) {
+      expect(REGISTRY.find((row) => row.address === address)).toMatchObject({
+        group: 'account', access: 'public', roles: 'any', inMenu: false,
+      });
+    }
   });
 });
 
@@ -252,5 +261,7 @@ describe('R-66: the groups, their members and their order', () => {
     expect(labels['/queue']).toBe('Очередь');
     expect(labels['/']).toBe('Главная');
     expect(labels['/projects']).toBe('Проекты');
+    expect(labels['/admin/users']).toBe('Пользователи');
+    expect(labels['/admin/registrations']).toBe('Заявки на регистрацию');
   });
 });

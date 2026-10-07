@@ -536,6 +536,8 @@ describe('no loading.tsx sits at or above a page whose registry access is not pu
     expect(pages.filter((page) => accessOf(page.address) === 'public').map((p) => p.address).sort()).toEqual([
       '/403',
       '/login',
+      '/register',
+      '/register/submitted',
     ]);
   });
 

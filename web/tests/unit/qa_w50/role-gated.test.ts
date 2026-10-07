@@ -2,16 +2,13 @@
  * `W50-QA-01`, items 6 and 8 — `admin` screens are absent from the menu for an expert, and the
  * `/403` screen for every role-gated row names the role the registry requires.
  *
- * W50 registers **no** role-gated row (`R-60`: reading needs no role, and the `admin` rows are
- * W51's). So each item is two tests, and they must not be read as one:
+ * W51 registers three administrator rows. Synthetic expert and any-of rows still exercise
+ * role forms the live registry does not have. The two subjects must not be read as one:
  *
- *   1. a **fixture registry** — the live rows plus role-gated ones of every shape (an `admin`
- *      group with a static and a dynamic row, an `expert`-only row, an any-of row) — through the
+ *   1. a **fixture registry** — the live rows plus an `expert`-only and an any-of row — through the
  *      same functions the frame and the guard use (`buildNavigation`, `enforceScreen`,
  *      `requiredRolesFor`, `ForbiddenPage`): this is what proves the mechanism;
- *   2. the **live registry's** role-gated set, asserted to be exactly what W50 ships — empty —
- *      so that the fixture case is never mistaken for coverage of a live row. When W51 adds a
- *      row, the second test reddens and points here.
+ *   2. the **live registry's** exact administrator set and role-specific menu.
  *
  * Written by QA from the plan, without the lane reports.
  */
@@ -47,18 +44,8 @@ const { default: ForbiddenRoute } = await import('@/app/403/page');
 
 const USER = 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 
-/** Role-gated rows of every shape W51 might add. None is in the live registry. */
+/** Synthetic role-gated shapes that the live registry does not contain. */
 const GATED: readonly ScreenEntry[] = [
-  { address: '/admin/users', label: 'Учётные записи', group: 'admin', access: 'session', roles: ['admin'], inMenu: true },
-  { address: '/admin/registrations', label: 'Заявки', group: 'admin', access: 'session', roles: ['admin'], inMenu: true },
-  {
-    address: '/admin/users/[user_uid]',
-    label: 'Учётная запись',
-    group: 'admin',
-    access: 'session',
-    roles: ['admin'],
-    inMenu: false,
-  },
   { address: '/expert-desk', label: 'Стол эксперта', group: 'work', access: 'session', roles: ['expert'], inMenu: true },
   {
     address: '/review-board',
@@ -149,16 +136,22 @@ describe('6 (fixture): admin screens are absent from the menu for an expert', ()
   });
 });
 
-describe('6 (live): W50 registers no role-gated row, so the fixture above is the only coverage', () => {
-  it('the live role-gated set is empty (R-60), and no live row is in the admin group', () => {
+describe('6 (live): the administrator rows are role-gated in the real registry', () => {
+  it('the live role-gated set contains exactly the three admin screens', () => {
     const rows: readonly ScreenEntry[] = SCREEN_REGISTRY;
-    expect(rows.filter((row) => row.roles !== 'any').map((row) => row.address)).toEqual([]);
-    expect(rows.filter((row) => row.group === 'admin').map((row) => row.address)).toEqual([]);
+    const admin = ['/admin/users', '/admin/users/[user_uid]', '/admin/registrations'];
+    expect(rows.filter((row) => row.roles !== 'any').map((row) => row.address)).toEqual(admin);
+    expect(rows.filter((row) => row.group === 'admin').map((row) => row.address)).toEqual(admin);
   });
 
-  it('so no session sees an administration group in the live menu, an administrator included', () => {
-    for (const who of [EXPERT, ADMIN, BOTH, NONE]) {
+  it('an expert and empty role set see no admin group; administrators see both links', () => {
+    for (const who of [EXPERT, NONE]) {
       expect(buildNavigation(who).groups.map((group) => group.group)).not.toContain('admin');
+    }
+    for (const who of [ADMIN, BOTH]) {
+      expect(buildNavigation(who).groups.at(-1)?.items.map((item) => item.address)).toEqual([
+        '/admin/users', '/admin/registrations',
+      ]);
     }
   });
 });
@@ -244,8 +237,8 @@ describe('8 (fixture): /403 for every role-gated row names the role the registry
   });
 });
 
-describe('8 (live): every live row is role-free, so the /403 route names no role for any of them', () => {
-  it('the real /403 route, given each live row as from, renders the screen with no role named', async () => {
+describe('8 (live): /403 names admin for every live administrator row', () => {
+  it('the real /403 route names precisely the role of each live row', async () => {
     const live = SCREEN_REGISTRY.filter((row) => row.address !== '/403');
     expect(live.length).toBeGreaterThan(20);
     for (const row of live) {
@@ -253,7 +246,12 @@ describe('8 (live): every live row is role-free, so the /403 route names no role
       const element = await ForbiddenRoute({ params: Promise.resolve({}), searchParams: Promise.resolve({ from: path }) });
       const text = visibleText(renderScreen(newClient(), element));
       expect(text, row.address).toContain('Доступ закрыт');
-      for (const label of Object.values(ROLE_LABELS)) expect(text, row.address).not.toContain(`«${label}»`);
+      if (row.roles === 'any') {
+        for (const label of Object.values(ROLE_LABELS)) expect(text, row.address).not.toContain(`«${label}»`);
+      } else {
+        expect(text, row.address).toContain('«Администратор»');
+        expect(text, row.address).not.toContain('«Эксперт»');
+      }
     }
   });
 });

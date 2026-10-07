@@ -100,6 +100,7 @@ MANIFEST = JOURNEY_DIR / "manifest.json"
 APP_DIR = REPOSITORY_ROOT / "web" / "src" / "app"
 WEB_SRC = REPOSITORY_ROOT / "web" / "src"
 OPENAPI = REPOSITORY_ROOT / "contracts" / "api" / "v1" / "openapi.json"
+JOURNEY = JOURNEY_DIR / "journey.mjs"
 
 _HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 
@@ -142,6 +143,36 @@ def screens_in_app_tree(app_dir: Path) -> dict[str, str]:
 
 def screens_in_manifest(manifest: dict) -> dict[str, str]:
     return {route["path"]: route["page_module"] for route in manifest["routes"]}
+
+
+def placeholder_sample_findings(routes: list[dict]) -> list[str]:
+    """Only the no-call user placeholder may carry a sample, for exactly its user_uid."""
+    detail = "/admin/users/{user_uid}"
+    findings = []
+    matches = [route for route in routes if route.get("path") == detail]
+    if len(matches) != 1:
+        findings.append(f"{detail} must have exactly one journey row")
+    for route in routes:
+        path = route.get("path", "")
+        sample = route.get("sample_identifiers")
+        if path == detail and sample is None:
+            findings.append(f"{detail} has no user_uid sample")
+            continue
+        if sample is None:
+            continue
+        if path != detail:
+            findings.append(f"{path} is not the allowed sample placeholder")
+            continue
+        names = set(re.findall(r"\{([a-z_]+)\}", path))
+        if not isinstance(sample, dict) or set(sample) != names or names != {"user_uid"}:
+            findings.append(f"{path} sample must name exactly its user_uid segment")
+            continue
+        value = sample["user_uid"]
+        if not isinstance(value, str) or re.fullmatch(r"usr_[0-9A-HJKMNP-TV-Z]{26}", value) is None:
+            findings.append(f"{path} sample is not a well-formed usr_<ULID>")
+        if route.get("expects_api") != [] or route.get("optional_api"):
+            findings.append(f"{path} sample is allowed only while the detail makes no API call")
+    return findings
 
 
 def operations_in_contract(openapi: dict) -> set[tuple[str, str, str]]:
@@ -418,6 +449,43 @@ def test_each_route_agrees_with_its_own_page_module(manifest: dict) -> None:
             f"route '{route['name']}' declares path {route['path']} but its page module "
             f"sits at {derived}"
         )
+
+
+def test_user_detail_sample_is_only_for_the_no_call_placeholder(manifest: dict) -> None:
+    assert placeholder_sample_findings(manifest["routes"]) == []
+
+
+def test_user_detail_sample_validation_can_fail() -> None:
+    row = {
+        "path": "/admin/users/{user_uid}",
+        "sample_identifiers": {"user_uid": "usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F"},
+        "expects_api": [],
+    }
+    assert placeholder_sample_findings([{**row, "sample_identifiers": None}]) == [
+        "/admin/users/{user_uid} has no user_uid sample"
+    ]
+    assert "not a well-formed" in placeholder_sample_findings([
+        {**row, "sample_identifiers": {"user_uid": "usr_invalid"}}
+    ])[0]
+    assert "exactly its user_uid" in placeholder_sample_findings([
+        {**row, "sample_identifiers": {"project_uid": row["sample_identifiers"]["user_uid"]}}
+    ])[0]
+    assert "only while" in placeholder_sample_findings([
+        {**row, "expects_api": [{"method": "GET", "path": "/users/{user_uid}"}]}
+    ])[0]
+
+
+def test_the_journey_consumes_the_declared_sample_only_for_route_address() -> None:
+    source = _require(JOURNEY).read_text(encoding="utf-8")
+    assert "fill(route.path, captured, route.sample_identifiers ?? {})" in source, (
+        "journey.mjs no longer consumes the manifest sample for the placeholder address"
+    )
+    assert "const value = captured[name] ?? samples[name]" in source, (
+        "a captured real user identity must take precedence over the placeholder sample"
+    )
+    assert "concreteApi(expectation, captured)" in source, (
+        "API expectations must not use the placeholder sample"
+    )
 
 
 def test_every_api_call_the_journey_declares_is_in_the_contract(

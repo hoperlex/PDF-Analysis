@@ -135,8 +135,8 @@ const RULED_LINKS: [string, string][] = [['/', 'Главная'], ...RULING.flat
 // --------------------------------------------------------------------------------- the menu
 
 describe('R-66: the menu’s groups and items equal the ruling’s, in order', () => {
-  it('as data: Главная, then Работа, Знания, Система, each with the ruled items in order', () => {
-    for (const roles of [['expert'], ['admin'], ['expert', 'admin'], []] as const) {
+  it('as data: non-admin sessions see exactly the R-66 groups and their order', () => {
+    for (const roles of [['expert'], []] as const) {
       const navigation = buildNavigation({ roles, isDefaultCredential: false, profileComplete: true });
       expect(navigation.home, `roles [${roles.join(',')}]`).toEqual({ address: '/', label: 'Главная' });
       expect(
@@ -146,6 +146,23 @@ describe('R-66: the menu’s groups and items equal the ruling’s, in order', (
         })),
         `roles [${roles.join(',')}]`,
       ).toEqual(RULING.map((group) => ({ group: group.group, items: group.items.map(([a, l]) => [a, l]) })));
+    }
+  });
+
+  it('admins see the same R-66 prefix followed by the two W51 administrator links', () => {
+    for (const roles of [['admin'], ['expert', 'admin']] as const) {
+      const navigation = buildNavigation({ roles, isDefaultCredential: false, profileComplete: true });
+      expect(navigation.groups.slice(0, 3).map((group) => ({
+        group: group.label,
+        items: group.items.map((item) => [item.address, item.label]),
+      }))).toEqual(RULING.map((group) => ({ group: group.group, items: group.items.map(([a, l]) => [a, l]) })));
+      expect(navigation.groups.at(-1)).toMatchObject({
+        group: 'admin',
+        items: [
+          { address: '/admin/users', label: 'Пользователи' },
+          { address: '/admin/registrations', label: 'Заявки на регистрацию' },
+        ],
+      });
     }
   });
 
@@ -268,7 +285,7 @@ describe('R-66: each of the four stubs is an honest RoutePlaceholder', () => {
   }
 
   it('the four are exactly the ruling’s stubs among the menu rows (no fifth placeholder hides in the menu)', () => {
-    const menuRows = SCREEN_REGISTRY.filter((row) => row.inMenu && row.group !== 'home').map((row) => row.address);
+    const menuRows = SCREEN_REGISTRY.filter((row) => row.inMenu && !['home', 'admin'].includes(row.group)).map((row) => row.address);
     expect(menuRows.sort()).toEqual(RULING.flatMap((group) => group.items.map(([address]) => address)).sort());
   });
 });

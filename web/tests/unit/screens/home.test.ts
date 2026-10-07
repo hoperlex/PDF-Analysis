@@ -43,11 +43,9 @@ import type {
 } from '@/shared/api';
 import { ApiError, RUN_STATE_VALUES, VERDICT_VALUES, queryKeys } from '@/shared/api';
 import { SCREEN_REGISTRY } from '@/shared/config';
-import type { ScreenEntry } from '@/shared/config';
 import { routes } from '@/shared/lib';
 import {
   HOME_TILE_COPY,
-  PendingRegistrationsTile,
   RECENT_PROJECT_LIMIT,
   REGISTRATIONS_SCREEN,
   recentProjects,
@@ -310,28 +308,17 @@ describe('the administrator’s tile, and what the page asks the API', () => {
     ]);
   });
 
-  it('links nowhere in W50, because the registry has no row for the registration screen', () => {
-    expect(SCREEN_REGISTRY.map((screen): string => screen.address)).not.toContain(REGISTRATIONS_SCREEN);
-    expect(registrationsScreenLink()).toBeNull();
-    const markup = draw(home(ADMIN), loaded());
-    const tile = markup.slice(markup.indexOf('data-home-tile="registrations"'));
-    expect(tile.slice(0, tile.indexOf('</section>'))).not.toContain('<a ');
-    expect(markup).not.toContain(REGISTRATIONS_SCREEN);
+  it('does not invent a link if the registration screen has no registry row', () => {
+    const missing = SCREEN_REGISTRY.filter((screen) => screen.address !== REGISTRATIONS_SCREEN);
+    expect(registrationsScreenLink(missing)).toBeNull();
   });
 
-  it('links to the registration screen once the registry has its row (W51)', () => {
-    const row: ScreenEntry = {
-      address: REGISTRATIONS_SCREEN,
-      label: 'Заявки на регистрацию',
-      group: 'admin',
-      access: 'session',
-      roles: ['admin'],
-      inMenu: true,
-    };
-    const href = registrationsScreenLink([...SCREEN_REGISTRY, row]);
-    expect(href).toBe(REGISTRATIONS_SCREEN);
-    const markup = draw(createElement(PendingRegistrationsTile, { href }), loaded());
-    expect(markup).toContain(`href="${REGISTRATIONS_SCREEN}"`);
+  it('links the live administrator tile to the registered requests screen', () => {
+    expect(SCREEN_REGISTRY.map((screen): string => screen.address)).toContain(REGISTRATIONS_SCREEN);
+    expect(registrationsScreenLink()).toBe(REGISTRATIONS_SCREEN);
+    const markup = draw(home(ADMIN), loaded());
+    const tile = markup.slice(markup.indexOf('data-home-tile="registrations"'));
+    expect(tile.slice(0, tile.indexOf('</section>'))).toContain(`href="${REGISTRATIONS_SCREEN}"`);
   });
 });
 

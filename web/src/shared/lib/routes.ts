@@ -67,4 +67,7 @@ export const routes = {
    */
   review: (projectUid: string, runId: string): string =>
     `/projects/${projectUid}/runs/${runId}/review`,
+
+  /** One account, addressed by its opaque identity rather than its display name. */
+  user: (userUid: string): string => `/admin/users/${userUid}`,
 } as const;
