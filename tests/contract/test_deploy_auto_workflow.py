@@ -44,6 +44,9 @@ def workflow_shape_findings(text: str) -> set[str]:
     permission_lines = [line for line in permissions or [] if line.strip() and not line.lstrip().startswith("#")]
     if permission_lines != ["  contents: read"]:
         findings.add("TOP_LEVEL_PERMISSIONS")
+    jobs = _top_level_block(text, "jobs")
+    if jobs is None or re.search(r"(?m)^    permissions\s*:", "\n".join(jobs)):
+        findings.add("JOB_PERMISSIONS")
 
     for host in ("135.106.164.147", "audit.135.106.164.147.sslip.io"):
         exact = f"'{host} ssh-ed25519 {HOST_KEY_BLOB}'"
@@ -51,6 +54,26 @@ def workflow_shape_findings(text: str) -> set[str]:
             findings.add("PINNED_HOST_KEY_BLOB")
     if text.count(f"Fingerprint: {HOST_KEY_FINGERPRINT}") != 1:
         findings.add("PINNED_HOST_KEY_FINGERPRINT")
+    lines = text.splitlines()
+    redirects = [
+        index for index, line in enumerate(lines)
+        if line.strip() == '> "$HOME/.ssh/known_hosts"'
+    ]
+    if len(redirects) != 1:
+        findings.add("PINNED_HOST_KEY_SET")
+    else:
+        redirect = redirects[0]
+        starts = [
+            index for index, line in enumerate(lines[:redirect])
+            if line.strip() == "printf '%s\\n' \\"
+        ]
+        expected = [
+            f"'{host} ssh-ed25519 {HOST_KEY_BLOB}'" for host in
+            ("135.106.164.147", "audit.135.106.164.147.sslip.io")
+        ]
+        actual = [line.strip().rstrip(" \\") for line in lines[starts[-1] + 1:redirect]] if starts else []
+        if actual != expected:
+            findings.add("PINNED_HOST_KEY_SET")
     return findings
 
 
@@ -66,6 +89,7 @@ class DeployAutoWorkflowContract(unittest.TestCase):
 
     def test_workflow_permissions_are_exactly_read_only(self) -> None:
         self.assertNotIn("TOP_LEVEL_PERMISSIONS", workflow_shape_findings(self.text))
+        self.assertNotIn("JOB_PERMISSIONS", workflow_shape_findings(self.text))
 
     def test_deployments_are_serial_and_never_cancel_each_other(self) -> None:
         self.assertIn("group: auditmanager-alpha-production", self.text)
@@ -77,6 +101,7 @@ class DeployAutoWorkflowContract(unittest.TestCase):
         self.assertNotIn("secrets.VPS_KNOWN_HOSTS", self.text)
         self.assertNotIn("PINNED_HOST_KEY_BLOB", workflow_shape_findings(self.text))
         self.assertNotIn("PINNED_HOST_KEY_FINGERPRINT", workflow_shape_findings(self.text))
+        self.assertNotIn("PINNED_HOST_KEY_SET", workflow_shape_findings(self.text))
         self.assertIn(
             "135.106.164.147|audit.135.106.164.147.sslip.io", self.text
         )
@@ -124,6 +149,21 @@ class DeployAutoWorkflowContract(unittest.TestCase):
 
         changed_key = self.text.replace(HOST_KEY_BLOB, f"{HOST_KEY_BLOB[:-1]}A", 1)
         self.assertIn("PINNED_HOST_KEY_BLOB", workflow_shape_findings(changed_key))
+
+        job_write = self.text.replace(
+            "    timeout-minutes: 90\n",
+            "    timeout-minutes: 90\n    permissions:\n      contents: write\n",
+            1,
+        )
+        self.assertIn("JOB_PERMISSIONS", workflow_shape_findings(job_write))
+
+        extra_host = self.text.replace(
+            '            > "$HOME/.ssh/known_hosts"',
+            "            'foreign.example ssh-ed25519 AAAA' \\\n"
+            '            > "$HOME/.ssh/known_hosts"',
+            1,
+        )
+        self.assertIn("PINNED_HOST_KEY_SET", workflow_shape_findings(extra_host))
 
 
 if __name__ == "__main__":

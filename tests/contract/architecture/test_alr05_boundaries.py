@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -60,6 +61,23 @@ def _targets(node: ast.AST, path: Path) -> tuple[str, ...]:
     return (module,) if module else ()
 
 
+def _dynamic_target(
+    node: ast.AST, module_aliases: set[str], function_aliases: set[str]
+) -> str | None:
+    if not isinstance(node, ast.Call) or not node.args:
+        return None
+    function = node.func
+    is_import = (
+        isinstance(function, ast.Attribute)
+        and isinstance(function.value, ast.Name)
+        and function.value.id in module_aliases
+        and function.attr == "import_module"
+    ) or (isinstance(function, ast.Name) and function.id in function_aliases)
+    if is_import and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+        return node.args[0].value
+    return None
+
+
 def _violations() -> list[Violation]:
     violations: list[Violation] = []
     for path in sorted(SOURCE_ROOT.rglob("*.py")):
@@ -71,8 +89,26 @@ def _violations() -> list[Violation]:
             continue
 
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        module_aliases = {
+            alias.asname or alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+            if alias.name == "importlib"
+        }
+        function_aliases = {
+            alias.asname or alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module == "importlib"
+            for alias in node.names
+            if alias.name == "import_module"
+        }
         for node in ast.walk(tree):
-            for target in _targets(node, path):
+            targets = _targets(node, path)
+            dynamic = _dynamic_target(node, module_aliases, function_aliases)
+            if dynamic is not None:
+                targets = (*targets, dynamic)
+            for target in targets:
                 parts = target.split(".")
                 if len(parts) < 2 or parts[0] != "auditmanager":
                     continue
@@ -99,3 +135,24 @@ def test_backend_cross_context_imports_use_public_modules() -> None:
     assert violations == [], "ALR-05 violations:\n" + "\n".join(
         violation.render() for violation in violations
     )
+
+
+def test_literal_dynamic_cross_context_import_is_visible(monkeypatch, tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    source = root / "src" / "auditmanager"
+    importer = source / "jobs" / "repository.py"
+    importer.parent.mkdir(parents=True)
+    importer.write_text(
+        "import importlib as loader\n"
+        "from importlib import import_module as load\n"
+        "loader.import_module('auditmanager.storage.models')\n"
+        "load('auditmanager.storage')\n"
+        "load('auditmanager.storage.public')\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys.modules[__name__], "REPOSITORY_ROOT", root)
+    monkeypatch.setattr(sys.modules[__name__], "SOURCE_ROOT", source)
+    assert [(item.kind, item.target) for item in _violations()] == [
+        ("deep", "auditmanager.storage.models"),
+        ("package-root", "auditmanager.storage"),
+    ]

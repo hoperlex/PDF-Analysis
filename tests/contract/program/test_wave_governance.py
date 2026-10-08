@@ -98,11 +98,12 @@ def governance_findings(markdown: str) -> set[str]:
         target = _field(publication, "development_target")
         authority = _field(publication, "origin_main_authority") or ""
         if target == "origin/main":
-            match = re.fullmatch(r"separate direct owner instruction (?P<reference>\S(?:.*\S)?)", authority)
-            if match is None:
+            if not authority.startswith("separate direct owner instruction "):
                 findings.add("MAIN_DIRECT_AUTHORITY_REQUIRED")
-            elif len(match.group("reference")) < 7:
+            elif re.fullmatch(r"separate direct owner instruction [0-9a-f]{40}", authority) is None:
                 findings.add("MAIN_DIRECT_AUTHORITY_REFERENCE_REQUIRED")
+        elif re.fullmatch(r"none(?:; .+)?", authority) is None:
+            findings.add("MAIN_DIRECT_AUTHORITY_TARGET_MISMATCH")
         if target not in {"none", "origin/dev", "origin/main"}:
             findings.add("PUBLICATION_TARGET_INVALID")
     return findings
@@ -282,6 +283,20 @@ def test_enumerator_flag_captured_output_and_main_authority_are_validated() -> N
         "- origin_main_authority: separate direct owner instruction x",
     )
     assert "MAIN_DIRECT_AUTHORITY_REFERENCE_REQUIRED" in governance_findings(unbound_main)
+
+
+def test_main_authority_requires_a_main_target_and_exact_candidate_sha() -> None:
+    base = VALID_TASK.replace(
+        "- origin_main_authority: none",
+        "- origin_main_authority: separate direct owner instruction " + "a" * 40,
+    )
+    assert "MAIN_DIRECT_AUTHORITY_TARGET_MISMATCH" in governance_findings(base)
+
+    main = base.replace("- development_target: origin/dev", "- development_target: origin/main")
+    assert governance_findings(main) == set()
+    for reference in ("xxxxxxx", "a" * 39, "a" * 41, "a" * 40 + " later"):
+        broken = main.replace("a" * 40, reference)
+        assert "MAIN_DIRECT_AUTHORITY_REFERENCE_REQUIRED" in governance_findings(broken)
 
 
 def test_the_operational_docs_state_the_same_rules_the_guard_executes() -> None:
