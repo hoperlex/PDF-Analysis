@@ -7,6 +7,8 @@ carries its check. **`W49-INT-CLOSE` (2026-10-06) opened `D-129` … `D-132`** f
 QA, `W49-FIX` and the W48 acceptance; the `alpha-w48.1` release (2026-10-07) closed `D-70` and
 `D-132` and opened `D-133`. **`W50-INT-CLOSE` (2026-10-07) opened `D-134` … `D-136`** from
 the two independent W50 judges; all three are register-only and remain open.
+**The owner's W51 validation deferral (2026-10-08) opened `D-137` and `D-138`:**
+QA/live acceptance and the full end-of-wave gate remain due after implementation.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
 register that had been entirely obsolete while still reading as the list of what was open, and this
@@ -37,6 +39,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-134 | invalid `next`/`from` is escaped into Next Flight router metadata despite the absolute “never echoed” wording | W50 Judge X R1, upheld by Judge Y; prose/transport boundary |
 | D-135 | the registry comment says the menu cannot hide an open screen, but `/optimisation` is open by address and intentionally hidden | W50 Judge Y JY-1, upheld by Judge X; comment correction |
 | D-136 | W50-PLAN §3.4 says five first-load routes shrink; the measured count is four | W50 Judge Y JY-2, independently measured by Judge X; plan correction |
+| **D-137** | W51 QA, independent review and live/manual identity acceptance have not run | a separate validation wave must run the built-stand and human checks against one exact candidate |
+| **D-138** | W51 implementation is being integrated without its full end-of-wave `make gate` | a separate validation wave must run and record `GATE OK` for the exact candidate before any release claim |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
@@ -116,6 +120,32 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-137 — W51 QA and live identity acceptance are deferred
+
+**Opened 2026-10-08 by the integrator on the owner's direct instruction.** W51 Stage B has
+focused tests and frontend lint, but `W51-QA-01`, independent judges, built-stand PC-01 identity
+journey, manual A13–A20, and release acceptance have not run. Stage C may add the journey and
+manual-pack code; that is no evidence that the browser or API scenario passed. Schedule a
+separate validation wave, with an exact candidate SHA and recorded results, before closing this
+row. Corrections found there belong to the later correction stage.
+
+**Check:** compare `docs/program/dispatch/W51-PLAN.md` §4–§5 with the completed task/review
+reports and acceptance evidence for the same SHA. This row closes only when QA, independent
+review, the built-stand journey and manual pass have explicit recorded results.
+
+### D-138 — the W51 end-of-wave gate is deferred
+
+**Opened 2026-10-08 by the integrator on the owner's direct instruction.** The combined W51
+Stage B tree passed 148 focused tests and frontend lint, but no full `make gate` has been run
+on the W51 candidate. The rendered-language branch-coverage assertion is red in the focused
+lane reports; it is a known unresolved check, not a passed gate. The separate validation wave
+must run the full gate on an exact clean candidate after the planned correction stage and record
+literal `GATE OK`. Until then W51 is not gated, tagged or authorized for `origin/main`.
+
+**Check:** `docs/program/W51-INT-CLOSE.md` or its later validation-wave report must name the
+tested SHA, full `make gate` command, log and literal `GATE OK`, with that SHA unchanged for any
+release claim.
 
 ### D-134 — invalid return input appears in escaped Next Flight metadata
 

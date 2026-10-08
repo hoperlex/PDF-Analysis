@@ -4,9 +4,9 @@
 > (`docs/program/dispatch/IDENTITY-WAVES.md`) are closed on `origin/dev`. W51 Stage A and
 > all three Stage B implementation lanes are merged there through `4442921`; Stage C,
 > QA, correction and release checks remain open. The owner temporarily deferred temporary
-> stand checks and end-of-wave gates to a later separately designed wave. The combined
-> implementation passed 148 focused tests and frontend lint; its red rendered-language
-> branch-coverage assertion and unrun checks are recorded as debt in the lane reports.
+> stand checks and end-of-wave gates to a later separately designed wave (`D-137`, `D-138`).
+> The combined implementation passed 148 focused tests and frontend lint; its red
+> rendered-language branch-coverage assertion remains recorded in the lane reports.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers

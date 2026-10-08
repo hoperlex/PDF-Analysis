@@ -5,8 +5,8 @@ implementation lanes are accepted on `origin/dev`: `W51-AUTH-01` at `ebe614d`,
 `W51-ADMIN-USERS` at `c88e794`, and `W51-ADMIN-REQUESTS` at `4442921`.
 The integrated tree passed 148 focused tests across nine files and frontend lint
 on 2026-10-08. Stage C, QA, correction and release checks remain open; W51 is not
-closed. The lane reports record the red rendered-language branch-coverage guard
-and other deferred validation explicitly.
+closed. Deferred QA/live acceptance and the full gate are tracked as `D-137` and
+`D-138`; the lane reports record the red rendered-language branch-coverage guard.
 **Controlling rulings:** `R-55`, `R-56`,
 `R-59`, `R-60`, `R-61`, `R-66`, `R-70`.
 **Roles:** lanes, QA, judges and FIX are the executor's; freeze, merges and publication are the
@@ -20,7 +20,7 @@ No contract change.
 **Temporary validation direction, 2026-10-08.** The owner stopped the temporary W51 stand
 and deferred stand checks and end-of-wave gates to a later, separately designed wave. Current
 implementation lanes run basic focused tests and frontend lint only; the unrun R-70/live and
-release checks are recorded as debt, never described as passed. This direction applies to
+release checks are recorded as `D-137`/`D-138`, never described as passed. This direction applies to
 development work on `origin/dev` and grants no publication to `origin/main`.
 
 ## 1. Objective
