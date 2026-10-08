@@ -318,12 +318,8 @@
         "the first project uid and each route after it captures the next identifier. A route",
         "inserted before them walks a screen with nothing captured yet.",
         "",
-        "What this route does NOT cover is the submitted exchange -- the password typed, the",
-        "303, the cookie, the credential the forwarder then presents. That is a write step",
-        "against a live API that can mint a token, and the API half of the exchange does not",
-        "exist yet (W34-CONTRACT published the operation; no router implements it). The",
-        "session report of W34-WEB names it as the open half rather than declaring a step",
-        "here that no stack can satisfy."
+        "The screen walk does not submit credentials. The exchange is covered by focused",
+        "BFF tests; a live write journey is deferred by the owner for a later wave."
       ],
       "expects_api": [
         {
@@ -514,12 +510,17 @@
       "path": "/account",
       "page_module": "web/src/app/account/page.tsx",
       "$comment": [
-        "The account's profile, a placeholder until W51 (`W50-PLAN.md` section 3.2, decision",
-        "three, sends an incomplete profile here). Walked with a complete profile, so it",
-        "renders the promise of the profile screen. `expects_api` is EMPTY: the placeholder",
-        "reads the session's subject on the server and calls nothing."
+        "The account profile reads getMe on mount, then shows names, roles and an edit form.",
+        "An incomplete profile can submit names and e-mail together; a complete profile",
+        "can change only names. The journey opens it with a complete account."
       ],
-      "expects_api": [],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/me",
+          "operationId": "getMe"
+        }
+      ],
       "follow": null
     },
     {
@@ -583,7 +584,7 @@
       "path": "/register",
       "page_module": "web/src/app/register/page.tsx",
       "$comment": [
-        "Public registration placeholder. It makes no API call; the future form is owned by W51-AUTH-01."
+        "The public registration form makes no API call on mount. Submission is a plain HTML POST to the reserved BFF door."
       ],
       "expects_api": [],
       "follow": null
@@ -593,7 +594,7 @@
       "path": "/register/submitted",
       "page_module": "web/src/app/register/submitted/page.tsx",
       "$comment": [
-        "Public confirmation placeholder. It does not claim a request was submitted and makes no API call."
+        "Direct visitors see conditional confirmation wording. This screen makes no API call and does not assert a request was submitted."
       ],
       "expects_api": [],
       "follow": null

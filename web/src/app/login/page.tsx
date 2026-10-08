@@ -9,7 +9,7 @@
  *      five). It answers who the session belongs to through `subjectOf` — **never the
  *      credential it holds**;
  *   2. the refusal code the exchange redirected back with, validated against the feature's
- *      closed set so a hand-typed query string renders no sentence at all;
+ *      closed set; an unknown value renders an explicit fault;
  *   3. the `next` address the guard sent a guest here with, passed through the screen
  *      registry's `safeReturnPath`, so only an address of this application reaches the form's
  *      hidden field and an invalid one is dropped without being echoed.
@@ -45,6 +45,7 @@ export default async function LoginRoute({ params, searchParams }: ScreenRoutePr
     <SignInPage
       login={subject === null ? null : subject.login}
       refusal={isSignInRefusal(candidate) ? candidate : null}
+      unknownRefusal={candidate !== undefined && !isSignInRefusal(candidate)}
       next={safeReturnPath(Array.isArray(asked) ? asked[0] : asked)}
     />
   );

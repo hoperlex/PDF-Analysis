@@ -160,6 +160,7 @@ function importedBindings(source: string): ReadonlyArray<{
  * unmapped, not asserted as an absence — a hook is free to gain one later.
  */
 const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
+  'src/features/edit-profile/model/use-edit-profile.ts': false,
   'src/features/append-comment/model/use-append-comment.ts': true,
   'src/features/create-project/model/use-create-project.ts': true,
   'src/features/export-run/model/use-export-run.ts': false,

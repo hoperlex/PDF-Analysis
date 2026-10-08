@@ -26,6 +26,7 @@
 
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { CHANGE_PASSWORD_OUTCOME_PARAM, isChangePasswordOutcome } from '@/features/change-password';
+import { NEXT_PARAM, safeReturnPath } from '@/shared/config';
 
 import type { ScreenRouteProps } from '../../bff/session/screen-lock';
 import { requireScreen } from '../../bff/session/screen-lock';
@@ -38,11 +39,13 @@ export default async function ChangePasswordRoute({ params, searchParams }: Scre
   const query = searchParams === undefined ? {} : await searchParams;
   const raw = query[CHANGE_PASSWORD_OUTCOME_PARAM];
   const candidate = Array.isArray(raw) ? raw[0] : raw;
+  const asked = query[NEXT_PARAM];
 
   return (
     <ChangePasswordPage
       login={subject.login}
       outcome={isChangePasswordOutcome(candidate) ? candidate : null}
+      next={safeReturnPath(Array.isArray(asked) ? asked[0] : asked)}
       // `R-50`. The register's answer, which the API gave it at sign-in. This screen is the
       // one a default credential is sent to, and this prop is what lets it say so.
       mustChange={subject.isDefaultCredential}
