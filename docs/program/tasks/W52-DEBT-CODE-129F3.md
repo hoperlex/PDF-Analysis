@@ -78,8 +78,9 @@ QA, stand, full gate, release, tag or `origin/main` publication.
 
 ## Deliverables
 
-- A one-code-point uppercase initial for every accepted first/middle name, including
-  `ß`, `ŉ` and `ǰ`.
+- A one-code-point initial for every accepted first/middle name: an uppercase letter
+  where its mapping provides one, including `ß`, `ŉ` and `ǰ`; an uncased glyph keeps
+  its existing form.
 - Focused tests holding the 66-character bound and sensible initials for all three.
 
 ## Required tests
