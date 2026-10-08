@@ -13,11 +13,14 @@ attested build differs. Its evidence records a measured build value.
 
 - `W52-INT-C-TRANSLATE-01`, published on `origin/dev`.
 - `W52-INT-C2-GRANT-01`, published on `origin/dev`.
+- `W52-INT-C2-RELNOTES-01`, published on `origin/dev` at
+  `a6ff1ff6ea8bf5c21ed125f3a07c9cb613a85a89`.
+- `W52-INT-C2-ACCEPT-GRANT-01`, the current-tree base correction.
 
 ## Frozen inputs
 
 - Start from the exact `origin/dev` SHA read back by
-  `W52-INT-C2-GRANT-01`; record it in the lane report.
+  `W52-INT-C2-ACCEPT-GRANT-01`; record it in the lane report.
 - API `GET /system/version` is sealed at 30 paths / 37 operations /
   83 schemas; `VERSION=0.3.0`; 23 error codes; domain revision 9 /
   29 identities; head `0016_release_notes`;
