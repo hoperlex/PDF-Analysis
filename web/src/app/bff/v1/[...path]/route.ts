@@ -474,8 +474,16 @@ function seeOther(location: string, cookie?: string): Response {
 }
 
 /** Back to the sign-in screen, saying which of the six refusals happened. */
-function refuseSignIn(refusal: Refusal): Response {
-  return seeOther(`${SIGN_IN_SCREEN}?${REFUSAL_PARAM}=${refusal}`);
+function withNext(path: string, next: string | null): string {
+  return next === null ? path : `${path}${path.includes('?') ? '&' : '?'}${NEXT_FIELD}=${encodeURIComponent(next)}`;
+}
+
+function postedReturnPath(request: Request): string | null {
+  return safeReturnPath(new URL(request.url).searchParams.get(NEXT_FIELD));
+}
+
+function refuseSignIn(refusal: Refusal, next: string | null = null): Response {
+  return seeOther(withNext(`${SIGN_IN_SCREEN}?${REFUSAL_PARAM}=${refusal}`, next));
 }
 
 /** Back to the registration screen, saying which of the six refusals happened. */
@@ -581,8 +589,8 @@ function endedOn(request: Request, sessionId: string, answer: Response): Respons
 }
 
 /** Back to the password screen, saying how it ended. Carries a cookie only on success. */
-function reportChange(outcome: ChangeOutcome, cookie?: string): Response {
-  return seeOther(`${CHANGE_PASSWORD_SCREEN}?${OUTCOME_PARAM}=${outcome}`, cookie);
+function reportChange(outcome: ChangeOutcome, cookie?: string, next: string | null = null): Response {
+  return seeOther(withNext(`${CHANGE_PASSWORD_SCREEN}?${OUTCOME_PARAM}=${outcome}`, next), cookie);
 }
 
 /**
@@ -628,10 +636,12 @@ async function postedCredentials(
  * is followed by `getMe`, and the row is opened with the subject it describes.
  */
 async function openTheSession(request: Request): Promise<Response> {
-  if (!guestIsAdmitted(request)) return refuseSignIn('throttled');
+  const returnPath = postedReturnPath(request);
+  if (!guestIsAdmitted(request)) return refuseSignIn('throttled', returnPath);
 
   const credentials = await postedCredentials(request);
-  if (credentials === null) return refuseSignIn('validation');
+  if (credentials === null) return refuseSignIn('validation', returnPath);
+  const next = safeReturnPath(credentials.next) ?? returnPath;
 
   let upstream: string;
   let token: string;
@@ -642,7 +652,7 @@ async function openTheSession(request: Request): Promise<Response> {
     // The message is deliberately not forwarded: `MissingConfigurationError` names an
     // environment variable, and a variable name on a public answer is a hint about the
     // deployment that nothing outside needs.
-    return refuseSignIn('unconfigured');
+    return refuseSignIn('unconfigured', next);
   }
 
   const answer = await forwardWithCredential(
@@ -662,19 +672,19 @@ async function openTheSession(request: Request): Promise<Response> {
     // `R-56`'s addendum: only a pending application is shown. Everything else — no request,
     // a wrong password, an approved or a rejected request — is the one generic refusal.
     const pending = await applicationIsPending(request, { upstream, token }, credentials);
-    return refuseSignIn(pending ? 'pending' : 'credentials');
+    return refuseSignIn(pending ? 'pending' : 'credentials', next);
   }
   // A `429` reaches this tier only from a proxy placed in front of the API, which limits by
   // client address. That is the same fact as this tier's own bucket — about the caller,
   // never about an account — so it is the same refusal rather than an unexplained `upstream`.
-  if (answer.status === 429) return refuseSignIn('throttled');
-  if (answer.status !== 200) return refuseSignIn('upstream');
+  if (answer.status === 429) return refuseSignIn('throttled', next);
+  if (answer.status !== 200) return refuseSignIn('upstream', next);
 
   let minted: MintedToken;
   try {
     minted = (await answer.json()) as MintedToken;
   } catch {
-    return refuseSignIn('upstream');
+    return refuseSignIn('upstream', next);
   }
   if (
     typeof minted.token !== 'string' ||
@@ -684,14 +694,14 @@ async function openTheSession(request: Request): Promise<Response> {
     // the answer that lets a reviewer past the screen the ruling exists to send them to.
     typeof minted.is_default_credential !== 'boolean'
   ) {
-    return refuseSignIn('upstream');
+    return refuseSignIn('upstream', next);
   }
 
   // Who the credential belongs to, from the API and not from the form: the login typed is
   // not the subject (a legacy account's row may name it differently, and the label, roles
   // and profile state are nowhere in the form at all). No subject, no session.
   const described = await readTheAccount(request, upstream, minted.token);
-  if (described === null) return refuseSignIn('upstream');
+  if (described === null) return refuseSignIn('upstream', next);
   // `R-50`. The exchange and `getMe` report the same column a moment apart; if either says
   // the password must change, it must. The stricter of two answers from the API, not a value
   // this tier made up.
@@ -706,7 +716,7 @@ async function openTheSession(request: Request): Promise<Response> {
   } catch {
     // A lifetime this tier will not hold is an answer it does not understand, and an
     // answer it does not understand is not a session. Refusing beats inventing a lifetime.
-    return refuseSignIn('upstream');
+    return refuseSignIn('upstream', next);
   }
 
   // `R-50`, the signpost half. A reviewer whose account is still on the password this
@@ -720,8 +730,10 @@ async function openTheSession(request: Request): Promise<Response> {
   // repeating a sign-in with the same `next` lands on the same address.
   return seeOther(
     account.isDefaultCredential
-      ? CHANGE_PASSWORD_SCREEN
-      : (safeReturnPath(credentials.next) ?? AFTER_SIGN_IN),
+      ? withNext(CHANGE_PASSWORD_SCREEN, next)
+      : !account.profileComplete && next !== null
+        ? withNext('/account', next)
+        : (next ?? AFTER_SIGN_IN),
     sessionCookie(id, minted.expires_in, requestIsSecure(request)),
   );
 }
@@ -770,39 +782,40 @@ async function postedPasswords(
  * goes back is a redirect and an opaque cookie.
  */
 async function changeThePassword(request: Request): Promise<Response> {
+  const next = postedReturnPath(request);
   const sessionId = readSessionId(request.headers.get('cookie'));
   const held = sessionId === null ? null : credentialOf(sessionId);
   if (held === null) {
     // No live session: there is no credential to present and nothing to revoke. Back to the
     // sign-in screen rather than to the password screen, because signing in is the next
     // thing to do and a password screen with no session can only refuse.
-    return seeOther(SIGN_IN_SCREEN, clearedSessionCookie(requestIsSecure(request)));
+    return seeOther(withNext(SIGN_IN_SCREEN, next), clearedSessionCookie(requestIsSecure(request)));
   }
   const subject = subjectOf(sessionId);
-  if (subject === null) return seeOther(SIGN_IN_SCREEN, clearedSessionCookie(requestIsSecure(request)));
+  if (subject === null) return seeOther(withNext(SIGN_IN_SCREEN, next), clearedSessionCookie(requestIsSecure(request)));
 
   const passwords = await postedPasswords(request);
-  if (passwords === null) return reportChange('validation');
+  if (passwords === null) return reportChange('validation', undefined, next);
   if (passwords.next !== passwords.confirm) {
     // R-48's confirmation, checked before anything is sent and before the "must differ"
     // rule below: two passwords that disagree with each other are a typo to fix, which is
     // a different fact -- and a different next action -- from "that matches what you
     // already have".
-    return reportChange('mismatch');
+    return reportChange('mismatch', undefined, next);
   }
   if (passwords.current === passwords.next) {
     // Refused here, before anything is sent, and refused independently by the API. The
     // API's rule is the one that counts; this one means no request carrying two passwords
     // goes out for nothing and the reviewer reads a Russian sentence rather than a
     // translated API message.
-    return reportChange('unchanged');
+    return reportChange('unchanged', undefined, next);
   }
 
   let upstream: string;
   try {
     upstream = getApiUpstreamUrl();
   } catch {
-    return reportChange('unconfigured');
+    return reportChange('unconfigured', undefined, next);
   }
 
   // `getApiToken()` is deliberately NOT read here, and that is the difference from the
@@ -832,23 +845,23 @@ async function changeThePassword(request: Request): Promise<Response> {
   // accepted". One answer from the API, one outcome here: the reviewer is told the current
   // password did not match, which is the reading that costs them nothing if it is the other
   // one — they are about to meet the sign-in screen anyway.
-  if (answer.status === 401) return reportChange('credentials');
+  if (answer.status === 401) return reportChange('credentials', undefined, next);
   // 422 is the API's own copy of the "must differ" rule, plus the mechanical bounds.
-  if (answer.status === 422) return reportChange('unchanged');
-  if (answer.status !== 200) return reportChange('upstream');
+  if (answer.status === 422) return reportChange('unchanged', undefined, next);
+  if (answer.status !== 200) return reportChange('upstream', undefined, next);
 
   let minted: MintedToken;
   try {
     minted = (await answer.json()) as MintedToken;
   } catch {
-    return reportChange('upstream');
+    return reportChange('upstream', undefined, next);
   }
   if (
     typeof minted.token !== 'string' ||
     typeof minted.expires_in !== 'number' ||
     typeof minted.is_default_credential !== 'boolean'
   ) {
-    return reportChange('upstream');
+    return reportChange('upstream', undefined, next);
   }
 
   // `W49-PLAN.md` §3.5's refresh: the new row is opened with what `getMe` says about the
@@ -858,7 +871,7 @@ async function changeThePassword(request: Request): Promise<Response> {
   const described = await readTheAccount(request, upstream, minted.token);
   if (described === null) {
     closeSession(sessionId);
-    return seeOther(SIGN_IN_SCREEN, clearedSessionCookie(requestIsSecure(request)));
+    return seeOther(withNext(SIGN_IN_SCREEN, next), clearedSessionCookie(requestIsSecure(request)));
   }
 
   let replacement: string;
@@ -881,14 +894,16 @@ async function changeThePassword(request: Request): Promise<Response> {
     // session is closed and the reviewer is sent to sign in with the new password rather
     // than told nothing happened.
     closeSession(sessionId);
-    return seeOther(SIGN_IN_SCREEN, clearedSessionCookie(requestIsSecure(request)));
+    return seeOther(withNext(SIGN_IN_SCREEN, next), clearedSessionCookie(requestIsSecure(request)));
   }
   // The old row last, and only once the new one exists. Deleting first would leave a window
   // in which a concurrent request from the same browser met `staleSession`.
   closeSession(sessionId);
+  const cookie = sessionCookie(replacement, minted.expires_in, requestIsSecure(request));
+  if (next !== null) return seeOther(described.profileComplete ? next : withNext('/account', next), cookie);
   return reportChange(
     'changed',
-    sessionCookie(replacement, minted.expires_in, requestIsSecure(request)),
+    cookie,
   );
 }
 

@@ -160,9 +160,10 @@ function changePassword(
     new_password: NEW_PASSWORD,
     confirm_new_password: NEW_PASSWORD,
   },
+  next?: string,
 ): Promise<Response> {
   return POST(
-    new Request(`http://web.test${CHANGE_PASSWORD_SUBMIT_PATH}`, {
+    new Request(`http://web.test${CHANGE_PASSWORD_SUBMIT_PATH}${next === undefined ? '' : `?next=${encodeURIComponent(next)}`}`, {
       method: 'POST',
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
@@ -173,6 +174,36 @@ function changePassword(
     { params: Promise.resolve({ path: ['session', 'password'] }) },
   );
 }
+
+describe('validated return path through password change', () => {
+  it('keeps next after a refusal, then opens it after a successful change', async () => {
+    const cookie = await openASession();
+    const mismatch = await changePassword(cookie, {
+      current_password: PASSWORD,
+      new_password: NEW_PASSWORD,
+      confirm_new_password: 'не совпало',
+    }, '/projects?x=1');
+    expect(mismatch.headers.get('location')).toBe('/account/password?outcome=mismatch&next=%2Fprojects%3Fx%3D1');
+
+    answers = [() => jsonAnswer(REPLACEMENT)];
+    const changed = await changePassword(cookie, undefined, '/projects?x=1');
+    expect(changed.headers.get('location')).toBe('/projects?x=1');
+  });
+
+  it('drops an external destination without echoing it', async () => {
+    const cookie = await openASession();
+    const refused = await changePassword(cookie, { current_password: PASSWORD, new_password: 'one', confirm_new_password: 'two' }, '//evil.example');
+    expect(refused.headers.get('location')).toBe('/account/password?outcome=mismatch');
+  });
+
+  it('hands an incomplete profile to its completion screen', async () => {
+    const cookie = await openASession();
+    me = () => accountAnswer({ profile_complete: false });
+    answers = [() => jsonAnswer(REPLACEMENT)];
+    const response = await changePassword(cookie, undefined, '/dashboard');
+    expect(response.headers.get('location')).toBe('/account?next=%2Fdashboard');
+  });
+});
 
 function listProjects(cookie?: string): Promise<Response> {
   return GET(

@@ -41,13 +41,15 @@ import {
 export interface ChangePasswordFormProps {
   /** How the previous attempt ended, if there was one. */
   readonly outcome?: ChangePasswordOutcome | null | undefined;
+  readonly next?: string | null | undefined;
 }
 
-export function ChangePasswordForm({ outcome }: ChangePasswordFormProps) {
+export function ChangePasswordForm({ outcome, next }: ChangePasswordFormProps) {
   const reported = outcome ?? null;
+  const action = next ? `${CHANGE_PASSWORD_SUBMIT_PATH}?next=${encodeURIComponent(next)}` : CHANGE_PASSWORD_SUBMIT_PATH;
 
   return (
-    <form className="am-form" method="post" action={CHANGE_PASSWORD_SUBMIT_PATH}>
+    <form className="am-form" method="post" action={action}>
       <div className="am-form__field">
         <label htmlFor="change-password-current">
           <strong>Текущий пароль</strong>

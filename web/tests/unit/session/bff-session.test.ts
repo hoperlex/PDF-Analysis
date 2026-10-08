@@ -391,10 +391,22 @@ describe('W50: a validated next survives sign-in, and an invalid one is dropped'
     expect(await response.text()).toBe('');
   });
 
-  it('lands a default credential on the change screen whatever next says', async () => {
+  it('carries next to the forced change screen', async () => {
     answer = () => mintedAnswer(3600, true);
     const response = await signIn({ login: LOGIN, password: PASSWORD, next: '/projects?x=1' });
-    expect(response.headers.get('location')).toBe('/account/password');
+    expect(response.headers.get('location')).toBe('/account/password?next=%2Fprojects%3Fx%3D1');
+  });
+
+  it('keeps a validated destination after a refused sign-in', async () => {
+    answer = () => new Response('{}', { status: 401 });
+    const response = await signIn({ login: LOGIN, password: PASSWORD, next: '/projects?x=1' });
+    expect(response.headers.get('location')).toBe('/login?refusal=credentials&next=%2Fprojects%3Fx%3D1');
+  });
+
+  it('sends an incomplete profile to completion while keeping the destination', async () => {
+    me = () => accountAnswer({ profile_complete: false });
+    const response = await signIn({ login: LOGIN, password: PASSWORD, next: '/dashboard' });
+    expect(response.headers.get('location')).toBe('/account?next=%2Fdashboard');
   });
 
   it('is idempotent: the same next lands on the same address every time', async () => {

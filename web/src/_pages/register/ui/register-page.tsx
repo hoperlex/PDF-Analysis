@@ -1,11 +1,14 @@
-import { RoutePlaceholder } from '@/shared/ui';
+import { RegisterForm } from '@/features/register';
+import type { RegistrationRefusal } from '@/features/register';
+import { PageShell } from '@/shared/ui';
 
-export function RegisterPage() {
+export function RegisterPage({ refusal, unknownRefusal = false }: {
+  readonly refusal?: RegistrationRefusal | null;
+  readonly unknownRefusal?: boolean;
+}) {
   return (
-    <RoutePlaceholder
-      screen="Регистрация"
-      route="/register"
-      promise="Здесь можно будет подать заявку на учётную запись. После решения администратора состояние заявки будет показано при входе."
-    />
+    <PageShell title="Регистрация" subtitle="Отправьте заявку на учётную запись. Решение принимает администратор.">
+      <RegisterForm refusal={refusal} unknownRefusal={unknownRefusal} />
+    </PageShell>
   );
 }

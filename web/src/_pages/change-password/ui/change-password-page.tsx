@@ -35,9 +35,10 @@ export interface ChangePasswordPageProps {
    * fault reports a fault.
    */
   readonly mustChange?: boolean | undefined;
+  readonly next?: string | null | undefined;
 }
 
-export function ChangePasswordPage({ login, outcome, mustChange }: ChangePasswordPageProps) {
+export function ChangePasswordPage({ login, outcome, mustChange, next }: ChangePasswordPageProps) {
   const signedIn = typeof login === 'string' && login.length > 0;
 
   return (
@@ -57,11 +58,11 @@ export function ChangePasswordPage({ login, outcome, mustChange }: ChangePasswor
         </p>
       ) : null}
       {signedIn ? (
-        <ChangePasswordForm outcome={outcome} />
+        <ChangePasswordForm outcome={outcome} next={next} />
       ) : (
         <p className="am-note" data-change-password-session="none">
           Сеанс не открыт, поэтому менять нечего и подтверждать нечем.{' '}
-          <Link href="/login">Перейдите на экран входа</Link> и войдите под своей учётной
+          <Link href={next ? `/login?next=${encodeURIComponent(next)}` : '/login'}>Перейдите на экран входа</Link> и войдите под своей учётной
           записью.
         </p>
       )}

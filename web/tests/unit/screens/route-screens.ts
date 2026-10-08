@@ -256,7 +256,7 @@ export const SEEDS: readonly Seed[] = [
     discipline: {},
   },
   {
-    // The placeholder the guard sends an incomplete profile to: the state it exists for.
+    // The profile route starts with getMe loading; account-auth.test.ts seeds its ready states.
     address: '/account',
     name: 'account-incomplete',
     make: () => createElement(AccountPage, { profileComplete: false }),

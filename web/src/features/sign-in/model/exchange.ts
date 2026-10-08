@@ -120,7 +120,7 @@ export const SIGN_IN_REFUSALS = [
 
 export type SignInRefusal = (typeof SIGN_IN_REFUSALS)[number];
 
-/** True for exactly the six values above, so a hand-typed query string renders nothing. */
+/** True for exactly the six values above; an unknown query value renders a typed fault. */
 export function isSignInRefusal(value: string | null | undefined): value is SignInRefusal {
   return typeof value === 'string' && (SIGN_IN_REFUSALS as readonly string[]).includes(value);
 }

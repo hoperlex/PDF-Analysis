@@ -30,14 +30,15 @@ export interface SignInFormProps {
 }
 
 export function SignInForm({ refusal, next }: SignInFormProps) {
+  const action = next ? `${SESSION_OPEN_PATH}?next=${encodeURIComponent(next)}` : SESSION_OPEN_PATH;
   return (
-    <form className="am-form" method="post" action={SESSION_OPEN_PATH}>
+    <form className="am-form" method="post" action={action}>
       {typeof next === 'string' && next.length > 0 ? (
         <input type="hidden" name={SIGN_IN_NEXT_FIELD} value={next} />
       ) : null}
       <div className="am-form__field">
         <label htmlFor="sign-in-login">
-          <strong>Имя пользователя</strong>
+          <strong>Адрес электронной почты</strong>
         </label>
         <input
           id="sign-in-login"
@@ -46,7 +47,7 @@ export function SignInForm({ refusal, next }: SignInFormProps) {
           autoComplete="username"
           required
           maxLength={320}
-          placeholder="Имя пользователя"
+          placeholder="Электронная почта или прежний логин"
         />
       </div>
 
