@@ -1,5 +1,9 @@
 # ALPHA-MANUAL-01 — completion report
 
+> Forward addendum: `W52-ACCEPT-01` adds an independently measured API build
+> comparison to the automated pack. Its report carries the new checks; this
+> historical W48 completion evidence remains as recorded.
+
 ## Result
 
 **DONE.** Открытая альфа получила воспроизводимый операторский пакет: безопасный preflight,

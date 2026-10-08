@@ -154,6 +154,51 @@ if [[ "$MODE" == "automated" ]]; then
     "index содержит незакоммиченные изменения"
   [[ -z "$(git -C "$REPO_ROOT" ls-files --others --exclude-standard)" ]] || die \
     "checkout содержит untracked-файлы"
+
+  # Measure the candidate tree independently of the API implementation. Read
+  # the runtime COPY inventory from Dockerfile.api on every invocation.
+  CANDIDATE_BUILD_ID="$(python3 - "$REPO_ROOT" <<'PY'
+import hashlib
+import pathlib
+import re
+import sys
+
+root = pathlib.Path(sys.argv[1])
+dockerfile = (root / "infra/deploy/Dockerfile.api").read_text(encoding="utf-8")
+expected = {
+    "src/", "db/", "contracts/", "fixtures/recorded/", "release-notes/",
+    "docs/program/P02_LOCK.json", "VERSION", "uv.lock",
+}
+copied = {
+    source
+    for source, destination in re.findall(r"^COPY (\S+) (/app/\S+)$", dockerfile, re.M)
+    if destination == f"/app/{source}"
+}
+missing = expected - copied
+if missing:
+    raise SystemExit(f"Dockerfile.api lacks build inputs: {', '.join(sorted(missing))}")
+paths = []
+for source in sorted(expected & copied):
+    candidate = root / source
+    if candidate.is_symlink() or not candidate.exists():
+        raise SystemExit(f"build input is absent or linked: {source}")
+    members = candidate.rglob("*") if candidate.is_dir() else (candidate,)
+    for member in members:
+        relative = member.relative_to(root)
+        if "__pycache__" in relative.parts or member.suffix == ".pyc":
+            continue
+        if member.is_symlink():
+            raise SystemExit(f"build input is linked: {relative.as_posix()}")
+        if member.is_file():
+            paths.append(member)
+manifest = hashlib.sha256()
+for path in sorted(paths, key=lambda item: item.relative_to(root).as_posix()):
+    name = path.relative_to(root).as_posix()
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    manifest.update(f"{name}\t{digest}\n".encode("utf-8"))
+print("b" + manifest.hexdigest()[:16])
+PY
+)" || blocked "не удалось измерить кандидатскую сборку API"
 fi
 
 cat >"$REPORT" <<EOF
@@ -165,6 +210,7 @@ cat >"$REPORT" <<EOF
 - local_origin_dev: $DEV_SHA
 - candidate_sha: ${CANDIDATE_SHA:-not-required}
 - attested_deployed_sha: ${DEPLOYED_SHA:-not-required}
+- candidate_api_build_id_measured: ${CANDIDATE_BUILD_ID:-not-required}
 - deployed_sha_attestation: operator_input; this command does not identify the served revision
 - runbook: $RUNBOOK_REL
 - credentials_recorded: no
@@ -360,6 +406,8 @@ if [[ "$MODE" == "automated" ]]; then
     --out "$EVIDENCE_DIR/automated-verdict.json" \
     --candidate-sha "$CANDIDATE_SHA" \
     --deployed-sha "$DEPLOYED_SHA" \
+    --origin "$ORIGIN" \
+    --candidate-build-id "$CANDIDATE_BUILD_ID" \
     --journey-exit "$JOURNEY_EXIT" \
     --refusals-exit "$REFUSALS_EXIT" \
     >"$EVIDENCE_DIR/verifier.log" 2>&1
@@ -376,6 +424,16 @@ if [[ "$MODE" == "automated" ]]; then
 - refusals_exit: $REFUSALS_EXIT
 - verifier_exit: $VERIFIER_EXIT
 - machine_evidence: automated-verdict.json
+- served_api_build_id_measured: $(python3 - "$EVIDENCE_DIR/automated-verdict.json" <<'PY'
+import json
+import pathlib
+import re
+import sys
+
+value = json.loads(pathlib.Path(sys.argv[1]).read_text())["phases"]["apiBuild"]["servedMeasured"]
+print(value if isinstance(value, str) and re.fullmatch(r"b[0-9a-f]{16}", value) else "unavailable")
+PY
+)
 - human_A01_A20: required separately; not executed by this command
 EOF
 

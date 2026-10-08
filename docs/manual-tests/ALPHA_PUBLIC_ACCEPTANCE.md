@@ -97,6 +97,16 @@ raw browser envelopes, safe logs, `report.md`, and a machine-readable
 `automated-verdict.json` with schema `w48-alpha-acceptance/v1` and separate
 `candidateSha` and `deployedSha` in `.local/manual-alpha/<UTC timestamp>-<pid>/`.
 
+The command also measures the candidate API build from the clean checkout's
+runtime image inputs, remeasures it independently in the verdict checker, and
+reads `getProductVersion` from the authorized origin using the reviewer
+credential supplied in `E2E_PC01_LOGIN` and `E2E_PC01_PASSWORD`. Require
+`phases.apiBuild.outcome: PASS`: the two local measurements and the served
+`build_id` must agree, and the served product and contract versions must match
+the candidate. `report.md` and the machine verdict record only the measured
+identifiers; neither records the password, bearer token or request headers.
+An unavailable version read is `BLOCKED`; a mismatched build is `FAIL`.
+
 - `ALPHA ACCEPTANCE PASS` means the automated phases completed. It is **not** a
   human sign-off for A01–A20.
 - `ALPHA ACCEPTANCE FAIL` means observed behavior or evidence completeness
@@ -131,6 +141,10 @@ authorized that deployment action. In a private window open the origin, go to
 appears in the URL or page; there is no redirect loop or unhandled error. If
 the application permits work with the unchanged initial password, this is
 **FAIL**.
+
+Also compare the measured candidate and served API build identifiers in the
+automated verdict. The SHA pair remains operator attestation; the build read
+is the separate measurement of API bytes served by the running process.
 
 ### A02 — create a test project
 

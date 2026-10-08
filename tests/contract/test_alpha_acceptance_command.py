@@ -5,9 +5,13 @@ import os
 import re
 import shutil
 import subprocess
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
+
+from auditmanager.releases.build_id import compute_build_id
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,6 +25,61 @@ MANIFEST = ROOT / "tests" / "e2e" / "pc01" / "journey" / "manifest.json"
 # adds a screen moves both by adding it to the manifest. That the verifier still refuses a
 # shorter walk is shown with a one-route-short envelope (`W50-REGISTRY-01` report).
 ROUTES = len(json.loads(MANIFEST.read_text(encoding="utf-8"))["routes"])
+REVIEWER_ENV = {"E2E_PC01_LOGIN": "synthetic-reviewer", "E2E_PC01_PASSWORD": "not-a-real-secret"}
+
+
+@pytest.fixture
+def version_server():
+    """A local credentialed API with a mutable served-build answer."""
+    state = {"build_id": compute_build_id(), "version_status": 200}
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, _format: str, *_args: object) -> None:
+            pass
+
+        def answer(self, status: int, body: dict) -> None:
+            encoded = json.dumps(body).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(encoded)))
+            self.end_headers()
+            self.wfile.write(encoded)
+
+        def do_POST(self) -> None:
+            if self.path != "/api/v1/auth/token":
+                self.answer(404, {})
+                return
+            size = int(self.headers.get("Content-Length", "0"))
+            credentials = json.loads(self.rfile.read(size))
+            if credentials != {"login": REVIEWER_ENV["E2E_PC01_LOGIN"],
+                               "password": REVIEWER_ENV["E2E_PC01_PASSWORD"]}:
+                self.answer(401, {})
+                return
+            self.answer(200, {"token": "stub-private-token", "expires_in": 60,
+                              "is_default_credential": False})
+
+        def do_GET(self) -> None:
+            if self.path != "/api/v1/system/version":
+                self.answer(404, {})
+                return
+            if self.headers.get("Authorization") != "Bearer stub-private-token":
+                self.answer(401, {})
+                return
+            self.answer(state["version_status"], {
+                "product_version": "0.3.0",
+                "build_id": state["build_id"],
+                "contract_version": "1.0.0-draft.1",
+            })
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}", state
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
 
 
 def _assert_no_served_revision_proof_claim(report: str) -> None:
@@ -266,8 +325,9 @@ body = {{
 
 
 def test_release_command_cannot_turn_skips_recorded_mode_or_outage_into_pass(
-    tmp_path: Path,
+    tmp_path: Path, version_server,
 ) -> None:
+    origin, _ = version_server
     real_node = shutil.which("node")
     assert real_node is not None
     bin_dir = tmp_path / "bin"
@@ -277,8 +337,7 @@ def test_release_command_cannot_turn_skips_recorded_mode_or_outage_into_pass(
     base_env = {
         **os.environ,
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
-        "E2E_PC01_LOGIN": "synthetic-reviewer",
-        "E2E_PC01_PASSWORD": "not-a-real-secret",
+        **REVIEWER_ENV,
     }
 
     expected = {"pass": 0, "skipped": 1, "recorded": 1, "dependency": 2}
@@ -288,7 +347,7 @@ def test_release_command_cannot_turn_skips_recorded_mode_or_outage_into_pass(
             str(SCRIPT),
             "--automated",
             "--origin",
-            "https://alpha.example.test",
+            origin,
             "--candidate-sha",
             head,
             "--deployed-sha",
@@ -306,6 +365,9 @@ def test_release_command_cannot_turn_skips_recorded_mode_or_outage_into_pass(
         machine = json.loads((evidence / "automated-verdict.json").read_text())
         assert machine["candidateSha"] == head
         assert machine["deployedSha"] == head
+        assert machine["phases"]["apiBuild"]["outcome"] == "PASS"
+        assert machine["phases"]["apiBuild"]["candidateMeasured"] == compute_build_id()
+        assert machine["phases"]["apiBuild"]["servedMeasured"] == compute_build_id()
         assert machine["humanChecklist"] == {
             "required": True,
             "automated": False,
@@ -314,14 +376,19 @@ def test_release_command_cannot_turn_skips_recorded_mode_or_outage_into_pass(
         if machine["verdict"] == "PASS":
             assert {phase["outcome"] for phase in machine["phases"].values()} == {"PASS"}
         assert "not-a-real-secret" not in output
+        assert "stub-private-token" not in output
         report = (evidence / "report.md").read_text()
         assert f"- attested_deployed_sha: {head}" in report
         assert "deployed_sha_attestation: operator_input" in report
         _assert_no_served_revision_proof_claim(report)
         assert "not-a-real-secret" not in report
+        assert "stub-private-token" not in report
+        assert f"candidate_api_build_id_measured: {compute_build_id()}" in report
+        assert f"served_api_build_id_measured: {compute_build_id()}" in report
 
 
-def test_verifier_itself_rejects_a_partial_or_non_live_envelope(tmp_path: Path) -> None:
+def test_verifier_itself_rejects_a_partial_or_non_live_envelope(tmp_path: Path, version_server) -> None:
+    origin, _ = version_server
     sha = "b" * 40
     refusals = tmp_path / "refusals.json"
     refusals.write_text(json.dumps(_refusals()), encoding="utf-8")
@@ -345,10 +412,15 @@ def test_verifier_itself_rejects_a_partial_or_non_live_envelope(tmp_path: Path) 
             sha,
             "--deployed-sha",
             sha,
+            "--origin",
+            origin,
+            "--candidate-build-id",
+            compute_build_id(),
             "--journey-exit",
             "0",
             "--refusals-exit",
             "0",
+            env={**os.environ, **REVIEWER_ENV},
         )
         assert result.returncode == 1
         assert json.loads(out.read_text())["verdict"] == "FAIL"
@@ -356,8 +428,9 @@ def test_verifier_itself_rejects_a_partial_or_non_live_envelope(tmp_path: Path) 
 
 
 def test_dependency_outage_blocks_even_when_partial_journey_exits_zero(
-    tmp_path: Path,
+    tmp_path: Path, version_server,
 ) -> None:
+    origin, _ = version_server
     sha = "c" * 40
     journey = _journey(dependency=True)
     terminal_exchange = journey["write"]["steps"][-1]["exchanges"][0]
@@ -385,10 +458,15 @@ def test_dependency_outage_blocks_even_when_partial_journey_exits_zero(
         sha,
         "--deployed-sha",
         sha,
+        "--origin",
+        origin,
+        "--candidate-build-id",
+        compute_build_id(),
         "--journey-exit",
         "0",
         "--refusals-exit",
         "0",
+        env={**os.environ, **REVIEWER_ENV},
     )
 
     evidence = json.loads(verdict_path.read_text())
@@ -398,7 +476,8 @@ def test_dependency_outage_blocks_even_when_partial_journey_exits_zero(
     assert "acceptance verdict: PASS" not in result.stdout
 
 
-def test_partial_with_failed_text_analysis_is_not_provider_live_pass(tmp_path: Path) -> None:
+def test_partial_with_failed_text_analysis_is_not_provider_live_pass(tmp_path: Path, version_server) -> None:
+    origin, _ = version_server
     sha = "d" * 40
     journey = _journey()
     terminal_exchange = journey["write"]["steps"][-1]["exchanges"][0]
@@ -428,10 +507,15 @@ def test_partial_with_failed_text_analysis_is_not_provider_live_pass(tmp_path: P
         sha,
         "--deployed-sha",
         sha,
+        "--origin",
+        origin,
+        "--candidate-build-id",
+        compute_build_id(),
         "--journey-exit",
         "0",
         "--refusals-exit",
         "0",
+        env={**os.environ, **REVIEWER_ENV},
     )
 
     evidence = json.loads(verdict_path.read_text())
@@ -440,6 +524,47 @@ def test_partial_with_failed_text_analysis_is_not_provider_live_pass(tmp_path: P
     assert evidence["verdict"] == "FAIL"
     assert "failed text_analysis stage" in "\n".join(evidence["findings"])
     assert "acceptance verdict: PASS" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("scenario", "expected_exit", "expected_phase"),
+    [
+        ("served-mismatch", 1, "FAIL"),
+        ("shell-mismatch", 1, "FAIL"),
+        ("version-unavailable", 2, "BLOCKED"),
+    ],
+)
+def test_build_measurement_refuses_mismatch_and_missing_response(
+    tmp_path: Path, version_server, scenario: str, expected_exit: int, expected_phase: str
+) -> None:
+    origin, state = version_server
+    candidate_build = compute_build_id()
+    if scenario == "served-mismatch":
+        state["build_id"] = "b" + "0" * 16 if candidate_build != "b" + "0" * 16 else "b" + "1" * 16
+    if scenario == "version-unavailable":
+        state["version_status"] = 503
+    if scenario == "shell-mismatch":
+        candidate_build = "b" + "0" * 16 if candidate_build != "b" + "0" * 16 else "b" + "1" * 16
+    journey = tmp_path / "journey.json"
+    refusals = tmp_path / "refusals.json"
+    verdict = tmp_path / "verdict.json"
+    journey.write_text(json.dumps(_journey()), encoding="utf-8")
+    refusals.write_text(json.dumps(_refusals()), encoding="utf-8")
+    result = run(
+        "node", str(VERIFY),
+        "--journey", str(journey), "--refusals", str(refusals),
+        "--out", str(verdict),
+        "--candidate-sha", "a" * 40, "--deployed-sha", "a" * 40,
+        "--origin", origin, "--candidate-build-id", candidate_build,
+        "--journey-exit", "0", "--refusals-exit", "0",
+        env={**os.environ, **REVIEWER_ENV},
+    )
+    assert result.returncode == expected_exit, result.stdout + result.stderr
+    evidence = json.loads(verdict.read_text())
+    assert evidence["phases"]["apiBuild"]["outcome"] == expected_phase
+    assert evidence["verdict"] == expected_phase
+    assert "not-a-real-secret" not in result.stdout + result.stderr + verdict.read_text()
+    assert "stub-private-token" not in result.stdout + result.stderr + verdict.read_text()
 
 
 @pytest.mark.parametrize(

@@ -7,7 +7,8 @@
  * executed drive from being presented as the public-alpha acceptance run.
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,6 +27,8 @@ function parseArgs(argv) {
     'out',
     'candidate-sha',
     'deployed-sha',
+    'origin',
+    'candidate-build-id',
     'journey-exit',
     'refusals-exit',
   ]) {
@@ -39,6 +42,78 @@ function readJson(path) {
     return { value: JSON.parse(readFileSync(resolve(path), 'utf8')), error: null };
   } catch (error) {
     return { value: null, error: error.message };
+  }
+}
+
+const REPOSITORY_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
+const BUILD_INPUTS = [
+  'src/', 'db/', 'contracts/', 'fixtures/recorded/', 'release-notes/',
+  'docs/program/P02_LOCK.json', 'VERSION', 'uv.lock',
+];
+
+function independentlyMeasuredBuildId() {
+  const dockerfile = readFileSync(resolve(REPOSITORY_ROOT, 'infra/deploy/Dockerfile.api'), 'utf8');
+  const runtimeSources = new Set(
+    [...dockerfile.matchAll(/^COPY ([^\s]+) (\/app\/[^\s]+)$/gm)]
+      .filter(([, source, destination]) => destination === `/app/${source}`)
+      .map(([, source]) => source),
+  );
+  for (const source of BUILD_INPUTS) {
+    if (!runtimeSources.has(source)) throw new Error(`Dockerfile.api omits build input ${source}`);
+  }
+  const names = [];
+  function walk(relative) {
+    const absolute = resolve(REPOSITORY_ROOT, relative);
+    const stat = lstatSync(absolute);
+    if (stat.isSymbolicLink()) throw new Error(`build input is a symlink: ${relative}`);
+    if (stat.isDirectory()) {
+      for (const child of readdirSync(absolute).sort()) {
+        if (child === '__pycache__') continue;
+        walk(`${relative}${relative.endsWith('/') ? '' : '/'}${child}`);
+      }
+    } else if (stat.isFile() && !relative.endsWith('.pyc')) {
+      names.push(relative);
+    }
+  }
+  for (const source of BUILD_INPUTS) walk(source);
+  const manifest = createHash('sha256');
+  for (const name of names.sort()) {
+    const digest = createHash('sha256').update(readFileSync(resolve(REPOSITORY_ROOT, name))).digest('hex');
+    manifest.update(`${name}\t${digest}\n`);
+  }
+  return `b${manifest.digest('hex').slice(0, 16)}`;
+}
+
+async function readServedProductVersion(origin) {
+  const login = process.env.E2E_PC01_LOGIN;
+  const password = process.env.E2E_PC01_PASSWORD;
+  if (!login || !password) return { outcome: 'BLOCKED', reason: 'reviewer credential is absent', body: null };
+  try {
+    const auth = await fetch(`${origin}/api/v1/auth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ login, password }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (auth.status !== 200) return { outcome: 'BLOCKED', reason: `credential exchange returned ${auth.status}`, body: null };
+    const issued = await auth.json();
+    if (typeof issued?.token !== 'string' || !issued.token) {
+      return { outcome: 'FAIL', reason: 'credential exchange returned no token', body: null };
+    }
+    const version = await fetch(`${origin}/api/v1/system/version`, {
+      headers: { authorization: `Bearer ${issued.token}` },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (version.status !== 200) return { outcome: 'BLOCKED', reason: `version read returned ${version.status}`, body: null };
+    const body = await version.json();
+    if (typeof body?.product_version !== 'string' || typeof body?.build_id !== 'string' ||
+        typeof body?.contract_version !== 'string') {
+      return { outcome: 'FAIL', reason: 'version response is malformed', body: null };
+    }
+    return { outcome: 'PASS', reason: null, body };
+  } catch {
+    // Never serialize a response body, credential, token, URL or transport exception.
+    return { outcome: 'BLOCKED', reason: 'version service is unavailable', body: null };
   }
 }
 
@@ -72,11 +147,41 @@ function isCurrentRunReading(item, runId) {
 }
 
 const args = parseArgs(process.argv.slice(2));
+const expectedVersion = readFileSync(resolve(REPOSITORY_ROOT, 'VERSION'), 'utf8').trim();
+const expectedContractVersion = JSON.parse(
+  readFileSync(resolve(REPOSITORY_ROOT, 'contracts/api/v1/openapi.json'), 'utf8'),
+).info.version;
+let independentBuildId = null;
+let buildInputError = null;
+try {
+  independentBuildId = independentlyMeasuredBuildId();
+} catch (error) {
+  buildInputError = error instanceof Error ? error.message : 'build inputs are unavailable';
+}
+const servedVersion = await readServedProductVersion(args.origin);
 const journeyRead = readJson(args.journey);
 const refusalsRead = readJson(args.refusals);
 const journey = journeyRead.value;
 const refusals = refusalsRead.value;
 const findings = [];
+if (buildInputError !== null) findings.push(buildInputError);
+if (servedVersion.reason !== null) findings.push(servedVersion.reason);
+const buildIdPattern = /^b[0-9a-f]{16}$/;
+const buildParity = buildInputError === null && servedVersion.outcome === 'PASS' &&
+  buildIdPattern.test(args['candidate-build-id']) &&
+  args['candidate-build-id'] === independentBuildId &&
+  servedVersion.body.build_id === independentBuildId &&
+  servedVersion.body.product_version === expectedVersion &&
+  servedVersion.body.contract_version === expectedContractVersion;
+if (!buildIdPattern.test(args['candidate-build-id'])) findings.push('candidate build ID is malformed');
+if (independentBuildId !== null && args['candidate-build-id'] !== independentBuildId) {
+  findings.push('shell and verifier measured different candidate builds');
+}
+if (servedVersion.body !== null) {
+  if (servedVersion.body.build_id !== independentBuildId) findings.push('served API build differs from candidate');
+  if (servedVersion.body.product_version !== expectedVersion) findings.push('served product version differs from candidate');
+  if (servedVersion.body.contract_version !== expectedContractVersion) findings.push('served contract version differs from candidate');
+}
 
 // How many cold routes a complete read phase walks: the number the journey manifest beside
 // this file declares, not a literal. Until W50 this was `16` written six times, and a wave that
@@ -234,6 +339,14 @@ const refusalsBlockedByDependency =
   dependencyUnavailable && refusalsExit === 99 && refusalsRead.error !== null;
 
 const phases = {
+    apiBuild: {
+      outcome: buildParity ? 'PASS' : servedVersion.outcome === 'BLOCKED' &&
+        buildInputError === null && args['candidate-build-id'] === independentBuildId ? 'BLOCKED' : 'FAIL',
+      candidateMeasured: independentBuildId,
+      servedMeasured: servedVersion.body?.build_id ?? null,
+      productVersion: servedVersion.body?.product_version ?? null,
+      contractVersion: servedVersion.body?.contract_version ?? null,
+    },
     identity: {
       outcome: identityOk ? 'PASS' : 'FAIL',
     },
