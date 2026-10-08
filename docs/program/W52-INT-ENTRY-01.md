@@ -46,10 +46,15 @@ debt rows and the frozen contract set, and records the code-only validation
 boundary. D-137–D-140 remain release-blocking until the separate validation
 stage supplies exact-candidate evidence.
 
-The local `git ls-remote origin refs/heads/dev refs/heads/main` failed with
-`Could not resolve host: github.com`. Do not publish this commit until the
-remote is reachable, its refs are re-read, and an exact fast-forward is
-proved. No `origin/main` authority exists here.
+The first sandboxed `git ls-remote origin refs/heads/dev refs/heads/main`
+failed with `Could not resolve host: github.com`. The approved read-only
+repeat resolved both refs: `dev` was `4159d4e` and `main` was `1e9bb13`.
+After the exact clean commit `604341491c3ac2de07087d3a56904bfe480b1e4b`
+again passed the 93 focused checks, `git diff --check` and ancestor proof,
+the refs were re-read at those same SHAs. A non-force push fast-forwarded
+`origin/dev` from `4159d4e` to `6043414`; readback returned that exact SHA.
+`origin/main` remained `1e9bb13`. This publication addendum changes only
+this report and claims no release or deployment authority.
 
 ## Scope and rollback
 
