@@ -19,6 +19,14 @@ opaque test helper is now explicit and checked before the guard sees it. The fir
 was stopped when disk pressure developed; a fresh full gate is required on
 the corrected commit.
 
+The second full gate ran its Python battery to completion: 3,259 passed,
+6 skipped and two failed. The remaining failures were stale test expectations:
+the composed-router smoke test treated the two declared Stage-B 503 responses
+as unexpected faults, and the migrated-template fixture test still required
+head `0015` after SEAL introduced `0016`. Both tests now pin the exact new
+behavior and migration head. That second gate also had no `GATE OK`; a new
+complete gate on the final correction is required.
+
 The three new release routes are intentionally skeletal: authorized requests
 return `dependency_unavailable` until Stage C installs release storage and
 VERSION. They are a known limitation of this exact source, not evidence of a

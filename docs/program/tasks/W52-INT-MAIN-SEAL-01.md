@@ -76,6 +76,10 @@ directly instructs merging it into main. This task alone owns that publication.
 - `tests/integration/api/identity_surface.py` — make its injected release
   stand-in explicit and runtime-check the forwarded port so the whole-port
   guard can verify this otherwise opaque wiring.
+- `tests/integration/composition/test_router_answers.py` — distinguish the
+  two declared Stage-B 503 release responses from unexpected server faults.
+- `tests/integration/db/test_fixture_template.py` — pin the cloned template
+  to the inherited migration head `0016_release_notes`.
 - Local isolated branch, ignored test configuration and services owned by this task.
 
 ## Forbidden hotspots
