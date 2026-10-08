@@ -68,6 +68,12 @@
 > `W52-INT-A2B-01` grants Stage B SEAL from a fresh pin sweep; Stage C/C2 still
 > require fresh grants after their preceding merges. The code-only Stage-A acceptance supplies no complete gate, QA,
 > live/manual acceptance, release verdict or `origin/main` authority.
+> `W52-SEAL-01` is implemented at `0dd3f7b` and accepted into the local
+> integration line: the API is 30 paths / 37 operations / 83 schemas and the
+> migration head is `0016_release_notes`. The sealed release routes return
+> `dependency_unavailable` until Stage C supplies the release backend.
+> `W52-INT-B2C-01` owns development publication and the first current-tree
+> Stage-C grant; D-137–D-140 remain open.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers

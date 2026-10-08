@@ -4,9 +4,11 @@
 from planning SHA `2b45a11` on 2026-10-08. The entry and execution amendment below
 supersedes the older gate-dependent dispatch sentence. `W52-RULE-01` recorded
 R-71…R-74. `W52-FREEZE-01` froze Stage A; `W52-GATE-01` is accepted at
-`6d2ae47` on `origin/dev`. `W52-INT-A2B-01` issues the current-tree Stage-B
-SEAL grant; Stage C/C2 remain undispatchable until their exact grants follow
-the preceding merges.
+`6d2ae47` on `origin/dev`. `W52-INT-A2B-01` issued the Stage-B
+SEAL grant. SEAL is implemented at `0dd3f7b`; `W52-INT-B2C-01`
+accepts it and issues the first Stage-C grant in
+`tasks/W52-RELEASES-API.md`. Stage C2 still requires its grant after
+the Stage-C merge.
 Round 2 (both judges ACCEPT-WITH-FIXES, all fixes
 text or grant lines) is applied; no third round (`R-74`). Revision 2 was rebuilt on the first judging round (design judge:
 ACCEPT-WITH-FIXES, seven majors; grants judge: REJECT, seven majors; both verified against
