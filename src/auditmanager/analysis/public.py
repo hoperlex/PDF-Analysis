@@ -61,7 +61,7 @@ from auditmanager.analysis.text import (
     load_provider_config,
     run_text_analysis,
 )
-from auditmanager.analysis.text.stage import STAGE_VERSION
+from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
 
 __all__ = [
     "ARTIFACT_VERSION",
@@ -87,7 +87,7 @@ __all__ = [
     "ProviderMode",
     "ProxyAdapter",
     "ProxySettings",
-    "STAGE_VERSION",
+    "TEXT_STAGE_VERSION",
     "StageContext",
     "StageDefinition",
     "StageError",
