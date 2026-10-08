@@ -8,7 +8,8 @@
 > open. Temporary-stand checks and end-of-wave gates are deferred to a later,
 > separately designed wave (`D-137`, `D-138`).
 > W52 code preparations `W52-PINSWEEP-01` and `W52-FACTS-01` are merged on `origin/dev`
-> through `b5be37e`; W52 has not been frozen or closed. QA and full-gate evidence for this
+> through `b5be37e`; W52 Stage A is frozen and accepted on `origin/dev` at
+> `6d2ae471132e78268d3af8ca872560491ec57233`, while the wave is not closed. QA and full-gate evidence for this
 > and later code-only candidates is open under `D-139` and `D-140`.
 > The independent D-133 proxy-code correction is merged through `3cfc8d9`; its W56 and
 > live-validation halves remain open.
@@ -53,8 +54,8 @@
 > `W52-INT-ENTRY-01` adopts the judged W52 plan and roadmap from planning
 > SHA `2b45a11` and reconciles its W51 full-gate entry with the owner's later
 > code-first deferral. The W51 close at `4159d4e` satisfies development
-> lineage only; D-137–D-140 retain release validation. W52 still awaits
-> `W52-RULE-01` and `W52-FREEZE-01` before dispatch.
+> lineage only; D-137–D-140 retain release validation. At the entry commit,
+> `W52-RULE-01` and `W52-FREEZE-01` were still pending; both are complete now.
 > `W52-INT-FRONTEND-BASELINE-01` remeasured the clean `defade8` development
 > tree: frontend typecheck and lint passed, and all 1,712 Vitest tests passed
 > with child-process execution permitted. This supersedes the older red
@@ -62,8 +63,10 @@
 > independent QA or live/manual acceptance; D-137–D-140 remain open.
 > `W52-RULE-01` records the owner's three direct confirmations as R-71…R-74.
 > `W52-FREEZE-01` fixes the Stage-A base and the remaining `W52-GATE-01`
-> grant; Stage B/C/C2 remain undispatchable until fresh grants follow their
-> preceding merges. The code-only freeze supplies no complete gate, QA,
+> grant. `W52-GATE-01` passed 257 DB, 63 storage, 91 ingest and 54 auth tests
+> on isolated services; the exact fixture-only SHA was published to `origin/dev`.
+> `W52-INT-A2B-01` grants Stage B SEAL from a fresh pin sweep; Stage C/C2 still
+> require fresh grants after their preceding merges. The code-only Stage-A acceptance supplies no complete gate, QA,
 > live/manual acceptance, release verdict or `origin/main` authority.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
