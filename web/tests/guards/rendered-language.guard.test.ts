@@ -86,6 +86,8 @@ import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
 import { SignInPage } from '@/_pages/sign-in';
 import { ChangePasswordPage } from '@/_pages/change-password';
+import { ManageUserControls } from '@/features/manage-user';
+import type { Account } from '@/shared/api';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
@@ -1064,6 +1066,19 @@ const DERIVED_SCREENS: readonly { readonly name: string; readonly make: () => Re
       ),
   }));
 
+const ADMIN_USER_ACCOUNT: Account = {
+  archived_at: null,
+  display_label: 'Проверкина А. С.',
+  first_name: 'Анна',
+  is_default_credential: false,
+  last_name: 'Проверкина',
+  login: 'проверкина@пример.испытание',
+  middle_name: 'Сергеевна',
+  profile_complete: true,
+  roles: ['admin', 'expert'],
+  user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+};
+
 const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => ReactElement }[] = [
   /*
    * `AppFrame` is a SCREEN here, not a wrapper, and that is the repair.
@@ -1168,6 +1183,14 @@ const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => React
     name: 'change-password-changed',
     make: () =>
       createElement(ChangePasswordPage, { login: 'проверяющий', outcome: 'changed' }),
+  },
+  {
+    name: 'manage-user-active',
+    make: () => createElement(ManageUserControls, { account: ADMIN_USER_ACCOUNT }),
+  },
+  {
+    name: 'manage-user-archived',
+    make: () => createElement(ManageUserControls, { account: { ...ADMIN_USER_ACCOUNT, archived_at: '2026-10-08T00:00:00Z' } }),
   },
   /*
    * `app/not-found.tsx` is a FILE in the route tree and not an address, so no derivation

@@ -604,25 +604,37 @@
       "path": "/admin/users",
       "page_module": "web/src/app/admin/users/page.tsx",
       "$comment": [
-        "Admin-only no-call placeholder. The journey account holds admin and opens it directly;",
-        "an expert is sent to /403 and a guest to /login with validated next."
+        "Admin-only account list. The journey account holds admin and opens it directly;",
+        "an expert is sent to /403 and a guest to /login with validated next.",
+        "A rendered detail link supplies the opaque user_uid for the next cold load."
       ],
-      "expects_api": [],
-      "follow": null
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/users",
+          "operationId": "listUsers"
+        }
+      ],
+      "follow": {
+        "capture": "user_uid",
+        "href_pattern": "^/admin/users/(usr_%ID%)$"
+      }
     },
     {
       "name": "admin-user",
       "path": "/admin/users/{user_uid}",
       "page_module": "web/src/app/admin/users/[user_uid]/page.tsx",
       "$comment": [
-        "Admin-only no-call placeholder. Until the users list offers a real link, the read walk",
-        "uses this well-formed sample solely to check a cold load of the guarded address.",
-        "W51-ADMIN-USERS replaces it with a captured real user identity when the list is built."
+        "Admin-only account detail. The user_uid comes from the preceding list's rendered",
+        "link. The screen reads getUser and offers no mutation until an action is submitted."
       ],
-      "sample_identifiers": {
-        "user_uid": "usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F"
-      },
-      "expects_api": [],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/users/{user_uid}",
+          "operationId": "getUser"
+        }
+      ],
       "follow": null
     },
     {

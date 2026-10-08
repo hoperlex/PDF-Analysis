@@ -27,6 +27,8 @@ import { FrameNavigationView } from '@/_app/frame-navigation';
 import { buildNavigation } from '@/_app/navigation';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { SignInPage } from '@/_pages/sign-in';
+import { ManageUserControls } from '@/features/manage-user';
+import { UserList } from '@/widgets/user-list';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
@@ -49,6 +51,7 @@ import type {
   RunStatus,
 } from '@/shared/api';
 import type { DocumentVersion, Project } from '@/shared/api';
+import type { Account } from '@/shared/api';
 import { ApiError, queryKeys } from '@/shared/api';
 import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, Menu, avatarColourIndex } from '@/shared/ui';
 import type { DisclosureProps, MenuProps } from '@/shared/ui';
@@ -202,6 +205,19 @@ const FRAME_EXPERT = {
   profileComplete: true,
 } as const;
 const FRAME_ADMIN = { ...FRAME_EXPERT, displayLabel: 'Проверкина А. С.', initials: 'ПА', roles: ['admin', 'expert'] } as const;
+
+const USER_ACCOUNT: Account = {
+  archived_at: null,
+  display_label: 'Проверкина А. С.',
+  first_name: 'Анна',
+  is_default_credential: false,
+  last_name: 'Проверкина',
+  login: 'proverkina@example.org',
+  middle_name: 'Сергеевна',
+  profile_complete: true,
+  roles: ['admin', 'expert'],
+  user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+};
 
 export function screens(): Screen[] {
   const out: Screen[] = [];
@@ -642,6 +658,16 @@ export function screens(): Screen[] {
     'ChangePasswordPage changed',
     render(createElement(ChangePasswordPage, { login: 'проверяющий', outcome: 'changed' })),
   );
+
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.users.list({ includeArchived: false, limit: 50 }), {
+      items: [USER_ACCOUNT], page: { next_cursor: null },
+    });
+    add('UserList populated', renderScreen(client, createElement(UserList)));
+  }
+  add('ManageUserControls active', renderScreen(newClient(), createElement(ManageUserControls, { account: USER_ACCOUNT })));
+  add('ManageUserControls archived', renderScreen(newClient(), createElement(ManageUserControls, { account: { ...USER_ACCOUNT, archived_at: '2026-10-08T00:00:00Z' } })));
 
   /*
    * The stage comparison, `R-23` / `W43-COMPARE`, 2026-09-24.
