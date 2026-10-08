@@ -5,8 +5,10 @@ findings, expert decision, CSV, comparison, rejected uploads, sign-out, and acco
 management. It creates real test records and runs analysis on the named stand. Use only
 an authorized alpha origin and the synthetic files in this pack.
 
-Allow 45–70 minutes. Enter the login and password only in the browser. Do not pass them
-to a script or put them in a URL, notes, screenshots, or a DevTools export.
+Allow 45–70 minutes. For manual steps, enter the login and password in the
+browser. The automated command reads them only from its approved environment
+variables. Do not put them in arguments, a URL, notes, screenshots, or a
+DevTools export.
 
 ## 1. Starting conditions and branch rule
 
