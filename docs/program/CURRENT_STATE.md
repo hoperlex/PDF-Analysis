@@ -50,6 +50,11 @@
 > `W52-INT-VERSION-READ-PREP-01` adds strict one-line product VERSION reading;
 > 102 focused tests, compilation and lint passed. Stage C still owns the root
 > file and startup refusal; QA/gate remain D-139/D-140.
+> `W52-INT-ENTRY-01` adopts the judged W52 plan and roadmap from planning
+> SHA `2b45a11` and reconciles its W51 full-gate entry with the owner's later
+> code-first deferral. The W51 close at `4159d4e` satisfies development
+> lineage only; D-137–D-140 retain release validation. W52 still awaits
+> `W52-RULE-01` and `W52-FREEZE-01` before dispatch.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
@@ -98,10 +103,11 @@ without a release tag. W51's screens, Stage C identity journey code and manual A
 are merged into `origin/dev`; `W51-INT-CLOSE` closes their implementation on the development
 line. The identity browser journey has not run; QA, independent review, correction and
 release evidence remain open under the 2026-10-08 validation deferral (`D-137`, `D-138`).
-The proposed W52 plan has no freeze on this line. Its pin-sweep CLI and central independent
+The adopted W52 plan has no freeze on this line. Its pin-sweep CLI and central independent
 expected-facts file are code preparations only; their focused checks are recorded in
 `W52-PINSWEEP-01.md` and `W52-FACTS-01.md`. W52 QA and full gate remain due under
-`D-139`/`D-140`.
+`D-139`/`D-140`. `W52-INT-ENTRY-01` makes the owner's code-first execution
+amendment explicit while retaining W52 ruling, freeze and later release checks.
 The proxy-code half of D-133 is merged with local-stub evidence in
 `W52-DEBT-CODE-133.md`; the RunStatus/model-configuration and live-validation halves
 remain open.
