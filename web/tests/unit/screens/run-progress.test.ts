@@ -204,11 +204,14 @@ describe('the provider mode is on screen, twice, and is never guessed', () => {
     expect(markup).not.toContain(`<strong>${mode}</strong>`);
   });
 
-  it('calls an unrecognised mode unknown rather than live', () => {
+  it('calls an unrecognised mode unrecognised rather than absent or live', () => {
     const markup = screen({ provider_mode: 'turbo' as never });
-    expect(markup).toContain('data-provider-mode="unknown"');
+    expect(markup).toContain('data-provider-mode="unrecognized"');
+    expect(markup).toContain('неизвестное значение');
+    expect(markup).not.toContain('data-provider-mode="unknown"');
     expect(markup).not.toContain('data-provider-mode="live"');
     expect(markup).not.toContain('>live<');
+    expect(markup).not.toContain('turbo');
   });
 
   it('names the mode again beside the review link, so a reviewer cannot miss it', () => {
@@ -518,6 +521,14 @@ describe('an estimated basis is the normal case, not a warning (M-7)', () => {
     });
     expect(markup).toContain('data-cost-basis="unstated"');
     expect(markup).not.toContain('data-cost-basis="measured"');
+  });
+
+  it('marks an unrecognised basis without echoing it or calling it unstated', () => {
+    const markup = screen(priced({ cost_basis: 'guessed' as never }));
+    expect(markup).toContain('data-cost-basis="unrecognized"');
+    expect(markup).toContain('неизвестное значение');
+    expect(markup).not.toContain('data-cost-basis="unstated"');
+    expect(markup).not.toContain('guessed');
   });
 });
 
