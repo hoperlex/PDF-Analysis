@@ -3,8 +3,10 @@
 > **Updated 2026-10-08 by the W51 integrator.** W49 and W50 of the identity programme
 > (`docs/program/dispatch/IDENTITY-WAVES.md`) are closed on `origin/dev`. W51 Stage A and
 > all three Stage B implementation lanes and Stage C code are merged there through
-> `4400e81`; QA, correction and release checks remain open. The owner temporarily deferred temporary
-> stand checks and end-of-wave gates to a later separately designed wave (`D-137`, `D-138`).
+> `4400e81`. `W51-INT-CLOSE` closes implementation on the development line under
+> the owner's accelerated-close direction; QA, correction and release checks remain
+> open. Temporary-stand checks and end-of-wave gates are deferred to a later,
+> separately designed wave (`D-137`, `D-138`).
 > W52 code preparations `W52-PINSWEEP-01` and `W52-FACTS-01` are merged on `origin/dev`
 > through `b5be37e`; W52 has not been frozen or closed. QA and full-gate evidence for this
 > and later code-only candidates is open under `D-139` and `D-140`.
@@ -78,7 +80,7 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Active development, 2026-10-08 — W51 implementation and W52 code preparations on `dev`
+## Active development, 2026-10-08 — W51 implementation closed and W52 code preparations on `dev`
 
 W49 — accounts with e-mail sign-in, a role set `{expert, admin}`, registration requests and
 administrator account management (`R-55` … `R-61`) — was published to `origin/dev` by
@@ -93,7 +95,8 @@ browser/gate validation tracked by D-139/D-140.
 Its clean lane tree passed a full `make gate`; the FIX merge and the docs-only close candidate
 passed light acceptance under `R-70` (`AGENTS.md` §8). W50 is closed on the development line
 without a release tag. W51's screens, Stage C identity journey code and manual A13–A20 pack
-are merged into `origin/dev`. The identity browser journey has not run; QA, correction and
+are merged into `origin/dev`; `W51-INT-CLOSE` closes their implementation on the development
+line. The identity browser journey has not run; QA, independent review, correction and
 release evidence remain open under the 2026-10-08 validation deferral (`D-137`, `D-138`).
 The proposed W52 plan has no freeze on this line. Its pin-sweep CLI and central independent
 expected-facts file are code preparations only; their focused checks are recorded in

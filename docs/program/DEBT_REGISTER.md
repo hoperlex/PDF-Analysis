@@ -9,6 +9,8 @@ QA, `W49-FIX` and the W48 acceptance; the `alpha-w48.1` release (2026-10-07) clo
 the two independent W50 judges; all three are register-only and remain open.
 **The owner's W51 validation deferral (2026-10-08) opened `D-137` and `D-138`:**
 QA/live acceptance and the full end-of-wave gate remain due after implementation.
+`W51-INT-CLOSE` closes development implementation only under the owner's accelerated-close
+direction. D-137 and D-138 stay open and block any W51 release verdict.
 **The owner's continuing code-first direction (2026-10-08) opened `D-139` and `D-140`:**
 W52 and subsequent code-only wave candidates accrue QA/live checks and full-gate evidence for a
 separately planned validation wave. Each candidate must be named by exact SHA there.
@@ -43,7 +45,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-135 | open-screen menu comment corrected locally; deferred validation remains | `W52-INT-PROSE-134136`; D-139/D-140 |
 | D-136 | W50 first-load plan corrected to four decreases and review's increase; deferred validation remains | `W52-INT-PROSE-134136`; D-139/D-140 |
 | **D-137** | W51 QA, independent review and live/manual identity acceptance have not run | a separate validation wave must run the built-stand and human checks against one exact candidate |
-| **D-138** | W51 implementation is being integrated without its full end-of-wave `make gate` | a separate validation wave must run and record `GATE OK` for the exact candidate before any release claim |
+| **D-138** | W51 development implementation closed without its full end-of-wave `make gate` | a separate validation wave must run and record `GATE OK` for the exact candidate before any release claim |
 | **D-139** | W52 and subsequent code-only candidates defer QA, independent review, built-stand and manual acceptance | the validation wave must inventory every accumulated candidate and run the applicable checks on exact SHAs |
 | **D-140** | W52 and subsequent code-only candidates defer the full end-of-wave gate | the validation wave must record literal `GATE OK` on the release candidate after corrections |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
@@ -220,6 +222,8 @@ language guard remains red. D-137 stays open.
 
 `W52-INT-HOTFIX-BACKPORT-01` makes the language guard green in a focused run
 without supplying the independent QA, browser or human evidence. D-137 stays open.
+`W51-INT-CLOSE` records development implementation closure and basic tests only;
+its closure does not change this row's evidence requirement.
 
 ### D-138 — the W51 end-of-wave gate is deferred
 
@@ -235,6 +239,8 @@ tested SHA, full `make gate` command, log and literal `GATE OK`, with that SHA u
 release claim. `W52-INT-VALIDATE-01` recorded a red full gate on `e2cfea92`; D-138 stays open.
 The later `W52-INT-HOTFIX-BACKPORT-01` correction has only focused checks; D-138
 still requires a full gate on its final exact candidate.
+`W51-INT-CLOSE` adds basic tests and a development-only publication, not the
+required literal `GATE OK`; this row stays open.
 
 ### D-134 — invalid return input appears in escaped Next Flight metadata
 

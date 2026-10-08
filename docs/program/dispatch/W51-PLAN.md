@@ -6,17 +6,22 @@ implementation lanes are accepted on `origin/dev`: `W51-AUTH-01` at `ebe614d`,
 Stage C identity journey and A13–A20 manual code merged at `4400e81`. Stage B's
 integrated tree passed 148 focused tests across nine files and frontend lint;
 Stage C's static conformance passed 82 tests and its acceptance-command tests passed 21.
-QA, correction and release checks remain open; W51 is not closed. Deferred QA/live
-acceptance and the full gate are tracked as `D-137` and
-`D-138`; the lane reports record the red rendered-language branch-coverage guard.
+W51 implementation is closed on the development line by `W51-INT-CLOSE` under
+the owner's accelerated-close direction of 2026-10-08. QA, independent
+review, live/manual acceptance, any resulting correction and the full gate
+remain open under `D-137` and `D-138`; development closure is not a release
+verdict. The lane reports preserve their red rendered-language guard result;
+the later development hotfix and focused checks are recorded separately.
 **Controlling rulings:** `R-55`, `R-56`,
 `R-59`, `R-60`, `R-61`, `R-66`, `R-70`.
 **Roles:** lanes, QA, judges and FIX are the executor's; freeze, merges and publication are the
 integrator's (`IDENTITY-WAVES.md` §8, as amended by later `R-70`/`AGENTS.md` §8).
-**Exit:** the screens and Stage C acceptance code are integrated on `origin/dev`; the PC-01
-identity continuation and manual pack require the deferred live validation of registration,
-approval, roles, archive and purge. A tag or publication to
-`origin/main` requires separate direct owner authority and a full gate on its exact candidate.
+**Development exit:** the screens and Stage C acceptance code are integrated and W51
+implementation is closed on `origin/dev`. The PC-01 identity continuation and manual pack
+still require deferred live validation of registration, approval, roles, archive and purge.
+QA and independent judges remain due; findings will enter a later correction stage. A tag or
+publication to `origin/main` requires those validation results, a full gate on the exact
+candidate and separate direct owner authority.
 No contract change.
 
 **Temporary validation direction, 2026-10-08.** The owner stopped the temporary W51 stand
@@ -255,7 +260,10 @@ Depends on: `W50-INT-CLOSE`. Standard form.
   only presentation); FSD boundaries; typed states for every closed vocabulary (`role`, `status`,
   `conflict_reason`, refusal); invalidation after each mutation; registry, manifest and seeds
   complete; lock bytes unchanged.
-- INT-CLOSE: standard form; the alpha acceptance pack is the release evidence for `alpha-w51`.
+- INT-CLOSE: under the owner's 2026-10-08 accelerated-close direction, close W51
+  implementation on `origin/dev` with exact basic-check evidence and D-137/D-138 open.
+  The alpha acceptance pack can support a later release only after the deferred checks
+  run; this close does not authorize `alpha-w51`.
 
 ## 5. Integration order
 
@@ -264,8 +272,10 @@ Depends on: `W50-INT-CLOSE`. Standard form.
 3. Stage B: `W51-AUTH-01` → `W51-ADMIN-USERS` → `W51-ADMIN-REQUESTS`, each from the prior
    accepted merge, with shared guard and manifest files updated by one owner at a time.
 4. Stage C: `W51-E2E-01`.
-5. `W51-QA-01`; judges X and Y; cross-examination; `W51-FIX`.
-6. `W51-INT-CLOSE`.
+5. `W51-INT-CLOSE`: development implementation closure with D-137/D-138 open.
+6. A separate validation wave owns `W51-QA-01`, independent judges, built-stand and
+   human acceptance, correction of findings, and the exact-candidate full gate before
+   any W51 release verdict.
 
 ## 6. Ownership matrix
 
