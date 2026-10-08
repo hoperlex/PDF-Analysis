@@ -76,7 +76,6 @@ __all__ = [
     "USER_UID_PATTERN",
     "USER_UID_PREFIX",
     "Account",
-    "AccountStanding",
     "CredentialStanding",
     "RegistrationId",
     "UserRecord",
@@ -493,24 +492,6 @@ class CredentialStanding:
     token_epoch: int
     #: Whether this account is still on the password the deployment seeded it with.
     is_default_credential: bool
-
-
-@dataclass(frozen=True, slots=True)
-class AccountStanding:
-    """What the authorization seam needs about an account on every request, in one read.
-
-    `W49-PLAN.md` §3.2. ``W49-SEAL-01`` widens ``api.security.AccountStanding`` and the
-    adapter's ``standing_of`` with the last three fields; this is the row read it wires.
-    The order of evaluation stays the seam's: ``archived`` (or a stale epoch) is
-    ``authentication_required``, then the default credential, then the incomplete profile,
-    then the roles. Nothing here is credential material, and no role travels in a token.
-    """
-
-    token_epoch: int
-    is_default_credential: bool
-    archived: bool
-    profile_complete: bool
-    roles: frozenset[str]
 
 
 @dataclass(frozen=True, slots=True)

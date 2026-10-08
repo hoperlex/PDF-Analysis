@@ -21,7 +21,6 @@ from auditmanager.access.accounts import (
     AccountInvariantViolation,
     AccountRepository,
 )
-from auditmanager.access.models import AccountStanding
 from auditmanager.access.repository import UserRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -66,42 +65,41 @@ def _epoch(session: Session, uid: str) -> int:
 
 
 # =======================================================================================
-# The standing read.
+# The management account read; the served standing read uses this in its adapter.
 # =======================================================================================
 
 
-class TestTheStandingRead:
+class TestTheAccountRead:
     def test_the_seed_after_0015(self, session: Session) -> None:
-        standing = accounts.account_standing(session, _seed(session))
-        assert standing == AccountStanding(
-            token_epoch=1,
-            is_default_credential=True,
-            archived=False,
-            profile_complete=False,
-            roles=frozenset({"admin", "expert"}),
-        )
+        account = accounts.get_account(session, _seed(session))
+        assert account is not None
+        assert account.record.token_epoch == 1
+        assert account.record.is_default_credential is True
+        assert account.record.archived is False
+        assert account.record.profile_complete is False
+        assert account.roles == frozenset({"admin", "expert"})
 
     def test_an_account_with_no_role_answers_an_empty_set(self, session: Session) -> None:
         uid = _create(session, "anna@example.com", roles=())
-        standing = accounts.account_standing(session, uid)
-        assert standing is not None
-        assert standing.roles == frozenset()
-        assert standing.profile_complete is True
-        assert standing.is_default_credential is False
+        account = accounts.get_account(session, uid)
+        assert account is not None
+        assert account.roles == frozenset()
+        assert account.record.profile_complete is True
+        assert account.record.is_default_credential is False
 
     def test_archived_is_reported_and_purged_is_none(self, session: Session) -> None:
         seed = _seed(session)
         uid = _create(session, "anna@example.com")
         accounts.archive_account(session, actor_uid=seed, user_uid=uid)
         session.commit()
-        standing = accounts.account_standing(session, uid)
-        assert standing is not None and standing.archived is True
+        account = accounts.get_account(session, uid)
+        assert account is not None and account.record.archived is True
         assert users.credential_standing(session, uid) is None, (
             "the credential seam's read must give an archived account no standing"
         )
         accounts.purge_account(session, actor_uid=seed, user_uid=uid)
         session.commit()
-        assert accounts.account_standing(session, uid) is None
+        assert accounts.get_account(session, uid) is None
 
     def test_an_unknown_role_in_storage_is_a_raise_not_a_dropped_member(
         self, session: Session
@@ -113,11 +111,11 @@ class TestTheStandingRead:
             {"u": uid},
         )
         with pytest.raises(DomainError) as caught:
-            accounts.account_standing(session, uid)
+            accounts.get_account(session, uid)
         assert caught.value.code is ErrorCode.VALIDATION_FAILED
 
     def test_it_is_one_statement(self, session: Session, migrated_engine: Engine) -> None:
-        """The read runs on every credentialed request; it must stay one round trip."""
+        """The adapter's management read is one round trip, not two snapshots."""
         from sqlalchemy import event
 
         statements: list[str] = []
@@ -129,7 +127,7 @@ class TestTheStandingRead:
         event.listen(migrated_engine, "before_cursor_execute", count)
         try:
             with Session(migrated_engine) as fresh:
-                accounts.account_standing(fresh, uid)
+                accounts.get_account(fresh, uid)
         finally:
             event.remove(migrated_engine, "before_cursor_execute", count)
         selects = [s for s in statements if s.lstrip().upper().startswith("SELECT")]

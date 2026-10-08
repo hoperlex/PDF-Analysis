@@ -41,7 +41,6 @@ from sqlalchemy.orm import Session
 from auditmanager.access.models import (
     ROLE_ADMIN,
     Account,
-    AccountStanding,
     UserRecord,
     is_email_login,
     normalize_email,
@@ -136,20 +135,6 @@ _LIST_ACCOUNTS = text(
     _ACCOUNTS
     + "WHERE (:include_archived OR u.archived_at IS NULL) "
     "GROUP BY u.user_uid ORDER BY u.login, u.user_uid"
-)
-
-#: The standing read (`W49-PLAN.md` §3.2): one primary-key lookup with its roles, run on
-#: every credentialed request exactly as ``credential_standing`` is today, and never cached
-#: -- a role change that took effect a little while later would be a revocation with a
-#: delay. It answers for an archived account too, with ``archived`` true, so that the seam
-#: and not this read decides the refusal; the refusal is ``authentication_required``.
-_SELECT_STANDING = text(
-    "SELECT u.token_epoch, u.is_default_credential, u.archived_at IS NOT NULL, "
-    "u.profile_completed_at IS NOT NULL, "
-    "COALESCE(array_agg(r.role ORDER BY r.role) FILTER (WHERE r.role IS NOT NULL), "
-    "ARRAY[]::text[]) "
-    "FROM app_user u LEFT JOIN app_user_role r ON r.user_uid = u.user_uid "
-    "WHERE u.user_uid = :user_uid GROUP BY u.user_uid"
 )
 
 #: The serialisation point of every change that can remove an administrator: the rows of
@@ -331,25 +316,6 @@ class AccountRepository:
         """Every active account, or every account, ordered by login."""
         rows = session.execute(_LIST_ACCOUNTS, {"include_archived": include_archived}).all()
         return tuple(_account(row) for row in rows)
-
-    def account_standing(self, session: Session, user_uid: str) -> AccountStanding | None:
-        """The standing the seam re-reads on every credentialed request, or ``None``.
-
-        ``None`` means no such row -- a purged account. An archived account answers with
-        ``archived=True``; the seam turns both into ``authentication_required``. A role the
-        vocabulary does not know is a raise, never a dropped member (:func:`parse_role`).
-        """
-        row = session.execute(_SELECT_STANDING, {"user_uid": user_uid}).first()
-        if row is None:
-            return None
-        epoch, is_default, archived, complete, roles = row
-        return AccountStanding(
-            token_epoch=int(epoch),
-            is_default_credential=bool(is_default),
-            archived=bool(archived),
-            profile_complete=bool(complete),
-            roles=frozenset(parse_role(role) for role in roles),
-        )
 
     def _lock_admins_then(self, session: Session, user_uid: str) -> UserRecord | None:
         """Lock every active administrator, then the target -- always in that order."""
