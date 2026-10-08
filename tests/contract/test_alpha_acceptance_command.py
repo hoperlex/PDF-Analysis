@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -20,6 +21,29 @@ MANIFEST = ROOT / "tests" / "e2e" / "pc01" / "journey" / "manifest.json"
 # adds a screen moves both by adding it to the manifest. That the verifier still refuses a
 # shorter walk is shown with a one-route-short envelope (`W50-REGISTRY-01` report).
 ROUTES = len(json.loads(MANIFEST.read_text(encoding="utf-8"))["routes"])
+
+
+def _assert_no_served_revision_proof_claim(report: str) -> None:
+    """An operator's SHA input is an attestation, never a measurement of served bytes."""
+
+    normalized = report.replace("_", " ").replace("-", " ")
+    forbidden = (
+        r"\b(?:deployed|served)\s+(?:sha|revision)\s+(?:proof|proven|verified|measured)\b",
+        r"\b(?:this\s+)?(?:report|acceptance)\s+(?:proves|verifies|measures)\s+"
+        r"(?:the\s+)?(?:served|deployed)\b",
+    )
+    assert not any(re.search(pattern, normalized, flags=re.IGNORECASE) for pattern in forbidden), (
+        "acceptance report claims to prove the served revision from operator input"
+    )
+
+
+def test_operator_attestation_must_not_be_described_as_proof() -> None:
+    good = "- attested_deployed_sha: " + "a" * 40
+    _assert_no_served_revision_proof_claim(good)
+    with pytest.raises(AssertionError, match="claims to prove"):
+        _assert_no_served_revision_proof_claim(
+            good + "\n- deployed_sha_proof: this report proves the served revision\n"
+        )
 
 
 def run(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -293,6 +317,7 @@ def test_release_command_cannot_turn_skips_recorded_mode_or_outage_into_pass(
         report = (evidence / "report.md").read_text()
         assert f"- attested_deployed_sha: {head}" in report
         assert "deployed_sha_attestation: operator_input" in report
+        _assert_no_served_revision_proof_claim(report)
         assert "not-a-real-secret" not in report
 
 
