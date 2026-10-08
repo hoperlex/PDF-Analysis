@@ -76,7 +76,6 @@ __all__ = [
     "USER_UID_PATTERN",
     "USER_UID_PREFIX",
     "Account",
-    "AccountStanding",
     "CredentialStanding",
     "RegistrationId",
     "UserRecord",
@@ -361,9 +360,18 @@ def name_label(last_name: str, first_name: str, middle_name: str | None) -> str:
     for names :func:`normalize_person_name` accepted, which is inside ``author_label``'s
     1..128 by construction.
     """
-    label = f"{last_name} {first_name[0].upper()}."
+    def initial(name: str) -> str:
+        capital = name[0].upper()
+        # Unicode upper-casing can expand one character (ß→SS, ŉ→ʼN, ǰ→J̌).
+        # An initial is one uppercase letter, not the entire mapping; the first
+        # code point of ŉ's mapping is a modifier apostrophe rather than the N.
+        # Some characters accepted by the existing name pattern have no uppercase
+        # mapping (ĸ, for example); keep their original glyph as before.
+        return next((character for character in capital if character.isupper()), capital[0])
+
+    label = f"{last_name} {initial(first_name)}."
     if middle_name:
-        label = f"{label} {middle_name[0].upper()}."
+        label = f"{label} {initial(middle_name)}."
     return label
 
 
@@ -484,24 +492,6 @@ class CredentialStanding:
     token_epoch: int
     #: Whether this account is still on the password the deployment seeded it with.
     is_default_credential: bool
-
-
-@dataclass(frozen=True, slots=True)
-class AccountStanding:
-    """What the authorization seam needs about an account on every request, in one read.
-
-    `W49-PLAN.md` §3.2. ``W49-SEAL-01`` widens ``api.security.AccountStanding`` and the
-    adapter's ``standing_of`` with the last three fields; this is the row read it wires.
-    The order of evaluation stays the seam's: ``archived`` (or a stale epoch) is
-    ``authentication_required``, then the default credential, then the incomplete profile,
-    then the roles. Nothing here is credential material, and no role travels in a token.
-    """
-
-    token_epoch: int
-    is_default_credential: bool
-    archived: bool
-    profile_complete: bool
-    roles: frozenset[str]
 
 
 @dataclass(frozen=True, slots=True)

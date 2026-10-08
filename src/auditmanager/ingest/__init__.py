@@ -49,9 +49,9 @@ from .envelope import (
 from .failures import domain_error_from_storage
 from .reconciliation import (
     MissingObject,
-    OrphanObject,
     Reconciler,
     ReconciliationReport,
+    UnattributedBlob,
 )
 from .service import IngestService
 
@@ -71,9 +71,9 @@ __all__ = [
     "CommandStarted",
     "IngestService",
     "MissingObject",
-    "OrphanObject",
     "Reconciler",
     "ReconciliationReport",
+    "UnattributedBlob",
     "domain_error_from_storage",
     "payload_fingerprint",
     "probe",

@@ -37,7 +37,8 @@
  * `/403` carries it in `from`. Both are read back from a query string the browser controls,
  * so both pass one validator here — {@link safeReturnPath} — before anything uses them: in
  * the sign-in form's hidden field, in the BFF's after-sign-in redirect, and on the `/403`
- * screen. A value that fails it is dropped and never echoed.
+ * screen. A value that fails it is omitted from those visible uses. Next may still
+ * serialize the raw query value, escaped, in its router-state metadata.
  */
 
 import type { Role } from '@/shared/api/generated/types.gen';
@@ -283,9 +284,10 @@ export type ScreenDecision = 'open' | 'sign-in' | 'change-password' | 'complete-
 /**
  * **The one answer to "may this session open this screen".** `requireScreen` maps each
  * answer to its redirect (`web/src/app/bff/session/screen-lock.ts`), and the frame's
- * navigation offers exactly the rows whose answer is `open` — one function, so the menu
- * cannot offer a screen the guard refuses, or hide one it opens (`W50-SHELL-FRAME`; the
- * integrator's grant of 2026-10-07 moved it here out of `enforceScreen`, unchanged).
+ * navigation offers only open rows marked `inMenu` in a visible group. The menu
+ * cannot offer a screen the guard refuses; an open screen such as `/optimisation`
+ * may intentionally be omitted (`W50-SHELL-FRAME`; the integrator's grant of
+ * 2026-10-07 moved this decision here out of `enforceScreen`).
  *
  * In order, and the order is the behaviour:
  *
@@ -359,8 +361,9 @@ export function screenMatching(
 
 /**
  * The one validator for `next` and `from` (`W50-PLAN.md` §3.2). Returns the value when it is
- * a same-application address and `null` for anything else — the caller drops a `null`, and
- * never echoes what it was given.
+ * a same-application address and `null` for anything else — the caller omits a `null`
+ * from its visible text, form and redirect. Next may still serialize the raw query
+ * value, escaped, in router-state metadata.
  *
  * A value passes when it is a string of at most {@link RETURN_PATH_MAX_LENGTH} characters
  * that starts with exactly one `/` (so not `//host…`, which a browser reads as another

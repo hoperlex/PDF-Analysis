@@ -120,7 +120,11 @@ export async function runWritePhase({
         // each step receives the SAME value rather than a jar carried on from the step
         // before -- so a step is still openable on its own, which is `D-16`'s property.
         record.startedWith = page.startedWith();
-        await page.goto(url);
+        try {
+          await page.goto(url);
+        } finally {
+          record.navigationAttempts = page.navigationAttempts ?? null;
+        }
         record.landedOn = await page.location();
         record.navigateTimingsMs = page.timingsMs;
 

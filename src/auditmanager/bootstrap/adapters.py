@@ -1171,7 +1171,7 @@ class AccountAdapter(_SessionHolder):
         names: PersonNamesView | None,
         roles: frozenset[str] | None,
     ) -> AccountView:
-        """Names, then roles, in one transaction: a refused role change keeps the names."""
+        """Update names and roles in one transaction; a refused role change rolls both back."""
 
         def work(session: Session) -> AccountView:
             if names is not None:

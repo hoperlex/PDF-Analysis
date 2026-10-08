@@ -43,21 +43,32 @@ driver = _load_driver()
 
 
 @pytest.fixture(scope="session", autouse=True)
-def recorded_provider_mode() -> Iterator[None]:
-    """Name the provider mode out loud, because the root conftest removed it.
+def pc01_service_env() -> None:
+    """Load this suite's local service addresses once, without selecting a provider."""
+    driver.load_env_file()
+
+
+@pytest.fixture(autouse=True)
+def recorded_provider_mode(pc01_service_env: None) -> Iterator[None]:
+    """Name the provider mode for one test, because the root conftest removed it.
 
     Asserted rather than assumed. If that strip were ever reordered after this fixture,
     the suite would silently inherit whatever a developer had exported -- and a shell
     carrying the operated proxy's credentials would turn every test below into a paid
     call. That is the accident the root conftest exists to prevent, so this checks it held.
     """
-    driver.load_env_file()
-    os.environ["AUDITMANAGER_PROVIDER_MODE"] = "recorded"
+    assert "AUDITMANAGER_PROVIDER_MODE" not in os.environ, (
+        "provider mode leaked into PC-01 from an earlier test"
+    )
     for leaked in ("ANTHROPIC_API_KEY", "PROXY_LLM_BASE_URL", "PROXY_LLM_TOKEN"):
         assert leaked not in os.environ, (
             f"{leaked} reached this suite; the recorded journey must not be able to spend"
         )
-    yield
+    os.environ["AUDITMANAGER_PROVIDER_MODE"] = "recorded"
+    try:
+        yield
+    finally:
+        os.environ.pop("AUDITMANAGER_PROVIDER_MODE", None)
 
 
 @pytest.fixture(scope="session")
@@ -89,6 +100,6 @@ def page_texts(manifest: Mapping[str, Any]) -> tuple[str, ...]:
 
 
 @pytest.fixture(scope="session")
-def client(recorded_provider_mode: None) -> Any:
+def client(pc01_service_env: None) -> Any:
     """The application under test, composed once from the environment."""
     return driver.build_client(AUDITMANAGER_PROVIDER_MODE="recorded")

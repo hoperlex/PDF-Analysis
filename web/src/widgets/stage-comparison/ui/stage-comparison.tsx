@@ -128,7 +128,9 @@ function providerModeText(value: string | number | null): string {
   const label = providerModeLabel(value);
   return label === 'unknown'
     ? PROVIDER_MODE_UNKNOWN_LABEL
-    : PROVIDER_MODE_LABELS[label];
+    : label === 'unrecognized'
+      ? 'неизвестное значение'
+      : PROVIDER_MODE_LABELS[label];
 }
 
 /** One run's side of one fact. The machine value stays in the cell's `data-` attribute. */
@@ -146,7 +148,7 @@ function FactCell({
   }
   if (factId === 'provider_mode') {
     return (
-      <span data-provider-mode={value ?? 'absent'}>{providerModeText(value)}</span>
+      <span data-provider-mode={providerModeLabel(value)}>{providerModeText(value)}</span>
     );
   }
   if (factId === 'created_at' || factId === 'terminal_at') {
@@ -167,9 +169,19 @@ function FactCell({
     );
   }
   if (factId === 'cost_basis') {
+    const basis: 'absent' | 'measured' | 'estimated' | 'unrecognized' = value === null
+      ? 'absent'
+      : value === 'measured' || value === 'estimated'
+        ? value
+        : 'unrecognized';
+    const label = basis === 'absent'
+      ? '—'
+      : basis === 'unrecognized'
+        ? 'неизвестное значение'
+        : COST_BASIS_LABELS[basis];
     return (
-      <span data-cost-basis={value ?? 'absent'}>
-        {value === 'measured' || value === 'estimated' ? COST_BASIS_LABELS[value] : '—'}
+      <span data-cost-basis={basis}>
+        {label}
       </span>
     );
   }

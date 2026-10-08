@@ -9,6 +9,8 @@ QA, `W49-FIX` and the W48 acceptance; the `alpha-w48.1` release (2026-10-07) clo
 the two independent W50 judges; all three are register-only and remain open.
 **The owner's W51 validation deferral (2026-10-08) opened `D-137` and `D-138`:**
 QA/live acceptance and the full end-of-wave gate remain due after implementation.
+`W51-INT-CLOSE` closes development implementation only under the owner's accelerated-close
+direction. D-137 and D-138 stay open and block any W51 release verdict.
 **The owner's continuing code-first direction (2026-10-08) opened `D-139` and `D-140`:**
 W52 and subsequent code-only wave candidates accrue QA/live checks and full-gate evidence for a
 separately planned validation wave. Each candidate must be named by exact SHA there.
@@ -25,35 +27,35 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | ~~D-63~~ | a dashboard | **closed by wave 46**: four panels on one read (`W46-WIRE`, `W46-CLIENT`, `alpha-w46`) |
 | ~~D-118~~ | `make gate` did not lint | **closed by `W47-CLOSE`**: lint runs first and fails closed; eslint is clean |
 | **D-119** | the restored MinIO release predates upstream's final security release, and upstream is now archived | **owner**: rehearse the security upgrade after backup, or select the next S3-compatible implementation |
-| **D-120** | a push to `main` deploys whatever it names; the workflow proves ancestry, not a gate | **owner**: bind deployment to gate evidence, or keep it a process rule |
+| **D-120** | a push to `main` deploys whatever it names; the workflow proves ancestry, not a gate | **R-73** accepts the process control; accepted-risk closure remains at `W52-INT-CLOSE` |
 | **D-121** | `ALPHA ACCEPTANCE PASS` attests the deployed SHA from operator input; nothing served names the running revision | a revision endpoint or served file is a contract question |
 | D-122 | no online dependency-vulnerability, transitive-licence or container-image scan has ever run | `W48-AUDIT` §7 question 5 |
 | **D-123** | the alpha MinIO volume was never inventoried, and the restore was not rehearsed on it after the image rebuild | sits beside `D-119`; **owner** schedules it |
 | D-124 | the norms HNSW index is one per table and the snapshot filter runs after the scan; `hnsw.ef_search` is never set | a second snapshot shrinks `nearest()` |
-| D-125 | the corpus loader re-reads files after `snapshot_of` hashed them and does not re-verify | immutable snapshot can carry other bytes |
+| D-125 | corpus re-read verification is implemented locally; real-corpus/database and full-gate evidence remain | `W52-DEBT-CODE-125`; D-139/D-140 |
 | D-126 | a snapshot's `content_key` excludes the segmentation profile | raising the profile version makes `ensure_snapshot` conflict |
 | D-127 | an embedding build counts as complete with a one-character window; its digest includes a private bigint | completeness and digest are weaker than `NORM-VECTOR-01` claims |
-| D-128 | nine `W48-JUDGE-Z` findings classed *register*: guard blind spots and two naming/reporting gaps | each with its path:line in `reviews/W48-JUDGE-Z.md` |
-| D-129 | the W49 judges' and `W49-FIX`'s register findings: comments, docstrings, a 68-character label, edge assumptions | each with its path:line in the two reviews and `W49-FIX.md` |
+| D-128 | nine `W48-JUDGE-Z` register findings; F-1…F-7/F-10/F-11 code repaired locally, validation remains | `W52-DEBT-GUARDS-128F1`, `W52-DEBT-GUARDS-128F2`, `W52-DEBT-GUARDS-128A`, `W52-DEBT-CODE-128F7`, `W52-DEBT-CODE-128F10`, `W52-DEBT-CODE-128F11`; `reviews/W48-JUDGE-Z.md` |
+| D-129 | the W49 judges' and `W49-FIX`'s register findings: Y F-3/F-4/F-5, X R-2 and stale revoke prose repaired locally; comments and edge assumptions remain | `W52-DEBT-CODE-129F3`, `W52-DEBT-CODE-129F4`, `W52-INT-129F5-01`, `W52-INT-129R2-01`, `W52-INT-129REVOKE-01`; each remaining finding has its path:line in the two reviews and `W49-FIX.md` |
 | D-130 | the identity debts `W49-PLAN.md` §3 registers by design | owner-visible limits of the identity model, scheduled with W52 |
-| D-131 | the alpha acceptance journey has no retry for a transient browser network error | one co-tenant Docker bridge event failed a whole run |
+| D-131 | bounded retry for transient GET navigation is implemented locally; live browser validation remains | `W52-DEBT-CODE-131`; D-139/D-140 |
 | ~~D-132~~ | `alpha-w48` was tagged without the manual A01–A12 pass (`R-64`) | **closed 2026-10-07** by the owner's attestation (`R-68`) |
 | **D-133** | the proxy adapter folds every non-400/401 HTTP failure into `analysis_failed`, discards the error body, and no operator can read why a stage failed | found by the `alpha-w48.1` acceptance; W52 debt lane |
-| D-134 | invalid `next`/`from` is escaped into Next Flight router metadata despite the absolute “never echoed” wording | W50 Judge X R1, upheld by Judge Y; prose/transport boundary |
-| D-135 | the registry comment says the menu cannot hide an open screen, but `/optimisation` is open by address and intentionally hidden | W50 Judge Y JY-1, upheld by Judge X; comment correction |
-| D-136 | W50-PLAN §3.4 says five first-load routes shrink; the measured count is four | W50 Judge Y JY-2, independently measured by Judge X; plan correction |
+| D-134 | absolute return-path wording corrected locally; deferred browser/gate validation remains | `W52-INT-PROSE-134136`; D-139/D-140 |
+| D-135 | open-screen menu comment corrected locally; deferred validation remains | `W52-INT-PROSE-134136`; D-139/D-140 |
+| D-136 | W50 first-load plan corrected to four decreases and review's increase; deferred validation remains | `W52-INT-PROSE-134136`; D-139/D-140 |
 | **D-137** | W51 QA, independent review and live/manual identity acceptance have not run | a separate validation wave must run the built-stand and human checks against one exact candidate |
-| **D-138** | W51 implementation is being integrated without its full end-of-wave `make gate` | a separate validation wave must run and record `GATE OK` for the exact candidate before any release claim |
+| **D-138** | W51 development implementation closed without its full end-of-wave `make gate` | a separate validation wave must run and record `GATE OK` for the exact candidate before any release claim |
 | **D-139** | W52 and subsequent code-only candidates defer QA, independent review, built-stand and manual acceptance | the validation wave must inventory every accumulated candidate and run the applicable checks on exact SHAs |
 | **D-140** | W52 and subsequent code-only candidates defer the full end-of-wave gate | the validation wave must record literal `GATE OK` on the release candidate after corrections |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
-| D-78 | `CONFIGURED_AUTHOR_LABEL` attributes every verdict by every reviewer identically | **wave 41, `W41-AUTHOR`** |
+| ~~D-78~~ | `CONFIGURED_AUTHOR_LABEL` attributed every verdict identically | **closed by `W41-AUTHOR`** (`14a0913`); register reconciled by `W52-INT-REGISTER-72-78` |
 | D-79 | the gate now reads `docs/` — `test_doc_prose_facts.py`, built in wave 45 | **and it was red on arrival**: see `D-102` |
 | ~~D-80~~ | the web image overlaid the host's `node_modules` | **closed by `W45-READY`**: root `.dockerignore`, verified by a marker build |
 | **D-83** | twelve refusal sentences cannot be rendered by the stack-free gate | narrowed by `W48-LIVE`: refusals are a fail-closed phase of `make alpha-acceptance`; no live run recorded |
-| D-87 | a full-tree mutation copy still cannot redden a migration — §10.1 names only half the trap | narrowed by `W48-GUARDS`: fresh database per case and 11 family digests; `OPERATING_CONSTRAINTS.md` §10.1 still states half |
+| D-87 | §10.1 now states both mutation traps; wider schema-invariant coverage remains | `W52-INT-87-01`; `W48-GUARDS` fresh-database tests |
 | ~~D-89~~ | a shared hotspot with no owner: the journey manifest, and I wrote both grants | **closed by `W48-GOV`**: enumerator ownership is a task-file rule the battery enforces (`268d6ab`) |
 | **D-91** | two streams drew `R-18`'s line in different places in one wave | **owner**: where does it fall |
 | D-96 | three register rows in three waves sent a stream to a file that does not carry what the row says | narrowed by `W48-GOV`: task premises need captured output; this register's own rows are still checked by nothing |
@@ -82,7 +84,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
 | ~~D-70~~ | the stand had no live provider | **closed 2026-10-07**: `alpha-w48.1` acceptance ran a live model on the stand (`W48-INT-MAIN-02.md`) |
 | D-71 | `D-59` is 121 blocks not 79, and 25 of them are a different defect | **owner: widen `R-19`?** |
-| D-72 | a URL with no host becomes a retryable outage | argue it from the catalog, as `D-13` was |
+| ~~D-72~~ | a URL with no host became a retryable outage | **closed by `W41-AUTHOR`** (`b56d103`); register reconciled by `W52-INT-REGISTER-72-78` |
 | D-68 | the certification's criterion-4 selector is too wide | use `span.am-badge[data-run-state]` |
 | **D-59** | the corpus carries leaked LLM reasoning as document body | **owner** — before embeddings are paid for |
 | D-60 | `R-16`'s text size, token count and chunk tail re-measured | the embedding stream counts tokens first |
@@ -139,6 +141,11 @@ acceptance packs, run the checks, classify findings and hand corrections to late
 for the same candidate. Close only when every deferred QA, independent review, built-stand and
 manual acceptance item has a recorded result or a documented owner disposition.
 
+`W52-INT-VALIDATE-01` measured the combined `origin/dev` candidate `e2cfea92`:
+foundation, Python/DB/corpus and frontend diagnostics ran. Candidate-by-candidate
+acceptance inventory, independent QA/review, built-stand and manual evidence are still
+absent. This diagnostic does not close D-139.
+
 `W52-FACTS-01`'s broad integration/API attempt reached the suite's private-bucket fixture and
 failed at setup because `S3_ENDPOINT_URL` was absent. The integrator did not start a stand.
 This attempt is not an integration pass; the exact suite remains in the validation inventory.
@@ -153,6 +160,50 @@ the exact candidate it proposes to release and record the literal `GATE OK`.
 
 **Check:** the validation-wave report names that clean SHA, the full `make gate` command, log and
 literal `GATE OK`; the SHA is unchanged for any subsequent release claim.
+
+`W52-INT-VALIDATE-01` attempted the full gate on `e2cfea92`. Foundation 35 and the
+canonical Python battery 3,245 passed, but two TS2375 errors stopped the frontend
+typecheck. A separate complete Vitest run found seven failures. No `GATE OK`; D-140
+remains open until correction and a new exact-candidate full gate.
+
+`W52-INT-HOTFIX-BACKPORT-01` brought the accepted main hotfix to dev: typecheck,
+72 focused frontend tests and lint pass, including the previously red guards.
+This is a correction, not a new full gate; D-140 remains open.
+
+`W52-INT-FRONTEND-BASELINE-01` remeasured clean `defade8`: frontend
+typecheck and lint passed, and the full Vitest suite passed 1,712 tests in
+109 files with child-process execution permitted. A restricted sandbox run
+had six `eslint`/`tsc` spawn failures (`EPERM` or absent compiler output),
+which the permitted run resolved. This replaces the earlier red frontend
+diagnostic as the current observation, but is not a full `make gate`; D-140
+remains open for literal `GATE OK` on an exact release candidate.
+
+`W52-INT-GATE-PARTITION-01` removed the duplicate foundation selection from
+the later battery; the other 3,216 collected test IDs stayed identical. It
+did not run a new full gate or measure JUnit outcome parity/timing. D-140
+remains open.
+
+`W52-INT-GATE-PC01-ENV-01` confines PC-01's recorded provider mode to each
+test and restores its absence at teardown; two local PC-01 tests with a
+teardown probe, 60 governance/prose tests and lint passed. The service-backed
+journey, full-gate JUnit outcome parity and timing remain D-139/D-140.
+
+`W52-INT-SEMVER-PREP-01` adds a pure releases-context SemVer parser and
+bytewise order key with 23 local cases; 60 governance/prose tests, Python
+compilation and lint also passed. W52 SEAL must give its future database
+`sort_key` column C collation and the API loader must consume this public
+function. Database-backed ordering, QA and full gate remain D-139/D-140.
+
+`W52-INT-BUILD-ID-PREP-01` adds the W52 content-derived API build-id helper.
+Seven synthetic-tree cases, 23 SemVer cases and 60 governance/prose tests,
+compilation and lint passed. `W52-RELEASES-API` still owes the image inputs,
+startup binding, `.dockerignore` guard and checkout/image parity; QA and the
+full gate remain D-139/D-140.
+
+`W52-INT-VERSION-READ-PREP-01` adds strict product VERSION reading with 12
+synthetic-tree cases; the combined focused command passed 102 tests, plus
+compilation and lint. `W52-RELEASES-API` still owes the root file and startup
+`ConfigurationError` binding; QA and full gate remain D-139/D-140.
 
 The W52 FACTS branch's optional web typecheck reported two `exactOptionalPropertyTypes` errors
 in `web/src/_pages/account/ui/account-page.tsx` and
@@ -173,6 +224,15 @@ row. Corrections found there belong to the later correction stage.
 reports and acceptance evidence for the same SHA. This row closes only when QA, independent
 review, the built-stand journey and manual pass have explicit recorded results.
 
+The `e2cfea92` diagnostic in `W52-INT-VALIDATE-01` does not include W51-QA-01,
+independent X/Y review, a built-stand identity journey or human A13–A20 results. Its
+language guard remains red. D-137 stays open.
+
+`W52-INT-HOTFIX-BACKPORT-01` makes the language guard green in a focused run
+without supplying the independent QA, browser or human evidence. D-137 stays open.
+`W51-INT-CLOSE` records development implementation closure and basic tests only;
+its closure does not change this row's evidence requirement.
+
 ### D-138 — the W51 end-of-wave gate is deferred
 
 **Opened 2026-10-08 by the integrator on the owner's direct instruction.** The combined W51
@@ -184,10 +244,19 @@ literal `GATE OK`. Until then W51 is not gated, tagged or authorized for `origin
 
 **Check:** `docs/program/W51-INT-CLOSE.md` or its later validation-wave report must name the
 tested SHA, full `make gate` command, log and literal `GATE OK`, with that SHA unchanged for any
-release claim.
+release claim. `W52-INT-VALIDATE-01` recorded a red full gate on `e2cfea92`; D-138 stays open.
+The later `W52-INT-HOTFIX-BACKPORT-01` correction has only focused checks; D-138
+still requires a full gate on its final exact candidate.
+`W51-INT-CLOSE` adds basic tests and a development-only publication, not the
+required literal `GATE OK`; this row stays open.
 
 ### D-134 — invalid return input appears in escaped Next Flight metadata
 
+> **Narrowed 2026-10-08 by `W52-INT-PROSE-134136`.** The screen-registry
+> comments and W50 plan now distinguish visible/form/redirect use from escaped
+> Next router metadata. No framework or routing behavior changed. Local tests
+> and lint passed; browser validation and the full gate remain D-139/D-140.
+>
 **Opened 2026-10-07 by `W50-INT-CLOSE` from W50 Judge X R1, independently upheld by Judge Y.**
 `safeReturnPath` excludes an invalid `next`/`from` from the visible `/login` and `/403` text,
 the hidden field and the BFF redirect target. Next still serializes the raw query value into
@@ -205,6 +274,11 @@ visible text, form and redirect observations in `reviews/W50-JUDGE-X.md` R1 and
 
 ### D-135 — the menu comment claims every open screen appears
 
+> **Narrowed 2026-10-08 by `W52-INT-PROSE-134136`.** The comment now says the
+> menu offers only open rows marked `inMenu` in a visible group; `/optimisation`
+> remains reachable by address and absent from the menu. Local tests and lint
+> passed; D-139/D-140 retain deferred validation.
+>
 **Opened 2026-10-07 by `W50-INT-CLOSE` from W50 Judge Y JY-1, upheld by Judge X.**
 `web/src/shared/config/screen-registry.ts:250-254` says the frame cannot hide a screen that
 `screenDecision` opens. Its `/optimisation` row is `session`/`any`, `hidden` and `inMenu: false`;
@@ -217,6 +291,11 @@ and Judge Y JY-1 give the independent runtime and source checks.
 
 ### D-136 — W50's first-load plan claims five decreases instead of four
 
+> **Narrowed 2026-10-08 by `W52-INT-PROSE-134136`.** The plan now names the
+> four measured decreases and the review page's 1,370-byte increase within the
+> 1,536-byte allowance. No new build was made under the owner's deferral;
+> D-139/D-140 retain validation and full-gate evidence.
+>
 **Opened 2026-10-07 by `W50-INT-CLOSE` from W50 Judge Y JY-2, independently measured by Judge X.**
 `docs/program/dispatch/W50-PLAN.md` §3.4 says five target routes' first-load JS falls. The
 Stage A to LAZY build tables show decreases for `/dashboard`, `/knowledge-base`, the run page
@@ -266,6 +345,12 @@ every A01–A12 recorded.
 
 ### D-131 — the acceptance journey has no retry for a transient browser network error
 
+> **Narrowed 2026-10-08 by `W52-DEBT-CODE-131`, merged at `130ed91`.**
+> The PC-01 CDP page retries only `net::ERR_NETWORK_CHANGED` at GET navigation,
+> with up to four attempts; write actions are never replayed. Four local Node
+> tests, syntax checks and lint passed. Live acceptance and the full gate remain
+> D-139/D-140; D-131 is not closed.
+>
 **Opened 2026-10-06 by `W49-INT-CLOSE`.** Run `20261006T083425Z-1338396` of the W48 acceptance
 failed at start-run with `net::ERR_NETWORK_CHANGED` while another tenant's Docker bridge on this
 host dropped veths (08:36:09–08:36:19Z); no run was created and the next run passed that phase.
@@ -287,6 +372,35 @@ with no retention rule; the administrator knows the temporary password a reset s
 
 ### D-129 — the W49 register findings
 
+> **Further narrowed 2026-10-08 by `W52-INT-129R2-01`.** The status-read
+> docstring now limits the equal-work claim to its one PBKDF2 derivation and
+> names the extra failed-read UPDATE. It cites the W49 judge's host-specific
+> timing measurement without claiming new evidence. No algorithm changed;
+> other findings and D-139/D-140 remain.
+>
+> **Further narrowed 2026-10-08 by `W52-INT-129REVOKE-01`.** The operator
+> revocation command's docstring now describes the role-aware API and its lack
+> of an HTTP bulk-revocation operation. The command and role policy did not
+> change. Other findings and D-139/D-140 remain.
+>
+> **Further narrowed 2026-10-08 by `W52-INT-129F5-01`.** Three docstrings now
+> name the existing `validation_failed` refusal, the `R-56` rejected-applicant
+> answer, and rollback of both names and roles on a refused update. The
+> composition-root docstring was edited in this explicit integration slot.
+> No behavior or contract changed. Other findings and D-139/D-140 remain.
+>
+> **Further narrowed 2026-10-08 by `W52-DEBT-CODE-129F4`, merged at `bdd23ac`.**
+> The test-only management `account_standing` SQL, port member and access-side type
+> are removed; its tests now read `get_account`, as the served credential adapter does.
+> Fifty-three access/auth tests collected, Python compilation and frontend lint passed;
+> database execution remains D-139 and the full gate D-140. Other findings remain.
+>
+> **Narrowed 2026-10-08 by `W52-DEBT-CODE-129F3`, merged at `4bcc671`.**
+> `name_label` now emits one code point per initial even when Unicode upper-casing
+> expands `ß`, `ŉ` or `ǰ`; the existing 66-character API bound is unchanged. Eleven
+> focused tests, Python compilation and frontend lint passed. Other findings remain;
+> QA and full gate remain D-139/D-140. This is not D-129 closure.
+>
 **Opened 2026-10-06 by `W49-INT-CLOSE`** from `reviews/W49-JUDGE-Y.md`, `reviews/W49-JUDGE-X.md`
 (both upheld each other's findings) and `W49-FIX.md`:
 
@@ -310,6 +424,48 @@ with no retention rule; the administrator knows the temporary password a reset s
 **Check:** each finding's path:line and reproduction in its review or report.
 
 ### D-128 — the closure judge's register findings
+
+> **Further narrowed 2026-10-08 by `W52-DEBT-CODE-128F10`, merged at `6976904`.**
+> `ReconciliationReport` now exposes `unattributed_blobs` for rows without a manifest
+> or Attempt-scoped publication intent, whether old or current; two never-populated
+> fields are removed. Available detached rows now check actual object presence. One
+> pure unit test, Python compilation and frontend lint passed. Edited PostgreSQL/MinIO
+> integration cases await D-139; the full gate awaits D-140. D-128 is not closed.
+>
+> **Further narrowed 2026-10-08 by `W52-DEBT-GUARDS-128F1`, merged at `029ca93`.**
+> The D-97 guard now discovers screen tests under `tests/unit/screens`, and the five
+> tracked private router mounts plus the language guard's private query mount use the
+> shared harness. Six focused files passed 89 tests and frontend lint. The complete
+> language guard still has its separate, pre-existing red assertion naming 17 uncovered
+> branches on both the base and repaired trees. F-10 remains open; QA and full gate
+> remain D-139/D-140. This is not D-128 closure.
+>
+> **Further narrowed 2026-10-08 by `W52-DEBT-CODE-128F11`, merged at `06a417d`.**
+> The analysis public seam now exports `TEXT_STAGE_VERSION` and its sole in-repository
+> importer uses that name directly; the version value is unchanged. Two architecture
+> files passed 3 tests and frontend lint. F-1/F-10 remain open; QA and full gate
+> remain D-139/D-140. F-10 still needs either authority-backed classification of
+> unattributed Blob rows or retirement of its dead report fields and old description.
+>
+> **Further narrowed 2026-10-08 by `W52-DEBT-GUARDS-128F2`, first merged at `05bd099`,
+> with its TSX parsing correction merged at `000a915`.** F-2's mutation guard now
+> discovers executable `useMutation` calls in all feature model TypeScript files,
+> including `model/archive.ts` and JSX-first `.tsx` files; the explicit invalidation map
+> remains mandatory. Its focused file passed 15 tests and frontend lint. At that merge,
+> F-1/F-10/F-11 remained open; QA and full gate remained D-139/D-140.
+>
+> **Further narrowed 2026-10-08 by `W52-DEBT-CODE-128F7`, merged at `a761e79`.**
+> F-7 now distinguishes a missing `provider_mode`/`cost_basis` from an unrecognised
+> present value in run progress and stage comparison, without echoing the raw value.
+> Four focused Vitest files passed 136 tests and frontend lint. At that merge,
+> F-1/F-2/F-10/F-11 remained open; QA and full gate remained D-139/D-140.
+>
+> **Narrowed 2026-10-08 by `W52-DEBT-GUARDS-128A`, merged at `030eba9`.** F-3 through
+> F-6 now have local regression probes: main-authority metadata, acceptance-report
+> proof claims, workflow job permissions/host set, and literal dynamic ALR-05 imports.
+> The four focused files passed 47 tests and frontend lint. At that merge,
+> F-1/F-2/F-7/F-10/F-11 remained open. QA and the full gate remain D-139/D-140;
+> this was not D-128 closure.
 
 **Opened 2026-10-05 by `W48-INT-CLOSE` from `docs/program/reviews/W48-JUDGE-Z.md`.** The judge
 classed nine findings *register*: F-1 `screen-set.guard.test.ts` does not read
@@ -346,6 +502,12 @@ projection of the same text cannot be loaded.
 
 ### D-125 — the corpus loader does not re-verify what it re-reads
 
+> **Narrowed 2026-10-08 by `W52-DEBT-CODE-125`, merged at `0e710f0`.**
+> The snapshot pass retains raw per-document fingerprints; loader and direct
+> segmentation projection check each subsequent read before yielding it. Local
+> fixture tests (16), Python compilation and lint passed. Real-corpus/database
+> execution and full-gate evidence remain D-139/D-140; D-125 is not closed.
+>
 **Opened 2026-10-05 by `W48-INT-CLOSE`.** `open_corpus_projection` hashes the corpus in
 `snapshot_of`; `CorpusProjection.iter_documents` (`src/auditmanager/norms/corpus_source.py`)
 reads every document again for insertion without comparing it with that hash. A file changed in
@@ -407,8 +569,11 @@ deploys it proves only that the SHA is an ancestor of `origin/main`. Nothing in 
 process rule (`AGENTS.md` §6, `MAIN_AUTODEPLOY_POLICY.md`), not a mechanism.
 
 **Check:** `grep -c 'make gate' .github/workflows/deploy-auto.yml` → `0`.
-**Needs:** an owner decision — bind deployment to gate evidence, or record the process rule as
-the accepted control.
+**Decision:** R-73 accepts `AGENTS.md` §6 and `MAIN_AUTODEPLOY_POLICY.md`
+as the process control: only the integrator pushes `main` after literal
+`GATE OK` on the exact clean candidate and a separate direct owner instruction.
+The workflow still does not attest the gate. `W52-INT-CLOSE` owns the
+accepted-risk closure and its current-tree check; D-120 remains open here.
 
 
 ### D-119 — reproducible again is not maintained: MinIO needs a security/lifecycle decision
@@ -2051,6 +2216,11 @@ Check: `docs/program/W39-CORPUS.md` §2 carries the queries.
 
 ### D-72 — `ProxySettings` accepts a URL with no host and calls the failure retryable
 
+> **Closed by `W41-AUTHOR` (`b56d103`), register reconciled 2026-10-08 by
+> `W52-INT-REGISTER-72-78`.** `ProxySettings` now refuses a hostless URL at
+> construction with `internal_error`; the focused hostless-URL tests prove the
+> refusal and a hosted-URL control. The opening text below is historical.
+>
 **Found by `W39-CORPUS` in code outside its grant, reported not repaired.**
 `ProxySettings.__post_init__` validates only the `http://` / `https://` prefix, so
 `http://:59990` constructs successfully and fails later as **`dependency_unavailable`, which
@@ -2156,6 +2326,12 @@ Check: `git rev-list --count origin/dev..origin/main` — it must be `0` at the 
 
 ### D-78 — every verdict by every reviewer is attributed to the same constant
 
+> **Closed by `W41-AUTHOR` (`14a0913`, record citation `83751df`), register
+> reconciled 2026-10-08 by `W52-INT-REGISTER-72-78`.** The constant is absent
+> from runtime code. `appendDecision` passes the authenticated subject's
+> display label and opaque user identity to the ledger; W41's report records
+> its tests and mutation. The opening text below is historical.
+>
 **Raised 2026-09-23 by `pdf-analysis-04` from its authorization audit; verified by the integrator
 and taken into wave 41 as `W41-AUTHOR` the same hour.**
 
@@ -2603,6 +2779,12 @@ Check: `curl -so /dev/null -w '%{http_code}' http://127.0.0.1:31500/api/v1/docs`
 
 ### D-87 — a full-tree mutation copy still cannot redden a migration, and §10.1 names only half of it
 
+> **Further narrowed 2026-10-08 by `W52-INT-87-01`.** The live §10.1 now
+> requires both a copied migration source and a fresh database migrated from
+> that source. It names the existing constraint-specific `migrated_engine` and
+> does not claim every schema invariant is covered. That wider test-coverage
+> debt remains; D-87 is not closed.
+>
 **Found by `W42-SEAL` when a mutation came back green, which is the only way any of these
 has ever been found.**
 
@@ -3452,7 +3634,7 @@ after the fact is the integrator writing history. Wave 48 decides whether to ann
 
 ### D-97 — six screen-rendering implementations do not share one provider/state contract
 
-> **`D-97` closed by `W48-WEB`, 2026-10-05.** All five screen-wide consumers render through `harness.ts::renderScreen` (`996b546`), and `a73a331` makes the guard discover new consumers instead of listing them. The private router mounts left are the five focused screen tests the row excluded (`D-128` F-1 records that the guard does not read them).
+> **`D-97` closed by `W48-WEB`, 2026-10-05.** All five screen-wide consumers render through `harness.ts::renderScreen` (`996b546`), and `a73a331` makes the guard discover new consumers instead of listing them. At closure, five focused screen tests still had private router mounts outside the guard's walk (`D-128` F-1); `W52-DEBT-GUARDS-128F1` later migrated them and enlarged discovery (`029ca93`).
 
 **Opened by both closing W44 judges, 2026-09-24.** The integration comment claimed five existing
 copies became four and that the residue was registered. The commit migrated none of the five and

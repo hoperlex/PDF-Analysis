@@ -79,7 +79,8 @@ handler, the mirror constant in `features/sign-in/model/exchange.ts` and `sessio
 
 `next`/`from` validation (one function, unit-tested): a string that starts with exactly one `/`,
 is not `//…` or `/\…`, has no scheme, is at most 512 characters, and whose path matches a
-registry address shape; anything else is dropped, never echoed. The sign-in form carries the
+registry address shape; anything else is omitted from the visible form and redirect (Next may
+still serialize the raw query, escaped, in router-state metadata). The sign-in form carries the
 validated `next` in a hidden field, and the BFF's after-sign-in redirect uses it after validating
 it again; both are this wave's `W50-REGISTRY-01` (the BFF handler and the form are in its paths).
 
@@ -106,13 +107,13 @@ application (the existing argument in `screen-lock.ts`). No redirect cycle exist
 `widgets/dashboard`. Two things must both hold, and each has a check:
 
 - **the bundle really splits:** the `next build` route table's first-load JS per route is
-  recorded before and after in the report, and no measured route gets worse; *(amended by the
-  owner's direct poll of 2026-10-07: the five target routes' first-load JS falls, and no other
-  route grows by more than the measured fixed cost of the async-chunk runtime — at most 1.5 kB
-  gzip per route on this toolchain — with the exact-byte table in the report. Any `import()`
-  adds webpack's chunk-id map to the runtime every route loads, so "no route grows" was
-  unsatisfiable by any lazy loading; `W50-LAZY-01` measured −25 / −10 / −8 / −2 kB on the heavy
-  routes against +0.7 … +1.4 kB elsewhere.)*
+  recorded before and after in the report. Four routes fell: `/dashboard`,
+  `/knowledge-base`, the run page and the comparison page. The review page grew 1,370 bytes,
+  within the 1.5 kB gzip runtime-cost allowance. *(The owner's direct poll of 2026-10-07
+  originally named five target decreases and allowed other routes to grow by that fixed cost;
+  the Stage A → LAZY builds measured four decreases and the review increase, as W50 Judge X/Y
+  confirmed. Any `import()` adds webpack's chunk-id map to the runtime every route loads, so
+  "no route grows" was unsatisfiable by lazy loading.)*
 - **the instruments keep seeing the widgets:** the screen harness
   (`web/tests/unit/screens/harness.ts`, `renderToStaticMarkup`), the contrast census and the
   language guards render `_pages` synchronously, where a dynamic import yields only its

@@ -70,7 +70,7 @@ describe('D-97: screen-wide consumers share one router/query provider contract',
   const routerProvider = ['AppRouterContext', 'Provider'].join('.');
   const queryProvider = ['QueryClient', 'Provider'].join('');
 
-  const harnessImport = /import\s*\{(?<bindings>[^}]*)\}\s*from\s*['"][^'"]*screens\/harness['"]/s;
+  const harnessImport = /import\s*\{(?<bindings>[^}]*)\}\s*from\s*['"][^'"]*(?:screens\/|\.\/)harness['"]/s;
   const importsRenderScreen = (source: string): boolean => {
     const bindings = harnessImport.exec(source)?.groups?.bindings ?? '';
     return /(?:^|,)\s*renderScreen(?:\s+as\s+\w+)?\s*(?:,|$)/s.test(bindings);
@@ -91,6 +91,8 @@ describe('D-97: screen-wide consumers share one router/query provider contract',
   const consumers = [
     ...walkFiles(join(WEB_ROOT, 'tests/guards'), (path) => /\.(?:ts|tsx)$/.test(path)),
     ...walkFiles(join(WEB_ROOT, 'tests/unit/styles'), (path) => /\.(?:ts|tsx)$/.test(path)),
+    ...walkFiles(join(WEB_ROOT, 'tests/unit/screens'), (path) =>
+      /\.(?:ts|tsx)$/.test(path) && !path.endsWith('/harness.ts')),
   ]
     .filter((path) => isScreenWideConsumer(readText(path)))
     .map((path) => repoRelative(path).replace(/^web\//, ''))
@@ -102,6 +104,10 @@ describe('D-97: screen-wide consumers share one router/query provider contract',
     expect(consumers.length, 'screen-wide consumer discovery found too little to be credible')
       .toBeGreaterThanOrEqual(5);
     expect(consumers).toContain('tests/unit/styles/screens.ts');
+    expect(
+      consumers.filter((relative) => relative.startsWith('tests/unit/screens/')).length,
+      'the guard must inspect tracked unit screen consumers',
+    ).toBeGreaterThanOrEqual(5);
     for (const relative of consumers) {
       const source = readText(join(WEB_ROOT, relative));
       expect(findings(relative, source)).toEqual([]);
@@ -109,7 +115,7 @@ describe('D-97: screen-wide consumers share one router/query provider contract',
   });
 
   it('can fail on a private screen-wide provider copy', () => {
-    const relative = 'tests/guards/new-screen-wide.guard.test.ts';
+    const relative = 'tests/unit/screens/new-screen.test.ts';
     const privateCopy = `createElement(${routerProvider}, { value: router }, screen)`;
     expect(isScreenWideConsumer(privateCopy)).toBe(true);
     expect(findings(relative, privateCopy)).toEqual([

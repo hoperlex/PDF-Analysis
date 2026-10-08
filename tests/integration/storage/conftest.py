@@ -12,14 +12,14 @@ command, so when those names are not already exported the session reads them
 out of the repository-root ``.env`` -- the same git-ignored file ``make`` reads
 -- without overriding anything the caller set.
 
-Cleanup is scoped: every object a test creates is registered with the
-``blobs`` fixture and deleted by exact key at teardown. No fixture ever empties
-the bucket, which would destroy a concurrently running lane's objects.
+Each test owns a temporary bucket. The census sees every key; teardown
+deletes observed keys individually before dropping that test's bucket.
 """
 
 from __future__ import annotations
 
 import os
+import secrets
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Iterator
@@ -78,7 +78,7 @@ def _load_dotenv_if_needed() -> None:
 
 
 @pytest.fixture(scope="session")
-def settings() -> S3StorageSettings:
+def base_settings() -> S3StorageSettings:
     _load_dotenv_if_needed()
     try:
         return S3StorageSettings.from_env()
@@ -89,7 +89,37 @@ def settings() -> S3StorageSettings:
         )
 
 
-@pytest.fixture(scope="session")
+def _keys_in_bucket(raw_s3: Any, bucket: str) -> list[str]:
+    found: list[str] = []
+    token: str | None = None
+    while True:
+        kwargs: dict[str, Any] = {"Bucket": bucket}
+        if token:
+            kwargs["ContinuationToken"] = token
+        page = raw_s3.list_objects_v2(**kwargs)
+        found.extend(item["Key"] for item in page.get("Contents", []))
+        if not page.get("IsTruncated"):
+            return sorted(found)
+        token = page.get("NextContinuationToken")
+
+
+@pytest.fixture
+def settings(base_settings: S3StorageSettings, raw_s3: Any) -> Iterator[S3StorageSettings]:
+    """Give this test every key in a new bucket, never a filtered shared view."""
+    bucket = f"{base_settings.bucket[:40]}-{secrets.token_hex(8)}"
+    create: dict[str, Any] = {"Bucket": bucket}
+    if base_settings.region != "us-east-1":
+        create["CreateBucketConfiguration"] = {"LocationConstraint": base_settings.region}
+    raw_s3.create_bucket(**create)
+    try:
+        yield replace(base_settings, bucket=bucket)
+    finally:
+        for key in _keys_in_bucket(raw_s3, bucket):
+            raw_s3.delete_object(Bucket=bucket, Key=key)
+        raw_s3.delete_bucket(Bucket=bucket)
+
+
+@pytest.fixture
 def store(settings: S3StorageSettings) -> S3BlobStore:
     blob_store = S3BlobStore(settings)
     try:
@@ -103,7 +133,7 @@ def store(settings: S3StorageSettings) -> S3BlobStore:
 
 
 @pytest.fixture(scope="session")
-def raw_s3(settings: S3StorageSettings) -> Any:
+def raw_s3(base_settings: S3StorageSettings) -> Any:
     """A plain boto3 client, independent of the adapter under test.
 
     Assertions about what the bucket does or does not contain are made through
@@ -112,10 +142,10 @@ def raw_s3(settings: S3StorageSettings) -> Any:
     """
     return boto3.client(
         "s3",
-        endpoint_url=settings.endpoint_url,
-        region_name=settings.region,
-        aws_access_key_id=settings.access_key_id,
-        aws_secret_access_key=settings.secret_access_key,
+        endpoint_url=base_settings.endpoint_url,
+        region_name=base_settings.region,
+        aws_access_key_id=base_settings.access_key_id,
+        aws_secret_access_key=base_settings.secret_access_key,
         config=Config(
             signature_version="s3v4",
             s3={"addressing_style": "path"},
@@ -131,17 +161,7 @@ def bucket_keys(raw_s3: Any, settings: S3StorageSettings):
     """Return every object key currently in the bucket, sorted."""
 
     def _keys() -> list[str]:
-        found: list[str] = []
-        token: str | None = None
-        while True:
-            kwargs: dict[str, Any] = {"Bucket": settings.bucket}
-            if token:
-                kwargs["ContinuationToken"] = token
-            page = raw_s3.list_objects_v2(**kwargs)
-            found.extend(item["Key"] for item in page.get("Contents", []))
-            if not page.get("IsTruncated"):
-                return sorted(found)
-            token = page.get("NextContinuationToken")
+        return _keys_in_bucket(raw_s3, settings.bucket)
 
     return _keys
 
@@ -174,7 +194,7 @@ def publish(store: S3BlobStore, blobs: list[BlobId]):
     return _publish
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def unreachable_store(settings: S3StorageSettings) -> S3BlobStore:
     """An adapter pointed at a port nothing listens on."""
     return S3BlobStore(replace(settings, endpoint_url=CLOSED_ENDPOINT))

@@ -24,9 +24,6 @@ import { describe, expect, it } from 'vitest';
 // the context Next's own `<AppRouterProvider>` publishes; supplying it is what lets the
 // screen be rendered at all. It is a deep import into `next/dist`, which is why it is
 // here in one place and not spread across the suite, and it adds no dependency.
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-
 import { queryKeys } from '@/shared/api';
 import { AppFrame } from '@/_app';
 import { CreateProjectForm } from '@/features/create-project';
@@ -37,7 +34,7 @@ import { ProjectsPage } from '@/_pages/projects';
 import { RunPage } from '@/_pages/run';
 
 import { PROJECT_UID, RUN_ID, VERSION_UID, render, runStatus } from '../review/fixtures';
-import { newClient, renderWith } from './harness';
+import { newClient, renderScreen, renderWith } from './harness';
 
 // ------------------------------------------------------------------- the forms
 
@@ -114,35 +111,16 @@ describe('the start-run control', () => {
 
 describe('/projects', () => {
   it('composes the create form and the list under one frame', () => {
-    const markup = renderWith(newClient(), createElement(ProjectsPage, {}));
+    const markup = renderScreen(newClient(), createElement(ProjectsPage, {}));
     expect(markup).toContain('>Проекты</h1>');
     expect(markup).toContain('id="new-project-name"');
     expect(markup).toContain('Все проекты');
   });
 });
 
-/** A router that records instead of navigating. Nothing in one render pass calls it. */
-function stubRouter(pushed: string[]): AppRouterInstance {
-  return {
-    push: (href: string) => pushed.push(href),
-    replace: (href: string) => pushed.push(href),
-    back: () => {},
-    forward: () => {},
-    refresh: () => {},
-    prefetch: () => {},
-  } as unknown as AppRouterInstance;
-}
-
 describe('/projects/{project_uid}', () => {
   const detail = (projectUid: string) =>
-    renderWith(
-      newClient(),
-      createElement(
-        AppRouterContext.Provider,
-        { value: stubRouter([]) },
-        createElement(ProjectDetailPage, { projectUid }),
-      ),
-    );
+    renderScreen(newClient(), createElement(ProjectDetailPage, { projectUid }));
 
   it('refuses a malformed address without asking the server about it', () => {
     const markup = detail('not-a-project-address');
@@ -172,7 +150,7 @@ describe('/projects/{project_uid}/runs/{run_id}', () => {
     const status = runStatus({ state: 'published' });
     const client = newClient();
     client.setQueryData(queryKeys.runs.detail(status.run_id), status);
-    const markup = renderWith(
+    const markup = renderScreen(
       client,
       createElement(RunPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
     );

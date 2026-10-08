@@ -53,7 +53,6 @@ from sqlalchemy.orm import Session
 
 from auditmanager.access.models import (
     Account,
-    AccountStanding,
     CredentialStanding,
     UserRecord,
 )
@@ -171,9 +170,6 @@ class AccountRepository(Protocol):
     the caller's session and leaves the commit to it; every §3.2 invariant is enforced by
     the implementation, so a router that calls these cannot skip one.
     """
-
-    def account_standing(self, session: Session, user_uid: str) -> AccountStanding | None:
-        """Epoch, default credential, archived, profile complete and roles, in one read."""
 
     def get_account(self, session: Session, user_uid: str) -> Account | None:
         """``getUser``: the account and its roles, archived or not."""

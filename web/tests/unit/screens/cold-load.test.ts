@@ -29,9 +29,6 @@
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-
 import type {
   DocumentVersion,
   DocumentVersionPage,
@@ -49,21 +46,9 @@ import { ProjectDetailPage } from '@/_pages/project-detail';
 import { VersionDetailPage } from '@/_pages/version-detail';
 
 import { DOCUMENT_UID, PROJECT_UID, RUN_ID, VERSION_UID, runStatus } from '../review/fixtures';
-import { newClient, renderWith, seedError } from './harness';
+import { newClient, renderScreen, seedError } from './harness';
 
 // --------------------------------------------------------------------- fixtures
-
-/** A router that records instead of navigating. Nothing in one render pass calls it. */
-function stubRouter(pushed: string[]): AppRouterInstance {
-  return {
-    push: (href: string) => pushed.push(href),
-    replace: (href: string) => pushed.push(href),
-    back: () => {},
-    forward: () => {},
-    refresh: () => {},
-    prefetch: () => {},
-  } as unknown as AppRouterInstance;
-}
 
 function version(overrides: Partial<DocumentVersion> = {}): DocumentVersion {
   return {
@@ -108,10 +93,7 @@ const RUNS_KEY = queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT);
 type Client = ReturnType<typeof newClient>;
 
 function withRouter(client: Client, element: ReturnType<typeof createElement>): string {
-  return renderWith(
-    client,
-    createElement(AppRouterContext.Provider, { value: stubRouter([]) }, element),
-  );
+  return renderScreen(client, element);
 }
 
 /**
@@ -279,7 +261,7 @@ describe('the version screen asks the server on a cold load (D-16)', () => {
 
 describe('the document screen asks the server on a cold load (D-16)', () => {
   const screen = (client: Client, documentUid = DOCUMENT_UID) =>
-    renderWith(
+    renderScreen(
       client,
       createElement(DocumentDetailPage, { projectUid: PROJECT_UID, documentUid }),
     );

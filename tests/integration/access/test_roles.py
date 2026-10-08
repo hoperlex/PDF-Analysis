@@ -71,7 +71,9 @@ class TestGrantAndRevoke:
         uid = _create(session, "anna@example.com", roles=("expert", "admin"))
         before = _epoch(session, uid)
         assert accounts.revoke_role(session, actor_uid=seed, user_uid=uid, role="expert")
-        assert accounts.account_standing(session, uid).roles == frozenset({"admin"})
+        account = accounts.get_account(session, uid)
+        assert account is not None
+        assert account.roles == frozenset({"admin"})
         assert not accounts.revoke_role(session, actor_uid=seed, user_uid=uid, role="expert")
         session.commit()
         assert _epoch(session, uid) == before + 1

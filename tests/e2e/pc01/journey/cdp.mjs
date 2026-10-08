@@ -44,6 +44,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { navigateWithTransientRetry } from './navigation-retry.mjs';
 
 /**
  * Candidate Chromium binaries, in order.
@@ -451,10 +452,24 @@ class Page {
     // "Loading the run request..." with no progress -- and a journey that records only
     // outcomes cannot report that.
     const t0 = Date.now();
-    const result = await this.#send('Page.navigate', { url });
+    const { result, attempts } = await navigateWithTransientRetry(
+      (method, params) => this.#send(method, params),
+      url,
+      {
+        onRetry: ({ attempts: failedAttempts, delayMs }) => {
+          console.warn(
+            `navigation: net::ERR_NETWORK_CHANGED after attempt ${failedAttempts}; ` +
+              `retrying GET in ${delayMs} ms`,
+          );
+        },
+      },
+    );
+    this.navigationAttempts = attempts;
     if (result.errorText) {
       // A navigation that never reached a server is a failure of the journey, not a 0.
-      throw new Error(`navigation to ${url} failed: ${result.errorText}`);
+      throw new Error(
+        `navigation to ${url} failed after ${attempts} attempt(s): ${result.errorText}`,
+      );
     }
     const t1 = Date.now();
     await this.#settle(settleMs, timeoutMs);

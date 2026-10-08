@@ -29,39 +29,22 @@
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-
 import type { ErrorCode, ErrorEnvelope, RunStatus, StageState } from '@/shared/api';
 import { ApiError, queryKeys } from '@/shared/api';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 
-import { newClient, renderWith, seedError } from './harness';
+import { newClient, renderScreen, seedError } from './harness';
 
 const PROJECT_UID = 'prj_01M2545JSD15ETSNNV904X991J';
 const VERSION_UID = 'ver_01M2545JSD15ETSNNV904X991J';
 const NEWER = 'run_01M2545JSD15ETSNNV904X991J';
 const OLDER = 'run_01M2545JSD15ETSNNV904X991K';
 
-function stubRouter(): AppRouterInstance {
-  return {
-    push: () => {}, replace: () => {}, back: () => {}, forward: () => {},
-    refresh: () => {}, prefetch: () => {},
-  } as unknown as AppRouterInstance;
-}
-
 function screen(seed: (client: ReturnType<typeof newClient>) => void, versionUid = VERSION_UID): string {
   const client = newClient();
   seed(client);
-  return renderWith(
-    client,
-    createElement(
-      AppRouterContext.Provider,
-      { value: stubRouter() },
-      createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid }),
-    ),
-  );
+  return renderScreen(client, createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid }));
 }
 
 function stage(over: Partial<StageState> & Pick<StageState, 'stage_id' | 'status'>): StageState {
@@ -226,6 +209,25 @@ describe('a fact neither run carries prints nothing at all', () => {
     // not), and ten of those eleven disagree.
     expect(markup).toContain('data-compared-count="11"');
     expect(markup).toContain('data-difference-count="10"');
+  });
+});
+
+describe('an unfamiliar run fact is not an absent one', () => {
+  it('marks an unfamiliar provider mode and basis without showing raw values', () => {
+    const changed = base({
+      run_id: NEWER,
+      provider_mode: 'turbo' as never,
+      cost_basis: 'guessed' as never,
+    });
+    const markup = screen(seedRuns([changed, base({ run_id: OLDER })]));
+    const modeRow = factRow(markup, 'provider_mode');
+    const basisRow = factRow(markup, 'cost_basis');
+    expect(modeRow).toContain('data-provider-mode="unrecognized"');
+    expect(basisRow).toContain('data-cost-basis="unrecognized"');
+    expect(visible(modeRow)).toContain('неизвестное значение');
+    expect(visible(basisRow)).toContain('неизвестное значение');
+    expect(modeRow + basisRow).not.toContain('turbo');
+    expect(modeRow + basisRow).not.toContain('guessed');
   });
 });
 

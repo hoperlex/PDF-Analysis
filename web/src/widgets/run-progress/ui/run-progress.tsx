@@ -19,8 +19,8 @@
  *   reconciled it.
  *
  *   **A recorded run never reads as a live one.** The provider mode sits on the badge and
- *   again as a sentence, and a reading that carries no recognised mode says `unknown` —
- *   never `live`.
+ *   again as a sentence. Missing and unrecognised modes have different labels, neither
+ *   of which can be mistaken for `live`.
  *
  *   **Motion stops when the run stops.** A terminal or reconciled reading shows no
  *   activity indicator, because there is no activity.
@@ -238,9 +238,11 @@ function Recorded({ status }: { readonly status: RunStatus }) {
             <dd data-model-call-count={cost.callCount}>{cost.callCount}</dd>
             <dt>Основание</dt>
             <dd data-cost-basis={cost.basis ?? 'unstated'}>
-              {cost.basis === null || cost.basis === undefined
+              {cost.basis === null
                 ? 'не указано'
-                : COST_BASIS_LABELS[cost.basis]}
+                : cost.basis === 'unrecognized'
+                  ? 'неизвестное значение'
+                  : COST_BASIS_LABELS[cost.basis]}
             </dd>
           </dl>
           <p>{costBasisCaption(cost.basis)}</p>
@@ -290,6 +292,11 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
   }
 
   const mode = runProviderMode(status);
+  const modeText = mode === 'unknown'
+    ? PROVIDER_MODE_UNKNOWN_LABEL
+    : mode === 'unrecognized'
+      ? 'неизвестное значение'
+      : PROVIDER_MODE_LABELS[mode];
   const animating = isRunAnimating(status);
   const interrupted = interruptedReason(status);
 
@@ -298,7 +305,7 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
       <p className={styles.mode}>
         <RunStateBadge state={status.state} providerMode={badgeProviderMode(mode)} />
         <span data-provider-mode={mode}>
-          режим провайдера: <strong data-provider-mode={mode}>{mode === 'unknown' ? PROVIDER_MODE_UNKNOWN_LABEL : PROVIDER_MODE_LABELS[mode]}</strong>
+          режим провайдера: <strong data-provider-mode={mode}>{modeText}</strong>
         </span>
       </p>
       <p>{providerModeCaption(mode)}</p>
@@ -348,7 +355,7 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
         <p>
           <Link href={routes.review(projectUid, status.run_id)}>Разобрать находки</Link>{' '}
           — режим провайдера этого прогона:{' '}
-          <strong data-provider-mode={mode}>{mode === 'unknown' ? PROVIDER_MODE_UNKNOWN_LABEL : PROVIDER_MODE_LABELS[mode]}</strong>.
+          <strong data-provider-mode={mode}>{modeText}</strong>.
         </p>
       ) : (
         <NotApplicableState

@@ -3,15 +3,71 @@
 > **Updated 2026-10-08 by the W51 integrator.** W49 and W50 of the identity programme
 > (`docs/program/dispatch/IDENTITY-WAVES.md`) are closed on `origin/dev`. W51 Stage A and
 > all three Stage B implementation lanes and Stage C code are merged there through
-> `4400e81`; QA, correction and release checks remain open. The owner temporarily deferred temporary
-> stand checks and end-of-wave gates to a later separately designed wave (`D-137`, `D-138`).
+> `4400e81`. `W51-INT-CLOSE` closes implementation on the development line under
+> the owner's accelerated-close direction; QA, correction and release checks remain
+> open. Temporary-stand checks and end-of-wave gates are deferred to a later,
+> separately designed wave (`D-137`, `D-138`).
 > W52 code preparations `W52-PINSWEEP-01` and `W52-FACTS-01` are merged on `origin/dev`
-> through `b5be37e`; W52 has not been frozen or closed. QA and full-gate evidence for this
+> through `b5be37e`; W52 Stage A is frozen and accepted on `origin/dev` at
+> `6d2ae471132e78268d3af8ca872560491ec57233`, while the wave is not closed. QA and full-gate evidence for this
 > and later code-only candidates is open under `D-139` and `D-140`.
 > The independent D-133 proxy-code correction is merged through `3cfc8d9`; its W56 and
 > live-validation halves remain open.
+> D-128 guard corrections F-3…F-6 are merged through `030eba9`, F-7 presentation through
+> `a761e79`, and F-2 mutation discovery with TSX parsing through `000a915`;
+> F-11 public-stage naming is merged through `06a417d`, and F-1 screen-provider
+> coverage through `029ca93`; F-10's report correction is merged through `6976904`.
+> D-128 still awaits deferred database validation and full-gate evidence.
+> D-129 Y F-3's bounded name-label correction is merged through `4bcc671`, and
+> F-4's unused standing-query removal through `bdd23ac`; F-5's three docstrings
+> are corrected on this integration line. Other findings remain open.
+> D-125's per-document corpus read verification is merged through `0e710f0`;
+> its real-corpus/database and full-gate evidence remains deferred.
+> D-131's bounded transient browser-navigation retry is merged through `130ed91`;
+> its live browser evidence remains deferred.
 > The combined implementation passed 148 focused tests and frontend lint; its red
 > rendered-language branch-coverage assertion remains recorded in the lane reports.
+> `W52-INT-VALIDATE-01` measured the published `e2cfea92` candidate with a full
+> `make gate` attempt: foundation 35 and Python 3,245 passed; frontend lint passed,
+> but two TypeScript errors stopped the gate before Vitest. Separately, Vitest had
+> 1,705 passes and seven failures. There is no `GATE OK`; D-137–D-140 remain open.
+> `W52-INT-HOTFIX-BACKPORT-01` carries the already deployed W51 web correction
+> back to the development line, reconciled with dev's later D-128 F-1 guard work.
+> Typecheck, 72 focused frontend tests and lint pass on the backport; no new full
+> gate or live acceptance was run, so D-137–D-140 remain open.
+> `W52-INT-GATE-PARTITION-01` excludes the foundation suite from the later
+> battery after the gate's separate foundation step. The other 3,216 collected
+> test IDs are unchanged; 91 focused contract/governance tests and lint passed.
+> Full-gate outcome and timing remain D-140.
+> `W52-INT-GATE-PC01-ENV-01` confines PC-01's recorded provider mode to one
+> test at a time; a local teardown probe and 62 focused tests passed. The
+> service-backed journey and full gate remain D-139/D-140.
+> `W52-INT-SEMVER-PREP-01` adds a pure canonical SemVer order key for the future
+> releases context; 83 focused tests, compilation and lint passed. Its database
+> collation and release consumers await W52 SEAL/API, with QA/gate in D-139/D-140.
+> `W52-INT-BUILD-ID-PREP-01` adds the pure API content-hash helper for W52;
+> 90 focused tests, compilation and lint passed. Stage C still owns the image
+> inputs, startup binding and image parity; QA/gate remain D-139/D-140.
+> `W52-INT-VERSION-READ-PREP-01` adds strict one-line product VERSION reading;
+> 102 focused tests, compilation and lint passed. Stage C still owns the root
+> file and startup refusal; QA/gate remain D-139/D-140.
+> `W52-INT-ENTRY-01` adopts the judged W52 plan and roadmap from planning
+> SHA `2b45a11` and reconciles its W51 full-gate entry with the owner's later
+> code-first deferral. The W51 close at `4159d4e` satisfies development
+> lineage only; D-137–D-140 retain release validation. At the entry commit,
+> `W52-RULE-01` and `W52-FREEZE-01` were still pending; both are complete now.
+> `W52-INT-FRONTEND-BASELINE-01` remeasured the clean `defade8` development
+> tree: frontend typecheck and lint passed, and all 1,712 Vitest tests passed
+> with child-process execution permitted. This supersedes the older red
+> frontend diagnostic as a current observation, but supplies no full gate,
+> independent QA or live/manual acceptance; D-137–D-140 remain open.
+> `W52-RULE-01` records the owner's three direct confirmations as R-71…R-74.
+> `W52-FREEZE-01` fixes the Stage-A base and the remaining `W52-GATE-01`
+> grant. `W52-GATE-01` passed 257 DB, 63 storage, 91 ingest and 54 auth tests
+> on isolated services; the exact fixture-only SHA was published to `origin/dev`.
+> `W52-INT-A2B-01` grants Stage B SEAL from a fresh pin sweep; Stage C/C2 still
+> require fresh grants after their preceding merges. The code-only Stage-A acceptance supplies no complete gate, QA,
+> live/manual acceptance, release verdict or `origin/main` authority.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
@@ -42,7 +98,7 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Active development, 2026-10-08 — W51 implementation and W52 code preparations on `dev`
+## Active development, 2026-10-08 — W51 implementation closed and W52 code preparations on `dev`
 
 W49 — accounts with e-mail sign-in, a role set `{expert, admin}`, registration requests and
 administrator account management (`R-55` … `R-61`) — was published to `origin/dev` by
@@ -50,20 +106,60 @@ administrator account management (`R-55` … `R-61`) — was published to `origi
 return paths, a home page, grouped navigation and an account menu, four honest route placeholders,
 and lazy loading for five heavy widgets. The production build's 23rd page row is Next's synthetic
 `/_not-found`, not a registered screen. `W50-QA-01` and both independent judges accepted the
-merged candidate; the three upheld register-only findings are open as `D-134` … `D-136`.
+merged candidate; the three upheld register-only findings `D-134` … `D-136`
+have their live prose corrected in `W52-INT-PROSE-134136.md`, with deferred
+browser/gate validation tracked by D-139/D-140.
 `W50-FIX` corrected accepted prose and fixtures and added the R-70 light-acceptance command.
 Its clean lane tree passed a full `make gate`; the FIX merge and the docs-only close candidate
 passed light acceptance under `R-70` (`AGENTS.md` §8). W50 is closed on the development line
 without a release tag. W51's screens, Stage C identity journey code and manual A13–A20 pack
-are merged into `origin/dev`. The identity browser journey has not run; QA, correction and
+are merged into `origin/dev`; `W51-INT-CLOSE` closes their implementation on the development
+line. The identity browser journey has not run; QA, independent review, correction and
 release evidence remain open under the 2026-10-08 validation deferral (`D-137`, `D-138`).
-The proposed W52 plan has no freeze on this line. Its pin-sweep CLI and central independent
+The adopted W52 plan has no freeze on this line. Its pin-sweep CLI and central independent
 expected-facts file are code preparations only; their focused checks are recorded in
 `W52-PINSWEEP-01.md` and `W52-FACTS-01.md`. W52 QA and full gate remain due under
-`D-139`/`D-140`.
+`D-139`/`D-140`. `W52-INT-ENTRY-01` makes the owner's code-first execution
+amendment explicit while retaining W52 ruling, freeze and later release checks.
 The proxy-code half of D-133 is merged with local-stub evidence in
 `W52-DEBT-CODE-133.md`; the RunStatus/model-configuration and live-validation halves
 remain open.
+Four D-128 guard blind spots (F-3…F-6) have local basic-test evidence in
+`W52-DEBT-GUARDS-128A.md`.
+The F-7 run-presentation correction has 136 focused tests and lint in
+`W52-DEBT-CODE-128F7.md`. F-2 has 15 focused tests and lint in
+`W52-DEBT-GUARDS-128F2.md`. F-11 has 3 focused tests and lint in
+`W52-DEBT-CODE-128F11.md`. F-1's shared-provider repair passed 89 focused tests and
+lint in `W52-DEBT-GUARDS-128F1.md`; the language guard's separate, pre-existing
+17-branch coverage assertion remains red on both base and repaired trees. D-128 now
+retains deferred validation. F-10's reconciler report now names unattributed Blob rows
+without inferring age and omits dead categories; its pure unit test, Python compilation
+and lint passed in `W52-DEBT-CODE-128F10.md`. The database integration cases await D-139.
+The D-129 Y F-3 Unicode initial correction passed 11 focused tests and lint in
+`W52-DEBT-CODE-129F3.md`; other D-129 findings remain open.
+F-4's unused management standing read and access-side type were removed in
+`W52-DEBT-CODE-129F4.md`; 53 access/auth tests collected, and database execution
+awaits D-139.
+D-129 Y F-5's three identity docstrings now state the served refusal and atomic
+rollback behavior, including the `R-56` addendum; `W52-INT-129F5-01.md` records
+the integration slot for the composition-root docstring. No behavior changed.
+The `access.revoke` operator-command docstring no longer claims the role-aware
+API has no roles; `W52-INT-129REVOKE-01.md` records that D-129 prose correction.
+D-87's migration-mutation procedure now requires a fresh database after editing
+a copied migration; its wider schema-test coverage remains open.
+The debt-register summary now marks D-72 and D-78 closed by their W41 repairs;
+the old opening evidence remains in their dated rows.
+D-129 X R-2's status-read docstring now describes equal PBKDF2 work without
+claiming every request path has identical total timing.
+The D-125 corpus projection now checks each re-read document against the raw
+fingerprint that determined its snapshot, including repaired and direct
+segmentation reads. Sixteen local fixture tests, Python compilation and lint
+passed in `W52-DEBT-CODE-125.md`; real-corpus/database evidence and full gate
+remain D-139/D-140.
+D-131's PC-01 CDP page now retries `net::ERR_NETWORK_CHANGED` on GET navigation
+with a fixed budget and records attempt counts; four local Node tests, syntax
+checks and lint passed in `W52-DEBT-CODE-131.md`. The live acceptance journey
+and full gate remain D-139/D-140.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:

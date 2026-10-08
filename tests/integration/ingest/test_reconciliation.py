@@ -140,7 +140,7 @@ def interrupted(store, session_factory, project, baseline_pdf, key, track):
     return blob_id
 
 
-def test_a_pre_0014_publish_interruption_is_legacy_unattributed_not_an_orphan(
+def test_a_current_document_upload_interruption_is_unattributed_not_an_orphan(
     interrupted, store, engine, reconciler: Reconciler, baseline_pdf
 ) -> None:
     blob_id = interrupted
@@ -159,11 +159,9 @@ def test_a_pre_0014_publish_interruption_is_legacy_unattributed_not_an_orphan(
 
     report = reconciler.report()
 
-    assert report.orphan_objects == ()
-    assert report.unpublished_records == ()
-    assert [item.blob_id for item in report.legacy_unattributed_blobs] == [blob_id]
-    assert report.legacy_unattributed_blobs[0].recorded_state == "verifying"
-    assert report.legacy_unattributed_blobs[0].object_present is True
+    assert [item.blob_id for item in report.unattributed_blobs] == [blob_id]
+    assert report.unattributed_blobs[0].recorded_state == "verifying"
+    assert report.unattributed_blobs[0].object_present is True
     assert report.missing_objects == ()
     assert not report.is_clean
     screen_message(report.describe())
@@ -200,7 +198,7 @@ def test_a_re_upload_adopts_the_orphan_instead_of_writing_a_second_object(
     assert reconciler.report().is_clean
 
 
-def test_a_record_with_no_object_is_reported_as_unpublished_not_as_an_orphan(
+def test_a_record_with_no_object_is_reported_as_unattributed(
     session_factory, store, project, baseline_pdf, key, engine, reconciler
 ) -> None:
     """The other side of the window: the database is mid-publication, the store is empty.
@@ -224,11 +222,9 @@ def test_a_record_with_no_object_is_reported_as_unpublished_not_as_an_orphan(
 
     report = reconciler.report()
 
-    assert report.orphan_objects == ()
-    assert report.unpublished_records == ()
-    assert [item.blob_id for item in report.legacy_unattributed_blobs] == [blob_id]
-    assert report.legacy_unattributed_blobs[0].recorded_state == "verifying"
-    assert report.legacy_unattributed_blobs[0].object_present is False
+    assert [item.blob_id for item in report.unattributed_blobs] == [blob_id]
+    assert report.unattributed_blobs[0].recorded_state == "verifying"
+    assert report.unattributed_blobs[0].object_present is False
 
 
 # --- a published version whose bytes have gone -------------------------------
@@ -291,8 +287,7 @@ def test_report_is_clean_on_a_healthy_instance(
 
     assert report.is_clean
     assert report.describe() == (
-        "orphan_objects=0 unpublished_records=0 legacy_unattributed_blobs=0 "
-        "missing_objects=0 "
+        "unattributed_blobs=0 missing_objects=0 "
         "missing_analysis_artifacts=0 unbound_analysis_artifacts=0 stale_commands=0"
     )
 
@@ -350,10 +345,10 @@ def test_a_stale_in_progress_command_is_reported_and_can_be_abandoned(
     assert reconciler.report(stale_command_age="1 hour").stale_commands == ()
 
 
-def test_a_legacy_unattributed_blob_cannot_be_rejected_without_attempt_authority(
+def test_an_unattributed_blob_cannot_be_rejected_without_attempt_authority(
     interrupted, store, engine, reconciler, service, project, baseline_pdf, key
 ) -> None:
-    """A pre-0014 row cannot prove that no producer still owns its content identity."""
+    """A document Blob cannot prove that no producer still owns its content identity."""
     blob_id = interrupted
     store._purge_published(blob_id)
 

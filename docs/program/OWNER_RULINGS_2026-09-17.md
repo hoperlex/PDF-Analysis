@@ -1291,3 +1291,55 @@ windows, with acceptance by a lighter procedure. Settled by a direct poll the sa
 
 `AGENTS.md` §8 is the operating text. `W52-PLAN.md` §3.7's exclusion of impacted-test selection is
 superseded; its battery speed-up stands.
+
+## 3.26 — `R-71` to `R-74`, ruled 2026-10-08 for W52
+
+The roadmap poll in `dispatch/ROADMAP-TO-BETA.md` §10 supplied V-1…V-10,
+P-2 and W-1. The owner directly confirmed all three remaining W52 §4
+deviations on 2026-10-08: «подтверждаю все три». The second confirmation is
+read with the already binding R-70: diff-derived light acceptance continues.
+
+### `R-71` — one product version and a separate contract version
+
+`VERSION` is the one canonical SemVer product-version source and equals the
+highest non-archive release-note version. A release is an owner-instructed
+deployment to `origin/main` with a user-visible change, tagged `v<VERSION>`;
+the CP-series release plan is retired. The older `alpha-wNN` naming ends with
+the identity-wave design; no unmade W49–W51 release is implied. API and web
+build identifiers follow `dispatch/W52-PLAN.md` §3.1. `contract_version`
+does not change in W52; its next value and family scope are decided at the
+beta freeze. Package placeholder versions are not product versions.
+
+### `R-72` — authored, versioned release notes
+
+The repository authors release-note entries and a deployment loader appends
+their revisions to PostgreSQL. One canonical SemVer is the immutable natural
+key of a release row, not a public API identity or display number. Published
+entries are corrected by a new authored revision, with history retained; the
+API exposes no operation addressing a release by identity. The user sees a
+history panel, update banner and one-time «Что нового» as specified in
+`dispatch/W52-PLAN.md` §3.2–§3.5. `markReleaseNotesRead` writes the signed-in
+account's own high-water mark and is available to an administrator without
+the expert role. The user notes and technical release record are separate;
+the form test and an independent judge check claims against the code.
+
+### `R-73` — D-120's deployment gate is a process control
+
+The owner accepts the risk that the auto-deploy workflow itself checks Git
+ancestry but does not run or attest `make gate`. Only the integrator may push
+`origin/main`, after literal `GATE OK` on the exact clean candidate and a
+separate direct owner instruction naming that candidate. `AGENTS.md` §6 and
+`MAIN_AUTODEPLOY_POLICY.md` remain the operating controls. `W52-INT-CLOSE`
+records D-120's accepted-risk closure as the W52 plan assigns; this ruling
+does not authorize a push or claim that a release has passed.
+
+### `R-74` — bounded judging, independent facts and serial gate preparation
+
+Plan judging is capped at two rounds. Waves touching contracts, migrations,
+security or data custody use two cross-judges; other waves use one independent
+judge. `tests/support/expected_facts.json` is maintained by hand, independently
+of the artifacts it tests; live prose is edited separately and stays guarded.
+W52 accelerates the full gate through sequential fixture and battery changes
+without `pytest-xdist`. R-70's diff-derived light acceptance remains in force.
+If the measured battery misses the W52 target, the integrator records the
+shortfall and later options without silently widening this wave.

@@ -30,37 +30,15 @@
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-
 import { PROJECT_SECTIONS } from '@/entities/project';
 import { ProjectDetailPage } from '@/_pages/project-detail';
 import { ProjectSections } from '@/widgets/project-sections';
 
 import { PROJECT_UID, render } from '../review/fixtures';
-import { newClient, renderWith } from './harness';
-
-/** A router that records instead of navigating. Nothing in one render pass calls it. */
-function stubRouter(): AppRouterInstance {
-  return {
-    push: () => {},
-    replace: () => {},
-    back: () => {},
-    forward: () => {},
-    refresh: () => {},
-    prefetch: () => {},
-  } as unknown as AppRouterInstance;
-}
+import { newClient, renderScreen } from './harness';
 
 function screen(): string {
-  return renderWith(
-    newClient(),
-    createElement(
-      AppRouterContext.Provider,
-      { value: stubRouter() },
-      createElement(ProjectDetailPage, { projectUid: PROJECT_UID }),
-    ),
-  );
+  return renderScreen(newClient(), createElement(ProjectDetailPage, { projectUid: PROJECT_UID }));
 }
 
 /** The widget alone, opened at one section, with a stand-in for the documents. */

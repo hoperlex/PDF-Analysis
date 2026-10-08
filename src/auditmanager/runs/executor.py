@@ -96,7 +96,7 @@ from auditmanager.analysis.public import (
     load_provider_config,
     run_text_analysis,
 )
-from auditmanager.analysis.public import STAGE_VERSION as TEXT_STAGE_VERSION
+from auditmanager.analysis.public import TEXT_STAGE_VERSION
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.findings.public import (
     BlockIndex,

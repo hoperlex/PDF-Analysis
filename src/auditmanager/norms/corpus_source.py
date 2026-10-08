@@ -82,11 +82,15 @@ class CorpusProjection:
     repair_count: int
     target_characters: int
     documents: tuple[tuple[Path, CorpusManifestDocument], ...]
+    base_fingerprints: tuple[DocumentFingerprint, ...]
     replacements_by_document: Mapping[str, Mapping[str, str]]
 
     def iter_documents(self) -> Iterator[ProjectedCorpusDocument]:
-        for directory, metadata in self.documents:
+        for (directory, metadata), expected in zip(
+            self.documents, self.base_fingerprints, strict=True
+        ):
             document = read_document(directory)
+            _verify_fingerprint(document, expected)
             if document.source_document_id != metadata.source_document_ref:
                 raise CorpusUnavailable(
                     f"{metadata.slug}: manifest source reference "
@@ -147,10 +151,11 @@ def read_document(directory: Path) -> CorpusDocument:
     )
 
 
-def snapshot_of(root: Path) -> CorpusSnapshot:
-    """Derive the snapshot identifier of the corpus at `root`."""
+def _snapshot_with_fingerprints(
+    directories: tuple[Path, ...],
+) -> tuple[CorpusSnapshot, tuple[DocumentFingerprint, ...]]:
     fingerprints: list[DocumentFingerprint] = []
-    for directory in document_directories(root):
+    for directory in directories:
         document = read_document(directory)
         fingerprints.append(
             fingerprint(
@@ -160,7 +165,24 @@ def snapshot_of(root: Path) -> CorpusSnapshot:
                 drawn_on=drawn_on(document.markdown),
             )
         )
-    return derive(fingerprints)
+    return derive(fingerprints), tuple(fingerprints)
+
+
+def _verify_fingerprint(document: CorpusDocument, expected: DocumentFingerprint) -> None:
+    actual = fingerprint(
+        slug=document.slug,
+        source_document_id=document.source_document_id,
+        results_md=document.results_bytes,
+        drawn_on=drawn_on(document.markdown),
+    )
+    if actual != expected:
+        raise CorpusUnavailable(f"{document.slug}: source changed since snapshot was derived")
+
+
+def snapshot_of(root: Path) -> CorpusSnapshot:
+    """Derive the snapshot identifier of the corpus at `root`."""
+    snapshot, _fingerprints = _snapshot_with_fingerprints(document_directories(root))
+    return snapshot
 
 
 def segment_corpus(
@@ -173,11 +195,13 @@ def segment_corpus(
     """Segment every document under ``root`` under one verified text identity.
 
     The supplied snapshot identifier is checked against the source bytes before the first
-    document is yielded. When a repair ledger is present, every ledger row is also checked
-    against the raw block's key, page, character count and SHA-256 before any replacement is
-    made. A partially applicable ledger is refused rather than projected partly.
+    document is yielded, and each document's fingerprint is checked again when it is read
+    for projection. When a repair ledger is present, every ledger row is also checked
+    against the raw block's key, page, character count and SHA-256 before any replacement
+    is made. A partially applicable ledger is refused rather than projected partly.
     """
-    base_snapshot = snapshot_of(root)
+    directories = document_directories(root)
+    base_snapshot, fingerprints = _snapshot_with_fingerprints(directories)
     effective_snapshot = (
         base_snapshot
         if repair_ledger is None
@@ -190,8 +214,9 @@ def segment_corpus(
         )
 
     replacements_by_document = _validated_replacements(root, repair_ledger)
-    for directory in document_directories(root):
+    for directory, expected in zip(directories, fingerprints, strict=True):
         document = read_document(directory)
+        _verify_fingerprint(document, expected)
         paragraphs, report = segment(
             document.slug,
             document.markdown,
@@ -336,7 +361,7 @@ def open_corpus_projection(
     if target_characters <= 0:
         raise ValueError("target_characters must be positive")
     directories = document_directories(root)
-    base_snapshot = snapshot_of(root)
+    base_snapshot, fingerprints = _snapshot_with_fingerprints(directories)
     effective_snapshot = (
         base_snapshot
         if repair_ledger is None
@@ -350,6 +375,7 @@ def open_corpus_projection(
         repair_count=0 if repair_ledger is None else len(repair_ledger.applied),
         target_characters=target_characters,
         documents=_manifest_documents(root, directories),
+        base_fingerprints=fingerprints,
         replacements_by_document=replacements,
     )
 

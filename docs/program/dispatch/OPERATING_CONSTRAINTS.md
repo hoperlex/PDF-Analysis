@@ -443,12 +443,17 @@ editing by hand never will.
 contract, a fixture or the ledger tool takes effect for code that resolves them from
 `auditmanager.__file__`.
 
-**It does not make a migration mutable, and neither does any other copy.**
+**It does not make a migration mutable, and neither does any other copy by itself.**
 `tests/integration/db/conftest.py` derives `REPOSITORY_ROOT` from *its own file* and runs
 `alembic` as a subprocess with that `cwd`, so the worktree's `db/migrations` is what applies
 regardless of `pythonpath` or what the copy holds. Mutating a migration means copying the
-**whole worktree, tests included**, and running pytest from there — `W10-RUN` did this for
-its trigger sweep and it is the difference between measuring the migrations and appearing to.
+**whole worktree, tests included**, and running pytest from there. It also means applying
+the changed migration to a **fresh database** before testing its invariant: a suite attached
+to a database migrated before the edit cannot see changed migration source. `W10-RUN` used
+the whole-tree copy for its trigger sweep; `W42-SEAL`'s `M-S3-6` showed why that copy alone
+is insufficient. `tests/integration/db/test_run_terminal_detail_schema.py` uses a fresh
+`migrated_engine` for the specific constraint it tests; that does not establish coverage
+for every other schema invariant.
 
 The target says so on every run. It was written claiming the opposite for one commit, which
 is the same false-affordance class this wave exists to find: a facility that looks like it
