@@ -34,7 +34,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.testclient import TestClient
 
-from auditmanager.access.models import UserRecord
+from auditmanager.access.models import UserRecord, UserUid
 from auditmanager.access.accounts import AccountRepository
 from auditmanager.access.repository import CREDENTIALS_REVOKED, UserRepository
 from auditmanager.access.revoke import NOTHING_SENTINEL, REVOKED_PREFIX
@@ -205,7 +205,9 @@ def test_revoking_an_unknown_login_is_a_fact_and_not_an_error(
     """Empty means nothing matched. The caller decides whether that is a problem."""
     repository = UserRepository()
     with session_factory() as session:
-        assert repository.revoke_credentials(session, login="w39rev-nobody-at-all") == ()
+        assert repository.revoke_credentials(
+            session, login=f"w39rev-absent-{secrets.token_hex(8)}"
+        ) == ()
         session.commit()
 
 
@@ -453,8 +455,8 @@ def test_a_credential_naming_no_account_is_refused(client: TestClient) -> None:
     assert signer is not None
     orphan = signer.issue(
         Subject(
-            user_uid="usr_01M2545JSD15ETSNNV904X9911",
-            login="w39rev-never-existed",
+            user_uid=str(UserUid.new()),
+            login=f"w39rev-absent-{secrets.token_hex(8)}",
             token_epoch=1,
             display_label="Never Existed",
         ),

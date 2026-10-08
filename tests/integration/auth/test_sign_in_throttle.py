@@ -698,7 +698,9 @@ def test_the_command_refuses_to_run_bare(app_user_table: object) -> None:
 
 
 def test_the_command_refuses_both_targets_at_once(app_user_table: object) -> None:
-    result = _run("auditmanager.access.unlock", "--login", "admin", "--everyone")
+    result = _run(
+        "auditmanager.access.unlock", "--login", f"ghost-{secrets.token_hex(8)}", "--everyone"
+    )
     assert result.returncode == 2
     assert UNLOCKED_PREFIX not in result.stdout
 

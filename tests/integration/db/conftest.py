@@ -5,18 +5,18 @@ and no in-memory substitute: the schema's invariants are triggers, partial uniqu
 indexes, ``jsonb`` predicates and custom SQLSTATEs, none of which SQLite has, so a
 suite that could fall back would be asserting nothing about what actually ships.
 
-Each test that needs a database gets its **own freshly created, empty** one, and it
-is dropped afterwards. That is what makes "migrations apply from an empty database"
-a repeatable claim rather than a statement about whatever the last run left behind.
+Tests of migration application get a fresh empty database. Other consumers get a
+fresh clone of a session-local, migrated template. Every clone is dropped afterwards.
 """
 
 from __future__ import annotations
 
 import os
+import hashlib
 import secrets
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -114,6 +114,30 @@ def clear_the_role_backfill(database_url: str) -> int:
         engine.dispose()
 
 
+def _migration_digest() -> str:
+    """Bind the template name to all migration inputs, including the Alembic config."""
+    root = REPOSITORY_ROOT / "db" / "migrations"
+    digest = hashlib.sha256()
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or "__pycache__" in path.parts or path.suffix == ".pyc":
+            continue
+        digest.update(path.relative_to(root).as_posix().encode("utf-8") + b"\0")
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:12]
+
+
+def _drop_database(maintenance_engine: Engine, name: str) -> None:
+    with maintenance_engine.connect() as connection:
+        connection.execute(
+            text(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname = :name AND pid <> pg_backend_pid()"
+            ),
+            {"name": name},
+        )
+        connection.execute(text(f'DROP DATABASE IF EXISTS "{name}"'))
+
+
 @pytest.fixture(scope="session")
 def foundation_command():
     """The literal-command runner, handed to tests as a fixture.
@@ -197,15 +221,7 @@ def empty_database(
     try:
         yield settings
     finally:
-        with maintenance_engine.connect() as connection:
-            connection.execute(
-                text(
-                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                    "WHERE datname = :name AND pid <> pg_backend_pid()"
-                ),
-                {"name": name},
-            )
-            connection.execute(text(f'DROP DATABASE IF EXISTS "{name}"'))
+        _drop_database(maintenance_engine, name)
 
 
 @pytest.fixture
@@ -213,13 +229,49 @@ def empty_database_url(empty_database: DatabaseSettings) -> str:
     return empty_database.url.render_as_string(hide_password=False)
 
 
+@pytest.fixture(scope="session")
+def migrated_template(
+    configured_settings: DatabaseSettings, maintenance_engine: Engine
+) -> Iterator[str]:
+    """Apply the literal migration command once to a run-local template."""
+    name = f"a1_tpl_{_migration_digest()}_{secrets.token_hex(6)}"
+    with maintenance_engine.connect() as connection:
+        connection.execute(text(f'CREATE DATABASE "{name}"'))
+    try:
+        url = configured_settings.url.set(database=name).render_as_string(hide_password=False)
+        result = run_foundation_command(MIGRATE_ARGV, url)
+        assert result.returncode == 0, result.describe()
+        yield name
+    finally:
+        _drop_database(maintenance_engine, name)
+
+
 @pytest.fixture
-def migrated_database(empty_database: DatabaseSettings) -> DatabaseSettings:
-    """An empty database with the migration head applied, via the literal command."""
-    url = empty_database.url.render_as_string(hide_password=False)
-    result = run_foundation_command(MIGRATE_ARGV, url)
-    assert result.returncode == 0, result.describe()
-    return empty_database
+def migrated_database_factory(
+    configured_settings: DatabaseSettings, maintenance_engine: Engine, migrated_template: str
+) -> Iterator[Callable[[], DatabaseSettings]]:
+    """Give each consumer a fresh clone, including multiple clones in one test."""
+    names: list[str] = []
+
+    def clone() -> DatabaseSettings:
+        name = f"a1_clone_{secrets.token_hex(8)}"
+        with maintenance_engine.connect() as connection:
+            connection.execute(text(f'CREATE DATABASE "{name}" TEMPLATE "{migrated_template}"'))
+        names.append(name)
+        return DatabaseSettings(url=configured_settings.url.set(database=name))
+
+    try:
+        yield clone
+    finally:
+        for name in reversed(names):
+            _drop_database(maintenance_engine, name)
+
+
+@pytest.fixture
+def migrated_database(
+    migrated_database_factory: Callable[[], DatabaseSettings],
+) -> DatabaseSettings:
+    return migrated_database_factory()
 
 
 @pytest.fixture

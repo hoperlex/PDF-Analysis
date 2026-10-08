@@ -16,9 +16,8 @@ this suite cannot disturb each other.
 that refuse deletion with SQLSTATE ``AM003``. That the cleanup *has* to be a truncate is
 itself evidence the immutability guard is real.
 
-Object storage is the lane's own bucket with **scoped** cleanup: every blob a test
-publishes is registered and deleted by exact identity at teardown. No fixture empties
-the bucket, which would destroy a concurrently running lane's objects.
+Object storage uses a fresh bucket per test. The census sees every key; teardown
+deletes observed keys individually before dropping that test's bucket.
 
 Assertions about what the bucket holds are made through a plain ``boto3`` client, never
 through the adapter under test, so a bug in the adapter's own inspection path cannot
@@ -31,6 +30,7 @@ import os
 import secrets
 import subprocess
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -223,14 +223,44 @@ def clean_tables(engine: Engine) -> Iterator[None]:
 
 
 @pytest.fixture(scope="session")
-def s3_settings(lane_environment: None) -> S3StorageSettings:
+def base_s3_settings(lane_environment: None) -> S3StorageSettings:
     try:
         return S3StorageSettings.from_env()
     except StorageError as exc:
         pytest.fail(f"tests/integration/ingest needs a real S3-compatible service: {exc}")
 
 
-@pytest.fixture(scope="session")
+def _keys_in_bucket(raw_s3: Any, bucket: str) -> list[str]:
+    found: list[str] = []
+    token: str | None = None
+    while True:
+        kwargs: dict[str, Any] = {"Bucket": bucket}
+        if token:
+            kwargs["ContinuationToken"] = token
+        page = raw_s3.list_objects_v2(**kwargs)
+        found.extend(item["Key"] for item in page.get("Contents", []))
+        if not page.get("IsTruncated"):
+            return sorted(found)
+        token = page.get("NextContinuationToken")
+
+
+@pytest.fixture
+def s3_settings(base_s3_settings: S3StorageSettings, raw_s3: Any) -> Iterator[S3StorageSettings]:
+    """Keep the full bucket census test-owned without filtering canonical keys."""
+    bucket = f"{base_s3_settings.bucket[:40]}-{secrets.token_hex(8)}"
+    create: dict[str, Any] = {"Bucket": bucket}
+    if base_s3_settings.region != "us-east-1":
+        create["CreateBucketConfiguration"] = {"LocationConstraint": base_s3_settings.region}
+    raw_s3.create_bucket(**create)
+    try:
+        yield replace(base_s3_settings, bucket=bucket)
+    finally:
+        for key in _keys_in_bucket(raw_s3, bucket):
+            raw_s3.delete_object(Bucket=bucket, Key=key)
+        raw_s3.delete_bucket(Bucket=bucket)
+
+
+@pytest.fixture
 def store(s3_settings: S3StorageSettings) -> S3BlobStore:
     blob_store = S3BlobStore(s3_settings)
     try:
@@ -241,14 +271,14 @@ def store(s3_settings: S3StorageSettings) -> S3BlobStore:
 
 
 @pytest.fixture(scope="session")
-def raw_s3(s3_settings: S3StorageSettings) -> Any:
+def raw_s3(base_s3_settings: S3StorageSettings) -> Any:
     """A plain boto3 client, independent of the adapter and of the service under test."""
     return boto3.client(
         "s3",
-        endpoint_url=s3_settings.endpoint_url,
-        region_name=s3_settings.region,
-        aws_access_key_id=s3_settings.access_key_id,
-        aws_secret_access_key=s3_settings.secret_access_key,
+        endpoint_url=base_s3_settings.endpoint_url,
+        region_name=base_s3_settings.region,
+        aws_access_key_id=base_s3_settings.access_key_id,
+        aws_secret_access_key=base_s3_settings.secret_access_key,
         config=Config(
             signature_version="s3v4",
             s3={"addressing_style": "path"},
@@ -264,17 +294,7 @@ def bucket_keys(raw_s3: Any, s3_settings: S3StorageSettings):
     """Every object key currently in the bucket, sorted. Read through boto3 directly."""
 
     def _keys() -> list[str]:
-        found: list[str] = []
-        token: str | None = None
-        while True:
-            kwargs: dict[str, Any] = {"Bucket": s3_settings.bucket}
-            if token:
-                kwargs["ContinuationToken"] = token
-            page = raw_s3.list_objects_v2(**kwargs)
-            found.extend(item["Key"] for item in page.get("Contents", []))
-            if not page.get("IsTruncated"):
-                return sorted(found)
-            token = page.get("NextContinuationToken")
+        return _keys_in_bucket(raw_s3, s3_settings.bucket)
 
     return _keys
 
