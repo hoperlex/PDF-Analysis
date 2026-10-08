@@ -34,8 +34,6 @@
 
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 
 import type { RunStatus } from '@/shared/api';
 import { isTerminalRunState, queryKeys } from '@/shared/api';
@@ -44,20 +42,9 @@ import { ReviewPage } from '@/_pages/review';
 import { RunProgress } from '@/widgets/run-progress';
 
 import { PROJECT_UID, RUN_ID, runStatus } from '../review/fixtures';
-import { newClient, renderWith } from './harness';
+import { newClient, renderScreen, renderWith } from './harness';
 
 const BASE_URL = 'http://api.test/v1';
-
-function stubRouter(): AppRouterInstance {
-  return {
-    push: () => {},
-    replace: () => {},
-    refresh: () => {},
-    back: () => {},
-    forward: () => {},
-    prefetch: () => {},
-  } as unknown as AppRouterInstance;
-}
 
 let served: RunStatus;
 
@@ -85,14 +72,7 @@ describe('the review screen shows the run that is in the cache (D-57.1)', () => 
     const client = newClient();
     const status = runStatus({ state: 'published', published_finding_count: 1, ...overrides });
     client.setQueryData(queryKeys.runs.detail(RUN_ID), status);
-    return renderWith(
-      client,
-      createElement(
-        AppRouterContext.Provider,
-        { value: stubRouter() },
-        createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
-      ),
-    );
+    return renderScreen(client, createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }));
   }
 
   it('renders the run header rather than the loading branch', () => {
@@ -117,14 +97,7 @@ describe('the review screen shows the run that is in the cache (D-57.1)', () => 
   });
 
   it('still renders the loading branch when nothing is in the cache', () => {
-    const markup = renderWith(
-      newClient(),
-      createElement(
-        AppRouterContext.Provider,
-        { value: stubRouter() },
-        createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
-      ),
-    );
+    const markup = renderScreen(newClient(), createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }));
     expect(markup).toContain('Загрузка прогона…');
     expect(markup).not.toContain(`data-run-id="${RUN_ID}"`);
   });

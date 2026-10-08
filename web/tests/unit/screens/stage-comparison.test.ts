@@ -29,39 +29,22 @@
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-
 import type { ErrorCode, ErrorEnvelope, RunStatus, StageState } from '@/shared/api';
 import { ApiError, queryKeys } from '@/shared/api';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 
-import { newClient, renderWith, seedError } from './harness';
+import { newClient, renderScreen, seedError } from './harness';
 
 const PROJECT_UID = 'prj_01M2545JSD15ETSNNV904X991J';
 const VERSION_UID = 'ver_01M2545JSD15ETSNNV904X991J';
 const NEWER = 'run_01M2545JSD15ETSNNV904X991J';
 const OLDER = 'run_01M2545JSD15ETSNNV904X991K';
 
-function stubRouter(): AppRouterInstance {
-  return {
-    push: () => {}, replace: () => {}, back: () => {}, forward: () => {},
-    refresh: () => {}, prefetch: () => {},
-  } as unknown as AppRouterInstance;
-}
-
 function screen(seed: (client: ReturnType<typeof newClient>) => void, versionUid = VERSION_UID): string {
   const client = newClient();
   seed(client);
-  return renderWith(
-    client,
-    createElement(
-      AppRouterContext.Provider,
-      { value: stubRouter() },
-      createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid }),
-    ),
-  );
+  return renderScreen(client, createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid }));
 }
 
 function stage(over: Partial<StageState> & Pick<StageState, 'stage_id' | 'status'>): StageState {

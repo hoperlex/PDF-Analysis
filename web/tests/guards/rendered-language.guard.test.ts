@@ -53,7 +53,6 @@
 
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
-import { QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 
 import { ApiError, queryKeys } from '@/shared/api';
@@ -1097,15 +1096,22 @@ const QUEUE_REQUEST: RegistrationRequest = {
   submitted_at: '2026-10-08T00:00:00Z',
 };
 
-function queueLanguageShape(request: RegistrationRequest): ReactElement {
-  const client = newClient();
-  client.setQueryData(queryKeys.registrations.list({ status: 'pending', limit: 50 }), {
-    items: [request], page: { next_cursor: null }, pending_total: request.status === 'pending' ? 1 : 0,
-  });
-  return createElement(QueryClientProvider, { client }, createElement(RegistrationQueue));
+type ScreenCase = {
+  readonly name: string;
+  readonly make: () => ReactElement;
+  readonly seedClient?: (client: ReturnType<typeof newClient>) => void;
+};
+
+function queueLanguageShape(request: RegistrationRequest): Pick<ScreenCase, 'make' | 'seedClient'> {
+  return {
+    make: () => createElement(RegistrationQueue),
+    seedClient: (client) => client.setQueryData(queryKeys.registrations.list({ status: 'pending', limit: 50 }), {
+      items: [request], page: { next_cursor: null }, pending_total: request.status === 'pending' ? 1 : 0,
+    }),
+  };
 }
 
-const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => ReactElement }[] = [
+const EXTRA_SHAPES: readonly ScreenCase[] = [
   /*
    * `AppFrame` is a SCREEN here, not a wrapper, and that is the repair.
    *
@@ -1218,9 +1224,9 @@ const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => React
     name: 'manage-user-archived',
     make: () => createElement(ManageUserControls, { account: { ...ADMIN_USER_ACCOUNT, archived_at: '2026-10-08T00:00:00Z' } }),
   },
-  { name: 'registration-queue-pending', make: () => queueLanguageShape(QUEUE_REQUEST) },
-  { name: 'registration-queue-approved', make: () => queueLanguageShape({ ...QUEUE_REQUEST, status: 'approved', decided_at: '2026-10-08T01:00:00Z' }) },
-  { name: 'registration-queue-rejected', make: () => queueLanguageShape({ ...QUEUE_REQUEST, status: 'rejected', decided_at: '2026-10-08T01:00:00Z', rejection_reason: 'Проверка не пройдена.' }) },
+  { name: 'registration-queue-pending', ...queueLanguageShape(QUEUE_REQUEST) },
+  { name: 'registration-queue-approved', ...queueLanguageShape({ ...QUEUE_REQUEST, status: 'approved', decided_at: '2026-10-08T01:00:00Z' }) },
+  { name: 'registration-queue-rejected', ...queueLanguageShape({ ...QUEUE_REQUEST, status: 'rejected', decided_at: '2026-10-08T01:00:00Z', rejection_reason: 'Проверка не пройдена.' }) },
   /*
    * `app/not-found.tsx` is a FILE in the route tree and not an address, so no derivation
    * reaches it and it stays a hand-written entry. It carried a WHOLE ENGLISH SENTENCE to a
@@ -1283,7 +1289,7 @@ const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => React
   },
 ];
 
-const SCREENS: readonly { readonly name: string; readonly make: () => ReactElement }[] = [
+const SCREENS: readonly ScreenCase[] = [
   ...DERIVED_SCREENS,
   ...EXTRA_SHAPES,
 ];
@@ -1392,6 +1398,7 @@ export function renderedScreens(): readonly { readonly where: string; readonly m
                   : state === 'two-runs'
                     ? twoRunClient(loaded)
                     : loaded(overrides ?? {});
+      screen.seedClient?.(client);
       out.push({ where: `${screen.name} (${state})`, markup: renderScreen(client, screen.make()) });
     }
   }
