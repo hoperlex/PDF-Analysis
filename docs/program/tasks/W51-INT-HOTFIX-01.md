@@ -66,7 +66,11 @@ on 2026-10-08 after reviewing its cost.
 ## Publication authority
 
 - development_target: origin/main
-- origin_main_authority: separate direct owner instruction 2026-10-08 user request «Пупу, запуш в main хотфикс» for the verified successor of `0df36495`
+- origin_main_authority: separate direct owner instruction 1e9bb1308b7b97cd75eef28e206b23c569871b68
+
+The cited hotfix commit records the 2026-10-08 user request «Пупу, запуш в main
+хотфикс» and its exact publication boundary. This field supplies the current
+governance guard's commit reference; the historical authorization is unchanged.
 
 ## Allowed paths
 

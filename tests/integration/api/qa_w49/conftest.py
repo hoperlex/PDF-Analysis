@@ -19,5 +19,7 @@ from tests.integration.db.conftest import (  # type: ignore[import-not-found]  #
     empty_database,
     maintenance_engine,
     migrated_database,
+    migrated_database_factory,
     migrated_engine,
+    migrated_template,
 )
