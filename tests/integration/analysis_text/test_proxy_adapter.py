@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import urllib.error
 from typing import Any
 
@@ -47,8 +48,8 @@ class _Response:
     def __init__(self, status: int, payload: bytes) -> None:
         self.status, self._payload = status, payload
 
-    def read(self) -> bytes:
-        return self._payload
+    def read(self, size: int = -1) -> bytes:
+        return self._payload if size < 0 else self._payload[:size]
 
     def __enter__(self) -> "_Response":
         return self
@@ -209,9 +210,16 @@ class TestFailuresMapToTheCatalog:
         ("status", "payload", "expected"),
         [
             (401, {}, ErrorCode.DEPENDENCY_CREDENTIAL_REFUSED),
+            (402, {"error": {"code": "credit_exhausted"}}, ErrorCode.INTERNAL_ERROR),
+            (403, {"error": {"code": "ip_not_allowed"}}, ErrorCode.DEPENDENCY_CREDENTIAL_REFUSED),
+            (404, {"error": {"code": "not_found"}}, ErrorCode.INTERNAL_ERROR),
             (400, {"error": {"code": "model_not_allowed"}}, ErrorCode.ANALYSIS_INPUT_INVALID),
             (400, {"error": {"code": "invalid_request"}}, ErrorCode.ANALYSIS_INPUT_INVALID),
             (413, {}, ErrorCode.ANALYSIS_INPUT_INVALID),
+            (429, {}, ErrorCode.DEPENDENCY_UNAVAILABLE),
+            (500, {"error": {"code": "upstream_error"}}, ErrorCode.INTERNAL_ERROR),
+            (502, {}, ErrorCode.INTERNAL_ERROR),
+            (507, {}, ErrorCode.INTERNAL_ERROR),
             (503, {"error": {"code": "queue_full"}}, ErrorCode.DEPENDENCY_UNAVAILABLE),
             (504, {"error": {"code": "deadline_exceeded"}}, ErrorCode.DEPENDENCY_UNAVAILABLE),
         ],
@@ -231,6 +239,61 @@ class TestFailuresMapToTheCatalog:
         with pytest.raises(DomainError) as caught:
             _adapter(raising).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
         assert caught.value.code is expected
+        assert caught.value.code.retryable is (status in {429, 503, 504})
+
+    def test_a_returned_non_200_uses_the_same_mapping(self) -> None:
+        capture = _Captured(status=402, document={"error": {"code": "credit_exhausted"}})
+        with pytest.raises(DomainError) as caught:
+            _adapter(capture).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
+        assert caught.value.code is ErrorCode.INTERNAL_ERROR
+
+    def test_error_body_is_bounded_redacted_and_never_returned(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        token = "sk-test-secret-1234567890"
+        url = "https://proxy.example/private"
+        payload = json.dumps({"error": {"code": "credit_exhausted", "message": f"{token} {url}"}}).encode()
+        payload += b"x" * 9000
+        reads: list[int] = []
+
+        class Body(io.BytesIO):
+            def read(self, size: int = -1) -> bytes:
+                reads.append(size)
+                return super().read(size)
+
+        def raising(request: Any, timeout: int | None = None) -> Any:
+            raise urllib.error.HTTPError(
+                url, 402, "", {}, Body(payload),  # type: ignore[arg-type]
+            )
+
+        with caplog.at_level(logging.WARNING, logger="auditmanager.analysis.text.proxy"):
+            with pytest.raises(DomainError) as caught:
+                _adapter(raising).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
+        assert reads == [4097]
+        assert "status=402" in caplog.text
+        assert "truncated=True" in caplog.text
+        assert "[redacted]" in caplog.text
+        assert token not in caplog.text and url not in caplog.text
+        proxy_records = [
+            record for record in caplog.records
+            if record.name == "auditmanager.analysis.text.proxy"
+        ]
+        assert len(proxy_records) == 1
+        assert len(proxy_records[0].getMessage()) < 700
+        envelope = caught.value.envelope("cid").as_dict()
+        assert token not in str(envelope) and url not in str(envelope)
+        assert "credit_exhausted" not in str(envelope)
+
+    @pytest.mark.parametrize("payload", [b"not-json", b"[]", b'{"error": "refused"}'])
+    def test_malformed_or_unstructured_body_still_maps(self, payload: bytes) -> None:
+        def raising(request: Any, timeout: int | None = None) -> Any:
+            raise urllib.error.HTTPError(
+                "https://proxy.example", 500, "", {}, io.BytesIO(payload),  # type: ignore[arg-type]
+            )
+
+        with pytest.raises(DomainError) as caught:
+            _adapter(raising).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
+        assert caught.value.code is ErrorCode.INTERNAL_ERROR
 
     def test_an_unreachable_proxy_is_a_dependency_failure(self) -> None:
         def unreachable(request: Any, timeout: int | None = None) -> Any:
