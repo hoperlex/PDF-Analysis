@@ -100,6 +100,7 @@ MANIFEST = JOURNEY_DIR / "manifest.json"
 APP_DIR = REPOSITORY_ROOT / "web" / "src" / "app"
 WEB_SRC = REPOSITORY_ROOT / "web" / "src"
 OPENAPI = REPOSITORY_ROOT / "contracts" / "api" / "v1" / "openapi.json"
+JOURNEY = JOURNEY_DIR / "journey.mjs"
 
 _HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 
@@ -144,6 +145,44 @@ def screens_in_manifest(manifest: dict) -> dict[str, str]:
     return {route["path"]: route["page_module"] for route in manifest["routes"]}
 
 
+def placeholder_sample_findings(routes: list[dict]) -> list[str]:
+    """A live user detail needs the list's captured user_uid; only a stub may use a sample."""
+    detail = "/admin/users/{user_uid}"
+    findings = []
+    matches = [route for route in routes if route.get("path") == detail]
+    if len(matches) != 1:
+        findings.append(f"{detail} must have exactly one journey row")
+    list_captures_user = any(
+        route.get("path") == "/admin/users"
+        and (route.get("follow") or {}).get("capture") == "user_uid"
+        for route in routes
+    )
+    for route in routes:
+        path = route.get("path", "")
+        sample = route.get("sample_identifiers")
+        if path == detail and sample is None:
+            if not list_captures_user or route.get("expects_api") != [
+                {"method": "GET", "path": "/users/{user_uid}", "operationId": "getUser"}
+            ]:
+                findings.append(f"{detail} has no user_uid sample or live list capture")
+            continue
+        if sample is None:
+            continue
+        if path != detail:
+            findings.append(f"{path} is not the allowed sample placeholder")
+            continue
+        names = set(re.findall(r"\{([a-z_]+)\}", path))
+        if not isinstance(sample, dict) or set(sample) != names or names != {"user_uid"}:
+            findings.append(f"{path} sample must name exactly its user_uid segment")
+            continue
+        value = sample["user_uid"]
+        if not isinstance(value, str) or re.fullmatch(r"usr_[0-9A-HJKMNP-TV-Z]{26}", value) is None:
+            findings.append(f"{path} sample is not a well-formed usr_<ULID>")
+        if route.get("expects_api") != [] or route.get("optional_api"):
+            findings.append(f"{path} sample is allowed only while the detail makes no API call")
+    return findings
+
+
 def operations_in_contract(openapi: dict) -> set[tuple[str, str, str]]:
     """``(METHOD, path, operationId)`` for every operation the contract publishes."""
     out: set[tuple[str, str, str]] = set()
@@ -174,6 +213,8 @@ def operations_claimed_by_manifest(manifest: dict) -> set[tuple[str, str, str]]:
                 out.add((call["method"].upper(), call["path"], call["operationId"]))
     call = refusal_api(manifest)
     if call is not None:
+        out.add((call["method"].upper(), call["path"], call["operationId"]))
+    for call in (manifest.get("identity") or {}).get("operations") or ():
         out.add((call["method"].upper(), call["path"], call["operationId"]))
     return out
 
@@ -420,6 +461,43 @@ def test_each_route_agrees_with_its_own_page_module(manifest: dict) -> None:
         )
 
 
+def test_user_detail_sample_is_only_for_the_no_call_placeholder(manifest: dict) -> None:
+    assert placeholder_sample_findings(manifest["routes"]) == []
+
+
+def test_user_detail_sample_validation_can_fail() -> None:
+    row = {
+        "path": "/admin/users/{user_uid}",
+        "sample_identifiers": {"user_uid": "usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F"},
+        "expects_api": [],
+    }
+    assert placeholder_sample_findings([{**row, "sample_identifiers": None}]) == [
+        "/admin/users/{user_uid} has no user_uid sample or live list capture"
+    ]
+    assert "not a well-formed" in placeholder_sample_findings([
+        {**row, "sample_identifiers": {"user_uid": "usr_invalid"}}
+    ])[0]
+    assert "exactly its user_uid" in placeholder_sample_findings([
+        {**row, "sample_identifiers": {"project_uid": row["sample_identifiers"]["user_uid"]}}
+    ])[0]
+    assert "only while" in placeholder_sample_findings([
+        {**row, "expects_api": [{"method": "GET", "path": "/users/{user_uid}"}]}
+    ])[0]
+
+
+def test_the_journey_consumes_the_declared_sample_only_for_route_address() -> None:
+    source = _require(JOURNEY).read_text(encoding="utf-8")
+    assert "fill(route.path, captured, route.sample_identifiers ?? {})" in source, (
+        "journey.mjs no longer consumes the manifest sample for the placeholder address"
+    )
+    assert "const value = captured[name] ?? samples[name]" in source, (
+        "a captured real user identity must take precedence over the placeholder sample"
+    )
+    assert "concreteApi(expectation, captured)" in source, (
+        "API expectations must not use the placeholder sample"
+    )
+
+
 def test_every_api_call_the_journey_declares_is_in_the_contract(
     manifest: dict, openapi: dict
 ) -> None:
@@ -432,6 +510,43 @@ def test_every_api_call_the_journey_declares_is_in_the_contract(
         f"contracts/api/v1/openapi.json: {unknown}. Either the contract moved and the "
         "journey did not, or the journey names an operation that was never published."
     )
+
+
+def test_w51_identity_journey_is_complete_and_contract_bound(
+    manifest: dict, openapi: dict
+) -> None:
+    identity = manifest.get("identity")
+    assert isinstance(identity, dict), "W51 identity phase is absent"
+    assert identity["runner"] == "tests/e2e/pc01/journey/identity.mjs"
+    source = _require(REPOSITORY_ROOT / identity["runner"]).read_text(encoding="utf-8")
+    assert "checkedExchange(page, stageSpec(manifest" in source
+    assert "sessionRow(registerPath, id)" in source
+    assert identity["session_store_path_env"] == "E2E_PC01_SESSION_STORE_PATH"
+    stages = [call["stage"] for call in identity["operations"]]
+    assert stages == [
+        "register", "approve", "profile", "verdict", "remove_expert",
+        "revoked_request", "denied_mutation", "archive", "purge_refused", "reject",
+        "self_archive",
+    ]
+    assert identity["manual_steps"] == [f"A{index:02d}" for index in range(13, 21)]
+    assert identity["expected_author_label"] == "Тестов И. П."
+    wrong = [
+        f"{call['stage']}: {call['status']}"
+        for call in identity["operations"]
+        if call["status"] not in responses_published_for(
+            openapi, call["method"], call["path"]
+        )
+    ]
+    assert not wrong, f"identity statuses not published by the contract: {wrong}"
+    manual = _require(REPOSITORY_ROOT / "docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md")
+    recorder = _require(REPOSITORY_ROOT / "scripts/manual-alpha-check.sh")
+    manual_text = manual.read_text(encoding="utf-8")
+    recorder_text = recorder.read_text(encoding="utf-8")
+    for step in identity["manual_steps"]:
+        assert f"### {step} —" in manual_text
+        assert f'record_manual "{step}"' in recorder_text
+    for item in identity["operations"]:
+        assert "password" not in item and "credential" not in item
 
 
 def test_the_bff_prefix_the_journey_uses_is_where_the_app_mounts_it(

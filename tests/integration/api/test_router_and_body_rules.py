@@ -31,6 +31,8 @@ Two did not.
 
 from __future__ import annotations
 
+from tests.support.expected_facts import FACTS
+
 import json
 
 import pytest
@@ -101,11 +103,11 @@ class TestTheRouterRefusesADuplicateOperationId:
         """The consequence, asserted so the rule is not merely a raise.
 
         Distinct ids give a surface whose ``operation_ids`` has one entry per route. A
-        duplicate would leave ``routes`` at twenty and ``operation_ids`` at nineteen,
-        which is exactly what ``len(router.routes) == 20`` cannot see.
+        duplicate would leave ``routes`` at thirty-four and ``operation_ids`` at
+        thirty-three, which is exactly what ``len(router.routes) == 34`` cannot see.
         """
-        assert len(router.routes) == 20
-        assert len(router.operation_ids) == 20
+        assert len(router.routes) == FACTS.operation_count
+        assert len(router.operation_ids) == FACTS.operation_count
         assert len(router.operation_ids) == len(router.routes)
 
 

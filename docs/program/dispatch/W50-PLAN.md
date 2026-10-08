@@ -45,10 +45,14 @@ One array of entries `{ address, label, group, access, roles, inMenu }`:
   equals the registry's addresses, both directions; `tests/e2e/pc01/journey/manifest.json`
   (which `test_pc01_journey_conformance.py` compares with `web/src/app`) lists the same set.
 
-Groups (P-11): Главная `/`; **Работа** — Проекты `/projects`, Дашборд `/dashboard`; **Знания** —
-База знаний `/knowledge-base`, Блоки `/blocks`; **Система** — Оптимизация `/optimisation`,
-Журнал выполнения `/logs`, Исполнители `/workers`; **Администрирование** — rows are added by
-W51; the group renders only when it has rows the session may open.
+Groups (P-11 as amended by `R-66` at `W50-FREEZE-01`): Главная `/`; **Работа** — Проекты
+`/projects`, Дашборд `/dashboard`, «Оптимизация разделов» `/section-optimisation` (stub);
+**Знания** — База знаний `/knowledge-base`, Блоки `/blocks`, «Нормы» `/norms` (stub);
+**Система** — Журнал выполнения `/logs`, Исполнители `/workers`, «Настройки анализа»
+`/analysis-settings` (stub), «Очередь» `/queue` (stub); `/optimisation` is registered in group
+`hidden` until W59; **Администрирование** — rows are added by W51; the group renders only when it
+has rows the session may open. The four stubs and their wording are `W50-REGISTRY-01`'s
+(`R-66`).
 
 ### 3.2 Server guard — `requireScreen(address, { params, searchParams })`
 
@@ -102,7 +106,13 @@ application (the existing argument in `screen-lock.ts`). No redirect cycle exist
 `widgets/dashboard`. Two things must both hold, and each has a check:
 
 - **the bundle really splits:** the `next build` route table's first-load JS per route is
-  recorded before and after in the report, and no measured route gets worse;
+  recorded before and after in the report, and no measured route gets worse; *(amended by the
+  owner's direct poll of 2026-10-07: the five target routes' first-load JS falls, and no other
+  route grows by more than the measured fixed cost of the async-chunk runtime — at most 1.5 kB
+  gzip per route on this toolchain — with the exact-byte table in the report. Any `import()`
+  adds webpack's chunk-id map to the runtime every route loads, so "no route grows" was
+  unsatisfiable by any lazy loading; `W50-LAZY-01` measured −25 / −10 / −8 / −2 kB on the heavy
+  routes against +0.7 … +1.4 kB elsewhere.)*
 - **the instruments keep seeing the widgets:** the screen harness
   (`web/tests/unit/screens/harness.ts`, `renderToStaticMarkup`), the contrast census and the
   language guards render `_pages` synchronously, where a dynamic import yields only its
@@ -242,6 +252,88 @@ overflow for every menu state; the `/403` screen for every role-gated row.
 ### `W50-FIX` (executor), `W50-INT-CLOSE` (integrator)
 Standard forms.
 
+### Grants widened at `W50-FREEZE-01`
+
+The task files are the grants. At the freeze the integrator widened four of them beyond §4, each
+for a file the task's own change makes false (measured at `ead639f`): `W50-REGISTRY-01` gets the
+four `R-66` stub routes and their `_pages` modules, the `PC01_UI_SEAM.md` §2 `/` row, and the
+release-acceptance files that pin sixteen routes and `/` → `/projects`
+(`verify-acceptance.mjs`, `test_alpha_acceptance_command.py`, `manual-alpha-check.sh`,
+`ALPHA_PUBLIC_ACCEPTANCE.md`, the `redden*` manifests); `W50-HOME-01` gets the `root` and
+`sign-in` `expects_api` entries of the journey manifest; `W50-SHELL-FRAME` gets three test files
+that pin the old frame; `W50-QA-01` gets `tests/e2e/pc01/qa_w50/**`. The `next build` route table
+`W50-LAZY-01` compares against is measured on its own base (the Stage-A merge), with the freeze's
+reading quoted where one exists.
+
+### Integrator rulings at the `W50-REGISTRY-01` merge (2026-10-06)
+
+`W50-REGISTRY-01` (merged at the commit after `8e9706b`) handed back seven questions:
+
+1. **A guest must get a real redirect, not a 200 with a redirect in the stream.** The segment
+   `loading.tsx` files above guarded pages turn `requireScreen`'s redirect into a streamed
+   `NEXT_REDIRECT` with status 200. `W50-LAZY-01` deletes the four segment `loading.tsx` files
+   (`app/projects`, `app/projects/[project_uid]`, `app/dashboard`, `app/knowledge-base`), keeps
+   typed loading states inside `_pages/**` around the lazy widgets, adds to its new
+   `lazy-boundary.guard.test.ts` a rule that no `loading.tsx` sits at or above a `page.tsx` whose
+   registry access is not `public`, and records on its lane stand, for every registered
+   `session` screen, that a guest gets `307` with `Location: /login?next=…`.
+2. The error boundary's texts are covered by `screen-guard.guard.test.ts`; adding `error.tsx` to
+   `rendered-language.guard.test.ts`'s hand-written list is granted to `W50-SHELL-FRAME`, which
+   already owns that file's fixtures in Stage C.
+3. The registry keeps literal addresses typed by `ScreenAddress` instead of importing
+   `routes.ts` (§3.1 said "imports it"): a compile-time check on every literal is accepted as
+   equivalent; §3.1's sentence is read that way.
+4. `next` is lost after a refused sign-in and after the forced default-password change: carried
+   to W51, whose sign-in and password screens own those redirects (`W51-FREEZE-01` input).
+5. Stale prose outside the grant (`routes.ts:30`, `journey.mjs:304`, the journey README, the
+   legacy `openSession` docstring in `store.ts`, `$comment` and root's `listProjects` in the
+   `redden-write` fixtures, "three" in `prepared-sections.guard.test.ts` titles): collected for
+   `W50-FIX`, which gets an explicit grant for them.
+6. `configuration-and-cache-keys.test.ts:224` counts decision cache keys, not namespaces: no
+   change needed.
+7. `UserListFilters` and `RegistrationListFilters` are not re-exported from `@/shared/api`:
+   carried to W51, whose admin lanes consume them (`W51-FREEZE-01` input).
+
+The Stage-B lane base is the commit that carries this section.
+
+### Integrator rulings at the Stage-B merges (2026-10-07)
+
+- `W50-HOME-01`: the journey manifest's `root` and `sign-in` declare the home page's
+  `listProjects` and `getDashboardSummary`, and `listRegistrations` as `optional_api` (only an
+  administrator makes it) — moved by the integrator, as the task's integration contract says.
+  The rendered-language guard cannot reach the administrator tile or the recent-projects
+  branches (its `/` seed is an expert's): `W50-SHELL-FRAME` adds an administrator `/` seed to
+  `web/tests/unit/screens/route-screens.ts` (granted below; REGISTRY's zone is merged and free).
+  The registrations link stays registry-driven and appears when W51 registers
+  `/admin/registrations`.
+- `W50-SHELL-UI`'s notes for the frame: the avatar's 3:1 circle check covers the page and the bar
+  surfaces only — the frame places the avatar on the bar; the group at the bar's right edge
+  passes `align: 'end'`; real focus, outside click and Tab-away are first exercised by the frame
+  and QA in a browser; `DisclosureView`/`MenuView` stay out of the public index, and the frame
+  uses the islands.
+
+### Integrator rulings at the Stage-C merge (2026-10-07)
+
+`W50-SHELL-FRAME` (merged at the commit after `9e8d5da`) handed back four questions:
+
+1. **The census lost one pair** (`text|--am-accent|--am-paper|hover|-`): its only site was the
+   bar's old «Выйти» button, which this task removed by design. §7's "the census shrinks" is
+   about coverage lost while the element stays; here the element is gone. Accepted as an expected
+   delta; the screen count rose (86 → 90). The lazy guard's `BASELINE` still reads below the
+   merged counts and is raised in `W50-FIX`.
+2. **The footer** «Альфа-версия. Изменять данные может эксперт, управлять учётными записями —
+   администратор.» — confirmed by the owner's direct poll the same day.
+3. The account menu's item says «Сменить пароль» (an action) while the screen's title says
+   «Смена пароля» (a name): both stay.
+4. The account header for an empty role set says «Роли не назначены.», as the home page does:
+   accepted.
+
+Two process changes from the owner's direct polls of the same day apply from here on: `R-70`
+(`AGENTS.md` §8) — light acceptance by default, the complete gate only at named points; and
+Stage E runs as fresh background subagents launched by the integrator. `W50-JUDGE-Y`'s lazy
+baseline is corrected: `W50-FREEZE-01` did not measure a route table, so the judge measures its
+own (see that task file).
+
 ## 5. Integration order
 
 1. `W50-FREEZE-01`.
@@ -263,13 +355,13 @@ Standard forms.
 | `_pages/**` (not home, sign-in, account, forbidden), `loading.tsx` bodies, `widgets/knowledge-base/**`, `entities/expert-decision/**` | `W50-LAZY-01` | executor | SHELL-UI, HOME |
 | `_app/**` except `providers.tsx`, `layout.tsx` | `W50-SHELL-FRAME` (Stage C) | executor | none |
 | `web/src/_app/providers.tsx` (composition root), `web/package.json`, `web/package-lock.json` | frozen | — | none |
-| `CURRENT_STATE.md`, `origin/dev` | `W50-INT-CLOSE` | integrator | none |
+| `CURRENT_STATE.md`, `DEBT_REGISTER.md`, `origin/dev` | `W50-INT-CLOSE` | integrator | none |
 
 ## 7. Stop conditions
 
 `W48-PLAN.md` §14, plus: a screen needs a contract the W49 reseal did not provide; a primitive
 cannot meet the contrast or keyboard requirement without a dependency; a route's first-load JS
-gets worse or the census shrinks; `next` validation cannot be made exact for an address shape;
+grows beyond the amended bound of §3.4 or the census shrinks; `next` validation cannot be made exact for an address shape;
 a page needs `params` the guard cannot receive.
 
 ## 8. Non-goals

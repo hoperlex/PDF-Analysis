@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.identifiers",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 8,
-  "revision_note": "Candidate revision 8 of the unreleased 1.0.0-draft.1 candidate. Under the repository owner's NORM-ID-01 ruling of 2026-09-30, two identifiers and entity bindings are added: norm_document_id (ndoc) names one immutable normative document inside a NormsSnapshot, and norm_paragraph_id (npar) names one immutable canonical paragraph. Both are opaque, globally unique and generated once; neither is derived from a source reference, slug, ordinal, checksum, content key or database sequence. Retrieval chunks remain replaceable projections and deliberately receive no public identifier. No existing identifier, prefix, rule or binding is removed or renamed. The API and error-code surfaces do not change. The family carries one candidate_revision, so all three catalogs and all three schemas move to 8; state and error catalogs otherwise remain byte-stable. contract_version stays 1.0.0-draft.1 because this is an additive change to an unreleased draft candidate.",
+  "candidate_revision": 9,
+  "revision_note": "Candidate revision 9 of the unreleased 1.0.0-draft.1 candidate, written by W49-SEAL-01 under owner rulings R-55, R-56, R-60 and R-61 (OWNER_RULINGS_2026-09-17.md section 3.19) and the seal decisions of 2026-10-06. Two identifiers and entity bindings are added because both now cross the wire: user_uid (usr) names one account (entity User, the app_user row of migration 0006), and request_id (reg) names one registration request (entity RegistrationRequest, migration 0015). Both are opaque, globally unique and generated once; neither is derived from a login, an e-mail address, a name or a database sequence, and an e-mail address is a sign-in identifier and a unique key among active accounts, never an identity. Both prefixes were already minted in this shape by the access boundary before the seal (usr since 0006, reg since 0015); the seal moves them into the shared registry (src/auditmanager/shared/identity/ids.py) in the same change, so the registry and this catalog stay equal. No existing identifier, prefix, rule or binding is removed or renamed. The family carries one candidate_revision, so all three catalogs move to 9. contract_version stays 1.0.0-draft.1 because this is an additive change to an unreleased draft candidate.",
   "status": "draft_candidate",
   "frozen": false,
   "format": "<prefix>_<ULID>",
@@ -55,7 +55,9 @@
     "export_id": "exp",
     "worker_id": "wrk",
     "audit_event_id": "evt",
-    "erasure_request_id": "era"
+    "erasure_request_id": "era",
+    "user_uid": "usr",
+    "request_id": "reg"
   },
   "entities": {
     "Object": "object_uid",
@@ -84,7 +86,9 @@
     "ExportRequest": "export_id",
     "Worker": "worker_id",
     "AuditEvent": "audit_event_id",
-    "ErasureRequest": "erasure_request_id"
+    "ErasureRequest": "erasure_request_id",
+    "User": "user_uid",
+    "RegistrationRequest": "request_id"
   },
   "distinct_identities": [
     {
@@ -156,6 +160,19 @@
       "evidence": [
         "NORM-Q01",
         "NORM-Q07"
+      ]
+    },
+    {
+      "name": "account_identity",
+      "identifiers": [
+        "user_uid",
+        "request_id"
+      ],
+      "rule": "A RegistrationRequest is the history of one application and a User is the account an approval creates; neither substitutes for the other. Approval allocates a new user_uid and records it on the request, a rejected request creates no account, and purging an account never removes the request that created it. A login (the normalised e-mail address) is unique only among active accounts and pending requests, can be held again after an account is archived or purged, and is therefore never an identity or a foreign key.",
+      "authority": "R-55 and R-61 owner rulings 2026-10-05",
+      "evidence": [
+        "W49-PLAN.md section 3.1",
+        "W49-PLAN.md section 3.3"
       ]
     }
   ],

@@ -3,7 +3,15 @@
 Written 2026-09-17 by the integrator. **Reconciled by `W47-CLOSE` against the gated wave-47
 tree at `b0e5ae5` on 2026-09-30, and by `W48-INT-CLOSE` against the W48 closure candidate on
 2026-10-05:** fifteen rows closed, six narrowed, nine opened (`D-120` … `D-128`); every closure
-carries its check.
+carries its check. **`W49-INT-CLOSE` (2026-10-06) opened `D-129` … `D-132`** from the W49 judges,
+QA, `W49-FIX` and the W48 acceptance; the `alpha-w48.1` release (2026-10-07) closed `D-70` and
+`D-132` and opened `D-133`. **`W50-INT-CLOSE` (2026-10-07) opened `D-134` … `D-136`** from
+the two independent W50 judges; all three are register-only and remain open.
+**The owner's W51 validation deferral (2026-10-08) opened `D-137` and `D-138`:**
+QA/live acceptance and the full end-of-wave gate remain due after implementation.
+**The owner's continuing code-first direction (2026-10-08) opened `D-139` and `D-140`:**
+W52 and subsequent code-only wave candidates accrue QA/live checks and full-gate evidence for a
+separately planned validation wave. Each candidate must be named by exact SHA there.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
 register that had been entirely obsolete while still reading as the list of what was open, and this
@@ -26,6 +34,18 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-126 | a snapshot's `content_key` excludes the segmentation profile | raising the profile version makes `ensure_snapshot` conflict |
 | D-127 | an embedding build counts as complete with a one-character window; its digest includes a private bigint | completeness and digest are weaker than `NORM-VECTOR-01` claims |
 | D-128 | nine `W48-JUDGE-Z` findings classed *register*: guard blind spots and two naming/reporting gaps | each with its path:line in `reviews/W48-JUDGE-Z.md` |
+| D-129 | the W49 judges' and `W49-FIX`'s register findings: comments, docstrings, a 68-character label, edge assumptions | each with its path:line in the two reviews and `W49-FIX.md` |
+| D-130 | the identity debts `W49-PLAN.md` §3 registers by design | owner-visible limits of the identity model, scheduled with W52 |
+| D-131 | the alpha acceptance journey has no retry for a transient browser network error | one co-tenant Docker bridge event failed a whole run |
+| ~~D-132~~ | `alpha-w48` was tagged without the manual A01–A12 pass (`R-64`) | **closed 2026-10-07** by the owner's attestation (`R-68`) |
+| **D-133** | the proxy adapter folds every non-400/401 HTTP failure into `analysis_failed`, discards the error body, and no operator can read why a stage failed | found by the `alpha-w48.1` acceptance; W52 debt lane |
+| D-134 | invalid `next`/`from` is escaped into Next Flight router metadata despite the absolute “never echoed” wording | W50 Judge X R1, upheld by Judge Y; prose/transport boundary |
+| D-135 | the registry comment says the menu cannot hide an open screen, but `/optimisation` is open by address and intentionally hidden | W50 Judge Y JY-1, upheld by Judge X; comment correction |
+| D-136 | W50-PLAN §3.4 says five first-load routes shrink; the measured count is four | W50 Judge Y JY-2, independently measured by Judge X; plan correction |
+| **D-137** | W51 QA, independent review and live/manual identity acceptance have not run | a separate validation wave must run the built-stand and human checks against one exact candidate |
+| **D-138** | W51 implementation is being integrated without its full end-of-wave `make gate` | a separate validation wave must run and record `GATE OK` for the exact candidate before any release claim |
+| **D-139** | W52 and subsequent code-only candidates defer QA, independent review, built-stand and manual acceptance | the validation wave must inventory every accumulated candidate and run the applicable checks on exact SHAs |
+| **D-140** | W52 and subsequent code-only candidates defer the full end-of-wave gate | the validation wave must record literal `GATE OK` on the release candidate after corrections |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
@@ -60,7 +80,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | ~~D-97~~ | five screen-wide renderer copies remained and a sixth helper was added while prose claimed four remained | **closed by `W48-WEB`**: every screen-wide consumer renders through `harness.ts::renderScreen` (`996b546`) |
 | ~~D-74~~ | an existence check costs a full parent read | **closed by `W48-PORTS`**: `run_exists`/`finding_exists` on both ports since `8877d5d` |
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
-| **D-70** | the stand's API **will not start** since wave 41: the stub URL has no host and `D-72` now refuses it | **owner: a real credential, or a hostname** |
+| ~~D-70~~ | the stand had no live provider | **closed 2026-10-07**: `alpha-w48.1` acceptance ran a live model on the stand (`W48-INT-MAIN-02.md`) |
 | D-71 | `D-59` is 121 blocks not 79, and 25 of them are a different defect | **owner: widen `R-19`?** |
 | D-72 | a URL with no host becomes a retryable outage | argue it from the catalog, as `D-13` was |
 | D-68 | the certification's criterion-4 selector is too wide | use `span.am-badge[data-run-state]` |
@@ -105,6 +125,189 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-139 — later code-only waves defer QA and live checks
+
+**Opened 2026-10-08 by the integrator on the owner's continuing instruction to take tasks
+without approval and defer QA.** `W52-FACTS-01` starts code preparation while W51's QA remains
+open under `D-137`. W52's planned independent audit, built-stand attack, QA and judges are not
+silently treated as completed; the same rule applies to later code-only waves until the owner
+changes it. The validation wave must enumerate the exact candidate SHAs and applicable task
+acceptance packs, run the checks, classify findings and hand corrections to later fix stages.
+
+**Check:** reconcile each code-only wave's plan and task reports against validation-wave evidence
+for the same candidate. Close only when every deferred QA, independent review, built-stand and
+manual acceptance item has a recorded result or a documented owner disposition.
+
+`W52-FACTS-01`'s broad integration/API attempt reached the suite's private-bucket fixture and
+failed at setup because `S3_ENDPOINT_URL` was absent. The integrator did not start a stand.
+This attempt is not an integration pass; the exact suite remains in the validation inventory.
+
+### D-140 — later code-only waves defer full gates
+
+**Opened 2026-10-08 by the integrator on the owner's direction to run only basic tests and
+lint during implementation.** A focused test or lint pass is not a full `make gate`. W52 and
+later code-only candidates are not gated, closed, tagged or authorized for `origin/main` by
+their implementation merges. The validation wave must run the full gate after corrections on
+the exact candidate it proposes to release and record the literal `GATE OK`.
+
+**Check:** the validation-wave report names that clean SHA, the full `make gate` command, log and
+literal `GATE OK`; the SHA is unchanged for any subsequent release claim.
+
+The W52 FACTS branch's optional web typecheck reported two `exactOptionalPropertyTypes` errors
+in `web/src/_pages/account/ui/account-page.tsx` and
+`web/src/_pages/register/ui/register-page.tsx`. The exact same two errors reproduce on the
+dispatch base `186637f`; the FACTS changes added none. The later correction stage owns them,
+and the validation wave must re-run typecheck and the full gate after correction.
+
+### D-137 — W51 QA and live identity acceptance are deferred
+
+**Opened 2026-10-08 by the integrator on the owner's direct instruction.** W51 Stage B has
+focused tests and frontend lint, but `W51-QA-01`, independent judges, built-stand PC-01 identity
+journey, manual A13–A20, and release acceptance have not run. Stage C added the journey and
+manual-pack code in merge `4400e81`; that is no evidence that the browser or API scenario passed. Schedule a
+separate validation wave, with an exact candidate SHA and recorded results, before closing this
+row. Corrections found there belong to the later correction stage.
+
+**Check:** compare `docs/program/dispatch/W51-PLAN.md` §4–§5 with the completed task/review
+reports and acceptance evidence for the same SHA. This row closes only when QA, independent
+review, the built-stand journey and manual pass have explicit recorded results.
+
+### D-138 — the W51 end-of-wave gate is deferred
+
+**Opened 2026-10-08 by the integrator on the owner's direct instruction.** The combined W51
+Stage B tree passed 148 focused tests and frontend lint, but no full `make gate` has been run
+on the W51 candidate. The rendered-language branch-coverage assertion is red in the focused
+lane reports; it is a known unresolved check, not a passed gate. The separate validation wave
+must run the full gate on an exact clean candidate after the planned correction stage and record
+literal `GATE OK`. Until then W51 is not gated, tagged or authorized for `origin/main`.
+
+**Check:** `docs/program/W51-INT-CLOSE.md` or its later validation-wave report must name the
+tested SHA, full `make gate` command, log and literal `GATE OK`, with that SHA unchanged for any
+release claim.
+
+### D-134 — invalid return input appears in escaped Next Flight metadata
+
+**Opened 2026-10-07 by `W50-INT-CLOSE` from W50 Judge X R1, independently upheld by Judge Y.**
+`safeReturnPath` excludes an invalid `next`/`from` from the visible `/login` and `/403` text,
+the hidden field and the BFF redirect target. Next still serializes the raw query value into
+escaped `__PAGE__` router-state metadata in the HTML response. The absolute “never echoed”
+wording in `web/src/shared/config/screen-registry.ts:40` and `:326-329` is therefore false
+for transport bytes. Neither judge observed a visible injection, external redirect or protected
+data leak. A future grant should correct the application prose; removing framework metadata
+would be a separate behavior change.
+
+**Check:** on a production Next stand set `W50_WEB_ORIGIN` to its loopback origin, then run
+`curl -fsS "$W50_WEB_ORIGIN/login?next=https%3A%2F%2Fattacker.example%2Fx" | rg '__PAGE__'`
+and the analogous `/403?from=` request; inspect the escaped raw value and compare with the
+visible text, form and redirect observations in `reviews/W50-JUDGE-X.md` R1 and
+`reviews/W50-JUDGE-Y.md` cross-examination.
+
+### D-135 — the menu comment claims every open screen appears
+
+**Opened 2026-10-07 by `W50-INT-CLOSE` from W50 Judge Y JY-1, upheld by Judge X.**
+`web/src/shared/config/screen-registry.ts:250-254` says the frame cannot hide a screen that
+`screenDecision` opens. Its `/optimisation` row is `session`/`any`, `hidden` and `inMenu: false`;
+`web/src/_app/navigation.ts` filters on `inMenu`. Direct navigation works while the menu omits
+the address, as `R-66` requires. Correct only the comment under a future grant.
+
+**Check:** `rg -n -A5 -B3 'cannot offer a screen|/optimisation' web/src/shared/config/screen-registry.ts`
+and `rg -n -A5 'inMenu' web/src/_app/navigation.ts`; the Judge X route/menu browser results
+and Judge Y JY-1 give the independent runtime and source checks.
+
+### D-136 — W50's first-load plan claims five decreases instead of four
+
+**Opened 2026-10-07 by `W50-INT-CLOSE` from W50 Judge Y JY-2, independently measured by Judge X.**
+`docs/program/dispatch/W50-PLAN.md` §3.4 says five target routes' first-load JS falls. The
+Stage A to LAZY build tables show decreases for `/dashboard`, `/knowledge-base`, the run page
+and the comparison page. The review page grew 1,370 bytes, within the 1,536-byte runtime-cost
+bound. The plan wording should name four decreasing routes and explain review's case; no
+product change follows from this finding.
+
+**Check:** `rg -n 'five target routes|first-load JS falls' docs/program/dispatch/W50-PLAN.md`
+and `sed -n '28,55p' docs/program/reviews/W50-JUDGE-Y.md`; Judge X's JY-2 cross-examination
+in `reviews/W50-JUDGE-X.md` records an independent rebuild.
+
+### D-133 — a proxy failure is mis-classified, its reason discarded, and invisible to operators
+
+> **Narrowed 2026-10-08 by `W52-DEBT-CODE-133`, merged at `3cfc8d9`.** The adapter now
+> maps 402/403/404 and unclassified 5xx without claiming a model answered, bounds and
+> redacts the error body before a server-side log, and keeps that body out of the API
+> envelope. Its local-stub suite passed 64 tests. Live proxy QA remains due in D-139 and
+> the full gate in D-140. **D-133 stays open** for a typed stage message in RunStatus and
+> the `PROXY_LLM_MODEL` startup-policy decision, assigned to W56 §A3.5. Check those
+> endpoints and the configured-model refusal on the later exact candidate before closure.
+
+**Opened 2026-10-07 by the integrator from the `alpha-w48.1` acceptance (`W48-INT-MAIN-02.md`).**
+`_map_http_failure` in `src/auditmanager/analysis/text/proxy.py` folds 403, 402, 404 and 5xx into
+`analysis_failed` ("the model answered", not retryable) although no model answered — the IP
+allowlist's 403 looked exactly like a model failure; the proxy's error body is discarded except
+for 400/401, although the proxy passes OpenRouter's own errors through un-enveloped and the guide
+says to read the status first; `stage_result.error.message` is exposed in neither the API nor the
+UI, so the cause of a failed stage needs database access on the host. Also: the agent gateway's
+default model for the owner's key was not Claude, and whether it honours `PROXY_LLM_MODEL`
+depends on the operator's per-key policy (`.local/handoff/connect-proxy-llm-SKILL.md`, the
+proxy's client guide, untracked).
+
+**Check:** `sed -n '/def _map_http_failure/,/^def /p' src/auditmanager/analysis/text/proxy.py`.
+
+### D-132 — `alpha-w48` was tagged without the manual A01–A12 pass — **CLOSED**
+
+> **Closed 2026-10-07 by `R-68`:** the owner attested the manual check of `3a54108`
+> (`alpha-w48.1`) with no deviation found; no scripted per-item report exists.
+
+**Opened 2026-10-06 by `W49-INT-CLOSE` under `R-64`.** `W48-INT-MAIN-01` tagged `alpha-w48` on
+the automated acceptance alone; the manual pass of `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md`
+§4 was not run. The owner scheduled it for the W49 release (direct poll, 2026-10-06), where W49's
+own manual pass closes this row.
+
+**Check:** a manual-pass `report.md` under `.local/manual-alpha/` for the W49 release SHA with
+every A01–A12 recorded.
+
+### D-131 — the acceptance journey has no retry for a transient browser network error
+
+**Opened 2026-10-06 by `W49-INT-CLOSE`.** Run `20261006T083425Z-1338396` of the W48 acceptance
+failed at start-run with `net::ERR_NETWORK_CHANGED` while another tenant's Docker bridge on this
+host dropped veths (08:36:09–08:36:19Z); no run was created and the next run passed that phase.
+`tests/e2e/pc01/journey/journey.mjs` treats any navigation error as final.
+
+**Check:** `grep -n "ERR_NETWORK_CHANGED\|retry" tests/e2e/pc01/journey/*.mjs`.
+
+### D-130 — the identity debts `W49-PLAN.md` §3 registers by design
+
+**Opened 2026-10-06 by `W49-INT-CLOSE`, as `W49-PLAN.md` §4 (`W49-INT-CLOSE`) requires.** `display_name` is not yet
+retired (the derived «Фамилия И. О.» takes precedence, `R-55`); the column
+`is_default_credential` keeps its name although it now also marks an administrator's temporary
+password; a submitted login is disclosed as taken to whoever submits a request (`conflict_reason`
+`login_taken`, accepted); rejection is one request at a time (no bulk); decided requests are kept
+with no retention rule; the administrator knows the temporary password a reset sets; migration
+`0015` is forward-only.
+
+**Check:** `grep -n -i "registered" docs/program/dispatch/W49-PLAN.md` (§3.1, §3.3, §3.4 and §3.5).
+
+### D-129 — the W49 register findings
+
+**Opened 2026-10-06 by `W49-INT-CLOSE`** from `reviews/W49-JUDGE-Y.md`, `reviews/W49-JUDGE-X.md`
+(both upheld each other's findings) and `W49-FIX.md`:
+
+- Y F-2: the live comment on `app_user.display_name` and migration `0009`'s log name the removed
+  `auditmanager.access.name` and claim login ≤ 100 characters; repair is one future
+  `COMMENT ON COLUMN` migration, `0009` untouched;
+- Y F-3: `name_label` reaches 68 characters against `maxLength` 66 for names starting with ß, ŉ or
+  ǰ, the only three BMP letters whose upper case expands (`access/models.py`);
+- Y F-4: `account_standing` is unused by the served path (a port member with seven test callers);
+- Y F-5: three docstrings contradict their code — `access/accounts.py` `complete_profile`,
+  `access/registrations.py` module docstring, `bootstrap/adapters.py` `update_account`;
+- Y F-7: `api/routers/errors.py` imports `sqlalchemy.exc` (pre-W49; ALR-01's letter only);
+- X R-1 `conflict_reason` is a login oracle (accepted); R-2 the status-read timing wording; R-3
+  `X-Real-IP` trust depends on the network boundary; R-4 a distributed flood can reach
+  `queue_full`; R-5 `429` is not declared in the OpenAPI document;
+- `W49-FIX`: the `required` lists of `identifiers.schema.json` still hold the 27 earlier names;
+  `access/revoke.py` still says "this system has no roles"; `deploy.sh` brings the stack up with
+  `compose.server.yml` alone, so on a TLS-overlay host `up -d` would recreate the proxy without
+  the overlay (pre-existing; the deployed stand serves TLS, so verify how before changing it).
+
+**Check:** each finding's path:line and reproduction in its review or report.
 
 ### D-128 — the closure judge's register findings
 
@@ -1744,7 +1947,18 @@ one is mutation plumbing. **Written as three because a row overstating its own r
 The fix is proved loaded rather than assumed: the same mutation against the **old** seed is
 green.
 
-### D-70 — the owner's stand is running a certification stub — **and since wave 41 it will not start**
+### D-70 — the owner's stand is running a certification stub — **and since wave 41 it will not start** — **CLOSED**
+
+> **Closed 2026-10-07.** `alpha-w48.1` (`3a54108`) was accepted on the stand with `providerLive`
+> observed `live`: run `run_01M4AHC903YDHQQGY2BCN7GDV2` published in 26.2 s and found the three
+> planted issues with no false positive (`W48-INT-MAIN-02.md`). **Check:** the
+> `automated-verdict.json` named there, phase `providerLive`.
+
+> **2026-10-06, `W50-FREEZE-01`.** The stand now starts: `W48-INT-MAIN-01` deployed `23e0579` with
+> `provider_mode=recorded`, and the owner then switched it to `proxy` (`R-65`; a proxy run records
+> `live`). The re-acceptance that would close this row is **deferred by the owner** while the
+> proxy's availability is investigated; `alpha-w48` stays tagged under `R-64`. The row stays open
+> until an acceptance run on the stand reports `provider_mode` `live`.
 
 > **Escalated 2026-09-23 by `D-72`'s own repair, at the wave-41 redeploy.** The stub is
 > `PROXY_LLM_BASE_URL=http://:59990` — no hostname. `D-72` made `ProxySettings` refuse exactly

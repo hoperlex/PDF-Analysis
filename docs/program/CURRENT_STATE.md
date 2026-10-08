@@ -1,9 +1,21 @@
 # Current state
 
-> **Updated 2026-10-06 on the `integration/w48-1` hotfix line.** `alpha-w48` is the last tagged
-> release; this line repairs the model-proxy address on top of it (`W48-PROXY-01`). The identity
-> waves continue on `integration/w50` and `origin/dev`. `origin/main` requires a separate direct
-> owner instruction because it triggers external deployment.
+> **Updated 2026-10-08 by the W51 integrator.** W49 and W50 of the identity programme
+> (`docs/program/dispatch/IDENTITY-WAVES.md`) are closed on `origin/dev`. W51 Stage A and
+> all three Stage B implementation lanes and Stage C code are merged there through
+> `4400e81`; QA, correction and release checks remain open. The owner temporarily deferred temporary
+> stand checks and end-of-wave gates to a later separately designed wave (`D-137`, `D-138`).
+> W52 code preparations `W52-PINSWEEP-01` and `W52-FACTS-01` are merged on `origin/dev`
+> through `b5be37e`; W52 has not been frozen or closed. QA and full-gate evidence for this
+> and later code-only candidates is open under `D-139` and `D-140`.
+> The independent D-133 proxy-code correction is merged through `3cfc8d9`; its W56 and
+> live-validation halves remain open.
+> The combined implementation passed 148 focused tests and frontend lint; its red
+> rendered-language branch-coverage assertion remains recorded in the lane reports.
+> `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
+> Development candidates publish to
+> `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
+> external deployment.
 >
 > **What is deployed is deliberately not stated here.** A sentence naming a sha and a date is
 > true only until somebody redeploys, and `D-104` is the row about exactly that: every prose
@@ -30,19 +42,39 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Active development, 2026-10-06 — `W48-PROXY-01`, a hotfix of `alpha-w48`
+## Active development, 2026-10-08 — W51 implementation and W52 code preparations on `dev`
 
-`alpha-w48` is tagged under `R-64` (recorded on the identity line, `OWNER_RULINGS_2026-09-17.md`
-§3.21 at `a015d65`); what the stand runs is answered by `infra/deploy/verify-deployed.sh`. The stand cannot reach a model: the
-model proxy's `/api/` endpoint admits an IP allowlist the stand is not on, and the owner's key
-works only on the proxy's agent gateway, whose path the adapter cannot address. On the owner's
-direct poll of 2026-10-06 the repair is made in code, on this hotfix line, and reaches the stand
-before the identity waves do; it then merges into `integration/w50`.
+W49 — accounts with e-mail sign-in, a role set `{expert, admin}`, registration requests and
+administrator account management (`R-55` … `R-61`) — was published to `origin/dev` by
+`W49-INT-CLOSE`. W50 (the shell) adds one registry for **22** real screens, guards and validated
+return paths, a home page, grouped navigation and an account menu, four honest route placeholders,
+and lazy loading for five heavy widgets. The production build's 23rd page row is Next's synthetic
+`/_not-found`, not a registered screen. `W50-QA-01` and both independent judges accepted the
+merged candidate; the three upheld register-only findings are open as `D-134` … `D-136`.
+`W50-FIX` corrected accepted prose and fixtures and added the R-70 light-acceptance command.
+Its clean lane tree passed a full `make gate`; the FIX merge and the docs-only close candidate
+passed light acceptance under `R-70` (`AGENTS.md` §8). W50 is closed on the development line
+without a release tag. W51's screens, Stage C identity journey code and manual A13–A20 pack
+are merged into `origin/dev`. The identity browser journey has not run; QA, correction and
+release evidence remain open under the 2026-10-08 validation deferral (`D-137`, `D-138`).
+The proposed W52 plan has no freeze on this line. Its pin-sweep CLI and central independent
+expected-facts file are code preparations only; their focused checks are recorded in
+`W52-PINSWEEP-01.md` and `W52-FACTS-01.md`. W52 QA and full gate remain due under
+`D-139`/`D-140`.
+The proxy-code half of D-133 is merged with local-stub evidence in
+`W52-DEBT-CODE-133.md`; the RunStatus/model-configuration and live-validation halves
+remain open.
 
-The frozen API surface remains **17 paths / 20 operations / 61 schemas**, the error catalog
-**22**, domain candidate revision 8 with **27** opaque identities, and the migration head is
-**`0014_durable_analysis_effects`**. The last closed release is `alpha-w48`. This section makes no
-deployment claim: `infra/deploy/verify-deployed.sh` answers what is deployed.
+The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
+with no promotion. W49 now means identity, W50 the shell and W51 the screens:
+`docs/program/dispatch/IDENTITY-WAVES.md` is the controlling plan, with `W49-PLAN.md`,
+`W50-PLAN.md` and `W51-PLAN.md` beside it.
+
+The frozen API surface is **27 paths / 34 operations / 77 schemas** since `W49-SEAL-01`, the
+error catalog **23**, domain candidate revision 9 with **29** opaque identities, and the
+migration head is **`0015_accounts_roles_registration`**. The last tagged release is `alpha-w48.1`.
+This section makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is
+deployed.
 
 ### Normative-corpus persistence and the alpha runtime boundary (integrated before W48, unchanged)
 
@@ -94,10 +126,15 @@ decision rather than smuggling a MinIO release upgrade into recovery work.
 
 ## Previous release state — wave 48 (historical record)
 
-W48 (correction, debt closure and a whole-tree audit, `R-49`) was integrated on
-`integration/w48-close`, published to `origin/dev` and `origin/main` and deployed by
-`W48-INT-MAIN-01`, and tagged `alpha-w48` under `R-64`: the automated acceptance passed every phase
-but the live provider (`D-70`). What W48 changed, by owner ruling and by lane:
+W48 (correction, debt closure and a whole-tree audit, `R-49`) is integrated on
+`integration/w48-close` and published to `origin/dev` by `W48-INT-CLOSE`. On the owner's direct
+instruction naming `23e0579`, `W48-INT-MAIN-01` fast-forwarded `origin/main`, the auto-deploy
+workflow deployed and verified it, and it is tagged `alpha-w48` under `R-64`: the automated
+acceptance passed every phase but the live provider (`D-70` — the stand runs `recorded`), and the
+manual A01–A12 pass is owed (`W48-INT-MAIN-01.md`). Development candidates publish to
+`origin/dev`; `origin/main` is the auto-deploy ref and moves only on a direct owner instruction.
+
+What W48 changed, by owner ruling and by lane:
 
 - **durable analysis effects** (`R-53`): migration `0014_durable_analysis_effects` records every
   paid provider attempt and every analysis object before the external effect, reconciles them
@@ -113,6 +150,10 @@ but the live provider (`D-70`). What W48 changed, by owner ruling and by lane:
   wrap (`W48-WEB`, `W48-TAILS`);
 - **external acceptance**: `make alpha-acceptance` is the repository-owned deployed check beside,
   not inside, the hermetic gate (`W48-LIVE`).
+
+The W48 surface was **17 paths / 20 operations / 61 schemas**, error catalog **22**, domain
+candidate revision 8, migration head `0014_durable_analysis_effects`. Release record:
+`docs/program/W48-INT-MAIN-01.md`.
 
 ## Previous release state — wave 47 (historical record)
 

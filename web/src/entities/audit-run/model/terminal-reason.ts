@@ -140,6 +140,14 @@ const CATALOG_SENTENCES: Readonly<Record<ErrorCode, string>> = {
     'Предъявленный для этой работы токен исполнения отсутствовал, был искажён или не был ' +
     'текущим. Само значение никогда не возвращается обратно, поэтому причина его не ' +
     'показывает.',
+  // `W49-SEAL-01`. No run can end with this code: only the edge in front of `/api/v1`
+  // answers it, to a caller that sends the registration operations too often. The
+  // sentence still restates the catalog summary, because a reading that carried it would
+  // be a defect worth seeing named rather than rendered as the undescribed default.
+  rate_limited:
+    'С одного клиента за короткое окно пришло слишком много однотипных запросов, и граница ' +
+    'перед программным интерфейсом их отклонила. Прогон таким кодом завершиться не может; ' +
+    'ничего не создано и не изменено.',
   internal_error:
     'Прогон остановила неклассифицированная серверная неисправность. При этом прогон несёт ' +
     'устойчивый код и идентификатор корреляции; внутренние подробности остаются в защищённой ' +

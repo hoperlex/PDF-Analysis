@@ -6,19 +6,21 @@
  * Russian. `W31-UI` translated every sentence `web/src` owns and then reported a wall: a
  * failure `detail` is frequently `error.envelope.message` — the API's own text, rendered
  * by the backend from the `summary` fields of `contracts/domain/v1/error-codes.json`.
- * Measured on `ae2adf5`: the catalog carries 22 codes and **not one Cyrillic character**.
+ * Measured on `ae2adf5`: every code the catalog carried then, and **not one Cyrillic
+ * character** among them.
  * So the client cannot translate that string; it can only decide to say the same thing
  * itself, which is what this module is.
  *
  * **1. It is keyed on the whole catalog, and the reason is what constrains the field.**
  * `transport.ts`'s `decodeFailure` constructs an `ApiError` exactly when `isErrorCode()`
- * passes, and `isErrorCode` tests membership of `ERROR_CODE_VALUES` — the whole 22-code
+ * passes, and `isErrorCode` tests membership of `ERROR_CODE_VALUES` — the whole 23-code
  * catalog. It does **not** test `PC01_ERROR_CODES`. Every classifier that consumes this
- * map has a `default:` arm that fires for any code it has no branch for, and six catalog
+ * map has a `default:` arm that fires for any code it has no branch for, and seven catalog
  * codes are outside `PC01_ERROR_CODES` — `unsupported_contract_version`,
  * `required_norm_unavailable`, `partial_result_not_publishable`, `cost_budget_exceeded`,
- * `stale_attempt`, `execution_token_invalid`. A map keyed on the narrower list would leave
- * those six rendering nothing, or rendering English. `W29-SAY` was told to key
+ * `stale_attempt`, `execution_token_invalid` and, since `W49-SEAL-01`, `rate_limited`. A
+ * map keyed on the narrower list would leave those seven rendering nothing, or rendering
+ * English. `W29-SAY` was told to key
  * `terminal-reason.ts` on `PC01_ERROR_CODES` and refused for the same reason, measured the
  * same way; this is that argument applied to a different field, not copied from it.
  *
@@ -145,6 +147,11 @@ const CATALOG_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   execution_token_invalid:
     'Предъявленное полномочие на исполнение отсутствует, искажено либо не является ' +
     'текущим для этой задачи. Само значение токена никогда не возвращается в ответе.',
+  // `W49-SEAL-01`. Answered only by the edge in front of `/api/v1`, which throttles the
+  // two unauthenticated registration operations per client; restates the catalog summary.
+  rate_limited:
+    'С этого клиента за короткое время пришло слишком много однотипных запросов. Ничего ' +
+    'не создано и не изменено; тот же запрос можно повторить позже.',
   internal_error:
     'Неклассифицированная серверная неисправность. Ответ всё равно несёт устойчивый код ' +
     'и идентификатор корреляции; ни внутренний путь, ни содержимое запроса, ни запрос к ' +

@@ -37,6 +37,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         commented = record_decision(
             session,
@@ -45,6 +46,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             event_type="comment",
             comment="Проверено по разделу АР.",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         reject = record_decision(
             session,
@@ -52,6 +54,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             finding_observation_id=published.finding_observation_id,
             event_type="reject",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
 
         identities = {accept.decision_id, commented.decision_id, reject.decision_id}
@@ -74,6 +77,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         projection = current_verdict(session, published.finding_uid)
         assert projection is not None
@@ -85,6 +89,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             finding_observation_id=published.finding_observation_id,
             event_type="reject",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         projection = current_verdict(session, published.finding_uid)
         assert projection.current_verdict == "rejected"
@@ -101,6 +106,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         before = current_verdict(session, published.finding_uid)
         assert before.current_verdict == "accepted"
@@ -113,6 +119,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             event_type="comment",
             comment="Согласовано с ГИП.",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         after = current_verdict(session, published.finding_uid)
 
@@ -143,6 +150,7 @@ class TestTheJourneyAppendsAndUpdatesNothing:
             event_type="comment",
             comment="Нужна проверка.",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         projection = current_verdict(session, published.finding_uid)
         assert projection.current_verdict == "pending"
@@ -180,6 +188,7 @@ class TestTheProjectionIsRebuildable:
                 event_type=event_type,
                 comment=comment,
                 author_label="reviewer-1",
+                author_user_uid=None,
             )
 
         stored = current_verdict(session, published.finding_uid)
@@ -210,6 +219,7 @@ class TestTheProjectionIsRebuildable:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         record_decision(
             session,
@@ -217,6 +227,7 @@ class TestTheProjectionIsRebuildable:
             finding_observation_id=published.second_finding_observation_id,
             event_type="reject",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         assert current_verdict(session, published.finding_uid).current_verdict == "accepted"
         assert (
@@ -260,6 +271,7 @@ class TestRevocation:
                 finding_observation_id=published.finding_observation_id,
                 event_type="revoke",
                 author_label="reviewer-1",
+                author_user_uid=None,
             )
         assert caught.value.code is ErrorCode.VALIDATION_FAILED
         assert "revoke" in DECLARED_EVENT_TYPES
@@ -274,6 +286,7 @@ class TestRevocation:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         assert current_verdict(session, published.finding_uid).current_verdict == "accepted"
 
@@ -292,6 +305,7 @@ class TestRevocation:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         second = record_decision(
             session,
@@ -299,6 +313,7 @@ class TestRevocation:
             finding_observation_id=published.finding_observation_id,
             event_type="reject",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         self._revoke(session, published)
 
@@ -327,6 +342,7 @@ class TestRevocation:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         self._revoke(session, published)
         assert current_verdict(session, published.finding_uid).current_verdict == "pending"
@@ -337,6 +353,7 @@ class TestRevocation:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         projection = current_verdict(session, published.finding_uid)
         assert projection.current_verdict == "accepted"
@@ -351,6 +368,7 @@ class TestTheLedgerRefusesRewriting:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         with pytest.raises(DBAPIError) as caught:
             with nested_transaction(session):
@@ -381,6 +399,7 @@ class TestTheLedgerRefusesRewriting:
             finding_observation_id=published.finding_observation_id,
             event_type="reject",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         with pytest.raises(DBAPIError) as caught:
             with nested_transaction(session):
@@ -447,6 +466,7 @@ class TestWhatMayBeJudged:
                 finding_observation_id=published.finding_observation_id,
                 event_type="accept",
                 author_label="reviewer-1",
+                author_user_uid=None,
             )
         assert caught.value.code is ErrorCode.NOT_FOUND
 
@@ -479,6 +499,7 @@ class TestWhatMayBeJudged:
                 finding_observation_id=rejected,
                 event_type="accept",
                 author_label="reviewer-1",
+                author_user_uid=None,
             )
         assert caught.value.code is ErrorCode.NOT_FOUND
 
@@ -490,6 +511,7 @@ class TestWhatMayBeJudged:
                 finding_observation_id=rejected,
                 event_type="accept",
                 author_label="reviewer-1",
+                author_user_uid=None,
             )
         assert caught.value.code is ErrorCode.NOT_FOUND
 
@@ -521,6 +543,7 @@ class TestWhatMayBeJudged:
                 finding_observation_id=published.second_finding_observation_id,
                 event_type="accept",
                 author_label="reviewer-1",
+                author_user_uid=None,
             )
         assert caught.value.code is ErrorCode.NOT_FOUND
 
@@ -534,6 +557,7 @@ class TestWhatMayBeJudged:
                 finding_observation_id=published.finding_observation_id,
                 event_type="comment",
                 author_label="reviewer-1",
+                author_user_uid=None,
             )
         assert caught.value.code is ErrorCode.VALIDATION_FAILED
 
@@ -547,6 +571,7 @@ class TestWhatMayBeJudged:
                 finding_observation_id=published.finding_observation_id,
                 event_type="needs_manual_review",
                 author_label="reviewer-1",
+                author_user_uid=None,
             )
         assert caught.value.code is ErrorCode.VALIDATION_FAILED
 
@@ -563,6 +588,7 @@ class TestIdempotency:
             event_type="accept",
             command_id=command_id,
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         second = record_decision(
             session,
@@ -571,6 +597,7 @@ class TestIdempotency:
             event_type="accept",
             command_id=command_id,
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         assert second.decision_id == first.decision_id
         assert current_verdict(session, published.finding_uid).decision_event_count == 1
@@ -590,6 +617,7 @@ class TestIdempotency:
             event_type="accept",
             command_id=command_id,
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         with pytest.raises(IntegrityError):
             with nested_transaction(session):
@@ -629,6 +657,7 @@ class TestIdempotency:
             event_type="accept",
             command_id=command_id,
             author_label="reviewer-1",
+            author_user_uid=None,
         )
 
         real = ledger_module._existing_event
@@ -649,6 +678,7 @@ class TestIdempotency:
             event_type="reject",
             command_id=command_id,
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         assert calls["n"] == 2, "the insert must have been attempted and refused"
         assert second.decision_id == first.decision_id
@@ -665,6 +695,7 @@ class TestIdempotency:
             event_type="accept",
             command_id=command("expert-accept-003"),
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         two = record_decision(
             session,
@@ -673,6 +704,7 @@ class TestIdempotency:
             event_type="reject",
             command_id=command("expert-reject-003"),
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         assert one.decision_id != two.decision_id
         assert current_verdict(session, published.finding_uid).decision_event_count == 2
@@ -703,6 +735,7 @@ class TestAuthorLabel:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             author_label="anna.petrova",
+            author_user_uid=None,
         )
         assert event.author_label == "anna.petrova"
         stored = session.execute(
@@ -724,6 +757,7 @@ class TestAuthorLabel:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             author_label="anna.petrova",
+            author_user_uid=None,
         )
         second = record_decision(
             session,
@@ -731,6 +765,7 @@ class TestAuthorLabel:
             finding_observation_id=published.finding_observation_id,
             event_type="reject",
             author_label="boris.smirnov",
+            author_user_uid=None,
         )
         rows = session.execute(
             text(
@@ -766,6 +801,7 @@ class TestAuthorLabel:
                 finding_observation_id=published.finding_observation_id,
                 event_type="accept",
                 author_label="   ",
+                author_user_uid=None,
             )
         assert caught.value.code is ErrorCode.VALIDATION_FAILED
 
@@ -785,6 +821,7 @@ class TestOrdering:
                 event_type="comment",
                 comment=f"Замечание {index}.",
                 author_label="reviewer-1",
+                author_user_uid=None,
             )
             for index in range(3)
         ]
@@ -806,6 +843,7 @@ class TestOrdering:
             finding_observation_id=published.finding_observation_id,
             event_type="accept",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         assert not hasattr(event, "sequence_no")
         projection = current_verdict(session, published.finding_uid)

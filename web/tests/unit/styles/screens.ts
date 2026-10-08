@@ -22,8 +22,14 @@ import { ReviewPage } from '@/_pages/review';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { AppFrame } from '@/_app';
+import { accountMenuProps } from '@/_app/account-menu';
+import { FrameNavigationView } from '@/_app/frame-navigation';
+import { buildNavigation } from '@/_app/navigation';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { SignInPage } from '@/_pages/sign-in';
+import { ManageUserControls } from '@/features/manage-user';
+import { UserList } from '@/widgets/user-list';
+import { RegistrationQueue } from '@/widgets/registration-queue';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
@@ -46,7 +52,13 @@ import type {
   RunStatus,
 } from '@/shared/api';
 import type { DocumentVersion, Project } from '@/shared/api';
+import type { Account } from '@/shared/api';
+import type { RegistrationRequest } from '@/shared/api';
 import { ApiError, queryKeys } from '@/shared/api';
+import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, Menu, avatarColourIndex } from '@/shared/ui';
+import type { DisclosureProps, MenuProps } from '@/shared/ui';
+import { DisclosureView } from '@/shared/ui/disclosure';
+import { MenuView } from '@/shared/ui/menu';
 import { groupByCategory } from '@/entities/finding';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
 import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
@@ -185,6 +197,45 @@ const RECORDS: readonly DecisionRecord[] = (
   decision_event_count: index + 1,
 }));
 
+/** The frame's sessions (`W50-SHELL-FRAME`): the whole subject the layout hands it. */
+const FRAME_EXPERT = {
+  login: 'эксперт@пример.испытание',
+  displayLabel: 'Экспертова А. С.',
+  initials: 'ЭА',
+  roles: ['expert'],
+  isDefaultCredential: false,
+  profileComplete: true,
+} as const;
+const FRAME_ADMIN = { ...FRAME_EXPERT, displayLabel: 'Проверкина А. С.', initials: 'ПА', roles: ['admin', 'expert'] } as const;
+
+const USER_ACCOUNT: Account = {
+  archived_at: null,
+  display_label: 'Проверкина А. С.',
+  first_name: 'Анна',
+  is_default_credential: false,
+  last_name: 'Проверкина',
+  login: 'proverkina@example.org',
+  middle_name: 'Сергеевна',
+  profile_complete: true,
+  roles: ['admin', 'expert'],
+  user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+};
+
+const REGISTRATION_REQUEST: RegistrationRequest = {
+  created_user_uid: null,
+  decided_at: null,
+  decided_by: null,
+  display_label: 'Заявкина М. П.',
+  first_name: 'Мария',
+  last_name: 'Заявкина',
+  login: 'zayavkina@example.org',
+  middle_name: 'Петровна',
+  rejection_reason: null,
+  request_id: 'reg_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  status: 'pending',
+  submitted_at: '2026-10-08T00:00:00Z',
+};
+
 export function screens(): Screen[] {
   const out: Screen[] = [];
   /**
@@ -206,12 +257,48 @@ export function screens(): Screen[] {
    * -- `.am-app__signin` -- and a census that rendered only the link would be measuring the
    * rule on an `<a>` while a `<button>` somewhere else wore it.
    */
-  add(
-    'AppFrame with an open session',
-    render(
-      createElement(AppFrame, { children: 'экран', session: { login: 'проверяющий' } }),
-    ),
-  );
+  add('AppFrame with an open session', render(createElement(AppFrame, { children: 'экран', session: FRAME_EXPERT })));
+
+  /*
+   * `W50-SHELL-FRAME`. The frame's islands render closed in one pass, so the states a reader
+   * opens are seeded the way `W50-SHELL-UI`'s primitives are: the account menu OPEN with the
+   * very props the bar gives it (`accountMenuProps`, not a copy), its header carrying the
+   * frame's own rules; and the navigation drawn with every disclosure open — the one-row
+   * groups and the stacked «Меню» with its inline groups — once with `Главная` as the current
+   * page and once with a page under a group current, which is the only way the current-page
+   * rules are reached by a pass that has no router.
+   */
+  {
+    const inBar = (child: ReactElement): string => render(createElement('header', { className: 'am-app__bar' }, child));
+    let seedPanel = 0;
+    const drawnOpen = (props: DisclosureProps): ReactElement => {
+      seedPanel += 1;
+      return createElement(DisclosureView, { ...props, open: true, panelId: `seed-frame-${seedPanel}` });
+    };
+    add(
+      'AppFrame, the account menu open',
+      inBar(
+        createElement(MenuView, {
+          ...accountMenuProps(FRAME_ADMIN),
+          state: { open: true, active: 0 },
+          triggerId: 'seed-frame-account-trigger',
+          menuId: 'seed-frame-account-menu',
+        }),
+      ),
+    );
+    for (const pathname of ['/', '/blocks']) {
+      add(
+        `AppFrame, the navigation open, ${pathname} current`,
+        inBar(
+          createElement(FrameNavigationView, {
+            navigation: buildNavigation(FRAME_ADMIN),
+            pathname,
+            disclosure: drawnOpen,
+          }),
+        ),
+      );
+    }
+  }
 
   /*
    * The same shell WITH an instance label, which is the whole of `.am-app__instance`.
@@ -589,6 +676,23 @@ export function screens(): Screen[] {
     render(createElement(ChangePasswordPage, { login: 'проверяющий', outcome: 'changed' })),
   );
 
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.users.list({ includeArchived: false, limit: 50 }), {
+      items: [USER_ACCOUNT], page: { next_cursor: null },
+    });
+    add('UserList populated', renderScreen(client, createElement(UserList)));
+  }
+  add('ManageUserControls active', renderScreen(newClient(), createElement(ManageUserControls, { account: USER_ACCOUNT })));
+  add('ManageUserControls archived', renderScreen(newClient(), createElement(ManageUserControls, { account: { ...USER_ACCOUNT, archived_at: '2026-10-08T00:00:00Z' } })));
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.registrations.list({ status: 'pending', limit: 50 }), {
+      items: [REGISTRATION_REQUEST], page: { next_cursor: null }, pending_total: 1,
+    });
+    add('RegistrationQueue pending', renderScreen(client, createElement(RegistrationQueue)));
+  }
+
   /*
    * The stage comparison, `R-23` / `W43-COMPARE`, 2026-09-24.
    *
@@ -662,6 +766,116 @@ export function screens(): Screen[] {
       renderScreen(
         client,
         createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+      ),
+    );
+  }
+
+  /*
+   * ------------------------------------------- the shell primitives (`W50-SHELL-UI`)
+   *
+   * `Disclosure`, `Menu` and `Avatar` render nowhere yet -- `W50-SHELL-FRAME` composes them --
+   * so without these seeds every rule they brought would be reached by no screen, and the
+   * unreached-rule case above would say so. Each is rendered in each state its rules select:
+   * the disclosure closed and open (its current group, its current link, the right-aligned
+   * and the inline layout), the menu closed and open with its header, and one avatar per
+   * colour pair. The closed states are the client islands' own server render; the open ones
+   * are the views those islands render once a reader has opened them, which a static pass
+   * cannot do. They sit in the application bar where the frame will put them, so the census
+   * measures them on the surface they will really meet.
+   */
+  {
+    const inBar = (...children: ReactElement[]): string =>
+      render(createElement('header', { className: 'am-app__bar' }, ...children));
+    const work: DisclosureProps = {
+      label: 'Работа',
+      links: [
+        { href: '/projects', label: 'Проекты', current: true },
+        { href: '/dashboard', label: 'Дашборд' },
+      ],
+    };
+    const system: DisclosureProps = {
+      label: 'Система',
+      links: [
+        { href: '/logs', label: 'Журнал выполнения' },
+        { href: '/workers', label: 'Исполнители' },
+      ],
+    };
+    add('Disclosure closed', inBar(createElement(Disclosure, work)));
+    add(
+      'Disclosure open, the current group, aligned to the end',
+      inBar(
+        createElement(DisclosureView, { ...work, current: true, align: 'end', open: true, panelId: 'seed-work' }),
+      ),
+    );
+    add(
+      'Disclosure open, the stacked menu holding inline groups',
+      inBar(
+        createElement(DisclosureView, {
+          label: 'Меню',
+          open: true,
+          panelId: 'seed-stacked',
+          children: [
+            createElement(DisclosureView, {
+              ...work,
+              key: 'work',
+              layout: 'inline',
+              current: true,
+              open: true,
+              panelId: 'seed-stacked-work',
+            }),
+            createElement(DisclosureView, {
+              ...system,
+              key: 'system',
+              layout: 'inline',
+              open: false,
+              panelId: 'seed-stacked-system',
+            }),
+          ],
+        }),
+      ),
+    );
+
+    const items: MenuProps['items'] = [
+      { kind: 'link', label: 'Профиль', href: '/account' },
+      { kind: 'link', label: 'Сменить пароль', href: '/account/password' },
+      { kind: 'submit', label: 'Выйти', action: '/bff/v1/session/end' },
+    ];
+    const account = (): MenuProps => ({
+      label: 'Учётная запись: Петрова А. С.',
+      trigger: createElement(Avatar, { initials: 'ПА', colourKey: 'petrova@example.test' }),
+      header: createElement('p', null, 'Петрова А. С.'),
+      items,
+    });
+    add('Menu closed', inBar(createElement(Menu, account())));
+    add(
+      'Menu open, with its header',
+      inBar(
+        createElement(MenuView, {
+          ...account(),
+          state: { open: true, active: 0 },
+          triggerId: 'seed-account-trigger',
+          menuId: 'seed-account-menu',
+        }),
+      ),
+    );
+
+    // One avatar per pair. The addresses are FOUND, by hashing invented ones until every
+    // pair is worn, because the pair is a property of the address and not of anything a
+    // seed could name directly.
+    const byPair = new Map<number, string>();
+    for (let n = 1; byPair.size < AVATAR_PALETTE_SIZE && n < 1000; n += 1) {
+      const address = `seed-${n}@example.test`;
+      const index = avatarColourIndex(address);
+      if (!byPair.has(index)) byPair.set(index, address);
+    }
+    add(
+      'Avatar, one per colour pair',
+      inBar(
+        ...[...byPair]
+          .sort(([a], [b]) => a - b)
+          .map(([index, address]) =>
+            createElement(Avatar, { key: address, initials: 'ПА', colourKey: address, label: `Пара ${index + 1}` }),
+          ),
       ),
     );
   }

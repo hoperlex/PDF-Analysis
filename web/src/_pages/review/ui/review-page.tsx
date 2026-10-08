@@ -46,7 +46,6 @@ import { ErrorState, LoadingState, PageShell, RunStateBadge } from '@/shared/ui'
 import { routes } from '@/shared/lib';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
-import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { ExportPanel } from '@/widgets/export-panel';
 import { FindingList } from '@/widgets/finding-list';
 import { useAppendComment } from '@/features/append-comment';
@@ -61,6 +60,8 @@ import { firstDeclaredPage } from '@/entities/finding-observation';
 import { presentFailureOrNull } from '../model/present-failure';
 import type { ReviewSelection } from '../model/selection';
 import { resolveSelection, selectFinding, selectPage } from '../model/selection';
+
+import { LazyEvidenceViewer } from './lazy-evidence-viewer';
 
 export interface ReviewPageProps {
   readonly projectUid: ProjectUid;
@@ -215,7 +216,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                 </p>
               </article>
 
-              <EvidenceViewer
+              <LazyEvidenceViewer
                 observation={detail.observation}
                 activePage={activePage ?? 1}
                 onPageChange={(page) => {

@@ -1,5 +1,5 @@
 /**
- * The three sections `R-23`'s addendum ruled prepared, held to the four rules it set.
+ * The prepared sections, held to the four rules `R-23`'s addendum set.
  *
  * `blocks` was the fourth. `W45-BLOCKS` built it a real operation and a real screen, so
  * it graduated out of this file rather than being held to a placeholder's rules it no
@@ -32,7 +32,7 @@
  *
  * ## What this file deliberately does NOT do
  *
- * It does not add these three screens to `rendered-language.guard.test.ts`'s `SCREENS` or
+ * It does not add these screens to `rendered-language.guard.test.ts`'s `SCREENS` or
  * to `tests/unit/styles/screens.ts`. Wave 43 is the first wave to add a screen since wave
  * 41 repaired the language guard's coverage and wave 42 widened the contrast census, and
  * `W43-PLAN.md` puts the question *"do the instruments reach the new screens"* to the
@@ -46,21 +46,35 @@ import type { ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 /*
- * `R-50`. The three prepared sections' route files read the session cookie before they
- * render. An empty jar is no session, which the lock passes through: what this guard is
- * about -- that each address renders its own screen -- is unchanged by it.
+ * `W50-PLAN.md` §3.2. The prepared sections' route files await `requireScreen` before they
+ * render, and since `W50` an empty jar is a guest the guard sends to sign in. The route-file
+ * case below therefore puts a session in the jar -- an account every section admits -- and
+ * what this guard is about, that each address renders its own screen, is unchanged by it.
  */
+const jar = vi.hoisted(() => ({ value: null as string | null }));
+
 vi.mock('next/headers', () => ({
-  cookies: async () => ({ get: () => undefined }),
+  cookies: async () => ({
+    get: (name: string) => (jar.value === null ? undefined : { name, value: jar.value }),
+  }),
 }));
 
 import { AppFrame } from '@/_app';
+import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
 import { LogsPage } from '@/_pages/logs';
+import { NormsPage } from '@/_pages/norms';
 import { OptimisationPage } from '@/_pages/optimisation';
+import { QueuePage } from '@/_pages/queue';
+import { SectionOptimisationPage } from '@/_pages/section-optimisation';
 import { WorkersPage } from '@/_pages/workers';
 import { RoutePlaceholder } from '@/shared/ui';
+import { forgetEverySession, openSession } from '@/app/bff/session/store';
+import AnalysisSettingsRoute from '@/app/analysis-settings/page';
 import LogsRoute from '@/app/logs/page';
+import NormsRoute from '@/app/norms/page';
 import OptimisationRoute from '@/app/optimisation/page';
+import QueueRoute from '@/app/queue/page';
+import SectionOptimisationRoute from '@/app/section-optimisation/page';
 import WorkersRoute from '@/app/workers/page';
 import { newClient, renderScreen } from '../unit/screens/harness';
 
@@ -93,6 +107,11 @@ export function visibleText(markup: string): string[] {
 
 // ------------------------------------------------------------------------- the subjects
 
+/*
+ * `R-66` adds four sections, each an honest stub on its way, and holds them to the same
+ * rules as the original three: no digit, a promise of their own, and the "yet" wording
+ * (they ARE coming, unlike workers). `stub: true` identifies the four new stubs.
+ */
 const SECTIONS = [
   {
     name: 'optimisation',
@@ -100,15 +119,42 @@ const SECTIONS = [
     title: 'Оптимизация',
     screen: OptimisationPage,
     routeFile: OptimisationRoute,
+    stub: false,
   },
-  { name: 'logs', route: '/logs', title: 'Журнал выполнения', screen: LogsPage, routeFile: LogsRoute },
+  {
+    name: 'logs',
+    route: '/logs',
+    title: 'Журнал выполнения',
+    screen: LogsPage,
+    routeFile: LogsRoute,
+    stub: false,
+  },
   {
     name: 'workers',
     route: '/workers',
     title: 'Исполнители',
     screen: WorkersPage,
     routeFile: WorkersRoute,
+    stub: false,
   },
+  {
+    name: 'section-optimisation',
+    route: '/section-optimisation',
+    title: 'Оптимизация разделов',
+    screen: SectionOptimisationPage,
+    routeFile: SectionOptimisationRoute,
+    stub: true,
+  },
+  { name: 'norms', route: '/norms', title: 'Нормы', screen: NormsPage, routeFile: NormsRoute, stub: true },
+  {
+    name: 'analysis-settings',
+    route: '/analysis-settings',
+    title: 'Настройки анализа',
+    screen: AnalysisSettingsPage,
+    routeFile: AnalysisSettingsRoute,
+    stub: true,
+  },
+  { name: 'queue', route: '/queue', title: 'Очередь', screen: QueuePage, routeFile: QueueRoute, stub: true },
 ] as const;
 
 /**
@@ -160,7 +206,7 @@ describe('R-23: no invented number reaches a reviewer from a prepared section', 
 // ------------------------------------------------- 2. a promise, and one nobody shares
 
 describe('R-23: each section promises something of its own, and none of them is the default', () => {
-  it('can fail: three screens sharing the component default', () => {
+  it('can fail: screens sharing the component default', () => {
     const generic = 'Раздел появится в одной из следующих версий.';
     expect(unpromised([generic, generic], generic)).toEqual([generic, generic]);
     expect(unpromised(['Своё обещание', generic], generic)).toEqual([generic]);
@@ -168,7 +214,7 @@ describe('R-23: each section promises something of its own, and none of them is 
     expect(longest(['Блоки', 'Раздел пока недоступен', generic])).toBe(generic);
   });
 
-  it('none of the three falls back to the generic sentence', () => {
+  it('none of the sections falls back to the generic sentence', () => {
     expect(GENERIC.length, 'the component rendered no default sentence to compare against')
       .toBeGreaterThan(80);
     for (const { name, screen } of SECTIONS) {
@@ -177,7 +223,7 @@ describe('R-23: each section promises something of its own, and none of them is 
     }
   });
 
-  it('the three promises are pairwise distinct', () => {
+  it('the promises are pairwise distinct', () => {
     // Longest visible string on each screen: on a RoutePlaceholder that is the promise.
     const promises = SECTIONS.map(({ screen }) =>
       longest(visibleText(render(createElement(screen)))),
@@ -221,7 +267,7 @@ describe('R-18: the workers stub does not say a thing is coming that nobody deci
     expect(text.some((s) => s.includes('в альфе'))).toBe(true);
   });
 
-  it('the other two still carry them, so the exemption is one screen and not a hole', () => {
+  it('the other sections still carry them, so the exemption is one screen and not a hole', () => {
     // The ratchet's other direction. If this ever fails, either a section was newly
     // deferred -- in which case say so here -- or the component's default moved.
     for (const { name, screen } of SECTIONS.filter((s) => s.name !== 'workers')) {
@@ -245,28 +291,58 @@ describe('R-23: each prepared section has a place in the navigation', () => {
     expect(navTargets('<a href="/projects">П</a>')).not.toContain('/blocks');
   });
 
-  it('the frame links to all three addresses', () => {
-    const targets = navTargets(render(createElement(AppFrame, { children: null, session: null })));
+  it('the frame links every section in the menu, for a session that may open them', () => {
+    // `W50-SHELL-FRAME`: the menu is the registry's rows the session may open, so a guest
+    // sees only «Вход» and the case renders a complete session. Under `R-66` `/optimisation`
+    // left the menu (it stays a registered, reachable screen in `hidden`), and the four stubs
+    // are linked from here on.
+    const session = {
+      login: 'проверяющий@пример.испытание',
+      displayLabel: 'Проверяющий П. П.',
+      initials: 'ПП',
+      roles: ['expert'],
+      isDefaultCredential: false,
+      profileComplete: true,
+    };
+    const targets = navTargets(render(createElement(AppFrame, { children: null, session })));
     // Non-vacuous in both factors: the two links that predate this wave must still be
     // there, otherwise "contains /blocks" could pass on a frame that lost everything else.
     expect(targets).toContain('/knowledge-base');
     expect(targets).toContain('/account/password');
-    for (const { route } of SECTIONS) expect(targets).toContain(route);
+    for (const { route } of SECTIONS.filter((section) => section.route !== '/optimisation')) {
+      expect(targets).toContain(route);
+    }
+    expect(targets).not.toContain('/optimisation');
   });
 
   it('each address is served by a route file that renders its own screen and no other', async () => {
+    // `W50-PLAN.md` §3.2. Each route file awaits `requireScreen` before it renders, with the
+    // page props Next hands it, so a route is an async function and what it returns is
+    // awaited here. The jar holds a session of an account every section admits, so the
+    // guard returns and the route decides exactly what it decided before.
+    forgetEverySession();
+    jar.value = openSession(
+      {
+        login: 'petrova@example.org',
+        displayLabel: 'Петрова А. С.',
+        initials: 'ПА',
+        roles: ['expert'],
+        isDefaultCredential: false,
+        profileComplete: true,
+      },
+      'a-credential',
+      3600,
+    );
     for (const { title, routeFile, screen } of SECTIONS) {
-      // `R-50`. Each of these route files now awaits the default-credential lock before it
-      // renders, so a route is an async function and what it returns is awaited here. The
-      // jar this file mocks is empty -- no session, so the lock returns and the route
-      // decides exactly what it decided before, which is what this case is about.
-      const viaRoute = render(await routeFile());
+      const viaRoute = render(await routeFile({ searchParams: Promise.resolve({}) }));
       expect(viaRoute).toBe(render(createElement(screen)));
       expect(visibleText(viaRoute)).toContain(title);
     }
+    forgetEverySession();
+    jar.value = null;
   });
 
-  it('the three screens are three different screens', () => {
+  it('the sections are different screens', () => {
     const titles = SECTIONS.map(({ screen }) => visibleText(render(createElement(screen)))[0]);
     expect(new Set(titles).size).toBe(SECTIONS.length);
   });

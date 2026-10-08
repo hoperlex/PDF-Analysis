@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 f043eb6c3a5bbba3cb95fff59039fff42582c79ae0dc8ff2ba261e2cb4583585
+ *   sha256 633a58a53baf6652625b59d3db9438ae01e8c4ac8da788160882f031123f2e37
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -20,6 +20,10 @@ import { request } from '../transport';
 import type {
   AppendDecisionInput,
   AppendDecisionResult,
+  ApproveRegistrationInput,
+  ApproveRegistrationResult,
+  ArchiveUserInput,
+  ArchiveUserResult,
   ChangePasswordInput,
   ChangePasswordResult,
   CreateProjectInput,
@@ -32,8 +36,12 @@ import type {
   GetDocumentVersionResult,
   GetFindingInput,
   GetFindingResult,
+  GetMeInput,
+  GetMeResult,
   GetRunStatusInput,
   GetRunStatusResult,
+  GetUserInput,
+  GetUserResult,
   GetVersionBlocksInput,
   GetVersionBlocksResult,
   IssueTokenInput,
@@ -46,16 +54,36 @@ import type {
   ListDocumentsResult,
   ListProjectsInput,
   ListProjectsResult,
+  ListRegistrationsInput,
+  ListRegistrationsResult,
   ListRunFindingsInput,
   ListRunFindingsResult,
   ListRunsInput,
   ListRunsResult,
+  ListUsersInput,
+  ListUsersResult,
   ListVersionsInput,
   ListVersionsResult,
+  PurgeUserInput,
+  PurgeUserResult,
+  ReadRegistrationStatusInput,
+  ReadRegistrationStatusResult,
+  RejectRegistrationInput,
+  RejectRegistrationResult,
+  ResetUserPasswordInput,
+  ResetUserPasswordResult,
+  RestoreUserInput,
+  RestoreUserResult,
   StartRunInput,
   StartRunResult,
   StreamDocumentVersionContentInput,
   StreamDocumentVersionContentResult,
+  SubmitRegistrationInput,
+  SubmitRegistrationResult,
+  UpdateMyProfileInput,
+  UpdateMyProfileResult,
+  UpdateUserInput,
+  UpdateUserResult,
   UploadDocumentInput,
   UploadDocumentResult,
 } from './operations.gen';
@@ -71,6 +99,30 @@ export function appendDecision(
   options?: RequestOptions,
 ): Promise<ApiResponse<AppendDecisionResult>> {
   return request<AppendDecisionResult>(OPERATIONS.appendDecision, input, options);
+}
+
+/**
+ * Approve a registration request and create the account.
+ *
+ * `POST /registrations/{request_id}/approve` - a write; carries a required Idempotency-Key.
+ */
+export function approveRegistration(
+  input: ApproveRegistrationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ApproveRegistrationResult>> {
+  return request<ApproveRegistrationResult>(OPERATIONS.approveRegistration, input, options);
+}
+
+/**
+ * Archive an account.
+ *
+ * `POST /users/{user_uid}/archive`.
+ */
+export function archiveUser(
+  input: ArchiveUserInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ArchiveUserResult>> {
+  return request<ArchiveUserResult>(OPERATIONS.archiveUser, input, options);
 }
 
 /**
@@ -146,6 +198,18 @@ export function getFinding(
 }
 
 /**
+ * Read the signed-in account.
+ *
+ * `GET /me`.
+ */
+export function getMe(
+  input: GetMeInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetMeResult>> {
+  return request<GetMeResult>(OPERATIONS.getMe, input, options);
+}
+
+/**
  * Read run state and per-stage state.
  *
  * `GET /runs/{run_id}`.
@@ -155,6 +219,18 @@ export function getRunStatus(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetRunStatusResult>> {
   return request<GetRunStatusResult>(OPERATIONS.getRunStatus, input, options);
+}
+
+/**
+ * Read one account.
+ *
+ * `GET /users/{user_uid}`.
+ */
+export function getUser(
+  input: GetUserInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetUserResult>> {
+  return request<GetUserResult>(OPERATIONS.getUser, input, options);
 }
 
 /**
@@ -230,6 +306,18 @@ export function listProjects(
 }
 
 /**
+ * List registration requests, oldest first.
+ *
+ * `GET /registrations`.
+ */
+export function listRegistrations(
+  input: ListRegistrationsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListRegistrationsResult>> {
+  return request<ListRegistrationsResult>(OPERATIONS.listRegistrations, input, options);
+}
+
+/**
  * List the published findings of one run, with their evidence.
  *
  * `GET /runs/{run_id}/findings`.
@@ -254,6 +342,18 @@ export function listRuns(
 }
 
 /**
+ * List accounts, ordered by login.
+ *
+ * `GET /users`.
+ */
+export function listUsers(
+  input: ListUsersInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListUsersResult>> {
+  return request<ListUsersResult>(OPERATIONS.listUsers, input, options);
+}
+
+/**
  * List the published versions of one document, newest first.
  *
  * `GET /documents/{document_uid}/versions`.
@@ -263,6 +363,66 @@ export function listVersions(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListVersionsResult>> {
   return request<ListVersionsResult>(OPERATIONS.listVersions, input, options);
+}
+
+/**
+ * Purge an archived, unreferenced account.
+ *
+ * `DELETE /users/{user_uid}`.
+ */
+export function purgeUser(
+  input: PurgeUserInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PurgeUserResult>> {
+  return request<PurgeUserResult>(OPERATIONS.purgeUser, input, options);
+}
+
+/**
+ * Read whether a login and password pair proves a pending application.
+ *
+ * `POST /registrations/status`.
+ */
+export function readRegistrationStatus(
+  input: ReadRegistrationStatusInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ReadRegistrationStatusResult>> {
+  return request<ReadRegistrationStatusResult>(OPERATIONS.readRegistrationStatus, input, options);
+}
+
+/**
+ * Reject a registration request with a reason.
+ *
+ * `POST /registrations/{request_id}/reject`.
+ */
+export function rejectRegistration(
+  input: RejectRegistrationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RejectRegistrationResult>> {
+  return request<RejectRegistrationResult>(OPERATIONS.rejectRegistration, input, options);
+}
+
+/**
+ * Set a temporary password for an account.
+ *
+ * `POST /users/{user_uid}/password`.
+ */
+export function resetUserPassword(
+  input: ResetUserPasswordInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ResetUserPasswordResult>> {
+  return request<ResetUserPasswordResult>(OPERATIONS.resetUserPassword, input, options);
+}
+
+/**
+ * Restore an archived account.
+ *
+ * `POST /users/{user_uid}/restore`.
+ */
+export function restoreUser(
+  input: RestoreUserInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RestoreUserResult>> {
+  return request<RestoreUserResult>(OPERATIONS.restoreUser, input, options);
 }
 
 /**
@@ -290,6 +450,42 @@ export function streamDocumentVersionContent(
 }
 
 /**
+ * Apply for an account.
+ *
+ * `POST /registrations`.
+ */
+export function submitRegistration(
+  input: SubmitRegistrationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SubmitRegistrationResult>> {
+  return request<SubmitRegistrationResult>(OPERATIONS.submitRegistration, input, options);
+}
+
+/**
+ * Set the signed-in account's names, and complete its profile.
+ *
+ * `PATCH /me`.
+ */
+export function updateMyProfile(
+  input: UpdateMyProfileInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UpdateMyProfileResult>> {
+  return request<UpdateMyProfileResult>(OPERATIONS.updateMyProfile, input, options);
+}
+
+/**
+ * Change an account's names, its role set, or both.
+ *
+ * `PATCH /users/{user_uid}`.
+ */
+export function updateUser(
+  input: UpdateUserInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UpdateUserResult>> {
+  return request<UpdateUserResult>(OPERATIONS.updateUser, input, options);
+}
+
+/**
  * Upload one PDF and publish an immutable document version.
  *
  * `POST /projects/{project_uid}/documents` - a write; carries a required Idempotency-Key.
@@ -307,23 +503,37 @@ export function uploadDocument(
  */
 export const apiClient = {
   appendDecision,
+  approveRegistration,
+  archiveUser,
   changePassword,
   createProject,
   exportRunCsv,
   getDashboardSummary,
   getDocumentVersion,
   getFinding,
+  getMe,
   getRunStatus,
+  getUser,
   getVersionBlocks,
   issueToken,
   listDecisionHistory,
   listDecisions,
   listDocuments,
   listProjects,
+  listRegistrations,
   listRunFindings,
   listRuns,
+  listUsers,
   listVersions,
+  purgeUser,
+  readRegistrationStatus,
+  rejectRegistration,
+  resetUserPassword,
+  restoreUser,
   startRun,
   streamDocumentVersionContent,
+  submitRegistration,
+  updateMyProfile,
+  updateUser,
   uploadDocument,
 } as const;

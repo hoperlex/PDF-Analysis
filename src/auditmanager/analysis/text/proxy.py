@@ -25,6 +25,8 @@ Two constraints from the proxy that shape this file:
 from __future__ import annotations
 
 import json
+import logging
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -55,6 +57,15 @@ _PORTAL_PATH: Final[str] = "/api/v1/chat/completions"
 #: documents for that gateway.
 _COMPLETIONS_PATH: Final[str] = "/chat/completions"
 _TIMEOUT_SECONDS: Final[int] = 200  # the proxy's own deadline is ~190s
+_ERROR_BODY_LIMIT: Final[int] = 4096
+_ERROR_LOG_LIMIT: Final[int] = 512
+_LOGGER = logging.getLogger(__name__)
+_SENSITIVE_ERROR_TEXT = re.compile(
+    r"(?i)\bbearer\s+[^\s\"']+|https?://[^\s\"']+|"
+    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|"
+    r"(?<![A-Za-z0-9])(?:sk|pk|tok|key|secret)[-_][A-Za-z0-9._=-]{6,}|"
+    r"(?<![A-Za-z0-9])[A-Za-z0-9+/_=.\-]{24,}(?![A-Za-z0-9])"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,10 +170,10 @@ class ProxyAdapter(ModelAdapter):
         started = time.monotonic()
         try:
             with self._opener(http, timeout=_TIMEOUT_SECONDS) as response:
-                raw = response.read()
                 status = response.status
+                raw = response.read() if status == 200 else response.read(_ERROR_BODY_LIMIT + 1)
         except urllib.error.HTTPError as exc:  # noqa: PERF203 - each status means something
-            raise _map_http_failure(exc, self._settings.model) from None
+            raise _map_http_failure(exc.code, exc.read(_ERROR_BODY_LIMIT + 1)) from None
         except urllib.error.URLError as exc:
             raise DomainError(
                 ErrorCode.DEPENDENCY_UNAVAILABLE,
@@ -171,10 +182,7 @@ class ProxyAdapter(ModelAdapter):
         latency_ms = int((time.monotonic() - started) * 1000)
 
         if status != 200:
-            raise DomainError(
-                ErrorCode.ANALYSIS_FAILED,
-                message=f"the model proxy answered with an unexpected status {status}",
-            )
+            raise _map_http_failure(status, raw)
         return _from_openai_response(json.loads(raw), latency_ms)
 
 
@@ -299,20 +307,37 @@ def _stop_reason(finish_reason: str | None) -> str:
     )
 
 
-def _map_http_failure(exc: urllib.error.HTTPError, model: str) -> DomainError:
-    """Map the proxy's documented statuses onto the frozen catalog.
+def _redacted_error_body(raw: bytes) -> str:
+    """Keep one bounded diagnostic line; no raw proxy body reaches the log or API."""
+    text = raw[:_ERROR_BODY_LIMIT].decode("utf-8", errors="replace")
+    text = _SENSITIVE_ERROR_TEXT.sub("[redacted]", text)
+    text = re.sub(r"[\x00-\x1f\x7f]", " ", text)
+    return text[:_ERROR_LOG_LIMIT]
+
+
+def _map_http_failure(status: int, raw: bytes) -> DomainError:
+    """Map a bounded proxy refusal to the existing catalog without guessing a model answer.
 
     The proxy answers its own failures as ``{"error": {"code": ...}}`` and passes upstream
     failures through unchanged, so the status is the reliable signal and the code is read
     only when it is there.
     """
+    truncated = len(raw) > _ERROR_BODY_LIMIT
+    body = raw[:_ERROR_BODY_LIMIT]
+    _LOGGER.warning(
+        "model proxy HTTP refusal: status=%s body=%s truncated=%s",
+        status,
+        _redacted_error_body(body),
+        truncated,
+    )
     try:
-        detail = json.loads(exc.read() or b"{}")
-    except ValueError:
+        detail = json.loads(body or b"{}")
+    except (ValueError, UnicodeError):
         detail = {}
-    code = (detail.get("error") or {}).get("code", "")
+    error = detail.get("error") if isinstance(detail, dict) else None
+    code = error.get("code", "") if isinstance(error, dict) else ""
 
-    if exc.code == 401:
+    if status in (401, 403):
         # `dependency_unavailable` is `retryable: true`, so this mapping used to tell a
         # caller to retry a rejected credential -- an operation that cannot succeed until
         # an operator changes something, presented as one that will. That is the `D-7`
@@ -322,10 +347,10 @@ def _map_http_failure(exc: urllib.error.HTTPError, model: str) -> DomainError:
         # an operator reads *which* credential was refused from one vocabulary.
         return DomainError(
             ErrorCode.DEPENDENCY_CREDENTIAL_REFUSED,
-            message="the model proxy refused the configured credential",
+            message="the model proxy refused its configured credential or access policy",
             dependency=DEPENDENCY_NAME,
         )
-    if exc.code == 400 and code == "model_not_allowed":
+    if status == 400 and code == "model_not_allowed":
         # Configuration, not a fault: the proxy names the permitted set and retrying cannot
         # change it. The requested slug is named because a wrong value in configuration is
         # otherwise hours of diagnosis.
@@ -336,27 +361,29 @@ def _map_http_failure(exc: urllib.error.HTTPError, model: str) -> DomainError:
                 "the configured value is not one the operator allows"
             ),
         )
-    if exc.code == 400:
+    if status == 400:
         return DomainError(
             ErrorCode.ANALYSIS_INPUT_INVALID,
             message="the model proxy refused the request body",
         )
-    if exc.code == 413:
+    if status == 413:
         return DomainError(
             ErrorCode.ANALYSIS_INPUT_INVALID,
             message="the request exceeds the model proxy's body limit",
         )
-    if exc.code in (429, 503):
+    if status in (429, 503):
         return DomainError(
             ErrorCode.DEPENDENCY_UNAVAILABLE,
             message="the model proxy is saturated; the call was not made",
         )
-    if exc.code == 504:
+    if status == 504:
         return DomainError(
             ErrorCode.DEPENDENCY_UNAVAILABLE,
             message="the model proxy exceeded its deadline before answering",
         )
+    # 402 (credit), 404 (base path) and other 5xx need operator investigation;
+    # an upstream call may already have run. Retrying them is not known to be safe.
     return DomainError(
-        ErrorCode.ANALYSIS_FAILED,
-        message=f"the model proxy answered with status {exc.code}",
+        ErrorCode.INTERNAL_ERROR,
+        message=f"the model proxy returned status {status} before a confirmed model answer",
     )

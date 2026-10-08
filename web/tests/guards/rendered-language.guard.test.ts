@@ -53,6 +53,7 @@
 
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 
 import { ApiError, queryKeys } from '@/shared/api';
@@ -78,18 +79,38 @@ import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
 import { AppFrame } from '@/_app';
+import { accountMenuProps } from '@/_app/account-menu';
+import { FrameNavigationView } from '@/_app/frame-navigation';
+import { buildNavigation } from '@/_app/navigation';
+import type { DisclosureProps } from '@/shared/ui';
+import { DisclosureView } from '@/shared/ui/disclosure';
+import { MenuView } from '@/shared/ui/menu';
 import { SignInPage } from '@/_pages/sign-in';
 import { ChangePasswordPage } from '@/_pages/change-password';
+import { ManageUserControls } from '@/features/manage-user';
+import type { Account } from '@/shared/api';
+import type { RegistrationRequest } from '@/shared/api';
+import { RegistrationQueue } from '@/widgets/registration-queue';
 import NotFound from '@/app/not-found';
+import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
+import { RECENT_PROJECT_LIMIT } from '@/widgets/home-tiles';
 
 import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles } from './lib/repo';
 import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
 import { newClient, renderScreen, seedError } from '../unit/screens/harness';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
+import {
+  ADMIN_AND_EXPERT,
+  DEFAULT_CREDENTIAL,
+  EXPERT,
+  INCOMPLETE_PROFILE,
+  NO_ROLES,
+  UNKNOWN_ROLE,
+} from '../unit/shell/subjects';
 
 // ===================================================================== the vocabulary
 
@@ -679,6 +700,10 @@ const KEYS = {
   decisions: queryKeys.findings.decisions(FINDING_UID),
   journal: queryKeys.findings.journal({ limit: JOURNAL_PAGE_LIMIT }),
   dashboardSummary: queryKeys.dashboard.summary(),
+  // The home page's own two reads (`W50-HOME-01`), seeded by `W50-SHELL-FRAME` so the recent
+  // list and the administrator's tile render loaded rather than pending in every state.
+  recentProjects: queryKeys.projects.list(undefined, RECENT_PROJECT_LIMIT),
+  pendingRegistrations: queryKeys.registrations.list({ status: 'pending', limit: 1 }),
 } as const;
 
 /**
@@ -744,6 +769,21 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
     page,
   });
   client.setQueryData(KEYS.dashboardSummary, dashboardSummary());
+  /*
+   * `W50-SHELL-FRAME` (the integrator's ruling of 2026-10-07, Q3): the home page reads five
+   * recent projects and, for an administrator, the count of pending requests — keys no other
+   * state seeds, so both tiles were pending in every state. Five projects, so the list is the
+   * full one; a page whose `pending_total` is two, of which the tile renders the count only.
+   */
+  client.setQueryData(KEYS.recentProjects, {
+    items: Array.from({ length: RECENT_PROJECT_LIMIT }, (_, index) => ({
+      ...project(),
+      project_uid: `prj_${ULID.slice(0, -1)}${'ABCDE'[index] as string}`,
+      name: `Договор поставки ${index + 1}`,
+    })),
+    page,
+  });
+  client.setQueryData(KEYS.pendingRegistrations, { items: [], page, pending_total: 2 });
   return client;
 }
 
@@ -1029,6 +1069,42 @@ const DERIVED_SCREENS: readonly { readonly name: string; readonly make: () => Re
       ),
   }));
 
+const ADMIN_USER_ACCOUNT: Account = {
+  archived_at: null,
+  display_label: 'Проверкина А. С.',
+  first_name: 'Анна',
+  is_default_credential: false,
+  last_name: 'Проверкина',
+  login: 'проверкина@пример.испытание',
+  middle_name: 'Сергеевна',
+  profile_complete: true,
+  roles: ['admin', 'expert'],
+  user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+};
+
+const QUEUE_REQUEST: RegistrationRequest = {
+  created_user_uid: null,
+  decided_at: null,
+  decided_by: null,
+  display_label: 'Заявкина М. П.',
+  first_name: 'Мария',
+  last_name: 'Заявкина',
+  login: 'заявкина@пример.испытание',
+  middle_name: 'Петровна',
+  rejection_reason: null,
+  request_id: 'reg_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  status: 'pending',
+  submitted_at: '2026-10-08T00:00:00Z',
+};
+
+function queueLanguageShape(request: RegistrationRequest): ReactElement {
+  const client = newClient();
+  client.setQueryData(queryKeys.registrations.list({ status: 'pending', limit: 50 }), {
+    items: [request], page: { next_cursor: null }, pending_total: request.status === 'pending' ? 1 : 0,
+  });
+  return createElement(QueryClientProvider, { client }, createElement(RegistrationQueue));
+}
+
 const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => ReactElement }[] = [
   /*
    * `AppFrame` is a SCREEN here, not a wrapper, and that is the repair.
@@ -1048,15 +1124,47 @@ const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => React
    */
   { name: 'app-frame', make: () => createElement(AppFrame, { children: null, session: null }) },
   /*
-   * `D-113`. The frame's OTHER state, for the reason the sign-in screen's two other shapes
+   * `D-113`. The frame's OTHER states, for the reason the sign-in screen's two other shapes
    * are below: the signed-in bar is selected by a prop and not by an address, so the
-   * derivation cannot reach it and an English word in it would redden nothing. `Выйти` and
-   * the reviewer's own login are the two strings it adds.
+   * derivation cannot reach it and an English word in it would redden nothing.
+   *
+   * `W50-SHELL-FRAME`: the frame is handed the whole subject, and what it renders depends on
+   * it — the navigation groups a session may open, the account menu's header (name, e-mail,
+   * roles, or the typed fault for a role it cannot name) — so each state is its own entry.
+   * The menus a reader opens are drawn open here, with the bar's own props: the account
+   * menu's `MenuView` from `accountMenuProps`, and the navigation with every disclosure open.
    */
+  { name: 'app-frame-with-a-session', make: () => createElement(AppFrame, { children: null, session: EXPERT }) },
+  { name: 'app-frame-admin', make: () => createElement(AppFrame, { children: null, session: ADMIN_AND_EXPERT }) },
+  { name: 'app-frame-no-roles', make: () => createElement(AppFrame, { children: null, session: NO_ROLES }) },
+  { name: 'app-frame-unknown-role', make: () => createElement(AppFrame, { children: null, session: UNKNOWN_ROLE }) },
   {
-    name: 'app-frame-with-a-session',
+    name: 'app-frame-default-credential',
+    make: () => createElement(AppFrame, { children: null, session: DEFAULT_CREDENTIAL }),
+  },
+  {
+    name: 'app-frame-incomplete-profile',
+    make: () => createElement(AppFrame, { children: null, session: INCOMPLETE_PROFILE }),
+  },
+  {
+    name: 'app-frame-account-menu-open',
     make: () =>
-      createElement(AppFrame, { children: null, session: { login: 'проверяющий' } }),
+      createElement(MenuView, {
+        ...accountMenuProps(ADMIN_AND_EXPERT),
+        state: { open: true, active: 0 },
+        triggerId: 'language-account-trigger',
+        menuId: 'language-account-menu',
+      }),
+  },
+  {
+    name: 'app-frame-navigation-open',
+    make: () =>
+      createElement(FrameNavigationView, {
+        navigation: buildNavigation(ADMIN_AND_EXPERT),
+        pathname: '/blocks',
+        disclosure: (props: DisclosureProps) =>
+          createElement(DisclosureView, { ...props, open: true, panelId: `language-${props.label}` }),
+      }),
   },
   /*
    * The sign-in screen's two OTHER shapes. The credentials form itself is derived, because
@@ -1102,6 +1210,17 @@ const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => React
     make: () =>
       createElement(ChangePasswordPage, { login: 'проверяющий', outcome: 'changed' }),
   },
+  {
+    name: 'manage-user-active',
+    make: () => createElement(ManageUserControls, { account: ADMIN_USER_ACCOUNT }),
+  },
+  {
+    name: 'manage-user-archived',
+    make: () => createElement(ManageUserControls, { account: { ...ADMIN_USER_ACCOUNT, archived_at: '2026-10-08T00:00:00Z' } }),
+  },
+  { name: 'registration-queue-pending', make: () => queueLanguageShape(QUEUE_REQUEST) },
+  { name: 'registration-queue-approved', make: () => queueLanguageShape({ ...QUEUE_REQUEST, status: 'approved', decided_at: '2026-10-08T01:00:00Z' }) },
+  { name: 'registration-queue-rejected', make: () => queueLanguageShape({ ...QUEUE_REQUEST, status: 'rejected', decided_at: '2026-10-08T01:00:00Z', rejection_reason: 'Проверка не пройдена.' }) },
   /*
    * `app/not-found.tsx` is a FILE in the route tree and not an address, so no derivation
    * reaches it and it stays a hand-written entry. It carried a WHOLE ENGLISH SENTENCE to a
@@ -1109,6 +1228,19 @@ const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => React
    * again, on a screen nobody had rendered, three waves after `D-53` was closed.
    */
   { name: 'not-found', make: () => createElement(NotFound, {}) },
+  /*
+   * `app/error.tsx`, for the same reason as `not-found` (granted at the `W50-REGISTRY-01`
+   * merge, ruling 2): a file in the route tree, not an address. Rendered with a thrown error
+   * whose message is English and a numeric digest, so a leak of the message would read here.
+   */
+  {
+    name: 'error-boundary',
+    make: () =>
+      createElement(ErrorBoundary, {
+        error: Object.assign(new TypeError('Cannot read properties of undefined'), { digest: '3141592653' }),
+        reset: () => {},
+      }),
+  },
   /*
    * The evidence viewer and the decision history are rendered here as widgets rather
    * than through the review page, because their failure branches are chosen by props
@@ -2100,6 +2232,35 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
       '-- reported in docs/program/W45-BLOCKS.md rather than manufactured here.',
   },
 ];
+
+/**
+ * The home page's two branches no literal names (`W50-SHELL-FRAME`, the integrator's ruling of
+ * 2026-10-07, Q3): the administrator's tile and the loaded recent-projects list. Their words are
+ * constants (`HOME_TILE_COPY`), so {@link branchLabelsInSource} cannot require them; this case
+ * requires the two MARKERS instead, so the `home-admin` seed and the loaded state's home keys
+ * cannot be dropped in silence.
+ */
+export function homeBranchesMissing(markups: readonly string[]): string[] {
+  const markers = ['data-home-tile="registrations"', 'data-recent-project-count="5"'];
+  return markers.filter((marker) => !markups.some((markup) => markup.includes(marker)));
+}
+
+describe("the home page's administrator tile and recent-projects list are rendered by some state", () => {
+  it('can fail: a matrix without them names both', () => {
+    expect(homeBranchesMissing(['<section data-home-tile="summary"></section>'])).toEqual([
+      'data-home-tile="registrations"',
+      'data-recent-project-count="5"',
+    ]);
+  });
+
+  it('renders both', () => {
+    expect(
+      homeBranchesMissing(renderedScreens().map((screen) => screen.markup)),
+      'no state renders this home-page branch: the `home-admin` seed in route-screens.ts or ' +
+        "the loaded state's home keys are gone, and the language guard no longer reads it",
+    ).toEqual([]);
+  });
+});
 
 describe('every branch the widgets have is rendered by some state in this matrix', () => {
   const labels = branchLabelsInSource();

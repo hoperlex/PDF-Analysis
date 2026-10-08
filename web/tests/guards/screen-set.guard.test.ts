@@ -160,11 +160,24 @@ describe('the set of screens is read off web/src/app, not out of a list', () => 
 
   it('runs every opt-out claim against the route file it is about', () => {
     const excused = optOuts();
-    // There is exactly one today and the number is not the assertion; that each one is
-    // CHECKED is. An opt-out nobody re-runs is a comment.
-    expect(excused.length, 'the opt-out list is empty; this case has stopped measuring').toBe(1);
+    // `W50-REGISTRY-01`: there is none today. The one there was -- `/`, while it only
+    // redirected -- became an ordinary seed when the address got a screen. The count is a
+    // ratchet: an address leaving both instruments is a decision somebody makes here, in
+    // writing, and not a side effect of a seed.
     expect(
-      excused.filter((entry) => !entry.holds).map((entry) => entry.address),
+      excused.map((entry) => entry.address),
+      'an address is excused from both instruments. If it really renders nothing, change ' +
+        'this count deliberately; the proof its entry carries is run below either way',
+    ).toEqual([]);
+    // And the check below is not vacuous for being run over nothing: the same reading,
+    // over an opt-out whose proof does not hold, names it.
+    const unheld = (entries: readonly { address: string; holds: boolean }[]) =>
+      entries.filter((entry) => !entry.holds).map((entry) => entry.address);
+    expect(unheld([{ address: '/a-claim-that-no-longer-holds', holds: false }])).toEqual([
+      '/a-claim-that-no-longer-holds',
+    ]);
+    expect(
+      unheld(excused),
       'this address is excused from both instruments and the proof its entry carries no ' +
         'longer holds against its route file. Either the screen now renders something — in ' +
         'which case seed it — or the reason has to be rewritten to say what is true now.',
@@ -178,8 +191,15 @@ describe('the set of screens is read off web/src/app, not out of a list', () => 
   it('every derived screen renders real markup, and none of them throws', () => {
     const screens = derivedScreens();
     expect(screens.length, 'the derived set renders nothing').toBeGreaterThan(10);
-    // A relationship, never a literal: the count is `every address minus the excused`.
-    expect(screens.length).toBe(routeAddresses().length - optOuts().length);
+    // A relationship, never a literal: every address minus the excused is rendered at least
+    // once. Per ADDRESS since `W50-SHELL-FRAME` seeds `/` twice (expert, administrator) — the
+    // integrator's ruling of 2026-10-07 (Q4); the unique-names check below still holds.
+    const expected = routeAddresses().length - optOuts().length;
+    const renderedAddresses = (list: readonly { readonly address: string }[]): number =>
+      new Set(list.map((s) => s.address)).size;
+    expect(renderedAddresses(screens)).toBe(expected);
+    // Can fail: every seed of one address dropped is one address short.
+    expect(renderedAddresses(screens.filter((s) => s.address !== '/'))).toBe(expected - 1);
     for (const screen of screens) {
       const markup = renderCold(screen.make(wellFormed(IDENTITIES)));
       expect(markup.length, `${screen.name} (${screen.address}) rendered nothing`)

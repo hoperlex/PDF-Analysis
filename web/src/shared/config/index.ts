@@ -8,3 +8,35 @@
 
 export { MissingConfigurationError, getApiBaseUrl, getInstanceLabel, hasApiBaseUrl } from './env';
 export { RUN_POLLING, pollDelayMs } from './polling';
+
+// `W50-PLAN.md` §3.1: the only list of screens, and the one validator for `next`/`from`.
+export type {
+  RouteParams,
+  ScreenAccess,
+  ScreenAccessOf,
+  ScreenAddress,
+  ScreenDecision,
+  ScreenDecisionSubject,
+  ScreenEntry,
+  ScreenGroup,
+  ScreenRoles,
+} from './screen-registry';
+export {
+  CHANGE_PASSWORD_SCREEN,
+  FORBIDDEN_SCREEN,
+  FROM_PARAM,
+  HOME_SCREEN,
+  NEXT_PARAM,
+  PROFILE_SCREEN,
+  RETURN_PATH_MAX_LENGTH,
+  SCREEN_ACCESS_LEVELS,
+  SCREEN_GROUPS,
+  SCREEN_REGISTRY,
+  SIGN_IN_SCREEN,
+  concreteAddress,
+  requiredRolesFor,
+  safeReturnPath,
+  screenAt,
+  screenDecision,
+  screenMatching,
+} from './screen-registry';

@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 f043eb6c3a5bbba3cb95fff59039fff42582c79ae0dc8ff2ba261e2cb4583585
+ *   sha256 633a58a53baf6652625b59d3db9438ae01e8c4ac8da788160882f031123f2e37
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,13 +17,16 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'f043eb6c3a5bbba3cb95fff59039fff42582c79ae0dc8ff2ba261e2cb4583585';
+export const CONTRACT_DIGEST = '633a58a53baf6652625b59d3db9438ae01e8c4ac8da788160882f031123f2e37';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
+  'Account',
+  'AccountPage',
   'AnalysisProfileId',
   'AppendDecisionRequest',
   'AppendDecisionResponse',
+  'ApproveRegistrationRequest',
   'BlockGeometry',
   'ChangePasswordRequest',
   'CorrelationId',
@@ -57,6 +60,7 @@ export const SCHEMA_NAMES = [
   'ModelCallId',
   'ObservationProvenance',
   'PageInfo',
+  'PersonNames',
   'Project',
   'ProjectDocumentCount',
   'ProjectPage',
@@ -64,6 +68,14 @@ export const SCHEMA_NAMES = [
   'ProjectUid',
   'PromptBundleId',
   'ProviderMode',
+  'RegistrationRequest',
+  'RegistrationRequestId',
+  'RegistrationRequestPage',
+  'RegistrationStatus',
+  'RegistrationStatusResponse',
+  'RejectRegistrationRequest',
+  'ResetUserPasswordRequest',
+  'Role',
   'RunActivity',
   'RunActivitySpend',
   'RunId',
@@ -77,12 +89,44 @@ export const SCHEMA_NAMES = [
   'StageState',
   'StageStatus',
   'StartRunRequest',
+  'SubmitRegistrationRequest',
+  'UpdateMyProfileRequest',
+  'UpdateUserRequest',
   'UploadDocumentRequest',
+  'UserUid',
   'Verdict',
   'VerdictCount',
   'VersionBlockIndex',
   'VersionUid',
 ] as const;
+
+/** One account, as the account itself reads it through `getMe` and an administrator reads it through the account operations. No credential material. */
+export type Account = {
+  /** Null for an active account. An archived account cannot sign in and none of its credentials is accepted; an administrator may restore it. */
+  archived_at: string | null;
+  /** The name to show for this account, resolved by the server and never empty: the name form `Last F. M.` when the account has a last and a first name, else the display name an operator chose, else the login. A complete profile always has the name form (R-55). */
+  display_label: string;
+  /** Null until somebody gives the names. */
+  first_name: string | null;
+  /** True while the account must change its password: it is still on the password the deployment seeded it with, or an administrator reset it. The same fact `IssueTokenResponse.is_default_credential` reports at sign-in. */
+  is_default_credential: boolean;
+  /** Null until somebody gives the names. */
+  last_name: string | null;
+  /** The sign-in identifier: the normalised e-mail address (trimmed, lower-case, ASCII, an internationalised domain in its `xn--` form, at most 254 characters) once the profile is complete, or the legacy login an account created before the identity upgrade keeps until it completes its profile. Not an identity of this surface. */
+  login: string;
+  /** Optional; null when the person has none. */
+  middle_name: string | null;
+  /** False for an account that has not given its names and e-mail yet. Such an account reaches only `getMe`, `updateMyProfile` and `changePassword`; every other operation answers `permission_denied` with `required_capability: profile_completed`. */
+  profile_complete: boolean;
+  /** The role set, sorted. Empty is a valid set: such an account reads product data and changes nothing. */
+  roles: Array<Role>;
+  user_uid: UserUid;
+};
+
+export type AccountPage = {
+  items: Array<Account>;
+  page: PageInfo;
+};
 
 export type AnalysisProfileId = string;
 
@@ -100,6 +144,11 @@ export type AppendDecisionRequest = {
 export type AppendDecisionResponse = {
   current_verdict: Verdict;
   event: DecisionEvent;
+};
+
+export type ApproveRegistrationRequest = {
+  /** The roles the new account receives: at least one. */
+  roles: Array<Role>;
 };
 
 /** One derived block, one extracted text line. `block_id` is an anchor inside this artifact -- it matches `Evidence.block_id`'s pattern -- and is never a contract identifier. */
@@ -275,6 +324,7 @@ export const ERROR_CODE_VALUES = [
   'cost_budget_exceeded',
   'stale_attempt',
   'execution_token_invalid',
+  'rate_limited',
   'internal_error',
 ] as const;
 
@@ -421,6 +471,14 @@ export type PageInfo = {
   next_cursor: Cursor | null;
 };
 
+/** A person's names, set together. 1-60 characters of letters, separated by single spaces, hyphens or apostrophes, with no word mixing Cyrillic and Latin letters. Surrounding whitespace and invisible characters are removed before the rule is applied. */
+export type PersonNames = {
+  first_name: string;
+  last_name: string;
+  /** Optional; absent when the person has none. */
+  middle_name?: string;
+};
+
 export type Project = {
   created_at: string;
   document_count?: number;
@@ -480,6 +538,76 @@ export const PROVIDER_MODE_VALUES = [
 
 /** ProviderMode - the closed value set above. */
 export type ProviderMode = (typeof PROVIDER_MODE_VALUES)[number];
+
+/** One registration request, as an administrator reads it. No credential material. */
+export type RegistrationRequest = {
+  /** The account an approval created. Null while pending, on a rejected request, and after that account was purged. */
+  created_user_uid: UserUid | null;
+  /** Null while the request is pending. */
+  decided_at: string | null;
+  /** The administrator who decided; null while pending. */
+  decided_by: UserUid | null;
+  /** The applicant's name form, `Last F. M.`, resolved by the server. */
+  display_label: string;
+  first_name: string;
+  last_name: string;
+  /** The normalised e-mail address the applicant gave. */
+  login: string;
+  /** Null when the applicant gave none. */
+  middle_name: string | null;
+  /** The administrator's reason, present only on a rejected request. It is read by administrators only and is never shown to the applicant. */
+  rejection_reason: string | null;
+  request_id: RegistrationRequestId;
+  status: RegistrationStatus;
+  submitted_at: string;
+};
+
+/** Opaque registration request identity. */
+export type RegistrationRequestId = string;
+
+/** The contract pattern for `RegistrationRequestId`. Anchored; use with `new RegExp()`. */
+export const REGISTRATION_REQUEST_ID_PATTERN = "^reg_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** One page of requests and the number of pending requests in all, whatever the filter -- the administrator's badge. */
+export type RegistrationRequestPage = {
+  items: Array<RegistrationRequest>;
+  page: PageInfo;
+  pending_total: number;
+};
+
+/** The states of the `registration_request` machine in `contracts/domain/v1/state-machines.json`: `pending` until an administrator decides, then `approved` or `rejected`, both terminal. */
+export const REGISTRATION_STATUS_VALUES = [
+  'pending',
+  'approved',
+  'rejected',
+] as const;
+
+/** RegistrationStatus - the closed value set above. */
+export type RegistrationStatus = (typeof REGISTRATION_STATUS_VALUES)[number];
+
+/** What an applicant is told: that the application is pending. This is the only status this surface ever shows an applicant (R-56 and its addendum of 2026-10-06); a decided application is answered like an unknown pair. */
+export type RegistrationStatusResponse = {
+  status: "pending";
+};
+
+export type RejectRegistrationRequest = {
+  /** Why the request is rejected, 1-256 characters after surrounding whitespace is removed, with no control character but a line feed. Stored for administrators; the applicant is not shown it. */
+  reason: string;
+};
+
+export type ResetUserPasswordRequest = {
+  /** The password the account signs in with next and must then change. It is held to the deployment's password policy against the account's login, and it appears in no response body, no error detail and no diagnostic record. */
+  temporary_password: string;
+};
+
+/** One role an account may hold; an account holds a set of them (R-55, R-60). `expert` makes product changes -- projects, uploads, runs, verdicts, comments and the export. `admin` manages accounts and registration requests. Reading product data needs no role: any active account with a complete profile reads it. */
+export const ROLE_VALUES = [
+  'expert',
+  'admin',
+] as const;
+
+/** Role - the closed value set above. */
+export type Role = (typeof ROLE_VALUES)[number];
 
 export type RunActivity = {
   by_state: Array<RunStateCount>;
@@ -612,6 +740,35 @@ export type StartRunRequest = {
   version_uid: VersionUid;
 };
 
+/** An application for an account. 1-60 characters of letters, separated by single spaces, hyphens or apostrophes, with no word mixing Cyrillic and Latin letters. Surrounding whitespace and invisible characters are removed before the rule is applied. */
+export type SubmitRegistrationRequest = {
+  first_name: string;
+  last_name: string;
+  /** The applicant's e-mail address, which becomes the account's login on approval. Normalised by the server (trimmed, lower-case, ASCII, at most 254 characters). */
+  login: string;
+  /** Optional; absent when the person has none. */
+  middle_name?: string;
+  /** The account's future password, held to the deployment's password policy with the applicant's names and e-mail local part added to its blocklist. Stored hashed until the decision, which removes it; it appears in no response body, no error detail and no diagnostic record. */
+  password: string;
+};
+
+/** The signed-in account's own names, and -- while its profile is incomplete -- the e-mail address that becomes its login. 1-60 characters of letters, separated by single spaces, hyphens or apostrophes, with no word mixing Cyrillic and Latin letters. Surrounding whitespace and invisible characters are removed before the rule is applied. */
+export type UpdateMyProfileRequest = {
+  /** Required to complete a profile whose login is not yet an e-mail address; it becomes the login in the same write that stores the names. A complete profile's login is fixed: an `email` other than the current login is `validation_failed` with `details.field: login`. */
+  email?: string;
+  first_name: string;
+  last_name: string;
+  /** Optional; absent when the person has none. */
+  middle_name?: string;
+};
+
+/** An administrator's change of an account's names, its role set, or both. An absent property leaves that half unchanged. */
+export type UpdateUserRequest = {
+  names?: PersonNames;
+  /** The whole new role set, not a delta. Removing a role from oneself is `permission_denied`; leaving no active account holding `admin` is `conflict` with `details.conflict_reason: last_admin`. */
+  roles?: Array<Role>;
+};
+
 export type UploadDocumentRequest = {
   /** Optional display label. When absent the server derives one for presentation. Neither this nor the uploaded file name is ever an identity. */
   display_title?: string;
@@ -620,6 +777,12 @@ export type UploadDocumentRequest = {
   /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
 };
+
+/** Opaque account identity. An e-mail address is the sign-in identifier and a unique key among active accounts; this is the identity every reference names. */
+export type UserUid = string;
+
+/** The contract pattern for `UserUid`. Anchored; use with `new RegExp()`. */
+export const USER_UID_PATTERN = "^usr_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /** The current projected verdict. `pending` when the ledger holds no verdict-bearing event, and after a revocation. `needs_manual_review` is declared for the closed union and has no PC-01 producer. */
 export const VERDICT_VALUES = [

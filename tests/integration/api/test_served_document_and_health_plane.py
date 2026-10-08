@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from tests.support.expected_facts import FACTS
+
 import json
 from pathlib import Path
 from typing import Any
@@ -30,9 +32,9 @@ OPENAPI = Path(__file__).resolve().parents[3] / "contracts/api/v1/openapi.json"
 #: from the document it is counting cannot tell you the document shrank.
 OPENAPI_VERSION = "3.1.0"
 BASE_PATH = "/api/v1"
-PATH_COUNT = 17
-OPERATION_COUNT = 20
-SCHEMA_COUNT = 61
+PATH_COUNT = FACTS.path_count
+OPERATION_COUNT = FACTS.operation_count
+SCHEMA_COUNT = FACTS.schema_count
 
 
 class TestTheDocumentedAndTheWiredApplicationAgree:
@@ -109,6 +111,14 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "startRun",
             "streamDocumentVersionContent",
             "uploadDocument",
+            # `W49-SEAL-01`: every new GET or POST that takes a query or a body.
+            "approveRegistration",
+            "listRegistrations",
+            "listUsers",
+            "readRegistrationStatus",
+            "rejectRegistration",
+            "resetUserPassword",
+            "submitRegistration",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

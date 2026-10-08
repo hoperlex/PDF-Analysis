@@ -39,6 +39,8 @@ resolves the same way.
 
 from __future__ import annotations
 
+from tests.support.expected_facts import FACTS
+
 import copy
 import importlib.util
 import json
@@ -81,58 +83,38 @@ surface = conformance.surface
 
 
 # =======================================================================================
-# The literals. None of these is derived from the document or from the engine.
+# Independent facts come from expected_facts.json, never from the document or engine.
 # =======================================================================================
 
 #: `ALPHA_ROADMAP.md` §3 `T-1` and the measurement in the `W13-CONF` brief.
 FROZEN_OPENAPI_VERSION = "3.1.0"
-FROZEN_OPERATION_COUNT = 20
-FROZEN_SCHEMA_COUNT = 61
+FROZEN_OPERATION_COUNT = FACTS.operation_count
+FROZEN_SCHEMA_COUNT = FACTS.schema_count
 FROZEN_SERVER_URL = "/api/v1"
 
-#: The twenty operations, written out. Deliberately not derived from the document: an
-#: operation that disappears from the contract has to fail *here*, not silently reduce the
-#: size of the thing both sides are compared through.
+#: The operation triples are written in expected_facts.json. An operation that disappears
+#: from the contract fails against that independent register.
 #:
 #: Twelve until the `R-5` reseal of 2026-09-18 added the three listings, fifteen until
 #: `W34-CONTRACT` added the credential exchange on 2026-09-22, sixteen until `W38-KB`
 #: added the decision journal under `R-24` the same day, seventeen until `W39-REVOKE`
 #: added the password change under `R-26` on 2026-09-23 -- the operation that makes a
 #: credential retractable -- nineteen until `W45-BLOCKS` added `getVersionBlocks` on
-#: 2026-09-25, and twenty until `W46-SEAL` added `getDashboardSummary` under `R-44` the
-#: same day.
+#: 2026-09-25, twenty until `W46-SEAL` added `getDashboardSummary` under `R-44` the
+#: same day, and thirty-four since `W49-SEAL-01` added the fourteen account and
+#: registration operations under `R-55` ... `R-61` on 2026-10-06.
 #:
-#: **This tuple, `FROZEN_OPERATION_COUNT` and `FROZEN_SCHEMA_COUNT`/`FROZEN_SCHEMA_NAMES`
-#: below are a pin this file's own header calls out as "not derived from the document",
-#: and a reseal has to move all four by hand.** Found stale at `W46-SEAL`, against
+#: These values were previously independent literals in this file and went stale at
+#: `W46-SEAL`, against
 #: `FROZEN_OPERATION_COUNT = 19` and `FROZEN_SCHEMA_COUNT = 53` while the live contract
 #: already declared 20 and 61: the same `D-102` shape -- a guard built to catch a moved
 #: surface was itself carrying the pre-reseal numbers -- in a fifth location neither
 #: `D-102` nor `D-105` names. Reported in `docs/program/W46-SEAL.md` section 4.
-FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
-    ("POST", "/projects", "createProject"),
-    ("GET", "/projects", "listProjects"),
-    ("POST", "/projects/{project_uid}/documents", "uploadDocument"),
-    ("GET", "/versions/{version_uid}", "getDocumentVersion"),
-    ("GET", "/versions/{version_uid}/content", "streamDocumentVersionContent"),
-    ("POST", "/runs", "startRun"),
-    ("GET", "/runs/{run_id}", "getRunStatus"),
-    ("GET", "/runs/{run_id}/findings", "listRunFindings"),
-    ("GET", "/findings/{finding_uid}", "getFinding"),
-    ("POST", "/findings/{finding_uid}/decisions", "appendDecision"),
-    ("GET", "/findings/{finding_uid}/decisions", "listDecisionHistory"),
-    ("GET", "/runs/{run_id}/export.csv", "exportRunCsv"),
-    ("GET", "/projects/{project_uid}/documents", "listDocuments"),
-    ("GET", "/documents/{document_uid}/versions", "listVersions"),
-    ("GET", "/versions/{version_uid}/runs", "listRuns"),
-    ("POST", "/auth/token", "issueToken"),
-    ("GET", "/decisions", "listDecisions"),
-    ("POST", "/auth/password", "changePassword"),
-    ("GET", "/versions/{version_uid}/blocks", "getVersionBlocks"),
-    ("GET", "/dashboard", "getDashboardSummary"),
-)
+FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = FACTS.operations
 
-#: The fifty-one `components.schemas` keys, written out. Forty-three until the `R-5`
+#: The `components.schemas` keys live in expected_facts.json -- seventy-seven since
+#: `W49-SEAL-01`, sixty-one
+#: before it from `W46-SEAL`, fifty-one before that. Forty-three until the `R-5`
 #: reseal, which added `DocumentVersionPage`, `RunStatusPage` and `CostBasis`,
 #: forty-six until `W34-CONTRACT` added `IssueTokenRequest` and `IssueTokenResponse`,
 #: forty-eight until `W38-KB` added `DecisionRecord` and `DecisionRecordPage`, and fifty
@@ -144,72 +126,7 @@ FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
 #: contract's `components.schemas` keys"*). If FastAPI splits a model into `X-Input` and
 #: `X-Output`, this set changes and the gate fails - which is the correct outcome. The fix
 #: belongs in the application (`separate_input_output_schemas=False`), never here.
-FROZEN_SCHEMA_NAMES: frozenset[str] = frozenset(
-    {
-        "AnalysisProfileId",
-        "AppendDecisionRequest",
-        "AppendDecisionResponse",
-        "CorrelationId",
-        "CostBasis",
-        "CreateProjectRequest",
-        "Cursor",
-        "DecisionEvent",
-        "DecisionEventPage",
-        "DecisionRecord",
-        "DecisionRecordPage",
-        "DecisionEventType",
-        "DecisionId",
-        "DocumentUid",
-        "DocumentVersion",
-        "DocumentVersionPage",
-        "ErrorCode",
-        "ErrorEnvelope",
-        "Evidence",
-        "Finding",
-        "FindingCategory",
-        "FindingDetail",
-        "FindingObservation",
-        "FindingObservationId",
-        "FindingPage",
-        "FindingUid",
-        "IdempotencyKey",
-        "InputManifestEntry",
-        "IssueTokenRequest",
-        "IssueTokenResponse",
-    "VersionBlockIndex",
-    "BlockGeometry",
-        "ChangePasswordRequest",
-        "ModelCallId",
-        "ObservationProvenance",
-        "PageInfo",
-        "Project",
-        "ProjectPage",
-        "ProjectUid",
-        "PromptBundleId",
-        "ProviderMode",
-        "RunId",
-        "RunState",
-        "RunStatus",
-        "RunStatusPage",
-        "Sha256",
-        "StageId",
-        "StageState",
-        "StageStatus",
-        "StartRunRequest",
-        "UploadDocumentRequest",
-        "Verdict",
-        "VersionUid",
-        # `W46-SEAL`, `R-40` and `R-44`.
-        "ProjectSection",
-        "ProjectDocumentCount",
-        "VerdictCount",
-        "RunStateCount",
-        "RunActivitySpend",
-        "RunActivity",
-        "SectionDocumentCount",
-        "DashboardSummary",
-    }
-)
+FROZEN_SCHEMA_NAMES: frozenset[str] = FACTS.schema_names
 
 #: The declared normalization, by identifier. Pinned here so that a normalization added to
 #: the engine without a planted difference proving it still fails is itself a failure.
@@ -249,14 +166,14 @@ class TestTheFrozenDocument:
     def test_declares_openapi_3_1_0(self, contract: dict[str, Any]) -> None:
         assert contract["openapi"] == FROZEN_OPENAPI_VERSION
 
-    def test_declares_exactly_twenty_operations(self, contract: dict[str, Any]) -> None:
+    def test_declares_exactly_the_frozen_operations(self, contract: dict[str, Any]) -> None:
         index = conformance.operation_index(contract)
         assert len(index) == FROZEN_OPERATION_COUNT
         assert index == {
             (method, path): operation_id for method, path, operation_id in FROZEN_OPERATIONS
         }
 
-    def test_declares_exactly_the_sixty_one_schemas(self, contract: dict[str, Any]) -> None:
+    def test_declares_exactly_the_frozen_schemas(self, contract: dict[str, Any]) -> None:
         names = set(contract["components"]["schemas"])
         assert len(names) == FROZEN_SCHEMA_COUNT
         assert names == set(FROZEN_SCHEMA_NAMES), {
@@ -608,7 +525,9 @@ class TestN1ComponentReferenceResolution:
         # Every operation that referenced it, not just one. Ten before the `R-5`
         # reseal; thirteen after it, because each of the three new listings declares
         # its own `404` -- an unknown parent is `not_found` and never an empty page.
-        assert len(report) == 14, report
+        # Fourteen until `W49-SEAL-01`, whose eight operations that address an account or
+        # a request by identity each declare one too.
+        assert len(report) == 22, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]
@@ -938,8 +857,11 @@ class TestN7EffectiveSecurity:
                     hoisted += 1
                 else:
                     overriding += 1
-        assert hoisted == FROZEN_OPERATION_COUNT - 1, hoisted
-        assert overriding == 1, overriding
+        # `W49-SEAL-01`: three operations declare the empty requirement now -- the
+        # exchange and the two registration operations an applicant reaches with no
+        # account.
+        assert hoisted == FROZEN_OPERATION_COUNT - 3, hoisted
+        assert overriding == 3, overriding
         assert_silent(differences(surface(rooted), surface(fastapi_flavoured(sealed))))
 
     def test_dropped_operation_security_is_caught(self, contract: dict[str, Any]) -> None:

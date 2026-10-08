@@ -22,23 +22,30 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /*
- * `R-50`. Every route under the lock now reads the session cookie before it renders, and
- * so does the root layout, so this file's subjects need a cookie jar. The jar is EMPTY:
- * with no session there is nothing to be on a default credential about, the lock returns
- * without redirecting, and what each route decides -- which screen, which props -- is
- * exactly what it decided before. The lock's own behaviour is
- * `tests/guards/default-credential-screens.guard.test.ts`'s subject, not this file's.
+ * `W50-PLAN.md` §3.2. Every route now awaits `requireScreen` before it renders, and so does
+ * the root layout read the cookie, so this file's subjects need a cookie jar. Since `W50` an
+ * empty jar is a guest, and the guard sends a guest to sign in -- so the jar holds a session
+ * of an account that may open every screen: a complete profile, a changed password. With
+ * it, the guard returns and what each route decides -- which screen, which props -- is
+ * exactly what it decided before. The guard's own decisions are
+ * `tests/guards/screen-guard.guard.test.ts`'s subject, not this file's.
  */
+const jar = vi.hoisted(() => ({ value: null as string | null }));
+
 vi.mock('next/headers', () => ({
-  cookies: async () => ({ get: () => undefined }),
+  cookies: async () => ({
+    get: (name: string) => (jar.value === null ? undefined : { name, value: jar.value }),
+  }),
 }));
 
 import { WEB_ROOT } from '../../guards/lib/repo';
 
 import { DocumentDetailPage } from '@/_pages/document-detail';
+import { AdminUserPage } from '@/_pages/admin-user';
+import { HomePage } from '@/_pages/home';
 import { ReviewPage } from '@/_pages/review';
 import { ProjectDetailPage } from '@/_pages/project-detail';
 import { ProjectsPage } from '@/_pages/projects';
@@ -54,31 +61,53 @@ import ProjectsRoute from '@/app/projects/page';
 import ReviewRoute from '@/app/projects/[project_uid]/runs/[run_id]/review/page';
 import RootPage from '@/app/page';
 import RunRoute from '@/app/projects/[project_uid]/runs/[run_id]/page';
+import AdminUserRoute from '@/app/admin/users/[user_uid]/page';
 
 import { GET, POST } from '@/app/bff/v1/[...path]/route';
 import RootLayout, { metadata } from '@/app/layout';
 import { AppFrame, AppProviders } from '@/_app';
 
 import { routes } from '@/shared/lib';
+import { forgetEverySession, openSession } from '@/app/bff/session/store';
 
 import { DOCUMENT_UID, PROJECT_UID, RUN_ID, VERSION_UID } from '../review/fixtures';
+import { newClient, renderScreen } from './harness';
 import { routeAddresses } from './route-screens';
 import { screens as censusScreens } from '../styles/screens';
+
+/** The account the jar's session belongs to: one every W50 screen admits. */
+const SIGNED_IN = {
+  login: 'petrova@example.org',
+  displayLabel: 'Петрова А. С.',
+  initials: 'ПА',
+  roles: ['expert'],
+  isDefaultCredential: false,
+  profileComplete: true,
+} as const;
+
+beforeEach(() => {
+  forgetEverySession();
+  jar.value = openSession({ ...SIGNED_IN, roles: [...SIGNED_IN.roles] }, 'a-credential', 3600);
+});
+
+/** The query string Next hands every route, empty. */
+const NO_QUERY = { searchParams: Promise.resolve({}) };
 
 /** Distinct values, so a route that crossed its two parameters is red rather than green. */
 const A_PROJECT = PROJECT_UID;
 const A_RUN = RUN_ID.replace(/.$/, 'C');
 const A_DOCUMENT = DOCUMENT_UID.replace(/.$/, 'D');
 const A_VERSION = VERSION_UID.replace(/.$/, 'E');
+const A_USER = 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 
 describe('each route delegates to its screen and to no other', () => {
   it('/projects renders the projects screen', async () => {
-    const element = await ProjectsRoute();
+    const element = await ProjectsRoute(NO_QUERY);
     expect(element.type).toBe(ProjectsPage);
   });
 
   it('/projects/{project_uid} passes the project address through, unparsed', async () => {
-    const element = await ProjectRoute({ params: Promise.resolve({ project_uid: A_PROJECT }) });
+    const element = await ProjectRoute({ params: Promise.resolve({ project_uid: A_PROJECT }), ...NO_QUERY });
     expect(element.type).toBe(ProjectDetailPage);
     expect(element.props).toEqual({ projectUid: A_PROJECT });
   });
@@ -86,6 +115,7 @@ describe('each route delegates to its screen and to no other', () => {
   it('/projects/{project_uid}/runs/{run_id} passes both, and does not cross them', async () => {
     const element = await RunRoute({
       params: Promise.resolve({ project_uid: A_PROJECT, run_id: A_RUN }),
+      ...NO_QUERY,
     });
     expect(element.type).toBe(RunPage);
     expect(element.props).toEqual({ projectUid: A_PROJECT, runId: A_RUN });
@@ -94,6 +124,7 @@ describe('each route delegates to its screen and to no other', () => {
   it('.../review passes both to the review screen, and does not cross them', async () => {
     const element = await ReviewRoute({
       params: Promise.resolve({ project_uid: A_PROJECT, run_id: A_RUN }),
+      ...NO_QUERY,
     });
     expect(element.type).toBe(ReviewPage);
     expect(element.props).toEqual({ projectUid: A_PROJECT, runId: A_RUN });
@@ -102,6 +133,7 @@ describe('each route delegates to its screen and to no other', () => {
   it('/projects/{project_uid}/documents/{document_uid} passes both, and does not cross them', async () => {
     const element = await DocumentRoute({
       params: Promise.resolve({ project_uid: A_PROJECT, document_uid: A_DOCUMENT }),
+      ...NO_QUERY,
     });
     expect(element.type).toBe(DocumentDetailPage);
     expect(element.props).toEqual({ projectUid: A_PROJECT, documentUid: A_DOCUMENT });
@@ -110,6 +142,7 @@ describe('each route delegates to its screen and to no other', () => {
   it('/projects/{project_uid}/versions/{version_uid} passes both, and does not cross them', async () => {
     const element = await VersionRoute({
       params: Promise.resolve({ project_uid: A_PROJECT, version_uid: A_VERSION }),
+      ...NO_QUERY,
     });
     expect(element.type).toBe(VersionDetailPage);
     expect(element.props).toEqual({ projectUid: A_PROJECT, versionUid: A_VERSION });
@@ -118,9 +151,18 @@ describe('each route delegates to its screen and to no other', () => {
   it('.../comparison passes both to the comparison screen, and does not cross them', async () => {
     const element = await ComparisonRoute({
       params: Promise.resolve({ project_uid: A_PROJECT, version_uid: A_VERSION }),
+      ...NO_QUERY,
     });
     expect(element.type).toBe(StageComparisonPage);
     expect(element.props).toEqual({ projectUid: A_PROJECT, versionUid: A_VERSION });
+  });
+
+  it('/admin/users/{user_uid} delegates the opaque identity unchanged', async () => {
+    jar.value = openSession({ ...SIGNED_IN, roles: ['admin'] }, 'a-credential', 3600);
+    const element = await AdminUserRoute({ params: Promise.resolve({ user_uid: A_USER }), ...NO_QUERY });
+    expect(element.type).toBe(AdminUserPage);
+    expect(element.props).toEqual({ userUid: A_USER });
+    expect(routes.user(A_USER)).toBe(`/admin/users/${A_USER}`);
   });
 
   it('comparison is mounted under the version, not under a run', () => {
@@ -170,38 +212,38 @@ describe('a malformed address is a 404, not a screen reporting a failure', () =>
     // it is asserted rather than the mere fact of a throw: `redirect()` throws too, and a
     // route that redirected to /projects instead would still be a 307 to an instrument.
     await expect(
-      ProjectRoute({ params: Promise.resolve({ project_uid: BAD }) }),
+      ProjectRoute({ params: Promise.resolve({ project_uid: BAD }), ...NO_QUERY }),
     ).rejects.toMatchObject({ digest: 'NEXT_HTTP_ERROR_FALLBACK;404' });
   });
 
   it('a malformed run address 404s, for both the run screen and the review screen', async () => {
     for (const route of [RunRoute, ReviewRoute]) {
       await expect(
-        route({ params: Promise.resolve({ project_uid: A_PROJECT, run_id: BAD }) }),
+        route({ params: Promise.resolve({ project_uid: A_PROJECT, run_id: BAD }), ...NO_QUERY }),
       ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
     }
   });
 
   it('a malformed version address 404s on the comparison route too', async () => {
     await expect(
-      ComparisonRoute({ params: Promise.resolve({ project_uid: A_PROJECT, version_uid: BAD }) }),
+      ComparisonRoute({ params: Promise.resolve({ project_uid: A_PROJECT, version_uid: BAD }), ...NO_QUERY }),
     ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
     // And the PARENT segment, which is the half a route that trusted its ancestor misses.
     await expect(
-      ComparisonRoute({ params: Promise.resolve({ project_uid: BAD, version_uid: A_VERSION }) }),
+      ComparisonRoute({ params: Promise.resolve({ project_uid: BAD, version_uid: A_VERSION }), ...NO_QUERY }),
     ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
     // The other direction, so this is not a route that is simply always red.
     await expect(
-      ComparisonRoute({ params: Promise.resolve({ project_uid: A_PROJECT, version_uid: A_VERSION }) }),
+      ComparisonRoute({ params: Promise.resolve({ project_uid: A_PROJECT, version_uid: A_VERSION }), ...NO_QUERY }),
     ).resolves.toBeDefined();
   });
 
   it('a malformed document or version address 404s', async () => {
     await expect(
-      DocumentRoute({ params: Promise.resolve({ project_uid: A_PROJECT, document_uid: BAD }) }),
+      DocumentRoute({ params: Promise.resolve({ project_uid: A_PROJECT, document_uid: BAD }), ...NO_QUERY }),
     ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
     await expect(
-      VersionRoute({ params: Promise.resolve({ project_uid: A_PROJECT, version_uid: BAD }) }),
+      VersionRoute({ params: Promise.resolve({ project_uid: A_PROJECT, version_uid: BAD }), ...NO_QUERY }),
     ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
   });
 
@@ -209,10 +251,10 @@ describe('a malformed address is a 404, not a screen reporting a failure', () =>
     // The check is on every segment, not only the last one. A route that validated the
     // run and trusted the project would answer 200 for /projects/nonsense/runs/<real>.
     await expect(
-      RunRoute({ params: Promise.resolve({ project_uid: BAD, run_id: A_RUN }) }),
+      RunRoute({ params: Promise.resolve({ project_uid: BAD, run_id: A_RUN }), ...NO_QUERY }),
     ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
     await expect(
-      VersionRoute({ params: Promise.resolve({ project_uid: BAD, version_uid: A_VERSION }) }),
+      VersionRoute({ params: Promise.resolve({ project_uid: BAD, version_uid: A_VERSION }), ...NO_QUERY }),
     ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
   });
 
@@ -221,10 +263,10 @@ describe('a malformed address is a 404, not a screen reporting a failure', () =>
     // working screen must keep answering 200. This is the assertion that would catch a
     // shape check inverted or tightened past the contract's own pattern.
     await expect(
-      ProjectRoute({ params: Promise.resolve({ project_uid: A_PROJECT }) }),
+      ProjectRoute({ params: Promise.resolve({ project_uid: A_PROJECT }), ...NO_QUERY }),
     ).resolves.toBeDefined();
     await expect(
-      ReviewRoute({ params: Promise.resolve({ project_uid: A_PROJECT, run_id: A_RUN }) }),
+      ReviewRoute({ params: Promise.resolve({ project_uid: A_PROJECT, run_id: A_RUN }), ...NO_QUERY }),
     ).resolves.toBeDefined();
   });
 
@@ -234,22 +276,38 @@ describe('a malformed address is a 404, not a screen reporting a failure', () =>
     // fetch on a screen that fetches on the client. See docs/program/reviews/W22-WEB.md.
     const ABSENT = 'run_00000000000000000000000000';
     await expect(
-      RunRoute({ params: Promise.resolve({ project_uid: A_PROJECT, run_id: ABSENT }) }),
+      RunRoute({ params: Promise.resolve({ project_uid: A_PROJECT, run_id: ABSENT }), ...NO_QUERY }),
     ).resolves.toBeDefined();
   });
 });
 
-describe('/ starts the journey at the project list', () => {
-  it('redirects rather than rendering a screen of its own', () => {
-    // `redirect()` signals by throwing; Next's digest carries the destination.
-    let thrown: unknown;
-    try {
-      RootPage();
-    } catch (error) {
-      thrown = error;
-    }
-    expect(thrown).toBeDefined();
-    expect(String((thrown as { digest?: string }).digest ?? thrown)).toContain('/projects');
+describe('/ is the front door, and renders a screen of its own', () => {
+  it('renders the home page with the name and roles the session carries', async () => {
+    // `W50-PLAN.md` §3.2: a completed sign-in lands here, so `/` is a screen and no longer
+    // a redirect. A `/` that redirected again -- to `/projects` or anywhere -- throws here
+    // instead of returning the home page.
+    const element = await RootPage(NO_QUERY);
+    expect(element.type).toBe(HomePage);
+    expect(element.props).toEqual({
+      displayLabel: SIGNED_IN.displayLabel,
+      roles: [...SIGNED_IN.roles],
+    });
+    // The props come from the subject, which never holds the credential.
+    expect(JSON.stringify(element.props)).not.toContain('a-credential');
+  });
+
+  it('greets by the name form without doubling the period it ends with', async () => {
+    // `Петрова А. С.` ends in a period; the lane stand's journey read «С.. Начальная» once.
+    const markup = renderScreen(newClient(), await RootPage(NO_QUERY));
+    expect(markup).toContain(`Здравствуйте, ${SIGNED_IN.displayLabel}`);
+    expect(markup).not.toMatch(/\.\./);
+  });
+
+  it('sends a guest to sign in, and back to / afterwards', async () => {
+    jar.value = null;
+    await expect(RootPage(NO_QUERY)).rejects.toMatchObject({
+      digest: expect.stringContaining(`/login?next=${encodeURIComponent('/')};`),
+    });
   });
 });
 
@@ -506,12 +564,17 @@ describe('every screen address is built once and matches a route file on disk', 
       comparison: routes.comparison(PROJECT_UID, VERSION_UID),
       run: routes.run(PROJECT_UID, RUN_ID),
       review: routes.review(PROJECT_UID, RUN_ID),
+      user: routes.user(A_USER),
     };
     // The names are checked against the module rather than trusted, so a builder added
     // without a line here is red rather than silently unlinked.
     expect(Object.keys(built).sort()).toEqual(Object.keys(routes).sort());
     expect(
       Object.entries(built)
+        // The Stage-A users list is a no-call placeholder and has no real user identity
+        // to link. W51-ADMIN-USERS owns that first rendered link; the builder's route
+        // totality and opaque value are asserted above meanwhile.
+        .filter(([builder]) => builder !== 'user')
         .filter(([, url]) => !drawn.has(url))
         .map(([builder, url]) => `routes.${builder}() -> ${url}`)
         .sort(),

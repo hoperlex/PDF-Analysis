@@ -46,6 +46,33 @@ A default is what a caller with no authenticated subject would fall into, and a 
 attributed to a configuration constant is worse than a refusal, because it looks like a
 decision somebody took. The composition root passes the display label the seam verified;
 there is nothing else to pass.
+
+**``author_user_uid`` is the identity; ``author_label`` is the name** (`W49-PLAN.md` §3.1).
+A label is a display string, and a display string identifies nobody (``AGENTS.md`` §4): two
+reviewers may read as the same "Фамилия И. О.", and a rename moves the name without moving
+the person. So every event also records the ``user_uid`` of the account that took it, in
+the column migration ``0015`` added with a ``RESTRICT`` foreign key to ``app_user``. That
+key is what makes "this account decided something" a fact the database holds, and why an
+expert who authored a decision cannot be purged (`R-61`).
+
+* **History is NULL, and NULL reads as "author account unknown".** Every event written
+  before ``0015`` has no account, and nothing can invent one for it: the label it carries
+  is a name, not a key, and resolving a name back to an account is the display-string
+  identity this column exists to stop. A NULL is therefore listed like any other row and
+  reported as ``None`` -- never a fault, never a refusal, never a guess.
+* **A value is never coerced.** The ledger writes what it is given. A malformed identity
+  fails ``ck_expert_decision_event_author_user_uid_format`` and an unknown one fails the
+  foreign key, so either is a refused append and neither becomes NULL.
+* **The argument has no default** since `W49-SEAL-01`, which wired the subject: the
+  decisions router passes ``Subject.user_uid`` through the composition root, and every
+  caller names the account -- or says ``None`` out loud, meaning "author account unknown",
+  the NULL a history row holds. A call that forgot the argument is a ``TypeError``, never a
+  silently NULL author.
+* **It is part of the idempotency fingerprint when it is given.** Two accounts with one
+  display name presenting one key are two payloads, and answering the second with the
+  first one's event would attribute a decision to somebody who did not take it. When it
+  is ``None`` the fingerprint is byte-for-byte the one this module computed before the
+  column existed, so a key claimed before ``0015`` still replays.
 """
 
 from __future__ import annotations
@@ -83,10 +110,10 @@ _INSERT_EVENT = text(
     """
     INSERT INTO expert_decision_event (
         decision_id, finding_uid, finding_observation_id, event_type,
-        verdict, comment, author_label, command_id, correlation_id
+        verdict, comment, author_label, author_user_uid, command_id, correlation_id
     ) VALUES (
         :decision_id, :finding_uid, :finding_observation_id, :event_type,
-        :verdict, :comment, :author_label, :command_id, :correlation_id
+        :verdict, :comment, :author_label, :author_user_uid, :command_id, :correlation_id
     )
     RETURNING decision_id, recorded_at
     """
@@ -95,7 +122,7 @@ _INSERT_EVENT = text(
 _EVENT_BY_COMMAND = text(
     """
     SELECT decision_id, finding_uid, finding_observation_id, event_type,
-           verdict, comment, author_label, command_id, recorded_at
+           verdict, comment, author_label, author_user_uid, command_id, recorded_at
     FROM expert_decision_event
     WHERE command_id = :command_id
     """
@@ -104,7 +131,7 @@ _EVENT_BY_COMMAND = text(
 _EVENTS_FOR_FINDING = text(
     """
     SELECT decision_id, finding_uid, finding_observation_id, event_type,
-           verdict, comment, author_label, command_id, recorded_at
+           verdict, comment, author_label, author_user_uid, command_id, recorded_at
     FROM expert_decision_event
     WHERE finding_uid = :finding_uid
     ORDER BY sequence_no
@@ -119,6 +146,12 @@ class DecisionEvent:
     ``sequence_no`` is deliberately absent. The contract lists a database sequence value
     exposed to a client among the non-identities, so it is never returned and never
     embedded in a cursor; client-visible ordering is ``(recorded_at, decision_id)``.
+
+    ``author_user_uid`` is the account that took the decision, or ``None`` when the
+    account is unknown -- every event written before migration ``0015``, and every event
+    appended before `W49-SEAL-01` wires the subject. ``None`` is an answer, not a fault.
+    It has no default here: every construction states what it read. It is not on the wire
+    (`W49-PLAN.md` §3.1, "no wire change"); the composition root maps fields by name.
     """
 
     decision_id: str
@@ -128,6 +161,7 @@ class DecisionEvent:
     verdict: str | None
     comment: str | None
     author_label: str
+    author_user_uid: str | None
     command_id: str | None
     recorded_at: object | None = None
 
@@ -166,6 +200,7 @@ def _row_to_event(row) -> DecisionEvent:  # noqa: ANN001 - a SQLAlchemy RowMappi
         verdict=row["verdict"],
         comment=row["comment"],
         author_label=row["author_label"],
+        author_user_uid=row["author_user_uid"],
         command_id=row["command_id"],
         recorded_at=row["recorded_at"],
     )
@@ -181,6 +216,7 @@ def record_decision(
     command_id: str | None = None,
     correlation_id: str | None = None,
     author_label: str,
+    author_user_uid: str | None,
 ) -> DecisionEvent:
     """Append one expert decision event. Never updates and never deletes.
 
@@ -188,6 +224,12 @@ def record_decision(
     reviewer the authorization seam verified, handed down from the command surface, and it
     is not a field a client fills in. A default here would be a decision recorded with no
     named author -- which must be a refusal, not a row attributed to a constant.
+
+    ``author_user_uid`` is the ``user_uid`` of that same verified subject, persisted beside
+    the label. It is written exactly as given: a malformed or unknown identity is refused by
+    the database and the append fails; nothing turns it into NULL. It has **no default**
+    (`W49-SEAL-01`): ``None`` -- "author account unknown", the same NULL a pre-``0015`` row
+    holds -- has to be passed explicitly. See the module docstring.
 
     Replaying the same command under one idempotency key appends exactly one event: the
     unique index on ``command_id`` is the enforcement, and a second attempt returns the
@@ -247,6 +289,7 @@ def record_decision(
         "verdict": VERDICT_FOR_EVENT[event_type],
         "comment": comment,
         "author_label": author_label,
+        "author_user_uid": author_user_uid,
         "command_id": command_id,
         "correlation_id": correlation_id,
     }
@@ -278,6 +321,7 @@ def record_decision(
         verdict=VERDICT_FOR_EVENT[event_type],
         comment=comment,
         author_label=author_label,
+        author_user_uid=author_user_uid,
         command_id=command_id,
         recorded_at=row["recorded_at"],
     )
@@ -307,10 +351,17 @@ def append_decision_under_key(
     comment: str | None = None,
     correlation_id: str | None = None,
     author_label: str,
+    author_user_uid: str | None,
 ) -> tuple[DecisionEvent, bool]:
     """Append one decision event under an idempotency key, or replay the first one.
 
     Returns ``(event, replayed)``.
+
+    ``author_user_uid`` is persisted beside ``author_label``, as in :func:`record_decision`,
+    and is part of the payload fingerprint whenever it is given: one key presented by two
+    accounts that share a display name is a reused key, not a replay. It has no default
+    (`W49-SEAL-01`); an explicit ``None`` keeps the fingerprint this function computed
+    before the column existed.
 
     ``record_decision`` accepts a ``command_id`` but nothing claimed one, while
     ``expert_decision_event.command_id`` is a **foreign key into ``command_record``** — so
@@ -328,16 +379,20 @@ def append_decision_under_key(
 
     # The canonical primitive, the one `B1` and `B5` already claim with, so all three
     # write paths compare payloads the same way rather than three ways.
-    fingerprint = payload_fingerprint(
-        {
-            "command": "append_decision.v1",
-            "finding_uid": finding_uid,
-            "finding_observation_id": finding_observation_id,
-            "event_type": event_type,
-            "comment": comment,
-            "author_label": author_label,
-        }
-    )
+    payload: dict[str, str | None] = {
+        "command": "append_decision.v1",
+        "finding_uid": finding_uid,
+        "finding_observation_id": finding_observation_id,
+        "event_type": event_type,
+        "comment": comment,
+        "author_label": author_label,
+    }
+    # The account joins the fingerprint only when there is one. Absent, the payload is the
+    # pre-``0015`` one byte for byte, so a key claimed before the column existed replays
+    # instead of reading as reused.
+    if author_user_uid is not None:
+        payload["author_user_uid"] = author_user_uid
+    fingerprint = payload_fingerprint(payload)
 
     claimed = CommandRepository().begin(
         session,
@@ -372,6 +427,7 @@ def append_decision_under_key(
         command_id=command_id,
         correlation_id=correlation_id,
         author_label=author_label,
+        author_user_uid=author_user_uid,
     )
     CommandRepository().succeed(
         session, command_id=claimed.command_id, outcome={"decision_id": event.decision_id}

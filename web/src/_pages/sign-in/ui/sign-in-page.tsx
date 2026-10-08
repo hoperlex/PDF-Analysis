@@ -14,6 +14,7 @@
  */
 
 import { PageShell } from '@/shared/ui';
+import { ErrorState } from '@/shared/ui';
 import type { SignInRefusal } from '@/features/sign-in';
 import { SignInForm, SignOutForm } from '@/features/sign-in';
 
@@ -22,9 +23,12 @@ export interface SignInPageProps {
   readonly login?: string | null | undefined;
   /** The refusal the last attempt was redirected back with, if there was one. */
   readonly refusal?: SignInRefusal | null | undefined;
+  /** The validated address to return to once signed in (`W50-PLAN.md` §3.2), if any. */
+  readonly next?: string | null | undefined;
+  readonly unknownRefusal?: boolean | undefined;
 }
 
-export function SignInPage({ login, refusal }: SignInPageProps) {
+export function SignInPage({ login, refusal, next, unknownRefusal = false }: SignInPageProps) {
   const signedIn = typeof login === 'string' && login.length > 0;
 
   return (
@@ -33,10 +37,11 @@ export function SignInPage({ login, refusal }: SignInPageProps) {
       subtitle={
         signedIn
           ? 'Сеанс открыт. Он хранится на сервере приложения; в браузере лежит только его номер.'
-          : 'Имя пользователя и пароль уходят на сервер приложения и обмениваются на пропуск там же.'
+          : 'Адрес электронной почты и пароль уходят на сервер приложения. Для прежней учётной записи до завершения профиля принимается старый логин.'
       }
     >
-      {signedIn ? <SignOutForm login={login} /> : <SignInForm refusal={refusal} />}
+      {signedIn ? <SignOutForm login={login} /> : <SignInForm refusal={refusal} next={next} />}
+      {unknownRefusal ? <div data-sign-in-refusal="unknown"><ErrorState title="Неизвестный ответ входа" detail="Сервер вернул состояние, которое эта версия страницы не понимает." /></div> : null}
       <p className="am-note">
         Проверка пары имени и пароля целиком на стороне сервера. Эта страница не хранит
         ни пароль, ни пропуск и не обращается к хранилищу браузера.

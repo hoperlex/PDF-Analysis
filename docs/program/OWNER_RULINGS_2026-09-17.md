@@ -1092,3 +1092,202 @@ identity wave.
 The normative corpus remains at migrations `0012` and `0013`, with no promotion, custody writes
 or retrieval. Its open questions `NORM-Q01` through `NORM-Q09` and debts `D-59`, `D-71` and
 `D-119` remain registered rather than decided.
+
+## 3.19 — `R-55` … `R-61`, ruled 2026-10-05 by direct poll for the identity programme
+
+The owner ordered the identity programme on 2026-10-05 (accounts, roles, registration, account
+management, routing, navigation, home page and the account menu), answered two direct polls the
+same day, and confirmed the seven texts below as drafted in
+`docs/program/dispatch/IDENTITY-WAVES.md` §4. They supersede earlier exclusions only within the
+scope each one names.
+
+### `R-55` — the alpha gains accounts, a role set and account management
+
+The alpha gains accounts with e-mail sign-in, full names (surname, name, optional patronymic), a
+role set `{expert, admin}` — one account may hold either or both — registration requests and
+administrator management of accounts. `R-18`'s exclusion of roles and user management, `R-42`'s
+sentence that this programme has no role vocabulary, and `T-6`'s "implementation deferred" are
+superseded for exactly this scope. Multi-tenancy stays excluded. Where both exist, the derived
+name form «Фамилия И. О.» takes precedence over the `display_name` `R-37` let a reviewer choose.
+
+### `R-56` — registration carries no mail
+
+A registration request sends no mail. The applicant learns the status — pending, or rejected
+with the administrator's reason — at sign-in. SMTP and notifications are a later task.
+
+> **`R-56` addendum, ruled 2026-10-06 by direct poll at the `W49-ACCESS-01` merge.** The plan
+> nulls a request's password hash at the decision, so after a rejection nothing can prove the
+> applicant's pair. Asked how a rejected applicant learns of the decision, the owner ruled:
+> **nothing is shown** — sign-in answers the generic refusal as if no request existed, the reason
+> is visible only to administrators, and a mail notification will inform the applicant once SMTP
+> exists. Sign-in shows only *pending*.
+
+### `R-57` — the avatar is generated
+
+The avatar is a coloured circle with initials, generated from the account's names and e-mail.
+There is no upload in this programme.
+
+### `R-58` — every cross-context import goes through a public module
+
+Every cross-context import the ALR-05 walk listed on the W48 closure line (16 deep / 22
+package-root at `c11f1b6`; 18 / 24 at `411c6d0`) is repaired through
+`auditmanager.<context>.public` modules and an executable guard. No waiver is granted,
+`api/composition.py` included. Done by `W48-PUBLIC-01`; the walk reads 0 / 0.
+
+### `R-59` — the seeded account becomes an e-mail account at its first sign-in
+
+The seeded `admin` keeps its login until its first sign-in after the identity upgrade, where the
+forced completion screen takes an e-mail and the names in one save and rewrites `login` to the
+e-mail. From then on every account's login is an e-mail. Every account that exists at the
+upgrade follows the same path; an operator command completes a profile from the host.
+
+### `R-60` — who may read and who may change
+
+An active account with any role reads product data. Product mutations — projects, uploads, runs,
+verdicts, comments, export — require `expert`. Account and request management requires `admin`.
+
+### `R-61` — removing an account is archive, and purge only when nothing references it
+
+"Delete an account" is archive with restore. An archived account that nothing references may be
+purged irreversibly. "References" is the written register of foreign keys in
+`docs/program/dispatch/W49-PLAN.md` §3.1: `archived_by`, `granted_by`, `decided_by` and the new
+`expert_decision_event.author_user_uid` restrict; the request that created an account is history,
+not a reference. An administrator who archived, granted or decided anything, and an expert who
+authored a decision, are therefore never purgeable.
+
+## 3.20 — `R-62`, `R-63`, ruled 2026-10-06 by direct poll at the `W49-FIX` dispatch
+
+Stage E of W49 (`W49-QA-01`, `W49-JUDGE-X`, `W49-JUDGE-Y`, all on `1b25955`) left two questions
+only the owner could answer. The integrator put both to a direct poll on 2026-10-06; the owner
+chose the recommended option each time and ordered both repairs into `W49-FIX`.
+
+### `R-62` — an archived account is not changed until it is restored
+
+`updateUser` on an archived account answers `not_found`, as `resetUserPassword` and the access
+layer's role grant (`AccountRepository.grant_role`) already do: an archived account's names and
+roles change only after `restoreUser`. Raised as
+`W49-JUDGE-Y` F-6, widened by `W49-JUDGE-X` M-X6 (the role direction works too and survives a
+restore). Repaired in `W49-FIX`.
+
+### `R-63` — a failed token exchange does not count against a registration request
+
+A failed `issueToken` for a login that has no account no longer notes an attempt against a
+registration request for that login; only `readRegistrationStatus` counts against the request's
+throttle. The exchange never compares the request's hash, so that count protected nothing, while
+the BFF's status read after every refused exchange made one sign-in cost two attempts and refused
+a pending applicant's third correct password for 300 seconds (`W49-QA-01` Q-1, confirmed by
+`W49-JUDGE-Y`). Constant work is unchanged: both paths still perform the same derivations whether
+or not a request exists. This amends `W49-PLAN.md` §3.3 "The request's throttle columns count both
+kinds of attempts". Repaired in `W49-FIX`.
+
+## 3.21 — `R-64`, `R-65`, ruled 2026-10-06 by direct poll after the W48 alpha acceptance
+
+`W48-INT-MAIN-01` deployed `23e0579` (workflow run `37428566874`) and ran `make alpha-acceptance`
+against it. Every automated phase passed except the provider: the stand runs
+`AUDITMANAGER_PROVIDER_MODE=recorded`, and the credential the owner placed on the host is a model
+proxy credential (`PROXY_LLM_*`), not an `ANTHROPIC_API_KEY`. The owner answered two direct polls.
+
+### `R-64` — `alpha-w48` is tagged without live-provider evidence
+
+`alpha-w48` is created now at `23e0579` on the automated acceptance of run
+`20261006T085651Z-1448500` (sign-in, 3/3 writes, 16/16 cold routes, width 780, 6/6 refusals), with
+one named exception: `D-70` — no run on the deployed stand used a real model, so `W48-PLAN.md`
+§12's live-provider condition and the manual A01–A12 pass are not met. This is a one-time
+exception for `alpha-w48`, not a change to the release rule; the manual pass is owed and is
+registered as a debt.
+
+### `R-65` — the model proxy counts as a live provider in release acceptance
+
+From the W49 release on, release acceptance accepts `provider_mode` `live` **or** `proxy` — both
+call a real model through the owner's credential — and never `recorded`. `OD-02` already made the
+proxy the provider of record (2026-09-14). The owner switches the stand to `proxy` on the host.
+
+> **`R-65` note, measured by the integrator the same day.** No verifier change is needed: a run
+> records the *provenance* mode, not the transport. `bootstrap/composition.py` `_provenance_mode`
+> records every transport but `recorded` as `live`, the database CHECK on
+> `audit_run.provider_mode` admits only `live` and `recorded`, and `execute_run` refuses a declared
+> mode that disagrees with its adapter, whose proxy variant reports `live`. A proxy run therefore
+> already passes the `providerLive` phase. `W49-FIX` only makes the runbook say so.
+
+## 3.22 — `R-66`, the navigation amendment, ruled 2026-10-06 at `W50-FREEZE-01`
+
+The owner answered the roadmap poll's question A-6 on 2026-10-06 (`dispatch/ROADMAP-TO-BETA.md`
+§10.1, relayed by the planning session; accepted by the integrator for this freeze) and settled the
+stub wording by two direct polls the same day.
+
+### `R-66` — navigation is split by meaning, and the four new sections are honest stubs
+
+It amends `P-11` (`dispatch/W50-PLAN.md` §3.1):
+
+- **Работа** — Проекты `/projects`, Дашборд `/dashboard`, «Оптимизация разделов»
+  `/section-optimisation` (stub);
+- **Знания** — База знаний `/knowledge-base`, Блоки `/blocks`, «Нормы» `/norms` (stub);
+- **Система** — Журнал выполнения `/logs`, Исполнители `/workers`, «Настройки анализа»
+  `/analysis-settings` (stub), «Очередь» `/queue` (stub);
+- `/optimisation` leaves the menu and stays a registered, reachable screen (group `hidden`) until
+  project optimisation becomes a project tab «Оптимизация» (planned W59). This supersedes, for
+  `/optimisation` only and until then, `R-23`'s requirement that a prepared section has a place in
+  the navigation.
+
+Each stub follows `R-23`: it is *on its way*, and its promise says what will be there and when,
+**the "when" named by an event in words, never by a number** (the prepared-sections guard's
+no-digits rule stands; wave numbers move). The events: «Очередь» — with durable execution of
+analyses; «Нормы» — after the normative corpus moves onto the stand; «Настройки анализа» — together
+with the АР section in working order; «Оптимизация разделов» — after all sections are implemented.
+The owner may reword the sentences at acceptance.
+
+## 3.23 — `R-67`, `R-68`, ruled 2026-10-06/07 by direct poll for the `alpha-w48.1` hotfix
+
+### `R-67` — the model proxy is reached through its agent gateway, fixed in code, as a hotfix
+
+The stand's calls to the proxy's `/api/` endpoint are refused by the proxy's nginx IP allowlist
+before any key is read; the owner's key works on the agent gateway
+(`https://proxyllm.fvds.ru/agent/v1`). The owner ruled (2026-10-06, two polls — one taken by the
+acceptance session, one by the integrator) that the repair is made in code, not by a query-string
+URL workaround and not by waiting for the proxy operator's allowlist, and that it is delivered as a
+hotfix of `alpha-w48` before the identity waves reach the stand. `W48-PROXY-01` implements it: a
+base URL with a path is called at `<base>/chat/completions`, an origin-only URL keeps
+`/api/v1/chat/completions`, and a base URL with a query or fragment is refused.
+
+### `R-68` — the owner's attestation is the manual record for `alpha-w48.1`
+
+After the automated acceptance of `3a54108` passed with a live provider, the owner declined the
+scripted A01–A12 protocol and attested, verbatim (2026-10-07): «Чек лист заполнять не буду, ручная
+проверка уже проводилась, отклонений от ожидаемого поведения не выявленно.» That attestation is the
+manual record for `alpha-w48.1` and closes `D-132`. It is recorded as the owner's own evidence, not
+as a scripted PASS; the release rule itself is unchanged for later releases.
+
+## 3.24 — `R-69`, ruled 2026-10-07 by direct poll on the scope of the English translation
+
+### `R-69` — the human runbooks are translated too, in a lane of W52
+
+The owner's 2026-10-07 instruction to write `AGENTS.md`, `README.md` "and similar" in English was
+carried out for those two files at the W50 integration. Asked whether it also covers the human
+runbooks `docs/manual-tests/*.md` (fourteen files, `ALPHA_PUBLIC_ACCEPTANCE.md` among them, whose
+sentences tests and scripts pin), the owner ruled that it does, and that they are translated as a
+separate lane of W52 (the quality wave), not in W50. That lane's grant names every test and script
+that pins a runbook sentence, re-swept at `W52-FREEZE-01`. Communication with the owner stays
+Russian.
+
+## 3.25 — `R-70`, ruled 2026-10-07 by direct poll on the cost of the complete gate
+
+### `R-70` — light acceptance by default; the complete gate at named points
+
+The owner observed that complete gates and their reruns slow development badly and consume the
+shared host (the `W50-SHELL-FRAME` gate was voided once by storage under load and passed on the
+second run after forty minutes), and asked for separate gates before heavy waves, in assigned
+windows, with acceptance by a lighter procedure. Settled by a direct poll the same day:
+
+- a complete `make gate` with the literal `GATE OK` is required only in a window assigned before a
+  heavy wave, before every publication to `origin/main` (`AGENTS.md` §6 unchanged), and for a
+  change that touches contracts, migrations, `infra/**`, the `Makefile`, a dependency manifest or
+  lock, the composition root or shared test fixtures;
+- everything else — lane hand-backs, merges into `integration/*`, publication to `origin/dev` — is
+  accepted by light acceptance: the container-free checks (whitespace, frontend lint, types and
+  tests, the contract tests and the static end-to-end checks) plus, by the diff, the integration
+  directories of each changed backend context and the live journey for a changed screen;
+- the `make` target that derives light acceptance from the diff is built in `W50-FIX`, not deferred
+  to W52.
+
+`AGENTS.md` §8 is the operating text. `W52-PLAN.md` §3.7's exclusion of impacted-test selection is
+superseded; its battery speed-up stands.

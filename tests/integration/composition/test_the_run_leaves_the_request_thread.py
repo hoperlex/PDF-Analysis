@@ -56,6 +56,7 @@ from starlette.testclient import TestClient
 
 from auditmanager.analysis.text import ProviderMode, RecordedAdapter
 from auditmanager.api.app import create_asgi_app
+from auditmanager.access.accounts import AccountRepository as AccountAccessRepository
 from auditmanager.access.repository import UserRepository as UserAccessRepository
 from auditmanager.api.routers import build_router
 from auditmanager.bootstrap.adapters import CredentialAdapter
@@ -278,7 +279,10 @@ def _client(
         # object the composition root wires and the one that answers for the account
         # `static_token()` provisioned.
         credentials=CredentialAdapter(
-            sessions, users=UserAccessRepository(), signer=_credential_signer()
+            sessions,
+            users=UserAccessRepository(),
+            accounts=AccountAccessRepository(),
+            signer=_credential_signer(),
         ),
     )
     app = create_asgi_app(

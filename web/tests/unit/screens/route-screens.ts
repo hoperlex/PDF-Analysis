@@ -66,14 +66,15 @@
  *
  * ## How a screen opts out, and why an opt-out is not a `catch`
  *
- * There is one, and there will be more. An opt-out is **an entry in `SEEDS` like any
- * other**, carrying `optOut` instead of `make`, and it has to satisfy three things or the
- * guard is red:
+ * None does today. The one there was — `/`, while it was a bare `redirect("/projects")` —
+ * became an ordinary seed when `W50-REGISTRY-01` gave the address a screen of its own. An
+ * opt-out is **an entry in `SEEDS` like any other**, carrying `optOut` instead of `make`,
+ * and it has to satisfy three things or the guard is red:
  *
  *   - a `why` a reader can act on, at least 80 characters;
- *   - a `proof` — a zero-argument behavioural probe which the guard RUNS. The root
- *     opt-out calls `RootPage()` and requires the `NEXT_REDIRECT` it claims, so changing
- *     what the route does is red even if its source still contains the old words;
+ *   - a `proof` — a zero-argument behavioural probe which the guard RUNS against what the
+ *     route file does, so changing what the route does is red even if its source still
+ *     contains the old words;
  *   - it is still counted. `routeAddresses().length` and the opt-out list are both
  *     asserted, so an address cannot leave the census by being excused.
  *
@@ -87,18 +88,29 @@
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
 
+import { AccountPage } from '@/_pages/account';
+import { AdminRegistrationsPage } from '@/_pages/admin-registrations';
+import { AdminUserPage } from '@/_pages/admin-user';
+import { AdminUsersPage } from '@/_pages/admin-users';
+import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
 import { BlocksPage } from '@/_pages/blocks';
 import { ChangePasswordPage } from '@/_pages/change-password';
-import RootPage from '@/app/page';
 import { DashboardPage } from '@/_pages/dashboard';
 import { DocumentDetailPage } from '@/_pages/document-detail';
+import { ForbiddenPage } from '@/_pages/forbidden';
+import { HomePage } from '@/_pages/home';
 import { KnowledgeBasePage } from '@/_pages/knowledge-base';
 import { LogsPage } from '@/_pages/logs';
+import { NormsPage } from '@/_pages/norms';
 import { OptimisationPage } from '@/_pages/optimisation';
 import { ProjectDetailPage } from '@/_pages/project-detail';
 import { ProjectsPage } from '@/_pages/projects';
+import { QueuePage } from '@/_pages/queue';
+import { RegisterPage } from '@/_pages/register';
+import { RegisterSubmittedPage } from '@/_pages/register-submitted';
 import { ReviewPage } from '@/_pages/review';
 import { RunPage } from '@/_pages/run';
+import { SectionOptimisationPage } from '@/_pages/section-optimisation';
 import { SignInPage } from '@/_pages/sign-in';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { VersionDetailPage } from '@/_pages/version-detail';
@@ -209,33 +221,81 @@ export type Seed = RenderedSeed | OptedOutSeed;
 
 export const SEEDS: readonly Seed[] = [
   {
+    /*
+     * `W50-REGISTRY-01`: an ordinary seed since `/` stopped redirecting. Was the
+     * `root-redirect` opt-out. `W50-HOME-01` changes what `HomePage` renders and keeps these
+     * props, so this seed renders the home page it builds without being touched. The label
+     * is Cyrillic like every value this file seeds, and the longest a name form reaches in
+     * practice is HOME's own case, not this one's.
+     */
     address: '/',
-    name: 'root-redirect',
-    optOut: {
-      why:
-        'It renders nothing. `redirect("/projects")` throws the Next redirect signal before ' +
-        'any element is produced, so there is no markup for a language guard to read and no ' +
-        'element for the contrast census to measure. `routes.test.ts` asserts the redirect ' +
-        'itself, which is the whole behaviour of this address; adding it here would put an ' +
-        'empty screen in two censuses and make both of them slightly less true.',
-      proof: () => {
-        // It renders nothing, so calling it must not RETURN anything: `redirect()`
-        // throws Next's redirect signal before an element exists. A page that returns
-        // an element -- however its source is written -- fails here.
-        try {
-          RootPage();
-          return false;
-        } catch (thrown) {
-          const digest = (thrown as { digest?: unknown })?.digest;
-          return typeof digest === 'string' && digest.includes('NEXT_REDIRECT');
-        }
-      },
-    },
+    name: 'home',
+    make: () => createElement(HomePage, { displayLabel: 'Петрова А. С.', roles: ['expert'] }),
+    discipline: {},
+  },
+  {
+    /*
+     * `W50-SHELL-FRAME`, granted at the Stage-B merges and widened by the integrator's ruling
+     * of 2026-10-07 (Q3): the same address for a session holding `admin`. The expert's seed
+     * above cannot mount the administrator tile, so without this one the language guard and
+     * the census never read it. A second seed for one address is why `derivedScreens()`
+     * yields every seed of an address, in this order.
+     */
+    address: '/',
+    name: 'home-admin',
+    make: () => createElement(HomePage, { displayLabel: 'Проверкина А. С.', roles: ['admin', 'expert'] }),
+    discipline: {},
+  },
+  {
+    // `R-60` gives no W50 screen a role, so the live `/403` names none; a seed that names one
+    // is the screen a role-gated row will send a session to, and it is the one the
+    // instruments should read.
+    address: '/403',
+    name: 'forbidden',
+    make: () => createElement(ForbiddenPage, { requiredRoles: ['admin'] }),
+    discipline: {},
+  },
+  {
+    // The profile route starts with getMe loading; account-auth.test.ts seeds its ready states.
+    address: '/account',
+    name: 'account-incomplete',
+    make: () => createElement(AccountPage, { profileComplete: false }),
+    discipline: {},
   },
   {
     address: '/account/password',
     name: 'change-password-signed-out',
     make: () => createElement(ChangePasswordPage, {}),
+    discipline: {},
+  },
+  {
+    address: '/register',
+    name: 'register',
+    make: () => createElement(RegisterPage, {}),
+    discipline: {},
+  },
+  {
+    address: '/register/submitted',
+    name: 'register-submitted',
+    make: () => createElement(RegisterSubmittedPage, {}),
+    discipline: {},
+  },
+  {
+    address: '/admin/users',
+    name: 'admin-users',
+    make: () => createElement(AdminUsersPage, {}),
+    discipline: {},
+  },
+  {
+    address: '/admin/users/[user_uid]',
+    name: 'admin-user',
+    make: (s) => createElement(AdminUserPage, { userUid: s['user_uid'] as string }),
+    discipline: { user_uid: 'defers-to-route' },
+  },
+  {
+    address: '/admin/registrations',
+    name: 'admin-registrations',
+    make: () => createElement(AdminRegistrationsPage, {}),
     discipline: {},
   },
   {
@@ -251,6 +311,12 @@ export const SEEDS: readonly Seed[] = [
     discipline: {},
   },
   {
+    address: '/analysis-settings',
+    name: 'analysis-settings',
+    make: () => createElement(AnalysisSettingsPage, {}),
+    discipline: {},
+  },
+  {
     address: '/knowledge-base',
     name: 'knowledge-base',
     make: () => createElement(KnowledgeBasePage, {}),
@@ -263,6 +329,7 @@ export const SEEDS: readonly Seed[] = [
     discipline: {},
   },
   { address: '/logs', name: 'logs', make: () => createElement(LogsPage, {}), discipline: {} },
+  { address: '/norms', name: 'norms', make: () => createElement(NormsPage, {}), discipline: {} },
   {
     address: '/optimisation',
     name: 'optimisation',
@@ -346,6 +413,13 @@ export const SEEDS: readonly Seed[] = [
      */
     discipline: { project_uid: 'refuses', version_uid: 'refuses' },
   },
+  { address: '/queue', name: 'queue', make: () => createElement(QueuePage, {}), discipline: {} },
+  {
+    address: '/section-optimisation',
+    name: 'section-optimisation',
+    make: () => createElement(SectionOptimisationPage, {}),
+    discipline: {},
+  },
   {
     address: '/workers',
     name: 'workers',
@@ -368,6 +442,7 @@ export function wellFormed(identities: {
     document_uid: identities.documentUid,
     version_uid: identities.versionUid,
     run_id: identities.runId,
+    user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
   };
 }
 
@@ -400,7 +475,9 @@ function seedFor(address: string): Seed | undefined {
 }
 
 /**
- * Every derived address that has a rendering seed, joined to what the tree says about it.
+ * Every rendering seed of every derived address, joined to what the tree says about it — one
+ * entry per seed, so an address seeded twice (`/`, for an expert and for an administrator) is
+ * rendered twice.
  *
  * An address with no seed is NOT silently dropped: it is reported by `unseededAddresses()`
  * and the guard names it. This function is what the two instruments consume, so a screen
@@ -409,16 +486,18 @@ function seedFor(address: string): Seed | undefined {
 export function derivedScreens(): readonly DerivedScreen[] {
   const out: DerivedScreen[] = [];
   for (const route of routeAddresses()) {
-    const seed = seedFor(route.address);
-    if (seed === undefined || seed.make === undefined) continue;
-    out.push({
-      address: route.address,
-      name: seed.name,
-      file: route.file,
-      segments: route.segments,
-      discipline: seed.discipline,
-      make: seed.make,
-    });
+    // Every seed of the address, in `SEEDS` order: `/` has two (`W50-SHELL-FRAME`).
+    for (const seed of SEEDS.filter((entry) => entry.address === route.address)) {
+      if (seed.make === undefined) continue;
+      out.push({
+        address: route.address,
+        name: seed.name,
+        file: route.file,
+        segments: route.segments,
+        discipline: seed.discipline,
+        make: seed.make,
+      });
+    }
   }
   return out;
 }

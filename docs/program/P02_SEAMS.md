@@ -597,7 +597,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Twenty operations, sealed. `A5` generates the typed client from this document; `B6`
+Thirty-four operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -606,8 +606,10 @@ listings below and made published work reachable after a page reload (`DEBT_REGI
 D-16). Sixteen after `W34-CONTRACT` added `issueToken` on 2026-09-22, seventeen after
 `W38-KB` added `listDecisions` under `R-24` the same day, eighteen after `W39-REVOKE`
 added `changePassword` under `R-26` on 2026-09-23, and nineteen after `W45-BLOCKS` added
-`getVersionBlocks` under `R-29` on 2026-09-25, and twenty after `W46-SEAL` added
-`getDashboardSummary` under `R-44` on 2026-09-25.
+`getVersionBlocks` under `R-29` on 2026-09-25, twenty after `W46-SEAL` added
+`getDashboardSummary` under `R-44` on 2026-09-25, and thirty-four after `W49-SEAL-01` added
+the account, registration and account-management operations under `R-55` ... `R-61` on
+2026-10-06.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -645,11 +647,44 @@ could.
 | `changePassword` | `POST /auth/password` |
 | `getVersionBlocks` | `GET /versions/{version_uid}/blocks` |
 | `getDashboardSummary` | `GET /dashboard` |
+| `getMe` | `GET /me` |
+| `updateMyProfile` | `PATCH /me` |
+| `submitRegistration` | `POST /registrations` |
+| `readRegistrationStatus` | `POST /registrations/status` |
+| `listRegistrations` | `GET /registrations` |
+| `approveRegistration` | `POST /registrations/{request_id}/approve` |
+| `rejectRegistration` | `POST /registrations/{request_id}/reject` |
+| `listUsers` | `GET /users` |
+| `getUser` | `GET /users/{user_uid}` |
+| `updateUser` | `PATCH /users/{user_uid}` |
+| `archiveUser` | `POST /users/{user_uid}/archive` |
+| `restoreUser` | `POST /users/{user_uid}/restore` |
+| `purgeUser` | `DELETE /users/{user_uid}` |
+| `resetUserPassword` | `POST /users/{user_uid}/password` |
 
 Rules that hold across the whole surface:
 
-* every write takes a required `Idempotency-Key` header, passed through to the owning
-  command handler and never re-derived in the router;
+* the writes that take a required `Idempotency-Key` header are `createProject`,
+  `uploadDocument`, `startRun`, `appendDecision` and `approveRegistration`, and no others.
+  The key is passed through to the owning command handler and never re-derived in the
+  router: an identical repeat replays the first answer, and another payload under the same
+  key is `idempotency_key_reuse`. The other writes take no key. What a repeat of each does
+  was measured at `W49-SEAL-01` (`tests/integration/api/test_user_management.py::TestARepeatWithoutAKey`,
+  `test_registration_flow.py`, `tests/integration/auth/test_revocation.py`):
+  * `issueToken` and `readRegistrationStatus` write nothing but the brakes' counters. A
+    repeat of the first mints another credential; a repeat of the second answers the
+    same status again;
+  * `changePassword`: a repeat presents the credential the change revoked, and is
+    `authentication_required`;
+  * `updateMyProfile` and `updateUser` state the result, so a repeat writes the same names
+    and role set again. An unchanged role set raises no credential epoch;
+  * `submitRegistration`: a repeat while the first application is pending is `conflict`
+    with `conflict_reason: request_pending`;
+  * `rejectRegistration`, `archiveUser` and `restoreUser`: a repeat is
+    `state_transition_not_allowed` on the `registration_request` or `app_user` machine;
+  * `purgeUser`: a repeat is `not_found`;
+  * `resetUserPassword` repeats its effect: the temporary password is set again, and every
+    credential issued in between is refused;
 * every response carries `X-Correlation-Id`;
 * every non-2xx body is the `ErrorEnvelope`, with `retryable` pinned to the catalog
   value for the reported code;
@@ -657,13 +692,24 @@ Rules that hold across the whole surface:
   link: a URL into object storage is the internal address the contract forbids in a
   response, and it would outlive the request that authorized it;
 * growing lists — projects, findings, decision history — are cursor-paginated;
-* every operation but `issueToken` requires a bearer credential **and** a credential
-  generation the account still accepts. `changePassword` raises that generation, which is
-  how a credential already issued is taken back: see `src/auditmanager/api/security.py`.
-  There is no revocation operation and there deliberately is not one — revoking an account
-  whose password nobody is changing is an operator's action
-  (`python -m auditmanager.access.revoke`), and publishing it would require deciding who
-  may revoke whom, which is the role vocabulary `T-6` forbids inventing at this seam.
+* every operation requires a bearer credential **and** a credential generation the account
+  still accepts, except those the sealed contract declares with `security: []` —
+  `issueToken`, `submitRegistration` and `readRegistrationStatus`, listed by
+  `python3 -c "import json; d = json.load(open('contracts/api/v1/openapi.json')); print(sorted(o['operationId'] for p in d['paths'].values() for o in p.values() if isinstance(o, dict) and o.get('security') == []))"`
+  and held in code as `UNAUTHENTICATED_OPERATIONS` in `src/auditmanager/api/security.py`.
+  `changePassword` raises that generation, which is how a credential already issued is taken
+  back: see the same module. Who may take back whom is no longer an open vocabulary:
+  `R-55` gives every account a role set drawn from `expert` and `admin`, and `R-60` decides
+  what each set reaches — product data is read by any active account with a complete
+  profile, product changes require `expert`, and account and registration-request
+  management require `admin` — per `operationId` in `OPERATION_ROLES` of the same module.
+  So an administrator takes back another account's credentials through `archiveUser`,
+  `resetUserPassword` or a change of its role set in `updateUser`, each of which raises the
+  generation, as `restoreUser` does. An administrator may not archive itself, reset its own
+  password or remove a role of its own, and the last active administrator can neither be
+  archived nor lose `admin` (`W49-PLAN.md` §3.2). There is still no operation whose only
+  effect is to revoke: taking credentials back from a shell — one account's, or everyone's —
+  remains an operator's action (`python -m auditmanager.access.revoke`).
 
 ## 8. Owner decisions this seam register encodes
 

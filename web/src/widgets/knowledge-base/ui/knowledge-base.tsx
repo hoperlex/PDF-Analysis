@@ -24,7 +24,7 @@
 
 import Link from 'next/link';
 
-import type { DecisionRecord, DecisionEventType, FindingCategory } from '@/shared/api';
+import type { DecisionRecord, DecisionEventType } from '@/shared/api';
 import {
   DECISION_EVENT_TYPE_VALUES,
   FINDING_CATEGORY_VALUES,
@@ -33,7 +33,7 @@ import {
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { formatInstant } from '@/shared/lib';
-import { VERDICT_LABELS } from '@/entities/expert-decision';
+import { CATEGORY_LABELS, VERDICT_LABELS } from '@/entities/expert-decision';
 
 export interface KnowledgeBaseProps {
   readonly records: readonly DecisionRecord[];
@@ -41,15 +41,9 @@ export interface KnowledgeBaseProps {
   readonly error?: ErrorStateProps | null | undefined;
 }
 
-/**
- * Category headings. The contract value stays in `data-category` on the row, so the
- * machine value has a home and the reviewer reads Russian — the owner's 2026-09-22 ruling,
- * and the same split `RunStateBadge` and `DecisionHistory` already make.
- */
-export const CATEGORY_LABELS: Readonly<Record<FindingCategory, string>> = {
-  internal_contradiction: 'Внутреннее противоречие',
-  explicit_placeholder: 'Явный пропуск',
-};
+// Category headings come from `CATEGORY_LABELS` in `entities/expert-decision`: the page's
+// filter reads the same table, and it moved there so the page keeps no static import of
+// this widget (`W50-LAZY-01`).
 
 /** Event labels, the same four `DecisionHistory` uses. */
 const EVENT_TYPE_LABELS: Readonly<Record<DecisionEventType, string>> = {

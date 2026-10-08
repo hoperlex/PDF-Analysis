@@ -27,7 +27,7 @@ export interface RouteIdentities {
 }
 
 export const routes = {
-  /** The project list. The journey starts here and `/` redirects to it. */
+  /** The project list. The home screen at `/` links here. */
   projects: (): string => '/projects',
 
   /** One project: its documents, and the upload that adds one. */
@@ -67,4 +67,7 @@ export const routes = {
    */
   review: (projectUid: string, runId: string): string =>
     `/projects/${projectUid}/runs/${runId}/review`,
+
+  /** One account, addressed by its opaque identity rather than its display name. */
+  user: (userUid: string): string => `/admin/users/${userUid}`,
 } as const;

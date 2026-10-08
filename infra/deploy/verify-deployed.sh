@@ -50,6 +50,23 @@
 # is the repair; this is what tells you that you need it, because a stack whose images are
 # perfect and whose proxy answers 502 is not a deployed stack.
 #
+# AND IT ASKS THE PROXY WHAT CONFIGURATION IT READS, which is `W49-FIX` / `B-1`. The proxy's
+# configuration is not in an image: `compose.server.yml` bind-mounts `proxy/nginx.conf` as a
+# single file, and a single-file bind mount keeps the inode the file had when the container
+# started. `git checkout` replaces a changed file with a new inode, so after a deploy the
+# running proxy went on reading -- and `nginx -s reload` went on re-reading -- the OLD file,
+# while this script, which then compared only the images, called the stack this tree.
+# Measured by `W49-JUDGE-X` (`docs/program/reviews/W49-JUDGE-X.md` section 7.4); the
+# registration throttle of `W49-EDGE-01` would have been absent behind a green deploy. So
+# every bind mount of the running proxy is read from the container itself, mapped back to
+# the tree, and compared by SHA-256 inside the container, exactly as the image files are.
+#
+# IT SENDS NO REQUEST BURST. Whether the throttle answers 429 is a property of the
+# configuration this section compares; proving it by flooding the registration endpoints
+# would be a side effect on the live stand, and this script runs on every production
+# deploy. The burst is driven against a disposable stand instead, in
+# `tests/integration/composition/test_proxy_config_follows_checkout.py`.
+#
 # WHAT IT COMPARES AGAINST is the WORKING TREE, not `HEAD`. "Is the deployed stack the
 # repository in front of me" is the question an operator actually has, and a dirty tree is
 # itself a reason the answer is no. `HEAD` and the dirty state are printed for the record.
@@ -280,11 +297,114 @@ while IFS=$'\t' read -r service svc_name host_src container_dst extras; do
 done <<<"$MAPPINGS"
 
 echo
+
+# --- 3. what the running proxy reads, against the tree ------------------------------
+# `B-1`. The mounts are read from the container, not from the compose file: the container is
+# what serves, and it may carry an overlay (`proxy/compose.tls.yml`) this script never names.
+# Each bind-mount source must be this checkout's `infra/deploy/proxy/` -- a mount from
+# anywhere else is a proxy that is not serving this tree, whatever its bytes are -- and every
+# tracked file under each source is compared inside the container. `proxy/nginx.conf` is
+# named rather than counted, for the reason `src/` is above: the one file this section may
+# never be blind to is the configuration the proxy actually serves.
+echo "-- the proxy's configuration against the tree --"
+PROXY_CONTAINER="$(compose ps --quiet proxy 2>/dev/null | head -1)"
+[ -n "$PROXY_CONTAINER" ] || fail "$UNANSWERABLE" \
+    "no running container for the 'proxy' service of $INSTANCE." \
+    "What the proxy serves was not compared."
+docker inspect --format \
+    '{{range .Mounts}}{{if eq .Type "bind"}}{{.Source}}{{"\t"}}{{.Destination}}{{"\n"}}{{end}}{{end}}' \
+    "$PROXY_CONTAINER" > "$WORK/proxy-mounts" 2>/dev/null || fail "$UNANSWERABLE" \
+    "the proxy container $PROXY_CONTAINER could not be inspected." \
+    "What the proxy serves was not compared."
+HERE_PHYSICAL="$(cd "$HERE" && pwd -P)"
+: > "$WORK/proxy-expected"
+: > "$WORK/proxy-wanted"
+PROXY_PROBLEMS=0
+SAW_NGINX_CONF=no
+while IFS=$'\t' read -r source destination; do
+    [ -n "$source" ] || continue
+    case "$source" in
+        "$HERE"/proxy/*) rel="${source#"$HERE"/}" ;;
+        "$HERE_PHYSICAL"/proxy/*) rel="${source#"$HERE_PHYSICAL"/}" ;;
+        *)
+            printf '  %s  MOUNTED FROM %s, NOT FROM THIS CHECKOUT\n' "$destination" "$source"
+            PROXY_PROBLEMS=$((PROXY_PROBLEMS + 1))
+            continue ;;
+    esac
+    tree="infra/deploy/$rel"
+    [ "$tree" != infra/deploy/proxy/nginx.conf ] || SAW_NGINX_CONF=yes
+    tracked="$(git -C "$REPO" ls-files -- "$tree")"
+    if [ -z "$tracked" ]; then
+        printf '  %s  MOUNTED FROM %s, WHICH THE TREE DOES NOT TRACK\n' "$destination" "$tree"
+        PROXY_PROBLEMS=$((PROXY_PROBLEMS + 1))
+        continue
+    fi
+    while IFS= read -r file; do
+        [ -n "$file" ] || continue
+        [ -f "$REPO/$file" ] || fail "$UNANSWERABLE" \
+            "$file is tracked but not in the working tree." \
+            "The tree side of this comparison is incomplete, so nothing is concluded."
+        if [ "$file" = "$tree" ]; then
+            inside="$destination"
+        else
+            inside="${destination%/}/${file#"$tree"/}"
+        fi
+        printf '%s\n' "$inside" >> "$WORK/proxy-wanted"
+        printf '%s  %s\n' "$(sha256sum "$REPO/$file" | cut -d' ' -f1)" "$inside" \
+            >> "$WORK/proxy-expected"
+    done <<<"$tracked"
+done < "$WORK/proxy-mounts"
+if [ "$SAW_NGINX_CONF" = no ]; then
+    printf '  infra/deploy/proxy/nginx.conf  NOT MOUNTED BY THE RUNNING PROXY\n'
+    PROXY_PROBLEMS=$((PROXY_PROBLEMS + 1))
+fi
+
+tr '\n' '\0' < "$WORK/proxy-wanted" > "$WORK/proxy-wanted.z"
+docker exec -i "$PROXY_CONTAINER" sh -c 'xargs -0 -r sha256sum 2>/dev/null || true' \
+    < "$WORK/proxy-wanted.z" > "$WORK/proxy-actual" || true
+LC_ALL=C sort -k2 "$WORK/proxy-expected" > "$WORK/proxy-expected.s"
+LC_ALL=C sort -k2 "$WORK/proxy-actual" > "$WORK/proxy-actual.s"
+LC_ALL=C join -j 2 -v 1 -o 0 "$WORK/proxy-expected.s" "$WORK/proxy-actual.s" \
+    > "$WORK/proxy-missing"
+LC_ALL=C join -j 2 -o 0,1.1,2.1 "$WORK/proxy-expected.s" "$WORK/proxy-actual.s" \
+    | awk '$2 != $3 { print }' > "$WORK/proxy-changed"
+sed 's/^/  /; s/$/  MISSING FROM THE PROXY/' "$WORK/proxy-missing"
+awk '{ printf "  %s  DIFFERENT BYTES\n      tree  %s\n      proxy %s\n", $1, $2, $3 }' \
+    "$WORK/proxy-changed"
+PROXY_PROBLEMS=$((PROXY_PROBLEMS + $(grep -c . "$WORK/proxy-missing" || true) \
+    + $(grep -c . "$WORK/proxy-changed" || true)))
+proxy_total="$(grep -c . "$WORK/proxy-wanted" || true)"
+if [ "$PROXY_PROBLEMS" -eq 0 ]; then
+    printf '  %-34s %4s files, identical\n' "infra/deploy/proxy/" "$proxy_total"
+else
+    printf '  %-34s %4s files compared, %s disagreement(s)\n' \
+        "infra/deploy/proxy/" "$proxy_total" "$PROXY_PROBLEMS"
+fi
+
+echo
 if [ "$PROBLEMS" -ne 0 ]; then
+    if [ "$PROXY_PROBLEMS" -ne 0 ]; then
+        PROXY_NOTE="The proxy's configuration disagrees too: $PROXY_PROBLEMS file(s), listed above."
+    else
+        PROXY_NOTE="The proxy's configuration is this tree's."
+    fi
     fail "$DRIFT" "the deployed stack is NOT this tree -- $PROBLEMS file(s) disagree." \
         "Rebuild it, and reload the proxy afterwards:" \
         "    docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d --build" \
         "    infra/deploy/reload-proxy.sh" \
+        "$PROXY_NOTE" \
+        "Until then, no claim about this stack is a claim about $HEAD_SHA."
+fi
+if [ "$PROXY_PROBLEMS" -ne 0 ]; then
+    fail "$DRIFT" \
+        "the running proxy is NOT serving this tree's configuration -- $PROXY_PROBLEMS file(s) disagree." \
+        "A single-file bind mount keeps the inode it was started with, and a checkout replaces" \
+        "the file with a new one, so neither nginx -t nor nginx -s reload inside the container" \
+        "reads it. reload-proxy.sh restarts the proxy when a mounted file changed:" \
+        "    infra/deploy/reload-proxy.sh" \
+        "A proxy mounted from another checkout has to be recreated from this one, with the" \
+        "same -f files it was created with (add proxy/compose.tls.yml if TLS is on):" \
+        "    docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d --force-recreate proxy" \
         "Until then, no claim about this stack is a claim about $HEAD_SHA."
 fi
 echo "verify-deployed.sh: the deployed stack IS this tree ($HEAD_SHA$DIRTY)."

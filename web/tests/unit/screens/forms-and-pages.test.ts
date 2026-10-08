@@ -183,10 +183,12 @@ describe('/projects/{project_uid}/runs/{run_id}', () => {
 });
 
 describe('the application frame', () => {
-  it('carries the product name and the one navigation target, and no checkpoint code', () => {
+  it('carries the product name and the brand link home, and no checkpoint code', () => {
     const markup = render(createElement(AppFrame, { children: 'the screen', session: null }));
     expect(markup).toContain('AuditManager');
-    expect(markup).toContain('href="/projects"');
+    // `W50-SHELL-FRAME`: the brand goes to the registry's `/` (it went to `/projects` before
+    // the home page existed); a guest's only other link is the way in.
+    expect(markup).toContain('<a class="am-app__brand" href="/">AuditManager</a>');
     expect(markup).toContain('the screen');
     // `PC-01` was asserted here until 2026-09-22. It is the programme's own checkpoint
     // code: it told a reviewer nothing and named the thing `R-18` says the alpha must
@@ -204,19 +206,28 @@ describe('the application frame', () => {
     expect(anonymous).toContain('>Вход<');
     expect(anonymous).not.toContain('Выйти');
 
-    const signedIn = render(
-      createElement(AppFrame, { children: null, session: { login: 'проверяющий' } }),
-    );
+    // `W50-SHELL-FRAME`: the frame is handed the whole subject, and the way out sits in the
+    // account menu under the avatar, beside the account's name and e-mail.
+    const session = {
+      login: 'проверяющий@пример.испытание',
+      displayLabel: 'Проверяющий П. П.',
+      initials: 'ПП',
+      roles: ['expert'],
+      isDefaultCredential: false,
+      profileComplete: true,
+    };
+    const signedIn = render(createElement(AppFrame, { children: null, session }));
     expect(signedIn).not.toContain('>Вход<');
     expect(signedIn).toContain('Выйти');
-    expect(signedIn).toContain('проверяющий');
+    expect(signedIn).toContain('проверяющий@пример.испытание');
+    expect(signedIn).toContain('Проверяющий П. П.');
     // A POST to the BFF's own door, and not a link: signing out deletes the row that holds
     // the credential, and a GET that changes state is a GET a prefetch can fire.
     expect(signedIn).toContain('method="post"');
     expect(signedIn).toContain('action="/bff/v1/session/end"');
   });
 
-  it('states what this prototype is not, rather than implying it is more', () => {
+  it('states what this alpha is, rather than implying it is more or less', () => {
     const markup = render(createElement(AppFrame, { children: null, session: null }));
     // The intent of this case is unchanged and is the reason it is not deleted: a reviewer
     // must not be left assuming their verdicts are attributed to a named account, or that
@@ -225,8 +236,12 @@ describe('the application frame', () => {
     // Was `без учётных записей` — WITHOUT ACCOUNTS — which this case pinned in place while
     // wave 34 gave the application accounts. The assertion held and the claim became false,
     // which is the shape `W37CERT4-2` reports: a test can keep a sentence true to itself and
-    // false about the world. The half that survives is the one that is still measured.
-    expect(markup).toContain('разделения доступа между учётными записями');
+    // false about the world. The half that survived was "no separation of access between
+    // accounts", and W49 made that false in turn: a role set separates what an account may
+    // do (`R-55`, `R-60`). `W50-SHELL-FRAME` replaced it with what is now true, and
+    // `screen-claims-about-the-system.guard.test.ts` refuses a denial of roles on any screen.
+    expect(markup).toContain('Изменять данные может эксперт, управлять учётными записями — администратор.');
+    expect(markup).not.toContain('разделения доступа между учётными записями');
     expect(markup).not.toContain('без учётных записей,');
   });
 });

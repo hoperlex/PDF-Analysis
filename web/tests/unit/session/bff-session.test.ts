@@ -13,11 +13,16 @@
  * The stub is `globalThis.fetch`, which is what `forwardWithCredential` calls when the
  * route handler gives it no override. Recording every call is how "the password went out
  * once, to one address" is asserted rather than described.
+ *
+ * Since `W49-BFF-01` one sign-in is up to two upstream calls on each branch — the exchange
+ * and `getMe` when it succeeds, the exchange and the registration status read when it is
+ * refused — so the stub answers by **address**: `answer` is the exchange, `me` is `getMe`,
+ * `status` is `readRegistrationStatus` and `other` is everything the catch-all forwards.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GET, POST } from '@/app/bff/v1/[...path]/route';
+import { GET, PATCH, POST } from '@/app/bff/v1/[...path]/route';
 import {
   SESSION_CLOSE_PATH,
   SESSION_OPEN_PATH,
@@ -27,12 +32,21 @@ import {
   signInRefusalUrl,
 } from '@/features/sign-in';
 import { BFF_BASE_PATH } from '@/shared/api/credentialed-forward';
+import { forgetEveryGuestBucket } from '@/app/bff/session/guest-throttle';
 import {
   SESSION_COOKIE,
+  credentialOf,
   forgetEverySession,
   openSessionCount,
   subjectOf,
 } from '@/app/bff/session/store';
+
+import {
+  ACCOUNT_LABEL,
+  ACCOUNT_LOGIN,
+  accountAnswer,
+  authenticationRequired,
+} from './account-fixture';
 
 const UPSTREAM = 'http://api.test:8000';
 const DEPLOYMENT_TOKEN = 'deployment-credential-a1b2';
@@ -42,18 +56,33 @@ const PASSWORD = 'пароль-который-не-должен-утечь';
 
 interface Seen {
   readonly url: string;
+  readonly path: string;
   readonly method: string;
   readonly authorization: string | null;
   readonly body: string;
 }
 
 let seen: Seen[] = [];
+/** The exchange, `POST /auth/token`. */
 let answer: () => Response;
+/** `getMe`, `GET /me`. */
+let me: () => Response;
+/** `readRegistrationStatus`, `POST /registrations/status`. */
+let status: () => Response;
+/** Everything else the catch-all forwards. */
+let other: () => Response;
 
 const ORIGINAL = {
   upstream: process.env.AUDITMANAGER_API_UPSTREAM,
   token: process.env.AUDITMANAGER_API_TOKEN,
 };
+
+function respond(path: string, method: string): Response {
+  if (method === 'POST' && path === '/auth/token') return answer();
+  if (method === 'GET' && path === '/me') return me();
+  if (method === 'POST' && path === '/registrations/status') return status();
+  return other();
+}
 
 /**
  * What the API answers a successful exchange with, as the contract declares it.
@@ -75,26 +104,34 @@ function mintedAnswer(expiresIn: number = 3600, isDefault = false): Response {
 
 beforeEach(() => {
   forgetEverySession();
+  forgetEveryGuestBucket();
   seen = [];
   answer = () => mintedAnswer();
+  me = () => accountAnswer();
+  status = () => authenticationRequired();
+  other = () => new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
   process.env.AUDITMANAGER_API_UPSTREAM = UPSTREAM;
   process.env.AUDITMANAGER_API_TOKEN = DEPLOYMENT_TOKEN;
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const headers = new Headers(init?.headers ?? {});
     const raw = init?.body;
+    const method = init?.method ?? 'GET';
+    const path = new URL(String(input)).pathname;
     seen.push({
       url: String(input),
-      method: init?.method ?? 'GET',
+      path,
+      method,
       authorization: headers.get('authorization'),
       body: raw === undefined || raw === null ? '' : new TextDecoder().decode(raw as ArrayBuffer),
     });
-    return answer();
+    return respond(path, method);
   });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
   forgetEverySession();
+  forgetEveryGuestBucket();
   if (ORIGINAL.upstream === undefined) delete process.env.AUDITMANAGER_API_UPSTREAM;
   else process.env.AUDITMANAGER_API_UPSTREAM = ORIGINAL.upstream;
   if (ORIGINAL.token === undefined) delete process.env.AUDITMANAGER_API_TOKEN;
@@ -167,6 +204,17 @@ describe('R-50: where a sign-in lands, and what the register was told', () => {
     const second = cookieFrom(await signIn());
     expect(subjectOf(second.split('=')[1] as string)?.isDefaultCredential).toBe(false);
   });
+
+  it('takes the stricter of the exchange and getMe, which report the same column', async () => {
+    // A moment apart, the two answers can disagree only if the column changed between
+    // them. Either saying the password must change is enough: that is the API's answer,
+    // the restrictive one, and not a value this tier made up.
+    answer = () => mintedAnswer(3600, false);
+    me = () => accountAnswer({ is_default_credential: true });
+    const response = await signIn();
+    expect(response.headers.get('location')).toBe('/account/password');
+    expect(subjectOf(cookieFrom(response).split('=')[1] as string)?.isDefaultCredential).toBe(true);
+  });
 });
 
 describe('the exchange happens on the server, and the token stops there', () => {
@@ -200,12 +248,15 @@ describe('the exchange happens on the server, and the token stops there', () => 
     await listProjects(cookie);
     await listProjects(cookie);
 
-    expect(seen).toHaveLength(3);
+    // The exchange, `getMe`, and the two reads.
+    expect(seen).toHaveLength(4);
     const exchanges = seen.filter((call) => call.body.includes(PASSWORD));
     expect(exchanges).toHaveLength(1);
     expect(exchanges[0]?.url).toBe(`${UPSTREAM}/auth/token`);
     expect(exchanges[0]?.method).toBe('POST');
     expect(JSON.parse(exchanges[0]?.body as string)).toEqual({ login: LOGIN, password: PASSWORD });
+    // A successful exchange is never followed by the registration status read.
+    expect(seen.map((call) => call.path)).not.toContain('/registrations/status');
   });
 
   it('presents the reviewer’s own credential once the session exists', async () => {
@@ -248,6 +299,8 @@ describe('the sign-in screen is told what happened without being told which half
     expect(response.headers.get('location')).toBe(signInRefusalUrl('credentials'));
     expect(response.headers.get('set-cookie')).toBeNull();
     expect(openSessionCount()).toBe(0);
+    // And `getMe` was never asked: there is no credential to ask it with.
+    expect(seen.map((call) => call.path)).not.toContain('/me');
   });
 
   it('refuses an incomplete form without sending anything upstream', async () => {
@@ -300,12 +353,73 @@ describe('the sign-in screen is told what happened without being told which half
     // The pin the handler's own copy of these three strings is held to. A rename on either
     // side is red here rather than a redirect to a screen that shows nothing.
     expect(SIGN_IN_PATH).toBe('/login');
-    expect(SIGN_IN_LANDING_PATH).toBe('/projects');
+    // `W50-PLAN.md` §3.2: a completed sign-in lands on the front door, not the project list.
+    expect(SIGN_IN_LANDING_PATH).toBe('/');
     expect(SESSION_OPEN_PATH).toBe(`${BFF_BASE_PATH}/session`);
     expect(SESSION_CLOSE_PATH).toBe(`${BFF_BASE_PATH}/session/end`);
     for (const refusal of SIGN_IN_REFUSALS) {
       expect(signInRefusalUrl(refusal)).toBe(`${SIGN_IN_PATH}?refusal=${refusal}`);
     }
+  });
+});
+
+describe('W50: a validated next survives sign-in, and an invalid one is dropped', () => {
+  it('lands on next, with its query', async () => {
+    const response = await signIn({ login: LOGIN, password: PASSWORD, next: '/projects?x=1' });
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/projects?x=1');
+  });
+
+  it('lands on next for a dynamic address too', async () => {
+    const address = '/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+    expect((await signIn({ login: LOGIN, password: PASSWORD, next: address })).headers.get('location')).toBe(
+      address,
+    );
+  });
+
+  it.each([
+    '//evil.example',
+    'https://evil.example',
+    '/\\evil',
+    `/projects?q=${'a'.repeat(513 - '/projects?q='.length)}`,
+    '/nowhere',
+    '/projects#top',
+  ])('drops %s, lands on / and echoes nothing of it', async (next) => {
+    const response = await signIn({ login: LOGIN, password: PASSWORD, next });
+    expect(response.headers.get('location')).toBe(SIGN_IN_LANDING_PATH);
+    for (const [, value] of response.headers) expect(value).not.toContain('evil');
+    expect(await response.text()).toBe('');
+  });
+
+  it('carries next to the forced change screen', async () => {
+    answer = () => mintedAnswer(3600, true);
+    const response = await signIn({ login: LOGIN, password: PASSWORD, next: '/projects?x=1' });
+    expect(response.headers.get('location')).toBe('/account/password?next=%2Fprojects%3Fx%3D1');
+  });
+
+  it('keeps a validated destination after a refused sign-in', async () => {
+    answer = () => new Response('{}', { status: 401 });
+    const response = await signIn({ login: LOGIN, password: PASSWORD, next: '/projects?x=1' });
+    expect(response.headers.get('location')).toBe('/login?refusal=credentials&next=%2Fprojects%3Fx%3D1');
+  });
+
+  it('sends an incomplete profile to completion while keeping the destination', async () => {
+    me = () => accountAnswer({ profile_complete: false });
+    const response = await signIn({ login: LOGIN, password: PASSWORD, next: '/dashboard' });
+    expect(response.headers.get('location')).toBe('/account?next=%2Fdashboard');
+  });
+
+  it('is idempotent: the same next lands on the same address every time', async () => {
+    const first = await signIn({ login: LOGIN, password: PASSWORD, next: '/dashboard' });
+    const second = await signIn({ login: LOGIN, password: PASSWORD, next: '/dashboard' });
+    expect(first.headers.get('location')).toBe('/dashboard');
+    expect(second.headers.get('location')).toBe(first.headers.get('location'));
+  });
+
+  it('never forwards next upstream: the exchange carries the pair and nothing else', async () => {
+    await signIn({ login: LOGIN, password: PASSWORD, next: '/projects?x=1' });
+    const exchange = seen.find((call) => call.path === '/auth/token');
+    expect(JSON.parse(exchange?.body ?? '{}')).toEqual({ login: LOGIN, password: PASSWORD });
   });
 });
 
@@ -359,5 +473,389 @@ describe('the reserved segment is this tier’s own and never reaches the API', 
     const envelope = (await response.json()) as { error_code: string };
     expect(envelope.error_code).toBe('not_found');
     expect(seen).toEqual([]);
+  });
+});
+
+/** The session id a sign-in's cookie carries. */
+function idFrom(cookie: string): string {
+  return cookie.split('=')[1] as string;
+}
+
+/** `PATCH /me` through the catch-all, as the generated client sends it. */
+function updateMyProfile(cookie: string, body: Record<string, unknown>): Promise<Response> {
+  return PATCH(
+    new Request('http://web.test/bff/v1/me', {
+      method: 'PATCH',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ path: ['me'] }) },
+  );
+}
+
+describe('W49: the session holds the subject getMe describes, never one this tier guessed', () => {
+  it('opens the row with getMe’s six fields, read with the minted credential', async () => {
+    me = () =>
+      accountAnswer({ roles: ['admin', 'expert'], is_default_credential: false, profile_complete: true });
+    const cookie = cookieFrom(await signIn());
+
+    const call = seen.find((entry) => entry.path === '/me');
+    expect(call?.method).toBe('GET');
+    expect(call?.authorization).toBe(`Bearer ${MINTED}`);
+    expect(call?.body).toBe('');
+
+    const subject = subjectOf(idFrom(cookie));
+    expect(subject).toMatchObject({
+      // The account's login from the API, not the one typed into the form.
+      login: ACCOUNT_LOGIN,
+      displayLabel: ACCOUNT_LABEL,
+      initials: 'ПА',
+      roles: ['admin', 'expert'],
+      isDefaultCredential: false,
+      profileComplete: true,
+    });
+    expect(subject?.login).not.toBe(LOGIN);
+    expect(Object.keys(subject as object).sort()).toEqual([
+      'displayLabel',
+      'expiresAt',
+      'initials',
+      'isDefaultCredential',
+      'login',
+      'openedAt',
+      'profileComplete',
+      'roles',
+    ]);
+    expect(JSON.stringify(subject)).not.toContain(MINTED);
+  });
+
+  it('records an incomplete legacy profile as incomplete, with no roles invented', async () => {
+    me = () =>
+      accountAnswer({
+        login: 'admin',
+        display_label: 'admin',
+        last_name: null,
+        first_name: null,
+        middle_name: null,
+        roles: [],
+        profile_complete: false,
+      });
+    const subject = subjectOf(idFrom(cookieFrom(await signIn())));
+    expect(subject?.profileComplete).toBe(false);
+    expect(subject?.roles).toEqual([]);
+    expect(subject?.initials).toBe('A');
+  });
+
+  it('opens no session when getMe does not describe a subject it understands', async () => {
+    const unusable: readonly (() => Response)[] = [
+      () => authenticationRequired(),
+      () => new Response('{}', { status: 500 }),
+      () => new Response('not json', { status: 200 }),
+      () => accountAnswer({ roles: ['expert', 'owner'] }),
+      () => accountAnswer({ roles: ['expert', 'expert'] }),
+      () => accountAnswer({ roles: 'expert' }),
+      () => accountAnswer({ profile_complete: undefined }),
+      () => accountAnswer({ is_default_credential: 'no' }),
+      () => accountAnswer({ display_label: '' }),
+      () => accountAnswer({ login: 42 }),
+    ];
+    for (const shape of unusable) {
+      forgetEveryGuestBucket();
+      me = shape;
+      const response = await signIn();
+      expect(response.headers.get('location')).toBe(signInRefusalUrl('upstream'));
+      expect(response.headers.get('set-cookie')).toBeNull();
+    }
+    expect(openSessionCount()).toBe(0);
+  });
+});
+
+describe('R-56 addendum: sign-in shows a pending application and nothing else', () => {
+  beforeEach(() => {
+    answer = () => authenticationRequired();
+  });
+
+  it('sends a pair that proves a pending application to the pending refusal', async () => {
+    status = () =>
+      new Response(JSON.stringify({ status: 'pending' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    const response = await signIn();
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe(signInRefusalUrl('pending'));
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(openSessionCount()).toBe(0);
+  });
+
+  it('asks the status read with the same pair, and sends the password nowhere else', async () => {
+    await signIn();
+    expect(seen.map((call) => `${call.method} ${call.path}`)).toEqual([
+      'POST /auth/token',
+      'POST /registrations/status',
+    ]);
+    const statusCall = seen[1] as Seen;
+    expect(JSON.parse(statusCall.body)).toEqual({ login: LOGIN, password: PASSWORD });
+    // The same credential handling as the exchange it follows.
+    expect(statusCall.authorization).toBe((seen[0] as Seen).authorization);
+    expect(seen.filter((call) => call.body.includes(PASSWORD))).toHaveLength(2);
+  });
+
+  it('answers a rejected or unknown pair with the generic refusal, never with pending', async () => {
+    // The status read answers every pair but a pending one with the exchange's own 401 --
+    // an unknown login, a wrong password, and a decided request alike.
+    status = () => authenticationRequired();
+    const response = await signIn();
+    expect(response.headers.get('location')).toBe(signInRefusalUrl('credentials'));
+    expect(response.headers.get('location')).not.toBe(signInRefusalUrl('pending'));
+  });
+
+  it('reads only a 200 naming pending as pending; every other answer is the generic refusal', async () => {
+    const notPending: readonly (() => Response)[] = [
+      () => new Response(JSON.stringify({ status: 'rejected' }), { status: 200 }),
+      () => new Response(JSON.stringify({ status: 'approved' }), { status: 200 }),
+      () => new Response(JSON.stringify({}), { status: 200 }),
+      () => new Response('null', { status: 200 }),
+      () => new Response('not json', { status: 200 }),
+      () => new Response(JSON.stringify({ status: 'pending' }), { status: 201 }),
+      () => new Response(JSON.stringify({ status: 'pending' }), { status: 422 }),
+      () => new Response('{}', { status: 500 }),
+      () => new Response('{}', { status: 503 }),
+    ];
+    for (const shape of notPending) {
+      forgetEveryGuestBucket();
+      status = shape;
+      const response = await signIn();
+      expect(response.headers.get('location')).toBe(signInRefusalUrl('credentials'));
+    }
+  });
+
+  it('reads a proxy’s 429 on the exchange as the per-client throttled refusal', async () => {
+    answer = () => new Response('{}', { status: 429 });
+    const response = await signIn();
+    expect(response.headers.get('location')).toBe(signInRefusalUrl('throttled'));
+    expect(seen.map((call) => call.path)).toEqual(['/auth/token']);
+  });
+});
+
+describe('an upstream 401 on a held credential closes the session and answers the envelope', () => {
+  it('deletes the row, clears the cookie and returns the API’s own 401 envelope', async () => {
+    const cookie = cookieFrom(await signIn());
+    expect(openSessionCount()).toBe(1);
+
+    other = () => authenticationRequired('api-epoch-raised');
+    const response = await listProjects(cookie);
+
+    // The envelope, not a redirect: the caller is the generated client's fetch.
+    expect(response.status).toBe(401);
+    expect(response.headers.get('location')).toBeNull();
+    const envelope = (await response.json()) as { error_code: string; correlation_id: string };
+    expect(envelope.error_code).toBe('authentication_required');
+    expect(envelope.correlation_id).toBe('api-epoch-raised');
+    expect(response.headers.get('set-cookie'), 'the cookie is cleared in the same answer').not.toBeNull();
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
+    expect(response.headers.get('set-cookie')).toContain(`${SESSION_COOKIE}=;`);
+
+    // The row is gone, here as well as there.
+    expect(openSessionCount()).toBe(0);
+    expect(subjectOf(idFrom(cookie))).toBeNull();
+    expect(credentialOf(idFrom(cookie))).toBeNull();
+
+    // And the browser's old cookie now opens nothing: no further request goes out with it.
+    seen = [];
+    const after = await listProjects(cookie);
+    expect(after.status).toBe(401);
+    expect(seen).toEqual([]);
+  });
+
+  it('keeps the session on every other refusal, which is about the request and not the credential', async () => {
+    const cookie = cookieFrom(await signIn());
+    for (const statusCode of [403, 404, 409, 422, 500, 503]) {
+      other = () => new Response('{}', { status: statusCode });
+      const response = await listProjects(cookie);
+      expect(response.status).toBe(statusCode);
+      expect(response.headers.get('set-cookie')).toBeNull();
+    }
+    expect(openSessionCount()).toBe(1);
+    expect(credentialOf(idFrom(cookie))).toBe(MINTED);
+  });
+});
+
+describe('W49: a successful profile change rewrites the subject without a new sign-in', () => {
+  it('re-reads getMe after PATCH /me and rewrites the row in place', async () => {
+    me = () =>
+      accountAnswer({
+        login: 'admin',
+        display_label: 'admin',
+        last_name: null,
+        first_name: null,
+        middle_name: null,
+        profile_complete: false,
+      });
+    const cookie = cookieFrom(await signIn());
+    const before = subjectOf(idFrom(cookie));
+    expect(before?.profileComplete).toBe(false);
+
+    other = () => accountAnswer();
+    me = () => accountAnswer();
+    seen = [];
+    const response = await updateMyProfile(cookie, {
+      email: ACCOUNT_LOGIN,
+      last_name: 'Проверяющая',
+      first_name: 'Анна',
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(seen.map((call) => `${call.method} ${call.path}`)).toEqual(['PATCH /me', 'GET /me']);
+    expect(seen[1]?.authorization).toBe(`Bearer ${MINTED}`);
+
+    const after = subjectOf(idFrom(cookie));
+    expect(after).toMatchObject({
+      login: ACCOUNT_LOGIN,
+      displayLabel: ACCOUNT_LABEL,
+      initials: 'ПА',
+      profileComplete: true,
+    });
+    // The same session: the same credential and the lifetime the exchange granted.
+    expect(credentialOf(idFrom(cookie))).toBe(MINTED);
+    expect(after?.openedAt).toBe(before?.openedAt);
+    expect(after?.expiresAt).toBe(before?.expiresAt);
+    expect(openSessionCount()).toBe(1);
+  });
+
+  it('reads nothing again when the change was refused', async () => {
+    const cookie = cookieFrom(await signIn());
+    other = () => new Response('{}', { status: 422 });
+    seen = [];
+    const response = await updateMyProfile(cookie, { last_name: '', first_name: '' });
+    expect(response.status).toBe(422);
+    expect(seen.map((call) => call.path)).toEqual(['/me']);
+    expect(seen[0]?.method).toBe('PATCH');
+  });
+
+  it('ends the session when the refresh cannot say who it belongs to now', async () => {
+    const cookie = cookieFrom(await signIn());
+    other = () => accountAnswer();
+    me = () => new Response('{}', { status: 503 });
+    const response = await updateMyProfile(cookie, { last_name: 'Проверяющая', first_name: 'Анна' });
+    // The change itself was made and is reported as made; the session is closed so the next
+    // sign-in reads the subject again, rather than this tier keeping one it knows is stale.
+    expect(response.status).toBe(200);
+    expect(response.headers.get('set-cookie'), 'the cookie is cleared in the same answer').not.toBeNull();
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
+    expect(openSessionCount()).toBe(0);
+  });
+
+  it('does not refresh on a read of /me, which changes nothing', async () => {
+    const cookie = cookieFrom(await signIn());
+    other = () => accountAnswer();
+    seen = [];
+    await GET(new Request('http://web.test/bff/v1/me', { headers: { cookie } }), {
+      params: Promise.resolve({ path: ['me'] }),
+    });
+    expect(seen).toHaveLength(1);
+  });
+});
+
+describe('the two public registration operations are refused to the browser; the administrator’s are forwarded', () => {
+  /** `submitRegistration` and `readRegistrationStatus`: refused by method and path. */
+  const PUBLIC: readonly (readonly string[])[] = [['registrations'], ['registrations', 'status']];
+
+  /**
+   * The administrator's operations under the same segment, each as the generated client
+   * sends it. Forwarded with the session's credential like any operation; the API refuses
+   * them to anyone without `admin`.
+   */
+  const ADMINISTRATIVE: readonly { readonly verb: 'GET' | 'POST'; readonly path: readonly string[]; readonly search?: string }[] = [
+    { verb: 'GET', path: ['registrations'], search: '?status=pending' },
+    { verb: 'GET', path: ['registrations'] },
+    { verb: 'POST', path: ['registrations', 'reg_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', 'approve'] },
+    { verb: 'POST', path: ['registrations', 'reg_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', 'reject'] },
+  ];
+
+  async function ask(
+    verb: 'GET' | 'POST',
+    path: readonly string[],
+    cookie?: string,
+    search = '',
+  ): Promise<Response> {
+    const method = verb === 'GET' ? GET : POST;
+    return method(
+      new Request(`http://web.test/bff/v1/${path.join('/')}${search}`, {
+        method: verb,
+        headers: {
+          'content-type': 'application/json',
+          ...(cookie === undefined ? {} : { cookie }),
+        },
+        ...(verb === 'POST' ? { body: JSON.stringify({ login: LOGIN, password: PASSWORD }) } : {}),
+      }),
+      { params: Promise.resolve({ path: [...path] }) },
+    );
+  }
+
+  it('refuses POST /registrations and POST /registrations/status without a session, forwarding nothing', async () => {
+    for (const path of PUBLIC) {
+      const response = await ask('POST', path);
+      expect(response.status, `POST ${path.join('/')}`).toBe(404);
+      expect(((await response.json()) as { error_code: string }).error_code).toBe('not_found');
+    }
+    expect(seen).toEqual([]);
+  });
+
+  it('refuses them with a live session too, before the session is read', async () => {
+    const cookie = cookieFrom(await signIn());
+    seen = [];
+    for (const path of PUBLIC) {
+      const response = await ask('POST', path, cookie);
+      expect(response.status, `POST ${path.join('/')}`).toBe(404);
+      // Refused before the session is read: the session is untouched, not cleared.
+      expect(response.headers.get('set-cookie')).toBeNull();
+    }
+    // Not one request went out under the reviewer's credential.
+    expect(seen).toEqual([]);
+    expect(openSessionCount()).toBe(1);
+  });
+
+  it('forwards the administrator’s list, approve and reject with the session’s own credential', async () => {
+    const cookie = cookieFrom(await signIn());
+    for (const { verb, path, search } of ADMINISTRATIVE) {
+      seen = [];
+      const response = await ask(verb, path, cookie, search);
+      const where = `${verb} ${path.join('/')}${search ?? ''}`;
+      expect(response.status, where).toBe(200);
+      expect(seen.map((call) => `${call.method} ${call.path}`), where).toEqual([
+        `${verb} /${path.join('/')}`,
+      ]);
+      expect(seen[0]?.url, where).toBe(`${UPSTREAM}/${path.join('/')}${search ?? ''}`);
+      expect(seen[0]?.authorization, where).toBe(`Bearer ${MINTED}`);
+    }
+  });
+
+  it('treats them like any operation without a session: nothing is forwarded, the answer is 401', async () => {
+    for (const { verb, path, search } of ADMINISTRATIVE) {
+      const response = await ask(verb, path, undefined, search);
+      expect(response.status, `${verb} ${path.join('/')}`).toBe(401);
+    }
+    expect(seen).toEqual([]);
+  });
+
+  it('passes the API’s own refusal of a non-administrator through, and keeps the session', async () => {
+    // `role:admin` is the API's to enforce; this tier forwards and reports what it said.
+    const cookie = cookieFrom(await signIn());
+    other = () => new Response(JSON.stringify({ error_code: 'permission_denied' }), { status: 403 });
+    const response = await ask('GET', ['registrations'], cookie, '?status=pending');
+    expect(response.status).toBe(403);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(openSessionCount()).toBe(1);
+  });
+
+  it('still forwards a segment that merely starts with the same letters', async () => {
+    // The control: the refusal is of two exact addresses, not of a prefix. A path the
+    // contract does not have is the API's to refuse, and it is forwarded like any other.
+    const cookie = cookieFrom(await signIn());
+    seen = [];
+    await GET(new Request('http://web.test/bff/v1/registrationsx', { headers: { cookie } }), {
+      params: Promise.resolve({ path: ['registrationsx'] }),
+    });
+    expect(seen.map((call) => call.path)).toEqual(['/registrationsx']);
   });
 });

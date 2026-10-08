@@ -8,15 +8,18 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 f043eb6c3a5bbba3cb95fff59039fff42582c79ae0dc8ff2ba261e2cb4583585
+ *   sha256 633a58a53baf6652625b59d3db9438ae01e8c4ac8da788160882f031123f2e37
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 import type {
+  Account,
+  AccountPage,
   AppendDecisionRequest,
   AppendDecisionResponse,
+  ApproveRegistrationRequest,
   ChangePasswordRequest,
   CorrelationId,
   CreateProjectRequest,
@@ -37,11 +40,22 @@ import type {
   Project,
   ProjectPage,
   ProjectUid,
+  RegistrationRequest,
+  RegistrationRequestId,
+  RegistrationRequestPage,
+  RegistrationStatus,
+  RegistrationStatusResponse,
+  RejectRegistrationRequest,
+  ResetUserPasswordRequest,
   RunId,
   RunStatus,
   RunStatusPage,
   StartRunRequest,
+  SubmitRegistrationRequest,
+  UpdateMyProfileRequest,
+  UpdateUserRequest,
   UploadDocumentRequest,
+  UserUid,
   Verdict,
   VersionBlockIndex,
   VersionUid,
@@ -50,24 +64,38 @@ import type {
 /** Every operationId in the contract, sorted. */
 export const OPERATION_IDS = [
   'appendDecision',
+  'approveRegistration',
+  'archiveUser',
   'changePassword',
   'createProject',
   'exportRunCsv',
   'getDashboardSummary',
   'getDocumentVersion',
   'getFinding',
+  'getMe',
   'getRunStatus',
+  'getUser',
   'getVersionBlocks',
   'issueToken',
   'listDecisionHistory',
   'listDecisions',
   'listDocuments',
   'listProjects',
+  'listRegistrations',
   'listRunFindings',
   'listRuns',
+  'listUsers',
   'listVersions',
+  'purgeUser',
+  'readRegistrationStatus',
+  'rejectRegistration',
+  'resetUserPassword',
+  'restoreUser',
   'startRun',
   'streamDocumentVersionContent',
+  'submitRegistration',
+  'updateMyProfile',
+  'updateUser',
   'uploadDocument',
 ] as const;
 
@@ -107,6 +135,59 @@ export type AppendDecisionInput = {
 export type AppendDecisionResult = AppendDecisionResponse;
 
 // ------------------------------------------------------------------------------------
+// approveRegistration - POST /registrations/{request_id}/approve
+// ------------------------------------------------------------------------------------
+
+/**
+ * Approve a registration request and create the account.
+ *
+ * Requires `admin`. In one transaction, with the request locked: the account is created from the request's login, names and password, with a complete profile and the roles the body names (at least one); the request is decided and its password removed. The same `Idempotency-Key` with the same payload replays the recorded outcome; with another payload it is `idempotency_key_reuse`.
+ */
+export type ApproveRegistrationInput = {
+  /** Path parameters, substituted into `/registrations/{request_id}/approve`. */
+  path: {
+    request_id: RegistrationRequestId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ApproveRegistrationRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `approveRegistration` (`application/json`, HTTP 200). */
+export type ApproveRegistrationResult = RegistrationRequest;
+
+// ------------------------------------------------------------------------------------
+// archiveUser - POST /users/{user_uid}/archive
+// ------------------------------------------------------------------------------------
+
+/**
+ * Archive an account.
+ *
+ * Requires `admin`. Archive is the normal removal (R-61) and is reversible: the account cannot sign in and every credential it holds is refused from its next request. Oneself is `permission_denied`; an archived account is `state_transition_not_allowed` against `app_user`; the last active account holding `admin` is `conflict` with `conflict_reason: last_admin`.
+ */
+export type ArchiveUserInput = {
+  /** Path parameters, substituted into `/users/{user_uid}/archive`. */
+  path: {
+    user_uid: UserUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `archiveUser` (`application/json`, HTTP 200). */
+export type ArchiveUserResult = Account;
+
+// ------------------------------------------------------------------------------------
 // changePassword - POST /auth/password
 // ------------------------------------------------------------------------------------
 
@@ -119,11 +200,11 @@ export type AppendDecisionResult = AppendDecisionResponse;
  *
  * **The response is the replacement credential**, minted after the change, and the only one this account now accepts. It is answered rather than left to a second exchange because the caller's own credential was revoked by this very request: a `204` would leave them holding something already dead with no way to tell that from a failure.
  *
- * The `403` is declared because every operation behind the seam declares it: `permission_denied` means an authenticated subject was refused, a generated client needs a typed shape for it on every authorized operation, and an operation that omitted it would be claiming a property about a role model this document does not describe. This surface raises it nowhere, here included.
+ * The `403` is declared because every operation behind the seam declares it: `permission_denied` means an authenticated subject was refused, and a generated client needs a typed shape for it on every authorized operation. This operation does not raise it today: an account still on a default credential reaches it, so does an incomplete profile, and it needs no role.
  *
  * Nothing is created, so there is no idempotency key. A repeat of the same request is refused by its own `current_password`, which is no longer current -- it is not replayed and there is no `409` here.
  *
- * Revocation has no operation of its own on this surface. Ending a pilot -- taking credentials away from accounts whose passwords nobody is changing -- is an operator's action taken on the deployment, and publishing it would require deciding who may revoke whom, which is the role vocabulary this document deliberately does not have.
+ * Revocation has no operation of its own on this surface. Ending a pilot -- taking credentials away from accounts whose passwords nobody is changing -- is an operator's action taken on the deployment; an administrator's changes that take an account's rights away (`archiveUser`, a role change through `updateUser`, `resetUserPassword`) revoke that account's credentials as part of the change.
  */
 export type ChangePasswordInput = {
   /** Request body, sent as `application/json`. */
@@ -244,6 +325,25 @@ export type GetFindingInput = {
 export type GetFindingResult = FindingDetail;
 
 // ------------------------------------------------------------------------------------
+// getMe - GET /me
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the signed-in account.
+ *
+ * The account the presented credential names: its login, names, role set and state. Reachable by an account still on a default credential and by an incomplete profile, because it is how a client learns either state; every operation that is not this one, `updateMyProfile` or `changePassword` answers an incomplete profile with `permission_denied` and `required_capability: profile_completed`. Nothing is created or changed.
+ */
+export type GetMeInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getMe` (`application/json`, HTTP 200). */
+export type GetMeResult = Account;
+
+// ------------------------------------------------------------------------------------
 // getRunStatus - GET /runs/{run_id}
 // ------------------------------------------------------------------------------------
 
@@ -265,6 +365,29 @@ export type GetRunStatusInput = {
 
 /** Success body of `getRunStatus` (`application/json`, HTTP 200). */
 export type GetRunStatusResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
+// getUser - GET /users/{user_uid}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read one account.
+ *
+ * Requires `admin`. One account, archived or not.
+ */
+export type GetUserInput = {
+  /** Path parameters, substituted into `/users/{user_uid}`. */
+  path: {
+    user_uid: UserUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getUser` (`application/json`, HTTP 200). */
+export type GetUserResult = Account;
 
 // ------------------------------------------------------------------------------------
 // getVersionBlocks - GET /versions/{version_uid}/blocks
@@ -441,6 +564,34 @@ export type ListProjectsInput = {
 export type ListProjectsResult = ProjectPage;
 
 // ------------------------------------------------------------------------------------
+// listRegistrations - GET /registrations
+// ------------------------------------------------------------------------------------
+
+/**
+ * List registration requests, oldest first.
+ *
+ * Requires `admin`. Every request, or those in one status, ordered by `(submitted_at, request_id)`, with `pending_total` -- the number of pending requests whatever the filter.
+ */
+export type ListRegistrationsInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+    /** Restrict the page to requests in this status. */
+    status?: RegistrationStatus;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listRegistrations` (`application/json`, HTTP 200). */
+export type ListRegistrationsResult = RegistrationRequestPage;
+
+// ------------------------------------------------------------------------------------
 // listRunFindings - GET /runs/{run_id}/findings
 // ------------------------------------------------------------------------------------
 
@@ -509,6 +660,34 @@ export type ListRunsInput = {
 export type ListRunsResult = RunStatusPage;
 
 // ------------------------------------------------------------------------------------
+// listUsers - GET /users
+// ------------------------------------------------------------------------------------
+
+/**
+ * List accounts, ordered by login.
+ *
+ * Requires `admin`. Every active account, or every account with `include_archived=true`, ordered by `(login, user_uid)`.
+ */
+export type ListUsersInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Include archived accounts. Absent is `false`. */
+    include_archived?: boolean;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listUsers` (`application/json`, HTTP 200). */
+export type ListUsersResult = AccountPage;
+
+// ------------------------------------------------------------------------------------
 // listVersions - GET /documents/{document_uid}/versions
 // ------------------------------------------------------------------------------------
 
@@ -539,6 +718,123 @@ export type ListVersionsInput = {
 
 /** Success body of `listVersions` (`application/json`, HTTP 200). */
 export type ListVersionsResult = DocumentVersionPage;
+
+// ------------------------------------------------------------------------------------
+// purgeUser - DELETE /users/{user_uid}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Purge an archived, unreferenced account.
+ *
+ * Requires `admin`. Irreversible (R-61): an **archived** account that nothing references is deleted with its roles; the request that created it keeps its row, and the login becomes free. An account that is not archived is `state_transition_not_allowed` against `app_user`; one that archived, granted or decided anything, or authored a decision, is `conflict` with `conflict_reason: account_referenced` and stays archived; oneself is `permission_denied`.
+ */
+export type PurgeUserInput = {
+  /** Path parameters, substituted into `/users/{user_uid}`. */
+  path: {
+    user_uid: UserUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `purgeUser`. */
+export type PurgeUserResult = void;
+
+// ------------------------------------------------------------------------------------
+// readRegistrationStatus - POST /registrations/status
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read whether a login and password pair proves a pending application.
+ *
+ * Reachable without a credential, like `issueToken`, and called by a client after an exchange was refused. A pair that proves a **pending** application answers `{"status": "pending"}`. **Every other pair answers the same `401 authentication_required` a refused exchange gets** -- an unknown login, a wrong password, and a decided application, whose password was removed at the decision so that nothing can prove the pair. A rejected applicant is told nothing here (R-56 addendum of 2026-10-06); the reason is for administrators. Every path costs the same work, so the timing reveals nothing either, and refused reads are counted on the request with the sign-in brake's rules. `403` is not declared: there is no subject to deny. The edge throttles it per client and answers `rate_limited` (`429`) itself, before the operation is reached.
+ */
+export type ReadRegistrationStatusInput = {
+  /** Request body, sent as `application/json`. */
+  body: IssueTokenRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `readRegistrationStatus` (`application/json`, HTTP 200). */
+export type ReadRegistrationStatusResult = RegistrationStatusResponse;
+
+// ------------------------------------------------------------------------------------
+// rejectRegistration - POST /registrations/{request_id}/reject
+// ------------------------------------------------------------------------------------
+
+/**
+ * Reject a registration request with a reason.
+ *
+ * Requires `admin`. Decides the request as rejected with the reason, which is stored for administrators only, and removes its password. A request that is no longer pending is `state_transition_not_allowed` against `registration_request`. No account is created.
+ */
+export type RejectRegistrationInput = {
+  /** Path parameters, substituted into `/registrations/{request_id}/reject`. */
+  path: {
+    request_id: RegistrationRequestId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: RejectRegistrationRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `rejectRegistration` (`application/json`, HTTP 200). */
+export type RejectRegistrationResult = RegistrationRequest;
+
+// ------------------------------------------------------------------------------------
+// resetUserPassword - POST /users/{user_uid}/password
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set a temporary password for an account.
+ *
+ * Requires `admin`. The account's password becomes the temporary one, held to the password policy; the account must change it at its next sign-in (`is_default_credential` becomes true), its sign-in brake is cleared, and every credential it holds is refused. Not oneself (`permission_denied`): an administrator changes their own password with `changePassword`. That the administrator knows the temporary password is a registered limitation.
+ */
+export type ResetUserPasswordInput = {
+  /** Path parameters, substituted into `/users/{user_uid}/password`. */
+  path: {
+    user_uid: UserUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ResetUserPasswordRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `resetUserPassword` (`application/json`, HTTP 200). */
+export type ResetUserPasswordResult = Account;
+
+// ------------------------------------------------------------------------------------
+// restoreUser - POST /users/{user_uid}/restore
+// ------------------------------------------------------------------------------------
+
+/**
+ * Restore an archived account.
+ *
+ * Requires `admin`. Returns an archived account to active; it signs in again with its own password. An active account is `state_transition_not_allowed` against `app_user`; a login another active account took meanwhile is `conflict` with `conflict_reason: login_taken`.
+ */
+export type RestoreUserInput = {
+  /** Path parameters, substituted into `/users/{user_uid}/restore`. */
+  path: {
+    user_uid: UserUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `restoreUser` (`application/json`, HTTP 200). */
+export type RestoreUserResult = Account;
 
 // ------------------------------------------------------------------------------------
 // startRun - POST /runs
@@ -595,6 +891,73 @@ export type StreamDocumentVersionContentInput = {
 export type StreamDocumentVersionContentResult = Blob;
 
 // ------------------------------------------------------------------------------------
+// submitRegistration - POST /registrations
+// ------------------------------------------------------------------------------------
+
+/**
+ * Apply for an account.
+ *
+ * Reachable without a credential: `security` is the empty requirement, as on `issueToken`. Records an application an administrator then approves or rejects; no mail is sent (R-56). The e-mail, the names and the password are validated first, then: an active account holding the login is `conflict` with `conflict_reason: login_taken`, a pending request for it `request_pending`, and 100 pending requests in all `queue_full`. That the first two tell a submitter a login is known is an accepted, registered limitation. Neither `401` nor `403` is declared: there is no credential to refuse and no subject to deny. The edge in front of this surface throttles it per client and answers `rate_limited` (`429`) itself, before the operation is reached; like the edge's own body-size refusal, that answer is not a response of the operation and is not declared here.
+ */
+export type SubmitRegistrationInput = {
+  /** Request body, sent as `application/json`. */
+  body: SubmitRegistrationRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `submitRegistration` (`application/json`, HTTP 201). */
+export type SubmitRegistrationResult = RegistrationStatusResponse;
+
+// ------------------------------------------------------------------------------------
+// updateMyProfile - PATCH /me
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set the signed-in account's names, and complete its profile.
+ *
+ * **Completion** (R-59): an account whose profile is incomplete gives its names and -- unless its login already is one -- its e-mail address, and the names, the login and the completion are written in **one** update, so there is no instant at which the account has one without the other. **A complete profile** changes its names only; its login is fixed. An e-mail another active account holds is `conflict` with `details.conflict_reason: login_taken`. The account is the one the credential names, never one named in the body. No credential is revoked: names are not rights.
+ */
+export type UpdateMyProfileInput = {
+  /** Request body, sent as `application/json`. */
+  body: UpdateMyProfileRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `updateMyProfile` (`application/json`, HTTP 200). */
+export type UpdateMyProfileResult = Account;
+
+// ------------------------------------------------------------------------------------
+// updateUser - PATCH /users/{user_uid}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Change an account's names, its role set, or both.
+ *
+ * Requires `admin`. Names change without revoking anything; a change of the role set revokes every credential the account holds, so it signs in again and only then meets its new rights. An administrator cannot remove a role from themselves (`permission_denied`, no detail), and the last active account holding `admin` cannot lose it (`conflict`, `conflict_reason: last_admin`). An administrator naming an account whose profile is incomplete does not complete it: only the account itself gives its e-mail.
+ */
+export type UpdateUserInput = {
+  /** Path parameters, substituted into `/users/{user_uid}`. */
+  path: {
+    user_uid: UserUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: UpdateUserRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `updateUser` (`application/json`, HTTP 200). */
+export type UpdateUserResult = Account;
+
+// ------------------------------------------------------------------------------------
 // uploadDocument - POST /projects/{project_uid}/documents
 // ------------------------------------------------------------------------------------
 
@@ -648,6 +1011,34 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['decisions'],
+  },
+  approveRegistration: {
+    operationId: 'approveRegistration',
+    method: 'POST',
+    path: '/registrations/{request_id}/approve',
+    pathParams: ['request_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['registrations'],
+  },
+  archiveUser: {
+    operationId: 'archiveUser',
+    method: 'POST',
+    path: '/users/{user_uid}/archive',
+    pathParams: ['user_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['users'],
   },
   changePassword: {
     operationId: 'changePassword',
@@ -733,6 +1124,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['findings'],
   },
+  getMe: {
+    operationId: 'getMe',
+    method: 'GET',
+    path: '/me',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['account'],
+  },
   getRunStatus: {
     operationId: 'getRunStatus',
     method: 'GET',
@@ -746,6 +1151,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['runs'],
+  },
+  getUser: {
+    operationId: 'getUser',
+    method: 'GET',
+    path: '/users/{user_uid}',
+    pathParams: ['user_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['users'],
   },
   getVersionBlocks: {
     operationId: 'getVersionBlocks',
@@ -831,6 +1250,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['projects'],
   },
+  listRegistrations: {
+    operationId: 'listRegistrations',
+    method: 'GET',
+    path: '/registrations',
+    pathParams: [],
+    queryParams: ['cursor', 'limit', 'status'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['registrations'],
+  },
   listRunFindings: {
     operationId: 'listRunFindings',
     method: 'GET',
@@ -859,6 +1292,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['runs'],
   },
+  listUsers: {
+    operationId: 'listUsers',
+    method: 'GET',
+    path: '/users',
+    pathParams: [],
+    queryParams: ['cursor', 'include_archived', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['users'],
+  },
   listVersions: {
     operationId: 'listVersions',
     method: 'GET',
@@ -872,6 +1319,76 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['documents'],
+  },
+  purgeUser: {
+    operationId: 'purgeUser',
+    method: 'DELETE',
+    path: '/users/{user_uid}',
+    pathParams: ['user_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: null,
+    successStatuses: [204],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['users'],
+  },
+  readRegistrationStatus: {
+    operationId: 'readRegistrationStatus',
+    method: 'POST',
+    path: '/registrations/status',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 422, 500, 503],
+    tags: ['registrations'],
+  },
+  rejectRegistration: {
+    operationId: 'rejectRegistration',
+    method: 'POST',
+    path: '/registrations/{request_id}/reject',
+    pathParams: ['request_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['registrations'],
+  },
+  resetUserPassword: {
+    operationId: 'resetUserPassword',
+    method: 'POST',
+    path: '/users/{user_uid}/password',
+    pathParams: ['user_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['users'],
+  },
+  restoreUser: {
+    operationId: 'restoreUser',
+    method: 'POST',
+    path: '/users/{user_uid}/restore',
+    pathParams: ['user_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['users'],
   },
   startRun: {
     operationId: 'startRun',
@@ -900,6 +1417,48 @@ export const OPERATIONS = {
     successStatuses: [200, 206],
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['documents'],
+  },
+  submitRegistration: {
+    operationId: 'submitRegistration',
+    method: 'POST',
+    path: '/registrations',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [409, 422, 500, 503],
+    tags: ['registrations'],
+  },
+  updateMyProfile: {
+    operationId: 'updateMyProfile',
+    method: 'PATCH',
+    path: '/me',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['account'],
+  },
+  updateUser: {
+    operationId: 'updateUser',
+    method: 'PATCH',
+    path: '/users/{user_uid}',
+    pathParams: ['user_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['users'],
   },
   uploadDocument: {
     operationId: 'uploadDocument',

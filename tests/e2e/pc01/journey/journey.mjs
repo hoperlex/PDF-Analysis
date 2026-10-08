@@ -24,8 +24,9 @@
  * to reuse a browser, so this property cannot be lost by forgetting it.
  *
  * **One origin, no credential.** The browser is given an origin and nothing else. It
- * follows the app's own links to find every identifier it uses -- it is handed no project,
- * document, version or run id, and it holds no token. `T-6` says the credential lives in
+ * follows the app's own links to find project, document, version and run identities. A
+ * no-call administrator detail placeholder has one manifest-declared user sample until its
+ * list can offer a real identity. It holds no token. `T-6` says the credential lives in
  * the BFF route handler server-side; the journey asserts the browser never presented one.
  *
  * **Two phases, one instrument, one exit code.** The *write* half -- create a project,
@@ -105,10 +106,10 @@ const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
 const ID = manifest.identifier_pattern;
 const API_PREFIX = manifest.api_prefix;
 
-/** `{project_uid}` -> the captured value, or a hard failure naming what is missing. */
-function fill(template, captured) {
+/** `{project_uid}` -> a captured identity, then a declared placeholder sample, or a hard failure. */
+function fill(template, captured, samples = {}) {
   return template.replace(/\{([a-z_]+)\}/g, (_, name) => {
-    const value = captured[name];
+    const value = captured[name] ?? samples[name];
     if (value === undefined) {
       throw new Error(
         `route needs {${name}} but no earlier route captured it; ` +
@@ -243,7 +244,7 @@ if (PHASE === 'write') {
   console.log('phase: write only -- the read walk was NOT run.');
 }
 for (const route of PHASE === 'write' ? [] : manifest.routes) {
-  const url = ORIGIN + fill(route.path, captured);
+  const url = ORIGIN + fill(route.path, captured, route.sample_identifiers ?? {});
 
   const record = await withColdBrowser(async (page) => {
     // Before anything is navigated: what this profile actually holds. An empty profile
@@ -301,7 +302,7 @@ for (const route of PHASE === 'write' ? [] : manifest.routes) {
   }
 
   // ---- the document itself, redirects included -------------------------------------
-  // `/` is a redirect, so "the document" is a chain and not one response. Every hop is
+  // A route may redirect, so "the document" is a chain and not one response. Every hop is
   // kept with its own status and `location`: a 200 reached through a 307 and a 200 served
   // directly are different facts, and collapsing them is how a journey stops being
   // evidence.

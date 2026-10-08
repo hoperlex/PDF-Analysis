@@ -67,6 +67,7 @@ A wave's exit criterion in this programme is **publication to `origin/dev`**, no
 | P-10 | administrator without the expert role | reads everything, changes nothing | `W49-PLAN.md` §3.2; `R-60` |
 | P-11 | navigation groups | as proposed: Главная; Работа; Знания; Система; Администрирование | `W50-PLAN.md` §3.1 |
 | P-12 | "delete an account" | archive with restore, **plus** irreversible purge when nothing references the account | `W49-PLAN.md` §3.1; `R-61` |
+| P-13 | what a rejected applicant sees (asked at the ACCESS-01 merge, 2026-10-06) | nothing at sign-in — the generic refusal; the reason is for administrators; mail informs the applicant later | `W49-PLAN.md` §3.3, §3.5; `W51-PLAN.md` §3; `R-56` addendum |
 
 Three consequences the polls could not see, each stated where it binds:
 
@@ -79,10 +80,11 @@ Three consequences the polls could not see, each stated where it binds:
   who archived, granted or decided anything is therefore unpurgeable, and so is an expert who
   authored a decision; the request that created an account is history, not a reference.
 - **P-2.** A rejection reason is free text typed by an administrator, which the error catalog's
-  safety rules exclude from `details`, and every detail value is capped at 256 characters. The
-  reason is therefore 1–256 characters, travels in a dedicated status read, and reaches the
-  sign-in screen through a one-time server-side notice, never through a URL (`W49-PLAN.md` §3.3,
-  §3.5).
+  safety rules exclude from `details`, and every detail value is capped at 256 characters, so the
+  reason is 1–256 characters. The request's password hash is nulled at the decision, so a
+  rejected applicant can no longer prove the pair; the owner ruled on 2026-10-06 (P-13, `R-56`
+  addendum) that a rejected applicant sees nothing at sign-in and will learn of the rejection by
+  mail once SMTP exists. Only *pending* is shown at sign-in (`W49-PLAN.md` §3.3, §3.5).
 - **P-9.** The forced completion applies to every account that exists at upgrade, not only to
   `admin`; the stand stays usable between W49 and the W51 screens through an operator command
   (`W49-PLAN.md` §3.1).
@@ -128,9 +130,10 @@ guard that already exists or a task below that adds one.
 - **A reseal is four documents in one change:** `contracts/api/v1/openapi.json`, the generated
   client under `web/src/shared/api/generated/`, the mirror `web/openapi/openapi.json`, and
   `web/FRONTEND_LOCK.json` (`CURRENT_STATE.md`, `D-18`). A new error code or detail key is a
-  second reseal in the same slot, and a code lives in four places — `error-codes.json`,
-  `error-envelope.schema.json`, the `== 22` literal in `test_openapi_document.py`, and the
-  Russian sentence in `web/src/shared/api/catalog-message.ts`; this programme adds one code
+  second reseal in the same slot, and a code lives in at least seven places — the catalog, the
+  envelope schema, the backend enum `shared/errors/codes.py`, the Russian sentence in
+  `catalog-message.ts`, the exhaustive map in `terminal-reason.ts` and the literal counts in the
+  contract and failure-surface tests (measured by `W49-SEAL-01`'s stop, `W49-PLAN.md` §3.4); this programme adds one code
   (`rate_limited`) and one detail key (`conflict_reason`), both in W49.
 - **Registers, not rules.** Which operations answer without a credential, which a default
   credential reaches, and now which roles each operation requires, are written sets in

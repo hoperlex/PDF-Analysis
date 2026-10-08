@@ -73,7 +73,7 @@
         "text": "Войти"
       }
     ],
-    "lands_on": "/projects",
+    "lands_on": "/",
     "bound_ms": 30000,
     "refusal_marker": "data-sign-in-refusal"
   },
@@ -111,13 +111,35 @@
       "name": "root",
       "path": "/",
       "page_module": "web/src/app/page.tsx",
-      "redirects_to": "/projects",
-      "$comment": "A redirect is not a blank page: the browser lands on /projects and that screen lists. Measured -- declaring no call here made the route red, correctly.",
+      "$comment": [
+        "The front door. Until W50 this was a redirect to /projects and declared the list the",
+        "browser landed on; W50-REGISTRY-01 made `/` a screen of its own -- where a completed",
+        "sign-in lands (`session.lands_on`) -- so it no longer redirects and declares no",
+        "`redirects_to`.",
+        "",
+        "Since W50-HOME-01 the home page reads the five newest projects (`listProjects`) and the",
+        "dashboard summary (`getDashboardSummary`); a session holding `admin` also reads the",
+        "pending registration count (`listRegistrations`), so that call is optional -- the walk",
+        "asserts declared calls in both directions, and an expert-only walk makes no such call."
+      ],
       "expects_api": [
         {
           "method": "GET",
           "path": "/projects",
           "operationId": "listProjects"
+        },
+        {
+          "method": "GET",
+          "path": "/dashboard",
+          "operationId": "getDashboardSummary"
+        }
+      ],
+      "optional_api": [
+        {
+          "method": "GET",
+          "path": "/registrations",
+          "operationId": "listRegistrations",
+          "$why_optional": "only a session holding `admin` reads the pending-request count"
         }
       ],
       "follow": null
@@ -272,31 +294,53 @@
       "name": "sign-in",
       "path": "/login",
       "page_module": "web/src/app/login/page.tsx",
+      "redirects_to": "/",
       "$comment": [
         "The sign-in screen, added by W34-WEB because this manifest is where a new screen",
         "is declared: `test_the_journey_walks_every_screen_the_application_offers` reddens",
         "the moment `web/src/app` offers one the journey does not walk, which is the point",
         "of that check and not a side effect of it.",
         "",
-        "`expects_api` is EMPTY and that is the claim, not an omission. The screen renders a",
-        "`<form>` and asks the API nothing until it is submitted: the exchange is a POST the",
-        "browser makes on navigation, to `/bff/v1/session`, which is this tier's own address",
-        "and not an operation of `contracts/api/v1/openapi.json`. Declaring a contract",
-        "operation here would name a call the browser does not make on load, and the walk",
-        "asserts in both directions -- every declared call observed, and no undeclared one.",
+        "Walked like every route here, with the session cookie -- and since W50 the guard sends",
+        "a session that opens `/login` to `/` (`W50-PLAN.md` section 3.2, decision five), so",
+        "the browser lands on the front door: `redirects_to` says so. The sign-in form itself",
+        "is what the `session` half above drives, as a guest.",
+        "",
+        "The calls declared below are the home page's (see `root`), because the walk lands there;",
+        "a guest's sign-in screen renders a `<form>` and asks the API nothing until it is",
+        "submitted: the",
+        "exchange is a POST the browser makes on navigation, to `/bff/v1/session`, which is",
+        "this tier's own address and not an operation of `contracts/api/v1/openapi.json`.",
+        "The walk asserts in both directions -- every declared call observed, and no",
+        "undeclared one.",
         "",
         "It is LAST so the read walk's follow-chain is untouched: `root` hands `/projects`",
         "the first project uid and each route after it captures the next identifier. A route",
         "inserted before them walks a screen with nothing captured yet.",
         "",
-        "What this route does NOT cover is the submitted exchange -- the password typed, the",
-        "303, the cookie, the credential the forwarder then presents. That is a write step",
-        "against a live API that can mint a token, and the API half of the exchange does not",
-        "exist yet (W34-CONTRACT published the operation; no router implements it). The",
-        "session report of W34-WEB names it as the open half rather than declaring a step",
-        "here that no stack can satisfy."
+        "The screen walk does not submit credentials. The exchange is covered by focused",
+        "BFF tests; a live write journey is deferred by the owner for a later wave."
       ],
-      "expects_api": [],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/projects",
+          "operationId": "listProjects"
+        },
+        {
+          "method": "GET",
+          "path": "/dashboard",
+          "operationId": "getDashboardSummary"
+        }
+      ],
+      "optional_api": [
+        {
+          "method": "GET",
+          "path": "/registrations",
+          "operationId": "listRegistrations",
+          "$why_optional": "only a session holding `admin` reads the pending-request count"
+        }
+      ],
       "follow": null
     },
     {
@@ -444,6 +488,169 @@
           "method": "GET",
           "path": "/dashboard",
           "operationId": "getDashboardSummary"
+        }
+      ],
+      "follow": null
+    },
+    {
+      "name": "forbidden",
+      "path": "/403",
+      "page_module": "web/src/app/403/page.tsx",
+      "$comment": [
+        "The screen a session lacking a role is sent to (`W50-PLAN.md` section 3.2, decision",
+        "four). Registered `public`; walked with the session cookie and no `from`, so it",
+        "renders without naming a role. `expects_api` is EMPTY: it reads the screen registry,",
+        "never the API."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "account",
+      "path": "/account",
+      "page_module": "web/src/app/account/page.tsx",
+      "$comment": [
+        "The account profile reads getMe on mount, then shows names, roles and an edit form.",
+        "An incomplete profile can submit names and e-mail together; a complete profile",
+        "can change only names. The journey opens it with a complete account."
+      ],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/me",
+          "operationId": "getMe"
+        }
+      ],
+      "follow": null
+    },
+    {
+      "name": "section-optimisation",
+      "path": "/section-optimisation",
+      "page_module": "web/src/app/section-optimisation/page.tsx",
+      "$comment": [
+        "Оптимизация разделов -- an honest stub on its way, R-66 (W50-REGISTRY-01).",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
+        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this entry",
+        "gains operations and the assertion starts carrying weight."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "norms",
+      "path": "/norms",
+      "page_module": "web/src/app/norms/page.tsx",
+      "$comment": [
+        "Нормы -- an honest stub on its way, R-66 (W50-REGISTRY-01).",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
+        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this entry",
+        "gains operations and the assertion starts carrying weight."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "analysis-settings",
+      "path": "/analysis-settings",
+      "page_module": "web/src/app/analysis-settings/page.tsx",
+      "$comment": [
+        "Настройки анализа -- an honest stub on its way, R-66 (W50-REGISTRY-01).",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
+        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this entry",
+        "gains operations and the assertion starts carrying weight."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "queue",
+      "path": "/queue",
+      "page_module": "web/src/app/queue/page.tsx",
+      "$comment": [
+        "Очередь -- an honest stub on its way, R-66 (W50-REGISTRY-01).",
+        "",
+        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
+        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this entry",
+        "gains operations and the assertion starts carrying weight."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "register",
+      "path": "/register",
+      "page_module": "web/src/app/register/page.tsx",
+      "$comment": [
+        "The public registration form makes no API call on mount. Submission is a plain HTML POST to the reserved BFF door."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "register-submitted",
+      "path": "/register/submitted",
+      "page_module": "web/src/app/register/submitted/page.tsx",
+      "$comment": [
+        "Direct visitors see conditional confirmation wording. This screen makes no API call and does not assert a request was submitted."
+      ],
+      "expects_api": [],
+      "follow": null
+    },
+    {
+      "name": "admin-users",
+      "path": "/admin/users",
+      "page_module": "web/src/app/admin/users/page.tsx",
+      "$comment": [
+        "Admin-only account list. The journey account holds admin and opens it directly;",
+        "an expert is sent to /403 and a guest to /login with validated next.",
+        "A rendered detail link supplies the opaque user_uid for the next cold load."
+      ],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/users",
+          "operationId": "listUsers"
+        }
+      ],
+      "follow": {
+        "capture": "user_uid",
+        "href_pattern": "^/admin/users/(usr_%ID%)$"
+      }
+    },
+    {
+      "name": "admin-user",
+      "path": "/admin/users/{user_uid}",
+      "page_module": "web/src/app/admin/users/[user_uid]/page.tsx",
+      "$comment": [
+        "Admin-only account detail. The user_uid comes from the preceding list's rendered",
+        "link. The screen reads getUser and offers no mutation until an action is submitted."
+      ],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/users/{user_uid}",
+          "operationId": "getUser"
+        }
+      ],
+      "follow": null
+    },
+    {
+      "name": "admin-registrations",
+      "path": "/admin/registrations",
+      "page_module": "web/src/app/admin/registrations/page.tsx",
+      "$comment": [
+        "Admin-only queue. It reads listRegistrations on mount and shows pending_total.",
+        "Approval and rejection are writes offered only for pending requests, not part of",
+        "this read walk. An expert is sent to /403 and a guest to /login."
+      ],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/registrations",
+          "operationId": "listRegistrations"
         }
       ],
       "follow": null
@@ -673,6 +880,33 @@
           "[data-run-failure]"
         ]
       }
+    ]
+  },
+  "identity": {
+    "$comment": [
+      "W51 Stage C. identity.mjs drives these operations through the browser. It consumes",
+      "the run written by the PC-01 write half, and the administrator credential from",
+      "E2E_PC01_LOGIN/PASSWORD. Its generated applicant passwords are never recorded.",
+      "The BFF session register path is supplied at run time, never committed; a 401",
+      "without a before/after row reading is not accepted as proof of session deletion."
+    ],
+    "runner": "tests/e2e/pc01/journey/identity.mjs",
+    "session_store_path_env": "E2E_PC01_SESSION_STORE_PATH",
+    "review_path": "/projects/{project_uid}/runs/{run_id}/review",
+    "expected_author_label": "Тестов И. П.",
+    "manual_steps": ["A13", "A14", "A15", "A16", "A17", "A18", "A19", "A20"],
+    "operations": [
+      { "stage": "register", "method": "POST", "path": "/registrations", "operationId": "submitRegistration", "status": 201 },
+      { "stage": "approve", "method": "POST", "path": "/registrations/{request_id}/approve", "operationId": "approveRegistration", "status": 200 },
+      { "stage": "profile", "method": "GET", "path": "/me", "operationId": "getMe", "status": 200 },
+      { "stage": "verdict", "method": "POST", "path": "/findings/{finding_uid}/decisions", "operationId": "appendDecision", "status": 201 },
+      { "stage": "remove_expert", "method": "PATCH", "path": "/users/{user_uid}", "operationId": "updateUser", "status": 200 },
+      { "stage": "revoked_request", "method": "GET", "path": "/me", "operationId": "getMe", "status": 401, "error_code": "authentication_required" },
+      { "stage": "denied_mutation", "method": "POST", "path": "/findings/{finding_uid}/decisions", "operationId": "appendDecision", "status": 403, "error_code": "permission_denied" },
+      { "stage": "archive", "method": "POST", "path": "/users/{user_uid}/archive", "operationId": "archiveUser", "status": 200 },
+      { "stage": "purge_refused", "method": "DELETE", "path": "/users/{user_uid}", "operationId": "purgeUser", "status": 409, "conflict_reason": "account_referenced" },
+      { "stage": "reject", "method": "POST", "path": "/registrations/{request_id}/reject", "operationId": "rejectRegistration", "status": 200 },
+      { "stage": "self_archive", "method": "POST", "path": "/users/{user_uid}/archive", "operationId": "archiveUser", "status": 403, "error_code": "permission_denied" }
     ]
   },
   "refusals": {

@@ -8,7 +8,7 @@ contract's doing rather than a liberty:
   ``security`` would mean "inherit the document's", which is not what the contract says
   here: it says the empty requirement, explicitly, overriding the root. It is stated
   through ``openapi_extra`` -- the same mechanism ``uploadDocument`` uses to restore
-  ``encoding.file.contentType`` -- and :data:`_OPEN_REQUIREMENT` is where the exact
+  ``encoding.file.contentType`` -- and :data:`OPEN_REQUIREMENT` is where the exact
   spelling and the reason for it are written down. The runtime half of the same fact is
   :data:`auditmanager.api.security.UNAUTHENTICATED_OPERATIONS`, which is what actually lets
   an uncredentialed request through. Two halves, both named, neither inferred from the
@@ -35,8 +35,10 @@ declarations are the contract's, spelling for spelling.
 **It is not an open operation.** It requires a credential like every operation but the
 exchange, and the account whose password changes is the one that credential names -- read
 from :data:`~auditmanager.api.security.CurrentSubject`, never from the body. A login in the
-body would be an operation one reviewer could aim at another, which is an authorization
-model this system has not got and `T-6` forbids inventing here.
+body would be an operation one reviewer could aim at another. Since `W49-SEAL-01` an
+administrator *can* set another account's password -- ``resetUserPassword``, an operation of
+its own, behind the ``admin`` role and refused for oneself -- and that is exactly why this one
+stays addressed by the credential: the two acts are separate operations with separate rules.
 
 **It answers with a credential, and that is the revocation being visible rather than a
 convenience.** Changing a password raises the account's credential epoch in the same
@@ -74,6 +76,7 @@ from auditmanager.api.security import CurrentSubject
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
+    "OPEN_REQUIREMENT",
     "ChangePasswordRequest",
     "IssueTokenRequest",
     "IssueTokenResponse",
@@ -81,7 +84,10 @@ __all__ = [
 ]
 
 #: The operation's own ``security``: **the empty requirement**, which overrides the
-#: document root for this operation and for no other.
+#: document root for this operation. Since `W49-SEAL-01` it is also the requirement of the
+#: two registration operations a caller reaches without a credential
+#: (``api/routers/registrations.py``), which is why it is public: one spelling of the
+#: mechanism below, imported, rather than a second copy of it.
 #:
 #: The value is an empty ``tuple`` and not an empty ``list``, and that is the whole
 #: mechanism rather than a typo. ``fastapi.utils.deep_dict_update`` -- what applies
@@ -103,7 +109,7 @@ __all__ = [
 #:
 #: ``test_the_exchange_declares_the_empty_requirement`` asserts both halves: the normalized
 #: in-memory document and the bytes of the served ``/openapi.json``.
-_OPEN_REQUIREMENT: Final[dict[str, Any]] = {"security": ()}
+OPEN_REQUIREMENT: Final[dict[str, Any]] = {"security": ()}
 
 
 class _Object(BaseModel):
@@ -134,9 +140,9 @@ class IssueTokenResponse(_Object):
     `permission_denied`. Required, the client is told at the one moment it can act on:
     it sends them to the change screen instead of into a wall of refusals.
 
-    **It says nothing about what the subject may do**, which is why it is not the capability
-    vocabulary `T-6` forbids: it is a fact about the account's *password*, the same kind of
-    fact as "this credential expires in 3600 seconds". What follows from it is declared
+    **It says nothing about what the subject may do**: it is a fact about the account's
+    *password*, the same kind of fact as "this credential expires in 3600 seconds" -- the role
+    set `R-55` gave accounts is read by the seam from the row, never handed to a client here. What follows from it is declared
     where refusals are declared -- the ``permission_denied`` every guarded operation already
     carries, with ``required_capability: password_changed`` in its details.
     """
@@ -174,7 +180,7 @@ def build_auth_routes(router: APIRouter, credentials: CredentialPort) -> None:
         tags=["auth"],
         status_code=200,
         response_model=IssueTokenResponse,
-        openapi_extra=dict(_OPEN_REQUIREMENT),
+        openapi_extra=dict(OPEN_REQUIREMENT),
         responses={
             **success(
                 200,
@@ -227,9 +233,8 @@ def build_auth_routes(router: APIRouter, credentials: CredentialPort) -> None:
             # which `tests/contract/domain_p02/test_openapi_document.py`'s
             # ``test_every_operation_can_report_401_and_403`` enforces for exactly the
             # reason that makes it right here: a generated client needs a typed shape for
-            # `permission_denied` on every authorized operation, and an operation that
-            # omitted it would be asserting something about a role model this surface does
-            # not have.
+            # `permission_denied` on every authorized operation -- and since `W49-SEAL-01`
+            # the seam raises it for a missing role or an incomplete profile as well.
             #
             # **This sentence used to read "Nothing raises it, here or anywhere else," and
             # `R-50` made it false.** The seam raises it, on every operation that is not

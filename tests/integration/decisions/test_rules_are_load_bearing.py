@@ -103,6 +103,7 @@ class TestRevokeIsRefusedByItsOwnRule:
                 finding_observation_id=published.finding_observation_id,
                 event_type="revoke",
                 author_label="reviewer-1",
+                author_user_uid=None,
             )
         assert caught.value.code is ErrorCode.VALIDATION_FAILED
 
@@ -156,6 +157,7 @@ class TestAnUnknownFindingIsRefusedByTheFindingRule:
                 finding_observation_id=published.finding_observation_id,
                 event_type="accept",
                 author_label="reviewer-1",
+                author_user_uid=None,
             )
         # NOT_FOUND, and specifically not CONFLICT: with the rule gone the INSERT is
         # attempted and the foreign key refuses it, which this module reports as
@@ -250,6 +252,7 @@ class TestCriterionSixOrdering:
             finding_observation_id=published.second_finding_observation_id,
             event_type="accept",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         rejected = record_decision(
             session,
@@ -257,6 +260,7 @@ class TestCriterionSixOrdering:
             finding_observation_id=published.finding_observation_id,
             event_type="reject",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         commented = record_decision(
             session,
@@ -265,6 +269,7 @@ class TestCriterionSixOrdering:
             event_type="comment",
             comment="Замечание после отклонения.",
             author_label="reviewer-1",
+            author_user_uid=None,
         )
 
         stored = current_verdict(session, published.finding_uid)
@@ -333,6 +338,7 @@ class TestAStaleCommandRecordIsRefused:
             event_type="accept",
             idempotency_key=_key(),
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         assert replayed is False
         fingerprint = session.execute(
@@ -384,6 +390,7 @@ class TestAStaleCommandRecordIsRefused:
             event_type="accept",
             command_id=command_id,
             author_label="reviewer-1",
+            author_user_uid=None,
         )
         repository().succeed(
             session, command_id=typed_id, outcome={"appended": True}
@@ -404,6 +411,7 @@ class TestAStaleCommandRecordIsRefused:
                 event_type="accept",
                 idempotency_key=key,
                 author_label="reviewer-1",
+                author_user_uid=None,
             )
         assert caught.value.code is ErrorCode.IDEMPOTENCY_KEY_STALE
         # Not IDEMPOTENCY_KEY_REUSE: the payload really is the same one, so the refusal
@@ -437,6 +445,7 @@ class TestAStaleCommandRecordIsRefused:
                 event_type="accept",
                 idempotency_key=key,
                 author_label="reviewer-1",
+                author_user_uid=None,
             )
         assert caught.value.code is ErrorCode.IDEMPOTENCY_KEY_STALE
 

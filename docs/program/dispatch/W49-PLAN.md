@@ -37,9 +37,11 @@ is stated with its reason.
 ### 3.1 Account
 
 - `app_user.login` **is** the sign-in identifier and holds the normalised e-mail (trimmed,
-  zero-width characters removed, lower-cased; at most 254 characters). The CHECK
-  `ck_app_user_login_format` is replaced by: **`login` has an e-mail shape, or
-  `profile_completed_at IS NULL`.** No seed constant is hard-coded: every account that exists at
+  zero-width characters removed, lower-cased, ASCII; an internationalised domain is accepted in
+  its `xn--` form; at most 254 characters). The CHECK `ck_app_user_login_format` is replaced by:
+  **`login` has an e-mail shape, or `profile_completed_at IS NULL` and `login` has the legacy
+  login shape** — narrower than an unconditional `IS NULL`, so raw SQL still cannot write `Admin`
+  (decided at the ACCESS-01 merge). No seed constant is hard-coded: every account that exists at
   upgrade is a legacy account until it completes its profile.
 - `profile_completed_at`: the backfill leaves it NULL for every existing row. While it is NULL
   the account reaches only the operations in `OPERATIONS_AN_INCOMPLETE_PROFILE_REACHES` (§3.2).
@@ -140,23 +142,29 @@ is stated with its reason.
   carried the names). Two concurrent approvals: one wins, the other answers
   `state_transition_not_allowed`.
 - A request for a login held by an active account, or already pending, answers `conflict`; more
-  than 100 pending requests answers `conflict` too. The reasons are the new safe detail key
-  `conflict_reason ∈ {login_taken, request_pending, queue_full, account_referenced}` — an
+  than 100 pending requests answers `conflict` too; so does removing, archiving or demoting the
+  last active administrator (an act on oneself stays `permission_denied` with no detail — the
+  screens never offer it). The reasons are the new safe detail key
+  `conflict_reason ∈ {login_taken, request_pending, queue_full, account_referenced, last_admin}` — an
   enum-like classifier, hence admissible under the catalog's safety rules; a catalog reseal inside
   `W49-SEAL-01`. That `login_taken` and `request_pending` disclose a login's existence to someone
   who submits a request is an accepted limitation, registered.
-- **Status at sign-in (`R-56`).** `issueToken` is unchanged: a pair that matches no active
-  account answers the generic `authentication_required`. A new unauthenticated operation
-  `readRegistrationStatus` (`POST /registrations/status`, body `login`, `password`) answers
-  `{status: pending|rejected, decided_at?, rejection_reason?}` for a pair that matches a request,
-  and the same generic refusal otherwise. The BFF calls it only after a failed exchange (§3.5).
-  `rejection_reason` is **1–256 characters** — the catalog's per-value limit (`error-codes.json`,
-  `detail_value_rules`) and the reason it is **not** an error detail: a free text typed by an
-  administrator is a raw input, which the safety rules exclude from `details`. The owner's
-  "1–500" becomes 1–256 as a consequence.
+- **Status at sign-in (`R-56` with its 2026-10-06 addendum).** `issueToken` is unchanged: a
+  pair that matches no active account answers the generic `authentication_required`. A new
+  unauthenticated operation `readRegistrationStatus` (`POST /registrations/status`, body
+  `login`, `password`) answers `{status: pending}` for a pair that matches a **pending** request,
+  and the same generic refusal for every other pair — including a decided request, whose password
+  columns are nulled at the decision, so there is nothing left to prove the pair with. **A
+  rejected applicant sees nothing at sign-in**; the owner ruled on 2026-10-06 that the applicant
+  will learn of a rejection by mail once SMTP exists. The BFF calls the status read only after a
+  failed exchange (§3.5). `rejection_reason` is **1–256 characters**, stored for administrators
+  only — the catalog's per-value limit, and a free text typed by an administrator is a raw input
+  the safety rules exclude from `details`. The owner's "1–500" becomes 1–256 as a consequence.
 - Constant work: a failed exchange and a status read each perform the same number of PBKDF2
   derivations whether or not a request exists, so timing does not reveal one. The request's
-  throttle columns count both kinds of attempts.
+  throttle columns count both kinds of attempts. *(Amended by `R-63`, 2026-10-06: only the status
+  read counts against a request; a failed exchange performs its derivations and notes nothing on
+  the request.)*
 - No mail, no verification, no captcha (`R-56`; `IDENTITY-WAVES.md` §9).
 
 ### 3.4 Operations added (names are the seal task's to confirm)
@@ -166,7 +174,7 @@ is stated with its reason.
 | `getMe` | `GET /me` | ∅ | default-credential and incomplete-profile reachable |
 | `updateMyProfile` | `PATCH /me` | ∅ | incomplete-profile reachable; `login` writable only while `profile_completed_at IS NULL`; completion is one UPDATE |
 | `submitRegistration` | `POST /registrations` | none | unauthenticated; `security: []` in the document |
-| `readRegistrationStatus` | `POST /registrations/status` | none | unauthenticated; `security: []`; constant work |
+| `readRegistrationStatus` | `POST /registrations/status` | none | unauthenticated; `security: []`; constant work; declares `401` for the generic refusal and no `403`, as `issueToken` does (`submitRegistration` declares neither) |
 | `listRegistrations` | `GET /registrations?status=` | `{admin}` | response carries `pending_total` for the badge |
 | `approveRegistration` | `POST /registrations/{request_id}/approve` | `{admin}` | body: roles (≥ 1); idempotency key as other mutations |
 | `rejectRegistration` | `POST /registrations/{request_id}/reject` | `{admin}` | body: reason, 1–256 chars |
@@ -188,12 +196,20 @@ true`, category `policy`, no detail keys): the proxy throttle of §3.5 has to an
 catalog code — it answers direct callers of `/api/v1/`, the safety rules forbid inventing a code
 at the edge, and the catalog has no 429 today. That is the
 second reseal of the slot `IDENTITY-WAVES.md` §5 allows; no other code
-is added. A code lives in three places at once — `error-codes.json`,
-`error-envelope.schema.json` (its `enum` and the per-code `retryable` `allOf`) and the literal
-`== 22` in `tests/contract/domain_p02/test_openapi_document.py` — and in the Russian sentence
-`web/src/shared/api/catalog-message.ts` carries for every code
-(`catalog-message.contract.test.ts` "describes every code the catalog declares"); all four move
-in `W49-SEAL-01a`. One safe detail key is added (`conflict_reason` on `conflict`).
+is added. A code lives in more places than the catalog — measured by the seal's stop on
+2026-10-06 (`docs/program/W49-SEAL-01a.md` at `2fae883`): `error-codes.json`;
+`error-envelope.schema.json` (its `enum` and the per-code `retryable` `allOf`); the backend enum
+`src/auditmanager/shared/errors/codes.py`, which refuses to import out of step with the catalog;
+the Russian sentence in `web/src/shared/api/catalog-message.ts`; the exhaustive
+`Record<ErrorCode, …>` in `web/src/entities/audit-run/model/terminal-reason.ts`; and the literal
+counts `== 22` / `toHaveLength(22)` in the contract, failure-surface and vocabulary tests — all
+move in `W49-SEAL-01a`. The database's own code vocabulary (migration `0002` `ERROR_CODES`, used
+by the `terminal_reason` and `error_code` CHECKs) does **not** grow: `rate_limited` is answered
+only by the proxy and is never stored, so `test_contract_vocabulary.py` declares an explicit
+edge-only set `{rate_limited}` and asserts the database domain equals the catalog minus that set.
+Because the catalog, the identifiers and the state machines all change, the domain family's
+`candidate_revision` moves from 8 to 9 together (the catalog's own revision note says the family
+carries one revision). One safe detail key is added (`conflict_reason` on `conflict`).
 `DecisionEvent` on the wire is unchanged. Every sentence in `openapi.json` that denies a role,
 subject or capability vocabulary, or rate limiting, is superseded under `R-55` — not a counted
 list: the seal's required check is
@@ -232,20 +248,22 @@ writes, each named in the report. The surface triple after the reseal is **measu
   mechanism is the one the route handler already has — the `SESSION_SEGMENT`/`EXCHANGE_SEGMENT`
   constants in `web/src/app/bff/v1/[...path]/route.ts` and their tests in
   `web/tests/unit/session/bff-session.test.ts` — not `web/scripts/reserved-forwarder.mjs`, which
-  reserves npm script names. The catch-all refuses the `registrations` first segment to the
-  browser exactly as it refuses `auth` today (`not_found` before the session is read), so
-  `submitRegistration` and `readRegistrationStatus` are reachable only through the reserved
-  handlers and their bucket, never with a session's credential. The registration handler, like
+  reserves npm script names. The catch-all refuses exactly the two public operations —
+  `POST /registrations` and `POST /registrations/status` — to the browser, as it refuses `auth`
+  today (`not_found` before the session is read), so `submitRegistration` and
+  `readRegistrationStatus` are reachable only through the reserved handlers and their bucket,
+  never with a session's credential. The administrator's operations under the same segment
+  (`listRegistrations`, `approveRegistration`, `rejectRegistration`) are forwarded with the
+  session's credential like every other operation — W50's home tile and W51's queue use them.
+  (Corrected at the BFF-01 hand-back, 2026-10-06: refusing the whole segment closed them too.) The registration handler, like
   the session handler, answers the form with `303`: to `/register/submitted` on success, else to
   `/register?refusal=<value>` with the closed set `{validation, login_taken, request_pending,
   queue_full, throttled, upstream}` mapped from the API's `conflict_reason` and status (the W51
   screen renders each value as a sentence; an unknown value is a typed fault).
 - On a failed exchange the session handler calls `readRegistrationStatus` with the same pair; a
-  `pending`/`rejected` answer is stored as a **one-time notice** row in the register (status,
-  reason, five-minute TTL, opaque id) and the browser is sent to
-  `/login?refusal=pending|rejected&notice=<id>`; `app/login/page.tsx` reads and deletes the notice
-  server-side (it already reads `searchParams` and the register). **The reason never travels in
-  a URL**, so it cannot be spoofed by one.
+  `pending` answer sends the browser to `/login?refusal=pending`, anything else to the generic
+  `credentials` refusal. There is no notice and no reason anywhere near a URL: the only status a
+  stranger could forge is the *pending* sentence, which reveals nothing about any request.
 - **Throttle for guests, in the BFF:** a per-client token bucket on `POST /bff/v1/registration`
   and `POST /bff/v1/session`. Both are plain HTML forms answered with `303` to a screen and a
   closed `?refusal=` set (`route.ts` `refuseSignIn`, `exchange.ts`), so the bucket refuses with
@@ -282,7 +300,7 @@ writes, each named in the report. The surface triple after the reseal is **measu
   envelope as JSON with `$request_id` as `correlation_id` — nginx's own 429 is an HTML page,
   exactly as its 413 is (the comment at `nginx.conf:37-42` is why the body cap is 32m). The
   100-request cap stays the last line. Bulk rejection and request retention are registered debts.
-- The sign-in refusal set gains `pending`, `rejected` and `throttled` in both of its mirrors —
+- The sign-in refusal set gains `pending` and `throttled` in both of its mirrors —
   `SIGN_IN_REFUSALS` in `web/src/features/sign-in/model/exchange.ts` and `type Refusal` in
   `web/src/app/bff/v1/[...path]/route.ts` — and the sign-in screen renders the sentences
   (Russian). `exchange.ts` records the `W40-LIMIT` decision **not** to add a `throttled` value,
@@ -415,9 +433,37 @@ measured at the base, into the ACCESS and SEAL task files.
   `web/tests/contract/**`, `src/auditmanager/api/**`, `src/auditmanager/bootstrap/adapters.py`,
   `src/auditmanager/bootstrap/composition.py` (this wave's composition-root owner),
   `tests/integration/api/**`, `tests/integration/auth/**`, `tests/integration/composition/**`,
+  `src/auditmanager/access/**` for exactly three edits decided at the ACCESS-01 merge —
+  attaching `conflict_reason` to the `conflict` raises once the catalog declares the key, moving
+  `usr`/`reg` into the shared identity registry, and removing `access/name.py`, which
+  `access.profile` replaces —
+  `src/auditmanager/decisions/ledger.py` (removing the `author_user_uid = None` default from `record_decision` and `append_decision_under_key`, decided at the DECISIONS-01 merge) and the call sites that then need the keyword — `tests/integration/decisions/**`, `tests/integration/exports/test_verdict_columns.py`, `tests/integration/p02_journey/journey.py`, `tests/integration/p02_journey/test_journey_figures.py`, `tests/integration/p02_journey/test_query_surface_over_the_corpus.py` — one keyword argument per call, nothing else,
   `tests/e2e/pc01/test_acceptance.py` (the route-count assertion only),
   `web/src/app/bff/v1/[...path]/route.ts` and `web/src/shared/api/authorization.ts` (the one
-  count comment in each, §3.6), `docs/program/CONTRACT_PIN_REGISTRY.md` (all rows but the
+  count comment in each, §3.6),
+  **granted after the seal's stop of 2026-10-06** — the error-code and surface sites it measured:
+  `src/auditmanager/shared/errors/codes.py` (the `rate_limited` member and its count sentence),
+  `web/src/shared/api/errors.ts` (its count sentence), `web/src/shared/api/catalog-message.ts` (the
+  `rate_limited` sentence and its count sentences), `web/src/entities/audit-run/model/terminal-reason.ts`
+  (the `rate_limited` entry), `web/tests/unit/screens/run-terminal-reason.test.ts`,
+  `web/tests/unit/api/failure-surface.test.ts`, `web/tests/unit/api/authorization-state.test.ts`
+  (the open set becomes `issueToken`, `submitRegistration`, `readRegistrationStatus`),
+  `docs/program/P02_SEAMS.md`, `infra/deploy/README.md`, `infra/deploy/serve.py` and
+  `infra/deploy/proxy/nginx.conf` (only sentences naming the surface triple or the code count;
+  `W49-EDGE-01` takes `nginx.conf` afterwards), and the suite-account sites that must create
+  complete expert accounts — `tests/support/accounts.py` (one helper: complete profile, role
+  `expert`, an e-mail login derived from the suite label), `tests/e2e/pc01/driver.py`,
+  `tests/characterization/w13_baseline/**` (records 10 and 11 re-captured with a
+  `permitted_change` naming the derived name form as the only difference),
+  `tests/integration/ingest/test_size_guard_boundary.py`,
+  `tests/integration/p02_journey/test_truncated_end_to_end.py` and
+  `tests/integration/p02_journey/test_query_surface_over_the_corpus.py`, and after the seal's second stop (`W49-SEAL-01c.md` at `48099d9`): `P02_SEAMS.md` §7's
+  operation table and idempotency sentence, `tests/contract/domain_p02/test_seam_register.py`,
+  `test_c3_the_surface_declares_no_operation_that_can_mutate_a_version`, the inverted prefix test
+  in `tests/integration/access/test_password_hashing.py`, the edge-only `rate_limited` in
+  `tests/integration/db/test_durable_analysis_effects.py`, the `candidate_revision` const in
+  `contracts/domain/v1/*.schema.json`, and the "unnamed account" predicate in
+  `src/auditmanager/access/repository.py`; `docs/program/CONTRACT_PIN_REGISTRY.md` (all rows but the
   head's), the exact live triple sentences of `docs/program/CURRENT_STATE.md` and
   `docs/program/ALPHA_ROADMAP.md` named by the task file, `docs/program/W49-SEAL-01{a,b,c}.md`.
 - **01a — the documents:** §3.4 operations and schemas; `conflict_reason`; `rate_limited` in
@@ -437,7 +483,9 @@ measured at the base, into the ACCESS and SEAL task files.
   `.venv/bin/python -m pytest tests/integration/api/test_authorization.py tests/integration/auth -q`
   green.
 - **01c — the routers:** `me.py`, `registrations.py`, `users.py`; the decisions router passes the
-  subject's `user_uid` to the ledger; the status read with constant work. The suite's own logins
+  subject's `user_uid` to the ledger, the ledger's `None` default is removed so a new event can
+  never be written without its author's account, and `test_the_ledger_declares_no_default_author`
+  extends to `author_user_uid`; the status read with constant work. The suite's own logins
   change where the plan changes the rule: `tests/integration/api/driver.py` (`SUITE_LOGIN`
   becomes an e-mail with a complete profile), `test_authorization.py` (the open set is now three),
   `test_decision_authorship.py` and `tests/integration/auth/test_the_reviewer_name_is_visible.py`
@@ -450,20 +498,21 @@ measured at the base, into the ACCESS and SEAL task files.
 - **Stop:** any new error code other than `rate_limited`; a change to an existing operation's
   shape; a free-text detail key; a business rule in a router.
 
-### `W49-BFF-01` — session subject, notice, throttle, refusal sentences (executor)
+### `W49-BFF-01` — session subject, throttle, refusal sentences (executor)
 - **Depends on:** `W49-SEAL-01` (generated client, registers, `rate_limited`). Parallel with
   `W49-EDGE-01`.
-- **Allowed paths:** `web/src/app/bff/**`, `web/src/app/login/page.tsx` (reads and deletes the
-  notice), `web/src/shared/api/credentialed-forward.ts`, `web/src/shared/config/**` (the session
+- **Allowed paths:** `web/src/app/bff/**`, `web/src/app/login/page.tsx` (the pending and
+  throttled sentences), `web/src/shared/api/credentialed-forward.ts`, `web/src/shared/config/**` (the session
   store format and the proxy flag), `web/src/features/sign-in/**`, `web/src/_pages/sign-in/**`,
   `web/tests/unit/session/**`, `web/tests/guards/session-durability.guard.test.ts`,
   `web/tests/guards/server-credential.guard.test.ts`, `docs/program/W49-BFF-01.md`.
 - **Deliverables:** §3.5 in full, including the `throttled` value and sentence in both closed
   refusal sets and the registration handler's set. `layout.tsx` and the frame are untouched (W50).
 - **Required tests and mutations:** `npm --prefix web test -- --run`; lint; typecheck; a forward
-  under the `registrations` segment through the catch-all is refused with and without a session;
-  a version-1 register file is replaced, not read; the notice is deleted on first read and absent
-  after its TTL; removing the upstream-401 row-closing is red; the bucket refuses the N+1th guest
+  of `POST /registrations` or `POST /registrations/status` through the catch-all is refused with and
+  without a session, while `GET /registrations` and the approve/reject paths are forwarded;
+  a version-1 register file is replaced, not read; a rejected or unknown pair lands on the
+  generic `credentials` refusal, never on `pending`; removing the upstream-401 row-closing is red; the bucket refuses the N+1th guest
   request within the window; a forged `X-Forwarded-For` does not escape the bucket; without the
   flag the bucket is global.
 
@@ -472,21 +521,24 @@ Depends on: `W49-BFF-01` and `W49-EDGE-01` merged. Standard form, files under `t
 `tests/integration/access/qa_w49/**`, `web/tests/unit/qa_w49/**`. Brief: approve race;
 archive/purge/demote/reset of self; last-admin removal through `updateUser` and `archiveUser`;
 token after role removal → 401 → the BFF closes the row and answers the envelope; restore
-collision; queue cap at 100 and 101; registration with a taken login; status read as
-pending/rejected and the throttle on those attempts; archived account sign-in equals the generic
+collision; queue cap at 100 and 101; registration with a taken login; status read as pending,
+a rejected request's pair answered exactly like an unknown pair, and the throttle on those
+attempts; archived account sign-in equals the generic
 refusal byte-for-byte; `is_default_credential` after admin reset forces the change; purge of a
 non-archived account, of an account that authored a decision event, of one that decided a
 request, of one that archived another, and of self — each refused; purge of an archived
 unreferenced account succeeds, its request row survives with `created_user_uid` NULL, and the
-login is free; the notice is single-use.
+login is free.
 
 ### `W49-JUDGE-X` (attacker) and `W49-JUDGE-Y` (architecture) (executor, fresh contexts)
 - X: privilege escalation across every operation with every role set and profile state;
   default credential against the new operations; enumeration via `conflict_reason` and via
   timing of the exchange and the status read; flooding to the cap through the BFF, through
-  `/api/v1/` directly and from two addresses; a forged `notice` id; a forged `refusal` value;
+  `/api/v1/` directly and from two addresses; a rejected applicant learning anything at sign-in;
+  a forged `refusal` value;
   a forged `X-Forwarded-For`; BFF: the reserved registration handlers reach only the two public
-  operations, and the catch-all refuses the `registrations` segment with or without a session.
+  operations, the catch-all refuses those two with or without a session, and the administrator's
+  registration operations still require the `admin` role through the catch-all.
 - Y: routers free of SQL/logic (`rg` queries recorded); invariants live in `access`; the ALR-05
   guard green (AST walk 0 / 0); migration fresh and both upgrade paths; partial unique; the
   reference register equals the schema's foreign keys to `app_user`; the reseal documents and

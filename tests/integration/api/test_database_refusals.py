@@ -119,6 +119,7 @@ def test_am002_an_append_only_ledger_refuses_delete(
         finding_observation_id=published_run.finding_observation_id,
         event_type="accept",
         author_label="reviewer-1",
+        author_user_uid=None,
     )
 
     error = _refusal(

@@ -288,3 +288,86 @@ def test_the_api_operation_table_matches_the_frozen_document(
         (row["Operation"].strip("`"), row["Method and path"].strip("`")) for row in rows
     }
     assert registered == documented
+
+
+#: The first line of §7's rule about ``Idempotency-Key``. The rule runs from here to the next
+#: top-level bullet of that list.
+KEY_RULE_START = "* the writes that take a required `Idempotency-Key` header are"
+
+#: The words that close the rule's first sentence: everything before them names the keyed
+#: writes, and nothing else.
+KEY_RULE_FIRST_SENTENCE_END = ", and no others."
+
+
+def _key_rule(text: str) -> tuple[str, str]:
+    """``(first sentence, rest)`` of the §7 rule that names the keyed writes."""
+    lines = text.splitlines()
+    starts = [index for index, line in enumerate(lines) if line.startswith(KEY_RULE_START)]
+    assert len(starts) == 1, f"§7 must state the keyed writes once, found {len(starts)}"
+    block = [lines[starts[0]]]
+    for line in lines[starts[0] + 1 :]:
+        if not line.startswith(" "):
+            break
+        block.append(line)
+    rule = "\n".join(block)
+    assert KEY_RULE_FIRST_SENTENCE_END in rule, rule
+    first, _, rest = rule.partition(KEY_RULE_FIRST_SENTENCE_END)
+    return first, rest
+
+
+def _resolve_parameter(openapi_document: dict, parameter: dict) -> dict:
+    reference = parameter.get("$ref")
+    if reference is None:
+        return parameter
+    node: dict = openapi_document
+    for part in reference.removeprefix("#/").split("/"):
+        node = node[part]
+    return node
+
+
+def test_the_idempotency_rule_names_exactly_the_keyed_writes(
+    seam_register_text: str, openapi_document: dict
+) -> None:
+    """`W49-SEAL-01`. §7 said "every write takes a required `Idempotency-Key` header", and
+    the account writes made that false: only some writes are keyed.
+
+    So the rule now names them, and this compares the names with the frozen document both
+    ways. Its first sentence names exactly the operations that declare a required
+    ``Idempotency-Key`` header. The rest names every other write, so a write added later is
+    either keyed or described, and never left out of the rule.
+    """
+    operation_ids: set[str] = set()
+    writes: set[str] = set()
+    keyed: set[str] = set()
+    for item in openapi_document["paths"].values():
+        for method, operation in item.items():
+            if method not in {"get", "post", "put", "patch", "delete"}:
+                continue
+            operation_ids.add(operation["operationId"])
+            if method == "get":
+                continue
+            writes.add(operation["operationId"])
+            for raw in operation.get("parameters", []):
+                parameter = _resolve_parameter(openapi_document, raw)
+                if (
+                    parameter.get("in") == "header"
+                    and parameter.get("name") == "Idempotency-Key"
+                    and parameter.get("required") is True
+                ):
+                    keyed.add(operation["operationId"])
+    assert keyed, "the document declares no keyed write; this guard would compare nothing"
+
+    first, rest = _key_rule(seam_register_text)
+
+    def named(prose: str) -> set[str]:
+        return set(re.findall(r"`([A-Za-z]+)`", prose)) & operation_ids
+
+    assert named(first) == keyed, (
+        "§7's rule must name exactly the writes that require Idempotency-Key: "
+        f"missing {sorted(keyed - named(first))}, extra {sorted(named(first) - keyed)}"
+    )
+    assert named(rest) == writes - keyed, (
+        "§7's rule must say what a repeat of every unkeyed write does: "
+        f"missing {sorted(writes - keyed - named(rest))}, "
+        f"not an unkeyed write {sorted(named(rest) - (writes - keyed))}"
+    )

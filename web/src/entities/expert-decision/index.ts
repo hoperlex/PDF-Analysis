@@ -24,6 +24,9 @@ export { JOURNAL_PAGE_LIMIT, useDecisionJournal } from './api/use-decision-journ
 /** The Russian label for a verdict, so no consumer renders the contract value as prose. */
 export { VERDICT_LABELS } from './ui/verdict-badge';
 
+/** The Russian heading for a finding's category, as the knowledge base shows it. */
+export { CATEGORY_LABELS } from './model/category-labels';
+
 export type { IntentRecord } from './model/intent';
 export { intentSignature, resolveIntentKey } from './model/intent';
 

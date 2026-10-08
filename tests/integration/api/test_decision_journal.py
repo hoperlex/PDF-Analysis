@@ -203,8 +203,10 @@ def test_a_record_carries_the_finding_context_it_was_recorded_against(
         # `OPERATING_CONSTRAINTS.md` §12 -- a test that built its expectation out of the
         # thing under test would move both sides of the comparison together. The driver's
         # label is deliberately not equal to its login, so this line distinguishes the two.
-        assert record["author_label"] == "Испытательный стенд"
-        assert record["author_label"] != "api-suite", (
+        # `W49-SEAL-01`: the suite account is a complete profile, so its label is the name
+        # form of its names ("Фамилия И. О."), and its login is an e-mail address.
+        assert record["author_label"] == "Стендова А. И."
+        assert record["author_label"] != "api-suite@suite.invalid", (
             "the journal is reporting the login again; `R-37` ruled for the display name"
         )
 

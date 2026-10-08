@@ -1,6 +1,6 @@
 """The identity types, the contract catalog and the migration's CHECKs agree.
 
-Three artifacts describe the same 27 identities. Any one of them can be edited
+Three artifacts describe the same 29 identities (27 until `W49-SEAL-01` added `usr` and `reg`). Any one of them can be edited
 alone, which is what these tests are for.
 """
 

@@ -8,6 +8,8 @@ closed rule is gone.
 
 from __future__ import annotations
 
+from tests.support.expected_facts import FACTS
+
 from types import ModuleType
 
 import pytest
@@ -15,12 +17,35 @@ import pytest
 PC01_MACHINES = ("audit_run", "blob", "command_idempotency")
 NOT_INSTANTIATED_MACHINES = ("import", "job", "attempt")
 
+#: Catalog codes that no column of this schema stores, and the reason each one is here.
+#:
+#: `rate_limited` (`W49-SEAL-01`, owner decision of 2026-10-06 on the seal's stop report):
+#: it is answered only by the edge in front of ``/api/v1`` -- the proxy's throttle on the
+#: two unauthenticated registration operations -- and never by the application, so no
+#: run, job or attempt can terminate with it and no ``error_code``/``terminal_reason``
+#: CHECK has to admit it. Widening those CHECKs would need a migration for a value nothing
+#: writes. The set is an explicit, named exception and not a tolerance: a stored code put
+#: here would make the database refuse a legal value, and the two assertions below are
+#: what turn either mistake red.
+EDGE_ONLY_CODES: frozenset[str] = frozenset({"rate_limited"})
+
 
 def test_error_code_domain_equals_the_frozen_catalog(
     migration_module: ModuleType, error_codes_contract: dict
 ) -> None:
-    assert set(migration_module.ERROR_CODES) == set(error_codes_contract["codes"])
-    assert len(migration_module.ERROR_CODES) == 22
+    """The stored vocabulary is the catalog minus the codes nothing stores, exactly.
+
+    Both directions still hold for every code a column can carry: the schema neither
+    narrows (a legal stored value refused at run time) nor widens (an undeclared value
+    storable). ``EDGE_ONLY_CODES`` must be a subset of the catalog and disjoint from what
+    the migration stores, so a code cannot be both edge-only and stored.
+    """
+    catalog = set(error_codes_contract["codes"])
+    stored = set(migration_module.ERROR_CODES)
+    assert EDGE_ONLY_CODES <= catalog, sorted(EDGE_ONLY_CODES - catalog)
+    assert EDGE_ONLY_CODES.isdisjoint(stored), sorted(EDGE_ONLY_CODES & stored)
+    assert stored == catalog - EDGE_ONLY_CODES
+    assert len(migration_module.ERROR_CODES) == FACTS.stored_error_codes
 
 
 def test_stage_ids_equal_the_analysis_registry(

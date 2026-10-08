@@ -12,7 +12,8 @@ import Link from 'next/link';
 
 import { PageShell } from '@/shared/ui';
 import { routes } from '@/shared/lib';
-import { RunProgress } from '@/widgets/run-progress';
+
+import { LazyRunProgress } from './lazy-run-progress';
 
 export interface RunPageProps {
   readonly projectUid: string;
@@ -35,7 +36,7 @@ export function RunPage({ projectUid, runId }: RunPageProps) {
         </>
       }
     >
-      <RunProgress projectUid={projectUid} runId={runId} />
+      <LazyRunProgress projectUid={projectUid} runId={runId} />
     </PageShell>
   );
 }

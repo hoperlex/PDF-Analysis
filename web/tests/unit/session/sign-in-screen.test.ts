@@ -108,7 +108,7 @@ describe('the signed-in shape offers the way out, on the server', () => {
 });
 
 describe('every refusal is Russian, and says nothing about which half was wrong', () => {
-  it('renders all four, each with its machine value on a data attribute', () => {
+  it('renders all six, each with its machine value on a data attribute', () => {
     for (const refusal of SIGN_IN_REFUSALS) {
       const markup = render(createElement(SignInPage, { refusal }));
       expect(markup).toContain(`data-sign-in-refusal="${refusal}"`);
@@ -134,8 +134,40 @@ describe('every refusal is Russian, and says nothing about which half was wrong'
     // Not a per-account report: no count, no deadline, no "this account".
     expect(/\d/.test(message)).toBe(false);
     expect(/эт(а|у|ой) учётн/i.test(message)).toBe(false);
-    // And the refusal vocabulary did not grow a value for it.
-    expect([...SIGN_IN_REFUSALS]).toEqual(['credentials', 'validation', 'unconfigured', 'upstream']);
+    // And the refusal vocabulary did not grow a value for the ACCOUNT's throttle. It grew two
+    // values in `W49-BFF-01`, and neither is that: `pending` is a registration status and
+    // `throttled` is the per-CLIENT guest bucket, decided before any login is read.
+    expect([...SIGN_IN_REFUSALS]).toEqual([
+      'credentials',
+      'validation',
+      'unconfigured',
+      'upstream',
+      'pending',
+      'throttled',
+    ]);
+  });
+
+  it('says the guest limit is about the connection and never about an account', () => {
+    const message = signInRefusalMessage('throttled');
+    expect(message).toContain('подключени');
+    expect(message).toContain('а не к учётной записи');
+    expect(/подожд/i.test(message)).toBe(true);
+    // Nothing that would make it a report on a particular account or a particular limit.
+    expect(/\d/.test(message)).toBe(false);
+    expect(/эт(а|у|ой) учётн/i.test(message)).toBe(false);
+    expect(/(заблокирован|атак)/i.test(message)).toBe(false);
+  });
+
+  it('says only that an application is pending: no reason, no decision, nothing a forged link could reveal', () => {
+    const message = signInRefusalMessage('pending');
+    expect(message).toContain('ещё не рассмотрена');
+    expect(message).toContain('администратор');
+    // `R-56` addendum: a rejection is never shown here, and no reason travels to sign-in.
+    for (const forbidden of [/отклон/i, /причин/i, /одобрена/i, /\d/]) {
+      expect(forbidden.test(message), String(forbidden)).toBe(false);
+    }
+    // And it says nothing about which login it is about: a stranger can type the address.
+    expect(message).not.toContain('@');
   });
 
   it('never names the login or the password as the part that failed', () => {

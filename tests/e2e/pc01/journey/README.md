@@ -11,7 +11,7 @@ A sign-in, two phases, one instrument, one envelope, one exit code.
 app's own controls, on the public origin — then waits for the run's terminal by reading
 what the run screen's own poller renders.
 
-**The read walk** then visits all **fifteen** routes, each in a cold browser, discovering every
+**The read walk** then visits every route declared in `manifest.json`, each in a cold browser, discovering every
 identifier by following links the pages render.
 
 Exit `0` means both halves did what `manifest.json` says they do. Non-zero prints every
@@ -20,6 +20,37 @@ finding and names the envelope file. `--phase read|write|all` selects; the defau
 
 **The origin must be one you may write to.** There is no default origin, and the write half
 creates real state.
+
+## W51 identity continuation
+
+`identity.mjs` consumes the completed PC-01 write envelope so the newly approved expert can
+record a verdict on that run. It needs an administrator in `E2E_PC01_LOGIN` and
+`E2E_PC01_PASSWORD`, plus a read-only host path to the web tier's version-2 session register:
+
+```sh
+E2E_PC01_LOGIN=<admin-login> E2E_PC01_PASSWORD=<admin-password> \
+E2E_PC01_SESSION_STORE_PATH=<read-only-host-path-to-web-session-register> \
+  node tests/e2e/pc01/journey/identity.mjs \
+    --origin <allowed-origin> --journey <out>/journey.json --out <out>/identity
+```
+
+The path is a runtime input, not a repository fixture. The script checks that the expert's
+opaque cookie still names a register row after the administrator changes roles, and that the row
+has disappeared after the next BFF request returns 401. It records neither the cookie nor
+the generated passwords. An inaccessible register is a failure, because HTTP 401 alone
+cannot prove row deletion. The output is `<out>/identity/identity.json`.
+
+The continuation covers registration, pending status, approval with `expert`, profile,
+verdict author label, role removal, revoked session, a new sign-in with a denied mutation,
+archive, purge conflict, rejected/unknown generic refusal and self-archive refusal. The
+last-admin conflict needs a separately prepared isolation fixture; an ordinary administrator
+cannot both be the last admin and remove their own role. The human A13–A20 checklist names
+the observations. `D-137` records that the continuation has not run on a built stand.
+
+The existing `--phase all` runner and `manual-alpha-check.sh --automated` still cover the
+PC-01 product journey and PDF refusals. Run this identity continuation separately and keep
+both envelopes for W51 validation; its result is not folded into the earlier release
+verifier until the separate validation wave.
 
 ## Why it is here and not in someone's `/root`
 
@@ -147,9 +178,9 @@ reviewer.
 credential minted for an account that has never changed its password reaches `issueToken`
 and `changePassword` and nothing else: every other operation answers `403 permission_denied`
 with `required_capability: password_changed`, and the sign-in screen sends that reviewer to
-`/account/password` rather than to the project list. So a journey run with the seeded
+`/account/password` rather than to the home screen. So a journey run with the seeded
 `admin`/`password` pair stops at the sign-in with *"the browser was at `/account/password`
-and not at `/projects`"* — and that is the feature working, not the instrument breaking.
+and not at `/`"* — and that is the feature working, not the instrument breaking.
 
 Give it an account whose password has been changed, which is what every deployment is
 required to do anyway. On a stand that is the one command:
@@ -330,7 +361,7 @@ Re-measured 2026-09-24 against `http://127.0.0.1:31500`, both halves, with the s
 read routes**, each route in its own cold browser.
 
 **The route count is the number to distrust first.** It was seven when this paragraph was
-written and is fifteen now, and it changes whenever `web/src/app` gains a screen — which
+written and is 22 now, and it changes whenever `web/src/app` gains a screen — which
 is exactly what `test_the_journey_walks_every_screen_the_application_offers` reddens on.
 The seconds are a property of this host under whatever else it was running.
 

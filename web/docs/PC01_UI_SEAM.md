@@ -56,7 +56,7 @@ reads run state to decide whether export is offered; it does not poll (§7).
 
 | URL | File | Screen | Owner |
 |---|---|---|---|
-| `/` | `src/app/page.tsx` | redirect to `/projects` | `A5` |
+| `/` | `src/app/page.tsx` | the front door: where a sign-in lands; a placeholder rendered from `_pages/home` until `W50-HOME-01` (a guest is sent to `/login?next=%2F`) | `W50-REGISTRY-01` |
 | `/projects` | `src/app/projects/page.tsx` | project list and create | `B7` |
 | `/projects/{project_uid}` | `src/app/projects/[project_uid]/page.tsx` | one project: upload, start run | `B7` |
 | `/projects/{project_uid}/documents/{document_uid}` | `.../documents/[document_uid]/page.tsx` | one document, its versions | `W19-SHELL` |
@@ -292,8 +292,16 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.findings.detail(findingUid)` | `['findings','detail',uid]` | `B8` |
 | `queryKeys.findings.decisions(findingUid)` | `['findings','decisions',uid]` | `B8` |
 | `queryKeys.dashboard.summary()` | `['dashboard','summary']` | `W46-WIRE` |
+| `queryKeys.account.me()` | `['account','me']` | `W50-REGISTRY-01` |
+| `queryKeys.users.list(filters?)` | `['users','list',filters]` | `W51` |
+| `queryKeys.users.detail(userUid)` | `['users','detail',uid]` | `W51` |
+| `queryKeys.registrations.list(filters?)` | `['registrations','list',filters]` | `W51`, `W50-HOME-01` |
 
-`projects`, `versions`, `runs`, `findings`, `dashboard` are the only legal first segments.
+`projects`, `versions`, `runs`, `findings`, `dashboard`, `account`, `users`, `registrations` are
+the only legal first segments. The last three entered together in `W50-REGISTRY-01`: `account`
+is the signed-in account (`getMe`), `users` the administrator's view of the accounts, and
+`registrations` the requests awaiting or past a decision. A later lane adds key factories inside
+them and no new root.
 Invalidation targets a prefix: appending a decision invalidates
 `queryKeys.findings.decisions(uid)` and `queryKeys.findings.detail(uid)`, and — because the
 verdict projection appears in the finding list — `queryKeys.runs.findings(runId)` and

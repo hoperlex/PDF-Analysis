@@ -60,6 +60,7 @@ _JOURNAL = text(
         e.verdict,
         e.comment,
         e.author_label,
+        e.author_user_uid,
         e.recorded_at,
         f.project_uid,
         f.allocated_by_run_id,
@@ -85,6 +86,12 @@ class JournalEntry:
     The frozen ``DecisionRecord``, and deliberately the whole of it: a listing item that
     were a subset of a shape the contract declares would be a second shape of the same
     resource, and ``ports.py`` already records what the first one cost.
+
+    One field more than the wire, and only one: ``author_user_uid``, the account that took
+    the decision (`W49-PLAN.md` §3.1). The contract does not carry it -- "no wire change" --
+    and the composition root maps the record field by field, so it never leaks onto the
+    wire by being here. ``None`` means "author account unknown": every event written before
+    migration ``0015``, listed like any other row and never treated as a fault.
     """
 
     decision_id: str
@@ -94,6 +101,7 @@ class JournalEntry:
     verdict: str | None
     comment: str | None
     author_label: str
+    author_user_uid: str | None
     recorded_at: datetime
     project_uid: str
     run_id: str
@@ -129,6 +137,10 @@ def decision_journal(
 
     An ungrounded observation cannot appear: it carries no ``finding_uid``, so the join to
     ``finding`` drops it, and there is no ``WHERE grounded`` anywhere to forget.
+
+    No join reaches ``app_user``. ``author_user_uid`` is read straight off the event, so an
+    event whose account is unknown (NULL) is listed exactly as one whose account is known;
+    an inner join there would silently drop the whole of history.
     """
     rows = session.execute(_JOURNAL, {"category": category, "verdict": verdict}).mappings()
     return tuple(
@@ -140,6 +152,7 @@ def decision_journal(
             verdict=row["verdict"],
             comment=row["comment"],
             author_label=row["author_label"],
+            author_user_uid=row["author_user_uid"],
             recorded_at=row["recorded_at"],
             project_uid=row["project_uid"],
             run_id=row["allocated_by_run_id"],

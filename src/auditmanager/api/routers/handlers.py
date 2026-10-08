@@ -68,6 +68,9 @@ AGGREGATE_OF_PATH_PARAMETER: Final[Mapping[str, str]] = {
     "version_uid": "DocumentVersion",
     "run_id": "AuditRun",
     "finding_uid": "Finding",
+    # `W49-SEAL-01`. The entity names of `contracts/domain/v1/identifiers.json`.
+    "user_uid": "User",
+    "request_id": "RegistrationRequest",
 }
 
 #: The contract's spelling of each header this surface reads, keyed by the lower-cased name
@@ -103,6 +106,10 @@ _CONSTRAINT_OF_PYDANTIC_TYPE: Final[Mapping[str, str]] = {
     "bool_type": "type",
     "datetime_parsing": "format",
     "datetime_type": "format",
+    # `W49-SEAL-01`. A role set is a list: its bound is its length, and a role named twice
+    # is refused by the schema's own `uniqueItems` (`models._unique_roles`).
+    "list_type": "type",
+    "unique_items": "uniqueItems",
 }
 _DEFAULT_CONSTRAINT: Final[str] = "type"
 
@@ -152,6 +159,9 @@ _ENUM_VALUES: Final[Mapping[str, str]] = {
     "verdict": "accepted, needs_manual_review, pending, rejected",
     "event_type": "accept, comment, reject, revoke",
     "provider_mode": "live, recorded",
+    # `W49-SEAL-01`. `listRegistrations`' filter, and a role in a role set.
+    "status": "approved, pending, rejected",
+    "roles": "admin, expert",
 }
 
 #: An HTTP status Starlette raises for itself, and the catalog code that answers it. 405 is
@@ -289,7 +299,11 @@ def _refusal(
     location: Sequence[Any] = tuple(error.get("loc", ()))
     kind = str(error.get("type", ""))
     where = str(location[0]) if location else "body"
-    name = str(location[-1]) if len(location) > 1 else ""
+    # The innermost **named** location. A refusal inside a list -- `roles[1]` -- reports
+    # the property (`roles`), never the index: an index names no field a caller can read
+    # off the schema (`W49-SEAL-01`, the first request bodies with a list).
+    named = [str(part) for part in location[1:] if not isinstance(part, int)]
+    name = named[-1] if named else ""
     constraint = _CONSTRAINT_OF_PYDANTIC_TYPE.get(kind, _DEFAULT_CONSTRAINT)
 
     if where == "path":

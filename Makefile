@@ -138,7 +138,7 @@ override DB_CHECK := src/auditmanager/shared/db/check.py
 override STO_CHECK := src/auditmanager/storage/check.py
 override QA_SUITE := tests/integration/foundation
 
-.PHONY: bootstrap up down check-services migrate check-db check-storage test-foundation gate mutation-copy foundation alpha-acceptance
+.PHONY: bootstrap up down check-services migrate check-db check-storage test-foundation gate light-acceptance mutation-copy foundation alpha-acceptance
 
 # --- shared guards -----------------------------------------------------------------
 # Expanded verbatim into each recipe that needs them. No guard has a success path that
@@ -1047,3 +1047,9 @@ gate: foundation
 	run_frontend
 	check_whitespace
 	printf '%s\n' "GATE OK: battery, foundation, frontend lint/typecheck/tests and whitespace all pass"
+
+# R-70: BASE is the full SHA of the last tree accepted by a complete gate.
+# Pass it through the environment so a malformed value never becomes shell source.
+light-acceptance: export LIGHT_ACCEPTANCE_BASE := $(BASE)
+light-acceptance:
+	@.venv/bin/python scripts/light_acceptance.py

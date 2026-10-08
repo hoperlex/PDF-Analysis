@@ -10,7 +10,8 @@
  * once it already knew the identities.
  *
  * Composition only: the shell from `shared/ui`, the query from the `expert-decision`
- * entity, the list from a widget. No projection is computed here — `ADR-0012` puts the
+ * entity, the list from a widget (reached through the lazy wrapper beside this file,
+ * `W50-LAZY-01`). No projection is computed here — `ADR-0012` puts the
  * knowledge-base view on the server, and a count assembled in this file would be a second
  * answer to a question the server already answers.
  *
@@ -27,8 +28,9 @@ import type { ErrorStateProps } from '@/shared/ui';
 import type { FindingCategory, Verdict } from '@/shared/api';
 import { ApiError, ApiFailure, catalogMessage } from '@/shared/api';
 import { PageShell } from '@/shared/ui';
-import { useDecisionJournal } from '@/entities/expert-decision';
-import { CATEGORY_LABELS, KnowledgeBase } from '@/widgets/knowledge-base';
+import { CATEGORY_LABELS, useDecisionJournal } from '@/entities/expert-decision';
+
+import { LazyKnowledgeBase } from './lazy-knowledge-base';
 
 /** `Все` is the absence of the parameter, never a value sent to the server. */
 type CategoryChoice = FindingCategory | 'all';
@@ -137,7 +139,7 @@ export function KnowledgeBasePage() {
           </select>
         </label>
       </div>
-      <KnowledgeBase
+      <LazyKnowledgeBase
         records={journal.data?.items ?? []}
         isLoading={journal.isPending}
         error={

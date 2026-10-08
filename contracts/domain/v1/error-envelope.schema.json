@@ -41,6 +41,7 @@
         "cost_budget_exceeded",
         "stale_attempt",
         "execution_token_invalid",
+        "rate_limited",
         "internal_error"
       ]
     },
@@ -514,6 +515,25 @@
         "properties": {
           "retryable": {
             "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "rate_limited"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": true
           }
         }
       }

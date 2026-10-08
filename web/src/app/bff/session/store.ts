@@ -58,6 +58,20 @@
  * this suite have no volume and want none. That is a configured absence rather than a
  * silent fallback — {@link sessionDurability} reports which of the two is in force, and the
  * register says so in the log the first time it writes.
+ *
+ * ## What a row holds, since `W49-BFF-01`
+ *
+ * The credential, the two instants, and the **subject** `getMe` described when the session
+ * was opened — `login`, `displayLabel`, `initials`, `roles`, `isDefaultCredential`,
+ * `profileComplete` (`./subject.ts`, `W49-PLAN.md` §3.5). The subject is rewritten after a
+ * successful profile change or password change ({@link refreshSubject}), so a completed
+ * profile is visible without signing in again.
+ *
+ * The file format is therefore **version 2**. A version-1 file — written before rows carried
+ * a subject — is **replaced at the first read, not read**: its rows have no roles and no
+ * profile state, and inventing either for a session that is already open would be deciding a
+ * reviewer's rights in this tier. Replacing it signs every reviewer out once, which is the
+ * rollback cost the task file states.
  */
 
 import {
@@ -73,6 +87,11 @@ import {
 import { dirname } from 'node:path';
 
 import { SESSION_STORE_VARIABLE, getSessionStorePath } from '@/shared/config/session-store';
+
+import type { SessionAccount } from './subject';
+import { initialsOf, isRoleSet } from './subject';
+
+export type { SessionAccount } from './subject';
 
 /** The cookie that carries the opaque identifier. Never the credential itself. */
 export const SESSION_COOKIE = 'am_session';
@@ -90,29 +109,25 @@ export const SESSION_ID_PATTERN = /^[0-9a-f]{64}$/;
 export const MIN_LIFETIME_SECONDS = 30;
 export const MAX_LIFETIME_SECONDS = 12 * 60 * 60;
 
-/** What a screen may learn about the open session. Deliberately no credential. */
-export interface SessionSubject {
-  readonly login: string;
+/**
+ * What a screen may learn about the open session: the account `getMe` described (see
+ * {@link SessionAccount} for each field) and the two instants. Deliberately no credential.
+ */
+export interface SessionSubject extends SessionAccount {
   readonly openedAt: number;
   readonly expiresAt: number;
-  /**
-   * `R-50`. Whether the account this session belongs to is still on the password the
-   * deployment seeded it with.
-   *
-   * **Read from the API's answer and never decided here.** The exchange returns
-   * `is_default_credential` on `IssueTokenResponse`; this tier records what it was told.
-   * A tier that worked it out for itself — from the login, from the shape of the password
-   * — would be inventing a security state, and the same state is enforced a second time by
-   * the API, which refuses every operation but the exchange and the change while it holds.
-   * So this field decides where a reviewer is *sent*, and never what they are *allowed*.
-   */
-  readonly isDefaultCredential: boolean;
 }
 
 /** The row. `credential` leaves this module only through `credentialOf`. */
 interface HeldSession extends SessionSubject {
   readonly credential: string;
 }
+
+/** The version this module writes, and the only one it reads rows from. */
+export const REGISTER_FORMAT_VERSION = 2;
+
+/** The version written before rows carried a subject. Replaced at the first read, never read. */
+const REPLACED_REGISTER_FORMAT_VERSION = 1;
 
 const REGISTRY_KEY = Symbol.for('auditmanager.web.session-register');
 
@@ -142,8 +157,39 @@ interface Registry {
 
 /** The shape written to the volume. Versioned, so a later format is distinguishable. */
 interface PersistedRegister {
-  readonly version: 1;
+  readonly version: typeof REGISTER_FORMAT_VERSION;
   readonly sessions: readonly (HeldSession & { readonly id: string })[];
+}
+
+/** One row as it comes off the disk: nothing is trusted until {@link heldSessionFrom} checks it. */
+type StoredRow = { readonly [field in keyof HeldSession | 'id']?: unknown };
+
+/**
+ * A version-2 row the register will hold, or `null` when any field is not the type it must
+ * be. A row that fails is skipped, exactly as an expired one is: one bad row costs one
+ * reviewer a sign-in, never the whole register.
+ */
+function heldSessionFrom(row: StoredRow, now: number): HeldSession | null {
+  if (typeof row.credential !== 'string' || row.credential.length === 0) return null;
+  if (typeof row.expiresAt !== 'number' || row.expiresAt <= now) return null;
+  if (typeof row.openedAt !== 'number') return null;
+  if (typeof row.login !== 'string' || row.login.length === 0) return null;
+  if (typeof row.displayLabel !== 'string' || row.displayLabel.length === 0) return null;
+  if (typeof row.initials !== 'string') return null;
+  if (!isRoleSet(row.roles)) return null;
+  if (typeof row.isDefaultCredential !== 'boolean') return null;
+  if (typeof row.profileComplete !== 'boolean') return null;
+  return {
+    credential: row.credential,
+    openedAt: row.openedAt,
+    expiresAt: row.expiresAt,
+    login: row.login,
+    displayLabel: row.displayLabel,
+    initials: row.initials,
+    roles: Object.freeze([...row.roles]),
+    isDefaultCredential: row.isDefaultCredential,
+    profileComplete: row.profileComplete,
+  };
 }
 
 function registry(): Registry {
@@ -224,6 +270,12 @@ function announce(path: string | null): void {
  * refuses to serve anything because of one corrupt line, which turns a lost session into a
  * lost deployment. Every expired row is dropped on the way in, so a restart does not
  * resurrect a session that died while the process was down.
+ *
+ * **A version-1 file is replaced, not read** (`W49-PLAN.md` §3.5). Its rows carry no roles
+ * and no profile state, so reading them would mean inventing both for a session that is
+ * already open. The file is overwritten with an empty version-2 register on the spot — so
+ * the credentials it held leave the volume now rather than at the next sign-in — and the
+ * replacement is said out loud: every reviewer signs in again, once.
  */
 function hydrate(now: number): void {
   const held = registry();
@@ -233,21 +285,27 @@ function hydrate(now: number): void {
   announce(path);
   if (path === null || !existsSync(path)) return;
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as PersistedRegister;
-    if (parsed.version !== 1 || !Array.isArray(parsed.sessions)) {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as {
+      readonly version?: unknown;
+      readonly sessions?: unknown;
+    };
+    if (parsed.version === REPLACED_REGISTER_FORMAT_VERSION) {
+      console.warn(
+        `[session-register] ${path} is a version-${String(REPLACED_REGISTER_FORMAT_VERSION)} ` +
+          `register, written before sessions carried a subject. It is replaced with an empty ` +
+          `version-${String(REGISTER_FORMAT_VERSION)} register and none of its sessions is ` +
+          'read: every reviewer signs in again, once.',
+      );
+      persist();
+      return;
+    }
+    if (parsed.version !== REGISTER_FORMAT_VERSION || !Array.isArray(parsed.sessions)) {
       throw new Error(`unexpected register format: version ${String(parsed.version)}`);
     }
-    for (const row of parsed.sessions) {
-      if (!SESSION_ID_PATTERN.test(row.id)) continue;
-      if (typeof row.credential !== 'string' || row.credential.length === 0) continue;
-      if (typeof row.expiresAt !== 'number' || row.expiresAt <= now) continue;
-      held.rows.set(row.id, {
-        login: row.login,
-        credential: row.credential,
-        openedAt: row.openedAt,
-        expiresAt: row.expiresAt,
-        isDefaultCredential: row.isDefaultCredential === true,
-      });
+    for (const row of parsed.sessions as readonly StoredRow[]) {
+      if (typeof row.id !== 'string' || !SESSION_ID_PATTERN.test(row.id)) continue;
+      const session = heldSessionFrom(row, now);
+      if (session !== null) held.rows.set(row.id, session);
     }
   } catch (error) {
     console.error(
@@ -277,7 +335,7 @@ function persist(): void {
   if (path === null) return;
   const held = registry();
   const snapshot: PersistedRegister = {
-    version: 1,
+    version: REGISTER_FORMAT_VERSION,
     sessions: [...held.rows].map(([id, row]) => ({ id, ...row })),
   };
   const temporary = `${path}.writing-${String(process.pid)}`;
@@ -407,23 +465,67 @@ function sweep(now: number): void {
 }
 
 /**
- * Record an exchanged credential and return the identifier the cookie will carry.
+ * Record an exchanged credential and the account `getMe` described, and return the identifier
+ * the cookie will carry.
  *
- * `isDefaultCredential` is the API's own answer, passed in rather than computed: see
- * {@link SessionSubject.isDefaultCredential}. It is a required argument and not an
- * optional one with a default, because the value a caller would get by omitting it is the
- * permissive one — the reviewer walks into the application and meets a wall of refusals.
+ * The account is the API's own answer, passed in rather than computed: see
+ * {@link SessionAccount}. It is a required argument and not an optional one with defaults,
+ * because the values a caller would get by omitting it are decisions about a reviewer's
+ * rights that this tier does not take.
  *
  * @throws {SessionLifetimeError} when the lifetime is not a finite number of seconds
  * inside the accepted band.
+ */
+export function openSession(
+  account: SessionAccount,
+  credential: string,
+  lifetimeSeconds: number,
+  now?: number,
+): string;
+/**
+ * The form this function had before sessions carried a subject: a login and the `R-50` flag.
+ *
+ * **Kept for legacy guard callers:**
+ * `web/tests/guards/default-credential-screens.guard.test.ts` drives the change-password lock
+ * with `openSession(login, credential, lifetime, isDefaultCredential)`. The route handler uses
+ * the account form, carrying the account returned by `getMe`.
+ *
+ * The fields this form cannot know are filled with the **restrictive** values, never the
+ * permissive ones: no roles, an incomplete profile, and the login as the label. A screen
+ * reading such a session shows the least it can and sends the reviewer to the profile, which
+ * is the direction a default must point. Nothing is authorised by it either way: the API
+ * reads the account's row on every request.
  */
 export function openSession(
   login: string,
   credential: string,
   lifetimeSeconds: number,
   isDefaultCredential: boolean,
-  now: number = Date.now(),
+  now?: number,
+): string;
+export function openSession(
+  accountOrLogin: SessionAccount | string,
+  credential: string,
+  lifetimeSeconds: number,
+  defaultOrNow?: boolean | number,
+  legacyNow?: number,
 ): string {
+  let account: SessionAccount;
+  let now: number;
+  if (typeof accountOrLogin === 'string') {
+    account = {
+      login: accountOrLogin,
+      displayLabel: accountOrLogin,
+      initials: initialsOf(accountOrLogin),
+      roles: Object.freeze([]),
+      isDefaultCredential: defaultOrNow === true,
+      profileComplete: false,
+    };
+    now = legacyNow ?? Date.now();
+  } else {
+    account = accountOrLogin;
+    now = typeof defaultOrNow === 'number' ? defaultOrNow : Date.now();
+  }
   if (
     !Number.isFinite(lifetimeSeconds) ||
     lifetimeSeconds < MIN_LIFETIME_SECONDS ||
@@ -437,14 +539,58 @@ export function openSession(
   sweep(now);
   const id = mintSessionId();
   register().set(id, {
-    login,
+    ...accountFields(account),
     credential,
     openedAt: now,
     expiresAt: now + Math.floor(lifetimeSeconds) * 1000,
-    isDefaultCredential,
   });
   persist();
   return id;
+}
+
+/**
+ * Exactly the six subject fields, copied: never a spread of whatever object the caller
+ * passed, so a property that is not part of the subject — a credential included — cannot
+ * ride into the row, the file or a screen's props by accident.
+ */
+function accountFields(account: SessionAccount): SessionAccount {
+  return {
+    login: account.login,
+    displayLabel: account.displayLabel,
+    initials: account.initials,
+    roles: Object.freeze([...account.roles]),
+    isDefaultCredential: account.isDefaultCredential,
+    profileComplete: account.profileComplete,
+  };
+}
+
+/**
+ * Rewrite the subject of an open session with what `getMe` says now. True when there was a
+ * live session to rewrite.
+ *
+ * `W49-PLAN.md` §3.5's refresh: called after a successful profile change, so a completed
+ * profile — its new login, its name, `profileComplete` — is current without a new sign-in.
+ * The credential and both instants are kept: the API did not issue a new credential, so the
+ * session is the same session, and its lifetime is the one the exchange granted.
+ */
+export function refreshSubject(
+  id: string | null,
+  account: SessionAccount,
+  now: number = Date.now(),
+): boolean {
+  if (id === null || !SESSION_ID_PATTERN.test(id)) return false;
+  sweep(now);
+  const rows = register();
+  const row = rows.get(id);
+  if (row === undefined) return false;
+  rows.set(id, {
+    ...accountFields(account),
+    credential: row.credential,
+    openedAt: row.openedAt,
+    expiresAt: row.expiresAt,
+  });
+  persist();
+  return true;
 }
 
 /**
@@ -459,10 +605,9 @@ export function subjectOf(id: string | null, now: number = Date.now()): SessionS
   const row = register().get(id);
   if (row === undefined) return null;
   return {
-    login: row.login,
+    ...accountFields(row),
     openedAt: row.openedAt,
     expiresAt: row.expiresAt,
-    isDefaultCredential: row.isDefaultCredential,
   };
 }
 
