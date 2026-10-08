@@ -42,6 +42,9 @@
 > `W52-INT-SEMVER-PREP-01` adds a pure canonical SemVer order key for the future
 > releases context; 83 focused tests, compilation and lint passed. Its database
 > collation and release consumers await W52 SEAL/API, with QA/gate in D-139/D-140.
+> `W52-INT-BUILD-ID-PREP-01` adds the pure API content-hash helper for W52;
+> 90 focused tests, compilation and lint passed. Stage C still owns the image
+> inputs, startup binding and image parity; QA/gate remain D-139/D-140.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers

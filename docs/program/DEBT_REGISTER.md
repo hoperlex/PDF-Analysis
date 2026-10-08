@@ -184,6 +184,12 @@ compilation and lint also passed. W52 SEAL must give its future database
 `sort_key` column C collation and the API loader must consume this public
 function. Database-backed ordering, QA and full gate remain D-139/D-140.
 
+`W52-INT-BUILD-ID-PREP-01` adds the W52 content-derived API build-id helper.
+Seven synthetic-tree cases, 23 SemVer cases and 60 governance/prose tests,
+compilation and lint passed. `W52-RELEASES-API` still owes the image inputs,
+startup binding, `.dockerignore` guard and checkout/image parity; QA and the
+full gate remain D-139/D-140.
+
 The W52 FACTS branch's optional web typecheck reported two `exactOptionalPropertyTypes` errors
 in `web/src/_pages/account/ui/account-page.tsx` and
 `web/src/_pages/register/ui/register-page.tsx`. The exact same two errors reproduce on the
