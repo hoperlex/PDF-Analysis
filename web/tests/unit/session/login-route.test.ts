@@ -36,7 +36,7 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
     jar.value = null;
     const element = await LoginRoute(query());
     expect(element.type).toBe(SignInPage);
-    expect(element.props).toEqual({ login: null, refusal: null, next: null });
+    expect(element.props).toEqual({ login: null, refusal: null, unknownRefusal: false, next: null });
   });
 
   it('sends a live session to /, rendering nothing (W50-PLAN.md §3.2, decision five)', async () => {
@@ -68,7 +68,7 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
     forgetEverySession();
     jar.value = '0'.repeat(64);
     const element = await LoginRoute(query());
-    expect(element.props).toEqual({ login: null, refusal: null, next: null });
+    expect(element.props).toEqual({ login: null, refusal: null, unknownRefusal: false, next: null });
   });
 
   it('renders only a refusal the feature publishes, whatever the query string says', async () => {
@@ -77,15 +77,18 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
     expect((await LoginRoute(query({ refusal: 'credentials' }))).props).toEqual({
       login: null,
       refusal: 'credentials',
+      unknownRefusal: false,
       next: null,
     });
     // The two values `W49-BFF-01` added reach the screen like the other four.
     for (const added of ['pending', 'throttled']) {
       expect((await LoginRoute(query({ refusal: added }))).props.refusal).toBe(added);
     }
-    // A hand-typed or injected value renders no sentence at all.
+    // A hand-typed or injected value does not become a known refusal.
     for (const hostile of ['boom', '<script>', '', 'CREDENTIALS']) {
-      expect((await LoginRoute(query({ refusal: hostile }))).props.refusal).toBeNull();
+      const props = (await LoginRoute(query({ refusal: hostile }))).props;
+      expect(props.refusal).toBeNull();
+      expect(props.unknownRefusal).toBe(true);
     }
     // A repeated parameter arrives as an array; the first is read and still validated.
     expect((await LoginRoute(query({ refusal: ['upstream', 'boom'] }))).props.refusal).toBe(
@@ -110,6 +113,6 @@ describe('the route tells the screen who is signed in, and nothing more', () => 
     forgetEverySession();
     jar.value = null;
     const element = await LoginRoute({});
-    expect(element.props).toEqual({ login: null, refusal: null, next: null });
+    expect(element.props).toEqual({ login: null, refusal: null, unknownRefusal: false, next: null });
   });
 });

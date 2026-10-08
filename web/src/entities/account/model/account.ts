@@ -71,7 +71,7 @@ export function roleLabels(roles: readonly unknown[]): readonly string[] {
  */
 export function displayLabelOf(account: Pick<Account, 'display_label'>): string {
   const label = account.display_label.trim();
-  if (label.length === 0) throw new MalformedAccountError('display_label');
+  if (label.length === 0) throw new MalformedAccountError('отображаемое имя');
   return label;
 }
 

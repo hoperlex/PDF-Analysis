@@ -8,7 +8,7 @@ export function RegisterPage({ refusal, unknownRefusal = false }: {
 }) {
   return (
     <PageShell title="Регистрация" subtitle="Отправьте заявку на учётную запись. Решение принимает администратор.">
-      <RegisterForm refusal={refusal} unknownRefusal={unknownRefusal} />
+      <RegisterForm refusal={refusal ?? null} unknownRefusal={unknownRefusal} />
     </PageShell>
   );
 }
