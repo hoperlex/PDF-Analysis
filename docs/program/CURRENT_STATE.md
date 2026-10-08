@@ -1,6 +1,6 @@
 # Current state
 
-> **Updated 2026-10-08 by the W51 integrator.** W49 and W50 of the identity programme
+> **Updated 2026-10-08 by the W52 integrator.** W49 and W50 of the identity programme
 > (`docs/program/dispatch/IDENTITY-WAVES.md`) are closed on `origin/dev`. W51 Stage A and
 > all three Stage B implementation lanes and Stage C code are merged there through
 > `4400e81`. `W51-INT-CLOSE` closes implementation on the development line under
@@ -68,12 +68,13 @@
 > `W52-INT-A2B-01` grants Stage B SEAL from a fresh pin sweep; Stage C/C2 still
 > require fresh grants after their preceding merges. The code-only Stage-A acceptance supplies no complete gate, QA,
 > live/manual acceptance, release verdict or `origin/main` authority.
-> `W52-SEAL-01` is implemented at `0dd3f7b` and accepted into the local
-> integration line: the API is 30 paths / 37 operations / 83 schemas and the
-> migration head is `0016_release_notes`. The sealed release routes return
-> `dependency_unavailable` until Stage C supplies the release backend.
-> `W52-INT-B2C-01` owns development publication and the first current-tree
-> Stage-C grant; D-137–D-140 remain open.
+> `W52-SEAL-01` is accepted on `origin/dev`: the API is 30 paths / 37
+> operations / 83 schemas and the migration head is `0016_release_notes`.
+> `W52-INT-B2C-01` published its first Stage-C grant. `W52-RELEASES-API`
+> fills the sealed routes, release loader and startup version/build binding;
+> `W52-INT-C-API-01` accepts that backend and grants RELEASES-WEB and
+> TRANSLATE from its development publication. Stage C2 has no grant yet.
+> Release-note prose is still minimal, and D-137–D-140 remain open.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
@@ -104,7 +105,7 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Active development, 2026-10-08 — W51 implementation closed and W52 code preparations on `dev`
+## Active development, 2026-10-08 — W52 Stage C backend integration
 
 W49 — accounts with e-mail sign-in, a role set `{expert, admin}`, registration requests and
 administrator account management (`R-55` … `R-61`) — was published to `origin/dev` by
