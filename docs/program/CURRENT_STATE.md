@@ -79,7 +79,8 @@
 > Stage-C lane and starts from that integration's read-back `origin/dev`.
 > `W52-INT-C-TRANSLATE-01` accepts the seven-path English operator-runbook
 > lane. Stage C implementation is merged on the development line; Stage C2
-> still needs a fresh grant. CP-00's historical ratification suite remains
+> has its current-tree RELNOTES and ACCEPT grants from
+> `W52-INT-C2-GRANT-01`. CP-00's historical ratification suite remains
 > red on the unchanged Stage-C base; its direct manual-vocabulary check and
 > the translation's prose/count checks pass.
 > Release-note prose is still minimal, and D-137–D-140 remain open.
