@@ -14,7 +14,8 @@
  * never re-fires — so this guard reads the mutation hooks themselves. It does two things
  * together, and both matter:
  *
- *   1. **Discovers** every `features/<feature>/model/use-*.ts` file that calls `useMutation(`,
+ *   1. **Discovers** every TypeScript file in a feature's `model/` directory that calls
+ *      `useMutation(`,
  *      and refuses to run unless that discovered set is exactly `EXPECTED_INVALIDATION`'s
  *      keys — so a new mutation hook that nobody maps here fails loudly instead of
  *      silently passing by omission.
@@ -32,7 +33,7 @@
  */
 
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
@@ -171,10 +172,18 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/upload-document/model/use-upload-document.ts': true,
 };
 
-/** Every `features/<feature>/model/use-*.ts` file that calls `useMutation(`, relative to `WEB_ROOT`. */
+/** A feature model source with an executable mutation call, independent of its filename. */
+function isMutationHook(path: string, source: string): boolean {
+  return path.startsWith(`${FEATURES_ROOT}${sep}`) &&
+    path.includes(`${sep}model${sep}`) &&
+    /\.(?:ts|tsx)$/.test(path) &&
+    sourceCalls(source, 'useMutation');
+}
+
+/** Every feature model mutation hook, keyed by its path relative to `WEB_ROOT`. */
 function discoverMutationHooks(): string[] {
-  return walkFiles(FEATURES_ROOT, (path) => /\/model\/use-[^/]+\.(?:ts|tsx)$/.test(path))
-    .filter((path) => sourceCalls(readText(path), 'useMutation'))
+  return walkFiles(FEATURES_ROOT, (path) => /\.(?:ts|tsx)$/.test(path))
+    .filter((path) => isMutationHook(path, readText(path)))
     .map((path) => repoRelative(path).replace(/^web\//, ''))
     .sort();
 }
@@ -284,6 +293,17 @@ describe('every mutation hook is mapped to whether it invalidates the dashboard'
 
   it('recognises namespace-qualified mutation hooks', () => {
     expect(sourceCalls('const mutation = RQ.useMutation({ mutationFn });', 'useMutation')).toBe(true);
+  });
+
+  it('discovers an executable hook in model/archive.ts without a use- filename', () => {
+    const source = 'const mutation = RQ.useMutation({ mutationFn });';
+    const archive = join(FEATURES_ROOT, 'archive-project', 'model', 'archive.ts');
+    expect(isMutationHook(archive, source)).toBe(true);
+    expect(isMutationHook(archive.replace(/\.ts$/, '.tsx'), source)).toBe(true);
+    expect(isMutationHook(join(FEATURES_ROOT, 'archive-project', 'archive.ts'), source)).toBe(false);
+    expect(isMutationHook(join(WEB_ROOT, 'src', 'entities', 'model', 'archive.ts'), source)).toBe(false);
+    expect(isMutationHook(archive, `// ${source}`)).toBe(false);
+    expect(isMutationHook(archive, `const example = ${JSON.stringify(source)};`)).toBe(false);
   });
 
   it('does not accept dashboard invalidation text that exists only in a decoy comment', () => {
