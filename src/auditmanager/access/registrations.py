@@ -40,11 +40,9 @@ a refused exchange followed by this read, as the BFF sends them -- costs one att
 **A decided request cannot be matched by a password**, because the decision nulls the
 password columns (§3.3, and the guard trigger refuses any later write). So this read
 answers ``pending`` for a proven pair, and answers ``None`` for a pair whose request is
-already decided -- including a rejected one. §3.3 also asks it to answer ``rejected`` with
-the reason; those two sentences cannot both hold, and this read keeps to the one that does
-not disclose a decision to someone who has not proven the password. The choice is recorded
-as an open question in ``docs/program/W49-ACCESS-01c.md``; it is a one-statement change
-once ruled.
+already decided -- including a rejected one. The `R-56` addendum rules that sign-in
+shows the generic refusal for a rejected request; only administrators see the reason
+until a later mail notification exists.
 """
 
 from __future__ import annotations

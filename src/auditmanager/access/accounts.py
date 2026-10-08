@@ -353,7 +353,7 @@ class AccountRepository:
         ``email`` becomes the login. It may be omitted only when the login already is an
         e-mail. Refusals: ``validation_failed`` for a name or an e-mail the rules refuse, or
         a missing e-mail on a legacy login; ``not_found`` for no such active account;
-        ``state_transition_not_allowed`` when the profile is already complete (the login is
+        ``validation_failed`` on ``login`` when the profile is already complete (the login is
         writable only while it is not); ``conflict`` with ``conflict_reason: login_taken``
         when another active account holds that e-mail.
         """

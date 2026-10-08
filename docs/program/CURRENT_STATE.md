@@ -16,7 +16,8 @@
 > coverage through `029ca93`; F-10's report correction is merged through `6976904`.
 > D-128 still awaits deferred database validation and full-gate evidence.
 > D-129 Y F-3's bounded name-label correction is merged through `4bcc671`, and
-> F-4's unused standing-query removal through `bdd23ac`; other findings remain open.
+> F-4's unused standing-query removal through `bdd23ac`; F-5's three docstrings
+> are corrected on this integration line. Other findings remain open.
 > D-125's per-document corpus read verification is merged through `0e710f0`;
 > its real-corpus/database and full-gate evidence remains deferred.
 > D-131's bounded transient browser-navigation retry is merged through `130ed91`;
@@ -91,6 +92,9 @@ The D-129 Y F-3 Unicode initial correction passed 11 focused tests and lint in
 F-4's unused management standing read and access-side type were removed in
 `W52-DEBT-CODE-129F4.md`; 53 access/auth tests collected, and database execution
 awaits D-139.
+D-129 Y F-5's three identity docstrings now state the served refusal and atomic
+rollback behavior, including the `R-56` addendum; `W52-INT-129F5-01.md` records
+the integration slot for the composition-root docstring. No behavior changed.
 The D-125 corpus projection now checks each re-read document against the raw
 fingerprint that determined its snapshot, including repaired and direct
 segmentation reads. Sixteen local fixture tests, Python compilation and lint
