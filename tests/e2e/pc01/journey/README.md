@@ -143,6 +143,11 @@ forgetting it. Both options are **values the caller states**, never values carri
 from a previous call, and `page.startedWith()` reports the jar as it stood before the
 first navigation — so the property is measured per route rather than asserted here.
 
+An initial `Page.navigate` GET retries only `net::ERR_NETWORK_CHANGED`, with delays of
+1, 3 and 6 seconds (four attempts total). The journey records `navigationAttempts`
+for successful route and write-step loads and logs each retry. Other navigation
+errors fail immediately. Form actions, uploads and API writes are never replayed.
+
 ## One origin, one session, following the app's own links
 
 The journey is given an origin and a login, and nothing else. It is handed no project,

@@ -264,6 +264,7 @@ for (const route of PHASE === 'write' ? [] : manifest.routes) {
     return {
       name: route.name,
       url,
+      navigationAttempts: page.navigationAttempts,
       startedWith,
       viewport: page.viewport ?? null,
       width: await measureWidth(page),
