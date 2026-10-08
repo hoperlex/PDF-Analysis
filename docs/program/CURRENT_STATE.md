@@ -5,6 +5,9 @@
 > all three Stage B implementation lanes and Stage C code are merged there through
 > `4400e81`; QA, correction and release checks remain open. The owner temporarily deferred temporary
 > stand checks and end-of-wave gates to a later separately designed wave (`D-137`, `D-138`).
+> W52 code preparations `W52-PINSWEEP-01` and `W52-FACTS-01` are merged on `origin/dev`
+> through `b5be37e`; W52 has not been frozen or closed. QA and full-gate evidence for this
+> and later code-only candidates is open under `D-139` and `D-140`.
 > The combined implementation passed 148 focused tests and frontend lint; its red
 > rendered-language branch-coverage assertion remains recorded in the lane reports.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
@@ -37,7 +40,7 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Active development, 2026-10-08 — W50 closed; W51 implementation merged on `dev`
+## Active development, 2026-10-08 — W51 implementation and W52 code preparations on `dev`
 
 W49 — accounts with e-mail sign-in, a role set `{expert, admin}`, registration requests and
 administrator account management (`R-55` … `R-61`) — was published to `origin/dev` by
@@ -52,6 +55,10 @@ passed light acceptance under `R-70` (`AGENTS.md` §8). W50 is closed on the dev
 without a release tag. W51's screens, Stage C identity journey code and manual A13–A20 pack
 are merged into `origin/dev`. The identity browser journey has not run; QA, correction and
 release evidence remain open under the 2026-10-08 validation deferral (`D-137`, `D-138`).
+The proposed W52 plan has no freeze on this line. Its pin-sweep CLI and central independent
+expected-facts file are code preparations only; their focused checks are recorded in
+`W52-PINSWEEP-01.md` and `W52-FACTS-01.md`. W52 QA and full gate remain due under
+`D-139`/`D-140`.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:

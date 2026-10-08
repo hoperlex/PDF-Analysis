@@ -139,6 +139,10 @@ acceptance packs, run the checks, classify findings and hand corrections to late
 for the same candidate. Close only when every deferred QA, independent review, built-stand and
 manual acceptance item has a recorded result or a documented owner disposition.
 
+`W52-FACTS-01`'s broad integration/API attempt reached the suite's private-bucket fixture and
+failed at setup because `S3_ENDPOINT_URL` was absent. The integrator did not start a stand.
+This attempt is not an integration pass; the exact suite remains in the validation inventory.
+
 ### D-140 — later code-only waves defer full gates
 
 **Opened 2026-10-08 by the integrator on the owner's direction to run only basic tests and
@@ -149,6 +153,12 @@ the exact candidate it proposes to release and record the literal `GATE OK`.
 
 **Check:** the validation-wave report names that clean SHA, the full `make gate` command, log and
 literal `GATE OK`; the SHA is unchanged for any subsequent release claim.
+
+The W52 FACTS branch's optional web typecheck reported two `exactOptionalPropertyTypes` errors
+in `web/src/_pages/account/ui/account-page.tsx` and
+`web/src/_pages/register/ui/register-page.tsx`. The exact same two errors reproduce on the
+dispatch base `186637f`; the FACTS changes added none. The later correction stage owns them,
+and the validation wave must re-run typecheck and the full gate after correction.
 
 ### D-137 — W51 QA and live identity acceptance are deferred
 
