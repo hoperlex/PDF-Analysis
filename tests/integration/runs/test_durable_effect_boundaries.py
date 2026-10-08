@@ -622,11 +622,7 @@ def test_artifact_crash_boundaries_leave_enumerable_breadcrumbs(
     report = Reconciler(blob_store, session_factory=factory).report()
     assert publication["blob_id"] not in {
         str(item.blob_id)
-        for item in (
-            *report.orphan_objects,
-            *report.unpublished_records,
-            *report.legacy_unattributed_blobs,
-        )
+        for item in report.unattributed_blobs
     }
     unbound = [
         item
@@ -693,11 +689,7 @@ def test_process_loss_after_temporary_verification_keeps_a_pre_upload_breadcrumb
         report = Reconciler(blob_store, session_factory=factory).report()
         assert publication["blob_id"] not in {
             str(item.blob_id)
-            for item in (
-                *report.orphan_objects,
-                *report.unpublished_records,
-                *report.legacy_unattributed_blobs,
-            )
+            for item in report.unattributed_blobs
         }
         unbound = [
             item
@@ -923,7 +915,7 @@ def test_bound_analysis_artifacts_are_not_detached_and_missing_bytes_are_named(
     bound_ids = {str(row.blob_id) for row in rows}
 
     healthy = Reconciler(blob_store, session_factory=factory).report()
-    assert not (bound_ids & {str(item.blob_id) for item in healthy.orphan_objects})
+    assert not (bound_ids & {str(item.blob_id) for item in healthy.unattributed_blobs})
     assert not {
         item.blob_id for item in healthy.missing_analysis_artifacts
     } & {parse_blob_id(blob_id) for blob_id in bound_ids}

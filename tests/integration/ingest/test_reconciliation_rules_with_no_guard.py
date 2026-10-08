@@ -271,7 +271,7 @@ def test_a_version_whose_stored_size_disagrees_with_its_manifest_is_refused(
 # --- an available blob no manifest references ---------------------------------
 
 
-def test_an_available_blob_without_w48_authority_is_legacy_unattributed(
+def test_an_available_blob_without_w48_authority_is_unattributed(
     store, session_factory, reconciler, track, engine
 ) -> None:
     """The ``detached`` half of ``report()``, which nothing reached.
@@ -326,11 +326,10 @@ def test_an_available_blob_without_w48_authority_is_legacy_unattributed(
 
     report = reconciler.report()
 
-    assert report.orphan_objects == ()
-    assert [item.blob_id for item in report.legacy_unattributed_blobs] == [
+    assert [item.blob_id for item in report.unattributed_blobs] == [
         verified.blob_id
     ]
-    orphan = report.legacy_unattributed_blobs[0]
+    orphan = report.unattributed_blobs[0]
     # ``recorded_state`` is what tells an operator which of the two orphan shapes this is.
     # ``verifying`` is the interrupted publication; ``available`` is this one. A report
     # that flattened them would not distinguish "finish it" from "look at it".
@@ -338,14 +337,18 @@ def test_an_available_blob_without_w48_authority_is_legacy_unattributed(
     assert orphan.sha256 == digest
     assert orphan.size_bytes == len(content)
     assert orphan.object_present is True
-    assert report.unpublished_records == ()
     assert report.missing_objects == ()
     assert not report.is_clean
     assert report.describe() == (
-        "orphan_objects=0 unpublished_records=0 legacy_unattributed_blobs=1 "
-        "missing_objects=0 "
+        "unattributed_blobs=1 missing_objects=0 "
         "missing_analysis_artifacts=0 unbound_analysis_artifacts=0 stale_commands=0"
     )
+
+    # An available database row is not proof that its bytes still exist.
+    store._purge_published(verified.blob_id)
+    absent = reconciler.report().unattributed_blobs
+    assert len(absent) == 1
+    assert absent[0].object_present is False
 
 
 # --- an unreachable store is not an integrity verdict --------------------------

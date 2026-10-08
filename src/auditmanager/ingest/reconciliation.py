@@ -11,19 +11,13 @@ What is canonical
 ``available`` and a committed ``input_manifest_entry`` references them. Everything below
 follows from that single decision:
 
-``orphan_objects``
-    Bytes that a current publication protocol can prove lost their owner.  W48's
-    Attempt-scoped analysis intents are not placed here while they are live.
-
-``legacy_unattributed_blobs``
-    Blob rows with no manifest and no W48 publication intent.  They may pre-date
-    migration ``0014`` and therefore have no Attempt authority from which an operator
-    could infer that rejection is safe.  They remain visible and adoptable, but are
-    never presented as action-ready orphans.
-
-``unpublished_records``
-    The database is mid-publication and the store has nothing. Nothing was ever
-    canonical, so there is nothing to clean up. This also self-heals on a re-upload.
+``unattributed_blobs``
+    Blob rows with no manifest and no Attempt-scoped analysis publication intent.
+    These may pre-date migration ``0014`` or belong to a newer document upload
+    interrupted before its version commit.  Their age cannot be inferred from the
+    row, and no Attempt authority proves that rejection is safe.  They remain visible
+    and adoptable, never action-ready orphans.  The row includes whether its object
+    is present, so an interrupted publication with no stored bytes is visible too.
 
 ``missing_objects``
     A published version's manifest names bytes the store does not hold. This is the
@@ -36,7 +30,7 @@ follows from that single decision:
     A bound analysis publication names bytes the store no longer holds. Unlike an
     unbound intent this is consumer-visible evidence, so the report names its exact
     run, stage and artifact role. Bound analysis blobs are excluded from
-    ``orphan_objects`` for the same reason manifest blobs are.
+    ``unattributed_blobs`` for the same reason manifest blobs are.
 
 ``unbound_analysis_artifacts``
     An Attempt committed publication intent but never committed the stage-result binding.
@@ -112,8 +106,7 @@ from .failures import domain_error_from_storage
 __all__ = [
     "MissingAnalysisArtifact",
     "MissingObject",
-    "LegacyUnattributedBlob",
-    "OrphanObject",
+    "UnattributedBlob",
     "ReconciliationReport",
     "Reconciler",
     "UnboundAnalysisArtifact",
@@ -163,18 +156,11 @@ _ATTEMPT_TERMINALS = frozenset({"succeeded", "failed", "superseded", "lost", "ca
 
 
 @dataclass(frozen=True, slots=True)
-class OrphanObject:
-    """Bytes the database does not fully own. Identity and content facts only."""
+class UnattributedBlob:
+    """A blob without a manifest or Attempt-scoped publication authority.
 
-    blob_id: BlobId
-    recorded_state: str
-    sha256: str | None
-    size_bytes: int | None
-
-
-@dataclass(frozen=True, slots=True)
-class LegacyUnattributedBlob:
-    """A pre-0014-style blob with no Attempt-scoped publication authority."""
+    It may be old or new. No safe rejection conclusion follows from its age.
+    """
 
     blob_id: BlobId
     recorded_state: str
@@ -236,9 +222,7 @@ class UnboundAnalysisArtifact:
 class ReconciliationReport:
     """What one reconciliation pass found. Empty on a healthy instance."""
 
-    orphan_objects: tuple[OrphanObject, ...] = ()
-    unpublished_records: tuple[OrphanObject, ...] = ()
-    legacy_unattributed_blobs: tuple[LegacyUnattributedBlob, ...] = ()
+    unattributed_blobs: tuple[UnattributedBlob, ...] = ()
     missing_objects: tuple[MissingObject, ...] = ()
     missing_analysis_artifacts: tuple[MissingAnalysisArtifact, ...] = ()
     unbound_analysis_artifacts: tuple[UnboundAnalysisArtifact, ...] = ()
@@ -247,9 +231,7 @@ class ReconciliationReport:
     @property
     def is_clean(self) -> bool:
         return not (
-            self.orphan_objects
-            or self.unpublished_records
-            or self.legacy_unattributed_blobs
+            self.unattributed_blobs
             or self.missing_objects
             or self.missing_analysis_artifacts
             or self.unbound_analysis_artifacts
@@ -259,9 +241,7 @@ class ReconciliationReport:
     def describe(self) -> str:
         """A short operator-facing summary. Counts and opaque identities only."""
         return (
-            f"orphan_objects={len(self.orphan_objects)} "
-            f"unpublished_records={len(self.unpublished_records)} "
-            f"legacy_unattributed_blobs={len(self.legacy_unattributed_blobs)} "
+            f"unattributed_blobs={len(self.unattributed_blobs)} "
             f"missing_objects={len(self.missing_objects)} "
             f"missing_analysis_artifacts={len(self.missing_analysis_artifacts)} "
             f"unbound_analysis_artifacts={len(self.unbound_analysis_artifacts)} "
@@ -296,17 +276,7 @@ class Reconciler:
         with session_scope(self._factory) as session:
             unsettled = self._blobs.unsettled(session)
             detached = tuple(
-                LegacyUnattributedBlob(
-                    blob_id=parse_blob_id(blob_id),
-                    recorded_state=state,
-                    sha256=sha256,
-                    size_bytes=None if size is None else int(size),
-                    object_present=True,
-                )
-                for blob_id, state, sha256, size in (
-                    tuple(row)
-                    for row in session.execute(_AVAILABLE_WITHOUT_MANIFEST).all()
-                )
+                tuple(row) for row in session.execute(_AVAILABLE_WITHOUT_MANIFEST).all()
             )
             manifest_blobs = self._documents.manifest_blob_ids(session)
             analysis_artifacts = tuple(
@@ -366,13 +336,22 @@ class Reconciler:
             )
 
         unbound_blob_ids = {blob_id for blob_id, *_rest in unbound_artifacts}
-        legacy: list[LegacyUnattributedBlob] = list(detached)
+        unattributed: list[UnattributedBlob] = [
+            UnattributedBlob(
+                blob_id=parse_blob_id(blob_id),
+                recorded_state=state,
+                sha256=sha256,
+                size_bytes=None if size is None else int(size),
+                object_present=self._object_exists(parse_blob_id(blob_id)),
+            )
+            for blob_id, state, sha256, size in detached
+        ]
         for record in unsettled:
             if record.blob_id in unbound_blob_ids:
                 continue
             object_present = self._object_exists(record.blob_id)
-            legacy.append(
-                LegacyUnattributedBlob(
+            unattributed.append(
+                UnattributedBlob(
                     blob_id=record.blob_id,
                     recorded_state=record.state.value,
                     sha256=record.sha256,
@@ -434,7 +413,7 @@ class Reconciler:
         )
 
         return ReconciliationReport(
-            legacy_unattributed_blobs=tuple(legacy),
+            unattributed_blobs=tuple(unattributed),
             missing_objects=tuple(missing),
             missing_analysis_artifacts=tuple(missing_analysis),
             unbound_analysis_artifacts=unbound_analysis,
