@@ -66,6 +66,10 @@ and dialog have Russian loading, empty and fault states.
 - `web/src/entities/release/**`, `web/src/widgets/version-history/**`,
   `web/src/features/mark-release-notes-read/**`
 - `web/src/_app/**` — account-menu item, banner island and What's New host only
+- `web/src/shared/ui/menu.tsx` — one generic client-side action item for
+  opening the panel from the existing keyboard-accessible account menu;
+  added by the exclusive integrator before WEB implementation because the
+  sealed primitive has only link and submit items
 - `web/src/shared/api/version-check.ts`, `web/src/shared/api/index.ts`,
   `web/src/shared/api/query-keys.ts` — version fetch, export, release namespace
 - `web/src/shared/config/env.ts`, `web/src/shared/config/index.ts` — build-ID
@@ -86,6 +90,11 @@ and dialog have Russian loading, empty and fault states.
   route and first-route `PUT /me/release-notes` only
 - `web/docs/PC01_UI_SEAM.md` — §6 release state only
 - `web/tests/unit/release/**`, `docs/program/W52-RELEASES-WEB.md`
+- `web/tests/unit/ui/menu.test.ts`, `web/tests/unit/shell/frame.test.ts`,
+  `web/tests/unit/qa_w50/r66-navigation.test.ts`,
+  `web/tests/unit/qa_w50/primitives-keyboard.test.ts` — only assertions
+  about the new account-menu action and its four-item keyboard order;
+  narrow integrator correction, not general W50 test ownership
 - local `agent/w52-releases-web` branch/worktree and ignored environment
 
 ## Forbidden hotspots
