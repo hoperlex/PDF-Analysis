@@ -11,10 +11,11 @@ product and fixture text remains verbatim and identifiable to an operator.
 
 - `W52-SEAL-01`, accepted by `W52-INT-B2C-01` on `origin/dev`.
 - `W52-RELEASES-API`, accepted by `W52-INT-C-API-01` on `origin/dev`.
+- `W52-RELEASES-WEB`, accepted by `W52-INT-C-WEB-01` on `origin/dev`.
 
 ## Frozen inputs
 
-- Start from the exact `origin/dev` SHA read back by `W52-INT-C-API-01`;
+- Start from the exact `origin/dev` SHA read back by `W52-INT-C-WEB-01`;
   record it in the lane report.
 - W52 API 30 paths / 37 operations / 83 schemas; 23 error codes;
   migration head `0016_release_notes`; domain revision 9 / 29 identities;

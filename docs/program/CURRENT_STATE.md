@@ -73,7 +73,11 @@
 > `W52-INT-B2C-01` published its first Stage-C grant. `W52-RELEASES-API`
 > fills the sealed routes, release loader and startup version/build binding;
 > `W52-INT-C-API-01` accepts that backend and grants RELEASES-WEB and
-> TRANSLATE from its development publication. Stage C2 has no grant yet.
+> TRANSLATE from its development publication. `W52-INT-WEB-GRANT-01`
+> corrected the menu-action path grant; `W52-INT-C-WEB-01` accepts the
+> 36-path WEB lane after merged UI/guard checks. TRANSLATE is the remaining
+> Stage-C lane and starts from that integration's read-back `origin/dev`.
+> Stage C2 has no grant yet.
 > Release-note prose is still minimal, and D-137–D-140 remain open.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to

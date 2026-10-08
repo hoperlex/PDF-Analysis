@@ -9,7 +9,10 @@ SEAL grant. SEAL is implemented at `0dd3f7b`; `W52-INT-B2C-01`
 accepts it and issues the first Stage-C grant in
 `tasks/W52-RELEASES-API.md`. RELEASES-API is implemented at `81e5181`;
 `W52-INT-C-API-01` accepts it and issues current-tree WEB and TRANSLATE
-grants. Stage C2 still requires its grant after the Stage-C merge.
+grants. `W52-INT-WEB-GRANT-01` adds the narrow account-menu action path,
+and `W52-INT-C-WEB-01` accepts the WEB lane at `93bd4da` after merged
+checks. TRANSLATE is next; Stage C2 still requires its grant after the
+Stage-C merge.
 Round 2 (both judges ACCEPT-WITH-FIXES, all fixes
 text or grant lines) is applied; no third round (`R-74`). Revision 2 was rebuilt on the first judging round (design judge:
 ACCEPT-WITH-FIXES, seven majors; grants judge: REJECT, seven majors; both verified against
