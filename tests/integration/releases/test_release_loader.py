@@ -82,17 +82,23 @@ def test_loader_is_idempotent_and_serves_the_highest_revision(
 ) -> None:
     sessions = create_session_factory(migrated_engine)
     notes = _notes()
+    archive_revision = notes["0.2.0"].revision
+    current_revision = notes["0.3.0"].revision
     first = load_notes(sessions, notes=notes, product_version="0.3.0")
     assert first.inserted == ("0.2.0", "0.3.0")
     second = load_notes(sessions, notes=notes, product_version="0.3.0")
     assert second.unchanged == ("0.2.0", "0.3.0")
-    assert _revisions(migrated_engine) == [("0.2.0", 1), ("0.3.0", 1)]
+    assert _revisions(migrated_engine) == [
+        ("0.2.0", archive_revision), ("0.3.0", current_revision)
+    ]
 
-    changed = _changed(notes["0.3.0"], revision=2, title="Новая редакция истории")
+    changed = _changed(notes["0.3.0"], revision=current_revision + 1, title="Новая редакция истории")
     revised = {**notes, "0.3.0": changed}
     assert load_notes(sessions, notes=revised, product_version="0.3.0").appended == ("0.3.0",)
     assert _revisions(migrated_engine) == [
-        ("0.2.0", 1), ("0.3.0", 1), ("0.3.0", 2)
+        ("0.2.0", archive_revision),
+        ("0.3.0", current_revision),
+        ("0.3.0", current_revision + 1),
     ]
     uid = _seeded_uid(migrated_engine)
     listing = ReleaseRepository(sessions, product_version="0.3.0").list_for_account(uid)
@@ -113,15 +119,20 @@ def test_conflicts_and_missing_history_roll_back_the_whole_load(
 ) -> None:
     sessions = create_session_factory(migrated_engine)
     notes = _notes()
+    current_revision = notes["0.3.0"].revision
     load_notes(sessions, notes=notes, product_version="0.3.0")
     original = _revisions(migrated_engine)
     with pytest.raises(ValueError, match="without bump"):
         load_notes(sessions, notes={
-            **notes, "0.3.0": _changed(notes["0.3.0"], revision=1, title="Изменено без ревизии")
+            **notes, "0.3.0": _changed(
+                notes["0.3.0"], revision=current_revision, title="Изменено без ревизии"
+            )
         }, product_version="0.3.0")
     with pytest.raises(ValueError, match="unchanged content"):
         load_notes(sessions, notes={
-            **notes, "0.3.0": _changed(notes["0.3.0"], revision=2, title=notes["0.3.0"].title)
+            **notes, "0.3.0": _changed(
+                notes["0.3.0"], revision=current_revision + 1, title=notes["0.3.0"].title
+            )
         }, product_version="0.3.0")
     with pytest.raises(ValueError, match="missing from image"):
         load_notes(sessions, notes={"0.3.0": notes["0.3.0"]}, product_version="0.3.0")
@@ -197,7 +208,9 @@ def test_account_mark_only_rises_and_new_accounts_see_no_old_whats_new(
     revised = {
         **notes,
         "0.3.0": _changed(
-            notes["0.3.0"], revision=2, title="Уточнённая история изменений"
+            notes["0.3.0"],
+            revision=notes["0.3.0"].revision + 1,
+            title="Уточнённая история изменений",
         ),
     }
     load_notes(sessions, notes=revised, product_version="0.3.0")
