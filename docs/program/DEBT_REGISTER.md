@@ -190,6 +190,11 @@ compilation and lint passed. `W52-RELEASES-API` still owes the image inputs,
 startup binding, `.dockerignore` guard and checkout/image parity; QA and the
 full gate remain D-139/D-140.
 
+`W52-INT-VERSION-READ-PREP-01` adds strict product VERSION reading with 12
+synthetic-tree cases; the combined focused command passed 102 tests, plus
+compilation and lint. `W52-RELEASES-API` still owes the root file and startup
+`ConfigurationError` binding; QA and full gate remain D-139/D-140.
+
 The W52 FACTS branch's optional web typecheck reported two `exactOptionalPropertyTypes` errors
 in `web/src/_pages/account/ui/account-page.tsx` and
 `web/src/_pages/register/ui/register-page.tsx`. The exact same two errors reproduce on the

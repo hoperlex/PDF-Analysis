@@ -45,6 +45,9 @@
 > `W52-INT-BUILD-ID-PREP-01` adds the pure API content-hash helper for W52;
 > 90 focused tests, compilation and lint passed. Stage C still owns the image
 > inputs, startup binding and image parity; QA/gate remain D-139/D-140.
+> `W52-INT-VERSION-READ-PREP-01` adds strict one-line product VERSION reading;
+> 102 focused tests, compilation and lint passed. Stage C still owns the root
+> file and startup refusal; QA/gate remain D-139/D-140.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
