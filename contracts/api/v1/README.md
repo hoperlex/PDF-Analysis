@@ -20,8 +20,8 @@ under owner decision `OD-14` and released at Gate A. It is seam `S8` of
 **Twelve operations at Gate A, and no thirteenth without a reseal.** Exactly the eleven
 capabilities `docs/program/tasks/P2-API-01.md` enumerated. Adding an endpoint is a contract
 change, not an implementation detail, and every one since was added by a recorded reseal:
-the document's own `info.description` narrates each, ending with `W49-SEAL-01` (accounts,
-registration requests and account management under `R-55` ... `R-61`), and it states the
+the document's own `info.description` narrates each, ending with `W52-SEAL-01` (the release
+version, history and account read mark), and it states the
 current totals once, in its last paragraph. `tests/contract/api_v1/test_doc_prose_facts.py`
 pins those totals independently.
 

@@ -74,6 +74,9 @@ ACCOUNT_REFERENCES: Final[tuple[AccountReference, ...]] = (
     AccountReference(
         "app_user_role", "user_uid", "CASCADE", "the roles this account holds (its own rows)"
     ),
+    AccountReference(
+        "account_release_mark", "user_uid", "CASCADE", "the account's own release read mark"
+    ),
 )
 
 

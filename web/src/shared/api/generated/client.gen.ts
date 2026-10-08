@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 633a58a53baf6652625b59d3db9438ae01e8c4ac8da788160882f031123f2e37
+ *   sha256 dc8f18754d22ef85820c124e086df7f9d9ca769c188554decd8a373b1b460304
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -38,6 +38,8 @@ import type {
   GetFindingResult,
   GetMeInput,
   GetMeResult,
+  GetProductVersionInput,
+  GetProductVersionResult,
   GetRunStatusInput,
   GetRunStatusResult,
   GetUserInput,
@@ -56,6 +58,8 @@ import type {
   ListProjectsResult,
   ListRegistrationsInput,
   ListRegistrationsResult,
+  ListReleasesInput,
+  ListReleasesResult,
   ListRunFindingsInput,
   ListRunFindingsResult,
   ListRunsInput,
@@ -64,6 +68,8 @@ import type {
   ListUsersResult,
   ListVersionsInput,
   ListVersionsResult,
+  MarkReleaseNotesReadInput,
+  MarkReleaseNotesReadResult,
   PurgeUserInput,
   PurgeUserResult,
   ReadRegistrationStatusInput,
@@ -210,6 +216,18 @@ export function getMe(
 }
 
 /**
+ * Read the running product version.
+ *
+ * `GET /system/version`.
+ */
+export function getProductVersion(
+  input: GetProductVersionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetProductVersionResult>> {
+  return request<GetProductVersionResult>(OPERATIONS.getProductVersion, input, options);
+}
+
+/**
  * Read run state and per-stage state.
  *
  * `GET /runs/{run_id}`.
@@ -318,6 +336,18 @@ export function listRegistrations(
 }
 
 /**
+ * List visible releases and what is new.
+ *
+ * `GET /releases`.
+ */
+export function listReleases(
+  input: ListReleasesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListReleasesResult>> {
+  return request<ListReleasesResult>(OPERATIONS.listReleases, input, options);
+}
+
+/**
  * List the published findings of one run, with their evidence.
  *
  * `GET /runs/{run_id}/findings`.
@@ -363,6 +393,18 @@ export function listVersions(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListVersionsResult>> {
   return request<ListVersionsResult>(OPERATIONS.listVersions, input, options);
+}
+
+/**
+ * Mark release notes read through a version.
+ *
+ * `PUT /me/release-notes`.
+ */
+export function markReleaseNotesRead(
+  input: MarkReleaseNotesReadInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<MarkReleaseNotesReadResult>> {
+  return request<MarkReleaseNotesReadResult>(OPERATIONS.markReleaseNotesRead, input, options);
 }
 
 /**
@@ -512,6 +554,7 @@ export const apiClient = {
   getDocumentVersion,
   getFinding,
   getMe,
+  getProductVersion,
   getRunStatus,
   getUser,
   getVersionBlocks,
@@ -521,10 +564,12 @@ export const apiClient = {
   listDocuments,
   listProjects,
   listRegistrations,
+  listReleases,
   listRunFindings,
   listRuns,
   listUsers,
   listVersions,
+  markReleaseNotesRead,
   purgeUser,
   readRegistrationStatus,
   rejectRegistration,

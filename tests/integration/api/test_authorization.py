@@ -135,6 +135,10 @@ GUARDED = (
     ("restoreUser", "POST", "/users/usr_01M2545JSD15ETSNNV904X991S/restore"),
     ("purgeUser", "DELETE", "/users/usr_01M2545JSD15ETSNNV904X991S"),
     ("resetUserPassword", "POST", "/users/usr_01M2545JSD15ETSNNV904X991S/password"),
+    # W52 release reads and the signed-in account's own mark are guarded.
+    ("getProductVersion", "GET", "/system/version"),
+    ("listReleases", "GET", "/releases"),
+    ("markReleaseNotesRead", "PUT", "/me/release-notes"),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -208,7 +212,7 @@ def _envelope(answer) -> dict:
 
 
 def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) -> None:
-    """One request per guarded operation, with no credential. Thirty-one of thirty-four.
+    """One request per guarded operation, with no credential. Thirty-four of thirty-seven.
 
     The set comparison is what makes this a sweep rather than a list: a twentieth
     operation is either written into ``GUARDED`` and swept, or named in
@@ -216,7 +220,7 @@ def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) ->
     ``test_the_open_surface_is_exactly_the_register`` -- there is no third place for it to
     be, and an operation that is in neither fails here.
     """
-    assert len(GUARDED) == 31
+    assert len(GUARDED) == 34
     assert UNAUTHENTICATED_OPERATIONS == {
         "issueToken",
         "submitRegistration",
@@ -676,8 +680,9 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "auth.py",
         "decisions.py",
         "me.py",
-        "registrations.py",
-        "users.py",
+            "registrations.py",
+            "releases.py",
+            "users.py",
     ], (
         f"{subject_readers} depend on the verified subject. Reading WHO the caller is is "
         "the seam's own vocabulary; deciding WHAT they may do is the seam's registers, "

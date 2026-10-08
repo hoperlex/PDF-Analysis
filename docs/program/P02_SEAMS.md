@@ -597,7 +597,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Thirty-four operations, sealed. `A5` generates the typed client from this document; `B6`
+Thirty-seven operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -607,9 +607,9 @@ D-16). Sixteen after `W34-CONTRACT` added `issueToken` on 2026-09-22, seventeen 
 `W38-KB` added `listDecisions` under `R-24` the same day, eighteen after `W39-REVOKE`
 added `changePassword` under `R-26` on 2026-09-23, and nineteen after `W45-BLOCKS` added
 `getVersionBlocks` under `R-29` on 2026-09-25, twenty after `W46-SEAL` added
-`getDashboardSummary` under `R-44` on 2026-09-25, and thirty-four after `W49-SEAL-01` added
+`getDashboardSummary` under `R-44` on 2026-09-25, and `W49-SEAL-01` then added
 the account, registration and account-management operations under `R-55` ... `R-61` on
-2026-10-06.
+2026-10-06. `W52-SEAL-01` added the three release operations on 2026-10-08.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -661,6 +661,9 @@ could.
 | `restoreUser` | `POST /users/{user_uid}/restore` |
 | `purgeUser` | `DELETE /users/{user_uid}` |
 | `resetUserPassword` | `POST /users/{user_uid}/password` |
+| `getProductVersion` | `GET /system/version` |
+| `listReleases` | `GET /releases` |
+| `markReleaseNotesRead` | `PUT /me/release-notes` |
 
 Rules that hold across the whole surface:
 
@@ -685,6 +688,8 @@ Rules that hold across the whole surface:
   * `purgeUser`: a repeat is `not_found`;
   * `resetUserPassword` repeats its effect: the temporary password is set again, and every
     credential issued in between is refused;
+  * `markReleaseNotesRead` raises the account's own read mark through a known release;
+    a lower or equal version is a no-op and takes no key;
 * every response carries `X-Correlation-Id`;
 * every non-2xx body is the `ErrorEnvelope`, with `retryable` pinned to the catalog
   value for the reported code;

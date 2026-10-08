@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 633a58a53baf6652625b59d3db9438ae01e8c4ac8da788160882f031123f2e37
+ *   sha256 dc8f18754d22ef85820c124e086df7f9d9ca769c188554decd8a373b1b460304
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '633a58a53baf6652625b59d3db9438ae01e8c4ac8da788160882f031123f2e37';
+export const CONTRACT_DIGEST = 'dc8f18754d22ef85820c124e086df7f9d9ca769c188554decd8a373b1b460304';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -57,10 +57,12 @@ export const SCHEMA_NAMES = [
   'InputManifestEntry',
   'IssueTokenRequest',
   'IssueTokenResponse',
+  'MarkReleaseNotesReadRequest',
   'ModelCallId',
   'ObservationProvenance',
   'PageInfo',
   'PersonNames',
+  'ProductVersion',
   'Project',
   'ProjectDocumentCount',
   'ProjectPage',
@@ -74,6 +76,10 @@ export const SCHEMA_NAMES = [
   'RegistrationStatus',
   'RegistrationStatusResponse',
   'RejectRegistrationRequest',
+  'ReleaseEntry',
+  'ReleaseList',
+  'ReleaseNoteItem',
+  'ReleaseNoteKind',
   'ResetUserPasswordRequest',
   'Role',
   'RunActivity',
@@ -451,6 +457,11 @@ export type IssueTokenResponse = {
   token: string;
 };
 
+/** The known release version through which this account has read. Unknown or future versions are refused. */
+export type MarkReleaseNotesReadRequest = {
+  read_through: string;
+};
+
 export type ModelCallId = string;
 
 /** The contract pattern for `ModelCallId`. Anchored; use with `new RegExp()`. */
@@ -477,6 +488,13 @@ export type PersonNames = {
   last_name: string;
   /** Optional; absent when the person has none. */
   middle_name?: string;
+};
+
+/** The running product version from VERSION, its content-derived build identifier, and the unchanged API contract version. */
+export type ProductVersion = {
+  build_id: string;
+  contract_version: string;
+  product_version: string;
 };
 
 export type Project = {
@@ -594,6 +612,41 @@ export type RejectRegistrationRequest = {
   /** Why the request is rejected, 1-256 characters after surrounding whitespace is removed, with no control character but a line feed. Stored for administrators; the applicant is not shown it. */
   reason: string;
 };
+
+/** The highest stored revision of one visible release. The archive entry is last; range_label is null for a normal release. */
+export type ReleaseEntry = {
+  date: string;
+  is_archive: boolean;
+  items: Array<ReleaseNoteItem>;
+  range_label: string | null;
+  revision: number;
+  title: string;
+  version: string;
+};
+
+/** Visible releases newest first, archive last, and the versions this account has not yet read. */
+export type ReleaseList = {
+  items: Array<ReleaseEntry>;
+  whats_new: Array<string>;
+};
+
+/** One user-facing note; where is the navigation label saved at release time. */
+export type ReleaseNoteItem = {
+  kind: ReleaseNoteKind;
+  screen: string;
+  text: string;
+  where: string;
+};
+
+/** The editorial category of a release note. */
+export const RELEASE_NOTE_KIND_VALUES = [
+  'new',
+  'improved',
+  'fixed',
+] as const;
+
+/** ReleaseNoteKind - the closed value set above. */
+export type ReleaseNoteKind = (typeof RELEASE_NOTE_KIND_VALUES)[number];
 
 export type ResetUserPasswordRequest = {
   /** The password the account signs in with next and must then change. It is held to the deployment's password policy against the account's login, and it appears in no response body, no error detail and no diagnostic record. */

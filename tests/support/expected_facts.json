@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 27,
+    "path_count": 30,
     "operations": [
       [
         "POST",
@@ -172,6 +172,21 @@
         "POST",
         "/users/{user_uid}/password",
         "resetUserPassword"
+      ],
+      [
+        "GET",
+        "/system/version",
+        "getProductVersion"
+      ],
+      [
+        "GET",
+        "/releases",
+        "listReleases"
+      ],
+      [
+        "PUT",
+        "/me/release-notes",
+        "markReleaseNotesRead"
       ]
     ],
     "schema_names": [
@@ -251,13 +266,19 @@
       "Verdict",
       "VerdictCount",
       "VersionBlockIndex",
-      "VersionUid"
+      "VersionUid",
+      "ProductVersion",
+      "ReleaseNoteKind",
+      "ReleaseNoteItem",
+      "ReleaseEntry",
+      "ReleaseList",
+      "MarkReleaseNotesReadRequest"
     ]
   },
   "error_catalog": {
     "api_codes": 23,
     "stored_vocabulary": 22
   },
-  "migration_head": "0015_accounts_roles_registration",
+  "migration_head": "0016_release_notes",
   "contract_version": "1.0.0-draft.1"
 }

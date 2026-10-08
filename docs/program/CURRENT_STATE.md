@@ -166,9 +166,9 @@ with no promotion. W49 now means identity, W50 the shell and W51 the screens:
 `docs/program/dispatch/IDENTITY-WAVES.md` is the controlling plan, with `W49-PLAN.md`,
 `W50-PLAN.md` and `W51-PLAN.md` beside it.
 
-The frozen API surface is **27 paths / 34 operations / 77 schemas** since `W49-SEAL-01`, the
+The frozen API surface is **30 paths / 37 operations / 83 schemas** since `W52-SEAL-01`, the
 error catalog **23**, domain candidate revision 9 with **29** opaque identities, and the
-migration head is **`0015_accounts_roles_registration`**. The last tagged release is `alpha-w48.1`.
+migration head is **`0016_release_notes`**. The last tagged release is `alpha-w48.1`.
 This section makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is
 deployed.
 

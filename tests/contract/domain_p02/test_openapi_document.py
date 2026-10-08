@@ -90,6 +90,9 @@ REQUIRED_OPERATIONS = {
     "restoreUser",
     "purgeUser",
     "resetUserPassword",
+    "getProductVersion",
+    "listReleases",
+    "markReleaseNotesRead",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -400,7 +403,9 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
 #: pinned as a literal so a second input-less operation is a decision someone makes
 #: rather than a drift nobody notices. Moves on a reseal that adds or removes every
 #: parameter, header and body an operation takes.
-INPUT_LESS_OPERATIONS: frozenset[str] = frozenset({"getDashboardSummary", "getMe"})
+INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
+    {"getDashboardSummary", "getMe", "getProductVersion", "listReleases"}
+)
 
 
 def test_every_operation_that_takes_input_can_report_a_client_fault(

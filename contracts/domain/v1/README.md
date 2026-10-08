@@ -14,6 +14,10 @@ opaque identity, durable lifecycle and the externally visible failure shape. It 
 coordination artifact, not runtime configuration. Runtime types may be generated or
 mirrored from it only with contract tests that prove equivalence.
 
+`W52-SEAL-01` adds no domain identity or catalog code. `ReleaseEntry.version` in the
+API is an immutable canonical SemVer natural key for release history, not an opaque
+entity identity or a second `contract_version`; no operation addresses a release.
+
 Revision 2 applied the repository owner's disposition of **2026-09-01**: `PD-01` and
 `PD-03` are **approved with modification**, and `OQ-01`, `OQ-03`, `OQ-05` and `OQ-06`
 are resolved. `U-04` (tenant/IdP/TTL/legal hold), `OQ-02` and `OQ-04` stay explicitly

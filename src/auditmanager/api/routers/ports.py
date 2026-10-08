@@ -39,6 +39,7 @@ from auditmanager.api.schemas.documents import DocumentVersionView
 from auditmanager.api.schemas.findings import FindingDetailView, FindingView
 from auditmanager.api.schemas.projects import ProjectView
 from auditmanager.api.schemas.registrations import RegistrationListingView, RegistrationView
+from auditmanager.api.schemas.models import ProductVersion, ReleaseList
 from auditmanager.api.schemas.runs import RunStatusView
 from auditmanager.api.security import AccountStanding, IssuedCredential
 
@@ -54,6 +55,7 @@ __all__ = [
     "FindingPort",
     "ProjectPort",
     "RegistrationPort",
+    "ReleasesPort",
     "RunPort",
     "UploadedDocument",
 ]
@@ -619,3 +621,17 @@ class RegistrationPort(Protocol):
 
     def reject(self, *, actor_uid: str, request_id: str, reason: str) -> RegistrationView:
         """Decide the request as rejected with a reason of 1-256 characters."""
+
+
+@runtime_checkable
+class ReleasesPort(Protocol):
+    """Release reads and the signed-in account's own high-water mark.
+
+    Stage B freezes these methods. Stage C supplies storage and version computation.
+    """
+
+    def get_product_version(self) -> ProductVersion: ...
+
+    def list_releases(self, *, user_uid: str) -> ReleaseList: ...
+
+    def mark_read(self, *, user_uid: str, read_through: str) -> None: ...

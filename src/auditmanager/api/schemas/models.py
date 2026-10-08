@@ -1,4 +1,4 @@
-"""The 50 ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
+"""The 83 ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
 
 `T-1` makes FastAPI generate the served document, and `W13-CONF`'s conformance gate compares
 that document against the frozen contract. **The contract stays the authority**: every class
@@ -29,7 +29,7 @@ Three spellings in here are deliberate and are the reason the generated document
 
 Nothing in this module renders a response. The wire bytes are produced by the ``*_body``
 functions beside it, which the response baseline pins byte for byte; these models declare
-the *document*, and validate the four request bodies.
+the *document*, and validate the declared request bodies.
 """
 
 from __future__ import annotations
@@ -92,6 +92,12 @@ __all__ = [
     "RejectRegistrationRequest",
     "ResetUserPasswordRequest",
     "Role",
+    "ProductVersion",
+    "ReleaseNoteKind",
+    "ReleaseNoteItem",
+    "ReleaseEntry",
+    "ReleaseList",
+    "MarkReleaseNotesReadRequest",
     "RunId",
     "RunState",
     "RunStatus",
@@ -876,6 +882,44 @@ class Account(_Object):
 class AccountPage(_Object):
     items: list[Account]
     page: PageInfo
+
+
+class ProductVersion(_Object):
+    product_version: str
+    build_id: str
+    contract_version: str
+
+
+class ReleaseNoteKind(str, enum.Enum):
+    new = "new"
+    improved = "improved"
+    fixed = "fixed"
+
+
+class ReleaseNoteItem(_Object):
+    kind: ReleaseNoteKind
+    screen: str
+    where: str
+    text: str
+
+
+class ReleaseEntry(_Object):
+    version: str
+    revision: Annotated[int, Field(ge=1)]
+    date: Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+    title: str
+    is_archive: bool
+    range_label: str | None
+    items: list[ReleaseNoteItem]
+
+
+class ReleaseList(_Object):
+    items: list[ReleaseEntry]
+    whats_new: list[str]
+
+
+class MarkReleaseNotesReadRequest(_Object):
+    read_through: str
 
 
 class PersonNames(_Object):
