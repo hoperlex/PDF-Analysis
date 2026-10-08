@@ -18,6 +18,12 @@ integrator `pdf-analysis-48` after the second round.
 **Controlling answers:** `ROADMAP-TO-BETA.md` §10 (V-1…V-10, P-1, P-2) and §10.10 (W-1…W-4).
 `R-V1`…`R-V4` are placeholders; `W52-RULE-01` takes the next free numbers.
 **Roles:** `IDENTITY-WAVES.md` §8. Task forms not spelled out are its §10 standard forms.
+For W52 development only, the owner's later 2026-10-08 deferral overrides
+§10's full-gate steps in `W52-FREEZE-01`, individual code lanes and
+`W52-INT-CLOSE`; D-140 owns their replacement exact-candidate gate.
+`W52-FREEZE-01` must state this exception in its own task file and cannot
+claim the old freeze baseline or JUnit parity. All other freeze checks,
+especially current-tree grants and frozen contracts, remain required.
 **Development exit under the owner's 2026-10-08 code-first direction:** the
 implementation candidate may advance on `origin/dev` with each lane's basic
 checks, while D-137–D-140 record the deferred W51/W52 QA, attack, built-stand,
@@ -296,7 +302,9 @@ Standard form. Records after the owner confirms the text:
 
 ### `W52-FREEZE-01` (integrator)
 
-Standard form, plus: the deferred timing boundary of §3.7 and the exact
+Exception to `IDENTITY-WAVES.md` §10: no full `make gate` at this code-only
+freeze; D-140 owns that check. Otherwise standard form, plus: the deferred
+timing boundary of §3.7 and the exact
 W49–W51 rows for the two debt lanes. `pin_sweep.py` and the expected-facts
 file now exist as code preparations on dev; the freeze runs the tool against
 the **current** tree and widens each remaining task grant as needed. It
@@ -551,13 +559,15 @@ remain required for a release verdict and do not run as part of code-only close.
 - `W52-JUDGE-Y` (architecture and truth): ALR-05 for `releases`; no rule in a component
   (`whats_new` only on the server); the facts file is the only count literal; the gate measurement
   reproduces; every debt row closed by this wave is closed by its own check command.
-- `W52-NOTES-JUDGE` (§3.4): every claim against the diff; re-run on the INT-CLOSE candidate.
+- `W52-NOTES-JUDGE` (§3.4): every claim against the diff; re-run on the
+  later release-validation candidate.
 - `W52-FIX`: standard form.
 
 ### `W52-INT-CLOSE` (integrator)
 
-Development close records exact code and focused-check evidence, with D-137–D-140
-open. The following register work belongs to release validation/close and
+Exception to `IDENTITY-WAVES.md` §10: development close records exact code
+and focused-check evidence on `origin/dev`, with D-137–D-140 open and no
+`GATE OK` claim. The following register work belongs to release validation/close and
 requires its named re-measurements: close `D-66`, `D-72`, `D-78`,
 `D-79`, `D-68` with their re-measured checks; repair the register's §2 owner table, §3 lag
 sentence and header count; close `D-120` (`R-V3`) and `D-121` (`W52-ACCEPT-01`); re-slot `D-122` to

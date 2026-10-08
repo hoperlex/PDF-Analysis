@@ -19,7 +19,10 @@ W51 QA, built-stand/manual acceptance and full gate remain D-137/D-138.
 W52 and later code-only candidates retain D-139/D-140. W52 Stage A/B/C code
 work still requires `W52-RULE-01` and `W52-FREEZE-01` before dispatch; the
 already merged FACTS/PINSWEEP and other preparations do not count as that
-freeze. The later validation stage owns audit/attack, independent QA/judges,
+freeze. The W52 plan explicitly overrides the old `IDENTITY-WAVES.md` §10
+full-gate requirement at its code-only freeze and development close; D-140
+owns the later exact-candidate gate. The later validation stage owns
+audit/attack, independent QA/judges,
 live/manual acceptance, exact-candidate full gate and corrections. A release
 or `origin/main` update requires a separate direct owner instruction.
 
