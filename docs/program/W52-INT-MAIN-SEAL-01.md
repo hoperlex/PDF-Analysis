@@ -27,6 +27,15 @@ head `0015` after SEAL introduced `0016`. Both tests now pin the exact new
 behavior and migration head. That second gate also had no `GATE OK`; a new
 complete gate on the final correction is required.
 
+The third full gate on `9cfe080` passed the corrected contract and composition
+guards, then encountered a host storage outage during S3-backed tests: 3,049
+passed, 63 failed and 149 setup errors, beginning with `StorageUnavailableError`
+while writing test PDF bytes. The host had about 1.1 GB available during the
+failure; after unrelated temporary data was cleared it had 15 GB, and the
+first affected test passed unchanged against the same services. This is not
+gate evidence. The isolated services and volumes must be recreated before a
+fresh full gate on the committed successor.
+
 The three new release routes are intentionally skeletal: authorized requests
 return `dependency_unavailable` until Stage C installs release storage and
 VERSION. They are a known limitation of this exact source, not evidence of a
