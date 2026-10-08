@@ -39,9 +39,9 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-131 | bounded retry for transient GET navigation is implemented locally; live browser validation remains | `W52-DEBT-CODE-131`; D-139/D-140 |
 | ~~D-132~~ | `alpha-w48` was tagged without the manual A01–A12 pass (`R-64`) | **closed 2026-10-07** by the owner's attestation (`R-68`) |
 | **D-133** | the proxy adapter folds every non-400/401 HTTP failure into `analysis_failed`, discards the error body, and no operator can read why a stage failed | found by the `alpha-w48.1` acceptance; W52 debt lane |
-| D-134 | invalid `next`/`from` is escaped into Next Flight router metadata despite the absolute “never echoed” wording | W50 Judge X R1, upheld by Judge Y; prose/transport boundary |
-| D-135 | the registry comment says the menu cannot hide an open screen, but `/optimisation` is open by address and intentionally hidden | W50 Judge Y JY-1, upheld by Judge X; comment correction |
-| D-136 | W50-PLAN §3.4 says five first-load routes shrink; the measured count is four | W50 Judge Y JY-2, independently measured by Judge X; plan correction |
+| D-134 | absolute return-path wording corrected locally; deferred browser/gate validation remains | `W52-INT-PROSE-134136`; D-139/D-140 |
+| D-135 | open-screen menu comment corrected locally; deferred validation remains | `W52-INT-PROSE-134136`; D-139/D-140 |
+| D-136 | W50 first-load plan corrected to four decreases and review's increase; deferred validation remains | `W52-INT-PROSE-134136`; D-139/D-140 |
 | **D-137** | W51 QA, independent review and live/manual identity acceptance have not run | a separate validation wave must run the built-stand and human checks against one exact candidate |
 | **D-138** | W51 implementation is being integrated without its full end-of-wave `make gate` | a separate validation wave must run and record `GATE OK` for the exact candidate before any release claim |
 | **D-139** | W52 and subsequent code-only candidates defer QA, independent review, built-stand and manual acceptance | the validation wave must inventory every accumulated candidate and run the applicable checks on exact SHAs |
@@ -188,6 +188,11 @@ release claim.
 
 ### D-134 — invalid return input appears in escaped Next Flight metadata
 
+> **Narrowed 2026-10-08 by `W52-INT-PROSE-134136`.** The screen-registry
+> comments and W50 plan now distinguish visible/form/redirect use from escaped
+> Next router metadata. No framework or routing behavior changed. Local tests
+> and lint passed; browser validation and the full gate remain D-139/D-140.
+>
 **Opened 2026-10-07 by `W50-INT-CLOSE` from W50 Judge X R1, independently upheld by Judge Y.**
 `safeReturnPath` excludes an invalid `next`/`from` from the visible `/login` and `/403` text,
 the hidden field and the BFF redirect target. Next still serializes the raw query value into
@@ -205,6 +210,11 @@ visible text, form and redirect observations in `reviews/W50-JUDGE-X.md` R1 and
 
 ### D-135 — the menu comment claims every open screen appears
 
+> **Narrowed 2026-10-08 by `W52-INT-PROSE-134136`.** The comment now says the
+> menu offers only open rows marked `inMenu` in a visible group; `/optimisation`
+> remains reachable by address and absent from the menu. Local tests and lint
+> passed; D-139/D-140 retain deferred validation.
+>
 **Opened 2026-10-07 by `W50-INT-CLOSE` from W50 Judge Y JY-1, upheld by Judge X.**
 `web/src/shared/config/screen-registry.ts:250-254` says the frame cannot hide a screen that
 `screenDecision` opens. Its `/optimisation` row is `session`/`any`, `hidden` and `inMenu: false`;
@@ -217,6 +227,11 @@ and Judge Y JY-1 give the independent runtime and source checks.
 
 ### D-136 — W50's first-load plan claims five decreases instead of four
 
+> **Narrowed 2026-10-08 by `W52-INT-PROSE-134136`.** The plan now names the
+> four measured decreases and the review page's 1,370-byte increase within the
+> 1,536-byte allowance. No new build was made under the owner's deferral;
+> D-139/D-140 retain validation and full-gate evidence.
+>
 **Opened 2026-10-07 by `W50-INT-CLOSE` from W50 Judge Y JY-2, independently measured by Judge X.**
 `docs/program/dispatch/W50-PLAN.md` §3.4 says five target routes' first-load JS falls. The
 Stage A to LAZY build tables show decreases for `/dashboard`, `/knowledge-base`, the run page

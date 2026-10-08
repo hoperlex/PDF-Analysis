@@ -62,7 +62,9 @@ administrator account management (`R-55` … `R-61`) — was published to `origi
 return paths, a home page, grouped navigation and an account menu, four honest route placeholders,
 and lazy loading for five heavy widgets. The production build's 23rd page row is Next's synthetic
 `/_not-found`, not a registered screen. `W50-QA-01` and both independent judges accepted the
-merged candidate; the three upheld register-only findings are open as `D-134` … `D-136`.
+merged candidate; the three upheld register-only findings `D-134` … `D-136`
+have their live prose corrected in `W52-INT-PROSE-134136.md`, with deferred
+browser/gate validation tracked by D-139/D-140.
 `W50-FIX` corrected accepted prose and fixtures and added the R-70 light-acceptance command.
 Its clean lane tree passed a full `make gate`; the FIX merge and the docs-only close candidate
 passed light acceptance under `R-70` (`AGENTS.md` §8). W50 is closed on the development line
