@@ -17,6 +17,8 @@
 > D-128 still awaits deferred database validation and full-gate evidence.
 > D-129 Y F-3's bounded name-label correction is merged through `4bcc671`, and
 > F-4's unused standing-query removal through `bdd23ac`; other findings remain open.
+> D-125's per-document corpus read verification is merged through `0e710f0`;
+> its real-corpus/database and full-gate evidence remains deferred.
 > The combined implementation passed 148 focused tests and frontend lint; its red
 > rendered-language branch-coverage assertion remains recorded in the lane reports.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
@@ -87,6 +89,11 @@ The D-129 Y F-3 Unicode initial correction passed 11 focused tests and lint in
 F-4's unused management standing read and access-side type were removed in
 `W52-DEBT-CODE-129F4.md`; 53 access/auth tests collected, and database execution
 awaits D-139.
+The D-125 corpus projection now checks each re-read document against the raw
+fingerprint that determined its snapshot, including repaired and direct
+segmentation reads. Sixteen local fixture tests, Python compilation and lint
+passed in `W52-DEBT-CODE-125.md`; real-corpus/database evidence and full gate
+remain D-139/D-140.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:

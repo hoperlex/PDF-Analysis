@@ -30,7 +30,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-122 | no online dependency-vulnerability, transitive-licence or container-image scan has ever run | `W48-AUDIT` §7 question 5 |
 | **D-123** | the alpha MinIO volume was never inventoried, and the restore was not rehearsed on it after the image rebuild | sits beside `D-119`; **owner** schedules it |
 | D-124 | the norms HNSW index is one per table and the snapshot filter runs after the scan; `hnsw.ef_search` is never set | a second snapshot shrinks `nearest()` |
-| D-125 | the corpus loader re-reads files after `snapshot_of` hashed them and does not re-verify | immutable snapshot can carry other bytes |
+| D-125 | corpus re-read verification is implemented locally; real-corpus/database and full-gate evidence remain | `W52-DEBT-CODE-125`; D-139/D-140 |
 | D-126 | a snapshot's `content_key` excludes the segmentation profile | raising the profile version makes `ensure_snapshot` conflict |
 | D-127 | an embedding build counts as complete with a one-character window; its digest includes a private bigint | completeness and digest are weaker than `NORM-VECTOR-01` claims |
 | D-128 | nine `W48-JUDGE-Z` register findings; F-1…F-7/F-10/F-11 code repaired locally, validation remains | `W52-DEBT-GUARDS-128F1`, `W52-DEBT-GUARDS-128F2`, `W52-DEBT-GUARDS-128A`, `W52-DEBT-CODE-128F7`, `W52-DEBT-CODE-128F10`, `W52-DEBT-CODE-128F11`; `reviews/W48-JUDGE-Z.md` |
@@ -400,6 +400,12 @@ projection of the same text cannot be loaded.
 
 ### D-125 — the corpus loader does not re-verify what it re-reads
 
+> **Narrowed 2026-10-08 by `W52-DEBT-CODE-125`, merged at `0e710f0`.**
+> The snapshot pass retains raw per-document fingerprints; loader and direct
+> segmentation projection check each subsequent read before yielding it. Local
+> fixture tests (16), Python compilation and lint passed. Real-corpus/database
+> execution and full-gate evidence remain D-139/D-140; D-125 is not closed.
+>
 **Opened 2026-10-05 by `W48-INT-CLOSE`.** `open_corpus_projection` hashes the corpus in
 `snapshot_of`; `CorpusProjection.iter_documents` (`src/auditmanager/norms/corpus_source.py`)
 reads every document again for insertion without comparing it with that hash. A file changed in
