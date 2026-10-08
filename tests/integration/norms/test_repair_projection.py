@@ -23,7 +23,9 @@ from auditmanager.norms import (
     segment,
 )
 from auditmanager.norms.corpus_source import (
+    CorpusUnavailable,
     RepairProjectionMismatch,
+    open_corpus_projection,
     segment_corpus,
     snapshot_of,
 )
@@ -65,7 +67,98 @@ def corpus_root(tmp_path: Path) -> Path:
     (document / "blocks.json").write_text(
         json.dumps({"document_id": "doc_source_0001"}), encoding="utf-8"
     )
+    _write_manifest(root, [(SLUG, "doc_source_0001")])
     return root
+
+
+def _write_manifest(root: Path, documents: list[tuple[str, str]]) -> None:
+    (root / "MANIFEST.json").write_text(
+        json.dumps(
+            {
+                "documents": [
+                    {
+                        "slug": slug,
+                        "document_id": source_id,
+                        "document_name": slug,
+                        "doc_type": "standard",
+                        "pdf_pages": 7,
+                        "blocks_count": 1,
+                    }
+                    for slug, source_id in documents
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize("changed_file", ["results.md", "blocks.json"])
+def test_projection_refuses_source_changed_after_snapshot(
+    corpus_root: Path, changed_file: str
+) -> None:
+    projection = open_corpus_projection(corpus_root)
+    path = corpus_root / SLUG / changed_file
+    if changed_file == "results.md":
+        path.write_text(_markdown("Different body with the same date."), encoding="utf-8")
+    else:
+        path.write_text(json.dumps({"document_id": "another_source"}), encoding="utf-8")
+
+    with pytest.raises(CorpusUnavailable, match="source changed since snapshot"):
+        list(projection.iter_documents())
+
+
+def test_projection_rechecks_each_iteration_and_repaired_sources(corpus_root: Path) -> None:
+    base = snapshot_of(corpus_root)
+    ledger = ledger_of(base.snapshot_id, NOW, [_repair()])
+    projection = open_corpus_projection(corpus_root, repair_ledger=ledger)
+
+    assert len(list(projection.iter_documents())) == 1
+    (corpus_root / SLUG / "results.md").write_text(
+        _markdown("Changed after the first iteration."), encoding="utf-8"
+    )
+    with pytest.raises(CorpusUnavailable, match="source changed since snapshot"):
+        list(projection.iter_documents())
+
+
+def test_a_later_document_change_refuses_an_in_progress_projection(corpus_root: Path) -> None:
+    later = "Я_000_13330_2026"
+    directory = corpus_root / later
+    directory.mkdir()
+    (directory / "results.md").write_text(_markdown(), encoding="utf-8")
+    (directory / "blocks.json").write_text(
+        json.dumps({"document_id": "doc_source_0002"}), encoding="utf-8"
+    )
+    _write_manifest(
+        corpus_root,
+        [(SLUG, "doc_source_0001"), (later, "doc_source_0002")],
+    )
+    projection = open_corpus_projection(corpus_root)
+    documents = projection.iter_documents()
+
+    assert next(documents).metadata.slug == SLUG
+    (directory / "results.md").write_text(
+        _markdown("Changed while the first document was projected."), encoding="utf-8"
+    )
+    with pytest.raises(CorpusUnavailable, match="source changed since snapshot"):
+        next(documents)
+
+
+def test_direct_segment_corpus_refuses_a_later_changed_document(corpus_root: Path) -> None:
+    later = "Я_000_13330_2026"
+    directory = corpus_root / later
+    directory.mkdir()
+    (directory / "results.md").write_text(_markdown(), encoding="utf-8")
+    (directory / "blocks.json").write_text(
+        json.dumps({"document_id": "doc_source_0002"}), encoding="utf-8"
+    )
+    rows = segment_corpus(corpus_root, snapshot_of(corpus_root).snapshot_id)
+
+    assert next(rows)[0].document_slug == SLUG
+    (directory / "results.md").write_text(
+        _markdown("Changed while the first document was segmented."), encoding="utf-8"
+    )
+    with pytest.raises(CorpusUnavailable, match="source changed since snapshot"):
+        next(rows)
 
 
 def _repair(*, replacement: str | None = REPAIRED_TEXT) -> PageRepair:
