@@ -85,7 +85,9 @@
 > the translation's prose/count checks pass.
 > `W52-INT-C2-RELNOTES-01` accepts revision-2 authored `0.3.0` and archive
 > `0.2.0` notes with form, screen-registry and database-loader checks on the
-> development line. `W52-ACCEPT-01` is next; D-137–D-140 remain open.
+> development line. `W52-INT-C2-ACCEPT-01` accepts the measured-build
+> alpha-acceptance pack, completing Stage C2 implementation on the development
+> line. D-137–D-140 remain open; no live or release verdict follows.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers

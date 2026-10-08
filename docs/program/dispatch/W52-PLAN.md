@@ -15,7 +15,9 @@ checks. `W52-INT-C-TRANSLATE-01` accepts the English operator runbooks
 after WEB. `W52-INT-C2-GRANT-01` issues current-tree RELNOTES and
 ACCEPT grants from the Stage-C readback. `W52-INT-C2-RELNOTES-01`
 accepts the authored notes and corrects the loader test's revision
-assumption on the development line; ACCEPT follows its readback.
+assumption on the development line. `W52-INT-C2-ACCEPT-01` accepts the
+measured-build acceptance pack from the refreshed grant; Stage C2
+implementation is complete, with release validation still deferred.
 Round 2 (both judges ACCEPT-WITH-FIXES, all fixes
 text or grant lines) is applied; no third round (`R-74`). Revision 2 was rebuilt on the first judging round (design judge:
 ACCEPT-WITH-FIXES, seven majors; grants judge: REJECT, seven majors; both verified against
