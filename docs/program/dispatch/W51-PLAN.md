@@ -1,7 +1,8 @@
 # Wave 51 — screens: sign-in, registration, account; administration of users and requests; identity in the acceptance pack
 
-**Status:** Stage A `W51-ROUTES-01` is accepted at `bc5d443` on `origin/dev`;
-Stage B begins with AUTH from the integrator's docs-only dispatch tip based on that merge.
+**Status:** Stage A `W51-ROUTES-01` is accepted at `bc5d443`; Stage B
+`W51-AUTH-01` is accepted and published on `origin/dev` at `ebe614d`.
+`W51-ADMIN-USERS` starts from its docs-only dispatch tip based on that merge.
 **Controlling rulings:** `R-55`, `R-56`,
 `R-59`, `R-60`, `R-61`, `R-66`, `R-70`.
 **Roles:** lanes, QA, judges and FIX are the executor's; freeze, merges and publication are the
