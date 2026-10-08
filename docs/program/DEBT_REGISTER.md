@@ -33,7 +33,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-125 | the corpus loader re-reads files after `snapshot_of` hashed them and does not re-verify | immutable snapshot can carry other bytes |
 | D-126 | a snapshot's `content_key` excludes the segmentation profile | raising the profile version makes `ensure_snapshot` conflict |
 | D-127 | an embedding build counts as complete with a one-character window; its digest includes a private bigint | completeness and digest are weaker than `NORM-VECTOR-01` claims |
-| D-128 | nine `W48-JUDGE-Z` register findings; F-2…F-7/F-11 code repaired locally, F-1/F-10 remain | `W52-DEBT-GUARDS-128F2`, `W52-DEBT-GUARDS-128A`, `W52-DEBT-CODE-128F7`, `W52-DEBT-CODE-128F11`; `reviews/W48-JUDGE-Z.md` |
+| D-128 | nine `W48-JUDGE-Z` register findings; F-1…F-7/F-11 code repaired locally, F-10 remains | `W52-DEBT-GUARDS-128F1`, `W52-DEBT-GUARDS-128F2`, `W52-DEBT-GUARDS-128A`, `W52-DEBT-CODE-128F7`, `W52-DEBT-CODE-128F11`; `reviews/W48-JUDGE-Z.md` |
 | D-129 | the W49 judges' and `W49-FIX`'s register findings: comments, docstrings, a 68-character label, edge assumptions | each with its path:line in the two reviews and `W49-FIX.md` |
 | D-130 | the identity debts `W49-PLAN.md` §3 registers by design | owner-visible limits of the identity model, scheduled with W52 |
 | D-131 | the alpha acceptance journey has no retry for a transient browser network error | one co-tenant Docker bridge event failed a whole run |
@@ -311,6 +311,14 @@ with no retention rule; the administrator knows the temporary password a reset s
 
 ### D-128 — the closure judge's register findings
 
+> **Further narrowed 2026-10-08 by `W52-DEBT-GUARDS-128F1`, merged at `029ca93`.**
+> The D-97 guard now discovers screen tests under `tests/unit/screens`, and the five
+> tracked private router mounts plus the language guard's private query mount use the
+> shared harness. Six focused files passed 89 tests and frontend lint. The complete
+> language guard still has its separate, pre-existing red assertion naming 17 uncovered
+> branches on both the base and repaired trees. F-10 remains open; QA and full gate
+> remain D-139/D-140. This is not D-128 closure.
+>
 > **Further narrowed 2026-10-08 by `W52-DEBT-CODE-128F11`, merged at `06a417d`.**
 > The analysis public seam now exports `TEXT_STAGE_VERSION` and its sole in-repository
 > importer uses that name directly; the version value is unchanged. Two architecture
@@ -3479,7 +3487,7 @@ after the fact is the integrator writing history. Wave 48 decides whether to ann
 
 ### D-97 — six screen-rendering implementations do not share one provider/state contract
 
-> **`D-97` closed by `W48-WEB`, 2026-10-05.** All five screen-wide consumers render through `harness.ts::renderScreen` (`996b546`), and `a73a331` makes the guard discover new consumers instead of listing them. The private router mounts left are the five focused screen tests the row excluded (`D-128` F-1 records that the guard does not read them).
+> **`D-97` closed by `W48-WEB`, 2026-10-05.** All five screen-wide consumers render through `harness.ts::renderScreen` (`996b546`), and `a73a331` makes the guard discover new consumers instead of listing them. At closure, five focused screen tests still had private router mounts outside the guard's walk (`D-128` F-1); `W52-DEBT-GUARDS-128F1` later migrated them and enlarged discovery (`029ca93`).
 
 **Opened by both closing W44 judges, 2026-09-24.** The integration comment claimed five existing
 copies became four and that the residue was registered. The commit migrated none of the five and
