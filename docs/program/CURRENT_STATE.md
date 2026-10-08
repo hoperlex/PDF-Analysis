@@ -15,8 +15,8 @@
 > F-11 public-stage naming is merged through `06a417d`, and F-1 screen-provider
 > coverage through `029ca93`; F-10's report correction is merged through `6976904`.
 > D-128 still awaits deferred database validation and full-gate evidence.
-> D-129 Y F-3's bounded name-label correction is merged through `4bcc671`;
-> D-129's other findings remain open.
+> D-129 Y F-3's bounded name-label correction is merged through `4bcc671`, and
+> F-4's unused standing-query removal through `bdd23ac`; other findings remain open.
 > The combined implementation passed 148 focused tests and frontend lint; its red
 > rendered-language branch-coverage assertion remains recorded in the lane reports.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
@@ -84,6 +84,9 @@ without inferring age and omits dead categories; its pure unit test, Python comp
 and lint passed in `W52-DEBT-CODE-128F10.md`. The database integration cases await D-139.
 The D-129 Y F-3 Unicode initial correction passed 11 focused tests and lint in
 `W52-DEBT-CODE-129F3.md`; other D-129 findings remain open.
+F-4's unused management standing read and access-side type were removed in
+`W52-DEBT-CODE-129F4.md`; 53 access/auth tests collected, and database execution
+awaits D-139.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:
