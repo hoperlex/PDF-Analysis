@@ -7,6 +7,8 @@ row before anyone learns the provider was never configured.
 
 from __future__ import annotations
 
+from tests.support.expected_facts import FACTS
+
 import os
 
 import pytest
@@ -88,7 +90,7 @@ class TestItRefusesToStartRatherThanFailLater:
 class TestWhatItActuallyWires:
     def test_it_builds_all_the_frozen_operations(self) -> None:
         app = build_application(environ=_base_env())
-        assert len(app.router.routes) == 34, (
+        assert len(app.router.routes) == FACTS.operation_count, (
             "the router does not carry the thirty-four operations the frozen document "
             "declares -- fifteen until `W34-CONTRACT` added the credential exchange, "
             "sixteen until `W38-KB` added the decision journal under `R-24`, seventeen "
@@ -163,7 +165,7 @@ class TestTheProxyIsATransportNotAProvenanceMode:
             "PROXY_LLM_TOKEN": "t",
         }
         app = build_application(environ=env)
-        assert len(app.router.routes) == 34
+        assert len(app.router.routes) == FACTS.operation_count
         assert app.settings.provider_mode == "proxy"
 
 

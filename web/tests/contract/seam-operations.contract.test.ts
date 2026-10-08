@@ -10,6 +10,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import expectedFacts from '../../../tests/support/expected_facts.json';
 
 import type { OperationId } from '@/shared/api';
 import {
@@ -31,64 +32,15 @@ import {
 } from '@/shared/api';
 import { CONTRACT_PATH, readText } from '../guards/lib/repo';
 
-/** The frozen register of P02_SEAMS.md section 7, restated so a change has to be deliberate. */
-const SEAM_OPERATIONS: ReadonlyArray<readonly [string, string, string]> = [
-  ['createProject', 'POST', '/projects'],
-  ['listProjects', 'GET', '/projects'],
-  ['uploadDocument', 'POST', '/projects/{project_uid}/documents'],
-  ['getDocumentVersion', 'GET', '/versions/{version_uid}'],
-  ['streamDocumentVersionContent', 'GET', '/versions/{version_uid}/content'],
-  ['startRun', 'POST', '/runs'],
-  ['getRunStatus', 'GET', '/runs/{run_id}'],
-  ['listRunFindings', 'GET', '/runs/{run_id}/findings'],
-  ['getFinding', 'GET', '/findings/{finding_uid}'],
-  ['appendDecision', 'POST', '/findings/{finding_uid}/decisions'],
-  ['listDecisionHistory', 'GET', '/findings/{finding_uid}/decisions'],
-  ['exportRunCsv', 'GET', '/runs/{run_id}/export.csv'],
-  // R-5, 2026-09-18: the three listings that make published work reachable after a
-  // page reload. DEBT_REGISTER.md D-16.
-  ['listDocuments', 'GET', '/projects/{project_uid}/documents'],
-  ['listVersions', 'GET', '/documents/{document_uid}/versions'],
-  ['listRuns', 'GET', '/versions/{version_uid}/runs'],
-  // W34-CONTRACT, 2026-09-22: the credential exchange. R-3 required a bearer credential on
-  // every operation and described no way to obtain one, so this is the one operation whose
-  // own `security` is the empty requirement. It says nothing about what the credential is.
-  ['issueToken', 'POST', '/auth/token'],
-  // W38-KB, 2026-09-22: `R-24`. The decision journal across findings, which the
-  // knowledge base reads. `listDecisionHistory` answers for one finding and this
-  // answers for all of them; it creates nothing and `ADR-0012` calls it a projection.
-  ['listDecisions', 'GET', '/decisions'],
-  // W39-REVOKE, 2026-09-23: `R-26`. The password change, and with it the only way this
-  // surface can take a credential back -- the account's credential generation is raised by
-  // the same write that stores the new digest, so every credential minted under the old
-  // password stops being accepted. It answers `IssueTokenResponse`, because it revokes the
-  // caller's own credential in the act of succeeding and has to hand back the replacement.
-  ['changePassword', 'POST', '/auth/password'],
-  // W45-BLOCKS, 2026-09-25: the block index for one version. Keyed by version_uid, not
-  // run_id -- page_geometry_extraction carries no model and no provider reference, so its
-  // output is a deterministic property of the version. status distinguishes "not_produced"
-  // (absent -- no run has produced it yet) from "produced" with blocks:[] (a version that
-  // genuinely has none); the same bytes for blocks, different bytes for status.
-  ['getVersionBlocks', 'GET', '/versions/{version_uid}/blocks'],
-  // `W46-SEAL`, `R-44`: one aggregate read serving all four dashboard panels.
-  ['getDashboardSummary', 'GET', '/dashboard'],
-  // `W49-SEAL-01`, `R-55` ... `R-61`: the account itself, registration requests and an
-  // administrator's account management.
-  ['getMe', 'GET', '/me'],
-  ['updateMyProfile', 'PATCH', '/me'],
-  ['submitRegistration', 'POST', '/registrations'],
-  ['readRegistrationStatus', 'POST', '/registrations/status'],
-  ['listRegistrations', 'GET', '/registrations'],
-  ['approveRegistration', 'POST', '/registrations/{request_id}/approve'],
-  ['rejectRegistration', 'POST', '/registrations/{request_id}/reject'],
-  ['listUsers', 'GET', '/users'],
-  ['getUser', 'GET', '/users/{user_uid}'],
-  ['updateUser', 'PATCH', '/users/{user_uid}'],
-  ['archiveUser', 'POST', '/users/{user_uid}/archive'],
-  ['restoreUser', 'POST', '/users/{user_uid}/restore'],
-  ['purgeUser', 'DELETE', '/users/{user_uid}'],
-  ['resetUserPassword', 'POST', '/users/{user_uid}/password'],
-];
+/** The independent operation register lives in expected_facts.json. */
+const SEAM_OPERATIONS: ReadonlyArray<readonly [string, string, string]> =
+  expectedFacts.surface.operations.map((entry) => {
+    const [method, path, operationId] = entry;
+    if (method === undefined || path === undefined || operationId === undefined) {
+      throw new Error('incomplete expected operation');
+    }
+    return [operationId, method, path] as const;
+  });
 
 /**
  * `W49-SEAL-01`. The operations a caller reaches without a credential, by name: the
@@ -246,7 +198,7 @@ describe('the error catalog', () => {
     // meaning two opposite things (`D-18`). Twenty-one before it, since the wave-13
     // reseal, where `R-3` added `dependency_credential_refused` so one 403 stopped
     // meaning two things (`D-7`).
-    expect(ERROR_CODE_VALUES).toHaveLength(23);
+    expect(ERROR_CODE_VALUES).toHaveLength(expectedFacts.error_catalog.api_codes);
     expect(ERROR_CODE_VALUES).toContain('rate_limited');
     expect(ERROR_CODE_VALUES).toContain('idempotency_key_in_progress');
     expect(ERROR_CODE_VALUES).toContain('state_transition_not_allowed');
@@ -392,7 +344,9 @@ describe('the surface leaks no internal address', () => {
     // Read off the frozen document rather than written down: a client generated from a
     // truncated contract carries fewer names than the contract has, which is the defect
     // this asserts, and a literal here would only ever be the last reseal's figure.
-    expect(SCHEMA_NAMES).toHaveLength(SCHEMA_COUNT);
+    expect(SCHEMA_NAMES).toHaveLength(expectedFacts.surface.schema_names.length);
+    expect(new Set(SCHEMA_NAMES)).toEqual(new Set(expectedFacts.surface.schema_names));
+    expect(SCHEMA_COUNT).toBe(expectedFacts.surface.schema_names.length);
     expect(SCHEMA_COUNT).toBeGreaterThan(40);
   });
 });

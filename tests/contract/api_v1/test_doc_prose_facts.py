@@ -53,15 +53,17 @@ set: a future live mismatch fails the guard instead of inheriting a permanent al
 
 from __future__ import annotations
 
+import ast
 import json
 import pathlib
 import re
 import subprocess
-from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Iterator
 
 import pytest
+
+from tests.support.expected_facts import FACTS, FACTS_PATH, ExpectedFacts, load_expected_facts
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
@@ -75,16 +77,14 @@ MANUAL_TESTS_DIR = REPO_ROOT / "docs" / "manual-tests"
 PIN_REGISTRY = REPO_ROOT / "docs" / "program" / "CONTRACT_PIN_REGISTRY.md"
 
 _PIN_REGISTRY_BLOCK = re.compile(r"```json\n(?P<body>\{.*?\})\n```", re.DOTALL)
-_PIN_ASSIGNMENT = re.compile(
-    r"^(?:FROZEN_OPERATION_COUNT|FROZEN_SCHEMA_COUNT|FROZEN_OPERATIONS|"
-    r"FROZEN_SCHEMA_NAMES|PATH_COUNT|OPERATION_COUNT|SCHEMA_COUNT)\s*(?::[^=]+)?=",
-    re.MULTILINE,
-)
-_PIN_ASSERTION = re.compile(
-    r"^\s*assert\s+.*(?:declared_operations\(|router\.routes\)|router\.operation_ids\)|"
-    r"len\(paths\)|ERROR_CODES\)|raw\[\"codes\"\]|len\(declared\).*len\(set\(declared\)\)|"
-    r"_true_migration_head\(\)|SurfaceTriple\(paths=).*?$",
-    re.MULTILINE,
+_PIN_NAMES = frozenset({
+    "FROZEN_OPERATION_COUNT", "FROZEN_SCHEMA_COUNT", "FROZEN_OPERATIONS",
+    "FROZEN_SCHEMA_NAMES", "PATH_COUNT", "OPERATION_COUNT", "SCHEMA_COUNT",
+})
+_PIN_SUBJECT = re.compile(
+    r"(?:router\.routes|router\.operation_ids|app\.router\.routes|"
+    r"application\.router\.routes|client\.app\.router\.routes|"
+    r"declared_operations\(|ERROR_CODES|raw\['codes'\]|_true_migration_head\()"
 )
 
 # TypeScript/TSX has independent contract tests too. Only literal symbolic pins and the exact
@@ -92,12 +92,13 @@ _PIN_ASSERTION = re.compile(
 # Object.keys(...).length`, HTTP status, fixture size or local enum count is not independent.
 _TS_PIN_ASSIGNMENT = re.compile(
     r"^\s*const\s+(?:FROZEN_OPERATION_COUNT|FROZEN_SCHEMA_COUNT|FROZEN_OPERATIONS|"
-    r"FROZEN_SCHEMA_NAMES|PATH_COUNT|OPERATION_COUNT|SCHEMA_COUNT)\s*(?::[^=]+)?=\s*"
-    r"(?:\d+|\[[^\n]*\])\s*;?",
+    r"FROZEN_SCHEMA_NAMES|SEAM_OPERATIONS|SCHEMA_NAMES|PATH_COUNT|OPERATION_COUNT|"
+    r"SCHEMA_COUNT)\s*(?::[^=]+)?=\s*(?:\d+;?|\[)",
     re.MULTILINE,
 )
 _TS_ERROR_COUNT_ASSERTION = re.compile(
-    r"^\s*expect\(ERROR_CODE_VALUES\)\.toHaveLength\((?:17|20|22|23|27|34|61|77)\);?",
+    r"^\s*expect\((?:ERROR_CODE_VALUES|OPERATIONS|SCHEMA_NAMES|SEAM_OPERATIONS)\)"
+    r"\.toHaveLength\(\d+\);?",
     re.MULTILINE,
 )
 
@@ -188,26 +189,60 @@ def _pin_registry() -> list[dict[str, str]]:
     return document["pins"]
 
 
-def _discovered_independent_pins() -> list[tuple[str, str]]:
-    """A deliberately narrow inventory of independent surface/error/head pins.
+def _python_pin_candidates(relative: str, text: str) -> list[tuple[str, str]]:
+    found: list[tuple[str, str]] = []
+    tree = ast.parse(text, filename=relative)
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(target, ast.Name) and target.id in _PIN_NAMES for target in targets):
+                value = node.value
+                literal_collection = (
+                    isinstance(value, ast.Call)
+                    and isinstance(value.func, ast.Name)
+                    and value.func.id in {"frozenset", "tuple", "set"}
+                    and bool(value.args)
+                    and isinstance(value.args[0], (ast.Tuple, ast.List, ast.Set))
+                )
+                if isinstance(value, (ast.Constant, ast.Tuple, ast.List, ast.Set)) or literal_collection:
+                    snippet = ast.get_source_segment(text, node) or ""
+                    found.append((relative, snippet.strip()))
+        if not isinstance(node, ast.Assert):
+            continue
+        for comparison in (child for child in ast.walk(node.test) if isinstance(child, ast.Compare)):
+            snippet = ast.get_source_segment(text, comparison) or ""
+            independent = any(
+                isinstance(child, ast.Constant)
+                and (type(child.value) is int or (
+                    isinstance(child.value, str) and "_true_migration_head(" in snippet
+                ))
+                for child in ast.walk(comparison)
+            )
+            subject = _PIN_SUBJECT.search(snippet) or (
+                relative == "tests/integration/api/test_operation_surface.py"
+                and "len(paths)" in snippet
+            ) or (
+                "_true_surface_triple(" in snippet and "SurfaceTriple(" in snippet
+            )
+            if independent and subject:
+                found.append((relative, snippet.strip()))
+    return found
 
-    HTTP statuses and local enum sizes are not candidates. Symbolic frozen-count assignments,
-    semantic literal assertions, the frontend surface lock and the history-boundary shape are.
-    The value assertion remains in its owning test; this inventory proves no sibling pin lives
-    in an unregistered path or appears without increasing that path's registered count.
+
+def _discovered_independent_pins() -> list[tuple[str, str]]:
+    """Find numeric expectations for contract-sized subjects outside the facts file.
+
+    The subject grammar is fixed, but the number is not: an arbitrary new count must
+    still fail. Python syntax parsing ignores comments and strings; TypeScript uses the
+    masking pass above. Fixture data and the unrelated report-length assertion are out
+    of scope by semantic subject, not by a shared numeric value.
     """
     found: list[tuple[str, str]] = []
     for path in sorted((REPO_ROOT / "tests").rglob("*.py")):
         relative = str(path.relative_to(REPO_ROOT))
-        text = path.read_text(encoding="utf-8")
-        found.extend((relative, match.group(0).strip()) for match in _PIN_ASSIGNMENT.finditer(text))
-        for match in _PIN_ASSERTION.finditer(text):
-            assertion = match.group(0).strip()
-            if (
-                "_true_migration_head()" in assertion
-                or re.search(r"==\s*(?:17|20|22|61|SurfaceTriple)", assertion)
-            ):
-                found.append((relative, assertion))
+        if relative.startswith("tests/contract/tools/fixtures/"):
+            continue
+        found.extend(_python_pin_candidates(relative, path.read_text(encoding="utf-8")))
 
     for path in sorted((REPO_ROOT / "web" / "tests").rglob("*")):
         if path.suffix not in {".ts", ".tsx"}:
@@ -217,15 +252,6 @@ def _discovered_independent_pins() -> list[tuple[str, str]]:
             _typescript_pin_candidates(relative, path.read_text(encoding="utf-8"))
         )
 
-    lock = json.loads((REPO_ROOT / "web" / "FRONTEND_LOCK.json").read_text(encoding="utf-8"))
-    for field in ("paths", "operations", "component_schemas"):
-        found.append(("web/FRONTEND_LOCK.json", f'{field}={lock["openapi"][field]}'))
-    found.append(
-        (
-            "tests/contract/api_v1/test_doc_prose_facts.py",
-            "_GENUINE_HISTORICAL_HEADING_SHAPE",
-        )
-    )
     return found
 
 
@@ -540,42 +566,56 @@ def _is_registered(file: str, matched_text: str, registry: frozenset[tuple[str, 
 
 
 def test_true_migration_head_is_a_real_single_head() -> None:
-    assert _true_migration_head() == "0015_accounts_roles_registration"
+    assert _true_migration_head() == FACTS.migration_head
 
 
 def test_true_surface_triple_matches_the_frozen_contract() -> None:
-    """A PINNED literal, deliberately, and every reseal must move it.
-
-    Deriving this from the contract would make it a tautology: `_true_surface_triple()`
-    already parses that document, so comparing its answer to the same document would
-    check nothing (`OPERATING_CONSTRAINTS.md` §12 — a query that shares an assumption
-    with its subject is not a measurement). The pin is what makes this an independent
-    second opinion about the parse.
-
-    **The cost is that it goes stale exactly once per reseal, and it did.** `W45-BLOCKS`
-    moved the surface to 16/19/53 and this literal stayed at 15/18/51, so the guard built
-    to catch stale counts was itself the stale count -- red on the merged tip, and the
-    integrator reported "contract suites green" from a scope that did not include this
-    file. `D-102`.
-
-    So: **this literal is a reseal document.** It moves with `openapi.json`, the generated
-    client, the mirror and `web/FRONTEND_LOCK.json`, and a reseal that leaves it behind is
-    an incomplete reseal.
-
-    **`W46-SEAL` moved it to 17/20/61** (`R-40`'s `section` field and `ProjectSection`
-    enum, `R-44`'s `getDashboardSummary` and its seven response schemas -- eight schemas
-    in total). Also: this brief named this pin's location as
-    `tests/contract/api_v1/test_doc_prose_facts.py:290`; it is no longer there, because
-    the docstring above grew when `D-102` was written up. Reported in
-    `docs/program/W46-SEAL.md` section 4 as a false premise found and corrected, not
-    silently followed.
-
-    **`W49-SEAL-01` moved it to 27/34/77**: ten paths, fourteen operations and sixteen
-    schemas for the account itself, registration requests and account management
-    (`R-55` ... `R-61`), measured on the resealed document rather than quoted from the plan.
-    """
+    """The hand-maintained facts file is the second opinion about the parsed document."""
     triple = _true_surface_triple()
-    assert triple == SurfaceTriple(paths=27, operations=34, schemas=77)
+    assert triple == SurfaceTriple(
+        paths=FACTS.path_count,
+        operations=FACTS.operation_count,
+        schemas=FACTS.schema_count,
+    )
+
+
+def _current_fact_differences(facts: ExpectedFacts) -> set[str]:
+    document = json.loads(API_CONTRACT.read_text(encoding="utf-8"))
+    catalog = json.loads(ERROR_CATALOG.read_text(encoding="utf-8"))
+    methods = {"get", "post", "put", "patch", "delete", "head", "options"}
+    operations = {
+        (method.upper(), path, operation["operationId"])
+        for path, item in document["paths"].items()
+        for method, operation in item.items()
+        if method in methods
+    }
+    differences: set[str] = set()
+    if len(document["paths"]) != facts.path_count or operations != set(facts.operations):
+        differences.add("surface")
+    if set(document["components"]["schemas"]) != facts.schema_names:
+        differences.add("surface")
+    if len(catalog["codes"]) != facts.api_error_codes:
+        differences.add("error_catalog")
+    if _true_migration_head() != facts.migration_head:
+        differences.add("migration_head")
+    if document["info"]["version"] != facts.contract_version or catalog["contract_version"] != facts.contract_version:
+        differences.add("contract_version")
+    return differences
+
+
+def test_expected_facts_are_independent_and_current() -> None:
+    assert not _current_fact_differences(FACTS)
+
+
+@pytest.mark.parametrize("family", ["surface", "error_catalog", "migration_head", "contract_version"])
+def test_current_fact_mutation_reddens_its_family(family: str) -> None:
+    candidates = {
+        "surface": replace(FACTS, path_count=FACTS.path_count + 1),
+        "error_catalog": replace(FACTS, api_error_codes=FACTS.api_error_codes + 1),
+        "migration_head": replace(FACTS, migration_head="9999_mutated"),
+        "contract_version": replace(FACTS, contract_version="9.9.9-mutated"),
+    }
+    assert family in _current_fact_differences(candidates[family])
 
 
 def test_true_tagged_tip_is_read_from_git_and_is_plausible() -> None:
@@ -583,8 +623,8 @@ def test_true_tagged_tip_is_read_from_git_and_is_plausible() -> None:
     assert re.fullmatch(r"alpha-w\d+(?:\.\d+)?", tip), tip
 
 
-def test_contract_pin_registry_is_complete_and_points_to_live_needles() -> None:
-    """`D-105`: independent pins are enumerable and each entry still identifies code."""
+def test_contract_pin_registry_points_to_live_fact_consumers() -> None:
+    """Every registered consumer remains present, with no second literal opinion."""
     pins = _pin_registry()
     assert pins
     assert {pin["family"] for pin in pins} == {
@@ -596,23 +636,17 @@ def test_contract_pin_registry_is_complete_and_points_to_live_needles() -> None:
     ids = [pin["pin_id"] for pin in pins]
     assert len(ids) == len(set(ids)), "pin_id values must be unique"
 
-    registered_by_path = Counter(pin["path"] for pin in pins)
     for pin in pins:
         assert set(pin) == {"pin_id", "family", "path", "needle", "event"}, pin
         target = REPO_ROOT / pin["path"]
         assert target.is_file(), f"{pin['pin_id']}: missing {pin['path']}"
+        if pin["family"] != "history_boundary":
+            text = target.read_text(encoding="utf-8")
+            assert "FACTS" in text or "expectedFacts" in text, pin["pin_id"]
     assert not _pin_needle_errors(pins)
 
     discovered = _discovered_independent_pins()
-    discovered_by_path = Counter(path for path, _ in discovered)
-    unknown_paths = sorted(set(discovered_by_path) - set(registered_by_path))
-    assert not unknown_paths, f"independent pins outside CONTRACT_PIN_REGISTRY.md: {unknown_paths}"
-    overflow = {
-        path: (count, registered_by_path[path])
-        for path, count in discovered_by_path.items()
-        if count > registered_by_path[path]
-    }
-    assert not overflow, f"new independent pins lack their own registry entries: {overflow}"
+    assert not discovered, f"independent literals outside expected_facts.json: {discovered}"
 
 
 def test_typescript_pin_discovery_reads_code_and_ignores_comments_and_strings() -> None:
@@ -631,11 +665,32 @@ def test_typescript_pin_discovery_reads_code_and_ignores_comments_and_strings() 
     assert _typescript_pin_candidates(relative, decoys) == []
 
 
-def test_existing_frontend_error_count_pins_are_discovered() -> None:
-    discovered = set(_discovered_independent_pins())
-    needle = "expect(ERROR_CODE_VALUES).toHaveLength(23);"
-    assert ("web/tests/contract/seam-operations.contract.test.ts", needle) in discovered
-    assert ("web/tests/unit/api/failure-surface.test.ts", needle) in discovered
+def test_a_new_frontend_error_count_literal_is_discovered() -> None:
+    relative = "web/tests/contract/new-count.contract.test.ts"
+    needle = "expect(ERROR_CODE_VALUES).toHaveLength(999);"
+    assert _typescript_pin_candidates(relative, needle) == [(relative, needle)]
+
+
+def test_an_arbitrary_new_operation_literal_is_discovered_without_its_number_in_the_rule() -> None:
+    relative = "tests/integration/other/test_future_surface.py"
+    source = (
+        "def test_new_pin(router):\n"
+        "    assert len(router.routes) == 999\n"
+        "    assert len(report) == 22\n"
+        "    # assert len(router.routes) == 998\n"
+    )
+    assert _python_pin_candidates(relative, source) == [
+        (relative, "len(router.routes) == 999")
+    ]
+
+
+def test_expected_facts_loader_refuses_a_duplicate_operation(tmp_path: pathlib.Path) -> None:
+    raw = json.loads(FACTS_PATH.read_text(encoding="utf-8"))
+    raw["surface"]["operations"].append(raw["surface"]["operations"][0])
+    changed = tmp_path / "expected_facts.json"
+    changed.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(ValueError, match="duplicate expected operation"):
+        load_expected_facts(changed)
 
 
 @pytest.mark.parametrize(

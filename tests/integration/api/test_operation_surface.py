@@ -9,6 +9,8 @@ surface the frontend cannot see, and a missing one is a client call with no serv
 
 from __future__ import annotations
 
+from tests.support.expected_facts import FACTS
+
 from typing import Any
 
 import pytest
@@ -41,7 +43,7 @@ def test_the_router_declares_exactly_the_frozen_operations(
     )
 
 
-def test_the_document_declares_thirty_four_and_the_router_implements_thirty_four(
+def test_the_document_and_router_match_the_expected_operation_count(
     router: Surface, openapi_document: dict[str, Any]
 ) -> None:
     """The count is checked separately from the set.
@@ -60,8 +62,8 @@ def test_the_document_declares_thirty_four_and_the_router_implements_thirty_four
     account-management operations under `R-55` ... `R-61`. The number moved because an
     owner ruling or a reseal moved it; nothing else may move it.
     """
-    assert len(declared_operations(openapi_document)) == 34
-    assert len(router.routes) == 34
+    assert len(declared_operations(openapi_document)) == FACTS.operation_count
+    assert len(router.routes) == FACTS.operation_count
 
 
 def test_every_declared_operation_is_reachable(
@@ -174,12 +176,12 @@ def test_the_document_declares_no_operation_outside_the_declared_capabilities(
     assert list(openapi_document["components"]["securitySchemes"]) == ["bearerAuth"], (
         "the authorization seam is one bearer scheme declared once, per R-3"
     )
-    assert len(paths) == 27 and sum(
+    assert len(paths) == FACTS.path_count and sum(
         1
         for item in openapi_document["paths"].values()
         for method in item
         if method in {"get", "put", "post", "delete", "options", "head", "patch"}
-    ) == 34, (
+    ) == FACTS.operation_count, (
         "10 paths / 12 operations before the `R-5` reseal, 12 / 15 after it, 13 / 16 "
         "after `W34-CONTRACT` added the credential exchange, 14 / 17 after `W38-KB` added "
         "the decision journal under `R-24`, 15 / 18 after `W39-REVOKE` added the password "

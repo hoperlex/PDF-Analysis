@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import expectedFacts from '../../../tests/support/expected_facts.json';
 
 import {
   CONTRACT_PATH,
@@ -40,6 +41,7 @@ interface FrontendLock {
     readonly sha256: string;
     readonly snapshot_sha256: string;
     readonly content_commit: string;
+    readonly paths: number;
     readonly operations: number;
     readonly component_schemas: number;
   };
@@ -113,7 +115,11 @@ describe('the frontend lock matches the tree', () => {
     const operations = Object.values(document.paths).flatMap((item) =>
       Object.keys(item).filter((key) => methods.has(key)),
     );
+    expect(lock.openapi.paths).toBe(expectedFacts.surface.path_count);
+    expect(lock.openapi.paths).toBe(Object.keys(document.paths).length);
+    expect(lock.openapi.operations).toBe(expectedFacts.surface.operations.length);
     expect(lock.openapi.operations).toBe(operations.length);
+    expect(lock.openapi.component_schemas).toBe(expectedFacts.surface.schema_names.length);
     expect(lock.openapi.component_schemas).toBe(Object.keys(document.components.schemas).length);
   });
 });

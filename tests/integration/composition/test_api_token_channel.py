@@ -36,6 +36,8 @@ read from the thing it is checking cannot tell you the thing changed.
 
 from __future__ import annotations
 
+from tests.support.expected_facts import FACTS
+
 import os
 import re
 from pathlib import Path
@@ -125,7 +127,7 @@ class TestAMissingTokenRefusesAtConstruction:
         """
         application = build_application(environ=_base_env())
         assert application.settings.api_token == _A_TOKEN
-        assert len(application.router.routes) == 34
+        assert len(application.router.routes) == FACTS.operation_count
 
     def test_settings_alone_refuses_too(self) -> None:
         """The refusal is in ``load``, so anything that resolves settings inherits it."""

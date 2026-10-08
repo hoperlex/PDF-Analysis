@@ -39,6 +39,8 @@ resolves the same way.
 
 from __future__ import annotations
 
+from tests.support.expected_facts import FACTS
+
 import copy
 import importlib.util
 import json
@@ -81,18 +83,17 @@ surface = conformance.surface
 
 
 # =======================================================================================
-# The literals. None of these is derived from the document or from the engine.
+# Independent facts come from expected_facts.json, never from the document or engine.
 # =======================================================================================
 
 #: `ALPHA_ROADMAP.md` §3 `T-1` and the measurement in the `W13-CONF` brief.
 FROZEN_OPENAPI_VERSION = "3.1.0"
-FROZEN_OPERATION_COUNT = 34
-FROZEN_SCHEMA_COUNT = 77
+FROZEN_OPERATION_COUNT = FACTS.operation_count
+FROZEN_SCHEMA_COUNT = FACTS.schema_count
 FROZEN_SERVER_URL = "/api/v1"
 
-#: The thirty-four operations, written out. Deliberately not derived from the document: an
-#: operation that disappears from the contract has to fail *here*, not silently reduce the
-#: size of the thing both sides are compared through.
+#: The operation triples are written in expected_facts.json. An operation that disappears
+#: from the contract fails against that independent register.
 #:
 #: Twelve until the `R-5` reseal of 2026-09-18 added the three listings, fifteen until
 #: `W34-CONTRACT` added the credential exchange on 2026-09-22, sixteen until `W38-KB`
@@ -103,52 +104,16 @@ FROZEN_SERVER_URL = "/api/v1"
 #: same day, and thirty-four since `W49-SEAL-01` added the fourteen account and
 #: registration operations under `R-55` ... `R-61` on 2026-10-06.
 #:
-#: **This tuple, `FROZEN_OPERATION_COUNT` and `FROZEN_SCHEMA_COUNT`/`FROZEN_SCHEMA_NAMES`
-#: below are a pin this file's own header calls out as "not derived from the document",
-#: and a reseal has to move all four by hand.** Found stale at `W46-SEAL`, against
+#: These values were previously independent literals in this file and went stale at
+#: `W46-SEAL`, against
 #: `FROZEN_OPERATION_COUNT = 19` and `FROZEN_SCHEMA_COUNT = 53` while the live contract
 #: already declared 20 and 61: the same `D-102` shape -- a guard built to catch a moved
 #: surface was itself carrying the pre-reseal numbers -- in a fifth location neither
 #: `D-102` nor `D-105` names. Reported in `docs/program/W46-SEAL.md` section 4.
-FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
-    ("POST", "/projects", "createProject"),
-    ("GET", "/projects", "listProjects"),
-    ("POST", "/projects/{project_uid}/documents", "uploadDocument"),
-    ("GET", "/versions/{version_uid}", "getDocumentVersion"),
-    ("GET", "/versions/{version_uid}/content", "streamDocumentVersionContent"),
-    ("POST", "/runs", "startRun"),
-    ("GET", "/runs/{run_id}", "getRunStatus"),
-    ("GET", "/runs/{run_id}/findings", "listRunFindings"),
-    ("GET", "/findings/{finding_uid}", "getFinding"),
-    ("POST", "/findings/{finding_uid}/decisions", "appendDecision"),
-    ("GET", "/findings/{finding_uid}/decisions", "listDecisionHistory"),
-    ("GET", "/runs/{run_id}/export.csv", "exportRunCsv"),
-    ("GET", "/projects/{project_uid}/documents", "listDocuments"),
-    ("GET", "/documents/{document_uid}/versions", "listVersions"),
-    ("GET", "/versions/{version_uid}/runs", "listRuns"),
-    ("POST", "/auth/token", "issueToken"),
-    ("GET", "/decisions", "listDecisions"),
-    ("POST", "/auth/password", "changePassword"),
-    ("GET", "/versions/{version_uid}/blocks", "getVersionBlocks"),
-    ("GET", "/dashboard", "getDashboardSummary"),
-    # `W49-SEAL-01`, `R-55` ... `R-61`.
-    ("GET", "/me", "getMe"),
-    ("PATCH", "/me", "updateMyProfile"),
-    ("POST", "/registrations", "submitRegistration"),
-    ("POST", "/registrations/status", "readRegistrationStatus"),
-    ("GET", "/registrations", "listRegistrations"),
-    ("POST", "/registrations/{request_id}/approve", "approveRegistration"),
-    ("POST", "/registrations/{request_id}/reject", "rejectRegistration"),
-    ("GET", "/users", "listUsers"),
-    ("GET", "/users/{user_uid}", "getUser"),
-    ("PATCH", "/users/{user_uid}", "updateUser"),
-    ("POST", "/users/{user_uid}/archive", "archiveUser"),
-    ("POST", "/users/{user_uid}/restore", "restoreUser"),
-    ("DELETE", "/users/{user_uid}", "purgeUser"),
-    ("POST", "/users/{user_uid}/password", "resetUserPassword"),
-)
+FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = FACTS.operations
 
-#: The `components.schemas` keys, written out -- seventy-seven since `W49-SEAL-01`, sixty-one
+#: The `components.schemas` keys live in expected_facts.json -- seventy-seven since
+#: `W49-SEAL-01`, sixty-one
 #: before it from `W46-SEAL`, fifty-one before that. Forty-three until the `R-5`
 #: reseal, which added `DocumentVersionPage`, `RunStatusPage` and `CostBasis`,
 #: forty-six until `W34-CONTRACT` added `IssueTokenRequest` and `IssueTokenResponse`,
@@ -161,91 +126,7 @@ FROZEN_OPERATIONS: tuple[tuple[str, str, str], ...] = (
 #: contract's `components.schemas` keys"*). If FastAPI splits a model into `X-Input` and
 #: `X-Output`, this set changes and the gate fails - which is the correct outcome. The fix
 #: belongs in the application (`separate_input_output_schemas=False`), never here.
-FROZEN_SCHEMA_NAMES: frozenset[str] = frozenset(
-    {
-        "AnalysisProfileId",
-        "AppendDecisionRequest",
-        "AppendDecisionResponse",
-        "CorrelationId",
-        "CostBasis",
-        "CreateProjectRequest",
-        "Cursor",
-        "DecisionEvent",
-        "DecisionEventPage",
-        "DecisionRecord",
-        "DecisionRecordPage",
-        "DecisionEventType",
-        "DecisionId",
-        "DocumentUid",
-        "DocumentVersion",
-        "DocumentVersionPage",
-        "ErrorCode",
-        "ErrorEnvelope",
-        "Evidence",
-        "Finding",
-        "FindingCategory",
-        "FindingDetail",
-        "FindingObservation",
-        "FindingObservationId",
-        "FindingPage",
-        "FindingUid",
-        "IdempotencyKey",
-        "InputManifestEntry",
-        "IssueTokenRequest",
-        "IssueTokenResponse",
-    "VersionBlockIndex",
-    "BlockGeometry",
-        "ChangePasswordRequest",
-        "ModelCallId",
-        "ObservationProvenance",
-        "PageInfo",
-        "Project",
-        "ProjectPage",
-        "ProjectUid",
-        "PromptBundleId",
-        "ProviderMode",
-        "RunId",
-        "RunState",
-        "RunStatus",
-        "RunStatusPage",
-        "Sha256",
-        "StageId",
-        "StageState",
-        "StageStatus",
-        "StartRunRequest",
-        "UploadDocumentRequest",
-        "Verdict",
-        "VersionUid",
-        # `W46-SEAL`, `R-40` and `R-44`.
-        "ProjectSection",
-        "ProjectDocumentCount",
-        "VerdictCount",
-        "RunStateCount",
-        "RunActivitySpend",
-        "RunActivity",
-        "SectionDocumentCount",
-        "DashboardSummary",
-        # `W49-SEAL-01`. Sixteen: two identities, two enumerations, ten objects and two
-        # pages. `readRegistrationStatus` takes `IssueTokenRequest` -- the pair it reads is
-        # the exchange's pair -- so the status read adds no request schema of its own.
-        "UserUid",
-        "RegistrationRequestId",
-        "Role",
-        "RegistrationStatus",
-        "Account",
-        "AccountPage",
-        "PersonNames",
-        "UpdateMyProfileRequest",
-        "UpdateUserRequest",
-        "ResetUserPasswordRequest",
-        "SubmitRegistrationRequest",
-        "RegistrationStatusResponse",
-        "RegistrationRequest",
-        "RegistrationRequestPage",
-        "ApproveRegistrationRequest",
-        "RejectRegistrationRequest",
-    }
-)
+FROZEN_SCHEMA_NAMES: frozenset[str] = FACTS.schema_names
 
 #: The declared normalization, by identifier. Pinned here so that a normalization added to
 #: the engine without a planted difference proving it still fails is itself a failure.

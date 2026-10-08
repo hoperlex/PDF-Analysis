@@ -25,6 +25,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import expectedFacts from '../../../../tests/support/expected_facts.json';
 
 import type { ErrorEnvelope } from '@/shared/api';
 import {
@@ -76,7 +77,7 @@ describe('a code outside the catalog is not a catalog code', () => {
     // Twenty-three since `W49-SEAL-01` added `rate_limited`, which only the edge answers.
     // Twenty-two since round 7: `R-8`, reinstated by `R-13`, added `staged_upload_lost`.
     // Twenty-one before it, when `R-3` added `dependency_credential_refused`.
-    expect(ERROR_CODE_VALUES).toHaveLength(23);
+    expect(ERROR_CODE_VALUES).toHaveLength(expectedFacts.error_catalog.api_codes);
     expect([...ERROR_CODE_VALUES]).toContain('validation_failed');
     expect([...ERROR_CODE_VALUES]).not.toContain('cost_budget_exhausted');
   });

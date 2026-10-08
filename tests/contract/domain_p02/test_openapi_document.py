@@ -16,6 +16,8 @@ of every schema object under the governance interpreter.
 
 from __future__ import annotations
 
+from tests.support.expected_facts import FACTS
+
 import copy
 import json
 import re
@@ -860,7 +862,7 @@ def test_the_error_code_enum_equals_the_frozen_catalog(
 ) -> None:
     declared = openapi_document["components"]["schemas"]["ErrorCode"]["enum"]
     assert set(declared) == set(error_codes_contract["codes"])
-    assert len(declared) == len(set(declared)) == 23
+    assert len(declared) == len(set(declared)) == FACTS.api_error_codes
 
 
 # ---------------------------------------------------------------------------
