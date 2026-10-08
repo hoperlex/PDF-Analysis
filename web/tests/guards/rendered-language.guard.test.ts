@@ -53,6 +53,7 @@
 
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 
 import { ApiError, queryKeys } from '@/shared/api';
@@ -88,6 +89,8 @@ import { SignInPage } from '@/_pages/sign-in';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { ManageUserControls } from '@/features/manage-user';
 import type { Account } from '@/shared/api';
+import type { RegistrationRequest } from '@/shared/api';
+import { RegistrationQueue } from '@/widgets/registration-queue';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
@@ -1079,6 +1082,29 @@ const ADMIN_USER_ACCOUNT: Account = {
   user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
 };
 
+const QUEUE_REQUEST: RegistrationRequest = {
+  created_user_uid: null,
+  decided_at: null,
+  decided_by: null,
+  display_label: 'Заявкина М. П.',
+  first_name: 'Мария',
+  last_name: 'Заявкина',
+  login: 'заявкина@пример.испытание',
+  middle_name: 'Петровна',
+  rejection_reason: null,
+  request_id: 'reg_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  status: 'pending',
+  submitted_at: '2026-10-08T00:00:00Z',
+};
+
+function queueLanguageShape(request: RegistrationRequest): ReactElement {
+  const client = newClient();
+  client.setQueryData(queryKeys.registrations.list({ status: 'pending', limit: 50 }), {
+    items: [request], page: { next_cursor: null }, pending_total: request.status === 'pending' ? 1 : 0,
+  });
+  return createElement(QueryClientProvider, { client }, createElement(RegistrationQueue));
+}
+
 const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => ReactElement }[] = [
   /*
    * `AppFrame` is a SCREEN here, not a wrapper, and that is the repair.
@@ -1192,6 +1218,9 @@ const EXTRA_SHAPES: readonly { readonly name: string; readonly make: () => React
     name: 'manage-user-archived',
     make: () => createElement(ManageUserControls, { account: { ...ADMIN_USER_ACCOUNT, archived_at: '2026-10-08T00:00:00Z' } }),
   },
+  { name: 'registration-queue-pending', make: () => queueLanguageShape(QUEUE_REQUEST) },
+  { name: 'registration-queue-approved', make: () => queueLanguageShape({ ...QUEUE_REQUEST, status: 'approved', decided_at: '2026-10-08T01:00:00Z' }) },
+  { name: 'registration-queue-rejected', make: () => queueLanguageShape({ ...QUEUE_REQUEST, status: 'rejected', decided_at: '2026-10-08T01:00:00Z', rejection_reason: 'Проверка не пройдена.' }) },
   /*
    * `app/not-found.tsx` is a FILE in the route tree and not an address, so no derivation
    * reaches it and it stays a hand-written entry. It carried a WHOLE ENGLISH SENTENCE to a

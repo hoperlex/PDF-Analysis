@@ -29,6 +29,7 @@ import { ChangePasswordPage } from '@/_pages/change-password';
 import { SignInPage } from '@/_pages/sign-in';
 import { ManageUserControls } from '@/features/manage-user';
 import { UserList } from '@/widgets/user-list';
+import { RegistrationQueue } from '@/widgets/registration-queue';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
@@ -52,6 +53,7 @@ import type {
 } from '@/shared/api';
 import type { DocumentVersion, Project } from '@/shared/api';
 import type { Account } from '@/shared/api';
+import type { RegistrationRequest } from '@/shared/api';
 import { ApiError, queryKeys } from '@/shared/api';
 import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, Menu, avatarColourIndex } from '@/shared/ui';
 import type { DisclosureProps, MenuProps } from '@/shared/ui';
@@ -217,6 +219,21 @@ const USER_ACCOUNT: Account = {
   profile_complete: true,
   roles: ['admin', 'expert'],
   user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+};
+
+const REGISTRATION_REQUEST: RegistrationRequest = {
+  created_user_uid: null,
+  decided_at: null,
+  decided_by: null,
+  display_label: 'Заявкина М. П.',
+  first_name: 'Мария',
+  last_name: 'Заявкина',
+  login: 'zayavkina@example.org',
+  middle_name: 'Петровна',
+  rejection_reason: null,
+  request_id: 'reg_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  status: 'pending',
+  submitted_at: '2026-10-08T00:00:00Z',
 };
 
 export function screens(): Screen[] {
@@ -668,6 +685,13 @@ export function screens(): Screen[] {
   }
   add('ManageUserControls active', renderScreen(newClient(), createElement(ManageUserControls, { account: USER_ACCOUNT })));
   add('ManageUserControls archived', renderScreen(newClient(), createElement(ManageUserControls, { account: { ...USER_ACCOUNT, archived_at: '2026-10-08T00:00:00Z' } })));
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.registrations.list({ status: 'pending', limit: 50 }), {
+      items: [REGISTRATION_REQUEST], page: { next_cursor: null }, pending_total: 1,
+    });
+    add('RegistrationQueue pending', renderScreen(client, createElement(RegistrationQueue)));
+  }
 
   /*
    * The stage comparison, `R-23` / `W43-COMPARE`, 2026-09-24.

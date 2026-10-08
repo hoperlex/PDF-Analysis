@@ -642,10 +642,17 @@
       "path": "/admin/registrations",
       "page_module": "web/src/app/admin/registrations/page.tsx",
       "$comment": [
-        "Admin-only no-call placeholder. The journey account holds admin and opens it directly;",
-        "an expert is sent to /403 and a guest to /login with validated next."
+        "Admin-only queue. It reads listRegistrations on mount and shows pending_total.",
+        "Approval and rejection are writes offered only for pending requests, not part of",
+        "this read walk. An expert is sent to /403 and a guest to /login."
       ],
-      "expects_api": [],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/registrations",
+          "operationId": "listRegistrations"
+        }
+      ],
       "follow": null
     }
   ],

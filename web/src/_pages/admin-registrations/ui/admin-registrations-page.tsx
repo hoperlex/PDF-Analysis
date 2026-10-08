@@ -1,11 +1,10 @@
-import { RoutePlaceholder } from '@/shared/ui';
+import { PageShell } from '@/shared/ui';
+import { RegistrationQueue } from '@/widgets/registration-queue';
 
 export function AdminRegistrationsPage() {
   return (
-    <RoutePlaceholder
-      screen="Заявки на регистрацию"
-      route="/admin/registrations"
-      promise="Здесь администратор сможет просматривать заявки на регистрацию и принимать решения по ним."
-    />
+    <PageShell title="Заявки на регистрацию" subtitle="Рассмотрите ожидающие заявки или прочитайте уже принятые решения.">
+      <RegistrationQueue />
+    </PageShell>
   );
 }
