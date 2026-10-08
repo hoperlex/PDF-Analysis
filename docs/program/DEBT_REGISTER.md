@@ -125,8 +125,8 @@ Every row names how to check it. A row nobody can re-measure is a row that will 
 
 **Opened 2026-10-08 by the integrator on the owner's direct instruction.** W51 Stage B has
 focused tests and frontend lint, but `W51-QA-01`, independent judges, built-stand PC-01 identity
-journey, manual A13–A20, and release acceptance have not run. Stage C may add the journey and
-manual-pack code; that is no evidence that the browser or API scenario passed. Schedule a
+journey, manual A13–A20, and release acceptance have not run. Stage C added the journey and
+manual-pack code in merge `4400e81`; that is no evidence that the browser or API scenario passed. Schedule a
 separate validation wave, with an exact candidate SHA and recorded results, before closing this
 row. Corrections found there belong to the later correction stage.
 

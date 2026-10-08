@@ -3,17 +3,19 @@
 **Status:** Stage A `W51-ROUTES-01` is accepted at `bc5d443`. Stage B's three
 implementation lanes are accepted on `origin/dev`: `W51-AUTH-01` at `ebe614d`,
 `W51-ADMIN-USERS` at `c88e794`, and `W51-ADMIN-REQUESTS` at `4442921`.
-The integrated tree passed 148 focused tests across nine files and frontend lint
-on 2026-10-08. Stage C, QA, correction and release checks remain open; W51 is not
-closed. Deferred QA/live acceptance and the full gate are tracked as `D-137` and
+Stage C identity journey and A13–A20 manual code merged at `4400e81`. Stage B's
+integrated tree passed 148 focused tests across nine files and frontend lint;
+Stage C's static conformance passed 82 tests and its acceptance-command tests passed 21.
+QA, correction and release checks remain open; W51 is not closed. Deferred QA/live
+acceptance and the full gate are tracked as `D-137` and
 `D-138`; the lane reports record the red rendered-language branch-coverage guard.
 **Controlling rulings:** `R-55`, `R-56`,
 `R-59`, `R-60`, `R-61`, `R-66`, `R-70`.
 **Roles:** lanes, QA, judges and FIX are the executor's; freeze, merges and publication are the
 integrator's (`IDENTITY-WAVES.md` §8, as amended by later `R-70`/`AGENTS.md` §8).
-**Exit:** the screens are integrated on `origin/dev`; the PC-01 journey and the manual
-acceptance pack cover registration, approval, roles, archive and purge when deferred validation
-resumes. A tag or publication to
+**Exit:** the screens and Stage C acceptance code are integrated on `origin/dev`; the PC-01
+identity continuation and manual pack require the deferred live validation of registration,
+approval, roles, archive and purge. A tag or publication to
 `origin/main` requires separate direct owner authority and a full gate on its exact candidate.
 No contract change.
 
