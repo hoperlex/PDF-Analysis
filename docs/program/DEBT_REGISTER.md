@@ -49,7 +49,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
-| D-78 | `CONFIGURED_AUTHOR_LABEL` attributes every verdict by every reviewer identically | **wave 41, `W41-AUTHOR`** |
+| ~~D-78~~ | `CONFIGURED_AUTHOR_LABEL` attributed every verdict identically | **closed by `W41-AUTHOR`** (`14a0913`); register reconciled by `W52-INT-REGISTER-72-78` |
 | D-79 | the gate now reads `docs/` — `test_doc_prose_facts.py`, built in wave 45 | **and it was red on arrival**: see `D-102` |
 | ~~D-80~~ | the web image overlaid the host's `node_modules` | **closed by `W45-READY`**: root `.dockerignore`, verified by a marker build |
 | **D-83** | twelve refusal sentences cannot be rendered by the stack-free gate | narrowed by `W48-LIVE`: refusals are a fail-closed phase of `make alpha-acceptance`; no live run recorded |
@@ -82,7 +82,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-69 | the language guard green over 8 English words — **closed**; fifth blind guard in five waves | the tally is the finding |
 | ~~D-70~~ | the stand had no live provider | **closed 2026-10-07**: `alpha-w48.1` acceptance ran a live model on the stand (`W48-INT-MAIN-02.md`) |
 | D-71 | `D-59` is 121 blocks not 79, and 25 of them are a different defect | **owner: widen `R-19`?** |
-| D-72 | a URL with no host becomes a retryable outage | argue it from the catalog, as `D-13` was |
+| ~~D-72~~ | a URL with no host became a retryable outage | **closed by `W41-AUTHOR`** (`b56d103`); register reconciled by `W52-INT-REGISTER-72-78` |
 | D-68 | the certification's criterion-4 selector is too wide | use `span.am-badge[data-run-state]` |
 | **D-59** | the corpus carries leaked LLM reasoning as document body | **owner** — before embeddings are paid for |
 | D-60 | `R-16`'s text size, token count and chunk tail re-measured | the embedding stream counts tokens first |
@@ -2143,6 +2143,11 @@ Check: `docs/program/W39-CORPUS.md` §2 carries the queries.
 
 ### D-72 — `ProxySettings` accepts a URL with no host and calls the failure retryable
 
+> **Closed by `W41-AUTHOR` (`b56d103`), register reconciled 2026-10-08 by
+> `W52-INT-REGISTER-72-78`.** `ProxySettings` now refuses a hostless URL at
+> construction with `internal_error`; the focused hostless-URL tests prove the
+> refusal and a hosted-URL control. The opening text below is historical.
+>
 **Found by `W39-CORPUS` in code outside its grant, reported not repaired.**
 `ProxySettings.__post_init__` validates only the `http://` / `https://` prefix, so
 `http://:59990` constructs successfully and fails later as **`dependency_unavailable`, which
@@ -2248,6 +2253,12 @@ Check: `git rev-list --count origin/dev..origin/main` — it must be `0` at the 
 
 ### D-78 — every verdict by every reviewer is attributed to the same constant
 
+> **Closed by `W41-AUTHOR` (`14a0913`, record citation `83751df`), register
+> reconciled 2026-10-08 by `W52-INT-REGISTER-72-78`.** The constant is absent
+> from runtime code. `appendDecision` passes the authenticated subject's
+> display label and opaque user identity to the ledger; W41's report records
+> its tests and mutation. The opening text below is historical.
+>
 **Raised 2026-09-23 by `pdf-analysis-04` from its authorization audit; verified by the integrator
 and taken into wave 41 as `W41-AUTHOR` the same hour.**
 

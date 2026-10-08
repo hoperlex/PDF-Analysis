@@ -432,12 +432,10 @@ class TestAHostlessUrlIsAConfigurationErrorNotAnOutage:
     for the waiting, and reported a transient provider outage about a value that was never
     going to work.
 
-    **It is not hypothetical.** ``infra/deploy/env/provider.env`` on the owner's stand carries
-    exactly that URL today (`D-70`), so this is what `D-70` looks like from inside the
-    product. `W39-CORPUS` diagnosed it from the outside and put the check in the one caller
-    it owned, ``auditmanager.norms.__main__.resolve_transport``, whose refusal message still
-    names this class: *"accepted by ProxySettings, which checks only the scheme"*. This is
-    that sentence stopping being true.
+    The historical `D-70` incident involved that URL shape; it does not describe today's
+    deployment configuration. `W39-CORPUS` diagnosed it from the outside and put a check in
+    the one caller it owned, ``auditmanager.norms.__main__.resolve_transport``. This test
+    holds the shared ``ProxySettings`` boundary directly.
 
     No error code is added. The refusal is ``INTERNAL_ERROR`` from ``__post_init__``, the same
     shape the two checks beside it already use, because a deployment assembled from a broken

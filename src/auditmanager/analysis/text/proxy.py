@@ -82,12 +82,11 @@ class ProxySettings:
                 ErrorCode.INTERNAL_ERROR,
                 message="the proxy base URL is not an absolute http or https address",
             )
-        # `D-72`. The prefix check above accepts `http://:59990` -- a URL with a port and
-        # no host -- because the string really does start with `http://`. It then fails at
-        # call time out of `urllib` as `dependency_unavailable`, which the frozen catalog
-        # marks `retryable: true`, so a lane pointed at nothing retries a ladder against a
-        # configuration error and reports a provider outage. `infra/deploy/env/provider.env`
-        # on the owner's stand carries exactly that value today (`D-70`).
+        # `D-72`. Before the host check, the prefix check accepted `http://:59990` -- a URL
+        # with a port and no host -- because it starts with `http://`. At call time `urllib`
+        # then reported `dependency_unavailable`, a retryable provider outage for a
+        # configuration error. The historical `D-70` incident exposed this shape; this
+        # comment makes no claim about the current deployment configuration.
         #
         # `urlsplit().hostname` rather than a second string test: it is the same parse
         # `urllib.request` will perform on this string a moment later, so what is refused
