@@ -31,6 +31,8 @@ Two did not.
 
 from __future__ import annotations
 
+from tests.support.expected_facts import FACTS
+
 import json
 
 import pytest
@@ -104,8 +106,8 @@ class TestTheRouterRefusesADuplicateOperationId:
         duplicate would leave ``routes`` at thirty-four and ``operation_ids`` at
         thirty-three, which is exactly what ``len(router.routes) == 34`` cannot see.
         """
-        assert len(router.routes) == 34
-        assert len(router.operation_ids) == 34
+        assert len(router.routes) == FACTS.operation_count
+        assert len(router.operation_ids) == FACTS.operation_count
         assert len(router.operation_ids) == len(router.routes)
 
 

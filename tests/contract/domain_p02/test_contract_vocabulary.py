@@ -8,6 +8,8 @@ closed rule is gone.
 
 from __future__ import annotations
 
+from tests.support.expected_facts import FACTS
+
 from types import ModuleType
 
 import pytest
@@ -43,7 +45,7 @@ def test_error_code_domain_equals_the_frozen_catalog(
     assert EDGE_ONLY_CODES <= catalog, sorted(EDGE_ONLY_CODES - catalog)
     assert EDGE_ONLY_CODES.isdisjoint(stored), sorted(EDGE_ONLY_CODES & stored)
     assert stored == catalog - EDGE_ONLY_CODES
-    assert len(migration_module.ERROR_CODES) == 22
+    assert len(migration_module.ERROR_CODES) == FACTS.stored_error_codes
 
 
 def test_stage_ids_equal_the_analysis_registry(

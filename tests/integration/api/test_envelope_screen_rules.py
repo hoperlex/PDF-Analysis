@@ -25,6 +25,8 @@ the module's own constant moves with the constant and cannot fail when it drifts
 
 from __future__ import annotations
 
+from tests.support.expected_facts import FACTS
+
 import json
 from pathlib import Path
 
@@ -193,7 +195,7 @@ class TestTheDefaultMessageIsTheSummaryTheFrozenContractDeclares:
         # `staged_upload_lost` so one 409 stopped meaning two opposite things (`D-18`).
         # Twenty-one before that, since the wave-13 reseal, where `R-3` added
         # `dependency_credential_refused` so one 403 stopped meaning two things (`D-7`).
-        assert len(raw["codes"]) == 23, (
+        assert len(raw["codes"]) == FACTS.api_error_codes, (
             f"the frozen catalog declares {len(raw['codes'])} codes, not 23; this suite "
             "pins the count so a code added or removed is a red test rather than a "
             "silently narrower sweep"
