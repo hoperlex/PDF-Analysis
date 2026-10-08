@@ -19,6 +19,8 @@
 > F-4's unused standing-query removal through `bdd23ac`; other findings remain open.
 > D-125's per-document corpus read verification is merged through `0e710f0`;
 > its real-corpus/database and full-gate evidence remains deferred.
+> D-131's bounded transient browser-navigation retry is merged through `130ed91`;
+> its live browser evidence remains deferred.
 > The combined implementation passed 148 focused tests and frontend lint; its red
 > rendered-language branch-coverage assertion remains recorded in the lane reports.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
@@ -94,6 +96,10 @@ fingerprint that determined its snapshot, including repaired and direct
 segmentation reads. Sixteen local fixture tests, Python compilation and lint
 passed in `W52-DEBT-CODE-125.md`; real-corpus/database evidence and full gate
 remain D-139/D-140.
+D-131's PC-01 CDP page now retries `net::ERR_NETWORK_CHANGED` on GET navigation
+with a fixed budget and records attempt counts; four local Node tests, syntax
+checks and lint passed in `W52-DEBT-CODE-131.md`. The live acceptance journey
+and full gate remain D-139/D-140.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:

@@ -36,7 +36,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-128 | nine `W48-JUDGE-Z` register findings; F-1…F-7/F-10/F-11 code repaired locally, validation remains | `W52-DEBT-GUARDS-128F1`, `W52-DEBT-GUARDS-128F2`, `W52-DEBT-GUARDS-128A`, `W52-DEBT-CODE-128F7`, `W52-DEBT-CODE-128F10`, `W52-DEBT-CODE-128F11`; `reviews/W48-JUDGE-Z.md` |
 | D-129 | the W49 judges' and `W49-FIX`'s register findings: Y F-3/F-4 repaired locally; comments, docstrings and edge assumptions remain | `W52-DEBT-CODE-129F3`, `W52-DEBT-CODE-129F4`; each remaining finding has its path:line in the two reviews and `W49-FIX.md` |
 | D-130 | the identity debts `W49-PLAN.md` §3 registers by design | owner-visible limits of the identity model, scheduled with W52 |
-| D-131 | the alpha acceptance journey has no retry for a transient browser network error | one co-tenant Docker bridge event failed a whole run |
+| D-131 | bounded retry for transient GET navigation is implemented locally; live browser validation remains | `W52-DEBT-CODE-131`; D-139/D-140 |
 | ~~D-132~~ | `alpha-w48` was tagged without the manual A01–A12 pass (`R-64`) | **closed 2026-10-07** by the owner's attestation (`R-68`) |
 | **D-133** | the proxy adapter folds every non-400/401 HTTP failure into `analysis_failed`, discards the error body, and no operator can read why a stage failed | found by the `alpha-w48.1` acceptance; W52 debt lane |
 | D-134 | invalid `next`/`from` is escaped into Next Flight router metadata despite the absolute “never echoed” wording | W50 Judge X R1, upheld by Judge Y; prose/transport boundary |
@@ -266,6 +266,12 @@ every A01–A12 recorded.
 
 ### D-131 — the acceptance journey has no retry for a transient browser network error
 
+> **Narrowed 2026-10-08 by `W52-DEBT-CODE-131`, merged at `130ed91`.**
+> The PC-01 CDP page retries only `net::ERR_NETWORK_CHANGED` at GET navigation,
+> with up to four attempts; write actions are never replayed. Four local Node
+> tests, syntax checks and lint passed. Live acceptance and the full gate remain
+> D-139/D-140; D-131 is not closed.
+>
 **Opened 2026-10-06 by `W49-INT-CLOSE`.** Run `20261006T083425Z-1338396` of the W48 acceptance
 failed at start-run with `net::ERR_NETWORK_CHANGED` while another tenant's Docker bridge on this
 host dropped veths (08:36:09–08:36:19Z); no run was created and the next run passed that phase.
