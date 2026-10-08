@@ -34,6 +34,8 @@ The GitHub deployment and public origin must verify the same successor SHA.
 
 ## Captured premise evidence
 
+- premise: the owner pinned the exact development source while remote dev advanced.
+
 ### P-01 — publication refs before integration
 
 - captured_at: 2026-10-08
@@ -66,6 +68,14 @@ directly instructs merging it into main. This task alone owns that publication.
   `3fc0dcf` and preserve main's earlier gate repairs; no content conflict occurred.
 - `docs/program/tasks/W52-INT-MAIN-SEAL-01.md` — this grant and evidence boundary.
 - `docs/program/W52-INT-MAIN-SEAL-01.md` — prepublication report and risk record.
+- `tests/integration/composition/test_an_absent_parent_is_not_an_empty_page.py` —
+  enumerate the new unaddressed GET routes and assert their intentional
+  Stage-B `dependency_unavailable` refusal.
+- `tests/integration/composition/test_every_port_implementation_is_whole.py` —
+  include the new `ReleasesPort` in the whole-port wiring guard.
+- `tests/integration/api/identity_surface.py` — make its injected release
+  stand-in explicit and runtime-check the forwarded port so the whole-port
+  guard can verify this otherwise opaque wiring.
 - Local isolated branch, ignored test configuration and services owned by this task.
 
 ## Forbidden hotspots
@@ -85,7 +95,8 @@ completed product-version feature.
 
 ## Deliverables
 
-- Clean merge successor with both parent histories and the pinned SEAL blobs.
+- Clean merge successor with both parent histories, pinned SEAL blobs and the
+  two narrow composition-guard corrections exposed by the first gate.
 - Isolated focused contract, migration and route checks; production web and API
   image builds; complete `make gate` with literal `GATE OK` on one exact SHA.
 - Fast-forward `origin/main` only after a fresh ref check, then verify the exact

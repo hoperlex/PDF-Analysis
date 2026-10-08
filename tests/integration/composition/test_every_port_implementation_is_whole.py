@@ -51,6 +51,8 @@ PORT_FOR_ARGUMENT = {
     # `W49-SEAL-01`.
     "accounts": "AccountPort",
     "registrations": "RegistrationPort",
+    # `W52-SEAL-01`.
+    "releases": "ReleasesPort",
 }
 
 

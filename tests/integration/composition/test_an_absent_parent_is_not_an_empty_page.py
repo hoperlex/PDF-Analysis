@@ -67,8 +67,10 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 #: `W49-SEAL-01` added one addressed ``GET`` (``getUser``) and three unaddressed ones: two
 #: collections (``listRegistrations``, ``listUsers``) and ``getMe``, which is neither a
 #: collection nor an aggregate -- see :data:`SELF_OPERATIONS`.
+#: `W52-SEAL-01` added two unaddressed GETs: ``getProductVersion`` and
+#: ``listReleases``. Both explicitly refuse until Stage C supplies release data.
 EXPECTED_ADDRESSED = 12
-EXPECTED_UNADDRESSED = 6
+EXPECTED_UNADDRESSED = 8
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -89,6 +91,10 @@ AGGREGATE_OPERATIONS = frozenset({"getDashboardSummary"})
 #: missing and nothing to page. Exempt from the page check, and checked for its own shape by
 #: :func:`test_the_callers_own_account_answers_its_own_shape`.
 SELF_OPERATIONS = frozenset({"getMe"})
+
+# `W52-SEAL-01` declares these GETs before Stage C installs their data provider.
+# The composed adapter must refuse explicitly until that implementation lands.
+PENDING_RELEASE_OPERATIONS = frozenset({"getProductVersion", "listReleases"})
 
 
 def _prefixes() -> dict[str, str]:
@@ -240,12 +246,31 @@ def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None
     "excluded from this page check" is not the same claim as "unchecked".
     """
     for operation_id, template in _unaddressed(_get_routes(app)):
-        if operation_id in AGGREGATE_OPERATIONS or operation_id in SELF_OPERATIONS:
+        if (
+            operation_id in AGGREGATE_OPERATIONS
+            or operation_id in SELF_OPERATIONS
+            or operation_id in PENDING_RELEASE_OPERATIONS
+        ):
             continue
         status, body = _get(app, template)
         assert status == 200, f"{operation_id} answered {status}: {body}"
         assert isinstance(body, dict) and isinstance(body.get("items"), list), (
             f"{operation_id} answered 200 without a page: {body}"
+        )
+
+
+def test_pending_release_gets_refuse_with_the_declared_dependency_code(app: Composed) -> None:
+    pending = tuple(
+        (operation_id, path)
+        for operation_id, path in _unaddressed(_get_routes(app))
+        if operation_id in PENDING_RELEASE_OPERATIONS
+    )
+    assert {operation_id for operation_id, _path in pending} == PENDING_RELEASE_OPERATIONS
+    for operation_id, path in pending:
+        status, body = _get(app, path)
+        code = body.get("error_code") if isinstance(body, dict) else None
+        assert (status, code) == (503, "dependency_unavailable"), (
+            f"{operation_id} answered {(status, code)} instead of the Stage-B refusal"
         )
 
 
