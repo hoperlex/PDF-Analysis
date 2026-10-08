@@ -8,6 +8,8 @@
 > W52 code preparations `W52-PINSWEEP-01` and `W52-FACTS-01` are merged on `origin/dev`
 > through `b5be37e`; W52 has not been frozen or closed. QA and full-gate evidence for this
 > and later code-only candidates is open under `D-139` and `D-140`.
+> The independent D-133 proxy-code correction is merged through `3cfc8d9`; its W56 and
+> live-validation halves remain open.
 > The combined implementation passed 148 focused tests and frontend lint; its red
 > rendered-language branch-coverage assertion remains recorded in the lane reports.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
@@ -59,6 +61,9 @@ The proposed W52 plan has no freeze on this line. Its pin-sweep CLI and central 
 expected-facts file are code preparations only; their focused checks are recorded in
 `W52-PINSWEEP-01.md` and `W52-FACTS-01.md`. W52 QA and full gate remain due under
 `D-139`/`D-140`.
+The proxy-code half of D-133 is merged with local-stub evidence in
+`W52-DEBT-CODE-133.md`; the RunStatus/model-configuration and live-validation halves
+remain open.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:

@@ -230,6 +230,14 @@ in `reviews/W50-JUDGE-X.md` records an independent rebuild.
 
 ### D-133 — a proxy failure is mis-classified, its reason discarded, and invisible to operators
 
+> **Narrowed 2026-10-08 by `W52-DEBT-CODE-133`, merged at `3cfc8d9`.** The adapter now
+> maps 402/403/404 and unclassified 5xx without claiming a model answered, bounds and
+> redacts the error body before a server-side log, and keeps that body out of the API
+> envelope. Its local-stub suite passed 64 tests. Live proxy QA remains due in D-139 and
+> the full gate in D-140. **D-133 stays open** for a typed stage message in RunStatus and
+> the `PROXY_LLM_MODEL` startup-policy decision, assigned to W56 §A3.5. Check those
+> endpoints and the configured-model refusal on the later exact candidate before closure.
+
 **Opened 2026-10-07 by the integrator from the `alpha-w48.1` acceptance (`W48-INT-MAIN-02.md`).**
 `_map_http_failure` in `src/auditmanager/analysis/text/proxy.py` folds 403, 402, 404 and 5xx into
 `analysis_failed` ("the model answered", not retryable) although no model answered — the IP
