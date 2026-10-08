@@ -32,6 +32,10 @@
 > back to the development line, reconciled with dev's later D-128 F-1 guard work.
 > Typecheck, 72 focused frontend tests and lint pass on the backport; no new full
 > gate or live acceptance was run, so D-137–D-140 remain open.
+> `W52-INT-GATE-PARTITION-01` excludes the foundation suite from the later
+> battery after the gate's separate foundation step. The other 3,216 collected
+> test IDs are unchanged; 91 focused contract/governance tests and lint passed.
+> Full-gate outcome and timing remain D-140.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers

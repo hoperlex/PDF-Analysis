@@ -168,6 +168,11 @@ remains open until correction and a new exact-candidate full gate.
 72 focused frontend tests and lint pass, including the previously red guards.
 This is a correction, not a new full gate; D-140 remains open.
 
+`W52-INT-GATE-PARTITION-01` removed the duplicate foundation selection from
+the later battery; the other 3,216 collected test IDs stayed identical. It
+did not run a new full gate or measure JUnit outcome parity/timing. D-140
+remains open.
+
 The W52 FACTS branch's optional web typecheck reported two `exactOptionalPropertyTypes` errors
 in `web/src/_pages/account/ui/account-page.tsx` and
 `web/src/_pages/register/ui/register-page.tsx`. The exact same two errors reproduce on the
