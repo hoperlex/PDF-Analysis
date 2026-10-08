@@ -882,6 +882,33 @@
       }
     ]
   },
+  "identity": {
+    "$comment": [
+      "W51 Stage C. identity.mjs drives these operations through the browser. It consumes",
+      "the run written by the PC-01 write half, and the administrator credential from",
+      "E2E_PC01_LOGIN/PASSWORD. Its generated applicant passwords are never recorded.",
+      "The BFF session register path is supplied at run time, never committed; a 401",
+      "without a before/after row reading is not accepted as proof of session deletion."
+    ],
+    "runner": "tests/e2e/pc01/journey/identity.mjs",
+    "session_store_path_env": "E2E_PC01_SESSION_STORE_PATH",
+    "review_path": "/projects/{project_uid}/runs/{run_id}/review",
+    "expected_author_label": "Тестов И. П.",
+    "manual_steps": ["A13", "A14", "A15", "A16", "A17", "A18", "A19", "A20"],
+    "operations": [
+      { "stage": "register", "method": "POST", "path": "/registrations", "operationId": "submitRegistration", "status": 201 },
+      { "stage": "approve", "method": "POST", "path": "/registrations/{request_id}/approve", "operationId": "approveRegistration", "status": 200 },
+      { "stage": "profile", "method": "GET", "path": "/me", "operationId": "getMe", "status": 200 },
+      { "stage": "verdict", "method": "POST", "path": "/findings/{finding_uid}/decisions", "operationId": "appendDecision", "status": 201 },
+      { "stage": "remove_expert", "method": "PATCH", "path": "/users/{user_uid}", "operationId": "updateUser", "status": 200 },
+      { "stage": "revoked_request", "method": "GET", "path": "/me", "operationId": "getMe", "status": 401, "error_code": "authentication_required" },
+      { "stage": "denied_mutation", "method": "POST", "path": "/findings/{finding_uid}/decisions", "operationId": "appendDecision", "status": 403, "error_code": "permission_denied" },
+      { "stage": "archive", "method": "POST", "path": "/users/{user_uid}/archive", "operationId": "archiveUser", "status": 200 },
+      { "stage": "purge_refused", "method": "DELETE", "path": "/users/{user_uid}", "operationId": "purgeUser", "status": 409, "conflict_reason": "account_referenced" },
+      { "stage": "reject", "method": "POST", "path": "/registrations/{request_id}/reject", "operationId": "rejectRegistration", "status": 200 },
+      { "stage": "self_archive", "method": "POST", "path": "/users/{user_uid}/archive", "operationId": "archiveUser", "status": 403, "error_code": "permission_denied" }
+    ]
+  },
   "refusals": {
     "$comment": [
       "The REFUSAL half. `D-44`, and before it `W27-REFUSE`'s six drives.",

@@ -11,7 +11,7 @@ A sign-in, two phases, one instrument, one envelope, one exit code.
 app's own controls, on the public origin — then waits for the run's terminal by reading
 what the run screen's own poller renders.
 
-**The read walk** then visits all **22** routes, each in a cold browser, discovering every
+**The read walk** then visits every route declared in `manifest.json`, each in a cold browser, discovering every
 identifier by following links the pages render.
 
 Exit `0` means both halves did what `manifest.json` says they do. Non-zero prints every
@@ -20,6 +20,37 @@ finding and names the envelope file. `--phase read|write|all` selects; the defau
 
 **The origin must be one you may write to.** There is no default origin, and the write half
 creates real state.
+
+## W51 identity continuation
+
+`identity.mjs` consumes the completed PC-01 write envelope so the newly approved expert can
+record a verdict on that run. It needs an administrator in `E2E_PC01_LOGIN` and
+`E2E_PC01_PASSWORD`, plus a read-only host path to the web tier's version-2 session register:
+
+```sh
+E2E_PC01_LOGIN=<admin-login> E2E_PC01_PASSWORD=<admin-password> \
+E2E_PC01_SESSION_STORE_PATH=<read-only-host-path-to-web-session-register> \
+  node tests/e2e/pc01/journey/identity.mjs \
+    --origin <allowed-origin> --journey <out>/journey.json --out <out>/identity
+```
+
+The path is a runtime input, not a repository fixture. The script checks that the expert's
+opaque cookie still names a register row after the administrator changes roles, and that the row
+has disappeared after the next BFF request returns 401. It records neither the cookie nor
+the generated passwords. An inaccessible register is a failure, because HTTP 401 alone
+cannot prove row deletion. The output is `<out>/identity/identity.json`.
+
+The continuation covers registration, pending status, approval with `expert`, profile,
+verdict author label, role removal, revoked session, a new sign-in with a denied mutation,
+archive, purge conflict, rejected/unknown generic refusal and self-archive refusal. The
+last-admin conflict needs a separately prepared isolation fixture; an ordinary administrator
+cannot both be the last admin and remove their own role. The human A13–A20 checklist names
+the observations. `D-137` records that the continuation has not run on a built stand.
+
+The existing `--phase all` runner and `manual-alpha-check.sh --automated` still cover the
+PC-01 product journey and PDF refusals. Run this identity continuation separately and keep
+both envelopes for W51 validation; its result is not folded into the earlier release
+verifier until the separate validation wave.
 
 ## Why it is here and not in someone's `/root`
 

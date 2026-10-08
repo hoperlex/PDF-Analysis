@@ -140,7 +140,7 @@ function withoutCredentials(exchanges, mount) {
  * absent, because that is an operator error with a fix in the message; everything the
  * APPLICATION got wrong comes back as a finding so the envelope is still written.
  */
-export async function openSession({ origin, manifest }) {
+export async function openSession({ origin, manifest, credentials = null }) {
   const spec = manifest.session;
   const failures = [];
   if (spec === undefined) {
@@ -151,7 +151,10 @@ export async function openSession({ origin, manifest }) {
     return { ok: false, cookies: [], record: null, failures };
   }
 
-  const { login, password } = credentialsFromEnvironment();
+  const { login, password } = credentials ?? credentialsFromEnvironment();
+  if (typeof login !== 'string' || !login || typeof password !== 'string' || !password) {
+    throw new Error('session: explicit credentials must contain nonempty login and password');
+  }
   const values = { login, password };
   const mount = sessionPath(manifest);
 

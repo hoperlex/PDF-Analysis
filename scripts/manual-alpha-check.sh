@@ -25,10 +25,10 @@ usage() {
 Параметры:
   --origin URL        Проверяемый origin без пути. Обязателен, кроме --files-only.
   --preflight-only    Проверить PDF, TLS/redirect/login и закрытый API (по умолчанию).
-  --automated         Выполнить sign-in, 3 записи, все cold routes из journey manifest и 6 отказов.
+  --automated         Выполнить sign-in, 3 записи, cold routes и 6 PDF-отказов из manifest.
   --candidate-sha SHA Полный SHA проверяемого чистого checkout.
   --deployed-sha SHA  Полный SHA, засвидетельствованный оператором из deployment evidence.
-  --interactive       После preflight записать ручные A01-A12 как PASS/FAIL/BLOCKED.
+  --interactive       После preflight записать ручные A01-A20 как PASS/FAIL/BLOCKED.
   --files-only        Проверить только локальные PDF; сеть не используется.
   --evidence-dir DIR  Каталог отчёта (по умолчанию .local/manual-alpha/<UTC timestamp>-<pid>).
   -h, --help          Показать эту справку.
@@ -376,12 +376,12 @@ if [[ "$MODE" == "automated" ]]; then
 - refusals_exit: $REFUSALS_EXIT
 - verifier_exit: $VERIFIER_EXIT
 - machine_evidence: automated-verdict.json
-- human_A01_A12: required separately; not executed by this command
+- human_A01_A20: required separately; not executed by this command
 EOF
 
   if ((VERIFIER_EXIT == 0)); then
     printf '%s\n' '- automated_verdict: PASS' >>"$REPORT"
-    printf '\nALPHA ACCEPTANCE PASS: automated phases complete; human A01-A12 remains required; evidence: %s\n' \
+    printf '\nALPHA ACCEPTANCE PASS: automated phases complete; human A01-A20 remains required; evidence: %s\n' \
       "$EVIDENCE_DIR"
     exit 0
   fi
@@ -460,6 +460,22 @@ record_manual "A11" "dashboard и сохранность" \
   "Четыре панели без fault; тестовые данные достижимы из списка после cold reload."
 record_manual "A12" "выход" \
   "После «Выйти» deep link закрыт; повторный вход возвращает доступ; секреты не записаны."
+record_manual "A13" "заявка и ожидающий вход" \
+  "Регистрация ведёт на подтверждение; до решения вход сообщает: «Заявка на регистрацию ещё не рассмотрена» без причины."
+record_manual "A14" "очередь и одобрение" \
+  "Ноль ролей: «Выберите хотя бы одну роль. Запрос не отправлен.»; одобрение с «Эксперт» обновляет очередь и счётчик."
+record_manual "A15" "вход и профиль эксперта" \
+  "Новый пользователь входит; имя, фамилия и отчество из заявки видны на /account после cold reload."
+record_manual "A16" "вердикт и автор" \
+  "Вердикт сохранён, история показывает автора «Фамилия И. О.» из профиля, без технического идентификатора."
+record_manual "A17" "отзыв роли" \
+  "После снятия «Эксперт» следующий BFF-запрос -> 401 authentication_required; строка сессии удалена; после входа новая запись -> 403 permission_denied."
+record_manual "A18" "отклонённая заявка" \
+  "Отклонённый и неизвестный адрес получают побайтно одинаковый общий отказ; причина видна только администратору."
+record_manual "A19" "административные запреты" \
+  "Самоархивирование -> permission_denied; доступ сохраняется. last_admin проверяется отдельно в QA-фикстуре (D-137)."
+record_manual "A20" "архив и удаление автора" \
+  "Архивный пользователь получает общий отказ входа; purge -> account_referenced, запись остаётся."
 
 cat >>"$REPORT" <<EOF
 
