@@ -1,11 +1,10 @@
-import { RoutePlaceholder } from '@/shared/ui';
+import { PageShell } from '@/shared/ui';
+import { UserList } from '@/widgets/user-list';
 
 export function AdminUsersPage() {
   return (
-    <RoutePlaceholder
-      screen="Пользователи"
-      route="/admin/users"
-      promise="Здесь администратор сможет просматривать учётные записи и управлять ими."
-    />
+    <PageShell title="Пользователи" subtitle="Учётные записи и их роли. Откройте запись для управления.">
+      <UserList />
+    </PageShell>
   );
 }

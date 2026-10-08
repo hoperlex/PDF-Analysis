@@ -1,5 +1,5 @@
-import { routes } from '@/shared/lib';
-import { RoutePlaceholder } from '@/shared/ui';
+import { PageShell } from '@/shared/ui';
+import { UserCard } from '@/widgets/user-card';
 
 export interface AdminUserPageProps {
   readonly userUid: string;
@@ -7,10 +7,8 @@ export interface AdminUserPageProps {
 
 export function AdminUserPage({ userUid }: AdminUserPageProps) {
   return (
-    <RoutePlaceholder
-      screen="Пользователь"
-      route={routes.user(userUid)}
-      promise="Здесь администратор сможет просматривать и изменять учётную запись пользователя."
-    />
+    <PageShell title="Пользователь" subtitle="Просмотр и управление учётной записью.">
+      <UserCard userUid={userUid} />
+    </PageShell>
   );
 }
