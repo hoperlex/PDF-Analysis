@@ -102,7 +102,8 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56730`, `60330/60331` | `gate-w48proxy` — `W48-PROXY-01` | 2026-10-06 | **released** — merged without a lane gate; no services started |
 | `56740`, `60340/60341` | `gate-w481int` — the `integration/w48-1` hotfix line and its gates | 2026-10-06 | **released** — `alpha-w48.1`; `make down` |
 | `56750`, `60350/60351` | `gate-w50fix` — `W50-FIX` | 2026-10-07 | **released** — W50 closed on `dev`; no W50 container/volume |
-| `56760`, `60360/60361`; API `56860`, Next `31360` | `gate-w51routes` — `W51-ROUTES-01` | 2026-10-07 | after Stage-A merge and verified lane cleanup |
+| `56760`, `60360/60361`; API `56860`, Next `31360` | `gate-w51routes` — `W51-ROUTES-01` | 2026-10-07 | **released** — Stage-A merge `bc5d443`; stand, volumes and credentials removed |
+| `56770`, `60370/60371`; API `56870`, Next `31370` | `gate-w51auth` — `W51-AUTH-01` | 2026-10-08 | **released** — temporary stand stopped by owner direction; containers, volumes and credentials removed |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,

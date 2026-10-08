@@ -1,14 +1,22 @@
 # Wave 51 — screens: sign-in, registration, account; administration of users and requests; identity in the acceptance pack
 
-**Status:** W50 is closed on `origin/dev`; Stage A dispatches from the exact verified
-`W51-FREEZE-01` development candidate and its task. **Controlling rulings:** `R-55`, `R-56`,
+**Status:** Stage A `W51-ROUTES-01` is accepted at `bc5d443` on `origin/dev`;
+Stage B begins with AUTH from the integrator's docs-only dispatch tip based on that merge.
+**Controlling rulings:** `R-55`, `R-56`,
 `R-59`, `R-60`, `R-61`, `R-66`, `R-70`.
 **Roles:** lanes, QA, judges and FIX are the executor's; freeze, merges and publication are the
 integrator's (`IDENTITY-WAVES.md` §8, as amended by later `R-70`/`AGENTS.md` §8).
-**Exit:** the screens are accepted on `origin/dev` under `R-70`; the PC-01 journey and the manual
-acceptance pack cover registration, approval, roles, archive and purge. A tag or publication to
+**Exit:** the screens are integrated on `origin/dev`; the PC-01 journey and the manual
+acceptance pack cover registration, approval, roles, archive and purge when deferred validation
+resumes. A tag or publication to
 `origin/main` requires separate direct owner authority and a full gate on its exact candidate.
 No contract change.
+
+**Temporary validation direction, 2026-10-08.** The owner stopped the temporary W51 stand
+and deferred stand checks and end-of-wave gates to a later, separately designed wave. Current
+implementation lanes run basic focused tests and frontend lint only; the unrun R-70/live and
+release checks are recorded as debt, never described as passed. This direction applies to
+development work on `origin/dev` and grants no publication to `origin/main`.
 
 ## 1. Objective
 
@@ -161,17 +169,24 @@ Depends on: `W50-INT-CLOSE`. Standard form.
   writer at a time.
 - **AUTH allowed paths:** `web/src/app/login/**`, `web/src/app/register/**`,
   `web/src/app/account/**`, `web/src/_pages/sign-in/**`, `web/src/_pages/register/**`,
-  `web/src/_pages/account/**`, `web/src/_pages/change-password/**`,
+  `web/src/_pages/register-submitted/**`, `web/src/_pages/account/**`,
+  `web/src/_pages/change-password/**`,
   `web/src/app/bff/v1/[...path]/route.ts` (validated `next` redirects only),
   `web/src/features/sign-in/**`, `web/src/features/register/**`,
   `web/src/features/change-password/**`, `web/src/features/edit-profile/**`,
-  `web/tests/unit/screens/{sign-in,register,account}*.test.ts`, `web/tests/unit/session/**`,
+  `web/tests/unit/screens/{sign-in,register,account,change-password}*.test.ts`,
+  `web/tests/unit/screens/route-screens.ts` (AUTH's five existing seeds only),
+  `web/tests/unit/session/**`, `web/tests/unit/styles/screens.ts` (AUTH states only),
   `web/tests/guards/dashboard-invalidation.guard.test.ts` (AUTH hook entry),
   `web/tests/guards/rendered-language.guard.test.ts` (AUTH states),
   `tests/e2e/pc01/journey/manifest.json` (AUTH routes only),
   `docs/program/W51-AUTH-01.md`. Mutations: an unknown refusal value is a typed fault, not a
   blank; the password mismatch is caught before the request; the e-mail field is disabled once
   the profile is complete; a forged `?refusal=pending` shows only the pending sentence.
+  The added submitted-page and seed grants are confined to existing AUTH addresses; they do
+  not transfer registry or administrator-screen ownership from Stage A and later lanes.
+  The temporary validation direction above replaces this lane's R-70 stand/gate requirement
+  with focused tests and lint; report the skipped checks as debt.
 - **ADMIN-USERS allowed paths:** `web/src/app/admin/users/**`, `web/src/_pages/admin-users/**`,
   `web/src/widgets/user-list/**`, `web/src/widgets/user-card/**`,
   `web/src/features/manage-user/**`, `web/src/entities/user/**`,
@@ -250,9 +265,9 @@ Depends on: `W50-INT-CLOSE`. Standard form.
 | Hotspot / path family | Owner | Role | Parallel writer |
 | --- | --- | --- | --- |
 | `contracts/**`, migrations, backend, root locks, `globals.css`, `_app/**`, `shared/ui/**`, `screen-lock.ts` | frozen | — | none |
-| `screen-registry.ts`, `route-screens.ts`, screen/frame/W50-QA pins, route builder, API filter exports, `manifest.json`, five placeholder `_pages` modules | `W51-ROUTES-01` (Stage A) | executor | none |
+| `screen-registry.ts`, route address enumeration, initial `route-screens.ts` seeds, screen/frame/W50-QA pins, route builder, API filter exports, initial `manifest.json` rows and five placeholder `_pages` modules | `W51-ROUTES-01` (Stage A, accepted) | executor | Stage B edits only its named screen bodies and existing seed/manifest entries |
 | `shared/api/query-keys.ts` | frozen (namespaces entered in W50) | — | none |
-| `app/{login,register,account}/**`, BFF validated redirects, `_pages/{sign-in,register,account,change-password}/**`, `features/{sign-in,register,change-password,edit-profile}/**` | `W51-AUTH-01` | executor | none; before ADMIN-USERS |
+| `app/{login,register,account}/**`, BFF validated redirects, `_pages/{sign-in,register,register-submitted,account,change-password}/**`, `features/{sign-in,register,change-password,edit-profile}/**`, AUTH entries in shared seed/census files | `W51-AUTH-01` | executor | none; before ADMIN-USERS |
 | `app/admin/users/**`, `_pages/{admin-users,admin-user}/**`, `widgets/{user-list,user-card}/**`, `features/manage-user/**`, `entities/user/**` | `W51-ADMIN-USERS` | executor | none; after AUTH, before ADMIN-REQUESTS |
 | `app/admin/registrations/**`, `_pages/admin-registrations/**`, `widgets/registration-queue/**`, `features/decide-registration/**`, `entities/registration-request/**` | `W51-ADMIN-REQUESTS` | executor | none; after ADMIN-USERS |
 | `dashboard-invalidation.guard.test.ts`, `rendered-language.guard.test.ts`, `styles/screens.ts`, journey manifest's Stage-B route entries | Stage-B lane currently executing | executor | sequential ownership only |
