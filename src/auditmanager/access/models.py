@@ -361,9 +361,18 @@ def name_label(last_name: str, first_name: str, middle_name: str | None) -> str:
     for names :func:`normalize_person_name` accepted, which is inside ``author_label``'s
     1..128 by construction.
     """
-    label = f"{last_name} {first_name[0].upper()}."
+    def initial(name: str) -> str:
+        capital = name[0].upper()
+        # Unicode upper-casing can expand one character (ß→SS, ŉ→ʼN, ǰ→J̌).
+        # An initial is one uppercase letter, not the entire mapping; the first
+        # code point of ŉ's mapping is a modifier apostrophe rather than the N.
+        # Some characters accepted by the existing name pattern have no uppercase
+        # mapping (ĸ, for example); keep their original glyph as before.
+        return next((character for character in capital if character.isupper()), capital[0])
+
+    label = f"{last_name} {initial(first_name)}."
     if middle_name:
-        label = f"{label} {middle_name[0].upper()}."
+        label = f"{label} {initial(middle_name)}."
     return label
 
 

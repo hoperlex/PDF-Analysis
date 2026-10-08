@@ -156,6 +156,24 @@ class TestTheLabel:
         assert 1 <= len(label) <= 128
 
     @pytest.mark.parametrize(
+        ("initial", "capital"),
+        [("ß", "S"), ("ŉ", "N"), ("ǰ", "J")],
+    )
+    def test_expanding_uppercase_initial_stays_within_the_contract(
+        self, initial: str, capital: str
+    ) -> None:
+        last_name = "A" * MAX_PERSON_NAME_LENGTH
+        name = f"{initial}abc"
+        assert normalize_person_name(name, field="first_name", required=True) == name
+        label = name_label(last_name, name, name)
+        assert label == f"{last_name} {capital}. {capital}."
+        assert len(label) == MAX_NAME_LABEL_LENGTH
+
+    def test_uncased_initial_keeps_its_glyph_and_still_fits(self) -> None:
+        last_name = "A" * MAX_PERSON_NAME_LENGTH
+        assert name_label(last_name, "ĸara", None) == f"{last_name} ĸ."
+
+    @pytest.mark.parametrize(
         ("fields", "label"),
         [
             ({"last_name": "Петрова", "first_name": "Анна", "display_name": "Аня"}, "Петрова А."),
