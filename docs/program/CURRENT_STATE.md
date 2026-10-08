@@ -103,6 +103,8 @@ D-87's migration-mutation procedure now requires a fresh database after editing
 a copied migration; its wider schema-test coverage remains open.
 The debt-register summary now marks D-72 and D-78 closed by their W41 repairs;
 the old opening evidence remains in their dated rows.
+D-129 X R-2's status-read docstring now describes equal PBKDF2 work without
+claiming every request path has identical total timing.
 The D-125 corpus projection now checks each re-read document against the raw
 fingerprint that determined its snapshot, including repaired and direct
 segmentation reads. Sixteen local fixture tests, Python compilation and lint

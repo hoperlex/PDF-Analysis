@@ -34,7 +34,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-126 | a snapshot's `content_key` excludes the segmentation profile | raising the profile version makes `ensure_snapshot` conflict |
 | D-127 | an embedding build counts as complete with a one-character window; its digest includes a private bigint | completeness and digest are weaker than `NORM-VECTOR-01` claims |
 | D-128 | nine `W48-JUDGE-Z` register findings; F-1…F-7/F-10/F-11 code repaired locally, validation remains | `W52-DEBT-GUARDS-128F1`, `W52-DEBT-GUARDS-128F2`, `W52-DEBT-GUARDS-128A`, `W52-DEBT-CODE-128F7`, `W52-DEBT-CODE-128F10`, `W52-DEBT-CODE-128F11`; `reviews/W48-JUDGE-Z.md` |
-| D-129 | the W49 judges' and `W49-FIX`'s register findings: Y F-3/F-4/F-5 and stale revoke prose repaired locally; comments and edge assumptions remain | `W52-DEBT-CODE-129F3`, `W52-DEBT-CODE-129F4`, `W52-INT-129F5-01`, `W52-INT-129REVOKE-01`; each remaining finding has its path:line in the two reviews and `W49-FIX.md` |
+| D-129 | the W49 judges' and `W49-FIX`'s register findings: Y F-3/F-4/F-5, X R-2 and stale revoke prose repaired locally; comments and edge assumptions remain | `W52-DEBT-CODE-129F3`, `W52-DEBT-CODE-129F4`, `W52-INT-129F5-01`, `W52-INT-129R2-01`, `W52-INT-129REVOKE-01`; each remaining finding has its path:line in the two reviews and `W49-FIX.md` |
 | D-130 | the identity debts `W49-PLAN.md` §3 registers by design | owner-visible limits of the identity model, scheduled with W52 |
 | D-131 | bounded retry for transient GET navigation is implemented locally; live browser validation remains | `W52-DEBT-CODE-131`; D-139/D-140 |
 | ~~D-132~~ | `alpha-w48` was tagged without the manual A01–A12 pass (`R-64`) | **closed 2026-10-07** by the owner's attestation (`R-68`) |
@@ -308,6 +308,12 @@ with no retention rule; the administrator knows the temporary password a reset s
 
 ### D-129 — the W49 register findings
 
+> **Further narrowed 2026-10-08 by `W52-INT-129R2-01`.** The status-read
+> docstring now limits the equal-work claim to its one PBKDF2 derivation and
+> names the extra failed-read UPDATE. It cites the W49 judge's host-specific
+> timing measurement without claiming new evidence. No algorithm changed;
+> other findings and D-139/D-140 remain.
+>
 > **Further narrowed 2026-10-08 by `W52-INT-129REVOKE-01`.** The operator
 > revocation command's docstring now describes the role-aware API and its lack
 > of an HTTP bulk-revocation operation. The command and role policy did not

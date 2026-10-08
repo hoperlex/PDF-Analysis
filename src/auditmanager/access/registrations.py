@@ -30,7 +30,10 @@ The status read, and the work it does
 :meth:`RegistrationRepository.read_status` answers a pair (login, password) that matches a
 request, and ``None`` -- the same generic refusal as a failed exchange -- otherwise. **It
 performs exactly one PBKDF2 derivation on every path**, request or no request, blocked or
-not, so its timing says nothing; and :meth:`auditmanager.access.repository.UserRepository.
+not, to equalize the main verification cost. Other work differs: a failed read for a
+known request updates its throttle row, while an unknown login has no row to update.
+One derivation therefore does not guarantee equal total request timing. The W49 judge's
+measurement found no usable timing oracle on that host. :meth:`auditmanager.access.repository.UserRepository.
 authenticate` likewise spends exactly one on a login no account holds, whether or not a
 request exists. Only a failed status read is counted on the request's own throttle
 columns, with the account brake's rules (`W40-LIMIT`); a failed exchange spends its
