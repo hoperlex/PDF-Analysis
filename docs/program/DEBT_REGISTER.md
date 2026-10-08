@@ -53,7 +53,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-79 | the gate now reads `docs/` — `test_doc_prose_facts.py`, built in wave 45 | **and it was red on arrival**: see `D-102` |
 | ~~D-80~~ | the web image overlaid the host's `node_modules` | **closed by `W45-READY`**: root `.dockerignore`, verified by a marker build |
 | **D-83** | twelve refusal sentences cannot be rendered by the stack-free gate | narrowed by `W48-LIVE`: refusals are a fail-closed phase of `make alpha-acceptance`; no live run recorded |
-| D-87 | a full-tree mutation copy still cannot redden a migration — §10.1 names only half the trap | narrowed by `W48-GUARDS`: fresh database per case and 11 family digests; `OPERATING_CONSTRAINTS.md` §10.1 still states half |
+| D-87 | §10.1 now states both mutation traps; wider schema-invariant coverage remains | `W52-INT-87-01`; `W48-GUARDS` fresh-database tests |
 | ~~D-89~~ | a shared hotspot with no owner: the journey manifest, and I wrote both grants | **closed by `W48-GOV`**: enumerator ownership is a task-file rule the battery enforces (`268d6ab`) |
 | **D-91** | two streams drew `R-18`'s line in different places in one wave | **owner**: where does it fall |
 | D-96 | three register rows in three waves sent a stream to a file that does not carry what the row says | narrowed by `W48-GOV`: task premises need captured output; this register's own rows are still checked by nothing |
@@ -2695,6 +2695,12 @@ Check: `curl -so /dev/null -w '%{http_code}' http://127.0.0.1:31500/api/v1/docs`
 
 ### D-87 — a full-tree mutation copy still cannot redden a migration, and §10.1 names only half of it
 
+> **Further narrowed 2026-10-08 by `W52-INT-87-01`.** The live §10.1 now
+> requires both a copied migration source and a fresh database migrated from
+> that source. It names the existing constraint-specific `migrated_engine` and
+> does not claim every schema invariant is covered. That wider test-coverage
+> debt remains; D-87 is not closed.
+>
 **Found by `W42-SEAL` when a mutation came back green, which is the only way any of these
 has ever been found.**
 
