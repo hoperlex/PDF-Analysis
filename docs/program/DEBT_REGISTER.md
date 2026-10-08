@@ -9,6 +9,9 @@ QA, `W49-FIX` and the W48 acceptance; the `alpha-w48.1` release (2026-10-07) clo
 the two independent W50 judges; all three are register-only and remain open.
 **The owner's W51 validation deferral (2026-10-08) opened `D-137` and `D-138`:**
 QA/live acceptance and the full end-of-wave gate remain due after implementation.
+**The owner's continuing code-first direction (2026-10-08) opened `D-139` and `D-140`:**
+W52 and subsequent code-only wave candidates accrue QA/live checks and full-gate evidence for a
+separately planned validation wave. Each candidate must be named by exact SHA there.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
 register that had been entirely obsolete while still reading as the list of what was open, and this
@@ -41,6 +44,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-136 | W50-PLAN §3.4 says five first-load routes shrink; the measured count is four | W50 Judge Y JY-2, independently measured by Judge X; plan correction |
 | **D-137** | W51 QA, independent review and live/manual identity acceptance have not run | a separate validation wave must run the built-stand and human checks against one exact candidate |
 | **D-138** | W51 implementation is being integrated without its full end-of-wave `make gate` | a separate validation wave must run and record `GATE OK` for the exact candidate before any release claim |
+| **D-139** | W52 and subsequent code-only candidates defer QA, independent review, built-stand and manual acceptance | the validation wave must inventory every accumulated candidate and run the applicable checks on exact SHAs |
+| **D-140** | W52 and subsequent code-only candidates defer the full end-of-wave gate | the validation wave must record literal `GATE OK` on the release candidate after corrections |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
@@ -120,6 +125,30 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-139 — later code-only waves defer QA and live checks
+
+**Opened 2026-10-08 by the integrator on the owner's continuing instruction to take tasks
+without approval and defer QA.** `W52-FACTS-01` starts code preparation while W51's QA remains
+open under `D-137`. W52's planned independent audit, built-stand attack, QA and judges are not
+silently treated as completed; the same rule applies to later code-only waves until the owner
+changes it. The validation wave must enumerate the exact candidate SHAs and applicable task
+acceptance packs, run the checks, classify findings and hand corrections to later fix stages.
+
+**Check:** reconcile each code-only wave's plan and task reports against validation-wave evidence
+for the same candidate. Close only when every deferred QA, independent review, built-stand and
+manual acceptance item has a recorded result or a documented owner disposition.
+
+### D-140 — later code-only waves defer full gates
+
+**Opened 2026-10-08 by the integrator on the owner's direction to run only basic tests and
+lint during implementation.** A focused test or lint pass is not a full `make gate`. W52 and
+later code-only candidates are not gated, closed, tagged or authorized for `origin/main` by
+their implementation merges. The validation wave must run the full gate after corrections on
+the exact candidate it proposes to release and record the literal `GATE OK`.
+
+**Check:** the validation-wave report names that clean SHA, the full `make gate` command, log and
+literal `GATE OK`; the SHA is unchanged for any subsequent release claim.
 
 ### D-137 — W51 QA and live identity acceptance are deferred
 
