@@ -229,6 +229,25 @@ describe('a fact neither run carries prints nothing at all', () => {
   });
 });
 
+describe('an unfamiliar run fact is not an absent one', () => {
+  it('marks an unfamiliar provider mode and basis without showing raw values', () => {
+    const changed = base({
+      run_id: NEWER,
+      provider_mode: 'turbo' as never,
+      cost_basis: 'guessed' as never,
+    });
+    const markup = screen(seedRuns([changed, base({ run_id: OLDER })]));
+    const modeRow = factRow(markup, 'provider_mode');
+    const basisRow = factRow(markup, 'cost_basis');
+    expect(modeRow).toContain('data-provider-mode="unrecognized"');
+    expect(basisRow).toContain('data-cost-basis="unrecognized"');
+    expect(visible(modeRow)).toContain('неизвестное значение');
+    expect(visible(basisRow)).toContain('неизвестное значение');
+    expect(modeRow + basisRow).not.toContain('turbo');
+    expect(modeRow + basisRow).not.toContain('guessed');
+  });
+});
+
 describe('the machine vocabulary stays in the attributes', () => {
   const markup = screen(seedRuns([NEWER_RUN, OLDER_RUN]));
 

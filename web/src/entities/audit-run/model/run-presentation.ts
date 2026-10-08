@@ -9,8 +9,8 @@
  *    Nothing in this module produces the string for a run, and `RunStateBadge` would not
  *    compile if it did.
  * 2. **A recorded run never looks like a live one.** `provider_mode` is read from the
- *    reading and rendered; a reading that does not carry a recognised mode renders
- *    `unknown`, never `live`. Defaulting an unstated provenance to `live` would let a
+ *    reading and rendered; missing and unrecognised modes receive different labels,
+ *    never `live`. Defaulting an unstated provenance to `live` would let a
  *    replayed run pass as evidence of a real model call.
  * 3. **A run that stopped stops animating.** `OD-10` reconciles a run abandoned in
  *    `running` to `failed` with an explicit interrupted reason. A view that keeps a
@@ -32,11 +32,17 @@ import {
 // Provider mode
 // ------------------------------------------------------------------------------------
 
-/** Rendered when the reading carries no recognised provider mode. Never `live`. */
+/** Rendered when the reading carries no provider mode. Never `live`. */
 export const PROVIDER_MODE_UNKNOWN = 'unknown';
 
-/** What the UI can display: a contract mode, or the explicit absence of one. */
-export type ProviderModeLabel = (typeof PROVIDER_MODE_VALUES)[number] | typeof PROVIDER_MODE_UNKNOWN;
+/** The reading carried a mode, but it is outside the frozen vocabulary. */
+export const PROVIDER_MODE_UNRECOGNIZED = 'unrecognized';
+
+/** What the UI can display: a contract mode, absence, or an unrecognised value. */
+export type ProviderModeLabel =
+  | (typeof PROVIDER_MODE_VALUES)[number]
+  | typeof PROVIDER_MODE_UNKNOWN
+  | typeof PROVIDER_MODE_UNRECOGNIZED;
 
 const PROVIDER_MODES: ReadonlySet<string> = new Set<string>(PROVIDER_MODE_VALUES);
 
@@ -44,15 +50,18 @@ function isProviderMode(value: unknown): value is ProviderMode {
   return typeof value === 'string' && PROVIDER_MODES.has(value);
 }
 
-/** Narrow an arbitrary value to a contract provider mode, or to `unknown`. */
+/** Preserve the difference between a missing field and an unfamiliar value. */
 export function providerModeLabel(value: unknown): ProviderModeLabel {
-  return isProviderMode(value) ? value : PROVIDER_MODE_UNKNOWN;
+  if (isProviderMode(value)) return value;
+  return value === undefined || value === null
+    ? PROVIDER_MODE_UNKNOWN
+    : PROVIDER_MODE_UNRECOGNIZED;
 }
 
 /**
  * Whether every run/stage value used as a label-table key belongs to its closed contract
- * vocabulary. Provider mode is deliberately excluded: `providerModeLabel` narrows any
- * unrecognised value to the explicit `unknown` presentation before a table is indexed.
+ * vocabulary. Provider mode is deliberately excluded: `providerModeLabel` classifies
+ * missing and unrecognised values before a table is indexed.
  */
 export function hasKnownRunVocabulary(status: RunStatus): boolean {
   const candidate = status as RunStatus & {
@@ -92,11 +101,11 @@ export function runProviderMode(status: { readonly provider_mode?: unknown }): P
 }
 
 /**
- * The value `RunStateBadge` accepts. `unknown` is not one of its two qualifiers, so it is
- * passed as `undefined` and the screen states the absence separately and explicitly.
+ * The value `RunStateBadge` accepts. Missing and unrecognised values have no badge
+ * qualifier; the screen states their different reasons separately.
  */
 export function badgeProviderMode(label: ProviderModeLabel): 'live' | 'recorded' | undefined {
-  return label === PROVIDER_MODE_UNKNOWN ? undefined : label;
+  return label === 'live' || label === 'recorded' ? label : undefined;
 }
 
 /** One sentence saying what this provenance is and is not evidence of. */
@@ -108,6 +117,8 @@ export function providerModeCaption(label: ProviderModeLabel): string {
       return 'Воспроизведено из записей. Этот прогон не является свидетельством живого вызова провайдера.';
     case PROVIDER_MODE_UNKNOWN:
       return 'Это показание не несёт режима провайдера. Оно не считается живым.';
+    case PROVIDER_MODE_UNRECOGNIZED:
+      return 'Показание содержит неизвестный режим провайдера. Его нельзя считать живым.';
   }
 }
 
@@ -359,7 +370,7 @@ export type RunCostReading =
   | {
       readonly kind: 'reported';
       readonly micros: number;
-      readonly basis: CostBasis | null;
+      readonly basis: CostBasis | null | 'unrecognized';
       readonly callCount: number;
     };
 
@@ -400,7 +411,11 @@ export function runCost(status: {
   return {
     kind: 'reported',
     micros,
-    basis: basis === 'measured' || basis === 'estimated' ? basis : null,
+    basis: basis === 'measured' || basis === 'estimated'
+      ? basis
+      : basis === undefined || basis === null
+        ? null
+        : 'unrecognized',
     callCount,
   };
 }
@@ -413,7 +428,7 @@ export function runCost(status: {
  * downgrades the whole run the moment one contributing call is unmeasured. The first
  * live run is the first that can print `measured`. Nothing here is phrased as a fault.
  */
-export function costBasisCaption(basis: CostBasis | null): string {
+export function costBasisCaption(basis: CostBasis | null | 'unrecognized'): string {
   switch (basis) {
     case 'measured':
       return 'Каждый вызов, вошедший в эту сумму, сообщил свою стоимость, поэтому величина измерена.';
@@ -425,6 +440,8 @@ export function costBasisCaption(basis: CostBasis | null): string {
       );
     case null:
       return 'Это показание не несёт основания стоимости, поэтому точность величины не указана.';
+    case 'unrecognized':
+      return 'Показание содержит неизвестное основание стоимости, поэтому точность величины нельзя определить.';
   }
 }
 

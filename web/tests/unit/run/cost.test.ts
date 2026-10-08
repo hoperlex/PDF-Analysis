@@ -144,7 +144,9 @@ describe('an unstated cost basis is not a measured one (M-10)', () => {
 
   it('rejects a basis outside the contract value set', () => {
     const reading = runCost({ cost_micros: 5, model_call_count: 1, cost_basis: 'guessed' });
-    expect(reading).toMatchObject({ kind: 'reported', basis: null });
+    expect(reading).toMatchObject({ kind: 'reported', basis: 'unrecognized' });
+    expect(costBasisCaption('unrecognized')).toContain('неизвестное основание');
+    expect(costBasisCaption('unrecognized')).not.toContain('не несёт основания');
   });
 
   it('does not phrase estimated as a fault', () => {

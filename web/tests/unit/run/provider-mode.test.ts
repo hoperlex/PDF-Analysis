@@ -12,6 +12,7 @@ import type { RunState, RunStatus } from '@/shared/api';
 import { PROVIDER_MODE_VALUES } from '@/shared/api';
 import {
   PROVIDER_MODE_UNKNOWN,
+  PROVIDER_MODE_UNRECOGNIZED,
   badgeProviderMode,
   interruptedReason,
   isRunAnimating,
@@ -34,10 +35,14 @@ function reading(state: RunState, extra: Partial<RunStatus> = {}): RunStatus {
   };
 }
 
-describe('a run with no provider provenance renders `unknown`, never `live`', () => {
-  it('renders unknown for an absent, null, empty or unrecognised value', () => {
-    for (const value of [undefined, null, '', 'LIVE', 'Live', 'replayed', 0, {}]) {
+describe('a run with no recognised provider provenance never renders live', () => {
+  it('separates missing from unrecognised values', () => {
+    for (const value of [undefined, null]) {
       expect(providerModeLabel(value)).toBe(PROVIDER_MODE_UNKNOWN);
+    }
+    for (const value of ['', 'LIVE', 'Live', 'replayed', 0, {}]) {
+      expect(providerModeLabel(value)).toBe(PROVIDER_MODE_UNRECOGNIZED);
+      expect(providerModeLabel(value)).not.toBe(PROVIDER_MODE_UNKNOWN);
       expect(providerModeLabel(value)).not.toBe('live');
     }
   });
@@ -58,6 +63,7 @@ describe('a run with no provider provenance renders `unknown`, never `live`', ()
     expect(badgeProviderMode('live')).toBe('live');
     expect(badgeProviderMode('recorded')).toBe('recorded');
     expect(badgeProviderMode(PROVIDER_MODE_UNKNOWN)).toBeUndefined();
+    expect(badgeProviderMode(PROVIDER_MODE_UNRECOGNIZED)).toBeUndefined();
   });
 
   it('covers exactly the contract value set, plus the explicit absence', () => {
@@ -72,10 +78,11 @@ describe('the caption says what the provenance is not evidence of', () => {
 
   it('says an unknown provenance is not treated as live', () => {
     expect(providerModeCaption(PROVIDER_MODE_UNKNOWN).toLowerCase()).toContain('не считается живым');
+    expect(providerModeCaption(PROVIDER_MODE_UNRECOGNIZED).toLowerCase()).toContain('неизвестный');
   });
 
   it('has a caption for every label', () => {
-    for (const label of ['live', 'recorded', PROVIDER_MODE_UNKNOWN] as const) {
+    for (const label of ['live', 'recorded', PROVIDER_MODE_UNKNOWN, PROVIDER_MODE_UNRECOGNIZED] as const) {
       expect(providerModeCaption(label).length).toBeGreaterThan(0);
     }
   });
