@@ -1,8 +1,13 @@
 # Current state
 
-> **Updated 2026-10-07 by `W50-INT-CLOSE`.** W49 and W50 of the identity programme
-> (`docs/program/dispatch/IDENTITY-WAVES.md`) are closed on `origin/dev`; W51 (the screens) is
-> next. `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
+> **Updated 2026-10-08 by the W51 integrator.** W49 and W50 of the identity programme
+> (`docs/program/dispatch/IDENTITY-WAVES.md`) are closed on `origin/dev`. W51 Stage A and
+> all three Stage B implementation lanes are merged there through `4442921`; Stage C,
+> QA, correction and release checks remain open. The owner temporarily deferred temporary
+> stand checks and end-of-wave gates to a later separately designed wave. The combined
+> implementation passed 148 focused tests and frontend lint; its red rendered-language
+> branch-coverage assertion and unrun checks are recorded as debt in the lane reports.
+> `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
 > external deployment.
@@ -32,7 +37,7 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Active development, 2026-10-07 — W50 closed on `dev`; W51 (the screens) is next
+## Active development, 2026-10-08 — W50 closed; W51 Stage B implemented on `dev`
 
 W49 — accounts with e-mail sign-in, a role set `{expert, admin}`, registration requests and
 administrator account management (`R-55` … `R-61`) — was published to `origin/dev` by
@@ -44,8 +49,9 @@ merged candidate; the three upheld register-only findings are open as `D-134` �
 `W50-FIX` corrected accepted prose and fixtures and added the R-70 light-acceptance command.
 Its clean lane tree passed a full `make gate`; the FIX merge and the docs-only close candidate
 passed light acceptance under `R-70` (`AGENTS.md` §8). W50 is closed on the development line
-without a release tag. W51 starts from this `origin/dev` candidate; its scope is the identity
-screens, with its own freeze and grants.
+without a release tag. W51's screen implementation is merged into `origin/dev`; its Stage C
+journey and manual-pack code, QA, correction and release evidence remain open under the
+2026-10-08 validation deferral.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:

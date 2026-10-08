@@ -1,10 +1,12 @@
 # Wave 51 — screens: sign-in, registration, account; administration of users and requests; identity in the acceptance pack
 
-**Status:** Stage A `W51-ROUTES-01` is accepted at `bc5d443`; Stage B
-`W51-AUTH-01` is accepted at `ebe614d`, and `W51-ADMIN-USERS` is accepted and
-published on `origin/dev` at `c88e794`. `W51-ADMIN-REQUESTS` starts from its
-docs-only dispatch tip based on that merge. The ADMIN-USERS report records the
-rendered-language branch-coverage debt for later correction.
+**Status:** Stage A `W51-ROUTES-01` is accepted at `bc5d443`. Stage B's three
+implementation lanes are accepted on `origin/dev`: `W51-AUTH-01` at `ebe614d`,
+`W51-ADMIN-USERS` at `c88e794`, and `W51-ADMIN-REQUESTS` at `4442921`.
+The integrated tree passed 148 focused tests across nine files and frontend lint
+on 2026-10-08. Stage C, QA, correction and release checks remain open; W51 is not
+closed. The lane reports record the red rendered-language branch-coverage guard
+and other deferred validation explicitly.
 **Controlling rulings:** `R-55`, `R-56`,
 `R-59`, `R-60`, `R-61`, `R-66`, `R-70`.
 **Roles:** lanes, QA, judges and FIX are the executor's; freeze, merges and publication are the
