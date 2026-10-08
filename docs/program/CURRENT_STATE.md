@@ -13,7 +13,8 @@
 > D-128 guard corrections F-3…F-6 are merged through `030eba9`, F-7 presentation through
 > `a761e79`, and F-2 mutation discovery with TSX parsing through `000a915`;
 > F-11 public-stage naming is merged through `06a417d`, and F-1 screen-provider
-> coverage through `029ca93`; F-10 remains open.
+> coverage through `029ca93`; F-10's report correction is merged through `6976904`.
+> D-128 still awaits deferred database validation and full-gate evidence.
 > The combined implementation passed 148 focused tests and frontend lint; its red
 > rendered-language branch-coverage assertion remains recorded in the lane reports.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
@@ -76,7 +77,9 @@ The F-7 run-presentation correction has 136 focused tests and lint in
 `W52-DEBT-CODE-128F11.md`. F-1's shared-provider repair passed 89 focused tests and
 lint in `W52-DEBT-GUARDS-128F1.md`; the language guard's separate, pre-existing
 17-branch coverage assertion remains red on both base and repaired trees. D-128 now
-retains F-10 and deferred validation.
+retains deferred validation. F-10's reconciler report now names unattributed Blob rows
+without inferring age and omits dead categories; its pure unit test, Python compilation
+and lint passed in `W52-DEBT-CODE-128F10.md`. The database integration cases await D-139.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:

@@ -33,7 +33,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-125 | the corpus loader re-reads files after `snapshot_of` hashed them and does not re-verify | immutable snapshot can carry other bytes |
 | D-126 | a snapshot's `content_key` excludes the segmentation profile | raising the profile version makes `ensure_snapshot` conflict |
 | D-127 | an embedding build counts as complete with a one-character window; its digest includes a private bigint | completeness and digest are weaker than `NORM-VECTOR-01` claims |
-| D-128 | nine `W48-JUDGE-Z` register findings; F-1…F-7/F-11 code repaired locally, F-10 remains | `W52-DEBT-GUARDS-128F1`, `W52-DEBT-GUARDS-128F2`, `W52-DEBT-GUARDS-128A`, `W52-DEBT-CODE-128F7`, `W52-DEBT-CODE-128F11`; `reviews/W48-JUDGE-Z.md` |
+| D-128 | nine `W48-JUDGE-Z` register findings; F-1…F-7/F-10/F-11 code repaired locally, validation remains | `W52-DEBT-GUARDS-128F1`, `W52-DEBT-GUARDS-128F2`, `W52-DEBT-GUARDS-128A`, `W52-DEBT-CODE-128F7`, `W52-DEBT-CODE-128F10`, `W52-DEBT-CODE-128F11`; `reviews/W48-JUDGE-Z.md` |
 | D-129 | the W49 judges' and `W49-FIX`'s register findings: comments, docstrings, a 68-character label, edge assumptions | each with its path:line in the two reviews and `W49-FIX.md` |
 | D-130 | the identity debts `W49-PLAN.md` §3 registers by design | owner-visible limits of the identity model, scheduled with W52 |
 | D-131 | the alpha acceptance journey has no retry for a transient browser network error | one co-tenant Docker bridge event failed a whole run |
@@ -311,6 +311,13 @@ with no retention rule; the administrator knows the temporary password a reset s
 
 ### D-128 — the closure judge's register findings
 
+> **Further narrowed 2026-10-08 by `W52-DEBT-CODE-128F10`, merged at `6976904`.**
+> `ReconciliationReport` now exposes `unattributed_blobs` for rows without a manifest
+> or Attempt-scoped publication intent, whether old or current; two never-populated
+> fields are removed. Available detached rows now check actual object presence. One
+> pure unit test, Python compilation and frontend lint passed. Edited PostgreSQL/MinIO
+> integration cases await D-139; the full gate awaits D-140. D-128 is not closed.
+>
 > **Further narrowed 2026-10-08 by `W52-DEBT-GUARDS-128F1`, merged at `029ca93`.**
 > The D-97 guard now discovers screen tests under `tests/unit/screens`, and the five
 > tracked private router mounts plus the language guard's private query mount use the
