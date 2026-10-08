@@ -3,12 +3,13 @@
 **Status:** revision 3 design, adopted onto the development line by `W52-INT-ENTRY-01`
 from planning SHA `2b45a11` on 2026-10-08. The entry and execution amendment below
 supersedes the older gate-dependent dispatch sentence. W52 is **not frozen or
-dispatchable**: `W52-RULE-01` and `W52-FREEZE-01` remain due.
+dispatchable**: `W52-RULE-01` has recorded R-71…R-74;
+`W52-FREEZE-01` remains due.
 Round 2 (both judges ACCEPT-WITH-FIXES, all fixes
-text or grant lines) is applied; no third round (`R-V4`). Revision 2 was rebuilt on the first judging round (design judge:
+text or grant lines) is applied; no third round (`R-74`). Revision 2 was rebuilt on the first judging round (design judge:
 ACCEPT-WITH-FIXES, seven majors; grants judge: REJECT, seven majors; both verified against
 `integration/w49`, where the W49 seal has landed). The second round was the
-last planned round; `R-V4` has not yet been recorded as an owner ruling.
+last planned round; `R-74` records the owner's process ruling.
 **Amended 2026-10-07** by the planning session at the integrator's request, not re-judged (grant
 lines and one lane, no design change): `W52-TRANSLATE-01` in Stage C for the runbook translation
 (owner poll 2026-10-07, `R-69`), and `D-133`'s code-only half in `W52-DEBT-CODE`. Paths measured
@@ -16,7 +17,7 @@ on `integration/w50` at `df120a8`; every pin is re-swept at `W52-FREEZE-01`.
 **Author:** the planning session, on local branch `plan/roadmap-to-beta`; hand-over to the
 integrator `pdf-analysis-48` after the second round.
 **Controlling answers:** `ROADMAP-TO-BETA.md` §10 (V-1…V-10, P-1, P-2) and §10.10 (W-1…W-4).
-`R-V1`…`R-V4` are placeholders; `W52-RULE-01` takes the next free numbers.
+`R-71`…`R-74` are recorded by `W52-RULE-01`.
 **Roles:** `IDENTITY-WAVES.md` §8. Task forms not spelled out are its §10 standard forms.
 For W52 development only, the owner's later 2026-10-08 deferral overrides
 §10's full-gate steps in `W52-FREEZE-01`, individual code lanes and
@@ -36,8 +37,8 @@ require the owner's separate direct instruction naming that SHA.
 **Execution amendment, 2026-10-08:** W51 implementation closed on `origin/dev`
 at `4159d4e` without a full gate by the owner's later direction. The plan's
 original first entry row and serial gate measurements cannot be interpreted
-as passed. `W52-RULE-01` still records the three owner confirmations named in
-§4; `W52-FREEZE-01` still re-sweeps the current tree, grants and pins before
+as passed. `W52-RULE-01` records the three owner confirmations named in
+§4 as R-71…R-74; `W52-FREEZE-01` still re-sweeps the current tree, grants and pins before
 new W52 lanes are dispatched. Stage A audit/attack, Stage D QA/judging, live
 acceptance and complete gates move to the separate validation stage tracked
 by D-137–D-140. The implementation tasks below retain their design and
@@ -66,7 +67,7 @@ substitute for the freeze.
 | screen registry and account menu exist (W50) | `web/src/shared/config/screen-registry.ts`; the account-menu island in `web/src/_app/` |
 | role registers exist (W49) | `OPERATION_ROLES` and the profile/default-credential registers in `src/auditmanager/api/security.py`; `ACCOUNT_REFERENCES` in `src/auditmanager/access/references.py` |
 | W49–W51 debts registered | rows above `D-128` in `DEBT_REGISTER.md` |
-| `R-V1`…`R-V4` recorded, including the three owner confirmations of §4 `W52-RULE-01` | `W52-RULE-01` |
+| R-71…R-74 recorded, including the three owner confirmations of §4 | `W52-RULE-01` |
 | current pins, grants, contract set and code-only validation boundary recorded | `W52-FREEZE-01.md`; full-gate timing moves to D-140 |
 
 ## 3. Design decisions bound by this plan
@@ -80,7 +81,7 @@ substitute for the freeze.
   a guard asserts no code reads them as the product version.
 - **A release** is an owner-instructed deploy to `main` with a user-visible change (V-3), tagged
   `v<VERSION>` by `*-INT-MAIN`. `alpha-wNN` ends at `alpha-w51`; the CP-series plan in
-  `CHECKPOINT_REGISTRY.md` is retired (`R-V1`).
+  `CHECKPOINT_REGISTRY.md` is retired (`R-71`).
 - **API `build_id` is computed by the API process at start-up over its own files**, not stamped by
   a build step: `"b" + sha256_hex[:16]` over the sorted lines `"<path>\t<sha256 of bytes>\n"` for
   every regular file under the roots `src/`, `db/`, `contracts/`, `fixtures/recorded/`,
@@ -124,7 +125,7 @@ substitute for the freeze.
 - **Releases have no public identity.** No operation addresses one release, so there is no path
   parameter and no `<prefix>_<ULID>`; the version string is data. (Precedent: retrieval chunks
   have no public identity.) Internally a release row has a surrogate key and a unique canonical
-  `version`. `R-V2` records that a canonical SemVer is an immutable natural key here, not a display
+  `version`. `R-72` records that a canonical SemVer is an immutable natural key here, not a display
   number (`AGENTS.md` §4): the append-only triggers and loader rule 4 enforce that it never changes
   meaning.
 - **Nothing is opened to a guest.** `UNAUTHENTICATED_OPERATIONS` is unchanged; `/bff/version`
@@ -277,28 +278,32 @@ Lane changes (`W52-GATE-01`):
 **Deferred validation invariant:** the union of foundation and battery test ids
 is identical before and after, and each id's outcome (pass, skip, xfail) is
 identical — compared from JUnit XML, not from ids alone.
-**Target:** battery ≤ 6 min when measured. **Deviation from the adopted A6, for owner confirmation:**
-`pytest-xdist` (a `uv.lock` change) and impacted-test selection for lane gates are not in this
-wave; if the target is missed, the integrator registers them with the measured shortfall.
+**Target:** battery ≤ 6 min when measured. **Confirmed W52 deviation from the adopted A6:**
+`pytest-xdist` (a `uv.lock` change) is not in this wave; R-70's existing
+diff-derived light acceptance remains. Additional impacted-test selection
+is not added in W52. If the target is missed, the integrator registers the
+measured shortfall and later options.
 
 ## 4. Tasks
 
 ### `W52-RULE-01` (integrator)
 
-Standard form. Records after the owner confirms the text:
+Standard form. Recorded after the owner confirmed the text:
 
-- `R-V1` versioning (§3.1; V-1…V-3, V-9, V-10), including: `contract_version` unchanged in W52 and
+- `R-71` versioning (§3.1; V-1…V-3, V-9, V-10), including: `contract_version` unchanged in W52 and
   decided at the beta freeze.
-- `R-V2` release notes (§3.2–§3.5; V-2, V-4…V-8), including: releases have no public identity and
+- `R-72` release notes (§3.2–§3.5; V-2, V-4…V-8), including: releases have no public identity and
   a canonical SemVer is their immutable natural key; authored revisions; `markReleaseNotesRead`
   is the account's own state.
-- `R-V3` `D-120` accepted as a process rule (W-1): only the integrator pushes `main`, after literal
+- `R-73` `D-120` accepted as a process rule (W-1): only the integrator pushes `main`, after literal
   `GATE OK` on the exact SHA and the owner's direct instruction; `D-120` closes as accepted risk.
-- `R-V4` process (P-2): plan judging capped at two rounds; two cross-judges only for waves touching
+- `R-74` process (P-2): plan judging capped at two rounds; two cross-judges only for waves touching
   contract, migration, security or data custody, one judge otherwise.
-- **Owner confirmations** asked in one message: the hand-written facts file, and live prose not
-  reading it (§3.6); A6 without `pytest-xdist` and impacted-test selection in this wave (§3.7);
-  `contract_version` unchanged until beta (§3.1, not an owner answer, asked for completeness).
+- **Owner confirmations**, answered 2026-10-08: the hand-written facts file, and live prose not
+  reading it (§3.6); serial full-gate acceleration without `pytest-xdist` in W52 (§3.7),
+  while R-70's diff-derived light acceptance continues; `contract_version`
+  unchanged until beta (§3.1). The earlier §3.7 exclusion of impacted-test
+  selection is superseded by R-70.
 
 ### `W52-FREEZE-01` (integrator)
 
@@ -546,7 +551,7 @@ mismatching build fails the pack; `shellcheck`.
 ### Stage D — judging (fresh contexts), then FIX
 
 Risk tier: contract, migration and deploy are touched → **two cross-judges**
-under the proposed `R-V4`. Stage D is deferred to D-139/D-140; its checks
+under recorded `R-74`. Stage D is deferred to D-139/D-140; its checks
 remain required for a release verdict and do not run as part of code-only close.
 
 - `W52-QA-01`: standard form; `tests/integration/qa_w52/**`, `web/tests/unit/qa_w52/**`.
@@ -570,7 +575,7 @@ and focused-check evidence on `origin/dev`, with D-137–D-140 open and no
 `GATE OK` claim. The following register work belongs to release validation/close and
 requires its named re-measurements: close `D-66`, `D-72`, `D-78`,
 `D-79`, `D-68` with their re-measured checks; repair the register's §2 owner table, §3 lag
-sentence and header count; close `D-120` (`R-V3`) and `D-121` (`W52-ACCEPT-01`); re-slot `D-122` to
+sentence and header count; close `D-120` (`R-73`) and `D-121` (`W52-ACCEPT-01`); re-slot `D-122` to
 W63; slot `D-123` to W53 with the backup target (this machine until after beta); narrow `D-133` to
 its remaining half (`RunStatus` message and the `PROXY_LLM_MODEL` refusal, `W56-PLAN.md` §A3.5)
 with `W52-DEBT-CODE`'s check; register this
@@ -628,8 +633,9 @@ guest; the `contract_version` would have to move.
 ## 8. Non-goals
 
 Online scans (`D-122`, W63); a served technical version view; editing release notes in the
-interface; SMTP; `pytest-xdist`; impacted-test selection; moving `contract_version`; any change to
-how `main` deploys beyond `R-V3`; the operator prompts of `scripts/manual-alpha-check.sh` in English
+interface; SMTP; `pytest-xdist`; additional impacted-test selection beyond R-70;
+moving `contract_version`; any change to
+how `main` deploys beyond `R-73`; the operator prompts of `scripts/manual-alpha-check.sh` in English
 (they are the tool's conversation with the operator, not a runbook; extending `R-69` to them adds
 that script and `tests/contract/test_alpha_acceptance_command.py`, which pins its Russian refusals);
 `D-133`'s `RunStatus` message and `PROXY_LLM_MODEL` refusal (W56a).

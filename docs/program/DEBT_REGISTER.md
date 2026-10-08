@@ -27,7 +27,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | ~~D-63~~ | a dashboard | **closed by wave 46**: four panels on one read (`W46-WIRE`, `W46-CLIENT`, `alpha-w46`) |
 | ~~D-118~~ | `make gate` did not lint | **closed by `W47-CLOSE`**: lint runs first and fails closed; eslint is clean |
 | **D-119** | the restored MinIO release predates upstream's final security release, and upstream is now archived | **owner**: rehearse the security upgrade after backup, or select the next S3-compatible implementation |
-| **D-120** | a push to `main` deploys whatever it names; the workflow proves ancestry, not a gate | **owner**: bind deployment to gate evidence, or keep it a process rule |
+| **D-120** | a push to `main` deploys whatever it names; the workflow proves ancestry, not a gate | **R-73** accepts the process control; accepted-risk closure remains at `W52-INT-CLOSE` |
 | **D-121** | `ALPHA ACCEPTANCE PASS` attests the deployed SHA from operator input; nothing served names the running revision | a revision endpoint or served file is a contract question |
 | D-122 | no online dependency-vulnerability, transitive-licence or container-image scan has ever run | `W48-AUDIT` §7 question 5 |
 | **D-123** | the alpha MinIO volume was never inventoried, and the restore was not rehearsed on it after the image rebuild | sits beside `D-119`; **owner** schedules it |
@@ -569,8 +569,11 @@ deploys it proves only that the SHA is an ancestor of `origin/main`. Nothing in 
 process rule (`AGENTS.md` §6, `MAIN_AUTODEPLOY_POLICY.md`), not a mechanism.
 
 **Check:** `grep -c 'make gate' .github/workflows/deploy-auto.yml` → `0`.
-**Needs:** an owner decision — bind deployment to gate evidence, or record the process rule as
-the accepted control.
+**Decision:** R-73 accepts `AGENTS.md` §6 and `MAIN_AUTODEPLOY_POLICY.md`
+as the process control: only the integrator pushes `main` after literal
+`GATE OK` on the exact clean candidate and a separate direct owner instruction.
+The workflow still does not attest the gate. `W52-INT-CLOSE` owns the
+accepted-risk closure and its current-tree check; D-120 remains open here.
 
 
 ### D-119 — reproducible again is not maintained: MinIO needs a security/lifecycle decision

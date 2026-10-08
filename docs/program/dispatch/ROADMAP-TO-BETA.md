@@ -6,7 +6,7 @@ entry is amended in `W52-PLAN.md`: W51 implementation is closed, while
 D-137–D-140 defer QA, live/manual checks and complete gates. This roadmap
 remains a planning and owner-answer source; its release rows are targets, not
 claims that a wave was frozen, validated, tagged or deployed. `W52-RULE-01`
-and `W52-FREEZE-01` are still required before W52 dispatch.
+has recorded R-71…R-74; `W52-FREEZE-01` is still required before W52 dispatch.
 
 **Status:** revision 3, 2026-10-06 (§10.10–§10.13 added; §6.2 restated after costing W53–W55). Revision 1 (2026-10-05, `83fb7e6`) was a proposal; the owner
 then answered an eight-round poll (§10), and this revision is rebuilt on those answers.
@@ -208,8 +208,8 @@ critical path only while those windows come.
 | A2 | No idle hand-offs: next block planned while the current one executes; freeze at close; owner decisions asked one block ahead in packs | **adopted** | overhead 1.8 → 1.2 |
 | A3 | Risk-tiered judging: two cross-judges only for contract, migration, security, data custody; one judge otherwise; section profiles judged by the evaluation harness | **adopted** | 2–4 h per wave |
 | A4 | Plan judging capped at two rounds, plus a pin-sweep tool deriving `allowed_paths` grants from the fact a task changes | **adopted** | ≈ 1 day per block plan |
-| A5 | Fact registry: one generated file for surface triple, migration head, error count; guards and live prose read it | **adopted** as polled; **implementation pending `W52-RULE-01` confirmation:** the file is hand-written (a generated one would be a tautology under `CONTRACT_PIN_REGISTRY.md`) and live prose does not read it (`W52-PLAN.md` §3.6) | a reseal touches 1 file, not ~27 |
-| A6 | Faster gate: parallel battery (per-worker database and bucket), impacted-test selection for lane gates; full gate on the merged candidate | **adopted**; **W52 delivers only the serial half** (template database, no duplicate foundation run, hazards removed) pending `W52-RULE-01` confirmation; `pytest-xdist` and impacted selection follow if the ≤ 6 min target is missed | 13 → ≈ 5 min per gate |
+| A5 | Fact registry: one generated file for surface triple, migration head, error count; guards and live prose read it | **W52 deviation confirmed in R-74:** the file is hand-written (a generated one would be a tautology under `CONTRACT_PIN_REGISTRY.md`) and live prose does not read it (`W52-PLAN.md` §3.6) | a reseal touches 1 file, not ~27 |
+| A6 | Faster gate: parallel battery (per-worker database and bucket), impacted-test selection for lane gates; full gate on the merged candidate | **W52 serial half confirmed in R-74:** template database, no duplicate foundation run, hazards removed; no `pytest-xdist` in W52. R-70's diff-derived light acceptance remains. A later measurement determines whether to add parallelism. | 13 → ≈ 5 min per gate |
 | A7 | Milestone deployment (`main`, live acceptance and tag per milestone) | **not adopted** — per-wave `main` on owner instruction stays | — |
 | A8 | Legacy discipline profiles ported as reviewed input data, gated by evaluation | **adopted** — relaxes "not a wholesale port" for profiles only | ≈ half of each section lane |
 | A9 | Evaluation harness (precision/recall per category) as a gate | **adopted** (tools) | finite АР iteration |
@@ -423,7 +423,7 @@ bundled file with database storage as the owner asked.
 | 3 | W56 | D-3.1 answered by F-7 (one real set, not anonymised; anonymisation registered); D-3.3 answered by G-2 and G-4 (portal bundles, 500 pages / 250 MiB); D-3.4 answered by H-5 for now (no regression; beta thresholds at W58); **open:** D-3.2 named experts with slots (`OD-18`, before W58); the drawing-analysis budget and the W56b poll pack (after the W54 vision probe, G-3) |
 | 4 | W58 | D-4.1 beta users internal or external (with NORM-Q04, `U-04`, SMTP) |
 | — | W57 | **answered** by I-1…I-12 (§10.15); run-time query embedding on the stand is not needed for W57 (I-2) — D-2.4's stand-capacity question stays open only for semantic retrieval from document text, which no wave plans |
-| — | W52 freeze | recording of §10.1–§10.8 as rulings; the P-11 amendment (A-6) reaching `W50-PLAN.md` before W50 freezes |
+| — | W52 freeze | R-71…R-74 recorded by `W52-RULE-01`; W50 already absorbed the P-11 navigation amendment (A-6). Current-tree grant and pin sweep remain for `W52-FREEZE-01`. |
 
 ### 10.10 Second poll (2026-10-06): W52 and pack 2
 

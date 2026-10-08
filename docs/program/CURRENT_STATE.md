@@ -60,6 +60,9 @@
 > with child-process execution permitted. This supersedes the older red
 > frontend diagnostic as a current observation, but supplies no full gate,
 > independent QA or live/manual acceptance; D-137–D-140 remain open.
+> `W52-RULE-01` records the owner's three direct confirmations as R-71…R-74.
+> W52 still awaits `W52-FREEZE-01` before any new lane is dispatchable;
+> development rulings do not supply release validation or `origin/main` authority.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
