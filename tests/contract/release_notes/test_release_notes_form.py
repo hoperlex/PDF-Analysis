@@ -5,11 +5,11 @@ from __future__ import annotations
 import copy
 import json
 import re
+import subprocess
 from datetime import date
 from pathlib import Path
 from typing import Any
 
-import jsonschema
 import pytest
 
 from auditmanager.releases.versioning import canonical_semver_sort_key
@@ -17,6 +17,7 @@ from auditmanager.releases.versioning import canonical_semver_sort_key
 
 ROOT = Path(__file__).resolve().parents[3]
 NOTES = ROOT / "release-notes"
+GOVERNANCE_PYTHON = ROOT / ".venv" / "bootstrap" / "bin" / "python"
 KINDS = {"new": 0, "improved": 1, "fixed": 2}
 CODE_TRACES = {
     "snake_case": re.compile(r"(?<!\w)[A-Za-zА-Яа-я0-9]+_[A-Za-zА-Яа-я0-9]+(?!\w)"),
@@ -24,6 +25,32 @@ CODE_TRACES = {
     "file_extension": re.compile(r"(?<!\w)[\w-]+\.[A-Za-z][A-Za-z0-9]{1,7}\b"),
     "api_path": re.compile(r"/api/", re.I),
 }
+
+SHAPE_CHECK = """
+import json
+import sys
+from jsonschema import Draft202012Validator, FormatChecker
+
+payload = json.load(sys.stdin)
+schema = payload["schema"]
+Draft202012Validator.check_schema(schema)
+errors = list(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(payload["entry"]))
+raise SystemExit(10 if errors else 0)
+"""
+
+
+def _shape_valid(schema: dict[str, Any], entry: dict[str, Any], *, python: Path = GOVERNANCE_PYTHON) -> bool:
+    """Use the pinned governance interpreter; runtime Python has no jsonschema."""
+    result = subprocess.run(
+        [str(python), "-c", SHAPE_CHECK],
+        input=json.dumps({"schema": schema, "entry": entry}, ensure_ascii=False),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode not in {0, 10}:
+        raise AssertionError(f"governance schema validator failed: {result.stderr.strip()}")
+    return result.returncode == 0
 
 
 def _read_entries() -> list[tuple[str, dict[str, Any]]]:
@@ -111,9 +138,8 @@ def form_failures(
 def test_authored_shape_and_form() -> None:
     entries = _read_entries()
     schema = json.loads((NOTES / "schema.json").read_text(encoding="utf-8"))
-    validator = jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker())
     for _, entry in entries:
-        validator.validate(entry)
+        assert _shape_valid(schema, entry)
         assert entry["revision"] == 2
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
     assert [entry["version"] for _, entry in entries] == ["0.3.0", "0.2.0"]
@@ -189,5 +215,11 @@ def test_sealed_shape_rejects_unknown_fields() -> None:
     schema = json.loads((NOTES / "schema.json").read_text(encoding="utf-8"))
     entry = copy.deepcopy(_read_entries()[0][1])
     entry["unexpected"] = "not in the sealed shape"
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.Draft202012Validator(schema).validate(entry)
+    assert not _shape_valid(schema, entry)
+
+
+def test_missing_governance_interpreter_refuses(tmp_path: Path) -> None:
+    schema = json.loads((NOTES / "schema.json").read_text(encoding="utf-8"))
+    entry = _read_entries()[0][1]
+    with pytest.raises(FileNotFoundError):
+        _shape_valid(schema, entry, python=tmp_path / "missing-python")
