@@ -74,6 +74,11 @@ semantics, and deployment runs it after migration before starting the API.
   `infra/deploy/deploy.sh`, `infra/deploy/reset.sh`,
   `infra/deploy/README.md` — release service, copies and directly affected prose
 - `tests/integration/releases/**`
+- `tests/integration/api/test_release_routes.py` — replace its Stage-B
+  placeholder-adapter assertion with the Stage-C served adapter check;
+  added by the exclusive integrator after the existing test was found to
+  instantiate the Stage-B zero-argument placeholder
+- `docs/program/tasks/W52-RELEASES-API.md` — this narrow grant correction only
 - `tests/integration/composition/test_deploy_script_refusals.py`,
   `tests/integration/composition/test_deploy_image_identity.py`,
   `tests/integration/composition/test_deployed_stack_probe.py`,

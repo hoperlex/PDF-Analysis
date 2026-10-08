@@ -594,6 +594,9 @@ class TestItReadsTheRealDockerfiles:
             "contracts/",
             "fixtures/recorded/",
             "docs/program/P02_LOCK.json",
+            "VERSION",
+            "release-notes/",
+            "uv.lock",
             "infra/deploy/serve.py",
         }, copied
 

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.api.schemas.models import ProductVersion, ReleaseList
 from auditmanager.bootstrap.adapters import ReleasesAdapter
+from auditmanager.releases.public import ReleaseRepository
 
 from .identity_surface import credential_for, identity_surface, make_account
 
@@ -66,7 +67,7 @@ def test_admin_without_expert_reads_release_surface_and_marks_only_itself(
     assert releases.mark == (admin, "0.3.0")
 
 
-def test_stage_b_wiring_refuses_to_invent_release_data(
+def test_stage_c_adapter_serves_the_running_version_and_visible_history(
     session: Session, session_factory: sessionmaker[Session]
 ) -> None:
     account = make_account(
@@ -75,7 +76,23 @@ def test_stage_b_wiring_refuses_to_invent_release_data(
         names=("Читателева", "Анна", None),
         roles=(),
     )
-    surface = identity_surface(session_factory, releases=ReleasesAdapter())
-    answer = surface.send("GET", "/releases", credential=credential_for(session, account))
-    assert answer.status == 503
-    assert json.loads(answer.body)["error_code"] == "dependency_unavailable"
+    adapter = ReleasesAdapter(
+        ReleaseRepository(session_factory, product_version="0.3.0"),
+        product_version="0.3.0",
+        build_id="b0123456789abcdef",
+    )
+    surface = identity_surface(session_factory, releases=adapter)
+    credential = credential_for(session, account)
+    version = surface.send("GET", "/system/version", credential=credential)
+    assert version.status == 200
+    assert json.loads(version.body)["product_version"] == "0.3.0"
+    answer = surface.send("GET", "/releases", credential=credential)
+    assert answer.status == 200
+    body = json.loads(answer.body)
+    assert body["whats_new"] == [], "a newly created account has no historical What's New"
+    assert [item["version"] for item in body["items"]] in (
+        [], ["0.3.0", "0.2.0"]
+    ), "the lane DB may be before or after the one-shot loader"
+    if body["items"]:
+        assert body["items"][-1]["is_archive"] is True
+        assert body["items"][0]["range_label"] is None

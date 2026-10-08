@@ -41,7 +41,9 @@ from auditmanager.api.schemas.findings import (
 )
 from auditmanager.api.schemas.projects import ProjectView
 from auditmanager.api.schemas.registrations import RegistrationListingView, RegistrationView
-from auditmanager.api.schemas.models import ProductVersion, ReleaseList
+from auditmanager.api.schemas.models import (
+    ProductVersion, ReleaseEntry, ReleaseList, ReleaseNoteItem,
+)
 from auditmanager.api.schemas.runs import RunStatusView, StageStateView
 from auditmanager.api.security import (
     ROLE_ADMIN,
@@ -52,6 +54,8 @@ from auditmanager.api.security import (
     TokenSigner,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
+from auditmanager.shared.errors import CONTRACT_VERSION
+from auditmanager.releases.public import ReleaseRepository
 
 
 class _SessionHolder:
@@ -76,20 +80,42 @@ class _SessionHolder:
 
 
 class ReleasesAdapter:
-    """Explicit Stage-B port placeholder; Stage C installs the release context.
+    """Transport views over the release context's immutable history and account mark."""
 
-    Every authorized request receives the catalog's dependency refusal. No version,
-    release or read mark is fabricated while VERSION and the loader are absent.
-    """
+    def __init__(
+        self, repository: ReleaseRepository, *, product_version: str, build_id: str
+    ) -> None:
+        self._repository = repository
+        self._product_version = product_version
+        self._build_id = build_id
 
     def get_product_version(self) -> ProductVersion:
-        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE)
+        return ProductVersion(
+            product_version=self._product_version,
+            build_id=self._build_id,
+            contract_version=CONTRACT_VERSION,
+        )
 
     def list_releases(self, *, user_uid: str) -> ReleaseList:
-        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE)
+        listing = self._repository.list_for_account(user_uid)
+        return ReleaseList(
+            items=[
+                ReleaseEntry(
+                    version=item.version,
+                    revision=item.revision,
+                    date=item.released_on.isoformat(),
+                    title=item.title,
+                    is_archive=item.is_archive,
+                    range_label=item.range_label,
+                    items=[ReleaseNoteItem(**note_item) for note_item in item.items],
+                )
+                for item in listing.items
+            ],
+            whats_new=list(listing.whats_new),
+        )
 
     def mark_read(self, *, user_uid: str, read_through: str) -> None:
-        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE)
+        self._repository.mark_read(user_uid=user_uid, read_through=read_through)
 
 
 def _not_found(what: str) -> DomainError:

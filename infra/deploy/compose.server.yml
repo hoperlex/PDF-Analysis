@@ -160,6 +160,23 @@ services:
     command: ["alembic", "--config", "db/migrations/alembic.ini", "upgrade", "head"]
     restart: "no"
 
+  # Apply authored release revisions after schema migration. This one-shot
+  # service must finish before the API can expose the current VERSION.
+  release-notes:
+    build:
+      context: ../..
+      dockerfile: infra/deploy/Dockerfile.api
+    image: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-api
+    networks: [alpha]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is unset.}
+    working_dir: /app
+    command: ["python", "-m", "auditmanager.releases.load"]
+    restart: "no"
+
   api:
     build:
       context: ../..
@@ -175,6 +192,8 @@ services:
       s3-init:
         condition: service_completed_successfully
       migrate:
+        condition: service_completed_successfully
+      release-notes:
         condition: service_completed_successfully
     # Named one by one rather than `env_file: alpha.env`, so this file states exactly what
     # the application reads. The service passwords and the NEXT_PUBLIC_* build values are

@@ -657,7 +657,7 @@ done
 # run where `up` was non-zero: on a good run their containers are `exited/0` and reading
 # them would be a second opinion about a success nobody doubts.
 if [ "$UP_STATUS" -ne 0 ]; then
-    for service in s3-init migrate; do
+    for service in s3-init migrate release-notes; do
         #: `--all`, because a one-shot service's container is not running by the time it
         #: matters. Without it `ps --quiet` prints nothing and the failure reads as absence.
         cid="$(compose ps --all --quiet "$service" 2>/dev/null | head -1 || true)"

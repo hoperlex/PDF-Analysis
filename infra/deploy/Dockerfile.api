@@ -84,6 +84,9 @@ COPY db/ /app/db/
 COPY contracts/ /app/contracts/
 COPY fixtures/recorded/ /app/fixtures/recorded/
 COPY docs/program/P02_LOCK.json /app/docs/program/P02_LOCK.json
+COPY VERSION /app/VERSION
+COPY release-notes/ /app/release-notes/
+COPY uv.lock /app/uv.lock
 COPY infra/deploy/serve.py /app/serve.py
 
 ENV PATH=/app/.venv/bin:$PATH \

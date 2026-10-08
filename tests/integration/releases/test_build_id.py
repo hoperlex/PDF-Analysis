@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import fnmatch
+import subprocess
 from pathlib import Path
 
 import auditmanager
@@ -96,3 +98,45 @@ def test_required_input_absence_fails_closed(
         path.unlink()
     with pytest.raises(FileNotFoundError):
         compute_build_id()
+
+
+def test_no_tracked_build_input_is_hidden_by_dockerignore() -> None:
+    """A clean checkout and /app must hash the same tracked byte set."""
+    root = Path(__file__).resolve().parents[3]
+    selected = subprocess.check_output(
+        [
+            "git", "ls-files", "-z", "--", "src", "db", "contracts",
+            "fixtures/recorded", "release-notes", "VERSION", "uv.lock",
+            "docs/program/P02_LOCK.json",
+        ],
+        cwd=root,
+    ).decode("utf-8").strip("\0").split("\0")
+    # Docker's current ignore patterns are simple path, basename or **/ rules.
+    # Fail on a new syntax rather than silently proving an incomplete match.
+    patterns = [
+        line.strip()
+        for line in (root / ".dockerignore").read_text().splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    assert set(patterns) <= {
+        ".git", ".local", ".venv", "**/node_modules", "web/.next",
+        "**/__pycache__", "**/*.pyc", ".pytest_cache", ".mypy_cache",
+        ".ruff_cache", "*.log", ".env", ".env.*", "!.env.example",
+    }
+    for name in selected:
+        parts = name.split("/")
+        for pattern in patterns:
+            if pattern.startswith("!"):
+                continue
+            if pattern.startswith("**/"):
+                assert not any(
+                    fnmatch.fnmatchcase(part, pattern[3:]) for part in parts
+                ), (name, pattern)
+            elif "/" in pattern:
+                assert not (name == pattern or name.startswith(pattern + "/")), (
+                    name, pattern
+                )
+            else:
+                assert not any(
+                    fnmatch.fnmatchcase(part, pattern) for part in parts
+                ), (name, pattern)

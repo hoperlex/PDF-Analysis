@@ -26,7 +26,7 @@ down`. This is the deployed stack.
 | `Dockerfile.api` | the thirty-seven operations under uvicorn, plus `T-3`'s health plane |
 | `Dockerfile.web` | `npm run build`, then `next start` |
 | `serve.py` | the entry point: **one built application, two ports** |
-| `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, api, web, one proxy |
+| `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, release-notes, api, web, one proxy |
 | `proxy/nginx.conf` | `T-2` — the web app at `/`, the API at `/api/v1`, one origin |
 | `proxy/tls-server.conf` | the TLS server block. **nginx never loads it unless a certificate is there** |
 | `proxy/enable-tls.sh` | the switch: the image runs it before nginx starts, and it asks one question |
@@ -67,8 +67,9 @@ docker compose --env-file infra/deploy/env/alpha.env \
   -f infra/deploy/compose.server.yml up -d --build
 ```
 
-`migrate` runs once and exits; `api` waits for it. Migrations are never run by a serving
-process — two replicas starting together would race the same upgrade.
+`migrate` runs once and exits; `release-notes` then loads authored revisions
+and exits; `api` waits for both. Migrations and release loading are never run
+by a serving process — two replicas starting together would race the same work.
 
 ### Normative corpus in this alpha candidate
 
@@ -278,6 +279,11 @@ time, both image IDs are identical, and **all seven container IDs are identical*
 `Recreated` for nothing. The one residue: `migrate` and `s3-init` are *started again* in
 place, keeping their container IDs; `alembic upgrade head` against a database already at head
 applies nothing, and `migrations-at-head` proves it afterwards.
+
+Since W52, `release-notes` is a third one-shot service after `migrate`.
+An unchanged entry is checked by its canonical content hash and left as one
+stored revision on repeat deployment; a changed entry needs an authored
+revision bump. The historical seven-container measurement above predates it.
 
 `W23-DEPLOY` measured `api`, `web` and `migrate` being recreated and `D-36` recorded it. **The
 cause that row names is wrong**, and `W24-IDEM` measured it: two consecutive fully cached

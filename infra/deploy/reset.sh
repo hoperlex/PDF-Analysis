@@ -258,6 +258,20 @@ if [ -n "$RESTORE" ]; then
     compose exec -T postgres pg_restore --clean --if-exists --no-owner \
         --username "$CONFIGURED_USER" --dbname "$DATABASE" < "$RESTORE/database.dump"
 
+    # A restored database can predate the image's release tables. Bring it to
+    # this image's head, then append authored notes. A completed restore is
+    # reported, never reversed, if this follow-up cannot complete.
+    RESTORE_MIGRATE_STATUS=0
+    compose run --rm migrate || RESTORE_MIGRATE_STATUS=$?
+    RESTORE_NOTES_STATUS=0
+    if [ "$RESTORE_MIGRATE_STATUS" -eq 0 ]; then
+        compose run --rm --no-deps release-notes || RESTORE_NOTES_STATUS=$?
+    fi
+    if [ "$RESTORE_MIGRATE_STATUS" -ne 0 ] || [ "$RESTORE_NOTES_STATUS" -ne 0 ]; then
+        echo "reset.sh: !! restored rows, but migration or release-note load needs operator review."
+        echo "reset.sh: !! migrate=$RESTORE_MIGRATE_STATUS release-notes=$RESTORE_NOTES_STATUS"
+    fi
+
     # --- `R-52`: A RESTORE ROLLS CREDENTIAL STATE BACK, SO THE RESTORE TAKES IT AWAY AGAIN
     #
     # `pg_dump` here is the whole database with no `--exclude-table` and the line above is
@@ -639,6 +653,8 @@ compose exec -T postgres psql --quiet --username "$CONFIGURED_USER" --dbname "$D
 
 echo "reset.sh: re-running migrations to head"
 compose run --rm migrate >/dev/null
+echo "reset.sh: re-loading release notes"
+compose run --rm --no-deps release-notes >/dev/null
 
 echo "reset.sh: purging and re-initialising bucket $BUCKET"
 mc_run s3-init -c "$MC_ALIAS; mc --quiet rm --recursive --force \"local/$BUCKET\" >/dev/null 2>&1 || true" >/dev/null

@@ -104,7 +104,9 @@ def test_the_block_split_finds_the_services_this_stack_has() -> None:
     is the shape `OPERATING_CONSTRAINTS.md` §12 names, and the reason this case exists.
     """
     blocks = _service_blocks(COMPOSE.read_text(encoding="utf-8"))
-    assert set(blocks) == {"postgres", "s3", "s3-init", "migrate", "api", "web", "proxy"}
+    assert set(blocks) == {
+        "postgres", "s3", "s3-init", "migrate", "release-notes", "api", "web", "proxy"
+    }
     # And the mount reader finds a mount this stack has had since wave 14, so "no mounts
     # anywhere" cannot pass for "only the web service mounts it".
     assert _mounts(blocks["postgres"]) == ["postgres-data"]

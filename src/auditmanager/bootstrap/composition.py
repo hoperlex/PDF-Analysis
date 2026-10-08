@@ -38,6 +38,9 @@ from auditmanager.bootstrap.adapters import (
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.runs import ThreadCarrier
+from auditmanager.releases.public import (
+    ReleaseRepository, compute_build_id, read_product_version,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +88,13 @@ def build_application(
         DatabaseSettings(url=parse_database_url(resolved.database_url))
     )
     sessions = create_session_factory(engine)
+
+    try:
+        product_version = read_product_version()
+        build_id = compute_build_id()
+    except (FileNotFoundError, ValueError) as exc:
+        raise ConfigurationError(f"release version or build inputs are invalid: {exc}") from exc
+    release_repository = ReleaseRepository(sessions, product_version=product_version)
 
     store = S3BlobStore(
         S3StorageSettings(
@@ -171,7 +181,9 @@ def build_application(
         registrations=RegistrationAdapter(
             sessions, registrations=RegistrationAccessRepository()
         ),
-        releases=ReleasesAdapter(),
+        releases=ReleasesAdapter(
+            release_repository, product_version=product_version, build_id=build_id
+        ),
     )
     return Application(
         router=router,
