@@ -30,6 +30,7 @@ import { HOME_SCREEN, SIGN_IN_SCREEN, getInstanceLabel } from '@/shared/config';
 
 import { AccountMenu } from './account-menu';
 import { FrameNavigation } from './frame-navigation';
+import { ReleaseNoticesGate } from './release-notices';
 import { buildNavigation } from './navigation';
 import { ThemeToggle } from './theme-toggle';
 import styles from './app-frame.module.css';
@@ -111,6 +112,7 @@ export function AppFrame({ children, session }: AppFrameProps) {
         </div>
       </header>
       <main className="am-app__main">{children}</main>
+      {session !== null && session.profileComplete && !session.isDefaultCredential ? <ReleaseNoticesGate /> : null}
       <footer className="am-app__footer">{FRAME_FOOTER}</footer>
     </div>
   );

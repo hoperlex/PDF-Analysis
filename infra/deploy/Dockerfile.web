@@ -32,7 +32,9 @@ ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL \
     NEXT_TELEMETRY_DISABLED=1
 # The build is the type gate too: `next.config.mjs` sets `ignoreBuildErrors: false`, so a
 # type error is a failed image rather than a shipped one.
-RUN npm run build
+# Hash exactly the web inputs and public build arguments before this existing
+# build command. The result is inlined into both client and server bundles.
+RUN set -eu; build_id="$(node -e 'const fs=require("node:fs"),crypto=require("node:crypto"),paths=[];function walk(name){const entry=fs.statSync(name);if(entry.isDirectory())for(const child of fs.readdirSync(name).sort())walk(`${name}/${child}`);else if(entry.isFile())paths.push(name)}for(const root of ["src","package-lock.json","next.config.mjs","tsconfig.json"])walk(root);if(fs.existsSync("public"))walk("public");const hash=crypto.createHash("sha256");for(const name of paths.sort()){const digest=crypto.createHash("sha256").update(fs.readFileSync(name)).digest("hex");hash.update(`${name}\t${digest}\n`)}for(const name of ["NEXT_PUBLIC_API_BASE_URL","NEXT_PUBLIC_INSTANCE_LABEL"])hash.update(`${name}\t${process.env[name]??""}\n`);process.stdout.write(`w${hash.digest("hex").slice(0,16)}`)')"; NEXT_PUBLIC_WEB_BUILD_ID="$build_id" npm run build
 
 FROM node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e
 

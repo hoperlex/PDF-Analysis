@@ -1,0 +1,36 @@
+.banner {
+  position: fixed;
+  z-index: 80;
+  inset: auto 1rem 1rem auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .65rem;
+  max-width: min(32rem, calc(100vw - 2rem));
+  padding: .8rem;
+  border: 1px solid var(--am-line);
+  border-radius: .5rem;
+  color: var(--am-ink);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-3);
+}
+
+.whatsNew {
+  position: fixed;
+  z-index: 79;
+  inset: auto auto 1rem 1rem;
+  box-sizing: border-box;
+  width: min(28rem, calc(100vw - 2rem));
+  max-height: min(70dvh, 40rem);
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 1rem;
+  border: 1px solid var(--am-line);
+  border-radius: .5rem;
+  color: var(--am-ink);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-3);
+}
+
+.whatsNew h2 { margin-top: 0; }
+.markFault { position: fixed; z-index: 80; inset: auto 1rem 6rem auto; color: var(--am-failed); }

@@ -6,7 +6,7 @@
  * gets reintroduced.
  */
 
-export { MissingConfigurationError, getApiBaseUrl, getInstanceLabel, hasApiBaseUrl } from './env';
+export { MissingConfigurationError, getApiBaseUrl, getInstanceLabel, getWebBuildId, hasApiBaseUrl } from './env';
 export { RUN_POLLING, pollDelayMs } from './polling';
 
 // `W50-PLAN.md` §3.1: the only list of screens, and the one validator for `next`/`from`.

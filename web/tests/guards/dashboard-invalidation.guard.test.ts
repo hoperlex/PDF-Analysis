@@ -163,6 +163,7 @@ function importedBindings(source: string): ReadonlyArray<{
 const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/edit-profile/model/use-edit-profile.ts': false,
   'src/features/manage-user/model/use-manage-user.ts': false,
+  'src/features/mark-release-notes-read/model/use-mark-release-notes-read.ts': false,
   'src/features/decide-registration/model/use-decide-registration.ts': false,
   'src/features/append-comment/model/use-append-comment.ts': true,
   'src/features/create-project/model/use-create-project.ts': true,

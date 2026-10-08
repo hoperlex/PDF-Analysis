@@ -296,9 +296,11 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.users.list(filters?)` | `['users','list',filters]` | `W51` |
 | `queryKeys.users.detail(userUid)` | `['users','detail',uid]` | `W51` |
 | `queryKeys.registrations.list(filters?)` | `['registrations','list',filters]` | `W51`, `W50-HOME-01` |
+| `queryKeys.releases.list()` | `['releases','list']` | `W52-RELEASES-WEB` |
+| `queryKeys.releases.version()` | `['releases','version']` | `W52-RELEASES-WEB` |
 
-`projects`, `versions`, `runs`, `findings`, `dashboard`, `account`, `users`, `registrations` are
-the only legal first segments. The last three entered together in `W50-REGISTRY-01`: `account`
+`projects`, `versions`, `runs`, `findings`, `dashboard`, `account`, `users`, `registrations`,
+`releases` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
 is the signed-in account (`getMe`), `users` the administrator's view of the accounts, and
 `registrations` the requests awaiting or past a decision. A later lane adds key factories inside
 them and no new root.

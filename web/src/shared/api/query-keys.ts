@@ -6,7 +6,7 @@
  * owner, and `web/docs/PC01_UI_SEAM.md` records which Gate B session uses which.
  *
  * Rules:
- *   - every key starts with one of the eight root namespaces below;
+ *   - every key starts with one of the nine root namespaces below;
  *   - a key is built by calling a function here, never by writing an array literal;
  *   - invalidation targets a prefix — `queryKeys.runs.all()` invalidates every run key;
  *   - a key filled by more than one site carries its value type, as a `DataTag`. See
@@ -50,7 +50,7 @@ import type {
 } from './generated/types.gen';
 
 /**
- * The eight root namespaces. Nothing else is a legal first key segment.
+ * The nine root namespaces. Nothing else is a legal first key segment.
  *
  * `account`, `users` and `registrations` entered together, once, in `W50-REGISTRY-01`
  * (`W50-PLAN.md` §3.6): the signed-in account, the administrator's account list and the
@@ -65,6 +65,7 @@ export const QUERY_NAMESPACES = [
   'account',
   'users',
   'registrations',
+  'releases',
 ] as const;
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
@@ -100,6 +101,11 @@ export interface FindingListFilters {
 }
 
 export const queryKeys = {
+  releases: {
+    all: () => ['releases'] as const,
+    list: () => ['releases', 'list'] as const,
+    version: () => ['releases', 'version'] as const,
+  },
   projects: {
     all: () => ['projects'] as const,
     list: (cursor?: string, limit?: number) => ['projects', 'list', { cursor, limit }] as const,

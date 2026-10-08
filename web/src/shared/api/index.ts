@@ -88,3 +88,5 @@ export { QUERY_NAMESPACES, queryKeys } from './query-keys';
 
 export type { CsvColumn } from './csv-columns';
 export { CSV_COLUMNS, CSV_ENCODING, csvFileName } from './csv-columns';
+
+export { VersionCheckError, checkWebVersion, shouldShowUpdate } from './version-check';

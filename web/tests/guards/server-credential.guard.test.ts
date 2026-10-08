@@ -70,12 +70,12 @@ describe('the credential is out of the browser bundle by construction', () => {
     ).toEqual([]);
   });
 
-  it('keeps the two NEXT_PUBLIC_ names the web tier is allowed to have', () => {
+  it('keeps the three NEXT_PUBLIC_ names the web tier is allowed to have', () => {
     const names = new Set<string>();
     for (const file of sources) {
       for (const match of file.text.match(/NEXT_PUBLIC_[A-Z0-9_]+/g) ?? []) names.add(match);
     }
-    expect([...names].sort()).toEqual(['NEXT_PUBLIC_API_BASE_URL', 'NEXT_PUBLIC_INSTANCE_LABEL']);
+    expect([...names].sort()).toEqual(['NEXT_PUBLIC_API_BASE_URL', 'NEXT_PUBLIC_INSTANCE_LABEL', 'NEXT_PUBLIC_WEB_BUILD_ID']);
   });
 
   it('is imported by exactly the BFF route handler and nothing else', () => {

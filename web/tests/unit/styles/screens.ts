@@ -23,6 +23,7 @@ import { VersionDetailPage } from '@/_pages/version-detail';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { AppFrame } from '@/_app';
 import { accountMenuProps } from '@/_app/account-menu';
+import { MarkFaultView, UpdateBannerView, WhatsNewView } from '@/_app/release-notices';
 import { FrameNavigationView } from '@/_app/frame-navigation';
 import { buildNavigation } from '@/_app/navigation';
 import { ChangePasswordPage } from '@/_pages/change-password';
@@ -30,6 +31,7 @@ import { SignInPage } from '@/_pages/sign-in';
 import { ManageUserControls } from '@/features/manage-user';
 import { UserList } from '@/widgets/user-list';
 import { RegistrationQueue } from '@/widgets/registration-queue';
+import { VersionHistoryView } from '@/widgets/version-history';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
@@ -285,6 +287,45 @@ export function screens(): Screen[] {
           menuId: 'seed-frame-account-menu',
         }),
       ),
+    );
+    add(
+      'Release history, loading',
+      render(createElement(VersionHistoryView, {
+        version: null, listing: null, loading: true, error: null,
+        onClose: () => undefined, onRetry: () => undefined,
+      })),
+    );
+    add(
+      'Web update banner',
+      render(createElement(UpdateBannerView, { onUpdate: () => undefined, onLater: () => undefined })),
+    );
+    add('Release-note read fault', render(createElement(MarkFaultView)));
+    add(
+      'Whats New dialog',
+      render(createElement(WhatsNewView, {
+        newest: '0.3.0', onClose: () => undefined,
+        listing: { whats_new: ['0.3.0'], items: [{
+          version: '0.3.0', revision: 1, date: '2026-10-08', title: 'Новые возможности',
+          is_archive: false, range_label: null,
+          items: [{ kind: 'new', screen: 'home', where: 'Работа › Главная', text: 'Открыта история версий.' }],
+        }] },
+      })),
+    );
+    add(
+      'Release history, long item at narrow width',
+      render(createElement(VersionHistoryView, {
+        version: '0.3.0', loading: false, error: null,
+        listing: { whats_new: [], items: [{
+          version: '0.3.0', revision: 1, date: '2026-10-08', title: 'История улучшений',
+          is_archive: false, range_label: null,
+          items: [{ kind: 'improved', screen: 'home', where: 'Работа › Главная', text: 'Д'.repeat(400) }],
+        }, {
+          version: '0.2.0', revision: 1, date: '2026-10-01', title: 'Ранние изменения',
+          is_archive: true, range_label: '0.1–0.2',
+          items: [{ kind: 'fixed', screen: 'home', where: 'Работа › Главная', text: 'Исправлен вход.' }],
+        }] },
+        onClose: () => undefined, onRetry: () => undefined,
+      })),
     );
     for (const pathname of ['/', '/blocks']) {
       add(

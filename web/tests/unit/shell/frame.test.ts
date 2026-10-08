@@ -115,7 +115,8 @@ describe('the account menu', () => {
       `<form class="am-menu__form" action="${SESSION_CLOSE_PATH}" method="post"><button type="submit" class="am-menu__item" role="menuitem" tabindex="-1">Выйти</button></form>`,
     );
     expect(markup).not.toMatch(/<a\b[^>]*>Выйти<\/a>/);
-    expect(accountMenuProps(EXPERT).items.map((item) => item.kind)).toEqual(['link', 'link', 'submit']);
+    expect(markup).toContain('>История версий</button>');
+    expect(accountMenuProps(EXPERT).items.map((item) => item.kind)).toEqual(['link', 'link', 'action', 'submit']);
   });
 
   it('is there for a default credential and an incomplete profile, which see no navigation', () => {

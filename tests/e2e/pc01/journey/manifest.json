@@ -140,7 +140,9 @@
           "path": "/registrations",
           "operationId": "listRegistrations",
           "$why_optional": "only a session holding `admin` reads the pending-request count"
-        }
+        },
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "PUT", "path": "/me/release-notes", "operationId": "markReleaseNotesRead", "$why_optional": "only when What’s New is dismissed"}
       ],
       "follow": null
     },
@@ -154,6 +156,9 @@
           "path": "/projects",
           "operationId": "listProjects"
         }
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": {
         "capture": "project_uid",
@@ -171,6 +176,9 @@
           "operationId": "listDocuments"
         }
       ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": {
         "capture": "document_uid",
         "href_pattern": "^/projects/prj_%ID%/documents/(doc_%ID%)$"
@@ -186,6 +194,9 @@
           "path": "/documents/{document_uid}/versions",
           "operationId": "listVersions"
         }
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": {
         "capture": "version_uid",
@@ -207,6 +218,9 @@
           "path": "/versions/{version_uid}",
           "operationId": "getDocumentVersion"
         }
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": {
         "capture": "run_id",
@@ -237,6 +251,9 @@
           "operationId": "listRuns"
         }
       ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -249,6 +266,9 @@
           "path": "/runs/{run_id}",
           "operationId": "getRunStatus"
         }
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": null
     },
@@ -286,7 +306,8 @@
           "path": "/versions/{version_uid}/content",
           "operationId": "streamDocumentVersionContent",
           "$why_optional": "the document pane fetches the PDF only once a finding is open"
-        }
+        },
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": null
     },
@@ -339,7 +360,8 @@
           "path": "/registrations",
           "operationId": "listRegistrations",
           "$why_optional": "only a session holding `admin` reads the pending-request count"
-        }
+        },
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": null
     },
@@ -362,6 +384,9 @@
           "path": "/decisions",
           "operationId": "listDecisions"
         }
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": null
     },
@@ -393,6 +418,9 @@
         "a dead one."
       ],
       "expects_api": [],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -418,6 +446,9 @@
           "operationId": "listProjects"
         }
       ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -432,6 +463,9 @@
         "entry gains operations and the assertion starts carrying weight."
       ],
       "expects_api": [],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -446,6 +480,9 @@
         "entry gains operations and the assertion starts carrying weight."
       ],
       "expects_api": [],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -460,6 +497,9 @@
         "entry gains operations and the assertion starts carrying weight."
       ],
       "expects_api": [],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -490,6 +530,9 @@
           "operationId": "getDashboardSummary"
         }
       ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -503,6 +546,9 @@
         "never the API."
       ],
       "expects_api": [],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -521,6 +567,9 @@
           "operationId": "getMe"
         }
       ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -535,6 +584,9 @@
         "gains operations and the assertion starts carrying weight."
       ],
       "expects_api": [],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -549,6 +601,9 @@
         "gains operations and the assertion starts carrying weight."
       ],
       "expects_api": [],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -563,6 +618,9 @@
         "gains operations and the assertion starts carrying weight."
       ],
       "expects_api": [],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -577,6 +635,9 @@
         "gains operations and the assertion starts carrying weight."
       ],
       "expects_api": [],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -587,6 +648,9 @@
         "The public registration form makes no API call on mount. Submission is a plain HTML POST to the reserved BFF door."
       ],
       "expects_api": [],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -597,6 +661,9 @@
         "Direct visitors see conditional confirmation wording. This screen makes no API call and does not assert a request was submitted."
       ],
       "expects_api": [],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -614,6 +681,9 @@
           "path": "/users",
           "operationId": "listUsers"
         }
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": {
         "capture": "user_uid",
@@ -635,6 +705,9 @@
           "operationId": "getUser"
         }
       ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
       "follow": null
     },
     {
@@ -652,6 +725,9 @@
           "path": "/registrations",
           "operationId": "listRegistrations"
         }
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": null
     }

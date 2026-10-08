@@ -324,6 +324,7 @@ describe('the frame’s menu per kind of visitor', () => {
     expect(items).toEqual([
       ['a', 'Профиль'],
       ['a', 'Сменить пароль'],
+      ['button', 'История версий'],
       ['button', 'Выйти'],
     ]);
     const form = /<form[^>]*>(?=<button type="submit"[^>]*role="menuitem")/.exec(markup)?.[0] ?? '';

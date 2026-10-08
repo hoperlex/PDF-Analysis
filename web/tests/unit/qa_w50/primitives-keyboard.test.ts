@@ -37,8 +37,8 @@ interface MenuWalk {
   readonly prevented: boolean[];
 }
 
-/** The account menu has three items: Профиль, Сменить пароль, Выйти. */
-const ITEMS = 3;
+/** The account menu has four items, including the release-history action. */
+const ITEMS = 4;
 
 function startMenu(): MenuWalk {
   return { state: MENU_CLOSED, focus: 'trigger', prevented: [] };
@@ -85,18 +85,18 @@ describe('Menu: Enter and Space open, the arrows move, Home/End jump, Escape and
 
   it('ArrowDown on the trigger opens on the first item, ArrowUp on the last', () => {
     expect(walkMenu(['ArrowDown']).focus).toBe('item:0');
-    expect(walkMenu(['ArrowUp']).focus).toBe('item:2');
-    expect(walkMenu(['ArrowUp']).state).toEqual({ open: true, active: 2 });
+    expect(walkMenu(['ArrowUp']).focus).toBe('item:3');
+    expect(walkMenu(['ArrowUp']).state).toEqual({ open: true, active: 3 });
   });
 
   it('ArrowDown and ArrowUp walk the items and wrap at both ends', () => {
     const focusAfterEach: Where[] = [];
     let walk = walkMenu(['Enter']);
-    for (const key of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowUp', 'ArrowUp', 'ArrowUp']) {
+    for (const key of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowUp', 'ArrowUp', 'ArrowUp', 'ArrowUp']) {
       walk = press(walk, key);
       focusAfterEach.push(walk.focus);
     }
-    expect(focusAfterEach).toEqual(['item:1', 'item:2', 'item:0', 'item:2', 'item:1', 'item:0']);
+    expect(focusAfterEach).toEqual(['item:1', 'item:2', 'item:3', 'item:0', 'item:3', 'item:2', 'item:1', 'item:0']);
     expect(walk.state.open).toBe(true);
     // Every arrow press is suppressed: an arrow that also scrolled the page would move it.
     expect(walk.prevented.every((value) => value)).toBe(true);
@@ -104,9 +104,9 @@ describe('Menu: Enter and Space open, the arrows move, Home/End jump, Escape and
 
   it('Home jumps to the first item and End to the last, from anywhere', () => {
     const walk = walkMenu(['Enter', 'ArrowDown', 'End']);
-    expect(walk.focus).toBe('item:2');
+    expect(walk.focus).toBe('item:3');
     expect(press(walk, 'Home').focus).toBe('item:0');
-    expect(press(press(walk, 'Home'), 'End').focus).toBe('item:2');
+    expect(press(press(walk, 'Home'), 'End').focus).toBe('item:3');
   });
 
   it('Escape on an item closes the menu and returns focus to the trigger', () => {
@@ -182,6 +182,7 @@ describe('Menu, server-rendered: the attributes the pattern needs before any scr
       items: [
         { kind: 'link', label: 'Профиль', href: '/account' },
         { kind: 'link', label: 'Сменить пароль', href: '/account/password' },
+        { kind: 'action', label: 'История версий' },
         { kind: 'submit', label: 'Выйти', action: '/bff/v1/session/end' },
       ],
     }),
@@ -199,7 +200,7 @@ describe('Menu, server-rendered: the attributes the pattern needs before any scr
 
   it('every item is a menuitem out of the tab order, so Tab leaves the menu instead of walking it', () => {
     const items = [...markup.matchAll(/<(a|button)[^>]*role="menuitem"[^>]*>/g)].map((m) => m[0]);
-    expect(items).toHaveLength(3);
+    expect(items).toHaveLength(4);
     for (const item of items) expect(item).toContain('tabindex="-1"');
   });
 

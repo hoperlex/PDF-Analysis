@@ -1,0 +1,49 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--am-ink) 45%, transparent);
+}
+
+.panel {
+  position: absolute;
+  inset: 0 0 0 auto;
+  box-sizing: border-box;
+  width: min(32rem, 100vw);
+  max-height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1.25rem;
+  color: var(--am-ink);
+  background: var(--am-surface);
+  box-shadow: var(--am-shadow-3);
+}
+
+.heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.heading h2 { margin: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1rem 0; }
+.new { color: var(--am-ok); }
+.improved { color: var(--am-accent); }
+.fixed { color: var(--am-degraded); }
+.feed { display: grid; gap: 1rem; }
+.card { min-width: 0; border-top: 1px solid var(--am-line); padding-top: 1rem; }
+.card h3 { margin: 0; overflow-wrap: anywhere; }
+.meta, .where { color: var(--am-ink-muted); }
+.items { list-style: none; padding: 0; margin: .5rem 0 0; display: grid; gap: .8rem; }
+.item { min-width: 0; overflow-wrap: anywhere; }
+.item p { margin: .15rem 0; }
+.text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.archive { margin-top: 1rem; }
+.archive summary { cursor: pointer; }

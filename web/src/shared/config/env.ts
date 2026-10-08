@@ -60,3 +60,15 @@ export function getInstanceLabel(): string | null {
   const raw = process.env.NEXT_PUBLIC_INSTANCE_LABEL;
   return raw === undefined || raw.trim().length === 0 ? null : raw.trim();
 }
+
+/** The immutable identifier inlined into this web build. Missing is a build fault. */
+export function getWebBuildId(): string {
+  const raw = process.env.NEXT_PUBLIC_WEB_BUILD_ID;
+  if (raw === undefined || raw.trim().length === 0) {
+    throw new MissingConfigurationError(
+      'NEXT_PUBLIC_WEB_BUILD_ID',
+      'Build the web image with its content-derived identifier.',
+    );
+  }
+  return raw.trim();
+}

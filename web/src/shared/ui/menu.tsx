@@ -15,7 +15,7 @@
  *
  * ## Items
  *
- * An item is a link or a form-submit control. `Выйти` must stay a POST to the session's own
+ * An item is a link, local action or form-submit control. `Выйти` must stay a POST to the session's own
  * door — a link that "signed out" would be a GET that changes state — so the submit item is a
  * `<button type="submit">` inside its own `<form method="post">`, and it is the button, not the
  * form, that carries `role="menuitem"`. Every item has `tabindex="-1"`: focus reaches items
@@ -38,6 +38,8 @@ import { MENU_CLOSED, menuTransition } from './menu-state';
 
 export type MenuItem =
   | { readonly kind: 'link'; readonly label: string; readonly href: string }
+  /** A local client action, such as opening a panel. */
+  | { readonly kind: 'action'; readonly label: string; readonly onChoose?: (() => void) | undefined }
   /** A POST to `action`, from a submit control of its own form. */
   | { readonly kind: 'submit'; readonly label: string; readonly action: string };
 
@@ -122,6 +124,18 @@ export function MenuView({
                 >
                   {item.label}
                 </Link>
+              ) : item.kind === 'action' ? (
+                <button
+                  type="button"
+                  className="am-menu__item"
+                  role="menuitem"
+                  tabIndex={-1}
+                  ref={bindings?.itemRef?.(index)}
+                  onFocus={() => bindings?.onItemFocus?.(index)}
+                  onClick={() => { bindings?.onItemChosen?.(); item.onChoose?.(); }}
+                >
+                  {item.label}
+                </button>
               ) : (
                 <form className="am-menu__form" method="post" action={item.action}>
                   <button

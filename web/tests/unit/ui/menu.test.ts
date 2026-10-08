@@ -22,6 +22,7 @@ import type { Element } from '../styles/contrast';
 const ITEMS: readonly [MenuItem, ...MenuItem[]] = [
   { kind: 'link', label: 'Профиль', href: '/account' },
   { kind: 'link', label: 'Сменить пароль', href: '/account/password' },
+  { kind: 'action', label: 'История версий' },
   { kind: 'submit', label: 'Выйти', action: '/bff/v1/session/end' },
 ];
 
@@ -121,11 +122,12 @@ describe('the menu button and its menu', () => {
     expect(elements.some((el) => el.classes.has('am-menu__header'))).toBe(true);
   });
 
-  it('a link item is a link; the submit item is a POST from its own form', () => {
+  it('a link navigates, an action is a button, and sign-out is a POST', () => {
     const items = tree(view(OPEN)).filter((el) => el.attrs.get('role') === 'menuitem');
-    expect(items.map((el) => el.tag)).toEqual(['a', 'a', 'button']);
+    expect(items.map((el) => el.tag)).toEqual(['a', 'a', 'button', 'button']);
     expect(items.slice(0, 2).map((el) => el.attrs.get('href'))).toEqual(['/account', '/account/password']);
-    const signOut = items[2] as Element;
+    expect(items[2]?.attrs.get('type')).toBe('button');
+    const signOut = items[3] as Element;
     expect(signOut.attrs.get('type')).toBe('submit');
     const form = signOut.parent as Element;
     expect([form.tag, form.attrs.get('method'), form.attrs.get('action')]).toEqual([
@@ -217,10 +219,11 @@ describe('menuTransition: opening from the trigger', () => {
 
 describe('menuTransition: moving inside the open menu', () => {
   it('ArrowDown walks forward and wraps from the last item to the first', () => {
-    const steps = run(OPEN, [key('ArrowDown'), key('ArrowDown'), key('ArrowDown')]);
+    const steps = run(OPEN, [key('ArrowDown'), key('ArrowDown'), key('ArrowDown'), key('ArrowDown')]);
     expect(steps.map((s) => s.focus)).toEqual([
       { target: 'item', index: 1 },
       { target: 'item', index: 2 },
+      { target: 'item', index: 3 },
       { target: 'item', index: 0 },
     ]);
     for (const s of steps) expect(s.preventDefault).toBe(true);

@@ -81,6 +81,7 @@ import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-ver
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
 import { AppFrame } from '@/_app';
 import { accountMenuProps } from '@/_app/account-menu';
+import { UpdateBannerView, WhatsNewView } from '@/_app/release-notices';
 import { FrameNavigationView } from '@/_app/frame-navigation';
 import { buildNavigation } from '@/_app/navigation';
 import type { DisclosureProps } from '@/shared/ui';
@@ -94,6 +95,7 @@ import { ManageUserControls } from '@/features/manage-user';
 import type { Account } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
 import { RegistrationQueue } from '@/widgets/registration-queue';
+import { VersionHistoryView } from '@/widgets/version-history';
 import { UserCard } from '@/widgets/user-card';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
@@ -1129,6 +1131,35 @@ function queueLanguageShape(request: RegistrationRequest): Pick<ScreenCase, 'mak
 }
 
 const EXTRA_SHAPES: readonly ScreenCase[] = [
+  {
+    name: 'update-banner',
+    make: () => createElement(UpdateBannerView, { onUpdate: () => undefined, onLater: () => undefined }),
+  },
+  {
+    name: 'whats-new',
+    make: () => createElement(WhatsNewView, {
+      newest: '0.3.0', onClose: () => undefined,
+      listing: { whats_new: ['0.3.0'], items: [{
+        version: '0.3.0', revision: 1, date: '2026-10-08', title: 'Новые возможности',
+        is_archive: false, range_label: null,
+        items: [{ kind: 'new', screen: 'home', where: 'Работа › Главная', text: 'Открыта история версий.' }],
+      }] },
+    }),
+  },
+  {
+    name: 'release-history-loading',
+    make: () => createElement(VersionHistoryView, {
+      version: null, listing: null, loading: true, error: null,
+      onClose: () => undefined, onRetry: () => undefined,
+    }),
+  },
+  {
+    name: 'release-history-empty',
+    make: () => createElement(VersionHistoryView, {
+      version: '0.3.0', listing: { items: [], whats_new: [] }, loading: false, error: null,
+      onClose: () => undefined, onRetry: () => undefined,
+    }),
+  },
   /*
    * `AppFrame` is a SCREEN here, not a wrapper, and that is the repair.
    *

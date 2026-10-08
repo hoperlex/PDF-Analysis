@@ -30,6 +30,7 @@ import {
   MissingConfigurationError,
   getApiBaseUrl,
   getInstanceLabel,
+  getWebBuildId,
   hasApiBaseUrl,
 } from '@/shared/config';
 import { QUERY_NAMESPACES, newIdempotencyKey, queryKeys } from '@/shared/api';
@@ -37,8 +38,10 @@ import { decisionCacheKeys } from '@/entities/expert-decision';
 
 const VARIABLE = 'NEXT_PUBLIC_API_BASE_URL';
 const LABEL_VARIABLE = 'NEXT_PUBLIC_INSTANCE_LABEL';
+const BUILD_VARIABLE = 'NEXT_PUBLIC_WEB_BUILD_ID';
 const ORIGINAL_URL = process.env[VARIABLE];
 const ORIGINAL_LABEL = process.env[LABEL_VARIABLE];
+const ORIGINAL_BUILD = process.env[BUILD_VARIABLE];
 
 function setEnv(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];
@@ -48,6 +51,19 @@ function setEnv(name: string, value: string | undefined): void {
 afterEach(() => {
   setEnv(VARIABLE, ORIGINAL_URL);
   setEnv(LABEL_VARIABLE, ORIGINAL_LABEL);
+  setEnv(BUILD_VARIABLE, ORIGINAL_BUILD);
+});
+
+describe('the web build identifier', () => {
+  it('refuses an absent value instead of inventing one', () => {
+    setEnv(BUILD_VARIABLE, undefined);
+    expect(() => getWebBuildId()).toThrow(MissingConfigurationError);
+  });
+
+  it('returns the exact inlined build value', () => {
+    setEnv(BUILD_VARIABLE, ' w0123456789abcdef ');
+    expect(getWebBuildId()).toBe('w0123456789abcdef');
+  });
 });
 
 // ---------------------------------------------------------------------------------------
@@ -174,7 +190,7 @@ const VERSION_UID = 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const USER_UID = 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 
 describe('every cache key starts in its own namespace', () => {
-  it('declares exactly the eight roots', () => {
+  it('declares exactly the nine roots', () => {
     // `account`, `users` and `registrations` entered once, in `W50-REGISTRY-01`.
     expect([...QUERY_NAMESPACES]).toEqual([
       'projects',
@@ -185,6 +201,7 @@ describe('every cache key starts in its own namespace', () => {
       'account',
       'users',
       'registrations',
+      'releases',
     ]);
   });
 
@@ -202,6 +219,7 @@ describe('every cache key starts in its own namespace', () => {
     expect(queryKeys.users.list()[0]).toBe('users');
     expect(queryKeys.users.detail(USER_UID)[0]).toBe('users');
     expect(queryKeys.registrations.list()[0]).toBe('registrations');
+    expect(queryKeys.releases.list()[0]).toBe('releases');
   });
 
   it('keeps who-am-I apart from who-is-there: account.me is not under users', () => {
