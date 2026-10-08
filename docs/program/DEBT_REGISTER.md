@@ -178,6 +178,12 @@ test and restores its absence at teardown; two local PC-01 tests with a
 teardown probe, 60 governance/prose tests and lint passed. The service-backed
 journey, full-gate JUnit outcome parity and timing remain D-139/D-140.
 
+`W52-INT-SEMVER-PREP-01` adds a pure releases-context SemVer parser and
+bytewise order key with 23 local cases; 60 governance/prose tests, Python
+compilation and lint also passed. W52 SEAL must give its future database
+`sort_key` column C collation and the API loader must consume this public
+function. Database-backed ordering, QA and full gate remain D-139/D-140.
+
 The W52 FACTS branch's optional web typecheck reported two `exactOptionalPropertyTypes` errors
 in `web/src/_pages/account/ui/account-page.tsx` and
 `web/src/_pages/register/ui/register-page.tsx`. The exact same two errors reproduce on the

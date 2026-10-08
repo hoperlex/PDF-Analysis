@@ -39,6 +39,9 @@
 > `W52-INT-GATE-PC01-ENV-01` confines PC-01's recorded provider mode to one
 > test at a time; a local teardown probe and 62 focused tests passed. The
 > service-backed journey and full gate remain D-139/D-140.
+> `W52-INT-SEMVER-PREP-01` adds a pure canonical SemVer order key for the future
+> releases context; 83 focused tests, compilation and lint passed. Its database
+> collation and release consumers await W52 SEAL/API, with QA/gate in D-139/D-140.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
