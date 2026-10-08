@@ -10,8 +10,8 @@
 > and later code-only candidates is open under `D-139` and `D-140`.
 > The independent D-133 proxy-code correction is merged through `3cfc8d9`; its W56 and
 > live-validation halves remain open.
-> D-128 guard corrections F-3…F-6 are merged through `030eba9`; F-1/F-2 and F-7/F-10/F-11
-> remain open with the wider W52 freeze and validation.
+> D-128 guard corrections F-3…F-6 are merged through `030eba9`, and the F-7 presentation
+> correction through `a761e79`; F-1/F-2/F-10/F-11 remain open.
 > The combined implementation passed 148 focused tests and frontend lint; its red
 > rendered-language branch-coverage assertion remains recorded in the lane reports.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
@@ -67,7 +67,9 @@ The proxy-code half of D-133 is merged with local-stub evidence in
 `W52-DEBT-CODE-133.md`; the RunStatus/model-configuration and live-validation halves
 remain open.
 Four D-128 guard blind spots (F-3…F-6) have local basic-test evidence in
-`W52-DEBT-GUARDS-128A.md`; D-128 remains open for its other five findings.
+`W52-DEBT-GUARDS-128A.md`.
+The F-7 run-presentation correction has 136 focused tests and lint in
+`W52-DEBT-CODE-128F7.md`; D-128 now retains four findings.
 
 The old normative-corpus W49 is withdrawn (`R-54`); the corpus stays at migrations `0012`/`0013`
 with no promotion. W49 now means identity, W50 the shell and W51 the screens:

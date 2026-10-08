@@ -33,7 +33,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | D-125 | the corpus loader re-reads files after `snapshot_of` hashed them and does not re-verify | immutable snapshot can carry other bytes |
 | D-126 | a snapshot's `content_key` excludes the segmentation profile | raising the profile version makes `ensure_snapshot` conflict |
 | D-127 | an embedding build counts as complete with a one-character window; its digest includes a private bigint | completeness and digest are weaker than `NORM-VECTOR-01` claims |
-| D-128 | nine `W48-JUDGE-Z` register findings; F-3…F-6 guard code repaired locally, five findings remain | `W52-DEBT-GUARDS-128A`; `reviews/W48-JUDGE-Z.md` |
+| D-128 | nine `W48-JUDGE-Z` register findings; F-3…F-7 code repaired locally, four findings remain | `W52-DEBT-GUARDS-128A`, `W52-DEBT-CODE-128F7`; `reviews/W48-JUDGE-Z.md` |
 | D-129 | the W49 judges' and `W49-FIX`'s register findings: comments, docstrings, a 68-character label, edge assumptions | each with its path:line in the two reviews and `W49-FIX.md` |
 | D-130 | the identity debts `W49-PLAN.md` §3 registers by design | owner-visible limits of the identity model, scheduled with W52 |
 | D-131 | the alpha acceptance journey has no retry for a transient browser network error | one co-tenant Docker bridge event failed a whole run |
@@ -311,11 +311,18 @@ with no retention rule; the administrator knows the temporary password a reset s
 
 ### D-128 — the closure judge's register findings
 
+> **Further narrowed 2026-10-08 by `W52-DEBT-CODE-128F7`, merged at `a761e79`.**
+> F-7 now distinguishes a missing `provider_mode`/`cost_basis` from an unrecognised
+> present value in run progress and stage comparison, without echoing the raw value.
+> Four focused Vitest files passed 136 tests and frontend lint. F-1/F-2/F-10/F-11
+> remain open; QA and full gate remain D-139/D-140.
+>
 > **Narrowed 2026-10-08 by `W52-DEBT-GUARDS-128A`, merged at `030eba9`.** F-3 through
 > F-6 now have local regression probes: main-authority metadata, acceptance-report
 > proof claims, workflow job permissions/host set, and literal dynamic ALR-05 imports.
-> The four focused files passed 47 tests and frontend lint. F-1/F-2/F-7/F-10/F-11 remain
-> open. QA and the full gate remain D-139/D-140; this is not D-128 closure.
+> The four focused files passed 47 tests and frontend lint. At that merge,
+> F-1/F-2/F-7/F-10/F-11 remained open. QA and the full gate remain D-139/D-140;
+> this was not D-128 closure.
 
 **Opened 2026-10-05 by `W48-INT-CLOSE` from `docs/program/reviews/W48-JUDGE-Z.md`.** The judge
 classed nine findings *register*: F-1 `screen-set.guard.test.ts` does not read
