@@ -1,0 +1,5 @@
+"""The releases context's public version-ordering seam."""
+
+from auditmanager.releases.versioning import canonical_semver_sort_key
+
+__all__ = ["canonical_semver_sort_key"]
