@@ -21,8 +21,8 @@ export type UserCommandResult =
 export function refreshManagedUser(queryClient: QueryClient, account: Account): void {
   queryClient.setQueryData(queryKeys.users.detail(account.user_uid), account);
   void queryClient.invalidateQueries({ queryKey: queryKeys.users.all() });
-  const own = queryClient.getQueryData<Account>(queryKeys.account.me());
-  if (own?.user_uid === account.user_uid) {
+  const own = queryClient.getQueryData(queryKeys.account.me());
+  if (own !== null && typeof own === 'object' && 'user_uid' in own && own.user_uid === account.user_uid) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.account.me() });
   }
 }

@@ -37,7 +37,7 @@ export function AccountPage({ profileComplete, next }: AccountPageProps) {
         <Avatar initials={initialsOf(label)} colourKey={account.login} label={`Аватар: ${label}`} />
         <p className="am-note"><strong>{label}</strong></p>
         <p className="am-note">Роли: {roles.length ? roles.join(', ') : 'не назначены'}.</p>
-        <EditProfileForm account={account} next={next} />
+        <EditProfileForm account={account} next={next ?? null} />
         <p className="am-note"><Link href="/account/password">Сменить пароль</Link></p>
       </div>
     </PageShell>

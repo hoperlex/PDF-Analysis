@@ -164,6 +164,10 @@ canonical Python battery 3,245 passed, but two TS2375 errors stopped the fronten
 typecheck. A separate complete Vitest run found seven failures. No `GATE OK`; D-140
 remains open until correction and a new exact-candidate full gate.
 
+`W52-INT-HOTFIX-BACKPORT-01` brought the accepted main hotfix to dev: typecheck,
+72 focused frontend tests and lint pass, including the previously red guards.
+This is a correction, not a new full gate; D-140 remains open.
+
 The W52 FACTS branch's optional web typecheck reported two `exactOptionalPropertyTypes` errors
 in `web/src/_pages/account/ui/account-page.tsx` and
 `web/src/_pages/register/ui/register-page.tsx`. The exact same two errors reproduce on the
@@ -187,6 +191,9 @@ The `e2cfea92` diagnostic in `W52-INT-VALIDATE-01` does not include W51-QA-01,
 independent X/Y review, a built-stand identity journey or human A13–A20 results. Its
 language guard remains red. D-137 stays open.
 
+`W52-INT-HOTFIX-BACKPORT-01` makes the language guard green in a focused run
+without supplying the independent QA, browser or human evidence. D-137 stays open.
+
 ### D-138 — the W51 end-of-wave gate is deferred
 
 **Opened 2026-10-08 by the integrator on the owner's direct instruction.** The combined W51
@@ -199,6 +206,8 @@ literal `GATE OK`. Until then W51 is not gated, tagged or authorized for `origin
 **Check:** `docs/program/W51-INT-CLOSE.md` or its later validation-wave report must name the
 tested SHA, full `make gate` command, log and literal `GATE OK`, with that SHA unchanged for any
 release claim. `W52-INT-VALIDATE-01` recorded a red full gate on `e2cfea92`; D-138 stays open.
+The later `W52-INT-HOTFIX-BACKPORT-01` correction has only focused checks; D-138
+still requires a full gate on its final exact candidate.
 
 ### D-134 — invalid return input appears in escaped Next Flight metadata
 

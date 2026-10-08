@@ -74,6 +74,8 @@ import type {
 } from '@/shared/api';
 import { RUN_STATE_VALUES } from '@/shared/api';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
+import { USER_PAGE_LIMIT } from '@/entities/user';
+import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
@@ -85,11 +87,14 @@ import type { DisclosureProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
 import { SignInPage } from '@/_pages/sign-in';
+import { AccountPage } from '@/_pages/account';
+import { RegisterPage } from '@/_pages/register';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { ManageUserControls } from '@/features/manage-user';
 import type { Account } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
 import { RegistrationQueue } from '@/widgets/registration-queue';
+import { UserCard } from '@/widgets/user-card';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
@@ -703,6 +708,10 @@ const KEYS = {
   // list and the administrator's tile render loaded rather than pending in every state.
   recentProjects: queryKeys.projects.list(undefined, RECENT_PROJECT_LIMIT),
   pendingRegistrations: queryKeys.registrations.list({ status: 'pending', limit: 1 }),
+  account: queryKeys.account.me(),
+  users: queryKeys.users.list({ includeArchived: false, limit: USER_PAGE_LIMIT }),
+  user: queryKeys.users.detail('usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F'),
+  registrations: queryKeys.registrations.list({ limit: REGISTRATION_PAGE_LIMIT, status: 'pending' }),
 } as const;
 
 /**
@@ -783,6 +792,10 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
     page,
   });
   client.setQueryData(KEYS.pendingRegistrations, { items: [], page, pending_total: 2 });
+  client.setQueryData(KEYS.account, ADMIN_USER_ACCOUNT);
+  client.setQueryData(KEYS.users, { items: [ADMIN_USER_ACCOUNT], page });
+  client.setQueryData(KEYS.user, ADMIN_USER_ACCOUNT);
+  client.setQueryData(KEYS.registrations, { items: [QUEUE_REQUEST], page, pending_total: 1 });
   return client;
 }
 
@@ -838,6 +851,10 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.findings, { data: { items: [], page } });
   client.setQueryData(KEYS.decisions, { data: { items: [], page } });
   client.setQueryData(KEYS.journal, { items: [], page });
+  client.setQueryData(KEYS.account, ADMIN_USER_ACCOUNT);
+  client.setQueryData(KEYS.users, { items: [], page });
+  client.setQueryData(KEYS.user, ADMIN_USER_ACCOUNT);
+  client.setQueryData(KEYS.registrations, { items: [], page, pending_total: 0 });
   client.setQueryData(
     KEYS.dashboardSummary,
     dashboardSummary({
@@ -1078,7 +1095,7 @@ const ADMIN_USER_ACCOUNT: Account = {
   middle_name: 'Сергеевна',
   profile_complete: true,
   roles: ['admin', 'expert'],
-  user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
 };
 
 const QUEUE_REQUEST: RegistrationRequest = {
@@ -1105,7 +1122,7 @@ type ScreenCase = {
 function queueLanguageShape(request: RegistrationRequest): Pick<ScreenCase, 'make' | 'seedClient'> {
   return {
     make: () => createElement(RegistrationQueue),
-    seedClient: (client) => client.setQueryData(queryKeys.registrations.list({ status: 'pending', limit: 50 }), {
+    seedClient: (client) => client.setQueryData(KEYS.registrations, {
       items: [request], page: { next_cursor: null }, pending_total: request.status === 'pending' ? 1 : 0,
     }),
   };
@@ -1187,7 +1204,10 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
    * `web/tests/unit/session/sign-in-screen.test.ts`, which renders all four.
    */
   { name: 'sign-in-refused', make: () => createElement(SignInPage, { refusal: 'credentials' }) },
+  { name: 'sign-in-unknown-refusal', make: () => createElement(SignInPage, { unknownRefusal: true }) },
   { name: 'sign-in-open', make: () => createElement(SignInPage, { login: 'проверяющий' }) },
+  { name: 'registration-refused', make: () => createElement(RegisterPage, { refusal: 'validation' }) },
+  { name: 'registration-unknown-refusal', make: () => createElement(RegisterPage, { unknownRefusal: true }) },
   /*
    * The password screen's three OTHER shapes, `R-26`. The signed-out shape is derived,
    * because `/account/password` is an address; these three are selected by props:
@@ -1402,6 +1422,13 @@ export function renderedScreens(): readonly { readonly where: string; readonly m
       out.push({ where: `${screen.name} (${state})`, markup: renderScreen(client, screen.make()) });
     }
   }
+  const badAccount = { ...ADMIN_USER_ACCOUNT, display_label: '' };
+  const accountClient = loadedClient();
+  accountClient.setQueryData(KEYS.account, badAccount);
+  out.push({ where: 'account (invalid data)', markup: renderScreen(accountClient, createElement(AccountPage, { profileComplete: true })) });
+  const userClient = loadedClient();
+  userClient.setQueryData(KEYS.user, badAccount);
+  out.push({ where: 'user-card (invalid data)', markup: renderScreen(userClient, createElement(UserCard, { userUid: badAccount.user_uid })) });
   /*
    * The review screen with its detail and history still in flight, appended once.
    *
@@ -1645,7 +1672,7 @@ describe('the guard renders the screens it claims to render', () => {
     // a vacuity check stops checking. `W30-LISTS` ruled against hard-coded counts two waves
     // ago and this was one of them.
     expect(screens.length).toBe(
-      SCREENS.length * CACHE_STATES.length + 1 + malformedVariants(IDENTITIES).length,
+      SCREENS.length * CACHE_STATES.length + 3 + malformedVariants(IDENTITIES).length,
     );
     // The derived half is non-trivial too: a route walk that returned nothing would leave
     // this file rendering only the shapes below the derivation and still satisfy the
@@ -2134,6 +2161,30 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  * red rather than leaving a stale excuse in place.
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
+  {
+    label: 'Заявка не одобрена',
+    why: 'The approval form sets its local roles failure only after submit with no role selected. One static server render cannot fire that submit handler or seed component useState.',
+  },
+  {
+    label: 'Заявка не отклонена',
+    why: 'The rejection form sets its local reason failure only after submit with an invalid reason. One static server render cannot fire that submit handler or seed component useState.',
+  },
+  {
+    label: 'Изменение не выполнено',
+    why: 'ManageUserControls shows this only after its useMutation observer receives a failed command. A seeded query cache does not set mutation observer state in one static render.',
+  },
+  {
+    label: 'Пароль не сброшен',
+    why: 'ManageUserControls sets the mismatch state only in the password form submit handler. A single static render cannot submit the form or assign this local useState value.',
+  },
+  {
+    label: 'Профиль не сохранён',
+    why: 'EditProfileForm shows this after the profile mutation rejects. A static render can seed query answers but cannot run the submit handler or settle its useMutation observer.',
+  },
+  {
+    label: 'Решение не сохранено',
+    why: 'RegistrationDecisionControls shows this after an approve or reject mutation fails. Its useMutation observer cannot be put into an error state by seeding a query cache.',
+  },
   {
     label: 'Загрузка: новый проект…',
     why:
