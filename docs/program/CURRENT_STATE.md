@@ -55,6 +55,11 @@
 > code-first deferral. The W51 close at `4159d4e` satisfies development
 > lineage only; D-137–D-140 retain release validation. W52 still awaits
 > `W52-RULE-01` and `W52-FREEZE-01` before dispatch.
+> `W52-INT-FRONTEND-BASELINE-01` remeasured the clean `defade8` development
+> tree: frontend typecheck and lint passed, and all 1,712 Vitest tests passed
+> with child-process execution permitted. This supersedes the older red
+> frontend diagnostic as a current observation, but supplies no full gate,
+> independent QA or live/manual acceptance; D-137–D-140 remain open.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers

@@ -170,6 +170,14 @@ remains open until correction and a new exact-candidate full gate.
 72 focused frontend tests and lint pass, including the previously red guards.
 This is a correction, not a new full gate; D-140 remains open.
 
+`W52-INT-FRONTEND-BASELINE-01` remeasured clean `defade8`: frontend
+typecheck and lint passed, and the full Vitest suite passed 1,712 tests in
+109 files with child-process execution permitted. A restricted sandbox run
+had six `eslint`/`tsc` spawn failures (`EPERM` or absent compiler output),
+which the permitted run resolved. This replaces the earlier red frontend
+diagnostic as the current observation, but is not a full `make gate`; D-140
+remains open for literal `GATE OK` on an exact release candidate.
+
 `W52-INT-GATE-PARTITION-01` removed the duplicate foundation selection from
 the later battery; the other 3,216 collected test IDs stayed identical. It
 did not run a new full gate or measure JUnit outcome parity/timing. D-140
