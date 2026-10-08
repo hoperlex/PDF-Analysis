@@ -1,58 +1,60 @@
-# Открытая альфа — ручная приёмка публичного стенда
+# Open alpha — manual acceptance of the public stand
 
-Этот сценарий проверяет пользовательский путь опубликованной альфы: доступ, проект, PDF,
-прогон, находки, решение эксперта, CSV, сравнение, отрицательные загрузки, выход и управление
-учётными записями. Он создаёт
-реальные тестовые записи и запускает анализ на указанном стенде, поэтому используйте только
-разрешённый alpha-origin и синтетические файлы из этого пакета.
+This runbook checks the published alpha's user journey: access, project, PDF, run,
+findings, expert decision, CSV, comparison, rejected uploads, sign-out, and account
+management. It creates real test records and runs analysis on the named stand. Use only
+an authorized alpha origin and the synthetic files in this pack.
 
-Ориентир по времени: 45–70 минут. Логин и пароль вводятся только в браузере. Не передавайте их
-скрипту, не вставляйте в URL, заметки, снимки экрана или DevTools export.
+Allow 45–70 minutes. Enter the login and password only in the browser. Do not pass them
+to a script or put them in a URL, notes, screenshots, or a DevTools export.
 
-## 1. Условия старта и правило веток
+## 1. Starting conditions and branch rule
 
-- Integration-кандидат сначала публикуется как точный SHA в `origin/dev`. Это обычная ветка
-  доставки версии на development-контур.
-- Переход этого SHA в `origin/main` **не является продолжением приёмки по умолчанию**. Он
-  выполняется только по отдельному прямому указанию владельца и строго по
-  `docs/program/MAIN_AUTODEPLOY_POLICY.md`, потому что push/merge в `origin/main` запускает
-  внешнее развёртывание.
-- Для приёмки уже развёрнутой версии оператор передаёт **attested deployed SHA** из отдельного
-  результата deployment workflow и `infra/deploy/verify-deployed.sh`. Он обязан буквально
-  совпасть с проверенным `candidate SHA`, но release-команда лишь записывает это свидетельство:
-  hostname и переданный аргумент не идентифицируют обслуживаемую ревизию. Ветка — канал
-  доставки, SHA — идентичность версии.
-- Есть отдельная учётная запись ревьюера. Начальный пароль уже изменён. Если после первого входа
-  приложение направило на `/account/password`, смените пароль, выйдите и начните сценарий заново:
-  это обязательная защита, а не дефект.
-- Тестировщик имеет право создавать данные и выполнять модельные вызовы на этом стенде.
-- Открыта приватная сессия браузера и DevTools. Размер viewport для проверки переполнения —
+- First publish the integration candidate as an exact SHA in `origin/dev`. This is the
+  normal delivery branch for the development environment.
+- Moving that SHA to `origin/main` **does not follow automatically from acceptance**. It
+  requires a separate direct instruction from the owner and strict adherence to
+  `docs/program/MAIN_AUTODEPLOY_POLICY.md`, because a push or merge to `origin/main`
+  triggers an external deployment.
+- To accept an already deployed version, the operator supplies an **attested deployed
+  SHA** from the separate deployment workflow result and
+  `infra/deploy/verify-deployed.sh`. It must exactly match the checked `candidate SHA`,
+  but the release command only records that attestation: neither a hostname nor a
+  supplied argument identifies the revision actually served. The branch is a delivery
+  channel; the SHA identifies the version.
+- Use a separate reviewer account whose initial password has already been changed.
+  If the first sign-in sends you to `/account/password`, change the password, sign out,
+  and restart this runbook. That is a required safeguard, not a defect.
+- The tester is authorized to create data and make model calls on this stand.
+- Use a private browser session with DevTools open. The viewport for overflow checks is
   **780 × 900**.
-- В отчёт не попадают cookie, bearer token, пароль, полные request headers и несинтетические PDF.
+- Do not put cookies, bearer tokens, passwords, complete request headers, or
+  non-synthetic PDFs in the report.
 
-Создайте уникальный префикс данных, например
-`ALPHA-MANUAL-20261001-1530-<инициалы>`. Не удаляйте и не переименовывайте чужие проекты.
+Choose a unique data prefix such as `ALPHA-MANUAL-20261001-1530-<initials>`.
+Do not delete or rename another person's projects.
 
-## 2. Пакет тестовых PDF
+## 2. Test PDF pack
 
-Все пять файлов синтетические: в них нет реального проекта, заказчика, адреса или персональных
-данных. Канонические файлы находятся в `fixtures/synthetic/ar/`, а переносимый архив — в
-`artifacts/manual-alpha/alpha-test-pdfs.tar.gz`.
+All five files are synthetic: they contain no real project, customer, address, or
+personal data. The canonical files are in `fixtures/synthetic/ar/`; the portable
+archive is `artifacts/manual-alpha/alpha-test-pdfs.tar.gz`.
 
-| Файл | Назначение | Размер | SHA-256 | Ожидание |
+| File | Purpose | Size | SHA-256 | Expected result |
 | --- | --- | ---: | --- | --- |
-| `ar_baseline.pdf` | положительный AR-документ, 8 страниц | 58 978 B | `6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f` | версия создаётся |
-| `encrypted.pdf` | защищённый паролем PDF | 40 514 B | `9513362c5d85dec1438406ffd4e77fef6d08bb18f104a5b107afc610dde8faba` | 422, `not_encrypted` |
-| `image_only.pdf` | две страницы только с изображением | 246 242 B | `8917d48af68cffac071fdf75040d181a548d27d952baa05defbca48a2ca94325` | 422, `every_page_has_extractable_text` |
-| `too_many_pages.pdf` | 31 текстовая страница | 66 487 B | `acb3c347dbfe4b38efbc7e56f4389e97725b529966defa2a39c21e34f74da12a` | 422, `1 <= page_count <= 30` |
-| `oversize.pdf` | валидный PDF размером 26 MiB | 27 303 204 B | `623bf92bbbf989c1d350f9c8038f9dd6379ee1538100374fd230a81812a665ef` | клиентский отказ `too_large`, запрос не отправляется |
+| `ar_baseline.pdf` | valid eight-page AR document | 58 978 B | `6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f` | version created |
+| `encrypted.pdf` | password-protected PDF | 40 514 B | `9513362c5d85dec1438406ffd4e77fef6d08bb18f104a5b107afc610dde8faba` | 422, `not_encrypted` |
+| `image_only.pdf` | two image-only pages | 246 242 B | `8917d48af68cffac071fdf75040d181a548d27d952baa05defbca48a2ca94325` | 422, `every_page_has_extractable_text` |
+| `too_many_pages.pdf` | 31 text pages | 66 487 B | `acb3c347dbfe4b38efbc7e56f4389e97725b529966defa2a39c21e34f74da12a` | 422, `1 <= page_count <= 30` |
+| `oversize.pdf` | valid 26 MiB PDF | 27 303 204 B | `623bf92bbbf989c1d350f9c8038f9dd6379ee1538100374fd230a81812a665ef` | client refusal `too_large`; no request sent |
 
-Пароль `encrypted.pdf` (`synthetic-user-pw`) нужен только для независимой проверки, что файл
-действительно зашифрован. В приложении пароль не вводите: файл должен быть отклонён.
+The password for `encrypted.pdf` (`synthetic-user-pw`) is only for an independent
+check that the file is encrypted. Do not enter it in the application: the file must
+be rejected.
 
-## 3. Автоматический preflight и release-команда
+## 3. Automated preflight and release command
 
-Из корня репозитория:
+From the repository root:
 
 ```bash
 ./scripts/manual-alpha-check.sh \
@@ -60,23 +62,26 @@
   --preflight-only
 ```
 
-Подставьте фактический разрешённый origin, если временный адрес изменился. Скрипт:
+Substitute the actual authorized origin if the temporary address has changed. The
+script:
 
-1. проверяет SHA-256 и размер пяти PDF;
-2. проверяет TLS и ответ корня без сессии (`307/308` на `/login?next=%2F` того же origin);
-3. проверяет доступность `/login` (`200`);
-4. убеждается, что `/api/v1/openapi.json` без сессии отвечает `401`;
-5. сохраняет только безопасное резюме в `.local/manual-alpha/<UTC timestamp>-<pid>/report.md`.
+1. checks the SHA-256 and size of all five PDFs;
+2. checks TLS and the root response without a session (`307/308` to
+   `/login?next=%2F` on the same origin);
+3. checks that `/login` is available (`200`);
+4. confirms that `/api/v1/openapi.json` answers `401` without a session;
+5. saves only a safe summary in `.local/manual-alpha/<UTC timestamp>-<pid>/report.md`.
 
-Нужна строка `PREFLIGHT OK`. Любое иное состояние — `FAIL` либо `BLOCKED`; ручной путь не
-начинайте. Preflight
-не доказывает, какой SHA развёрнут: для этого deployment owner запускает
-`infra/deploy/verify-deployed.sh` на сервере и прикладывает безопасную ссылку на результат.
+Require the literal line `PREFLIGHT OK`. Any other outcome is `FAIL` or `BLOCKED`;
+do not start the manual journey. Preflight does not establish which SHA is deployed.
+The deployment owner runs `infra/deploy/verify-deployed.sh` on the server and
+attaches a safe reference to its result.
 
-После того как deployment owner отдельно получил evidence и засвидетельствовал `deployed SHA`, выполните полный
-автоматизированный контур из **чистого checkout того же candidate SHA**. Значения
-`E2E_PC01_LOGIN` и `E2E_PC01_PASSWORD` должны быть заранее переданы процессу через разрешённый
-секретный канал; команда не принимает их аргументами и не имеет значений по умолчанию.
+After the deployment owner independently obtains evidence and attests the
+`deployed SHA`, run the full automated journey from a **clean checkout of the same
+candidate SHA**. Supply `E2E_PC01_LOGIN` and `E2E_PC01_PASSWORD` to the process in
+advance through an approved secret channel. The command accepts neither as an
+argument and provides no default.
 
 ```bash
 make alpha-acceptance \
@@ -85,22 +90,26 @@ make alpha-acceptance \
   ALPHA_DEPLOYED_SHA=<полный-sha-из-deployment-evidence>
 ```
 
-Команда выполняет preflight, вход через экран приложения, все 3 write-шага PC-01, все cold
-routes из journey manifest при 780 × 900, проверку `provider_mode=live` и все 6 refusal-сценариев. Результат
-сохраняется в `.local/manual-alpha/<UTC timestamp>-<pid>/`: сырые browser envelopes,
-безопасные логи, `report.md` и машинный `automated-verdict.json` схемы
-`w48-alpha-acceptance/v1` с раздельными `candidateSha` и `deployedSha`.
+The command runs preflight, signs in through the application screen, performs all
+three PC-01 write steps, cold-loads every route in the journey manifest at 780 ×
+900, checks `provider_mode=live`, and runs all six refusal scenarios. It stores
+raw browser envelopes, safe logs, `report.md`, and a machine-readable
+`automated-verdict.json` with schema `w48-alpha-acceptance/v1` and separate
+`candidateSha` and `deployedSha` in `.local/manual-alpha/<UTC timestamp>-<pid>/`.
 
-- `ALPHA ACCEPTANCE PASS` — автоматические фазы полны; это **не** подпись A01–A20.
-- `ALPHA ACCEPTANCE FAIL` — наблюдаемое поведение или полнота evidence нарушили контракт.
-- `ALPHA ACCEPTANCE BLOCKED` — нет требуемого доступа/инструмента либо новый run получил
-  типизированный `dependency_unavailable`. Это не `PASS`.
+- `ALPHA ACCEPTANCE PASS` means the automated phases completed. It is **not** a
+  human sign-off for A01–A20.
+- `ALPHA ACCEPTANCE FAIL` means observed behavior or evidence completeness
+  violated the contract.
+- `ALPHA ACCEPTANCE BLOCKED` means required access or a tool is unavailable,
+  or a new run returned typed `dependency_unavailable`. This is not `PASS`.
 
-`make alpha-acceptance` намеренно не входит в `make gate`: первый мутирует разрешённый alpha
-stand и требует credential, второй остаётся воспроизводимым и host-free.
+`make alpha-acceptance` is intentionally outside `make gate`: the former changes
+an authorized alpha stand and needs a credential; the latter remains reproducible
+without a host.
 
-Для интерактивного протокола запустите ту же команду с `--interactive`. После preflight скрипт
-будет принимать только `PASS`, `FAIL` или `BLOCKED` и однострочную безопасную заметку:
+For the interactive record, run the same script with `--interactive`. After
+preflight it accepts only `PASS`, `FAIL`, or `BLOCKED` and a one-line safe note:
 
 ```bash
 ./scripts/manual-alpha-check.sh \
@@ -108,106 +117,120 @@ stand и требует credential, второй остаётся воспрои
   --interactive
 ```
 
-## 4. Ручной сценарий
+## 4. Manual journey
 
-### A01 — версия развёртывания и вход
+### A01 — deployed version and sign-in
 
-Сверьте `candidate SHA` из принятой версии `origin/dev` с SHA успешного deployment workflow и
-результатом `verify-deployed.sh`. Если версия была перенесена в `origin/main`, отдельно приложите
-прямое указание, разрешившее этот deployment-action. В приватном окне откройте origin, перейдите
-на `/login`, введите учётные данные и войдите.
+Compare the accepted `candidate SHA` from `origin/dev` with the successful
+deployment workflow SHA and the result of `verify-deployed.sh`. If the version
+was moved to `origin/main`, separately attach the direct instruction that
+authorized that deployment action. In a private window open the origin, go to
+`/login`, enter the credentials, and sign in.
 
-**PASS:** SHA совпал; после входа открыт `/` (главная); пароль и token не появились в URL или
-странице; нет бесконечного редиректа и необработанной ошибки. Если приложение разрешило работу с
-неизменённым начальным паролем, это **FAIL**.
+**PASS:** the SHAs match; sign-in opens `/` (home); neither password nor token
+appears in the URL or page; there is no redirect loop or unhandled error. If
+the application permits work with the unchanged initial password, this is
+**FAIL**.
 
-### A02 — создание тестового проекта
+### A02 — create a test project
 
-На `/projects` создайте проект с уникальным префиксом из §1. Запишите только `project_uid` из URL
-или ссылки.
+At `/projects`, create one project with the unique prefix from §1. Record only
+its `project_uid` from the URL or link.
 
-**PASS:** появилась ровно одна новая строка проекта, нет alert, идентификатор имеет вид
-`prj_<ULID>`, проект открывается после полного обновления страницы.
+**PASS:** exactly one new project row appears with no alert; its identifier has
+the form `prj_<ULID>`; the project opens after a full page reload.
 
-### A03 — положительная загрузка
+### A03 — valid upload
 
-Откройте проект, выберите `ar_baseline.pdf`, задайте синтетическое название и нажмите
-«Загрузить».
+Open the project, choose `ar_baseline.pdf`, enter a synthetic title, and click
+«Загрузить» (Upload).
 
-**PASS:** браузер перешёл на `/projects/<project_uid>/versions/<version_uid>`; версия доступна
-после полного обновления; `version_uid` имеет вид `ver_<ULID>`; нет сообщения
-`data-upload-failure` или `data-precheck-problem`.
+**PASS:** the browser navigates to
+`/projects/<project_uid>/versions/<version_uid>`; the version remains available
+after a full reload; `version_uid` has the form `ver_<ULID>`; no
+`data-upload-failure` or `data-precheck-problem` message appears.
 
-### A04 — прогон и четыре стадии
+### A04 — run and four stages
 
-Нажмите «Запустить прогон». В Network ожидайте `POST /api/v1/runs` → `202`, тело со
-`state: queued`, затем дождитесь терминального состояния не более 150 секунд.
+Click «Запустить прогон» (Start run). In Network expect `POST /api/v1/runs` →
+`202` with `state: queued`, then wait no more than 150 seconds for a terminal
+state.
 
-**PASS:** итог `published` или `partial`; polling остановился; на экране нет
-`data-run-failure`; видны результаты четырёх стадий; `provider_mode` — **`live`**. Прогон через
-модельный прокси (`AUDITMANAGER_PROVIDER_MODE=proxy`, `R-65`) тоже записывает **`live`**: поле
-фиксирует происхождение результата — его выдала модель, а не воспроизведение, — а не транспорт
-вызова; `recorded` остаётся **FAIL**. Значение
-`recorded` на публичной альфе, `failed`, зависание, либо `dependency_unavailable` — **FAIL** и
-основание проверить D-70/provider connectivity. Сохраните correlation id сбойного запроса, но не
-его Authorization header.
+**PASS:** the result is `published` or `partial`; polling stops;
+`data-run-failure` is absent; all four stage results are visible; and
+`provider_mode` is **`live`**. A run through the model proxy
+(`AUDITMANAGER_PROVIDER_MODE=proxy`, `R-65`) also records **`live`**: this
+field describes whether a model produced the result, rather than the call's
+transport; replay is `recorded` and remains **FAIL**. On this public alpha,
+`recorded`, `failed`, a hang, or `dependency_unavailable` is **FAIL** and
+calls for checking D-70/provider connectivity. Save the failing request's
+correlation ID, without its Authorization header.
 
-### A05 — качество и доказательства PC-01
+### A05 — PC-01 findings and evidence quality
 
-Откройте review и каждую опубликованную находку. В эталоне заложены:
+Open the review screen and each published finding. The reference document
+contains:
 
-1. `SI-01`: класс огнестойкости одного здания `II` на странице 2 и `III` на странице 6;
-2. `SI-02`: два эвакуационных выхода на странице 3 и три на странице 7;
-3. `SI-03`: буквальный placeholder `уточнить` на странице 8.
+1. `SI-01`: fire-resistance class `II` for one building on page 2 and `III`
+   on page 6;
+2. `SI-02`: two evacuation exits on page 3 and three on page 7;
+3. `SI-03`: the literal fixture placeholder «уточнить» (clarify) on page 8.
 
-**PASS для live-провайдера:** найдены минимум две из трёх проблем; каждая цитата буквально
-присутствует на указанной странице PDF; ни одна из шести контрольных ловушек из
-`fixtures/synthetic/ar/expected_issues.json` не опубликована как находка. Общая находка без
-проверяемой цитаты/страницы — **FAIL**. Запишите найденные `SI-*` и ложные срабатывания, если они
-есть; не подменяйте экспертную оценку текстом модели.
+**PASS for a live provider:** at least two of the three issues are found;
+every quotation occurs literally on its declared PDF page; none of the six
+near-miss controls in `fixtures/synthetic/ar/expected_issues.json` is
+published as a finding. A general finding without a verifiable quotation and
+page is **FAIL**. Record the found `SI-*` issues and any false positives; do
+not substitute model prose for expert judgment.
 
-### A06 — решение эксперта и журнал
+### A06 — expert decision and journal
 
-На одной находке нажмите «Принять», затем добавьте уникальный синтетический комментарий. На
-другой — «Отклонить». Полностью обновите страницу и откройте `/knowledge-base`.
+On one finding click «Принять» (Accept), then add a unique synthetic comment.
+On another click «Отклонить» (Reject). Fully reload the page and open
+`/knowledge-base`.
 
-**PASS:** каждое действие добавило отдельное событие; комментарий не заменил прежний вердикт;
-история, автор и время сохранились после reload; knowledge base показывает актуальные вердикты.
+**PASS:** each action appends a separate event; the comment does not replace
+the earlier verdict; history, author, and time survive the reload; the
+knowledge base displays the current verdicts.
 
 ### A07 — CSV
 
-На review нажмите «Скачать <run_id>-findings.csv».
+On the review screen click «Скачать <run_id>-findings.csv» (Download).
 
-**PASS:** файл скачан; UTF-8 содержит BOM; первая строка содержит ровно 17 колонок; одна строка
-соответствует одному evidence item; `run_id`, `provider_mode`, страницы, цитаты и текущие
-вердикты согласованы с экраном. Повторное скачивание без новых решений побайтно идентично.
+**PASS:** the file downloads; UTF-8 includes a BOM; the first row has exactly
+17 columns; each row represents one evidence item; `run_id`,
+`provider_mode`, pages, quotations, and current verdicts agree with the
+screen. Downloading again without new decisions produces byte-identical
+content.
 
-### A08 — повторный прогон и сравнение
+### A08 — second run and comparison
 
-Запустите второй прогон той же неизменяемой версии. После терминала откройте
-`/projects/<project_uid>/versions/<version_uid>/comparison`.
+Start a second run of the same immutable version. After it reaches a terminal
+state, open `/projects/<project_uid>/versions/<version_uid>/comparison`.
 
-**PASS:** сравниваются именно два прогона одной версии; экран различает `same`, `changed`,
-`only_left`, `only_right`; отсутствие строки не показано как совпадение; оба run id видимы.
+**PASS:** exactly two runs of one version are compared; the screen distinguishes
+`same`, `changed`, `only_left`, and `only_right`; an absent row is not shown as
+a match; both run IDs are visible.
 
-### A09 — все экраны и ширина
+### A09 — all screens and width
 
-Пройдите ссылки приложения и сделайте cold reload на адресуемых экранах — их столько же, сколько
-маршрутов в `tests/e2e/pc01/journey/manifest.json`:
+Follow the application links and cold-reload the addressable screens. Their
+number equals the routes in `tests/e2e/pc01/journey/manifest.json`:
 
-1. `/` — главная, включая счётчик ожидающих заявок для администратора;
+1. `/` — home, including the administrator's pending-registration count;
 2. `/projects`;
-3. проект;
-4. документ;
-5. версия;
-6. сравнение версии;
-7. прогон;
+3. project;
+4. document;
+5. version;
+6. version comparison;
+7. run;
 8. review;
-9. `/login` в отдельном приватном окне (с открытым сеансом `/login` ведёт на `/`);
+9. `/login` in a separate private window (with an open session, `/login`
+   redirects to `/`);
 10. `/knowledge-base`;
 11. `/account/password`;
 12. `/blocks`;
-13. `/optimisation` (в меню его нет, адрес остаётся рабочим);
+13. `/optimisation` (absent from the menu but still addressable);
 14. `/logs`;
 15. `/workers`;
 16. `/dashboard`;
@@ -217,138 +240,164 @@ stand и требует credential, второй остаётся воспрои
 20. `/norms`;
 21. `/analysis-settings`;
 22. `/queue`;
-23. `/register` в отдельном приватном окне;
-24. `/register/submitted` после отправки тестовой заявки;
-25. `/admin/users` с административным сеансом;
-26. `/admin/users/<user_uid>` по ссылке из списка;
-27. `/admin/registrations` с административным сеансом.
+23. `/register` in a separate private window;
+24. `/register/submitted` after submitting a test registration;
+25. `/admin/users` with an administrator session;
+26. `/admin/users/<user_uid>` through the list link;
+27. `/admin/registrations` with an administrator session.
 
-**PASS:** нет пустого экрана, необработанной ошибки или неожиданного запроса `>=400`; на
-viewport 780 × 900 нет горизонтальной прокрутки. Подготовительные экраны могут честно показывать
-состояние «не реализовано»; это не разрешает им падать или придумывать данные.
+**PASS:** no blank screen, unhandled error, or unexpected request with status
+`>=400`; no horizontal scrolling at a 780 × 900 viewport. Preparatory
+screens may honestly show «не реализовано» (not implemented); that does not
+permit a crash or invented data.
 
-### A10 — четыре отрицательных PDF
+### A10 — four rejected PDFs
 
-Зафиксируйте число документов в тестовом проекте. По одному выберите четыре PDF из таблицы §2;
-после каждого отказа нажмите retry/reset формы, не перезагружая чужой файл.
+Record the document count in the test project. Select each of the four PDFs
+from the §2 table in turn; after each refusal use the form's retry or reset
+control without reloading another person's file.
 
-**PASS:** `oversize.pdf` отклонён в браузере как `too_large`, и upload-запрос не отправлен;
-остальные три получают HTTP 422 `validation_failed` и свой точный `details.constraint` из
-таблицы. После каждого случая число документов/версий не меняется. Один общий текст ошибки без
-rule-specific значения, HTTP 500 или созданный объект — **FAIL**.
+**PASS:** the browser rejects `oversize.pdf` as `too_large` and sends no upload
+request; the other three return HTTP 422 `validation_failed` with their exact
+`details.constraint` from the table. Document and version counts remain
+unchanged after every case. One generic error without a rule-specific value,
+HTTP 500, or a created object is **FAIL**.
 
-### A11 — dashboard и сохранность
+### A11 — dashboard and persistence
 
-Откройте `/dashboard`, затем вернитесь в проект через список, не используя сохранённый deep
-link.
+Open `/dashboard`, then return to the project through the list without using
+a saved deep link.
 
-**PASS:** четыре панели dashboard загружены без fault; тестовый проект, версия, оба прогона,
-находки и журнал решений доступны после cold reload; нулевое значение не подменяет ошибку.
+**PASS:** all four dashboard panels load without a fault; the test project,
+version, both runs, findings, and decision journal remain available after a
+cold reload; zero is not used to mask an error.
 
-### A12 — выход и закрытая сессия
+### A12 — sign-out and closed session
 
-Нажмите «Выйти», затем попробуйте открыть сохранённый URL review кнопкой Back и прямой вставкой.
+Click «Выйти» (Sign out), then try the saved review URL using Back and by
+pasting it directly.
 
-**PASS:** закрытые данные без сессии не читаются; приложение ведёт на вход/показывает
-authentication required; повторный вход возвращает доступ к сохранённым данным. Cookie или token
-не переносите в отчёт.
+**PASS:** protected data cannot be read without a session; the application
+sends the user to sign-in or shows authentication required; signing in again
+restores access to the saved data. Do not include a cookie or token in the
+report.
 
-### A13 — заявка и ожидающий вход
+### A13 — registration and pending sign-in
 
-В отдельном приватном окне отправьте `/register` с уникальным синтетическим адресом,
-именем, фамилией и паролем. Не записывайте пароль в отчёт. Откройте `/register/submitted`
-именно через ответ формы, затем попробуйте войти этой парой до решения администратора.
+In a separate private window submit `/register` with a unique synthetic
+address, first name, last name, and password. Do not record the password.
+Reach `/register/submitted` through the form response, then try signing in
+with this pair before an administrator decides.
 
-**PASS:** форма приводит на подтверждение; вход показывает «Заявка на регистрацию ещё не
+**PASS:** the form reaches confirmation; sign-in displays «Заявка на регистрацию ещё не
 рассмотрена: войти можно будет, когда администратор её одобрит. Подавать заявку повторно
-не нужно.» Причина будущего отказа здесь не раскрывается.
+не нужно.» (the registration is pending; do not submit it again). No future
+rejection reason is disclosed here.
 
-### A14 — очередь и одобрение
+### A14 — queue and approval
 
-Войдите администратором, откройте `/admin/registrations`. Найдите заявку по синтетическому
-адресу, проверьте общий счётчик ожидающих на главной. Нажмите «Одобрить заявку» без ролей,
-затем выберите только «Эксперт» и одобрите.
+Sign in as an administrator and open `/admin/registrations`. Find the request
+by its synthetic address and check the aggregate pending count on home.
+Click «Одобрить заявку» (Approve request) without selecting a role; then
+select only «Эксперт» (Expert) and approve it.
 
-**PASS:** до выбора роли показано «Выберите хотя бы одну роль. Запрос не отправлен.» и
-запроса на API нет; после одобрения заявка имеет состояние «Одобрена», появилась ссылка
-на новую учётную запись, а очередь и счётчик главной обновились. Пароль заявителя
-администратору не показан.
+**PASS:** before role selection the screen shows «Выберите хотя бы одну роль. Запрос не отправлен.»
+(choose at least one role; no request was sent), and no API request is made.
+After approval the request has status «Одобрена» (Approved), a link to the new
+account appears, and the queue and home count update. The administrator
+never sees the applicant's password.
 
-### A15 — вход и профиль одобренного эксперта
+### A15 — approved expert sign-in and profile
 
-В новом приватном окне войдите адресом и паролем A13, откройте `/account` и обновите страницу.
+In a new private window sign in with the A13 address and password. Open
+`/account` and reload the page.
 
-**PASS:** вход принят; фамилия, имя и отчество (если указано) перенесены из заявки,
-профиль завершён, роль отображается как «Эксперт». Не требуется вводить те же данные заново.
+**PASS:** sign-in succeeds; last name, first name, and middle name, if supplied,
+carry over from the request; the profile is complete; the role appears as
+«Эксперт» (Expert). There is no need to enter the same details again.
 
-### A16 — вердикт и автор
+### A16 — verdict and author
 
-Экспертом из A15 откройте review тестового прогона с находкой и запишите «Принять».
-Обновите review, откройте историю решения.
+As the expert from A15, open the test run's review screen with a finding and
+record «Принять» (Accept). Reload review and open the decision history.
 
-**PASS:** событие вердикта сохранилось; автор показан как «Фамилия И. О.» на основе полей
-профиля A13. Сырые идентификаторы и адрес входа не подменяют подпись автора.
+**PASS:** the verdict event persists; the author appears as «Фамилия И. О.»
+(Last name I. M.) based on A13 profile fields. Raw identifiers and the sign-in
+address do not replace the author label.
 
-### A17 — отзыв роли и следующая операция
+### A17 — role revocation and the next operation
 
-Администратором откройте `/admin/users/<user_uid>` эксперта A15 и снимите роль «Эксперт».
-В старом окне эксперта выполните следующий BFF-запрос. В серверном реестре сессий проверьте,
-что строка именно этой сессии исчезла; не копируйте cookie и credential в отчёт. Затем
-войдите снова и повторите запись вердикта.
+As administrator open `/admin/users/<user_uid>` for the A15 expert and
+remove the «Эксперт» (Expert) role. In the expert's old window make the next
+BFF request. In the server session register check that this session's exact
+row disappeared; do not copy its cookie or credential into the report.
+Then sign in again and retry recording a verdict.
 
-**PASS:** первый запрос после отзыва получает HTTP 401 с envelope `authentication_required`,
-строка сессии удалена, экран показывает состояние выхода и ссылку на вход. Повторный вход
-возможен, а новая попытка записи получает HTTP 403 `permission_denied`. Старый сеанс не
-продолжает работу с прежними правами.
+**PASS:** the first request after revocation returns HTTP 401 with the
+`authentication_required` envelope, the session row is removed, and the
+screen shows the signed-out state and a sign-in link. Signing in again is
+possible, but the new write attempt returns HTTP 403 `permission_denied`.
+The old session does not continue with its previous privileges.
 
-### A18 — отклонение и одинаковый отказ на входе
+### A18 — rejection and indistinguishable sign-in refusal
 
-Отправьте вторую синтетическую заявку, отклоните её администратором с причиной. В новом
-приватном окне попробуйте войти отклонённой парой и заведомо неизвестной парой. Сравните
-код отказа и весь видимый текст побайтно. Причину проверьте только в очереди администратора.
+Submit a second synthetic request and have an administrator reject it with
+a reason. In a new private window try signing in once with the rejected
+pair and once with a definitely unknown pair. Compare the refusal code and
+all visible text byte for byte. Check the reason only in the administrator's
+queue.
 
-**PASS:** оба входа показывают один и тот же общий отказ «Войти не удалось: такая пара
-имени пользователя и пароля не принята.» без различия по существованию заявки; причина
-видна администратору и отсутствует у заявителя.
+**PASS:** both sign-ins show the same general refusal, «Войти не удалось: такая пара
+имени пользователя и пароля не принята.» (these credentials were not
+accepted), with no distinction based on whether the request exists. The
+reason is visible to the administrator and absent for the applicant.
 
-### A19 — самоархивирование администратора
+### A19 — administrator self-archive
 
-Проверьте попытку архивировать собственную учётную запись. Не удаляйте роли у рабочих
-учётных записей ради этого шага. В отдельной QA-фикстуре проверьте защиту последнего
-администратора: обычный UI не может создать это условие вместе с другим действующим
-администратором, потому что снять роль у себя уже запрещено.
+Attempt to archive your own administrator account. Do not remove roles from
+working accounts to perform this step. In a separate QA fixture check the
+last-administrator safeguard: ordinary UI cannot create that condition
+alongside another active administrator because removing your own role is
+already forbidden.
 
-**PASS:** самоархивирование получает `permission_denied`; административный доступ
-сохраняется. Для `last_admin` приложена отдельная QA-проверка с конфликтом
-`conflict_reason: last_admin`; до неё эта часть остаётся долгом `D-137`.
+**PASS:** self-archiving returns `permission_denied`; administrator access
+remains. A separate QA check for `last_admin` shows the
+`conflict_reason: last_admin` conflict; until that check is attached, this
+part remains debt `D-137`.
 
-### A20 — архив и запрет удаления автора
+### A20 — archive and protected decision author
 
-Администратором архивируйте эксперта из A16. Попробуйте войти его парой, затем на карточке
-архивного пользователя подтвердите «Удалить навсегда».
+As administrator archive the expert from A16. Try signing in with that
+expert's pair, then on the archived user's card confirm «Удалить навсегда»
+(Delete permanently).
 
-**PASS:** вход получает тот же общий отказ, что A18; удаление получает конфликт
-`account_referenced`, поскольку пользователь записал вердикт; архивная запись остаётся.
+**PASS:** sign-in gets the same general refusal as A18; deletion gets
+`account_referenced` because the user recorded a verdict; the archived row
+remains.
 
-## 5. Вердикт
+## 5. Verdict
 
-- `PASS`: `make alpha-acceptance` завершился строкой `ALPHA ACCEPTANCE PASS` для точного
-  candidate SHA / attested deployed SHA и все A01–A20 подписаны человеком.
-- `FAIL`: нарушено ожидание хотя бы одного обязательного шага. Зафиксируйте шаг, время,
-  correlation id и безопасный screenshot; не повторяйте модельный вызов вслепую.
-- `BLOCKED`: шаг нельзя выполнить из-за доступа или внешней зависимости. Это не `PASS`; укажите
-  владельца блокировки.
+- `PASS`: `make alpha-acceptance` ended with `ALPHA ACCEPTANCE PASS` for the
+  exact candidate SHA and attested deployed SHA, and a human signed off all
+  A01–A20 steps.
+- `FAIL`: at least one required step missed its expectation. Record the step,
+  time, correlation ID, and a safe screenshot; do not blindly retry a model
+  call.
+- `BLOCKED`: a step cannot run because of access or an external dependency.
+  This is not `PASS`; name the owner of the blocker.
 
-Интерактивный скрипт сохраняет итоговый отчёт в `.local/manual-alpha/`. Перед публикацией вручную
-проверьте его на секреты. Каталог `.local/` исключён из Git.
+The interactive script saves its final report in `.local/manual-alpha/`.
+Check it manually for secrets before publishing. `.local/` is excluded from
+Git.
 
-## 6. Что этот сценарий не доказывает
+## 6. What this runbook does not establish
 
-- backup/restore и rollback инфраструктуры;
-- нагрузку, многопользовательскую изоляцию и hostile security testing;
-- качество на реальных проектных документах;
-- OCR: image-only PDF должен быть явно отклонён;
-- происхождение и соответствие deployed SHA: release-команда связывает переданные SHA с
-  evidence только как operator attestation; факты публикации в `origin/dev`, разрешения на
-  `origin/main` и обслуживаемой ревизии устанавливаются отдельно по Git remote ref, deployment
-  workflow и `infra/deploy/verify-deployed.sh`.
+- Infrastructure backup, restore, or rollback;
+- load handling, multi-user isolation, or hostile security testing;
+- quality on real project documents;
+- OCR: the image-only PDF must be explicitly rejected;
+- the origin and correspondence of the deployed SHA: the release command
+  links supplied SHAs to evidence only as an operator attestation. Establish
+  `origin/dev` publication, `origin/main` authorization, and the revision
+  actually served separately from the Git remote ref, deployment workflow,
+  and `infra/deploy/verify-deployed.sh`.

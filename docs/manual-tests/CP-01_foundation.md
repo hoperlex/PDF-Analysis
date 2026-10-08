@@ -26,7 +26,7 @@ started_at:
 ### MT01-01 — Clean bootstrap
 
 **Action**
-В новом worktree запустить documented bootstrap.
+Run the documented bootstrap in a new worktree.
 
 **Expected**
 Dependencies/locks resolve reproducibly; no manual copying of secrets/files.
@@ -36,7 +36,7 @@ Dependencies/locks resolve reproducibly; no manual copying of secrets/files.
 ### MT01-02 — Local services
 
 **Action**
-Запустить local PostgreSQL + S3-compatible storage + API + web.
+Start local PostgreSQL, S3-compatible storage, API, and web services.
 
 **Expected**
 All expected services start; S3 bucket is non-public.
@@ -46,7 +46,7 @@ All expected services start; S3 bucket is non-public.
 ### MT01-03 — Liveness/readiness split
 
 **Action**
-Проверить liveness/readiness. Затем остановить PostgreSQL и повторить.
+Check liveness and readiness. Then stop PostgreSQL and repeat the checks.
 
 **Expected**
 Liveness stays OK while process responsive; readiness fails safely without infrastructure details.
@@ -56,7 +56,7 @@ Liveness stays OK while process responsive; readiness fails safely without infra
 ### MT01-04 — Frontend shell
 
 **Action**
-Открыть web UI and one API-backed page/state.
+Open the web UI and one API-backed page or state.
 
 **Expected**
 Shell loads; typed/safe error state shown when dependency unavailable.
@@ -66,7 +66,7 @@ Shell loads; typed/safe error state shown when dependency unavailable.
 ### MT01-05 — Restart
 
 **Action**
-Вернуть DB, stop/start whole local stack.
+Restore the database, then stop and restart the whole local stack.
 
 **Expected**
 Readiness recovers; no manual file/database edits needed.
@@ -76,7 +76,7 @@ Readiness recovers; no manual file/database edits needed.
 ### MT01-06 — Fresh test commands
 
 **Action**
-Запустить lint/type/contract/integration command set.
+Run the lint, type, contract, and integration command set.
 
 **Expected**
 Commands match README and complete from clean checkout.

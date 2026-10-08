@@ -1,29 +1,29 @@
 # Manual checkpoint tests
 
-Manual runbook — обязательная часть checkpoint evidence. Его выполняют **после automated gates** из clean checkout/clean local state по возможности другим агентом/тестировщиком, чем автор основной реализации.
+The manual runbook is required checkpoint evidence. Run it **after automated gates** from a clean checkout and local state, preferably with a tester other than the implementation author.
 
-## Общий порядок
+## General procedure
 
 1. Checkout exact checkpoint candidate commit.
-2. Записать commit SHA, contract versions, migration head, tool/runtime versions.
-3. Очистить/создать отдельный local test namespace; не использовать случайно накопленную author DB.
-4. Запустить documented bootstrap/dev commands.
-5. Выполнить runbook сверху вниз.
-6. Для каждого шага записать `PASS/FAIL/BLOCKED`, фактический результат и безопасное evidence reference.
-7. После теста выполнить stop/cleanup согласно runbook.
-8. Сохранить отчёт по `MANUAL_TEST_REPORT_TEMPLATE.md`.
+2. Record the commit SHA, contract versions, migration head, and tool/runtime versions.
+3. Clean or create a separate local test namespace; do not use the author's accumulated database.
+4. Run the documented bootstrap and development commands.
+5. Follow the runbook from top to bottom.
+6. For every step record `PASS/FAIL/BLOCKED`, the observed result, and a safe evidence reference.
+7. Stop and clean up as the runbook directs.
+8. Save the report using `MANUAL_TEST_REPORT_TEMPLATE.md`.
 
-## Правила evidence
+## Evidence rules
 
-- в git — только synthetic/anonymized fixtures;
-- не коммитить tokens, cookies, presigned URLs, production documents или raw provider payloads;
-- screenshot допустим только без sensitive data;
-- для async failures указывать `correlation_id`, `run_id/job_id/attempt_id`, но не секреты;
-- manual success не может компенсировать red automated gate.
+- Commit only synthetic or anonymized fixtures to Git.
+- Do not commit tokens, cookies, presigned URLs, production documents, or raw provider payloads.
+- A screenshot is acceptable only when it contains no sensitive data.
+- For asynchronous failures, record `correlation_id` and `run_id/job_id/attempt_id`, without secrets.
+- Manual success cannot compensate for a failing automated gate.
 
 ## Expected command surface after CP-01
 
-Точные команды выбираются/фиксируются в `W1-INT-00`, но интерфейс должен оставаться семантически стабильным, например:
+The exact commands are selected and recorded in `W1-INT-00`, but their meaning must remain stable, for example:
 
 ```text
 make bootstrap
@@ -35,4 +35,4 @@ make test-e2e
 make stop
 ```
 
-Runbooks используют смысл этих команд; если выбран другой task runner, документация обновляется в CP-01 одним owner.
+Runbooks rely on what these commands do. If a different task runner is chosen, one CP-01 owner updates the documentation.

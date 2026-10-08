@@ -2,9 +2,9 @@
 
 ## Preconditions
 
-- Распакованный bootstrap package.
-- Доступ к read-only Git tree канонического legacy commit из `docs/SOURCE_TRACEABILITY.md` и исходным ADR/Bible.
-- Назначены architecture/domain owner и independent reviewer.
+- An unpacked bootstrap package.
+- Read-only access to the canonical legacy commit named in `docs/SOURCE_TRACEABILITY.md` and to the original ADRs and Bible.
+- An assigned architecture/domain owner and independent reviewer.
 
 ## Start record
 
@@ -26,68 +26,68 @@ started_at:
 ### MT00-01 — Documentation navigation
 
 **Action**
-Открыть README → Product synopsis → Bible → ADR index → Roadmap → S00. Проверить, что цепочка не содержит ссылки на отсутствующий обязательный документ.
+Open README → Product synopsis → Bible → ADR index → Roadmap → S00. Check that no link in this chain points to a missing required document.
 
 **Expected**
-Все plan-of-record документы доступны; bootstrap package самодостаточен.
+All plan-of-record documents are available; the bootstrap package is self-contained.
 
 **Record** `PASS / FAIL / BLOCKED`, actual result, safe evidence reference.
 
 ### MT00-02 — Greenfield boundary
 
 **Action**
-Проследить основной user journey и убедиться, что ни один mandatory runtime шаг не требует запуска/import legacy.
+Trace the main user journey and confirm that no required runtime step starts or imports the legacy application.
 
 **Expected**
-Legacy упоминается только как oracle/fixture source.
+The legacy application is mentioned only as an oracle or fixture source.
 
 **Record** `PASS / FAIL / BLOCKED`, actual result, safe evidence reference.
 
 ### MT00-03 — Identity walk
 
 **Action**
-Взять legacy-сценарий с rerun finding. На бумаге/whiteboard провести его через `Finding`/`FindingObservation`/`ExpertDecision`.
+Take a legacy scenario with a finding that reappears on rerun. Trace it on paper or a whiteboard through `Finding`/`FindingObservation`/`ExpertDecision`.
 
 **Expected**
-`F-NNN` нигде не нужен как FK; решение эксперта переживает rerun только через stable identity policy.
+`F-NNN` is never needed as a foreign key; an expert decision survives a rerun only through the stable identity policy.
 
 **Record** `PASS / FAIL / BLOCKED`, actual result, safe evidence reference.
 
 ### MT00-04 — Run/job/attempt walk
 
 **Action**
-Смоделировать provider timeout → retry → stale worker result.
+Model a provider timeout → retry → stale worker result.
 
 **Expected**
-Run/Job/Attempt не смешиваются; stale Attempt не имеет права publish.
+Run, Job, and Attempt stay distinct; a stale Attempt cannot publish a result.
 
 **Record** `PASS / FAIL / BLOCKED`, actual result, safe evidence reference.
 
 ### MT00-05 — Comparison ownership
 
 **Action**
-Смоделировать auto suggestion → user-approved sheet link → recompute → AI review.
+Model an automatic suggestion → user-approved sheet link → recompute → AI review.
 
 **Expected**
-Recompute не перетирает approved link; AI не меняет raw deterministic evidence.
+Recomputation does not overwrite an approved link; AI does not change raw deterministic evidence.
 
 **Record** `PASS / FAIL / BLOCKED`, actual result, safe evidence reference.
 
 ### MT00-06 — Unresolved decisions
 
 **Action**
-Просмотреть proposed ADR и owner decisions.
+Review the proposed ADRs and owner decisions.
 
 **Expected**
-Retention/tenant/IdP и другие неподтверждённые значения явно unresolved, а не придуманы.
+Retention, tenant, IdP, and other unconfirmed values remain explicitly unresolved rather than invented.
 
 **Record** `PASS / FAIL / BLOCKED`, actual result, safe evidence reference.
 
 ## Final acceptance checklist
 
-- [ ] Нет hidden Strangler runtime dependency.
-- [ ] Все ключевые bounded contexts имеют владельца данных.
-- [ ] Shared contract freeze/process понятен reviewer без устного пояснения.
+- [ ] There is no hidden Strangler runtime dependency.
+- [ ] Every key bounded context has a data owner.
+- [ ] A reviewer can understand the shared contract freeze and process without an oral explanation.
 
 ## Stop/cleanup
 

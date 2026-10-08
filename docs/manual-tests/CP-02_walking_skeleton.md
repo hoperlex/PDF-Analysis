@@ -26,7 +26,7 @@ started_at:
 ### MT02-01 — Create hierarchy
 
 **Action**
-В UI создать project/document as defined by slice.
+Create a project and document in the UI as defined by the slice.
 
 **Expected**
 Opaque IDs returned; human names are display-only.
@@ -36,7 +36,7 @@ Opaque IDs returned; human names are display-only.
 ### MT02-02 — Upload
 
 **Action**
-Загрузить synthetic PDF and publish version.
+Upload the synthetic PDF and publish a version.
 
 **Expected**
 Blob verify completes; immutable version/input manifest visible.
@@ -46,7 +46,7 @@ Blob verify completes; immutable version/input manifest visible.
 ### MT02-03 — Idempotent retry
 
 **Action**
-Повторить тот же upload command с тем же idempotency key/flow.
+Repeat the same upload command with the same idempotency key and flow.
 
 **Expected**
 No duplicate version/blob/business effect.

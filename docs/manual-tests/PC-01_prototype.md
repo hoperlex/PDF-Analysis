@@ -122,7 +122,7 @@ C2_PC01_LIVE=1 PYTHONPATH=src .venv/bin/pytest -q tests/e2e/pc01/test_live_text_
 
 * **at least two of the three seeded issues found** — a fire-resistance contradiction across
   pages 2 and 6, an evacuation-exit contradiction across pages 3 and 7, and a literal
-  `уточнить` placeholder on page 8;
+  «уточнить» (clarify) placeholder on page 8;
 * **every published quotation present on its declared page**, verified against the corpus's
   own extractor;
 * **none of the six near-miss controls flagged** — a third fire-resistance value belonging to
