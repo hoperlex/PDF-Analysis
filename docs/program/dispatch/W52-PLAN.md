@@ -17,7 +17,9 @@ ACCEPT grants from the Stage-C readback. `W52-INT-C2-RELNOTES-01`
 accepts the authored notes and corrects the loader test's revision
 assumption on the development line. `W52-INT-C2-ACCEPT-01` accepts the
 measured-build acceptance pack from the refreshed grant; Stage C2
-implementation is complete, with release validation still deferred.
+implementation is complete. `W52-INT-CLOSE` records the development-only
+closure after the governance-interpreter test correction, with D-137–D-140
+and release validation still open.
 Round 2 (both judges ACCEPT-WITH-FIXES, all fixes
 text or grant lines) is applied; no third round (`R-74`). Revision 2 was rebuilt on the first judging round (design judge:
 ACCEPT-WITH-FIXES, seven majors; grants judge: REJECT, seven majors; both verified against

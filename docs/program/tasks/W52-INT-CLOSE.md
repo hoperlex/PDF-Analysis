@@ -16,6 +16,8 @@ checks and explicitly leaves D-137–D-140 and release validation open.
 - `W52-INT-C2-RELNOTES-01`, notes accepted at `a6ff1ff`.
 - `W52-INT-C2-ACCEPT-01`, Stage C2 published at
   `a183dbf970aad4715a9cfad7010b024fd9d304ac`.
+- `W52-INT-RELNOTES-GATE-ENV-01`, local correction complete at
+  `35c8f3c2aa331a7be43a113a82aa5a29e3faecc1` for this close.
 
 ## Frozen inputs
 
