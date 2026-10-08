@@ -478,11 +478,14 @@ run_battery() {
   # with no dependency the runtime venv lacks. The three top-level files really are red --
   # 33, 3 and 28 failures -- and they are the CP-00 and clean-clone-bootstrap material
   # section 6.3 actually means. So the ignore now names those files, not the directory.
+  # `gate: foundation` has already executed the cross-provider suite through
+  # `test-foundation`; exclude only that exact directory from the later battery.
   local status
   set +e
   scrubbed_run PYTHONUNBUFFERED=1 -- \
     "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. -q \
     tests --ignore=tests/checkpoint \
+    --ignore=tests/integration/foundation \
     --ignore=tests/contract/test_cp00_candidate.py \
     --ignore=tests/contract/test_cp00_final_state.py \
     --ignore=tests/contract/test_validate_bootstrap.py
