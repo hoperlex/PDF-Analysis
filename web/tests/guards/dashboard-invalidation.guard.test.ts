@@ -42,8 +42,8 @@ import { WEB_ROOT, readText, repoRelative, walkFiles } from './lib/repo';
 const FEATURES_ROOT = join(WEB_ROOT, 'src', 'features');
 const DASHBOARD_INVALIDATION = 'queryKeys.dashboard.summary';
 
-function parsed(source: string): ts.SourceFile {
-  return ts.createSourceFile('guard-subject.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+function parsed(source: string, kind = ts.ScriptKind.TS): ts.SourceFile {
+  return ts.createSourceFile('guard-subject.ts', source, ts.ScriptTarget.Latest, true, kind);
 }
 
 function callHasName(node: ts.CallExpression, name: string): boolean {
@@ -83,8 +83,8 @@ function subtreeCallsExpression(sourceFile: ts.SourceFile, root: ts.Node, expres
   return found;
 }
 
-function sourceCalls(source: string, name: string): boolean {
-  const sourceFile = parsed(source);
+function sourceCalls(source: string, name: string, kind = ts.ScriptKind.TS): boolean {
+  const sourceFile = parsed(source, kind);
   return subtreeCalls(sourceFile, name);
 }
 
@@ -177,7 +177,7 @@ function isMutationHook(path: string, source: string): boolean {
   return path.startsWith(`${FEATURES_ROOT}${sep}`) &&
     path.includes(`${sep}model${sep}`) &&
     /\.(?:ts|tsx)$/.test(path) &&
-    sourceCalls(source, 'useMutation');
+    sourceCalls(source, 'useMutation', path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
 }
 
 /** Every feature model mutation hook, keyed by its path relative to `WEB_ROOT`. */
@@ -300,6 +300,8 @@ describe('every mutation hook is mapped to whether it invalidates the dashboard'
     const archive = join(FEATURES_ROOT, 'archive-project', 'model', 'archive.ts');
     expect(isMutationHook(archive, source)).toBe(true);
     expect(isMutationHook(archive.replace(/\.ts$/, '.tsx'), source)).toBe(true);
+    const tsx = 'const element = <div />; const mutation = RQ.useMutation({ mutationFn });';
+    expect(isMutationHook(archive.replace(/\.ts$/, '.tsx'), tsx)).toBe(true);
     expect(isMutationHook(join(FEATURES_ROOT, 'archive-project', 'archive.ts'), source)).toBe(false);
     expect(isMutationHook(join(WEB_ROOT, 'src', 'entities', 'model', 'archive.ts'), source)).toBe(false);
     expect(isMutationHook(archive, `// ${source}`)).toBe(false);

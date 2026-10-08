@@ -6,8 +6,10 @@ Task: `docs/program/tasks/W52-DEBT-GUARDS-128F2.md`. Exact dispatch base:
 The dashboard invalidation guard now scans TypeScript sources throughout each feature's
 `model` directory and identifies executable `useMutation` calls by AST. It no longer
 requires a `use-` filename. The existing explicit map of nine hooks and its invalidation
-assertions are unchanged. A focused regression case covers `model/archive.ts` and `.tsx`,
-while excluding a non-model path, another bounded context, comments and string literals.
+assertions are unchanged. A focused regression case covers `model/archive.ts` and `.tsx`
+with JSX before the mutation call, while excluding a non-model path, another bounded
+context, comments and string literals. The `.tsx` source is parsed in TSX mode; a TS
+parse of that JSX-first fixture misses the call.
 Changing the new discovery predicate back to `model/use-*` makes that case fail.
 
 Changed files: `web/tests/guards/dashboard-invalidation.guard.test.ts` and this handoff.
