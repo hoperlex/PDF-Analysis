@@ -1,6 +1,6 @@
-"""The thirty-four operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The thirty-seven operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles one ``APIRouter`` from the twelve router modules. It takes
+:func:`build_router` assembles one ``APIRouter`` from the thirteen router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
 port is the composition root's job (``api/composition.py``), and a factory that reached for
 a concrete implementation would have taken that decision away from it.
@@ -54,6 +54,7 @@ from auditmanager.api.routers.idempotency import (
     require_idempotency_key,
 )
 from auditmanager.api.routers.me import build_me_routes
+from auditmanager.api.routers.releases import build_release_routes
 from auditmanager.api.routers.multipart import MAX_BODY, BodyCapMiddleware
 from auditmanager.api.routers.ports import (
     AccountPort,
@@ -66,6 +67,7 @@ from auditmanager.api.routers.ports import (
     FindingPort,
     ProjectPort,
     RegistrationPort,
+    ReleasesPort,
     RunPort,
 )
 from auditmanager.api.routers.projects import build_project_routes
@@ -120,6 +122,7 @@ __all__ = [
     "FindingPort",
     "ProjectPort",
     "RegistrationPort",
+    "ReleasesPort",
     "Router",
     "RunPort",
     "WireResponse",
@@ -164,8 +167,9 @@ def build_router(
     dashboard: DashboardPort | None = None,
     accounts: AccountPort | None = None,
     registrations: RegistrationPort | None = None,
+    releases: ReleasesPort | None = None,
 ) -> Router:
-    """Assemble the thirty-four operations, from the twelve router modules -- ``me``,
+    """Assemble the thirty-seven operations, from the thirteen router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three.
 
     ``accounts`` and ``registrations`` are two more ports with a default, for the reason
@@ -221,6 +225,7 @@ def build_router(
     build_me_routes(router, accounts)  # type: ignore[arg-type]
     build_registration_routes(router, registrations)  # type: ignore[arg-type]
     build_user_routes(router, accounts)  # type: ignore[arg-type]
+    build_release_routes(router, releases)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

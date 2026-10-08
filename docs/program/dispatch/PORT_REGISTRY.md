@@ -106,6 +106,7 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56770`, `60370/60371`; API `56870`, Next `31370` | `gate-w51auth` — `W51-AUTH-01` | 2026-10-08 | **released** — temporary stand stopped by owner direction; containers, volumes and credentials removed |
 | `56780`, `60380/60381` | `gate-w52g` — `W52-GATE-01` Stage A | 2026-10-08 | **released** — Stage-A tests passed; containers, network and volumes removed |
 | `56790`, `60390/60391` | `gate-w52s` — `W52-SEAL-01` Stage B | 2026-10-08 | after SEAL hand-back and integrator cleanup; ports measured free before reservation |
+| `56800`, `60400/60401` | `gate-w52r` — `W52-RELEASES-API` Stage C | 2026-10-08 | after RELEASES-API hand-back and integrator cleanup; ports measured free before reservation |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,

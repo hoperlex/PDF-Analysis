@@ -73,6 +73,10 @@ P02_TABLES = (
     # `0015_accounts_roles_registration`. A journey grants no role and submits no request,
     # so both counts are expected unchanged across one.
     "app_user_role",
+    # `0016_release_notes`. A P02 journey neither loads releases nor marks notes.
+    "release",
+    "release_revision",
+    "account_release_mark",
     "audit_event",
     "audit_run",
     "attempt",

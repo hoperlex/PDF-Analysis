@@ -317,10 +317,13 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listDecisionHistory": _ANY_COMPLETE_ACCOUNT,
         "listDecisions": _ANY_COMPLETE_ACCOUNT,
         "getDashboardSummary": _ANY_COMPLETE_ACCOUNT,
+        "getProductVersion": _ANY_COMPLETE_ACCOUNT,
+        "listReleases": _ANY_COMPLETE_ACCOUNT,
         # The account itself.
         "getMe": _ANY_COMPLETE_ACCOUNT,
         "updateMyProfile": _ANY_COMPLETE_ACCOUNT,
         "changePassword": _ANY_COMPLETE_ACCOUNT,
+        "markReleaseNotesRead": _ANY_COMPLETE_ACCOUNT,
         # Product changes -- projects, uploads, runs, verdicts, comments, the export.
         "createProject": _EXPERT,
         "uploadDocument": _EXPERT,

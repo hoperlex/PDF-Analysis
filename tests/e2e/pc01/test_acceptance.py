@@ -442,7 +442,8 @@ def test_c3_the_surface_declares_no_operation_that_can_mutate_a_version(
 
     `W49-SEAL-01` added the surface's first mutating methods, all on accounts: the account's
     own profile (``PATCH /me``), an administrator's account change (``PATCH /users/{uid}``)
-    and purge (``DELETE /users/{uid}``). The set is pinned exactly, so a fourth is a
+    and purge (``DELETE /users/{uid}``). W52 adds the account's own release read mark
+    (``PUT /me/release-notes``). The set is pinned exactly, so another is a
     decision someone has to make here, and none of them may address a document or a
     version.
     """
@@ -451,7 +452,9 @@ def test_c3_the_surface_declares_no_operation_that_can_mutate_a_version(
         for route in client.app.router.routes
         if route.methods & {"PUT", "PATCH", "DELETE"}
     }
-    assert set(mutating) == {"updateMyProfile", "updateUser", "purgeUser"}, mutating
+    assert set(mutating) == {
+        "updateMyProfile", "updateUser", "purgeUser", "markReleaseNotesRead"
+    }, mutating
     assert not [
         path for path in mutating.values() if "/versions" in path or "/documents" in path
     ], mutating

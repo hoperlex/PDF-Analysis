@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 633a58a53baf6652625b59d3db9438ae01e8c4ac8da788160882f031123f2e37
+ *   sha256 dc8f18754d22ef85820c124e086df7f9d9ca769c188554decd8a373b1b460304
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -37,6 +37,8 @@ import type {
   IdempotencyKey,
   IssueTokenRequest,
   IssueTokenResponse,
+  MarkReleaseNotesReadRequest,
+  ProductVersion,
   Project,
   ProjectPage,
   ProjectUid,
@@ -46,6 +48,7 @@ import type {
   RegistrationStatus,
   RegistrationStatusResponse,
   RejectRegistrationRequest,
+  ReleaseList,
   ResetUserPasswordRequest,
   RunId,
   RunStatus,
@@ -73,6 +76,7 @@ export const OPERATION_IDS = [
   'getDocumentVersion',
   'getFinding',
   'getMe',
+  'getProductVersion',
   'getRunStatus',
   'getUser',
   'getVersionBlocks',
@@ -82,10 +86,12 @@ export const OPERATION_IDS = [
   'listDocuments',
   'listProjects',
   'listRegistrations',
+  'listReleases',
   'listRunFindings',
   'listRuns',
   'listUsers',
   'listVersions',
+  'markReleaseNotesRead',
   'purgeUser',
   'readRegistrationStatus',
   'rejectRegistration',
@@ -344,6 +350,25 @@ export type GetMeInput = {
 export type GetMeResult = Account;
 
 // ------------------------------------------------------------------------------------
+// getProductVersion - GET /system/version
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the running product version.
+ *
+ * Requires an active account with a complete profile. product_version comes from VERSION, build_id identifies this API process's content, and contract_version remains the API contract version.
+ */
+export type GetProductVersionInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getProductVersion` (`application/json`, HTTP 200). */
+export type GetProductVersionResult = ProductVersion;
+
+// ------------------------------------------------------------------------------------
 // getRunStatus - GET /runs/{run_id}
 // ------------------------------------------------------------------------------------
 
@@ -592,6 +617,25 @@ export type ListRegistrationsInput = {
 export type ListRegistrationsResult = RegistrationRequestPage;
 
 // ------------------------------------------------------------------------------------
+// listReleases - GET /releases
+// ------------------------------------------------------------------------------------
+
+/**
+ * List visible releases and what is new.
+ *
+ * Requires an active account with a complete profile. Returns releases at or below the running product version, highest revision per release, newest first with the archive last. whats_new contains only non-archive versions loaded after this account was created and above its read mark.
+ */
+export type ListReleasesInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listReleases` (`application/json`, HTTP 200). */
+export type ListReleasesResult = ReleaseList;
+
+// ------------------------------------------------------------------------------------
 // listRunFindings - GET /runs/{run_id}/findings
 // ------------------------------------------------------------------------------------
 
@@ -718,6 +762,27 @@ export type ListVersionsInput = {
 
 /** Success body of `listVersions` (`application/json`, HTTP 200). */
 export type ListVersionsResult = DocumentVersionPage;
+
+// ------------------------------------------------------------------------------------
+// markReleaseNotesRead - PUT /me/release-notes
+// ------------------------------------------------------------------------------------
+
+/**
+ * Mark release notes read through a version.
+ *
+ * Requires an active account with a complete profile, including an administrator without the expert role. The credential names the account; the body cannot name another. A known version at or below the running product version raises its high-water mark; a lower or equal version is a no-op. Unknown or future versions are validation_failed. No idempotency key is required.
+ */
+export type MarkReleaseNotesReadInput = {
+  /** Request body, sent as `application/json`. */
+  body: MarkReleaseNotesReadRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `markReleaseNotesRead`. */
+export type MarkReleaseNotesReadResult = void;
 
 // ------------------------------------------------------------------------------------
 // purgeUser - DELETE /users/{user_uid}
@@ -1138,6 +1203,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 500, 503],
     tags: ['account'],
   },
+  getProductVersion: {
+    operationId: 'getProductVersion',
+    method: 'GET',
+    path: '/system/version',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['releases'],
+  },
   getRunStatus: {
     operationId: 'getRunStatus',
     method: 'GET',
@@ -1264,6 +1343,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['registrations'],
   },
+  listReleases: {
+    operationId: 'listReleases',
+    method: 'GET',
+    path: '/releases',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['releases'],
+  },
   listRunFindings: {
     operationId: 'listRunFindings',
     method: 'GET',
@@ -1319,6 +1412,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['documents'],
+  },
+  markReleaseNotesRead: {
+    operationId: 'markReleaseNotesRead',
+    method: 'PUT',
+    path: '/me/release-notes',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: null,
+    successStatuses: [204],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['account'],
   },
   purgeUser: {
     operationId: 'purgeUser',

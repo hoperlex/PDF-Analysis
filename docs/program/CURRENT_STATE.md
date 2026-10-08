@@ -68,6 +68,12 @@
 > `W52-INT-A2B-01` grants Stage B SEAL from a fresh pin sweep; Stage C/C2 still
 > require fresh grants after their preceding merges. The code-only Stage-A acceptance supplies no complete gate, QA,
 > live/manual acceptance, release verdict or `origin/main` authority.
+> `W52-SEAL-01` is implemented at `0dd3f7b` and accepted into the local
+> integration line: the API is 30 paths / 37 operations / 83 schemas and the
+> migration head is `0016_release_notes`. The sealed release routes return
+> `dependency_unavailable` until Stage C supplies the release backend.
+> `W52-INT-B2C-01` owns development publication and the first current-tree
+> Stage-C grant; D-137–D-140 remain open.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
@@ -166,9 +172,9 @@ with no promotion. W49 now means identity, W50 the shell and W51 the screens:
 `docs/program/dispatch/IDENTITY-WAVES.md` is the controlling plan, with `W49-PLAN.md`,
 `W50-PLAN.md` and `W51-PLAN.md` beside it.
 
-The frozen API surface is **27 paths / 34 operations / 77 schemas** since `W49-SEAL-01`, the
+The frozen API surface is **30 paths / 37 operations / 83 schemas** since `W52-SEAL-01`, the
 error catalog **23**, domain candidate revision 9 with **29** opaque identities, and the
-migration head is **`0015_accounts_roles_registration`**. The last tagged release is `alpha-w48.1`.
+migration head is **`0016_release_notes`**. The last tagged release is `alpha-w48.1`.
 This section makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is
 deployed.
 

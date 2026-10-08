@@ -32,6 +32,7 @@ from auditmanager.bootstrap.adapters import (
     FindingAdapter,
     ProjectAdapter,
     RegistrationAdapter,
+    ReleasesAdapter,
     RunAdapter,
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
@@ -170,6 +171,7 @@ def build_application(
         registrations=RegistrationAdapter(
             sessions, registrations=RegistrationAccessRepository()
         ),
+        releases=ReleasesAdapter(),
     )
     return Application(
         router=router,

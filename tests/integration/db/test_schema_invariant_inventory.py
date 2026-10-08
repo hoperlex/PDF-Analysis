@@ -31,7 +31,11 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
-#: Resealed by `W49-ACCESS-01a` for ``0015_accounts_roles_registration``; the delta was
+#: Resealed by `W52-SEAL-01` for ``0016_release_notes``. The 0015 inventory below gained
+#: fourteen columns in three tables, four relations (three tables and one identity
+#: sequence), fourteen constraints, six indexes, three triggers and two functions.
+#: Views, extensions, policies and state topology are unchanged. The previous
+#: `W49-ACCESS-01a` review for ``0015_accounts_roles_registration`` found the delta was
 #: reviewed family by family against the migration (columns +29: six on ``app_user``,
 #: four on ``app_user_role``, eighteen on ``registration_request``, one on
 #: ``expert_decision_event``; relations +2; constraints +33 -- +8 and -1 (the UNIQUE
@@ -42,15 +46,15 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (334, "365da6b1bfb9b9beaa29eeb6086fd2eda12cf8cc1e36da9abcaa67ed93c093fd"),
-    "relations": (39, "b2dc24d63603b88a52b2bb72a21ee08ee2edbd03b60dd7dcc7b62ae80a243aee"),
-    "constraints": (364, "bbe203b8941ce99bef60b22bc3ae0d19fb085b0c5907fc9578d300f03199a7f4"),
-    "indexes": (87, "244302c6c3fcbdc99c61743abba3ef2849251362a12a203ff897e3dc8f9e1003"),
-    "triggers": (32, "663fdebe4a5cc307360db2acdacaed61fbe41fe35c1ab0dab4145cc975fb004a"),
-    "functions": (8, "9567150cc4ac48215e7076f5bba95568fa1715061f24973fcdbf4005ce3b405c"),
+    "columns": (348, "64e793b7997d8aa5d5355e3f59a93d084207517c43b895e9a489e23cd55045bc"),
+    "relations": (43, "c6b6ae6de7689280d2c30a3ec65a445b04bbbe59f11b813957ed719abe4d7b7d"),
+    "constraints": (378, "6f708e38a5691b29ecd3d1162bd790af5f45fa813f86a03b089a9f5ea35b86c6"),
+    "indexes": (93, "c85e0294447c2989af3e7966e7e8040680537893971229306426d1bc54e9e27a"),
+    "triggers": (35, "8b5c558507c0adf51db43012d2f767cada400f7f51fd8f561b36e73a8b5b609f"),
+    "functions": (10, "2ee97345179abc7b397b6559b49d92dc71e35c0638ab61a916a80797f38252db"),
     "views": (1, "099049415234da3d04583c58a693a68fda934f77e9eaf00b0d12e2542842734d"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
-    "sequences": (6, "c93f818ef0134cc85c2d8664bd97842ccaa20dc96fd25adbeb610fb40cc4d7e1"),
+    "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),
     "policies": (0, "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"),
     "state_topology": (51, "776830836156e8f9f890ee698a2a7ae02bd98a0cc33cbf6b628ce795b2201ce4"),
 }

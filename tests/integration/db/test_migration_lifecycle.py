@@ -23,6 +23,10 @@ EXPECTED_TABLES = {
     # `0015_accounts_roles_registration`: the role set and the registration requests.
     "app_user_role",
     "registration_request",
+    # `0016_release_notes`: immutable release history and each account's mark.
+    "release",
+    "release_revision",
+    "account_release_mark",
     "analysis_artifact_publication",
     "attempt",
     "audit_event",

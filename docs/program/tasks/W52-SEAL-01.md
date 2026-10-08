@@ -64,7 +64,7 @@ The three release operations, their role/profile policy and append-only `0016_re
 - `docs/manual-tests/PC-01_prototype.md`, `docs/manual-tests/README.md` — migration-head or surface sentence only
 - `infra/deploy/README.md`, `infra/deploy/serve.py`, `infra/deploy/proxy/nginx.conf`, `infra/deploy/compose.server.yml`, `infra/deploy/deploy.sh`, `infra/deploy/reset.sh` — count/head/table references only; no deploy flow change
 - `src/auditmanager/documents/refusals.py`, `src/auditmanager/shared/db/{__init__.py,check.py,errors.py,migrations.py,schema.py}`, `src/auditmanager/shared/statemachine/topology.py`, `src/auditmanager/storage/check.py` — migration-head comments/constants only
-- `web/src/_pages/knowledge-base/ui/knowledge-base-page.tsx`, `web/src/app/bff/v1/[...path]/route.ts`, `web/src/shared/api/credentialed-forward.ts` — surface count sentences only
+- `web/src/_pages/knowledge-base/ui/knowledge-base-page.tsx`, `web/src/app/bff/v1/[...path]/route.ts`, `web/src/shared/api/credentialed-forward.ts`, `web/src/shared/api/authorization.ts` — surface count sentences only; the last path was added by the exclusive integrator after the first contract test identified its live count comment outside the original grant
 - `web/tests/guards/frontend-lock.guard.test.ts` — lock/surface pin only
 - `docs/program/W52-SEAL-01.md` — six-item hand-back
 - local `agent/w52-seal-01` branch/worktree and its own ignored environment

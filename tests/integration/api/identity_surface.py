@@ -22,6 +22,7 @@ from auditmanager.access.public import (
     UserRepository,
 )
 from auditmanager.api.routers import build_router
+from auditmanager.api.routers.ports import ReleasesPort
 from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_signer
 from auditmanager.bootstrap.adapters import (
     AccountAdapter,
@@ -38,7 +39,9 @@ assert SIGNER is not None
 ADMIN_ROLES = ("expert", "admin")
 
 
-def identity_surface(session_factory: sessionmaker[Session]) -> Surface:
+def identity_surface(
+    session_factory: sessionmaker[Session], *, releases: ReleasesPort | None = None
+) -> Surface:
     """The served application over the shipped account, registration and credential ports.
 
     The six product ports are ``None``, as ``create_documentation_app`` passes them: their
@@ -62,6 +65,7 @@ def identity_surface(session_factory: sessionmaker[Session]) -> Surface:
             registrations=RegistrationAdapter(
                 session_factory, registrations=RegistrationRepository()
             ),
+            releases=releases,
         )
     )
 

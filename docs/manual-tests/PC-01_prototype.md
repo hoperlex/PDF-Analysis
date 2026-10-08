@@ -36,7 +36,7 @@ the expected one.
 A sentinel is the evidence, not the exit code: a checker that exits 0 without printing one is
 refused by the command surface on purpose.
 
-**Observe the migration head is `0015_accounts_roles_registration`**, not merely "a head".
+**Observe the migration head is `0016_release_notes`**, not merely "a head".
 
 > *Corrected 2026-09-23.* This line said `0005_truncated_call_status`, and a PC-01
 > recertification recorded that it was stale — after which the document went stale **twice

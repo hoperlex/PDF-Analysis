@@ -4,7 +4,7 @@
     "title": "AuditManager PC-01 API",
     "version": "1.0.0-draft.1",
     "summary": "The exact PC-01 journey: one project, one AR PDF, one text-consistency run, one CSV.",
-    "description": "Frozen at Gate A so `A5` can generate a typed client and `B6` can implement routers against a fixed shape, without either waiting on the other.\n\nResealed 2026-09-18 under owner ruling `R-3`: every operation here requires a bearer credential, declared once at the document root under `components.securitySchemes.bearerAuth`. The scheme names the seam and never its implementation. The operational liveness and readiness plane is outside `/api/v1`, carries no product meaning and needs no credential.\n\nWhat this surface deliberately does not have: tenancy, WebSocket or server-sent events; an export resource, export identity or export polling, because a synchronous read creates nothing; and any endpoint outside the eleven capabilities `P2-API-01` enumerates, other than the credential exchange the authorization seam needs, which `W34-CONTRACT` adds below, the aggregate dashboard read `R-44` adds in `W46-SEAL`, further below still, and the account and registration operations `W49-SEAL-01` adds at the end. Roles and a per-client throttle on the unauthenticated registration operations were on this list until `R-55` and `R-56` ruled them in; the last reseal below says what each is.\n\nThree rules hold everywhere and are not repeated per operation:\n\n1. **Opaque identity.** Every identifier is `<prefix>_<ULID>` from `contracts/domain/v1/identifiers.json`, and every path parameter carries the pattern for its entity. No response body, header or error detail ever contains a bucket name, object key, filesystem path, URL to internal storage, credential, prompt or model payload.\n2. **One failure shape.** Every non-2xx response is the `ErrorEnvelope` of `contracts/domain/v1/error-envelope.schema.json`, its `error_code` drawn from the twenty-three-code catalog and its `retryable` pinned to the catalog value for that code. A caller never infers retryability from the HTTP status.\n3. **Correlation.** Every response carries `X-Correlation-Id`. A caller may supply one on the request; the edge assigns one when the caller does not.\n\nRun state uses the contract vocabulary. The success terminal of an `AuditRun` is `published`. `succeeded` is a `StageResult` status on a different aggregate and never appears as a run state.\n\nResealed 2026-09-18 under owner ruling `R-5`, which closes `DEBT_REGISTER.md` `D-16` and `D-21` together. Three list operations -- `listDocuments`, `listVersions` and `listRuns` -- make published work reachable after a page reload: before them every read below the project list needed an identifier the client was already holding, so a reloaded screen could reach nothing that survived in the database and the store. And `RunStatus` gained `cost_micros`, `cost_basis` and `model_call_count`, so what a run spent is readable by a user for the first time. Each listing is a `GET` of the collection its parent creates into, pages with the same `cursor` and `limit` and returns the same `{items, page}` envelope as `listProjects`. No error code was added: an unknown parent is the catalog's `not_found` and a malformed cursor is `validation_failed`.\n\nAmended 2026-09-18 under owner ruling `R-8`, which closes `DEBT_REGISTER.md` `D-18`. The domain catalog gains one code, `staged_upload_lost`, and the `ErrorCode` enum below carries it: twenty-one becomes twenty-two. Two blob-store failures demanding opposite operator responses -- *stop, the instance was restored wrong* against *retry the upload* -- both answered `conflict` with `aggregate_type` `Blob`, so their envelopes were byte-identical apart from `correlation_id`. A widened `safe_detail_keys` was offered and rejected, because a detail key cannot fix `retryable`: the envelope reads that flag from the catalog for the reported code, so only a separate code carries a separate value. **No path, operation or schema changed** -- that amendment moved none of the three counts -- and the new code travels on the `503` every staging write already declares.\n\nResealed 2026-09-22 by `W34-CONTRACT`. `R-3` declared the seam and left no way to get through it: the document required a bearer credential on every operation and described no operation that hands one out, so the only caller this surface admitted was one already holding a credential from somewhere the document does not name. One operation closes that -- `issueToken`, `POST /auth/token` -- and it is a credential *exchange* and nothing more: a login and a password in, an opaque credential and its lifetime out. It is the single operation whose `security` is the empty requirement, because requiring a credential to obtain one is a closed door with a handle on the inside.\n\n**What this reseal deliberately did not add, because `T-6` forbade it.** No issuer, no discovery URL, no flow, no `bearerFormat`; and, until `R-55` superseded that part of `T-6` for the scope the `W49-SEAL-01` reseal below describes, no vocabulary of what a subject may do. The returned `token` is a string this document states no structure for; the deployment decides what it is, and the operations keep working when that decision changes. No error code was added either: an unaccepted login and password pair is the catalog's `authentication_required`, a malformed body is `validation_failed`. `permission_denied` is **not** declared here, because it means an authenticated subject refused a resource and this operation has no authenticated subject in it -- it is the operation that produces one. That reseal added one path, one operation and two schemas, and the sentence that stated the totals it produced has been rewritten as this delta: a reseal's own arithmetic stops being true at the next reseal, and `tests/contract/api_v1/test_surface_counts_in_prose.py` reads every such claim in this block against the live document. The totals are stated once, below.\n\nResealed 2026-09-22 by `W38-KB` under owner ruling `R-24`, which was ruled against the recommendation the owner was given: a client-side walk over runs and findings is cheaper and lives only as long as the alpha, and a listing operation costs a reseal and outlives it. One operation closes it -- `listDecisions`, `GET /decisions` -- because `listDecisionHistory` reads the history of **one** finding and nothing in this document enumerated decisions at all, so the knowledge base `R-23` requires had no source but a walk over every run. It is a projection in the sense `ADR-0012` fixes and creates nothing. Two component schemas were added, `DecisionRecord` and `DecisionRecordPage`; no parameter was, because `category` and `verdict` already exist and already mean the finding's category and the finding's current verdict. No error code was added: a malformed cursor is the catalog's `validation_failed`, an absent or refused credential is `authentication_required`, and there is no `404` on it at all -- the path addresses no parent identity, so an empty journal is an empty page. That reseal added one path, one operation and two schemas.\n\nResealed 2026-09-23 by `W39-REVOKE` under owner ruling `R-26`, which rules four account guards into the alpha. This is the one of them that **cannot be added later**: the other three make an account weak now and are fixed by adding them, while a credential already issued is permanent until it expires, and no later work reaches one sitting in somebody's browser. One operation closes it -- `changePassword`, `POST /auth/password` -- and it carries revocation with it, because the two share a mechanism: the account's credential generation is raised by the same write that stores the new digest, which is what makes every credential minted under the old password stop being accepted.\n\n**What this does not add.** No response schema: a credential and its lifetime is one shape and `IssueTokenResponse` already names it. No error code: a wrong current password is the catalog's `authentication_required` and a new password that is the current one is `validation_failed`. No revocation operation: taking credentials away from accounts whose passwords nobody is changing is an operator's action on the deployment, and publishing it would have required deciding who may revoke whom, which this document then had no way to say. Since `W49-SEAL-01` an administrator's changes that take an account's rights away -- archive, a role change, a password reset -- revoke that account's credentials as part of the change, still without an operation of its own. One path, one operation and one schema. The surface moved to 15 / 18 / 51.\n\nResealed 2026-09-23 by `W42-SEAL` under owner rulings `R-37` and `R-29`, and it is the first reseal here that adds no path and no operation. **No path, operation or schema moved: still 15 / 18 / 51, exactly as before.** Three things change and each is a *description* or a *property of an existing schema*, which is precisely why it still costs a reseal -- the conformance gate drops descriptions as annotation under `N4`, so nothing but this document carries them to a reader, and `D-18`'s four documents move together or the frontend reads a contract the backend does not serve.\n\n`R-37`, and `DEBT_REGISTER.md` `D-86`: `DecisionEvent.author_label` and `DecisionRecord.author_label` described themselves as *\"one configured local reviewer label ... a label, not a subject identity\"*. Since wave 41 that was false -- the server writes the authenticated reviewer, not a constant -- and the owner has now ruled that what it writes is the reviewer's **display name** rather than their login, because this is the field another reviewer reads on a decision somebody else took. **The schema does not move**: same type, same `minLength: 1`, same `maxLength: 128`. The sentence was wrong twice over and is corrected in both copies; `DecisionRecord` restates `DecisionEvent`'s properties rather than composing them with `allOf`, so a reseal that corrected one would have left `listDecisions` still describing the field falsely. An account that has chosen no display name records its login, which is a server-held string the reviewer typed and is 1..100 characters, inside this field's bounds by construction.\n\n`R-29`, and `D-46`: `RunStatus` gains one optional property, `terminal_detail`. A `failed` run could say that a dependency was unavailable and could not say **which**, because the catalog's `safe_detail_keys` live on the `ErrorEnvelope` and a 200 run reading is not an error envelope. It is the same shape and the same rule as `ErrorEnvelope.details` -- safe scalar classifiers, restricted to the keys the domain catalog declares for the reported code -- applied to the code in `terminal_reason` instead of to the one in `error_code`, and it is present only beside a `terminal_reason` because the allowlist that bounds it is a property of that code. **No component schema was added**, because the shape is declared inline exactly as `ErrorEnvelope.details` is, and **no error code was added**: a distinct code for a replay miss was the row's other option and is a second reseal, which the owner did not take. The domain catalog did not grow in that reseal. The true sentence this makes sayable is *your document is fine, the provider is fine, this deployment has no recording for it*, which `R-30` made the ordinary case by putting the alpha stand in `recorded` mode. Two migrations carry the storage: `0009_reviewer_display_name` and `0010_run_terminal_detail`.\n\nResealed 2026-09-25 by `W45-BLOCKS`. One operation is added -- `getVersionBlocks`, `GET /versions/{version_uid}/blocks` -- the first half of `R-23`'s block markup: `page_geometry_extraction` writes a real `bbox` per extracted text line and this operation reads it back, keyed by `version_uid` rather than by `run_id` because the stage carries no model and no provider reference and its output is a deterministic property of the version, identical across every run that reaches it. It answers `404` for an unknown version and, for a known one, `status: \"produced\"` or `status: \"not_produced\"` -- absent is not empty, and a version whose geometry has not yet been derived answers the same `blocks: []` as one that genuinely has none, distinguished only by `status`. It carries no crops: the stage's second artifact, the page-crop manifest, is unconditionally empty in this pipeline and is not exposed here at all. Two component schemas are added, `VersionBlockIndex` and `BlockGeometry`; no error code was added, because the only refusal this operation needs, `not_found`, was already in the catalog.\n\nResealed 2026-09-25 by `W46-SEAL` under owner rulings `R-40` and `R-44` (`docs/program/OWNER_RULINGS_2026-09-17.md` section 3.15). Two things land together because `R-40` ruled both halves in, against the cheaper recommendation the drafting session gave: the field and its aggregation in one wave.\n\n`UploadDocumentRequest.section` and `DocumentVersion.section` are added, both optional, drawing from the new `ProjectSection` enum -- legacy's fourteen project sections (`D-56`). The field lives on the document, not the version or the project: it classifies what a document is, not which revision of its bytes is being read, and a project holds many sections rather than being one. It is optional rather than required because this column starts with no rows to backfill and forcing every caller, `tests/e2e/**` among them, to name a section it may not know would fabricate a classification -- a document nobody has classified yet is a real state and is never defaulted to one of the fourteen.\n\nOne operation is added -- `getDashboardSummary`, `GET /dashboard` -- under `R-44`, the integrator's decision against the cheaper path: three of the four dashboard panels are already reachable by walking `listProjects`, `listDecisions` and `listRuns`, and the ruling is that the reseal this wave opens anyway should carry one aggregate read serving all four rather than three client-side walks a later aggregate read would only delete. It takes no parameter at all -- not a `project_uid`, not a date range, not a filter -- because a parameterised version of this operation would be a second, generic query surface over data three narrower operations already answer; what it answers is fixed: the operational shape of the whole deployment, right now. Every panel preserves absent is not empty: every `Verdict` and every `RunState` appears even at a count of zero, every one of the fourteen frozen sections appears in `section_breakdown` even with no documents, and the documents nobody has classified yet are their own row rather than folded into one of the fourteen. Seven component schemas are added -- `ProjectDocumentCount`, `VerdictCount`, `RunStateCount`, `RunActivitySpend`, `RunActivity`, `SectionDocumentCount` and `DashboardSummary` -- plus `ProjectSection`, eight in total. No error code was added: `getDashboardSummary` declares no `404`, because it names no parent identity to be missing, and no `422`, because it takes no parameter a caller could get wrong. That reseal added `/dashboard`, `getDashboardSummary` and the schemas named above.\n\nResealed 2026-09-29 by `W47-LOCK` under owner ruling `R-50` (`docs/program/OWNER_RULINGS_2026-09-17.md` section 3.17). `IssueTokenResponse` gains `is_default_credential`, boolean and required, answered by both operations that mint a credential. **No path, operation or schema moved**, because a property on a schema this document already carries adds no schema, and the domain catalog did not grow. That is why it is a reseal rather than an edit -- `D-18`'s four documents move together or the frontend reads a contract the backend does not serve.\n\n**The owner took the expensive option on purpose, and this field is only half of it.** A deployment's seeded account is published in a migration's own docstring, so an unchanged password is a password everyone who has read the runbook already has. The field is the signpost: a client learns the state at the moment it signs in and can send that reviewer to a password screen. The lock is the other half and it is behaviour, not shape: while this field is `true`, every operation except `issueToken` and `changePassword` answers the `permission_denied` it already declares, carrying the detail key `required_capability` the domain catalog already permits it, with the value `password_changed`. **No error code was added and none was needed** -- naming the capability after the act rather than after the credential tells a caller what to do, and the credential already has a name in this response. A field without the refusal would leave the API open to the seeded password for any caller that skips the screens; a refusal without the field would leave the screens to discover the state by failing.\n\nResealed 2026-10-06 by `W49-SEAL-01` under owner rulings `R-55`, `R-56`, `R-59`, `R-60` and `R-61` (`docs/program/OWNER_RULINGS_2026-09-17.md` section 3.19). The alpha gains accounts a person can hold: an e-mail address as the sign-in identifier, a full name, a role set, registration requests an administrator decides, and account management. The operations named below are added with their paths and schemas, and the domain catalog gains one code and one safe detail key; no existing operation changes shape.\n\n**Roles.** An account holds a set of `Role` values, `expert` and `admin`, and the server decides on every request what that set reaches -- a written register in the authorization seam, not a property of the credential and not a claim in it. Reading product data needs any active account with a complete profile; product changes (projects, uploads, runs, verdicts, comments, the export) need `expert`; account and request management needs `admin`. A refusal is the `403 permission_denied` every guarded operation already declares, with `required_capability` naming what is missing: `password_changed` (`R-50`), `profile_completed` (an account that has not given its names and e-mail yet reaches only `getMe`, `updateMyProfile` and `changePassword`), `role:expert` or `role:admin`. A change of an account's rights -- a role change, an archive, a restore, an administrator's password reset -- revokes every credential it holds, so it signs in again before it meets the new rights.\n\n**The account itself:** `getMe` and `updateMyProfile` (`R-59`: an account created before this reseal keeps its login until it gives its e-mail and names, in one write). **Registration:** `submitRegistration` and `readRegistrationStatus` are reachable without a credential, like `issueToken`; the status read shows an applicant `pending` and nothing else, and answers every other pair -- a rejected application included -- with the generic `401` (`R-56` and its addendum of 2026-10-06). `listRegistrations`, `approveRegistration` and `rejectRegistration` are an administrator's. **Management:** `listUsers`, `getUser`, `updateUser`, `archiveUser`, `restoreUser`, `purgeUser` and `resetUserPassword`, all `admin`; archive is the normal removal and purge deletes only an archived account that nothing references (`R-61`).\n\n**The catalog.** `rate_limited` (`429`, retryable) is added because the edge in front of `/api/v1` now throttles the unauthenticated registration operations per client, and a code invented at the edge is what the catalog's safety rules forbid; this application never raises it, and it is not declared on the operations: like the edge's own body-size refusal, it is answered before any operation is reached. `conflict` gains the safe detail key `conflict_reason`, an enum-like classifier -- `login_taken`, `request_pending`, `queue_full`, `account_referenced`, `last_admin` -- so the account and registration conflicts can be told apart without a free-text detail. Identities `usr` and `reg` enter `contracts/domain/v1/identifiers.json`, and the `app_user` and `registration_request` machines enter `state-machines.json`, which is what `state_transition_not_allowed` names. The surface moves to twenty-seven paths, thirty-four operations and seventy-seven schemas, and the domain catalog to twenty-three codes.",
+    "description": "Frozen at Gate A so `A5` can generate a typed client and `B6` can implement routers against a fixed shape, without either waiting on the other.\n\nResealed 2026-09-18 under owner ruling `R-3`: every operation here requires a bearer credential, declared once at the document root under `components.securitySchemes.bearerAuth`. The scheme names the seam and never its implementation. The operational liveness and readiness plane is outside `/api/v1`, carries no product meaning and needs no credential.\n\nWhat this surface deliberately does not have: tenancy, WebSocket or server-sent events; an export resource, export identity or export polling, because a synchronous read creates nothing; and any endpoint outside the eleven capabilities `P2-API-01` enumerates, other than the credential exchange the authorization seam needs, which `W34-CONTRACT` adds below, the aggregate dashboard read `R-44` adds in `W46-SEAL`, further below still, and the account and registration operations `W49-SEAL-01` adds at the end. Roles and a per-client throttle on the unauthenticated registration operations were on this list until `R-55` and `R-56` ruled them in; the last reseal below says what each is.\n\nThree rules hold everywhere and are not repeated per operation:\n\n1. **Opaque identity.** Every identifier is `<prefix>_<ULID>` from `contracts/domain/v1/identifiers.json`, and every path parameter carries the pattern for its entity. No response body, header or error detail ever contains a bucket name, object key, filesystem path, URL to internal storage, credential, prompt or model payload.\n2. **One failure shape.** Every non-2xx response is the `ErrorEnvelope` of `contracts/domain/v1/error-envelope.schema.json`, its `error_code` drawn from the twenty-three-code catalog and its `retryable` pinned to the catalog value for that code. A caller never infers retryability from the HTTP status.\n3. **Correlation.** Every response carries `X-Correlation-Id`. A caller may supply one on the request; the edge assigns one when the caller does not.\n\nRun state uses the contract vocabulary. The success terminal of an `AuditRun` is `published`. `succeeded` is a `StageResult` status on a different aggregate and never appears as a run state.\n\nResealed 2026-09-18 under owner ruling `R-5`, which closes `DEBT_REGISTER.md` `D-16` and `D-21` together. Three list operations -- `listDocuments`, `listVersions` and `listRuns` -- make published work reachable after a page reload: before them every read below the project list needed an identifier the client was already holding, so a reloaded screen could reach nothing that survived in the database and the store. And `RunStatus` gained `cost_micros`, `cost_basis` and `model_call_count`, so what a run spent is readable by a user for the first time. Each listing is a `GET` of the collection its parent creates into, pages with the same `cursor` and `limit` and returns the same `{items, page}` envelope as `listProjects`. No error code was added: an unknown parent is the catalog's `not_found` and a malformed cursor is `validation_failed`.\n\nAmended 2026-09-18 under owner ruling `R-8`, which closes `DEBT_REGISTER.md` `D-18`. The domain catalog gains one code, `staged_upload_lost`, and the `ErrorCode` enum below carries it: twenty-one becomes twenty-two. Two blob-store failures demanding opposite operator responses -- *stop, the instance was restored wrong* against *retry the upload* -- both answered `conflict` with `aggregate_type` `Blob`, so their envelopes were byte-identical apart from `correlation_id`. A widened `safe_detail_keys` was offered and rejected, because a detail key cannot fix `retryable`: the envelope reads that flag from the catalog for the reported code, so only a separate code carries a separate value. **No path, operation or schema changed** -- that amendment moved none of the three counts -- and the new code travels on the `503` every staging write already declares.\n\nResealed 2026-09-22 by `W34-CONTRACT`. `R-3` declared the seam and left no way to get through it: the document required a bearer credential on every operation and described no operation that hands one out, so the only caller this surface admitted was one already holding a credential from somewhere the document does not name. One operation closes that -- `issueToken`, `POST /auth/token` -- and it is a credential *exchange* and nothing more: a login and a password in, an opaque credential and its lifetime out. It is the single operation whose `security` is the empty requirement, because requiring a credential to obtain one is a closed door with a handle on the inside.\n\n**What this reseal deliberately did not add, because `T-6` forbade it.** No issuer, no discovery URL, no flow, no `bearerFormat`; and, until `R-55` superseded that part of `T-6` for the scope the `W49-SEAL-01` reseal below describes, no vocabulary of what a subject may do. The returned `token` is a string this document states no structure for; the deployment decides what it is, and the operations keep working when that decision changes. No error code was added either: an unaccepted login and password pair is the catalog's `authentication_required`, a malformed body is `validation_failed`. `permission_denied` is **not** declared here, because it means an authenticated subject refused a resource and this operation has no authenticated subject in it -- it is the operation that produces one. That reseal added one path, one operation and two schemas, and the sentence that stated the totals it produced has been rewritten as this delta: a reseal's own arithmetic stops being true at the next reseal, and `tests/contract/api_v1/test_surface_counts_in_prose.py` reads every such claim in this block against the live document. The totals are stated once, below.\n\nResealed 2026-09-22 by `W38-KB` under owner ruling `R-24`, which was ruled against the recommendation the owner was given: a client-side walk over runs and findings is cheaper and lives only as long as the alpha, and a listing operation costs a reseal and outlives it. One operation closes it -- `listDecisions`, `GET /decisions` -- because `listDecisionHistory` reads the history of **one** finding and nothing in this document enumerated decisions at all, so the knowledge base `R-23` requires had no source but a walk over every run. It is a projection in the sense `ADR-0012` fixes and creates nothing. Two component schemas were added, `DecisionRecord` and `DecisionRecordPage`; no parameter was, because `category` and `verdict` already exist and already mean the finding's category and the finding's current verdict. No error code was added: a malformed cursor is the catalog's `validation_failed`, an absent or refused credential is `authentication_required`, and there is no `404` on it at all -- the path addresses no parent identity, so an empty journal is an empty page. That reseal added one path, one operation and two schemas.\n\nResealed 2026-09-23 by `W39-REVOKE` under owner ruling `R-26`, which rules four account guards into the alpha. This is the one of them that **cannot be added later**: the other three make an account weak now and are fixed by adding them, while a credential already issued is permanent until it expires, and no later work reaches one sitting in somebody's browser. One operation closes it -- `changePassword`, `POST /auth/password` -- and it carries revocation with it, because the two share a mechanism: the account's credential generation is raised by the same write that stores the new digest, which is what makes every credential minted under the old password stop being accepted.\n\n**What this does not add.** No response schema: a credential and its lifetime is one shape and `IssueTokenResponse` already names it. No error code: a wrong current password is the catalog's `authentication_required` and a new password that is the current one is `validation_failed`. No revocation operation: taking credentials away from accounts whose passwords nobody is changing is an operator's action on the deployment, and publishing it would have required deciding who may revoke whom, which this document then had no way to say. Since `W49-SEAL-01` an administrator's changes that take an account's rights away -- archive, a role change, a password reset -- revoke that account's credentials as part of the change, still without an operation of its own. One path, one operation and one schema. The surface moved to 15 / 18 / 51.\n\nResealed 2026-09-23 by `W42-SEAL` under owner rulings `R-37` and `R-29`, and it is the first reseal here that adds no path and no operation. **No path, operation or schema moved: still 15 / 18 / 51, exactly as before.** Three things change and each is a *description* or a *property of an existing schema*, which is precisely why it still costs a reseal -- the conformance gate drops descriptions as annotation under `N4`, so nothing but this document carries them to a reader, and `D-18`'s four documents move together or the frontend reads a contract the backend does not serve.\n\n`R-37`, and `DEBT_REGISTER.md` `D-86`: `DecisionEvent.author_label` and `DecisionRecord.author_label` described themselves as *\"one configured local reviewer label ... a label, not a subject identity\"*. Since wave 41 that was false -- the server writes the authenticated reviewer, not a constant -- and the owner has now ruled that what it writes is the reviewer's **display name** rather than their login, because this is the field another reviewer reads on a decision somebody else took. **The schema does not move**: same type, same `minLength: 1`, same `maxLength: 128`. The sentence was wrong twice over and is corrected in both copies; `DecisionRecord` restates `DecisionEvent`'s properties rather than composing them with `allOf`, so a reseal that corrected one would have left `listDecisions` still describing the field falsely. An account that has chosen no display name records its login, which is a server-held string the reviewer typed and is 1..100 characters, inside this field's bounds by construction.\n\n`R-29`, and `D-46`: `RunStatus` gains one optional property, `terminal_detail`. A `failed` run could say that a dependency was unavailable and could not say **which**, because the catalog's `safe_detail_keys` live on the `ErrorEnvelope` and a 200 run reading is not an error envelope. It is the same shape and the same rule as `ErrorEnvelope.details` -- safe scalar classifiers, restricted to the keys the domain catalog declares for the reported code -- applied to the code in `terminal_reason` instead of to the one in `error_code`, and it is present only beside a `terminal_reason` because the allowlist that bounds it is a property of that code. **No component schema was added**, because the shape is declared inline exactly as `ErrorEnvelope.details` is, and **no error code was added**: a distinct code for a replay miss was the row's other option and is a second reseal, which the owner did not take. The domain catalog did not grow in that reseal. The true sentence this makes sayable is *your document is fine, the provider is fine, this deployment has no recording for it*, which `R-30` made the ordinary case by putting the alpha stand in `recorded` mode. Two migrations carry the storage: `0009_reviewer_display_name` and `0010_run_terminal_detail`.\n\nResealed 2026-09-25 by `W45-BLOCKS`. One operation is added -- `getVersionBlocks`, `GET /versions/{version_uid}/blocks` -- the first half of `R-23`'s block markup: `page_geometry_extraction` writes a real `bbox` per extracted text line and this operation reads it back, keyed by `version_uid` rather than by `run_id` because the stage carries no model and no provider reference and its output is a deterministic property of the version, identical across every run that reaches it. It answers `404` for an unknown version and, for a known one, `status: \"produced\"` or `status: \"not_produced\"` -- absent is not empty, and a version whose geometry has not yet been derived answers the same `blocks: []` as one that genuinely has none, distinguished only by `status`. It carries no crops: the stage's second artifact, the page-crop manifest, is unconditionally empty in this pipeline and is not exposed here at all. Two component schemas are added, `VersionBlockIndex` and `BlockGeometry`; no error code was added, because the only refusal this operation needs, `not_found`, was already in the catalog.\n\nResealed 2026-09-25 by `W46-SEAL` under owner rulings `R-40` and `R-44` (`docs/program/OWNER_RULINGS_2026-09-17.md` section 3.15). Two things land together because `R-40` ruled both halves in, against the cheaper recommendation the drafting session gave: the field and its aggregation in one wave.\n\n`UploadDocumentRequest.section` and `DocumentVersion.section` are added, both optional, drawing from the new `ProjectSection` enum -- legacy's fourteen project sections (`D-56`). The field lives on the document, not the version or the project: it classifies what a document is, not which revision of its bytes is being read, and a project holds many sections rather than being one. It is optional rather than required because this column starts with no rows to backfill and forcing every caller, `tests/e2e/**` among them, to name a section it may not know would fabricate a classification -- a document nobody has classified yet is a real state and is never defaulted to one of the fourteen.\n\nOne operation is added -- `getDashboardSummary`, `GET /dashboard` -- under `R-44`, the integrator's decision against the cheaper path: three of the four dashboard panels are already reachable by walking `listProjects`, `listDecisions` and `listRuns`, and the ruling is that the reseal this wave opens anyway should carry one aggregate read serving all four rather than three client-side walks a later aggregate read would only delete. It takes no parameter at all -- not a `project_uid`, not a date range, not a filter -- because a parameterised version of this operation would be a second, generic query surface over data three narrower operations already answer; what it answers is fixed: the operational shape of the whole deployment, right now. Every panel preserves absent is not empty: every `Verdict` and every `RunState` appears even at a count of zero, every one of the fourteen frozen sections appears in `section_breakdown` even with no documents, and the documents nobody has classified yet are their own row rather than folded into one of the fourteen. Seven component schemas are added -- `ProjectDocumentCount`, `VerdictCount`, `RunStateCount`, `RunActivitySpend`, `RunActivity`, `SectionDocumentCount` and `DashboardSummary` -- plus `ProjectSection`, eight in total. No error code was added: `getDashboardSummary` declares no `404`, because it names no parent identity to be missing, and no `422`, because it takes no parameter a caller could get wrong. That reseal added `/dashboard`, `getDashboardSummary` and the schemas named above.\n\nResealed 2026-09-29 by `W47-LOCK` under owner ruling `R-50` (`docs/program/OWNER_RULINGS_2026-09-17.md` section 3.17). `IssueTokenResponse` gains `is_default_credential`, boolean and required, answered by both operations that mint a credential. **No path, operation or schema moved**, because a property on a schema this document already carries adds no schema, and the domain catalog did not grow. That is why it is a reseal rather than an edit -- `D-18`'s four documents move together or the frontend reads a contract the backend does not serve.\n\n**The owner took the expensive option on purpose, and this field is only half of it.** A deployment's seeded account is published in a migration's own docstring, so an unchanged password is a password everyone who has read the runbook already has. The field is the signpost: a client learns the state at the moment it signs in and can send that reviewer to a password screen. The lock is the other half and it is behaviour, not shape: while this field is `true`, every operation except `issueToken` and `changePassword` answers the `permission_denied` it already declares, carrying the detail key `required_capability` the domain catalog already permits it, with the value `password_changed`. **No error code was added and none was needed** -- naming the capability after the act rather than after the credential tells a caller what to do, and the credential already has a name in this response. A field without the refusal would leave the API open to the seeded password for any caller that skips the screens; a refusal without the field would leave the screens to discover the state by failing.\n\nResealed 2026-10-06 by `W49-SEAL-01` under owner rulings `R-55`, `R-56`, `R-59`, `R-60` and `R-61` (`docs/program/OWNER_RULINGS_2026-09-17.md` section 3.19). The alpha gains accounts a person can hold: an e-mail address as the sign-in identifier, a full name, a role set, registration requests an administrator decides, and account management. The operations named below are added with their paths and schemas, and the domain catalog gains one code and one safe detail key; no existing operation changes shape.\n\n**Roles.** An account holds a set of `Role` values, `expert` and `admin`, and the server decides on every request what that set reaches -- a written register in the authorization seam, not a property of the credential and not a claim in it. Reading product data needs any active account with a complete profile; product changes (projects, uploads, runs, verdicts, comments, the export) need `expert`; account and request management needs `admin`. A refusal is the `403 permission_denied` every guarded operation already declares, with `required_capability` naming what is missing: `password_changed` (`R-50`), `profile_completed` (an account that has not given its names and e-mail yet reaches only `getMe`, `updateMyProfile` and `changePassword`), `role:expert` or `role:admin`. A change of an account's rights -- a role change, an archive, a restore, an administrator's password reset -- revokes every credential it holds, so it signs in again before it meets the new rights.\n\n**The account itself:** `getMe` and `updateMyProfile` (`R-59`: an account created before this reseal keeps its login until it gives its e-mail and names, in one write). **Registration:** `submitRegistration` and `readRegistrationStatus` are reachable without a credential, like `issueToken`; the status read shows an applicant `pending` and nothing else, and answers every other pair -- a rejected application included -- with the generic `401` (`R-56` and its addendum of 2026-10-06). `listRegistrations`, `approveRegistration` and `rejectRegistration` are an administrator's. **Management:** `listUsers`, `getUser`, `updateUser`, `archiveUser`, `restoreUser`, `purgeUser` and `resetUserPassword`, all `admin`; archive is the normal removal and purge deletes only an archived account that nothing references (`R-61`).\n\n**The catalog.** `rate_limited` (`429`, retryable) is added because the edge in front of `/api/v1` now throttles the unauthenticated registration operations per client, and a code invented at the edge is what the catalog's safety rules forbid; this application never raises it, and it is not declared on the operations: like the edge's own body-size refusal, it is answered before any operation is reached. `conflict` gains the safe detail key `conflict_reason`, an enum-like classifier -- `login_taken`, `request_pending`, `queue_full`, `account_referenced`, `last_admin` -- so the account and registration conflicts can be told apart without a free-text detail. Identities `usr` and `reg` enter `contracts/domain/v1/identifiers.json`, and the `app_user` and `registration_request` machines enter `state-machines.json`, which is what `state_transition_not_allowed` names. The domain catalog moved to twenty-three codes in W49.\n\nResealed 2026-10-08 by W52-SEAL-01: getProductVersion, listReleases and markReleaseNotesRead add the release boundary. The current surface has thirty paths, thirty-seven operations and eighty-three schemas. All require an active complete account; a release read mark is the account's own state. The catalog and contract_version do not move. Stage C provides the release loader and runtime values.",
     "contact": {
       "name": "docs/program/P02_SEAMS.md - seam S8"
     },
@@ -68,6 +68,10 @@
     {
       "name": "users",
       "description": "An administrator managing accounts: names, roles, archive, restore, purge and password reset."
+    },
+    {
+      "name": "releases",
+      "description": "The running product version and visible release history."
     }
   ],
   "paths": {
@@ -2053,6 +2057,144 @@
           }
         }
       }
+    },
+    "/system/version": {
+      "get": {
+        "operationId": "getProductVersion",
+        "tags": [
+          "releases"
+        ],
+        "summary": "Read the running product version.",
+        "description": "Requires an active account with a complete profile. product_version comes from VERSION, build_id identifies this API process's content, and contract_version remains the API contract version.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The running product, build and contract versions.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductVersion"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/releases": {
+      "get": {
+        "operationId": "listReleases",
+        "tags": [
+          "releases"
+        ],
+        "summary": "List visible releases and what is new.",
+        "description": "Requires an active account with a complete profile. Returns releases at or below the running product version, highest revision per release, newest first with the archive last. whats_new contains only non-archive versions loaded after this account was created and above its read mark.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visible releases and unread versions for this account.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/me/release-notes": {
+      "put": {
+        "operationId": "markReleaseNotesRead",
+        "tags": [
+          "account"
+        ],
+        "summary": "Mark release notes read through a version.",
+        "description": "Requires an active account with a complete profile, including an administrator without the expert role. The credential names the account; the body cannot name another. A known version at or below the running product version raises its high-water mark; a lower or equal version is a no-op. Unknown or future versions are validation_failed. No idempotency key is required.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReleaseNotesReadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "The account's read mark was raised or already covered this version.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3825,7 +3967,7 @@
           },
           "new_password": {
             "type": "string",
-            "description": "The password the account will hold. The bounds are mechanical. The deployment enforces a password policy on this operation \u2014 a refusal is `validation_failed` and names the rule in `message` \u2014 and that policy is not declared here, because it is the deployment's and may differ between them. No history and no expiry are enforced. A value equal to `current_password` is `validation_failed`, because a change that changes nothing would report a password as changed when it was not.",
+            "description": "The password the account will hold. The bounds are mechanical. The deployment enforces a password policy on this operation \u2014 a refusal is `validation_failed` and names the rule in `message` — and that policy is not declared here, because it is the deployment's and may differ between them. No history and no expiry are enforced. A value equal to `current_password` is `validation_failed`, because a change that changes nothing would report a password as changed when it was not.",
             "minLength": 1,
             "maxLength": 1024
           }
@@ -4453,6 +4595,146 @@
             "description": "Why the request is rejected, 1-256 characters after surrounding whitespace is removed, with no control character but a line feed. Stored for administrators; the applicant is not shown it.",
             "minLength": 1,
             "maxLength": 256
+          }
+        }
+      },
+      "ProductVersion": {
+        "type": "object",
+        "description": "The running product version from VERSION, its content-derived build identifier, and the unchanged API contract version.",
+        "additionalProperties": false,
+        "required": [
+          "product_version",
+          "build_id",
+          "contract_version"
+        ],
+        "properties": {
+          "product_version": {
+            "type": "string"
+          },
+          "build_id": {
+            "type": "string"
+          },
+          "contract_version": {
+            "type": "string"
+          }
+        }
+      },
+      "ReleaseNoteKind": {
+        "type": "string",
+        "description": "The editorial category of a release note.",
+        "enum": [
+          "new",
+          "improved",
+          "fixed"
+        ]
+      },
+      "ReleaseNoteItem": {
+        "type": "object",
+        "description": "One user-facing note; where is the navigation label saved at release time.",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "screen",
+          "where",
+          "text"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ReleaseNoteKind"
+          },
+          "screen": {
+            "type": "string"
+          },
+          "where": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "ReleaseEntry": {
+        "type": "object",
+        "description": "The highest stored revision of one visible release. The archive entry is last; range_label is null for a normal release.",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "revision",
+          "date",
+          "title",
+          "is_archive",
+          "range_label",
+          "items"
+        ],
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "is_archive": {
+            "type": "boolean"
+          },
+          "range_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseNoteItem"
+            }
+          }
+        }
+      },
+      "ReleaseList": {
+        "type": "object",
+        "description": "Visible releases newest first, archive last, and the versions this account has not yet read.",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "whats_new"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseEntry"
+            }
+          },
+          "whats_new": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "MarkReleaseNotesReadRequest": {
+        "type": "object",
+        "description": "The known release version through which this account has read. Unknown or future versions are refused.",
+        "additionalProperties": false,
+        "required": [
+          "read_through"
+        ],
+        "properties": {
+          "read_through": {
+            "type": "string"
           }
         }
       }

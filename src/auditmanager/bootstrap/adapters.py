@@ -3,7 +3,8 @@
 `B6` wrote `build_router` to take six protocols and construct none of them. Five more
 were added later with a default rather than a required argument -- `credentials` at wave
 39, `blocks` at `W45-BLOCKS`, `dashboard` at `W46-SEAL`, `accounts` and `registrations` at
-`W49-SEAL-01` -- so this file now carries eleven adapter classes. Each adapter is thin on purpose - it
+`W49-SEAL-01`, and a release placeholder at `W52-SEAL-01` -- so this file now carries
+twelve adapter classes. Each implemented adapter is thin on purpose - it
 opens a session, calls one module, maps the result into the view the frozen schema
 declares, and does nothing else. A rule that lives here rather than in a module is a rule
 the module's own tests cannot reach.
@@ -40,6 +41,7 @@ from auditmanager.api.schemas.findings import (
 )
 from auditmanager.api.schemas.projects import ProjectView
 from auditmanager.api.schemas.registrations import RegistrationListingView, RegistrationView
+from auditmanager.api.schemas.models import ProductVersion, ReleaseList
 from auditmanager.api.schemas.runs import RunStatusView, StageStateView
 from auditmanager.api.security import (
     ROLE_ADMIN,
@@ -71,6 +73,23 @@ class _SessionHolder:
     def _read(self, work: Any) -> Any:
         with self._sessions() as session:
             return work(session)
+
+
+class ReleasesAdapter:
+    """Explicit Stage-B port placeholder; Stage C installs the release context.
+
+    Every authorized request receives the catalog's dependency refusal. No version,
+    release or read mark is fabricated while VERSION and the loader are absent.
+    """
+
+    def get_product_version(self) -> ProductVersion:
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE)
+
+    def list_releases(self, *, user_uid: str) -> ReleaseList:
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE)
+
+    def mark_read(self, *, user_uid: str, read_through: str) -> None:
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE)
 
 
 def _not_found(what: str) -> DomainError:

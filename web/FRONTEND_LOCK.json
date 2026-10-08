@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "633a58a53baf6652625b59d3db9438ae01e8c4ac8da788160882f031123f2e37",
-    "content_commit": "e86bfbe",
-    "content_commit_subject": "feat(W49-SEAL-01a): reseal the contract for accounts, roles and registration",
+    "sha256": "dc8f18754d22ef85820c124e086df7f9d9ca769c188554decd8a373b1b460304",
+    "content_commit": "fd78ad8",
+    "content_commit_subject": "grant(W52-INT-A2B-01): dispatch W52-SEAL-01",
     "dispatch_named_commit": "7912504",
-    "commit_note": "Resealed 2026-10-06 by `W49-SEAL-01` under owner rulings R-55 ... R-61 (docs/program/OWNER_RULINGS_2026-09-17.md section 3.19) and the seal decisions recorded in docs/program/W49-SEAL-01a.md. Fourteen operations on ten new paths -- getMe, updateMyProfile, submitRegistration, readRegistrationStatus, listRegistrations, approveRegistration, rejectRegistration, listUsers, getUser, updateUser, archiveUser, restoreUser, purgeUser, resetUserPassword -- and sixteen component schemas; the ErrorCode enum gains rate_limited (the domain catalog's twenty-third code, answered only by the edge), and the denials of a role vocabulary and of rate limiting are superseded under R-55. No existing operation changes shape. The client was regenerated with `npm --prefix web run api:generate` from these bytes.",
+    "commit_note": "Resealed 2026-10-08 by W52-SEAL-01: three release operations and six schemas; contract_version and the error catalog remain unchanged. The digest is the authority; this atomic seal cannot name its own commit. Stage C supplies the release loader and runtime values.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 27,
-    "operations": 34,
-    "component_schemas": 77,
+    "paths": 30,
+    "operations": 37,
+    "component_schemas": 83,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "633a58a53baf6652625b59d3db9438ae01e8c4ac8da788160882f031123f2e37",
+    "snapshot_sha256": "dc8f18754d22ef85820c124e086df7f9d9ca769c188554decd8a373b1b460304",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "2878ce7a62fe7be05e87daaa3b3404cbd95e957a3e37c3a0462f150d5d398ced",
-      "index.ts": "ec8212686cd7ac9d38b36e6c6b53fed42fb54974472b793d4af99dd531d4e3c6",
-      "operations.gen.ts": "f0c57410cc210ed9eab3825ae9b313835a699e7b8e0973607be2e1f83c9bca15",
-      "types.gen.ts": "62bdb860f82ccb40c063ff745c4c36a26a5c682d4ba3b62501ebfee6f00e622b"
+      "client.gen.ts": "2eb5334503ed28a41b349552208e754576789f8bb3aedc94120be7c67f04e6d9",
+      "index.ts": "8082e5d914d7d00ddb4f8c5d9cd622ca794433dc026d89dfc211619fbc5e5b6e",
+      "operations.gen.ts": "684c794e3b4455e09df18a781aec3c176e9a8c9374bf87acce4feb9630eaa5b8",
+      "types.gen.ts": "596d7518569e183af04327ce577721e66b5eb40b191e99ac98ffba0e9964e9f6"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
