@@ -2,9 +2,9 @@
 
 **Status:** revision 3 design, adopted onto the development line by `W52-INT-ENTRY-01`
 from planning SHA `2b45a11` on 2026-10-08. The entry and execution amendment below
-supersedes the older gate-dependent dispatch sentence. W52 is **not frozen or
-dispatchable**: `W52-RULE-01` has recorded R-71…R-74;
-`W52-FREEZE-01` remains due.
+supersedes the older gate-dependent dispatch sentence. `W52-RULE-01` recorded
+R-71…R-74. `W52-FREEZE-01` freezes Stage A only; Stage B/C/C2 are not
+dispatchable until their exact grants follow the preceding merges.
 Round 2 (both judges ACCEPT-WITH-FIXES, all fixes
 text or grant lines) is applied; no third round (`R-74`). Revision 2 was rebuilt on the first judging round (design judge:
 ACCEPT-WITH-FIXES, seven majors; grants judge: REJECT, seven majors; both verified against
@@ -341,12 +341,26 @@ excludes `tests/contract/tools/fixtures/**` and exempts the one literal named in
 mutation per family using the **current** values (editing the facts file reddens the matching
 pins; a new count literal compared with the operation count anywhere reddens the inventory).
 
-**`W52-GATE-01`** (§3.7). Allowed: `Makefile` (battery recipe only),
-`tests/integration/db/conftest.py`, `tests/integration/storage/conftest.py`,
-`tests/integration/ingest/conftest.py`, `tests/e2e/pc01/conftest.py`, `tests/integration/auth/**`
-(isolation of the throttle and revocation tests only), `docs/program/W52-GATE-01.md`.
+**`W52-GATE-01`** (§3.7). Current Stage-A grant:
+`tests/integration/db/conftest.py`,
+`tests/integration/db/test_fixture_template.py` (new),
+`tests/integration/storage/conftest.py`,
+`tests/integration/ingest/conftest.py`,
+`tests/integration/auth/{conftest.py,test_sign_in_throttle.py,test_revocation.py}`
+(isolation of the throttle and revocation tests only), and
+`docs/program/W52-GATE-01.md`. `tasks/W52-GATE-01.md` owns the exact paths.
 Code-only delivery uses focused checks and lint. The JUnit invariant, literal
 `GATE OK` and timing are D-140 validation obligations on the later exact candidate.
+
+**Freeze reconciliation:** the Makefile battery partition is already merged by
+`W52-INT-GATE-PARTITION-01`, and PC-01 provider-mode restoration is already
+merged by `W52-INT-GATE-PC01-ENV-01`; neither is granted again. The executable
+Stage-A grant is `tasks/W52-GATE-01.md`: the three remaining conftests, an
+isolated fixture regression and the throttle/revocation files it names.
+Content-derived canonical Blob keys cannot carry a fabricated per-test
+prefix; test-owned bucket isolation or an equivalently complete ownership
+boundary must preserve detection of unexpected writes. Stop if that needs
+a path beyond the task grant.
 
 **`W52-PINSWEEP-01`** (A4). `tools/plan/pin_sweep.py <event>…` with events `reseal-surface`,
 `error-code`, `migration`, `table`, `route`, `contract-version`: prints every file a task causing
@@ -592,7 +606,9 @@ records a measured build equal to the candidate's; tag `v0.3.0`; the first row o
 
 ## 5. Integration order
 
-1. `W52-RULE-01`, `W52-FREEZE-01` (current-tree sweep; gate timing deferred).
+1. `W52-RULE-01`, `W52-FREEZE-01` (Stage-A exact base and advisory current-tree
+   sweep; gate timing deferred). Stage-B/C/C2 task grants are written after
+   the preceding stage's accepted merge and checked against a fresh sweep.
 2. Stage A code: reconcile merged FACTS and PINSWEEP, then GATE; run
    `pin_sweep --check` on Stage-B task files. AUDIT/ATTACK and gate measurement
    run in the later validation stage.
