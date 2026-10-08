@@ -311,9 +311,10 @@ with no retention rule; the administrator knows the temporary password a reset s
 
 ### D-128 — the closure judge's register findings
 
-> **Further narrowed 2026-10-08 by `W52-DEBT-GUARDS-128F2`, merged at `05bd099`.**
-> F-2's mutation guard now discovers executable `useMutation` calls in all feature
-> model TypeScript files, including `model/archive.ts`; the explicit invalidation map
+> **Further narrowed 2026-10-08 by `W52-DEBT-GUARDS-128F2`, first merged at `05bd099`,
+> with its TSX parsing correction merged at `000a915`.** F-2's mutation guard now
+> discovers executable `useMutation` calls in all feature model TypeScript files,
+> including `model/archive.ts` and JSX-first `.tsx` files; the explicit invalidation map
 > remains mandatory. Its focused file passed 15 tests and frontend lint. F-1/F-10/F-11
 > remain open; QA and full gate remain D-139/D-140.
 >

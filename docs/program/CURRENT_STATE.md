@@ -11,7 +11,8 @@
 > The independent D-133 proxy-code correction is merged through `3cfc8d9`; its W56 and
 > live-validation halves remain open.
 > D-128 guard corrections F-3…F-6 are merged through `030eba9`, F-7 presentation through
-> `a761e79`, and F-2 mutation discovery through `05bd099`; F-1/F-10/F-11 remain open.
+> `a761e79`, and F-2 mutation discovery with TSX parsing through `000a915`;
+> F-1/F-10/F-11 remain open.
 > The combined implementation passed 148 focused tests and frontend lint; its red
 > rendered-language branch-coverage assertion remains recorded in the lane reports.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
