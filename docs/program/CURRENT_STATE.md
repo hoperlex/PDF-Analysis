@@ -36,6 +36,9 @@
 > battery after the gate's separate foundation step. The other 3,216 collected
 > test IDs are unchanged; 91 focused contract/governance tests and lint passed.
 > Full-gate outcome and timing remain D-140.
+> `W52-INT-GATE-PC01-ENV-01` confines PC-01's recorded provider mode to one
+> test at a time; a local teardown probe and 62 focused tests passed. The
+> service-backed journey and full gate remain D-139/D-140.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers

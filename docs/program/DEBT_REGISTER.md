@@ -173,6 +173,11 @@ the later battery; the other 3,216 collected test IDs stayed identical. It
 did not run a new full gate or measure JUnit outcome parity/timing. D-140
 remains open.
 
+`W52-INT-GATE-PC01-ENV-01` confines PC-01's recorded provider mode to each
+test and restores its absence at teardown; two local PC-01 tests with a
+teardown probe, 60 governance/prose tests and lint passed. The service-backed
+journey, full-gate JUnit outcome parity and timing remain D-139/D-140.
+
 The W52 FACTS branch's optional web typecheck reported two `exactOptionalPropertyTypes` errors
 in `web/src/_pages/account/ui/account-page.tsx` and
 `web/src/_pages/register/ui/register-page.tsx`. The exact same two errors reproduce on the
