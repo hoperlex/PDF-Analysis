@@ -24,6 +24,10 @@
 > its live browser evidence remains deferred.
 > The combined implementation passed 148 focused tests and frontend lint; its red
 > rendered-language branch-coverage assertion remains recorded in the lane reports.
+> `W52-INT-VALIDATE-01` measured the published `e2cfea92` candidate with a full
+> `make gate` attempt: foundation 35 and Python 3,245 passed; frontend lint passed,
+> but two TypeScript errors stopped the gate before Vitest. Separately, Vitest had
+> 1,705 passes and seven failures. There is no `GATE OK`; D-137–D-140 remain open.
 > `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers

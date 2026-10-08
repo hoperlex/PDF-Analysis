@@ -139,6 +139,11 @@ acceptance packs, run the checks, classify findings and hand corrections to late
 for the same candidate. Close only when every deferred QA, independent review, built-stand and
 manual acceptance item has a recorded result or a documented owner disposition.
 
+`W52-INT-VALIDATE-01` measured the combined `origin/dev` candidate `e2cfea92`:
+foundation, Python/DB/corpus and frontend diagnostics ran. Candidate-by-candidate
+acceptance inventory, independent QA/review, built-stand and manual evidence are still
+absent. This diagnostic does not close D-139.
+
 `W52-FACTS-01`'s broad integration/API attempt reached the suite's private-bucket fixture and
 failed at setup because `S3_ENDPOINT_URL` was absent. The integrator did not start a stand.
 This attempt is not an integration pass; the exact suite remains in the validation inventory.
@@ -153,6 +158,11 @@ the exact candidate it proposes to release and record the literal `GATE OK`.
 
 **Check:** the validation-wave report names that clean SHA, the full `make gate` command, log and
 literal `GATE OK`; the SHA is unchanged for any subsequent release claim.
+
+`W52-INT-VALIDATE-01` attempted the full gate on `e2cfea92`. Foundation 35 and the
+canonical Python battery 3,245 passed, but two TS2375 errors stopped the frontend
+typecheck. A separate complete Vitest run found seven failures. No `GATE OK`; D-140
+remains open until correction and a new exact-candidate full gate.
 
 The W52 FACTS branch's optional web typecheck reported two `exactOptionalPropertyTypes` errors
 in `web/src/_pages/account/ui/account-page.tsx` and
@@ -173,6 +183,10 @@ row. Corrections found there belong to the later correction stage.
 reports and acceptance evidence for the same SHA. This row closes only when QA, independent
 review, the built-stand journey and manual pass have explicit recorded results.
 
+The `e2cfea92` diagnostic in `W52-INT-VALIDATE-01` does not include W51-QA-01,
+independent X/Y review, a built-stand identity journey or human A13–A20 results. Its
+language guard remains red. D-137 stays open.
+
 ### D-138 — the W51 end-of-wave gate is deferred
 
 **Opened 2026-10-08 by the integrator on the owner's direct instruction.** The combined W51
@@ -184,7 +198,7 @@ literal `GATE OK`. Until then W51 is not gated, tagged or authorized for `origin
 
 **Check:** `docs/program/W51-INT-CLOSE.md` or its later validation-wave report must name the
 tested SHA, full `make gate` command, log and literal `GATE OK`, with that SHA unchanged for any
-release claim.
+release claim. `W52-INT-VALIDATE-01` recorded a red full gate on `e2cfea92`; D-138 stays open.
 
 ### D-134 — invalid return input appears in escaped Next Flight metadata
 
