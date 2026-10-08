@@ -97,6 +97,8 @@ awaits D-139.
 D-129 Y F-5's three identity docstrings now state the served refusal and atomic
 rollback behavior, including the `R-56` addendum; `W52-INT-129F5-01.md` records
 the integration slot for the composition-root docstring. No behavior changed.
+The `access.revoke` operator-command docstring no longer claims the role-aware
+API has no roles; `W52-INT-129REVOKE-01.md` records that D-129 prose correction.
 The D-125 corpus projection now checks each re-read document against the raw
 fingerprint that determined its snapshot, including repaired and direct
 segmentation reads. Sixteen local fixture tests, Python compilation and lint

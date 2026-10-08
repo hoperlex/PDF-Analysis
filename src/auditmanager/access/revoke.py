@@ -7,12 +7,10 @@ Why this is a command and not an operation
 ------------------------------------------
 The question this answers is *"the pilot has ended -- stop the credentials we handed out"*.
 That is an **operator's** action, taken by somebody with a shell on the deployment, and it
-is not a reviewer's. Publishing it as an HTTP operation would require deciding who may call
-it, and this system has no roles: ``permission_denied`` is in the catalog precisely because
-nothing raises it yet, and :mod:`auditmanager.api.security` says in as many words that it
-decides *who* the subject is and not *what* they may do. An operation every authenticated
-reviewer could call to revoke another account is not a smaller decision than adding roles,
-it is the same decision taken by accident.
+is not a reviewer's. The HTTP API now has roles and typed ``permission_denied`` refusals,
+but no operation grants bulk credential revocation. Publishing one would require an
+explicit contract and authorization rule for that power; the existence of an ``admin``
+role alone does not grant it.
 
 So the surface this adds is zero. A reviewer who wants to invalidate their own credentials
 changes their password, which revokes them as part of the same statement; an operator who
