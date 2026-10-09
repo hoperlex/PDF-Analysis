@@ -4,13 +4,13 @@
 # Every base/source input has an immutable identity: both base images carry multi-arch index
 # digests, and both official source archives carry a commit URL plus a BuildKit-enforced SHA-256.
 # Go then checks the complete module graph against the upstream go.sum files in read-only mode.
-FROM golang:1.24.2-bookworm@sha256:79390b5e5af9ee6e7b1173ee3eac7fadf6751a545297672916b59bfa0ecf6f71 AS build
+FROM golang:1.24.8-bookworm@sha256:4ed690d6649d63c312b99a6120025ec79ce3b542968a37da53d6236c7c61a848 AS build
 
 ARG TARGETOS
 ARG TARGETARCH
 
-ADD --checksum=sha256:8819e3e7817e46b7b3798f8f200ead208562e571563c2e040352378031abe9f2 \
-    https://github.com/minio/minio/archive/07c3a429bfed433e49018cb0f78a52145d4bedeb.tar.gz \
+ADD --checksum=sha256:45521908307306e925c98d629e1c17d78c8b72b6ee242b1bfb1409f7d8ee5841 \
+    https://github.com/minio/minio/archive/9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a.tar.gz \
     /tmp/minio.tar.gz
 ADD --checksum=sha256:95cd293c7119f16921a6dc515a1fb74a2227f19fd994b9c8b770a154e802ac44 \
     https://github.com/minio/mc/archive/7394ce0dd2a80935aded936b09fa12cbb3cb8096.tar.gz \
@@ -19,7 +19,7 @@ ADD --checksum=sha256:95cd293c7119f16921a6dc515a1fb74a2227f19fd994b9c8b770a154e8
 RUN mkdir --parents /src/minio /src/mc /out \
     && tar --extract --gzip --file /tmp/minio.tar.gz --directory /src/minio --strip-components=1 \
     && tar --extract --gzip --file /tmp/mc.tar.gz --directory /src/mc --strip-components=1 \
-    && test "$(sed -n 's/^toolchain go//p' /src/minio/go.mod)" = "1.24.2" \
+    && test "$(sed -n 's/^toolchain go//p' /src/minio/go.mod)" = "1.24.8" \
     && test "$(sed -n 's/^toolchain go//p' /src/mc/go.mod)" = "1.23.10"
 
 # Keep the release metadata that upstream's git-backed gen-ldflags.go would produce. Source
@@ -33,11 +33,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     && CGO_ENABLED=0 GOTOOLCHAIN=local GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" \
        go build -mod=readonly -buildvcs=false -tags kqueue -trimpath \
        -ldflags '-s -w \
-         -X github.com/minio/minio/cmd.Version=2025-09-07T16:13:09Z \
+         -X github.com/minio/minio/cmd.Version=2025-10-15T17:29:55Z \
          -X github.com/minio/minio/cmd.CopyrightYear=2025 \
-         -X github.com/minio/minio/cmd.ReleaseTag=RELEASE.2025-09-07T16-13-09Z \
-         -X github.com/minio/minio/cmd.CommitID=07c3a429bfed433e49018cb0f78a52145d4bedeb \
-         -X github.com/minio/minio/cmd.ShortCommitID=07c3a429bfed \
+         -X github.com/minio/minio/cmd.ReleaseTag=RELEASE.2025-10-15T17-29-55Z \
+         -X github.com/minio/minio/cmd.CommitID=9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a \
+         -X github.com/minio/minio/cmd.ShortCommitID=9e49d5e7a648 \
          -X github.com/minio/minio/cmd.GOPATH=/go \
          -X github.com/minio/minio/cmd.GOROOT=/usr/local/go' \
        -o /out/minio . \
@@ -51,7 +51,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
          -X github.com/minio/mc/cmd.CommitID=7394ce0dd2a80935aded936b09fa12cbb3cb8096 \
          -X github.com/minio/mc/cmd.ShortCommitID=7394ce0dd2a8' \
        -o /out/mc . \
-    && /out/minio --version | grep --fixed-strings 'RELEASE.2025-09-07T16-13-09Z' \
+    && /out/minio --version | grep --fixed-strings 'RELEASE.2025-10-15T17-29-55Z' \
     && /out/mc --version | grep --fixed-strings 'RELEASE.2025-08-13T08-35-41Z'
 
 FROM alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1 AS runtime
@@ -63,8 +63,8 @@ COPY --from=build /src/mc/CREDITS /licenses/mc/CREDITS
 
 LABEL org.opencontainers.image.source="https://github.com/hoperlex/PDF-Analysis" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
-      io.auditmanager.minio.server-release="RELEASE.2025-09-07T16-13-09Z" \
-      io.auditmanager.minio.server-commit="07c3a429bfed433e49018cb0f78a52145d4bedeb" \
+      io.auditmanager.minio.server-release="RELEASE.2025-10-15T17-29-55Z" \
+      io.auditmanager.minio.server-commit="9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a" \
       io.auditmanager.minio.client-release="RELEASE.2025-08-13T08-35-41Z" \
       io.auditmanager.minio.client-commit="7394ce0dd2a80935aded936b09fa12cbb3cb8096"
 
