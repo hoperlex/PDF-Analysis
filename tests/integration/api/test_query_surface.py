@@ -1,8 +1,9 @@
-"""The four declared query parameters, against the adapters the application ships.
+"""Declared query parameters, against the adapters the application ships.
 
-``contracts/api/v1/openapi.json`` declares ``cursor``, ``limit``, ``category`` and
-``verdict``. ``src/auditmanager/api/README.md`` reported, as gap 5, that no query surface
-accepted any of them. A caller that supplies a filter and has it ignored is worse off than
+``contracts/api/v1/openapi.json`` declares ``cursor``, ``limit``, ``category``,
+``verdict`` and later filters such as W53's ``run_id``. The original gap 5 in
+``src/auditmanager/api/README.md`` was that no query surface accepted the first four.
+A caller that supplies a filter and has it ignored is worse off than
 one whose filter is refused: the refusal is visible, and the silent pass is a page the
 reviewer believes was filtered.
 
@@ -32,13 +33,18 @@ from typing import Any, Iterator, Mapping, Sequence
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from w13_api_driver import Answer, Request, Surface, dispatch
+from auditmanager.api.routers import Router
+from auditmanager.api.routers.execution import build_execution_routes
 from auditmanager.api.schemas.common import DEFAULT_LIMIT, MAX_LIMIT, MIN_LIMIT
 from auditmanager.api.schemas.models import FindingCategory, Verdict
+from auditmanager.bootstrap.adapters import ExecutionAdapter
 from auditmanager.findings import TextLayer
-from auditmanager.shared.identity import ProjectUid
+from auditmanager.jobs.public import JobRepository
+from auditmanager.runs.repository import RunRepository
+from auditmanager.shared.identity import ProjectUid, RunId
 
 from .test_listing_surface import Catalogue
 
@@ -860,11 +866,12 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
     paged: Catalogue,
     contract: dict[str, Any],
     session: Session,
+    session_factory: sessionmaker[Session],
 ) -> None:
     """The guard against the defect this session exists for.
 
-    The four parameters were declared in the frozen document, exposed by the generated
-    client and read by nothing. A behavioural test per parameter catches that only for the
+    The original four parameters were declared in the frozen document, exposed by the
+    generated client and read by nothing. A behavioural test per parameter catches that only for the
     parameters someone remembered to test; this catches it for every query parameter the
     document declares, including ones added later.
 
@@ -898,6 +905,10 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         # below, in this test's transaction, and the caller is given `admin` to reach them.
         "listRegistrations": "/registrations",
         "listUsers": "/users",
+        # `W53-SEAL-01`: the two execution reads are served below through the
+        # shipped ExecutionAdapter on this suite's rollback-joined session.
+        "listExecutionQueue": "/execution/queue",
+        "listExecutionJournal": "/execution/journal",
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -913,9 +924,42 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listDecisions": {"category", "cursor", "limit", "verdict"},
         "listRegistrations": {"status", "cursor", "limit"},
         "listUsers": {"include_archived", "cursor", "limit"},
+        "listExecutionQueue": {"cursor", "limit"},
+        "listExecutionJournal": {"run_id", "cursor", "limit"},
     }, f"the contract's query surface moved: {declared}"
 
     accounts_and_requests = _seed_accounts_and_requests(session, shipped_router)
+
+    # Build the same declared execution routes over their shipped adapter, with the
+    # suite's credential port and transaction-bound session factory. The older
+    # shipped_router fixture has the execution declarations but passes no execution
+    # port, so it cannot answer these two operations.
+    execution_router = Router(credentials=shipped_router.router.credentials)
+    build_execution_routes(
+        execution_router,
+        ExecutionAdapter(session_factory, runs=None),  # type: ignore[arg-type]
+    )
+    execution_surface = Surface(execution_router)
+
+    # Three distinct queued Runs provide three Jobs and at least two journal events
+    # per Run. Their events are newer than any committed residue in a reused lane,
+    # while the fixture's outer transaction rolls all of them back afterwards.
+    run_repository = RunRepository()
+    jobs = JobRepository()
+    execution_runs: list[str] = []
+    for _ in range(3):
+        run_id = str(RunId.new())
+        run_repository.create(
+            session, run_id=run_id, project_uid=mixed_run.run.project_uid,
+            version_uid=mixed_run.run.version_uid,
+            analysis_profile_id=mixed_run.run.analysis_profile_id,
+            prompt_bundle_id=mixed_run.run.prompt_bundle_id,
+            provider_mode="recorded", frozen_input_digest="a" * 64,
+            command_id=None,
+        )
+        run_repository.advance(session, run_id=run_id, from_state="created", to_state="queued")
+        jobs.enqueue(session, run_id=run_id)
+        execution_runs.append(run_id)
 
     # One supplied value per parameter that the answer must be visibly different for, and
     # the difference each one has to make. Literals, not derived: a case computed from the
@@ -987,35 +1031,38 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
 
     for operation_id, names in declared.items():
         target = targets[operation_id]
-        baseline = ok(get(shipped_router, f"{target}?limit=200"))
+        surface = (
+            execution_surface if operation_id.startswith("listExecution") else shipped_router
+        )
+        baseline = ok(get(surface, f"{target}?limit=200"))
         assert len(baseline["items"]) >= 2, (
             f"{operation_id} returned {len(baseline['items'])} items; this test needs at "
             "least two for a filter or a page boundary to be visible"
         )
 
         # limit: one item, and the first one.
-        limited = ok(get(shipped_router, f"{target}?limit=1"))
+        limited = ok(get(surface, f"{target}?limit=1"))
         if [item for item in limited["items"]] != [baseline["items"][0]]:
             inert.setdefault(operation_id, []).append("limit")
 
         # cursor: the page after the first item starts at the second.
         cursor = limited["page"]["next_cursor"]
         assert cursor, f"{operation_id}: a truncated page carried no cursor"
-        resumed = ok(get(shipped_router, f"{target}?limit=1&cursor={cursor}"))
+        resumed = ok(get(surface, f"{target}?limit=1&cursor={cursor}"))
         if [item for item in resumed["items"]] != [baseline["items"][1]]:
             inert.setdefault(operation_id, []).append("cursor")
 
         if "category" in names:
             for category in categories:
-                filtered = ok(get(shipped_router, f"{target}?category={category}&limit=200"))
+                filtered = ok(get(surface, f"{target}?category={category}&limit=200"))
                 if {item["category"] for item in filtered["items"]} != {category}:
                     inert.setdefault(operation_id, []).append(f"category={category}")
 
         if "verdict" in names and operation_id != "listDecisions":
             # Every finding of a fresh run is `pending`, so the discriminating case is the
             # verdict that must return nothing rather than the one that returns everything.
-            everything = ok(get(shipped_router, f"{target}?verdict=pending&limit=200"))
-            nothing = ok(get(shipped_router, f"{target}?verdict=rejected&limit=200"))
+            everything = ok(get(surface, f"{target}?verdict=pending&limit=200"))
+            nothing = ok(get(surface, f"{target}?verdict=rejected&limit=200"))
             if not everything["items"] or nothing["items"]:
                 inert.setdefault(operation_id, []).append("verdict")
 
@@ -1023,7 +1070,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             # `W49-SEAL-01`: one pending and one rejected request exist (seeded above), so
             # each value must return a non-empty page of exactly that status.
             for status in ("pending", "rejected"):
-                filtered = ok(get(shipped_router, f"{target}?status={status}&limit=200"))
+                filtered = ok(get(surface, f"{target}?status={status}&limit=200"))
                 carried = {item["status"] for item in filtered["items"]}
                 if carried != {status}:
                     inert.setdefault(operation_id, []).append(f"status={status}")
@@ -1031,8 +1078,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         if "include_archived" in names:
             # One account was archived above: absent by default, present when asked for.
             archived_uid = accounts_and_requests["archived"]
-            default = ok(get(shipped_router, f"{target}?limit=200"))
-            asked = ok(get(shipped_router, f"{target}?include_archived=true&limit=200"))
+            default = ok(get(surface, f"{target}?limit=200"))
+            asked = ok(get(surface, f"{target}?include_archived=true&limit=200"))
             if archived_uid in {item["user_uid"] for item in default["items"]} or (
                 archived_uid not in {item["user_uid"] for item in asked["items"]}
             ):
@@ -1046,13 +1093,25 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             # this run has certainly produced against the one nothing can produce:
             # `accepted`, from the `accept` appended above, and `needs_manual_review`,
             # which is in the closed union and has no PC-01 producer at all.
-            accepted = ok(get(shipped_router, f"{target}?verdict=accepted&limit=200"))
+            accepted = ok(get(surface, f"{target}?verdict=accepted&limit=200"))
             impossible = ok(
-                get(shipped_router, f"{target}?verdict=needs_manual_review&limit=200")
+                get(surface, f"{target}?verdict=needs_manual_review&limit=200")
             )
             carried = {item["current_verdict"] for item in accepted["items"]}
             if not accepted["items"] or carried != {"accepted"} or impossible["items"]:
                 inert.setdefault(operation_id, []).append("verdict")
+
+        if "run_id" in names:
+            own_run = execution_runs[-1]
+            foreign_run = execution_runs[-2]
+            assert foreign_run in {item["run_id"] for item in baseline["items"]}, (
+                "the unfiltered journal has no foreign Run to exclude"
+            )
+            filtered = ok(get(surface, f"{target}?run_id={own_run}&limit=200"))
+            if len(filtered["items"]) < 2 or {
+                item["run_id"] for item in filtered["items"]
+            } != {own_run}:
+                inert.setdefault(operation_id, []).append("run_id")
 
     assert inert == {}, (
         "the contract declares these query parameters and supplying one changes nothing, "
