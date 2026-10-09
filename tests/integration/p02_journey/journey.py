@@ -85,6 +85,9 @@ P02_TABLES = (
     "contract_state_transition",
     "document",
     "document_version",
+    # `0017_execution_queue`. A P02 replay must not change the deployment's
+    # dispatch-pause control row; count it instead of silently omitting it.
+    "execution_control",
     "expert_decision_event",
     "finding",
     "norm_chunk",
