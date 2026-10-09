@@ -116,6 +116,7 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56890`, `60490/60491`; API `56990`, Next `31490` | `gate-w53judge-x` — independent W53 X review | 2026-10-09 | after W53 X report and owner-only cleanup |
 | `56900`, `60500/60501`; API `57000`, Next `31510` | `gate-w53judge-y` — independent W53 Y review | 2026-10-09 | after W53 Y report and owner-only cleanup |
 | `56910`, `60510/60511`; API `57010`, Next `31520` | `gate-w53int` — W53 integrator QA and final gate | 2026-10-09 | after clean candidate gate and owner-only cleanup |
+| `56920`, `60520/60521`; API `57020`, Next `31530` | `gate-w53qa` — independent `W53-QA-01`, disposable stand | 2026-10-09 | after QA handback and owner-only cleanup |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,
