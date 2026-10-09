@@ -692,21 +692,21 @@ def _execute_run_body(
     # creates and executes in one go (every suite under `tests/integration/runs`, the
     # export suites, the p02 journey) still hands over a run in `created`.
     #
-    # Nothing here is tolerant: a run in any other state falls straight through to the
-    # `queued -> running` compare-and-set, which matches no row and raises
-    # `state_transition_not_allowed` naming both states. A second executor picking up a run
-    # that is already `running` is refused by the database, not by this branch.
+    # Job authority must inspect the Run while it is still queued. Advancing first
+    # would make a legitimate direct caller indistinguishable from an orphan
+    # running Run whose prior provider effect might already have spent.
     if run.state == INITIAL_STATE:
         run_repo.advance(
             session, run_id=run_id, from_state=INITIAL_STATE, to_state="queued"
         )
-    if run.state in {INITIAL_STATE, "queued"}:
-        run_repo.advance(session, run_id=run_id, from_state="queued", to_state="running")
-    elif run.state != "running":
+    if run.state not in {INITIAL_STATE, "queued", "running"}:
         raise DomainError(
             ErrorCode.STATE_TRANSITION_NOT_ALLOWED, machine="audit_run",
             current_state=run.state, requested_state="running",
         )
+    authority = job_repo.start_execution(session, run_id=run_id)
+    if run.state in {INITIAL_STATE, "queued"}:
+        run_repo.advance(session, run_id=run_id, from_state="queued", to_state="running")
     # `D-20`. The authority boundary that makes what has happened so far durable.
     #
     # Every state this function writes used to be written and overwritten inside the
@@ -717,7 +717,6 @@ def _execute_run_body(
     # Effect journals add finer commits later in the stage loop. A crash can therefore
     # expose truthful partial rows. Lease recovery fences a lost Attempt and
     # resumes only when no provider effect can have spent; ambiguous effects fail.
-    authority = job_repo.start_execution(session, run_id=run_id)
     # Unlike the old optional checkpoint, this commit is unconditional. It makes the
     # running Run plus Job/Attempt/Lease authority durable before the first S3 or provider
     # effect on every caller path, including direct integration invocations.

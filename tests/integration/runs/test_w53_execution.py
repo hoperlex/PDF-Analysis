@@ -288,6 +288,47 @@ class _PricedRecordedAdapter:
         return replace(self.inner.complete(request), reported_cost_usd=0.5)
 
 
+def test_running_run_without_job_refuses_before_new_authority_or_provider(
+    session, blob_store, helpers, recorded_adapter, provider_config
+):
+    seeded = helpers.seed_version(session, blob_store)
+    run_id = _run(session, seeded)
+    RunRepository().advance(
+        session, run_id=run_id, from_state="queued", to_state="running"
+    )
+    _prior_call(session, run_id, cost_micros=500_000, basis="measured")
+    adapter = _PricedRecordedAdapter(recorded_adapter)
+    with pytest.raises(DomainError) as refusal:
+        execute_run(
+            session, run_id, blob_store=blob_store, adapter=adapter,
+            provider_config=provider_config,
+        )
+    assert refusal.value.code is ErrorCode.STATE_TRANSITION_NOT_ALLOWED
+    assert refusal.value.detail_fields == {
+        "machine": "audit_run", "current_state": "running", "requested_state": "queued"
+    }
+    assert adapter.calls == 0
+    assert RunRepository().get(session, run_id).state == "running"
+    assert session.execute(text(
+        "SELECT count(*) FROM job WHERE run_id = :run_id"
+    ), {"run_id": run_id}).scalar_one() == 0
+    assert session.execute(text(
+        "SELECT count(*) FROM attempt a JOIN job j ON j.job_id = a.job_id "
+        "WHERE j.run_id = :run_id"
+    ), {"run_id": run_id}).scalar_one() == 0
+    assert session.execute(text(
+        "SELECT count(*) FROM lease l JOIN attempt a ON a.attempt_id = l.attempt_id "
+        "JOIN job j ON j.job_id = a.job_id WHERE j.run_id = :run_id"
+    ), {"run_id": run_id}).scalar_one() == 0
+    assert session.execute(text(
+        "SELECT count(*) FROM audit_event WHERE aggregate_type = 'AuditRun' "
+        "AND aggregate_id = :run_id AND event_type LIKE 'stage.%'"
+    ), {"run_id": run_id}).scalar_one() == 0
+    assert session.execute(text(
+        "SELECT count(*) FROM model_call WHERE run_id = :run_id"
+    ), {"run_id": run_id}).scalar_one() == 1
+
+
 def _prior_call(session, run_id, *, cost_micros, basis):
     call_id = str(ModelCallId.new())
     session.execute(text(

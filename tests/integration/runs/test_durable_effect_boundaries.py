@@ -150,8 +150,9 @@ def _live_config() -> ProviderConfig:
 def _authority_for(session: Session, started, jobs: JobRepository):
     runs = RunRepository()
     runs.advance(session, run_id=started.run_id, from_state="created", to_state="queued")
+    authority = jobs.start_execution(session, run_id=started.run_id)
     runs.advance(session, run_id=started.run_id, from_state="queued", to_state="running")
-    return jobs.start_execution(session, run_id=started.run_id)
+    return authority
 
 
 def _expire_and_reclaim(factory, run_id: str) -> None:
@@ -828,11 +829,11 @@ def test_a_wrong_execution_token_and_a_superseded_attempt_fail_closed(
         runs.advance(
             session, run_id=started.run_id, from_state="created", to_state="queued"
         )
+        jobs = JobRepository()
+        authority = jobs.start_execution(session, run_id=started.run_id)
         runs.advance(
             session, run_id=started.run_id, from_state="queued", to_state="running"
         )
-        jobs = JobRepository()
-        authority = jobs.start_execution(session, run_id=started.run_id)
         session.commit()
 
         supplied = "wrong-token-value"

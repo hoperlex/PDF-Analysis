@@ -417,13 +417,15 @@ class JobRepository:
             raise self._transition_error("audit_run", str(run_state), "running")
         job = session.execute(_LOCK_JOB, {"run_id": run_id}).mappings().first()
         if job is None:
-            # Direct execute_run callers create a run without the API's accepting
-            # transaction. Keep that compatibility path, but only for an absent Job.
+            # Direct execute_run callers can enqueue a queued Run without the
+            # API's accepting transaction. A running Run requires prior Job authority.
             existing = session.execute(
                 text("SELECT 1 FROM job WHERE run_id = :run_id"), {"run_id": run_id}
             ).scalar_one_or_none()
             if existing is not None:
                 raise self._transition_error("job", "locked", "leased")
+            if run_state != "queued":
+                raise self._transition_error("audit_run", str(run_state), "queued")
             job_id = self.enqueue(session, run_id=run_id)
         else:
             job_id = str(job["job_id"])
