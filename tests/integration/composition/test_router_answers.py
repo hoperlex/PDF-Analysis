@@ -34,6 +34,9 @@ from auditmanager.api.security import API_TOKEN_VARIABLE
 #: a credential minted from it -- which is what the deployment itself does.
 DEPLOYMENT_SECRET = "composition-static-token"
 
+# Stage C serves both release GETs through the composed adapter.
+RELEASE_GETS = frozenset({"/system/version", "/releases"})
+
 _STATIC_TOKEN_CACHE: str | None = None
 
 
@@ -172,7 +175,7 @@ class TestEveryOperationReachesItsModule:
 
 
 class TestNoOperationAnswersWithAServerFault:
-    """The anti-vacuity of this suite: a 500 anywhere means an adapter cannot call out.
+    """An unexplained 5xx means an adapter cannot call out.
 
     Written as a sweep rather than as six separate assertions so that a thirteenth operation
     added later is covered without anyone remembering to extend a list.
@@ -193,10 +196,14 @@ class TestNoOperationAnswersWithAServerFault:
             probes.append((method, filled))
 
         assert len(probes) >= 5, f"the sweep found too few GET routes: {probes}"
+        assert RELEASE_GETS <= {path for _method, path in probes}
         faults = []
         for method, path in probes:
             status, body = call(app, method, path)
-            if status >= 500:
+            if path in RELEASE_GETS:
+                if status != 200 or not isinstance(body, dict):
+                    faults.append((path, status, body))
+            elif status >= 500:
                 faults.append((path, status, body))
         assert faults == [], f"operations answered with a server fault: {faults}"
 

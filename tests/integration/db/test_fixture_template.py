@@ -36,13 +36,13 @@ def test_one_migration_supplies_isolated_clones_and_empty_stays_empty(
     try:
         with first_engine.begin() as connection:
             assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-                "0015_accounts_roles_registration"
+                "0016_release_notes"
             )
             connection.execute(text("CREATE TABLE fixture_marker (value integer NOT NULL)"))
             connection.execute(text("INSERT INTO fixture_marker VALUES (1)"))
         with second_engine.connect() as connection:
             assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-                "0015_accounts_roles_registration"
+                "0016_release_notes"
             )
             assert connection.execute(text("SELECT to_regclass('public.fixture_marker')")).scalar() is None
         with empty_engine.connect() as connection:

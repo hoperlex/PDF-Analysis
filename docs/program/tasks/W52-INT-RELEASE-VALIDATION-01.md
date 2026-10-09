@@ -24,6 +24,41 @@ separate publication task after the owner names the exact SHA.
 - `docs/program/dispatch/W51-PLAN.md` §4–5, `W52-PLAN.md` §4–5,
   `MAIN_AUTODEPLOY_POLICY.md` and D-137–D-140 are controlling inputs.
 
+## Enumerator ownership
+
+- enumerated_set_changed: no
+- enumerator_path: not_applicable
+- enumerator_owner: not_applicable
+- totality_query: `tests/support/expected_facts.json`; this task changes no member.
+
+## Captured premise evidence
+
+- premise: development and main are separate, and W51/W52 validation is open.
+
+### P-01 — remote refs and common ancestor
+
+- captured_at: 2026-10-09
+- command: `git ls-remote origin refs/heads/dev refs/heads/main; git merge-base origin/dev origin/main`
+- captured_output:
+  ```text
+  d0bcb258bdc1c0d10b3fb753622128421dc1c89d refs/heads/dev
+  21eba6eb44bfcea91348a021fa5ae84c9ab26fca refs/heads/main
+  3fc0dcfa1fbe59c2e00007fdbd7159e43c2d3551
+  ```
+- interpretation: neither ref is a descendant of the other; validation and reconciliation
+  are required before a release candidate exists.
+
+## Historical evidence
+
+- correction_mode: none
+- source_record: not_applicable
+- addendum_path: not_applicable
+
+## Publication authority
+
+- development_target: origin/dev
+- origin_main_authority: none
+
 ## Allowed paths
 
 - This task and `docs/program/W52-INT-RELEASE-VALIDATION-01.md` for evidence.

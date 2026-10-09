@@ -738,7 +738,6 @@ def build_apps() -> tuple[Any, Any]:
     no module is patched.
     """
     load_env_file()
-    os.environ["AUDITMANAGER_PROVIDER_MODE"] = "recorded"
     for leaked in ("ANTHROPIC_API_KEY", "PROXY_LLM_BASE_URL", "PROXY_LLM_TOKEN"):
         assert leaked not in os.environ, (
             f"{leaked} reached the baseline; a recorded capture must not be able to spend"

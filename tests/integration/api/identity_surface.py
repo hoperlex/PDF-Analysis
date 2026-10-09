@@ -12,6 +12,8 @@ operation.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -28,7 +30,9 @@ from auditmanager.bootstrap.adapters import (
     AccountAdapter,
     CredentialAdapter,
     RegistrationAdapter,
+    ReleasesAdapter,
 )
+from auditmanager.releases.public import ReleaseRepository
 from w13_api_driver import DEPLOYMENT_SECRET, Surface
 
 __all__ = ["ADMIN_ROLES", "credential_for", "identity_surface", "make_account"]
@@ -37,6 +41,34 @@ SIGNER = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
 assert SIGNER is not None
 
 ADMIN_ROLES = ("expert", "admin")
+
+
+_PRODUCT_VERSION = (Path(__file__).resolve().parents[3] / "VERSION").read_text(encoding="utf-8").strip()
+
+
+class _CheckedReleasePort:
+    """Keep the injected test port visible to the whole-port wiring guard."""
+
+    def __init__(
+        self, delegate: ReleasesPort | None, session_factory: sessionmaker[Session]
+    ) -> None:
+        selected = delegate if delegate is not None else ReleasesAdapter(
+            ReleaseRepository(session_factory, product_version=_PRODUCT_VERSION),
+            product_version=_PRODUCT_VERSION,
+            build_id="b0123456789abcdef",
+        )
+        if not isinstance(selected, ReleasesPort):
+            raise TypeError("release test stand-in does not implement ReleasesPort")
+        self._delegate = selected
+
+    def get_product_version(self):
+        return self._delegate.get_product_version()
+
+    def list_releases(self, *, user_uid: str):
+        return self._delegate.list_releases(user_uid=user_uid)
+
+    def mark_read(self, *, user_uid: str, read_through: str):
+        return self._delegate.mark_read(user_uid=user_uid, read_through=read_through)
 
 
 def identity_surface(
@@ -65,7 +97,7 @@ def identity_surface(
             registrations=RegistrationAdapter(
                 session_factory, registrations=RegistrationRepository()
             ),
-            releases=releases,
+            releases=_CheckedReleasePort(releases, session_factory),
         )
     )
 

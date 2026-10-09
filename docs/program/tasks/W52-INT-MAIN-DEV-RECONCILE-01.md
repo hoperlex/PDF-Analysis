@@ -25,6 +25,53 @@ expectation that Stage C made false. Publish to `origin/dev` only after QA and a
 - The eight main-only test paths listed in `W52-INT-VALIDATION-ENTRY-01` §2 and
   the release behavior implemented on development Stage C.
 
+## Enumerator ownership
+
+- enumerated_set_changed: no
+- enumerator_path: not_applicable
+- enumerator_owner: not_applicable
+- totality_query: `tests/support/expected_facts.json` and the eight-path diff;
+  no public contract member is changed.
+
+## Captured premise evidence
+
+- premise: main has eight test-only repairs after the common ancestor; its Stage-B
+  release 503 expectations are stale against the development Stage-C adapter.
+
+### P-01 — main-only path inventory
+
+- captured_at: 2026-10-09
+- command: `git diff --name-status 3fc0dcf..origin/main`
+- captured_output:
+  ```text
+  A docs/program/W52-INT-MAIN-01.md
+  A docs/program/W52-INT-MAIN-SEAL-01.md
+  A docs/program/tasks/W51-INT-HOTFIX-01.md
+  A docs/program/tasks/W52-INT-MAIN-01.md
+  A docs/program/tasks/W52-INT-MAIN-SEAL-01.md
+  M tests/characterization/w13_baseline/journey.py
+  M tests/integration/access/conftest.py
+  M tests/integration/api/identity_surface.py
+  M tests/integration/api/qa_w49/conftest.py
+  M tests/integration/composition/test_an_absent_parent_is_not_an_empty_page.py
+  M tests/integration/composition/test_every_port_implementation_is_whole.py
+  M tests/integration/composition/test_router_answers.py
+  M tests/integration/db/test_fixture_template.py
+  ```
+- interpretation: the eight tests need semantic review; inherited records remain
+  historical evidence about the main publication.
+
+## Historical evidence
+
+- correction_mode: addendum
+- source_record: `docs/program/W52-INT-MAIN-SEAL-01.md`
+- addendum_path: `docs/program/W52-INT-MAIN-DEV-RECONCILE-01.md`
+
+## Publication authority
+
+- development_target: origin/dev
+- origin_main_authority: none
+
 ## Allowed paths
 
 - A local merge of the exact frozen main SHA into the integration branch.
