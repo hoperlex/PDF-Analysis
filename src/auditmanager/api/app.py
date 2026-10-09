@@ -296,7 +296,7 @@ def _run_lifespan(application: Application) -> Any:
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        from auditmanager.runs.public import reconcile_at_startup
+        from auditmanager.runs.public import reconcile_at_startup, start_serving_carrier
 
         report = reconcile_at_startup(application.session_factory)
         if report.run_count or report.abandoned_count:
@@ -306,10 +306,7 @@ def _run_lifespan(application: Application) -> Any:
                 report.run_count,
                 report.abandoned_count,
             )
-        from auditmanager.runs.carrier import DurableCarrier
-
-        if isinstance(application.carrier, DurableCarrier):
-            application.carrier.start()
+        start_serving_carrier(application.carrier)
         try:
             yield
         finally:

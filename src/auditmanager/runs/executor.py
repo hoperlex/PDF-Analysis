@@ -109,8 +109,12 @@ from auditmanager.findings.public import (
     run_grounding_gate,
     select_terminal,
 )
-from auditmanager.jobs.public import AttemptAuthority, JobRepository
-from auditmanager.jobs.lease import start_for_current_thread, stop_for_current_thread
+from auditmanager.jobs.public import (
+    AttemptAuthority,
+    JobRepository,
+    start_attempt_lease_heartbeat,
+    stop_attempt_lease_heartbeat,
+)
 from auditmanager.runs.repository import (
     INITIAL_STATE,
     PC01_STAGES,
@@ -721,7 +725,7 @@ def _execute_run_body(
     # running Run plus Job/Attempt/Lease authority durable before the first S3 or provider
     # effect on every caller path, including direct integration invocations.
     session.commit()
-    start_for_current_thread(session, authority)
+    start_attempt_lease_heartbeat(session, authority)
     if checkpoint is not None:
         checkpoint()
 
@@ -900,7 +904,7 @@ def execute_run(*args: Any, **kwargs: Any) -> ExecutionResult:
     try:
         return _execute_run_body(*args, **kwargs)
     finally:
-        stop_for_current_thread()
+        stop_attempt_lease_heartbeat()
 
 
 __all__ = [

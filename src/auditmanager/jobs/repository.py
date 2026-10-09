@@ -335,7 +335,7 @@ class JobRepository:
         A watchdog passes ``force_attempt_id`` after the fixed execution deadline. It
         fences authority but does not free the caller's in-process worker slot.
         """
-        from auditmanager.runs.repository import RunRepository
+        from auditmanager.runs.public import fail_reclaimed_run
 
         session.execute(text("SET LOCAL lock_timeout = '2s'"))
         recovered = 0
@@ -392,10 +392,11 @@ class JobRepository:
                     self._advance_job(session, str(candidate["job_id"]), "retry_wait", "dead_letter")
                 else:
                     self._advance_job(session, str(candidate["job_id"]), state, "failed")
-                RunRepository().terminate(
-                    session, run_id=run_id, from_state=str(run_state), to_state="failed",
-                    terminal_reason=ErrorCode.ANALYSIS_FAILED.value,
-                    interrupted_reason="provider_outcome_unknown" if ambiguous else "attempt_budget_exhausted",
+                fail_reclaimed_run(
+                    session, run_id=run_id, from_state=str(run_state),
+                    interrupted_reason=(
+                        "provider_outcome_unknown" if ambiguous else "attempt_budget_exhausted"
+                    ),
                 )
             else:
                 if state == "running":
