@@ -197,7 +197,7 @@ The backup design below is advisory until its owner policy, capacity and later t
 ### 3.5 Custody design frozen now, built in W54 (D-2.2, E-6)
 
 Recorded in `R-W2` and in the rewritten `NORM_CORPUS_CUSTODY.md`, NORM-Q05, the `ADR-0020` addendum and
-`tasks/NORM-CUSTODY-01.md`:
+`NORM-CUSTODY-W53-ADDENDUM.md` (preserving the completed historical task `tasks/NORM-CUSTODY-01.md`):
 
 - **Roles live on bindings.** Storage objects are content-identified bytes; a binding or manifest says
   what they are. `publish` of bytes already `available` under the same id **reuses** them after
@@ -270,7 +270,7 @@ facts file; the custody document rewrites of §3.5. Allowed — **`W52-SEAL-01`'
   sentences in `docs/program/CURRENT_STATE.md` and `docs/program/ALPHA_ROADMAP.md`;
 - `docs/program/NORM_CORPUS_CUSTODY.md`, `docs/program/NORM_CORPUS_DECISION_BACKLOG.md`,
   `docs/architecture/adr/ADR-0020-normative-corpus-alpha-runtime.md` (addendum only),
-  `docs/program/tasks/NORM-CUSTODY-01.md`;
+  `docs/program/NORM-CUSTODY-W53-ADDENDUM.md` (new; historical task remains unchanged);
 - every further path `pin_sweep.py` prints at the freeze; `docs/program/W53-SEAL-01.md`.
 Required: `pin_sweep.py --check` clean; contract tests; a fresh upgrade, an upgrade of a database at
 `0016` with rows (an unreleased lease, a queued run without a Job), a refused downgrade with retained

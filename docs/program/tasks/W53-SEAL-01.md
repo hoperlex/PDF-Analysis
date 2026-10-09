@@ -39,9 +39,9 @@ The six W53 execution operations and optional `RunStatus.reaudit_of_run_id` are 
 
 ## Historical evidence
 
-- correction_mode: none
-- source_record: not_applicable
-- addendum_path: not_applicable
+- correction_mode: addendum
+- source_record: `docs/program/tasks/NORM-CUSTODY-01.md`
+- addendum_path: `docs/program/NORM-CUSTODY-W53-ADDENDUM.md`
 
 ## Publication authority
 
@@ -61,13 +61,13 @@ The six W53 execution operations and optional `RunStatus.reaudit_of_run_id` are 
 - `tests/integration/foundation/test_cross_provider_publication.py`, `tests/integration/p02_journey/journey.py`, `tests/support/expected_facts.json`, `tests/support/expected_facts.py`, `tests/e2e/pc01/test_acceptance.py`, `tests/e2e/pc01/journey/manifest.json` — exact new pins only.
 - `web/src/app/bff/v1/[...path]/route.ts`, `web/src/shared/api/{credentialed-forward,authorization}.ts`, `web/src/shared/config/screen-registry.ts`, `web/src/shared/lib/routes.ts`, `web/src/_pages/knowledge-base/ui/knowledge-base-page.tsx`, `web/tests/unit/**` — W53 generated/capability/surface references only, no execution UI.
 - `web/src/_app/navigation.ts`, `web/src/shared/config/index.ts`, `web/src/widgets/home-tiles/model/registrations-screen.ts` — route-pin review only; edit solely an affected W53 enumerator if its current content proves it necessary.
-- `docs/program/{CONTRACT_PIN_REGISTRY,P02_SEAMS,CURRENT_STATE,ALPHA_ROADMAP,NORM_CORPUS_CUSTODY,NORM_CORPUS_DECISION_BACKLOG}.md`, `docs/program/tasks/NORM-CUSTODY-01.md`, `docs/architecture/adr/ADR-0020-normative-corpus-alpha-runtime.md` — direct reseal/custody-design corrections; ADR addendum only.
+- `docs/program/{CONTRACT_PIN_REGISTRY,P02_SEAMS,CURRENT_STATE,ALPHA_ROADMAP,NORM_CORPUS_CUSTODY,NORM_CORPUS_DECISION_BACKLOG}.md`, `docs/program/NORM-CUSTODY-W53-ADDENDUM.md`, `docs/architecture/adr/ADR-0020-normative-corpus-alpha-runtime.md` — direct reseal/custody-design corrections; preserve the completed `NORM-CUSTODY-01.md` task and write the new addendum instead; ADR addendum only.
 - `docs/manual-tests/{PC-01_prototype,README}.md`, `infra/deploy/{README.md,serve.py}`, `infra/deploy/proxy/nginx.conf`, `src/auditmanager/api/README.md` — exact head/surface prose, not deployment behavior.
 - `docs/program/W53-SEAL-01.md` — six-item hand-back.
 
 ## Forbidden hotspots
 
-Every path outside this list; root dependency/lock files; global styles; existing migration files; error-catalog and identifier semantic changes; MinIO image/compose/foundation-lock paths; backup scripts/reset/readiness/runbook behavior; `VERSION`, `release-notes/**`; execution behavior in `jobs/**`, `runs/**`, `analysis/text/**`, `api/app.py` lifespan; refs, tags and the working stand. A pin-sweep hit is a review obligation, not permission to change unrelated behavior.
+Every path outside this list; the completed historical `docs/program/tasks/NORM-CUSTODY-01.md`; root dependency/lock files; global styles; existing migration files; error-catalog and identifier semantic changes; MinIO image/compose/foundation-lock paths; backup scripts/reset/readiness/runbook behavior; `VERSION`, `release-notes/**`; execution behavior in `jobs/**`, `runs/**`, `analysis/text/**`, `api/app.py` lifespan; refs, tags and the working stand. A pin-sweep hit is a review obligation, not permission to change unrelated behavior.
 
 ## Non-goals
 
