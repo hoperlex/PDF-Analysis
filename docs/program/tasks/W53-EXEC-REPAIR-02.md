@@ -91,6 +91,13 @@ STOP-01/STOP-02 limitations. This repair closes only the orphan-running flaw.
   already `running` must prove existing Job authority. No other stage,
   retry, carrier behavior or public signature may change.
 - `tests/integration/runs/test_w53_execution.py`: focused regression only.
+- `tests/integration/runs/test_durable_effect_boundaries.py`: only the
+  `_authority_for` setup near line 151 and the setup in
+  `test_a_wrong_execution_token_and_a_superseded_attempt_fail_closed` near
+  line 830. Claim the Job while the Run is `queued`, then advance it to
+  `running`, both before the existing commit; preserve every assertion and
+  fault being tested. The first expanded repair run had 33 passes and only
+  these two obsolete setup failures.
 - `docs/program/W53-EXEC-REPAIR-02-HANDBACK.md`: six-item report.
 
 ## Forbidden hotspots
