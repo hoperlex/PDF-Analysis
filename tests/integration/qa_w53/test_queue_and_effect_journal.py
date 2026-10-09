@@ -70,15 +70,32 @@ def test_pause_between_hint_and_claim_refuses_new_authority(engine, blob_store, 
     with Session(engine) as seed:
         jobs.set_paused(seed, paused=False)
         seeded = helpers.seed_version(seed, blob_store)
+        competing_run_id = _queued_run(seed, seeded)
+        competing_job_id = jobs.enqueue(seed, run_id=competing_run_id)
+        jobs.set_priority(seed, job_id=competing_job_id, priority=100)
         run_id = _queued_run(seed, seeded)
         job_id = jobs.enqueue(seed, run_id=run_id)
-        jobs.set_priority(seed, job_id=job_id, priority=100)
+        jobs.set_priority(seed, job_id=job_id, priority=99)
         seed.commit()
 
     try:
         with Session(engine) as dispatcher:
-            assert jobs.next_queued_run(dispatcher) == run_id
-            dispatcher.commit()
+            assert jobs.next_queued_run(dispatcher) != run_id
+
+        # The hint has no run_id argument. Lock every other runnable Run on a
+        # separate connection so SKIP LOCKED reaches this Job even when earlier
+        # tests left queued Jobs behind. This remains a real dispatcher hint.
+        with Session(engine) as competing_claims:
+            locked = competing_claims.execute(text(
+                "SELECT r.run_id FROM audit_run r JOIN job j ON j.run_id = r.run_id "
+                "WHERE j.state = 'queued' AND r.state IN ('queued', 'running') "
+                "AND j.available_at <= statement_timestamp() AND r.run_id <> :run_id "
+                "FOR UPDATE OF r"
+            ), {"run_id": run_id}).scalars().all()
+            assert competing_run_id in locked
+            with Session(engine) as dispatcher:
+                assert jobs.next_queued_run(dispatcher) == run_id
+                dispatcher.commit()
 
         with Session(engine) as administrator:
             jobs.set_paused(administrator, paused=True)
@@ -101,6 +118,13 @@ def test_pause_between_hint_and_claim_refuses_new_authority(engine, blob_store, 
         with Session(engine) as administrator:
             jobs.set_paused(administrator, paused=False)
             administrator.commit()
+        with Session(engine) as cleanup:
+            for owned_run_id in (run_id, competing_run_id):
+                cancel_audit_run(
+                    cleanup, run_id=owned_run_id, roles=frozenset({"expert"}),
+                    idempotency_key="w53-qa-cleanup-" + uuid4().hex,
+                )
+            cleanup.commit()
 
 
 def test_lease_reclaim_journals_the_effect_outcome(session, blob_store, helpers) -> None:
