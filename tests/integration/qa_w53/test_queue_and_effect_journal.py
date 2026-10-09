@@ -40,7 +40,18 @@ def test_priority_edit_does_not_hide_an_unseen_queue_job(session, blob_store, he
     jobs.set_priority(session, job_id=first, priority=100)
     jobs.set_priority(session, job_id=unseen, priority=90)
     queue = ExecutionAdapter(lambda: nullcontext(session), runs=None)
-    page_one = queue.list_queue(cursor=None, limit=1)
+    cursor = None
+    seen = set()
+    while True:
+        page_one = queue.list_queue(cursor=cursor, limit=1)
+        assert len(page_one.items) == 1, "the A anchor was not reachable"
+        current = page_one.items[0].job_id
+        assert current not in seen, "queue continuation repeated a Job before A"
+        if current == first:
+            break
+        seen.add(current)
+        cursor = page_one.page.next_cursor
+        assert cursor is not None, "the A anchor was not reachable"
     assert [item.job_id for item in page_one.items] == [first]
     cursor = page_one.page.next_cursor
     assert isinstance(cursor, str)

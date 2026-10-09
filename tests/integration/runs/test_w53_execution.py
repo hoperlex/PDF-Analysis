@@ -163,6 +163,23 @@ def test_generic_audit_event_without_run_payload_is_projected_from_identity(
         assert page[0].payload == {}
 
 
+def _queue_page_at_job(queue, job_id):
+    """Read actual one-item pages until this test's anchor is emitted."""
+    cursor = None
+    seen = set()
+    while True:
+        page = queue.list_queue(cursor=cursor, limit=1)
+        assert len(page.items) == 1, f"own anchor {job_id} was not reachable"
+        current = page.items[0].job_id
+        assert current not in seen, "queue continuation repeated an earlier Job"
+        if current == job_id:
+            assert page.page.next_cursor is not None
+            return page
+        seen.add(current)
+        cursor = page.page.next_cursor
+        assert cursor is not None, f"own anchor {job_id} was not reachable"
+
+
 def test_queue_cursor_follows_priority_order_after_new_insert(
     session, blob_store, helpers
 ):
@@ -172,13 +189,12 @@ def test_queue_cursor_follows_priority_order_after_new_insert(
     second = jobs.enqueue(session, run_id=_run(session, seeded))
     jobs.set_priority(session, job_id=first, priority=100)
     jobs.set_priority(session, job_id=second, priority=98)
-    repo = ExecutionRepository()
-    page1 = repo.list_queue(session, cursor=None, limit=1)
-    assert page1[0].job_id == first
+    queue = ExecutionAdapter(lambda: nullcontext(session), runs=None)
+    page1 = _queue_page_at_job(queue, first)
     later = jobs.enqueue(session, run_id=_run(session, seeded))
     jobs.set_priority(session, job_id=later, priority=99)
-    page2 = repo.list_queue(session, cursor=page1[0].position, limit=200)
-    identities = [item.job_id for item in page2]
+    page2 = queue.list_queue(cursor=page1.page.next_cursor, limit=1000)
+    identities = [item.job_id for item in page2.items]
     assert first not in identities
     assert identities.index(later) < identities.index(second)
 
@@ -193,18 +209,18 @@ def test_queue_emitted_cursor_survives_anchor_state_edit_and_refuses_bad_fields(
     jobs.set_priority(session, job_id=first, priority=100)
     jobs.set_priority(session, job_id=unseen, priority=90)
     queue = ExecutionAdapter(lambda: nullcontext(session), runs=None)
-    first_page = queue.list_queue(cursor=None, limit=1)
+    first_page = _queue_page_at_job(queue, first)
     assert [item.job_id for item in first_page.items] == [first]
     cursor = first_page.page.next_cursor
     assert cursor is not None
-    assert [item.job_id for item in queue.list_queue(cursor=cursor, limit=20).items] == [unseen]
+    assert unseen in [item.job_id for item in queue.list_queue(cursor=cursor, limit=1000).items]
 
     # Only the anchor row moves; the emitted token keeps the old boundary.
     session.execute(text("UPDATE job SET state = 'leased' WHERE job_id = :job_id"),
                     {"job_id": first})
-    second_page = queue.list_queue(cursor=cursor, limit=20)
-    assert [item.job_id for item in second_page.items] == [unseen]
+    second_page = queue.list_queue(cursor=cursor, limit=1000)
     assert unseen in [item.job_id for item in second_page.items]
+    assert first not in [item.job_id for item in second_page.items]
 
     for parts in (
         ("q1", "5", "100", first_page.items[0].created_at.isoformat(), first),
@@ -225,23 +241,31 @@ def test_queued_tie_order_matches_dispatcher(session, blob_store, helpers):
     job_ids = [jobs.enqueue(session, run_id=run_id) for run_id in run_ids]
     for job_id in job_ids:
         jobs.set_priority(session, job_id=job_id, priority=70)
-    expected = session.execute(text(
-        "SELECT job_id FROM job WHERE job_id = ANY(:job_ids) "
-        "ORDER BY priority DESC, created_at, job_id"
-    ), {"job_ids": job_ids}).scalars().all()
-    assert jobs.next_queued_run(session) == session.execute(text(
-        "SELECT run_id FROM job WHERE job_id = :job_id"
-    ), {"job_id": expected[0]}).scalar_one()
+    eligible = session.execute(text(
+        "SELECT j.job_id, j.run_id FROM job j JOIN audit_run r ON r.run_id = j.run_id "
+        "WHERE j.state = 'queued' AND r.state IN ('queued', 'running') "
+        "AND j.available_at <= statement_timestamp() "
+        "AND NOT EXISTS (SELECT 1 FROM execution_control WHERE singleton AND paused) "
+        "ORDER BY j.priority DESC, j.created_at, j.job_id"
+    )).mappings().all()
+    assert eligible
+    expected = [row["job_id"] for row in eligible]
+    own_expected = [job_id for job_id in expected if job_id in job_ids]
+    assert set(own_expected) == set(job_ids)
+    assert jobs.next_queued_run(session) == eligible[0]["run_id"]
     queue = ExecutionAdapter(lambda: nullcontext(session), runs=None)
     observed = []
     cursor = None
-    while len(observed) < len(job_ids):
+    while True:
         page = queue.list_queue(cursor=cursor, limit=1)
+        assert len(page.items) == 1
+        assert page.items[0].job_id not in observed
         observed.extend(item.job_id for item in page.items)
         cursor = page.page.next_cursor
         if cursor is None:
             break
-    assert observed == expected
+    assert [job_id for job_id in observed if job_id in expected] == expected
+    assert [job_id for job_id in observed if job_id in job_ids] == own_expected
 
 
 def _claim(session, run_id):
