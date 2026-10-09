@@ -1,0 +1,16 @@
+# W53 integrator first full gate — diagnostic failure, repair grants
+
+On 2026-10-09 the integrator ran exactly one complete `make gate` on a clean `integration/w53` SHA `9a121cf28de619d6ff8f5fcb765aa1c62d522307`, in the disposable `gate-w53int` lane (PostgreSQL port 56910, S3 ports 60510/60511). This is **not** acceptance evidence: exit status 2, no `GATE OK`. Foundation passed 35/35, including migrations, DB and S3 checks. The canonical Python battery ended **3343 passed, 13 failed, 6 skipped, 298 subtests passed** in 721.66 s; the gate correctly stopped before frontend checks.
+
+Preflight `/tmp/w53-int-gate/preflight.log` SHA-256 `5f02458b254756f6d542b96af6bdb8329252c296a0f3502eb0956ce41c113499` records UTC time, exact clean SHA, `df -B1` for worktree and Docker data root (both on `/dev/vda3`), and 8,897,970,176 free bytes. The estimate was 4,000,000,000 bytes incremental peak plus 3 GiB safety. A five-second monitor would stop the process group below 3 GiB; 156 samples reached a minimum 8,642,936,832 bytes free, so the peak measured loss was 255,033,344 bytes and `capacity_stop=False`. Complete gate log `/tmp/w53-int-gate/gate.log` SHA-256 `0178e881a6f7571abd8909ceb95d67a9b24da386f9fee3733c119fc791c6434e`; disk log SHA-256 `f420d1d52be9dff291f55a4436c6261f12c281808955595c77638e146774e60f`.
+
+The 13 failures partitioned as follows:
+
+- Eight pre-W53 API/PC-01/composition exhaustive guards did not enumerate the sealed six W53 operations or the execution port: `W53-GATE-SURFACE-REPAIR-01` owns five test files only.
+- The exhaustive query-parameter guard did not drive `listExecutionQueue` and `listExecutionJournal`: `W53-GATE-QUERY-REPAIR-01` owns that one test file and must prove behavioral use, not just add names.
+- The `qa_w53` pause/claim test assumed its own priority-100 Job was globally first after earlier tests had queued another: `W53-GATE-QA-REPAIR-01` owns that one test file and must preserve a real hint before pause and a mutant-red authority assertion.
+- The post-governance task validator found `PREMISE_DECLARATION_REQUIRED` in `W53-EXEC-REPAIR-02.md` and `W53-EXEC-WEB.md`; the integrator added truthful premise labels to their already captured evidence in grant commit `8d94517e30c91564557d1f30ba98cd76cd559c62`, and the validator then passed 1/1.
+- The benchmark guard required the existing 5.1 GB real norm corpus under this worktree's ignored `.local/norms/corpus`. The integrator linked that path to the already present canonical local corpus, with no copy or tracked change; its exact failing test then passed.
+- The P02 whole-journey table inventory omitted migration `0017`'s `execution_control`. The integrator added that table to the count in commit `e3ec657b97bacf0d6fc57f7d650943e355133715`; the exact failure and adjacent no-new-row replay passed 2/2 on the private lane.
+
+The three agent grants were committed at `8d94517e30c91564557d1f30ba98cd76cd559c62` and dispatched from that exact SHA in isolated worktrees. Their changed paths are disjoint. The integrator will audit/merge each result, verify the combined 13 failures with focused tests, then run a new complete `make gate` once on a clean final SHA with a fresh disk preflight. This diagnostic run cannot authorize `origin/dev`, `origin/main`, a tag, working-stand S3 upgrade or wave acceptance.
