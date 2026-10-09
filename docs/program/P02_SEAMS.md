@@ -597,7 +597,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Thirty-seven operations, sealed. `A5` generates the typed client from this document; `B6`
+Forty-three operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -664,11 +664,18 @@ could.
 | `getProductVersion` | `GET /system/version` |
 | `listReleases` | `GET /releases` |
 | `markReleaseNotesRead` | `PUT /me/release-notes` |
+| `listExecutionQueue` | `GET /execution/queue` |
+| `listExecutionJournal` | `GET /execution/journal` |
+| `cancelRun` | `POST /runs/{run_id}/cancel` |
+| `reauditRun` | `POST /runs/{run_id}/reaudit` |
+| `setJobPriority` | `PUT /execution/queue/{job_id}/priority` |
+| `setExecutionPaused` | `PUT /execution/dispatch` |
 
 Rules that hold across the whole surface:
 
 * the writes that take a required `Idempotency-Key` header are `createProject`,
-  `uploadDocument`, `startRun`, `appendDecision` and `approveRegistration`, and no others.
+  `uploadDocument`, `startRun`, `appendDecision`, `approveRegistration`, `cancelRun`,
+  `reauditRun`, `setJobPriority` and `setExecutionPaused`, and no others.
   The key is passed through to the owning command handler and never re-derived in the
   router: an identical repeat replays the first answer, and another payload under the same
   key is `idempotency_key_reuse`. The other writes take no key. What a repeat of each does

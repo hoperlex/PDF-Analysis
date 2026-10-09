@@ -527,7 +527,8 @@ class TestN1ComponentReferenceResolution:
         # its own `404` -- an unknown parent is `not_found` and never an empty page.
         # Fourteen until `W49-SEAL-01`, whose eight operations that address an account or
         # a request by identity each declare one too.
-        assert len(report) == 22, report
+        # W53 adds three identity-addressed commands with the same 404 envelope.
+        assert len(report) == 25, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

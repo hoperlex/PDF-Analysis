@@ -19,6 +19,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import text
 
 from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
 from auditmanager.api.schemas.blocks import VersionBlockIndexView
@@ -77,6 +78,34 @@ class _SessionHolder:
     def _read(self, work: Any) -> Any:
         with self._sessions() as session:
             return work(session)
+
+
+class ExecutionStubAdapter:
+    """An explicit sealed boundary until W53-EXEC-01 installs execution behavior."""
+
+    @staticmethod
+    def _unavailable() -> Any:
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="execution")
+
+    def list_queue(self, *, cursor: str | None, limit: int) -> Any:
+        return self._unavailable()
+
+    def list_journal(self, *, run_id: str | None, cursor: str | None, limit: int) -> Any:
+        return self._unavailable()
+
+    def cancel_run(self, *, run_id: str, user_uid: str, idempotency_key: str) -> Any:
+        return self._unavailable()
+
+    def reaudit_run(self, *, run_id: str, user_uid: str, idempotency_key: str) -> Any:
+        return self._unavailable()
+
+    def set_job_priority(
+        self, *, job_id: str, priority: int, user_uid: str, idempotency_key: str
+    ) -> Any:
+        return self._unavailable()
+
+    def set_paused(self, *, paused: bool, user_uid: str, idempotency_key: str) -> Any:
+        return self._unavailable()
 
 
 class ReleasesAdapter:
@@ -485,6 +514,10 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     # one attempt's provenance, and that ambiguity is not being inherited into a contract.
     cost = repository.cost(session, run_id)
     return RunStatusView(
+        reaudit_of_run_id=session.execute(
+            text("SELECT reaudit_of_run_id FROM audit_run WHERE run_id = :run_id"),
+            {"run_id": run_id},
+        ).scalar_one(),
         run_id=str(run.run_id),
         project_uid=str(run.project_uid),
         version_uid=str(run.version_uid),

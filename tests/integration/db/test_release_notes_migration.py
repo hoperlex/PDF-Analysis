@@ -23,7 +23,7 @@ def _refused(engine: Engine, statement: str, **parameters: object) -> str:
 def test_release_schema_is_the_single_head_and_mark_is_a_cascading_account_row(
     migrated_engine: Engine,
 ) -> None:
-    assert head_revision() == "0016_release_notes"
+    assert head_revision() == "0017_execution_queue"
     assert any(
         reference.table == "account_release_mark"
         and reference.column == "user_uid"
@@ -156,5 +156,5 @@ def test_downgrade_is_only_allowed_before_release_history_exists(
     assert "refusing to downgrade 0016_release_notes" in refused.stderr
     with migrated_engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0016_release_notes"
+            "0017_execution_queue"
         )

@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 dc8f18754d22ef85820c124e086df7f9d9ca769c188554decd8a373b1b460304
+ *   sha256 008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -24,6 +24,8 @@ import type {
   ApproveRegistrationResult,
   ArchiveUserInput,
   ArchiveUserResult,
+  CancelRunInput,
+  CancelRunResult,
   ChangePasswordInput,
   ChangePasswordResult,
   CreateProjectInput,
@@ -54,6 +56,10 @@ import type {
   ListDecisionsResult,
   ListDocumentsInput,
   ListDocumentsResult,
+  ListExecutionJournalInput,
+  ListExecutionJournalResult,
+  ListExecutionQueueInput,
+  ListExecutionQueueResult,
   ListProjectsInput,
   ListProjectsResult,
   ListRegistrationsInput,
@@ -74,12 +80,18 @@ import type {
   PurgeUserResult,
   ReadRegistrationStatusInput,
   ReadRegistrationStatusResult,
+  ReauditRunInput,
+  ReauditRunResult,
   RejectRegistrationInput,
   RejectRegistrationResult,
   ResetUserPasswordInput,
   ResetUserPasswordResult,
   RestoreUserInput,
   RestoreUserResult,
+  SetExecutionPausedInput,
+  SetExecutionPausedResult,
+  SetJobPriorityInput,
+  SetJobPriorityResult,
   StartRunInput,
   StartRunResult,
   StreamDocumentVersionContentInput,
@@ -129,6 +141,18 @@ export function archiveUser(
   options?: RequestOptions,
 ): Promise<ApiResponse<ArchiveUserResult>> {
   return request<ArchiveUserResult>(OPERATIONS.archiveUser, input, options);
+}
+
+/**
+ * Cancel Run
+ *
+ * `POST /runs/{run_id}/cancel` - a write; carries a required Idempotency-Key.
+ */
+export function cancelRun(
+  input: CancelRunInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelRunResult>> {
+  return request<CancelRunResult>(OPERATIONS.cancelRun, input, options);
 }
 
 /**
@@ -312,6 +336,30 @@ export function listDocuments(
 }
 
 /**
+ * List Journal
+ *
+ * `GET /execution/journal`.
+ */
+export function listExecutionJournal(
+  input: ListExecutionJournalInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListExecutionJournalResult>> {
+  return request<ListExecutionJournalResult>(OPERATIONS.listExecutionJournal, input, options);
+}
+
+/**
+ * List Queue
+ *
+ * `GET /execution/queue`.
+ */
+export function listExecutionQueue(
+  input: ListExecutionQueueInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListExecutionQueueResult>> {
+  return request<ListExecutionQueueResult>(OPERATIONS.listExecutionQueue, input, options);
+}
+
+/**
  * List projects, newest first.
  *
  * `GET /projects`.
@@ -432,6 +480,18 @@ export function readRegistrationStatus(
 }
 
 /**
+ * Reaudit Run
+ *
+ * `POST /runs/{run_id}/reaudit` - a write; carries a required Idempotency-Key.
+ */
+export function reauditRun(
+  input: ReauditRunInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ReauditRunResult>> {
+  return request<ReauditRunResult>(OPERATIONS.reauditRun, input, options);
+}
+
+/**
  * Reject a registration request with a reason.
  *
  * `POST /registrations/{request_id}/reject`.
@@ -465,6 +525,30 @@ export function restoreUser(
   options?: RequestOptions,
 ): Promise<ApiResponse<RestoreUserResult>> {
   return request<RestoreUserResult>(OPERATIONS.restoreUser, input, options);
+}
+
+/**
+ * Set Paused
+ *
+ * `PUT /execution/dispatch` - a write; carries a required Idempotency-Key.
+ */
+export function setExecutionPaused(
+  input: SetExecutionPausedInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetExecutionPausedResult>> {
+  return request<SetExecutionPausedResult>(OPERATIONS.setExecutionPaused, input, options);
+}
+
+/**
+ * Set Priority
+ *
+ * `PUT /execution/queue/{job_id}/priority` - a write; carries a required Idempotency-Key.
+ */
+export function setJobPriority(
+  input: SetJobPriorityInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetJobPriorityResult>> {
+  return request<SetJobPriorityResult>(OPERATIONS.setJobPriority, input, options);
 }
 
 /**
@@ -547,6 +631,7 @@ export const apiClient = {
   appendDecision,
   approveRegistration,
   archiveUser,
+  cancelRun,
   changePassword,
   createProject,
   exportRunCsv,
@@ -562,6 +647,8 @@ export const apiClient = {
   listDecisionHistory,
   listDecisions,
   listDocuments,
+  listExecutionJournal,
+  listExecutionQueue,
   listProjects,
   listRegistrations,
   listReleases,
@@ -572,9 +659,12 @@ export const apiClient = {
   markReleaseNotesRead,
   purgeUser,
   readRegistrationStatus,
+  reauditRun,
   rejectRegistration,
   resetUserPassword,
   restoreUser,
+  setExecutionPaused,
+  setJobPriority,
   startRun,
   streamDocumentVersionContent,
   submitRegistration,

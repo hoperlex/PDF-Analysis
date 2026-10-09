@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 dc8f18754d22ef85820c124e086df7f9d9ca769c188554decd8a373b1b460304
+ *   sha256 008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -30,6 +30,10 @@ import type {
   DocumentUid,
   DocumentVersion,
   DocumentVersionPage,
+  ExecutionDispatchStatus,
+  ExecutionJournalPage,
+  ExecutionQueueItem,
+  ExecutionQueuePage,
   FindingCategory,
   FindingDetail,
   FindingPage,
@@ -37,6 +41,7 @@ import type {
   IdempotencyKey,
   IssueTokenRequest,
   IssueTokenResponse,
+  JobId,
   MarkReleaseNotesReadRequest,
   ProductVersion,
   Project,
@@ -53,6 +58,8 @@ import type {
   RunId,
   RunStatus,
   RunStatusPage,
+  SetExecutionPausedRequest,
+  SetJobPriorityRequest,
   StartRunRequest,
   SubmitRegistrationRequest,
   UpdateMyProfileRequest,
@@ -69,6 +76,7 @@ export const OPERATION_IDS = [
   'appendDecision',
   'approveRegistration',
   'archiveUser',
+  'cancelRun',
   'changePassword',
   'createProject',
   'exportRunCsv',
@@ -84,6 +92,8 @@ export const OPERATION_IDS = [
   'listDecisionHistory',
   'listDecisions',
   'listDocuments',
+  'listExecutionJournal',
+  'listExecutionQueue',
   'listProjects',
   'listRegistrations',
   'listReleases',
@@ -94,9 +104,12 @@ export const OPERATION_IDS = [
   'markReleaseNotesRead',
   'purgeUser',
   'readRegistrationStatus',
+  'reauditRun',
   'rejectRegistration',
   'resetUserPassword',
   'restoreUser',
+  'setExecutionPaused',
+  'setJobPriority',
   'startRun',
   'streamDocumentVersionContent',
   'submitRegistration',
@@ -192,6 +205,30 @@ export type ArchiveUserInput = {
 
 /** Success body of `archiveUser` (`application/json`, HTTP 200). */
 export type ArchiveUserResult = Account;
+
+// ------------------------------------------------------------------------------------
+// cancelRun - POST /runs/{run_id}/cancel
+// ------------------------------------------------------------------------------------
+
+/** Cancel Run */
+export type CancelRunInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/cancel`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `cancelRun` (`application/json`, HTTP 200). */
+export type CancelRunResult = RunStatus;
 
 // ------------------------------------------------------------------------------------
 // changePassword - POST /auth/password
@@ -567,6 +604,51 @@ export type ListDocumentsInput = {
 export type ListDocumentsResult = DocumentVersionPage;
 
 // ------------------------------------------------------------------------------------
+// listExecutionJournal - GET /execution/journal
+// ------------------------------------------------------------------------------------
+
+/** List Journal */
+export type ListExecutionJournalInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+    run_id?: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listExecutionJournal` (`application/json`, HTTP 200). */
+export type ListExecutionJournalResult = ExecutionJournalPage;
+
+// ------------------------------------------------------------------------------------
+// listExecutionQueue - GET /execution/queue
+// ------------------------------------------------------------------------------------
+
+/** List Queue */
+export type ListExecutionQueueInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listExecutionQueue` (`application/json`, HTTP 200). */
+export type ListExecutionQueueResult = ExecutionQueuePage;
+
+// ------------------------------------------------------------------------------------
 // listProjects - GET /projects
 // ------------------------------------------------------------------------------------
 
@@ -829,6 +911,30 @@ export type ReadRegistrationStatusInput = {
 export type ReadRegistrationStatusResult = RegistrationStatusResponse;
 
 // ------------------------------------------------------------------------------------
+// reauditRun - POST /runs/{run_id}/reaudit
+// ------------------------------------------------------------------------------------
+
+/** Reaudit Run */
+export type ReauditRunInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/reaudit`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `reauditRun` (`application/json`, HTTP 202). */
+export type ReauditRunResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
 // rejectRegistration - POST /registrations/{request_id}/reject
 // ------------------------------------------------------------------------------------
 
@@ -900,6 +1006,54 @@ export type RestoreUserInput = {
 
 /** Success body of `restoreUser` (`application/json`, HTTP 200). */
 export type RestoreUserResult = Account;
+
+// ------------------------------------------------------------------------------------
+// setExecutionPaused - PUT /execution/dispatch
+// ------------------------------------------------------------------------------------
+
+/** Set Paused */
+export type SetExecutionPausedInput = {
+  /** Request body, sent as `application/json`. */
+  body: SetExecutionPausedRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setExecutionPaused` (`application/json`, HTTP 200). */
+export type SetExecutionPausedResult = ExecutionDispatchStatus;
+
+// ------------------------------------------------------------------------------------
+// setJobPriority - PUT /execution/queue/{job_id}/priority
+// ------------------------------------------------------------------------------------
+
+/** Set Priority */
+export type SetJobPriorityInput = {
+  /** Path parameters, substituted into `/execution/queue/{job_id}/priority`. */
+  path: {
+    job_id: JobId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetJobPriorityRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setJobPriority` (`application/json`, HTTP 200). */
+export type SetJobPriorityResult = ExecutionQueueItem;
 
 // ------------------------------------------------------------------------------------
 // startRun - POST /runs
@@ -1104,6 +1258,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['users'],
+  },
+  cancelRun: {
+    operationId: 'cancelRun',
+    method: 'POST',
+    path: '/runs/{run_id}/cancel',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
   },
   changePassword: {
     operationId: 'changePassword',
@@ -1315,6 +1483,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['documents'],
   },
+  listExecutionJournal: {
+    operationId: 'listExecutionJournal',
+    method: 'GET',
+    path: '/execution/journal',
+    pathParams: [],
+    queryParams: ['cursor', 'limit', 'run_id'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['execution'],
+  },
+  listExecutionQueue: {
+    operationId: 'listExecutionQueue',
+    method: 'GET',
+    path: '/execution/queue',
+    pathParams: [],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['execution'],
+  },
   listProjects: {
     operationId: 'listProjects',
     method: 'GET',
@@ -1455,6 +1651,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 422, 500, 503],
     tags: ['registrations'],
   },
+  reauditRun: {
+    operationId: 'reauditRun',
+    method: 'POST',
+    path: '/runs/{run_id}/reaudit',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [202],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   rejectRegistration: {
     operationId: 'rejectRegistration',
     method: 'POST',
@@ -1496,6 +1706,34 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['users'],
+  },
+  setExecutionPaused: {
+    operationId: 'setExecutionPaused',
+    method: 'PUT',
+    path: '/execution/dispatch',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
+  setJobPriority: {
+    operationId: 'setJobPriority',
+    method: 'PUT',
+    path: '/execution/queue/{job_id}/priority',
+    pathParams: ['job_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
   },
   startRun: {
     operationId: 'startRun',

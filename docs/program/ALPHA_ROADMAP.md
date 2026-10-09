@@ -33,7 +33,7 @@ the shortest route that still leaves a commit somebody can certify.
 >
 > **Corrected a fourth time 2026-09-28, a fifth 2026-10-06, and again by W52-SEAL-01.** Wave 46 added
 > `getDashboardSummary`, which made it 17/20/61; `W49-SEAL-01` added account and
-> registration operations; W52 added release operations, so it is **30 paths / 37 operations / 83 schemas**. Wave 45 added `getVersionBlocks`, which made it 16/19/53. Wave 38 added the knowledge base and wave 39 the
+> registration operations; W52 added release operations, and W53 execution operations bring the surface to **36 paths / 43 operations / 91 schemas**. Wave 45 added `getVersionBlocks`, which made it 16/19/53. Wave 38 added the knowledge base and wave 39 the
 > password change, which made it 15/18/51. This block has now been wrong
 > four times in seven days — and the second time it was wrong **in the very note written to record
 > that it had been wrong**. A surface count in prose is a number with no mechanism behind it;

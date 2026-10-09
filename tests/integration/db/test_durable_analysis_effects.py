@@ -429,6 +429,15 @@ def test_empty_0014_downgrades_to_0013_and_upgrades_back(
 def test_occupied_0014_downgrade_refuses_without_moving_the_head(
     migrated_database, migrated_engine, foundation_command
 ) -> None:
+    url = migrated_database.url.render_as_string(hide_password=False)
+    # Reach the revision under test while the later W53 schema is empty. A Job
+    # inserted before this step would correctly stop at 0017's own refusal.
+    clear_the_role_backfill(url)
+    to_0014 = foundation_command(
+        [".venv/bin/python", "-m", "alembic", "--config", "db/migrations/alembic.ini",
+         "downgrade", "0014_durable_analysis_effects"], url
+    )
+    assert to_0014.returncode == 0, to_0014.describe()
     with migrated_engine.begin() as connection:
         seeded = _seed_run(connection, label="occupied-downgrade")
         connection.execute(
@@ -436,10 +445,6 @@ def test_occupied_0014_downgrade_refuses_without_moving_the_head(
             {"job_id": str(JobId.new()), "run_id": seeded["run_id"]},
         )
 
-    url = migrated_database.url.render_as_string(hide_password=False)
-    # `0015` refuses its own downgrade while its role backfill is there; this test is about an
-    # earlier revision, so that backfill is removed first (conftest.clear_the_role_backfill).
-    clear_the_role_backfill(url)
     result = foundation_command(
         [
             ".venv/bin/python",
@@ -460,5 +465,5 @@ def test_occupied_0014_downgrade_refuses_without_moving_the_head(
     with migrated_engine.connect() as connection:
         assert connection.execute(
             text("SELECT version_num FROM alembic_version")
-        ).scalar_one() == head_revision()
+        ).scalar_one() == "0014_durable_analysis_effects"
         assert connection.execute(text("SELECT count(*) FROM job")).scalar_one() == 1

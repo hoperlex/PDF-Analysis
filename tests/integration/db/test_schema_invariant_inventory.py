@@ -31,6 +31,12 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `W53-SEAL-01` for ``0017_execution_queue`` after a fresh upgrade.
+#: The reviewed delta is +9 columns (job 2, lease 2, audit_run 1,
+#: provider_call_effect 1, execution_control 3), +1 relation, +7 constraints
+#: (including the re-audit ID check), +4 indexes. The run-frozen trigger
+#: and durable-effect guard function retain their counts but change definition;
+#: views, extensions, sequences, policies and state topology are unchanged.
 #: Resealed by `W52-SEAL-01` for ``0016_release_notes``. The 0015 inventory below gained
 #: fourteen columns in three tables, four relations (three tables and one identity
 #: sequence), fourteen constraints, six indexes, three triggers and two functions.
@@ -46,12 +52,12 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (348, "64e793b7997d8aa5d5355e3f59a93d084207517c43b895e9a489e23cd55045bc"),
-    "relations": (43, "c6b6ae6de7689280d2c30a3ec65a445b04bbbe59f11b813957ed719abe4d7b7d"),
-    "constraints": (378, "6f708e38a5691b29ecd3d1162bd790af5f45fa813f86a03b089a9f5ea35b86c6"),
-    "indexes": (93, "c85e0294447c2989af3e7966e7e8040680537893971229306426d1bc54e9e27a"),
-    "triggers": (35, "8b5c558507c0adf51db43012d2f767cada400f7f51fd8f561b36e73a8b5b609f"),
-    "functions": (10, "2ee97345179abc7b397b6559b49d92dc71e35c0638ab61a916a80797f38252db"),
+    "columns": (357, "03dba08362d17704acfaeaea45b0fa0b591f6b0c274cf55381215d02d66fdf18"),
+    "relations": (44, "e0d2b812b03bfc607baee6781c1c71e82a5a44e3165089b037d672d052e68ccb"),
+    "constraints": (385, "b711c09f03044c7aeb79cebc16e954c0361339dcc0fef0d1613f6a94c994ede8"),
+    "indexes": (97, "258ec08a249d7599eb6572e6dd2ae9861cae38b5ba2c2bc3294f8dd924da2019"),
+    "triggers": (35, "43ac9738a65a56c1b381cf749e1466008d17771ede0af19138f842e30927b888"),
+    "functions": (10, "e0586941093f1dca97900d4cef6092d5ded71dc0fb03da98e68d825b87ebfcde"),
     "views": (1, "099049415234da3d04583c58a693a68fda934f77e9eaf00b0d12e2542842734d"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

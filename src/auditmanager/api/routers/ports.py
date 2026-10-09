@@ -39,6 +39,7 @@ from auditmanager.api.schemas.documents import DocumentVersionView
 from auditmanager.api.schemas.findings import FindingDetailView, FindingView
 from auditmanager.api.schemas.projects import ProjectView
 from auditmanager.api.schemas.registrations import RegistrationListingView, RegistrationView
+from auditmanager.api.schemas import models
 from auditmanager.api.schemas.models import ProductVersion, ReleaseList
 from auditmanager.api.schemas.runs import RunStatusView
 from auditmanager.api.security import AccountStanding, IssuedCredential
@@ -57,8 +58,30 @@ __all__ = [
     "RegistrationPort",
     "ReleasesPort",
     "RunPort",
+    "ExecutionPort",
     "UploadedDocument",
 ]
+
+
+class ExecutionPort(Protocol):
+    """W53 execution reads and commands. Implementation is supplied in Stage B."""
+
+    def list_queue(self, *, cursor: str | None, limit: int) -> models.ExecutionQueuePage: ...
+    def list_journal(
+        self, *, run_id: str | None, cursor: str | None, limit: int
+    ) -> models.ExecutionJournalPage: ...
+    def cancel_run(
+        self, *, run_id: str, user_uid: str, idempotency_key: str
+    ) -> RunStatusView: ...
+    def reaudit_run(
+        self, *, run_id: str, user_uid: str, idempotency_key: str
+    ) -> RunStatusView: ...
+    def set_job_priority(
+        self, *, job_id: str, priority: int, user_uid: str, idempotency_key: str
+    ) -> models.ExecutionQueueItem: ...
+    def set_paused(
+        self, *, paused: bool, user_uid: str, idempotency_key: str
+    ) -> models.ExecutionDispatchStatus: ...
 
 
 class UploadedDocument(Protocol):

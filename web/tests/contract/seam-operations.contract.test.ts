@@ -84,7 +84,7 @@ describe('the seam operations', () => {
     expect(OPERATIONS.issueToken.requiresIdempotencyKey).toBe(false);
   });
 
-  it('requires an idempotency key on exactly the five keyed writes', () => {
+  it('requires an idempotency key on exactly the nine keyed writes', () => {
     const writes = Object.values(OPERATIONS)
       .filter((op) => op.requiresIdempotencyKey)
       .map((op) => op.operationId)
@@ -94,7 +94,11 @@ describe('the seam operations', () => {
     expect(writes).toEqual([
       'appendDecision',
       'approveRegistration',
+      'cancelRun',
       'createProject',
+      'reauditRun',
+      'setExecutionPaused',
+      'setJobPriority',
       'startRun',
       'uploadDocument',
     ]);
@@ -106,7 +110,8 @@ describe('the seam operations', () => {
   });
 
   it('cursor-paginates every growing list', () => {
-    for (const id of ['listProjects', 'listRunFindings', 'listDecisionHistory'] as const) {
+    for (const id of ['listProjects', 'listRunFindings', 'listDecisionHistory',
+      'listExecutionQueue', 'listExecutionJournal'] as const) {
       expect(OPERATIONS[id].queryParams).toContain('cursor');
       expect(OPERATIONS[id].queryParams).toContain('limit');
     }

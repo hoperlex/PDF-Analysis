@@ -431,7 +431,8 @@
         "DW-03 records that legacy has no distinct Run entity. This machine is greenfield target semantics and is not a claim of legacy parity.",
         "Progress, live logs and WebSocket updates are projections of these transitions and never a source of truth.",
         "PD-03 was approved with modification by the repository owner on 2026-09-01. run_creation is that modification expressed as a rule set, not as prose.",
-        "An unsuccessful optional branch changes only which terminal this machine selects while the run is still in validating. It creates no Run, no Job and no Attempt and never reopens a terminal Run; optional_branch_policy.interaction records that compatibility with PD-03."
+        "An unsuccessful optional branch changes only which terminal this machine selects while the run is still in validating. It creates no Run, no Job and no Attempt and never reopens a terminal Run; optional_branch_policy.interaction records that compatibility with PD-03.",
+        "W53-SEAL-01 clarification of the existing run_creation and terminal rule: reaudit_of_run_id is optional provenance on a newly accepted run, absent when null. Re-audit never reopens the source run; retry and resume still allocate only an Attempt under its existing Job. No transition, guard or candidate revision changes."
       ]
     },
     "job": {
@@ -577,7 +578,8 @@
       ],
       "decision_dependency": "PD-03",
       "notes": [
-        "An unsuccessful optional branch is not a Job failure and not a retryable error class; optional_branch_policy.job_consumer is the complete rule."
+        "An unsuccessful optional branch is not a Job failure and not a retryable error class; optional_branch_policy.job_consumer is the complete rule.",
+        "W53-SEAL-01 clarification: implementation uses the already declared queued -> cancelled and running -> retry_wait -> queued edges. R-79 and the W53 execution plan specify provider-effect classification for that implementation; this note adds no state, edge or guard to candidate revision 9."
       ]
     },
     "attempt": {

@@ -78,7 +78,7 @@ def envelope_responses(
     own ``422`` *replaces* it, and ``HTTPValidationError`` and ``ValidationError`` then
     never enter ``components.schemas``. An operation that omits it gets FastAPI's, and the
     gate reports it in three places
-    (``test_the_gate_catches_fastapis_own_validation_error``). The 83 schema names are
+    (``test_the_gate_catches_fastapis_own_validation_error``). The 91 schema names are
     pinned, so two extra ones are a failure.
     """
     overrides = descriptions or {}
@@ -115,7 +115,7 @@ def success(status: int, description: str, **extra: Any) -> dict[int | str, dict
 #: **Declared, and deliberately not enforced.** The annotation is a plain ``str`` with the
 #: contract's schema attached, not ``models.CorrelationId``, because a constrained parameter
 #: is a *refusable* one -- FastAPI would answer 422 for a malformed value. Two things say
-#: that would be wrong. The contract: thirteen of the thirty-seven operations declare no ``422`` at
+#: that would be wrong. The contract: thirteen of the forty-three operations declare no ``422`` at
 #: all, and every one of them carries this parameter. And the rule
 #: :mod:`auditmanager.api.routers.correlation` has held since `B6`: an unusable correlation
 #: id is **replaced, not refused**, because it addresses a diagnostic record and authorises

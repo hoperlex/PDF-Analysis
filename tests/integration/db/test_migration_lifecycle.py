@@ -27,6 +27,8 @@ EXPECTED_TABLES = {
     "release",
     "release_revision",
     "account_release_mark",
+    # `0017_execution_queue`: one durable pause-control row, inserted lazily.
+    "execution_control",
     "analysis_artifact_publication",
     "attempt",
     "audit_event",

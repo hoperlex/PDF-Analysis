@@ -97,3 +97,16 @@ corpus/index scale exceeds the proven PostgreSQL envelope, or availability/regio
 cannot share the alpha PostgreSQL failure domain. A replacement must define dual-system
 publication, reconciliation, backup/restore and canonical citation behavior before adding a
 network service.
+
+## W53 addendum — R-76, 2026-10-09
+
+Decision item 3's “every source PDF and crop ... with its own `blob_id`” described
+separate admissions as separate bytes. R-76 supersedes that identity claim: a Blob
+is content-derived and equal verified bytes in the corpus and a project reuse the same
+object. Each admission has its own immutable binding; the binding carries role
+`norm_source` and the drop's opaque `doc_…` / `blk_…` / `page_index` text anchors.
+The first publisher's storage role remains metadata, not a restriction on later
+bindings. Reuse requires size, SHA-256 and media type equality; a missing recorded
+SHA-256 or a changed media type is a refusal. A mismatch rejects the admission or
+Attempt, never the shared Blob row. W54 implements this after reconciling storage and
+ingest public seams; this addendum changes no runtime behavior.

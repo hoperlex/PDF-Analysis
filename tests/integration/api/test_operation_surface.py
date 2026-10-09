@@ -81,6 +81,7 @@ def test_every_declared_operation_is_reachable(
         "document_uid": "doc_01M2545JSD15ETSNNV904X991H",
         "version_uid": "ver_01M2545JSD15ETSNNV904X991J",
         "run_id": "run_01M2545JSD15ETSNNV904X991K",
+        "job_id": "job_01M2545JSD15ETSNNV904X991T",
         "finding_uid": "fnd_01M2545JSD15ETSNNV904X991M",
         # `W49-SEAL-01`.
         "request_id": "reg_01M2545JSD15ETSNNV904X991R",

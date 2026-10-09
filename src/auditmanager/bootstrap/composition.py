@@ -29,6 +29,7 @@ from auditmanager.bootstrap.adapters import (
     DashboardAdapter,
     DecisionAdapter,
     DocumentAdapter,
+    ExecutionStubAdapter,
     FindingAdapter,
     ProjectAdapter,
     RegistrationAdapter,
@@ -184,6 +185,7 @@ def build_application(
         releases=ReleasesAdapter(
             release_repository, product_version=product_version, build_id=build_id
         ),
+        execution=ExecutionStubAdapter(),
     )
     return Application(
         router=router,

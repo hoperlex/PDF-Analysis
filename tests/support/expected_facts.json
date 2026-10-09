@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 30,
+    "path_count": 36,
     "operations": [
       [
         "POST",
@@ -187,6 +187,36 @@
         "PUT",
         "/me/release-notes",
         "markReleaseNotesRead"
+      ],
+      [
+        "GET",
+        "/execution/queue",
+        "listExecutionQueue"
+      ],
+      [
+        "GET",
+        "/execution/journal",
+        "listExecutionJournal"
+      ],
+      [
+        "POST",
+        "/runs/{run_id}/cancel",
+        "cancelRun"
+      ],
+      [
+        "POST",
+        "/runs/{run_id}/reaudit",
+        "reauditRun"
+      ],
+      [
+        "PUT",
+        "/execution/queue/{job_id}/priority",
+        "setJobPriority"
+      ],
+      [
+        "PUT",
+        "/execution/dispatch",
+        "setExecutionPaused"
       ]
     ],
     "schema_names": [
@@ -272,13 +302,21 @@
       "ReleaseNoteItem",
       "ReleaseEntry",
       "ReleaseList",
-      "MarkReleaseNotesReadRequest"
+      "MarkReleaseNotesReadRequest",
+      "ExecutionDispatchStatus",
+      "ExecutionJournalEntry",
+      "ExecutionJournalPage",
+      "ExecutionQueueItem",
+      "ExecutionQueuePage",
+      "JobId",
+      "SetExecutionPausedRequest",
+      "SetJobPriorityRequest"
     ]
   },
   "error_catalog": {
     "api_codes": 23,
     "stored_vocabulary": 22
   },
-  "migration_head": "0016_release_notes",
+  "migration_head": "0017_execution_queue",
   "contract_version": "1.0.0-draft.1"
 }

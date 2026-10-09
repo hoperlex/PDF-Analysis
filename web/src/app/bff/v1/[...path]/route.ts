@@ -19,7 +19,7 @@
  * knows how many operations there are. Swapping the credential later is an edit to the
  * credential selection below, not a sweep through a handler per operation.
  *
- * Those figures are **thirty-seven operations across thirty paths**, which is what the
+ * Those figures are **forty-three operations across thirty-six paths**, which is what the
  * frozen document declares after the `W49-SEAL-01` reseal that added the account and
  * registration operations.
  * This file said fifteen and twelve once, sixteen and thirteen after that, and nineteen and

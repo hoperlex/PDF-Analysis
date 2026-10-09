@@ -71,6 +71,7 @@ class RunStatusView:
     #: exactly the ambiguity `D-15` records.
     model_call_count: int | None = None
     terminal_at: datetime | None = None
+    reaudit_of_run_id: str | None = None
 
 
 def stage_state_body(view: StageStateView) -> dict[str, Any]:
@@ -100,6 +101,8 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
         "stages": [stage_state_body(stage) for stage in view.stages],
         "created_at": timestamp(view.created_at),
     }
+    if view.reaudit_of_run_id is not None:
+        body["reaudit_of_run_id"] = view.reaudit_of_run_id
     if view.analysis_profile_id is not None:
         body["analysis_profile_id"] = view.analysis_profile_id
     if view.prompt_bundle_id is not None:

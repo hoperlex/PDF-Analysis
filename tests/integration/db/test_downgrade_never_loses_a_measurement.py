@@ -117,11 +117,12 @@ def test_a_measured_call_makes_the_downgrade_refuse(
 ):
     """The claim. One measured row is enough to stop it."""
     url = migrated_database.url.render_as_string(hide_password=False)
-    _seed_a_measured_call(migrated_engine)
-
-    # `0015` refuses its own downgrade while its role backfill is there; this test is about an
-    # earlier revision, so that backfill is removed first (conftest.clear_the_role_backfill).
+    # Reach 0004 before writing the row; 0017 correctly refuses to discard a
+    # populated run, so a head-to-0003 downgrade would test the wrong guard.
     clear_the_role_backfill(url)
+    to_0004 = run_foundation_command([*DOWNGRADE_ARGV[:-1], "0004_cost_basis"], url)
+    assert to_0004.returncode == 0, to_0004.describe()
+    _seed_a_measured_call(migrated_engine)
     result = run_foundation_command(DOWNGRADE_ARGV, url)
 
     assert result.returncode != 0, (

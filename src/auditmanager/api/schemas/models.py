@@ -99,9 +99,17 @@ __all__ = [
     "ReleaseList",
     "MarkReleaseNotesReadRequest",
     "RunId",
+    "JobId",
     "RunState",
     "RunStatus",
     "RunStatusPage",
+    "ExecutionQueueItem",
+    "ExecutionQueuePage",
+    "ExecutionJournalEntry",
+    "ExecutionJournalPage",
+    "SetJobPriorityRequest",
+    "SetExecutionPausedRequest",
+    "ExecutionDispatchStatus",
     "Sha256",
     "StageId",
     "StageState",
@@ -218,6 +226,7 @@ VersionUid = TypeAliasType(
     "VersionUid", Annotated[str, Field(pattern=rf"^ver_{_ULID}$")]
 )
 RunId = TypeAliasType("RunId", Annotated[str, Field(pattern=rf"^run_{_ULID}$")])
+JobId = TypeAliasType("JobId", Annotated[str, Field(pattern=rf"^job_{_ULID}$")])
 FindingUid = TypeAliasType(
     "FindingUid", Annotated[str, Field(pattern=rf"^fnd_{_ULID}$")]
 )
@@ -553,6 +562,7 @@ class StageState(_Object):
 
 class RunStatus(_Object):
     run_id: RunId
+    reaudit_of_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     project_uid: ProjectUid
     version_uid: VersionUid
     state: RunState
@@ -596,6 +606,49 @@ class RunStatus(_Object):
 class RunStatusPage(_Object):
     items: list[RunStatus]
     page: PageInfo
+
+
+class ExecutionQueueItem(_Object):
+    job_id: JobId
+    run_id: RunId
+    state: str
+    priority: int
+    created_at: datetime
+    available_at: datetime
+
+
+class ExecutionQueuePage(_Object):
+    items: list[ExecutionQueueItem]
+    page: PageInfo
+    paused: bool
+
+
+class ExecutionJournalEntry(_Object):
+    event_id: str
+    run_id: RunId
+    aggregate_type: str
+    aggregate_id: str
+    event_type: str
+    occurred_at: datetime
+    payload: dict[str, str | int | float | bool | None]
+
+
+class ExecutionJournalPage(_Object):
+    items: list[ExecutionJournalEntry]
+    page: PageInfo
+
+
+class SetJobPriorityRequest(_Object):
+    priority: Annotated[int, Field(ge=-100, le=100)]
+
+
+class SetExecutionPausedRequest(_Object):
+    paused: bool
+
+
+class ExecutionDispatchStatus(_Object):
+    paused: bool
+    changed_at: datetime
 
 
 # --- findings ----------------------------------------------------------------------

@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "dc8f18754d22ef85820c124e086df7f9d9ca769c188554decd8a373b1b460304",
-    "content_commit": "fd78ad8",
-    "content_commit_subject": "grant(W52-INT-A2B-01): dispatch W52-SEAL-01",
-    "dispatch_named_commit": "7912504",
-    "commit_note": "Resealed 2026-10-08 by W52-SEAL-01: three release operations and six schemas; contract_version and the error catalog remain unchanged. The digest is the authority; this atomic seal cannot name its own commit. Stage C supplies the release loader and runtime values.",
+    "sha256": "008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193",
+    "content_commit": "2e458ca9",
+    "content_commit_subject": "W53-SEAL-01 dispatch base; atomic reseal has no self-commit",
+    "dispatch_named_commit": "2e458ca9",
+    "commit_note": "W53-SEAL-01 adds six execution operations, eight schemas and optional RunStatus.reaudit_of_run_id; the domain error catalog and contract_version are unchanged. Stage B supplies behavior.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 30,
-    "operations": 37,
-    "component_schemas": 83,
+    "paths": 36,
+    "operations": 43,
+    "component_schemas": 91,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "dc8f18754d22ef85820c124e086df7f9d9ca769c188554decd8a373b1b460304",
+    "snapshot_sha256": "008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "2eb5334503ed28a41b349552208e754576789f8bb3aedc94120be7c67f04e6d9",
-      "index.ts": "8082e5d914d7d00ddb4f8c5d9cd622ca794433dc026d89dfc211619fbc5e5b6e",
-      "operations.gen.ts": "684c794e3b4455e09df18a781aec3c176e9a8c9374bf87acce4feb9630eaa5b8",
-      "types.gen.ts": "596d7518569e183af04327ce577721e66b5eb40b191e99ac98ffba0e9964e9f6"
+      "client.gen.ts": "c98e43ae60ba0418fefaf2246e2fbf4db69a9a37eac15f25072bbb9f48375094",
+      "index.ts": "5a65d548d95f99caf100e902545fb5f7307b8729e3cf5933d9941ad6374113a4",
+      "operations.gen.ts": "990df0d62e080851641552aa5f43aa1740d919dc518078bee484587a7c0dcb0d",
+      "types.gen.ts": "9f03b43ee8df62072a2877f65a4cf08aa120a29ecb59aa2ea072d2cbc5ed78bb"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

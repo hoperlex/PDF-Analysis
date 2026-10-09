@@ -93,6 +93,12 @@ REQUIRED_OPERATIONS = {
     "getProductVersion",
     "listReleases",
     "markReleaseNotesRead",
+    "listExecutionQueue",
+    "listExecutionJournal",
+    "cancelRun",
+    "reauditRun",
+    "setJobPriority",
+    "setExecutionPaused",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -117,6 +123,10 @@ WRITE_OPERATIONS = {
     "startRun",
     "appendDecision",
     "approveRegistration",
+    "cancelRun",
+    "reauditRun",
+    "setJobPriority",
+    "setExecutionPaused",
 }
 
 PAGINATED_OPERATIONS = {
@@ -130,13 +140,18 @@ PAGINATED_OPERATIONS = {
     # `W49-SEAL-01`.
     "listRegistrations",
     "listUsers",
+    "listExecutionQueue",
+    "listExecutionJournal",
 }
 
 #: Page-level properties a paginated response may carry beside `items` and `page`, by
 #: operation. `listRegistrations` carries `pending_total`, the administrator's badge: the
 #: number of pending requests whatever the filter, a property of the queue and not of the
 #: page. Anything else beside the two is still reported.
-PAGE_AGGREGATES: dict[str, set[str]] = {"listRegistrations": {"pending_total"}}
+PAGE_AGGREGATES: dict[str, set[str]] = {
+    "listRegistrations": {"pending_total"},
+    "listExecutionQueue": {"paused"},
+}
 
 
 def _walk(node: Any, path: str = "$"):

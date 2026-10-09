@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 dc8f18754d22ef85820c124e086df7f9d9ca769c188554decd8a373b1b460304
+ *   sha256 008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'dc8f18754d22ef85820c124e086df7f9d9ca769c188554decd8a373b1b460304';
+export const CONTRACT_DIGEST = '008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -46,6 +46,11 @@ export const SCHEMA_NAMES = [
   'ErrorCode',
   'ErrorEnvelope',
   'Evidence',
+  'ExecutionDispatchStatus',
+  'ExecutionJournalEntry',
+  'ExecutionJournalPage',
+  'ExecutionQueueItem',
+  'ExecutionQueuePage',
   'Finding',
   'FindingCategory',
   'FindingDetail',
@@ -57,6 +62,7 @@ export const SCHEMA_NAMES = [
   'InputManifestEntry',
   'IssueTokenRequest',
   'IssueTokenResponse',
+  'JobId',
   'MarkReleaseNotesReadRequest',
   'ModelCallId',
   'ObservationProvenance',
@@ -90,6 +96,8 @@ export const SCHEMA_NAMES = [
   'RunStatus',
   'RunStatusPage',
   'SectionDocumentCount',
+  'SetExecutionPausedRequest',
+  'SetJobPriorityRequest',
   'Sha256',
   'StageId',
   'StageState',
@@ -362,6 +370,43 @@ export type Evidence = {
   quote: string;
 };
 
+export type ExecutionDispatchStatus = {
+  changed_at: string;
+  paused: boolean;
+};
+
+export type ExecutionJournalEntry = {
+  aggregate_id: string;
+  aggregate_type: string;
+  event_id: string;
+  event_type: string;
+  occurred_at: string;
+  payload: {
+    [key: string]: string | number | boolean | null;
+  };
+  run_id: RunId;
+};
+
+export type ExecutionJournalPage = {
+  items: Array<ExecutionJournalEntry>;
+  page: PageInfo;
+};
+
+export type ExecutionQueueItem = {
+  available_at: string;
+  created_at: string;
+  job_id: JobId;
+  priority: number;
+  run_id: RunId;
+  state: string;
+};
+
+export type ExecutionQueuePage = {
+  items: Array<ExecutionQueueItem>;
+  page: PageInfo;
+  paused: boolean;
+};
+
 /** A published finding. Every listed finding is grounded: its quotations were verified present at their declared anchors. */
 export type Finding = {
   category: FindingCategory;
@@ -456,6 +501,11 @@ export type IssueTokenResponse = {
   /** The credential, presented on the authorized operations as `Authorization: Bearer <token>`. Opaque: this document states no format for it, and a caller that reads anything out of it has taken a dependency this contract does not offer. */
   token: string;
 };
+
+export type JobId = string;
+
+/** The contract pattern for `JobId`. Anchored; use with `new RegExp()`. */
+export const JOB_ID_PATTERN = "^job_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /** The known release version through which this account has read. Unknown or future versions are refused. */
 export type MarkReleaseNotesReadRequest = {
@@ -719,6 +769,7 @@ export type RunStatus = {
   prompt_bundle_id?: PromptBundleId;
   provider_mode: ProviderMode;
   published_finding_count?: number;
+  reaudit_of_run_id?: RunId;
   run_id: RunId;
   stages: Array<StageState>;
   state: RunState;
@@ -742,6 +793,14 @@ export type SectionDocumentCount = {
   document_count: number;
   /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
+};
+
+export type SetExecutionPausedRequest = {
+  paused: boolean;
+};
+
+export type SetJobPriorityRequest = {
+  priority: number;
 };
 
 /** A verification value, never an identity. */

@@ -223,6 +223,7 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "blob_id": "blob",
         "run_id": "run",
         "allocated_by_run_id": "run",
+        "reaudit_of_run_id": "run",
         "command_id": "cmd",
         "analysis_profile_id": "ap",
         "prompt_bundle_id": "pb",

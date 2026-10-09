@@ -311,6 +311,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "getVersionBlocks": _ANY_COMPLETE_ACCOUNT,
         "listVersions": _ANY_COMPLETE_ACCOUNT,
         "listRuns": _ANY_COMPLETE_ACCOUNT,
+        "listExecutionQueue": _ANY_COMPLETE_ACCOUNT,
+        "listExecutionJournal": _ANY_COMPLETE_ACCOUNT,
         "getRunStatus": _ANY_COMPLETE_ACCOUNT,
         "listRunFindings": _ANY_COMPLETE_ACCOUNT,
         "getFinding": _ANY_COMPLETE_ACCOUNT,
@@ -328,6 +330,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "createProject": _EXPERT,
         "uploadDocument": _EXPERT,
         "startRun": _EXPERT,
+        "cancelRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
+        "reauditRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "appendDecision": _EXPERT,
         "exportRunCsv": _EXPERT,
         # Account and registration-request management.
@@ -341,6 +345,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "restoreUser": _ADMIN,
         "purgeUser": _ADMIN,
         "resetUserPassword": _ADMIN,
+        "setJobPriority": _ADMIN,
+        "setExecutionPaused": _ADMIN,
     }
 )
 
