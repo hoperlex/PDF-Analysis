@@ -27,6 +27,12 @@ export interface RouteIdentities {
 }
 
 export const routes = {
+  /** Execution journal, optionally focused on one run. */
+  logs: (runId?: string): string =>
+    runId === undefined ? '/logs' : `/logs?run_id=${encodeURIComponent(runId)}`,
+
+  /** Durable execution queue. */
+  queue: (): string => '/queue',
   /** The project list. The home screen at `/` links here. */
   projects: (): string => '/projects',
 

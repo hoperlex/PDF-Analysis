@@ -32,6 +32,20 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { REPO_ROOT, WEB_ROOT, readText, repoRelative, walkFiles } from './lib/repo';
+import { queryKeys } from '@/shared/api';
+
+describe('execution query pages stay in one invalidation namespace', () => {
+  it('separates queue cursors and journal run filters without another root', () => {
+    expect(queryKeys.execution.all()).toEqual(['execution']);
+    expect(queryKeys.execution.queue('a')).not.toEqual(queryKeys.execution.queue('b'));
+    expect(queryKeys.execution.journal('run_A', 'a')).not.toEqual(
+      queryKeys.execution.journal('run_B', 'a'),
+    );
+    expect(queryKeys.execution.journal('run_A', 'a')).not.toEqual(
+      queryKeys.execution.journal('run_A', 'b'),
+    );
+  });
+});
 
 const TSC_BIN = join(WEB_ROOT, 'node_modules', '.bin', 'tsc');
 const FIXTURE_PROJECT = 'tests/guards/fixtures/query-keys/tsconfig.json';

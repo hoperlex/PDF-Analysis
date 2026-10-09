@@ -32,6 +32,7 @@ export function RunPage({ projectUid, runId }: RunPageProps) {
       actions={
         <>
           <Link href={routes.project(projectUid)}>К проекту</Link>{' '}
+          <Link href={routes.logs(runId)}>Журнал прогона</Link>{' '}
           <Link href={routes.projects()}>Все проекты</Link>
         </>
       }

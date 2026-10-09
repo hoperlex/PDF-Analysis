@@ -5,8 +5,7 @@
  * it graduated out of this file rather than being held to a placeholder's rules it no
  * longer follows -- `web/tests/guards/screen-set.guard.test.ts` and the language guard
  * and contrast census reach it now by walking the route tree, the way they reach every
- * other real screen, and this file is no longer the thing that would catch a regression
- * on `/blocks`.
+ * other real screen. W53 graduates `/logs` and `/queue` the same way.
  *
  * `OWNER_RULINGS_2026-09-17.md` §3.11 says preparation is four things and no more: a
  * place in the navigation, a `RoutePlaceholder` carrying a real `promise`, the data shape
@@ -61,19 +60,15 @@ vi.mock('next/headers', () => ({
 
 import { AppFrame } from '@/_app';
 import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
-import { LogsPage } from '@/_pages/logs';
 import { NormsPage } from '@/_pages/norms';
 import { OptimisationPage } from '@/_pages/optimisation';
-import { QueuePage } from '@/_pages/queue';
 import { SectionOptimisationPage } from '@/_pages/section-optimisation';
 import { WorkersPage } from '@/_pages/workers';
 import { RoutePlaceholder } from '@/shared/ui';
 import { forgetEverySession, openSession } from '@/app/bff/session/store';
 import AnalysisSettingsRoute from '@/app/analysis-settings/page';
-import LogsRoute from '@/app/logs/page';
 import NormsRoute from '@/app/norms/page';
 import OptimisationRoute from '@/app/optimisation/page';
-import QueueRoute from '@/app/queue/page';
 import SectionOptimisationRoute from '@/app/section-optimisation/page';
 import WorkersRoute from '@/app/workers/page';
 import { newClient, renderScreen } from '../unit/screens/harness';
@@ -108,9 +103,8 @@ export function visibleText(markup: string): string[] {
 // ------------------------------------------------------------------------- the subjects
 
 /*
- * `R-66` adds four sections, each an honest stub on its way, and holds them to the same
- * rules as the original three: no digit, a promise of their own, and the "yet" wording
- * (they ARE coming, unlike workers). `stub: true` identifies the four new stubs.
+ * Prepared sections only. Built execution pages are covered by the route-derived
+ * screen census, not by placeholder promises.
  */
 const SECTIONS = [
   {
@@ -119,14 +113,6 @@ const SECTIONS = [
     title: 'Оптимизация',
     screen: OptimisationPage,
     routeFile: OptimisationRoute,
-    stub: false,
-  },
-  {
-    name: 'logs',
-    route: '/logs',
-    title: 'Журнал выполнения',
-    screen: LogsPage,
-    routeFile: LogsRoute,
     stub: false,
   },
   {
@@ -154,7 +140,6 @@ const SECTIONS = [
     routeFile: AnalysisSettingsRoute,
     stub: true,
   },
-  { name: 'queue', route: '/queue', title: 'Очередь', screen: QueuePage, routeFile: QueueRoute, stub: true },
 ] as const;
 
 /**

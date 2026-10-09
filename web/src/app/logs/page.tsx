@@ -20,5 +20,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function LogsRoute({ params, searchParams }: ScreenRouteProps) {
   await requireScreen('/logs', { params, searchParams });
-  return <LogsPage />;
+  const query = searchParams === undefined ? {} : await searchParams;
+  const runId = query.run_id;
+  return <LogsPage initialRunId={typeof runId === 'string' ? runId : undefined} />;
 }

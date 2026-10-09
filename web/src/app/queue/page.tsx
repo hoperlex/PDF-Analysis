@@ -1,8 +1,8 @@
 /**
- * `/queue` — the route file for «Очередь», a section on its way (`R-66`).
+ * `/queue` — the route file for the durable execution queue.
  *
- * Delegation-only: the route decides nothing. The screen is an honest stub built the way
- * `/logs` is — `@/_pages/queue` renders `RoutePlaceholder` with a promise of its own.
+ * Delegation-only: the route decides nothing. `@/_pages/queue` reads the sealed
+ * execution projection and handles commands through the session BFF.
  *
  * `W50-PLAN.md` §3.2: the route awaits `requireScreen` with its own address, `params` and
  * `searchParams` before it renders; the registry's row is `session`, roles `any`. Declared

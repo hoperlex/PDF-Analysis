@@ -6,9 +6,10 @@
  * «Оптимизация разделов» `/section-optimisation` (stub); **Знания** — База знаний
  * `/knowledge-base`, Блоки `/blocks`, «Нормы» `/norms` (stub); **Система** — Журнал выполнения
  * `/logs`, Исполнители `/workers`, «Настройки анализа» `/analysis-settings` (stub), «Очередь»
- * `/queue` (stub); `/optimisation` leaves the menu and stays a registered, reachable screen
- * (group `hidden`). Each stub is `RoutePlaceholder`, says it is not implemented, shows no digit
- * and invents no data; access `session`, roles `any`.
+ * `/queue`; `/optimisation` leaves the menu and stays a registered, reachable screen
+ * (group `hidden`). W53 built `/logs` and `/queue`; the remaining three R-66 stubs
+ * still use `RoutePlaceholder`, say they are not implemented, show no digit and invent
+ * no data. Access remains `session`, roles `any`.
  *
  * The expectation below is typed from the ruling, not read from the registry, and the menu is
  * read three ways: the data the frame builds (`buildNavigation`), and the two rendered states of
@@ -78,12 +79,11 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
   },
 ];
 
-/** The four stubs of `R-66`, each with the group the ruling puts it in. */
+/** The three remaining stubs of `R-66`, each with the group the ruling puts it in. */
 const STUBS: readonly { readonly address: string; readonly label: string; readonly group: string }[] = [
   { address: '/section-optimisation', label: 'Оптимизация разделов', group: 'work' },
   { address: '/norms', label: 'Нормы', group: 'knowledge' },
   { address: '/analysis-settings', label: 'Настройки анализа', group: 'system' },
-  { address: '/queue', label: 'Очередь', group: 'system' },
 ];
 
 const COMPLETE: SessionAccount = {
@@ -210,7 +210,7 @@ const fetchSpy = vi.fn(async () => {
   throw new Error('a stub made a network call');
 });
 
-describe('R-66: each of the four stubs is an honest RoutePlaceholder', () => {
+describe('R-66: each of the three remaining stubs is an honest RoutePlaceholder', () => {
   beforeEach(() => {
     forgetEverySession();
     jar.value = openSession(COMPLETE, 'qa-credential', 3600);
@@ -284,7 +284,7 @@ describe('R-66: each of the four stubs is an honest RoutePlaceholder', () => {
     });
   }
 
-  it('the four are exactly the ruling’s stubs among the menu rows (no fifth placeholder hides in the menu)', () => {
+  it('all R-66 menu addresses remain registered after two stubs graduate', () => {
     const menuRows = SCREEN_REGISTRY.filter((row) => row.inMenu && !['home', 'admin'].includes(row.group)).map((row) => row.address);
     expect(menuRows.sort()).toEqual(RULING.flatMap((group) => group.items.map(([address]) => address)).sort());
   });

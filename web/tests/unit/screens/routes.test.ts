@@ -436,6 +436,11 @@ describe('the root layout wires the providers outside the frame', () => {
  * compared to the directory layout on disk rather than to another copy of themselves.
  */
 describe('every screen address is built once and matches a route file on disk', () => {
+  it('encodes a run filter without treating it as a route identity', () => {
+    expect(routes.logs(RUN_ID)).toBe('/logs?run_id=' + encodeURIComponent(RUN_ID));
+    expect(routes.logs()).toBe('/logs');
+    expect(routes.queue()).toBe('/queue');
+  });
   /*
    * THE LIST OF SIX `{url, file}` PAIRS THAT STOOD HERE IS GONE, and its deletion is
    * `D-94`.
@@ -466,7 +471,7 @@ describe('every screen address is built once and matches a route file on disk', 
     return Object.entries(routes).map(([builder, build]) => {
       const arity = (build as (...args: string[]) => string).length;
       const url = (build as (...args: string[]) => string)(...SENTINELS.slice(0, arity));
-      let shape = url;
+      let shape = new URL(url, 'http://screen.local').pathname;
       for (const sentinel of SENTINELS) shape = shape.split(sentinel).join('[*]');
       return { builder, shape };
     });
@@ -557,6 +562,8 @@ describe('every screen address is built once and matches a route file on disk', 
     }
     expect(drawn.size, 'the census markup carries no href at all').toBeGreaterThan(10);
     const built: Record<string, string> = {
+      logs: routes.logs(RUN_ID),
+      queue: routes.queue(),
       projects: routes.projects(),
       project: routes.project(PROJECT_UID),
       document: routes.document(PROJECT_UID, DOCUMENT_UID),

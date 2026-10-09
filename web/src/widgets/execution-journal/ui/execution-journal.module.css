@@ -1,0 +1,42 @@
+.list {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.list ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.row {
+  min-width: 0;
+  max-width: 100%;
+  padding: 1rem;
+  border: 1px solid var(--am-border, currentColor);
+  border-radius: 0.5rem;
+}
+
+.row p {
+  margin-bottom: 0;
+}
+
+.heading,
+.paging {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.identity {
+  overflow-wrap: anywhere;
+}
+
+.identity code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

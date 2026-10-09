@@ -37,6 +37,8 @@ import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { DocumentList } from '@/widgets/document-list';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
+import { ExecutionJournal } from '@/widgets/execution-journal';
+import { ExecutionQueue } from '@/widgets/execution-queue';
 import { ExportPanel } from '@/widgets/export-panel';
 import { FindingList } from '@/widgets/finding-list';
 import { ProjectList } from '@/widgets/project-list';
@@ -441,6 +443,29 @@ export function screens(): Screen[] {
   add('VersionList cold', withRouter(createElement(VersionList, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID })));
   add('RunList cold', withRouter(createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
   add('UploadPanel', renderWith(newClient(), createElement(UploadPanel, { projectUid: PROJECT_UID })));
+  add('ExecutionJournal loaded', withRouter(createElement(ExecutionJournal, {
+    entries: [{
+      event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+      run_id: RUN_ID,
+      aggregate_id: RUN_ID,
+      aggregate_type: 'AuditRun',
+      event_type: 'audit_run.transition',
+      occurred_at: '2026-10-09T10:00:00Z',
+      payload: { to_state: 'queued' },
+    }],
+    onNext: null, onPrevious: null,
+  })));
+  add('ExecutionQueue loaded', withRouter(createElement(ExecutionQueue, {
+    items: [{
+      job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+      run_id: RUN_ID, state: 'queued', priority: 2,
+      created_at: '2026-10-09T10:00:00Z',
+      available_at: '2026-10-09T10:00:00Z',
+    }],
+    roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
+    busy: false, onCancel: noop, onReaudit: noop,
+    onPriority: noop, onNext: null, onPrevious: null,
+  })));
 
   // The finding list, with a row SELECTED — `aria-current='true'` is the only place
   // `ink-soft` meets `accent-light`.

@@ -91,6 +91,7 @@ import { SignInPage } from '@/_pages/sign-in';
 import { AccountPage } from '@/_pages/account';
 import { RegisterPage } from '@/_pages/register';
 import { ChangePasswordPage } from '@/_pages/change-password';
+import { LogsPage } from '@/_pages/logs';
 import { ManageUserControls } from '@/features/manage-user';
 import type { Account } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
@@ -100,6 +101,8 @@ import { UserCard } from '@/widgets/user-card';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
+import { ExecutionJournal } from '@/widgets/execution-journal';
+import { ExecutionQueue } from '@/widgets/execution-queue';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { RECENT_PROJECT_LIMIT } from '@/widgets/home-tiles';
@@ -705,6 +708,8 @@ const KEYS = {
   finding: queryKeys.findings.detail(FINDING_UID),
   decisions: queryKeys.findings.decisions(FINDING_UID),
   journal: queryKeys.findings.journal({ limit: JOURNAL_PAGE_LIMIT }),
+  executionQueue: queryKeys.execution.queue(),
+  executionJournal: queryKeys.execution.journal(),
   dashboardSummary: queryKeys.dashboard.summary(),
   // The home page's own two reads (`W50-HOME-01`), seeded by `W50-SHELL-FRAME` so the recent
   // list and the administrator's tile render loaded rather than pending in every state.
@@ -798,6 +803,23 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.users, { items: [ADMIN_USER_ACCOUNT], page });
   client.setQueryData(KEYS.user, ADMIN_USER_ACCOUNT);
   client.setQueryData(KEYS.registrations, { items: [QUEUE_REQUEST], page, pending_total: 1 });
+  client.setQueryData(KEYS.executionQueue, {
+    items: [{
+      job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+      run_id: RUN_ID, state: 'queued', priority: 2,
+      created_at: '2026-10-09T10:00:00Z', available_at: '2026-10-09T10:00:00Z',
+    }],
+    page, paused: false,
+  });
+  client.setQueryData(KEYS.executionJournal, {
+    items: [{
+      event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+      run_id: RUN_ID, aggregate_id: RUN_ID, aggregate_type: 'AuditRun',
+      event_type: 'audit_run.transition', occurred_at: '2026-10-09T10:00:00Z',
+      payload: { to_state: 'queued' },
+    }],
+    page,
+  });
   return client;
 }
 
@@ -857,6 +879,8 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.users, { items: [], page });
   client.setQueryData(KEYS.user, ADMIN_USER_ACCOUNT);
   client.setQueryData(KEYS.registrations, { items: [], page, pending_total: 0 });
+  client.setQueryData(KEYS.executionQueue, { items: [], page, paused: false });
+  client.setQueryData(KEYS.executionJournal, { items: [], page });
   client.setQueryData(
     KEYS.dashboardSummary,
     dashboardSummary({
@@ -1278,6 +1302,71 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   { name: 'registration-queue-pending', ...queueLanguageShape(QUEUE_REQUEST) },
   { name: 'registration-queue-approved', ...queueLanguageShape({ ...QUEUE_REQUEST, status: 'approved', decided_at: '2026-10-08T01:00:00Z' }) },
   { name: 'registration-queue-rejected', ...queueLanguageShape({ ...QUEUE_REQUEST, status: 'rejected', decided_at: '2026-10-08T01:00:00Z', rejection_reason: 'Проверка не пройдена.' }) },
+  {
+    name: 'execution-journal-invalid-run-filter',
+    make: () => createElement(LogsPage, { initialRunId: 'некорректный' }),
+  },
+  {
+    name: 'execution-journal-known',
+    make: () => createElement(ExecutionJournal, {
+      entries: [{
+        event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+        run_id: RUN_ID,
+        aggregate_id: RUN_ID,
+        aggregate_type: 'AuditRun',
+        event_type: 'audit_run.transition',
+        occurred_at: '2026-10-09T10:00:00Z',
+        payload: { to_state: 'queued' },
+      }],
+      onNext: null, onPrevious: null,
+    }),
+  },
+  {
+    name: 'execution-journal-empty-paged',
+    make: () => createElement(ExecutionJournal, {
+      entries: [], onNext: null, onPrevious: () => {},
+    }),
+  },
+  {
+    name: 'execution-queue-admin',
+    make: () => createElement(ExecutionQueue, {
+      items: [{
+        job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+        run_id: RUN_ID,
+        state: 'queued',
+        priority: 2,
+        created_at: '2026-10-09T10:00:00Z',
+        available_at: '2026-10-09T10:00:00Z',
+      }],
+      roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
+      busy: false, onCancel: () => {}, onReaudit: () => {},
+      onPriority: () => {}, onNext: null, onPrevious: null,
+    }),
+  },
+  {
+    name: 'execution-queue-unknown-state',
+    make: () => createElement(ExecutionQueue, {
+      items: [{
+        job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+        run_id: RUN_ID,
+        state: 'unknown_state',
+        priority: 2,
+        created_at: '2026-10-09T10:00:00Z',
+        available_at: '2026-10-09T10:00:00Z',
+      }],
+      roles: ['admin'], asOf: null,
+      busy: false, onCancel: () => {}, onReaudit: () => {},
+      onPriority: () => {}, onNext: null, onPrevious: null,
+    }),
+  },
+  {
+    name: 'execution-queue-empty-paged',
+    make: () => createElement(ExecutionQueue, {
+      items: [], roles: [], asOf: null,
+      busy: false, onCancel: () => {}, onReaudit: () => {},
+      onPriority: () => {}, onNext: null, onPrevious: () => {},
+    }),
+  },
   /*
    * `app/not-found.tsx` is a FILE in the route tree and not an address, so no derivation
    * reaches it and it stays a hand-written entry. It carried a WHOLE ENGLISH SENTENCE to a
@@ -2192,6 +2281,10 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  * red rather than leaving a stale excuse in place.
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
+  {
+    label: 'Команда отклонена',
+    why: 'QueuePage can show this only after a command mutation settles with a typed refusal. The static harness cannot fire its confirmation or seed the mutation observer through a query cache.',
+  },
   {
     label: 'Заявка не одобрена',
     why: 'The approval form sets its local roles failure only after submit with no role selected. One static server render cannot fire that submit handler or seed component useState.',

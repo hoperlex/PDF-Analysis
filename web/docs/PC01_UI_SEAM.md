@@ -298,9 +298,12 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.registrations.list(filters?)` | `['registrations','list',filters]` | `W51`, `W50-HOME-01` |
 | `queryKeys.releases.list()` | `['releases','list']` | `W52-RELEASES-WEB` |
 | `queryKeys.releases.version()` | `['releases','version']` | `W52-RELEASES-WEB` |
+| `queryKeys.execution.all()` | `['execution']` | `W53-EXEC-WEB` |
+| `queryKeys.execution.queue(cursor?)` | `['execution','queue',{cursor}]` | `W53-EXEC-WEB` |
+| `queryKeys.execution.journal(runId?, cursor?)` | `['execution','journal',{runId,cursor}]` | `W53-EXEC-WEB` |
 
 `projects`, `versions`, `runs`, `findings`, `dashboard`, `account`, `users`, `registrations`,
-`releases` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
+`releases`, `execution` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
 is the signed-in account (`getMe`), `users` the administrator's view of the accounts, and
 `registrations` the requests awaiting or past a decision. A later lane adds key factories inside
 them and no new root.
@@ -310,6 +313,9 @@ verdict projection appears in the finding list — `queryKeys.runs.findings(runI
 `queryKeys.dashboard.summary()`. `queryKeys.dashboard.summary()` is also invalidated by
 `uploadDocument` and by `startRun`/a run reaching a terminal state — it is one read over the
 whole deployment, so more of the seam writes to it than to any other key here.
+W53 execution reads share the `execution` prefix: cancel/re-audit invalidate that prefix,
+`runs.all()` and the dashboard; priority/pause invalidate `execution`. A focused
+journal cursor includes its run id in the key so another run cannot reuse that page.
 
 There is **no global domain store.** The query client in `_app` is the only cache. PC-01's
 state lives on the server; a second copy of it in the browser is a second source of truth
@@ -422,4 +428,3 @@ latest_comment?: string | null }`. Build against it. **The earlier warning in th
 told you not to validate the detail response against the contract document. That warning is
 withdrawn: it was true only of the broken document and would now steer you away from a check
 that works.**
-

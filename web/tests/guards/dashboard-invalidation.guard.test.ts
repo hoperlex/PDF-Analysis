@@ -171,6 +171,10 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/record-verdict/model/use-record-verdict.ts': true,
   'src/features/start-run/model/use-start-run.ts': true,
   'src/features/upload-document/model/use-upload-document.ts': true,
+  'src/features/cancel-run/model/use-cancel-run.ts': true,
+  'src/features/reaudit-run/model/use-reaudit-run.ts': true,
+  'src/features/set-job-priority/model/use-set-job-priority.ts': false,
+  'src/features/pause-execution/model/use-pause-execution.ts': false,
 };
 
 /** A feature model source with an executable mutation call, independent of its filename. */

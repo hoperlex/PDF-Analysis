@@ -473,13 +473,12 @@
       "path": "/logs",
       "page_module": "web/src/app/logs/page.tsx",
       "$comment": [
-        "Логи -- front-end preparation under R-23's addendum. W43-PREP.",
-        "",
-        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
-        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this",
-        "entry gains operations and the assertion starts carrying weight."
+        "Журнал выполнения reads the sealed execution projection through the BFF.",
+        "A run filter is optional; the cold route requests the first page."
       ],
-      "expects_api": [],
+      "expects_api": [
+        {"method": "GET", "path": "/execution/journal", "operationId": "listExecutionJournal"}
+      ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
@@ -628,13 +627,13 @@
       "path": "/queue",
       "page_module": "web/src/app/queue/page.tsx",
       "$comment": [
-        "Очередь -- an honest stub on its way, R-66 (W50-REGISTRY-01).",
-        "",
-        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
-        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this entry",
-        "gains operations and the assertion starts carrying weight."
+        "Очередь reads durable jobs and the signed-in account's roles on a cold route.",
+        "Commands require explicit user intent and are not emitted by this read journey."
       ],
-      "expects_api": [],
+      "expects_api": [
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue"},
+        {"method": "GET", "path": "/me", "operationId": "getMe"}
+      ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],

@@ -1,34 +1,72 @@
-/**
- * `/logs` — the execution journal, prepared and not built.
- *
- * `R-23`'s addendum rules logs wanted and the preparation allowed now.
- *
- * Two things this screen is careful about, both from `docs/program/W43-PREP.md` note 3:
- *
- *   - **it is not the decision journal.** The contract says *journal* six times and every
- *     one of them is `listDecisions`, the expert's ledger, which is already a working
- *     screen at `/knowledge-base`. This section is the record of what the SERVER did, so
- *     the title says `Журнал выполнения` and never bare `Журнал`;
- *   - **the promise does not claim a table that is empty.** `audit_event` exists in the
- *     schema and nothing under `src/` ever writes it — its only writers in this
- *     repository are integration tests. So the promise says the server keeps its own
- *     records, which is true of stage results, model calls, state transitions and the
- *     process's own output, and stops there.
- *
- * What is in the way is stated plainly: no operation on the surface reads a log, so this
- * section costs a reseal and a decision about what is safe to publish — the contract's
- * standing rule is that no response ever carries a bucket name, object key, path, URL,
- * credential, prompt or model payload, and raw log lines are where those leak.
- */
+'use client';
 
-import { RoutePlaceholder } from '@/shared/ui';
+import { useState } from 'react';
 
-export function LogsPage() {
+import { RUN_ID_PATTERN } from '@/shared/api';
+import { executionFailure, useExecutionJournal } from '@/entities/execution';
+import { ExecutionJournal } from '@/widgets/execution-journal';
+import { ErrorState, LoadingState, PageShell } from '@/shared/ui';
+
+export interface LogsPageProps {
+  readonly initialRunId?: string | undefined;
+}
+
+const RUN_ID = new RegExp(RUN_ID_PATTERN);
+
+export function LogsPage({ initialRunId }: LogsPageProps) {
+  const [draft, setDraft] = useState(initialRunId ?? '');
+  const [filter, setFilter] = useState(initialRunId ?? '');
+  const [cursors, setCursors] = useState<string[]>([]);
+  const invalid = filter !== '' && !RUN_ID.test(filter);
+  const cursor = cursors.at(-1);
+  const journal = useExecutionJournal(invalid || filter === '' ? undefined : filter, cursor, !invalid);
+  const next = journal.data?.page.next_cursor ?? null;
+  const readFailure = journal.error === null ? null : executionFailure(journal.error, false);
+
   return (
-    <RoutePlaceholder
-      screen="Журнал выполнения"
-      route="/logs"
-      promise="Здесь будет журнал выполнения прогона: что делал сервер, когда и чем это закончилось. Сервер ведёт свои записи, но операции, которая отдала бы их приложению, в договоре нет, поэтому сейчас этот журнал виден только тому, у кого есть доступ к самому серверу."
-    />
+    <PageShell
+      title="Журнал выполнения"
+      subtitle="События выполнения на сервере, новые сверху. Показаны только безопасные поля договора."
+      actions={<button type="button" className="am-button am-button--quiet" disabled={invalid} onClick={() => void journal.refetch()}>Обновить</button>}
+    >
+      <form className="am-form" onSubmit={(event) => {
+        event.preventDefault();
+        setFilter(draft.trim());
+        setCursors([]);
+      }}>
+        <label htmlFor="execution-run-filter">Прогон</label>
+        <div className="am-form__row">
+          <input
+            id="execution-run-filter"
+            type="text"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Идентификатор прогона"
+            aria-describedby="execution-run-filter-help"
+          />
+          <button type="submit" className="am-button">Показать</button>
+        </div>
+        <p id="execution-run-filter-help" className="am-form__hint">Пустое поле показывает все прогоны.</p>
+      </form>
+      {invalid ? <ErrorState title="Неверный идентификатор прогона" detail="Проверьте идентификатор и повторите отбор." /> : null}
+      {!invalid && journal.isPending ? <LoadingState what="журнал выполнения" /> : null}
+      {!invalid && readFailure !== null ? (
+        <div data-execution-read-failure={readFailure.kind}>
+          <ErrorState
+            title="Журнал не открылся"
+            detail={readFailure.detail}
+            correlationId={readFailure.correlationId}
+            onRetry={() => void journal.refetch()}
+          />
+        </div>
+      ) : null}
+      {!invalid && journal.data !== undefined && readFailure === null ? (
+        <ExecutionJournal
+          entries={journal.data.items}
+          onPrevious={cursors.length === 0 ? null : () => setCursors((current) => current.slice(0, -1))}
+          onNext={next === null ? null : () => setCursors((current) => [...current, next])}
+        />
+      ) : null}
+    </PageShell>
   );
 }

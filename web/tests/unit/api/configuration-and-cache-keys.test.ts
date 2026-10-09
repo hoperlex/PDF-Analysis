@@ -190,7 +190,7 @@ const VERSION_UID = 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const USER_UID = 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 
 describe('every cache key starts in its own namespace', () => {
-  it('declares exactly the nine roots', () => {
+  it('declares exactly the ten roots', () => {
     // `account`, `users` and `registrations` entered once, in `W50-REGISTRY-01`.
     expect([...QUERY_NAMESPACES]).toEqual([
       'projects',
@@ -202,6 +202,7 @@ describe('every cache key starts in its own namespace', () => {
       'users',
       'registrations',
       'releases',
+      'execution',
     ]);
   });
 
@@ -220,6 +221,8 @@ describe('every cache key starts in its own namespace', () => {
     expect(queryKeys.users.detail(USER_UID)[0]).toBe('users');
     expect(queryKeys.registrations.list()[0]).toBe('registrations');
     expect(queryKeys.releases.list()[0]).toBe('releases');
+    expect(queryKeys.execution.queue()[0]).toBe('execution');
+    expect(queryKeys.execution.journal(RUN_ID)[0]).toBe('execution');
   });
 
   it('keeps who-am-I apart from who-is-there: account.me is not under users', () => {
