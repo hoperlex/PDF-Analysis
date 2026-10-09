@@ -13,7 +13,8 @@ Attempt's provider effects. A caller of `execute_run` could repeat a model
 call after an earlier process had spent it. Startup reconciliation takes the
 opposite safe path and fails a running Run without a Job.
 
-**Exact repair grant, dispatch after WEB's sequential host lane:** in
+**Exact repair boundary, with a formal task grant to be dispatched after WEB's
+sequential host lane:** in
 `src/auditmanager/jobs/repository.py`, allow the absent-Job fallback only
 when the locked Run is `queued`. Refuse a running Run with no Job before
 creating Job/Attempt/Lease or writing a stage event. Add a DB regression in
