@@ -47,6 +47,14 @@ class Version:
     metadata: dict[str, str]
 
 
+@dataclass(frozen=True)
+class ExportedVersion:
+    key: str
+    version_id: str
+    body: bytes
+    metadata: dict[str, str]
+
+
 def s3_client(user: str, password: str):
     return boto3.client(
         "s3", endpoint_url=ENDPOINT, aws_access_key_id=user,
@@ -100,13 +108,79 @@ def writes(client) -> list[tuple[str, bytes, dict[str, str]]]:
     return payloads
 
 
+def listed_versions(client) -> list[dict]:
+    """Read every version; an incomplete listing must never pass rollback QA."""
+    rows: list[dict] = []
+    markers: dict[str, str] = {}
+    seen_markers: set[tuple[str, str]] = set()
+    while True:
+        listed = client.list_object_versions(Bucket=BUCKET, **markers)
+        assert not listed.get("DeleteMarkers"), "unexpected delete marker"
+        rows.extend(listed.get("Versions", []))
+        if not listed.get("IsTruncated", False):
+            return rows
+        key_marker = listed.get("NextKeyMarker")
+        version_marker = listed.get("NextVersionIdMarker")
+        assert key_marker, "truncated listing without key marker"
+        pair = (key_marker, version_marker or "")
+        assert pair not in seen_markers, "repeated version-list marker"
+        seen_markers.add(pair)
+        markers = {"KeyMarker": key_marker}
+        if version_marker is not None:
+            markers["VersionIdMarker"] = version_marker
+
+
+def export_versions(client) -> list[ExportedVersion]:
+    """Export old-to-new versions from the upgraded server's S3 API."""
+    listed = listed_versions(client)
+    assert listed, "empty upgraded source"
+    exported: list[ExportedVersion] = []
+    for key in sorted({row["Key"] for row in listed}):
+        by_key = [row for row in listed if row["Key"] == key]
+        assert sum(bool(row["IsLatest"]) for row in by_key) == 1, key
+        # ListObjectVersions is newest first within each key; PUT restores oldest first.
+        for row in reversed(by_key):
+            observed = client.get_object(
+                Bucket=BUCKET, Key=key, VersionId=row["VersionId"]
+            )
+            body = observed["Body"].read()
+            exported.append(ExportedVersion(
+                key, row["VersionId"], body, observed["Metadata"]
+            ))
+    assert len(exported) == len(listed)
+    return exported
+
+
+def export_manifest(exported: list[ExportedVersion]) -> list[Version]:
+    result: list[Version] = []
+    for key in sorted({entry.key for entry in exported}):
+        # manifest() observes newest first, whereas restore_export() puts oldest first.
+        for entry in reversed([item for item in exported if item.key == key]):
+            result.append(Version(
+                entry.key, entry.version_id, hashlib.sha256(entry.body).hexdigest(),
+                len(entry.body), entry.metadata,
+            ))
+    return result
+
+
+def restore_export(client, exported: list[ExportedVersion]) -> None:
+    assert exported, "empty S3 export"
+    client.create_bucket(Bucket=BUCKET)
+    client.put_bucket_versioning(
+        Bucket=BUCKET, VersioningConfiguration={"Status": "Enabled"}
+    )
+    for entry in exported:
+        client.put_object(
+            Bucket=BUCKET, Key=entry.key, Body=entry.body,
+            Metadata=entry.metadata,
+        )
+
+
 def manifest(client, payloads: list[tuple[str, bytes, dict[str, str]]]) -> list[Version]:
     expected: dict[str, list[tuple[bytes, dict[str, str]]]] = {}
     for key, body, metadata in payloads:
         expected.setdefault(key, []).append((body, metadata))
-    listed = client.list_object_versions(Bucket=BUCKET)
-    versions = listed.get("Versions", [])
-    assert not listed.get("DeleteMarkers"), "unexpected delete marker"
+    versions = listed_versions(client)
     assert len(versions) == len(payloads), (len(versions), len(payloads))
     assert {row["Key"] for row in versions} == set(expected)
     result: list[Version] = []
@@ -172,21 +246,21 @@ def main() -> None:
         )
         start(NEW, COPY_VOLUME, user, password)
         running = True
-        new_manifest = manifest(ready(user, password), payloads)
+        upgraded = ready(user, password)
+        new_manifest = manifest(upgraded, payloads)
         assert new_manifest == old_manifest, "version IDs/keys/bytes changed on volume copy"
+        exported = export_versions(upgraded)
+        assert export_manifest(exported) == new_manifest, "S3 export differs from new-image read"
         print("old-volume-copy/new-image-read: PASS, exact version IDs and bytes")
         stop()
         running = False
         start(OLD, RESTORE_VOLUME, user, password)
         running = True
         restored = ready(user, password)
-        restored.create_bucket(Bucket=BUCKET)
-        restored.put_bucket_versioning(
-            Bucket=BUCKET, VersioningConfiguration={"Status": "Enabled"}
+        restore_export(restored, exported)
+        rollback_manifest = manifest(
+            restored, [(entry.key, entry.body, entry.metadata) for entry in exported]
         )
-        for key, body, metadata in payloads:
-            restored.put_object(Bucket=BUCKET, Key=key, Body=body, Metadata=metadata)
-        rollback_manifest = manifest(restored, payloads)
         assert logical_manifest(rollback_manifest) == logical_manifest(old_manifest)
         print("S3-restore/old-image-read: PASS, logical versions and bytes")
         print("S3 restore creates new VersionIds; only the volume copy preserves them")
