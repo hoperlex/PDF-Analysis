@@ -121,6 +121,7 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56940`, `60540/60541` | `gate-w53queue` — `W53-QUEUE-REPAIR-01`, disposable focused tests | 2026-10-09 | after queue handback and owner-only cleanup |
 | `56950`, `60550/60551` | `gate-w53jobs` — `W53-JOBS-REPAIR-03`, disposable focused tests | 2026-10-09 | after jobs handback and owner-only cleanup |
 | `56960`, `60560/60561`; API `57060`, Next `31560` | `gate-w53qare` — `W53-QA-RECHECK-01`, disposable acceptance | 2026-10-09 | after QA recheck handback and owner-only cleanup |
+| `56970`, `60570/60571` | `gate-w53qtest` — `W53-QUEUE-TEST-REPAIR-02`, disposable focused tests | 2026-10-09 | after test repair handback and owner-only cleanup |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,
