@@ -14,7 +14,7 @@ Correct the disposable MinIO rehearsal so its `--full` rollback restores objects
 - API `1.0.0-draft.1`, 36/43/91; OpenAPI SHA-256 `008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193`.
 - analysis/comparison/event: frozen W53 SEAL set; migration head `0017_execution_queue`.
 - MinIO pin `RELEASE.2025-10-15T17-29-55Z`, commit `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a`.
-- base code before dispatch: `f0b1a0ede0c6edb90d4d0072429cb95b28e7a945`; integrator assigns exact post-dispatch SHA.
+- base code before this dispatch amendment: `07c6d0f525348bb28793d6ec12a0c245ec26f14b`, after independent QA/X reports and the proxy repair. Integrator assigns exact post-amendment SHA.
 
 ## Enumerator ownership
 
