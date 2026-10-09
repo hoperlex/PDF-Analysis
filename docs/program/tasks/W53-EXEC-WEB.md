@@ -78,6 +78,19 @@ and route maps, guards, the journey manifest and the UI seam note must agree.
 - interpretation: generated client already exposes all six operations; this
   task consumes it and does not reseal or edit generated code.
 
+### P-03 — exact repair grant after the first full WEB test
+
+- captured_at: 2026-10-09
+- command: `npm --prefix web test -- --maxWorkers=1`
+- captured_output: `1750 passed, 3 failed`; two new widget CSS modules used
+  a literal colour, and `web/tests/unit/qa_w50/r66-navigation.test.ts`
+  still listed `/queue` among four W50 `RoutePlaceholder` stubs and asserted
+  its page makes no API request. Log: `/tmp/w53-exec-web-npm-test.log`.
+- interpretation: W53 deliberately graduates `/queue`; that historical
+  assertion is now stale. The exact extra path below may update only the
+  `/queue` stub enumeration/count and its supersession note. All R-66 menu,
+  registry, other stub, session and guest assertions must remain effective.
+
 ## Historical evidence
 
 - correction_mode: none
@@ -106,6 +119,9 @@ and route maps, guards, the journey manifest and the UI seam note must agree.
   `web/tests/guards/{query-key-shape,prepared-sections,dashboard-invalidation,rendered-language}.guard.test.ts`,
   `web/tests/unit/styles/screens.ts`.
 - `web/tests/unit/execution/**` (new) and `tests/e2e/pc01/journey/manifest.json`.
+- `web/tests/unit/qa_w50/r66-navigation.test.ts` (P-03 repair only: remove
+  `/queue` from the W50 stub enumeration and adjust its count/description;
+  preserve every remaining R-66 assertion).
 - `docs/program/W53-EXEC-WEB.md` (handback).
 
 ## Forbidden hotspots
