@@ -34,6 +34,9 @@ class ModelRequest:
 
     model_id: str
     body: Mapping[str, Any]
+    # Transport-only scope. It never changes the deterministic request checksum or
+    # recorded-response lookup; the proxy may use it to deduplicate one logical run.
+    idempotency_scope: str | None = None
 
     @property
     def request_sha256(self) -> str:
@@ -100,7 +103,8 @@ class ModelAdapter(Protocol):
 
 
 def build_request(
-    *, model_id: str, bundle: PromptBundle, text_layer: TextLayer
+    *, model_id: str, bundle: PromptBundle, text_layer: TextLayer,
+    idempotency_scope: str | None = None,
 ) -> ModelRequest:
     """Build the one request this stage makes for a document.
 
@@ -122,4 +126,5 @@ def build_request(
             "format": {"type": "json_schema", "schema": bundle.response_schema},
         },
     }
-    return ModelRequest(model_id=model_id, body=body)
+    return ModelRequest(model_id=model_id, body=body,
+                        idempotency_scope=idempotency_scope)

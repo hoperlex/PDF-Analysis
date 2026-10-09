@@ -61,6 +61,7 @@ workers, heartbeat-driven failover and resume remain out of scope.
 from __future__ import annotations
 
 import time
+from functools import wraps
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
@@ -109,6 +110,7 @@ from auditmanager.findings.public import (
     select_terminal,
 )
 from auditmanager.jobs.public import AttemptAuthority, JobRepository
+from auditmanager.jobs.lease import start_for_current_thread, stop_for_current_thread
 from auditmanager.runs.repository import (
     INITIAL_STATE,
     PC01_STAGES,
@@ -292,6 +294,16 @@ class _DurableCallJournal(ModelCallJournal):
         self._session.commit()
         self._committed("provider_outcome_unknown")
 
+    def not_processed(
+        self, model_call_id: ModelCallId, error: DomainError, dispatch_class: str
+    ) -> None:
+        self._jobs.record_provider_not_processed(
+            self._session, self._authority, model_call_id=model_call_id,
+            error_code=error.code.value, dispatch_class=dispatch_class,
+        )
+        self._session.commit()
+        self._committed("provider_not_processed")
+
 
 def _publication_store(
     session: Session,
@@ -471,6 +483,8 @@ def _run_text_analysis_stage(
         # The wait belongs to the attempt that is about to run, and is taken before it
         # rather than after the failure, so the last attempt never sleeps for nothing.
         waited = policy.backoff_before_attempt(attempt)
+        if attempt > 1:
+            waited = max(waited, outcome.retry_after_seconds)
         if waited:
             sleep(waited)
 
@@ -497,7 +511,8 @@ def _run_text_analysis_stage(
             status=outcome.status, error=outcome.error, waited_seconds=waited
         )
 
-        if outcome.provider_effect_uncertain or not policy.retries(outcome.error):
+        if (outcome.provider_effect_uncertain or outcome.provider_retry_allowed is False
+                or not policy.retries(outcome.error)):
             # Succeeded, partial, or a failure no second attempt could answer
             # differently - `analysis_failed` above all, which is the model having
             # answered. The policy owns that classification; there is no status or code
@@ -576,7 +591,7 @@ def _run_evidence_gate(
     return True, publication
 
 
-def execute_run(
+def _execute_run_body(
     session: Session,
     run_id: str,
     *,
@@ -615,7 +630,17 @@ def execute_run(
     # meter is built against and the configuration the attempts run under must be the same
     # object, or a re-read of the environment mid-run could move one and not the other.
     config = provider_config or load_provider_config()
-    meter = cost_meter or CostMeter(ceiling_usd=config.run_cost_ceiling_usd)
+    prior_cost = run_repo.cost(session, run_id)
+    meter = cost_meter or CostMeter(
+        ceiling_usd=config.run_cost_ceiling_usd,
+        spent_usd=0.0 if prior_cost is None else prior_cost.cost_micros / 1_000_000,
+        call_count=0 if prior_cost is None else prior_cost.model_call_count,
+    )
+    if cost_meter is None and prior_cost is not None:
+        # A persisted opening balance cannot be re-priced by this Attempt. Even a
+        # zero-cost earlier call may have been estimated, so a resumed meter must
+        # never re-label that historical contribution as measured.
+        meter.unpriced_contributions = max(meter.unpriced_contributions, 1)
 
     run = run_repo.get(session, run_id)
 
@@ -675,7 +700,13 @@ def execute_run(
         run_repo.advance(
             session, run_id=run_id, from_state=INITIAL_STATE, to_state="queued"
         )
-    run_repo.advance(session, run_id=run_id, from_state="queued", to_state="running")
+    if run.state in {INITIAL_STATE, "queued"}:
+        run_repo.advance(session, run_id=run_id, from_state="queued", to_state="running")
+    elif run.state != "running":
+        raise DomainError(
+            ErrorCode.STATE_TRANSITION_NOT_ALLOWED, machine="audit_run",
+            current_state=run.state, requested_state="running",
+        )
     # `D-20`. The authority boundary that makes what has happened so far durable.
     #
     # Every state this function writes used to be written and overwritten inside the
@@ -684,13 +715,14 @@ def execute_run(
     # one request and `PA-01` criterion 4's UI clause was unreachable.
     #
     # Effect journals add finer commits later in the stage loop. A crash can therefore
-    # expose truthful partial rows, which startup reconciliation accounts for by failing
-    # the run and its current Attempt rather than resuming or erasing them.
+    # expose truthful partial rows. Lease recovery fences a lost Attempt and
+    # resumes only when no provider effect can have spent; ambiguous effects fail.
     authority = job_repo.start_execution(session, run_id=run_id)
     # Unlike the old optional checkpoint, this commit is unconditional. It makes the
     # running Run plus Job/Attempt/Lease authority durable before the first S3 or provider
     # effect on every caller path, including direct integration invocations.
     session.commit()
+    start_for_current_thread(session, authority)
     if checkpoint is not None:
         checkpoint()
 
@@ -713,6 +745,8 @@ def execute_run(
     )
     halted = False
     for stage_id, roles in deterministic:
+        run_repo.stage_started(session, run_id=run_id, stage_id=stage_id)
+        session.commit()
         stage_store = _publication_store(
             session,
             store=blob_store,
@@ -751,6 +785,8 @@ def execute_run(
     # failed attempt. The two are different claims and the tally says which.
     attempts = not_attempted(policy)
     if not halted:
+        run_repo.stage_started(session, run_id=run_id, stage_id="text_analysis")
+        session.commit()
         text_store = _publication_store(
             session,
             store=blob_store,
@@ -857,6 +893,15 @@ def execute_run(
         gate_ran=gate_ran,
         model_attempts=attempts,
     )
+
+
+@wraps(_execute_run_body)
+def execute_run(*args: Any, **kwargs: Any) -> ExecutionResult:
+    """Drive a run and stop its independent heartbeat on every exit path."""
+    try:
+        return _execute_run_body(*args, **kwargs)
+    finally:
+        stop_for_current_thread()
 
 
 __all__ = [

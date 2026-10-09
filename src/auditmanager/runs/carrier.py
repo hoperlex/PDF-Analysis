@@ -48,15 +48,12 @@ Durability boundaries and the crash story
 
 Those effect commits can also make earlier stage-result/binding rows visible. A killed
 process may therefore leave a truthful partial execution: ``running``, its current
-Attempt, completed earlier stages and explicit unresolved effect breadcrumbs. The startup
-reconciler accounts for that execution by moving both run and Attempt to declared failure
-terminals; it never pretends the partial rows did not happen and never resumes them.
+Attempt, completed earlier stages and explicit unresolved effect breadcrumbs. W53 lease
+recovery fences that Attempt and resumes only when provider effects prove no spend;
+otherwise it fails the run with the uncertainty recorded.
 
-That leaves ``running`` as *the* stranded state, which is what
-:mod:`auditmanager.runs.reconciliation` was already written to resolve -- ``OD-10``, at
-startup, into the declared terminal ``failed`` carrying an ``interrupted_reason``. Before
-this module that reconciler had nothing to reconcile, because nothing ever committed a
-``running`` row.
+An orphan ``running`` Run with no nonterminal Job remains the startup reconciler's
+backstop. Queued Jobs and live leases survive another process's startup.
 
 An exception is not a crash, and is not left to the reconciler
 --------------------------------------------------------------
@@ -84,12 +81,14 @@ from time import monotonic
 from typing import Any, Final, Protocol
 
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import text
 
 from auditmanager.runs.executor import execute_run
 from auditmanager.jobs.public import JobRepository
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.scope import RECONCILIATION_TERMINAL
 from auditmanager.shared.errors import ErrorCode
+from auditmanager.shared.errors import DomainError
 
 __all__ = [
     "CRASHED_REASON",
@@ -97,6 +96,7 @@ __all__ = [
     "InlineCarrier",
     "RunCarrier",
     "ThreadCarrier",
+    "DurableCarrier",
     "run_to_terminal",
 ]
 
@@ -219,6 +219,97 @@ class ThreadCarrier:
         self._pool.shutdown(wait=False, cancel_futures=True)
 
 
+class DurableCarrier(ThreadCarrier):
+    """Serving-only PostgreSQL poller behind the unchanged RunCarrier façade.
+
+    A constructed test application is inert. ``start`` is called only from the
+    serving lifespan; outside it explicit ``submit`` retains the historical
+    per-run execution behavior for direct drivers.
+    """
+
+    __slots__ = (
+        "_sessions", "_runner", "_wake", "_stop", "_dispatch_thread",
+        "_active",
+    )
+
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        super().__init__(max_workers=RUN_CONCURRENCY)
+        self._sessions = session_factory
+        self._runner: Callable[[str], Callable[[], None]] | None = None
+        self._wake = threading.Event()
+        self._stop = threading.Event()
+        self._dispatch_thread: threading.Thread | None = None
+        self._active = False
+
+    def configure_runner(self, runner: Callable[[str], Callable[[], None]]) -> None:
+        self._runner = runner
+
+    def start(self) -> None:
+        if self._runner is None:
+            raise RuntimeError("durable carrier has no run factory")
+        self._active = True
+        self._dispatch_thread = threading.Thread(
+            target=self._poll, name="auditmanager-dispatch", daemon=True,
+        )
+        self._dispatch_thread.start()
+
+    def submit(self, job: Callable[[], None]) -> None:
+        if not self._active:
+            super().submit(job)
+            return
+        # The callable remains a plain RunCarrier callable. Its accepted run is
+        # already in PostgreSQL; the serving scheduler discovers it there.
+        self._wake.set()
+
+    def _poll(self) -> None:
+        last_reclaim = 0.0
+        while not self._stop.is_set():
+            try:
+                if monotonic() - last_reclaim >= 30.0:
+                    with self._sessions() as session:
+                        JobRepository().reclaim_expired(session)
+                        session.commit()
+                    last_reclaim = monotonic()
+                with self._lock:
+                    busy = bool(self._pending)
+                if not busy:
+                    with self._sessions() as session:
+                        run_id = JobRepository().next_queued_run(session)
+                    if run_id is not None:
+                        assert self._runner is not None
+                        super().submit(self._runner(run_id))
+                        continue
+            except Exception:
+                _log.exception("durable dispatch poll failed")
+            self._wake.wait(1.0)
+            self._wake.clear()
+
+    def drain(self, timeout: float | None = None) -> bool:
+        if not self._active:
+            return super().drain(timeout)
+        deadline = None if timeout is None else monotonic() + timeout
+        self._wake.set()
+        while True:
+            with self._sessions() as session:
+                outstanding = int(session.execute(text(
+                    "SELECT count(*) FROM job WHERE state IN "
+                    "('queued', 'leased', 'running', 'retry_wait')"
+                )).scalar_one())
+            if not outstanding and super().drain(0):
+                return True
+            if deadline is not None and monotonic() >= deadline:
+                return False
+            self._wake.wait(0.05)
+
+    def shutdown(self) -> None:
+        self._active = False
+        self._stop.set()
+        self._wake.set()
+        if self._dispatch_thread is not None:
+            self._dispatch_thread.join(timeout=3)
+        super().shutdown()
+
+
 def run_to_terminal(
     session_factory: sessionmaker[Session],
     run_id: str,
@@ -258,6 +349,18 @@ def run_to_terminal(
                 runs=run_repo,
             )
             session.commit()
+    except DomainError as failure:
+        if failure.code in {
+            ErrorCode.STATE_TRANSITION_NOT_ALLOWED, ErrorCode.STALE_ATTEMPT,
+            ErrorCode.EXECUTION_TOKEN_INVALID,
+        }:
+            # Another process claimed or fenced this run. It retains authority;
+            # this process must not convert its live run into a crash terminal.
+            _log.info("run %s was claimed or fenced elsewhere", run_id)
+            raise
+        _log.exception("run %s did not reach a terminal by itself", run_id)
+        _record_crash(session_factory, run_id, failure, runs=run_repo)
+        raise
     except Exception as failure:
         _log.exception("run %s did not reach a terminal by itself", run_id)
         _record_crash(session_factory, run_id, failure, runs=run_repo)

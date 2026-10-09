@@ -21,9 +21,40 @@ from sqlalchemy.orm import Session
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import AttemptId, JobId, LeaseId, ModelCallId
 from auditmanager.storage.public import BlobDeclaration, BlobId, parse_blob_id
+from auditmanager.jobs.events import append_execution_event
 
 _INSERT_JOB = text(
     "INSERT INTO job (job_id, run_id, state) VALUES (:job_id, :run_id, 'queued')"
+)
+_LOCK_RUN = text("SELECT state FROM audit_run WHERE run_id = :run_id FOR UPDATE")
+_LOCK_JOB = text(
+    "SELECT job_id, state, current_attempt_id FROM job WHERE run_id = :run_id "
+    "FOR UPDATE SKIP LOCKED"
+)
+_LOCK_JOB_WAIT = text(
+    "SELECT job_id, state, current_attempt_id FROM job WHERE run_id = :run_id "
+    "FOR UPDATE"
+)
+_NEXT_JOB = text(
+    "SELECT j.run_id FROM job j JOIN audit_run r ON r.run_id = j.run_id "
+    "WHERE j.state = 'queued' AND r.state IN ('queued', 'running') "
+    "AND j.available_at <= statement_timestamp() "
+    "AND NOT EXISTS (SELECT 1 FROM execution_control WHERE singleton AND paused) "
+    "ORDER BY j.priority DESC, j.created_at, j.job_id LIMIT 1 "
+    "FOR UPDATE OF r SKIP LOCKED"
+)
+_HEARTBEAT = text(
+    "UPDATE lease SET heartbeat_at = statement_timestamp(), "
+    "expires_at = statement_timestamp() + interval '60 seconds' "
+    "WHERE lease_id = :lease_id AND attempt_id = :attempt_id "
+    "AND released_at IS NULL AND expires_at > statement_timestamp()"
+)
+_EXPIRED_LEASES = text(
+    "SELECT j.run_id, j.job_id, a.attempt_id, l.lease_id FROM lease l "
+    "JOIN attempt a ON a.attempt_id = l.attempt_id "
+    "JOIN job j ON j.job_id = l.job_id WHERE l.released_at IS NULL "
+    "AND (l.expires_at <= statement_timestamp() OR l.attempt_id = :force_attempt_id) "
+    "ORDER BY (l.attempt_id = :force_attempt_id) DESC, l.expires_at, l.lease_id LIMIT 100"
 )
 _INSERT_ATTEMPT = text(
     "INSERT INTO attempt (attempt_id, job_id, state, execution_token) "
@@ -32,7 +63,7 @@ _INSERT_ATTEMPT = text(
 )
 _SET_CURRENT = text(
     "UPDATE job SET current_attempt_id = :attempt_id, updated_at = statement_timestamp() "
-    "WHERE job_id = :job_id AND state = 'queued' AND current_attempt_id IS NULL"
+    "WHERE job_id = :job_id AND state = 'queued'"
 )
 _INSERT_LEASE = text(
     "INSERT INTO lease (lease_id, job_id, attempt_id) "
@@ -52,17 +83,18 @@ _RELEASE_LEASE = text(
     "UPDATE lease SET released_at = statement_timestamp() "
     "WHERE attempt_id = :attempt_id AND released_at IS NULL"
 )
-_CURRENT_AUTHORITY = text(
-    "SELECT j.run_id, j.job_id, j.state AS job_state, j.current_attempt_id, "
-    "a.state AS attempt_state, a.execution_token "
-    "FROM job j JOIN attempt a ON a.attempt_id = j.current_attempt_id "
-    "WHERE j.job_id = :job_id FOR UPDATE OF j, a"
+_LOCK_AUTHORITY_JOB = text(
+    "SELECT run_id, job_id, state AS job_state, current_attempt_id "
+    "FROM job WHERE job_id = :job_id FOR UPDATE"
 )
-_BY_RUN_FOR_UPDATE = text(
-    "SELECT j.job_id, j.state AS job_state, j.current_attempt_id, "
-    "a.state AS attempt_state, a.execution_token "
-    "FROM job j JOIN attempt a ON a.attempt_id = j.current_attempt_id "
-    "WHERE j.run_id = :run_id FOR UPDATE OF j, a"
+_LOCK_AUTHORITY_ATTEMPT = text(
+    "SELECT state AS attempt_state, execution_token FROM attempt "
+    "WHERE attempt_id = :attempt_id FOR UPDATE"
+)
+_LOCK_AUTHORITY_LEASE = text(
+    "SELECT lease_id, released_at, expires_at, "
+    "expires_at > statement_timestamp() AS current FROM lease "
+    "WHERE attempt_id = :attempt_id FOR UPDATE"
 )
 
 _INSERT_PROVIDER_EFFECT = text(
@@ -90,10 +122,18 @@ _PROVIDER_UNKNOWN = text(
     """
     UPDATE provider_call_effect
        SET state = 'outcome_unknown', error_code = :error_code,
+           dispatch_class = 'outcome_unknown',
            updated_at = statement_timestamp()
      WHERE model_call_id = :model_call_id AND run_id = :run_id
        AND job_id = :job_id AND attempt_id = :attempt_id AND state = 'prepared'
     """
+)
+_PROVIDER_NOT_PROCESSED = text(
+    "UPDATE provider_call_effect SET state = 'not_processed', "
+    "error_code = :error_code, dispatch_class = :dispatch_class, "
+    "updated_at = statement_timestamp() WHERE model_call_id = :model_call_id "
+    "AND run_id = :run_id AND job_id = :job_id AND attempt_id = :attempt_id "
+    "AND state = 'prepared'"
 )
 _COMPLETE_PROVIDER = text(
     """
@@ -232,16 +272,175 @@ class SettledProviderEffect:
 class JobRepository:
     """Create and fence local execution plus journal its external effects."""
 
-    def start_execution(self, session: Session, *, run_id: str) -> AttemptAuthority:
+    def enqueue(self, session: Session, *, run_id: str) -> str:
+        """Create the durable Job in the accepting transaction."""
         job_id = str(JobId.new())
+        session.execute(_INSERT_JOB, {"job_id": job_id, "run_id": run_id})
+        append_execution_event(
+            session, event_type="job.created", aggregate_type="Job",
+            aggregate_id=job_id, run_id=run_id, payload={"state": "queued"},
+        )
+        return job_id
+
+    def next_queued_run(self, session: Session) -> str | None:
+        """Hint the highest runnable Job whose Run is not held by another claimant.
+
+        Only the Run is briefly locked here. Every writer follows Run then Job;
+        the worker later makes the authoritative claim under that same order.
+        """
+        return session.execute(_NEXT_JOB).scalar_one_or_none()
+
+    def heartbeat(self, session: Session, authority: AttemptAuthority) -> bool:
+        """Extend only a live lease, with database time and a bounded lock wait."""
+        session.execute(text("SET LOCAL lock_timeout = '2s'"))
+        return session.execute(
+            _HEARTBEAT,
+            {"lease_id": authority.lease_id, "attempt_id": authority.attempt_id},
+        ).rowcount == 1
+
+    def set_priority(self, session: Session, *, job_id: str, priority: int) -> None:
+        """Change only a queued Job, under the run-first lock order."""
+        if not -100 <= priority <= 100:
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="priority", constraint="range")
+        run_id = session.execute(text(
+            "SELECT run_id FROM job WHERE job_id = :job_id"
+        ), {"job_id": job_id}).scalar_one_or_none()
+        if run_id is None:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Job")
+        session.execute(_LOCK_RUN, {"run_id": run_id}).scalar_one()
+        row = session.execute(text(
+            "SELECT state FROM job WHERE job_id = :job_id FOR UPDATE"
+        ), {"job_id": job_id}).mappings().one()
+        if row["state"] != "queued":
+            raise self._transition_error("job", str(row["state"]), "queued")
+        session.execute(text(
+            "UPDATE job SET priority = :priority, updated_at = statement_timestamp() "
+            "WHERE job_id = :job_id"
+        ), {"job_id": job_id, "priority": priority})
+        append_execution_event(
+            session, event_type="job.priority_changed", aggregate_type="Job",
+            aggregate_id=job_id, run_id=run_id, payload={"priority": priority},
+        )
+
+    def set_paused(self, session: Session, *, paused: bool) -> None:
+        session.execute(text(
+            "INSERT INTO execution_control (singleton, paused) VALUES (true, :paused) "
+            "ON CONFLICT (singleton) DO UPDATE SET paused = EXCLUDED.paused, "
+            "changed_at = statement_timestamp()"
+        ), {"paused": paused})
+
+    def reclaim_expired(self, session: Session, *, force_attempt_id: str | None = None) -> int:
+        """Fence lost Attempts and resume only when no ambiguous provider effect exists.
+
+        A watchdog passes ``force_attempt_id`` after the fixed execution deadline. It
+        fences authority but does not free the caller's in-process worker slot.
+        """
+        from auditmanager.runs.repository import RunRepository
+
+        session.execute(text("SET LOCAL lock_timeout = '2s'"))
+        recovered = 0
+        candidates = session.execute(
+            _EXPIRED_LEASES, {"force_attempt_id": force_attempt_id}
+        ).mappings().all()
+        for candidate in candidates:
+            run_id = str(candidate["run_id"])
+            run_state = session.execute(
+                _LOCK_RUN, {"run_id": run_id}
+            ).scalar_one_or_none()
+            job = session.execute(
+                _LOCK_JOB_WAIT, {"run_id": run_id}
+            ).mappings().first()
+            if job is None or job["current_attempt_id"] != candidate["attempt_id"]:
+                continue
+            attempt = session.execute(
+                _LOCK_AUTHORITY_ATTEMPT, {"attempt_id": candidate["attempt_id"]}
+            ).mappings().first()
+            lease = session.execute(
+                _LOCK_AUTHORITY_LEASE, {"attempt_id": candidate["attempt_id"]}
+            ).mappings().first()
+            if (attempt is None or lease is None or lease["released_at"] is not None
+                    or (lease["current"] and candidate["attempt_id"] != force_attempt_id)):
+                continue
+            if attempt["attempt_state"] in {"leased", "running"}:
+                self._advance_attempt(
+                    session, str(candidate["attempt_id"]),
+                    str(attempt["attempt_state"]), "lost",
+                )
+            session.execute(_RELEASE_LEASE, {"attempt_id": candidate["attempt_id"]})
+            state = str(job["state"])
+            if state not in {"leased", "running"} or run_state not in {"queued", "running"}:
+                recovered += 1
+                continue
+            ambiguous = bool(session.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM provider_call_effect "
+                "WHERE attempt_id = :attempt_id AND state <> 'not_processed')"
+            ), {"attempt_id": candidate["attempt_id"]}).scalar_one())
+            count = int(session.execute(text(
+                "SELECT count(*) FROM attempt WHERE job_id = :job_id"
+            ), {"job_id": candidate["job_id"]}).scalar_one())
+            if ambiguous:
+                session.execute(text(
+                    "UPDATE provider_call_effect SET state = 'outcome_unknown', "
+                    "error_code = :code, dispatch_class = 'outcome_unknown', "
+                    "updated_at = statement_timestamp() "
+                    "WHERE attempt_id = :attempt_id AND state = 'prepared'"
+                ), {"attempt_id": candidate["attempt_id"],
+                    "code": ErrorCode.ANALYSIS_FAILED.value})
+            if ambiguous or count >= 3:
+                if state == "running" and not ambiguous:
+                    self._advance_job(session, str(candidate["job_id"]), "running", "retry_wait")
+                    self._advance_job(session, str(candidate["job_id"]), "retry_wait", "dead_letter")
+                else:
+                    self._advance_job(session, str(candidate["job_id"]), state, "failed")
+                RunRepository().terminate(
+                    session, run_id=run_id, from_state=str(run_state), to_state="failed",
+                    terminal_reason=ErrorCode.ANALYSIS_FAILED.value,
+                    interrupted_reason="provider_outcome_unknown" if ambiguous else "attempt_budget_exhausted",
+                )
+            else:
+                if state == "running":
+                    self._advance_job(session, str(candidate["job_id"]), "running", "retry_wait")
+                    self._advance_job(session, str(candidate["job_id"]), "retry_wait", "queued")
+                else:
+                    self._advance_job(session, str(candidate["job_id"]), "leased", "queued")
+                session.execute(text(
+                    "UPDATE job SET available_at = statement_timestamp() WHERE job_id = :job_id"
+                ), {"job_id": candidate["job_id"]})
+            recovered += 1
+        return recovered
+
+    def start_execution(self, session: Session, *, run_id: str) -> AttemptAuthority:
+        # The run is always locked before its Job. This serialises a claim with
+        # cancellation, final publication and the recovery sweep.
+        run_state = session.execute(_LOCK_RUN, {"run_id": run_id}).scalar_one_or_none()
+        if run_state not in ("queued", "running"):
+            raise self._transition_error("audit_run", str(run_state), "running")
+        job = session.execute(_LOCK_JOB, {"run_id": run_id}).mappings().first()
+        if job is None:
+            # Direct execute_run callers create a run without the API's accepting
+            # transaction. Keep that compatibility path, but only for an absent Job.
+            existing = session.execute(
+                text("SELECT 1 FROM job WHERE run_id = :run_id"), {"run_id": run_id}
+            ).scalar_one_or_none()
+            if existing is not None:
+                raise self._transition_error("job", "locked", "leased")
+            job_id = self.enqueue(session, run_id=run_id)
+        else:
+            job_id = str(job["job_id"])
+            if job["state"] != "queued":
+                raise self._transition_error("job", str(job["state"]), "leased")
         attempt_id = str(AttemptId.new())
         lease_id = str(LeaseId.new())
         try:
-            session.execute(_INSERT_JOB, {"job_id": job_id, "run_id": run_id})
             token = str(session.execute(
                 _INSERT_ATTEMPT,
                 {"attempt_id": attempt_id, "job_id": job_id},
             ).scalar_one())
+            append_execution_event(
+                session, event_type="attempt.created", aggregate_type="Attempt",
+                aggregate_id=attempt_id, run_id=run_id,
+                payload={"job_id": job_id, "state": "created"},
+            )
             changed = session.execute(
                 _SET_CURRENT,
                 {"job_id": job_id, "attempt_id": attempt_id},
@@ -275,16 +474,27 @@ class JobRepository:
         return AttemptAuthority(run_id, job_id, attempt_id, lease_id, token)
 
     def require_current(self, session: Session, authority: AttemptAuthority) -> None:
+        session.execute(_LOCK_RUN, {"run_id": authority.run_id}).scalar_one_or_none()
         row = session.execute(
-            _CURRENT_AUTHORITY, {"job_id": authority.job_id}
+            _LOCK_AUTHORITY_JOB, {"job_id": authority.job_id}
         ).mappings().first()
         if row is None or row["run_id"] != authority.run_id:
             raise DomainError(ErrorCode.STALE_ATTEMPT, aggregate_type="Attempt")
         if row["current_attempt_id"] != authority.attempt_id:
             raise DomainError(ErrorCode.STALE_ATTEMPT, aggregate_type="Attempt")
-        if not secrets.compare_digest(str(row["execution_token"]), authority.execution_token):
+        attempt = session.execute(
+            _LOCK_AUTHORITY_ATTEMPT, {"attempt_id": authority.attempt_id}
+        ).mappings().first()
+        lease = session.execute(
+            _LOCK_AUTHORITY_LEASE, {"attempt_id": authority.attempt_id}
+        ).mappings().first()
+        if attempt is None or not secrets.compare_digest(
+            str(attempt["execution_token"]), authority.execution_token
+        ):
             raise DomainError(ErrorCode.EXECUTION_TOKEN_INVALID, aggregate_type="Attempt")
-        if row["job_state"] != "running" or row["attempt_state"] != "running":
+        if (row["job_state"] != "running" or attempt["attempt_state"] != "running"
+                or lease is None or lease["lease_id"] != authority.lease_id
+                or lease["released_at"] is not None or not lease["current"]):
             raise DomainError(ErrorCode.STALE_ATTEMPT, aggregate_type="Attempt")
 
     def finish_execution(
@@ -297,21 +507,42 @@ class JobRepository:
         session.execute(_RELEASE_LEASE, {"attempt_id": authority.attempt_id})
 
     def fail_for_run(self, session: Session, *, run_id: str) -> None:
-        row = session.execute(_BY_RUN_FOR_UPDATE, {"run_id": run_id}).mappings().first()
+        self._close_for_run(session, run_id=run_id, target="failed")
+
+    def cancel_for_run(self, session: Session, *, run_id: str) -> None:
+        """Fence an accepted run under the run → job → attempt → lease lock order."""
+        self._close_for_run(session, run_id=run_id, target="cancelled")
+
+    def _close_for_run(self, session: Session, *, run_id: str, target: str) -> None:
+        session.execute(_LOCK_RUN, {"run_id": run_id}).scalar_one_or_none()
+        row = session.execute(_LOCK_JOB_WAIT, {"run_id": run_id}).mappings().first()
         if row is None:
             return
-        attempt_state = str(row["attempt_state"])
-        job_state = str(row["job_state"])
-        if attempt_state in {"created", "leased", "running"}:
-            target = "lost" if attempt_state in {"leased", "running"} else "cancelled"
-            self._advance_attempt(
-                session, str(row["current_attempt_id"]), attempt_state, target
-            )
-            session.execute(_RELEASE_LEASE, {"attempt_id": row["current_attempt_id"]})
-        if job_state == "running":
-            self._advance_job(session, str(row["job_id"]), "running", "failed")
-        elif job_state == "leased":
-            self._advance_job(session, str(row["job_id"]), "leased", "failed")
+        attempt_id = row["current_attempt_id"]
+        if attempt_id is not None:
+            attempt = session.execute(
+                _LOCK_AUTHORITY_ATTEMPT, {"attempt_id": attempt_id}
+            ).mappings().one()
+            attempt_state = str(attempt["attempt_state"])
+            if attempt_state in {"created", "leased", "running"}:
+                attempt_target = (
+                    "cancelled" if target == "cancelled" or attempt_state == "created"
+                    else "lost"
+                )
+                self._advance_attempt(session, str(attempt_id), attempt_state, attempt_target)
+            session.execute(
+                _LOCK_AUTHORITY_LEASE, {"attempt_id": attempt_id}
+            ).mappings().first()
+            session.execute(_RELEASE_LEASE, {"attempt_id": attempt_id})
+        job_state = str(row["state"])
+        if target == "cancelled" and job_state in {"queued", "leased", "running", "retry_wait"}:
+            self._advance_job(session, str(row["job_id"]), job_state, "cancelled")
+        elif target == "failed" and job_state in {"leased", "running"}:
+            self._advance_job(session, str(row["job_id"]), job_state, "failed")
+        elif target == "failed" and job_state == "queued":
+            # A queued Job cannot move directly to failed in the sealed graph. The
+            # run can be failed by reconciliation while the Job is cancelled.
+            self._advance_job(session, str(row["job_id"]), "queued", "cancelled")
 
     def prepare_provider_call(
         self,
@@ -339,6 +570,11 @@ class JobRepository:
                 "parameters": json.dumps(dict(parameters), sort_keys=True),
                 "request_sha256": request_sha256,
             },
+        )
+        append_execution_event(
+            session, event_type="provider.prepared", aggregate_type="Attempt",
+            aggregate_id=authority.attempt_id, run_id=authority.run_id,
+            payload={"attempt_id": authority.attempt_id, "state": "prepared"},
         )
         return model_call_id
 
@@ -371,6 +607,34 @@ class JobRepository:
             raise self._transition_error(
                 "provider_call_effect", "prepared", "response_received"
             )
+        append_execution_event(
+            session, event_type="provider.response_received",
+            aggregate_type="Attempt", aggregate_id=authority.attempt_id,
+            run_id=authority.run_id,
+            payload={"attempt_id": authority.attempt_id, "state": "response_received"},
+        )
+
+    def record_provider_not_processed(
+        self, session: Session, authority: AttemptAuthority, *,
+        model_call_id: ModelCallId, error_code: str, dispatch_class: str,
+    ) -> None:
+        if dispatch_class not in {"not_sent", "rate_limited", "proxy_unavailable", "definite_refusal"}:
+            raise ValueError("not_processed requires a proven dispatch class")
+        self.require_current(session, authority)
+        changed = session.execute(_PROVIDER_NOT_PROCESSED, {
+            "model_call_id": str(model_call_id), "run_id": authority.run_id,
+            "job_id": authority.job_id, "attempt_id": authority.attempt_id,
+            "error_code": error_code, "dispatch_class": dispatch_class,
+        }).rowcount
+        if changed != 1:
+            raise self._transition_error("provider_call_effect", "prepared", "not_processed")
+        append_execution_event(
+            session, event_type="provider.not_processed",
+            aggregate_type="Attempt", aggregate_id=authority.attempt_id,
+            run_id=authority.run_id,
+            payload={"attempt_id": authority.attempt_id, "error_code": error_code,
+                     "dispatch_class": dispatch_class},
+        )
 
     def record_provider_unknown(
         self,
@@ -395,6 +659,13 @@ class JobRepository:
             raise self._transition_error(
                 "provider_call_effect", "prepared", "outcome_unknown"
             )
+        append_execution_event(
+            session, event_type="provider.outcome_unknown",
+            aggregate_type="Attempt", aggregate_id=authority.attempt_id,
+            run_id=authority.run_id,
+            payload={"attempt_id": authority.attempt_id, "error_code": error_code,
+                     "dispatch_class": "outcome_unknown"},
+        )
 
     def complete_provider_call(
         self,
@@ -452,6 +723,11 @@ class JobRepository:
             raise self._transition_error(
                 "provider_call_effect", "response_received", "completed"
             )
+        append_execution_event(
+            session, event_type="provider.completed", aggregate_type="Attempt",
+            aggregate_id=authority.attempt_id, run_id=authority.run_id,
+            payload={"attempt_id": authority.attempt_id, "state": "completed"},
+        )
 
     def prepare_artifact(
         self,
@@ -559,6 +835,14 @@ class JobRepository:
         ).rowcount
         if changed != 1:
             raise self._transition_error("job", from_state, to_state)
+        run_id = session.execute(
+            text("SELECT run_id FROM job WHERE job_id = :job_id"), {"job_id": job_id}
+        ).scalar_one()
+        append_execution_event(
+            session, event_type="job.transition", aggregate_type="Job",
+            aggregate_id=job_id, run_id=run_id,
+            payload={"from_state": from_state, "to_state": to_state},
+        )
 
     def _advance_attempt(
         self, session: Session, attempt_id: str, from_state: str, to_state: str
@@ -574,6 +858,15 @@ class JobRepository:
         ).rowcount
         if changed != 1:
             raise self._transition_error("attempt", from_state, to_state)
+        run_id = session.execute(text(
+            "SELECT j.run_id FROM attempt a JOIN job j ON j.job_id = a.job_id "
+            "WHERE a.attempt_id = :attempt_id"
+        ), {"attempt_id": attempt_id}).scalar_one()
+        append_execution_event(
+            session, event_type="attempt.transition", aggregate_type="Attempt",
+            aggregate_id=attempt_id, run_id=run_id,
+            payload={"from_state": from_state, "to_state": to_state},
+        )
 
     @staticmethod
     def _transition_error(machine: str, current: str, requested: str) -> DomainError:

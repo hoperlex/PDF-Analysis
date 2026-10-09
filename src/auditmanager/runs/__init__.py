@@ -34,6 +34,7 @@ from auditmanager.runs.carrier import (
     InlineCarrier,
     RunCarrier,
     ThreadCarrier,
+    DurableCarrier,
     run_to_terminal,
 )
 from auditmanager.runs.retry import (
@@ -83,6 +84,7 @@ __all__ = [
     "BACKOFF_SECONDS",
     "COMMAND_TYPE_START_RUN",
     "CRASHED_REASON",
+    "DurableCarrier",
     "EffectCheckpoint",
     "ExecutionResult",
     "INITIAL_STATE",

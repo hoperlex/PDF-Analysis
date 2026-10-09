@@ -44,8 +44,10 @@ from dataclasses import dataclass
 from typing import Any, Final, Mapping
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from auditmanager.documents.public import DocumentRepository
+from auditmanager.jobs.public import JobRepository
 from auditmanager.ingest.public import (
     CommandReplay,
     CommandRepository,
@@ -305,12 +307,111 @@ def run_of_command(
     return RunRepository().find(session, run_id)
 
 
+_TERMINAL_RUN_STATES = frozenset({"published", "partial", "failed", "cancelled"})
+_CANCELLABLE_RUN_STATES = frozenset({"created", "queued", "running"})
+
+
+def _require_run_control_role(roles: frozenset[str]) -> None:
+    if not roles.intersection({"expert", "admin"}):
+        raise DomainError(ErrorCode.PERMISSION_DENIED)
+
+
+def cancel_audit_run(
+    session: Session, *, run_id: str, roles: frozenset[str], idempotency_key: str,
+    runs: RunRepository | None = None, jobs: JobRepository | None = None,
+    commands: CommandRepository | None = None,
+) -> str:
+    """Idempotently fence a runnable run, its Job, Attempt and Lease."""
+    _require_run_control_role(roles)
+    repository = runs or RunRepository()
+    ledger = commands or CommandRepository()
+    # One run row is locked before anything else the command changes.
+    session.execute(text(
+        "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
+    ), {"run_id": run_id}).scalar_one_or_none()
+    source = repository.get(session, run_id)
+    claimed = ledger.begin(
+        session, command_type="cancel_audit_run",
+        idempotency_key=IdempotencyKey(idempotency_key),
+        fingerprint=payload_fingerprint({"run_id": run_id}),
+    )
+    if isinstance(claimed, CommandReplay):
+        return run_id
+    assert isinstance(claimed, CommandStarted)
+    if source.state not in _CANCELLABLE_RUN_STATES:
+        raise DomainError(
+            ErrorCode.STATE_TRANSITION_NOT_ALLOWED,
+            machine="audit_run", current_state=source.state, requested_state="cancelled",
+        )
+    (jobs or JobRepository()).cancel_for_run(session, run_id=run_id)
+    repository.terminate(session, run_id=run_id, from_state=source.state, to_state="cancelled")
+    ledger.succeed(session, claimed.command_id, {"run_id": run_id})
+    return run_id
+
+
+def reaudit_run(
+    session: Session, *, source_run_id: str, roles: frozenset[str],
+    idempotency_key: str, runs: RunRepository | None = None,
+    jobs: JobRepository | None = None, commands: CommandRepository | None = None,
+) -> StartedRun:
+    """Create one new run from a terminal source's frozen input set."""
+    _require_run_control_role(roles)
+    repository = runs or RunRepository()
+    ledger = commands or CommandRepository()
+    session.execute(text(
+        "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
+    ), {"run_id": source_run_id}).scalar_one_or_none()
+    source = repository.get(session, source_run_id)
+    claimed = ledger.begin(
+        session, command_type="reaudit_run",
+        idempotency_key=IdempotencyKey(idempotency_key),
+        fingerprint=payload_fingerprint({
+            "reaudit_of_run_id": source_run_id,
+            "frozen_input_digest": source.frozen_input_digest,
+        }),
+    )
+    if isinstance(claimed, CommandReplay):
+        replay_run_id = claimed.outcome.get("run_id")
+        if not isinstance(replay_run_id, str):
+            raise DomainError(ErrorCode.IDEMPOTENCY_KEY_STALE, command_type="reaudit_run")
+        return StartedRun(replay_run_id, str(claimed.command_id), True)
+    assert isinstance(claimed, CommandStarted)
+    if source.state not in _TERMINAL_RUN_STATES:
+        raise DomainError(
+            ErrorCode.STATE_TRANSITION_NOT_ALLOWED,
+            machine="audit_run", current_state=source.state, requested_state="reaudit",
+        )
+    busy = session.execute(text(
+        "SELECT 1 FROM audit_run WHERE reaudit_of_run_id = :source "
+        "AND state NOT IN ('published', 'partial', 'failed', 'cancelled') LIMIT 1"
+    ), {"source": source_run_id}).scalar_one_or_none()
+    if busy is not None:
+        raise DomainError(ErrorCode.CONFLICT, message="a re-audit of this source is in progress")
+    new_id = str(RunId.new())
+    repository.create(
+        session, run_id=new_id, project_uid=source.project_uid,
+        version_uid=source.version_uid,
+        analysis_profile_id=source.analysis_profile_id,
+        prompt_bundle_id=source.prompt_bundle_id,
+        provider_mode=source.provider_mode,
+        frozen_input_digest=source.frozen_input_digest,
+        command_id=str(claimed.command_id), reaudit_of_run_id=source_run_id,
+        norms_snapshot_id=source.norms_snapshot_id,
+    )
+    repository.advance(session, run_id=new_id, from_state="created", to_state="queued")
+    (jobs or JobRepository()).enqueue(session, run_id=new_id)
+    ledger.succeed(session, claimed.command_id, {"run_id": new_id})
+    return StartedRun(new_id, str(claimed.command_id), False)
+
+
 __all__ = [
     "COMMAND_TYPE_START_RUN",
     "ROLE_SOURCE_DOCUMENT",
     "StartedRun",
     "frozen_input_digest",
     "run_of_command",
+    "cancel_audit_run",
+    "reaudit_run",
     "start_audit_run",
     "start_run_fingerprint",
 ]

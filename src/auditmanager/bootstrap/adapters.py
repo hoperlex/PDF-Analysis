@@ -45,6 +45,8 @@ from auditmanager.api.schemas.registrations import RegistrationListingView, Regi
 from auditmanager.api.schemas.models import (
     ProductVersion, ReleaseEntry, ReleaseList, ReleaseNoteItem,
 )
+from auditmanager.api.schemas import models
+from auditmanager.api.schemas.common import paginate, decode_cursor, encode_cursor
 from auditmanager.api.schemas.runs import RunStatusView, StageStateView
 from auditmanager.api.security import (
     ROLE_ADMIN,
@@ -80,32 +82,126 @@ class _SessionHolder:
             return work(session)
 
 
-class ExecutionStubAdapter:
-    """An explicit sealed boundary until W53-EXEC-01 installs execution behavior."""
+def _execution_cursor(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    parts = decode_cursor(raw)
+    if len(parts) != 1:
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    return parts[0]
+
+
+class ExecutionAdapter(_SessionHolder):
+    """Map the sealed execution port to the owning run/job commands and read projection."""
+
+    def __init__(self, session_factory: sessionmaker[Session], *, runs: "RunAdapter") -> None:
+        super().__init__(session_factory)
+        self._runs = runs
 
     @staticmethod
-    def _unavailable() -> Any:
-        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="execution")
+    def _roles(session: Session, user_uid: str) -> frozenset[str]:
+        from auditmanager.access.public import AccountRepository
 
-    def list_queue(self, *, cursor: str | None, limit: int) -> Any:
-        return self._unavailable()
+        return AccountRepository().roles_of(session, user_uid)
 
-    def list_journal(self, *, run_id: str | None, cursor: str | None, limit: int) -> Any:
-        return self._unavailable()
+    def list_queue(self, *, cursor: str | None, limit: int) -> models.ExecutionQueuePage:
+        from auditmanager.execution.public import ExecutionRepository
 
-    def cancel_run(self, *, run_id: str, user_uid: str, idempotency_key: str) -> Any:
-        return self._unavailable()
+        def read(session: Session) -> models.ExecutionQueuePage:
+            repo = ExecutionRepository()
+            after = _execution_cursor(cursor)
+            rows = repo.list_queue(session, cursor=after, limit=limit + 1)
+            items = rows[:limit]
+            next_cursor = encode_cursor((items[-1].job_id,)) if len(rows) > limit else None
+            return models.ExecutionQueuePage(
+                items=[models.ExecutionQueueItem(**{
+                    "job_id": row.job_id, "run_id": row.run_id, "state": row.state,
+                    "priority": row.priority, "created_at": row.created_at,
+                    "available_at": row.available_at,
+                }) for row in items],
+                page=models.PageInfo(next_cursor=next_cursor),
+                paused=repo.dispatch_status(session).paused,
+            )
+        return self._read(read)
 
-    def reaudit_run(self, *, run_id: str, user_uid: str, idempotency_key: str) -> Any:
-        return self._unavailable()
+    def list_journal(
+        self, *, run_id: str | None, cursor: str | None, limit: int
+    ) -> models.ExecutionJournalPage:
+        from auditmanager.execution.public import ExecutionRepository
+
+        def read(session: Session) -> models.ExecutionJournalPage:
+            after = _execution_cursor(cursor)
+            rows = ExecutionRepository().list_journal(
+                session, run_id=run_id, cursor=after, limit=limit + 1,
+            )
+            items = rows[:limit]
+            next_cursor = encode_cursor((items[-1].event_id,)) if len(rows) > limit else None
+            return models.ExecutionJournalPage(
+                items=[models.ExecutionJournalEntry(**{
+                    "event_id": row.event_id, "run_id": row.run_id,
+                    "aggregate_type": row.aggregate_type,
+                    "aggregate_id": row.aggregate_id,
+                    "event_type": row.event_type,
+                    "occurred_at": row.occurred_at,
+                    "payload": dict(row.payload),
+                }) for row in items],
+                page=models.PageInfo(next_cursor=next_cursor),
+            )
+        return self._read(read)
+
+    def cancel_run(self, *, run_id: str, user_uid: str, idempotency_key: str) -> RunStatusView:
+        from auditmanager.runs.commands import cancel_audit_run
+
+        def write(session: Session) -> RunStatusView:
+            cancel_audit_run(session, run_id=run_id, roles=self._roles(session, user_uid),
+                             idempotency_key=idempotency_key)
+            return _run_status_view(session, run_id)
+        return self._write(write)
+
+    def reaudit_run(self, *, run_id: str, user_uid: str, idempotency_key: str) -> RunStatusView:
+        from auditmanager.runs.commands import reaudit_run
+
+        def write(session: Session) -> tuple[str, bool, RunStatusView]:
+            result = reaudit_run(session, source_run_id=run_id,
+                                 roles=self._roles(session, user_uid),
+                                 idempotency_key=idempotency_key)
+            return result.run_id, result.replayed, _run_status_view(session, result.run_id)
+        new_id, replayed, view = self._write(write)
+        if not replayed:
+            self._runs.submit_existing(new_id)
+        return view
 
     def set_job_priority(
         self, *, job_id: str, priority: int, user_uid: str, idempotency_key: str
-    ) -> Any:
-        return self._unavailable()
+    ) -> models.ExecutionQueueItem:
+        from auditmanager.jobs.public import set_job_priority
+        from auditmanager.execution.public import ExecutionRepository
 
-    def set_paused(self, *, paused: bool, user_uid: str, idempotency_key: str) -> Any:
-        return self._unavailable()
+        def write(session: Session) -> models.ExecutionQueueItem:
+            set_job_priority(session, job_id=job_id, priority=priority,
+                             roles=self._roles(session, user_uid),
+                             idempotency_key=idempotency_key)
+            row = ExecutionRepository().get_queue_item(session, job_id)
+            if row is None:
+                raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Job")
+            return models.ExecutionQueueItem(**{
+                "job_id": row.job_id, "run_id": row.run_id, "state": row.state,
+                "priority": row.priority, "created_at": row.created_at,
+                "available_at": row.available_at,
+            })
+        return self._write(write)
+
+    def set_paused(self, *, paused: bool, user_uid: str, idempotency_key: str) -> models.ExecutionDispatchStatus:
+        from auditmanager.jobs.public import set_execution_paused
+        from auditmanager.execution.public import ExecutionRepository
+
+        def write(session: Session) -> models.ExecutionDispatchStatus:
+            set_execution_paused(session, paused=paused, roles=self._roles(session, user_uid),
+                                 idempotency_key=idempotency_key, actor_uid=user_uid)
+            state = ExecutionRepository().dispatch_status(session)
+            return models.ExecutionDispatchStatus(paused=state.paused,
+                                                  changed_at=state.changed_at)
+        return self._write(write)
 
 
 class ReleasesAdapter:
@@ -408,6 +504,11 @@ class RunAdapter(_SessionHolder):
                     from_state="created",
                     to_state="queued",
                 )
+                # Job creation shares the command transaction. A process dying after
+                # the 202 leaves a claimable row, not an in-memory-only submission.
+                from auditmanager.jobs.public import JobRepository
+
+                JobRepository().enqueue(session, run_id=started.run_id)
             return started
 
         started = self._write(work)
@@ -455,6 +556,10 @@ class RunAdapter(_SessionHolder):
             )
 
         return job
+
+    def submit_existing(self, run_id: str) -> None:
+        """Wake execution for a durable re-audit accepted in another command."""
+        self._carrier.submit(self._job(run_id))
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._read(lambda session: _run_status_view(session, run_id))

@@ -1,17 +1,15 @@
-"""Startup reconciliation — ``OD-10``: a restart leaves no run falsely ``running``.
+"""Startup reconciliation for orphan running runs and stale commands.
 
-PC-01 runs one execution per run in one process. W48 adds a durable local Lease and current
-Attempt authority but no heartbeat scheduler, so when a process dies its run stays ``running`` unless
-something reconciles it. That something is this module, called at startup --
-:func:`reconcile_at_startup`, from the serving application's lifespan.
+W53 gives live Jobs their own lease heartbeat and recovery owner. Startup
+preserves queued Jobs and live leases; it fails a running Run only when its Job
+is absent or terminal.
 
 **`D-20` made this module reachable and gave it a second state to handle.** Until a
 carrier existed, a run was created, executed and terminated inside the *one* transaction
 that answered ``startRun``, so no intermediate state was ever committed and this
 reconciler could never find anything: it was correct code guarding a case the
-architecture could not produce. Now that the accepting transaction commits ``queued`` and
-the worker commits ``running``, both are states a dead process can leave behind --
-:data:`STRANDED_STATES`.
+architecture could not produce. Now the accepting transaction commits ``queued`` and
+the worker commits ``running``. A durable Job owns both states across restarts.
 
 The vocabulary is the contract's, not a new one
 -----------------------------------------------
@@ -22,9 +20,8 @@ adding one would mean the application and the ``AM001`` trigger disagreeing abou
 states exist. The interruption is recorded as a *reason*, which is a column, rather than
 as a *state*, which is a contract.
 
-``GJ-02-EO-01`` is honored in its non-silent half: a stale ``running`` becomes an
-explicit terminal. PC-01 does not resume, because the profile defers resume — and a
-reconciler that quietly re-queued the run would be a resume by another name.
+``GJ-02-EO-01`` is honored in its non-silent half: an orphan ``running``
+becomes an explicit terminal. A nonterminal Job follows lease recovery instead.
 
 Two independent clauses
 -----------------------
@@ -42,6 +39,7 @@ from dataclasses import dataclass
 from typing import Any, Final
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from auditmanager.ingest.public import CommandRepository
 from auditmanager.jobs.public import (
@@ -62,19 +60,15 @@ INTERRUPTED_REASON: Final[str] = "executor_process_ended_before_terminal"
 #: interrupted run produced no acceptable result, which is what this code means.
 INTERRUPTED_TERMINAL_REASON: Final[str] = ErrorCode.ANALYSIS_FAILED.value
 
-#: The two non-terminal states a dead executor can leave a run sitting in, in the order
-#: a reader cares about them. `D-20` added the second: before the carrier existed nothing
-#: ever committed a ``queued`` row either, because the accepting transaction wrote
-#: ``created``, ``queued``, ``running`` and a terminal before it committed once.
+#: Only running Runs without live Job authority are reconciled here. Queued Jobs
+#: remain durable work for the dispatcher across process restarts.
 #:
 #: ``created`` is **not** here and must not be. A run in ``created`` was never scheduled,
 #: so nothing was ever going to execute it and nothing was interrupted; it is the state a
 #: run has for the few statements between its INSERT and the accepting commit, and a
-#: reconciler that terminated those would be terminating runs mid-creation. Both
-#: ``queued -> failed`` and ``running -> failed`` are declared edges of the frozen
-#: ``audit_run`` machine; ``created -> failed`` is not, so the topology refuses that move
-#: even if this tuple were wrong.
-STRANDED_STATES: Final[tuple[str, ...]] = ("running", "queued")
+#: reconciler that terminated those would be terminating runs mid-creation.
+#: ``running -> failed`` is a declared edge; ``created -> failed`` is not.
+STRANDED_STATES: Final[tuple[str, ...]] = ("running",)
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,12 +107,10 @@ def reconcile_interrupted_runs(
     jobs: JobRepository | None = None,
     interrupted_reason: str = INTERRUPTED_REASON,
 ) -> tuple[ReconciledRun, ...]:
-    """Move every stranded run -- ``running`` or ``queued`` -- to the ``OD-10`` terminal.
+    """Fail only a running run whose durable Job is absent or already terminal.
 
-    ``older_than`` is a PostgreSQL interval literal. It exists because "stale" has no
-    meaning without a threshold and PC-01 has no heartbeat to derive one from; a caller
-    reconciling at startup can pass ``'0 seconds'``, since by definition no execution is
-    in flight at that moment.
+    ``older_than`` is a PostgreSQL interval literal for the scan. It cannot
+    establish process death: Job and Lease state is authoritative even at startup.
 
     The transition goes through the same guard and the same trigger as every other
     move. ``running -> failed`` is a declared edge, so this is reconciliation inside the
@@ -131,6 +123,28 @@ def reconcile_interrupted_runs(
         for run in run_repo.stale_in_state(
             session, state=state, older_than=older_than
         ):
+            # The scan is a hint. Claim/cancel can move the row between scan and
+            # write, so lock and recheck it before consulting the Job.
+            locked_state = session.execute(text(
+                "SELECT state FROM audit_run WHERE run_id = :run_id "
+                "FOR UPDATE SKIP LOCKED"
+            ), {"run_id": run.run_id}).scalar_one_or_none()
+            if locked_state != state:
+                continue
+            # A second serving process may hold the live Lease. Startup cannot
+            # infer process death from run age; the Job/Lease recovery path owns it.
+            job_state = session.execute(text(
+                "SELECT state FROM job WHERE run_id = :run_id "
+                "FOR UPDATE SKIP LOCKED"
+            ), {"run_id": run.run_id}).scalar_one_or_none()
+            # A locked Job may be mid-claim. Distinguish it from absence with a
+            # nonlocking existence read, and leave it to its owner.
+            if job_state is None and session.execute(text(
+                "SELECT 1 FROM job WHERE run_id = :run_id"
+            ), {"run_id": run.run_id}).scalar_one_or_none() is not None:
+                continue
+            if job_state in {"queued", "leased", "running", "retry_wait"}:
+                continue
             job_repo.fail_for_run(session, run_id=run.run_id)
             run_repo.terminate(
                 session,
@@ -180,6 +194,7 @@ def reconcile(
     jobs: JobRepository | None = None,
     commands: CommandRepository | None = None,
     provider_effect_batch_size: int = 100,
+    command_older_than: str | None = None,
 ) -> ReconciliationReport:
     """Both clauses, in the order a startup wants them.
 
@@ -191,7 +206,9 @@ def reconcile(
     reconciled = reconcile_interrupted_runs(
         session, older_than=older_than, runs=runs, jobs=job_repo
     )
-    abandoned = abandon_stale_commands(session, older_than=older_than, commands=commands)
+    abandoned = abandon_stale_commands(
+        session, older_than=command_older_than or older_than, commands=commands
+    )
     settled = job_repo.settle_terminal_provider_effects(
         session,
         older_than=older_than,
@@ -206,19 +223,10 @@ def reconcile(
     )
 
 
-#: The threshold a *process start* reconciles with, and the assumption it rests on.
-#:
-#: ``PROTOTYPE_PROFILE.md`` section 2: "One local execution process is sufficient." One
-#: process means that at the instant this one starts, and before it binds a socket, no
-#: run anywhere can legitimately be executing -- so every ``running`` and ``queued`` row
-#: is stranded whatever its age, and a threshold is not needed to tell.
-#:
-#: **The assumption is load-bearing and is stated rather than buried.** Start a second
-#: process against the same database and this value terminates the first one's live run.
-#: That configuration is outside the profile; if it ever comes inside, this constant is
-#: the one place that has to change, and the ``1 hour`` default of the functions above is
-#: what it would change to.
+#: The startup scan may run immediately because the locked Job recheck preserves
+#: nonterminal authority, including a live lease held by another process.
 STARTUP_THRESHOLD: Final[str] = "0 seconds"
+STARTUP_COMMAND_THRESHOLD: Final[str] = "10 minutes"
 
 
 def reconcile_at_startup(session_factory: Any) -> ReconciliationReport:
@@ -234,7 +242,10 @@ def reconcile_at_startup(session_factory: Any) -> ReconciliationReport:
     a unit of work, and there is no transaction for it to be inside yet.
     """
     with session_factory() as session:
-        report = reconcile(session, older_than=STARTUP_THRESHOLD)
+        report = reconcile(
+            session, older_than=STARTUP_THRESHOLD,
+            command_older_than=STARTUP_COMMAND_THRESHOLD,
+        )
         session.commit()
     return report
 

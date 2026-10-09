@@ -35,6 +35,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
+from auditmanager.jobs.public import append_execution_event
+
 from auditmanager.shared.db import SQLSTATE_TO_CATALOG_CODE
 from auditmanager.shared.errors import DomainError, ErrorCode, screen_details
 from auditmanager.shared.statemachine import Topology, assert_initial, assert_transition
@@ -68,10 +70,12 @@ _INSERT_RUN = text(
     """
     INSERT INTO audit_run (
         run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id,
-        norms_snapshot_id, provider_mode, frozen_input_digest, command_id
+        norms_snapshot_id, provider_mode, frozen_input_digest, command_id,
+        reaudit_of_run_id
     ) VALUES (
         :run_id, :project_uid, :version_uid, :state, :analysis_profile_id,
-        :prompt_bundle_id, NULL, :provider_mode, :frozen_input_digest, :command_id
+        :prompt_bundle_id, :norms_snapshot_id, :provider_mode, :frozen_input_digest, :command_id,
+        :reaudit_of_run_id
     )
     """
 )
@@ -347,13 +351,13 @@ class RunRepository:
         provider_mode: str,
         frozen_input_digest: str,
         command_id: str | None,
+        reaudit_of_run_id: str | None = None,
+        norms_snapshot_id: str | None = None,
     ) -> RunRow:
         """Insert the run in ``created``. The frozen set is written once, here.
 
-        ``norms_snapshot_id`` is written NULL and is read by no PC-01 path: PC-01 pins
-        no norms snapshot, which is why the ``NormsSnapshot`` clause of the
-        ``created -> queued`` reference-resolution guard is recorded unevaluated under
-        ``OD-24``. See :mod:`auditmanager.runs.scope`.
+        A fresh PC-01 run passes the default NULL. Re-audit preserves a source's
+        already frozen snapshot identity without consulting or changing it.
         """
         assert_initial(self.topology(session), RUN_MACHINE, INITIAL_STATE)
         try:
@@ -369,10 +373,16 @@ class RunRepository:
                     "provider_mode": provider_mode,
                     "frozen_input_digest": frozen_input_digest,
                     "command_id": command_id,
+                    "reaudit_of_run_id": reaudit_of_run_id,
+                    "norms_snapshot_id": norms_snapshot_id,
                 },
             )
         except DBAPIError as exc:
             raise translate_refusal(exc) from exc
+        append_execution_event(
+            session, event_type="audit_run.created", aggregate_type="AuditRun",
+            aggregate_id=run_id, run_id=run_id, payload={"state": INITIAL_STATE},
+        )
         return self.get(session, run_id)
 
     # -- reads ---------------------------------------------------------------
@@ -491,6 +501,11 @@ class RunRepository:
         except DBAPIError as exc:
             raise translate_refusal(exc) from exc
         self._require_moved(result.rowcount, from_state, to_state)
+        append_execution_event(
+            session, event_type="audit_run.transition", aggregate_type="AuditRun",
+            aggregate_id=run_id, run_id=run_id,
+            payload={"from_state": from_state, "to_state": to_state},
+        )
 
     def terminate(
         self,
@@ -543,8 +558,19 @@ class RunRepository:
         except DBAPIError as exc:
             raise translate_refusal(exc) from exc
         self._require_moved(result.rowcount, from_state, to_state)
+        append_execution_event(
+            session, event_type="audit_run.transition", aggregate_type="AuditRun",
+            aggregate_id=run_id, run_id=run_id,
+            payload={"from_state": from_state, "to_state": to_state},
+        )
 
     # -- stage results -------------------------------------------------------
+
+    def stage_started(self, session: Session, *, run_id: str, stage_id: str) -> None:
+        append_execution_event(
+            session, event_type="stage.started", aggregate_type="AuditRun",
+            aggregate_id=run_id, run_id=run_id, payload={"stage_id": stage_id},
+        )
 
     def record_stage_result(
         self, session: Session, *, run_id: str, document: Mapping[str, Any]
@@ -574,6 +600,12 @@ class RunRepository:
             )
         except DBAPIError as exc:
             raise translate_refusal(exc) from exc
+        append_execution_event(
+            session, event_type="stage.finished", aggregate_type="AuditRun",
+            aggregate_id=run_id, run_id=run_id,
+            payload={"stage_id": str(document["stage_id"]),
+                     "state": str(document["status"])},
+        )
 
     # -- internals -----------------------------------------------------------
 

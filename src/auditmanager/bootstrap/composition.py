@@ -29,7 +29,7 @@ from auditmanager.bootstrap.adapters import (
     DashboardAdapter,
     DecisionAdapter,
     DocumentAdapter,
-    ExecutionStubAdapter,
+    ExecutionAdapter,
     FindingAdapter,
     ProjectAdapter,
     RegistrationAdapter,
@@ -38,7 +38,7 @@ from auditmanager.bootstrap.adapters import (
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
-from auditmanager.runs import ThreadCarrier
+from auditmanager.runs import DurableCarrier
 from auditmanager.releases.public import (
     ReleaseRepository, compute_build_id, read_product_version,
 )
@@ -142,27 +142,24 @@ def build_application(
     # thread. `ThreadCarrier` is `RUN_CONCURRENCY` wide -- one, per `PROTOTYPE_PROFILE.md`
     # section 2 -- so a second run waits in `queued` instead of competing for the
     # provider budget with the first.
-    carrier = ThreadCarrier()
+    carrier = DurableCarrier(sessions)
+
+    run_adapter = RunAdapter(
+        sessions,
+        blob_store=store,
+        adapter=model_adapter,
+        provider_config=provider_config,
+        provider_mode=_provenance_mode(resolved.provider_mode),
+        analysis_profile_id=profile_id,
+        prompt_bundle_id=bundle_id,
+        carrier=carrier,
+    )
+    carrier.configure_runner(run_adapter._job)
 
     router = build_router(
         projects=ProjectAdapter(ingest),
         documents=DocumentAdapter(ingest),
-        runs=RunAdapter(
-            sessions,
-            blob_store=store,
-            adapter=model_adapter,
-            provider_config=provider_config,
-            # The **provenance** mode, not the transport. `proxy` is how the call travels;
-            # `live` is what the run records, because a model really answered. Two things
-            # enforce that independently and both would refuse `proxy` here: the database
-            # CHECK on audit_run.provider_mode admits only live and recorded, and execute_run
-            # refuses a run whose declared mode disagrees with its adapter - and the proxy
-            # adapter reports `live`. Translating here is the only place that knows both.
-            provider_mode=_provenance_mode(resolved.provider_mode),
-            analysis_profile_id=profile_id,
-            prompt_bundle_id=bundle_id,
-            carrier=carrier,
-        ),
+        runs=run_adapter,
         findings=FindingAdapter(sessions),
         decisions=DecisionAdapter(sessions),
         exports=CsvExportAdapter(sessions),
@@ -185,7 +182,7 @@ def build_application(
         releases=ReleasesAdapter(
             release_repository, product_version=product_version, build_id=build_id
         ),
-        execution=ExecutionStubAdapter(),
+        execution=ExecutionAdapter(sessions, runs=run_adapter),
     )
     return Application(
         router=router,

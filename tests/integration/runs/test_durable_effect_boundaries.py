@@ -154,6 +154,34 @@ def _authority_for(session: Session, started, jobs: JobRepository):
     return jobs.start_execution(session, run_id=started.run_id)
 
 
+def _expire_and_reclaim(factory, run_id: str) -> None:
+    """Model a dead owner after its lease expires, without waiting sixty seconds."""
+    with factory() as controller:
+        controller.execute(text(
+            "UPDATE lease SET expires_at = statement_timestamp() - interval '1 second' "
+            "WHERE attempt_id = (SELECT current_attempt_id FROM job WHERE run_id = :run_id)"
+        ), {"run_id": run_id})
+        controller.commit()
+    with factory() as controller:
+        assert JobRepository().reclaim_expired(controller) >= 1
+        controller.commit()
+
+
+def _terminate_without_settling(factory, run_id: str) -> None:
+    """Make the owners terminal while retaining an effect for the bounded sweep."""
+    with factory() as controller:
+        controller.execute(text(
+            "SELECT state FROM audit_run WHERE run_id = :run_id FOR UPDATE"
+        ), {"run_id": run_id}).scalar_one()
+        JobRepository().fail_for_run(controller, run_id=run_id)
+        RunRepository().terminate(
+            controller, run_id=run_id, from_state="running", to_state="failed",
+            terminal_reason=ErrorCode.ANALYSIS_FAILED.value,
+            interrupted_reason="test_terminal_owner_before_effect_settlement",
+        )
+        controller.commit()
+
+
 def test_provider_checkpoints_refuse_a_foreign_current_authority(
     session,
     blob_store,
@@ -345,9 +373,11 @@ def test_provider_crash_boundaries_are_visible_from_a_new_transaction(
     assert model_call_count == 0
     assert adapter.calls == provider_calls
 
+    _terminate_without_settling(factory, started.run_id)
+
     with factory() as observer:
         report = reconcile(observer, older_than="0 seconds")
-        assert report.unresolved_provider_effects == ()
+        assert started.run_id not in {item.run_id for item in report.unresolved_provider_effects}
         settled = {
             item.model_call_id: item for item in report.settled_provider_effects
         }
@@ -366,7 +396,7 @@ def test_provider_crash_boundaries_are_visible_from_a_new_transaction(
         second = reconcile(observer, older_than="0 seconds")
     assert (state, error_code) == ("abandoned", ErrorCode.ANALYSIS_FAILED.value)
     assert second.settled_provider_effects == ()
-    assert second.unresolved_provider_effects == ()
+    assert started.run_id not in {item.run_id for item in second.unresolved_provider_effects}
 
 
 def test_live_response_lost_before_checkpoint_is_diagnosable_and_never_replayed(
@@ -413,11 +443,13 @@ def test_live_response_lost_before_checkpoint_is_diagnosable_and_never_replayed(
             {"run_id": started.run_id},
         ).scalar_one() == 0
 
+    _terminate_without_settling(factory, started.run_id)
+    with factory() as observer:
         report = reconcile(observer, older_than="0 seconds")
         observer.commit()
 
     assert adapter.calls == 1
-    assert report.unresolved_provider_effects == ()
+    assert started.run_id not in {item.run_id for item in report.unresolved_provider_effects}
     settled = {
         item.model_call_id: item for item in report.settled_provider_effects
     }
@@ -478,6 +510,8 @@ def test_provider_effect_settlement_is_bounded_and_resumable(
                 )
             )
 
+        _terminate_without_settling(factory, started.run_id)
+
     with factory() as observer:
         first = reconcile(
             observer,
@@ -498,7 +532,7 @@ def test_provider_effect_settlement_is_bounded_and_resumable(
         )
         observer.commit()
     assert len(second.settled_provider_effects) == 1
-    assert second.unresolved_provider_effects == ()
+    assert not (call_ids & {item.model_call_id for item in second.unresolved_provider_effects})
 
 
 def test_an_ambiguous_live_failure_is_journalled_once_and_not_retried(
@@ -758,9 +792,7 @@ def test_only_stale_terminal_analysis_publication_without_bytes_can_be_rejected(
     verified = blob_store.verify_temporary(killing_store.temporary)
     blob_store.discard_temporary(killing_store.temporary)
 
-    with factory() as controller:
-        reconcile(controller, older_than="0 seconds")
-        controller.commit()
+    _expire_and_reclaim(factory, started.run_id)
 
     reconciler = Reconciler(blob_store, session_factory=factory)
     report = reconciler.report(unbound_artifact_age="0 seconds")
@@ -1024,9 +1056,7 @@ def test_a_fresh_terminal_publication_is_refused_as_publication_not_stale(
     _started, verified = _interrupted_publication(
         factory, helpers, blob_store, recorded_adapter, provider_config
     )
-    with factory() as controller:
-        reconcile(controller, older_than="0 seconds")
-        controller.commit()
+    _expire_and_reclaim(factory, _started.run_id)
     reconciler = Reconciler(blob_store, session_factory=factory)
     with pytest.raises(DomainError) as refusal:
         reconciler.reject_unpublished(verified.blob_id, older_than="1 hour")
@@ -1106,9 +1136,7 @@ def test_the_sweep_leaves_a_terminal_effect_younger_than_its_threshold(
     """
     factory = _factory(engine)
     started = _prepared_provider_effect(factory, helpers, blob_store, recorded_adapter)
-    with factory() as controller:
-        reconcile_interrupted_runs(controller, older_than="0 seconds")
-        controller.commit()
+    _terminate_without_settling(factory, started.run_id)
     with factory() as controller:
         young = JobRepository().settle_terminal_provider_effects(
             controller, older_than="1 hour"

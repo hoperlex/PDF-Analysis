@@ -26,7 +26,10 @@ from __future__ import annotations
 
 import json
 import logging
+from http.client import HTTPException
 import re
+import socket
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -66,6 +69,22 @@ _SENSITIVE_ERROR_TEXT = re.compile(
     r"(?<![A-Za-z0-9])(?:sk|pk|tok|key|secret)[-_][A-Za-z0-9._=-]{6,}|"
     r"(?<![A-Za-z0-9])[A-Za-z0-9+/_=.\-]{24,}(?![A-Za-z0-9])"
 )
+
+
+class ProxyDispatchError(DomainError):
+    """A catalog error with transport evidence kept outside envelope details."""
+
+    __slots__ = ("dispatch_class", "retry_safe", "retry_after_seconds")
+
+    def __init__(
+        self, code: ErrorCode, *, dispatch_class: str, retry_safe: bool,
+        retry_after_seconds: float = 0.0, message: str | None = None,
+        details: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(code, message=message, **dict(details or {}))
+        self.dispatch_class = dispatch_class
+        self.retry_safe = retry_safe
+        self.retry_after_seconds = retry_after_seconds
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,7 +181,9 @@ class ProxyAdapter(ModelAdapter):
                 # the prompt bundle - no run id, no timestamp - so hashing it gives a key
                 # that survives a retry and differs between documents. Without this every
                 # retry is a fresh paid upstream call rather than a deduplicated one.
-                "X-Idempotency-Key": _idempotency_key(payload, self._settings.model),
+                "X-Idempotency-Key": _idempotency_key(
+                    payload, self._settings.model, request.idempotency_scope
+                ),
             },
         )
 
@@ -172,17 +193,46 @@ class ProxyAdapter(ModelAdapter):
                 status = response.status
                 raw = response.read() if status == 200 else response.read(_ERROR_BODY_LIMIT + 1)
         except urllib.error.HTTPError as exc:  # noqa: PERF203 - each status means something
-            raise _map_http_failure(exc.code, exc.read(_ERROR_BODY_LIMIT + 1)) from None
+            raise _classified_http_failure(
+                exc.code, exc.read(_ERROR_BODY_LIMIT + 1), headers=exc.headers
+            ) from None
         except urllib.error.URLError as exc:
-            raise DomainError(
-                ErrorCode.DEPENDENCY_UNAVAILABLE,
+            # URLError alone says nothing about whether request bytes were written.
+            # Only DNS, refused TCP connect and certificate verification prove a
+            # pre-dispatch failure. A reset or timeout remains ambiguous.
+            before_send = isinstance(
+                exc.reason, (socket.gaierror, ConnectionRefusedError,
+                             ssl.SSLCertVerificationError)
+            )
+            raise ProxyDispatchError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE, dispatch_class=(
+                    "not_sent" if before_send else "outcome_unknown"
+                ), retry_safe=before_send,
                 message="the model proxy could not be reached",
+            ) from None
+        except OSError:
+            raise ProxyDispatchError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE, dispatch_class="outcome_unknown",
+                retry_safe=False, message="the proxy connection ended without a complete answer",
+            ) from None
+        except HTTPException:
+            raise ProxyDispatchError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE, dispatch_class="outcome_unknown",
+                retry_safe=False, message="the proxy response ended before completion",
             ) from None
         latency_ms = int((time.monotonic() - started) * 1000)
 
         if status != 200:
-            raise _map_http_failure(status, raw)
-        return _from_openai_response(json.loads(raw), latency_ms)
+            raise _classified_http_failure(
+                status, raw, headers=getattr(response, "headers", None)
+            )
+        try:
+            return _from_openai_response(json.loads(raw), latency_ms)
+        except (ValueError, UnicodeError):
+            raise ProxyDispatchError(
+                ErrorCode.ANALYSIS_FAILED, dispatch_class="outcome_unknown",
+                retry_safe=False, message="the model proxy returned an invalid answer",
+            ) from None
 
 
 def _completions_url(base_url: str) -> str:
@@ -207,12 +257,46 @@ def _completions_url(base_url: str) -> str:
     return base + _COMPLETIONS_PATH
 
 
-def _idempotency_key(payload: bytes, model: str) -> str:
+def _idempotency_key(payload: bytes, model: str, scope: str | None = None) -> str:
     import hashlib
 
     # The model slug is part of the key. Without it, repeating one document after switching
     # models would collapse onto the earlier call and return the older model's answer.
-    return hashlib.sha256(model.encode("utf-8") + b"\0" + payload).hexdigest()
+    prefix = b"" if scope is None else scope.encode("utf-8") + b"\0"
+    return hashlib.sha256(prefix + model.encode("utf-8") + b"\0" + payload).hexdigest()
+
+
+def _retry_after(headers: Any) -> float:
+    if headers is None:
+        return 0.0
+    raw = headers.get("Retry-After")
+    if raw is None:
+        return 0.0
+    try:
+        return max(0.0, min(60.0, float(raw)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _classified_http_failure(status: int, raw: bytes, *, headers: Any) -> DomainError:
+    mapped = _map_http_failure(status, raw)
+    if status == 429:
+        return ProxyDispatchError(
+            mapped.code, dispatch_class="rate_limited", retry_safe=True,
+            retry_after_seconds=_retry_after(headers), message=mapped.custom_message,
+            details=mapped.detail_fields,
+        )
+    if status in (400, 401, 403, 413):
+        return ProxyDispatchError(
+            mapped.code, dispatch_class="definite_refusal", retry_safe=False,
+            message=mapped.custom_message, details=mapped.detail_fields,
+        )
+    # A 503 is retryable only for the proxy's own measured envelope. No such
+    # discriminator is frozen yet; foreign 503 and 504 remain ambiguous.
+    return ProxyDispatchError(
+        mapped.code, dispatch_class="outcome_unknown", retry_safe=False,
+        message=mapped.custom_message, details=mapped.detail_fields,
+    )
 
 
 def _to_openai_body(request: ModelRequest, model: str) -> dict[str, Any]:

@@ -55,6 +55,7 @@ from auditmanager.analysis.text.provenance import (
     assert_consistent_mode,
 )
 from auditmanager.analysis.text.response import parse_response
+from auditmanager.analysis.text.proxy import ProxyDispatchError
 from auditmanager.analysis.text.textlayer import TextLayer, load_text_layer
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId, RunId
@@ -79,6 +80,8 @@ class TextAnalysisOutcome:
     # billable work. The durable intent records that ambiguity and the executor must not
     # automatically repeat it as though the call never happened.
     provider_effect_uncertain: bool = False
+    provider_retry_allowed: bool | None = None
+    retry_after_seconds: float = 0.0
 
     def __post_init__(self) -> None:
         if self.status == STATUS_SUCCEEDED and self.error is not None:
@@ -108,6 +111,10 @@ class ModelCallJournal(Protocol):
 
     def outcome_unknown(
         self, model_call_id: ModelCallId, error: DomainError
+    ) -> None: ...
+
+    def not_processed(
+        self, model_call_id: ModelCallId, error: DomainError, dispatch_class: str
     ) -> None: ...
 
 
@@ -248,6 +255,7 @@ def run_text_analysis(
             model_id=resolved_config.model_id,
             bundle=profile.prompt_bundle,
             text_layer=text_layer,
+            idempotency_scope=str(run_id),
         )
         cost_meter.check_before_call()
     except DomainError as error:
@@ -286,14 +294,28 @@ def run_text_analysis(
         response = adapter.complete(request)
     except DomainError as error:
         if call_journal is not None:
-            call_journal.outcome_unknown(model_call_id, error)
+            if isinstance(error, ProxyDispatchError) and error.dispatch_class != "outcome_unknown":
+                call_journal.not_processed(model_call_id, error, error.dispatch_class)
+            else:
+                call_journal.outcome_unknown(model_call_id, error)
         return TextAnalysisOutcome(
             status=STATUS_FAILED,
             artifact=None,
             model_calls=(),
             error=error,
             metrics={"stage_id": STAGE_ID, "stage_version": STAGE_VERSION},
-            provider_effect_uncertain=mode is ProviderMode.LIVE,
+            provider_effect_uncertain=(
+                mode is ProviderMode.LIVE and not (
+                    isinstance(error, ProxyDispatchError)
+                    and error.dispatch_class != "outcome_unknown"
+                )
+            ),
+            provider_retry_allowed=(
+                error.retry_safe if isinstance(error, ProxyDispatchError) else None
+            ),
+            retry_after_seconds=(
+                error.retry_after_seconds if isinstance(error, ProxyDispatchError) else 0.0
+            ),
         )
 
     if call_journal is not None:

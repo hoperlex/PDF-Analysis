@@ -11,6 +11,9 @@ from __future__ import annotations
 import io
 import json
 import logging
+import http.client
+import socket
+import ssl
 import urllib.error
 from typing import Any
 
@@ -18,7 +21,7 @@ import pytest
 
 from auditmanager.analysis.text.adapter import ModelRequest
 from auditmanager.analysis.text.config import DEPENDENCY_NAME
-from auditmanager.analysis.text.proxy import ProxyAdapter, ProxySettings
+from auditmanager.analysis.text.proxy import ProxyAdapter, ProxySettings, ProxyDispatchError
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 ANTHROPIC_BODY: dict[str, Any] = {
@@ -71,6 +74,70 @@ def _adapter(opener: Any) -> ProxyAdapter:
     return ProxyAdapter(
         ProxySettings(base_url="https://proxy.example", token="tok"), opener=opener
     )
+
+
+class TestW53DispatchClassification:
+    @pytest.mark.parametrize("reason", [
+        socket.gaierror("no name"), ConnectionRefusedError("refused"),
+        ssl.SSLCertVerificationError("bad certificate"),
+    ])
+    def test_proven_pre_send_failure_is_safe_to_retry(self, reason: Exception) -> None:
+        def raising(*_: Any, **__: Any) -> Any:
+            raise urllib.error.URLError(reason)
+
+        with pytest.raises(ProxyDispatchError) as caught:
+            _adapter(raising).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
+        assert caught.value.dispatch_class == "not_sent"
+        assert caught.value.retry_safe is True
+
+    @pytest.mark.parametrize("failure", [
+        urllib.error.URLError("unspecified"),
+        urllib.error.URLError(ConnectionResetError("reset")),
+        urllib.error.URLError(TimeoutError("timed out")),
+        ConnectionResetError("reset"), TimeoutError("timed out"),
+        http.client.IncompleteRead(b"partial"),
+        http.client.RemoteDisconnected("remote closed"),
+    ])
+    def test_ambiguous_failure_never_retries(self, failure: Exception) -> None:
+        def raising(*_: Any, **__: Any) -> Any:
+            raise failure
+
+        with pytest.raises(ProxyDispatchError) as caught:
+            _adapter(raising).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
+        assert caught.value.dispatch_class == "outcome_unknown"
+        assert caught.value.retry_safe is False
+
+    @pytest.mark.parametrize("status, expected, safe", [
+        (400, "definite_refusal", False),
+        (401, "definite_refusal", False),
+        (413, "definite_refusal", False),
+        (429, "rate_limited", True),
+        (503, "outcome_unknown", False),
+        (504, "outcome_unknown", False),
+    ])
+    def test_http_response_requires_proof_before_retry(
+        self, status: int, expected: str, safe: bool,
+    ) -> None:
+        def raising(*_: Any, **__: Any) -> Any:
+            raise urllib.error.HTTPError(
+                "https://proxy.example", status, "", {"Retry-After": "900"},
+                io.BytesIO(b'{"error":{"code":"queue_full"}}'),
+            )
+
+        with pytest.raises(ProxyDispatchError) as caught:
+            _adapter(raising).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
+        assert caught.value.dispatch_class == expected
+        assert caught.value.retry_safe is safe
+        assert caught.value.retry_after_seconds == (60.0 if status == 429 else 0.0)
+
+    def test_run_scope_changes_proxy_key_without_changing_request_checksum(self) -> None:
+        first = ModelRequest(model_id="m", body=ANTHROPIC_BODY, idempotency_scope="run_first")
+        second = ModelRequest(model_id="m", body=ANTHROPIC_BODY, idempotency_scope="run_second")
+        a, b = _Captured(), _Captured()
+        _adapter(a).complete(first)
+        _adapter(b).complete(second)
+        assert first.request_sha256 == second.request_sha256
+        assert a.request.headers["X-idempotency-key"] != b.request.headers["X-idempotency-key"]
 
 
 class TestWhatGoesOnTheWire:

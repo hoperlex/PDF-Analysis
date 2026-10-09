@@ -306,6 +306,10 @@ def _run_lifespan(application: Application) -> Any:
                 report.run_count,
                 report.abandoned_count,
             )
+        from auditmanager.runs.carrier import DurableCarrier
+
+        if isinstance(application.carrier, DurableCarrier):
+            application.carrier.start()
         try:
             yield
         finally:

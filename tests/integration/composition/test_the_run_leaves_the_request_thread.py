@@ -41,6 +41,7 @@ from __future__ import annotations
 import json
 import threading
 import uuid
+import time
 from typing import Any, Iterator
 
 import importlib.util
@@ -63,13 +64,18 @@ from auditmanager.bootstrap.adapters import CredentialAdapter
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
 from auditmanager.bootstrap.adapters import RunAdapter
+from auditmanager.jobs.public import JobRepository
+from auditmanager.jobs.lease import LeaseHeartbeat
+from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.runs import (
     CRASHED_REASON,
     INTERRUPTED_REASON,
     RunRepository,
     ThreadCarrier,
+    DurableCarrier,
     reconcile_at_startup,
 )
+from auditmanager.runs.commands import cancel_audit_run
 
 from auditmanager.analysis.text import ProviderConfig
 from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
@@ -265,6 +271,8 @@ def _client(
         prompt_bundle_id=str(_PROFILE.prompt_bundle.prompt_bundle_id),
         carrier=carrier,
     )
+    if isinstance(carrier, DurableCarrier):
+        carrier.configure_runner(run_port._job)
     router = build_router(
         projects=None,  # type: ignore[arg-type]
         documents=None,  # type: ignore[arg-type]
@@ -406,6 +414,59 @@ class TestRunningIsAReadingAndNotAnInternalStep:
             carrier.shutdown()
 
 
+def test_serving_lifespan_dispatches_an_ordinary_run_adapter_submission(
+    sessions: sessionmaker[Session], blob_store: Any,
+    recorded_adapter: RecordedAdapter, provider_config: Any,
+    committed_version: Any,
+) -> None:
+    """The active carrier wakes from a plain nullary RunCarrier submission."""
+    # Quarantine earlier disposable-test queue rows while proving this run's
+    # serving path. Restore their availability in the finally block.
+    with sessions() as setup:
+        old_jobs = setup.execute(text(
+            "SELECT job_id, available_at FROM job WHERE state = 'queued' FOR UPDATE"
+        )).all()
+        setup.execute(text(
+            "UPDATE job SET available_at = timestamptz '2099-01-01' "
+            "WHERE state = 'queued'"
+        ))
+        JobRepository().set_paused(setup, paused=True)
+        setup.commit()
+    gated = GatedAdapter(recorded_adapter)
+    carrier = DurableCarrier(sessions)
+    client = next(_client(sessions, blob_store, gated, provider_config, carrier))
+    try:
+        with client:
+            started = _start(client, committed_version.version_uid)
+            assert started["state"] == "queued"
+            with sessions() as controller:
+                # A previous crashed test may have been reclaimed at startup.
+                controller.execute(text(
+                    "UPDATE job SET available_at = timestamptz '2099-01-01' "
+                    "WHERE state = 'queued' AND run_id <> :run_id"
+                ), {"run_id": started["run_id"]})
+                JobRepository().set_paused(controller, paused=False)
+                controller.commit()
+            assert gated.entered.wait(timeout=30)
+            assert _status(client, started["run_id"])["state"] == "running"
+            gated.release.set()
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                if _status(client, started["run_id"])["state"] in TERMINALS:
+                    break
+                time.sleep(0.05)
+            assert _status(client, started["run_id"])["state"] == "published"
+    finally:
+        gated.release.set()
+        with sessions() as cleanup:
+            for job_id, available_at in old_jobs:
+                cleanup.execute(text(
+                    "UPDATE job SET available_at = :available_at WHERE job_id = :job_id"
+                ), {"job_id": job_id, "available_at": available_at})
+            JobRepository().set_paused(cleanup, paused=False)
+            cleanup.commit()
+
+
 class TestACrashDoesNotStrandARun:
     """What a process death leaves, and what the next reader can do about it."""
 
@@ -484,7 +545,7 @@ class TestACrashDoesNotStrandARun:
             carrier.shutdown()
 
     @pytest.mark.parametrize("stranded_state", ["running", "queued"])
-    def test_a_process_death_is_resolved_by_the_next_process_start(
+    def test_startup_keeps_a_queued_job_and_fails_an_orphan_running_run(
         self,
         sessions: sessionmaker[Session],
         blob_store: Any,
@@ -493,16 +554,12 @@ class TestACrashDoesNotStrandARun:
         committed_version: Any,
         stranded_state: str,
     ) -> None:
-        """A killed process runs no ``except`` clause; the next start reconciles.
+        """A queued Job survives restart; an orphan running Run still fails.
 
-        Both non-terminal states a death can leave are covered. ``running`` is the worker
-        dying mid-analysis; ``queued`` is the process dying between the transaction that
-        accepted the run and the worker picking the job up -- a state that did not exist
-        before `D-20`, because the accepting transaction used to commit a terminal.
-
-        The kill is simulated by never submitting the job, which leaves exactly the row a
-        death leaves: `SIGKILL` cannot be issued at a thread, and a test that killed this
-        process would take the assertion with it.
+        The in-memory carrier drops work. W53's durable Job is the recovery
+        authority, so startup must leave that queued row for the dispatcher.
+        For the running case, remove only its otherwise queued Job to model an
+        orphan from pre-durable history and preserve the reconciliation backstop.
         """
         carrier = ThreadCarrier()
         try:
@@ -516,6 +573,8 @@ class TestACrashDoesNotStrandARun:
             repository = RunRepository()
             if stranded_state == "running":
                 with sessions() as opened:
+                    opened.execute(text("DELETE FROM job WHERE run_id = :run_id"),
+                                   {"run_id": run_id})
                     repository.advance(
                         opened, run_id=run_id, from_state="queued", to_state="running"
                     )
@@ -525,9 +584,10 @@ class TestACrashDoesNotStrandARun:
             reconcile_at_startup(sessions)
 
             body = _status(client, run_id)
-            assert body["state"] in TERMINALS, body
-            assert body["state"] == "failed", body
-            assert body["interrupted_reason"] == INTERRUPTED_REASON, body
+            expected = "failed" if stranded_state == "running" else "queued"
+            assert body["state"] == expected, body
+            if stranded_state == "running":
+                assert body["interrupted_reason"] == INTERRUPTED_REASON, body
         finally:
             carrier.shutdown()
 
@@ -551,6 +611,8 @@ class TestACrashDoesNotStrandARun:
         )
         started = _start(client, committed_version.version_uid)
         with sessions() as opened:
+            opened.execute(text("DELETE FROM job WHERE run_id = :run_id"),
+                           {"run_id": started["run_id"]})
             RunRepository().advance(
                 opened, run_id=started["run_id"], from_state="queued", to_state="running"
             )
@@ -610,7 +672,177 @@ def test_the_run_row_a_killed_process_leaves_is_the_only_one_it_can_leave(
         }
     non_terminal = (declared | {"created"}) - TERMINALS
     assert non_terminal == {"created", "queued", "running", "validating"}, non_terminal
-    assert set(STRANDED_STATES) == {"queued", "running"}, STRANDED_STATES
+    assert set(STRANDED_STATES) == {"running"}, STRANDED_STATES
     assert "created" not in STRANDED_STATES, (
         "a reconciler that terminated `created` runs would terminate runs mid-creation"
     )
+
+
+def test_another_process_preserves_a_live_lease_and_reclaims_only_after_expiry(
+    sessions: sessionmaker[Session], blob_store: Any,
+    recorded_adapter: RecordedAdapter, provider_config: Any,
+    committed_version: Any,
+) -> None:
+    client = next(_client(sessions, blob_store, recorded_adapter, provider_config, _NoCarrier()))
+    run_id = _start(client, committed_version.version_uid)["run_id"]
+    with sessions() as owner:
+        RunRepository().advance(owner, run_id=run_id, from_state="queued", to_state="running")
+        authority = JobRepository().start_execution(owner, run_id=run_id)
+        owner.commit()
+
+    report = reconcile_at_startup(sessions)
+    assert run_id not in {item.run_id for item in report.runs}
+    assert _status(client, run_id)["state"] == "running"
+    with sessions() as observer:
+        JobRepository().reclaim_expired(observer)
+        assert observer.execute(text(
+            "SELECT released_at IS NULL FROM lease WHERE lease_id = :lease_id"
+        ), {"lease_id": authority.lease_id}).scalar_one() is True
+        observer.commit()
+    with sessions() as controller:
+        controller.execute(text(
+            "UPDATE lease SET expires_at = statement_timestamp() - interval '1 second' "
+            "WHERE lease_id = :lease_id"
+        ), {"lease_id": authority.lease_id})
+        controller.commit()
+    with sessions() as recoverer:
+        assert JobRepository().reclaim_expired(recoverer) >= 1
+        recoverer.commit()
+    with sessions() as observer:
+        row = observer.execute(text(
+            "SELECT j.state, a.state FROM job j JOIN attempt a "
+            "ON a.attempt_id = j.current_attempt_id WHERE j.run_id = :run_id"
+        ), {"run_id": run_id}).one()
+        assert tuple(row) == ("queued", "lost")
+        next_authority = JobRepository().start_execution(observer, run_id=run_id)
+        observer.commit()
+    assert next_authority.attempt_id != authority.attempt_id
+
+
+def test_dispatch_skips_a_locked_top_priority_run(
+    sessions: sessionmaker[Session], blob_store: Any,
+    recorded_adapter: RecordedAdapter, provider_config: Any,
+    committed_version: Any,
+) -> None:
+    client = next(_client(sessions, blob_store, recorded_adapter, provider_config, _NoCarrier()))
+    top = _start(client, committed_version.version_uid)["run_id"]
+    next_run = _start(client, committed_version.version_uid)["run_id"]
+    with sessions() as controller:
+        jobs = JobRepository()
+        for run_id, priority in ((top, 100), (next_run, 99)):
+            job_id = controller.execute(text(
+                "SELECT job_id FROM job WHERE run_id = :run_id"
+            ), {"run_id": run_id}).scalar_one()
+            jobs.set_priority(controller, job_id=job_id, priority=priority)
+        controller.commit()
+    with sessions() as claimant:
+        claimant.execute(text(
+            "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
+        ), {"run_id": top}).scalar_one()
+        with sessions() as other_process:
+            picked = JobRepository().next_queued_run(other_process)
+            assert picked is not None and picked != top
+            other_process.rollback()
+        claimant.rollback()
+
+
+def test_claim_and_cancel_from_two_connections_keep_run_first_lock_order(
+    sessions: sessionmaker[Session], blob_store: Any,
+    recorded_adapter: RecordedAdapter, provider_config: Any,
+    committed_version: Any,
+) -> None:
+    client = next(_client(sessions, blob_store, recorded_adapter, provider_config, _NoCarrier()))
+    run_id = _start(client, committed_version.version_uid)["run_id"]
+    run_locked = threading.Event()
+    cancel_entered = threading.Event()
+    release_claim = threading.Event()
+    errors: list[BaseException] = []
+
+    def claim() -> None:
+        try:
+            with sessions() as session:
+                RunRepository().advance(session, run_id=run_id,
+                                        from_state="queued", to_state="running")
+                run_locked.set()
+                assert release_claim.wait(10)
+                JobRepository().start_execution(session, run_id=run_id)
+                session.commit()
+        except BaseException as exc:
+            errors.append(exc)
+
+    def cancel() -> None:
+        try:
+            assert run_locked.wait(10)
+            with sessions() as session:
+                cancel_entered.set()
+                cancel_audit_run(
+                    session, run_id=run_id, roles=frozenset({"admin"}),
+                    idempotency_key="w53-race-" + uuid.uuid4().hex,
+                )
+                session.commit()
+        except BaseException as exc:
+            errors.append(exc)
+
+    claimant = threading.Thread(target=claim, daemon=True)
+    canceller = threading.Thread(target=cancel, daemon=True)
+    claimant.start()
+    canceller.start()
+    try:
+        assert cancel_entered.wait(10)
+    finally:
+        release_claim.set()
+    claimant.join(10)
+    canceller.join(10)
+    assert not claimant.is_alive() and not canceller.is_alive(), "claim/cancel deadlock"
+    assert errors == []
+    with sessions() as observer:
+        states = observer.execute(text(
+            "SELECT r.state, j.state, a.state FROM audit_run r JOIN job j "
+            "ON j.run_id = r.run_id JOIN attempt a ON a.attempt_id = j.current_attempt_id "
+            "WHERE r.run_id = :run_id"
+        ), {"run_id": run_id}).one()
+    assert tuple(states) == ("cancelled", "cancelled", "cancelled")
+
+
+def test_watchdog_fences_a_blocked_attempt_without_releasing_the_worker_slot(
+    sessions: sessionmaker[Session], blob_store: Any,
+    recorded_adapter: RecordedAdapter, provider_config: Any,
+    committed_version: Any, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = next(_client(sessions, blob_store, recorded_adapter, provider_config, _NoCarrier()))
+    run_id = _start(client, committed_version.version_uid)["run_id"]
+    with sessions() as owner:
+        RunRepository().advance(owner, run_id=run_id, from_state="queued", to_state="running")
+        authority = JobRepository().start_execution(owner, run_id=run_id)
+        bind = owner.get_bind()
+        owner.commit()
+
+    import auditmanager.jobs.lease as lease_module
+    monkeypatch.setattr(lease_module, "HEARTBEAT_SECONDS", 0.02)
+    monkeypatch.setattr(lease_module, "ATTEMPT_WATCHDOG_SECONDS", 0.0)
+    worker_release = threading.Event()
+    carrier = DurableCarrier(sessions)
+    carrier.submit(lambda: worker_release.wait(10))
+    heartbeat = LeaseHeartbeat(bind, authority)
+    try:
+        heartbeat.start()
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            with sessions() as observer:
+                released = observer.execute(text(
+                    "SELECT released_at IS NOT NULL FROM lease WHERE lease_id = :lease_id"
+                ), {"lease_id": authority.lease_id}).scalar_one()
+            if released:
+                break
+            time.sleep(0.02)
+        assert released is True
+        with sessions() as observer:
+            with pytest.raises(DomainError) as fenced:
+                JobRepository().require_current(observer, authority)
+            assert fenced.value.code is ErrorCode.STALE_ATTEMPT
+        assert carrier.drain(timeout=0) is False
+    finally:
+        heartbeat.stop()
+        worker_release.set()
+        assert carrier.drain(timeout=5)
+        carrier.shutdown()
