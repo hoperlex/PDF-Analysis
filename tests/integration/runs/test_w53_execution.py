@@ -305,12 +305,31 @@ def test_prepared_provider_effect_fails_closed_on_lease_loss(
         session, first, provider="anthropic", model_identity="claude-opus-5",
         provider_mode="live", parameters={}, request_sha256="d" * 64,
     )
+    second_effect = jobs.prepare_provider_call(
+        session, first, provider="anthropic", model_identity="claude-opus-5",
+        provider_mode="live", parameters={}, request_sha256="e" * 64,
+    )
     _expire(session, first)
     row = session.execute(text(
-        "SELECT r.state, j.state, e.state FROM audit_run r JOIN job j ON j.run_id = r.run_id "
-        "JOIN provider_call_effect e ON e.job_id = j.job_id WHERE r.run_id = :run_id"
+        "SELECT r.state, j.state FROM audit_run r JOIN job j ON j.run_id = r.run_id "
+        "WHERE r.run_id = :run_id"
     ), {"run_id": run_id}).one()
-    assert tuple(row) == ("failed", "failed", "outcome_unknown")
+    assert tuple(row) == ("failed", "failed")
+    states = dict(session.execute(text(
+        "SELECT model_call_id, state FROM provider_call_effect WHERE run_id = :run_id"
+    ), {"run_id": run_id}).all())
+    assert states == {str(effect): "outcome_unknown", str(second_effect): "outcome_unknown"}
+    events = text(
+        "SELECT count(*) FROM audit_event WHERE event_type = 'provider.outcome_unknown' "
+        "AND aggregate_id = :attempt_id AND payload->>'run_id' = :run_id"
+    )
+    assert session.execute(events, {
+        "attempt_id": first.attempt_id, "run_id": run_id,
+    }).scalar_one() == 2
+    assert jobs.reclaim_expired(session) == 0
+    assert session.execute(events, {
+        "attempt_id": first.attempt_id, "run_id": run_id,
+    }).scalar_one() == 2
     with pytest.raises(DomainError):
         _claim(session, run_id)
 

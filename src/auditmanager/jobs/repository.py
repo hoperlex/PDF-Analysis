@@ -53,8 +53,18 @@ _EXPIRED_LEASES = text(
     "SELECT j.run_id, j.job_id, a.attempt_id, l.lease_id FROM lease l "
     "JOIN attempt a ON a.attempt_id = l.attempt_id "
     "JOIN job j ON j.job_id = l.job_id WHERE l.released_at IS NULL "
-    "AND (l.expires_at <= statement_timestamp() OR l.attempt_id = :force_attempt_id) "
-    "ORDER BY (l.attempt_id = :force_attempt_id) DESC, l.expires_at, l.lease_id LIMIT 100"
+    "AND ((CAST(:force_attempt_id AS text) IS NULL "
+    "AND l.expires_at <= statement_timestamp()) "
+    "OR (CAST(:force_attempt_id AS text) IS NOT NULL "
+    "AND l.attempt_id = :force_attempt_id)) "
+    "ORDER BY j.run_id, l.lease_id LIMIT 100"
+)
+_ENSURE_CONTROL = text(
+    "INSERT INTO execution_control (singleton, paused) VALUES (true, false) "
+    "ON CONFLICT (singleton) DO NOTHING"
+)
+_LOCK_CONTROL = text(
+    "SELECT paused FROM execution_control WHERE singleton = true FOR UPDATE"
 )
 _INSERT_ATTEMPT = text(
     "INSERT INTO attempt (attempt_id, job_id, state, execution_token) "
@@ -334,6 +344,8 @@ class JobRepository:
 
         A watchdog passes ``force_attempt_id`` after the fixed execution deadline. It
         fences authority but does not free the caller's in-process worker slot.
+        The forced pass considers only its Attempt. Periodic passes take all Run
+        locks in one stable order, including when two sweeps overlap.
         """
         from auditmanager.runs.public import fail_reclaimed_run
 
@@ -379,13 +391,23 @@ class JobRepository:
                 "SELECT count(*) FROM attempt WHERE job_id = :job_id"
             ), {"job_id": candidate["job_id"]}).scalar_one())
             if ambiguous:
-                session.execute(text(
+                changed_effects = session.execute(text(
                     "UPDATE provider_call_effect SET state = 'outcome_unknown', "
                     "error_code = :code, dispatch_class = 'outcome_unknown', "
                     "updated_at = statement_timestamp() "
-                    "WHERE attempt_id = :attempt_id AND state = 'prepared'"
+                    "WHERE attempt_id = :attempt_id AND state = 'prepared' "
+                    "RETURNING run_id, attempt_id"
                 ), {"attempt_id": candidate["attempt_id"],
-                    "code": ErrorCode.ANALYSIS_FAILED.value})
+                    "code": ErrorCode.ANALYSIS_FAILED.value}).mappings().all()
+                for effect in changed_effects:
+                    append_execution_event(
+                        session, event_type="provider.outcome_unknown",
+                        aggregate_type="Attempt", aggregate_id=str(effect["attempt_id"]),
+                        run_id=str(effect["run_id"]),
+                        payload={"attempt_id": str(effect["attempt_id"]),
+                                 "error_code": ErrorCode.ANALYSIS_FAILED.value,
+                                 "dispatch_class": "outcome_unknown"},
+                    )
             if ambiguous or count >= 3:
                 if state == "running" and not ambiguous:
                     self._advance_job(session, str(candidate["job_id"]), "running", "retry_wait")
@@ -411,6 +433,14 @@ class JobRepository:
         return recovered
 
     def start_execution(self, session: Session, *, run_id: str) -> AttemptAuthority:
+        # The singleton must exist before it can be locked. Its insert races with
+        # an administrator's upsert safely: whichever transaction commits first
+        # is observed by the other before a new Attempt can be created.
+        session.execute(_ENSURE_CONTROL)
+        if session.execute(_LOCK_CONTROL).scalar_one():
+            raise DomainError(
+                ErrorCode.CONFLICT, message="execution dispatch is paused",
+            )
         # The run is always locked before its Job. This serialises a claim with
         # cancellation, final publication and the recovery sweep.
         run_state = session.execute(_LOCK_RUN, {"run_id": run_id}).scalar_one_or_none()
@@ -822,6 +852,14 @@ class JobRepository:
                 "error_code": ErrorCode.ANALYSIS_FAILED.value,
             },
         ).mappings().all()
+        for effect in rows:
+            append_execution_event(
+                session, event_type="provider.abandoned",
+                aggregate_type="Attempt", aggregate_id=str(effect["attempt_id"]),
+                run_id=str(effect["run_id"]),
+                payload={"attempt_id": str(effect["attempt_id"]),
+                         "state": "abandoned"},
+            )
         return tuple(SettledProviderEffect(**dict(row)) for row in rows)
 
     def _advance_job(

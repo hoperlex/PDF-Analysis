@@ -384,6 +384,10 @@ def test_provider_crash_boundaries_are_visible_from_a_new_transaction(
         }
         assert settled[effect["model_call_id"]].previous_state == expected_state
         assert settled[effect["model_call_id"]].state == "abandoned"
+        assert observer.execute(text(
+            "SELECT count(*) FROM audit_event WHERE event_type = 'provider.abandoned' "
+            "AND payload->>'run_id' = :run_id"
+        ), {"run_id": started.run_id}).scalar_one() == 1
         observer.commit()
 
     with factory() as observer:
@@ -395,6 +399,10 @@ def test_provider_crash_boundaries_are_visible_from_a_new_transaction(
             {"model_call_id": effect["model_call_id"]},
         ).one()
         second = reconcile(observer, older_than="0 seconds")
+        assert observer.execute(text(
+            "SELECT count(*) FROM audit_event WHERE event_type = 'provider.abandoned' "
+            "AND payload->>'run_id' = :run_id"
+        ), {"run_id": started.run_id}).scalar_one() == 1
     assert (state, error_code) == ("abandoned", ErrorCode.ANALYSIS_FAILED.value)
     assert second.settled_provider_effects == ()
     assert started.run_id not in {item.run_id for item in second.unresolved_provider_effects}
