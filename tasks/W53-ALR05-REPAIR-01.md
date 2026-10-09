@@ -16,7 +16,7 @@ Eliminate the three W53 deep cross-context imports reported by the executable AL
 - domain revision 9 / 29 identities; state-machine SHA-256 `cd6a8b1bb6a5a413a3c03a1360d7af8d0b0eb36f70182f9b9e261b16c1805466`.
 - API `1.0.0-draft.1`, 36/43/91; OpenAPI SHA-256 `008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193`.
 - analysis/comparison/event: frozen W53 SEAL set; migration head `0017_execution_queue`.
-- base code before dispatch: `63951f1dd55bb02e978596ba89d92d3ffd43d128`; integrator assigns exact post-dispatch SHA.
+- base code before this dispatch amendment: `f69080608e6139bdd3ca0708b4960c2637fc4e1a`, after the independent QA report and proxy repair. Integrator assigns the exact post-amendment SHA.
 
 ## Enumerator ownership
 
@@ -96,6 +96,7 @@ Eliminate the three W53 deep cross-context imports reported by the executable AL
 ## Required tests
 
 - The exact ALR-05 guard must pass 2/2. Run import/lifespan/reclaim/lease focused tests, including `tests/integration/runs/test_w53_execution.py` and the two-connection lease/watchdog tests where private services are available after QA's live window. Apply AGENTS.md §8 before heavy tests. `git diff --check`, frozen hashes and path audit required. Keep logs under `/tmp/w53-alr05-repair-01/`.
+- The six independent `qa_w53` defects are separate; do not alter their source behavior or tests under this boundary repair. This lane's focused tests need to distinguish those known red guards from an ALR regression.
 
 ## Integration contract
 
