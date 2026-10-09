@@ -96,7 +96,7 @@ directories and the registry is generated.
 | Wave | Track 1 | Track 2 | Size | Release |
 |---|---|---|---|---|
 | **W52** | quality, repairs, debts of W48–W51 (owner); deploy bound to the gate | **versioning system** (§8); fact registry; faster gate; pin-sweep tool | L+ | `v0.3.0` |
-| **W53** | data safety: `D-119` MinIO upgrade, non-destructive backup pulled to this machine and restored with real objects, the custody design frozen (`R-W2`, documents rewritten) | E1: durable job queue on W48's tables (leases, heartbeat, reclaim, provably-safe retry, bounded resume, cancel, re-audit, pause), transactional journal; **Журнал выполнения**; **Очередь** | L+ | `v0.4.0` (execution core) |
+| **W53** | source-pinned MinIO build and disposable-copy rehearsal; custody design frozen. Working-stand upgrade and backup implementation are deferred by the owner's 2026-10-09 beta-wave direction | E1: durable job queue on W48's tables (leases, heartbeat, reclaim, provably-safe retry, bounded resume, cancel, re-audit, pause), transactional journal; **Журнал выполнения**; **Очередь** | L+ | `v0.4.0` remains a target only after an actual `v0.3.0` release or owner-ratified version/history branch |
 | **W54** | corpus foundation on this machine: custody implementation and the storage role change, repairs through a durable journal (≤ $10), corpus debts `D-124`…`D-127`, pinned BGE image, promotion bundle, importer and inbound channel, rehearsed locally (`W54-PLAN.md`) | worker service and registry, **Исполнители**; report-only probes: the portal's OCR bundle and image input through the proxy | L+ | `v0.5.0` (workers) |
 | **W55a** | corpus on the stand: embeddings built here (G-1), bundle pushed and imported, current snapshot set by an administrator and pinned by runs (G-6), **text search** with citations (G-5), «Нормы» screen, ranged PDF streaming (`W55-PLAN.md` Part A) | — | L | `v0.6.0` (corpus search) |
 | **W55b** | AR-1a: portal bundles only (G-4, G-10), up to 500 pages / 250 MiB streamed end to end (G-2), the analysis input budget (G-11), recognised text marked, portal blocks, crops cut locally, **Блоки** made real (`W55-PLAN.md` Part B) | — | L+ | `v0.6.1` (portal bundles, blocks) |
@@ -113,6 +113,14 @@ directories and the registry is generated.
 | **W64** | debts, hardening (load/SLO, security review, least-privilege roles, restore drill, operator docs), release acceptance | — | M | `v1.0.0-rc.1` → `v1.0.0` |
 | after 1.0 | **График работ** (`1.1.0`); remote/distributed workers; graphic comparison; SMTP and avatar upload if still wanted | | | `1.x` |
 
+**2026-10-09 backup replan:** The owner moved database backup to a separate beta wave, not W53.
+The earlier W53 backup design is not an implementation grant. `D-123` still prevents a
+working-stand MinIO upgrade without inventory and a recoverable copy. W54/W55 stand data
+promotion and W58's B6 restore criterion must be re-sequenced at their freezes; this decision
+alone does not assert that unbacked corpus or client writes are acceptable. The eventual beta
+backup task must obtain RPO, first-copy deadline, repeat schedule, operator, missed-run alert,
+restore cadence, capacity and erasure coordination before implementation.
+
 **Count:** 12 waves after W52 (W53–W64) since W54 was split on 2026-10-06 (F-1); beta after **6** of them. Moving `block_analysis` to W56 (G-8) keeps the count; W55 runs as two halves, W55a and W55b (G-9), counted as one wave of the map. W56 and W57 run as halves the same way (H-1, I-9); W57a and W57b come before W56b (I-12). The debt cadence holds within
 ±1 (W52, W58, W61, W64). A wave in which paid model calls would exceed ≈ $5 still stops for the
 owner under `R-29` — the budget-per-block measure was not adopted (§7).
@@ -125,10 +133,10 @@ owner under `R-29` — the budget-per-block measure was not adopted (§7).
 | Versioning system (§8), including the build-stamped version endpoint | the acceptance pack attests the deployed SHA from operator input; closes `D-121` | §8; `D-121` (registered by W48) | W52 |
 | Debts registered by W48 closure, `D-120`…`D-128` | the W52 quality track's worklist, beside the debts W49–W51 register | `DEBT_REGISTER.md` on `integration/w48-close` | W52 |
 | CVE/licence/image scan (`D-122`) | open audit question | `reviews/W48-AUDIT.md` §7 | **owner: not now** — W64 |
-| MinIO volume inventory and backup (`D-123`) | precedes the upgrade and custody | `D-123` | W53, backups to this machine until after beta |
-| `D-119` MinIO upstream archived | must precede the first custody write | `D-119` | W53: **upgrade to the 2025-10-15 security release; replacement after 1.0** |
+| MinIO volume inventory and recoverable copy (`D-123`) | precedes any working-stand image upgrade | `D-123` | separate beta backup wave; W53 does not claim this evidence |
+| `D-119` MinIO upstream archived | the source-pinned image can be prepared now; a working-stand upgrade still needs `D-123` | `D-119` | W53 disposable build/rehearsal; live upgrade deferred |
 | Blob identity vs NORM-Q05 | contract-level conflict | `storage/models.py`; NORM-Q05 | W53: **content-derived Blob + one immutable binding per admission**; NORM-Q05 wording clarified |
-| Backup **and restore** rehearsal of PostgreSQL + S3 | corpus and client documents must be restorable before they exist only there | W48 audit §7 | W53 |
+| Backup **and restore** rehearsal of PostgreSQL + S3 | needed for a release safety verdict; the owner deferred implementation out of W53 | W48 audit §7; R-77 | separate beta wave, with RPO and schedule to be ruled there |
 | Live provider credential (`D-70`) | blocks paid repairs, live acceptance and every АР wave | `D-70`; P-7 | owner, W48 |
 | Retry/resume | 3/17 provider failures in PC-02 | `ALPHA_ROADMAP.md` | W53 |
 | Real АР documents (`OD-17`) and named experts (`OD-18`) | АР quality cannot be measured or accepted without them | `OWNER_RULINGS` §4 | F-7: one real set + synthetic; experts before W58 |

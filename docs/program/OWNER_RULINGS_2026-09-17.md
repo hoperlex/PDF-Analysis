@@ -1343,3 +1343,49 @@ W52 accelerates the full gate through sequential fixture and battery changes
 without `pytest-xdist`. R-70's diff-derived light acceptance remains in force.
 If the measured battery misses the W52 target, the integrator records the
 shortfall and later options without silently widening this wave.
+
+## 3.27 — `R-75` to `R-79`, W53 owner answers and backup deferral
+
+The direct W53 poll in `dispatch/ROADMAP-TO-BETA.md` §10.11 supplied E-1…E-8.
+These entries record those answers without treating the planning branch's
+uncommitted edits or its implementation details as owner decisions.
+
+### `R-75` — MinIO security release
+
+Upgrade MinIO to the 2025-10-15 security release after inventory, a
+recoverable backup and rehearsal on a copy; consider replacement after 1.0
+(D-2.1). W53 may build and test the image on disposable data. Updating the
+working stand remains gated by the inventory and recovery evidence.
+
+### `R-76` — Blob bytes and bindings
+
+Blob identity is content-derived; admission has an immutable binding. Roles
+belong to bindings, so equal corpus and project bytes are stored once and
+reused (D-2.2, E-6). W53 freezes the design; custody implementation belongs
+to W54 and must check the current storage and ingest seams before a code grant.
+
+### `R-77` — backup destination and deferred implementation
+
+The earlier pack-2 answers selected this machine as the temporary backup
+destination, a restricted-command SSH pull, and one latest verified copy
+(D-2.5, E-3, E-4). On 2026-10-09 the owner moved database backup out of W53
+into a separate beta wave. No W53 backup implementation, RPO, schedule,
+operator, missed-run alert or restore-test cadence is approved. The beta
+wave must revalidate the earlier destination/transport/retention answers
+against its actual data, capacity and erasure policy before dispatch.
+
+### `R-78` — execution controls
+
+Every signed-in account may read the queue and journal. Experts and
+administrators may cancel and re-audit; this is the narrow E-5 exception to
+R-60. Only administrators may change job priority or pause dispatch (E-1,
+E-5).
+
+### `R-79` — safe retry limits
+
+Automatic provider retry is limited to provably unprocessed calls: no
+connection established, explicit 429, or the proxy's own 503 envelope.
+Ambiguous failures end with `outcome_unknown` and are not re-spent. The E-7
+limits are three provider tries with 2 s and 8 s delays, `Retry-After` at
+most 60 s; at most three Job Attempts before `dead_letter`; a 60 s lease
+with a 20 s heartbeat. E-7's custody retry numbers remain for W54.
