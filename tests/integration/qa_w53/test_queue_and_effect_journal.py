@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from uuid import uuid4
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auditmanager.execution.public import ExecutionRepository
+from auditmanager.bootstrap.adapters import ExecutionAdapter
 from auditmanager.jobs.public import JobRepository
 from auditmanager.runs.commands import cancel_audit_run
 from auditmanager.runs.repository import RunRepository
@@ -37,16 +39,19 @@ def test_priority_edit_does_not_hide_an_unseen_queue_job(session, blob_store, he
     unseen = jobs.enqueue(session, run_id=_queued_run(session, seeded))
     jobs.set_priority(session, job_id=first, priority=100)
     jobs.set_priority(session, job_id=unseen, priority=90)
-    queue = ExecutionRepository()
-    page_one = queue.list_queue(session, cursor=None, limit=1)
-    assert [item.job_id for item in page_one] == [first]
-    baseline_page_two = queue.list_queue(session, cursor=first, limit=1000)
-    assert unseen in [item.job_id for item in baseline_page_two]
+    queue = ExecutionAdapter(lambda: nullcontext(session), runs=None)
+    page_one = queue.list_queue(cursor=None, limit=1)
+    assert [item.job_id for item in page_one.items] == [first]
+    cursor = page_one.page.next_cursor
+    assert isinstance(cursor, str)
+    baseline_page_two = queue.list_queue(cursor=cursor, limit=1000)
+    assert unseen in [item.job_id for item in baseline_page_two.items]
 
     # Another administrator edits the already-seen anchor before the user opens page 2.
     jobs.set_priority(session, job_id=first, priority=50)
-    page_two = queue.list_queue(session, cursor=first, limit=1000)
-    assert unseen in [item.job_id for item in page_two]
+    page_two = queue.list_queue(cursor=cursor, limit=1000)
+    assert unseen in [item.job_id for item in page_two.items]
+    assert first not in [item.job_id for item in page_two.items]
 
 
 def test_pause_between_hint_and_claim_refuses_new_authority(engine, blob_store, helpers) -> None:

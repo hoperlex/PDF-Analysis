@@ -19,6 +19,26 @@ class QueueItem:
     created_at: datetime
     available_at: datetime
 
+    @property
+    def position(self) -> QueuePosition:
+        return QueuePosition(
+            rank=_QUEUE_RANK.get(self.state, 4), priority=self.priority,
+            created_at=self.created_at, job_id=self.job_id,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class QueuePosition:
+    """The sort coordinates captured when a queue page was emitted."""
+
+    rank: int
+    priority: int
+    created_at: datetime
+    job_id: str
+
+
+_QUEUE_RANK = {"queued": 0, "leased": 1, "running": 2, "retry_wait": 3}
+
 
 @dataclass(frozen=True, slots=True)
 class JournalEntry:
@@ -38,28 +58,32 @@ class DispatchStatus:
 
 
 _QUEUE = text("""
-    WITH anchor AS (
-        SELECT job_id, priority, created_at,
-               CASE state WHEN 'queued' THEN 0 WHEN 'leased' THEN 1
-                    WHEN 'running' THEN 2 WHEN 'retry_wait' THEN 3 ELSE 4 END AS rank
-          FROM job WHERE job_id = :cursor
-    )
     SELECT j.job_id, j.run_id, j.state, j.priority, j.created_at, j.available_at
       FROM job j
-     WHERE CAST(:cursor AS text) IS NULL OR EXISTS (
-        SELECT 1 FROM anchor a WHERE
+     WHERE (CAST(:cursor_job_id AS text) IS NULL OR j.job_id <> :cursor_job_id)
+       AND (CAST(:cursor_rank AS integer) IS NULL OR (
             CASE j.state WHEN 'queued' THEN 0 WHEN 'leased' THEN 1
-                 WHEN 'running' THEN 2 WHEN 'retry_wait' THEN 3 ELSE 4 END > a.rank
+                 WHEN 'running' THEN 2 WHEN 'retry_wait' THEN 3 ELSE 4 END > :cursor_rank
             OR (CASE j.state WHEN 'queued' THEN 0 WHEN 'leased' THEN 1
-                 WHEN 'running' THEN 2 WHEN 'retry_wait' THEN 3 ELSE 4 END = a.rank
-                AND (j.priority < a.priority
-                     OR (j.priority = a.priority AND j.created_at < a.created_at)
-                     OR (j.priority = a.priority AND j.created_at = a.created_at
-                         AND j.job_id < a.job_id)))
-     )
+                 WHEN 'running' THEN 2 WHEN 'retry_wait' THEN 3 ELSE 4 END = :cursor_rank
+                AND (j.priority < :cursor_priority
+                    OR (j.priority = :cursor_priority
+                        AND ((:cursor_rank = 0 AND (
+                                  j.created_at > CAST(:cursor_created_at AS timestamptz)
+                                  OR (j.created_at = CAST(:cursor_created_at AS timestamptz)
+                                      AND j.job_id > :cursor_job_id)))
+                             OR (:cursor_rank <> 0 AND (
+                                  j.created_at < CAST(:cursor_created_at AS timestamptz)
+                                  OR (j.created_at = CAST(:cursor_created_at AS timestamptz)
+                                      AND j.job_id < :cursor_job_id))))))
+     )))
      ORDER BY CASE j.state WHEN 'queued' THEN 0 WHEN 'leased' THEN 1
                    WHEN 'running' THEN 2 WHEN 'retry_wait' THEN 3 ELSE 4 END,
-              j.priority DESC, j.created_at DESC, j.job_id DESC
+              j.priority DESC,
+              CASE WHEN j.state = 'queued' THEN j.created_at END,
+              CASE WHEN j.state <> 'queued' THEN j.created_at END DESC,
+              CASE WHEN j.state = 'queued' THEN j.job_id END,
+              CASE WHEN j.state <> 'queued' THEN j.job_id END DESC
      LIMIT :fetch
 """)
 _QUEUE_ITEM = text(
@@ -129,9 +153,15 @@ _CONTROL = text("SELECT paused, changed_at FROM execution_control WHERE singleto
 
 class ExecutionRepository:
     def list_queue(
-        self, session: Session, *, cursor: str | None, limit: int
+        self, session: Session, *, cursor: QueuePosition | None, limit: int
     ) -> tuple[QueueItem, ...]:
-        rows = session.execute(_QUEUE, {"cursor": cursor, "fetch": limit}).mappings()
+        rows = session.execute(_QUEUE, {
+            "cursor_rank": None if cursor is None else cursor.rank,
+            "cursor_priority": None if cursor is None else cursor.priority,
+            "cursor_created_at": None if cursor is None else cursor.created_at,
+            "cursor_job_id": None if cursor is None else cursor.job_id,
+            "fetch": limit,
+        }).mappings()
         return tuple(QueueItem(**dict(row)) for row in rows)
 
     def get_queue_item(self, session: Session, job_id: str) -> QueueItem | None:

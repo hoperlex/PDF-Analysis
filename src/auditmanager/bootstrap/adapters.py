@@ -16,6 +16,7 @@ shares one engine and the composition root remains the only thing that reads con
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -58,6 +59,7 @@ from auditmanager.api.security import (
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.errors import CONTRACT_VERSION
+from auditmanager.shared.identity import JobId
 from auditmanager.releases.public import ReleaseRepository
 
 
@@ -91,6 +93,35 @@ def _execution_cursor(raw: str | None) -> str | None:
     return parts[0]
 
 
+def _queue_cursor(raw: str | None) -> "QueuePosition | None":
+    """Decode only coordinates issued by the queue's versioned page format."""
+    from auditmanager.execution.public import QueuePosition
+
+    if raw is None:
+        return None
+    parts = decode_cursor(raw)
+    if len(parts) != 5 or parts[0] != "q1":
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    _, rank_text, priority_text, created_text, job_id = parts
+    try:
+        rank = int(rank_text)
+        priority = int(priority_text)
+        created_at = datetime.fromisoformat(created_text)
+        JobId.parse(job_id)
+    except ValueError:
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format",
+        ) from None
+    if (
+        rank not in range(5) or str(rank) != rank_text
+        or priority not in range(-100, 101) or str(priority) != priority_text
+        or created_at.tzinfo is None
+        or created_at.astimezone(timezone.utc).isoformat() != created_text
+    ):
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    return QueuePosition(rank, priority, created_at, job_id)
+
+
 class ExecutionAdapter(_SessionHolder):
     """Map the sealed execution port to the owning run/job commands and read projection."""
 
@@ -109,10 +140,18 @@ class ExecutionAdapter(_SessionHolder):
 
         def read(session: Session) -> models.ExecutionQueuePage:
             repo = ExecutionRepository()
-            after = _execution_cursor(cursor)
+            after = _queue_cursor(cursor)
             rows = repo.list_queue(session, cursor=after, limit=limit + 1)
             items = rows[:limit]
-            next_cursor = encode_cursor((items[-1].job_id,)) if len(rows) > limit else None
+            if len(rows) > limit:
+                position = items[-1].position
+                next_cursor = encode_cursor((
+                    "q1", str(position.rank), str(position.priority),
+                    position.created_at.astimezone(timezone.utc).isoformat(),
+                    position.job_id,
+                ))
+            else:
+                next_cursor = None
             return models.ExecutionQueuePage(
                 items=[models.ExecutionQueueItem(**{
                     "job_id": row.job_id, "run_id": row.run_id, "state": row.state,
