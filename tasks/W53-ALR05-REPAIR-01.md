@@ -97,6 +97,7 @@ Eliminate the three W53 deep cross-context imports reported by the executable AL
 
 - The exact ALR-05 guard must pass 2/2. Run import/lifespan/reclaim/lease focused tests, including `tests/integration/runs/test_w53_execution.py` and the two-connection lease/watchdog tests where private services are available after QA's live window. Apply AGENTS.md §8 before heavy tests. `git diff --check`, frozen hashes and path audit required. Keep logs under `/tmp/w53-alr05-repair-01/`.
 - The six independent `qa_w53` defects are separate; do not alter their source behavior or tests under this boundary repair. This lane's focused tests need to distinguish those known red guards from an ALR regression.
+- Service-slot amendment from the integrator: private `gate-w53alr` PostgreSQL `56930`, old MinIO `60530/60531`, unique database/bucket. Ports were unbound at 2026-10-09 13:48:01 UTC; recheck before use. The host had 10,994,958,336 free bytes on the worktree/Docker filesystem and 5.1 GiB available RAM at that capture. This authorizes only bounded focused tests after Judge Y cleanup, not an image build, shared cache removal or full gate.
 
 ## Integration contract
 
