@@ -56,9 +56,14 @@ STOP-01/STOP-02 limitations. This repair closes only the orphan-running flaw.
 ### P-02 — required sequencing repair discovered in focused regression
 
 - captured_at: 2026-10-09
-- command: `sed -n '690,730p' src/auditmanager/runs/executor.py`
-- captured_output: `_execute_run_body` advances a legitimate direct Run
-  from `queued` to `running` before it calls `job_repo.start_execution`.
+- command: `git grep -n -E 'run_repo.advance\(|job_repo.start_execution\(' -- src/auditmanager/runs/executor.py | tail -12`
+- captured_output:
+  ```text
+  src/auditmanager/runs/executor.py:700:        run_repo.advance(
+  src/auditmanager/runs/executor.py:704:        run_repo.advance(session, run_id=run_id, from_state="queued", to_state="running")
+  src/auditmanager/runs/executor.py:720:    authority = job_repo.start_execution(session, run_id=run_id)
+  src/auditmanager/runs/executor.py:825:    run_repo.advance(session, run_id=run_id, from_state="running", to_state="validating")
+  ```
 - interpretation: a repository-only state check cannot distinguish that
   valid direct caller from an orphan that was already `running`. The first
   repair attempt passed its new orphan test but failed 25 existing direct
