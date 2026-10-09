@@ -135,6 +135,19 @@ because every one of them is reached by more than one lane. Three consequences w
    33 networks to 9 was that something on the host reclaims them. It does not. A live agent ran
    a command, and the only reason that is known is that it said so.
 
+## 4.5.1 Check disk space before an expensive gate
+
+Before `make gate` or a test run that builds images or consumes substantial disk, check the
+development server's available bytes on both the worktree filesystem and Docker's data-root
+filesystem, for example with `date -u`, `df -B1 .` and
+`df -B1 "$(docker info --format '{{.DockerRootDir}}')"`. Record the time, commands and output
+with the run log. Use the expected peak from a
+comparable completed run or the task's capacity estimate, plus a safety margin; if that estimate
+is absent or the free space is insufficient, stop before starting the run and ask the integrator
+to resolve capacity. Recheck just before a gate that waited in a queue: other lanes share the disk.
+Do not remove shared images, volumes or caches without their owner's authority. A gate stopped
+by disk exhaustion gives no acceptance evidence; diagnose the capacity change before any repeat.
+
 ## 4.6 Two instrument failures that both produce a red you will misread
 
 **Both reported by a peer session on 2026-09-22, and both were found by reading a log rather

@@ -153,6 +153,14 @@ and hands the role over once the budget is spent.
 Owner ruling `R-70` (2026-10-07). A complete `make gate` occupies this shared host for the better
 part of an hour and is repeated whenever load voids it; most changes do not need it.
 
+**Before starting `make gate` or another test run that builds images or uses substantial disk,**
+measure free space on the development server for the worktree and Docker data filesystem.
+Record the command, available bytes and time beside the run log. Compare them with the run's
+expected peak use and a safety margin; if there is no credible estimate or the margin is not
+available, stop before launching the run and resolve capacity with the integrator. Recheck
+immediately before a delayed launch. A disk-exhausted run is not a valid gate result and must
+not trigger a blind repeat of the full gate. See `docs/program/dispatch/OPERATING_CONSTRAINTS.md`.
+
 - **Light acceptance is the default** for a lane's hand-back, for every merge into an
   `integration/*` branch and for publication to `origin/dev`. On the exact tree being accepted:
   1. always, without containers: `git diff --check`; `npm --prefix web run lint -- --quiet`,
