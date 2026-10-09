@@ -45,6 +45,7 @@ The two existing screen entries graduate from prepared to built. Query-key
 and route maps, guards, the journey manifest and the UI seam note must agree.
 
 ## Captured premise evidence
+- premise: prepared W53 pages and generated client operation locations at dispatch
 
 ### P-01 — prepared page locations
 

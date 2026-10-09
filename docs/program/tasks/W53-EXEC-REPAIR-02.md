@@ -39,6 +39,7 @@ STOP-01/STOP-02 limitations. This repair closes only the orphan-running flaw.
 - totality_query: not_applicable
 
 ## Captured premise evidence
+- premise: direct execution of an orphan running Run can mint new authority before validating prior effects
 
 ### P-01 — orphan running fallback
 
