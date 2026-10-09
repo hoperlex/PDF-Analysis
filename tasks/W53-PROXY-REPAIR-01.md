@@ -15,7 +15,7 @@ For a foreign or unclassified HTTP 503, the proxy adapter must keep `outcome_unk
 - domain revision 9 / 29 identities; state-machine SHA-256 `cd6a8b1bb6a5a413a3c03a1360d7af8d0b0eb36f70182f9b9e261b16c1805466`.
 - API `1.0.0-draft.1`, 36/43/91; OpenAPI SHA-256 `008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193`.
 - analysis/comparison/event: frozen W53 SEAL set; migration head `0017_execution_queue`.
-- base code before dispatch: `f0b1a0ede0c6edb90d4d0072429cb95b28e7a945`; integrator assigns exact post-dispatch SHA.
+- base code before this dispatch amendment: `a21f2ffe392dfc4879fd7417b20f0a1d1f130902`, which includes the independent QA report and six red guards. Integrator assigns the exact post-amendment SHA.
 
 ## Enumerator ownership
 
@@ -84,6 +84,7 @@ For a foreign or unclassified HTTP 503, the proxy adapter must keep `outcome_unk
 ## Required tests
 
 - Run the focused proxy adapter suite. Prove with a synthetic confidential string embedded in an HTTP body that neither logger output nor API/persisted error message contains it. Assert foreign 503 remains `outcome_unknown`, `retry_safe=False`, and public message does not assert non-processing. Preserve 429/no-bytes/400 behavior and existing error codes. Run `git diff --check`, frozen SHA check and exact changed-path audit.
+- Run, without editing, `tests/integration/qa_w53/test_proxy_refusal_boundary.py`; its two red assertions at this base must turn green. The QA test path is not granted to this repair lane.
 - Before any heavy service run, perform AGENTS.md §8 disk preflight. A pure test needs no new Docker lane. Keep logs under `/tmp/w53-proxy-repair-01/`.
 
 ## Integration contract
