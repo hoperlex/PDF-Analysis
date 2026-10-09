@@ -53,6 +53,17 @@ STOP-01/STOP-02 limitations. This repair closes only the orphan-running flaw.
 - interpretation: a direct caller could mint new authority for a running
   orphan without checking any prior provider effects.
 
+### P-02 — required sequencing repair discovered in focused regression
+
+- captured_at: 2026-10-09
+- command: `sed -n '690,730p' src/auditmanager/runs/executor.py`
+- captured_output: `_execute_run_body` advances a legitimate direct Run
+  from `queued` to `running` before it calls `job_repo.start_execution`.
+- interpretation: a repository-only state check cannot distinguish that
+  valid direct caller from an orphan that was already `running`. The first
+  repair attempt passed its new orphan test but failed 25 existing direct
+  execution tests. Scope extends only to the executor call site below.
+
 ## Historical evidence
 
 - correction_mode: none
@@ -68,6 +79,12 @@ STOP-01/STOP-02 limitations. This repair closes only the orphan-running flaw.
 
 - `src/auditmanager/jobs/repository.py`: the absent-Job branch of
   `start_execution` only.
+- `src/auditmanager/runs/executor.py`: only `_execute_run_body` near the
+  Run `queued→running` transition and Job claim. Call `start_execution`
+  while a direct caller's Run is still `queued`, then advance it to
+  `running` in the same transaction before the existing commit. A Run
+  already `running` must prove existing Job authority. No other stage,
+  retry, carrier behavior or public signature may change.
 - `tests/integration/runs/test_w53_execution.py`: focused regression only.
 - `docs/program/W53-EXEC-REPAIR-02-HANDBACK.md`: six-item report.
 
@@ -94,7 +111,9 @@ proves zero provider calls and no new authority, and the handback report.
   assert typed refusal, zero provider calls, no Job/Attempt/Lease or stage
   event created. Repeat under a second connection if fixture permits.
 - Existing direct created/queued execution, valid resumed running Job,
-  concurrency and lease tests still pass; `git diff --check` and frozen hashes.
+  concurrency and lease tests still pass; specifically rerun the 25 direct
+  tests that the repository-only attempt broke. `git diff --check` and
+  frozen hashes.
 - Check disk before expensive testing under `AGENTS.md` §8. Full `make gate`
   belongs to the integrator on a later clean SHA.
 
@@ -102,8 +121,12 @@ proves zero provider calls and no new authority, and the handback report.
 
 Isolated worktree, branch `agent/w53-exec-repair-02` from the exact dispatch
 SHA supplied by the integrator. `running` with no Job is a typed refusal
-before any new authority or external effect; queued without Job retains the
-direct-caller fallback. Existing Job recovery remains unchanged. Use only
+before any new authority or external effect; a Run initially `created` or
+`queued` retains the direct-caller fallback because the Job claim occurs
+while it is `queued`. The following Run advancement and existing commit
+form the same transaction. Public `execute_run`, `RunCarrier` and
+`RunAdapter` signatures remain unchanged. Existing Job recovery remains
+unchanged. Use only
 disposable `gate-w53exec` ports 56860 and 60460/60461 after checking them;
 stop only own resources. No working-stand operation.
 
