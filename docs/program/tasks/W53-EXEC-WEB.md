@@ -21,7 +21,9 @@ the sealed API surface, not on a release verdict for EXEC.
 
 ## Frozen inputs
 
-- Exact dispatch base: `e210c674b4c6db8904572f939619e20d95625be4`.
+- Code input after EXEC integration: `e210c674b4c6db8904572f939619e20d95625be4`.
+  The task-file dispatch commit and agent worktree base are
+  `a72b7e9e588e4c19bf156f1090402a3af889173e`.
 - API: 36 paths / 43 operations / 91 schemas; OpenAPI SHA-256
   `008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193`.
 - Domain: candidate revision 9 / 29 identities; state-machine SHA-256
