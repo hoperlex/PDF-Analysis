@@ -314,7 +314,7 @@ class TestFailuresMapToTheCatalog:
             _adapter(capture).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
         assert caught.value.code is ErrorCode.INTERNAL_ERROR
 
-    def test_error_body_is_bounded_redacted_and_never_returned(
+    def test_error_body_is_bounded_and_never_logged_or_returned(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         token = "sk-test-secret-1234567890"
@@ -339,7 +339,7 @@ class TestFailuresMapToTheCatalog:
         assert reads == [4097]
         assert "status=402" in caplog.text
         assert "truncated=True" in caplog.text
-        assert "[redacted]" in caplog.text
+        assert "body=" not in caplog.text
         assert token not in caplog.text and url not in caplog.text
         proxy_records = [
             record for record in caplog.records
@@ -350,6 +350,33 @@ class TestFailuresMapToTheCatalog:
         envelope = caught.value.envelope("cid").as_dict()
         assert token not in str(envelope) and url not in str(envelope)
         assert "credit_exhausted" not in str(envelope)
+
+    @pytest.mark.parametrize("status", [400, 401, 403, 413, 429, 500, 503, 504])
+    def test_arbitrary_upstream_text_is_absent_from_logs_and_envelopes(
+        self, status: int, caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        private_text = "PRIVATE CUSTOMER DOCUMENT: chairman review delayed"
+        payload = json.dumps({"error": {"code": "foreign", "message": private_text}}).encode()
+
+        def refusing(*_: Any, **__: Any) -> Any:
+            raise urllib.error.HTTPError(
+                "https://proxy.example", status, "", {}, io.BytesIO(payload),
+            )
+
+        with caplog.at_level(logging.WARNING, logger="auditmanager.analysis.text.proxy"):
+            with pytest.raises(ProxyDispatchError) as caught:
+                _adapter(refusing).complete(ModelRequest(model_id="m", body=ANTHROPIC_BODY))
+
+        failure = caught.value
+        assert private_text not in caplog.text
+        assert private_text not in str(failure.envelope("cid").as_dict())
+        assert "body=" not in caplog.text
+        assert f"status={status}" in caplog.text
+        assert "truncated=False" in caplog.text
+        if status == 503:
+            assert failure.dispatch_class == "outcome_unknown"
+            assert failure.retry_safe is False
+            assert "call was not made" not in (failure.custom_message or "")
 
     @pytest.mark.parametrize("payload", [b"not-json", b"[]", b'{"error": "refused"}'])
     def test_malformed_or_unstructured_body_still_maps(self, payload: bytes) -> None:

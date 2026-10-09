@@ -27,7 +27,6 @@ from __future__ import annotations
 import json
 import logging
 from http.client import HTTPException
-import re
 import socket
 import ssl
 import time
@@ -61,14 +60,7 @@ _PORTAL_PATH: Final[str] = "/api/v1/chat/completions"
 _COMPLETIONS_PATH: Final[str] = "/chat/completions"
 _TIMEOUT_SECONDS: Final[int] = 200  # the proxy's own deadline is ~190s
 _ERROR_BODY_LIMIT: Final[int] = 4096
-_ERROR_LOG_LIMIT: Final[int] = 512
 _LOGGER = logging.getLogger(__name__)
-_SENSITIVE_ERROR_TEXT = re.compile(
-    r"(?i)\bbearer\s+[^\s\"']+|https?://[^\s\"']+|"
-    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|"
-    r"(?<![A-Za-z0-9])(?:sk|pk|tok|key|secret)[-_][A-Za-z0-9._=-]{6,}|"
-    r"(?<![A-Za-z0-9])[A-Za-z0-9+/_=.\-]{24,}(?![A-Za-z0-9])"
-)
 
 
 class ProxyDispatchError(DomainError):
@@ -390,14 +382,6 @@ def _stop_reason(finish_reason: str | None) -> str:
     )
 
 
-def _redacted_error_body(raw: bytes) -> str:
-    """Keep one bounded diagnostic line; no raw proxy body reaches the log or API."""
-    text = raw[:_ERROR_BODY_LIMIT].decode("utf-8", errors="replace")
-    text = _SENSITIVE_ERROR_TEXT.sub("[redacted]", text)
-    text = re.sub(r"[\x00-\x1f\x7f]", " ", text)
-    return text[:_ERROR_LOG_LIMIT]
-
-
 def _map_http_failure(status: int, raw: bytes) -> DomainError:
     """Map a bounded proxy refusal to the existing catalog without guessing a model answer.
 
@@ -407,12 +391,9 @@ def _map_http_failure(status: int, raw: bytes) -> DomainError:
     """
     truncated = len(raw) > _ERROR_BODY_LIMIT
     body = raw[:_ERROR_BODY_LIMIT]
-    _LOGGER.warning(
-        "model proxy HTTP refusal: status=%s body=%s truncated=%s",
-        status,
-        _redacted_error_body(body),
-        truncated,
-    )
+    # An upstream error body can contain the entire prompt or a credential. Even a
+    # bounded, regex-redacted excerpt is unsafe: arbitrary private prose survives it.
+    _LOGGER.warning("model proxy HTTP refusal: status=%s truncated=%s", status, truncated)
     try:
         detail = json.loads(body or b"{}")
     except (ValueError, UnicodeError):
@@ -454,10 +435,15 @@ def _map_http_failure(status: int, raw: bytes) -> DomainError:
             ErrorCode.ANALYSIS_INPUT_INVALID,
             message="the request exceeds the model proxy's body limit",
         )
-    if status in (429, 503):
+    if status == 429:
         return DomainError(
             ErrorCode.DEPENDENCY_UNAVAILABLE,
             message="the model proxy is saturated; the call was not made",
+        )
+    if status == 503:
+        return DomainError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            message="the model proxy returned status 503; the model call outcome is unknown",
         )
     if status == 504:
         return DomainError(
