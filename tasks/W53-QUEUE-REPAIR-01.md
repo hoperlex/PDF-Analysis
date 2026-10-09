@@ -10,13 +10,15 @@ An already emitted queue cursor must not change its boundary when that Job's pri
 - W53-EXEC-01
 - W53-EXEC-WEB
 - W53-REHEARSAL-01
+- W53-QA-01 (red counterexample integrated; acceptance pending repair)
+- W53-JUDGE-Y (independent private-DB confirmation integrated)
 
 ## Frozen inputs
 
 - domain revision 9 / 29 identities; state-machine SHA-256 `cd6a8b1bb6a5a413a3c03a1360d7af8d0b0eb36f70182f9b9e261b16c1805466`.
 - API `1.0.0-draft.1`, 36/43/91; OpenAPI SHA-256 `008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193`; Cursor is an opaque continuation string to clients.
 - analysis/comparison/event: frozen W53 SEAL set; migration head `0017_execution_queue`.
-- base code before dispatch: `af31b9568f5f07cf734c2fd5f29020f0d8ac4d2a`; integrator assigns exact post-dispatch SHA.
+- base code before this dispatch amendment: `1a788a77c42869ae4d17e3decb8733983a04ee50`, including QA and X/Y reports, proxy repair and rehearsal repair. Integrator assigns the exact post-amendment SHA.
 
 ## Enumerator ownership
 
@@ -64,11 +66,12 @@ An already emitted queue cursor must not change its boundary when that Job's pri
 - `src/auditmanager/execution/public.py`
 - `src/auditmanager/bootstrap/adapters.py` (only execution queue cursor encode/decode and mapping)
 - `tests/integration/runs/test_w53_execution.py` (only queue pagination tests)
+- `tests/integration/qa_w53/test_queue_and_effect_journal.py` (only `test_priority_edit_does_not_hide_an_unseen_queue_job`: adapt it to the emitted opaque API cursor without weakening its unseen-B assertion; the other QA tests are forbidden)
 - `docs/program/W53-QUEUE-REPAIR-01.md`
 
 ## Forbidden hotspots
 
-- `contracts/**`, migration, `jobs/repository.py` and its dispatch query, API routers/schema/common cursor codec, QA-owned `tests/integration/qa_w53/**`, root dependency/lock, composition root elsewhere, global styles, UI, release/backup/deployment paths, refs/tags/stand.
+- `contracts/**`, migration, `jobs/repository.py` and its dispatch query, API routers/schema/common cursor codec, other QA tests, root dependency/lock, composition root elsewhere, global styles, UI, release/backup/deployment paths, refs/tags/stand.
 
 ## Non-goals
 
@@ -83,6 +86,8 @@ An already emitted queue cursor must not change its boundary when that Job's pri
 ## Required tests
 
 - On a private migrated 0017 database, demonstrate the QA counterexample red before and green after by equivalent in-grant test; prove first/second page have no duplicate, unseen B remains, and malformed cursor refuses. Check tie order against dispatch query. Run focused existing queue/API tests; `git diff --check`, frozen hashes and exact path audit. Preflight disk under AGENTS.md §8 before a large battery; no image build or working stand. Logs under `/tmp/w53-queue-repair-01/`.
+- QA's original first test calls the internal repository with a raw Job ID; a stable emitted API cursor may change that internal method signature. Its narrow test amendment must exercise the **emitted continuation token** at the public execution adapter seam, retain the original A/B mutation sequence and the exact unseen-B assertion. Do not edit or skip the five other independent QA guards. The integrator reviews the test diff and independently repeats it.
+- Private lane: `gate-w53queue`, PostgreSQL `56940`, S3 API `60540`, console `60541`. Measure all ports before use, isolate volumes/credentials, and remove only own resources at handback.
 
 ## Integration contract
 
