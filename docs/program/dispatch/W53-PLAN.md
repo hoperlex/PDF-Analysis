@@ -321,8 +321,10 @@ Rebased after the seal merge (the README's count row is the seal's).
 - every transition has exactly one journal entry, and a forced rollback leaves none;
 - the 14 drivers and the 12 direct `execute_run` files pass unchanged; `make gate`.
 
-**`W53-EXEC-WEB`** (§3.3). Allowed: `web/src/app/logs/**` and the queue page W50 registered in Система,
-`web/src/_pages/{logs,execution-queue,workers,run}/**` (`run` — the journal link only),
+**`W53-EXEC-WEB`** (§3.3). The current W50 stub routes are `web/src/app/logs/page.tsx`
+and `web/src/app/queue/page.tsx`; the page modules are `web/src/_pages/logs/**` and
+`web/src/_pages/queue/**`, not `execution-queue`. Allowed: `web/src/app/{logs,queue}/**`,
+`web/src/_pages/{logs,queue,workers,run}/**` (`run` — the journal link only),
 `web/src/widgets/{execution-journal,execution-queue}/**`,
 `web/src/features/{cancel-run,reaudit-run,set-job-priority,pause-execution}/**`,
 `web/src/entities/execution/**`, `web/src/shared/lib/routes.ts` with

@@ -108,6 +108,13 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56790`, `60390/60391` | `gate-w52s` — `W52-SEAL-01` Stage B | 2026-10-08 | after SEAL hand-back and integrator cleanup; ports measured free before reservation |
 | `56800`, `60400/60401` | `gate-w52r` — `W52-RELEASES-API` Stage C | 2026-10-08 | after RELEASES-API hand-back and integrator cleanup; ports measured free before reservation |
 | `56820`, `60420/60421` | `gate-w52web` — `W52-RELEASES-WEB` Stage C, if local services are needed | 2026-10-08 | after WEB hand-back and integrator cleanup; ports measured free before reservation |
+| `56830`, `60430/60431`; API `56930` | `gate-w53seal` — `W53-SEAL-01` | 2026-10-09 | after accepted SEAL hand-back and owner-only cleanup |
+| `56840`, `60440/60441` | `gate-w53minio` — `W53-MINIO-01`, disposable copy only | 2026-10-09 | after accepted MINIO hand-back and owner-only cleanup |
+| `56860`, `60460/60461`; API `56960` | `gate-w53exec` — `W53-EXEC-01` | 2026-10-09 | after accepted EXEC hand-back and owner-only cleanup |
+| `56870`, `60470/60471`; API `56970`, Next `31470` | `gate-w53web` — `W53-EXEC-WEB`, only if services are needed | 2026-10-09 | after accepted WEB hand-back and owner-only cleanup |
+| `56880`, `60480/60481`; API `56980`, Next `31480` | `gate-w53rehearsal` — `W53-REHEARSAL-01`, disposable stand | 2026-10-09 | after accepted rehearsal and owner-only cleanup |
+| `56890`, `60490/60491`; API `56990`, Next `31490` | `gate-w53judge-x` — independent W53 X review | 2026-10-09 | after W53 X report and owner-only cleanup |
+| `56900`, `60500/60501`; API `57000`, Next `31510` | `gate-w53judge-y` — independent W53 Y review | 2026-10-09 | after W53 Y report and owner-only cleanup |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,
