@@ -139,6 +139,18 @@ GUARDED = (
     ("getProductVersion", "GET", "/system/version"),
     ("listReleases", "GET", "/releases"),
     ("markReleaseNotesRead", "PUT", "/me/release-notes"),
+    # `W53-SEAL-01`. The two execution reads and four commands share the same
+    # authorization seam. Keep every operation in the sweep: a command whose body
+    # is absent must still answer 401 before it can answer 422.
+    ("listExecutionQueue", "GET", "/execution/queue"),
+    ("listExecutionJournal", "GET", "/execution/journal"),
+    ("cancelRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/cancel"),
+    ("reauditRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/reaudit"),
+    (
+        "setJobPriority", "PUT",
+        "/execution/queue/job_01M2545JSD15ETSNNV904X991K/priority",
+    ),
+    ("setExecutionPaused", "PUT", "/execution/dispatch"),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -212,7 +224,7 @@ def _envelope(answer) -> dict:
 
 
 def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) -> None:
-    """One request per guarded operation, with no credential. Thirty-four of thirty-seven.
+    """One request per guarded operation, with no credential. Forty of forty-three.
 
     The set comparison is what makes this a sweep rather than a list: a twentieth
     operation is either written into ``GUARDED`` and swept, or named in
@@ -220,7 +232,7 @@ def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) ->
     ``test_the_open_surface_is_exactly_the_register`` -- there is no third place for it to
     be, and an operation that is in neither fails here.
     """
-    assert len(GUARDED) == 34
+    assert len(GUARDED) == 40
     assert UNAUTHENTICATED_OPERATIONS == {
         "issueToken",
         "submitRegistration",
@@ -389,7 +401,7 @@ def test_the_served_document_declares_the_scheme_the_contract_declares(
     opened = []
     for path_item in document["paths"].values():
         for method, operation in path_item.items():
-            if method not in ("get", "post"):
+            if method not in ("get", "post", "put", "patch", "delete"):
                 continue
             if operation["security"] == [{SCHEME_NAME: []}]:
                 continue
@@ -648,6 +660,9 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
     them at all is decided before any handler runs, by the seam's registers -- a router that
     refused on the strength of the subject's roles would be the business rule in a router
     `W49-PLAN.md` forbids, and this set is where it would first show.
+
+    **`W53-SEAL-01` adds ``execution.py``.** It passes the verified user identity
+    to the execution port for command attribution; the seam still owns permission.
     """
     import pathlib
 
@@ -679,10 +694,11 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
     assert subject_readers == [
         "auth.py",
         "decisions.py",
+        "execution.py",
         "me.py",
-            "registrations.py",
-            "releases.py",
-            "users.py",
+        "registrations.py",
+        "releases.py",
+        "users.py",
     ], (
         f"{subject_readers} depend on the verified subject. Reading WHO the caller is is "
         "the seam's own vocabulary; deciding WHAT they may do is the seam's registers, "

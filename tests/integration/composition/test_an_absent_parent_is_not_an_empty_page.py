@@ -70,8 +70,9 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 #: collection nor an aggregate -- see :data:`SELF_OPERATIONS`.
 #: `W52-SEAL-01` added two unaddressed GETs: ``getProductVersion`` and
 #: ``listReleases``. Stage C now serves both from the release adapter.
+# `W53-SEAL-01` added the two execution collection reads, both unaddressed.
 EXPECTED_ADDRESSED = 12
-EXPECTED_UNADDRESSED = 8
+EXPECTED_UNADDRESSED = 10
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -96,6 +97,10 @@ SELF_OPERATIONS = frozenset({"getMe"})
 # These GETs are neither a page of projects nor the account itself. Their own
 # response shapes are checked below after the Stage-C release adapter is wired.
 RELEASE_OPERATIONS = frozenset({"getProductVersion", "listReleases"})
+
+# W53 adds two unaddressed collection reads. They stay in the page-shape sweep;
+# neither may be mistaken for a read of a missing parent.
+EXECUTION_COLLECTIONS = frozenset({"listExecutionQueue", "listExecutionJournal"})
 
 
 def _prefixes() -> dict[str, str]:
@@ -246,7 +251,9 @@ def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None
     :func:`test_the_one_unaddressed_aggregate_answers_its_own_fixed_shape` instead, so
     "excluded from this page check" is not the same claim as "unchecked".
     """
-    for operation_id, template in _unaddressed(_get_routes(app)):
+    unaddressed = _unaddressed(_get_routes(app))
+    assert {operation_id for operation_id, _ in unaddressed} >= EXECUTION_COLLECTIONS
+    for operation_id, template in unaddressed:
         if (
             operation_id in AGGREGATE_OPERATIONS
             or operation_id in SELF_OPERATIONS

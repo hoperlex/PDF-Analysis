@@ -53,6 +53,8 @@ PORT_FOR_ARGUMENT = {
     "registrations": "RegistrationPort",
     # `W52-SEAL-01`.
     "releases": "ReleasesPort",
+    # `W53-SEAL-01`.
+    "execution": "ExecutionPort",
 }
 
 

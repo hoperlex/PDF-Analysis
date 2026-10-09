@@ -67,11 +67,10 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
     def test_the_two_schemas_fastapi_would_have_added_are_not_in_it(self) -> None:
         """``HTTPValidationError`` and ``ValidationError``, and the 422 that referenced them.
 
-        FastAPI injects a ``422`` for any operation with parameters that declares none of
-        its own. Fourteen of the eighteen displace it by declaring the contract's; the other
-        four -- ``getRunStatus``, ``getDocumentVersion``, ``getFinding``, ``exportRunCsv``
-        -- declare no 422 at all, because they cannot answer one. A malformed path identity
-        is 404 by design and the correlation header is declared but not enforced.
+        FastAPI injects a ``422`` for an operation with parameters that declares none of
+        its own. The pinned set below names every operation that declares the catalog's
+        validation envelope, including W53's query reads and commands. An operation
+        outside that set must not acquire FastAPI's own validation schema.
 
         The three `R-5` listings are in the first group: each declares ``cursor`` and
         ``limit``, and a cursor that is not a continuation token from this API is
@@ -94,7 +93,8 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             operation["operationId"]
             for path_item in document["paths"].values()
             for method, operation in path_item.items()
-            if method in ("get", "post") and "422" in operation["responses"]
+            if method in ("get", "post", "put", "patch", "delete")
+            and "422" in operation["responses"]
         }
         assert declared_422 == {
             "appendDecision",
@@ -119,6 +119,18 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "rejectRegistration",
             "resetUserPassword",
             "submitRegistration",
+            # Previously present PATCH/PUT operations are covered by this exhaustive
+            # method sweep as well as W53's new PUT operations.
+            "updateMyProfile",
+            "updateUser",
+            "markReleaseNotesRead",
+            # `W53-SEAL-01`: query reads and four execution commands.
+            "listExecutionQueue",
+            "listExecutionJournal",
+            "cancelRun",
+            "reauditRun",
+            "setJobPriority",
+            "setExecutionPaused",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:
@@ -155,7 +167,10 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
         document = create_documentation_app().openapi()
         for path, path_item in contract["paths"].items():
             for method, operation in path_item.items():
-                if method not in ("get", "post") or "422" not in operation["responses"]:
+                if (
+                    method not in ("get", "post", "put", "patch", "delete")
+                    or "422" not in operation["responses"]
+                ):
                     continue
                 served = document["paths"][path][method]["responses"]["422"]
                 schema = served["content"]["application/json"]["schema"]
