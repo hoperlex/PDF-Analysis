@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from auditmanager.jobs.events import append_execution_event
 from auditmanager.jobs.commands import set_execution_paused, set_job_priority
 from auditmanager.jobs.repository import (
+    JOB_WAKEUP_CHANNEL,
     AttemptAuthority,
     ExecutionNotClaimed,
     JobRepository,
@@ -26,6 +27,7 @@ def stop_attempt_lease_heartbeat() -> None:
     stop_for_current_thread()
 
 __all__ = [
+    "JOB_WAKEUP_CHANNEL",
     "AttemptAuthority",
     "ExecutionNotClaimed",
     "JobRepository",

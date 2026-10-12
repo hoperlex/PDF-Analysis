@@ -58,8 +58,9 @@ UNEVALUATED_GUARDS: Final[tuple[UnevaluatedGuard, ...]] = (
 #: and deliberately not merged into ``UNEVALUATED_GUARDS``.
 ABSENT_CAPABILITIES: Final[tuple[str, ...]] = (
     (
-        "remote execution: no worker process, remote queue or JobPackage/ResultPackage "
-        "transport exists; every Attempt runs inside the serving process"
+        "remote execution: the worker service (R-105) runs on the API's host from the "
+        "API's image against the one database; no remote worker, remote queue or "
+        "JobPackage/ResultPackage transport exists"
     ),
     (
         "cancellation after validating: cancel_audit_run fences created, queued and "
@@ -76,7 +77,8 @@ SCHEMAS_NOT_CLAIMED: Final[tuple[str, ...]] = ("JobPackage", "ResultPackage")
 #: two: migration ``0019`` instantiates the ``worker`` registry (R-105), and migration
 #: ``0018``'s ``norm_custody_admission`` is the custody outbox (R-76: the intent and its
 #: outbox row are one record), so neither is absent any more. What a worker process *does*
-#: is still absent until `W54-WORKER-01`; :data:`ABSENT_CAPABILITIES` says so.
+#: was absent until `W54-WORKER-01`, which added the local worker service; remote workers
+#: remain absent and :data:`ABSENT_CAPABILITIES` says so.
 AGGREGATES_NOT_INSTANTIATED: Final[tuple[str, ...]] = (
     "import",
     "export",

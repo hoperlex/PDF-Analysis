@@ -143,13 +143,17 @@ def test_lease_reclaim_journals_the_effect_outcome(session, blob_store, helpers)
         "WHERE lease_id = :lease_id"
     ), {"lease_id": authority.lease_id})
     assert jobs.reclaim_expired(session) >= 1
+    # D-150, decided at `W54-FREEZE-01`: a recorded call spends nothing, so the lost
+    # Attempt's prepared recorded effect is settled `not_processed` (not `outcome_unknown`)
+    # and journalled with the `not_sent` dispatch class.
     assert session.execute(text(
         "SELECT state FROM provider_call_effect WHERE model_call_id = :effect"
-    ), {"effect": str(effect)}).scalar_one() == "outcome_unknown"
+    ), {"effect": str(effect)}).scalar_one() == "not_processed"
     events = ExecutionRepository().list_journal(session, run_id=run_id, cursor=None, limit=100)
     assert any(
         item.aggregate_id == authority.attempt_id
-        and item.payload.get("dispatch_class") == "outcome_unknown"
+        and item.event_type == "provider.not_processed"
+        and item.payload.get("dispatch_class") == "not_sent"
         for item in events
     )
 

@@ -1,8 +1,8 @@
 """W53 execution declarations; every operation delegates to a port.
 
-`W54-SEAL-01` adds the worker registry's ``listWorkers`` and ``setWorkerIntake``
-(plan section 3.7). Their port methods are sealed stubs that answer
-``503 dependency_unavailable`` until `W54-WORKER-01` supplies the registry behaviour.
+`W54-SEAL-01` added the worker registry's ``listWorkers`` and ``setWorkerIntake``
+(plan section 3.7) as sealed stubs; `W54-WORKER-01` gave their port methods the registry
+behaviour (``bootstrap/adapters.py``, ``auditmanager.workers``).
 """
 
 from __future__ import annotations

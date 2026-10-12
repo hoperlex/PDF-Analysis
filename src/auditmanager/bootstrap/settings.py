@@ -59,6 +59,19 @@ API_TOKEN_ENV: Final[str] = "AUDITMANAGER_API_TOKEN"
 #: `OD-02` was revised to the proxy on 2026-09-14.
 _DECLARED_MODES: Final[frozenset[str]] = frozenset({"live", "recorded", "proxy"})
 
+#: `W54-WORKER-01`, owner ruling R-105. Which process claims runs. ``all`` is W53's
+#: in-process execution and the value when the name is unset -- every test and every
+#: developer stack builds an application without it. On the stand ``compose.server.yml``
+#: sets it literally per service (``api`` on the API, ``worker`` on the worker service),
+#: never through the ``.env`` and its fifteen frozen names, and ``deploy.sh`` refuses a
+#: compose file in which either service lacks it.
+EXECUTION_ROLE_ENV: Final[str] = "EXECUTION_ROLE"
+EXECUTION_ROLES: Final[frozenset[str]] = frozenset({"all", "api", "worker"})
+
+#: Where the worker writes its identity and heartbeat file (a tmpfs on the stand). Unset,
+#: it writes nothing and the container health check has nothing to read.
+WORKER_STATE_DIR_ENV: Final[str] = "AUDITMANAGER_WORKER_STATE_DIR"
+
 PROXY_BASE_URL_ENV: Final[str] = "PROXY_LLM_BASE_URL"
 PROXY_TOKEN_ENV: Final[str] = "PROXY_LLM_TOKEN"
 PROXY_MODEL_ENV: Final[str] = "PROXY_LLM_MODEL"
@@ -90,8 +103,13 @@ class AppSettings:
     api_key: str | None
     #: The deployment secret the credential signer is derived from; see
     #: :data:`API_TOKEN_ENV`. Still required, still refused when empty, and no longer a
-    #: credential anybody presents.
-    api_token: str
+    #: credential anybody presents. ``None`` only for ``EXECUTION_ROLE=worker``, which
+    #: serves nothing and must not hold the secret (R-105).
+    api_token: str | None
+    #: :data:`EXECUTION_ROLE_ENV`, validated.
+    execution_role: str = "all"
+    #: :data:`WORKER_STATE_DIR_ENV`; read by the worker service only.
+    worker_state_dir: str | None = None
 
     @property
     def requires_credential(self) -> bool:
@@ -108,9 +126,34 @@ def _require(name: str, environ: dict[str, str]) -> str:
     return value
 
 
+def _api_token(role: str, environ: dict[str, str]) -> str | None:
+    """Required for a process that serves; refused for the worker (R-105).
+
+    The token exemption: the worker answers no request, so it has no use for the secret
+    credentials are derived from, and holding it would widen what a compromised worker
+    could mint. Present is refused, not ignored.
+    """
+    if role != "worker":
+        return _require(API_TOKEN_ENV, environ)
+    if environ.get(API_TOKEN_ENV, "").strip():
+        raise ConfigurationError(
+            f"{EXECUTION_ROLE_ENV} is worker but {API_TOKEN_ENV} is set; the worker "
+            "service runs with the API's environment except that secret"
+        )
+    return None
+
+
 def load(environ: dict[str, str] | None = None) -> AppSettings:
     """Read and validate. Raises :class:`ConfigurationError` on anything missing."""
     env = dict(os.environ if environ is None else environ)
+
+    role = env.get(EXECUTION_ROLE_ENV, "").strip() or "all"
+    if role not in EXECUTION_ROLES:
+        raise ConfigurationError(
+            f"{EXECUTION_ROLE_ENV} is {role!r}; the declared roles are "
+            f"{sorted(EXECUTION_ROLES)}. A process either claims runs or it does not, "
+            "and which one it is must not be a guess"
+        )
 
     mode = env.get(PROVIDER_MODE_ENV, "recorded").strip() or "recorded"
     if mode not in _DECLARED_MODES:
@@ -167,7 +210,9 @@ def load(environ: dict[str, str] | None = None) -> AppSettings:
         model_id=env.get(MODEL_ID_ENV, "").strip() or "claude-opus-5",
         run_cost_ceiling_usd=ceiling,
         api_key=api_key,
-        api_token=_require(API_TOKEN_ENV, env),
+        api_token=_api_token(role, env),
+        execution_role=role,
+        worker_state_dir=env.get(WORKER_STATE_DIR_ENV, "").strip() or None,
         proxy_base_url=proxy_base_url,
         proxy_token=proxy_token,
         # The stub the proxy reads as "I am not choosing a model", so the operator's default

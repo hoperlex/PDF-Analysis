@@ -70,6 +70,16 @@ can raise.
 
 The reconciler stays for the case this cannot cover: a process that is killed has no
 ``except`` clause to run.
+
+W54: who claims (`EXECUTION_ROLE`, R-105)
+------------------------------------------
+``EXECUTION_ROLE=all`` keeps everything above: :class:`DurableCarrier` claims and reclaims
+inside the serving process. On the stand the API runs ``api`` and the separate
+``python -m auditmanager.workers serve`` process runs ``worker``. The API's carrier is
+then a :class:`ReclaimingCarrier`: it claims nothing -- the accepting transaction's Job
+and its ``NOTIFY`` are the hand-over -- and only fences expired leases, as the worker
+does too. :func:`run_to_terminal` takes the claiming worker's ``wrk`` identity, which the
+Lease records.
 """
 
 from __future__ import annotations
@@ -93,8 +103,10 @@ from auditmanager.shared.errors import DomainError
 
 __all__ = [
     "CRASHED_REASON",
+    "RECLAIM_SECONDS",
     "RUN_CONCURRENCY",
     "InlineCarrier",
+    "ReclaimingCarrier",
     "RunCarrier",
     "ThreadCarrier",
     "DurableCarrier",
@@ -114,6 +126,18 @@ RUN_CONCURRENCY: Final[int] = 1
 #: reader that could not tell them apart would not know whether to look for a dead
 #: container or for a stack trace.
 CRASHED_REASON: Final[str] = "executor_raised_before_terminal"
+
+#: How often a serving process fences expired leases. W53's value, now shared by the
+#: in-process carrier, the API's reclaim-only carrier and the worker service.
+RECLAIM_SECONDS: Final[float] = 30.0
+
+
+def _outstanding_jobs(session_factory: sessionmaker[Session]) -> int:
+    with session_factory() as session:
+        return int(session.execute(text(
+            "SELECT count(*) FROM job WHERE state IN "
+            "('queued', 'leased', 'running', 'retry_wait')"
+        )).scalar_one())
 
 
 class RunCarrier(Protocol):
@@ -266,7 +290,7 @@ class DurableCarrier(ThreadCarrier):
         last_reclaim = 0.0
         while not self._stop.is_set():
             try:
-                if monotonic() - last_reclaim >= 30.0:
+                if monotonic() - last_reclaim >= RECLAIM_SECONDS:
                     with self._sessions() as session:
                         JobRepository().reclaim_expired(session)
                         session.commit()
@@ -291,11 +315,7 @@ class DurableCarrier(ThreadCarrier):
         deadline = None if timeout is None else monotonic() + timeout
         self._wake.set()
         while True:
-            with self._sessions() as session:
-                outstanding = int(session.execute(text(
-                    "SELECT count(*) FROM job WHERE state IN "
-                    "('queued', 'leased', 'running', 'retry_wait')"
-                )).scalar_one())
+            outstanding = _outstanding_jobs(self._sessions)
             if not outstanding and super().drain(0):
                 return True
             if deadline is not None and monotonic() >= deadline:
@@ -311,6 +331,57 @@ class DurableCarrier(ThreadCarrier):
         super().shutdown()
 
 
+class ReclaimingCarrier:
+    """`EXECUTION_ROLE=api` (R-105): the API process claims nothing and reclaims leases.
+
+    ``submit`` does not execute and does not need to: the Job and its wake-up
+    ``NOTIFY`` were committed by the transaction that accepted the run, and only the
+    worker service claims. While serving, a background thread fences expired leases every
+    :data:`RECLAIM_SECONDS`, so a killed worker's run is recovered even when no worker is
+    left to do it. ``drain`` waits until no Job is outstanding -- in a test, that is the
+    worker finishing the work.
+    """
+
+    __slots__ = ("_sessions", "_stop", "_thread")
+
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        self._sessions = session_factory
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def submit(self, job: Callable[[], None]) -> None:
+        del job  # the accepted run is already durable work for the worker service
+
+    def start(self) -> None:
+        self._thread = threading.Thread(
+            target=self._reclaim_loop, name="auditmanager-reclaim", daemon=True,
+        )
+        self._thread.start()
+
+    def _reclaim_loop(self) -> None:
+        while not self._stop.is_set():
+            try:
+                with self._sessions() as session:
+                    JobRepository().reclaim_expired(session)
+                    session.commit()
+            except Exception:
+                _log.exception("lease reclaim pass failed")
+            self._stop.wait(RECLAIM_SECONDS)
+
+    def drain(self, timeout: float | None = None) -> bool:
+        deadline = None if timeout is None else monotonic() + timeout
+        while _outstanding_jobs(self._sessions):
+            if deadline is not None and monotonic() >= deadline:
+                return False
+            self._stop.wait(0.05)
+        return True
+
+    def shutdown(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=3)
+
+
 def run_to_terminal(
     session_factory: sessionmaker[Session],
     run_id: str,
@@ -319,6 +390,7 @@ def run_to_terminal(
     adapter: Any,
     provider_config: Any,
     runs: RunRepository | None = None,
+    worker_id: str | None = None,
 ) -> None:
     """Execute one **queued** run to a terminal, in its own sessions.
 
@@ -338,6 +410,10 @@ def run_to_terminal(
     (:class:`~auditmanager.jobs.public.ExecutionNotClaimed`, which includes the dispatch
     pause) and a fence by another Attempt are logged and re-raised with the Run and Job
     left untouched. Every other failure is recorded as the failure terminal.
+
+    ``worker_id`` is the registered worker this claim is made for (R-105): the Lease
+    records it and the claim refuses while that worker's intake is off. ``None`` is the
+    in-process claimant of ``EXECUTION_ROLE=all``.
     """
     run_repo = runs or RunRepository()
 
@@ -350,6 +426,7 @@ def run_to_terminal(
                 adapter=adapter,
                 provider_config=provider_config,
                 runs=run_repo,
+                jobs=JobRepository(worker_id=worker_id),
             )
             session.commit()
     except ExecutionNotClaimed as refusal:

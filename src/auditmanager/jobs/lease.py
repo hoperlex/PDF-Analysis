@@ -11,10 +11,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.jobs.repository import AttemptAuthority, JobRepository
 
-# The lease length is not a Python constant: PostgreSQL stamps it, as the 60-second
-# ``lease.expires_at`` default of migration 0017 and the extension in
-# ``repository._HEARTBEAT``, so a lease is always measured on database time. Three
-# heartbeats fit inside one lease.
+# The lease is measured on database time: PostgreSQL stamps ``lease.expires_at`` at the
+# claim and at every extension as ``statement_timestamp()`` plus
+# ``JobRepository.lease_seconds`` (60 seconds, the 0017 default). Three heartbeats fit
+# inside one lease. `W54-WORKER-01` (D-141): the final run transaction no longer holds the
+# lease row while the evidence gate runs, so these extensions are not blocked there.
 HEARTBEAT_SECONDS = 20
 ATTEMPT_WATCHDOG_SECONDS = 900
 

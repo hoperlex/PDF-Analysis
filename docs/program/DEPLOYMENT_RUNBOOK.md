@@ -764,6 +764,8 @@ discipline `test_deploy_script_refusals.py` already holds `deploy.sh`'s guards t
 | the app answers `authentication_required` to everything | the token. `T-6` is fail-closed by design |
 | `[session-register] could not write /var/lib/auditmanager/sessions/register.json (…)` in the `web` container's log | `R-51`'s volume is not writable — a restored volume owned by `root`, or a full disk. **The stand keeps serving and nobody is signed out**: the sessions are live in the container's memory either way, and refusing a sign-in over a full disk would take the stand down for a reason no reviewer can act on. What it means is that **the next deploy will sign everyone out**. Check the volume: `docker compose … exec web ls -la /var/lib/auditmanager/sessions`, and `df -h` |
 | `[session-register] AUDITMANAGER_SESSION_STORE is not set` | this stack is running the pre-wave-47 behaviour — sessions in memory only, and every deploy is a logout. `compose.server.yml` sets that variable; a stand that does not have it is not this compose file |
+| runs stay **`queued`**, «Исполнители» shows nobody online | the `worker` service is down, draining or has intake off (`R-105`). `docker compose … ps worker`, `docker compose … logs worker`; a worker with intake off is switched back by an administrator («Разрешить») — see §12 |
+| `deploy.sh` refuses with *EXECUTION_ROLE* in the message | `execution-role-declared`: `compose.server.yml` must set `EXECUTION_ROLE: api` on `api` and `EXECUTION_ROLE: worker` on `worker`, literally, and never in `alpha.env` (§12) |
 
 ---
 
@@ -858,3 +860,41 @@ first.
 * It does not open, convert or check the copy record. That is the copy key (`copy-serve.sh`).
 * It does not take part in a deploy. A `deploy.sh` that refuses while the import lock is held
   is `W54-STAND-COPY-01`'s guard, which reads `<staging>/import.lock`.
+
+---
+
+## 12. The worker service — operations (`W54-WORKER-01`, `R-105`)
+
+From W54 the API process answers requests and **does not execute runs**. The `worker`
+service in `compose.server.yml` does: the same image, started as
+`python -m auditmanager.workers serve`, with the API's environment **except
+`AUDITMANAGER_API_TOKEN`** (it refuses to start if that is set) plus `env/provider.env`. No
+port, no session volume. `infra/deploy/README.md` "The worker service" has the full table.
+
+**What the owner must know before the first W54 deploy.**
+
+* `deploy.sh` brings the new `worker` service up with the rest and now waits for its health
+  check. It refuses (`execution-role-declared`) a compose file whose `api` or `worker` lacks
+  the literal `EXECUTION_ROLE:` line. Nothing is added to `alpha.env`: the role is never one
+  of its fifteen names.
+* A deploy that recreates the worker sends it `SIGTERM`: no new claim, and the run in flight
+  gets up to 270 s to finish (`stop_grace_period` 300 s). A deploy during a long live run can
+  therefore take up to five minutes longer; pausing dispatch first («Очередь» → pause) and
+  waiting for the queue to empty avoids that.
+* `reset.sh` stops the worker before it drops or restores the schema and starts it again
+  afterwards; a restarted worker registers a new identity.
+
+**Day-to-day.**
+
+| Task | How |
+|---|---|
+| is a worker online? | «Исполнители», or `GET /api/v1/execution/workers` (any role): `online` < 90 s since the last heartbeat, `stale` < 600 s, then `offline` |
+| stop one worker taking new runs, keep its current one | «Не брать новые» (administrator; `PUT /execution/workers/{worker_id}/intake` `{"enabled": false}`). «Разрешить» undoes it |
+| stop all dispatch | the existing pause on «Очередь» (`setExecutionPaused`) |
+| restart the worker | `docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml restart worker` — it drains first; the old identity goes `stale`, then `offline` |
+| a worker was killed mid-run | nothing to do: its lease expires within 60 s and either process fences it — the run resumes when no provider effect can have spent (every recorded call, D-150), otherwise it fails as `provider_outcome_unknown` |
+| `worker LISTEN connection … was lost` in its log | the database connection that delivers wake-ups dropped. The worker keeps polling every 5 s and reconnects by itself; runs are picked up at most 5 s later meanwhile |
+
+**Rollback.** Migrations `0018`/`0019` refuse downgrade. A forward fix may set
+`EXECUTION_ROLE: all` on `api` and remove the `worker` service — W53's in-process execution —
+and `deploy.sh` accepts exactly that shape (`W54-PLAN.md` §3.10).

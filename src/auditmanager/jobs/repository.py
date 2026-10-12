@@ -45,9 +45,22 @@ _NEXT_JOB = text(
 )
 _HEARTBEAT = text(
     "UPDATE lease SET heartbeat_at = statement_timestamp(), "
-    "expires_at = statement_timestamp() + interval '60 seconds' "
+    "expires_at = statement_timestamp() + make_interval(secs => :lease_seconds) "
     "WHERE lease_id = :lease_id AND attempt_id = :attempt_id "
     "AND released_at IS NULL AND expires_at > statement_timestamp()"
+)
+#: `W54-WORKER-01` (R-105). One channel wakes every listening worker; the payload is
+#: empty because the queue in PostgreSQL is the authority and a notification is a hint.
+#: ``NOTIFY`` is transactional, so a worker is woken only after the accepting commit.
+JOB_WAKEUP_CHANNEL = "auditmanager_job_wakeup"
+_NOTIFY = text("SELECT pg_notify(:channel, '')")
+_LOCK_WORKER_INTAKE = text(
+    "SELECT intake_enabled FROM worker WHERE worker_id = :worker_id FOR SHARE"
+)
+_RUNS_HELD = text(
+    "SELECT l.worker_id, j.run_id FROM lease l JOIN job j ON j.job_id = l.job_id "
+    "WHERE l.worker_id = ANY(:worker_ids) AND l.released_at IS NULL "
+    "ORDER BY l.worker_id, l.acquired_at, j.run_id"
 )
 _EXPIRED_LEASES = text(
     "SELECT j.run_id, j.job_id, a.attempt_id, l.lease_id FROM lease l "
@@ -76,8 +89,9 @@ _SET_CURRENT = text(
     "WHERE job_id = :job_id AND state = 'queued'"
 )
 _INSERT_LEASE = text(
-    "INSERT INTO lease (lease_id, job_id, attempt_id) "
-    "VALUES (:lease_id, :job_id, :attempt_id)"
+    "INSERT INTO lease (lease_id, job_id, attempt_id, worker_id, expires_at) "
+    "VALUES (:lease_id, :job_id, :attempt_id, :worker_id, "
+    "statement_timestamp() + make_interval(secs => :lease_seconds))"
 )
 _ADVANCE_JOB = text(
     "UPDATE job SET state = :to_state, updated_at = statement_timestamp(), "
@@ -295,17 +309,53 @@ class SettledProviderEffect:
 
 
 class JobRepository:
-    """Create and fence local execution plus journal its external effects."""
+    """Create and fence local execution plus journal its external effects.
+
+    ``worker_id`` (`W54-WORKER-01`, R-105) names the registered worker process a claim is
+    made for. It is recorded on the Lease, frozen with it, and the claim refuses while
+    that worker's intake is switched off. ``None`` is the in-process claimant of
+    ``EXECUTION_ROLE=all``, whose Lease names no worker, exactly as before migration 0019.
+    """
+
+    #: The lease length, stamped on database time. Sixty seconds is the W53 value (the
+    #: 0017 column default); three heartbeats of :data:`jobs.lease.HEARTBEAT_SECONDS` fit
+    #: inside it. A class attribute so a test can shorten both the claim and the
+    #: extension together without a second code path.
+    lease_seconds: float = 60.0
+
+    def __init__(self, *, worker_id: str | None = None) -> None:
+        self._worker_id = worker_id
+
+    @property
+    def worker_id(self) -> str | None:
+        return self._worker_id
 
     def enqueue(self, session: Session, *, run_id: str) -> str:
-        """Create the durable Job in the accepting transaction."""
+        """Create the durable Job in the accepting transaction and wake the workers."""
         job_id = str(JobId.new())
         session.execute(_INSERT_JOB, {"job_id": job_id, "run_id": run_id})
         append_execution_event(
             session, event_type="job.created", aggregate_type="Job",
             aggregate_id=job_id, run_id=run_id, payload={"state": "queued"},
         )
+        self.wake_workers(session)
         return job_id
+
+    @staticmethod
+    def wake_workers(session: Session) -> None:
+        """Hint every listening worker, delivered only if the caller's transaction commits."""
+        session.execute(_NOTIFY, {"channel": JOB_WAKEUP_CHANNEL})
+
+    def runs_held_by(
+        self, session: Session, worker_ids: Sequence[str]
+    ) -> dict[str, tuple[str, ...]]:
+        """The Runs whose unreleased Lease names each worker, oldest claim first."""
+        held: dict[str, list[str]] = {worker_id: [] for worker_id in worker_ids}
+        if not worker_ids:
+            return {}
+        for row in session.execute(_RUNS_HELD, {"worker_ids": list(worker_ids)}).all():
+            held.setdefault(str(row[0]), []).append(str(row[1]))
+        return {worker_id: tuple(runs) for worker_id, runs in held.items()}
 
     def next_queued_run(self, session: Session) -> str | None:
         """Hint the highest runnable Job whose Run is not held by another claimant.
@@ -320,7 +370,8 @@ class JobRepository:
         session.execute(text("SET LOCAL lock_timeout = '2s'"))
         return session.execute(
             _HEARTBEAT,
-            {"lease_id": authority.lease_id, "attempt_id": authority.attempt_id},
+            {"lease_id": authority.lease_id, "attempt_id": authority.attempt_id,
+             "lease_seconds": float(self.lease_seconds)},
         ).rowcount == 1
 
     def set_priority(self, session: Session, *, job_id: str, priority: int) -> None:
@@ -353,6 +404,8 @@ class JobRepository:
             "ON CONFLICT (singleton) DO UPDATE SET paused = EXCLUDED.paused, "
             "changed_at = statement_timestamp()"
         ), {"paused": paused})
+        if not paused:
+            self.wake_workers(session)
 
     def reclaim_expired(self, session: Session, *, force_attempt_id: str | None = None) -> int:
         """Fence lost Attempts and resume only when no ambiguous provider effect exists.
@@ -398,9 +451,32 @@ class JobRepository:
             if state not in {"leased", "running"} or run_state not in {"queued", "running"}:
                 recovered += 1
                 continue
+            # D-150 (decided at `W54-FREEZE-01`): a recorded call spends nothing, so a
+            # recorded effect the lost Attempt left ``prepared`` is settled
+            # ``not_processed`` and no recorded effect makes the Attempt ambiguous.
+            # Only a live call that might have been sent fences the run.
+            settled_recorded = session.execute(text(
+                "UPDATE provider_call_effect SET state = 'not_processed', "
+                "error_code = :code, dispatch_class = 'not_sent', "
+                "updated_at = statement_timestamp() "
+                "WHERE attempt_id = :attempt_id AND state = 'prepared' "
+                "AND provider_mode = 'recorded' "
+                "RETURNING run_id, attempt_id"
+            ), {"attempt_id": candidate["attempt_id"],
+                "code": ErrorCode.ANALYSIS_FAILED.value}).mappings().all()
+            for effect in settled_recorded:
+                append_execution_event(
+                    session, event_type="provider.not_processed",
+                    aggregate_type="Attempt", aggregate_id=str(effect["attempt_id"]),
+                    run_id=str(effect["run_id"]),
+                    payload={"attempt_id": str(effect["attempt_id"]),
+                             "error_code": ErrorCode.ANALYSIS_FAILED.value,
+                             "dispatch_class": "not_sent"},
+                )
             ambiguous = bool(session.execute(text(
                 "SELECT EXISTS (SELECT 1 FROM provider_call_effect "
-                "WHERE attempt_id = :attempt_id AND state <> 'not_processed')"
+                "WHERE attempt_id = :attempt_id AND state <> 'not_processed' "
+                "AND provider_mode <> 'recorded')"
             ), {"attempt_id": candidate["attempt_id"]}).scalar_one())
             count = int(session.execute(text(
                 "SELECT count(*) FROM attempt WHERE job_id = :job_id"
@@ -444,6 +520,7 @@ class JobRepository:
                 session.execute(text(
                     "UPDATE job SET available_at = statement_timestamp() WHERE job_id = :job_id"
                 ), {"job_id": candidate["job_id"]})
+                self.wake_workers(session)
             recovered += 1
         return recovered
 
@@ -464,6 +541,23 @@ class JobRepository:
             ) from refusal
 
     def _claim(self, session: Session, *, run_id: str) -> AttemptAuthority:
+        if self._worker_id is not None:
+            # R-105. A registered worker claims only while its intake is on. FOR SHARE
+            # serialises the claim with `setWorkerIntake`'s row lock, so a switch that
+            # commits first is observed here before any Attempt exists.
+            intake = session.execute(
+                _LOCK_WORKER_INTAKE, {"worker_id": self._worker_id}
+            ).scalar_one_or_none()
+            if intake is None:
+                raise DomainError(
+                    ErrorCode.CONFLICT, message="the claiming worker is not registered",
+                    aggregate_type="Worker",
+                )
+            if not intake:
+                raise DomainError(
+                    ErrorCode.CONFLICT, message="the worker's intake is switched off",
+                    aggregate_type="Worker",
+                )
         # The singleton must exist before it can be locked. Its insert races with
         # an administrator's upsert safely: whichever transaction commits first
         # is observed by the other before a new Attempt can be created.
@@ -513,7 +607,9 @@ class JobRepository:
                 raise self._transition_error("job", "queued", "leased")
             session.execute(
                 _INSERT_LEASE,
-                {"lease_id": lease_id, "job_id": job_id, "attempt_id": attempt_id},
+                {"lease_id": lease_id, "job_id": job_id, "attempt_id": attempt_id,
+                 "worker_id": self._worker_id,
+                 "lease_seconds": float(self.lease_seconds)},
             )
             self._advance_job(session, job_id, "queued", "leased")
             self._advance_attempt(session, attempt_id, "created", "leased")
@@ -951,6 +1047,7 @@ class JobRepository:
 
 
 __all__ = [
+    "JOB_WAKEUP_CHANNEL",
     "AttemptAuthority",
     "ExecutionNotClaimed",
     "JobRepository",

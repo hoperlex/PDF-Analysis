@@ -184,6 +184,26 @@ mc_run() {
 
 MC_ALIAS='mc --quiet alias set local http://s3:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null'
 
+# `R-105`, `W54-WORKER-01`. The worker service writes to the database on its own -- its
+# registry heartbeat, lease extensions, the runs it claims -- so it is stopped before the
+# schema is dropped or restored over and started again once the migrations are back.
+# A restarted worker registers under a new identity, which is what a reset instance
+# should see. A compose file without a worker service (the W53 rollback) has none to stop.
+WORKER_DECLARED=no
+if grep -q '^  worker:[[:space:]]*$' "$COMPOSE_FILE"; then
+    WORKER_DECLARED=yes
+fi
+stop_worker() {
+    [ "$WORKER_DECLARED" = yes ] || return 0
+    echo "reset.sh: stopping the worker service before the database changes under it"
+    compose stop worker
+}
+start_worker() {
+    [ "$WORKER_DECLARED" = yes ] || return 0
+    echo "reset.sh: starting the worker service again"
+    compose up -d --no-deps worker
+}
+
 echo "reset.sh: instance   $CONFIGURED_INSTANCE"
 echo "reset.sh: database   $DATABASE"
 echo "reset.sh: bucket     $BUCKET"
@@ -255,6 +275,7 @@ if [ -n "$RESTORE" ]; then
         done < /dump/objects.attrs
         echo "  reset.sh: restored $(wc -l < /dump/objects.attrs) objects"'
     mc_run -v "$RESTORE:/dump:ro" s3-init -c "$MC_ALIAS; $restore_objects"
+    stop_worker
     compose exec -T postgres pg_restore --clean --if-exists --no-owner \
         --username "$CONFIGURED_USER" --dbname "$DATABASE" < "$RESTORE/database.dump"
 
@@ -270,6 +291,12 @@ if [ -n "$RESTORE" ]; then
     if [ "$RESTORE_MIGRATE_STATUS" -ne 0 ] || [ "$RESTORE_NOTES_STATUS" -ne 0 ]; then
         echo "reset.sh: !! restored rows, but migration or release-note load needs operator review."
         echo "reset.sh: !! migrate=$RESTORE_MIGRATE_STATUS release-notes=$RESTORE_NOTES_STATUS"
+        if [ "$WORKER_DECLARED" = yes ]; then
+            echo "reset.sh: !! the worker service was left stopped; start it once the schema is at head:"
+            echo "reset.sh: !!   docker compose --env-file $ENV_FILE --file $COMPOSE_FILE up -d --no-deps worker"
+        fi
+    else
+        start_worker
     fi
 
     # --- `R-52`: A RESTORE ROLLS CREDENTIAL STATE BACK, SO THE RESTORE TAKES IT AWAY AGAIN
@@ -647,6 +674,7 @@ if [ "$SESSIONS_CLEARED" != yes ]; then
 fi
 # <<< guard: sessions-cleared
 
+stop_worker
 echo "reset.sh: dropping and recreating schema public in $DATABASE"
 compose exec -T postgres psql --quiet --username "$CONFIGURED_USER" --dbname "$DATABASE" \
     --command "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO \"$CONFIGURED_USER\";"
@@ -661,6 +689,7 @@ mc_run s3-init -c "$MC_ALIAS; mc --quiet rm --recursive --force \"local/$BUCKET\
 # Re-initialise through the SAME script the stack initialises with, so a reset instance and
 # a fresh one are the same instance. In particular the bucket is private again.
 compose run --rm s3-init
+start_worker
 
 echo
 echo "reset.sh: done. The dump is at $DUMP_DIR"

@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -38,7 +39,7 @@ from auditmanager.bootstrap.adapters import (
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
-from auditmanager.runs import DurableCarrier
+from auditmanager.runs.public import DurableCarrier, ReclaimingCarrier, run_to_terminal
 from auditmanager.releases.public import (
     ReleaseRepository, compute_build_id, read_product_version,
 )
@@ -61,6 +62,89 @@ class Application:
     #: a line inside an adapter. It is also the only honest way to *wait* for a run --
     #: ``carrier.drain(timeout)`` waits on the real work, where a sleep waits on a guess.
     carrier: Any
+    #: `W54-WORKER-01` (R-105). ``all`` claims in-process (W53); ``api`` claims nothing
+    #: and its carrier only reclaims expired leases, because the worker service claims.
+    execution_role: str = "all"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkerRuntime:
+    """Everything ``python -m auditmanager.workers serve`` needs, already built.
+
+    The same engine, store, provider and profile wiring as :class:`Application`, without
+    a router and without the deployment secret: the worker answers no request (R-105).
+    """
+
+    settings: AppSettings
+    engine: Any
+    session_factory: sessionmaker[Session]
+    #: ``execute(run_id, worker_id)`` runs one claimed run to a terminal, recording the
+    #: worker on its Lease (:func:`auditmanager.runs.public.run_to_terminal`).
+    execute: Callable[[str, str], None]
+    #: What the registry row says this process is: the product version and build id.
+    version: str
+    slots: int
+    state_dir: Path | None
+
+
+def build_worker_runtime(
+    settings: AppSettings | None = None,
+    *,
+    environ: dict[str, str] | None = None,
+) -> WorkerRuntime:
+    """Wire the worker service, or refuse to -- the same contract as the application."""
+    env: dict[str, str] = dict(os.environ) if environ is None else dict(environ)
+    resolved = settings if settings is not None else load_settings(env)
+    if resolved.execution_role != "worker":
+        raise ConfigurationError(
+            f"the worker service runs only with EXECUTION_ROLE=worker, not "
+            f"{resolved.execution_role!r}; compose.server.yml sets it literally on the "
+            "worker service"
+        )
+
+    from auditmanager.shared.db import create_database_engine, create_session_factory
+    from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
+    from auditmanager.storage import S3BlobStore, S3StorageSettings
+
+    engine = create_database_engine(
+        DatabaseSettings(url=parse_database_url(resolved.database_url))
+    )
+    sessions = create_session_factory(engine)
+    try:
+        version = f"{read_product_version()}+{compute_build_id()}"
+    except (FileNotFoundError, ValueError) as exc:
+        raise ConfigurationError(f"release version or build inputs are invalid: {exc}") from exc
+    store = S3BlobStore(
+        S3StorageSettings(
+            endpoint_url=resolved.s3_endpoint_url,
+            region=resolved.s3_region,
+            access_key_id=resolved.s3_access_key_id,
+            secret_access_key=resolved.s3_secret_access_key,
+            bucket=resolved.s3_bucket,
+        )
+    )
+    model_adapter, provider_config, _profile_id, _bundle_id = _build_provider(resolved, env)
+
+    def execute(run_id: str, worker_id: str) -> None:
+        run_to_terminal(
+            sessions,
+            run_id,
+            blob_store=store,
+            adapter=model_adapter,
+            provider_config=provider_config,
+            worker_id=worker_id,
+        )
+
+    return WorkerRuntime(
+        settings=resolved,
+        engine=engine,
+        session_factory=sessions,
+        execute=execute,
+        version=version,
+        # `RUN_CONCURRENCY`: one run at a time, per `PROTOTYPE_PROFILE.md` section 2.
+        slots=1,
+        state_dir=None if resolved.worker_state_dir is None else Path(resolved.worker_state_dir),
+    )
 
 
 def build_application(
@@ -77,6 +161,11 @@ def build_application(
     # and nothing would say so.
     env: dict[str, str] = dict(os.environ) if environ is None else dict(environ)
     resolved = settings if settings is not None else load_settings(env)
+    if resolved.execution_role == "worker":
+        raise ConfigurationError(
+            "EXECUTION_ROLE=worker is the worker service's role (python -m "
+            "auditmanager.workers serve); the API serves with api or all"
+        )
 
     from auditmanager.ingest import IngestService
     from auditmanager.shared.db import create_database_engine, create_session_factory
@@ -128,7 +217,7 @@ def build_application(
     from auditmanager.access.repository import UserRepository as UserAccessRepository
 
     try:
-        signer = TokenSigner(derive_signing_key(resolved.api_token))
+        signer = TokenSigner(derive_signing_key(resolved.api_token or ""))
     except ValueError as exc:  # pragma: no cover - settings.load refuses an empty one first
         raise ConfigurationError(
             "the deployment secret derives no signing key, so this application could "
@@ -142,7 +231,13 @@ def build_application(
     # thread. `ThreadCarrier` is `RUN_CONCURRENCY` wide -- one, per `PROTOTYPE_PROFILE.md`
     # section 2 -- so a second run waits in `queued` instead of competing for the
     # provider budget with the first.
-    carrier = DurableCarrier(sessions)
+    #
+    # `W54-WORKER-01` (R-105). Under ``EXECUTION_ROLE=api`` the worker service claims and
+    # this process only fences expired leases; ``all`` keeps W53's in-process claimant.
+    carrier: Any = (
+        ReclaimingCarrier(sessions) if resolved.execution_role == "api"
+        else DurableCarrier(sessions)
+    )
 
     run_adapter = RunAdapter(
         sessions,
@@ -154,7 +249,8 @@ def build_application(
         prompt_bundle_id=bundle_id,
         carrier=carrier,
     )
-    carrier.configure_runner(run_adapter._job)
+    if isinstance(carrier, DurableCarrier):
+        carrier.configure_runner(run_adapter._job)
 
     router = build_router(
         projects=ProjectAdapter(ingest),
@@ -190,6 +286,7 @@ def build_application(
         session_factory=sessions,
         provider_config=provider_config,
         carrier=carrier,
+        execution_role=resolved.execution_role,
     )
 
 

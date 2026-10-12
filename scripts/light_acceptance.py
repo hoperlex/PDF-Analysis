@@ -30,16 +30,21 @@ CONTEXT_SUITES: dict[str, tuple[str, ...]] = {
     "dashboard": ("api",),
     "decisions": ("decisions",),
     "documents": ("ingest",),
+    # `W54-WORKER-01`: the execution read projection is served through the API and
+    # exercised with the worker registry; its own suite holds the registry reads.
+    "execution": ("execution", "api", "runs"),
     "export": ("exports",),
     "exports": ("exports",),
     "findings": ("findings",),
     "ingest": ("ingest",),
-    "jobs": ("runs",),
+    "jobs": ("jobs", "runs"),
     "norms": ("norms",),
     "operations": ("api",),
     "runs": ("runs",),
     "shared": ("shared_kernel", "db"),
     "storage": ("storage",),
+    # `W54-WORKER-01` (R-105): the worker service claims through `jobs` and runs `runs`.
+    "workers": ("workers", "jobs", "runs"),
 }
 
 RISK_FILES = {

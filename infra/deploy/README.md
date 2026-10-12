@@ -26,7 +26,7 @@ down`. This is the deployed stack.
 | `Dockerfile.api` | the forty-five operations under uvicorn, plus `T-3`'s health plane |
 | `Dockerfile.web` | `npm run build`, then `next start` |
 | `serve.py` | the entry point: **one built application, two ports** |
-| `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, release-notes, api, web, one proxy |
+| `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, release-notes, api, worker, web, one proxy |
 | `proxy/nginx.conf` | `T-2` — the web app at `/`, the API at `/api/v1`, one origin |
 | `proxy/tls-server.conf` | the TLS server block. **nginx never loads it unless a certificate is there** |
 | `proxy/enable-tls.sh` | the switch: the image runs it before nginx starts, and it asks one question |
@@ -232,6 +232,45 @@ outside needs it, and publishing it would add a surface nobody authorized.
 because `serve.py` builds the application once and hands the *same object* to both apps —
 a health plane in its own process would report on its own wiring and tell the proxy nothing
 about the process actually serving `/api/v1`.
+
+## The worker service — `R-105`
+
+Since `W54-WORKER-01` the API does not execute runs. The `worker` service does: the API's
+image started as `python -m auditmanager.workers serve`. Each service sets its role
+**literally** in `compose.server.yml` — `EXECUTION_ROLE: api` on the API,
+`EXECUTION_ROLE: worker` on the worker — and never in `alpha.env`. `deploy.sh`'s
+`execution-role-declared` guard refuses a compose file in which either line is missing, is
+not a literal, or names the wrong role, and refuses `api` with no worker service, because
+then nothing would ever claim a run.
+
+| | `api` | `worker` |
+|---|---|---|
+| claims queued runs | no | yes, one at a time (`slots` 1) |
+| fences expired leases | yes, every 30 s | yes, every 30 s |
+| `AUDITMANAGER_API_TOKEN` | required | **absent** — the worker refuses to start if it is set |
+| `provider.env` | read | read |
+| ports, session volume | `8000`/`8001` behind the proxy; no session volume | none; none |
+
+What the worker does: it registers a new `wrk_…` identity in the `worker` table on every
+start (kept on a tmpfs at `/run/auditmanager`, so a restarted container is a new worker),
+heartbeats every 20 s (stale after 90 s, offline after 600 s, derived on read), wakes on
+`LISTEN auditmanager_job_wakeup` and polls every 5 s regardless. A lost `LISTEN` connection
+is logged as a warning and the poll carries on until it is re-established. The container's
+health check is `python -m auditmanager.workers health`, which reads only the identity and
+heartbeat files on that tmpfs.
+
+**Stopping it drains it.** `SIGTERM` stops new claims and waits up to 270 s for the run in
+flight; `stop_grace_period` is 300 s, so a `deploy.sh` that recreates the worker can wait
+that long. A run still in flight when the process ends keeps its lease until it expires
+(60 s) and is then fenced by either process: resumed when no provider effect can have spent
+(every recorded call, D-150), failed as `provider_outcome_unknown` otherwise.
+
+**«Не брать новые»** (`setWorkerIntake`, administrators) is the same drain for one worker
+without stopping it: the claim refuses while intake is off and the run it holds finishes.
+
+**Rollback without the worker** (`W54-PLAN.md` §3.10): a forward fix that sets
+`EXECUTION_ROLE: all` on the API and removes the `worker` service is W53's in-process
+execution again; `deploy.sh` accepts exactly that shape.
 
 ## Deploying it — `PA-01` criterion 1
 

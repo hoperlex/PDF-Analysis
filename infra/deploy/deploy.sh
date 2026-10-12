@@ -307,6 +307,78 @@ if [ ! -r "$COMPOSE_FILE" ]; then
 fi
 # <<< guard: compose-file-present
 
+# `R-105`, `W54-WORKER-01`. Which process claims runs is set LITERALLY per service in the
+# compose file (`EXECUTION_ROLE: api` on the API, `EXECUTION_ROLE: worker` on the worker
+# service) and never in alpha.env. Read here, outside the guard below, because the
+# services-healthy guard needs to know whether a worker service exists.
+#
+# Prints the literal value of service $1's `EXECUTION_ROLE:` line, `absent` when the
+# service has none, or `no-service` when the file has no such service. Only the mapping
+# form `EXECUTION_ROLE: <value>` counts; any other spelling reads as absent and is refused,
+# which is the safe direction for a parser this small.
+service_role() {
+    awk -v want="$1" '
+        /^services:[[:space:]]*$/ { in_services = 1; next }
+        in_services && /^[^[:space:]#]/ { in_services = 0 }
+        in_services && /^  [A-Za-z0-9_.-]+:[[:space:]]*$/ {
+            current = $1; sub(/:$/, "", current)
+            if (current == want) found = 1
+            next
+        }
+        in_services && current == want && /^[[:space:]]+EXECUTION_ROLE:/ {
+            value = $0
+            sub(/^[[:space:]]+EXECUTION_ROLE:[[:space:]]*/, "", value)
+            sub(/[[:space:]]+#.*$/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            role = value
+        }
+        END {
+            if (!found) print "no-service"
+            else if (role == "") print "absent"
+            else print role
+        }
+    ' "$COMPOSE_FILE"
+}
+API_ROLE="$(service_role api)"
+WORKER_ROLE="$(service_role worker)"
+
+# >>> guard: execution-role-declared
+# The API must say whether it claims (`all`, W53's in-process execution and the rollback
+# of W54-PLAN 3.10) or not (`api`). A `worker` service, when there is one, must say
+# `worker`. `api` with no worker service is refused too: nothing would ever claim a run,
+# and every run would wait in `queued` with a green deployment in front of it.
+case "$API_ROLE" in
+    api|all) ;;
+    no-service)
+        refuse "$COMPOSE_FILE has no api service." \
+               "There is nothing to deploy that answers a request." ;;
+    absent)
+        refuse "the api service in $COMPOSE_FILE does not set EXECUTION_ROLE." \
+               "R-105: it is set literally per service -- 'EXECUTION_ROLE: api' when the" \
+               "worker service claims, 'EXECUTION_ROLE: all' for the in-process rollback." ;;
+    *)
+        refuse "the api service in $COMPOSE_FILE sets EXECUTION_ROLE to '$API_ROLE'." \
+               "R-105 allows the literal 'api' or 'all' there, never a substitution and" \
+               "never 'worker'." ;;
+esac
+case "$WORKER_ROLE" in
+    worker) ;;
+    no-service)
+        if [ "$API_ROLE" = api ]; then
+            refuse "the api service does not claim runs and $COMPOSE_FILE has no worker service." \
+                   "Every run would stay queued. Add the worker service, or set" \
+                   "'EXECUTION_ROLE: all' on the api service (the W53 rollback)."
+        fi ;;
+    absent)
+        refuse "the worker service in $COMPOSE_FILE does not set EXECUTION_ROLE." \
+               "R-105: it is set literally, 'EXECUTION_ROLE: worker', and the worker" \
+               "refuses to start without it." ;;
+    *)
+        refuse "the worker service in $COMPOSE_FILE sets EXECUTION_ROLE to '$WORKER_ROLE'." \
+               "R-105 allows only the literal 'worker' there." ;;
+esac
+# <<< guard: execution-role-declared
+
 # >>> guard: build-context-complete
 # THE CLEAN-CLONE GUARD, AND IT IS THE ONE THIS SCRIPT EXISTS FOR. "Brings the stack up
 # from a clean clone" fails in exactly one interesting way: the clone is not the tree the
@@ -676,16 +748,30 @@ if [ "$UP_STATUS" -ne 0 ]; then
 fi
 
 echo "-- every service is there, in the state compose knows it to be in --"
-for service in postgres s3 api web proxy; do
+LONG_RUNNING="postgres s3 api web proxy"
+# `R-105`. The worker is a long-running service like the others when the file declares
+# one. Nothing depends on it, so `up -d` does not wait for its first health check; a
+# `starting` state is given up to two minutes here before it is judged.
+[ "$WORKER_ROLE" = no-service ] || LONG_RUNNING="postgres s3 api worker web proxy"
+for service in $LONG_RUNNING; do
     cid="$(compose ps --quiet "$service" 2>/dev/null | head -1 || true)"
     if [ -z "$cid" ]; then
         refuse "the '$service' service of $INSTANCE has no container." \
                "The stack was brought up and this one is not there. Nothing about this" \
                "deployment is claimed."
     fi
-    state="$(docker inspect --format \
-        '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
-        "$cid" 2>/dev/null || true)"
+    state_of() {
+        docker inspect --format \
+            '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+            "$1" 2>/dev/null || true
+    }
+    state="$(state_of "$cid")"
+    waited=0
+    while [ "$state" = running/starting ] && [ "$waited" -lt 120 ]; do
+        sleep 2
+        waited=$((waited + 2))
+        state="$(state_of "$cid")"
+    done
     [ -n "$state" ] || state="unknown/unknown"
     case "$state" in
         running/healthy|running/none) printf '  %-9s %s\n' "$service" "$state" ;;

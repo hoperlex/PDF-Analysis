@@ -1,4 +1,5 @@
-# The alpha stack: PostgreSQL, the object store, the API, the web app and one proxy.
+# The alpha stack: PostgreSQL, the object store, the API, the worker, the web app and one
+# proxy.
 #
 #   cp infra/deploy/env/alpha.env.example infra/deploy/env/alpha.env   # then edit it
 #   cp infra/deploy/env/provider.env.example infra/deploy/env/provider.env
@@ -209,6 +210,11 @@ services:
       # `T-6`. Required at construction since `W14-PKG`: a container started without it
       # exits non-zero instead of serving `authentication_required` to everything.
       AUDITMANAGER_API_TOKEN: ${AUDITMANAGER_API_TOKEN:?AUDITMANAGER_API_TOKEN is unset. The seam is fail-closed; see infra/deploy/env/alpha.env.example.}
+      # `R-105`. A LITERAL, set here per service and never in alpha.env: the API claims no
+      # run, only the `worker` service below does, and both fence expired leases.
+      # `deploy.sh` refuses a compose file in which `api` or `worker` lacks this line.
+      # Rollback (W54-PLAN 3.10): `all` here and no `worker` service is W53's behaviour.
+      EXECUTION_ROLE: api
     # The provider credential, and only it. A separate file the owner writes on the host,
     # never passed to --env-file, so it stays out of compose substitution and therefore out
     # of `docker compose config` output.
@@ -225,6 +231,58 @@ services:
       timeout: 5s
       retries: 30
       start_period: 5s
+
+  # `R-105`, `W54-WORKER-01`. The only process that claims runs: the API's image and code,
+  # started as `python -m auditmanager.workers serve`. The API's environment except the
+  # deployment secret -- the worker answers no request, refuses to start while that secret
+  # is present, and is never given it -- plus the same provider credential file. No
+  # `ports:`, and not on the session volume.
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/deploy/Dockerfile.api
+    image: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-api
+    networks: [alpha]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      s3:
+        condition: service_healthy
+      s3-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      release-notes:
+        condition: service_completed_successfully
+    command: ["python", "-m", "auditmanager.workers", "serve"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is unset.}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:?S3_ENDPOINT_URL is unset.}
+      S3_REGION: ${S3_REGION:?S3_REGION is unset.}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is unset.}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is unset.}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is unset.}
+      AUDITMANAGER_PROVIDER_MODE: ${AUDITMANAGER_PROVIDER_MODE:?AUDITMANAGER_PROVIDER_MODE is unset.}
+      # A literal, like the API's. See the API service above.
+      EXECUTION_ROLE: worker
+      # The identity and heartbeat files the health check reads. On the tmpfs below, so a
+      # restarted container registers as a new worker and leaves no stale identity.
+      AUDITMANAGER_WORKER_STATE_DIR: /run/auditmanager
+    env_file:
+      - path: env/provider.env
+        required: false
+    tmpfs:
+      - /run/auditmanager:uid=10001,gid=10001,mode=0700,size=1m
+    # `SIGTERM` drains: no new claim, the run in flight finishes (at most 270 s, then the
+    # process exits and its lease expires into the reclaim). Above that drain on purpose.
+    stop_grace_period: 300s
+    healthcheck:
+      test: ["CMD", "python", "-m", "auditmanager.workers", "health"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 10s
 
   web:
     build:

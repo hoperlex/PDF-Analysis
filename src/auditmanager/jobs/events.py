@@ -17,6 +17,8 @@ from auditmanager.shared.identity import AuditEventId
 _SAFE_KEYS = frozenset({
     "run_id", "job_id", "attempt_id", "from_state", "to_state", "state",
     "stage_id", "error_code", "dispatch_class", "priority", "paused", "actor_uid",
+    # `W54-WORKER-01`: the worker registry's intake switch (R-105).
+    "worker_id", "intake_enabled",
 })
 _INSERT = text(
     "INSERT INTO audit_event (audit_event_id, event_type, aggregate_type, "

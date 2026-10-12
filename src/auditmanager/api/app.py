@@ -292,11 +292,21 @@ def _run_lifespan(application: Application) -> Any:
     implementation of the rule the reconciler already owns, and it would cover strictly
     fewer cases -- a ``SIGKILL`` reaches no shutdown hook at all. One mechanism, at
     startup, where it works for every way a process can end.
+
+    **`W54-WORKER-01` (R-105): the API may not be the claimant.** Under
+    ``EXECUTION_ROLE=api`` the carrier started here only fences expired leases; the worker
+    service claims. The startup reconciliation already leaves a run alone while its Job is
+    nonterminal, so restarting the API never touches a run a live worker holds; only an
+    expired lease is reclaimed, by either process.
     """
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         from auditmanager.runs.public import reconcile_at_startup, start_serving_carrier
+
+        _log.info(
+            "execution role: %s", getattr(application, "execution_role", "all"),
+        )
 
         report = reconcile_at_startup(application.session_factory)
         if report.run_count or report.abandoned_count:

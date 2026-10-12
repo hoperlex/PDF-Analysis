@@ -322,7 +322,12 @@ def _stage(tmp_path: Path, *, script: Path | None = None) -> Path:
     )
     for name, source in (("Dockerfile.api", DOCKERFILE_API), ("Dockerfile.web", DOCKERFILE_WEB)):
         (deploy / name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-    (deploy / "compose.server.yml").write_text("# stub\n", encoding="utf-8")
+    # The real file: `W54-WORKER-01`'s `execution-role-declared` guard reads each service's
+    # literal `EXECUTION_ROLE:` from it before any `docker` call. `docker` is still a stub.
+    (deploy / "compose.server.yml").write_text(
+        (ROOT / "infra/deploy/compose.server.yml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     (deploy / "env").mkdir(exist_ok=True)
     (deploy / "env/alpha.env.example").write_text(
         "\n".join(f"{n}={v}" for n, v in sorted(EXAMPLE_SECRETS.items())) + "\n",
