@@ -1506,3 +1506,17 @@ case. `R-88` and `R-93` are therefore general rules: a one-off copy precedes an 
 migrating `origin/main` publication whenever the stand holds real client data. They do not
 apply while the stand holds only generated test data (`R-109`), which is the case now. `R-99`
 (W53 exempt) is moot.
+
+## 3.31 — `R-111` to `R-115`, W55a (`W55A-RULE-01`)
+
+| Ruling | Source | Substance |
+| --- | --- | --- |
+| `R-111` | owner, direct instruction to `pdf-analysis-62`, 2026-10-12 | Start the next wave (W55a) without waiting for W54's window. W54's DB-backed light checks and the full gate are consolidated after W55a, run once on the combined candidate (`D-157`). Until then `origin/dev` carries W54 code whose migrations and DB tests have not run. |
+| `R-112` | `R-Y1`, K-13 | «Нормы» offers text search over the current snapshot; semantic retrieval is used only inside analysis (G-5). |
+| `R-113` | `R-Y2`, K-13 | One current snapshot with an append-only history. It qualifies only with a complete build and confirmed source bindings. Runs and re-audits pin it, and the pin is NULL until W57 (R-82, CD-6). |
+| `R-114` | `R-Y3`, K-13 | W55 splits into W55a (`v0.6.0`) and W55b (`v0.6.1`) (G-9). |
+| `R-115` | `R-Y4`, K-13 | Streamed and ranged content: a full read holds back its last chunk until the digest matches; a ranged read relies on recorded verification. |
+
+**A-7** is settled by the adopted W56 plan: «Настройки анализа» lands in W56b, not W55. The
+D-4.1 audience proof is due before P4. The stand holds test data only (`R-109`), so it is
+recorded at `W55A-STAND-IMPORT-01`.

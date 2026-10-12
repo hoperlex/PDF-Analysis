@@ -67,6 +67,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-154** | a run in `validating` cannot be cancelled (`R-85`, `W53-EXEC-STOP-02`) | a reviewed state-machine reseal, if ever wanted |
 | **D-155** | the deployment-wide pause is not shown in the run journal (`R-85`, Y-04) | a journal entry without a run identity is a contract change |
 | **D-156** | the stand's generated test data must be purged at the transition to beta, keeping the corpus (`R-109`) | a purge task in the beta wave |
+| **D-157** | W54's migrations `0018`/`0019`, its DB-backed tests, the BGE image build and MRR, and the W54 full gate have not run; consolidated after W55a (`R-111`) | one combined window run and one full gate on the W55a candidate |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
@@ -146,6 +147,18 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-157 — W54's DB-backed validation is deferred to after W55a
+
+**Opened 2026-10-12 under `R-111`.** `origin/dev` carries W54 (`integration/w54`) with every
+lane's container-free checks green. Nothing has run against a database yet: migrations
+`0018`/`0019`, the custody, worker, repair, snapshot, embedding and bundle DB suites, the BGE
+pins, image build and MRR reproduction, and the W54 full gate. The heavy-step queue is in
+`.local/handoff/integrator-2026-10-12-w54-stage-a.md` and in each W54 lane report's window
+section. W55a builds on this tree.
+
+**Check:** the combined W54+W55a window run records every queued suite green, then one literal
+`GATE OK` on the W55a candidate. No `origin/main` publication of W54 happens before that.
 
 ### D-156 — the stand's test data must be purged at the transition to beta
 
