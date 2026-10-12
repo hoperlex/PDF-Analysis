@@ -312,9 +312,10 @@ describe('the sign-in screen is told what happened without being told which half
     expect(openSessionCount()).toBe(0);
   });
 
+  // `W53-CLOSE` `C-17`: the exchange no longer reads `AUDITMANAGER_API_TOKEN` at all, so only a
+  // missing upstream is `unconfigured`. That the exchange works without the key, and sends no
+  // `Authorization`, is `edge-closure.test.ts`'s.
   it('refuses when the deployment cannot reach the API, and sends nothing', async () => {
-    delete process.env.AUDITMANAGER_API_TOKEN;
-    expect((await signIn()).headers.get('location')).toBe(signInRefusalUrl('unconfigured'));
     delete process.env.AUDITMANAGER_API_UPSTREAM;
     expect((await signIn()).headers.get('location')).toBe(signInRefusalUrl('unconfigured'));
     expect(seen).toEqual([]);
@@ -597,6 +598,8 @@ describe('R-56 addendum: sign-in shows a pending application and nothing else', 
     expect(JSON.parse(statusCall.body)).toEqual({ login: LOGIN, password: PASSWORD });
     // The same credential handling as the exchange it follows.
     expect(statusCall.authorization).toBe((seen[0] as Seen).authorization);
+    // `C-17`: both carry none, because both operations publish an empty security requirement.
+    expect(statusCall.authorization).toBeNull();
     expect(seen.filter((call) => call.body.includes(PASSWORD))).toHaveLength(2);
   });
 

@@ -101,9 +101,10 @@
  * minted and opens the row with the subject that comes back — login, label, initials, roles,
  * the `R-50` flag and whether the profile is complete. A `getMe` answer this tier does not
  * understand is not a session: the sign-in is refused as `upstream`, never opened with a
- * guessed subject. After a successful `PATCH /me` through the catch-all, and after a
- * successful password change, `getMe` is read again and the row rewritten, so a completed
- * profile shows without signing in again. A refresh that fails closes the session rather
+ * guessed subject. After a successful `PATCH /me` through the catch-all, after a successful
+ * `PATCH /users/{user_uid}` that `getMe` confirms was the session's own account (`W53-CLOSE`
+ * `C-19`), and after a successful password change, `getMe` is read again and the row
+ * rewritten, so a completed profile shows without signing in again. A refresh that fails closes the session rather
  * than keeping a subject this tier knows to be stale: signing in again is what re-reads it.
  *
  * ## An upstream 401 on a held credential closes the session
@@ -132,6 +133,20 @@
  * task's hand-back, `W49-PLAN.md` §3.5 at `83987e5`: refusing the whole segment closed them
  * too.)
  *
+ * ## Only this origin's forms reach the four doors (`W53-CLOSE` `C-15`)
+ *
+ * `/bff/v1/session`, `/bff/v1/session/end`, `/bff/v1/session/password` and
+ * `/bff/v1/registration` are form posts, and a form post is the one request another site can
+ * make a browser send without asking. The cookie's `SameSite=Strict` keeps the session out of
+ * such a post, which is not enough on its own: a cross-site post to the sign-in door needs no
+ * cookie to sign the victim into the attacker's account, and one to the sign-out door ends a
+ * session without the reviewer having asked. So each door asks the browser where the post came
+ * from **before** the guest bucket is charged or the body is read, and refuses when the
+ * browser says `Sec-Fetch-Site: cross-site` or sends an `Origin` naming another host. A post
+ * with neither header — `curl`, a browser too old to send them — is accepted: the check is
+ * about what a browser reports, and a client that is not a browser forges nothing by leaving
+ * them out. See {@link isCrossSitePost} for why the comparison is by host and port.
+ *
  * ## The guest throttle
  *
  * The exchange and the registration door each take a token from the caller's bucket first
@@ -146,7 +161,7 @@
  * the register is in `../../session/store.ts` for the same reason.
  */
 
-import { getApiToken, getApiUpstreamUrl } from '@/shared/config/server-env';
+import { getApiUpstreamUrl } from '@/shared/config/server-env';
 import { isBehindProxy } from '@/shared/config/proxy-trust';
 import { safeReturnPath } from '@/shared/config/screen-registry';
 import {
@@ -492,6 +507,61 @@ function refuseRegistration(refusal: RegistrationRefusal): Response {
 }
 
 /**
+ * `C-15`. True when the browser says this form post was sent from another site.
+ *
+ * Two reports, either one enough to refuse:
+ *
+ * - `Sec-Fetch-Site: cross-site`, which the browser computes itself and a page cannot set;
+ * - an `Origin` that is not this request's own. A malformed value, an `Origin: null` (an
+ *   opaque origin — a sandboxed frame, a `data:` page) and a scheme other than `http` or
+ *   `https` all count as not this origin.
+ *
+ * Neither header present is **not** a refusal: `curl`, a script and an old browser send
+ * neither, and none of them is a page on another site driving a reviewer's browser.
+ *
+ * **This request's own origin is its `Host` header**, which both proxy configurations set to
+ * the host and port the browser used (`proxy_set_header Host $http_host`, `Y-G`); without one
+ * the request URL's authority stands in. The comparison is by host and port and deliberately
+ * **not** by scheme. The scheme this process is told is the proxy's own `$scheme`, which an
+ * outer TLS terminator in front of nginx — the deferred edge-topology item — would report as
+ * `http` while the browser's `Origin` says `https`, and every sign-in on such a stand would be
+ * refused. The same host on another scheme is somebody already on the network path, not a
+ * page on another site, and a scheme comparison would not stop them anyway. The port is
+ * compared after normalisation under the `Origin`'s own scheme, so `https://host` and a
+ * `Host: host:443` agree.
+ */
+function isCrossSitePost(request: Request): boolean {
+  const site = request.headers.get('sec-fetch-site');
+  if (site !== null && site.trim().toLowerCase() === 'cross-site') return true;
+  const origin = request.headers.get('origin');
+  if (origin === null) return false;
+  return !originIsThisRequests(origin, request);
+}
+
+function originIsThisRequests(origin: string, request: Request): boolean {
+  let claimed: URL;
+  try {
+    claimed = new URL(origin.trim());
+  } catch {
+    return false;
+  }
+  if (claimed.protocol !== 'http:' && claimed.protocol !== 'https:') return false;
+  let host = request.headers.get('host')?.trim() ?? '';
+  if (host.length === 0) {
+    try {
+      host = new URL(request.url).host;
+    } catch {
+      return false;
+    }
+  }
+  try {
+    return new URL(`${claimed.protocol}//${host}`).host === claimed.host;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Take one token from the caller's guest bucket. True when the request may go on.
  *
  * Asked before the form is read and before the configuration is, so a refused guest costs
@@ -520,6 +590,24 @@ async function readTheAccount(
   upstream: string,
   credential: string,
 ): Promise<SessionAccount | null> {
+  return (await readWhoThisIs(request, upstream, credential))?.account ?? null;
+}
+
+/**
+ * `getMe`'s subject and the account's `user_uid`, or `null` for any answer that is not a subject.
+ *
+ * The identifier is read beside the subject rather than kept in the register: the only thing
+ * this tier needs it for is `C-19`'s question — was that `PATCH /users/{user_uid}` this
+ * session's own account? — and that is asked of the API at the moment it matters, not of a
+ * copy taken at sign-in. A body without a string `user_uid` still describes a subject — the
+ * sign-in and the `PATCH /me` refresh never needed the identifier and do not start refusing
+ * over it — and answers `userUid: null`, which `C-19` treats as "cannot say whose session".
+ */
+async function readWhoThisIs(
+  request: Request,
+  upstream: string,
+  credential: string,
+): Promise<{ readonly account: SessionAccount; readonly userUid: string | null } | null> {
   const headers = jsonHeaders(request);
   headers.delete('content-type');
   const answer = await forwardWithCredential(
@@ -528,11 +616,16 @@ async function readTheAccount(
     { upstream, token: credential },
   );
   if (answer.status !== 200) return null;
+  let body: unknown;
   try {
-    return accountFromMe(await answer.json());
+    body = await answer.json();
   } catch {
     return null;
   }
+  const account = accountFromMe(body);
+  if (account === null) return null;
+  const userUid = (body as { readonly user_uid?: unknown }).user_uid;
+  return { account, userUid: typeof userUid === 'string' && userUid.length > 0 ? userUid : null };
 }
 
 /**
@@ -552,7 +645,7 @@ async function readTheAccount(
  */
 async function applicationIsPending(
   request: Request,
-  target: { readonly upstream: string; readonly token: string },
+  target: { readonly upstream: string; readonly token: null },
   credentials: { readonly login: string; readonly password: string },
 ): Promise<boolean> {
   const answer = await forwardWithCredential(
@@ -624,11 +717,15 @@ async function postedCredentials(
  * own exchange, and is held nowhere afterwards: it is a parameter, never a field, and the
  * `FormData` it came from goes out of scope with the request.
  *
- * The forward carries the deployment's `Authorization` header like every other, and the
- * exchange ignores it: `issueToken` is the one operation the contract publishes with an
- * empty security requirement, because requiring a credential to obtain one is a door with
- * a handle on the inside only. Stripping the header for this one call would mean a second
- * forwarding path through `credentialed-forward`, which is a wider seam bought for nothing.
+ * **The forward carries no `Authorization` header** (`W53-CLOSE` `C-17`). `issueToken` is one
+ * of the operations the contract publishes with an empty security requirement
+ * (`UNAUTHENTICATED_OPERATIONS` in `auditmanager.api.security`), because requiring a
+ * credential to obtain one is a door with a handle on the inside only. This paragraph said
+ * until `C-17` that the deployment's header rode along and was ignored; it was not harmless.
+ * `AUDITMANAGER_API_TOKEN` is the key the API signs credentials with, so every sign-in put
+ * key material on the wire for an operation that reads none — the `W37CERT4-3` defect on the
+ * one path the anonymous-request repair did not reach. The forwarder takes `token: null` for
+ * exactly this, and the key is no longer read here at all.
  *
  * **Since `W49-BFF-01` the guest bucket is asked first**, and a refused exchange is followed
  * by the registration status read with the same pair (`applicationIsPending`), so a pending
@@ -636,6 +733,10 @@ async function postedCredentials(
  * is followed by `getMe`, and the row is opened with the subject it describes.
  */
 async function openTheSession(request: Request): Promise<Response> {
+  // `C-15`. First, before the bucket is charged and before the form is read. `validation`,
+  // because the closed set has no better member and this post was never this screen's form;
+  // no `next`, because the address it would carry is another site's choice.
+  if (isCrossSitePost(request)) return refuseSignIn('validation');
   const returnPath = postedReturnPath(request);
   if (!guestIsAdmitted(request)) return refuseSignIn('throttled', returnPath);
 
@@ -644,16 +745,16 @@ async function openTheSession(request: Request): Promise<Response> {
   const next = safeReturnPath(credentials.next) ?? returnPath;
 
   let upstream: string;
-  let token: string;
   try {
     upstream = getApiUpstreamUrl();
-    token = getApiToken();
   } catch {
     // The message is deliberately not forwarded: `MissingConfigurationError` names an
     // environment variable, and a variable name on a public answer is a hint about the
     // deployment that nothing outside needs.
     return refuseSignIn('unconfigured', next);
   }
+  // `C-17`: an operation with an empty security requirement is sent no credential at all.
+  const target = { upstream, token: null };
 
   const answer = await forwardWithCredential(
     new Request('http://web.invalid/bff/v1/auth/token', {
@@ -662,7 +763,7 @@ async function openTheSession(request: Request): Promise<Response> {
       body: JSON.stringify({ login: credentials.login, password: credentials.password }),
     }),
     [...EXCHANGE_SEGMENTS],
-    { upstream, token },
+    target,
   );
 
   // 401 alone, and deliberately not 403: the contract declares `permission_denied`
@@ -671,7 +772,7 @@ async function openTheSession(request: Request): Promise<Response> {
   if (answer.status === 401) {
     // `R-56`'s addendum: only a pending application is shown. Everything else — no request,
     // a wrong password, an approved or a rejected request — is the one generic refusal.
-    const pending = await applicationIsPending(request, { upstream, token }, credentials);
+    const pending = await applicationIsPending(request, target, credentials);
     return refuseSignIn(pending ? 'pending' : 'credentials', next);
   }
   // A `429` reaches this tier only from a proxy placed in front of the API, which limits by
@@ -718,6 +819,13 @@ async function openTheSession(request: Request): Promise<Response> {
     // answer it does not understand is not a session. Refusing beats inventing a lifetime.
     return refuseSignIn('upstream', next);
   }
+  // `C-16`. A sign-in over a live session replaces it: the row the request's cookie names is
+  // deleted, here and in the register file, rather than left valid behind a cookie the
+  // browser is about to overwrite. Closed only once the new row exists, for the reason the
+  // password change closes its old row last; a refused sign-in leaves the old session alone.
+  // `closeSession` answers `false` for a missing, malformed or unknown id, so a first sign-in
+  // costs nothing.
+  closeSession(readSessionId(request.headers.get('cookie')));
 
   // `R-50`, the signpost half. A reviewer whose account is still on the password this
   // deployment was seeded with lands on the change screen rather than on the application:
@@ -782,6 +890,8 @@ async function postedPasswords(
  * goes back is a redirect and an opaque cookie.
  */
 async function changeThePassword(request: Request): Promise<Response> {
+  // `C-15`, before the session is read and before the form is.
+  if (isCrossSitePost(request)) return reportChange('validation');
   const next = postedReturnPath(request);
   const sessionId = readSessionId(request.headers.get('cookie'));
   const held = sessionId === null ? null : credentialOf(sessionId);
@@ -818,12 +928,11 @@ async function changeThePassword(request: Request): Promise<Response> {
     return reportChange('unconfigured', undefined, next);
   }
 
-  // `getApiToken()` is deliberately NOT read here, and that is the difference from the
-  // exchange above. The exchange has no reviewer credential yet, so it forwards the
-  // deployment's; this operation is behind the seam and must present the REVIEWER's, which
-  // is what makes the API change that reviewer's password and no one else's. The deployment
-  // secret is the key the API signs with -- forwarding it would be the `W37CERT4-3` defect
-  // again, one operation over.
+  // The REVIEWER's credential, and never the deployment secret: this operation is behind the
+  // seam, and the credential presented is what makes the API change that reviewer's password
+  // and no one else's. The deployment secret is the key the API signs with and is read
+  // nowhere in this file (`C-17`): the exchange and the two registration forwards, which have
+  // no reviewer credential, send none at all.
   const correlationId = request.headers.get('x-correlation-id');
   const headers = new Headers({ 'content-type': 'application/json', accept: 'application/json' });
   if (correlationId !== null) headers.set('x-correlation-id', correlationId);
@@ -907,8 +1016,14 @@ async function changeThePassword(request: Request): Promise<Response> {
   );
 }
 
-/** End the session: the register forgets the credential, the browser forgets the number. */
+/**
+ * End the session: the register forgets the credential, the browser forgets the number.
+ *
+ * `C-15`: a post from another site ends nothing. The browser is sent to the application with
+ * no cookie instruction, so the session it holds is exactly the session it had.
+ */
 function closeTheSession(request: Request): Response {
+  if (isCrossSitePost(request)) return seeOther(AFTER_SIGN_IN);
   closeSession(readSessionId(request.headers.get('cookie')));
   return seeOther(SIGN_IN_SCREEN, clearedSessionCookie(requestIsSecure(request)));
 }
@@ -1005,22 +1120,22 @@ async function registrationRefusalOf(answer: Response): Promise<RegistrationRefu
 /**
  * Submit an application, exactly as the exchange is forwarded.
  *
- * The same credential handling as `openTheSession` — the deployment's header on an operation
- * that publishes an empty security requirement and ignores it — the form read here, the
+ * The same credential handling as `openTheSession` — **no** `Authorization` header, on an
+ * operation that publishes an empty security requirement (`C-17`) — the form read here, the
  * password sent upstream once in a JSON body, and the answer's body never returned: the
  * browser gets a `303` and no cookie, because an application opens no session.
  */
 async function submitTheApplication(request: Request): Promise<Response> {
+  // `C-15`, before the bucket and the form, as at sign-in.
+  if (isCrossSitePost(request)) return refuseRegistration('validation');
   if (!guestIsAdmitted(request)) return refuseRegistration('throttled');
 
   const application = await postedApplication(request);
   if (application === null) return refuseRegistration('validation');
 
   let upstream: string;
-  let token: string;
   try {
     upstream = getApiUpstreamUrl();
-    token = getApiToken();
   } catch {
     // Not forwarded, for the exchange's reason; and `upstream` rather than a seventh value,
     // because the applicant can do nothing different about either.
@@ -1040,7 +1155,7 @@ async function submitTheApplication(request: Request): Promise<Response> {
       }),
     }),
     [...SUBMIT_REGISTRATION_SEGMENTS],
-    { upstream, token },
+    { upstream, token: null },
   );
 
   if (answer.status === 201) return seeOther(REGISTER_SUBMITTED_SCREEN);
@@ -1096,6 +1211,19 @@ async function handle(request: Request, context: RouteContext): Promise<Response
         return endedOn(request, sessionId, answer);
       }
     }
+    // `C-19`. An administrator editing their own account through `updateUser` changes the
+    // same subject `PATCH /me` does — the names, and so the label and the initials; the roles,
+    // which raise the epoch and end the credential (`getMe` then answers `401` and the
+    // session closes here, exactly as the next request would close it). Whether the edit was
+    // the session's own is asked of `getMe`, so editing somebody else leaves the row alone.
+    // A `getMe` that cannot say who this session is closes it, for `PATCH /me`'s reason.
+    const editedUser = userChangeTarget(request, segments);
+    if (editedUser !== null && answer.status === 200) {
+      const self = await readWhoThisIs(request, upstream, held);
+      if (self === null || self.userUid === null) return endedOn(request, sessionId, answer);
+      const own = self.userUid.toLowerCase() === editedUser.toLowerCase();
+      if (own && !refreshSubject(sessionId, self.account)) return endedOn(request, sessionId, answer);
+    }
     return answer;
   }
 
@@ -1113,6 +1241,19 @@ function sameSegments(segments: readonly string[], expected: readonly string[]):
 /** `PATCH /me` — `updateMyProfile`, after which the row's subject is read again. */
 function isProfileChange(request: Request, segments: readonly string[]): boolean {
   return request.method === 'PATCH' && sameSegments(segments, ME_SEGMENTS);
+}
+
+/** `USERS_SEGMENT` is `updateUser`'s first path segment; its second is the account's `user_uid`. */
+const USERS_SEGMENT = 'users';
+
+/**
+ * `PATCH /users/{user_uid}` — `updateUser` — answers the `user_uid` it edits; anything else `null`.
+ * The caller asks `getMe` whether that is the session's own account (`C-19`).
+ */
+function userChangeTarget(request: Request, segments: readonly string[]): string | null {
+  if (request.method !== 'PATCH' || segments.length !== 2 || segments[0] !== USERS_SEGMENT) return null;
+  const uid = segments[1];
+  return uid === undefined || uid.length === 0 ? null : uid;
 }
 
 /**

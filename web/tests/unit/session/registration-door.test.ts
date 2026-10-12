@@ -153,6 +153,8 @@ describe('an application is forwarded once, and only a redirect comes back', () 
     const application = seen.find((call) => call.path === '/registrations');
     expect(exchange).toBeDefined();
     expect(application?.authorization).toBe(exchange?.authorization);
+    // `C-17`: and that is no `Authorization` at all -- the signing key is not a credential.
+    expect(application?.authorization).toBeNull();
   });
 
   it('leaves out a patronymic left blank, rather than sending an empty one', async () => {
@@ -204,9 +206,9 @@ describe('what this door refuses before anything is sent', () => {
     expect(seen).toEqual([]);
   });
 
+  // `W53-CLOSE` `C-17`: the signing key is no longer read by this door, so only a missing
+  // upstream is an unconfigured deployment here.
   it('answers an unconfigured deployment as upstream and sends nothing', async () => {
-    delete process.env.AUDITMANAGER_API_TOKEN;
-    expect(refusalOf(await apply())).toBe('upstream');
     delete process.env.AUDITMANAGER_API_UPSTREAM;
     expect(refusalOf(await apply())).toBe('upstream');
     expect(seen).toEqual([]);

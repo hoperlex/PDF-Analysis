@@ -75,6 +75,11 @@ def application_body(config: str) -> list[str]:
     Everything from the first directive that is neither `listen`, `http2`, `server_name`
     nor `ssl_*` down to the closing brace -- i.e. the part that is about the application
     rather than about the transport.
+
+    `Strict-Transport-Security` is transport too (`W53-CLOSE` `C-18`): it is a promise only
+    a TLS answer may make, so it is in the TLS block alone and is set aside here, by its
+    exact header name, rather than allowed to look like drift. Every other `add_header` --
+    the four security headers both blocks send -- stays in the body and must match.
     """
     lines = directives(config)
     try:
@@ -86,7 +91,13 @@ def application_body(config: str) -> list[str]:
     except StopIteration:  # pragma: no cover - a config with no server block
         pytest.fail("no `server {` block in this configuration")
     body = lines[start + 1 : -1] if lines[-1] == "}" else lines[start + 1 :]
-    transport = ("listen ", "http2 ", "server_name ", "ssl_")
+    transport = (
+        "listen ",
+        "http2 ",
+        "server_name ",
+        "ssl_",
+        "add_header Strict-Transport-Security ",
+    )
     return [line for line in body if not line.startswith(transport)]
 
 
@@ -161,6 +172,26 @@ def test_the_two_server_bodies_do_not_drift() -> None:
 def test_the_drift_check_can_fail() -> None:
     """The mutation this guard exists for, put in front of the same function."""
     mutated = TLS_BLOCK.read_text().replace("proxy_read_timeout 300s;", "proxy_read_timeout 30s;")
+    assert mutated != TLS_BLOCK.read_text()
+    assert application_body(PLAIN.read_text()) != application_body(mutated)
+
+
+def test_hsts_is_sent_by_the_tls_block_and_never_by_the_plain_one() -> None:
+    """`C-18`. HSTS on a plain-HTTP answer is ignored by a browser and is a promise that
+    listener cannot keep, so it is the TLS block's alone -- and the drift check above sets
+    aside exactly that line, so this is what holds it to the right file."""
+    hsts = 'add_header Strict-Transport-Security "max-age=31536000" always;'
+    assert hsts in directives(TLS_BLOCK.read_text())
+    assert not any(
+        line.startswith("add_header Strict-Transport-Security") for line in directives(PLAIN.read_text())
+    )
+
+
+def test_the_drift_check_still_sees_a_security_header_dropped_from_one_block() -> None:
+    """Setting HSTS aside must not have made the other `add_header` lines invisible to it."""
+    mutated = TLS_BLOCK.read_text().replace(
+        '    add_header Referrer-Policy "same-origin" always;\n', ""
+    )
     assert mutated != TLS_BLOCK.read_text()
     assert application_body(PLAIN.read_text()) != application_body(mutated)
 

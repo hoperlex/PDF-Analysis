@@ -4,7 +4,8 @@
  *
  * It runs on the Next **server**, called by `src/app/bff/v1/[...path]/route.ts`. The
  * browser calls the Next server at `/bff/v1/...`; this forwards to the API with the
- * deployment's bearer credential and returns the upstream answer unchanged. The token is
+ * credential the caller names — a session's, or none for an operation the contract leaves
+ * open — and returns the upstream answer unchanged. The token is
  * a parameter, never a module-scope read, so this file holds no secret and is inert if it
  * is ever imported somewhere it should not be.
  *
@@ -21,8 +22,9 @@
  * `authentication_required` envelope rather than as something this file invented.
  *
  * **Headers are allowlists in both directions, not denylists.** Inbound, an `Authorization`
- * the browser supplies is *dropped* and then the deployment's is set — never merged — so a
- * caller can neither substitute a credential of its own nor strip the real one. Outbound,
+ * the browser supplies is *dropped* and then the caller's chosen one is set — never merged — so
+ * a browser can neither substitute a credential of its own nor strip the real one; a `null`
+ * credential sends no header at all. Outbound,
  * only the three headers PC-01 reads survive, so no upstream header is republished by
  * accident.
  *
@@ -71,8 +73,14 @@ const METHODS_WITH_BODY: ReadonlySet<string> = new Set(['POST', 'PUT', 'PATCH', 
 export interface ForwardTarget {
   /** Absolute origin and optional base path, no trailing slash. */
   readonly upstream: string;
-  /** The deployment's bearer credential. Presented, never logged, never returned. */
-  readonly token: string;
+  /**
+   * The bearer credential to present — a session's, never the deployment's signing key — or
+   * `null` for one of the contract's operations with an empty security requirement
+   * (`issueToken`, `submitRegistration`, `readRegistrationStatus`), which is then sent with
+   * **no** `Authorization` header at all (`W53-CLOSE` `C-17`). Presented, never logged,
+   * never returned.
+   */
+  readonly token: string | null;
 }
 
 export interface ForwardOptions {
@@ -152,15 +160,17 @@ export function envelopeResponse(status: number, envelope: ErrorEnvelope): Respo
   });
 }
 
-function selectRequestHeaders(source: Headers, token: string): Headers {
+function selectRequestHeaders(source: Headers, token: string | null): Headers {
   const headers = new Headers();
   for (const name of FORWARDED_REQUEST_HEADERS) {
     const value = source.get(name);
     if (value === null) continue;
     headers.set(name, value);
   }
-  // Set last and unconditionally: the deployment's credential is the only one that goes.
-  headers.set('authorization', `Bearer ${token}`);
+  // Set last: the caller's chosen credential is the only one that goes, and with `null` none
+  // does. `authorization` is not in the inbound allowlist, so a browser's own header is never
+  // carried in either case.
+  if (token !== null) headers.set('authorization', `Bearer ${token}`);
   return headers;
 }
 
@@ -180,7 +190,7 @@ function resolveFetch(options: ForwardOptions | undefined): FetchLike {
 }
 
 /**
- * Forward one request to the API with the deployment's credential.
+ * Forward one request to the API with the caller's chosen credential, or with none.
  *
  * Never throws for a transport failure: the browser gets an `ErrorEnvelope` either way,
  * because a route handler that threw would hand Next's HTML error page to a client whose
