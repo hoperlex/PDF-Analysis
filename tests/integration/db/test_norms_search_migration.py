@@ -148,11 +148,19 @@ def test_a_fresh_upgrade_creates_the_current_snapshot_and_the_search_columns(
         assert _head(connection) == HEAD
         for table in ("norm_current_snapshot", "norm_current_snapshot_event"):
             assert connection.execute(text("SELECT to_regclass(:t)"), {"t": f"public.{table}"}).scalar_one()
+        # Tables only: each GIN index over a generated column has a `pg_attribute` row of the
+        # same name (with `attgenerated = ''`), which is asserted separately below.
         generated = dict(connection.execute(text(
-            "SELECT attrelid::regclass::text || '.' || attname, attgenerated FROM pg_attribute "
-            "WHERE attname IN ('designation_tokens', 'text_tsv') AND NOT attisdropped"
+            "SELECT a.attrelid::regclass::text || '.' || a.attname, a.attgenerated "
+            "FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid "
+            "WHERE c.relkind = 'r' AND a.attname IN ('designation_tokens', 'text_tsv') "
+            "AND NOT a.attisdropped"
         )).all())
         assert generated == {"norm_document.designation_tokens": "s", "norm_paragraph.text_tsv": "s"}
+        tokens_index = connection.execute(text(
+            "SELECT pg_get_indexdef('ix_norm_document_designation_tokens'::regclass)"
+        )).scalar_one()
+        assert "ON public.norm_document USING gin (designation_tokens)" in tokens_index, tokens_index
         volatility = connection.execute(text(
             "SELECT provolatile FROM pg_proc WHERE proname = 'norm_designation_tokens'"
         )).scalar_one()
@@ -285,12 +293,17 @@ def test_the_current_snapshot_changes_only_with_its_own_history_event(migrated_e
         # The control: the first designation, from nothing.
         designated = _event(connection, to=first, before=None)
         connection.execute(text(insert), {"s": first, "e": designated})
-        # One row only.
+        # An INSERT is a first designation (`from` NULL) to the guard, which fires before any
+        # constraint: a second INSERT carrying the history of a change is refused by it.
         _refused(connection, insert, {"s": second, "e": _event(connection, to=second, before=first)},
+                 sqlstate="AM003")
+        # One row only: with a history row the guard accepts for an INSERT, the singleton key
+        # and its CHECK are what refuse.
+        _refused(connection, insert, {"s": second, "e": _event(connection, to=second, before=None)},
                  sqlstate="23505")
         _refused(connection, "INSERT INTO norm_current_snapshot (singleton, norms_snapshot_id, "
                  "event_id) VALUES (false, :s, :e)",
-                 {"s": second, "e": _event(connection, to=second, before=first)}, sqlstate="23514")
+                 {"s": second, "e": _event(connection, to=second, before=None)}, sqlstate="23514")
         update = "UPDATE norm_current_snapshot SET norms_snapshot_id = :s, event_id = :e"
         # Reusing the designation's own event, or naming one from the wrong predecessor.
         _refused(connection, update, {"s": second, "e": designated}, sqlstate="AM003")

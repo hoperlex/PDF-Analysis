@@ -455,9 +455,16 @@ _FORCE_THE_INDEX = (
 
 
 def test_d124_a_second_snapshot_no_longer_shrinks_nearest(migrated_engine: Engine) -> None:
-    """The near snapshot fills the default 40-candidate scan; the far one is filtered out of it."""
+    """The near snapshot fills the default 40-candidate scan; the far one is filtered out of it.
+
+    Each far vector shares its one non-query dimension with one near vector, so it is strictly
+    closer to that vector than to any other and survives in its HNSW neighbour list. With
+    disjoint dimensions (`W55A-FIX-DB`) every far vector was exactly as far from every near
+    one, pgvector's neighbour heuristic pruned all of them, and the graph never reached the far
+    snapshot at all -- even unfiltered, with ``ef_search = 1000`` -- so no scan setting could.
+    """
     _seed_snapshot_with_vectors(migrated_engine, SNAPSHOT_ID, CONTENT_KEY, 0, 150, lambda i: _near(i + 1, 0.01))
-    _seed_snapshot_with_vectors(migrated_engine, OTHER_SNAPSHOT_ID, OTHER_CONTENT_KEY, 1, 30, lambda i: _far(i + 500))
+    _seed_snapshot_with_vectors(migrated_engine, OTHER_SNAPSHOT_ID, OTHER_CONTENT_KEY, 1, 30, lambda i: _far(i + 1))
     from auditmanager.norms import embedding_repository as module
 
     literal = vectors.pgvector_literal(vectors.pack(_unit_vector(0)))

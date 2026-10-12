@@ -57,14 +57,16 @@ def _credential(label: str, roles: frozenset[str]) -> str:
     from auditmanager.access.accounts import AccountRepository
     from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
     from auditmanager.shared.db.engine import create_database_engine
-    from auditmanager.shared.identity.ids import UserUid
 
     record = provisioned_record(label)
+    # `app_user_role.granted_by` references `app_user`: the grantor is a real account of this
+    # suite, and never the subject itself (removing one's own role is refused).
+    actor = provisioned_record("norms-roles-grantor")
     engine = create_database_engine(DatabaseSettings(url=parse_database_url(database_url())))
     try:
         with Session(engine) as session:
             AccountRepository().set_roles(
-                session, actor_uid=str(UserUid.new()), user_uid=str(record.user_uid),
+                session, actor_uid=str(actor.user_uid), user_uid=str(record.user_uid),
                 roles=roles,
             )
             session.commit()

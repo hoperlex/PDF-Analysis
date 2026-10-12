@@ -31,35 +31,29 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
-#: **Pending reseal for ``0020_norms_search`` (`W55A-SEAL-01`), on top of the 0018/0019 one
-#: below.** No database ran in this lane either (R-102, R-111: W54's and W55a's DB-backed checks
-#: run once together, D-157), so the test stays red until the integrator reseals from the
-#: printed inventory. The 0020 delta, reviewed against the migration source: columns +10
-#: (norm_current_snapshot_event 5, norm_current_snapshot 3, norm_document.designation_tokens,
-#: norm_paragraph.text_tsv) -> 419; relations +2 -> 50; constraints +15 (event: primary key, two
-#: foreign keys to norms_snapshot, five CHECKs -- id, from, to and actor formats, from <> to;
-#: current: primary key, two foreign keys, UNIQUE event_id, three CHECKs -- singleton, snapshot
-#: and event formats) -> 449; indexes +8 (two primary keys, uq_norm_current_snapshot_event,
-#: ix_norm_current_snapshot_event_changed and _to, the designation GIN, the partial text_tsv
-#: GIN, the partial clause index) -> 121; triggers +2 (trg_norm_current_snapshot_event_immutable,
-#: trg_norm_current_snapshot_guard) -> 42; functions +2 (am_guard_norm_current_snapshot,
-#: norm_designation_tokens) -> 15; views, extensions, sequences, policies and state topology
-#: unchanged. The figures after each arrow are the 0019 figures below plus this delta.
-#:
-#: **Pending reseal for ``0019_execution_workers`` (`W54-SEAL-01`).** The lane had no
-#: database (owner ruling R-102: migrations run only in the owner's heavy-step window), so the
-#: digests below are still 0017's and this test is expected red until the integrator runs it
-#: in the window and reseals from the printed inventory. The delta reviewed against the
-#: migration source, family by family: columns +52 (0018: analysis_artifact_publication 1,
-#: norm_custody_admission 17, norm_custody_binding 9, norm_repair_call 16, norm_paragraph 1,
-#: norms_snapshot 1; 0019: worker 6, lease 1) -> 409; relations +4 -> 48; constraints +49
-#: (0018 +42: publication +1 with ck_analysis_artifact_state redefined, admission 14, binding
-#: 9, repair call 16, norm_paragraph 1, norms_snapshot 1 with ck_norms_snapshot_raw_key
-#: redefined; 0019 +7: worker 5, lease 2) -> 434; indexes +16 -> 113; triggers +5 -> 40
-#: (both effect-table state guards redefined as INSERT OR UPDATE, trg_lease_frozen_guard
-#: redefined with worker_id); functions +3 -> 13 (am_guard_durable_effect_transition
-#: redefined); views, extensions, sequences, policies and state topology unchanged. Counts
-#: assume a PostgreSQL that records no NOT NULL rows in pg_constraint.
+#: Resealed by `W55A-FIX-DB` for ``0018_norm_custody``, ``0019_execution_workers`` and
+#: ``0020_norms_search`` together, from a fresh upgrade on PostgreSQL 17 + pgvector 0.8.6. The
+#: delta was measured, not only predicted: two fresh databases, one upgraded to
+#: ``0017_execution_queue`` (whose inventory equalled the previous seal exactly) and one to
+#: head, had every family's rows diffed. Each added or removed row is one of these:
+#: columns +62 (0018: analysis_artifact_publication.abandoned_at, norm_custody_admission 17,
+#: norm_custody_binding 9, norm_repair_call 16, norm_paragraph.text_reliability,
+#: norms_snapshot.unreliable_count; 0019: worker 6, lease.worker_id; 0020:
+#: norm_current_snapshot_event 5, norm_current_snapshot 3, the generated
+#: norm_document.designation_tokens and norm_paragraph.text_tsv) -> 419; relations +6 (three
+#: 0018 tables, worker, the two 0020 tables) -> 50; constraints +66 -2 -> 449 (0018: admission
+#: 14, binding 9, repair call 16, ck_norm_paragraph_text_reliability,
+#: ck_norms_snapshot_unreliable_count, ck_analysis_artifact_abandoned_shape, and two
+#: redefinitions -- ck_analysis_artifact_state gains 'abandoned', ck_norms_snapshot_raw_key
+#: becomes "(repair_count = 0 AND unreliable_count = 0) = (base key = content key)"; 0019:
+#: worker 5, lease's worker_id format CHECK and foreign key; 0020: event 8, current 7);
+#: indexes +24 (0018 13, 0019 3, 0020 8) -> 121; triggers +10 -3 -> 42 (both effect-table
+#: state guards redefined BEFORE INSERT OR UPDATE (D-148), trg_lease_frozen_guard redefined
+#: to freeze worker_id, four custody/repair-call triggers, trg_worker_frozen_guard, and the
+#: two 0020 triggers); functions +6 -1 -> 15 (am_guard_durable_effect_transition gains its
+#: INSERT arm; three custody/repair-call guards; am_guard_norm_current_snapshot and
+#: norm_designation_tokens). Views, extensions, sequences, policies and the state topology
+#: are byte-identical. No row outside those three migrations changed.
 #: Resealed by `W53-SEAL-01` for ``0017_execution_queue`` after a fresh upgrade.
 #: The reviewed delta is +9 columns (job 2, lease 2, audit_run 1,
 #: provider_call_effect 1, execution_control 3), +1 relation, +7 constraints
@@ -81,12 +75,12 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (357, "03dba08362d17704acfaeaea45b0fa0b591f6b0c274cf55381215d02d66fdf18"),
-    "relations": (44, "e0d2b812b03bfc607baee6781c1c71e82a5a44e3165089b037d672d052e68ccb"),
-    "constraints": (385, "b711c09f03044c7aeb79cebc16e954c0361339dcc0fef0d1613f6a94c994ede8"),
-    "indexes": (97, "258ec08a249d7599eb6572e6dd2ae9861cae38b5ba2c2bc3294f8dd924da2019"),
-    "triggers": (35, "43ac9738a65a56c1b381cf749e1466008d17771ede0af19138f842e30927b888"),
-    "functions": (10, "e0586941093f1dca97900d4cef6092d5ded71dc0fb03da98e68d825b87ebfcde"),
+    "columns": (419, "3fcfac716b7dacdcafaa1dd1dafeeadcc1ff255dbc16a6af97a48843c17f1e40"),
+    "relations": (50, "92a0ec6d035d72f0bb16e8ae867621a77a235a1c9a379237cf4aef2d28dd52de"),
+    "constraints": (449, "6c361ae584b7588c97f394a543137f0efc639fb8cbb3d1422e3251612d2216d0"),
+    "indexes": (121, "aa69f427e5b85d0d306931e4ecee46535c0a215b34799f58976bf789774a624e"),
+    "triggers": (42, "668355234ed4d73ef79d356f825494dba564afd31a223a5c1ae1d405d354b8bf"),
+    "functions": (15, "7e6b448fa0d19cfaab963346fb9e150f141d68ec9ad6be2271389313770fcad5"),
     "views": (1, "099049415234da3d04583c58a693a68fda934f77e9eaf00b0d12e2542842734d"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

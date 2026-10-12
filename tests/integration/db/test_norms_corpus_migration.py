@@ -115,6 +115,9 @@ def test_the_migration_creates_the_canonical_and_rebuildable_topology(
     assert tables == {
         "norm_chunk",
         "norm_chunk_build",
+        # `0020_norms_search` (W55a): the current snapshot and its history.
+        "norm_current_snapshot",
+        "norm_current_snapshot_event",
         # `0018_norm_custody` (W54): custody and the paid repair journal.
         "norm_custody_admission",
         "norm_custody_binding",
@@ -949,7 +952,11 @@ def test_import_conflicts_are_refused_and_write_nothing(
         before = _table_counts(target)
 
         other_id = str(NormsSnapshotId.new())
+        # `W54-JUDGE-Y` F1: a key's terms must agree with the row's own counts before the
+        # database is consulted, so the other key travels with the count it names.
+        assert "+1r+1u." in rows.snapshot.content_key, rows.snapshot.content_key
         other_key = rows.snapshot.content_key.replace("+1r+1u.", "+1r+2u.")
+        other_unreliable = 2
         changed_text = dataclasses.replace(
             rows,
             paragraphs=(dataclasses.replace(rows.paragraphs[0], text=rows.paragraphs[0].text + " ."),
@@ -966,7 +973,14 @@ def test_import_conflicts_are_refused_and_write_nothing(
         )
 
         def other_snapshot(snapshot_id: str, key: str, *, keep_children: bool):
-            snapshot = dataclasses.replace(rows.snapshot, norms_snapshot_id=snapshot_id, content_key=key)
+            snapshot = dataclasses.replace(
+                rows.snapshot,
+                norms_snapshot_id=snapshot_id,
+                content_key=key,
+                unreliable_count=(
+                    other_unreliable if key == other_key else rows.snapshot.unreliable_count
+                ),
+            )
             if keep_children:
                 return dataclasses.replace(rows, snapshot=snapshot)
             from auditmanager.shared.identity import NormDocumentId
@@ -1030,10 +1044,18 @@ def test_import_conflicts_are_refused_and_write_nothing(
 def test_an_import_the_database_refuses_midway_leaves_nothing_behind(
     migrated_engine: Engine, tmp_path: Path
 ) -> None:
-    """`ck_norms_snapshot_raw_key` refuses after the checks pass; the SAVEPOINT takes it all back."""
+    """`ck_norm_paragraph_char_length` refuses after the snapshot and document rows are in;
+    the SAVEPOINT takes it all back.
+
+    Until `W54-FIX-PY` this case reached ``ck_norms_snapshot_raw_key``. Python's key-term
+    check (`W54-JUDGE-Y` F1) now states that equivalence before any write, so the raw-key
+    contradiction is asserted to be refused there, and the midway refusal comes from a
+    paragraph CHECK that no Python check states: a ``char_length`` one longer than its text.
+    """
     import dataclasses
 
     from auditmanager.norms.loader import import_snapshot
+    from auditmanager.norms.repository import SnapshotRowsInvalid
     from auditmanager.shared.identity import (
         NormDocumentId,
         NormParagraphId,
@@ -1042,32 +1064,63 @@ def test_an_import_the_database_refuses_midway_leaves_nothing_behind(
 
     corpus = _write_three_block_corpus(tmp_path / "corpus")
     loaded, rows = _exported(migrated_engine, corpus)
-    documents = {d.norm_document_id: str(NormDocumentId.new()) for d in rows.documents}
-    contradictory = dataclasses.replace(
-        rows,
-        snapshot=dataclasses.replace(
+    assert rows.snapshot.repair_count == 0 and rows.snapshot.unreliable_count == 0
+    assert rows.snapshot.content_key == rows.snapshot.base_content_key
+
+    def fresh(snapshot, paragraphs=None):
+        documents = {d.norm_document_id: str(NormDocumentId.new()) for d in rows.documents}
+        return dataclasses.replace(
+            rows,
+            snapshot=snapshot,
+            documents=tuple(
+                dataclasses.replace(d, norm_document_id=documents[d.norm_document_id])
+                for d in rows.documents
+            ),
+            paragraphs=tuple(
+                dataclasses.replace(
+                    p,
+                    norm_document_id=documents[p.norm_document_id],
+                    norm_paragraph_id=str(NormParagraphId.new()),
+                )
+                for p in (paragraphs or rows.paragraphs)
+            ),
+        )
+
+    before = _table_counts(migrated_engine)
+
+    # The pre-F1 case: a moved key with nothing unreliable. Refused before any write.
+    contradictory = fresh(
+        dataclasses.replace(
             rows.snapshot,
             norms_snapshot_id=str(NormsSnapshotId.new()),
             content_key="+0r+1u.".join(rows.snapshot.content_key.rsplit(".", 1)),
-            unreliable_count=0,  # a moved key with nothing unreliable: refused by the CHECK
-        ),
-        documents=tuple(
-            dataclasses.replace(d, norm_document_id=documents[d.norm_document_id])
-            for d in rows.documents
-        ),
-        paragraphs=tuple(
-            dataclasses.replace(
-                p,
-                norm_document_id=documents[p.norm_document_id],
-                norm_paragraph_id=str(NormParagraphId.new()),
-            )
-            for p in rows.paragraphs
-        ),
+            unreliable_count=0,
+        )
     )
-    before = _table_counts(migrated_engine)
     with Session(migrated_engine) as session:
         with session.begin():
-            with pytest.raises(IntegrityError, match="ck_norms_snapshot_raw_key"):
+            with pytest.raises(SnapshotRowsInvalid, match="key_terms"):
                 import_snapshot(session, contradictory, chunking_profiles=["characters-v2:1200"])
+    assert _table_counts(migrated_engine) == before
+
+    # A key every Python check accepts (one repair, so a moved key is due), over rows whose
+    # last paragraph claims one character more than it has.
+    last = rows.paragraphs[-1]
+    refused_midway = fresh(
+        dataclasses.replace(
+            rows.snapshot,
+            norms_snapshot_id=str(NormsSnapshotId.new()),
+            content_key="+1r.".join(rows.snapshot.content_key.rsplit(".", 1)),
+            repair_count=1,
+        ),
+        paragraphs=(
+            *rows.paragraphs[:-1],
+            dataclasses.replace(last, char_length=len(last.text) + 1),
+        ),
+    )
+    with Session(migrated_engine) as session:
+        with session.begin():
+            with pytest.raises(IntegrityError, match="ck_norm_paragraph_char_length"):
+                import_snapshot(session, refused_midway, chunking_profiles=["characters-v2:1200"])
     assert loaded.created
     assert _table_counts(migrated_engine) == before
