@@ -90,6 +90,12 @@ no approved product domain, and every later stage that publishes an artifact
 (``contracts/analysis/v1/stage-registry.json``) brings its own role name. A
 closed enum here would make each of those a rewrite of this package instead of
 an addition to its callers.
+
+Since owner ruling ``R-76`` the role recorded on a stored object is the *first
+publisher's* role and is historical metadata, not part of the blob's identity or of
+its reuse check: equal bytes published again under another role reuse the same
+``blob_id``. A consumer reads the role that matters to it from its own binding -- a
+manifest entry, an analysis publication, a norm-corpus custody binding.
 """
 
 _ROLE_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[a-z][a-z0-9_]{2,63}$")

@@ -29,6 +29,19 @@ publication. Those two checkpoints make every interrupted state recoverable:
 ``auditmanager.ingest.reconciliation`` can start from the declared ``blob_id`` and ask
 the store about that exact canonical identity without the port needing a ``list``
 operation it deliberately does not have.
+
+Concurrent writers (`D-146`)
+----------------------------
+``blob_id`` is content-derived, so two writers of equal bytes -- two runs of one version,
+an upload and a custody dispatch, two custody admissions of one file -- address the same
+row. ``record_declared`` used to be a SELECT followed by a plain INSERT: the second writer's
+SELECT missed the first writer's uncommitted row and its INSERT then failed on the primary
+key. Every write below now takes a **per-blob transaction advisory lock** first
+(:meth:`BlobMetadataRepository.lock`), so writers of one ``blob_id`` serialise until the
+holder commits, and the INSERT is ``ON CONFLICT (blob_id) DO NOTHING`` followed by a re-read
+and a content comparison, so a writer that does not take the lock still cannot collide. The
+lock is reentrant inside one transaction and is released at its end; it is never held
+across an object-store call by this module.
 """
 
 from __future__ import annotations
@@ -64,7 +77,13 @@ _COLUMNS = "blob_id, state, sha256, size_bytes, media_type, created_at, updated_
 _SELECT = text(f"SELECT {_COLUMNS} FROM blob WHERE blob_id = :blob_id")
 _INSERT = text(
     "INSERT INTO blob (blob_id, state, sha256, size_bytes, media_type) "
-    "VALUES (:blob_id, :state, :sha256, :size_bytes, :media_type)"
+    "VALUES (:blob_id, :state, :sha256, :size_bytes, :media_type) "
+    "ON CONFLICT (blob_id) DO NOTHING"
+)
+#: `D-146`: one advisory key per ``blob_id``, namespaced so it cannot meet another
+#: context's advisory keys by accident. Transaction-scoped: released at commit/rollback.
+_LOCK = text(
+    "SELECT pg_advisory_xact_lock(hashtextextended('auditmanager.blob|' || :blob_id, 0))"
 )
 _ADVANCE = text(
     "UPDATE blob SET state = :to_state, updated_at = now() "
@@ -159,6 +178,15 @@ class BlobMetadataRepository:
 
     # -- writes --------------------------------------------------------------
 
+    def lock(self, session: Session, blob_id: BlobId) -> None:
+        """Serialise every metadata writer of one ``blob_id`` until this transaction ends.
+
+        `D-146`. Taken by every write in this class, and public so that another
+        context's writer of the same content (the norm-corpus custody dispatcher) can
+        hold the same lock around its own statements. Reentrant within a transaction.
+        """
+        session.execute(_LOCK, {"blob_id": str(blob_id)})
+
     def record_declared(
         self, session: Session, declaration: BlobDeclaration
     ) -> BlobMetadataRecord:
@@ -169,9 +197,13 @@ class BlobMetadataRepository:
         a process killed during staging or verification without listing the bucket.
         """
         topology = self.topology(session)
+        self.lock(session, declaration.blob_id)
         existing = self.get(session, declaration.blob_id)
         if existing is None:
             assert_initial(topology, BLOB_MACHINE, BlobState.TEMPORARY.value)
+            # `D-146`: idempotent even for a writer that did not take the lock. A row
+            # another transaction committed first is re-read and compared below rather
+            # than colliding on the primary key.
             session.execute(
                 _INSERT,
                 {
@@ -182,7 +214,7 @@ class BlobMetadataRepository:
                     "media_type": declaration.media_type,
                 },
             )
-            return self.require(session, declaration.blob_id)
+            existing = self.require(session, declaration.blob_id)
 
         self._assert_same_content(existing, declaration)
         return existing
@@ -215,6 +247,7 @@ class BlobMetadataRepository:
 
     def mark_available(self, session: Session, blob_id: BlobId) -> BlobMetadataRecord:
         """``verifying -> available``. The bytes are canonical and readable."""
+        self.lock(session, blob_id)
         current = self.require(session, blob_id)
         if current.state is BlobState.AVAILABLE:
             return current
@@ -222,6 +255,7 @@ class BlobMetadataRepository:
 
     def mark_rejected(self, session: Session, blob_id: BlobId) -> BlobMetadataRecord:
         """``temporary|verifying -> rejected``. The bytes never became canonical."""
+        self.lock(session, blob_id)
         current = self.require(session, blob_id)
         if current.state is BlobState.REJECTED:
             return current

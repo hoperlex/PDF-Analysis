@@ -1,0 +1,89 @@
+"""Norm-corpus custody: two-phase admission and binding of source PDFs and crops (`R-76`).
+
+Consumers outside ``auditmanager.norms`` import this surface through
+``auditmanager.norms.public``. The operator verbs ``admit``, ``dispatch --until-idle``,
+``reconcile``, ``report`` and ``requeue`` are :func:`admit`, :class:`CustodyDispatcher`,
+:class:`CustodyReconciler`, :func:`report` and :func:`requeue`; the bundle importer
+(`W54-BUNDLE`) owns the command line that runs them, and ``publish_bindings`` runs inside
+its snapshot transaction.
+"""
+
+from .errors import D143_MESSAGE, D143_REASON, CustodyRefused
+from .model import (
+    MAX_ATTEMPTS,
+    RETRY_DELAYS_SECONDS,
+    Admission,
+    AdmissionRequest,
+    AdmissionState,
+    AdmitOutcome,
+    Binding,
+    BindingDigestEntry,
+    BindingPublication,
+    CustodyIncident,
+    CustodyManifest,
+    CustodyReconciliation,
+    CustodyReport,
+    CustodySlot,
+    CustodySource,
+    DeclaredContent,
+    DispatchReport,
+    DispatchResult,
+    DispatchStep,
+    IncidentKind,
+    ManifestIndex,
+    RejectedBlob,
+    binding_digest,
+)
+from .roles import NORM_SOURCE, ROLE_SHAPES, RoleShape
+from .service import (
+    ADMIT_COMMAND_TYPE,
+    Checkpoint,
+    CustodyDispatcher,
+    CustodyReconciler,
+    admit,
+    blob_id_for,
+    publish_bindings,
+    report,
+    requeue,
+)
+
+__all__ = [
+    "ADMIT_COMMAND_TYPE",
+    "D143_MESSAGE",
+    "D143_REASON",
+    "MAX_ATTEMPTS",
+    "NORM_SOURCE",
+    "RETRY_DELAYS_SECONDS",
+    "ROLE_SHAPES",
+    "Admission",
+    "AdmissionRequest",
+    "AdmissionState",
+    "AdmitOutcome",
+    "Binding",
+    "BindingDigestEntry",
+    "BindingPublication",
+    "Checkpoint",
+    "CustodyDispatcher",
+    "CustodyIncident",
+    "CustodyManifest",
+    "CustodyReconciler",
+    "CustodyReconciliation",
+    "CustodyRefused",
+    "CustodyReport",
+    "CustodySlot",
+    "CustodySource",
+    "DeclaredContent",
+    "DispatchReport",
+    "DispatchResult",
+    "DispatchStep",
+    "IncidentKind",
+    "ManifestIndex",
+    "RejectedBlob",
+    "RoleShape",
+    "admit",
+    "binding_digest",
+    "blob_id_for",
+    "publish_bindings",
+    "report",
+    "requeue",
+]

@@ -19,12 +19,19 @@ host is not assumed to have python, jq, or anything but docker.
 (`S3BlobStore.publish`, `MetadataDirective="REPLACE"`) writes four user-metadata keys --
 `blob-id`, `blob-role`, `content-sha256`, `content-size` -- and the `Content-Type` header.
 This file used to carry `content-sha256` and `Content-Type` only, and that was chosen by
-reading `read()`: those are the two a *read* validates. `blob-role` and `Content-Type` are
-the two a *write* validates, in `publish`'s idempotency check, and `blob-role` was not
+reading `read()`: those are the two a *read* validates. `blob-role` and `Content-Type` were
+the two a *write* validated, in `publish`'s idempotency check, and `blob-role` was not
 being carried. A restored object therefore read back byte-identical and answered
 `409 conflict` -- `BlobAttributeConflictError` -- to every later upload of the same bytes,
 because `_record_from_head` resolved its role to `""`. `D-17`, measured by `W15-RUN`
 against a live stack twice.
+
+Since owner ruling `R-76` (`W54-CUSTODY-01`) `publish` no longer compares the role: a role
+belongs to the binding that uses the bytes, so a project document and a normative-corpus
+source can share one object, and `blob-role` is the first publisher's recorded history. It
+is still carried, because it is still history. The write path now leans harder on the other
+four: an existing object with no `content-sha256`, another `content-size` or another
+`Content-Type` is refused rather than reused.
 
 `content-size` was lost the same way, and its loss is quieter rather than smaller:
 `_record_from_head` only raises `SizeMismatchError` when `content-size` is present, so a

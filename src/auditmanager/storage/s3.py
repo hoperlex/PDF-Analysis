@@ -239,23 +239,58 @@ class S3BlobStore:
     def publish(self, verified: VerifiedBlob) -> PublishedBlob:
         """Copy verified bytes to their canonical key, then drop the temporary.
 
-        Idempotent by ``(sha256, size)``. If the canonical object already
-        exists, its recorded role and media type must agree with this
-        publication -- available bytes are immutable, so a disagreement is a
-        typed conflict rather than an overwrite.
+        Idempotent by ``(sha256, size)``. If the canonical object already exists it is
+        reused only after its recorded size, SHA-256 and media type are checked
+        against this publication -- available bytes are immutable, so a disagreement
+        is refused rather than overwritten:
+
+        * no recorded SHA-256 -- this adapter cannot vouch for the object, so it is
+          refused (:class:`BlobMetadataInvalidError`), never reused;
+        * a recorded SHA-256 or size that differs -- :class:`BlobIntegrityError`;
+        * a different media type -- :class:`BlobAttributeConflictError`.
+
+        **The role is not compared** (owner ruling `R-76`). A role belongs to the
+        binding that uses the bytes, not to the bytes: a project document and a
+        normative-corpus source may be the same file. The first publisher's
+        ``blob-role`` stays on the object as historical metadata and is returned
+        unchanged; a consumer reads its own role from its own binding.
         """
         canonical = layout.canonical_key(verified.blob_id)
         existing = self._head(canonical, missing=None)
         if existing is not None:
-            record = self._record_from_head(verified.blob_id, existing)
-            if record.role != verified.role or record.media_type != verified.media_type:
-                self.discard_temporary(_as_temporary(verified))
+            temporary = _as_temporary(verified)
+            try:
+                record = self._record_from_head(verified.blob_id, existing)
+            except StorageError:
+                self.discard_temporary(temporary)
+                raise
+            if not record.sha256:
+                self.discard_temporary(temporary)
+                raise BlobMetadataInvalidError(
+                    field=_META_SHA256,
+                    constraint="recorded on every object this adapter publishes",
+                )
+            if record.sha256 != verified.sha256:
+                self.discard_temporary(temporary)
+                raise ChecksumMismatchError(
+                    expected_sha256=verified.sha256,
+                    actual_sha256=record.sha256,
+                    role=str(verified.role),
+                )
+            if record.size != verified.size:
+                self.discard_temporary(temporary)
+                raise SizeMismatchError(
+                    expected_size=verified.size,
+                    actual_size=record.size,
+                    role=str(verified.role),
+                )
+            if record.media_type != verified.media_type:
+                self.discard_temporary(temporary)
                 raise BlobAttributeConflictError(
                     blob_id=str(verified.blob_id),
-                    role=str(record.role),
                     media_type=record.media_type,
                 )
-            self.discard_temporary(_as_temporary(verified))
+            self.discard_temporary(temporary)
             return record
 
         source_key = layout.temporary_key(verified.upload_token)

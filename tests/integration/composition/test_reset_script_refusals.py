@@ -653,8 +653,11 @@ def _staged(tmp_path: Path) -> Path:
 class TestTheSidecarCarriesEveryPublishedAttribute:
     """`D-17`. `publish()` writes `blob-id`, `blob-role`, `content-sha256`, `content-size`
     and `Content-Type`. A dump that records some of them restores an object that READS
-    correctly and answers `409` to the next upload of its own bytes, because `blob-role` is
-    consulted only on the write path. So the guard refuses a row short of any field."""
+    correctly and is refused on the write path: until `R-76` a missing `blob-role` made the
+    next upload of its own bytes answer `409`; since `R-76` the role is history and is not
+    compared, but a missing digest, size or content type still stops the reuse. So the guard
+    refuses a row short of any field -- the role included, because history lost in a
+    restore is not recoverable."""
 
     def test_a_complete_sidecar_lets_the_wipe_proceed(
         self, tmp_path: Path, env_file: Path
