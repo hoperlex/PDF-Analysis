@@ -1,7 +1,8 @@
 # W53C-EDGE-01 — hand-back
 
 Lane `EDGE`, branch `agent/w53c-edge`, base `04de50c` (`W53-CLOSE-PLAN` on `integration/w53-close`).
-Code commit `3860085`; this report is the commit after it. Container-free throughout: no docker,
+Code commit `3860085`; report `0a56cfa`; the C-19 amendment from the integrator review is the
+commit after it (§7). Container-free throughout: no docker,
 nginx, Next server or browser was started, and no process was killed.
 
 ## Per-finding status
@@ -35,11 +36,16 @@ Each finding was re-read at its cited location before any change. All five repro
   `AUDITMANAGER_API_TOKEN` now proceeds. Only a missing upstream counts as `unconfigured`/`upstream`.
   Two existing tests that deleted the token to provoke `unconfigured` were changed to delete only
   the upstream (`bff-session.test.ts`, `registration-door.test.ts`).
-- **C-19.** Whether the edit was the session's own is asked of `getMe` (its `user_uid`) after the
-  `200`. The register stores no uid, so its format is unchanged. If `getMe` cannot give a subject
-  and a uid (it answers `401` because a role change raised the epoch, any other non-200, or a body
-  without `user_uid`), the session is closed. This is the same rule `PATCH /me` already follows.
-  Sign-in itself does not require `user_uid`.
+- **C-19 (amended at review, §7).** After the `200`, `getMe` (its `user_uid`) says whether the
+  edit was the session's own. The register stores no uid, so its format is unchanged. If `getMe`
+  cannot give a subject and a uid, the session is **kept** and the upstream answer is returned
+  unchanged. That covers any non-200 including `401`, a body this tier does not understand, and a
+  body without `user_uid`. A failed read cannot tell the own account from someone else's, so an
+  administrator is not signed out for a transient fault. The session ends here only when `getMe`
+  confirms the own account and `refreshSubject` fails. A self-edit that changed the roles raises
+  the epoch: this answer keeps the session, and the next request meets the `401` and closes it.
+  `PATCH /me` is unchanged and still closes on a failed refresh. Sign-in does not require
+  `user_uid`.
 - **C-18.** `tls-server.conf`'s old "NO HSTS" note was replaced with the reason for the change.
   The header is `max-age=31536000`, with no `includeSubDomains` and no `preload`. Browsers ignore
   HSTS on plain HTTP and on IP literals, so the tunnelled `127.0.0.1` stand is unaffected.
@@ -119,8 +125,8 @@ an empty security requirement no longer receive an `Authorization` header.
 - C-18 HSTS commits any **host name** that serves the TLS block to HTTPS for a year. This is not
   verified against a running nginx (`nginx -t` was not run, container-free). The directives are
   standard `add_header … always`.
-- C-19: if `getMe` fails transiently right after an administrator edits **another** user, the
-  administrator's session is closed. This is the same rule `PATCH /me` already follows.
+- C-19: if `getMe` fails after a **self**-edit, the row keeps its old subject until the next
+  sign-in or the next `401`. That is the accepted cost of the review ruling.
 - Per `AGENTS.md` §8.3, an `infra/**` change normally needs one full gate on the lane. `R-84`
   (this wave) assigns lanes light, container-free checks, so no gate was run. The integrator
   decides whether a proxy smoke check (`nginx -t` with both files) is wanted.
@@ -146,3 +152,30 @@ non-goal, and the BFF no longer reads it.
   code.
 - `git status --porcelain -uall` printed nothing after the commit.
 - No containers, volumes, worktrees, pushes, merges or tags were created.
+
+## 7. Amendment after the integrator review (C-19)
+
+Ruling: on the `updateUser` path, a failed `getMe` (`self === null` / `userUid === null`) returns
+the upstream answer and keeps the session. The session ends only when `getMe` confirms the own
+account and `refreshSubject` fails. `PATCH /me` is unchanged.
+
+- **`route.ts`.** The failed-read branch returns `answer` instead of `endedOn(...)`, and the
+  comments are reworded. Nothing new is logged.
+- **`edge-closure.test.ts`.** Changes to the C-19 tests:
+  - new: "keeps the session when getMe … after editing another account", once each for `503`,
+    `401` and an unreadable body;
+  - the dead-credential self-edit case and the missing-`user_uid` case now expect the session to
+    be **kept**;
+  - the refresh-on-self, leave-others-alone and refused-edit cases are unchanged.
+- **Proof that the new tests fail.** With `route.ts` at `0a56cfa` (the previous rule) and the
+  amended tests, `npx vitest run tests/unit/session/edge-closure.test.ts` gives 5 failed /
+  40 passed; all five failures are the changed cases above.
+- **Checks on the amended tree.** All exit 0:
+  - `git diff --check`;
+  - `npm --prefix web run lint`;
+  - `npm --prefix web run typecheck`;
+  - `cd web && npx vitest run tests/unit/session tests/unit/api tests/unit/qa_w49` → 354 passed;
+  - `npx vitest run tests/unit/session/edge-closure.test.ts tests/unit/session/bff-session.test.ts`
+    → 97 passed, including the unchanged `PATCH /me` close-on-failed-refresh case.
+- **Containment.** The changed files are the same two already listed in §1, plus this report.
+  `git status --porcelain -uall` is clean after the commit.

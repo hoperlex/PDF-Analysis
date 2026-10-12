@@ -601,7 +601,8 @@ async function readTheAccount(
  * session's own account? — and that is asked of the API at the moment it matters, not of a
  * copy taken at sign-in. A body without a string `user_uid` still describes a subject — the
  * sign-in and the `PATCH /me` refresh never needed the identifier and do not start refusing
- * over it — and answers `userUid: null`, which `C-19` treats as "cannot say whose session".
+ * over it — and answers `userUid: null`, which `C-19` treats as "cannot say whose edit": the
+ * session is kept and the row left as it is.
  */
 async function readWhoThisIs(
   request: Request,
@@ -1212,15 +1213,22 @@ async function handle(request: Request, context: RouteContext): Promise<Response
       }
     }
     // `C-19`. An administrator editing their own account through `updateUser` changes the
-    // same subject `PATCH /me` does — the names, and so the label and the initials; the roles,
-    // which raise the epoch and end the credential (`getMe` then answers `401` and the
-    // session closes here, exactly as the next request would close it). Whether the edit was
-    // the session's own is asked of `getMe`, so editing somebody else leaves the row alone.
-    // A `getMe` that cannot say who this session is closes it, for `PATCH /me`'s reason.
+    // same subject `PATCH /me` does — the names, and so the label and the initials. Whether
+    // the edit was the session's own is asked of `getMe`, so editing somebody else leaves the
+    // row alone.
+    //
+    // **Unlike `PATCH /me`, a `getMe` that fails here keeps the session** (integrator ruling at
+    // the `W53C-EDGE-01` review). The register holds no `user_uid`, so a failed read cannot
+    // tell the administrator's own account from somebody else's, and closing on it would
+    // sign an administrator out for a transient fault while editing another account. The
+    // edit's own answer goes back unchanged. A self-edit that changed the roles raised the
+    // epoch, so `getMe` answers `401` here and the session is kept for this one answer; the
+    // next request presents the dead credential, meets `401` and closes it there. The session
+    // ends here only when `getMe` confirms the own account and the row cannot be rewritten.
     const editedUser = userChangeTarget(request, segments);
     if (editedUser !== null && answer.status === 200) {
       const self = await readWhoThisIs(request, upstream, held);
-      if (self === null || self.userUid === null) return endedOn(request, sessionId, answer);
+      if (self === null || self.userUid === null) return answer;
       const own = self.userUid.toLowerCase() === editedUser.toLowerCase();
       if (own && !refreshSubject(sessionId, self.account)) return endedOn(request, sessionId, answer);
     }

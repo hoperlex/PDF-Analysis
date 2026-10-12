@@ -435,17 +435,44 @@ describe('C-19: a self-targeted updateUser refreshes the subject', () => {
     expect(openSessionCount()).toBe(1);
   });
 
-  it('ends the session when the self-edit changed the roles and the credential died', async () => {
+  // Integrator ruling at the `W53C-EDGE-01` review: the register holds no `user_uid`, so a
+  // failed `getMe` cannot tell an edit of the session's own account from somebody else's, and
+  // an administrator is not signed out for a transient fault. `PATCH /me` is unchanged: it
+  // still closes on a failed refresh (`bff-session.test.ts`).
+  it.each([
+    ['answers 503', () => new Response('{}', { status: 503 })],
+    ['answers 401', () => authenticationRequired()],
+    ['answers a body this tier does not understand', () => new Response('not json', { status: 200 })],
+  ])('keeps the session when getMe %s after editing another account', async (_label, failing) => {
+    me = () => accountAnswer({ roles: ['admin'] });
+    const cookie = await signedIn();
+    me = failing;
+    seen = [];
+    const response = await updateUser(cookie, OTHER_UID);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(seen.map((call) => `${call.method} ${call.path}`)).toEqual([
+      `PATCH /users/${OTHER_UID}`,
+      'GET /me',
+    ]);
+    expect(openSessionCount()).toBe(1);
+    expect(credentialOf(idFrom(cookie))).toBe('minted-1');
+    expect(subjectOf(idFrom(cookie))?.displayLabel).toBe('Проверяющая А. Б.');
+  });
+
+  it('keeps the session for this answer when a self-edit killed the credential', async () => {
+    // The roles changed, the epoch rose, `getMe` answers `401`: this answer cannot tell whose
+    // edit it was, so nothing is closed here; the next request meets the `401` and closes it.
     me = () => accountAnswer({ roles: ['admin', 'expert'] });
     const cookie = await signedIn();
     me = () => authenticationRequired();
     const response = await updateUser(cookie, OWN_UID);
     expect(response.status).toBe(200);
-    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
-    expect(openSessionCount()).toBe(0);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(openSessionCount()).toBe(1);
   });
 
-  it('signs in on a getMe without user_uid, and closes when the edit then cannot be placed', async () => {
+  it('signs in on a getMe without user_uid, and keeps the row when the edit cannot be placed', async () => {
     const withoutUid = accountBody({ roles: ['admin'] });
     delete withoutUid.user_uid;
     me = () => new Response(JSON.stringify(withoutUid), { status: 200 });
@@ -453,8 +480,9 @@ describe('C-19: a self-targeted updateUser refreshes the subject', () => {
     expect(openSessionCount()).toBe(1);
     const response = await updateUser(cookie, OWN_UID);
     expect(response.status).toBe(200);
-    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
-    expect(openSessionCount()).toBe(0);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(openSessionCount()).toBe(1);
+    expect(subjectOf(idFrom(cookie))?.displayLabel).toBe('Проверяющая А. Б.');
   });
 
   it('reads nothing again when the edit was refused', async () => {
