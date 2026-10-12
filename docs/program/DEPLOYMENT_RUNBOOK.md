@@ -794,6 +794,13 @@ called and what a refusal means.
    install -d -m 700 -o <account> /srv/auditmanager-bundles
    ```
 
+   `deploy.sh` reads the import lock in this directory and the copy record in the copy
+   directory (§13) before it builds anything, as the account deploy-auto logs into. If that
+   is not the keys' account, it must still be able to **search** both directories: make it
+   the same account, or give both directories a group that account is in and mode `710`
+   (search, no read, no write). Otherwise every deploy refuses with `stand_dir_unsearchable`
+   (`W54-JUDGE-A` F1), because a record or a held lock it cannot see would read as none.
+
 2. Add one line to that account's `authorized_keys`. `restrict` turns off the pty and all
    forwarding, and `from=` names this development host:
 
@@ -822,9 +829,9 @@ the SHA-256 of the bundle's `SHA256SUMS`. The exact grammar is in
 
 | Verb | Called as | What it does |
 |---|---|---|
-| `receive <KEY> <size>` | `infra/deploy/push-bundle.sh --host <user@stand> --identity <key> <bundle dir>` | refuses on size, existing bundle, a running receive or free space **before reading a byte**; then reads exactly `<size>` bytes, lists the tar before extracting it, and keeps the tree only if `SHA256SUMS` matches the name, the files are exactly the listed ones and every file re-hashes. A refusal removes `incoming/<KEY>/` and nothing else |
+| `receive <KEY> <size>` | `infra/deploy/push-bundle.sh --host <user@stand> --identity <key> <bundle dir>` | refuses on size, existing bundle, a running receive, a running copy-key verb (it holds `copy.lock` from here to its end, because it may rewrite the record) or free space **before reading a byte**; then reads exactly `<size>` bytes, lists the tar before extracting it, and keeps the tree only if `SHA256SUMS` matches the name, the files are exactly the listed ones and every file re-hashes. A refusal removes `incoming/<KEY>/` and nothing else |
 | `status` | `ssh -i <key> -o IdentitiesOnly=yes <user@stand> status` | read-only: staging and its free bytes, the import lock, each bundle and its import state with the log tail, and the script's SHA-256 |
-| `import <KEY>` | `ssh … import <KEY>` | starts `python -m auditmanager.norms.bundle import /bundles/<KEY> --copy-record …` **detached** in a one-shot `api` container, under the import lock. Re-run it until `status` shows `import: exited 0`. A second `import`, `report` or `requeue` is refused while it runs |
+| `import <KEY>` | `ssh … import <KEY>` | takes the import lock **first**, then reads the copy record under the copy key's `copy.lock` and turns it into an import record, then starts `python -m auditmanager.norms.bundle import /bundles/<KEY> --copy-record …` **detached** in a one-shot `api` container, under the import lock. Re-run it until `status` shows `import: exited 0`. A second `import`, `report` or `requeue`, and the copy key's `resume`, are refused while it runs; it is refused while `resume` (which holds the same lock) or any other copy-key verb runs |
 | `report <KEY>` | `ssh … report <KEY>` | the module's `report`, run synchronously. Its exit status is passed on, and 0 means a full match. Its output is kept as `logs/<KEY>.report`; when it exits 0 **and** the last `import` of the same bundle exited 0, it then removes `bundles/<KEY>/objects/` (below) |
 | `requeue <KEY>` | `ssh … requeue <KEY>` | the module's `requeue` of that bundle's poisoned admissions. Run `import` again afterwards |
 
@@ -892,7 +899,8 @@ first.
 | `staging-*` | the staging directory is missing or misconfigured. This is the owner's install, step 1 |
 | `size-within-limit`, `staging-has-room` | the bundle is too large, or staging lacks twice its size plus the margin. Nothing was read |
 | `bundle-not-received` | this `<KEY>` is already on the stand. Check `status`. A re-send needs the owner to remove the old tree |
-| `receive-lock-free`, `import-lock-free` | another receive or import is running. Wait and check `status`. A hung importer holding the lock is an owner act |
+| `receive-lock-free`, `import-lock-free` | another receive or import is running, or (`import-lock-free` on `import`) the copy key's `resume`. Wait and check `status`. A hung importer holding the lock is an owner act |
+| `copy-lock-free` | a copy-key verb holds `copy.lock` beside the record (or this account cannot open it), so the record cannot be read and rewritten now. Nothing was read or started. Check the copy key's `status`; run it again once that verb has exited |
 | `tar-*`, `sums-*`, `files-match-sums` | the bytes that arrived are not the bundle that was named. They were removed, inside staging only. Send it again |
 | `bundle-received` | `import`, `report` or `requeue` named a bundle that was never received |
 | `env-file-present`, `compose-file-present` | the deployed checkout is incomplete |
@@ -912,8 +920,9 @@ first.
   read it before an `import` (the guards above), and a `receive` or an `import` under an open
   record makes it an import record, as `W54-PLAN.md` §3.5 says.
 * It does not take part in a deploy. `deploy.sh` refuses while the import lock is held
-  (`stand_import_locked`) and while an open record is an import record (`stand_import_open`);
-  §13 lists every typed word.
+  (`stand_import_locked`), while an open record is an import record (`stand_import_open`),
+  and when it cannot search the staging or the copy directory (`stand_dir_unsearchable`,
+  step 1 above); §13 lists the other typed words.
 
 ---
 

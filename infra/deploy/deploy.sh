@@ -147,6 +147,8 @@ done
 # standing on -- so deploy.sh refuses, here, before it reads anything else and before any
 # `docker` call, with a typed word an operator and deploy-auto's log can both grep:
 #
+#   stand_dir_unsearchable   the copy record's or the import lock's directory exists, and
+#                            this account cannot search it, so neither can be seen
 #   stand_import_locked      the importer holds `<BUNDLE_STAGING>/import.lock`
 #   stand_copy_unreadable    a record exists and is not one copy-serve.sh wrote
 #   stand_import_open        the open record is an import record (or a test-data waiver)
@@ -171,6 +173,21 @@ stand_record() {
     [ -n "$lines" ] && [ "$(printf '%s\n' "$lines" | wc -l)" -eq 1 ] || return 1
     printf '%s\n' "${lines%,}"
 }
+
+# >>> guard: stand-dirs-searchable
+# `W54-JUDGE-A` F1. The copy and staging directories are 0700 and belong to the keys'
+# account. Inside a directory this account cannot search, `-e` is false for everything --
+# so a record or a held lock there would read as "none" and every guard below would pass.
+# The kernel is asked (`cd`), not the mode bits, so the answer is the one `-e` would get.
+for STAND_DIR in "${STAND_COPY_RECORD%/*}" "${STAND_IMPORT_LOCK%/*}"; do
+    if { [ -e "$STAND_DIR" ] || [ -L "$STAND_DIR" ]; } && ! ( cd -- "$STAND_DIR" ) 2>/dev/null; then
+        refuse "[stand_dir_unsearchable] $STAND_DIR exists, but this account ($(id -un 2>/dev/null || id -u)) cannot search it." \
+               "Whether a copy is open or the importer runs cannot be seen from here, so nothing" \
+               "was built or started. The owner gives this account search access to it (the same" \
+               "account as the keys', or a group with 'x'; DEPLOYMENT_RUNBOOK.md §11)."
+    fi
+done
+# <<< guard: stand-dirs-searchable
 
 # >>> guard: stand-import-locked
 if [ -e "$STAND_IMPORT_LOCK" ] && ! flock --nonblock "$STAND_IMPORT_LOCK" true 2>/dev/null; then

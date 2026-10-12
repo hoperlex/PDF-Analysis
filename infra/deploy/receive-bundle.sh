@@ -47,6 +47,13 @@
 # deploy under (`stand_import_open`). The importer re-checks the record and the fingerprint
 # itself (`W54-BUNDLE-01`); this is the boundary's half.
 #
+# LOCKS (`W54-JUDGE-A` F3, F4). `import` takes `import.lock` FIRST, before it reads the
+# record, so the copy key's `resume` -- which holds the same lock while it starts the
+# writers -- cannot run between the check and the start. The record is rewritten only under
+# `copy.lock` beside it, the lock every copy-key verb holds: `receive` takes it before a
+# byte is read and keeps it to the end, `import` from its read of the record until the
+# conversion, and lets it go before the detached importer starts.
+#
 # STAGING LAYOUT (everything this script writes is under BUNDLE_STAGING):
 #
 #   incoming/<KEY>/      one receive in progress: bundle.tar, then tree/<KEY>/. Removed on
@@ -55,8 +62,9 @@
 #   logs/                <KEY>.received, <KEY>.import.{started,log,exit},
 #                        <KEY>.report, <KEY>.discarded
 #   receive.lock         one receive at a time
-#   import.lock          held for the whole of an import, report or requeue. `deploy.sh`
-#                        (`W54-STAND-COPY-01`) refuses while it is held
+#   import.lock          held for the whole of an import, report or requeue, and by the
+#                        copy key's `resume`. `deploy.sh` (`W54-STAND-COPY-01`) refuses
+#                        while it is held
 #
 # Exit: 0 done; 3 refused (`REFUSED [<guard>]` names which); anything else is the exit of
 # the importer's own report or requeue, passed on. Guard markers: see the library.
@@ -243,15 +251,31 @@ require_record_admits_import() {
     # <<< guard: writers-still-stopped
 }
 
+# `W54-JUDGE-A` F4: `copy.lock` beside the record, held until this process exits or
+# fc_drop_record_lock. No copy directory at all means no copy key and no record -- there is
+# nothing to lock. A directory whose lock this account cannot take is refused, never passed.
+take_record_lock() {
+    local dir="${COPY_RECORD%/*}"
+    [ -e "$dir" ] || [ -L "$dir" ] || return 0
+    # >>> guard: copy-lock-free
+    if ! fc_take_record_lock "$COPY_RECORD"; then
+        fc_refuse copy-lock-free "a copy-key verb holds $dir/copy.lock, or this account cannot open it; nothing was read or started." \
+            "The copy key's status shows the record. Run this again once that verb has exited."
+    fi
+    # <<< guard: copy-lock-free
+}
+
 # `W54-PLAN.md` §3.5: an open record becomes an import record when a bundle is received
-# or an import starts under it. No record, or a closed one, is left alone.
+# or an import starts under it. No record, or a closed one, is left alone. The caller holds
+# `copy.lock` (take_record_lock); without it the rewrite fails and is refused.
 mark_record_import() {
     [ -e "$COPY_RECORD" ] || return 0
     fc_record_valid "$COPY_RECORD" || return 0
     [ "$(fc_record_string "$COPY_RECORD" state)" = open ] || return 0
     [ "$(fc_record_string "$COPY_RECORD" purpose)" != import ] || return 0
-    fc_record_set "$COPY_RECORD" purpose '"import"'
-    fc_record_set "$COPY_RECORD" target_sha null
+    if ! fc_record_set "$COPY_RECORD" purpose '"import"' || ! fc_record_set "$COPY_RECORD" target_sha null; then
+        fc_refuse copy-record-readable "$COPY_RECORD could not be rewritten as an import record (copy.lock is not held)."
+    fi
     echo "receive-bundle.sh: the open copy record $(fc_record_string "$COPY_RECORD" stamp) is now an import record." >&2
 }
 
@@ -316,6 +340,7 @@ verb_receive() {
     fi
     # <<< guard: receive-lock-free
 
+    take_record_lock
     if [ -e "$COPY_RECORD" ] || [ -L "$COPY_RECORD" ]; then
         require_record_readable
     fi
@@ -426,16 +451,20 @@ verb_status() {
 # Detached, locked, re-entrant. The lock is taken HERE, synchronously, so a second
 # `import` is refused in words rather than queued; the detached runner inherits fd 9 and
 # holds the lock until the importer exits. Its exit status lands in logs/<KEY>.import.exit.
+# The import lock comes BEFORE the record's admission (`W54-JUDGE-A` F3), and the record
+# is checked and converted under `copy.lock`, which is let go before the runner starts.
 verb_import() {
     local key="$1"
     require_staging
     require_bundle "$key"
     require_stack
     require_record
-    require_record_admits_import
     ensure_layout
     take_import_lock
+    take_record_lock
+    require_record_admits_import
     mark_record_import
+    fc_drop_record_lock
     bundle_module import "$key"
 
     rm -f -- "$LOGS/$key.import.exit"

@@ -43,6 +43,7 @@ import http.server
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import threading
@@ -377,6 +378,7 @@ def _run(
     tmp_path: Path,
     env_file: Path | None,
     stub: dict[str, str] | None = None,
+    unprivileged: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     binary = tmp_path / "bin"
     binary.mkdir(exist_ok=True)
@@ -398,13 +400,28 @@ def _run(
     environment.update(stub or {})
 
     completed = subprocess.run(
-        ["bash", str(script), *args],
+        [*(_without_permission_override() if unprivileged else []), "bash", str(script), *args],
         capture_output=True,
         text=True,
         env=environment,
         timeout=180,
     )
     return completed, log
+
+
+def _without_permission_override() -> list[str]:
+    """The prefix that runs deploy.sh as an account the permission bits apply to.
+
+    `W54-JUDGE-A` F1 is about a deploy account that cannot search the keys' 0700
+    directories. Root can search anything only through CAP_DAC_OVERRIDE and
+    CAP_DAC_READ_SEARCH, so as root the case drops exactly those two from the bounding set
+    (and so from the capabilities `bash` gets on exec): a directory of mode 000 is then
+    unsearchable to it, as it is to any other account. Not as root, nothing is needed."""
+    if os.geteuid() != 0:
+        return []
+    setpriv = shutil.which("setpriv")
+    assert setpriv is not None, "setpriv (util-linux) is needed to run this case as root; it is never skipped"
+    return [setpriv, "--inh-caps=-all", "--bounding-set=-dac_override,-dac_read_search"]
 
 
 # --- the six that run before docker is touched at all ---------------------------------
@@ -1115,11 +1132,13 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     until `D-103`'s repair added `derived-secrets-coherent`, covered above, and 14 until
     `W54-WORKER-01` added `execution-role-declared` (R-105), covered above and in
     :class:`TestTheExecutionRoleIsDeclaredLiterally`, and 20 since `W54-STAND-COPY-01` added
-    the five stand-copy guards, covered in :class:`TestNoDeployWhileACopyOrAnImportIsOpen`.
+    the five stand-copy guards, covered in :class:`TestNoDeployWhileACopyOrAnImportIsOpen`,
+    and 21 since `W54-FIX-SHELL` added `stand-dirs-searchable` (`W54-JUDGE-A` F1), covered
+    there too.
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", DEPLOY.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 20, markers
+    assert len(markers) == 21, markers
     covered = set(BEFORE_DOCKER) | set(STAND_GUARDS) | {
         "port-not-foreign",
         "images-built",
@@ -1330,9 +1349,23 @@ def _hold(path: Path) -> object:
     return handle
 
 
+def _unsearchable(directory: Path, record: str | None = None) -> None:
+    """The keys' directory, as the deploy account of `W54-JUDGE-A` F1 sees it: it exists,
+    and this account cannot search it. A record inside is one every later guard would
+    refuse -- if it could be seen."""
+    directory.mkdir(parents=True, exist_ok=True)
+    if record is not None:
+        (directory / "record.json").write_text(record, encoding="utf-8")
+    directory.chmod(0o000)
+
+
 #: guard -> (typed word, how the case prepares the stand). `prepare` gets the case's
 #: tmp_path and the staged clone's HEAD, and returns whatever must stay alive (a lock).
 STAND_GUARDS: dict[str, tuple[str, Callable[[Path, str], object]]] = {
+    "stand-dirs-searchable": (
+        "stand_dir_unsearchable",
+        lambda tmp, head: _unsearchable(tmp / "stand-copy", _stand_record(purpose="none", attested=False)),
+    ),
     "stand-import-locked": (
         "stand_import_locked", lambda tmp, head: _hold(tmp / "stand-staging" / "import.lock"),
     ),
@@ -1361,6 +1394,10 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+#: The stand guards whose case needs an account the permission bits apply to.
+UNPRIVILEGED = frozenset({"stand-dirs-searchable"})
+
+
 class TestNoDeployWhileACopyOrAnImportIsOpen:
     """`W54-PLAN.md` §4 Stage C: deploy.sh refuses with a typed word before any `docker`
     call while the importer lock is held, while an open record is an import record, while
@@ -1374,7 +1411,7 @@ class TestNoDeployWhileACopyOrAnImportIsOpen:
         env_file.write_text(_env_text(EDITED_SECRETS, port=free_port), encoding="utf-8")
         script = _stage(tmp_path / "stand")
         keep = prepare(tmp_path, _commit(script.parents[2]))
-        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file, unprivileged=guard in UNPRIVILEGED)
         del keep
         assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
         assert f"deploy.sh: REFUSED: [{word}]" in completed.stderr, completed.stderr
@@ -1387,11 +1424,46 @@ class TestNoDeployWhileACopyOrAnImportIsOpen:
         env_file.write_text(_env_text(EDITED_SECRETS, port=free_port), encoding="utf-8")
         script = _stage(tmp_path / "mutant-stage", script=_mutant(tmp_path, guard))
         keep = prepare(tmp_path, _commit(script.parents[2]))
-        completed, _ = _run(script, tmp_path=tmp_path, env_file=env_file)
+        completed, _ = _run(script, tmp_path=tmp_path, env_file=env_file, unprivileged=guard in UNPRIVILEGED)
         del keep
         assert f"[{word}]" not in completed.stderr, (
             f"the {guard} guard was deleted and the refusal happened anyway"
         )
+        if guard == "stand-dirs-searchable":
+            # And what the guard closes: unseen, the open unattested record passes silently.
+            assert "[stand_copy_unattested]" not in completed.stderr, completed.stderr
+
+    def test_an_unsearchable_staging_directory_is_refused_too(self, tmp_path: Path, free_port: int) -> None:
+        """`W54-JUDGE-A` F1's other directory: a held import lock inside a staging directory
+        this account cannot search would read as no lock at all."""
+        env_file = tmp_path / "alpha.env"
+        env_file.write_text(_env_text(EDITED_SECRETS, port=free_port), encoding="utf-8")
+        script = _stage(tmp_path / "stand")
+        _commit(script.parents[2])
+        keep = _hold(tmp_path / "stand-staging" / "import.lock")
+        (tmp_path / "stand-staging").chmod(0o000)
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file, unprivileged=True)
+        del keep
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "deploy.sh: REFUSED: [stand_dir_unsearchable]" in completed.stderr, completed.stderr
+        assert str(tmp_path / "stand-staging") in completed.stderr
+        assert not log.exists(), log.read_text()
+
+    def test_a_searchable_directory_without_read_access_is_not_refused(
+        self, tmp_path: Path, free_port: int
+    ) -> None:
+        """The control: search is what `-e` needs, and read is not. A directory of mode 0111
+        hides nothing from the guards below, so the open unattested record in it is seen."""
+        env_file = tmp_path / "alpha.env"
+        env_file.write_text(_env_text(EDITED_SECRETS, port=free_port), encoding="utf-8")
+        script = _stage(tmp_path / "stand")
+        _commit(script.parents[2])
+        _write(tmp_path / "stand-copy" / "record.json", _stand_record(purpose="none", attested=False))
+        (tmp_path / "stand-copy").chmod(0o111)
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file, unprivileged=True)
+        assert "[stand_dir_unsearchable]" not in completed.stderr, completed.stderr
+        assert "deploy.sh: REFUSED: [stand_copy_unattested]" in completed.stderr, completed.stderr
+        assert not log.exists()
 
     @pytest.mark.parametrize(
         "record",
