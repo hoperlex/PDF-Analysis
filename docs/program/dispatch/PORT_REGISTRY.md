@@ -131,6 +131,7 @@ delegates the choice to a session that cannot see the other lanes.**
 | `57110`, `60710/60711` | `gate-w54-seal` — `W54-SEAL-01`, migration tests in a window | 2026-10-12 | after SEAL handback and lane cleanup |
 | `57120`, `60720/60721` | `gate-w54-custody` — `W54-CUSTODY-01`, window tests | 2026-10-12 | after CUSTODY handback |
 | `57130`, `60730/60731` | `gate-w54-worker` — `W54-WORKER-01`, window tests | 2026-10-12 | after WORKER handback |
+| `57140`, `60740/60741` | `gate-w54-repair` — `W54-REPAIR-01`, window tests | 2026-10-12 | after REPAIR handback |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,
