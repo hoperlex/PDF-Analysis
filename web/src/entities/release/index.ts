@@ -1,2 +1,4 @@
 export { useProductVersion, useReleases } from './api/use-releases';
-export { UnknownReleaseKindError, RELEASE_KIND_LABELS, releaseDate, releaseKindLabel } from './model/presentation';
+export {
+  OTHER_RELEASE_KIND_LABEL, RELEASE_KIND_LABELS, isKnownReleaseKind, releaseDate, releaseKindLabel,
+} from './model/presentation';

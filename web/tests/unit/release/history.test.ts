@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import type { ReleaseEntry } from '@/shared/api';
-import { UnknownReleaseKindError, releaseDate, releaseKindLabel } from '@/entities/release';
+import { OTHER_RELEASE_KIND_LABEL, releaseDate, releaseKindLabel } from '@/entities/release';
 import { VersionHistoryView } from '@/widgets/version-history';
 import { UpdateBannerView, WhatsNewView } from '@/_app/release-notices';
 
@@ -34,7 +34,7 @@ describe('release history presentation', () => {
     expect(releaseDate('2026-10-08')).toBe('08.10.2026');
   });
 
-  it('shows loading, empty and an unknown-kind fault as different states', () => {
+  it('shows loading, empty and a failed read as different states', () => {
     const draw = (props: { loading: boolean; error: Error | null; items: ReleaseEntry[] }) =>
       renderToStaticMarkup(createElement(VersionHistoryView, {
         version: null, listing: { items: props.items, whats_new: [] },
@@ -42,8 +42,28 @@ describe('release history presentation', () => {
       }));
     expect(draw({ loading: true, error: null, items: [] })).toContain('Загрузка: истории версий…');
     expect(draw({ loading: false, error: null, items: [] })).toContain('История версий пока пуста');
-    expect(draw({ loading: false, error: new UnknownReleaseKindError(), items: [] })).toContain('Неизвестная категория изменения');
-    expect(() => releaseKindLabel('unknown')).toThrow(UnknownReleaseKindError);
+    expect(draw({ loading: false, error: new Error('network'), items: [] })).toContain('История версий недоступна');
+  });
+
+  it('C-29: labels an unknown note kind generically and keeps the rest of the history', () => {
+    expect(releaseKindLabel('unknown')).toBe(OTHER_RELEASE_KIND_LABEL);
+    expect(OTHER_RELEASE_KIND_LABEL).toBe('Другое изменение');
+    expect(releaseKindLabel('fixed')).toBe('Исправлено');
+    const stranger = {
+      ...CURRENT,
+      items: [
+        { ...CURRENT.items[0]!, kind: 'retired' as never, text: 'Неизвестное изменение.' },
+        { ...CURRENT.items[0]!, kind: 'fixed' as const, text: 'Исправленное изменение.' },
+      ],
+    };
+    const html = renderToStaticMarkup(createElement(VersionHistoryView, {
+      version: '0.3.0', listing: { items: [stranger], whats_new: [] },
+      loading: false, error: null, onClose: noop, onRetry: noop,
+    }));
+    expect(html).toContain('>Другое изменение</span>');
+    expect(html).toContain('Неизвестное изменение.');
+    expect(html).toContain('Исправленное изменение.');
+    expect(html).not.toContain('retired');
   });
 
   it('shows only server-selected What’s New entries and leaves navigation free', () => {

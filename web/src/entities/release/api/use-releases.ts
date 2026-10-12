@@ -3,16 +3,11 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { getProductVersion, listReleases, queryKeys } from '@/shared/api';
-import { assertReleaseKinds } from '../model/presentation';
 
 export function useReleases(enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.releases.list(),
-    queryFn: async () => {
-      const answer = (await listReleases({})).data;
-      assertReleaseKinds(answer.items);
-      return answer;
-    },
+    queryFn: async () => (await listReleases({})).data,
     enabled,
     retry: false,
   });

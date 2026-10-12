@@ -1,11 +1,11 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ReleaseList } from '@/shared/api';
 import { checkWebVersion, hasErrorCode, shouldShowUpdate, VersionCheckError } from '@/shared/api';
-import { getWebBuildId, SIGN_IN_SCREEN } from '@/shared/config';
+import { getWebBuildId, MissingConfigurationError, SIGN_IN_SCREEN } from '@/shared/config';
 import { useReleases } from '@/entities/release';
 import { useMarkReleaseNotesRead } from '@/features/mark-release-notes-read';
 
@@ -54,8 +54,64 @@ export function ReleaseNoticesGate() {
   return mounted ? <ReleaseNotices /> : null;
 }
 
-function ReleaseNotices() {
-  const buildId = getWebBuildId();
+/**
+ * This build's identifier, or `null` when the bundle carries none.
+ *
+ * `C-29`: `getWebBuildId` throws on a missing identifier, and called during render that took
+ * every page of the frame down. Here a missing identifier only disables the update banner —
+ * there is nothing to compare the served build with — and the effect below says so once on
+ * the console. Any other fault is still thrown.
+ */
+export function bundleBuildId(): string | null {
+  try {
+    return getWebBuildId();
+  } catch (error) {
+    if (error instanceof MissingConfigurationError) return null;
+    throw error;
+  }
+}
+
+/** The two reads a trigger may start. */
+export interface NoticeReads {
+  readonly version: () => void;
+  readonly releases: () => void;
+}
+
+/**
+ * The route trigger. `C-29`: on mount only the version is read — `useReleases` is already
+ * fetching the list, and a mount-time `refetch()` was a second `listReleases` for the same
+ * render. A later route change re-reads both (`W52-PLAN.md` §3.5).
+ */
+export function readOnRoute(previous: string | null, current: string | null, reads: NoticeReads): void {
+  reads.version();
+  if (previous !== current) reads.releases();
+}
+
+/** What {@link listenForTabReturn} needs of `document`. */
+export interface TabDocument {
+  readonly visibilityState: DocumentVisibilityState;
+  addEventListener(type: 'visibilitychange', listener: () => void): void;
+  removeEventListener(type: 'visibilitychange', listener: () => void): void;
+}
+
+/**
+ * The tab-return trigger: ONE listener. `C-29`: `focus` and `visibilitychange` both fire on a
+ * single return to the tab, and listening to both read `/bff/version` and `listReleases`
+ * twice each time. `visibilitychange` to visible is the one that also covers a tab switch.
+ * Returns the detach.
+ */
+export function listenForTabReturn(target: TabDocument, reads: NoticeReads): () => void {
+  const onVisible = () => {
+    if (target.visibilityState !== 'visible') return;
+    reads.version();
+    reads.releases();
+  };
+  target.addEventListener('visibilitychange', onVisible);
+  return () => target.removeEventListener('visibilitychange', onVisible);
+}
+
+export function ReleaseNotices() {
+  const buildId = bundleBuildId();
   const pathname = usePathname();
   const releases = useReleases(true);
   const mark = useMarkReleaseNotesRead();
@@ -64,8 +120,10 @@ function ReleaseNotices() {
   const [later, setLater] = useState<string | null>(null);
   const [markFault, setMarkFault] = useState(false);
   const refetch = releases.refetch;
+  const routeSeen = useRef<string | null | undefined>(undefined);
 
-  const check = useCallback(async () => {
+  const checkVersion = useCallback(async () => {
+    if (buildId === null) return;
     try {
       const reading = await checkWebVersion();
       setAvailable(reading.changed ? reading.available : null);
@@ -76,23 +134,34 @@ function ReleaseNotices() {
         window.location.assign(SIGN_IN_SCREEN);
       }
     }
-    const answer = await refetch();
-    if (hasErrorCode(answer.error, 'authentication_required')) {
-      window.location.assign(SIGN_IN_SCREEN);
-    }
-  }, [refetch]);
+  }, [buildId]);
+
+  const reads = useMemo<NoticeReads>(() => ({
+    version: () => { void checkVersion(); },
+    releases: () => { void refetch(); },
+  }), [checkVersion, refetch]);
 
   useEffect(() => {
-    void check();
-    const onFocus = () => { void check(); };
-    const onVisible = () => { if (document.visibilityState === 'visible') void check(); };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [pathname, check]);
+    if (buildId === null) {
+      console.error('NEXT_PUBLIC_WEB_BUILD_ID is missing from this build: the update banner is disabled.');
+    }
+  }, [buildId]);
+
+  // The first read of the list and every re-read land here, so a lapsed session is sent to
+  // sign-in whichever trigger found it.
+  useEffect(() => {
+    if (hasErrorCode(releases.error, 'authentication_required')) {
+      window.location.assign(SIGN_IN_SCREEN);
+    }
+  }, [releases.error]);
+
+  useEffect(() => {
+    const previous = routeSeen.current === undefined ? pathname : routeSeen.current;
+    routeSeen.current = pathname;
+    readOnRoute(previous, pathname, reads);
+  }, [pathname, reads]);
+
+  useEffect(() => listenForTabReturn(document, reads), [reads]);
 
   const newest = releases.data?.whats_new[0] ?? null;
   const showWhatsNew = newest !== null && newest !== closedVersion;

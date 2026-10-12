@@ -130,10 +130,20 @@ export function QueuePage() {
         </button>
       ) : null}
       {account.isPending ? <LoadingState what="права на управление очередью" /> : null}
-      {accountFailure !== null ? <div data-execution-account-failure={accountFailure.kind}><ErrorState title="Права не прочитаны" detail={accountFailure.detail} correlationId={accountFailure.correlationId} onRetry={() => void account.refetch()} /></div> : null}
+      {accountFailure !== null ? (
+        <div data-execution-account-failure={accountFailure.kind}>
+          <p role="status" className="am-note" data-execution-controls-withheld>Очередь показана без команд: права не прочитаны.</p>
+          <ErrorState title="Права не прочитаны" detail={accountFailure.detail} correlationId={accountFailure.correlationId} onRetry={() => void account.refetch()} />
+        </div>
+      ) : null}
       {queue.isPending ? <LoadingState what="очередь" /> : null}
       {readFailure !== null ? <div data-execution-read-failure={readFailure.kind}><ErrorState title="Очередь не открылась" detail={readFailure.detail} correlationId={readFailure.correlationId} onRetry={() => void queue.refetch()} /></div> : null}
-      {queue.data !== undefined && readFailure === null && account.data !== undefined ? (
+      {/*
+        * `C-27`: every complete account may read the queue, so its rows do not wait for
+        * `getMe`. Until the roles are read — or when that read fails — `roles` is empty and
+        * the widget draws no command; the server refuses a command by role anyway.
+        */}
+      {queue.data !== undefined && readFailure === null ? (
         <ExecutionQueue
           items={queue.data.items}
           roles={roles}

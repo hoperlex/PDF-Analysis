@@ -278,6 +278,37 @@ export async function withColdBrowser(fn, { cookies = [], viewport = null } = {}
 }
 
 /**
+ * Navigate with the bounded transient retry and report how many `Page.navigate` commands
+ * were sent -- on success AND on a rejected command.
+ *
+ * `C-30` (W53 close): the count used to be assigned only after a navigation returned, so a
+ * CDP command that rejected left the page holding whatever an earlier navigation of the same
+ * page had recorded -- or nothing, on a fresh page -- and `write.mjs`'s `finally` wrote that
+ * into this route's evidence instead of the attempts this route actually made.
+ * `record` is called with `null` before the first command, then with the number of
+ * commands sent once the navigation settles either way; the rejection is rethrown.
+ */
+export async function navigateCountingAttempts(send, url, record, options = {}) {
+  let sent = 0;
+  record(null);
+  try {
+    const reached = await navigateWithTransientRetry(
+      (method, params) => {
+        sent += 1;
+        return send(method, params);
+      },
+      url,
+      options,
+    );
+    record(reached.attempts);
+    return reached;
+  } catch (error) {
+    record(sent);
+    throw error;
+  }
+}
+
+/**
  * Response headers worth keeping verbatim.
  *
  * `D-5` closed unanswerable because a harness logged *status lines only*. The correlation
@@ -452,9 +483,12 @@ class Page {
     // "Loading the run request..." with no progress -- and a journey that records only
     // outcomes cannot report that.
     const t0 = Date.now();
-    const { result, attempts } = await navigateWithTransientRetry(
+    const { result, attempts } = await navigateCountingAttempts(
       (method, params) => this.#send(method, params),
       url,
+      (count) => {
+        this.navigationAttempts = count;
+      },
       {
         onRetry: ({ attempts: failedAttempts, delayMs }) => {
           console.warn(
@@ -464,7 +498,6 @@ class Page {
         },
       },
     );
-    this.navigationAttempts = attempts;
     if (result.errorText) {
       // A navigation that never reached a server is a failure of the journey, not a 0.
       throw new Error(

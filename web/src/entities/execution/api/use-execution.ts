@@ -7,6 +7,13 @@ import { listExecutionJournal, listExecutionQueue, queryKeys } from '@/shared/ap
 
 export const EXECUTION_PAGE_LIMIT = 25;
 
+/*
+ * `C-26`: both reads are stale the moment they settle (`staleTime: 0`). The application's
+ * default `staleTime: 30_000` would otherwise let a remount, a tab return or a navigation back
+ * to the queue or the journal show a page up to thirty seconds old although each of them is
+ * the screen an operator opens to see what the runner is doing now.
+ */
+
 export function queueQueryOptions(cursor?: string) {
   return {
     queryKey: queryKeys.execution.queue(cursor),
@@ -14,6 +21,7 @@ export function queueQueryOptions(cursor?: string) {
       query: { limit: EXECUTION_PAGE_LIMIT, ...(cursor === undefined ? {} : { cursor }) },
     })).data,
     refetchOnWindowFocus: 'always',
+    staleTime: 0,
   } as const;
 }
 
@@ -32,6 +40,7 @@ export function journalQueryOptions(runId?: RunId, cursor?: string, enabled = tr
       },
     })).data,
     refetchOnWindowFocus: 'always',
+    staleTime: 0,
     enabled,
   } as const;
 }
