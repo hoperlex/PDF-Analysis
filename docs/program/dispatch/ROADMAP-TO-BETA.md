@@ -1,13 +1,5 @@
 # Roadmap after the identity block — waves 52 to 1.0, versioning and the road to beta
 
-**Development-line adoption, 2026-10-08:** `W52-INT-ENTRY-01` copied this
-planning record from `plan/roadmap-to-beta` at `2b45a11`. The W52 execution
-entry is amended in `W52-PLAN.md`: W51 implementation is closed, while
-D-137–D-140 defer QA, live/manual checks and complete gates. This roadmap
-remains a planning and owner-answer source; its release rows are targets, not
-claims that a wave was frozen, validated, tagged or deployed. `W52-RULE-01`
-has recorded R-71…R-74; `W52-FREEZE-01` is still required before W52 dispatch.
-
 **Status:** revision 3, 2026-10-06 (§10.10–§10.13 added; §6.2 restated after costing W53–W55). Revision 1 (2026-10-05, `83fb7e6`) was a proposal; the owner
 then answered an eight-round poll (§10), and this revision is rebuilt on those answers.
 Written by session `pdf-analysis-e5`. **Still not dispatchable and not a ruling:** the answers are
@@ -76,9 +68,10 @@ W52 quality + versioning system + tools
   ├─► corpus: custody ─► promotion + embeddings ─► retrieval + citations ─┐
   └─► execution: jobs, retry, Журнал, Очередь ─► Исполнители, Блоки, block analysis ─► АР depth, Настройки анализа
                                                                          ▼
-                                                    АР norm verification ─► beta gate
-  beta:  sections (cheap first) ║ comparison (versions + carryover, then П/Р stages)
-         Оптимизация проекта ║ Диспетчер ─► Оптимизация разделов ─► RC ─► 1.0 ─► График работ (1.1)
+                                                    АР norm verification ─► W58 rehearsal
+  pre-beta: sections (cheap first) ║ comparison (versions + carryover, then П/Р stages)
+            Оптимизация проекта ║ Диспетчер ─► Оптимизация разделов ─► W63 beta gate   (W58–W64 route: unadopted, K-4)
+            ─► RC ─► 1.0 ─► График работ (1.1)
 ```
 
 **Module order** (the "actual order" the owner asked for, confirmed by the poll):
@@ -96,33 +89,25 @@ directories and the registry is generated.
 | Wave | Track 1 | Track 2 | Size | Release |
 |---|---|---|---|---|
 | **W52** | quality, repairs, debts of W48–W51 (owner); deploy bound to the gate | **versioning system** (§8); fact registry; faster gate; pin-sweep tool | L+ | `v0.3.0` |
-| **W53** | source-pinned MinIO build and disposable-copy rehearsal; custody design frozen. Working-stand upgrade and backup implementation are deferred by the owner's 2026-10-09 beta-wave direction | E1: durable job queue on W48's tables (leases, heartbeat, reclaim, provably-safe retry, bounded resume, cancel, re-audit, pause), transactional journal; **Журнал выполнения**; **Очередь** | L+ | `v0.4.0` remains a target only after an actual `v0.3.0` release or owner-ratified version/history branch |
+| **W53** | data safety: `D-119` MinIO upgrade, non-destructive backup pulled to this machine and restored with real objects, the custody design frozen (`R-W2`, documents rewritten). *Amended 2026-10-12: backup deferred to the beta wave (`R-77`); custody design `R-76`; released as `v0.4.0` (`R-85`…`R-87`); MinIO recreated (`R-83`)* | E1: durable job queue on W48's tables (leases, heartbeat, reclaim, provably-safe retry, bounded resume, cancel, re-audit, pause), transactional journal; **Журнал выполнения**; **Очередь** | L+ | `v0.4.0` (execution core) |
 | **W54** | corpus foundation on this machine: custody implementation and the storage role change, repairs through a durable journal (≤ $10), corpus debts `D-124`…`D-127`, pinned BGE image, promotion bundle, importer and inbound channel, rehearsed locally (`W54-PLAN.md`) | worker service and registry, **Исполнители**; report-only probes: the portal's OCR bundle and image input through the proxy | L+ | `v0.5.0` (workers) |
 | **W55a** | corpus on the stand: embeddings built here (G-1), bundle pushed and imported, current snapshot set by an administrator and pinned by runs (G-6), **text search** with citations (G-5), «Нормы» screen, ranged PDF streaming (`W55-PLAN.md` Part A) | — | L | `v0.6.0` (corpus search) |
 | **W55b** | AR-1a: portal bundles only (G-4, G-10), up to 500 pages / 250 MiB streamed end to end (G-2), the analysis input budget (G-11), recognised text marked, portal blocks, crops cut locally, **Блоки** made real (`W55-PLAN.md` Part B) | — | L+ | `v0.6.1` (portal bundles, blocks) |
 | **W56a** | AR-2 on text: profile v2 with seven non-normative categories (H-2), severity proposed by the model and decided by the expert (H-3), deterministic `finding_merge` (H-4), recognised text as context for text-less pages (H-7), the no-regression quality gate (H-5), the seeded-corpus generator, the model identity check (H-6) (`W56-PLAN.md` Part A) | — | L+ | `v0.7.0` (АР v2 on text) |
-| **W57a** | AR-3a, before W56b (I-12): the reviewed checklist map, a reproducible retrieval set pinned by the run, profile v3 with six normative categories, citations grounded by quote and value, the norm-verification report (`W57-PLAN.md` Part A) | — | L+ | `v0.8.0` (norms in the analysis) |
+| **W57a** | AR-3a, before W56b (I-12): the reviewed checklist map, a reproducible retrieval set pinned by the run, profile v3 with five normative categories (insolation after beta, K-2), citations grounded by quote and value, the norm-verification report (`W57-PLAN.md` Part A) | — | L+ | `v0.8.0` (norms in the analysis) |
 | **W57b** | AR-3b: `normative_refs` by the corpus (`norm_verification` deterministic), Excel in legacy's layout, the owner's review of v3 findings (`W57-PLAN.md` Part B) | — | L | `v0.8.1` (references, Excel) |
-| **W56b** | `block_analysis` over the W55b crops (G-8), **region evidence**, recognised-text citations, **chunked text analysis** (G-11), **the critic** (H-10), multi-call resume, **Настройки анализа** (presets, A-8); **after W57b (I-12)**; planned after the W54 vision probe (`W56-PLAN.md` Part B) | — | L+ | `v0.9.0` (drawings, critic, presets) |
-| **W58** | debts of W53–W57; live acceptance with real АР documents; 2–3 expert smoke sessions; exposure review; backup/restore drill; contract `1.0.0` | — | M | **`v1.0.0-beta.1`** |
-| **W59** | S0 framework: 15 sections, stage attribute П/Р, section suggestion + confirmation, run routed by confirmed section, profile registry from legacy (§10.3); **АИ, ПЗ, ПОС, ТХ** | comparison-1: versions of one set, finding matching, decision carryover with confirmation (§10.4) | L+ | `beta.2` |
-| **W60** | **КЖ, КМ, ОВ, ВК, ПТ** | **Оптимизация проекта** on АР (§10.1) | L+ | `beta.3` |
+| **W56b** | `block_analysis` over the W55b crops (G-8), **region evidence**, recognised-text citations, **chunked text analysis** (G-11), **the critic** (H-10), multi-call resume, **Настройки анализа** (presets, A-8); **after W57b (I-12)**; dedicated pre-freeze graph in `W56B-PLAN.md`, gated by the W54/W55 vision probe and owner decisions | — | L+ | `v0.9.0` (drawings, critic, presets) |
+| **W58** | debts of W53–W57; real АР rehearsal with named experts; exposure review; backup/restore drill; candidate contract audit | — | M | development close; no beta claim (*unadopted, K-4*) |
+| **W59** | S0 framework: 15 sections, stage attribute П/Р, section suggestion + confirmation, run routed by confirmed section, profile registry from legacy (§10.3); **АИ, ПЗ, ПОС, ТХ** | comparison-1: versions of one set, finding matching, decision carryover with confirmation (§10.4) | L+ | development close |
+| **W60** | **КЖ, КМ, ОВ, ВК, ПТ** | **Оптимизация проекта** on АР (§10.1) | L+ | development close |
 | **W61** | debts + expert validation of W59–W60 | — | M | — |
-| **W62** | **ЭОМ, СС, ИТП, ГП, ПБ** | comparison-2: stages П/Р; **Диспетчер** (§10.5) | L+ | `beta.4` |
-| **W63** | **Оптимизация разделов** + Оптимизация проекта for the remaining sections | — | L | `beta.5` |
+| **W62** | **ЭОМ, СС, ИТП, ГП, ПБ** | comparison-2: stages П/Р; **Диспетчер** (§10.5) | L+ | development close |
+| **W63** | **Оптимизация разделов** + Оптимизация проекта for the remaining sections; repeat B1–B12 on the complete menu/full-АР candidate | — | L+ (remeasure) | earliest `v1.0.0-beta.1` (*unadopted, K-4*) |
 | **W64** | debts, hardening (load/SLO, security review, least-privilege roles, restore drill, operator docs), release acceptance | — | M | `v1.0.0-rc.1` → `v1.0.0` |
 | after 1.0 | **График работ** (`1.1.0`); remote/distributed workers; graphic comparison; SMTP and avatar upload if still wanted | | | `1.x` |
 
-**2026-10-09 backup replan:** The owner moved database backup to a separate beta wave, not W53.
-The earlier W53 backup design is not an implementation grant. `D-123` still prevents a
-working-stand MinIO upgrade without inventory and a recoverable copy. W54/W55 stand data
-promotion and W58's B6 restore criterion must be re-sequenced at their freezes; this decision
-alone does not assert that unbacked corpus or client writes are acceptable. The eventual beta
-backup task must obtain RPO, first-copy deadline, repeat schedule, operator, missed-run alert,
-restore cadence, capacity and erasure coordination before implementation.
-
-**Count:** 12 waves after W52 (W53–W64) since W54 was split on 2026-10-06 (F-1); beta after **6** of them. Moving `block_analysis` to W56 (G-8) keeps the count; W55 runs as two halves, W55a and W55b (G-9), counted as one wave of the map. W56 and W57 run as halves the same way (H-1, I-9); W57a and W57b come before W56b (I-12). The debt cadence holds within
-±1 (W52, W58, W61, W64). A wave in which paid model calls would exceed ≈ $5 still stops for the
+**Count:** 12 waves after W52 (W53–W64) since W54 was split on 2026-10-06 (F-1); the earliest beta (in the unadopted 2026-10-08 route, K-4) is after **11** of them, when W63 has delivered the last planned visible menu function. Moving `block_analysis` to W56 (G-8) keeps the count; W55 runs as two halves, W55a and W55b (G-9), counted as one wave of the map. W56 and W57 run as halves the same way (H-1, I-9); W57a and W57b come before W56b (I-12). The debt cadence holds within
+±1 (W52, W58, W61, W64). A wave in which paid model calls would exceed ≈ $5 (W57a: $8, K-10) still stops for the
 owner under `R-29` — the budget-per-block measure was not adopted (§7).
 
 ## 5. Interstitial tasks — important work between the goals
@@ -133,10 +118,10 @@ owner under `R-29` — the budget-per-block measure was not adopted (§7).
 | Versioning system (§8), including the build-stamped version endpoint | the acceptance pack attests the deployed SHA from operator input; closes `D-121` | §8; `D-121` (registered by W48) | W52 |
 | Debts registered by W48 closure, `D-120`…`D-128` | the W52 quality track's worklist, beside the debts W49–W51 register | `DEBT_REGISTER.md` on `integration/w48-close` | W52 |
 | CVE/licence/image scan (`D-122`) | open audit question | `reviews/W48-AUDIT.md` §7 | **owner: not now** — W64 |
-| MinIO volume inventory and recoverable copy (`D-123`) | precedes any working-stand image upgrade | `D-123` | separate beta backup wave; W53 does not claim this evidence |
-| `D-119` MinIO upstream archived | the source-pinned image can be prepared now; a working-stand upgrade still needs `D-123` | `D-119` | W53 disposable build/rehearsal; live upgrade deferred |
+| MinIO volume inventory and backup (`D-123`) | precedes the upgrade and custody | `D-123` | W53, backups to this machine until after beta |
+| `D-119` MinIO upstream archived | must precede the first custody write | `D-119` | W53: **upgrade to the 2025-10-15 security release; replacement after 1.0** |
 | Blob identity vs NORM-Q05 | contract-level conflict | `storage/models.py`; NORM-Q05 | W53: **content-derived Blob + one immutable binding per admission**; NORM-Q05 wording clarified |
-| Backup **and restore** rehearsal of PostgreSQL + S3 | needed for a release safety verdict; the owner deferred implementation out of W53 | W48 audit §7; R-77 | separate beta wave, with RPO and schedule to be ruled there |
+| Backup **and restore** rehearsal of PostgreSQL + S3 | corpus and client documents must be restorable before they exist only there | W48 audit §7 | W53 |
 | Live provider credential (`D-70`) | blocks paid repairs, live acceptance and every АР wave | `D-70`; P-7 | owner, W48 |
 | Retry/resume | 3/17 provider failures in PC-02 | `ALPHA_ROADMAP.md` | W53 |
 | Real АР documents (`OD-17`) and named experts (`OD-18`) | АР quality cannot be measured or accepted without them | `OWNER_RULINGS` §4 | F-7: one real set + synthetic; experts before W58 |
@@ -163,7 +148,15 @@ owner under `R-29` — the budget-per-block measure was not adopted (§7).
 | current process | 1.75 | 2.5 | 3.5 |
 | with the adopted measures (A2–A6, A8) | 1.0 | 1.5 | 2.0 |
 
-### 6.2 Forecast for the chosen scenario
+### 6.2 Historical forecast, pending a new critical-path baseline
+
+The dated P50/P80 cells below are the 2026-10-06 calculation, **not a current promise**.
+Its own W57 restatement moves beta by about three weeks without rewriting the cells; W56b
+still lacked a full plan, the beta menu/full-АР boundary and feature placements are being
+reconciled, W63's minimum field-call matrix may exceed `R-29`, and W64 now requires separate
+RC and GA acceptance/deployment chains. After those decisions, the integrator recomputes
+serial dependencies, paid-call budgets and separate beta/RC/GA P50/P80 dates from measured
+lane costs. Until then no task or release instruction may cite a date in this table as a gate.
 
 Counted in working days from 2026-10-06 (day 1). **Restated 2026-10-06** after the W53–W55 plans were
 costed task by task (below the table).
@@ -173,15 +166,25 @@ costed task by task (below the table).
 | rest of W48, W49 (L), W50 (M), W51 (M) — current process | 4 | 7.0 | ≈ 2026-10-14 | — |
 | W52 (L+; ≈ 16 h critical path, `W52-PLAN.md` §9) | 1 | 2.75 | ≈ 2026-10-19 | — |
 | W53 (L+; ≈ 22 h critical path, Stage B sequential on this host, `W53-PLAN.md` §9) | 1 | 4.0 | ≈ 2026-10-23 | — |
-| W54 (L+; ≈ 40 h critical path at the measured overhead, `W54-PLAN.md` §9) | 1 | 7.5 | ≈ 2026-11-05 | — |
-| W55a (L; ≈ 30 h, `W55-PLAN.md` §A6) | ½ | 5.75 | ≈ 2026-11-12 | — |
-| W55b (L+; ≈ 57 h, `W55-PLAN.md` §B6) | ½ | 10.75 | ≈ 2026-11-27 | — |
+| W54 (L+; ≈ 54 h, `W54-PLAN.md` §9, restated 2026-10-12) | 1 | 10.0 | re-dated at the freeze | 13 |
+| W55a (L; ≈ 41 h, `W55-PLAN.md` §A6, restated 2026-10-12) | ½ | 7.75 | re-dated at the freeze | 10.5 |
+| W55b (L+; ≈ 63.5 h, `W55-PLAN.md` §B6, restated 2026-10-12) | ½ | 12.0 | re-dated at the freeze | 16 |
 | W56a (L+; ≈ 62 h, `W56-PLAN.md` §A6) | ½ | 11.75 | ≈ 2026-12-15 | — |
-| W57a (L+; ≈ 66.5 h, `W57-PLAN.md` §A6) | ½ | 12.5 | ≈ 2027-01-12 | — |
-| W57b (L; ≈ 35 h, `W57-PLAN.md` §B6) | ½ | 6.5 | ≈ 2027-01-21 | — |
+| W57a (L+; ≈ 73 h, `W57-PLAN.md` §A6, restated 2026-10-12) | ½ | 13.8 | re-dated at the freeze | — |
+| W57b (L; ≈ 36 h, `W57-PLAN.md` §B6, restated 2026-10-12) | ½ | 6.8 | re-dated at the freeze | — |
 | W56b (L+; ≈ 75 h, extrapolated, `W56-PLAN.md` Part B; after W57b, I-12) | ½ | 14.25 | ≈ 2027-02-11 | — |
-| W58 to beta (≈ 20 h, extrapolated) | 1 | 3.75 | **≈ 2027-02-17** | **≈ 2027-04-05** |
-| W59–W64 to RC (≈ 45 + 45 + 20 + 45 + 30 + 25 h, extrapolated) | 6 | 40.0 | **≈ 2027-04-16** | **≈ 2027-06-18** |
+| W58 to beta (obsolete scenario; ≈ 20 h, extrapolated) | 1 | 3.75 | **≈ 2027-02-17** | **≈ 2027-04-05** |
+| W59–W64 to RC (obsolete scenario; ≈ 45 + 45 + 20 + 45 + 30 + 25 h, extrapolated) | 6 | 40.0 | **≈ 2027-04-16** | **≈ 2027-06-18** |
+
+**Restated 2026-10-12 for the corpus chain** (`plan/corpus-chain`, after the chain review and judging):
+the W54, W55a/b and W57a/b rows above carry the revised plans' own figures; W56a is unchanged. Outside
+those figures are the stand acts: P2 ≈ 4 h, P3 ≈ 4 h, P4 ≈ 6 h plus a 2–4 h transfer and import inside an
+agreed window (K-5), W56a's and W57's publications and builds ≈ 12 h, and the ≈ 14 h embedding build in
+night windows. From W54's start, **the corpus resident and searchable on the stand (P4)** is ≈ 112 active
+hours, P50 ≈ 21 working days and P80 ≈ 27; **W57b** is ≈ 355 active hours, P50 ≈ 67 and P80 ≈ 90 working
+days. None of this counts owner response time, disk provisioning here (CD-21) or holidays. The dates are
+set again at each freeze. W53 itself closed on the development line about two weeks ahead of its row
+because validation was deferred (D-137…D-140); these figures assume no such deferral.
 
 **Restated again 2026-10-07** for W57: costed task by task and split (I-9), it is ≈ 101.5 h against the ≈ 30 h
 extrapolated here, and it runs before W56b (I-12); beta moves by ≈ 3 weeks. The P80 column is × 1.35 of
@@ -216,8 +219,8 @@ critical path only while those windows come.
 | A2 | No idle hand-offs: next block planned while the current one executes; freeze at close; owner decisions asked one block ahead in packs | **adopted** | overhead 1.8 → 1.2 |
 | A3 | Risk-tiered judging: two cross-judges only for contract, migration, security, data custody; one judge otherwise; section profiles judged by the evaluation harness | **adopted** | 2–4 h per wave |
 | A4 | Plan judging capped at two rounds, plus a pin-sweep tool deriving `allowed_paths` grants from the fact a task changes | **adopted** | ≈ 1 day per block plan |
-| A5 | Fact registry: one generated file for surface triple, migration head, error count; guards and live prose read it | **W52 deviation confirmed in R-74:** the file is hand-written (a generated one would be a tautology under `CONTRACT_PIN_REGISTRY.md`) and live prose does not read it (`W52-PLAN.md` §3.6) | a reseal touches 1 file, not ~27 |
-| A6 | Faster gate: parallel battery (per-worker database and bucket), impacted-test selection for lane gates; full gate on the merged candidate | **W52 serial half confirmed in R-74:** template database, no duplicate foundation run, hazards removed; no `pytest-xdist` in W52. R-70's diff-derived light acceptance remains. A later measurement determines whether to add parallelism. | 13 → ≈ 5 min per gate |
+| A5 | Fact registry: one generated file for surface triple, migration head, error count; guards and live prose read it | **adopted** as polled; **implementation pending `W52-RULE-01` confirmation:** the file is hand-written (a generated one would be a tautology under `CONTRACT_PIN_REGISTRY.md`) and live prose does not read it (`W52-PLAN.md` §3.6) | a reseal touches 1 file, not ~27 |
+| A6 | Faster gate: parallel battery (per-worker database and bucket), impacted-test selection for lane gates; full gate on the merged candidate | **adopted**; **W52 delivers only the serial half** (template database, no duplicate foundation run, hazards removed) pending `W52-RULE-01` confirmation; `pytest-xdist` and impacted selection follow if the ≤ 6 min target is missed | 13 → ≈ 5 min per gate |
 | A7 | Milestone deployment (`main`, live acceptance and tag per milestone) | **not adopted** — per-wave `main` on owner instruction stays | — |
 | A8 | Legacy discipline profiles ported as reviewed input data, gated by evaluation | **adopted** — relaxes "not a wholesale port" for profiles only | ≈ half of each section lane |
 | A9 | Evaluation harness (precision/recall per category) as a gate | **adopted** (tools) | finite АР iteration |
@@ -244,10 +247,13 @@ critical path only while those windows come.
 deploy with no user-visible change keeps the version and changes only the build identifier,
 which still triggers the update banner. A wave that reaches only `dev` is not a release.
 
+The following numbers are the **normal proposed release route**; §8.4 governs code-only
+predecessors and truthful renumbering. A development close does not satisfy a `When` cell.
+
 | Version | Content | When |
 |---|---|---|
-| `0.1`, `0.2` | prototype (PC-01) and the deployed alpha line `alpha-w18` … `alpha-w51` | retroactive labels; **one archive entry** in the history (§10.8) |
-| `v0.3.0` | accounts, roles, registration, shell, version history | W52 close |
+| `0.1`, `0.2` | prototype (PC-01) and the actual deployed alpha-era history, inventoried by main SHA and reachable tags; local tags currently end at `alpha-w48.1` while later W51 code is on main without an observed W51 tag | retrospective labels; **one truthful archive entry** in the history (§10.8), not a claim that every alpha number was released |
+| `v0.3.0` | accounts, roles, registration, shell, version history | *amended (`R-86`): never released on its own; kept as a separate history row before `v0.4.0`* |
 | `v0.4.0` | durable execution core: Журнал выполнения, Очередь, retry and resume | W53 |
 | `v0.5.0` | worker service, Исполнители | W54 |
 | `v0.6.0` | corpus on the stand, text search and citations | W55a |
@@ -256,7 +262,7 @@ which still triggers the update banner. A wave that reaches only `dev` is not a 
 | `v0.8.0` | norms in the analysis: the reviewed checklist map and verified citations | W57a |
 | `v0.8.1` | the project's own references and Excel | W57b |
 | `v0.9.0` | drawings, region evidence, long documents, the critic, Настройки анализа | W56b (after W57b, I-12) |
-| `v1.0.0-beta.1` … `beta.5` | beta gate, then sections, comparison, optimisation, Диспетчер | W58–W63 |
+| `v1.0.0-beta.1` | complete visible menu, full АР, all planned sections, comparison, both optimisations and Диспетчер pass the same-tree beta gate | earliest W63; W58–W62 are development-only on the current route (*unadopted 2026-10-08 layer, K-4*) |
 | `v1.0.0-rc.1`, `v1.0.0` | hardening and release acceptance | W64 |
 | `v1.1.0` | График работ | after 1.0 |
 
@@ -278,7 +284,9 @@ which still triggers the update banner. A wave that reaches only `dev` is not a 
   families move together, is decided at the beta freeze (B9) with the error catalog (`D-8`);
   semver rules of `VERSIONING_AND_FREEZE_POLICY.md` apply after that.
 - **Tags:** `vX.Y.Z[-pre.N]`, annotated, on owner-instructed `main` commits that passed live
-  acceptance. `alpha-wNN` ends with `alpha-w51`. The unused CP-series plan in
+  acceptance. `alpha-wNN` naming ends at the first accepted product-version release; the
+  actual last alpha tag is established by ref inventory, not presumed to be `alpha-w51`.
+  The unused CP-series plan in
   `CHECKPOINT_REGISTRY.md` is retired.
 
 ### 8.3 Release notes: written in the repository, stored and served from the database
@@ -299,7 +307,8 @@ The binding design is `W52-PLAN.md` §3.2–§3.5 (revision 3, after two judging
 - **Judge** against the release diff before the `main` instruction, re-run on the closing candidate.
 - **Loading.** A one-shot service after migrations appends revisions (append-only, enforced by
   triggers); a newer release in the database than the image's `VERSION` is left and hidden, so a
-  rollback works; a missing older release refuses.
+  database read from an older image can work; a missing older release refuses. This alone is not
+  a deployable rollback: the repository guard requires `VERSION` to equal its highest note.
 - **Two layers.** The Russian user layer, and an English technical record per release in
   `docs/program/RELEASES.md`.
 - **Interface.** «История версий» in the account menu; a banner «Доступна новая версия — Обновить /
@@ -311,29 +320,67 @@ The binding design is `W52-PLAN.md` §3.2–§3.5 (revision 3, after two judging
   `listReleases`, `markReleaseNotesRead`) and migration `0016_release_notes`; nothing is opened to a
   guest.
 
+### 8.4 Exact release succession and recovery after code-first development
+
+`origin/dev` implementation closure is not a release. The normal W53–W56b alpha product-version chain
+requires the previous version's owner-instructed main deployment, live acceptance and remote
+annotated tag peeled to its served SHA; D-137–D-140 must have contemporaneous exact-SHA
+dispositions before the first affected main push. If a predecessor remains development-only,
+the next release freeze stops its normal `VERSION`/note grant until the owner approves a truthful
+bundled-history/version amendment covering every skipped release. A later green W58 rehearsal or W63 beta gate cannot
+attest a prior SHA. The W52 note author inventories actual main/tag history; `alpha-w51` is a
+planning name, not an assumed reachable tag.
+
+Under the owner's continuing code-first instruction, W53–W57 may close **implementation only**
+on `origin/dev` with the focused checks actually run and D-139/D-140 entries for deferred QA,
+manual/live and complete-gate work. This exception overrides a normal wave's full-gate step
+only for its development-only branch; it neither claims that `GATE OK` occurred nor grants a
+release. Before any affected main push, an exact candidate passes the deferred work, release
+notes/history are reconciled and the main policy is applied independently.
+
+*Unadopted (2026-10-08 layer, §10.16 K-4): the W58–W64 route and the beta move to W63 below are preserved, not reviewed or adopted.*
+W58–W62 are planned development-only waves with complete final gates on their accepted
+development trees. They do not create beta `VERSION`, notes, tags or main deployments.
+W63 is the first proposed beta publication and must recheck the complete B1–B12 matrix
+on its own gated and deployed SHA. Any separately requested intermediate main release
+needs an explicit owner instruction, truthful version/history amendment and a revised
+predecessor chain; it does not arise from these development closes.
+
+After a failed main deployment, do not remove a note that reached main or check out an older
+`VERSION` against the highest-note guard. The release process first contains the incident,
+then creates a strictly later, truthfully described forward recovery candidate. It gates and
+rehearses that candidate against the migrated DB, Blob and note rows; only a separate direct
+owner instruction permits its main push. This applies from `v0.3.0` onward, not only at GA.
+
 ## 9. Path to beta
 
 **Beta** is the product that named experts use on real АР projects on the deployed stand,
 under their own accounts, with the full АР pipeline including norm verification, durable
-execution with a run journal, restorable data and a versioned release. Sections, comparison,
-optimisation and Диспетчер arrive as `beta.N` releases.
+execution with a run journal, restorable data and a versioned release. Every menu destination
+visible on that tree must perform its named action; the planned section, comparison,
+optimisation and Диспетчер work therefore precedes the first beta on the current map.
+W58 measures an intermediate АР baseline; W63 repeats B1–B12 against the complete
+candidate and is the earliest `beta.1` release slot. A moved feature or menu decision
+changes that earliest slot, never weakens B12.
 
 | # | Entry criterion (measured on the deployed stand) |
 |---|---|
 | B1 | accounts, roles, registration, shell accepted live |
 | B2 | corpus snapshot loaded, every PDF and crop in S3 with a confirmed binding, embedding build complete, search answers with citations |
-| B3 | АР pipeline: block analysis, merge, review, norm verification; every published finding grounded; quality at or above the thresholds of decision D-3.4 |
+| B3 | every beta-eligible new АР start route/preset runs all applicable text, block, merge, review and norm-verification stages; every published finding grounded; blinded or explicitly in-sample real-set quality at or above the ruled per-category and aggregate thresholds, with missing strata unmeasured |
 | B4 | durable execution: provider failure retried, restart resumes, Журнал выполнения shows it |
-| B5 | real АР documents within the agreed envelope accepted end to end |
+| B5 | real АР documents within the separately ruled full-analysis envelope accepted end to end; maximum upload versus analysis limits and typed refusal for a larger input demonstrated without silent truncation |
 | B6 | backup and restore drill passed within the last wave |
-| B7 | deploy bound to the gate; version endpoint reports the tagged version; release history shows `v0.3.0` onward |
+| B7 | deploy bound to the gate; version endpoint reports the tagged version; release history truthfully shows every actually published numbered release and a ruled archive/bundled-history entry for any code-only interval, without invented `v0.3.0`–`v0.9.0` rows |
 | B8 | exposure review: nothing reachable that the owner did not decide to expose (`R-29` clause 2) |
 | B9 | contract `1.0.0` and error catalog frozen |
 | B10 | 2–3 expert smoke sessions completed with no blocking finding |
-| B11 | if beta users are external: licensing (NORM-Q04), retention (`U-04`) and registration mail (P-2) decided |
+| B11 | for any retained real client data: provenance, access, backup/evidence retention and `U-04` policy decided and required controls effective before upload; for external beta also licensing (NORM-Q04), exposure and registration mail (P-2) decided |
+| B12 | every menu destination visible on the beta tree has an actual role-appropriate action, result and live acceptance; a visible stub fails. Account-menu actions are included. An owner-approved menu change is recorded before freeze, and the full АР function matrix is tested. |
 
-Beta → RC: all 15 sections, both optimisations, comparison and Диспетчер delivered and validated
-by experts. RC → 1.0: hardening, no open blocking debt, release acceptance.
+Beta → RC: hardening and independent no-regression on the complete beta scope; no missing
+menu or АР function is silently deferred. RC → 1.0: no open blocking debt and release
+acceptance on a separate exact candidate.
 
 ## 10. Owner answers — poll of 2026-10-05/06
 
@@ -353,6 +400,13 @@ freezes; numbers are deliberately not taken here.
 | A-7 | order | **by readiness**: Настройки анализа with АР (W55; the wave map places it in W56 with AR-2); Оптимизация проекта right after beta on АР (W59); Оптимизация разделов after the sections (W62) |
 | A-8 | who changes model configuration | **an administrator keeps presets (global and per section); an expert picks an allowed preset when starting a run**; the run records the exact configuration |
 
+The A-7 wording records the 2026-10-05/06 answer. The owner's 2026-10-08
+clarification supersedes its **after-beta timing**: all visible menu functions
+must work before first beta. The exact A-7 wave placements still conflict
+with §4 (settings W55 versus W56b, project OPT W59 versus W60, section OPT
+W62 versus W63) and require a recorded ruling before each first affected
+freeze. Q-2 adds the W61 versus W62 Dispatcher conflict below.
+
 ### 10.2 What the answers change in plans already written
 
 - **Accepted by the W48–W51 integrator on 2026-10-06** for W50-FREEZE-01, under its own new ruling: Работа = Проекты, Дашборд, «Оптимизация разделов» (stub); Знания = База знаний, Блоки, «Нормы» (stub); Система = Журнал выполнения, Исполнители, «Настройки анализа» (stub), «Очередь» (stub); project «Оптимизация» becomes a project tab, the existing `/optimisation` screen stays reachable until W59. State then: W48 closed locally at `23e0579` (`GATE OK`, not yet on `origin/dev`); W49 running on `integration/w49`, migration head `0015_accounts_roles_registration`; next free ruling `R-62`.
@@ -362,8 +416,10 @@ freezes; numbers are deliberately not taken here.
   navigation entries one by one.
 - **W52 scope** grows by a second track: the versioning system of §8 and the adopted tools
   (A4, A5, A6). The `D-110` refusal proposed by revision 1 for W52 is dropped (S-6).
-- **Contract in W58:** `PS` added, five names changed, stage attribute on the version — one
-  reseal and one `CHECK` migration.
+- **Section contract reseal:** the original W58 placement for `PS`, five names,
+  stage attribute and one `CHECK` migration is superseded by W59's single section
+  owner on the current development route. W63 owns the later final `1.0.0`
+  contract freeze after the complete feature set.
 
 ### 10.3 Sections (rounds 3–4)
 
@@ -382,7 +438,7 @@ freezes; numbers are deliberately not taken here.
 |---|---|---|
 | C-1 | what is compared | **all three**: stages П and Р of one object; versions of one set; runs of one version (kept) |
 | C-2 | depth for documents | **text + AI summary**: sheet pairing, deterministic text differences as evidence, AI classification and summary on top; AI never alters the raw differences |
-| C-3 | when | **second track during beta**: versions and carryover first (W59), stages П/Р second (W62) |
+| C-3 | when | Historical answer: **second track during beta**. The 2026-10-08 beta clarification moves both implementations before first beta: versions/carryover W59, stages П/Р W62. |
 | C-4 | decision carryover | **with confirmation**: a matched finding is offered its previous decision marked «из версии N»; the expert confirms singly or in bulk; fixed findings are marked resolved |
 
 ### 10.5 Screens of `R-23` missing from revision 1 (round 5)
@@ -391,6 +447,11 @@ freezes; numbers are deliberately not taken here.
 |---|---|---|
 | Q-1 | Очередь | **with Исполнители**: queue tab in Система (enqueue, priority, pause, cancel), built with the job queue (W53) |
 | Q-2 | Диспетчер and График работ | **Диспетчер in beta** (assign project/document to an expert, statuses, «мои задачи»; W61); **График работ after 1.0** (`1.1.0`) |
+
+Q-2's Dispatcher capability is part of first-beta acceptance under the
+2026-10-08 clarification. Its W61 placement conflicts with §4's W62 and
+requires the same pre-freeze placement ruling; neither route puts an
+unfinished Dispatcher after beta.
 
 ### 10.6 Versioning (round 6)
 
@@ -428,10 +489,10 @@ bundled file with database storage as the owner asked.
 | Pack | Needed before | Decisions |
 |---|---|---|
 | 2 | — | **answered**: D-2.4 by G-1 (§10.13); D-2.1, D-2.2, D-2.3 and D-2.5 in §10.10 |
-| 3 | W56 | D-3.1 answered by F-7 (one real set, not anonymised; anonymisation registered); D-3.3 answered by G-2 and G-4 (portal bundles, 500 pages / 250 MiB); D-3.4 answered by H-5 for now (no regression; beta thresholds at W58); **open:** D-3.2 named experts with slots (`OD-18`, before W58); the drawing-analysis budget and the W56b poll pack (after the W54 vision probe, G-3) |
-| 4 | W58 | D-4.1 beta users internal or external (with NORM-Q04, `U-04`, SMTP) |
+| 3 | W56 | D-3.1 answered by F-7 (one real set, not anonymised; anonymisation registered); D-3.3 answered by G-2 and G-4 (portal bundles, 500 pages / 250 MiB); D-3.4 answered by H-5 for now (no regression; W58 measures beta-threshold inputs, W63 freezes the final thresholds); **open:** D-3.2 named experts with slots (`OD-18`, before W58); the drawing-analysis budget and the W56b poll pack (after the W54 vision probe, G-3) |
+| 4 | W58 rehearsal / W63 beta | D-4.1 beta users internal or external (with NORM-Q04, `U-04`, SMTP) must be decided before any applicable real-data/external rehearsal and confirmed before W63 publication |
 | — | W57 | **answered** by I-1…I-12 (§10.15); run-time query embedding on the stand is not needed for W57 (I-2) — D-2.4's stand-capacity question stays open only for semantic retrieval from document text, which no wave plans |
-| — | W52 freeze | R-71…R-74 recorded by `W52-RULE-01`; W50 already absorbed the P-11 navigation amendment (A-6). Current-tree grant and pin sweep remain for `W52-FREEZE-01`. |
+| — | W52 freeze | recording of §10.1–§10.8 as rulings; the P-11 amendment (A-6) reaching `W50-PLAN.md` before W50 freezes |
 
 ### 10.10 Second poll (2026-10-06): W52 and pack 2
 
@@ -521,6 +582,10 @@ The W55 plan built on these answers is `docs/program/dispatch/W55-PLAN.md`.
 | H-8 | labelling real documents | **the owner reviews v2's output in the product** (accept or reject per finding) — a precision figure, not a gate |
 | H-9 | live spend in W56a | **within $5 (`R-29`)**; a projection above it stops for the owner |
 
+H-5 is the historical answer. W58 records the measured figures and proposed
+thresholds; W63 freezes and tests the final beta thresholds on its complete
+candidate and independent field set.
+
 Follow-up the same day, after the first judging round of `W56-PLAN.md` showed that the critic is a second
 paid stage W53's single-call execution model does not cover, that FS-04 makes a run with a failed optional
 stage `partial`, and that the critic takes a large share of the $5:
@@ -542,17 +607,55 @@ Asked by the planning session `pdf-analysis-e6`: I-1…I-8 after the research di
 | I-1 | how norm verification is built | **in the same analysis call, then a deterministic check**: the analysis receives the norm paragraphs selected for the checklist and proposes a finding with a citation (document, clause, verbatim quote); a step without a model checks that the paragraph exists in the pinned snapshot and the quote is verbatim; an unconfirmed citation is not published. One paid call per run; no dependency on W56b's multi-call resume |
 | I-2 | how norms are selected | **a checklist map**: each АР checklist item mapped to documents and clauses (ported from legacy and checked, since part of its clause numbers are phantom); query vectors for the items built here in advance with the pinned BGE image; at run time SQL only — exact clause lookup plus pgvector; **no BGE on the stand** |
 | I-3 | the norms the project itself cites (`normative_refs`) | **by the corpus only**, without a model: "in the corpus" / "a newer edition in the corpus: …" / "not in the corpus"; no claim of "cancelled" or "replaced", because the corpus holds no document status |
-| I-4 | which normative categories | **all seven**: evacuation, fire safety, accessibility, thermal protection, insolation, sound insulation, plus `normative_refs`; each checked as "the values the document states against the norm's thresholds", with no independent calculation |
+| I-4 | which normative categories | **all seven**: evacuation, fire safety, accessibility, thermal protection, insolation, sound insulation, plus `normative_refs` (*amended by K-2, §10.16: insolation moves after beta; v3 has five normative categories*); each checked as "the values the document states against the norm's thresholds", with no independent calculation |
 | I-5 | a citation that fails the check | **the quote decides**: a quote found verbatim in another clause of the same document rebinds the citation to that clause without a model; a quote found nowhere in the document withholds the finding — counted in the evaluation and shown in the run's summary as withheld, never shown to the expert |
 | I-6 | which edition applies when the corpus holds several | **the newest in the pinned snapshot**; a project citing an older edition gets a separate `normative_refs` finding, and the expert decides |
 | I-7 | Excel | **legacy's layout, export only**: «Сводка» (counts by the five severities) and a findings sheet — № \| Лист/стр. \| Категория \| Замечание \| Рекомендация \| Серьёзность (the expert's decision and the model's proposal) \| Норма (document, clause) \| Цитата нормы \| Решение эксперта \| Комментарий; merged members as «также найдено» rows; no re-import; the CSV stays as it is |
 | I-8 | who checks the checklist map | **an automatic check plus the owner's review**: every mapped clause must exist in the snapshot or the row is dropped; the lane's report shows each checklist item beside its clause texts; the owner reviews the list once (≈ 25 rows) before the map enters the profile |
 | I-9 | W57 at ≈ 85–95 h (the judges' estimate after round 1) | **two waves**: W57a — the map, the retrieval set, profile v3, citations, screens; W57b — the project's own references and Excel; each with its own freeze, judges and release |
-| I-10 | live spend | **$5 (`R-29`) per half**; the expensive recordings fall in W57a; a re-record after FIX is a stop for the owner when the projection passes $5 |
+| I-10 | live spend | **$5 (`R-29`) per half**; the expensive recordings fall in W57a; a re-record after FIX is a stop for the owner when the projection passes $5 (*amended by K-10: W57a $8 with one re-record*) |
 | I-11 | norm text in the repository | **allowed — the repository is internal**: fragments of norms (quotes in recordings, paragraph texts in test fixtures) are committed with their source attribution |
 | I-12 | W56b or W57 first | **W57 first**: W57a and W57b follow W56a; W56b is planned after the W54 vision probe and follows W57b; releases W57a `v0.8.0`, W57b `v0.8.1`, W56b `v0.9.0` |
 
 The W57 plan built on these answers is `docs/program/dispatch/W57-PLAN.md`.
+
+### 10.16 Corpus-chain review poll (2026-10-12)
+
+**Context.** Session `pdf-analysis-4e` reviewed the W54→W57 chain against `origin/dev` `8722660`
+and rulings R-75…R-84. The review and the revision directives that follow from these answers are
+in `reviews/W54-W57-CHAIN-REVIEW.md`. The owner described the chain as "installing the normative
+corpus on prod".
+
+**Status of these answers.** They are recorded as the owner gave them. Turning them into `R-`
+rulings is the next `*-RULE-01` act.
+
+| # | Question | Owner's answer |
+|---|---|---|
+| K-1 | how the corpus is written into the stand while backup waits for the beta wave (R-77) | **with a one-off copy**. Before the import: an inventory of the client S3 objects and a quiesced PostgreSQL dump of the stand. The bundle kept on this machine is the corpus's own recovery copy. The importer refuses to run without that attested copy. The full backup system stays in the beta wave. |
+| K-2 | the corpus holds no insolation norm (no СанПиН 1.2.3685-21, no ГОСТ Р 57795), and no СП 2.13130 or СП 4.13130 | **insolation is removed from profile v3**; v3 keeps five normative categories. Fire safety is checked against what the corpus holds. Insolation returns after beta, together with its documents. |
+| K-3 | revise only W54 and W55a, or the whole chain | **the whole chain now**: W54, W55 and W57, with W57's second judging round. |
+| K-4 | the uncommitted 2026-10-08 planning layer found in the `plan-roadmap-to-beta` worktree (author unknown) | **preserve it and use it as the base**. It is preserved verbatim in `97127ac` on `plan/corpus-chain`. It is used for W54–W57 only; its W58–W64 plans and the beta move to W63 are neither reviewed nor adopted by this revision. |
+
+Second round, the same day, on the revised plans' open questions:
+
+| # | Question | Owner's answer |
+|---|---|---|
+| K-5 | the stand stays quiesced from the dump to the end of the corpus import, an estimated several hours | **acceptable**: a maintenance window of several hours, agreed in advance; its length is taken from the rehearsal. |
+| K-6 | the one-off copy only before the corpus import, or before every `origin/main` publication that applies migrations on the stand | **before every publication that applies migrations on the stand**, until the beta backup wave. |
+| K-7 | real client portal bundles on the stand before the beta backup wave (W55b) | **allowed without conditions**; the owner accepts the risk to client data and expert decisions until the backup wave. |
+| K-8 | the W54 repair sample projects more than the $10 ceiling | **stop for the owner's decision**; the run does not proceed under the ceiling on its own. |
+| K-9 | no `v0.3.0` tag and `W53-RELNOTES-STOP-01` open | **one truthful summary amendment** (§8.4 of the 2026-10-08 layer): versions 0.3–0.4, published only to the development line, are recorded as development history; the first real release goes out with the next `origin/main` publication; release notes resume. |
+| K-10 | W57a's paid-call ceiling (projection $3.44–4.48; one full re-record $2.24–3.28) | **$8**, one full re-record included; a second re-record is a stop. |
+| K-11 | the paid repair journal: this machine only, or mirrored to another host | **a local fsynced file on this machine**; no off-host mirror. |
+| K-12 | does K-6 apply to W53's `v0.4.0` publication, which applies `0017` and recreates MinIO before any copy tooling exists | **exempt**: W53's publication needs no copy (also confirmed to `pdf-analysis-62`); K-6 applies from W54 on. |
+| K-13 | approve the revised W54→W57 chain (`plan/corpus-chain` @ `a49cf78`) as the basis for implementation by `pdf-analysis-62` | **approved**, the whole chain. Its `*-RULE-01` acts record K-1…K-13 as rulings from R-88 on; each wave still freezes with a fresh pin sweep. |
+| K-14 | this host has ≈ 14 GB free; the W54/W55 rehearsal peak is ≈ 28 GB | **free the ignored caches of inactive worktrees** (as `HOST-CAPACITY-CACHE-01`): measure first, remove only ignored `node_modules`, `.venv` and `.next` directories of worktrees their owning session confirms inactive, and ask again if the space is still short. |
+| K-15 | checks during W54–W57 implementation (answered to `pdf-analysis-62` by direct poll, relayed 2026-10-12) | **light acceptance in every lane** (the touched contexts' tests and migrations on private lanes) **plus one full `make gate` on each wave's final candidate before `origin/main`**. This replaces the plans' per-lane full-gate levels (e.g. W54 §4 "full gate for SEAL, BGE-IMAGE, …", W55 §C5–§C6, W57's lane levels); the plans' texts are not re-judged for it, and `W54-RULE-01` records it as a ruling. |
+
+*Later the same day:* W53 was released (`origin/main` `2653dbf`, tag `v0.4.0`) under R-85…R-87. R-86
+keeps 0.3.0 as its own history row and supersedes K-9's wording. The stand is at migration head
+`0017` with MinIO recreated (R-83); no client-object read-back was done, so it moves to W54's P2
+(`reviews/W54-W57-CHAIN-REVIEW.md` CD-15).
 
 ## 11. Risks
 

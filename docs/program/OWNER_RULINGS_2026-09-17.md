@@ -1465,3 +1465,35 @@ deployment workflow's own verification, and one short live check on the stand, i
 complete `make gate`. For this candidate this replaces `R-70`'s full gate before `origin/main`
 and the gate clause of `MAIN_AUTODEPLOY_POLICY.md`; the separate direct owner instruction
 naming the exact SHA is still required.
+
+## 3.30 — `R-88` to `R-107`, the corpus-chain answers and the W54 records (`W54-RULE-01`)
+
+On 2026-10-12 the owner answered the corpus-chain review polls K-1…K-15. They were put by
+session `pdf-analysis-4e`, except K-15, which was put by `pdf-analysis-62`. The verbatim answers
+are in `dispatch/ROADMAP-TO-BETA.md` §10.16. K-13 approved the revised W54→W57 chain
+(`plan/corpus-chain` `ff59705`) and directed that its `*-RULE-01` acts record the answers as
+rulings from `R-88` on. The W54 plan's provisional records then take `R-103`…`R-107` under the
+same approval.
+
+| Ruling | Answer | Substance |
+| --- | --- | --- |
+| `R-88` | K-1 | The corpus enters the stand only after a one-off copy: an inventory of the client S3 objects and a quiesced PostgreSQL dump. The bundle kept here is the corpus's own recovery copy, and the importer refuses to run without the attested copy. Full backup stays in the beta wave. |
+| `R-89` | K-2 | Insolation leaves profile v3, which keeps five normative categories. Fire safety is checked against what the corpus holds. |
+| `R-90` | K-3 | The whole chain (W54, W55, W57) is revised now. |
+| `R-91` | K-4 | The 2026-10-08 planning layer is preserved (`97127ac`) and used for W54–W57 only. Its W56B and W58–W64 plans, and its move of beta to W63, are not adopted. |
+| `R-92` | K-5 | A maintenance window of several hours, agreed in advance, is acceptable for the copy and import; its length comes from the rehearsal. |
+| `R-93` | K-6 | A one-off copy precedes every `origin/main` publication that applies migrations on the stand, until the beta backup wave. |
+| `R-94` | K-7 | Real client portal bundles are allowed on the stand before the backup wave; the owner accepts the risk. |
+| `R-95` | K-8 | If the W54 repair sample projects above $10, the run stops for the owner's decision. |
+| `R-96` | K-9 | Superseded by `R-86`: 0.3.0 keeps its own history row; release notes resume. |
+| `R-97` | K-10 | W57a's paid-call ceiling is $8, including one full re-record; a second re-record is a stop. |
+| `R-98` | K-11 | The paid repair journal is a local fsynced file on this machine, with no off-host mirror. |
+| `R-99` | K-12 | W53's publication was exempt from `R-93`; the rule applies from W54. |
+| `R-100` | K-13 | The revised W54→W57 chain is approved as the implementation basis; each wave still freezes with a fresh pin sweep. |
+| `R-101` | K-14 | Disk is freed by removing ignored `node_modules`, `.venv` and `.next` directories of inactive worktrees, measured first; ask again if it is still short. |
+| `R-102` | K-15 | Every W54–W57 lane uses light acceptance (the touched contexts' tests and migrations on private lanes), plus one full `make gate` on each wave's final candidate before `origin/main`. This replaces the plans' per-lane full-gate levels. |
+| `R-103` | K-13 | The W54 shape (F-1) and the AR-1 inputs (F-5, F-6, F-9). "OCR is always marked" applies in W55. |
+| `R-104` | K-13 | Transport and the road to the stand: F-2, CD-16's sequences, K-5, K-6 and the P2 bootstrap, K-1's copy, both forced-command keys and their verbs, the importer's refusals, the `ADR-0020` addendum, and the two-phase custody sequence. |
+| `R-105` | K-13 | The worker service and the `ADR-0002` addendum. |
+| `R-106` | K-13 | Repairs (F-3, F-4, W-4): the journal and its write order, `R-79`'s tries, the sample stop (`R-95`), the cumulative $10, and the local journal (`R-98`). |
+| `R-107` | K-13 | Real-document scope (F-7). |
