@@ -99,18 +99,17 @@ _SELECT_PARAGRAPH_ROWS = text(
 
 _SELECT_STORED_PARAGRAPHS = text(
     """
-    SELECT d.norm_document_pk, d.slug, p.ordinal, p.page_label, p.block_ref, p.char_offset,
-           p.char_length, p.kind, p.clause_number, p.text, p.text_reliability
-    FROM norm_paragraph p
-    JOIN norm_document d USING (norms_snapshot_id, norm_document_pk)
-    WHERE p.norms_snapshot_id = :norms_snapshot_id
-    ORDER BY d.norm_document_pk, p.ordinal
+    SELECT ordinal, page_label, block_ref, char_offset, char_length, kind, clause_number,
+           text, text_reliability
+    FROM norm_paragraph
+    WHERE norms_snapshot_id = :norms_snapshot_id AND norm_document_pk = :norm_document_pk
+    ORDER BY ordinal
     """
 )
 
 _SELECT_DOCUMENT_PKS = text(
-    "SELECT norm_document_pk FROM norm_document WHERE norms_snapshot_id = :norms_snapshot_id "
-    "ORDER BY norm_document_pk"
+    "SELECT norm_document_pk, slug FROM norm_document "
+    "WHERE norms_snapshot_id = :norms_snapshot_id ORDER BY norm_document_pk"
 )
 
 _SELECT_UNRELIABLE_COUNT = text(
@@ -564,24 +563,19 @@ class NormsRepository:
         The rebuild path `NORM_CORPUS_PERSISTENCE.md` names, and the importer's: the chunks
         are a deterministic function of the canonical rows, so they are derived on arrival
         rather than carried. Refused for ``characters-v1`` over unreliable text; the build
-        row is written last, with the count.
+        row is written last, with the count. Paragraphs are read one document at a time, so
+        memory is bounded by the largest document rather than by the snapshot.
         """
         self.admit_chunking_profile(snapshot_id, chunking_profile)
         version, target = parse_chunking_profile(chunking_profile)
-        by_document: dict[int, list[Paragraph]] = defaultdict(list)
-        slugs: dict[int, str] = {}
-        rows = (
-            self._session.execute(
-                _SELECT_STORED_PARAGRAPHS, {"norms_snapshot_id": str(snapshot_id)}
-            )
-            .mappings()
-        )
-        for row in rows:
-            document_pk = int(row["norm_document_pk"])
-            slugs[document_pk] = str(row["slug"])
-            by_document[document_pk].append(
+        documents = self._session.execute(
+            _SELECT_DOCUMENT_PKS, {"norms_snapshot_id": str(snapshot_id)}
+        ).all()
+        chunks = 0
+        for document_pk, slug in documents:
+            paragraphs = [
                 Paragraph(
-                    document_slug=str(row["slug"]),
+                    document_slug=str(slug),
                     page_label=int(row["page_label"]),
                     block_id=str(row["block_ref"]),
                     ordinal=int(row["ordinal"]),
@@ -592,20 +586,14 @@ class NormsRepository:
                     text=str(row["text"]),
                     text_reliability=TextReliability(row["text_reliability"]),
                 )
-            )
-        chunks = 0
-        for document_pk in self._session.execute(
-            _SELECT_DOCUMENT_PKS, {"norms_snapshot_id": str(snapshot_id)}
-        ).scalars():
-            paragraphs = by_document.get(int(document_pk), [])
+                for row in self._session.execute(
+                    _SELECT_STORED_PARAGRAPHS,
+                    {"norms_snapshot_id": str(snapshot_id), "norm_document_pk": int(document_pk)},
+                ).mappings()
+            ]
             built = chunk_paragraphs(paragraphs, content_key, target, version=version)
             chunks += self._insert_chunks(
-                snapshot_id,
-                int(document_pk),
-                chunking_profile,
-                paragraphs,
-                built,
-                label=slugs.get(int(document_pk), str(document_pk)),
+                snapshot_id, int(document_pk), chunking_profile, paragraphs, built, label=str(slug)
             )
         self.finish_chunk_build(snapshot_id, chunking_profile, target, chunks)
         return chunks
