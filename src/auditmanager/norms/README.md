@@ -24,11 +24,12 @@ projection that can be rebuilt from the drop at any time.
 | `chunking.py` | joining paragraphs into ~1200-character retrieval chunks: `characters-v1` (every paragraph) and the reliability-aware `characters-v2`, with the coverage invariant |
 | `snapshot.py` | deterministic effective-text `content_key` derivation (`R-17`), its `+seg-<profile>` term (`D-126`), and the canonical row digest over a stored snapshot's rows |
 | `repair.py` | the immutable repair ledger and repaired-content key |
-| `corpus_source.py` | the only module that reads the filesystem; strict manifest/projection boundary |
+| `corpus_source.py` | reads the drop's text, manifest and crop paths; strict manifest/projection boundary (the bundle export also reads the drop's PDFs, read-only) |
 | `repository.py` | transaction-local PostgreSQL writes, content-key idempotency, rows read back with their ids, the streamed row digest, chunk builds from stored paragraphs |
 | `loader.py` | the atomic loader and its operator CLI; `import_snapshot`, which inserts rows with the ids they carry |
 | `embedding/` | the resumable, batch-bounded `bge-m3-dense-v1` embedder: the 512/64 windowing ported from the bake-off runner, the plan and per-batch checkpoint files, the encode phase, `embed-texts`, and the `norm-embedding-set/2` digest; standard library only at module level |
 | `embedding_repository.py` | transaction-local embedding persistence: a build accepted only with every chunk's full window set and loaded in one transaction ending with its completion row (`D-127`); the filtered HNSW search with its scan settings (`D-124`) |
+| `bundle/` | the promotion bundle (`W54-BUNDLE-01`): `export` from the promotion database and the drop into `<content_key>+<sha256(SHA256SUMS)>/`; on the stand `import` (custody admission and dispatch, then rows with their ids and the bindings in one transaction, then the build), the read-only `report`, `requeue`; the copy record's acceptance rule and the stand fingerprint |
 
 ## Rules this context keeps
 
@@ -123,3 +124,33 @@ PYTHONPATH=src .venv/bin/python -m auditmanager.norms.embedding load --snapshot 
 window, and 2 on a refusal. `embed-texts --in <request.json> --out <response.json>` answers a
 `auditmanager-embed-texts-request/1` file with base64 big-endian float32 vectors, the profile,
 the model revision and each vector's SHA-256; a text over 512 tokens is refused, never cut.
+
+## The promotion bundle (`W54-BUNDLE-01`)
+
+`python -m auditmanager.norms.bundle` carries one repaired snapshot from the promotion database
+to the stand **with its ids** (`W54-PLAN.md` §3.5). The bundle holds `manifest.json`
+(`auditmanager-norm-bundle/1`), the canonical rows (`rows/`), the complete build keyed by the
+computed chunk key (`build/`), and every source PDF and crop as a content-addressed object
+(`objects/<2 hex>/<sha256>.pdf`, hardlinked from the drop) with the custody slots it serves.
+`SHA256SUMS` lists every other file; its SHA-256 is the second half of the bundle's name.
+
+- **All-or-nothing, in order.** `import` verifies the bundle, the copy record (an attested
+  `import` copy, or an unexpired `test_data_waiver` while the `real_data` marker is unset) and
+  the fingerprint; admits every slot and dispatches until every admission is `confirmed`
+  (otherwise it exits 75 and the bundle is kept); then inserts the rows with their ids and
+  publishes the bindings in one transaction; then loads the build; then reports.
+- **Replay is a no-op; a conflict is refused before anything is written** -- the key under
+  another id, the id under another key, a child id held by another snapshot, a `rejected`
+  manifest Blob (`D-143`).
+- **An import alone leaves the fingerprint unchanged.** It writes only `norm*` rows,
+  `norm_custody.*` events and Blob rows custody names -- the fingerprint's three exclusions.
+- **`report` is read-only** and exits 0 only when the stand equals the manifest and the copy
+  record: counts, row, build and binding digests, admissions, Blob totals, client tables.
+
+```
+PYTHONPATH=src .venv/bin/python -m auditmanager.norms.bundle export --snapshot <ns_id> --chunking-profile characters-v2:1200 --corpus .local/norms/corpus --drop-sums .local/norms/corpus-sums/<date>/SHA256SUMS [--ledger <ledger.json>] --out .local/norms/bundles
+PYTHONPATH=src .venv/bin/python -m auditmanager.norms.bundle verify .local/norms/bundles/<KEY>
+```
+
+Exit status: 0 done (a full match for `report`); 1 `report` found a difference; 2 refused, with
+`bundle: REFUSED [<reason>]` on stderr; 75 the import is not finished.
