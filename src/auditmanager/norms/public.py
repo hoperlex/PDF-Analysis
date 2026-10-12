@@ -47,11 +47,18 @@ from auditmanager.norms.custody import (
     report,
     requeue,
 )
+from auditmanager.norms.repair import (  # W54-REPAIR-01
+    LEDGER_VERSION,
+    RepairLedger,
+    RepairOutcome,
+    repaired_snapshot,
+)
 
 __all__ = [
     "ADMIT_COMMAND_TYPE",
     "D143_MESSAGE",
     "D143_REASON",
+    "LEDGER_VERSION",
     "MAX_ATTEMPTS",
     "NORM_SOURCE",
     "RETRY_DELAYS_SECONDS",
@@ -80,11 +87,14 @@ __all__ = [
     "IncidentKind",
     "ManifestIndex",
     "RejectedBlob",
+    "RepairLedger",
+    "RepairOutcome",
     "RoleShape",
     "admit",
     "binding_digest",
     "blob_id_for",
     "publish_bindings",
+    "repaired_snapshot",
     "report",
     "requeue",
 ]

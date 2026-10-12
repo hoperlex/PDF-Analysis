@@ -1,46 +1,51 @@
 """The re-recognition runner: the only place in this context that spends money.
 
-`R-19` re-recognises the pages whose text is the recognition model's own reasoning. `R-27`
-authorises the stand's own provider credential for it and `R-29` caps a wave at roughly five
-dollars. This module is where those three meet, and it is deliberately the only file in
-`auditmanager.norms` that knows a provider exists.
+`R-19` re-recognises the pages whose text is the recognition model's own reasoning. `R-106`
+(`W54-PLAN.md` §3.3) puts every paid call through the durable repair journal
+(:mod:`auditmanager.norms.repair_journal`): a local fsynced file first, the
+``norm_repair_call`` row second, the dispatch third. This module composes that journal with
+the LLM proxy, and it is deliberately the only file in `auditmanager.norms` that knows a
+provider exists.
 
-    # what it would cost and what it would read, with no call made
-    PYTHONPATH=src .venv/bin/python -m auditmanager.norms \\
-        --corpus /path/to/corpus --ledger /path/to/repairs.json --dry-run
+    # what it would read, render and bound, with no call, no database and no credential
+    PYTHONPATH=src .venv/bin/python -m auditmanager.norms repair plan \\
+        --corpus <drop> --model claude-opus-5
 
-    # live mode is fail-closed until this command owns a durable per-call journal
-    PYTHONPATH=src .venv/bin/python -m auditmanager.norms \\
-        --corpus /path/to/corpus --ledger /path/to/repairs.json
+    # the priced sample (R-95): the three largest crops, then the projection and its verdict
+    PYTHONPATH=src .venv/bin/python -m auditmanager.norms repair sample \\
+        --corpus <drop> --sums <SHA256SUMS> --journal-dir .local/norms/repairs
+
+    # the full run, only after a `proceed` verdict or a recorded owner decision
+    PYTHONPATH=src .venv/bin/python -m auditmanager.norms repair full \\
+        --corpus <drop> --sums <SHA256SUMS> --journal-dir .local/norms/repairs
+
+    # the ledger the journal implies, and the journal against the database
+    ... repair ledger --corpus <drop> --journal-dir <dir> --out <ledger.json>
+    ... repair status --journal-dir <dir>
+
+``sample`` and ``full`` read ``DATABASE_URL`` (the promotion database) and the three
+``PROXY_LLM_*`` values from the process environment. Exit status: 0 done, 2 refused before
+anything was spent, 3 stopped on a rule (the ceiling, the sample stop, a refused answer).
 
 **The credential is read from the process environment and from nowhere else.** Not from a
 path this module knows, not from a lane `.env`, and it is never printed — not into the
-ledger, not into an error, not into the summary. That is `live.py`'s rule, restated here
-because this runner is reached by hand and a hand-run is where a credential gets echoed.
-`D-42` measured `docker compose config` printing such a value in clear; the same care applies.
+journal, not into an error, not into the summary. `D-42` measured `docker compose config`
+printing such a value in clear; the same care applies.
 
-**Three refusals before a single call, and each of them has cost somebody a wave.**
+**Refusals before a single call.** A proxy URL with no host (``ProxySettings`` accepts
+``http://:59990``); a model that is a stub or is not on the rate card (an unknown outcome
+could not be bounded); a crop that differs from the operator's ``SHA256SUMS``; a corpus that
+is not the journal's base snapshot; a journal the database does not agree with.
 
-*A proxy URL with no host.* ``ProxySettings`` checks only that the string starts with
-``http://`` or ``https://``, so ``http://:59990`` is accepted and fails later as a transport
-error that reads like an outage. It is not an outage; it is a lane pointed at nothing.
+**The checkpoint is taken inside the transport.** The W53 proxy adapter reads the body and
+parses it in one method. The opener this module hands it wraps the HTTP response so the
+complete 200 body is written to the journal — bytes to disk, row to ``response_received`` —
+*before* the adapter parses a byte of it. Replays parse the stored bytes through the same
+adapter with a stored-response opener, so the live and the replayed answer are read by one
+parser and no replay opens a connection.
 
-*A transport that prices nothing.* The proxy returns the real spend for a call, and the
-ledger's whole answer to *"what did this cost"* is that number. A run whose calls come back
-unpriced is not a cheap run — it is a run that **cannot say** what it spent, and under `R-29`
-that is the same as not knowing whether the ceiling was crossed. It stops on the first one
-unless the operator says otherwise, because a local stub of the proxy's contract answers
-exactly that way and looks, from here, like a very good deal.
-
-*The ceiling.* Checked **before** each call against what has already been spent and **after**
-each call against what it actually cost, which is ``cost.py``'s rule and catches two different
-failures: a run already at the ceiling never issues another request, and one call far more
-expensive than expected halts the run rather than being noticed in a bill.
-
-**Live mode is refused before transport construction.** A page ledger written only after the
-provider returns cannot prove whether a process-loss window spent money. Until a durable
-pre-call journal exists for this command, only ``--dry-run`` is executable; this is an explicit
-operator-visible refusal rather than a false "never re-spends" promise.
+The legacy flat form (``--corpus --ledger [--dry-run]``) is kept for the dry run; its live
+form still refuses (``durable_call_journal_required``) and names the commands above.
 """
 
 from __future__ import annotations
@@ -50,19 +55,44 @@ import base64
 import io
 import json
 import os
+import re
+import struct
 import sys
 import urllib.parse
+import urllib.request
+from collections.abc import Callable, Iterable, Sequence
+from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
-from auditmanager.norms.corpus_source import degenerate_pages
+from auditmanager.norms.corpus_source import crop_path, degenerate_pages, snapshot_of
+from auditmanager.norms.repair_journal import (
+    CEILING_USD,
+    CallFailure,
+    DurableRepairRunner,
+    Failure,
+    JournalRefused,
+    LocalJournal,
+    ModelNotPriced,
+    PreparedRequest,
+    RunStopped,
+    SqlCallStore,
+    UnreadableAnswer,
+    build_ledger,
+    money,
+    rate_for,
+    unknown_outcome_bound,
+)
+from auditmanager.norms.repair_journal.pricing import OUTPUT_TOKEN_CEILING
 from auditmanager.norms.rerecognition import (
     RECOGNITION_SYSTEM_PROMPT,
     PageToRecognise,
     RecognisedPage,
 )
 
-#: `R-29`'s first stopping condition, as the default rather than as a paragraph.
+#: `R-29`'s first stopping condition, kept for the legacy dry run's report only. The paid
+#: run's ceiling is `R-106`'s cumulative $10 (:data:`CEILING_USD`) and is not an argument.
 DEFAULT_CEILING_USD: float = 5.00
 
 #: The render resolution for a crop. 150 dpi over an A4 page is 1241×1754, which is what the
@@ -72,10 +102,27 @@ RENDER_DPI: int = 150
 ENV_BASE_URL = "PROXY_LLM_BASE_URL"
 ENV_TOKEN = "PROXY_LLM_TOKEN"
 ENV_MODEL = "PROXY_LLM_MODEL"
+ENV_DATABASE_URL = "DATABASE_URL"
+
+DEFAULT_JOURNAL_DIR = Path(".local/norms/repairs")
+LEDGER_FILENAME = "ledger.json"
+
+EXIT_REFUSED = 2
+EXIT_STOPPED = 3
+
+_RULING = re.compile(r"^R-[0-9]{1,4}$")
+_SUM_LINE = re.compile(r"^([0-9a-f]{64}) [ *](.+)$")
 
 
 class RunRefused(RuntimeError):
-    """The run stopped before or during spending, and says why in words, never in values."""
+    """The run stopped before spending, and says why in words, never in values."""
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+# --- the crop ---------------------------------------------------------------------------
 
 
 def render_crop_png(crop: bytes, *, dpi: int = RENDER_DPI) -> bytes:
@@ -95,15 +142,285 @@ def render_crop_png(crop: bytes, *, dpi: int = RENDER_DPI) -> bytes:
     return buffer.getvalue()
 
 
+def png_pixels(png: bytes) -> int:
+    """Width x height from a PNG's IHDR, without decoding the image."""
+    if len(png) < 24 or png[:8] != b"\x89PNG\r\n\x1a\n" or png[12:16] != b"IHDR":
+        raise RunRefused("a rendered crop is not a PNG")
+    width, height = struct.unpack(">II", png[16:24])
+    return width * height
+
+
+def crop_area(page: PageToRecognise) -> float:
+    """The crop's page area in PDF points, for `R-95`'s "three largest crops by area"."""
+    import pdfplumber
+
+    with pdfplumber.open(io.BytesIO(page.crop)) as document:
+        if not document.pages:
+            raise RunRefused(f"{page.document_slug}/{page.block_id}: the crop carries no page")
+        first = document.pages[0]
+        return float(first.width) * float(first.height)
+
+
+def recognition_body(png: bytes, *, model: str, max_output_tokens: int) -> dict[str, Any]:
+    """The Anthropic-shaped body the proxy adapter translates. A constant prompt (`R-19`)."""
+    encoded = base64.b64encode(png).decode("ascii")
+    return {
+        "model": model,
+        "max_tokens": max_output_tokens,
+        "system": RECOGNITION_SYSTEM_PROMPT,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded}"}},
+                ],
+            }
+        ],
+    }
+
+
+def verify_crops_against_sums(root: Path, pages: Iterable[PageToRecognise], sums: Path) -> int:
+    """Every crop to be paid for, checked against the operator's ``SHA256SUMS`` (step 0).
+
+    The file is ``sha256sum`` output taken over the drop: ``<64 hex>  <path>`` with paths
+    relative to the corpus root (a leading ``./`` is accepted). A crop with no line, or with
+    other bytes than its line says, refuses the run before anything is spent.
+    """
+    import hashlib
+
+    if not sums.is_file():
+        raise RunRefused("no SHA256SUMS file at the path given to --sums")
+    recorded: dict[str, str] = {}
+    for number, raw in enumerate(sums.read_text(encoding="utf-8").splitlines(), start=1):
+        if not raw.strip():
+            continue
+        match = _SUM_LINE.match(raw)
+        if match is None:
+            raise RunRefused(f"SHA256SUMS line {number} is not '<sha256>  <path>'")
+        path = match.group(2)
+        recorded[path.removeprefix("./")] = match.group(1)
+    checked = 0
+    for page in pages:
+        relative = crop_path(root, page.document_slug, page.block_id).relative_to(root).as_posix()
+        expected = recorded.get(relative)
+        if expected is None:
+            raise RunRefused(f"{page.document_slug}/{page.block_id}: the crop has no SHA256SUMS line")
+        if hashlib.sha256(page.crop).hexdigest() != expected:
+            raise RunRefused(
+                f"{page.document_slug}/{page.block_id}: the crop differs from its SHA256SUMS "
+                "line; the drop changed since step 0"
+            )
+        checked += 1
+    return checked
+
+
+# --- the proxy behind the journal's transport port ----------------------------------------
+
+
+class _CheckpointingResponse:
+    """Wraps one HTTP response so a complete 200 body is checkpointed before it is parsed."""
+
+    def __init__(self, inner: Any, checkpoint: Callable[[bytes], None]) -> None:
+        self._inner = inner
+        self._checkpoint = checkpoint
+
+    def __enter__(self) -> Self:
+        self._inner.__enter__()
+        return self
+
+    def __exit__(self, *exc: object) -> Any:
+        return self._inner.__exit__(*exc)
+
+    @property
+    def status(self) -> int:
+        return self._inner.status
+
+    @property
+    def headers(self) -> Any:
+        return getattr(self._inner, "headers", None)
+
+    def read(self, amount: int | None = None) -> bytes:
+        if amount is not None:
+            return self._inner.read(amount)
+        raw = self._inner.read()
+        if self.status == 200:
+            self._checkpoint(raw)
+        return raw
+
+
+class _StoredResponse:
+    """A checkpointed body served to the adapter as if it had just arrived. No socket."""
+
+    status = 200
+    headers = None
+
+    def __init__(self, raw: bytes) -> None:
+        self._raw = raw
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        return None
+
+    def read(self, amount: int | None = None) -> bytes:
+        return self._raw if amount is None else self._raw[:amount]
+
+
+def _usage_cost(raw: bytes) -> Decimal | None:
+    try:
+        document = json.loads(raw)
+    except (ValueError, UnicodeError):
+        return None
+    usage = document.get("usage") if isinstance(document, dict) else None
+    value = usage.get("cost") if isinstance(usage, dict) else None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        return None
+    return money(value)
+
+
+def read_proxy_answer(raw: bytes) -> RecognisedPage:
+    """Parse a checkpointed proxy body with the W53 adapter's own parser, offline.
+
+    ``model`` is the answer's own ``model`` field (H-6 compares it with the configured one);
+    ``cost_usd`` is ``usage.cost`` or ``None``.
+    """
+    from auditmanager.analysis.public import (
+        ModelRequest,
+        ProxyAdapter,
+        ProxyDispatchError,
+        ProxySettings,
+    )
+
+    adapter = ProxyAdapter(
+        ProxySettings(base_url="http://replay.invalid", token="replay", model="replay"),
+        opener=lambda _request, timeout=None: _StoredResponse(raw),
+    )
+    try:
+        response = adapter.complete(
+            ModelRequest(model_id="replay", body={"max_tokens": 1, "messages": []})
+        )
+    except ProxyDispatchError:
+        raise UnreadableAnswer(
+            "the checkpointed body is not a usable chat-completions answer",
+            cost_usd=_usage_cost(raw),
+        ) from None
+    document = json.loads(raw)
+    answered = document.get("model") if isinstance(document, dict) else None
+    return RecognisedPage(
+        text=response.output_text,
+        model=answered if isinstance(answered, str) else "",
+        stop_reason=response.stop_reason,
+        input_tokens=response.input_tokens,
+        output_tokens=response.output_tokens,
+        cost_usd=response.reported_cost_usd,
+    )
+
+
+class ReplayReader:
+    """An :class:`~auditmanager.norms.repair_journal.AnswerReader` for ledger export."""
+
+    def read_answer(self, raw: bytes) -> RecognisedPage:
+        return read_proxy_answer(raw)
+
+
+def _failure_of(error: Any) -> str:
+    from auditmanager.shared.errors import ErrorCode
+
+    if error.dispatch_class == "not_sent":
+        return Failure.NOT_SENT
+    if error.dispatch_class == "rate_limited":
+        return Failure.RATE_LIMITED
+    if error.dispatch_class == "definite_refusal":
+        if error.code is ErrorCode.DEPENDENCY_CREDENTIAL_REFUSED:
+            return Failure.CREDENTIAL_REFUSED
+        return Failure.REQUEST_REFUSED
+    return Failure.OUTCOME_UNKNOWN
+
+
+class ProxyRepairTransport:
+    """The journal's :class:`~auditmanager.norms.repair_journal.RepairTransport` over the proxy.
+
+    ``opener`` is the HTTP opener (``urllib.request.urlopen`` by default); tests inject a
+    stub, so no test opens a connection. Each try sends the call's own ``nrc`` id as its
+    idempotency scope.
+    """
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        token: str,
+        model: str,
+        max_output_tokens: int = OUTPUT_TOKEN_CEILING,
+        dpi: int = RENDER_DPI,
+        opener: Callable[..., Any] | None = None,
+        render: Callable[[bytes], bytes] | None = None,
+    ) -> None:
+        from auditmanager.analysis.public import ProxySettings
+
+        self.model = model
+        self._settings = ProxySettings(base_url=base_url, token=token, model=model)
+        self._max_output_tokens = max_output_tokens
+        self._dpi = dpi
+        self._opener = opener or urllib.request.urlopen
+        self._render = render or (lambda crop: render_crop_png(crop, dpi=self._dpi))
+
+    def prepare(self, page: PageToRecognise) -> PreparedRequest:
+        from auditmanager.analysis.public import ModelRequest
+
+        png = self._render(page.crop)
+        body = recognition_body(png, model=self.model, max_output_tokens=self._max_output_tokens)
+        request = ModelRequest(model_id=self.model, body=body)
+        return PreparedRequest(
+            request_sha256=request.request_sha256,
+            pixels=png_pixels(png),
+            max_output_tokens=self._max_output_tokens,
+            payload=body,
+        )
+
+    def dispatch(
+        self, prepared: PreparedRequest, *, call_id: str, checkpoint: Callable[[bytes], None]
+    ) -> None:
+        from auditmanager.analysis.public import (
+            ModelRequest,
+            ProxyAdapter,
+            ProxyDispatchError,
+        )
+        from auditmanager.shared.errors import DomainError
+
+        inner = self._opener
+
+        def opener(request: Any, timeout: Any = None) -> _CheckpointingResponse:
+            return _CheckpointingResponse(inner(request, timeout=timeout), checkpoint)
+
+        adapter = ProxyAdapter(self._settings, opener=opener)
+        try:
+            adapter.complete(
+                ModelRequest(model_id=self.model, body=prepared.payload, idempotency_scope=call_id)
+            )
+        except ProxyDispatchError as error:
+            failure = _failure_of(error)
+            raise CallFailure(
+                failure,
+                retry_safe=error.retry_safe and failure in (Failure.NOT_SENT, Failure.RATE_LIMITED),
+                retry_after_seconds=error.retry_after_seconds,
+            ) from None
+        except DomainError:
+            raise CallFailure(Failure.OUTCOME_UNKNOWN, retry_safe=False) from None
+
+    def read_answer(self, raw: bytes) -> RecognisedPage:
+        return read_proxy_answer(raw)
+
+
 class ProxyPageRecogniser:
     """A :class:`~auditmanager.norms.rerecognition.PageRecogniser` over the LLM proxy.
 
-    It builds the body the proxy adapter translates and hands the adapter the call. The
-    adapter is imported here and nowhere else in this context: `norms` owns a port, and the
-    composition of that port with a transport is this module's whole job.
+    Kept for the unjournaled seam :func:`~auditmanager.norms.rerecognition.rerecognise`; the
+    paid run never uses it — it goes through :class:`ProxyRepairTransport` and the journal.
     """
 
-    __slots__ = ("_adapter", "_model", "_max_output_tokens", "_dpi")
+    __slots__ = ("_adapter", "_dpi", "_max_output_tokens", "_model")
 
     def __init__(self, *, base_url: str, token: str, model: str, max_output_tokens: int, dpi: int) -> None:
         from auditmanager.analysis.public import ProxyAdapter, ProxySettings
@@ -117,20 +434,7 @@ class ProxyPageRecogniser:
         from auditmanager.analysis.public import ModelRequest
 
         png = render_crop_png(page.crop, dpi=self._dpi)
-        encoded = base64.b64encode(png).decode("ascii")
-        body: dict[str, Any] = {
-            "model": self._model,
-            "max_tokens": self._max_output_tokens,
-            "system": RECOGNITION_SYSTEM_PROMPT,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded}"}},
-                    ],
-                }
-            ],
-        }
+        body = recognition_body(png, model=self._model, max_output_tokens=self._max_output_tokens)
         response = self._adapter.complete(ModelRequest(model_id=self._model, body=body))
         return RecognisedPage(
             text=response.output_text,
@@ -172,7 +476,289 @@ def resolve_transport(environment: dict[str, str] | None = None) -> tuple[str, s
     return base_url, token, model
 
 
+# --- the repair commands ------------------------------------------------------------------
+
+
+def _write_json_atomically(path: Path, document: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".partial")
+    with open(temporary, "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(document, ensure_ascii=False, indent=1, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+    descriptor = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _session_factory(environment: dict[str, str]) -> Any:
+    from sqlalchemy import text
+
+    from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
+    from auditmanager.shared.db.engine import create_database_engine
+    from auditmanager.shared.db.session import create_session_factory
+
+    raw = (environment.get(ENV_DATABASE_URL) or "").strip()
+    if not raw:
+        raise RunRefused(f"{ENV_DATABASE_URL} (the promotion database) is unset")
+    engine = create_database_engine(DatabaseSettings(url=parse_database_url(raw)))
+    with engine.connect() as connection:
+        present = connection.execute(text("SELECT to_regclass('public.norm_repair_call')")).scalar()
+    if present is None:
+        raise RunRefused(
+            "the promotion database has no norm_repair_call table; apply the migration head "
+            "(0018 or later) before a paid run"
+        )
+    return create_session_factory(engine)
+
+
+def sql_store(environment: dict[str, str]) -> SqlCallStore:
+    """The promotion database's ``norm_repair_call``, from ``DATABASE_URL``."""
+    return SqlCallStore(_session_factory(environment))
+
+
+def _pages(corpus: Path) -> list[PageToRecognise]:
+    return list(degenerate_pages(corpus))
+
+
+def _command_plan(args: argparse.Namespace, environment: dict[str, str]) -> int:
+    model = (args.model or environment.get(ENV_MODEL) or "").strip()
+    rate_for(model)
+    pages = _pages(args.corpus)
+    bounds: list[Decimal] = []
+    areas: list[tuple[float, PageToRecognise]] = []
+    for page in pages:
+        png = render_crop_png(page.crop, dpi=args.dpi)
+        bounds.append(unknown_outcome_bound(model, pixels=png_pixels(png)))
+        areas.append((crop_area(page), page))
+    sample = sorted(areas, key=lambda item: (-item[0], item[1].document_slug, item[1].block_id))[:3]
+    print(
+        json.dumps(
+            {
+                "dry_run": True,
+                "model": model,
+                "pages": len(pages),
+                "base_snapshot": snapshot_of(args.corpus).snapshot_id,
+                "ceiling_usd": str(CEILING_USD),
+                "max_call_bound_usd": str(max(bounds, default=Decimal(0))),
+                "sample_blocks": [page.block_id for _area, page in sample],
+                "spent_usd": "0",
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+    return 0
+
+
+def _open_run(
+    args: argparse.Namespace,
+    environment: dict[str, str],
+    *,
+    transport_factory: Callable[..., Any],
+    store_factory: Callable[[dict[str, str]], Any],
+) -> tuple[DurableRepairRunner, list[PageToRecognise], LocalJournal, str]:
+    base_url, token, model = resolve_transport(environment)
+    rate_for(model)
+    pages = _pages(args.corpus)
+    verify_crops_against_sums(args.corpus, pages, args.sums)
+    base = snapshot_of(args.corpus).snapshot_id
+    if args.base_snapshot and args.base_snapshot != base:
+        raise RunRefused(
+            f"the corpus is snapshot {base!r}, not the {args.base_snapshot!r} this run names"
+        )
+    store = store_factory(environment)
+    transport = transport_factory(base_url=base_url, token=token, model=model, dpi=args.dpi)
+    journal = LocalJournal(args.journal_dir).open(
+        base_snapshot=base, model=model, ceiling_usd=CEILING_USD, now=_now()
+    )
+    runner = DurableRepairRunner(journal=journal, store=store, transport=transport, clock=_now)
+    return runner, pages, journal, base
+
+
+def _finish(
+    runner: DurableRepairRunner,
+    pages: Sequence[PageToRecognise],
+    base: str,
+    journal_dir: Path,
+    document: dict[str, Any],
+    *,
+    write_ledger: bool,
+) -> None:
+    if write_ledger:
+        ledger = build_ledger(
+            runner.journal, pages, runner.transport, model=runner.model,
+            base_snapshot_id=base, generated_at=_now(),
+        )
+        _write_json_atomically(journal_dir / LEDGER_FILENAME, ledger.as_document())
+        document["ledger"] = {
+            "path": str(journal_dir / LEDGER_FILENAME),
+            "applied": len(ledger.applied),
+            "unreliable": ledger.unreliable_count,
+        }
+    print(json.dumps(document, indent=2, ensure_ascii=False))
+
+
+def _command_run(
+    args: argparse.Namespace,
+    environment: dict[str, str],
+    *,
+    transport_factory: Callable[..., Any] = ProxyRepairTransport,
+    store_factory: Callable[[dict[str, str]], Any] | None = None,
+) -> int:
+    runner, pages, journal, base = _open_run(
+        args, environment, transport_factory=transport_factory,
+        store_factory=store_factory or sql_store,
+    )
+    try:
+        report = runner.reconcile()
+        document: dict[str, Any] = {"stage": args.stage, "reconcile": report.as_document()}
+        if args.stage == "full" and args.owner_decision:
+            if not _RULING.match(args.owner_decision):
+                raise RunRefused("--owner-decision names a ruling, such as R-111")
+            verdict = journal.sample_verdict
+            recorded = {d.get("ruling") for d in journal.owner_decisions}
+            if verdict is not None and args.owner_decision not in recorded:
+                journal.append_owner_decision(
+                    {"ruling": args.owner_decision, "projected_usd": verdict["projected_usd"]},
+                    _now(),
+                )
+        try:
+            if args.stage == "sample":
+                document["verdict"] = runner.sample(pages, crop_area)
+                summary = runner.summary(pages)
+            else:
+                summary = runner.full(pages)
+        except RunStopped as stopped:
+            document["summary"] = runner.summary(pages, stop=stopped.reason).as_document()
+            document["stopped"] = str(stopped)
+            if journal.sample_verdict is not None and "verdict" not in document:
+                document["verdict"] = journal.sample_verdict
+            _finish(runner, pages, base, args.journal_dir, document, write_ledger=args.stage == "full")
+            return EXIT_STOPPED
+        document["summary"] = summary.as_document()
+        _finish(runner, pages, base, args.journal_dir, document, write_ledger=args.stage == "full")
+        return 0
+    finally:
+        journal.close()
+
+
+def _command_ledger(args: argparse.Namespace, _environment: dict[str, str]) -> int:
+    journal = LocalJournal(args.journal_dir).open(read_only=True)
+    try:
+        header = journal.header or {}
+        base = snapshot_of(args.corpus).snapshot_id
+        if header.get("base_snapshot") != base:
+            raise RunRefused("the corpus is not the snapshot this journal was taken against")
+        ledger = build_ledger(
+            journal, _pages(args.corpus), ReplayReader(), model=str(header.get("model")),
+            base_snapshot_id=base, generated_at=_now(),
+        )
+    finally:
+        journal.close()
+    _write_json_atomically(args.out, ledger.as_document())
+    print(json.dumps({"ledger": str(args.out), "applied": len(ledger.applied),
+                      "unreliable": ledger.unreliable_count}, indent=2))
+    return 0
+
+
+def _command_status(
+    args: argparse.Namespace,
+    environment: dict[str, str],
+    *,
+    store_factory: Callable[[dict[str, str]], Any] | None = None,
+) -> int:
+    journal = LocalJournal(args.journal_dir).open(read_only=True)
+    try:
+        rows = (store_factory or sql_store)(environment).all_calls()
+        by_state: dict[str, int] = {}
+        for row in rows:
+            by_state[row.state.value] = by_state.get(row.state.value, 0) + 1
+        file_ids = set(journal.calls)
+        row_ids = {row.call_id for row in rows}
+        charged = sum(
+            (row.settlement.charged_usd for row in rows if row.settlement is not None), Decimal(0)
+        )
+        print(
+            json.dumps(
+                {
+                    "header": journal.header,
+                    "file_calls": len(file_ids),
+                    "database_calls": len(row_ids),
+                    "only_in_file": len(file_ids - row_ids),
+                    "only_in_database": len(row_ids - file_ids),
+                    "states": dict(sorted(by_state.items())),
+                    "charged_usd": str(money(charged)),
+                    "ceiling_usd": str(CEILING_USD),
+                    "sample_verdict": journal.sample_verdict,
+                    "owner_decisions": journal.owner_decisions,
+                    "dropped_torn_tail": journal.dropped_torn_tail,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+    finally:
+        journal.close()
+    return 0
+
+
+def repair_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="auditmanager.norms repair", description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    plan = commands.add_parser("plan", help="enumerate, render and bound; no call, no database")
+    plan.add_argument("--corpus", type=Path, required=True)
+    plan.add_argument("--model", default="", help=f"defaults to {ENV_MODEL}")
+    plan.add_argument("--dpi", type=int, default=RENDER_DPI)
+
+    for stage in ("sample", "full"):
+        run = commands.add_parser(stage)
+        run.set_defaults(stage=stage)
+        run.add_argument("--corpus", type=Path, required=True)
+        run.add_argument("--sums", type=Path, required=True, help="the operator's SHA256SUMS over the drop")
+        run.add_argument("--journal-dir", type=Path, default=DEFAULT_JOURNAL_DIR)
+        run.add_argument("--base-snapshot", default="", help="refuse unless the corpus is this snapshot")
+        run.add_argument("--dpi", type=int, default=RENDER_DPI)
+        if stage == "full":
+            run.add_argument(
+                "--owner-decision", default="",
+                help="the ruling that approves a full run the sample stopped (K-8)",
+            )
+
+    ledger = commands.add_parser("ledger", help="the ledger the journal implies; no call")
+    ledger.add_argument("--corpus", type=Path, required=True)
+    ledger.add_argument("--journal-dir", type=Path, default=DEFAULT_JOURNAL_DIR)
+    ledger.add_argument("--out", type=Path, required=True)
+
+    status = commands.add_parser("status", help="the journal against the database; no call")
+    status.add_argument("--journal-dir", type=Path, default=DEFAULT_JOURNAL_DIR)
+    return parser
+
+
+def repair_main(argv: list[str], environment: dict[str, str] | None = None) -> int:
+    source = dict(os.environ if environment is None else environment)
+    args = repair_parser().parse_args(argv)
+    if args.command == "plan":
+        return _command_plan(args, source)
+    if args.command in ("sample", "full"):
+        return _command_run(args, source)
+    if args.command == "ledger":
+        return _command_ledger(args, source)
+    return _command_status(args, source)
+
+
+# --- the legacy flat form -----------------------------------------------------------------
+
+
 def main(argv: list[str] | None = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments[:1] == ["repair"]:
+        return repair_main(arguments[1:])
+
     parser = argparse.ArgumentParser(prog="auditmanager.norms", description=__doc__)
     parser.add_argument("--corpus", type=Path, required=True, help="the corpus root directory")
     parser.add_argument("--ledger", type=Path, required=True, help="where the repair ledger is written")
@@ -186,16 +772,8 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="enumerate and render, make no call, spend nothing",
     )
-    parser.add_argument(
-        "--allow-unpriced",
-        action="store_true",
-        help=(
-            "continue when the transport reports no cost. Off by default: a run that cannot "
-            "say what it spent cannot be held to R-29's ceiling, and a local stub of the "
-            "proxy contract answers exactly this way."
-        ),
-    )
-    args = parser.parse_args(argv)
+    parser.add_argument("--allow-unpriced", action="store_true", help=argparse.SUPPRESS)
+    args = parser.parse_args(arguments)
 
     pages = degenerate_pages(args.corpus)
 
@@ -224,14 +802,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     raise RunRefused(
-        "live re-recognition is disabled: durable_call_journal_required. "
+        "live re-recognition outside the durable call journal is disabled: "
+        "durable_call_journal_required. Use `repair sample` and `repair full`. "
         "No provider transport was constructed and no call was made."
     )
 
 
-if __name__ == "__main__":
+def _entry() -> int:
     try:
-        raise SystemExit(main())
-    except RunRefused as refusal:
+        return main()
+    except (RunRefused, JournalRefused, ModelNotPriced) as refusal:
         print(f"refused: {refusal}", file=sys.stderr)
-        raise SystemExit(2) from None
+        return EXIT_REFUSED
+
+
+if __name__ == "__main__":
+    raise SystemExit(_entry())

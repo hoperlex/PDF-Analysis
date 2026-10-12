@@ -27,6 +27,7 @@ from .rerecognition import (
     PageRecogniser,
     PageToRecognise,
     RecognisedPage,
+    judge,
     rerecognise,
 )
 from .segmentation import attribution, blocks, drawn_on, recognised_text, segment
@@ -64,6 +65,7 @@ __all__ = [
     "inspect",
     "is_degenerate",
     "join_into_chunks",
+    "judge",
     "ledger_of",
     "recognised_text",
     "repaired_snapshot",
