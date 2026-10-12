@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "0dbfbee44843c198c533d7a580df0fd8b768db010351c323b9518febfd8ecbfb",
-    "content_commit": "7ebf162",
-    "content_commit_subject": "W54-SEAL-01 dispatch base; atomic reseal has no self-commit",
-    "dispatch_named_commit": "7ebf162",
-    "commit_note": "W54-SEAL-01 adds listWorkers and setWorkerIntake (sealed stubs answering dependency_unavailable until W54-WORKER-01), five schemas and the WorkerId path parameter; the domain error catalog and contract_version are unchanged.",
+    "sha256": "1a17359f0dcee3d37b685fcd6d724ad48f462ebc6c56803b5a66731d8b5797af",
+    "content_commit": "2122cee",
+    "content_commit_subject": "W55A-SEAL-01 dispatch base; atomic reseal has no self-commit",
+    "dispatch_named_commit": "2122cee",
+    "commit_note": "W55A-SEAL-01 adds the seven norms operations (searchNorms, getNormDocument, listNormParagraphs, streamNormDocumentContent, listNormSnapshots, listNormSnapshotEvents, setCurrentNormSnapshot; sealed stubs answering dependency_unavailable until W55A-SEARCH-01), twenty schemas, the NormDocumentId path parameter and the optional RunStatus.norms_snapshot_id; the domain error catalog keeps its twenty-three codes and contract_version is unchanged.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 38,
-    "operations": 45,
-    "component_schemas": 96,
+    "paths": 45,
+    "operations": 52,
+    "component_schemas": 116,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "0dbfbee44843c198c533d7a580df0fd8b768db010351c323b9518febfd8ecbfb",
+    "snapshot_sha256": "1a17359f0dcee3d37b685fcd6d724ad48f462ebc6c56803b5a66731d8b5797af",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "0a8ca6b16ef9bbe48929cd99a0a515f6d22058e2503abb64424fb74f15ace378",
-      "index.ts": "850790d5094a441e6ac78944d1f315eba4abcc83f7cd88d24ff0bfe0579ba63e",
-      "operations.gen.ts": "efaaa4e50be05cff3b2143fee2f517d3cdc4d63c984eee474abdadff46923b45",
-      "types.gen.ts": "ba9b600157649a753d614c37947e878661815029ad1a6d5949905578e5bbf9e2"
+      "client.gen.ts": "c419634918a292d903469c658366f44ccdc8fbc6d2f510c825fa6505f18c3a63",
+      "index.ts": "8fa7db1a44255de9c8b4cda28159762068ed2b17912420df321add5bddb30983",
+      "operations.gen.ts": "8c9f46c775d9d8dd647a62c7c1a0b9915b8f1e958ba66ae45f468bd6c163b631",
+      "types.gen.ts": "110109c62c522525c8054a64f1fd3383ff439f1538241ac5e2e0be393517a49b"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

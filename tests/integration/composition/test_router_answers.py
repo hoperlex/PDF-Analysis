@@ -39,7 +39,18 @@ RELEASE_GETS = frozenset({"/system/version", "/releases"})
 
 # `W54-SEAL-01` sealed the worker registry's read as a stub answering `503`. `W54-WORKER-01`
 # serves it, so it is no longer exempt: it answers 200 with a page like every other read.
-SEALED_STUB_GETS: frozenset[str] = frozenset()
+#: `W55A-SEAL-01` names the norms reads its port serves as sealed stubs: each must answer
+#: exactly `503 dependency_unavailable` until `W55A-SEARCH-01`, which empties this set. The
+#: suite's account is an `expert`, so the administrator's `/norms/snapshots/events` answers
+#: the seam's `403` and is not listed; `/norms/search` without `q` answers `422`.
+SEALED_STUB_GETS: frozenset[str] = frozenset(
+    {
+        "/norms/snapshots",
+        "/norm-documents/ndoc_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        "/norm-documents/ndoc_01ARZ3NDEKTSV4RRFFQ69G5FAV/paragraphs",
+        "/norm-documents/ndoc_01ARZ3NDEKTSV4RRFFQ69G5FAV/content",
+    }
+)
 WORKER_GETS = frozenset({"/execution/workers"})
 
 _STATIC_TOKEN_CACHE: str | None = None
@@ -231,6 +242,8 @@ def _absent_identity(parameter: str) -> str:
         "version_uid": "ver",
         "run_id": "run",
         "finding_uid": "fnd",
+        # `W55A-SEAL-01`: so a norm-document path reaches its handler, not the pattern's 422.
+        "norm_document_id": "ndoc",
     }
     return f"{prefixes.get(parameter, 'prj')}_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 

@@ -35,6 +35,9 @@ EXPECTED_TABLES = {
     "norm_repair_call",
     # `0019_execution_workers`: the worker registry.
     "worker",
+    # `0020_norms_search`: the one current norms snapshot and its append-only history.
+    "norm_current_snapshot",
+    "norm_current_snapshot_event",
     "analysis_artifact_publication",
     "attempt",
     "audit_event",

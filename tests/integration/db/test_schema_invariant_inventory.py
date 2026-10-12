@@ -31,6 +31,21 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: **Pending reseal for ``0020_norms_search`` (`W55A-SEAL-01`), on top of the 0018/0019 one
+#: below.** No database ran in this lane either (R-102, R-111: W54's and W55a's DB-backed checks
+#: run once together, D-157), so the test stays red until the integrator reseals from the
+#: printed inventory. The 0020 delta, reviewed against the migration source: columns +10
+#: (norm_current_snapshot_event 5, norm_current_snapshot 3, norm_document.designation_tokens,
+#: norm_paragraph.text_tsv) -> 419; relations +2 -> 50; constraints +15 (event: primary key, two
+#: foreign keys to norms_snapshot, five CHECKs -- id, from, to and actor formats, from <> to;
+#: current: primary key, two foreign keys, UNIQUE event_id, three CHECKs -- singleton, snapshot
+#: and event formats) -> 449; indexes +8 (two primary keys, uq_norm_current_snapshot_event,
+#: ix_norm_current_snapshot_event_changed and _to, the designation GIN, the partial text_tsv
+#: GIN, the partial clause index) -> 121; triggers +2 (trg_norm_current_snapshot_event_immutable,
+#: trg_norm_current_snapshot_guard) -> 42; functions +2 (am_guard_norm_current_snapshot,
+#: norm_designation_tokens) -> 15; views, extensions, sequences, policies and state topology
+#: unchanged. The figures after each arrow are the 0019 figures below plus this delta.
+#:
 #: **Pending reseal for ``0019_execution_workers`` (`W54-SEAL-01`).** The lane had no
 #: database (owner ruling R-102: migrations run only in the owner's heavy-step window), so the
 #: digests below are still 0017's and this test is expected red until the integrator runs it

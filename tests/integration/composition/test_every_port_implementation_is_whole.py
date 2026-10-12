@@ -55,6 +55,9 @@ PORT_FOR_ARGUMENT = {
     "releases": "ReleasesPort",
     # `W53-SEAL-01`.
     "execution": "ExecutionPort",
+    # `W55A-SEAL-01`.
+    "norms": "NormsSearchPort",
+    "norm_content": "NormContentPort",
 }
 
 

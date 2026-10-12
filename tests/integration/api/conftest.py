@@ -409,6 +409,16 @@ class IngestDocumentAdapter:
     def read_content(self, *, version_uid: str) -> bytes:
         return self._ingest.read_source_bytes(VersionUid(version_uid))
 
+    def stream_content(self, *, version_uid: str, byte_range: Any) -> Any:
+        """`W55A-SEAL-01`. Sealed like the shipped adapter's until `W55A-CONTENT-01`.
+
+        Declared so the D-74 guard finds the whole ``DocumentPort`` here; nothing in this
+        suite calls it before the content lane gives both adapters a body.
+        """
+        from auditmanager.shared.errors import DomainError, ErrorCode
+
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="content_stream")
+
     def list_documents(self, *, project_uid: str) -> tuple[DocumentVersionView, ...]:
         """`R-5`. Delegated, which is exactly what the shipped `DocumentAdapter` does.
 

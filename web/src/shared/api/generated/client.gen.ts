@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 0dbfbee44843c198c533d7a580df0fd8b768db010351c323b9518febfd8ecbfb
+ *   sha256 1a17359f0dcee3d37b685fcd6d724ad48f462ebc6c56803b5a66731d8b5797af
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -40,6 +40,8 @@ import type {
   GetFindingResult,
   GetMeInput,
   GetMeResult,
+  GetNormDocumentInput,
+  GetNormDocumentResult,
   GetProductVersionInput,
   GetProductVersionResult,
   GetRunStatusInput,
@@ -60,6 +62,12 @@ import type {
   ListExecutionJournalResult,
   ListExecutionQueueInput,
   ListExecutionQueueResult,
+  ListNormParagraphsInput,
+  ListNormParagraphsResult,
+  ListNormSnapshotEventsInput,
+  ListNormSnapshotEventsResult,
+  ListNormSnapshotsInput,
+  ListNormSnapshotsResult,
   ListProjectsInput,
   ListProjectsResult,
   ListRegistrationsInput,
@@ -90,6 +98,10 @@ import type {
   ResetUserPasswordResult,
   RestoreUserInput,
   RestoreUserResult,
+  SearchNormsInput,
+  SearchNormsResult,
+  SetCurrentNormSnapshotInput,
+  SetCurrentNormSnapshotResult,
   SetExecutionPausedInput,
   SetExecutionPausedResult,
   SetJobPriorityInput,
@@ -100,6 +112,8 @@ import type {
   StartRunResult,
   StreamDocumentVersionContentInput,
   StreamDocumentVersionContentResult,
+  StreamNormDocumentContentInput,
+  StreamNormDocumentContentResult,
   SubmitRegistrationInput,
   SubmitRegistrationResult,
   UpdateMyProfileInput,
@@ -244,6 +258,18 @@ export function getMe(
 }
 
 /**
+ * Get Norm Document
+ *
+ * `GET /norm-documents/{norm_document_id}`.
+ */
+export function getNormDocument(
+  input: GetNormDocumentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetNormDocumentResult>> {
+  return request<GetNormDocumentResult>(OPERATIONS.getNormDocument, input, options);
+}
+
+/**
  * Read the running product version.
  *
  * `GET /system/version`.
@@ -361,6 +387,42 @@ export function listExecutionQueue(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListExecutionQueueResult>> {
   return request<ListExecutionQueueResult>(OPERATIONS.listExecutionQueue, input, options);
+}
+
+/**
+ * List Norm Paragraphs
+ *
+ * `GET /norm-documents/{norm_document_id}/paragraphs`.
+ */
+export function listNormParagraphs(
+  input: ListNormParagraphsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListNormParagraphsResult>> {
+  return request<ListNormParagraphsResult>(OPERATIONS.listNormParagraphs, input, options);
+}
+
+/**
+ * List Norm Snapshot Events
+ *
+ * `GET /norms/snapshots/events`.
+ */
+export function listNormSnapshotEvents(
+  input: ListNormSnapshotEventsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListNormSnapshotEventsResult>> {
+  return request<ListNormSnapshotEventsResult>(OPERATIONS.listNormSnapshotEvents, input, options);
+}
+
+/**
+ * List Norm Snapshots
+ *
+ * `GET /norms/snapshots`.
+ */
+export function listNormSnapshots(
+  input: ListNormSnapshotsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListNormSnapshotsResult>> {
+  return request<ListNormSnapshotsResult>(OPERATIONS.listNormSnapshots, input, options);
 }
 
 /**
@@ -544,6 +606,30 @@ export function restoreUser(
 }
 
 /**
+ * Search Norms
+ *
+ * `GET /norms/search`.
+ */
+export function searchNorms(
+  input: SearchNormsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SearchNormsResult>> {
+  return request<SearchNormsResult>(OPERATIONS.searchNorms, input, options);
+}
+
+/**
+ * Set Current Norm Snapshot
+ *
+ * `PUT /norms/snapshots/current`.
+ */
+export function setCurrentNormSnapshot(
+  input: SetCurrentNormSnapshotInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetCurrentNormSnapshotResult>> {
+  return request<SetCurrentNormSnapshotResult>(OPERATIONS.setCurrentNormSnapshot, input, options);
+}
+
+/**
  * Set Paused
  *
  * `PUT /execution/dispatch` - a write; carries a required Idempotency-Key.
@@ -601,6 +687,18 @@ export function streamDocumentVersionContent(
   options?: RequestOptions,
 ): Promise<ApiResponse<StreamDocumentVersionContentResult>> {
   return request<StreamDocumentVersionContentResult>(OPERATIONS.streamDocumentVersionContent, input, options);
+}
+
+/**
+ * Stream Norm Document Content
+ *
+ * `GET /norm-documents/{norm_document_id}/content`.
+ */
+export function streamNormDocumentContent(
+  input: StreamNormDocumentContentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamNormDocumentContentResult>> {
+  return request<StreamNormDocumentContentResult>(OPERATIONS.streamNormDocumentContent, input, options);
 }
 
 /**
@@ -667,6 +765,7 @@ export const apiClient = {
   getDocumentVersion,
   getFinding,
   getMe,
+  getNormDocument,
   getProductVersion,
   getRunStatus,
   getUser,
@@ -677,6 +776,9 @@ export const apiClient = {
   listDocuments,
   listExecutionJournal,
   listExecutionQueue,
+  listNormParagraphs,
+  listNormSnapshotEvents,
+  listNormSnapshots,
   listProjects,
   listRegistrations,
   listReleases,
@@ -692,11 +794,14 @@ export const apiClient = {
   rejectRegistration,
   resetUserPassword,
   restoreUser,
+  searchNorms,
+  setCurrentNormSnapshot,
   setExecutionPaused,
   setJobPriority,
   setWorkerIntake,
   startRun,
   streamDocumentVersionContent,
+  streamNormDocumentContent,
   submitRegistration,
   updateMyProfile,
   updateUser,

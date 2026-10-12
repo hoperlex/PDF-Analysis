@@ -17,16 +17,34 @@ those bytes. Two of the things it captured are not a framework's to choose:
 routers, the exception handlers -- states the header list it wants and gets exactly that.
 ``X-Correlation-Id`` is the one header no route writes: the correlation middleware appends
 it to every response that does not already carry one, which is what puts it last.
+
+:class:`StreamingWireResponse` (`W55A-SEAL-01`, plan section A3.5) is the same contract for a
+body that arrives as an iterator of chunks: the exact header list in the exact order, and the
+body sent chunk by chunk after the status line. :func:`streamed_content_response` writes the
+header list the two content operations have always answered with -- ``Content-Type``,
+``Content-Length``, ``Content-Range`` on a ``206`` only, ``Accept-Ranges`` -- so records 14,
+15 and 31 keep their bytes when ``streamDocumentVersionContent`` moves onto it.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any, Final, Sequence
+from collections.abc import AsyncIterable, Iterable
+from typing import TYPE_CHECKING, Any, Final, Sequence
 
-from starlette.responses import Response
+from starlette.responses import Response, StreamingResponse
 
-__all__ = ["JSON_MEDIA_TYPE", "WireResponse", "encode_json", "json_response"]
+if TYPE_CHECKING:
+    from auditmanager.api.schemas.content import StreamedContent
+
+__all__ = [
+    "JSON_MEDIA_TYPE",
+    "StreamingWireResponse",
+    "WireResponse",
+    "encode_json",
+    "json_response",
+    "streamed_content_response",
+]
 
 #: The frozen document declares ``application/json`` with no parameters on every JSON
 #: response. The baseline records exactly that string.
@@ -65,10 +83,7 @@ class WireResponse(Response):
         super().__init__(content=content, status_code=status_code)
 
     def init_headers(self, headers: Any = None) -> None:  # noqa: D102 - see class docstring
-        self.raw_headers = [
-            (name.encode("latin-1"), value.encode("latin-1"))
-            for name, value in self._wire_headers
-        ]
+        self.raw_headers = _raw(self._wire_headers)
 
 
 def json_response(status: int, payload: bytes) -> WireResponse:
@@ -81,3 +96,55 @@ def json_response(status: int, payload: bytes) -> WireResponse:
         ),
         payload,
     )
+
+
+def _raw(headers: Sequence[tuple[str, str]]) -> list[tuple[bytes, bytes]]:
+    return [(name.encode("latin-1"), value.encode("latin-1")) for name, value in headers]
+
+
+class StreamingWireResponse(StreamingResponse):
+    """:class:`WireResponse`'s header contract, with an iterator for a body.
+
+    ``starlette.responses.StreamingResponse`` sends the status line and headers first and
+    then one ``http.response.body`` message per chunk, so the body is never held whole.
+    Only :meth:`init_headers` is replaced, for the reason :class:`WireResponse` gives:
+    Starlette would lowercase the names and append ``content-type`` after them.
+
+    **Nothing can refuse after the first chunk is requested.** The status line is already
+    on the wire by then, so a port must open its object -- and raise any typed failure --
+    before it hands the iterator over. What an iterator *may* still do is stop short or
+    raise: the client then receives fewer bytes than ``Content-Length``, which is how a
+    full read reports an integrity failure it could only detect at the end (R-115).
+    """
+
+    def __init__(
+        self,
+        status_code: int,
+        headers: Sequence[tuple[str, str]],
+        content: Iterable[bytes] | AsyncIterable[bytes],
+    ) -> None:
+        self._wire_headers: tuple[tuple[str, str], ...] = tuple(headers)
+        super().__init__(content=content, status_code=status_code)
+
+    def init_headers(self, headers: Any = None) -> None:  # noqa: D102 - see class docstring
+        self.raw_headers = _raw(self._wire_headers)
+
+
+def streamed_content_response(content: StreamedContent) -> StreamingWireResponse:
+    """``200`` with the whole object or ``206`` with one window, in the recorded order."""
+    length = str(content.content_length)
+    if content.window is None:
+        headers: tuple[tuple[str, str], ...] = (
+            ("Content-Type", content.media_type),
+            ("Content-Length", length),
+            ("Accept-Ranges", "bytes"),
+        )
+        return StreamingWireResponse(200, headers, content.chunks)
+    first, last = content.window
+    headers = (
+        ("Content-Type", content.media_type),
+        ("Content-Length", length),
+        ("Content-Range", f"bytes {first}-{last}/{content.total_size}"),
+        ("Accept-Ranges", "bytes"),
+    )
+    return StreamingWireResponse(206, headers, content.chunks)

@@ -1,13 +1,13 @@
-# Domain contract v1 — candidate `1.0.0-draft.1`, revision 10
+# Domain contract v1 — candidate `1.0.0-draft.1`, revision 11
 
 Owner lane: [W0-DOM-01](../../../docs/program/tasks/W0-DOM-01.md) (domain contract
 owner); the additive norm-identity amendment is owned by
 [NORM-ID-01](../../../docs/program/tasks/NORM-ID-01.md). Status: **candidate draft —
 working-tree amendment, not frozen, not ratified.** Every
 catalog in this directory declares `contract_version` `1.0.0-draft.1`,
-`candidate_revision` `10`, `status` `draft_candidate` and `frozen` `false`, and the three
-family schemas pin `candidate_revision` `const: 10` to match: see
-[What changed in revision 10](#what-changed-in-revision-10-and-what-breaks-for-a-reader-of-revision-9).
+`candidate_revision` `11`, `status` `draft_candidate` and `frozen` `false`, and the three
+family schemas pin `candidate_revision` `const: 11` to match: see
+[What changed in revision 11](#what-changed-in-revision-11-and-what-breaks-for-a-reader-of-revision-10).
 
 This family defines three primitives that every other bounded context depends on:
 opaque identity, durable lifecycle and the externally visible failure shape. It is a
@@ -72,6 +72,13 @@ custody binding (`nbd`) and a paid repair-call try (`nrc`). `worker_id` (`wrk`) 
 is now instantiated by migration `0019_execution_workers`. No machine, state or code changed. See
 [What changed in revision 10](#what-changed-in-revision-10-and-what-breaks-for-a-reader-of-revision-9).
 
+Revision 11 (`W55A-SEAL-01`, owner rulings `R-112`, `R-113` and `R-115`) registers the classifier
+values of the norms refusals under existing codes (CD-19): `reference_kind` on
+`required_norm_unavailable`, `conflict_reason: stale_current_snapshot` on `conflict` and
+`constraint: norms_search_too_broad` on `validation_failed`. No identifier, machine, state or code
+changed. See
+[What changed in revision 11](#what-changed-in-revision-11-and-what-breaks-for-a-reader-of-revision-10).
+
 ## Files
 
 | File | Role |
@@ -94,7 +101,7 @@ schema identity; neither is a contract version. The bare `version` key that revi
 used as the contract-envelope version is gone.
 
 The `1.0.0-draft.1` base was integrated at
-`cf7740474b1786163f54d93b013a0d526ef989e0`. Revisions 8, 9 and 10 are later working-tree amendments:
+`cf7740474b1786163f54d93b013a0d526ef989e0`. Revisions 8, 9, 10 and 11 are later working-tree amendments:
 it is neither committed here, frozen nor ratified. Every catalog still declares
 `contract_version` `1.0.0-draft.1`, `status` `draft_candidate` and `frozen` `false`;
 `1.0.0-draft.0` is the version it supersedes. Until an integrator records a freeze, an
@@ -103,9 +110,9 @@ owner-authorized round edits this unreleased candidate in place and advances
 version procedure.
 
 So the version line stays `1.0.0-draft.0` → `1.0.0-draft.1`, and each review round is
-recorded by `candidate_revision`, which the owning schemas pin with `const`. Revision 10 is
-additive and changes the unreleased candidate identity surface, so consumers
-must pin and review candidate revision 10. The draft version string does not move because this is still the same
+recorded by `candidate_revision`, which the owning schemas pin with `const`. Revision 11 is
+additive and changes the unreleased candidate error-classifier register, so consumers
+must pin and review candidate revision 11. The draft version string does not move because this is still the same
 unfrozen `1.0.0-draft.1` candidate; `candidate_revision` is the machine-readable
 discriminator that prevents meaning from changing under the same revision. A freeze or release
 would move this change onto the formal version procedure.
@@ -745,6 +752,23 @@ assumption.
   - `attempt` gains the `lost` terminal, distinct from `superseded`;
   - the error envelope gains required `contract_version` and required `retryable`;
   - two identifiers are added: `lease_id` (`lse`) and `command_id` (`cmd`).
+
+### What changed in revision 11, and what breaks for a reader of revision 10
+
+Revision 11 is written by `W55A-SEAL-01` with migration `0020_norms_search` and the API reseal
+that declares the seven norms operations (`docs/program/dispatch/W55-PLAN.md` §A3.2–§A3.6).
+
+| Change | Consumer impact |
+|---|---|
+| `required_norm_unavailable` notes register `reference_kind` values `norms_snapshot`, `norm_embedding_build` and `norm_source` | **Additive.** No current snapshot (or a never-current one named), a designation target without a complete build, and a document or target without a confirmed source binding. W57 adds `norm_retrieval_set`. |
+| `conflict` notes register `conflict_reason` `stale_current_snapshot` | **Additive.** `setCurrentNormSnapshot`'s `expected_current` no longer names the current snapshot. |
+| `validation_failed` notes register `constraint` `norms_search_too_broad` | **Additive.** The search statement timeout cancelled the query; never an empty or partial page. |
+| `candidate_revision` `10` → `11` in all three catalogs and the three schema `const` pins | Readers pinning the candidate revision must move. |
+
+No identifier, prefix, machine, state, transition, guard, code, summary or detail key is added,
+removed or renamed; the error catalog stays at twenty-three codes. The norms identities `ns`,
+`ndoc` and `npar` cross the API unchanged, and a current-snapshot history row is an `evt` audit
+event. `contract_version` remains `1.0.0-draft.1` and `frozen` remains `false`.
 
 ### What changed in revision 10, and what breaks for a reader of revision 9
 

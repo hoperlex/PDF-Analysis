@@ -32,6 +32,8 @@ from auditmanager.bootstrap.adapters import (
     DocumentAdapter,
     ExecutionAdapter,
     FindingAdapter,
+    NormContentAdapter,
+    NormsSearchAdapter,
     ProjectAdapter,
     RegistrationAdapter,
     ReleasesAdapter,
@@ -279,6 +281,10 @@ def build_application(
             release_repository, product_version=product_version, build_id=build_id
         ),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
+        # `W55A-SEAL-01`. The norms reads, the designation and the norm PDF: sealed stubs
+        # over the same session factory and store until `W55A-SEARCH-01`.
+        norms=NormsSearchAdapter(sessions),
+        norm_content=NormContentAdapter(sessions, blob_store=store),
     )
     return Application(
         router=router,

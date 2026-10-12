@@ -113,10 +113,22 @@ describe('the seam operations', () => {
 
   it('cursor-paginates every growing list', () => {
     for (const id of ['listProjects', 'listRunFindings', 'listDecisionHistory',
-      'listExecutionQueue', 'listExecutionJournal', 'listWorkers'] as const) {
+      'listExecutionQueue', 'listExecutionJournal', 'listWorkers',
+      // `W55A-SEAL-01`: the norms search and the three norms listings.
+      'searchNorms', 'listNormParagraphs', 'listNormSnapshots',
+      'listNormSnapshotEvents'] as const) {
       expect(OPERATIONS[id].queryParams).toContain('cursor');
       expect(OPERATIONS[id].queryParams).toContain('limit');
     }
+  });
+
+  it('takes the norms search text as a required query, and designates without a key', () => {
+    // `W55A-SEAL-01`. `q` is the search; `setCurrentNormSnapshot` is a compare-and-set on
+    // `expected_current`, so it is a write that takes no `Idempotency-Key`.
+    expect(OPERATIONS.searchNorms.queryParams).toContain('q');
+    expect(OPERATIONS.searchNorms.queryParams).toContain('norms_snapshot_id');
+    expect(OPERATIONS.setCurrentNormSnapshot.method).toBe('PUT');
+    expect(OPERATIONS.setCurrentNormSnapshot.requiresIdempotencyKey).toBe(false);
   });
 
   it('lets a reviewer filter findings by category and by verdict', () => {

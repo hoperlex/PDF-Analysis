@@ -821,6 +821,14 @@ def _resolve(document: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[st
     return node
 
 
+#: `W55A-SEAL-01`. Operations whose query parameters are declared but whose port is a sealed
+#: stub, so the drive below cannot show a parameter changing the answer. Emptied by
+#: `W55A-SEARCH-01`.
+SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset(
+    {"searchNorms", "listNormParagraphs", "listNormSnapshots", "listNormSnapshotEvents"}
+)
+
+
 def _declared_query_parameters(document: Mapping[str, Any]) -> dict[str, set[str]]:
     declared: dict[str, set[str]] = {}
     for operations in document["paths"].values():
@@ -885,6 +893,21 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
     """
     declared = _declared_query_parameters(contract)
     assert declared, "no query parameters found in the frozen document"
+    # `W55A-SEAL-01`. The norms operations are sealed stubs answering `503` until
+    # `W55A-SEARCH-01`, so no parameter can visibly change their answer yet. Their declared
+    # parameters are pinned here instead, and the lane that gives them a body empties
+    # `SEALED_STUB_QUERY_OPERATIONS` and drives them below like every other listing.
+    sealed = {
+        operation_id: declared.pop(operation_id)
+        for operation_id in sorted(SEALED_STUB_QUERY_OPERATIONS)
+        if operation_id in declared
+    }
+    assert sealed == {
+        "searchNorms": {"q", "norms_snapshot_id", "cursor", "limit"},
+        "listNormParagraphs": {"cursor", "limit"},
+        "listNormSnapshots": {"cursor", "limit"},
+        "listNormSnapshotEvents": {"cursor", "limit"},
+    }, f"the sealed norms query surface moved: {sealed}"
 
     targets = {
         "listProjects": "/projects",

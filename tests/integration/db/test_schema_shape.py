@@ -55,6 +55,9 @@ IMMUTABLE_TABLES = {
     # (NORM-Q06). The admission and repair-call journals refuse DELETE inside their own
     # state guards instead, because their state moves.
     "norm_custody_binding",
+    # `0020_norms_search`: the current snapshot's history is append-only (R-113). The
+    # current row itself moves, so its own guard refuses DELETE and an unrecorded change.
+    "norm_current_snapshot_event",
 }
 
 
@@ -253,6 +256,11 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "norm_custody_binding_id": "nbd",
         "norm_repair_call_id": "nrc",
         "worker_id": "wrk",
+        # `W55A-SEAL-01`, migration 0020: the current-snapshot history.
+        "event_id": "evt",
+        "from_snapshot_id": "ns",
+        "to_snapshot_id": "ns",
+        "actor_user_uid": "usr",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

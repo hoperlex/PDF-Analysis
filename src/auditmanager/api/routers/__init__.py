@@ -1,6 +1,6 @@
-"""The forty-five operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The fifty-two operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles one ``APIRouter`` from the fourteen router modules. It takes
+:func:`build_router` assembles one ``APIRouter`` from the fifteen router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
 port is the composition root's job (``api/composition.py``), and a factory that reached for
 a concrete implementation would have taken that decision away from it.
@@ -55,6 +55,7 @@ from auditmanager.api.routers.idempotency import (
     require_idempotency_key,
 )
 from auditmanager.api.routers.me import build_me_routes
+from auditmanager.api.routers.norms import build_norm_routes
 from auditmanager.api.routers.releases import build_release_routes
 from auditmanager.api.routers.multipart import MAX_BODY, BodyCapMiddleware
 from auditmanager.api.routers.ports import (
@@ -67,6 +68,8 @@ from auditmanager.api.routers.ports import (
     DocumentPort,
     ExecutionPort,
     FindingPort,
+    NormContentPort,
+    NormsSearchPort,
     ProjectPort,
     RegistrationPort,
     ReleasesPort,
@@ -123,6 +126,8 @@ __all__ = [
     "ExecutionPort",
     "FailureEnvelopeMiddleware",
     "FindingPort",
+    "NormContentPort",
+    "NormsSearchPort",
     "ProjectPort",
     "RegistrationPort",
     "ReleasesPort",
@@ -172,8 +177,10 @@ def build_router(
     registrations: RegistrationPort | None = None,
     releases: ReleasesPort | None = None,
     execution: ExecutionPort | None = None,
+    norms: NormsSearchPort | None = None,
+    norm_content: NormContentPort | None = None,
 ) -> Router:
-    """Assemble the forty-five operations, from the fourteen router modules -- ``me``,
+    """Assemble the fifty-two operations, from the fifteen router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three.
 
     ``accounts`` and ``registrations`` are two more ports with a default, for the reason
@@ -231,6 +238,9 @@ def build_router(
     build_user_routes(router, accounts)  # type: ignore[arg-type]
     build_release_routes(router, releases)  # type: ignore[arg-type]
     build_execution_routes(router, execution)  # type: ignore[arg-type]
+    # `W55A-SEAL-01`. The seven norms operations: six on the search port, the PDF on the
+    # content port. Optional with a default, for the reason `blocks` gives above.
+    build_norm_routes(router, norms, norm_content)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

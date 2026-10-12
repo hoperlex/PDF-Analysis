@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 38,
+    "path_count": 45,
     "operations": [
       [
         "POST",
@@ -227,6 +227,41 @@
         "PUT",
         "/execution/workers/{worker_id}/intake",
         "setWorkerIntake"
+      ],
+      [
+        "GET",
+        "/norms/search",
+        "searchNorms"
+      ],
+      [
+        "GET",
+        "/norm-documents/{norm_document_id}",
+        "getNormDocument"
+      ],
+      [
+        "GET",
+        "/norm-documents/{norm_document_id}/paragraphs",
+        "listNormParagraphs"
+      ],
+      [
+        "GET",
+        "/norm-documents/{norm_document_id}/content",
+        "streamNormDocumentContent"
+      ],
+      [
+        "GET",
+        "/norms/snapshots",
+        "listNormSnapshots"
+      ],
+      [
+        "GET",
+        "/norms/snapshots/events",
+        "listNormSnapshotEvents"
+      ],
+      [
+        "PUT",
+        "/norms/snapshots/current",
+        "setCurrentNormSnapshot"
       ]
     ],
     "schema_names": [
@@ -325,13 +360,33 @@
       "ExecutionWorkerPage",
       "SetWorkerIntakeRequest",
       "WorkerId",
-      "WorkerState"
+      "WorkerState",
+      "NormsSnapshotId",
+      "NormDocumentId",
+      "NormParagraphId",
+      "NormSourceAttribution",
+      "NormParagraphKind",
+      "NormTextReliability",
+      "NormBuildState",
+      "NormHighlight",
+      "NormFragment",
+      "NormSearchHit",
+      "NormSearchPage",
+      "NormDocument",
+      "NormParagraph",
+      "NormParagraphPage",
+      "NormSnapshot",
+      "NormSnapshotPage",
+      "NormSnapshotEvent",
+      "NormSnapshotEventPage",
+      "SetCurrentNormSnapshotRequest",
+      "NormCurrentSnapshot"
     ]
   },
   "error_catalog": {
     "api_codes": 23,
     "stored_vocabulary": 22
   },
-  "migration_head": "0019_execution_workers",
+  "migration_head": "0020_norms_search",
   "contract_version": "1.0.0-draft.1"
 }

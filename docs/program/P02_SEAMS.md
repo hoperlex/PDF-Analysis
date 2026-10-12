@@ -113,7 +113,9 @@ expected.
 authority/effect-journal DDL; earlier migrations remain immutable. `W54-SEAL-01` owns
 `0018_norm_custody` (custody admissions and bindings, the repair-call journal, D-142's
 `abandoned` publication and D-148's insert guards) and `0019_execution_workers` (the
-worker registry and `lease.worker_id`).
+worker registry and `lease.worker_id`). `W55A-SEAL-01` owns `0020_norms_search` (the one
+current norms snapshot and its append-only history, `norm_paragraph.text_tsv` and
+`norm_document.designation_tokens`).
 
 ### 3.1 Tables
 
@@ -137,6 +139,8 @@ worker registry and `lease.worker_id`).
 | `norm_custody_admission` | `norm_custody_admission_id` | custody intent and outbox; inserted `pending`; `pending → confirmed \| poisoned \| rejected`, `poisoned → pending \| rejected`; never deleted |
 | `norm_custody_binding` | `norm_custody_binding_id`; one per confirmed admission | **immutable after insert**; insert needs a confirmed admission, its verified Blob and the target |
 | `norm_repair_call` | `norm_repair_call_id` (its own idempotency scope) | inserted `prepared`; `prepared → response_received → completed`, `prepared → not_processed \| outcome_unknown`; never deleted |
+| `norm_current_snapshot` | one row (`singleton`) | the current norms snapshot; every insert or change names its own history event; never deleted (no unset) |
+| `norm_current_snapshot_event` | `event_id` (`evt`) | **immutable after insert**: the append-only history of the current snapshot (actor, from, to, time) |
 | `finding` | `finding_uid` | mutable |
 | `finding_observation` | `finding_observation_id` | **immutable after insert** |
 | `finding_evidence` | `(finding_observation_id, evidence_ordinal)` | **immutable after insert** |
@@ -606,7 +610,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Forty-five operations, sealed. `A5` generates the typed client from this document; `B6`
+Fifty-two operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -621,7 +625,9 @@ the account, registration and account-management operations under `R-55` ... `R-
 2026-10-06. `W52-SEAL-01` added the three release operations on 2026-10-08,
 `W53-SEAL-01` the six execution operations on 2026-10-09, and `W54-SEAL-01` the worker
 registry's `listWorkers` and `setWorkerIntake` on 2026-10-12 (stubs answering
-`dependency_unavailable` until `W54-WORKER-01`).
+`dependency_unavailable` until `W54-WORKER-01`). `W55A-SEAL-01` added the seven norms
+operations on 2026-10-12 under `R-112` and `R-113` (stubs answering `dependency_unavailable`
+until `W55A-SEARCH-01`).
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -684,6 +690,13 @@ could.
 | `setExecutionPaused` | `PUT /execution/dispatch` |
 | `listWorkers` | `GET /execution/workers` |
 | `setWorkerIntake` | `PUT /execution/workers/{worker_id}/intake` |
+| `searchNorms` | `GET /norms/search` |
+| `getNormDocument` | `GET /norm-documents/{norm_document_id}` |
+| `listNormParagraphs` | `GET /norm-documents/{norm_document_id}/paragraphs` |
+| `streamNormDocumentContent` | `GET /norm-documents/{norm_document_id}/content` |
+| `listNormSnapshots` | `GET /norms/snapshots` |
+| `listNormSnapshotEvents` | `GET /norms/snapshots/events` |
+| `setCurrentNormSnapshot` | `PUT /norms/snapshots/current` |
 
 Rules that hold across the whole surface:
 
@@ -711,6 +724,10 @@ Rules that hold across the whole surface:
     credential issued in between is refused;
   * `markReleaseNotesRead` raises the account's own read mark through a known release;
     a lower or equal version is a no-op and takes no key;
+  * `setCurrentNormSnapshot` (`W55A-SEAL-01`) is a compare-and-set on `expected_current`:
+    a repeat whose target is already current answers the current designation as a replay
+    and writes no history row, and a repeat after another designation is `conflict` with
+    `conflict_reason: stale_current_snapshot`;
 * every response carries `X-Correlation-Id`;
 * every non-2xx body is the `ErrorEnvelope`, with `retryable` pinned to the catalog
   value for the reported code;

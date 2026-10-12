@@ -95,6 +95,10 @@ P02_TABLES = (
     "norm_custody_binding",
     "norm_repair_call",
     "worker",
+    # `0020_norms_search`. A P02 journey designates no norms snapshot, so the current row
+    # and its history are expected unchanged across one.
+    "norm_current_snapshot",
+    "norm_current_snapshot_event",
     "expert_decision_event",
     "finding",
     "norm_chunk",

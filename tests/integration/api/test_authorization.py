@@ -158,6 +158,21 @@ GUARDED = (
         "setWorkerIntake", "PUT",
         "/execution/workers/wrk_01M2545JSD15ETSNNV904X991K/intake",
     ),
+    # `W55A-SEAL-01`. The seven norms operations: behind the seam before their sealed stubs
+    # can answer 503, and before `searchNorms` can refuse a missing `q`.
+    ("searchNorms", "GET", "/norms/search?q=%D0%A1%D0%9F%2054"),
+    ("getNormDocument", "GET", "/norm-documents/ndoc_01M2545JSD15ETSNNV904X991K"),
+    (
+        "listNormParagraphs", "GET",
+        "/norm-documents/ndoc_01M2545JSD15ETSNNV904X991K/paragraphs",
+    ),
+    (
+        "streamNormDocumentContent", "GET",
+        "/norm-documents/ndoc_01M2545JSD15ETSNNV904X991K/content",
+    ),
+    ("listNormSnapshots", "GET", "/norms/snapshots"),
+    ("listNormSnapshotEvents", "GET", "/norms/snapshots/events"),
+    ("setCurrentNormSnapshot", "PUT", "/norms/snapshots/current"),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -231,7 +246,7 @@ def _envelope(answer) -> dict:
 
 
 def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) -> None:
-    """One request per guarded operation, with no credential. Forty-two of forty-five.
+    """One request per guarded operation, with no credential. Forty-nine of fifty-two.
 
     The set comparison is what makes this a sweep rather than a list: a twentieth
     operation is either written into ``GUARDED`` and swept, or named in
@@ -239,7 +254,7 @@ def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) ->
     ``test_the_open_surface_is_exactly_the_register`` -- there is no third place for it to
     be, and an operation that is in neither fails here.
     """
-    assert len(GUARDED) == 42
+    assert len(GUARDED) == 49
     assert UNAUTHENTICATED_OPERATIONS == {
         "issueToken",
         "submitRegistration",
@@ -670,6 +685,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
 
     **`W53-SEAL-01` adds ``execution.py``.** It passes the verified user identity
     to the execution port for command attribution; the seam still owns permission.
+
+    **`W55A-SEAL-01` adds ``norms.py``.** ``setCurrentNormSnapshot`` passes the verified
+    administrator's identity to the norms port, which records it as the history row's
+    actor; that only an administrator may designate is the seam's register, not the router.
     """
     import pathlib
 
@@ -703,6 +722,7 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "decisions.py",
         "execution.py",
         "me.py",
+        "norms.py",
         "registrations.py",
         "releases.py",
         "users.py",

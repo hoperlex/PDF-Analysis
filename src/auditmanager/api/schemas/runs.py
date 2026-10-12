@@ -72,6 +72,9 @@ class RunStatusView:
     model_call_count: int | None = None
     terminal_at: datetime | None = None
     reaudit_of_run_id: str | None = None
+    #: `W55A-SEAL-01` (R-113, CD-6). The norms snapshot the run pinned at creation, or
+    #: ``None`` while no snapshot is current; rendered only when present.
+    norms_snapshot_id: str | None = None
 
 
 def stage_state_body(view: StageStateView) -> dict[str, Any]:
@@ -107,6 +110,8 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
         body["analysis_profile_id"] = view.analysis_profile_id
     if view.prompt_bundle_id is not None:
         body["prompt_bundle_id"] = view.prompt_bundle_id
+    if view.norms_snapshot_id is not None:
+        body["norms_snapshot_id"] = view.norms_snapshot_id
     if view.degradation_set is not None:
         body["degradation_set"] = list(view.degradation_set)
     if view.terminal_reason is not None:
