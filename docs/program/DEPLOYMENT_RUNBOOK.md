@@ -764,3 +764,97 @@ discipline `test_deploy_script_refusals.py` already holds `deploy.sh`'s guards t
 | the app answers `authentication_required` to everything | the token. `T-6` is fail-closed by design |
 | `[session-register] could not write /var/lib/auditmanager/sessions/register.json (…)` in the `web` container's log | `R-51`'s volume is not writable — a restored volume owned by `root`, or a full disk. **The stand keeps serving and nobody is signed out**: the sessions are live in the container's memory either way, and refusing a sign-in over a full disk would take the stand down for a reason no reviewer can act on. What it means is that **the next deploy will sign everyone out**. Check the volume: `docker compose … exec web ls -la /var/lib/auditmanager/sessions`, and `df -h` |
 | `[session-register] AUDITMANAGER_SESSION_STORE is not set` | this stack is running the pre-wave-47 behaviour — sessions in memory only, and every deploy is a logout. `compose.server.yml` sets that variable; a stand that does not have it is not this compose file |
+
+---
+
+## 11. The inbound bundle key — transport to the stand (`W54-TRANSPORT-01`)
+
+**What it is for.** The corpus reaches the stand as a verified bundle, sent through a second
+SSH key whose forced command is `infra/deploy/receive-bundle.sh` (`R-104`; `W54-PLAN.md` §3.5).
+There is no interactive stand shell. The account that key logs into can run `docker`, which
+is root-equivalent, so **the forced command is the boundary**. This section covers the order
+of operations. The mechanism and the guard list are in the scripts' headers and in
+`tests/integration/composition/test_bundle_transport_refusals.py`.
+
+**Each use is a separate act that needs the owner's direct instruction** (`CD-3`). The bundle
+import is P4 (`W55A-STAND-IMPORT-01`), and it follows `CD-16`'s sequence as `W54-PLAN.md` §3.5
+and §3.10 give it. This section does not restate that sequence. It says how each verb is
+called and what a refusal means.
+
+### Installing it (the owner, once)
+
+1. Create the staging directory **outside the checkout**. `deploy-auto` refuses a checkout
+   that has untracked files. The directory must be owned by the key's account and must not
+   be group- or world-writable, and it must be on a filesystem the Docker daemon can
+   bind-mount (`D-37`):
+
+   ```
+   install -d -m 700 -o <account> /srv/auditmanager-bundles
+   ```
+
+2. Add one line to that account's `authorized_keys`. `restrict` turns off the pty and all
+   forwarding, and `from=` names this development host:
+
+   ```
+   restrict,from="<development host>",command="BUNDLE_STAGING=/srv/auditmanager-bundles /srv/auditmanager/infra/deploy/receive-bundle.sh" ssh-ed25519 AAAA... w54-inbound
+   ```
+
+   If the defaults do not fit, the same `command=` string can set other variables:
+   `STAND_COPY_RECORD`, the copy record kept by the copy key (default
+   `/srv/auditmanager-copy/record.json`); `ALPHA_ENV_FILE`; `BUNDLE_MAX_BYTES`, the largest
+   size accepted (default 12 GiB); and `BUNDLE_STAGING_MARGIN_BYTES`, the free space kept
+   beyond twice the size (default 2 GiB). The client cannot set any of them. `LC_ALL` is
+   pinned inside the script, so an `LC_*` variable admitted by `AcceptEnv` changes nothing.
+
+3. Check the install with `status`. It prints the SHA-256 of the installed script and of its
+   library. Compare both with the published tree.
+
+**Rollback** means the owner removes that `authorized_keys` line (`W54-PLAN.md` §3.10).
+Nothing else on the stand depends on the key.
+
+### The verbs
+
+`<KEY>` is the bundle directory's name, `<content_key>+<bundle digest>`. The bundle digest is
+the SHA-256 of the bundle's `SHA256SUMS`. The exact grammar is in
+`infra/deploy/lib/forced-command.sh`.
+
+| Verb | Called as | What it does |
+|---|---|---|
+| `receive <KEY> <size>` | `infra/deploy/push-bundle.sh --host <user@stand> --identity <key> <bundle dir>` | refuses on size, existing bundle, a running receive or free space **before reading a byte**; then reads exactly `<size>` bytes, lists the tar before extracting it, and keeps the tree only if `SHA256SUMS` matches the name, the files are exactly the listed ones and every file re-hashes. A refusal removes `incoming/<KEY>/` and nothing else |
+| `status` | `ssh -i <key> -o IdentitiesOnly=yes <user@stand> status` | read-only: staging and its free bytes, the import lock, each bundle and its import state with the log tail, and the script's SHA-256 |
+| `import <KEY>` | `ssh … import <KEY>` | starts `python -m auditmanager.norms.bundle import /bundles/<KEY> --copy-record …` **detached** in a one-shot `api` container, under the import lock. Re-run it until `status` shows `import: exited 0`. A second `import`, `report` or `requeue` is refused while it runs |
+| `report <KEY>` | `ssh … report <KEY>` | the module's `report`, run synchronously. Its exit status is passed on, and 0 means a full match |
+| `requeue <KEY>` | `ssh … requeue <KEY>` | the module's `requeue` of that bundle's poisoned admissions. Run `import` again afterwards |
+
+`import`, `report` and `requeue` each run **one fixed command**. The bundle is mounted
+read-only, and the copy record is mounted read-only for `import` and `report`. The only thing
+the client supplies is the validated `<KEY>`.
+
+### Reading a refusal
+
+Every refusal exits **3** and names its guard: `receive-bundle.sh: REFUSED [<guard>]: <reason>`.
+`push-bundle.sh` passes the stand's exit status and message on. It refuses with its own guards
+(`push-bundle.sh: REFUSED [...]`) before anything leaves this host. It re-hashes every file
+first.
+
+| Guard | What to do |
+|---|---|
+| `command-*`, `verb-known`, `verb-grammar` | the command was not one of the five verbs, or its arguments do not fit the grammar. Nothing ran |
+| `staging-*` | the staging directory is missing or misconfigured. This is the owner's install, step 1 |
+| `size-within-limit`, `staging-has-room` | the bundle is too large, or staging lacks twice its size plus the margin. Nothing was read |
+| `bundle-not-received` | this `<KEY>` is already on the stand. Check `status`. A re-send needs the owner to remove the old tree |
+| `receive-lock-free`, `import-lock-free` | another receive or import is running. Wait and check `status`. A hung importer holding the lock is an owner act |
+| `tar-*`, `sums-*`, `files-match-sums` | the bytes that arrived are not the bundle that was named. They were removed, inside staging only. Send it again |
+| `bundle-received` | `import`, `report` or `requeue` named a bundle that was never received |
+| `env-file-present`, `compose-file-present` | the deployed checkout is incomplete |
+| `copy-record-present` | there is no copy record, so the one-off copy (`R-88`) has not happened. The record's own checks (attested, open, recent, unchanged) belong to the importer and to the copy key (`W54-STAND-COPY-01`) |
+
+### What it does not do
+
+* It does not delete a staged bundle. A bundle stays under `bundles/<KEY>/` until the owner
+  removes it. The importer's step 5 (delete objects after `report` matches) needs write
+  access, which this read-only mount does not give. `W54-BUNDLE-01` and
+  `W54-STAND-COPY-01` own that step.
+* It does not open, convert or check the copy record. That is the copy key (`copy-serve.sh`).
+* It does not take part in a deploy. A `deploy.sh` that refuses while the import lock is held
+  is `W54-STAND-COPY-01`'s guard, which reads `<staging>/import.lock`.
