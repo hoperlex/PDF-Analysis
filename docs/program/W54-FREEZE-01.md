@@ -61,3 +61,18 @@ co-tenant load (load average 24).
 
 The merge order is SEAL, then BGE-IMAGE, then TRANSPORT, rebased on SEAL's merge (plan §5).
 Stage B starts from the Stage A merges, one lane at a time.
+
+## Amendment 1 — `R-109`, `R-110` (owner, 2026-10-12)
+
+Wherever the adopted W54–W57 plans and `FAST-PATH-NORMS-SECTIONS.md` require the one-off copy
+or the `R-92` window before a migrating publication or the corpus import, read the requirement
+as conditional: "if the stand holds real client data". The integrator applies this reading; the
+plan texts are not rewritten.
+
+Under that reading:
+
+- P2 and P3 publish without a copy while the stand holds test data only.
+- P4 keeps `capacity`, `report` reconciliation and `resume`, but needs no copy or window.
+- `W54-STAND-COPY-01` and the rehearsal still build and prove the copy tooling.
+- The P2 bootstrap of `copy-serve.sh` is deferred to the first real upload.
+- `D-156` registers the beta-transition purge of the test data.

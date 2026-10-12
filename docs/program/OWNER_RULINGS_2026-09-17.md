@@ -1466,7 +1466,7 @@ complete `make gate`. For this candidate this replaces `R-70`'s full gate before
 and the gate clause of `MAIN_AUTODEPLOY_POLICY.md`; the separate direct owner instruction
 naming the exact SHA is still required.
 
-## 3.30 — `R-88` to `R-108`, the corpus-chain answers and the W54 records (`W54-RULE-01`)
+## 3.30 — `R-88` to `R-110`, the corpus-chain answers and the W54 records (`W54-RULE-01`)
 
 On 2026-10-12 the owner answered the corpus-chain review polls K-1…K-15. They were put by
 session `pdf-analysis-4e`, except K-15, which was put by `pdf-analysis-62`. The verbatim answers
@@ -1498,3 +1498,5 @@ same approval.
 | `R-106` | K-13 | Repairs (F-3, F-4, W-4): the journal and its write order, `R-79`'s tries, the sample stop (`R-95`), the cumulative $10, and the local journal (`R-98`). |
 | `R-107` | K-13 | Real-document scope (F-7). |
 | `R-108` | K-16 | Cache removal was not enough, so inactive W48–W53 worktrees are removed whole with `git worktree remove`. Branches and commits stay. If W54's disk stop rule still fires, the owner is asked again about adding disk. Applied 2026-10-12: 72 worktrees removed, about 7.5 GB freed, 22 GB free. Kept: `plan-corpus-chain`, `plan-roadmap-to-beta` (its uncommitted 2026-10-08 layer is preserved in `97127ac`), `prod-project-cleanup` (owner unknown), `w59-*` and `w54-int`. |
+| `R-109` | K-17 | The stand holds only generated test data. At the transition to beta that data must be purged together with everything linked to it — documents, versions, runs, findings, decisions and their Blobs and objects — while the corpus is kept (`D-156`). P1's missing read-back is therefore not a data risk, and `verify-objects` at P2 remains only a technical MinIO check. |
+| `R-110` | K-18 | The one-off copy (`R-88`, `R-93`) applies only from the first real client data. W54 still builds and rehearses the copy tooling (STAND-COPY, its verbs, the attested record and the `deploy.sh` refusals). While the stand holds only generated test data, migrating publications and the corpus import run without the `R-92` window and without the copy, and the corpus is recovered from the bundle on this host. A copy is taken immediately before the first upload of real client data (W55b at the earliest, `R-94`); from then on `R-88` and `R-93` apply in full. The owner's P2 run of `copy-serve.sh` is no longer needed at P2. |
