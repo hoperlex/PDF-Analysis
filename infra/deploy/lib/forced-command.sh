@@ -200,3 +200,154 @@ fc_check_bundle_tree() {
     fi
     # <<< guard: sums-verify
 }
+
+# --- the copy record (`W54-STAND-COPY-01`) --------------------------------------------
+#
+# `copy-serve.sh` (the copy key) writes the record; `receive-bundle.sh` reads it before an
+# import and turns an open record into an import record; `pull-copy.sh` and
+# `scripts/stand-copy/restore-test.sh` read it on the development host. The importer
+# (`W54-BUNDLE-01`) reads the same file as JSON. `deploy.sh` reads five of its keys with
+# its own ten-line reader, because it must run from a checkout that stages it alone.
+#
+# THE RECORD IS JSON IN ONE CANONICAL LAYOUT, so a shell can read and rewrite it without
+# a JSON parser (the stand promises bash, docker, curl, sed and git; not python3, not jq):
+#
+#   {
+#     "record_version": 1,
+#     "<key>": <one JSON value on this one line>,
+#     ...
+#     "<last key>": <value>
+#   }
+#
+# Every top-level key is on its own line, indented by exactly two spaces, and every value
+# -- objects and arrays included -- is on that same line. No string in it holds a quote or
+# a backslash: every value is a stamp, a digest, a name, a count or a UTC time that this
+# code produced. A file that is not in this layout is not a record (`fc_record_valid`).
+# The full schema is in `docs/program/W54-STAND-COPY-01.md` §3.
+
+#: `<STAMP>`: the UTC second the copy (or waiver) was opened, `YYYYMMDDTHHMMSSZ`.
+FC_STAMP_ERE='[0-9]{8}T[0-9]{6}Z'
+
+#: One fingerprint line, as the fingerprint query prints it: `<table>|<rows>|<sha256>`.
+FC_FINGERPRINT_LINE_ERE='^[a-z_][a-z0-9_]*\|(0|[1-9][0-9]*)\|[0-9a-f]{64}$'
+
+# fc_record_value <file> <key>: the raw JSON value of a top-level key, without its comma.
+# Fails unless the key is on exactly one line.
+fc_record_value() {
+    local file="$1" key="$2" lines
+    lines="$(sed -n "s/^  \"$key\": \(.*\)\$/\1/p" "$file" 2>/dev/null)" || return 1
+    [ -n "$lines" ] || return 1
+    [ "$(printf '%s\n' "$lines" | wc -l)" -eq 1 ] || return 1
+    printf '%s\n' "${lines%,}"
+}
+
+# fc_record_string <file> <key>: the characters of a top-level string; fails for null,
+# a number, an object, or a string holding a quote or a backslash.
+fc_record_string() {
+    local value
+    value="$(fc_record_value "$1" "$2")" || return 1
+    [[ $value =~ ^\"([^\"\\]*)\"$ ]] || return 1
+    printf '%s\n' "${BASH_REMATCH[1]}"
+}
+
+# fc_json_member <one-line object> <name>: the first member called <name> in it -- a
+# string's characters, or a number, true, false or null as written.
+fc_json_member() {
+    local object="$1" name="$2" string_ere scalar_ere
+    string_ere="\"$name\": \"([^\"\\\\]*)\""
+    scalar_ere="\"$name\": (-?[0-9]+|true|false|null)[,}]"
+    if [[ $object =~ $string_ere ]] || [[ $object =~ $scalar_ere ]]; then
+        printf '%s\n' "${BASH_REMATCH[1]}"
+        return 0
+    fi
+    return 1
+}
+
+# fc_json_words <one-line array of plain strings>: one word per line.
+fc_json_words() {
+    printf '%s\n' "$1" | grep -oE '"[a-z_]+"' | tr -d '"' || true
+}
+
+# fc_record_valid <file>: 0 only for a regular file in the canonical layout whose
+# `record_version` is 1 and whose `stamp`, `kind` and `state` are readable.
+fc_record_valid() {
+    local file="$1"
+    [ -f "$file" ] && [ ! -L "$file" ] && [ -r "$file" ] || return 1
+    awk '
+        NR == 1 { if ($0 != "{") bad = 1; next }
+        { line[NR] = $0 }
+        END {
+            if (NR < 3 || line[NR] != "}") bad = 1
+            for (i = 2; i < NR; i++) {
+                if (line[i] !~ /^  "[a-z0-9_]+": [^ ]/) bad = 1
+                if (i < NR - 1 && line[i] !~ /,$/) bad = 1
+                if (i == NR - 1 && line[i] ~ /,$/) bad = 1
+                if (line[i] ~ /\\/) bad = 1
+            }
+            exit bad
+        }' "$file" || return 1
+    [ "$(fc_record_value "$file" record_version)" = 1 ] || return 1
+    [[ $(fc_record_string "$file" stamp) =~ ^${FC_STAMP_ERE}$ ]] || return 1
+    case "$(fc_record_string "$file" kind)" in copy|test_data_waiver) ;; *) return 1 ;; esac
+    case "$(fc_record_string "$file" state)" in open|closed) ;; *) return 1 ;; esac
+}
+
+# fc_record_set <file> <key> <raw JSON value>: rewrite exactly one top-level line, keeping
+# its comma, atomically (a temporary file beside it, then a rename).
+fc_record_set() {
+    local file="$1" key="$2" value="$3" tmp
+    case "$value" in *\\*|*$'\n'*) return 1 ;; esac
+    tmp="$file.tmp.$$"
+    if ! awk -v prefix="  \"$key\": " -v value="$value" '
+            index($0, prefix) == 1 {
+                comma = ($0 ~ /,$/) ? "," : ""
+                print prefix value comma
+                found++
+                next
+            }
+            { print }
+            END { exit (found == 1) ? 0 : 1 }' "$file" > "$tmp"; then
+        rm -f -- "$tmp"
+        return 1
+    fi
+    chmod 0644 -- "$tmp"
+    mv -f -- "$tmp" "$file"
+}
+
+# fc_lock_held <lock file>: 0 while another process holds the flock(2) lock on it. A lock
+# file that cannot be opened counts as held: the safe direction for every caller.
+fc_lock_held() {
+    local lock="$1"
+    [ -e "$lock" ] || return 1
+    ! flock --nonblock "$lock" true 2>/dev/null
+}
+
+fc_now() {
+    date -u +%Y-%m-%dT%H:%M:%SZ
+}
+
+# fc_epoch <UTC time as fc_now writes it>
+fc_epoch() {
+    [[ $1 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || return 1
+    date -u -d "$1" +%s
+}
+
+# fc_fingerprint_lines_valid <query output>: one well-formed line per table, at least one,
+# in strictly increasing byte order (the query sorts by name; a repeat or a gap in the
+# order means the output is not the query's).
+fc_fingerprint_lines_valid() {
+    local lines="$1"
+    [ -n "$lines" ] || return 1
+    printf '%s\n' "$lines" | grep -Evq "$FC_FINGERPRINT_LINE_ERE" && return 1
+    [ "$(printf '%s\n' "$lines" | cut -d'|' -f1)" = "$(printf '%s\n' "$lines" | cut -d'|' -f1 | sort -u)" ]
+}
+
+# fc_fingerprint_json <query output>: the record's `fingerprint` value, on one line. Its
+# `sha256` is the SHA-256 of the query output, one line per table, each ending in a newline.
+fc_fingerprint_json() {
+    local lines="$1" digest tables
+    digest="$(printf '%s\n' "$lines" | sha256sum | cut -c1-64)"
+    tables="$(printf '%s\n' "$lines" \
+        | awk -F'|' '{ printf "%s\"%s\": {\"rows\": %s, \"sha256\": \"%s\"}", (NR > 1 ? ", " : ""), $1, $2, $3 }')"
+    printf '{"algorithm": "stand-fingerprint-v1", "sha256": "%s", "tables": {%s}}\n' "$digest" "$tables"
+}

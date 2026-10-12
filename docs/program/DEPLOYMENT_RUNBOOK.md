@@ -849,17 +849,25 @@ first.
 | `tar-*`, `sums-*`, `files-match-sums` | the bytes that arrived are not the bundle that was named. They were removed, inside staging only. Send it again |
 | `bundle-received` | `import`, `report` or `requeue` named a bundle that was never received |
 | `env-file-present`, `compose-file-present` | the deployed checkout is incomplete |
-| `copy-record-present` | there is no copy record, so the one-off copy (`R-88`) has not happened. The record's own checks (attested, open, recent, unchanged) belong to the importer and to the copy key (`W54-STAND-COPY-01`) |
+| `copy-record-present` | there is no copy record: neither the one-off copy (`R-88`) nor, while the stand holds only test data, a test-data waiver (`R-110`) has been opened. §13 |
+| `copy-record-readable` | the record is not one the copy key wrote (`record_version 1`, its canonical layout). Nothing was read. The owner inspects it |
+| `copy-record-open`, `copy-record-attested` | the record is closed, or open and not yet attested. Open and attest one with the copy key (§13) |
+| `waiver-before-real-data` | a `test_data_waiver` after the `real_data` marker: a full copy has been attested, so `R-88` and `R-93` apply in full and only an attested copy admits an import |
+| `copy-record-in-window` | the copy was quiesced more than 12 h ago, or the waiver has expired. `resume` it with the copy key and open a new one |
+| `writers-still-stopped` | `web`, `api` or `worker` runs again (or docker could not say), so the database is not quiesced. `resume`, then open a new copy or waiver |
 
 ### What it does not do
 
 * It does not delete a staged bundle. A bundle stays under `bundles/<KEY>/` until the owner
   removes it. The importer's step 5 (delete objects after `report` matches) needs write
-  access, which this read-only mount does not give. `W54-BUNDLE-01` and
-  `W54-STAND-COPY-01` own that step.
-* It does not open, convert or check the copy record. That is the copy key (`copy-serve.sh`).
-* It does not take part in a deploy. A `deploy.sh` that refuses while the import lock is held
-  is `W54-STAND-COPY-01`'s guard, which reads `<staging>/import.lock`.
+  access, which this read-only mount does not give; `docs/program/W54-STAND-COPY-01.md` §4
+  proposes the verb that does it.
+* It does not open, attest or close the copy record; that is the copy key (§13). It does
+  read it before an `import` (the guards above), and a `receive` or an `import` under an open
+  record makes it an import record, as `W54-PLAN.md` §3.5 says.
+* It does not take part in a deploy. `deploy.sh` refuses while the import lock is held
+  (`stand_import_locked`) and while an open record is an import record (`stand_import_open`);
+  §13 lists every typed word.
 
 ---
 
@@ -898,3 +906,180 @@ port, no session volume. `infra/deploy/README.md` "The worker service" has the f
 **Rollback.** Migrations `0018`/`0019` refuse downgrade. A forward fix may set
 `EXECUTION_ROLE: all` on `api` and remove the `worker` service — W53's in-process execution —
 and `deploy.sh` accepts exactly that shape (`W54-PLAN.md` §3.10).
+
+---
+
+## 13. The copy key — the one-off copy, the test-data waiver and the way back (`W54-STAND-COPY-01`)
+
+**What it is for.** `R-88` and `R-93` require a one-off copy of the stand — a quiesced
+PostgreSQL dump and an inventory of the bucket, restored and checked on the development host —
+before the corpus import and before every `origin/main` publication that migrates the stand,
+until the beta backup wave. `R-110` makes that conditional: **while the stand holds only
+generated test data (`R-109`), no copy is taken.** Publications deploy as before, and the
+corpus import runs under a *test-data waiver* instead. A copy is taken immediately before the
+first upload of real client data; from then on `R-88` and `R-93` apply in full.
+
+The copy key is a second owner-installed SSH key whose forced command is
+`infra/deploy/copy-serve.sh`. As with the inbound key (§11), the account can run `docker`, so
+**the forced command is the boundary**. The verbs, guards and record layout are in the
+script's header and in `tests/integration/composition/test_stand_copy_refusals.py`. The
+record's schema is in `docs/program/W54-STAND-COPY-01.md` §3.
+
+### Installing it (the owner, once — deferred under `R-110` to the first real upload)
+
+The script is installed **apart from the checkout**, so that the candidate's script can serve
+a stand whose checkout is still the older, deployed tree (`W54-PLAN.md` §3.10, P2 bootstrap).
+
+1. Create the copy directory outside the checkout, owned by the key's account, mode 700:
+
+   ```
+   install -d -m 700 -o <account> /srv/auditmanager-copy
+   ```
+
+2. Extract the three files from the candidate's git objects (not from a working tree), and
+   compare each SHA-256 with the gate record of that candidate:
+
+   ```
+   install -d -m 755 /srv/auditmanager/copy-serve/lib
+   git -C /srv/auditmanager fetch origin
+   for f in copy-serve.sh capacity-probe.sh lib/forced-command.sh; do
+       git -C /srv/auditmanager show "<candidate sha>:infra/deploy/$f" > "/srv/auditmanager/copy-serve/$f"
+       sha256sum "/srv/auditmanager/copy-serve/$f"
+   done
+   chmod 755 /srv/auditmanager/copy-serve/copy-serve.sh /srv/auditmanager/copy-serve/capacity-probe.sh
+   ```
+
+   `/srv/auditmanager/copy-serve/` is inside the checkout's directory, but every file there is
+   untracked: add `copy-serve/` to the checkout's `.git/info/exclude`, or deploy-auto refuses
+   the checkout as dirty. The owner may instead install it at `/srv/auditmanager-copy-serve/`;
+   only the `command=` path below changes.
+
+3. One line in that account's `authorized_keys`:
+
+   ```
+   restrict,from="<development host>",command="ALPHA_CHECKOUT=/srv/auditmanager STAND_COPY_DIR=/srv/auditmanager-copy /srv/auditmanager/copy-serve/copy-serve.sh" ssh-ed25519 AAAA... w54-copy
+   ```
+
+   The same string may set `ALPHA_ENV_FILE`, `BUNDLE_STAGING` (its `import.lock` is read),
+   `STAND_COPY_MARGIN_BYTES` (default 2 GiB beyond the database's size) and
+   `STAND_COPY_WINDOW_SECONDS` (default 43200, the importer's 12 h).
+
+4. Check it with `status`: it prints the installed script's, library's and probe's SHA-256 and
+   the deployed checkout's `HEAD`. A later publication that changes `copy-serve.sh` asks the
+   owner to repeat step 2.
+
+**Rollback** is the owner removing the key's line. `deploy.sh` still reads the record (below),
+so a record left open keeps blocking deploys until it is resumed or the owner moves it aside.
+
+### The verbs
+
+Every verb is `ssh -i <copy key> -o IdentitiesOnly=yes <user@stand> <verb ...>`.
+`<STAMP>` is `YYYYMMDDTHHMMSSZ`, printed by `dump-db` or `attest --test-data`.
+
+| Verb | What it does |
+|---|---|
+| `capacity` | read-only: free disk of the Docker data root, staging and the copy directory, the MinIO volume's free space and size, available RAM, swap, load, `pg_database_size`, the bucket's object count and bytes, and `docker system df`. P4 needs staging ≥ bundle + dump + 2 GiB, and the Docker volumes ≥ objects + `db_growth_bytes` + 2 GiB |
+| `dump-db` | opens a copy: writes the record first, then stops exactly the writers running (`web`, `api`, and `worker` when the deployed compose file has it), dumps PostgreSQL (`pg_dump --format=custom --no-owner --no-privileges`), checks the dump with `pg_restore --list`, and records the fingerprint, migration head and `rejected` Blob count. Refused while any record is open. Only the latest copy is kept |
+| `inventory-s3 <STAMP>` | lists every object in the bucket (`key`, size, ETag) into the copy, while the writers are still stopped |
+| `fetch <STAMP> db\|inventory\|record` | streams that file; `infra/deploy/pull-copy.sh` calls it |
+| `attest <STAMP> <dump-sha256> <restore-report-sha256> publish <sha>\|import` | binds the dump's and the restore report's digests and a purpose. The dump is re-hashed. A first attestation, and an import attestation, also needs the writers still stopped and the copy younger than 12 h. Re-attesting a publication rebinds it to another SHA (a forward fix). An import record is never rebound to a publication. **The first attestation of a full copy writes the `real_data` marker** |
+| `attest --test-data` | `R-110`: no copy. Stops the writers, takes the fingerprint and opens a `test_data_waiver` (an import record) that expires in 12 h. **Refused once the `real_data` marker exists** |
+| `verify-objects <N> [<seed>]` | reads back a seeded sample of N `available` Blobs through the api image's storage adapter and compares each with its recorded size and SHA-256. P1's read-back at P2 is a technical MinIO check (`R-109`) |
+| `restore-db <STAMP> <sha256>` | the owner's way back: checks the digest against the record and the file, stops every writer running again, reopens the record, restores the dump into a recreated `public` schema, compares the fingerprint, and leaves the writers stopped |
+| `resume <STAMP>` | starts the writers the record stopped (those the deployed file still declares) and closes the record. Refused while the importer holds its lock |
+| `status` | read-only: the record and its age, the marker, the import lock, the installed SHA-256s |
+
+### The order — with real client data on the stand
+
+P2 (a migrating publication), in `CD-16`'s order (`W54-PLAN.md` §3.10):
+
+```
+ssh … dump-db                                   # prints <STAMP>; writers stopped
+ssh … inventory-s3 <STAMP>
+install -d -m 700 .local/stand-copy             # once; ignored by Git
+infra/deploy/pull-copy.sh --host <user@stand> --identity <copy key> <STAMP> "$PWD/.local/stand-copy"
+scripts/stand-copy/restore-test.sh .local/stand-copy/<STAMP>     # heavy step, in a window
+ssh … attest <STAMP> <dump-sha256> <report-sha256> publish <candidate sha>
+# push; the workflow's deploy.sh accepts exactly <candidate sha>; verify-deployed.sh
+ssh … resume <STAMP>
+ssh … verify-objects 50
+```
+
+P4 (the corpus import): `capacity`; the inbound key's `receive` and `status`; then
+`dump-db` → `inventory-s3` → pull → restore test → `attest <STAMP> … import`; the inbound key's
+`import` and `report`; `resume <STAMP>`; `verify-objects`.
+
+**On failure after the push:** a forward fix (re-attest `publish <fix sha>`, push), or the
+owner-ordered `restore-db <STAMP> <dump-sha256>`, then a reviewed revert under
+`MAIN_AUTODEPLOY_POLICY.md` (re-attest `publish <revert sha>` first), then `resume`. A revert
+alone would fail `migrations-at-head`.
+
+### The order — test data only (now, `R-110`)
+
+* A publication deploys without a copy. With no record, or a closed one, `deploy.sh` changes
+  nothing.
+* The corpus import runs under a waiver, which is quiesced and fingerprinted like a copy, but
+  has no dump:
+
+  ```
+  ssh … attest --test-data                      # prints <STAMP>; writers stopped
+  # the inbound key: import <KEY>, until status shows exited 0; report <KEY>
+  ssh … resume <STAMP>
+  ```
+
+* The corpus is recovered from the bundle kept on this host, not from a copy.
+
+### `deploy.sh` and the record
+
+`deploy.sh` reads the record (`STAND_COPY_RECORD`, default
+`/srv/auditmanager-copy/record.json`) and the import lock (`BUNDLE_STAGING`, default
+`/srv/auditmanager-bundles`) **before anything else and before any `docker` call**. It
+refuses with exit 3 and a typed word that deploy-auto's log shows:
+
+| Word | Meaning | What to do |
+|---|---|---|
+| `stand_import_locked` | the importer holds `import.lock` | wait for the import; `status` on the inbound key |
+| `stand_copy_unreadable` | a record exists that the copy key did not write | the owner inspects it |
+| `stand_import_open` | the open record is an import record or a waiver | finish the import, then `resume <STAMP>` |
+| `stand_copy_unattested` | a copy is open and not attested | finish the copy and `attest … publish <sha>`, or `resume` it |
+| `stand_copy_other_target` | the open publication record binds another SHA (or the checkout's `HEAD` cannot be read) | re-attest for this SHA, or deploy the SHA it names |
+
+An open publication record attested for exactly this checkout's `HEAD` is accepted, and the
+deploy prints `under the open copy <STAMP>, attested for this commit <sha>`.
+
+### Reading a refusal
+
+Every refusal exits **3**: `copy-serve.sh: REFUSED [<guard>]: <reason>`. `pull-copy.sh` passes
+the stand's message on and removes whatever it fetched for that stamp.
+
+| Guard | What to do |
+|---|---|
+| `command-*`, `verb-known`, `verb-grammar` | not one of the verbs, or bad arguments. Nothing ran |
+| `checkout-present`, `env-file-present`, `instance-configured`, `copy-dir-*` | the install (steps 1–3) or the deployed checkout is incomplete |
+| `copy-lock-free`, `import-lock-free` | another copy verb, or the importer, is running. `status` |
+| `record-closed` | a copy or waiver is still open: `resume` it first |
+| `record-open`, `record-is-open`, `record-stamp-matches`, `record-readable`, `restore-record-present`, `fetch-record-present` | there is no open record with that stamp (only the latest is kept), or it is not readable |
+| `record-has-dump`, `artifact-present` | a waiver has no dump or inventory; or `dump-db`/`inventory-s3` has not finished |
+| `docker-answers`, `database-answers`, `fingerprint-read`, `inventory-read`, `sample-read` | the stack did not answer a read. The record stays as it was; nothing was guessed |
+| `copy-dir-has-room` | less free space than the database plus the margin. Nothing was stopped. `capacity` |
+| `writers-stopped`, `writers-still-stopped`, `writers-resumed` | a writer did not stop, runs again, or did not start. The record stays open; `resume <STAMP>` restarts what it stopped |
+| `dump-readable` | `pg_restore --list` cannot read the dump. The record is open without a dump; `resume`, then `dump-db` again |
+| `dump-digest-matches`, `dump-digest-matches-restore`, `inventory-taken` | the digest given is not the recorded one or the file's; or there is no inventory yet |
+| `window-open` | the copy is older than 12 h: `resume`, then a new copy |
+| `import-record-stays-import` | an import record is not rebound to a publication: `resume`, then a new copy |
+| `real-data-absent` | the `real_data` marker exists: no more waivers; take a copy |
+| `objects-match` | a sampled object did not read back as recorded (or nothing was sampled). The output lists each one |
+| `fingerprint-restored` | after `restore-db`, the database does not match the copy. The writers stay stopped. The owner decides |
+
+### Heavy steps and their floor
+
+`scripts/stand-copy/restore-test.sh` restores a whole database into a disposable local
+container. It is a heavy step (`W54-PLAN.md` §3.9) and refuses unless
+`infra/deploy/capacity-probe.sh` finds four times the dump plus 3 GiB free on the Docker data
+root's filesystem and at least 6 GiB of RAM available. The same probe applies the stop rule to
+any heavy step here:
+
+```
+infra/deploy/capacity-probe.sh --path root=/ --need root=$(( (<increment GiB> + 3) * 1073741824 )) \
+    --need-ram $(( 6 * 1073741824 ))
+```

@@ -39,7 +39,10 @@ down`. This is the deployed stack.
 | `object_attrs.py` | the third part of a dump: each object's S3 attributes |
 | `receive-bundle.sh` | `W54-TRANSPORT-01` — the inbound key's forced command on the stand: `receive`, `status`, `import`, `report`, `requeue`; the boundary for an account that can run `docker` |
 | `push-bundle.sh` | `W54-TRANSPORT-01` — this host's side: re-hash a bundle, send it as `receive <KEY> <size>` |
-| `lib/forced-command.sh` | the one verb dispatcher every forced-command key uses, the bundle-name grammar and the bundle-tree rule both ends apply |
+| `lib/forced-command.sh` | the one verb dispatcher every forced-command key uses, the bundle-name grammar and the bundle-tree rule both ends apply; since `W54-STAND-COPY-01` also the copy record's canonical layout and its reader/rewriter |
+| `copy-serve.sh` | `W54-STAND-COPY-01` — the copy key's forced command on the stand, installed apart from the checkout and acting on `ALPHA_CHECKOUT`: `capacity`, `dump-db`, `inventory-s3`, `fetch`, `attest` (and `attest --test-data`, `R-110`), `verify-objects`, `restore-db`, `resume`, `status`. Runbook §13 |
+| `capacity-probe.sh` | `W54-STAND-COPY-01` — free disk per filesystem, available RAM, swap and load; refuses below a stated need. The stand's `capacity` and this host's heavy-step stop rule (`W54-PLAN.md` §3.9) |
+| `pull-copy.sh` | `W54-STAND-COPY-01` — this host's side: fetch one copy's record, dump and inventory through the copy key and check them against the record |
 | `env/alpha.env.example` | the deployment's environment. **Not `.env`** — see below |
 | the `<instance>-web-sessions` volume | `R-51` — the session register, mounted by `web` and by nothing else. See below |
 | `env/provider.env.example` | the model credential, alone, written on the host by the owner |

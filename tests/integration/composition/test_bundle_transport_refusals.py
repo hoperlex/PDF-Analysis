@@ -85,6 +85,11 @@ import time
 
 with open(os.environ["STUB_LOG"], "a", encoding="utf-8") as handle:
     handle.write(json.dumps(sys.argv[1:]) + "\n")
+if sys.argv[1:2] == ["compose"] and sys.argv[6:7] == ["ps"]:
+    # `W54-STAND-COPY-01`: which writer has a running container, from STUB_RUNNING.
+    if sys.argv[-1] in os.environ.get("STUB_RUNNING", "").split(","):
+        sys.stdout.write("cid-" + sys.argv[-1] + "\n")
+    sys.exit(0)
 release = os.environ.get("STUB_RELEASE")
 if release:
     deadline = time.time() + 20
@@ -158,6 +163,41 @@ def _without_guard(text: str, guard: str) -> str:
     return mutated
 
 
+def _now(offset_seconds: int = 0) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + offset_seconds))
+
+
+def _record_text(
+    *,
+    kind: str = "test_data_waiver",
+    state: str = "open",
+    purpose: str = "import",
+    attested: bool = True,
+    quiesced_offset: int = -60,
+    expires_offset: int = 3600,
+    real_data_marker: bool = False,
+    target_sha: str | None = None,
+) -> str:
+    """A copy record in `lib/forced-command.sh`'s canonical layout (`W54-STAND-COPY-01`).
+    The default is the record `R-110` makes usual: an open, unexpired test-data waiver."""
+    waiver = attestation = None
+    if kind == "test_data_waiver" and attested:
+        waiver = {"statement": "test data only", "attested_at": _now(-60), "expires_at": _now(expires_offset)}
+    if kind == "copy" and attested:
+        attestation = {"dump_sha256": "d" * 64, "restore_report_sha256": "c" * 64, "attested_at": _now(-30)}
+    fields = {
+        "kind": kind, "stamp": "20261012T180000Z", "state": state, "purpose": purpose, "target_sha": target_sha,
+        "instance": "an-instance", "deployed_tree": "e" * 40, "migration_head": "0019_execution_workers",
+        "opened_at": _now(quiesced_offset), "quiesced_at": _now(quiesced_offset),
+        "writers_present": ["web", "api", "worker"], "writers_stopped": ["web", "api", "worker"],
+        "dump": None, "fingerprint": {"algorithm": "stand-fingerprint-v1", "sha256": "f" * 64, "tables": {}},
+        "rejected_blob_count": 0, "inventory": None, "attestation": attestation, "waiver": waiver,
+        "real_data_marker": real_data_marker, "restored_at": None, "closed_at": None,
+    }
+    lines = ['  "record_version": 1'] + [f'  "{key}": {json.dumps(value)}' for key, value in fields.items()]
+    return "{\n" + ",\n".join(lines) + "\n}\n"
+
+
 def _stage(tmp_path: Path, *, mutant: tuple[str, str] | None = None) -> Stand:
     """`mutant` is (file under infra/deploy, guard name): that block is deleted there."""
     repo = tmp_path / "repo"
@@ -180,7 +220,7 @@ def _stage(tmp_path: Path, *, mutant: tuple[str, str] | None = None) -> Stand:
     staging.chmod(0o700)
     record = tmp_path / "copy/record.json"
     record.parent.mkdir()
-    record.write_text('{"record_version": 1}\n', encoding="utf-8")
+    record.write_text(_record_text(), encoding="utf-8")
 
     binary = tmp_path / "bin"
     binary.mkdir()
@@ -398,6 +438,14 @@ def _reported(env: dict[str, str | None] | None = None, *, verb: str = "report",
     return run
 
 
+def _declare_writers(stand: Stand) -> None:
+    """A compose file that declares the three writers, as the deployed one does."""
+    (stand.deploy / "compose.server.yml").write_text(
+        "services:\n  postgres:\n    image: x\n  web:\n    image: x\n  api:\n    image: x\n  worker:\n    image: x\n",
+        encoding="utf-8",
+    )
+
+
 def _remove_compose(stand: Stand) -> None:
     (stand.deploy / "compose.server.yml").unlink()
 
@@ -504,6 +552,29 @@ GUARD_CASES: dict[str, Case] = {
         _reported(env={"STAND_COPY_RECORD": "/nonexistent/record.json"}, verb="import"),
     ),
     "import-lock-free": Case("receive-bundle.sh", _report_while_locked),
+    # receive-bundle.sh -- the copy record admits the import (`W54-STAND-COPY-01`)
+    "copy-record-readable": Case(
+        "receive-bundle.sh", _reported(verb="import", prepare=lambda s: s.record.write_text('{"record_version": 1}\n'))
+    ),
+    "copy-record-open": Case(
+        "receive-bundle.sh", _reported(verb="import", prepare=lambda s: s.record.write_text(_record_text(state="closed")))
+    ),
+    "copy-record-attested": Case(
+        "receive-bundle.sh",
+        _reported(verb="import", prepare=lambda s: s.record.write_text(_record_text(kind="copy", attested=False))),
+    ),
+    "waiver-before-real-data": Case(
+        "receive-bundle.sh",
+        _reported(verb="import", prepare=lambda s: (s.record.parent / "real_data").write_text("stamp=x\n")),
+    ),
+    "copy-record-in-window": Case(
+        "receive-bundle.sh",
+        _reported(verb="import", prepare=lambda s: s.record.write_text(_record_text(expires_offset=-1))),
+    ),
+    "writers-still-stopped": Case(
+        "receive-bundle.sh",
+        _reported(verb="import", env={"STUB_RUNNING": "worker"}, prepare=lambda s: _declare_writers(s)),
+    ),
     # receive-bundle.sh -- receive, before a byte is read
     "size-within-limit": Case(
         "receive-bundle.sh", _receive_of(_bundle, env={"BUNDLE_MAX_BYTES": "1000"})
@@ -549,7 +620,9 @@ def test_each_guard_refuses_and_its_deletion_stops_the_refusal(tmp_path: Path, g
     stand = _stage(tmp_path / "original")
     ran = case.run(stand)
     assert ran.refused(guard), (guard, ran.code, ran.out, ran.err)
-    assert stand.docker_calls() == [], "a refusal reached docker"
+    # `writers-still-stopped` asks compose which writer runs (read-only `ps`); nothing
+    # else may reach docker before a refusal.
+    assert [call for call in stand.docker_calls() if call[5:6] != ["ps"]] == [], "a refusal reached docker"
     assert stand.ssh_calls() == [], "a refusal reached ssh"
     if case.before_read:
         assert ran.consumed == 0, f"{guard} refused after reading {ran.consumed} bytes"
@@ -972,6 +1045,78 @@ def test_import_runs_detached_under_the_lock_and_is_re_entrant(tmp_path: Path) -
     calls = stand.docker_calls()
     assert len(calls) == 3
     assert all(call == _fixed(stand, "import", key) for call in calls), calls
+
+
+# --- the copy record before and during an import (`W54-STAND-COPY-01`) -----------------
+
+
+def _record(stand: Stand) -> dict:
+    return json.loads(stand.record.read_text())
+
+
+def test_a_receive_makes_an_open_record_an_import_record(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    stand.record.write_text(_record_text(kind="copy", purpose="publish", target_sha="e" * 40))
+    bundle = _bundle(tmp_path / "made")
+    data = _tar(bundle)
+    ran = _inbound(stand, f"receive {bundle.name} {len(data)}", stdin=data)
+    assert ran.code == 0, ran.err
+    assert _record(stand)["purpose"] == "import" and _record(stand)["target_sha"] is None
+    assert "is now an import record" in ran.err
+
+
+@pytest.mark.parametrize("state", ["closed", "absent"])
+def test_a_receive_leaves_a_closed_record_and_needs_none(tmp_path: Path, state: str) -> None:
+    stand = _stage(tmp_path)
+    if state == "absent":
+        stand.record.unlink()
+    else:
+        stand.record.write_text(_record_text(kind="copy", state="closed", purpose="publish", target_sha="e" * 40))
+    before = stand.record.read_text() if stand.record.exists() else None
+    bundle = _bundle(tmp_path / "made")
+    data = _tar(bundle)
+    ran = _inbound(stand, f"receive {bundle.name} {len(data)}", stdin=data)
+    assert ran.code == 0, ran.err
+    assert (stand.record.read_text() if stand.record.exists() else None) == before
+
+
+def test_a_receive_under_an_unreadable_record_is_refused_before_reading(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    stand.record.write_text("not a record\n")
+    bundle = _bundle(tmp_path / "made")
+    data = _tar(bundle)
+    ran = _inbound(stand, f"receive {bundle.name} {len(data)}", stdin=data)
+    assert ran.refused("copy-record-readable"), ran.err
+    assert ran.consumed == 0
+
+
+def test_an_import_under_an_attested_copy_starts_and_makes_it_an_import_record(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    _declare_writers(stand)
+    stand.record.write_text(_record_text(kind="copy", purpose="publish", target_sha="e" * 40))
+    key = _place(stand, _bundle(tmp_path / "made"))
+    ran = _inbound(stand, f"import {key}")
+    assert ran.code == 0, ran.err
+    assert _record(stand)["purpose"] == "import"
+    _wait_for(stand.staging / "logs" / f"{key}.import.exit")
+    asked = [call[-1] for call in stand.docker_calls() if call[5:6] == ["ps"]]
+    assert asked == ["web", "api", "worker"], asked
+
+
+def test_an_attested_copy_older_than_the_window_admits_no_import(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    stand.record.write_text(_record_text(kind="copy", quiesced_offset=-13 * 3600))
+    key = _place(stand, _bundle(tmp_path / "made"))
+    ran = _inbound(stand, f"import {key}")
+    assert ran.refused("copy-record-in-window"), ran.err
+    assert stand.docker_calls() == []
+
+
+def test_a_waiver_written_after_the_marker_is_refused_even_without_the_file(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    stand.record.write_text(_record_text(real_data_marker=True))
+    key = _place(stand, _bundle(tmp_path / "made"))
+    assert _inbound(stand, f"import {key}").refused("waiver-before-real-data")
 
 
 # --- push-bundle.sh, through the stubbed ssh into the staged receive ------------------
