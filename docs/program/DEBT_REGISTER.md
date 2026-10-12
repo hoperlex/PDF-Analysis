@@ -63,6 +63,9 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-150** | a recorded run's prepared effect still reclaims as `outcome_unknown` | W54 worker-service freeze |
 | **D-151** | the frozen OpenAPI and `P02_SEAMS.md` prose still describe product reads without a role (`R-80`) | the next contract reseal (W58) |
 | **D-152** | one composition test is order-sensitive to leftover queued Jobs | test isolation |
+| **D-153** | the proxy's own 503 is never retried automatically (`R-85`, `W53-EXEC-STOP-01`) | a verified, redacted own-503 envelope from the owner |
+| **D-154** | a run in `validating` cannot be cancelled (`R-85`, `W53-EXEC-STOP-02`) | a reviewed state-machine reseal, if ever wanted |
+| **D-155** | the deployment-wide pause is not shown in the run journal (`R-85`, Y-04) | a journal entry without a run identity is a contract change |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
@@ -142,6 +145,26 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-155 — the deployment-wide pause is not in the public run journal
+
+**Opened 2026-10-12 by `W53-INT-CLOSE` under `R-85` (was Y-04).** The pause is a durable
+`CommandRecord`/audit event; the public journal requires a `RunId`. Publishing it needs a
+contract change. **Check:** `rg -n "_JOURNAL_ALL" src/auditmanager/execution/public.py`.
+
+### D-154 — a run in `validating` cannot be cancelled
+
+**Opened 2026-10-12 by `W53-INT-CLOSE` under `R-85` (was `W53-EXEC-STOP-02`).** The sealed
+`audit_run` machine has no `validating → cancelled` edge; cancel answers
+`state_transition_not_allowed` and changes nothing. **Check:** the `validating` transitions in
+`contracts/domain/v1/state-machines.json`.
+
+### D-153 — the proxy's own 503 is never retried automatically
+
+**Opened 2026-10-12 by `W53-INT-CLOSE` under `R-85` (was `W53-EXEC-STOP-01`).** Every 503 is
+`outcome_unknown` with zero automatic repeats, because no verified own-proxy envelope exists.
+Safe; it only forgoes a retry `R-79` would allow. **Check:** the 503 branch of
+`src/auditmanager/analysis/text/proxy.py`.
 
 ### D-152 — one composition test assumes no other queued job is claimable
 

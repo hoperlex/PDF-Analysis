@@ -140,9 +140,13 @@ def test_authored_shape_and_form() -> None:
     schema = json.loads((NOTES / "schema.json").read_text(encoding="utf-8"))
     for _, entry in entries:
         assert _shape_valid(schema, entry)
-        assert entry["revision"] == 2
+    # Authored revisions: 0.2.0 and 0.3.0 were revised once (W52); 0.4.0 is first authored by
+    # W53-INT-CLOSE under R-86.
+    assert {entry["version"]: entry["revision"] for _, entry in entries} == {
+        "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
+    }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
-    assert [entry["version"] for _, entry in entries] == ["0.3.0", "0.2.0"]
+    assert [entry["version"] for _, entry in entries] == ["0.4.0", "0.3.0", "0.2.0"]
     archive = entries[-1][1]
     assert archive["is_archive"] is True
     assert archive["range_label"] == "0.1–0.2"

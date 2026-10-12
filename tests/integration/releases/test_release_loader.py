@@ -55,7 +55,7 @@ def test_shape_schema_matches_the_served_item_and_kind() -> None:
     assert set(schema["$defs"]["item"]["required"]) == set(
         served["ReleaseNoteItem"]["required"]
     )
-    assert set(_notes()) == {"0.2.0", "0.3.0"}
+    assert set(_notes()) == {"0.2.0", "0.3.0", "0.4.0"}
 
 
 @pytest.mark.parametrize(
@@ -81,7 +81,8 @@ def test_loader_is_idempotent_and_serves_the_highest_revision(
     migrated_engine: Engine,
 ) -> None:
     sessions = create_session_factory(migrated_engine)
-    notes = _notes()
+    # The two-release history this test was written against; 0.4.0 (R-86) is not part of it.
+    notes = {version: note for version, note in _notes().items() if version in {"0.2.0", "0.3.0"}}
     archive_revision = notes["0.2.0"].revision
     current_revision = notes["0.3.0"].revision
     first = load_notes(sessions, notes=notes, product_version="0.3.0")

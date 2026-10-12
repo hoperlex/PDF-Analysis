@@ -1437,3 +1437,31 @@ integrator runs one light acceptance of the merged candidate (web lint, typechec
 Vitest; contract tests; the changed contexts' integration tests on one private lane).
 No full `make gate` is required for an `origin/dev` publication of this wave; `R-70`'s
 full-gate rule before `origin/main` stands.
+
+## 3.29 — `R-85` to `R-87`, accepting W53 by the shortest route
+
+On 2026-10-12 the owner instructed session `pdf-analysis-62` to accept W53 by the shortest
+route and without further expensive gates, and answered three questions by direct poll.
+
+### `R-85` — W53's three open scope stops are accepted as implemented
+
+`W53-EXEC-STOP-01`: the proxy's own HTTP 503 is not retried automatically and is recorded as
+`outcome_unknown` (safe, no repeat); automatic retry of a proven own-503 waits for a verified
+envelope. `W53-EXEC-STOP-02`: cancelling a run in `validating` stays a typed refusal. Y-04: the
+deployment-wide pause stays in the internal audit record and is not published in the run
+journal. W53 acceptance no longer waits for any of them; each continues as a register row.
+
+### `R-86` — W53 is released as 0.4.0 with the 0.3.0 history kept
+
+`W53-RELNOTES-STOP-01` is resolved by a bundled history: `VERSION` becomes `0.4.0`, the 0.4.0
+notes are authored now, and the authored 0.3.0 entry stays in the history as the preceding
+development version although it was never released on its own. The tag `v0.4.0` follows the
+deployment.
+
+### `R-87` — W53 acceptance: main deployment and a short live check, no full gate
+
+W53 is accepted by an `origin/main` publication of an exact candidate the owner confirms, the
+deployment workflow's own verification, and one short live check on the stand, instead of a
+complete `make gate`. For this candidate this replaces `R-70`'s full gate before `origin/main`
+and the gate clause of `MAIN_AUTODEPLOY_POLICY.md`; the separate direct owner instruction
+naming the exact SHA is still required.
