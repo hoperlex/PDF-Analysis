@@ -115,11 +115,15 @@ def test_the_migration_creates_the_canonical_and_rebuildable_topology(
     assert tables == {
         "norm_chunk",
         "norm_chunk_build",
+        # `0018_norm_custody` (W54): custody and the paid repair journal.
+        "norm_custody_admission",
+        "norm_custody_binding",
         "norm_document",
         "norm_embedding",
         "norm_embedding_build",
         "norm_embedding_profile",
         "norm_paragraph",
+        "norm_repair_call",
         "norms_snapshot",
     }
     assert "FOREIGN KEY (norms_snapshot_id)" in audit_fk
@@ -431,3 +435,104 @@ def test_a_validated_repair_is_the_text_persisted_under_a_new_content_key(
         ).scalar_one()
     assert snapshot == (base.content_key, result.content_key, 1)
     assert persisted == replacement
+
+
+# --- `F-4`: the repaired key and `ck_norms_snapshot_raw_key` (`W54-REPAIR-01`) -----------------
+
+
+def _snapshot_row(connection, *, content_key: str, repair_count: int, unreliable_count: int) -> None:
+    from auditmanager.shared.identity import NormsSnapshotId
+
+    connection.execute(
+        text(
+            """
+            INSERT INTO norms_snapshot (
+                norms_snapshot_id, content_key, base_content_key, content_digest,
+                drawn_from, drawn_to, undated_documents, document_count,
+                repair_count, unreliable_count, segmentation_profile
+            ) VALUES (
+                :snapshot, :content_key, :base, :digest,
+                DATE '2026-07-23', DATE '2026-07-23', 0, 1, :repairs, :unreliable, 'markdown-v1'
+            )
+            """
+        ),
+        {
+            "snapshot": str(NormsSnapshotId.new()),
+            "content_key": content_key,
+            "base": CONTENT_KEY,
+            "digest": "2" * 64,
+            "repairs": repair_count,
+            "unreliable": unreliable_count,
+        },
+    )
+
+
+def _key_of(ledger_outcomes: list[str]) -> str:
+    """The key ``repaired_snapshot`` mints for a ledger of these outcomes over a fixed base."""
+    from auditmanager.norms import (
+        CorpusSnapshot,
+        PageRepair,
+        RepairOutcome,
+        ledger_of,
+        repaired_snapshot,
+    )
+
+    base = CorpusSnapshot(
+        snapshot_id=CONTENT_KEY, drawn_from="2026-07-23", drawn_to="2026-07-23",
+        undated_documents=0, document_count=1, content_digest=CONTENT_DIGEST,
+    )
+    repairs = []
+    for index, outcome in enumerate(ledger_outcomes):
+        repaired = outcome == "repaired"
+        repairs.append(
+            PageRepair(
+                document_slug="СП_000_13330_2026", block_id=f"blk_{index:032x}", page_label=1,
+                original_sha256="0" * 64, original_characters=1, crop_sha256="3" * 64,
+                outcome=RepairOutcome(outcome),
+                replacement="Исправленный текст страницы." if repaired else None, attempts=(),
+            )
+        )
+    return repaired_snapshot(base, ledger_of(CONTENT_KEY, "2026-10-12T00:00:00+00:00", repairs)).snapshot_id
+
+
+@pytest.mark.parametrize(
+    ("outcomes", "repairs", "unreliable"),
+    [
+        (["repaired"], 1, 0),
+        (["repaired", "still_degenerate"], 1, 1),
+        (["call_failed", "not_attempted"], 0, 2),
+    ],
+)
+def test_every_repaired_key_form_is_accepted_with_its_counts(
+    migrated_engine: Engine, outcomes: list[str], repairs: int, unreliable: int
+) -> None:
+    key = _key_of(outcomes)
+    assert key != CONTENT_KEY
+    with migrated_engine.connect() as connection:
+        transaction = connection.begin()
+        _snapshot_row(connection, content_key=key, repair_count=repairs, unreliable_count=unreliable)
+        transaction.rollback()
+
+
+@pytest.mark.parametrize(
+    ("content_key", "repairs", "unreliable"),
+    [
+        # Unreliable blocks under the base key: the W39 "applied nothing returns the base" rule,
+        # which `F-4` inverts, is refused by the database too.
+        (CONTENT_KEY, 0, 1),
+        # A moved key with nothing repaired and nothing unreliable is a record of effort.
+        ("2026-07-23..2026-07-23+0d+0r+0u." + "9" * 12, 0, 0),
+    ],
+)
+def test_the_raw_key_check_refuses_a_key_that_disagrees_with_its_counts(
+    migrated_engine: Engine, content_key: str, repairs: int, unreliable: int
+) -> None:
+    with migrated_engine.connect() as connection:
+        transaction = connection.begin()
+        with pytest.raises(IntegrityError) as refused:
+            _snapshot_row(
+                connection, content_key=content_key, repair_count=repairs,
+                unreliable_count=unreliable,
+            )
+        transaction.rollback()
+    assert "ck_norms_snapshot_raw_key" in str(refused.value)

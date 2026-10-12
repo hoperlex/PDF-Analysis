@@ -1,0 +1,73 @@
+# W54-REPAIR-01 - the promotion database (W54-PLAN.md section 3.2).
+#
+# A persistent local PostgreSQL that holds the base snapshot, the repaired snapshot, its
+# build and the paid repair journal's database half (`norm_repair_call`). Every opaque id
+# (`ns_`, `ndoc_`, `npar_`) is minted here once and exported by the bundle.
+#
+# Invoked only through scripts/promotion/stack.sh, never by hand:
+#
+#   scripts/promotion/stack.sh up | stop | status | migrate | run -- <command>
+#   scripts/promotion/dump.sh, verify-dump.sh, restore.sh
+#
+# - Its own compose project and its own NAMED volume. `stop` and `down` keep the volume;
+#   nothing in scripts/promotion passes `--volumes` to this project (only verify-dump.sh's
+#   disposable instance is removed with its anonymous volume). A lost volume is restored
+#   from the latest verified dump (scripts/promotion/restore.sh) and the repair journal is
+#   reconciled forward from the local fsynced file (R-98).
+# - Small: `mem_limit` and a small `shared_buffers`, because this host's available RAM moves
+#   between 2.6 and 7.3 GiB (section 3.9). It is stopped between operator steps.
+# - The port is the integrator's to register in PORT_REGISTRY.md; it is read from the
+#   operator's env file (.local/promotion/promotion.env), never defaulted, and bound to
+#   127.0.0.1 only.
+# - The image is the repository's own pgvector derivative of the FF-01 base, built from
+#   infra/postgres/Dockerfile exactly as infra/local does; stack.sh reads the base digest
+#   out of the Makefile's pin, so there is no call-site image argument here either.
+
+name: auditmanager-promotion
+
+volumes:
+  promotion-data:
+    name: auditmanager-promotion-data
+
+services:
+  postgres:
+    build:
+      context: ../..
+      dockerfile: infra/postgres/Dockerfile
+      args:
+        POSTGRES_BASE_IMAGE: ${FOUNDATION_POSTGRES_IMAGE:?FOUNDATION_POSTGRES_IMAGE is unset. Run scripts/promotion/stack.sh; it reads the Makefile pin.}
+    image: auditmanager-postgres:17.11-pgvector0.8.6-8ee86c9
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is unset.}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is unset.}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is unset.}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - max_connections=20
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=256MB
+    mem_limit: 1g
+    ports:
+      - "127.0.0.1:${PROMOTION_POSTGRES_PORT:?PROMOTION_POSTGRES_PORT is unset. Take it from PORT_REGISTRY.md.}:5432"
+    volumes:
+      - promotion-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready --quiet --host=127.0.0.1 --port=5432
+          --username="$$POSTGRES_USER" --dbname="$$POSTGRES_DB"
+          && PGPASSWORD="$$POSTGRES_PASSWORD" psql --quiet --no-align --tuples-only
+          --host=127.0.0.1 --port=5432 --username="$$POSTGRES_USER" --dbname="$$POSTGRES_DB"
+          --command='SELECT 1' >/dev/null
+      interval: 3s
+      timeout: 10s
+      retries: 40
+      start_period: 5s

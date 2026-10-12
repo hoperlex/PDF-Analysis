@@ -245,10 +245,123 @@ def test_the_window_does_not_move_when_a_page_is_repaired(base_snapshot) -> None
     assert repaired.undated_documents == base_snapshot.undated_documents
 
 
-def test_a_ledger_that_applied_nothing_returns_the_base_unchanged(base_snapshot) -> None:
-    """An empty repair pass is not a new corpus, and an identifier is not a record of effort."""
+def test_a_ledger_that_applied_nothing_moves_the_key_by_its_unreliable_blocks(base_snapshot) -> None:
+    """Inverted by `W54-REPAIR-01` (`F-4`, `W54-PLAN.md` §3.3).
+
+    This test used to assert that a ledger which applied nothing returns the base unchanged.
+    Under `F-4` every block that did not end ``REPAIRED`` is unreliable: its corpus text
+    stands but is marked, and a reliability-aware chunking skips it. That corpus is not the
+    one the base key names, so the key moves and says how many (`+0r+1u`), and `0018`'s
+    ``ck_norms_snapshot_raw_key`` refuses a row whose key equals the base with
+    ``unreliable_count > 0``.
+    """
     ledger = ledger_of(base_snapshot.snapshot_id, NOW, [_repair("a", "blk_1", replacement=None)])
+    moved = repaired_snapshot(base_snapshot, ledger)
+    assert moved != base_snapshot
+    assert moved.snapshot_id != base_snapshot.snapshot_id
+    assert moved.content_digest != base_snapshot.content_digest
+    assert moved.snapshot_id.startswith("2026-07-23..2026-08-20+1d+0r+1u.")
+    assert ledger.unreliable_count == 1
+
+
+def test_only_an_empty_ledger_returns_the_base_unchanged(base_snapshot) -> None:
+    """An empty repair pass is not a new corpus, and an identifier is not a record of effort."""
+    ledger = ledger_of(base_snapshot.snapshot_id, NOW, [])
     assert repaired_snapshot(base_snapshot, ledger) == base_snapshot
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        RepairOutcome.STILL_DEGENERATE,
+        RepairOutcome.UNUSABLE,
+        RepairOutcome.NOT_ATTEMPTED,
+        RepairOutcome.CALL_FAILED,
+    ],
+)
+def test_every_outcome_but_repaired_is_counted_unreliable(base_snapshot, outcome) -> None:
+    unrepaired = PageRepair(
+        document_slug="b",
+        block_id="blk_2",
+        page_label=1,
+        original_sha256="0" * 64,
+        original_characters=1,
+        crop_sha256="1" * 64,
+        outcome=outcome,
+        replacement=None,
+        attempts=(),
+    )
+    ledger = ledger_of(base_snapshot.snapshot_id, NOW, [_repair("a", "blk_1"), unrepaired])
+    key = repaired_snapshot(base_snapshot, ledger).snapshot_id
+    assert ledger.unreliable_count == 1
+    assert "+1r+1u." in key
+
+
+def test_a_ledger_without_unreliable_blocks_keeps_the_w39_key(base_snapshot) -> None:
+    """The `+<m>u` term and the unreliable fold-in appear only when `m > 0`.
+
+    Recomputed here independently, so a repaired-only ledger's key is pinned to the W39
+    algorithm rather than to whatever ``repaired_snapshot`` happens to compute today.
+    """
+    import hashlib
+
+    repair = _repair("a", "blk_1")
+    ledger = ledger_of(base_snapshot.snapshot_id, NOW, [repair])
+    expected = hashlib.sha256(
+        base_snapshot.content_digest.encode("ascii")
+        + b"\n"
+        + b"a\x00blk_1\x00"
+        + str(repair.replacement_sha256).encode("ascii")
+        + b"\n"
+    ).hexdigest()
+    key = repaired_snapshot(base_snapshot, ledger).snapshot_id
+    assert key == f"2026-07-23..2026-08-20+1d+1r.{expected[:12]}"
+    assert "u." not in key
+
+
+def test_which_blocks_are_unreliable_changes_the_key(base_snapshot) -> None:
+    one = ledger_of(base_snapshot.snapshot_id, NOW, [_repair("a", "blk_1", replacement=None)])
+    other = ledger_of(base_snapshot.snapshot_id, NOW, [_repair("a", "blk_9", replacement=None)])
+    assert (
+        repaired_snapshot(base_snapshot, one).snapshot_id
+        != repaired_snapshot(base_snapshot, other).snapshot_id
+    )
+
+
+def test_every_repaired_key_form_matches_the_transport_grammar(base_snapshot) -> None:
+    """`W54-TRANSPORT-01`'s bundle-name grammar accepts every key this function mints.
+
+    The ERE is read out of `infra/deploy/lib/forced-command.sh` rather than copied, so a
+    drift on either side fails here.
+    """
+    import re
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[3] / "infra/deploy/lib/forced-command.sh"
+    values: dict[str, str] = {}
+    for line in script.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"^(FC_BUNDLE_WINDOW_ERE|FC_BUNDLE_REPAIRS_ERE|FC_CONTENT_KEY_ERE)=(.*)$", line)
+        if match:
+            values[match.group(1)] = match.group(2)
+    window = values["FC_BUNDLE_WINDOW_ERE"].strip("'")
+    repairs = values["FC_BUNDLE_REPAIRS_ERE"].strip("'")
+    content = (
+        values["FC_CONTENT_KEY_ERE"].strip('"')
+        .replace("${FC_BUNDLE_WINDOW_ERE}", window)
+        .replace("${FC_BUNDLE_REPAIRS_ERE}", repairs)
+        .replace("\\\\", "\\")
+    )
+    grammar = re.compile(f"^{content}$")
+    unrepaired = _repair("b", "blk_2", replacement=None)
+    keys = [
+        base_snapshot.snapshot_id,
+        repaired_snapshot(base_snapshot, ledger_of(base_snapshot.snapshot_id, NOW, [_repair("a", "blk_1")])).snapshot_id,
+        repaired_snapshot(base_snapshot, ledger_of(base_snapshot.snapshot_id, NOW, [_repair("a", "blk_1"), unrepaired])).snapshot_id,
+        repaired_snapshot(base_snapshot, ledger_of(base_snapshot.snapshot_id, NOW, [unrepaired])).snapshot_id,
+    ]
+    for key in keys:
+        assert grammar.match(key), key
+    assert not grammar.match(keys[0].replace("+1d.", "+1d+0r."))
 
 
 def test_the_identifier_does_not_depend_on_the_order_repairs_were_taken_in(base_snapshot) -> None:

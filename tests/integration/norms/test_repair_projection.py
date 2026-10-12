@@ -227,15 +227,28 @@ def test_the_whole_corpus_projection_applies_repair_and_carries_its_identity(
     assert "\n\n".join(chunk.text for chunk in chunks) == REPAIRED_TEXT
 
 
-def test_an_unapplied_repair_keeps_raw_text_and_base_identity(corpus_root: Path) -> None:
+def test_an_unapplied_repair_keeps_raw_text_under_an_unreliable_identity(
+    corpus_root: Path,
+) -> None:
+    """`F-4`: the raw text stands, but the corpus is marked, so it is not the base corpus.
+
+    Before `W54-REPAIR-01` this projection kept the base identity. A block that did not end
+    ``REPAIRED`` is now unreliable and the key carries `+0r+1u`; the base key no longer
+    names this projection and is refused for it.
+    """
     base = snapshot_of(corpus_root)
     ledger = ledger_of(base.snapshot_id, NOW, [_repair(replacement=None)])
+    effective = repaired_snapshot(base, ledger)
+    assert effective.snapshot_id != base.snapshot_id
+    assert "+0r+1u." in effective.snapshot_id
 
-    rows = list(segment_corpus(corpus_root, base.snapshot_id, repair_ledger=ledger))
+    rows = list(segment_corpus(corpus_root, effective.snapshot_id, repair_ledger=ledger))
 
     _report, paragraphs, chunks = rows[0]
     assert [paragraph.text for paragraph in paragraphs] == [RAW_TEXT]
-    assert {chunk.snapshot_id for chunk in chunks} == {base.snapshot_id}
+    assert {chunk.snapshot_id for chunk in chunks} == {effective.snapshot_id}
+    with pytest.raises(RepairProjectionMismatch, match="does not identify"):
+        list(segment_corpus(corpus_root, base.snapshot_id, repair_ledger=ledger))
 
 
 def test_a_ledger_from_another_snapshot_is_refused_before_projection(

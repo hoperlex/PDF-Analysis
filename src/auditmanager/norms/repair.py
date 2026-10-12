@@ -43,8 +43,20 @@ notice.** :func:`repaired_snapshot` is the answer and the argument for it is thi
 
     `2026-07-23..2026-08-20+17d.4b74348debf7` → `2026-07-23..2026-08-20+17d+79r.<digest12>`
 
-    **A ledger that applied nothing returns the base snapshot unchanged**, object for object.
+    **A ledger that holds nothing returns the base snapshot unchanged**, object for object.
     An empty repair pass is not a new corpus and must not be presented as one.
+
+    `F-4` (`W54-PLAN.md` §3.3, `R-106`) adds the other half: **every block in the ledger that
+    did not end** ``REPAIRED`` **is unreliable**, and a corpus that carries unreliable text is
+    not the corpus the base key names either — its paragraphs are marked and a
+    reliability-aware chunking skips them. So the key also says how many, as a `+<m>u` term
+    whenever `m > 0`, and the digest folds those blocks in. A ledger that applied nothing
+    but marked three blocks unreliable is therefore a new key (`+0r+3u`), which inverts the
+    W39 rule that such a ledger returns the base; only a ledger with no repair and no
+    unreliable block does. `0018`'s `ck_norms_snapshot_raw_key` states the same equivalence
+    in the database.
+
+    `2026-07-23..2026-08-20+17d.4b74348debf7` → `2026-07-23..2026-08-20+17d+118r+3u.<digest12>`
 
 Structure, then compute, then write the value: the applied repairs are sorted into a
 canonical order before a byte is hashed, for the same reason `snapshot.derive` sorts — the
@@ -66,7 +78,10 @@ from .snapshot import DIGEST_CHARACTERS, CorpusSnapshot
 
 #: The ledger's own format version. A consumer that reads a ledger it does not understand
 #: must refuse rather than guess: the values in it decide which text an expert is shown.
-LEDGER_VERSION: str = "1"
+#: ``"2"`` (`W54-REPAIR-01`): the ``call_failed`` outcome and the unreliable-block rule. No
+#: version-1 ledger was ever written by a paid run (live mode was refused until the durable
+#: call journal existed), so nothing is migrated.
+LEDGER_VERSION: str = "2"
 
 
 class RepairOutcome(enum.Enum):
@@ -82,6 +97,11 @@ class RepairOutcome(enum.Enum):
     STILL_DEGENERATE = "still_degenerate"
     UNUSABLE = "unusable"
     NOT_ATTEMPTED = "not_attempted"
+    #: The provider call ended without an answer this context could read: its outcome is
+    #: unknown (`R-85`, never re-paid), it was not processed within `R-79`'s tries, or the
+    #: proxy refused the request. Distinct from ``NOT_ATTEMPTED`` because such a call may
+    #: have been paid for, and the journal, not this ledger, holds what it was charged.
+    CALL_FAILED = "call_failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,6 +286,16 @@ class RepairLedger:
         return tuple(r for r in self.repairs if r.outcome is RepairOutcome.UNUSABLE)
 
     @property
+    def unreliable(self) -> tuple[PageRepair, ...]:
+        """Every block that did not end ``REPAIRED`` (`F-4`): its corpus text stands, marked."""
+        return tuple(r for r in self.repairs if r.outcome is not RepairOutcome.REPAIRED)
+
+    @property
+    def unreliable_count(self) -> int:
+        """The `m` of the key's `+<m>u` and ``norms_snapshot.unreliable_count``."""
+        return len(self.unreliable)
+
+    @property
     def total_cost_usd(self) -> float:
         return sum(repair.cost_usd for repair in self.repairs)
 
@@ -322,7 +352,16 @@ def repaired_snapshot(base: CorpusSnapshot, ledger: RepairLedger) -> CorpusSnaps
     See this module's header for the argument. In one line: the base digest is over
     `results.md` bytes, a repair changes what is segmented without changing those bytes, and
     an identifier that cannot tell the two texts apart is the `R-17` failure with our own
-    hand on it.
+    hand on it. `F-4` extends it to unreliable blocks: a block that was not repaired keeps
+    its corpus text but is marked, and a marked corpus is not the base corpus either.
+
+    The key is `<window>+<d>d+<n>r.<12 hex>` with nothing unreliable, and
+    `<window>+<d>d+<n>r+<m>u.<12 hex>` whenever `m > 0` (`n` may then be `0`). With
+    `n = 0` and `m = 0` the base is returned unchanged.
+
+    The digest over applied repairs alone is byte-identical to the W39 digest, so a ledger
+    with no unreliable block keeps the key it always had; the unreliable blocks are folded
+    in after a separator line only when there are any.
 
     The dates do not move. A repair says nothing about when the corpus was drawn, and a
     window that drifted because we re-read a page would be a false statement about the draw.
@@ -333,10 +372,11 @@ def repaired_snapshot(base: CorpusSnapshot, ledger: RepairLedger) -> CorpusSnaps
             f"{base.snapshot_id!r}; applying it would attribute one corpus's repairs to another"
         )
     applied = sorted(ledger.applied, key=lambda r: (r.document_slug, r.block_id))
-    if not applied:
-        # Nothing was replaced, so nothing downstream reads different bytes. An empty pass is
-        # not a new corpus and giving it a new identifier would make the identifier a record
-        # of effort rather than of content.
+    unreliable = sorted(ledger.unreliable, key=lambda r: (r.document_slug, r.block_id))
+    if not applied and not unreliable:
+        # Nothing was replaced and nothing is marked, so nothing downstream reads different
+        # bytes. An empty pass is not a new corpus and giving it a new identifier would make
+        # the identifier a record of effort rather than of content.
         return base
 
     digest = hashlib.sha256()
@@ -349,15 +389,22 @@ def repaired_snapshot(base: CorpusSnapshot, ledger: RepairLedger) -> CorpusSnaps
         digest.update(b"\x00")
         digest.update(str(repair.replacement_sha256).encode("ascii"))
         digest.update(b"\n")
+    if unreliable:
+        digest.update(b"unreliable\n")
+        for repair in unreliable:
+            digest.update(repair.document_slug.encode("utf-8"))
+            digest.update(b"\x00")
+            digest.update(repair.block_id.encode("utf-8"))
+            digest.update(b"\n")
     content_digest = digest.hexdigest()
 
     window = (
         f"{base.drawn_from}..{base.drawn_to}" if base.drawn_from is not None else "undated"
     )
-    snapshot_id = (
-        f"{window}+{base.undated_documents}d+{len(applied)}r."
-        f"{content_digest[:DIGEST_CHARACTERS]}"
-    )
+    terms = f"+{base.undated_documents}d+{len(applied)}r"
+    if unreliable:
+        terms += f"+{len(unreliable)}u"
+    snapshot_id = f"{window}{terms}.{content_digest[:DIGEST_CHARACTERS]}"
     return CorpusSnapshot(
         snapshot_id=snapshot_id,
         drawn_from=base.drawn_from,

@@ -61,6 +61,7 @@ from auditmanager.analysis.text import (
     load_provider_config,
     run_text_analysis,
 )
+from auditmanager.analysis.text.proxy import ProxyDispatchError
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
 
 __all__ = [
@@ -86,6 +87,7 @@ __all__ = [
     "ProviderConfig",
     "ProviderMode",
     "ProxyAdapter",
+    "ProxyDispatchError",
     "ProxySettings",
     "TEXT_STAGE_VERSION",
     "StageContext",

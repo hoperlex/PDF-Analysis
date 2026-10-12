@@ -131,6 +131,39 @@ class PageRecogniser(Protocol):
     def recognise(self, page: PageToRecognise) -> RecognisedPage: ...
 
 
+def judge(answer: RecognisedPage, *, ordinal: int, now: str) -> tuple[RepairAttempt, RepairOutcome | None]:
+    """One answer, judged: the attempt record and the outcome it ends the page with.
+
+    ``None`` means the answer was degenerate and the page may be read again. The rule is
+    the one :func:`rerecognise` has always applied; it is a function of its own so that the
+    durable runner (:mod:`auditmanager.norms.repair_journal`) can replay an answer it
+    checkpointed earlier and reach the same outcome without paying for it again.
+    """
+    text = answer.text.strip()
+    verdict = inspect(text)
+    attempt = RepairAttempt(
+        ordinal=ordinal,
+        recognised_at=now,
+        model=answer.model,
+        stop_reason=answer.stop_reason,
+        input_tokens=answer.input_tokens,
+        output_tokens=answer.output_tokens,
+        cost_usd=answer.cost_usd,
+        characters=len(text),
+        text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        signals=verdict.signals,
+        evidence=verdict.evidence,
+    )
+    if answer.truncated or len(text) < MINIMUM_REPLACEMENT_CHARACTERS:
+        # Not a repair and not a retryable shape: the ceiling and the empty answer are
+        # both properties of this page against this prompt. Retrying spends again for the
+        # same outcome.
+        return attempt, RepairOutcome.UNUSABLE
+    if not verdict.is_degenerate:
+        return attempt, RepairOutcome.REPAIRED
+    return attempt, None
+
+
 def rerecognise(
     page: PageToRecognise,
     recogniser: PageRecogniser,
@@ -153,33 +186,12 @@ def rerecognise(
 
     for ordinal in range(1, max_attempts + 1):
         answer = recogniser.recognise(page)
-        text = answer.text.strip()
-        verdict = inspect(text)
-        attempts.append(
-            RepairAttempt(
-                ordinal=ordinal,
-                recognised_at=now,
-                model=answer.model,
-                stop_reason=answer.stop_reason,
-                input_tokens=answer.input_tokens,
-                output_tokens=answer.output_tokens,
-                cost_usd=answer.cost_usd,
-                characters=len(text),
-                text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                signals=verdict.signals,
-                evidence=verdict.evidence,
-            )
-        )
-
-        if answer.truncated or len(text) < MINIMUM_REPLACEMENT_CHARACTERS:
-            # Not a repair and not a retryable shape: the ceiling and the empty answer are
-            # both properties of this page against this prompt. Retrying spends again for the
-            # same outcome.
-            outcome = RepairOutcome.UNUSABLE
-            break
-        if not verdict.is_degenerate:
-            replacement = text
-            outcome = RepairOutcome.REPAIRED
+        attempt, ended = judge(answer, ordinal=ordinal, now=now)
+        attempts.append(attempt)
+        if ended is RepairOutcome.REPAIRED:
+            replacement = answer.text.strip()
+        if ended is not None:
+            outcome = ended
             break
         outcome = RepairOutcome.STILL_DEGENERATE
 
