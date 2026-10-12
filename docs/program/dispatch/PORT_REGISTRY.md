@@ -134,6 +134,7 @@ delegates the choice to a session that cannot see the other lanes.**
 | `57140`, `60740/60741` | `gate-w54-repair` — `W54-REPAIR-01`, window tests | 2026-10-12 | after REPAIR handback |
 | `57150`, `60750/60751` | `gate-w54-snapshot` — `W54-SNAPSHOT-01`, window tests | 2026-10-12 | after SNAPSHOT handback |
 | `57160`, `60760/60761` | `gate-w54-embed` — `W54-EMBED-01`, window tests | 2026-10-12 | after EMBED handback |
+| `57170`, `60770/60771` | `gate-w54-bundle` — `W54-BUNDLE-01`, window tests | 2026-10-12 | after BUNDLE handback |
 | `57190` | `promotion` — the persistent local promotion database (`infra/promotion/compose.yml`, `PROMOTION_POSTGRES_PORT`) | 2026-10-12 | kept until W55a's import is verified |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
