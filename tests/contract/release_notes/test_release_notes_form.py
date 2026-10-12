@@ -206,13 +206,13 @@ def test_bad_fixture_fails_named_rule(rule: str) -> None:
     elif rule == "dictionary_word":
         item["text"] = "Новый коммит опубликован."
     expected = "item_count" if rule == "item_count_above" else rule
-    assert expected in form_failures(entries, version="0.3.0", terms=_dictionary())
+    assert expected in form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary())
 
 
 def test_dictionary_word_inside_guillemets_is_allowed() -> None:
     entries = copy.deepcopy(_read_entries())
     entries[0][1]["items"][0]["text"] = "Термин «коммит» приведён как цитата."
-    assert "dictionary_word" not in form_failures(entries, version="0.3.0", terms=_dictionary())
+    assert "dictionary_word" not in form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary())
 
 
 def test_sealed_shape_rejects_unknown_fields() -> None:

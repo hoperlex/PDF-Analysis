@@ -66,7 +66,7 @@ def version_server():
                 self.answer(401, {})
                 return
             self.answer(state["version_status"], {
-                "product_version": "0.3.0",
+                "product_version": (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
                 "build_id": state["build_id"],
                 "contract_version": "1.0.0-draft.1",
             })
