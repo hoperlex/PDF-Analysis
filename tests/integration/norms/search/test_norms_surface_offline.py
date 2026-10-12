@@ -473,3 +473,33 @@ def test_an_unknown_target_is_not_found() -> None:
     assert (error.code, dict(error.detail_fields)) == (
         ErrorCode.NOT_FOUND, {"aggregate_type": "NormsSnapshot"}
     )
+
+
+def test_the_listing_the_setter_and_the_pdf_read_share_one_predicate() -> None:
+    """`listNormSnapshots.qualified`, the setter's refusal, ``content_available`` and the PDF
+    read are one SQL text each, not four restatements that could drift apart. The window
+    suite (``test_current_snapshot_window.py``) proves what that text selects."""
+    from auditmanager.norms import current_snapshot as current_module
+    from auditmanager.norms.search import service as service_module
+
+    for statement in (current_module._QUALIFICATION, service_module._SNAPSHOTS):
+        assert current_module.BUILD_COMPLETE_SQL in statement.text
+        assert current_module.SOURCES_CONFIRMED_SQL in statement.text
+    for statement in (service_module._DOCUMENT, service_module._PDF_BINDING):
+        assert current_module.PDF_BINDING_SQL in statement.text
+    assert current_module.PDF_BINDING_SQL in current_module.SOURCES_CONFIRMED_SQL
+    assert current_module.QUALIFICATION_PARAMETERS == {
+        "q_embedding_profile": "bge-m3-dense-v1",
+        "q_reliable_chunking": "characters-v2:%",
+        "q_role": "norm_source",
+        "q_target_kind": "norm_document",
+        "q_anchor_kind": "pdf",
+    }
+    # Every search statement names the reliability literal the partial indexes need.
+    from auditmanager.norms.search.query import ParsedQuery
+
+    for parsed in (ParsedQuery("СП 54", "7.1", "здания"), ParsedQuery("СП 54", None, None)):
+        for sql in (service_module._ranked_sql(parsed), service_module._ordered_sql(parsed)):
+            assert "p.text_reliability = 'reliable'" in sql
+            assert "LIMIT :search_window" in sql
+    assert service_module.SEARCH_WINDOW == 1000
