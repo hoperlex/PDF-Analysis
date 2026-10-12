@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import Any, Self
 
 import pytest
 
@@ -49,10 +49,10 @@ class _Response:
     def read(self, size: int = -1) -> bytes:
         return self._payload if size < 0 else self._payload[:size]
 
-    def __enter__(self) -> "_Response":
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *_: Any) -> None:
+    def __exit__(self, *_: object) -> None:
         return None
 
 
@@ -110,15 +110,11 @@ _UNUSABLE_ANSWERS: list[tuple[str, bytes, bool]] = [
 def test_every_unusable_answer_is_one_typed_ambiguous_refusal(
     label: str, raw: bytes, has_usage: bool
 ) -> None:
-    try:
+    # A bare AttributeError/TypeError escaping here -- the defect -- errors this test.
+    with pytest.raises(ProxyDispatchError) as caught:
         _adapter(raw).complete(ModelRequest(model_id="m", body={"messages": []}))
-    except ProxyDispatchError as refusal:
-        failure = refusal
-    except Exception as escaped:  # the defect: a bare error the stage cannot classify
-        pytest.fail(f"{label}: {type(escaped).__name__} escaped the proxy: {escaped}")
-    else:
-        pytest.fail(f"{label}: an unusable answer was accepted")
 
+    failure = caught.value
     assert failure.code is ErrorCode.ANALYSIS_FAILED
     # An answer arrived, so the call may have been paid: never "not processed" and
     # never safe to repeat automatically.
