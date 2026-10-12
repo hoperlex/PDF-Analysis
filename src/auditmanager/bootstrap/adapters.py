@@ -1721,53 +1721,209 @@ class RegistrationAdapter(_SessionHolder):
 
 
 class NormsSearchAdapter(_SessionHolder):
-    """`W55A-SEAL-01`. The six norms reads and the designation, as sealed stubs.
+    """`W55A-SEARCH-01`. The six norms reads and the designation.
 
-    Migration ``0020_norms_search`` carries the current snapshot, its history and the
-    search columns, but the search, the qualification predicate and the setter are
-    `W55A-SEARCH-01`'s (``norms/search/**``, ``norms/current_snapshot.py``), which replaces
-    every body below. Until then each refuses explicitly with ``503 dependency_unavailable``
-    -- never an empty page, which would read as "no snapshot is loaded".
+    Thin, as every adapter here: one session per call, one call into
+    ``auditmanager.norms`` (``norms.public``: the search module and the current-snapshot
+    module), and the answer mapped into the frozen shape. ``timeout_ms`` is the operator's
+    ``AUDITMANAGER_NORMS_SEARCH_TIMEOUT_MS`` (``bootstrap/settings.py``), handed to every
+    search; the refusals -- no current snapshot, a never-current scope, a stale
+    ``expected_current``, a target that does not qualify, a search the timeout cancelled --
+    are the module's, raised as typed failures and never an empty page.
     """
 
-    @staticmethod
-    def _norms_search_unavailable() -> Any:
-        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norms_search")
+    def __init__(self, sessions: sessionmaker[Session], *, timeout_ms: int) -> None:
+        super().__init__(sessions)
+        if timeout_ms <= 0:
+            raise ValueError("the norms search timeout must be positive")
+        self._timeout_ms = timeout_ms
 
     def search(
         self, *, q: str, norms_snapshot_id: str | None, cursor: str | None, limit: int
     ) -> models.NormSearchPage:
-        return self._norms_search_unavailable()
+        from auditmanager.norms.public import search_norms
+
+        page = self._read(
+            lambda session: search_norms(
+                session, q=q, norms_snapshot_id=norms_snapshot_id, cursor=cursor,
+                limit=limit, timeout_ms=self._timeout_ms,
+            )
+        )
+        return models.NormSearchPage(
+            items=[_norm_hit(hit) for hit in page.items],
+            page=models.PageInfo(next_cursor=page.next_cursor),
+        )
 
     def get_document(self, *, norm_document_id: str) -> models.NormDocument:
-        return self._norms_search_unavailable()
+        from auditmanager.norms.public import get_norm_document
+
+        return _norm_document(
+            self._read(lambda session: get_norm_document(session, norm_document_id))
+        )
 
     def list_paragraphs(
         self, *, norm_document_id: str, cursor: str | None, limit: int
     ) -> models.NormParagraphPage:
-        return self._norms_search_unavailable()
+        from auditmanager.norms.public import list_norm_paragraphs
+
+        document, page = self._read(
+            lambda session: list_norm_paragraphs(
+                session, norm_document_id, cursor=cursor, limit=limit
+            )
+        )
+        return models.NormParagraphPage(
+            items=[
+                models.NormParagraph(
+                    norm_paragraph_id=item.norm_paragraph_id,
+                    ordinal=item.ordinal,
+                    page_label=item.page_label,
+                    block_ref=item.block_ref,
+                    kind=models.NormParagraphKind(item.kind),
+                    clause_number=item.clause_number,
+                    text=item.text,
+                    text_reliability=models.NormTextReliability(item.text_reliability),
+                )
+                for item in page.items
+            ],
+            page=models.PageInfo(next_cursor=page.next_cursor),
+            source_attribution=models.NormSourceAttribution(document.source_attribution),
+        )
 
     def list_snapshots(self, *, cursor: str | None, limit: int) -> models.NormSnapshotPage:
-        return self._norms_search_unavailable()
+        from auditmanager.norms.public import list_norm_snapshots
+
+        page = self._read(
+            lambda session: list_norm_snapshots(session, cursor=cursor, limit=limit)
+        )
+        return models.NormSnapshotPage(
+            items=[
+                models.NormSnapshot(
+                    norms_snapshot_id=item.norms_snapshot_id,
+                    content_key=item.content_key,
+                    document_count=item.document_count,
+                    paragraph_count=item.paragraph_count,
+                    unreliable_count=item.unreliable_count,
+                    build_state=models.NormBuildState(item.build_state),
+                    qualified=item.qualified,
+                    current=item.current,
+                    created_at=item.created_at,
+                )
+                for item in page.items
+            ],
+            page=models.PageInfo(next_cursor=page.next_cursor),
+        )
 
     def list_snapshot_events(
         self, *, cursor: str | None, limit: int
     ) -> models.NormSnapshotEventPage:
-        return self._norms_search_unavailable()
+        from auditmanager.norms.public import (
+            EventPosition,
+            decode_event_cursor,
+            encode_event_cursor,
+            list_snapshot_events,
+        )
+
+        position = None if cursor is None else decode_event_cursor(cursor)
+        after = None if position is None else (position.changed_at, position.event_id)
+        rows = self._read(
+            lambda session: list_snapshot_events(session, after=after, limit=limit + 1)
+        )
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        next_cursor = (
+            encode_event_cursor(EventPosition(rows[-1].changed_at, rows[-1].event_id))
+            if has_more and rows
+            else None
+        )
+        return models.NormSnapshotEventPage(
+            items=[
+                models.NormSnapshotEvent(
+                    event_id=row.event_id,
+                    from_norms_snapshot_id=row.from_snapshot_id,
+                    to_norms_snapshot_id=row.to_snapshot_id,
+                    actor_user_uid=row.actor_user_uid,
+                    changed_at=row.changed_at,
+                )
+                for row in rows
+            ],
+            page=models.PageInfo(next_cursor=next_cursor),
+        )
 
     def set_current_snapshot(
         self, *, norms_snapshot_id: str, expected_current: str | None, user_uid: str
     ) -> models.NormCurrentSnapshot:
-        return self._norms_search_unavailable()
+        from auditmanager.norms.public import set_current_snapshot
+
+        designation = self._write(
+            lambda session: set_current_snapshot(
+                session,
+                norms_snapshot_id=norms_snapshot_id,
+                expected_current=expected_current,
+                actor_user_uid=user_uid,
+            )
+        )
+        return models.NormCurrentSnapshot(
+            norms_snapshot_id=designation.current.norms_snapshot_id,
+            designated_at=designation.current.designated_at,
+            designated_by=designation.current.designated_by,
+        )
+
+
+def _norm_hit(hit: Any) -> models.NormSearchHit:
+    return models.NormSearchHit(
+        norms_snapshot_id=hit.norms_snapshot_id,
+        norm_document_id=hit.norm_document_id,
+        norm_paragraph_id=hit.norm_paragraph_id,
+        designation=hit.designation,
+        title=hit.title,
+        doc_type=hit.doc_type,
+        clause_number=hit.clause_number,
+        page_label=hit.page_label,
+        block_ref=hit.block_ref,
+        fragment=models.NormFragment(
+            text=hit.fragment.text,
+            highlights=[
+                models.NormHighlight(char_start=first, char_end=last)
+                for first, last in hit.fragment.highlights
+            ],
+        ),
+        source_attribution=models.NormSourceAttribution(hit.source_attribution),
+    )
+
+
+def _norm_document(document: Any) -> models.NormDocument:
+    return models.NormDocument(
+        norm_document_id=document.norm_document_id,
+        norms_snapshot_id=document.norms_snapshot_id,
+        designation=document.designation,
+        title=document.title,
+        doc_type=document.doc_type,
+        drawn_on=document.drawn_on,
+        pdf_page_count=document.pdf_page_count,
+        paragraph_count=document.paragraph_count,
+        unreliable_paragraph_count=document.unreliable_paragraph_count,
+        content_available=document.content_available,
+        source_attribution=models.NormSourceAttribution(document.source_attribution),
+    )
 
 
 class NormContentAdapter(_SessionHolder):
-    """`W55A-SEAL-01`. ``streamNormDocumentContent`` as a sealed stub.
+    """`W55A-SEARCH-01`. ``streamNormDocumentContent``: the PDF through its confirmed binding.
 
-    The PDF is served only through a confirmed custody binding and streamed in chunks;
-    `W55A-SEARCH-01` supplies the binding read over `W55A-CONTENT-01`'s storage stream and
-    replaces this body. ``blob_store`` is taken now so the composition root's wiring does
-    not move when it does.
+    `W55A-CONTENT-01`'s recipe (``docs/program/W55A-CONTENT-01.md`` section 5), in its order,
+    because the caller sends a status line as soon as this returns:
+
+    1. the document and its confirmed ``norm_source`` PDF binding -- an unknown document is
+       ``not_found``, one without the binding ``required_norm_unavailable``
+       (``reference_kind: norm_source``);
+    2. the ``Range`` resolved against the **binding's** declared size -- ``422`` before the
+       store is touched;
+    3. the object opened with the binding's SHA-256 and size as the declaration, every
+       storage failure typed as ``IngestService.open_source_stream`` types it (``role``
+       ``norm_source``).
+
+    The held-back last chunk of a whole read, the size checks and the
+    ``storage_integrity_error`` log come with :meth:`BlobStore.open_stream`.
     """
 
     def __init__(self, sessions: sessionmaker[Session], *, blob_store: Any) -> None:
@@ -1777,4 +1933,52 @@ class NormContentAdapter(_SessionHolder):
     def stream_content(
         self, *, norm_document_id: str, byte_range: ByteRange | None
     ) -> StreamedContent:
-        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_content")
+        from auditmanager.ingest import domain_error_from_storage
+        from auditmanager.norms.public import NORM_SOURCE, norm_pdf_binding
+        from auditmanager.storage.public import (
+            BlobId,
+            BlobNotFoundError,
+            StorageError,
+        )
+
+        binding = self._read(lambda session: norm_pdf_binding(session, norm_document_id))
+        window = None if byte_range is None else byte_range.resolve(binding.size_bytes)
+        try:
+            chunks = self._blob_store.open_stream(
+                BlobId(binding.blob_id),
+                expected_sha256=binding.sha256,
+                expected_size=binding.size_bytes,
+                window=window,
+                chunk_size=CONTENT_CHUNK_BYTES,
+            )
+        except BlobNotFoundError:
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                blob_id=binding.blob_id,
+                role=NORM_SOURCE,
+                expected_sha256=binding.sha256,
+            ) from None
+        except StorageError as exc:
+            raise domain_error_from_storage(
+                exc, blob_id=binding.blob_id, role=NORM_SOURCE
+            ) from None
+        return StreamedContent(
+            media_type=PDF_MEDIA_TYPE,
+            total_size=binding.size_bytes,
+            window=window,
+            chunks=_typed_norm_chunks(chunks, binding.blob_id),
+        )
+
+
+def _typed_norm_chunks(chunks: Any, blob_id: str) -> Any:
+    """The opened body, a failure half-way raised as the system's typed failure."""
+    from auditmanager.ingest import domain_error_from_storage
+    from auditmanager.norms.public import NORM_SOURCE
+    from auditmanager.storage.public import StorageError
+
+    try:
+        yield from chunks
+    except StorageError as exc:
+        raise domain_error_from_storage(exc, blob_id=blob_id, role=NORM_SOURCE) from None
+    finally:
+        chunks.close()

@@ -112,19 +112,19 @@ EXECUTION_COLLECTIONS = frozenset({"listExecutionQueue", "listExecutionJournal"}
 #: `W54-WORKER-01` emptied it: ``listWorkers`` reads the registry and joins the page-shape
 #: sweep as an ordinary collection (an empty registry is a page with no items, which is a
 #: true statement about a deployment with no worker).
-#: `W55A-SEAL-01` fills it again with the two norms snapshot listings, whose port is a sealed
-#: stub until `W55A-SEARCH-01`; that lane empties it. The sweep's account holds ``admin``, so
-#: the administrator's history reaches its stub rather than the seam's ``403``.
-SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset({"listNormSnapshots", "listNormSnapshotEvents"})
+#: `W55A-SEAL-01` filled it again with the two norms snapshot listings; `W55A-SEARCH-01`
+#: serves them and empties it, so both join the page-shape sweep: no snapshot loaded is a
+#: page with no items, and so is a history with no designation. The sweep's account holds
+#: ``admin``, so the administrator's history answers its page rather than the seam's ``403``.
+SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 
 #: `W55A-SEAL-01`. Addressed ``GET`` operations whose port is a sealed stub: they cannot
 #: answer ``404`` for an absent identity until something reads the identity, so they are
 #: exempt from the ``404`` sweep and asserted to be exactly the stub instead
 #: (:func:`test_a_sealed_stub_get_with_a_parent_answers_unavailable`). `W55A-SEARCH-01`
-#: empties it and the three join the sweep: an absent ``ndoc_`` is ``404 not_found``.
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset(
-    {"getNormDocument", "listNormParagraphs", "streamNormDocumentContent"}
-)
+#: emptied it and the three joined the sweep: an absent ``ndoc_`` is ``404 not_found`` --
+#: the document, its paragraphs and its PDF alike.
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a
@@ -343,9 +343,10 @@ def test_a_sealed_stub_get_with_a_parent_answers_unavailable(app: Composed) -> N
 def test_a_query_without_its_text_is_refused_and_never_a_page(app: Composed) -> None:
     """`W55A-SEAL-01`. ``searchNorms`` with no ``q`` is a malformed request, not a page.
 
-    With a ``q`` it reaches its port, which is a sealed stub until `W55A-SEARCH-01` and then
-    refuses ``required_norm_unavailable`` while no snapshot is current -- in neither case an
-    empty page, which would read as "nothing in the corpus matches".
+    With a ``q`` it reaches its port (`W55A-SEARCH-01`): while no snapshot is current it
+    refuses ``required_norm_unavailable`` (``reference_kind: norms_snapshot``) -- never an
+    empty page, which would read as "nothing in the corpus matches" -- and once one is, it
+    answers a page. It is never the sealed stub's ``503`` again.
     """
     unaddressed = _unaddressed(_get_routes(app))
     queries = [(op, path) for op, path in unaddressed if op in QUERY_OPERATIONS]
@@ -355,9 +356,14 @@ def test_a_query_without_its_text_is_refused_and_never_a_page(app: Composed) -> 
         assert status == 422, f"{operation_id} answered {status}: {body}"
         assert body.get("error_code") == "validation_failed", body
         status, body = _get(app, f"{template}?q=%D0%93%D0%9E%D0%A1%D0%A2%2010140")
-        assert status in (422, 503), f"{operation_id} answered {status}: {body}"
-        assert isinstance(body, dict) and "items" not in body, body
-        assert body.get("error_code") in ("dependency_unavailable", "required_norm_unavailable"), body
+        assert status in (200, 422), f"{operation_id} answered {status}: {body}"
+        assert isinstance(body, dict), body
+        if status == 422:
+            assert "items" not in body, body
+            assert body.get("error_code") == "required_norm_unavailable", body
+            assert body.get("details") == {"reference_kind": "norms_snapshot"}, body
+        else:
+            assert isinstance(body.get("items"), list), body
 
 
 def test_release_gets_serve_the_running_version_and_history(app: Composed) -> None:

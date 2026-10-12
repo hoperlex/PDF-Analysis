@@ -281,9 +281,10 @@ def build_application(
             release_repository, product_version=product_version, build_id=build_id
         ),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
-        # `W55A-SEAL-01`. The norms reads, the designation and the norm PDF: sealed stubs
-        # over the same session factory and store until `W55A-SEARCH-01`.
-        norms=NormsSearchAdapter(sessions),
+        # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the
+        # designation over the same session factory, every search under the operator's
+        # statement timeout; the norm PDF through its confirmed binding from the same store.
+        norms=NormsSearchAdapter(sessions, timeout_ms=resolved.norms_search_timeout_ms),
         norm_content=NormContentAdapter(sessions, blob_store=store),
     )
     return Application(

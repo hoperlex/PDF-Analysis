@@ -39,18 +39,12 @@ RELEASE_GETS = frozenset({"/system/version", "/releases"})
 
 # `W54-SEAL-01` sealed the worker registry's read as a stub answering `503`. `W54-WORKER-01`
 # serves it, so it is no longer exempt: it answers 200 with a page like every other read.
-#: `W55A-SEAL-01` names the norms reads its port serves as sealed stubs: each must answer
-#: exactly `503 dependency_unavailable` until `W55A-SEARCH-01`, which empties this set. The
-#: suite's account is an `expert`, so the administrator's `/norms/snapshots/events` answers
-#: the seam's `403` and is not listed; `/norms/search` without `q` answers `422`.
-SEALED_STUB_GETS: frozenset[str] = frozenset(
-    {
-        "/norms/snapshots",
-        "/norm-documents/ndoc_01ARZ3NDEKTSV4RRFFQ69G5FAV",
-        "/norm-documents/ndoc_01ARZ3NDEKTSV4RRFFQ69G5FAV/paragraphs",
-        "/norm-documents/ndoc_01ARZ3NDEKTSV4RRFFQ69G5FAV/content",
-    }
-)
+#: `W55A-SEAL-01` named the norms reads its port served as sealed stubs, each answering
+#: exactly `503 dependency_unavailable`. `W55A-SEARCH-01` serves them and empties this set, so
+#: they meet the sweep's ordinary rule: an absent `ndoc_` is `404`, the snapshot list a page,
+#: `/norms/search` without `q` a `422`, and the administrator's history the seam's `403` for
+#: this suite's `expert` -- never a `5xx`.
+SEALED_STUB_GETS: frozenset[str] = frozenset()
 WORKER_GETS = frozenset({"/execution/workers"})
 
 _STATIC_TOKEN_CACHE: str | None = None

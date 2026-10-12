@@ -28,11 +28,15 @@ import json
 import os
 from pathlib import Path
 
+import pytest
+
 from auditmanager.bootstrap.settings import (
     COST_CEILING_ENV,
     MODEL_ID_ENV,
+    NORMS_SEARCH_TIMEOUT_ENV,
     PROVIDER_MODE_ENV,
     PROXY_MODEL_ENV,
+    ConfigurationError,
     load,
 )
 
@@ -150,3 +154,38 @@ class TestTheModelDefaults:
             PROXY_MODEL_ENV: "claude-sonnet-5",
         }
         assert load(env).proxy_model == "claude-sonnet-5"
+
+
+class TestTheNormsSearchTimeout:
+    """`W55A-SEARCH-01`. ``AUDITMANAGER_NORMS_SEARCH_TIMEOUT_MS``, the ``statement_timeout``
+    of every ``searchNorms`` query (`W55-PLAN.md` section A3.4).
+
+    The default is `W55A-FREEZE-01`'s provisional 3000 ms, written here as a literal so a
+    change to it is a visible decision; `W55A-D124-MEASURE` re-fixes it. A value that does
+    not parse refuses the start rather than falling back, because a fallback would be a
+    search bound nobody chose.
+    """
+
+    def test_the_name_is_the_one_the_error_register_names(self) -> None:
+        assert NORMS_SEARCH_TIMEOUT_ENV == "AUDITMANAGER_NORMS_SEARCH_TIMEOUT_MS"
+        register = json.loads(
+            (LOCK.parents[2] / "contracts/domain/v1/error-codes.json").read_text(encoding="utf-8")
+        )
+        notes = " ".join(register["codes"]["validation_failed"]["notes"])
+        assert NORMS_SEARCH_TIMEOUT_ENV in notes
+
+    def test_an_unconfigured_process_uses_the_freeze_default(self) -> None:
+        env = _base_env()
+        env.pop(NORMS_SEARCH_TIMEOUT_ENV, None)
+        assert load(env).norms_search_timeout_ms == 3000
+        assert load(env | {NORMS_SEARCH_TIMEOUT_ENV: "  "}).norms_search_timeout_ms == 3000
+
+    def test_an_explicit_timeout_wins(self) -> None:
+        env = _base_env() | {NORMS_SEARCH_TIMEOUT_ENV: "8000"}
+        assert load(env).norms_search_timeout_ms == 8000
+
+    @pytest.mark.parametrize("value", ["0", "-5", "3s", "1.5", "007", "600001"])
+    def test_a_value_that_is_not_a_bound_refuses_the_start(self, value: str) -> None:
+        env = _base_env() | {NORMS_SEARCH_TIMEOUT_ENV: value}
+        with pytest.raises(ConfigurationError):
+            load(env)
