@@ -29,8 +29,10 @@ therefore writes -- and the caller commits. Neither touches ``token_epoch``: a l
 refuses **minting** a credential and revocation refuses **presenting** one, and wiring the
 first to the second would let an unauthenticated caller sign out a reviewer who is working.
 
-A lockout ends by itself when its cooling-off period passes, when the account changes its
-password, or when an operator runs ``python -m auditmanager.access.unlock``. All three are
+A lockout ends by itself when its cooling-off period passes or when an operator runs
+``python -m auditmanager.access.unlock``; a password change clears a count that has not shut
+the account yet, and its proof of the current password is braked by the same allowance
+(`W53C-IDENTITY-01`, C-10). All three are
 in the code, because a lockout whose only way back is a runbook paragraph is a denial of
 service anybody can aim at a named account -- and this installation has one account.
 

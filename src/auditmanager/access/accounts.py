@@ -671,36 +671,6 @@ class AccountRepository:
         )
         return True
 
-    def revoke_role(
-        self, session: Session, *, actor_uid: str, user_uid: str, role: str
-    ) -> bool:
-        """Remove ``role`` from the account's set; ``True`` when the set changed.
-
-        `W49-PLAN.md` §3.2: an account cannot demote itself (``permission_denied``), and the
-        last active administrator cannot lose ``admin`` (``conflict``) -- decided under the
-        lock on the administrator set, like archive. A change raises ``token_epoch``.
-        """
-        role = parse_role(role)
-        _refuse_self(actor_uid, user_uid, "demote")
-        current = self._lock_admins_then(session, user_uid)
-        if current is None:
-            raise _no_such_account()
-        if role == ROLE_ADMIN and not current.archived:
-            self._refuse_last_admin(session, user_uid, "lose the role admin")
-        removed = session.execute(_DELETE_ROLE, {"user_uid": user_uid, "role": role}).first()
-        if removed is None:
-            return False
-        session.execute(_BUMP_EPOCH, {"user_uid": user_uid})
-        _log.warning(
-            "%s: %s (%r) no longer holds %r (by %s); every credential it held is refused.",
-            ROLES_CHANGED,
-            user_uid,
-            current.login,
-            role,
-            actor_uid,
-        )
-        return True
-
     def set_roles(
         self,
         session: Session,
@@ -711,10 +681,12 @@ class AccountRepository:
     ) -> frozenset[str]:
         """Make the account's role set exactly ``roles`` (``updateUser``'s roles).
 
-        The difference is applied as revocations then grants, each under the rules above,
-        and ``token_epoch`` is raised **once** when anything changed. An empty set is
-        allowed: an account with no role reaches only what every complete account reaches
-        (`R-60`). Removing a role from oneself is refused even when another is added in
+        The only way a role is removed: the difference is applied as removals then grants,
+        under the self and last-administrator rules of `W49-PLAN.md` §3.2, decided under
+        the lock on the administrator set, and ``token_epoch`` is raised **once** when
+        anything changed. An empty set is allowed: since `R-80` it means suspended -- the
+        account reaches its own account and the product version and release notes, and no
+        product data. Removing a role from oneself is refused even when another is added in
         the same call -- "demote" is any loss, not a net count. An archived account answers
         ``not_found``, as :meth:`reset_password` and :meth:`grant_role` do: its roles change
         only after ``restoreUser`` (`R-62`), so a restore never brings back a role granted

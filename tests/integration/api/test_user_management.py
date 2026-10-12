@@ -322,8 +322,10 @@ def _stored(session: Session, user_uid: str) -> tuple[Any, ...]:
     return tuple(row)
 
 
-#: `updateUser`'s bodies: each half alone, both together, and the role set emptied.
+#: `updateUser`'s bodies: each half alone, both together, the role set emptied, and -- C-09
+#: -- neither half, which answered 200 with the archived account before `W53C-IDENTITY-01`.
 ARCHIVED_UPDATES = {
+    "empty": {},
     "names": {"names": {"last_name": "Призраков", "first_name": "Иван"}},
     "grant-admin": {"roles": ["expert", "admin"]},
     "remove-all-roles": {"roles": []},
@@ -368,6 +370,16 @@ class TestAnArchivedAccountIsNotChanged:
         assert answer.status == 200, answer.body
         assert _json(answer)["display_label"] == "Призраков И."
         assert _json(answer)["roles"] == ["admin"]
+
+    def test_an_empty_change_on_an_active_account_answers_it_and_writes_nothing(
+        self, surface: Surface, session: Session, admin: str, expert: str
+    ) -> None:
+        """The counter-case of C-09: the refusal above is the archive, not the empty body."""
+        before = _stored(session, expert)
+        answer = _send(surface, "PATCH", f"/users/{expert}", credential_for(session, admin), {})
+        assert answer.status == 200, answer.body
+        assert _json(answer)["user_uid"] == expert
+        assert _stored(session, expert) == before
 
 
 class TestARepeatWithoutAKey:

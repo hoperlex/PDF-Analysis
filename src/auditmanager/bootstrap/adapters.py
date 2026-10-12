@@ -1393,9 +1393,22 @@ class AccountAdapter(_SessionHolder):
         names: PersonNamesView | None,
         roles: frozenset[str] | None,
     ) -> AccountView:
-        """Update names and roles in one transaction; a refused role change rolls both back."""
+        """Update names and roles in one transaction; a refused role change rolls both back.
+
+        **Roles first**, because ``set_roles`` takes the lock order ``auditmanager.access``
+        documents for every change that can remove an administrator -- the active
+        administrators, then the target. Writing the names first locked the target before
+        the administrator set, the reverse order, so a combined change and a concurrent
+        archive of the same account could deadlock (C-08). The names then lock a row this
+        transaction already holds. An empty change still answers ``not_found`` for an
+        archived or missing account, as either half alone does (`R-62`, C-09).
+        """
 
         def work(session: Session) -> AccountView:
+            if roles is not None:
+                self._accounts.set_roles(
+                    session, actor_uid=actor_uid, user_uid=user_uid, roles=roles
+                )
             if names is not None:
                 self._accounts.update_names(
                     session,
@@ -1404,11 +1417,10 @@ class AccountAdapter(_SessionHolder):
                     first_name=names.first_name,
                     middle_name=names.middle_name,
                 )
-            if roles is not None:
-                self._accounts.set_roles(
-                    session, actor_uid=actor_uid, user_uid=user_uid, roles=roles
-                )
-            return self._view_of(session, user_uid)
+            account = self._accounts.get_account(session, user_uid)
+            if account is None or account.record.archived:
+                raise _not_found("User")
+            return _account_view(account)
 
         return self._write(work)
 

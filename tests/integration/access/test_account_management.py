@@ -654,3 +654,95 @@ def test_list_accounts_hides_the_archived_unless_asked(session: Session) -> None
     assert every == {seed, uid}
     listed = {str(a.record.user_uid): a.roles for a in accounts.list_accounts(session)}
     assert listed[seed] == frozenset({"admin", "expert"})
+
+
+# =======================================================================================
+# The composition root's ``updateUser``: the lock order of a combined change (C-08).
+# =======================================================================================
+
+
+def test_a_names_and_roles_update_locks_the_administrator_set_before_its_target(
+    migrated_engine: Engine,
+) -> None:
+    """`W53C-IDENTITY-01` C-08, with real sessions: the module docstring's order -- every
+    active administrator, then the target -- holds for ``updateUser`` with both halves.
+
+    Another transaction holds the administrator set. The combined update must wait on it
+    **before** it locks its target, so a third connection can still lock the target with
+    ``NOWAIT`` while the update waits. With the names written first the update held the
+    target and then waited for the set -- the reverse order -- and a concurrent archive of
+    the same account, which takes the set and then the target, deadlocked against it.
+    """
+    from sqlalchemy.exc import DBAPIError
+    from sqlalchemy.orm import sessionmaker
+
+    from auditmanager.api.schemas.accounts import PersonNamesView
+    from auditmanager.bootstrap.adapters import AccountAdapter
+
+    with Session(migrated_engine) as setup:
+        seed = _seed(setup)
+        target = _create(setup, "anna@example.com", roles=("expert",))
+    adapter = AccountAdapter(
+        sessionmaker(bind=migrated_engine, expire_on_commit=False), accounts=accounts
+    )
+
+    holder = Session(migrated_engine)
+    holder.execute(
+        text(
+            "SELECT u.user_uid FROM app_user u "
+            "JOIN app_user_role r ON r.user_uid = u.user_uid AND r.role = 'admin' "
+            "WHERE u.archived_at IS NULL ORDER BY u.user_uid FOR UPDATE OF u"
+        )
+    ).all()
+
+    outcome: dict[str, object] = {}
+
+    def update() -> None:
+        try:
+            outcome["view"] = adapter.update_account(
+                actor_uid=seed,
+                user_uid=target,
+                names=PersonNamesView(
+                    last_name="Переименованная", first_name="Анна", middle_name=None
+                ),
+                roles=frozenset({"expert", "admin"}),
+            )
+        except Exception as exc:  # noqa: BLE001 - reported by the assertion below
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=update)
+    worker.start()
+    waiting = 0
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and not outcome:
+        with migrated_engine.connect() as probe:
+            waiting = probe.execute(
+                text(
+                    "SELECT count(*) FROM pg_stat_activity "
+                    "WHERE datname = current_database() AND wait_event_type = 'Lock'"
+                )
+            ).scalar_one()
+        if waiting:
+            break
+        time.sleep(0.05)
+    target_free = False
+    with migrated_engine.connect() as probe:
+        try:
+            probe.execute(
+                text("SELECT 1 FROM app_user WHERE user_uid = :u FOR UPDATE NOWAIT"),
+                {"u": target},
+            )
+            target_free = True
+        except DBAPIError:
+            target_free = False
+        probe.rollback()
+    holder.rollback()
+    holder.close()
+    worker.join(30)
+
+    assert waiting, "the update never waited on the administrator set"
+    assert target_free, "the update locked its target before the administrator set"
+    assert "error" not in outcome, outcome
+    view = outcome["view"]
+    assert view.last_name == "Переименованная"  # type: ignore[attr-defined]
+    assert set(view.roles) == {"expert", "admin"}  # type: ignore[attr-defined]
