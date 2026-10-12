@@ -216,3 +216,93 @@ def test_account_mark_only_rises_and_new_accounts_see_no_old_whats_new(
     load_notes(sessions, notes=revised, product_version="0.3.0")
     assert repo.list_for_account(new_uid).whats_new == (
     ), "a revision does not change when this release first reached the database"
+
+
+_UNSERVABLE_ITEMS = {
+    "unknown kind": [
+        {"kind": "removed", "screen": "Проекты", "where": "Список", "text": "Убрано."}
+    ],
+    "unknown field": [
+        {"kind": "new", "screen": "Проекты", "where": "Список", "text": "Новое.",
+         "audience": "admin"}
+    ],
+    "no items": "not-a-list",
+}
+
+
+@pytest.mark.parametrize("label", sorted(_UNSERVABLE_ITEMS))
+def test_a_newer_images_revision_falls_back_to_the_newest_servable_one(
+    migrated_engine: Engine, label: str
+) -> None:
+    """W53-CLOSE C-13: a rollback below the image that appended a revision never 500s.
+
+    The newer image's revision is written directly, as that image's loader would have
+    written it: same release, a higher revision, content this image cannot express.
+    The listing and the transport view built from it (``listReleases``' data path)
+    must answer with the newest revision this image can serve.
+    """
+    from auditmanager.bootstrap.adapters import ReleasesAdapter
+
+    sessions = create_session_factory(migrated_engine)
+    notes = _notes()
+    current = notes["0.3.0"]
+    load_notes(sessions, notes=notes, product_version="0.3.0")
+    with migrated_engine.begin() as connection:
+        connection.execute(
+            text("INSERT INTO release_revision "
+                 "(release_pk, revision, released_on, title, content, content_sha256) "
+                 "SELECT pk, :revision, :released_on, 'From a newer image', "
+                 "CAST(:content AS jsonb), :digest FROM release WHERE version = '0.3.0'"),
+            {
+                "revision": current.revision + 1,
+                "released_on": current.released_on,
+                "content": json.dumps({**current.content, "items": _UNSERVABLE_ITEMS[label]}),
+                "digest": "b" * 64,
+            },
+        )
+    repo = ReleaseRepository(sessions, product_version="0.3.0")
+    uid = _seeded_uid(migrated_engine)
+    listing = repo.list_for_account(uid)
+    assert [item.version for item in listing.items] == ["0.3.0", "0.2.0"]
+    served = listing.items[0]
+    assert (served.revision, served.title) == (current.revision, current.title)
+    assert served.items == current.items
+    assert listing.whats_new == ("0.3.0",)
+
+    view = ReleasesAdapter(
+        repo, product_version="0.3.0", build_id="0" * 64
+    ).list_releases(user_uid=uid)
+    assert [(entry.version, entry.revision) for entry in view.items] == [
+        ("0.3.0", current.revision), ("0.2.0", notes["0.2.0"].revision)
+    ]
+    # The image's own loader still treats the newer revision as history it must keep.
+    assert load_notes(sessions, notes=notes, product_version="0.3.0").older_revision == (
+        "0.3.0",
+    )
+
+
+def test_a_release_with_no_servable_revision_is_omitted_not_fatal(
+    migrated_engine: Engine,
+) -> None:
+    """A release this image can serve no revision of drops out; the others still answer."""
+    sessions = create_session_factory(migrated_engine)
+    load_notes(sessions, notes=_notes(), product_version="0.3.0")
+    with migrated_engine.begin() as connection:
+        pk = connection.execute(
+            text("INSERT INTO release(version, sort_key, is_archive) "
+                 "VALUES ('0.2.5', :key, false) RETURNING pk"),
+            {"key": canonical_semver_sort_key("0.2.5")},
+        ).scalar_one()
+        connection.execute(
+            text("INSERT INTO release_revision "
+                 "(release_pk, revision, released_on, title, content, content_sha256) "
+                 "VALUES (:pk, 1, DATE '2026-10-09', 'Unservable', "
+                 """'{"items":[{"kind":"removed","screen":"s","where":"w","text":"t"}]}'"""
+                 "::jsonb, :digest)"),
+            {"pk": pk, "digest": "c" * 64},
+        )
+    listing = ReleaseRepository(sessions, product_version="0.3.0").list_for_account(
+        _seeded_uid(migrated_engine)
+    )
+    assert [item.version for item in listing.items] == ["0.3.0", "0.2.0"]
+    assert listing.whats_new == ("0.3.0",)

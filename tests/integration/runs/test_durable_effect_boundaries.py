@@ -21,7 +21,6 @@ from auditmanager.jobs import JobRepository
 from auditmanager.runs import (
     execute_run,
     reconcile,
-    reconcile_interrupted_runs,
     start_audit_run,
 )
 from auditmanager.runs.repository import RunRepository
@@ -750,10 +749,8 @@ def test_process_loss_after_temporary_verification_keeps_a_pre_upload_breadcrumb
 
         reconciler = Reconciler(blob_store, session_factory=factory)
         with pytest.raises(DomainError) as refusal:
-            reconciler.reject_unpublished(
-                parse_blob_id(publication["blob_id"]), older_than="0 seconds"
-            )
-        assert refusal.value.code is ErrorCode.STATE_TRANSITION_NOT_ALLOWED
+            reconciler.reject_unpublished(parse_blob_id(publication["blob_id"]))
+        assert _rejection_reason(refusal) == "content_addressed_rerun_self_heals"
         with factory() as observer:
             blob_state_after = observer.execute(
                 text("SELECT state FROM blob WHERE blob_id = :blob_id"),
@@ -772,35 +769,27 @@ def test_process_loss_after_temporary_verification_keeps_a_pre_upload_breadcrumb
         blob_store.discard_temporary(killing_store.temporary)
 
 
-def test_only_stale_terminal_analysis_publication_without_bytes_can_be_rejected(
+def test_a_stale_terminal_analysis_publication_is_refused_and_a_rerun_publishes_it(
     engine,
     blob_store,
     recorded_adapter,
     provider_config,
     helpers,
 ) -> None:
+    """W53-CLOSE C-12: rejection would ban the version; a rerun self-heals instead.
+
+    This is the shape W48 called rejectable: a ``lost`` Attempt, a stale intent, and no
+    canonical or temporary bytes. The blob identity is content-derived, ``rejected`` is
+    terminal, and ``source_preparation`` produces the same bytes for every run of the
+    same version, so rejecting it made every later run of that version fail when it
+    re-recorded the content. The report must not offer the action, the action must
+    refuse with its own reason and change nothing, and a new run of the same version
+    must publish the very blob the interrupted run left behind.
+    """
     factory = _factory(engine)
-    killing_store = ExitAfterVerification(blob_store)
-    session = factory()
-    try:
-        _seeded, started = _start(
-            session, helpers, blob_store, provider_mode="recorded"
-        )
-        with pytest.raises(ProcessExit, match="artifact_verified_before_checkpoint"):
-            execute_run(
-                session,
-                started.run_id,
-                blob_store=killing_store,
-                adapter=recorded_adapter,
-                provider_config=provider_config,
-            )
-    finally:
-        session.close()
-
-    assert killing_store.temporary is not None
-    verified = blob_store.verify_temporary(killing_store.temporary)
-    blob_store.discard_temporary(killing_store.temporary)
-
+    seeded, started, verified = _interrupted_publication(
+        factory, helpers, blob_store, recorded_adapter, provider_config
+    )
     _expire_and_reclaim(factory, started.run_id)
 
     reconciler = Reconciler(blob_store, session_factory=factory)
@@ -814,15 +803,42 @@ def test_only_stale_terminal_analysis_publication_without_bytes_can_be_rejected(
     assert item.is_stale is True
     assert item.object_present is False
     assert item.temporary_present is False
-    assert item.rejection_eligible is True
+    assert item.rejection_eligible is False
 
-    reconciler.reject_unpublished(verified.blob_id, older_than="0 seconds")
+    with pytest.raises(DomainError) as refusal:
+        reconciler.reject_unpublished(verified.blob_id)
+    assert _rejection_reason(refusal) == "content_addressed_rerun_self_heals"
+    assert refusal.value.detail_fields["machine"] == "analysis_artifact_publication"
+    assert _blob_state(factory, verified.blob_id) == "temporary"
+
+    with factory() as session:
+        rerun = start_audit_run(
+            session,
+            version_uid=seeded.version_uid,
+            analysis_profile_id=seeded.analysis_profile_id,
+            prompt_bundle_id=seeded.prompt_bundle_id,
+            provider_mode="recorded",
+            idempotency_key=_key("rerun-after-refused-rejection"),
+        )
+        result = execute_run(
+            session,
+            rerun.run_id,
+            blob_store=blob_store,
+            adapter=recorded_adapter,
+            provider_config=provider_config,
+        )
+        session.commit()
+    assert result.terminal_state == "published"
     with factory() as observer:
-        state = observer.execute(
-            text("SELECT state FROM blob WHERE blob_id = :blob_id"),
-            {"blob_id": str(verified.blob_id)},
+        rebound = observer.execute(
+            text(
+                "SELECT count(*) FROM analysis_artifact_publication "
+                "WHERE run_id = :run_id AND blob_id = :blob_id AND state = 'bound'"
+            ),
+            {"run_id": rerun.run_id, "blob_id": str(verified.blob_id)},
         ).scalar_one()
-    assert state == "rejected"
+    assert rebound == 1, "the rerun did not re-derive the interrupted run's blob"
+    assert _blob_state(factory, verified.blob_id) == "available"
 
 
 def test_a_wrong_execution_token_and_a_superseded_attempt_fail_closed(
@@ -980,10 +996,10 @@ def test_bound_analysis_artifacts_are_not_detached_and_missing_bytes_are_named(
 
 # --- W48-FIX-C: regressions for W48-JUDGE-Z findings F-8 and F-9 -----------------------
 #
-# Each refusal below already existed and behaved correctly; what was missing was a test
-# that fails when the refusal is removed. The existing tests assert only the error code,
-# and every refusal of ``reject_unpublished`` shares one code, so a removed check was
-# masked by the next one. These assert the refusal's own reason.
+# Every refusal of ``reject_unpublished`` shares one code, so these assert the refusal's
+# own reason. W53-CLOSE C-12 replaced the W48 eligibility ladder (``attempt_not_terminal``,
+# ``publication_not_stale``, object presence) with one answer for every blob an
+# analysis-artifact intent names: a content-derived identity is never rejected.
 
 
 def _rejection_reason(refusal: pytest.ExceptionInfo[DomainError]) -> object:
@@ -996,7 +1012,7 @@ def _interrupted_publication(factory, helpers, blob_store, recorded_adapter, pro
     killing_store = ExitAfterVerification(blob_store)
     session = factory()
     try:
-        _seeded, started = _start(
+        seeded, started = _start(
             session, helpers, blob_store, provider_mode="recorded"
         )
         with pytest.raises(ProcessExit, match="artifact_verified_before_checkpoint"):
@@ -1012,7 +1028,7 @@ def _interrupted_publication(factory, helpers, blob_store, recorded_adapter, pro
     assert killing_store.temporary is not None
     verified = blob_store.verify_temporary(killing_store.temporary)
     blob_store.discard_temporary(killing_store.temporary)
-    return started, verified
+    return seeded, started, verified
 
 
 def _blob_state(factory, blob_id) -> str:
@@ -1025,55 +1041,48 @@ def _blob_state(factory, blob_id) -> str:
         )
 
 
-def test_a_live_attempts_blob_is_refused_as_attempt_not_terminal_even_without_bytes(
+def test_a_live_attempts_blob_is_refused_as_content_addressed(
     engine,
     blob_store,
     recorded_adapter,
     provider_config,
     helpers,
 ) -> None:
-    """F-8, first half: the producing Attempt is still ``running``.
-
-    The bytes are gone and the age threshold is zero, so every later check would let the
-    rejection through: only ``attempt_not_terminal`` stands between a live Attempt and a
-    permanently burned content identity.
-    """
+    """F-8, first half: the producing Attempt is still ``running``; nothing changes."""
     factory = _factory(engine)
-    _started, verified = _interrupted_publication(
+    _seeded, _started, verified = _interrupted_publication(
         factory, helpers, blob_store, recorded_adapter, provider_config
     )
     reconciler = Reconciler(blob_store, session_factory=factory)
     with pytest.raises(DomainError) as refusal:
-        reconciler.reject_unpublished(verified.blob_id, older_than="0 seconds")
-    assert _rejection_reason(refusal) == "attempt_not_terminal"
+        reconciler.reject_unpublished(verified.blob_id)
+    assert _rejection_reason(refusal) == "content_addressed_rerun_self_heals"
     assert _blob_state(factory, verified.blob_id) == "temporary"
 
 
-def test_a_fresh_terminal_publication_is_refused_as_publication_not_stale(
+def test_a_terminal_publication_is_refused_however_old_it_is(
     engine,
     blob_store,
     recorded_adapter,
     provider_config,
     helpers,
 ) -> None:
-    """F-8, second half: the Attempt is terminal, but the publication is younger than asked.
+    """F-8, second half, after C-12: no age makes a content-derived identity rejectable.
 
-    Bytes are gone and the Attempt is ``lost``, so only ``publication_not_stale`` refuses;
-    the same blob is then rejectable once the threshold admits it.
+    W48 rejected this blob once the threshold admitted it. Two refusals in a row prove the
+    refusal is not a one-shot guard, and the blob row stays ``temporary`` throughout.
     """
     factory = _factory(engine)
-    _started, verified = _interrupted_publication(
+    _seeded, started, verified = _interrupted_publication(
         factory, helpers, blob_store, recorded_adapter, provider_config
     )
-    _expire_and_reclaim(factory, _started.run_id)
+    _expire_and_reclaim(factory, started.run_id)
     reconciler = Reconciler(blob_store, session_factory=factory)
-    with pytest.raises(DomainError) as refusal:
-        reconciler.reject_unpublished(verified.blob_id, older_than="1 hour")
-    assert _rejection_reason(refusal) == "publication_not_stale"
-    assert _blob_state(factory, verified.blob_id) == "temporary"
-
-    reconciler.reject_unpublished(verified.blob_id, older_than="0 seconds")
-    assert _blob_state(factory, verified.blob_id) == "rejected"
+    for _ in range(2):
+        with pytest.raises(DomainError) as refusal:
+            reconciler.reject_unpublished(verified.blob_id)
+        assert _rejection_reason(refusal) == "content_addressed_rerun_self_heals"
+        assert _blob_state(factory, verified.blob_id) == "temporary"
 
 
 def _prepared_provider_effect(factory, helpers, blob_store, recorded_adapter):

@@ -353,8 +353,9 @@ def test_an_unattributed_blob_cannot_be_rejected_without_attempt_authority(
     store._purge_published(blob_id)
 
     with pytest.raises(DomainError) as raised:
-        reconciler.reject_unpublished(blob_id, older_than="0 seconds")
+        reconciler.reject_unpublished(blob_id)
     assert raised.value.code is ErrorCode.STATE_TRANSITION_NOT_ALLOWED
+    assert raised.value.detail_fields["current_state"] == "legacy_unattributed"
     assert blob_state(engine, blob_id) == "verifying"
 
     outcome = service.upload_single_pdf(

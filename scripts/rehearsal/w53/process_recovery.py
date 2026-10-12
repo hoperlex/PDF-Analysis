@@ -4,6 +4,12 @@ Run as the parent only. It starts two independent Python serving processes. The 
 blocks after committing provider.response_received; the parent sends SIGKILL. The
 second expires only that dead lane lease to avoid a sixty-second wait, runs startup
 reconciliation and verifies that the paid boundary is never dispatched again.
+
+Startup reconciliation is global: it settles every stale effect and interrupted Run in
+the database it is given. Every entrypoint therefore refuses unless ``DATABASE_URL``
+names a loopback database whose name starts with ``w53_rehearsal`` (create one, e.g.
+``w53_rehearsal_kill``, on the lane's private PostgreSQL). Checks are explicit raises,
+never ``assert``, so ``python -O`` cannot strip them.
 """
 
 from __future__ import annotations
@@ -35,10 +41,47 @@ ROOT = Path(__file__).resolve().parents[3]
 EVIDENCE = Path(os.environ.get("W53_REHEARSAL_EVIDENCE_DIR", "/tmp/w53-rehearsal-01"))
 HARNESS = ROOT / "tests/integration/runs/harness.py"
 SPEC = importlib.util.spec_from_file_location("w53_recovery_harness", HARNESS)
-assert SPEC is not None and SPEC.loader is not None
+if SPEC is None or SPEC.loader is None:
+    raise SystemExit(f"process_recovery: cannot load the test harness at {HARNESS}")
 harness = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = harness
 SPEC.loader.exec_module(harness)
+
+
+def require_disposable_database(raw_url: str | None) -> None:
+    """Refuse any target but a loopback database named for this rehearsal.
+
+    Self-contained on purpose, so a static test can call it without importing the
+    script. The URL itself is never echoed: it carries the password.
+    """
+    from sqlalchemy.engine import make_url
+    from sqlalchemy.exc import ArgumentError
+
+    if raw_url is None or not raw_url.strip():
+        raise SystemExit("process_recovery: refusing to run, DATABASE_URL is not set")
+    try:
+        url = make_url(raw_url.strip())
+    except (ArgumentError, ValueError):
+        raise SystemExit(
+            "process_recovery: refusing to run, DATABASE_URL is not a parseable URL"
+        ) from None
+    if url.host not in {"127.0.0.1", "localhost", "::1"}:
+        raise SystemExit(
+            f"process_recovery: refusing to run against host {url.host!r}; the global "
+            "reconcile() here may only touch a loopback disposable rehearsal database"
+        )
+    if not (url.database or "").startswith("w53_rehearsal"):
+        raise SystemExit(
+            f"process_recovery: refusing to run against database {url.database!r}; the "
+            "global reconcile() here may only touch a disposable database whose name "
+            "starts with 'w53_rehearsal'"
+        )
+
+
+def require(condition: object, message: object) -> None:
+    """A verification ``python -O`` cannot strip, unlike ``assert``."""
+    if not condition:
+        raise SystemExit(f"process_recovery: check failed: {message}")
 
 
 class CountedLiveRecorded:
@@ -56,6 +99,7 @@ class CountedLiveRecorded:
 
 
 def _engine():
+    require_disposable_database(os.environ.get("DATABASE_URL"))
     return create_database_engine(
         DatabaseSettings(url=parse_database_url(os.environ["DATABASE_URL"]))
     )
@@ -110,17 +154,17 @@ def recover_process() -> None:
             "FROM audit_run r JOIN job j ON j.run_id=r.run_id "
             "JOIN provider_call_effect e ON e.run_id=r.run_id WHERE r.run_id=:run_id"
         ), {"run_id": run_id}).mappings().one()
-        assert dict(before) == {
+        require(dict(before) == {
             "run_state": "running", "job_state": "running",
             "effect_state": "response_received",
-        }, dict(before)
+        }, dict(before))
         session.execute(text(
             "UPDATE lease SET expires_at=statement_timestamp()-interval '1 second' "
             "WHERE attempt_id=(SELECT current_attempt_id FROM job WHERE run_id=:run_id)"
         ), {"run_id": run_id})
         session.commit()
         recovered = JobRepository().reclaim_expired(session)
-        assert recovered == 1, recovered
+        require(recovered == 1, recovered)
         session.commit()
         report = reconcile(session, older_than="0 seconds")
         session.commit()
@@ -132,32 +176,41 @@ def recover_process() -> None:
             "JOIN lease l ON l.attempt_id=a.attempt_id "
             "JOIN provider_call_effect e ON e.run_id=r.run_id WHERE r.run_id=:run_id"
         ), {"run_id": run_id}).mappings().one()
-        assert after["run_state"] == "failed", dict(after)
-        assert after["job_state"] == "failed", dict(after)
-        assert after["attempt_state"] == "lost", dict(after)
-        assert after["lease_released"] is True, dict(after)
-        assert after["effect_state"] in {"response_received", "abandoned"}, dict(after)
-        assert session.execute(text(
+        require(after["run_state"] == "failed", dict(after))
+        require(after["job_state"] == "failed", dict(after))
+        require(after["attempt_state"] == "lost", dict(after))
+        require(after["lease_released"] is True, dict(after))
+        require(after["effect_state"] in {"response_received", "abandoned"}, dict(after))
+        require(session.execute(text(
             "SELECT count(*) FROM model_call WHERE run_id=:run_id"
-        ), {"run_id": run_id}).scalar_one() == 0
+        ), {"run_id": run_id}).scalar_one() == 0, "a model_call row was written")
         events = session.execute(text(
             "SELECT event_type, occurred_at, payload::text FROM audit_event "
             "WHERE payload->>'run_id'=:run_id ORDER BY occurred_at, audit_event_id"
         ), {"run_id": run_id}).all()
         names = [row.event_type for row in events]
-        assert names.index("provider.prepared") < names.index("provider.response_received")
+        require(
+            names.index("provider.prepared") < names.index("provider.response_received"),
+            "provider.prepared is not journalled before provider.response_received",
+        )
         serialized = json.dumps(events, default=str)
-        assert "w53-disposable-secret-never-log" not in serialized
-        assert "Authorization" not in serialized
-        assert (EVIDENCE / "provider-dispatch.count").read_text().splitlines() == ["one"]
+        require("w53-disposable-secret-never-log" not in serialized, "token in journal")
+        require("Authorization" not in serialized, "Authorization in journal")
+        require(
+            (EVIDENCE / "provider-dispatch.count").read_text().splitlines() == ["one"],
+            "provider dispatched more than once before replay",
+        )
         try:
             execute_run(session, run_id, blob_store=None, adapter=CountedLiveRecorded(),
                         provider_config=_config())
         except DomainError as error:
-            assert error.code is ErrorCode.STATE_TRANSITION_NOT_ALLOWED, error.code
+            require(error.code is ErrorCode.STATE_TRANSITION_NOT_ALLOWED, error.code)
         else:
             raise AssertionError("terminal run accepted a second executor")
-        assert (EVIDENCE / "provider-dispatch.count").read_text().splitlines() == ["one"]
+        require(
+            (EVIDENCE / "provider-dispatch.count").read_text().splitlines() == ["one"],
+            "provider dispatched again after the refused replay",
+        )
         print(
             f"second process: run={run_id}, before={dict(before)}, after={dict(after)}, "
             f"reclaimed={recovered}, settled={len(report.settled_provider_effects)}, "
@@ -167,6 +220,7 @@ def recover_process() -> None:
 
 
 def parent() -> None:
+    require_disposable_database(os.environ.get("DATABASE_URL"))
     EVIDENCE.mkdir(parents=True, exist_ok=True)
     for name in ("crash-ready.json", "provider-dispatch.count"):
         (EVIDENCE / name).unlink(missing_ok=True)
@@ -181,7 +235,7 @@ def parent() -> None:
             time.sleep(0.1)
         child.kill()  # Real SIGKILL, after a committed response boundary.
         code = child.wait(timeout=10)
-        assert code == -signal.SIGKILL, code
+        require(code == -signal.SIGKILL, code)
         print(f"first process exit={code} (SIGKILL)", flush=True)
         subprocess.run([sys.executable, __file__, "--recover"], check=True)
     finally:
