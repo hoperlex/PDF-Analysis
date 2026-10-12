@@ -31,6 +31,19 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `W55A-FIX` for its amendment of ``0020_norms_search``'s guard triggers (the
+#: strict current-snapshot history, JUDGE-X M4 / JUDGE-Y Y-3), measured, not predicted: two
+#: fresh databases, one upgraded with ``0020`` as at ``cb4bdf1`` (whose inventory equalled the
+#: previous seal exactly) and one with this lane's ``0020``, had every family's rows diffed.
+#: constraints +1 -> 450 (the constraint trigger's own row,
+#: ``trg_norm_current_snapshot_event_designates``, contype ``t``); triggers +4 -> 46
+#: (``trg_norm_current_snapshot_event_stamp`` BEFORE INSERT, ``..._event_designates`` AFTER
+#: INSERT DEFERRABLE INITIALLY DEFERRED, and ``trg_norm_current_snapshot_no_truncate`` /
+#: ``trg_norm_current_snapshot_event_no_truncate`` BEFORE TRUNCATE FOR EACH STATEMENT);
+#: functions +4 -1 -> 18 (``am_stamp_norm_current_snapshot_event``,
+#: ``am_require_current_norm_snapshot_event``, ``am_refuse_norm_current_snapshot_truncate``,
+#: and ``am_guard_norm_current_snapshot`` redefined with its newest-event check). Every other
+#: family is byte-identical.
 #: Resealed by `W55A-FIX-DB` for ``0018_norm_custody``, ``0019_execution_workers`` and
 #: ``0020_norms_search`` together, from a fresh upgrade on PostgreSQL 17 + pgvector 0.8.6. The
 #: delta was measured, not only predicted: two fresh databases, one upgraded to
@@ -77,10 +90,10 @@ from sqlalchemy import Engine, text
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
     "columns": (419, "3fcfac716b7dacdcafaa1dd1dafeeadcc1ff255dbc16a6af97a48843c17f1e40"),
     "relations": (50, "92a0ec6d035d72f0bb16e8ae867621a77a235a1c9a379237cf4aef2d28dd52de"),
-    "constraints": (449, "6c361ae584b7588c97f394a543137f0efc639fb8cbb3d1422e3251612d2216d0"),
+    "constraints": (450, "2882f6e8a6101efb4686652626d8fba42c62705122a75a7e78204d8e33a68bdd"),
     "indexes": (121, "aa69f427e5b85d0d306931e4ecee46535c0a215b34799f58976bf789774a624e"),
-    "triggers": (42, "668355234ed4d73ef79d356f825494dba564afd31a223a5c1ae1d405d354b8bf"),
-    "functions": (15, "7e6b448fa0d19cfaab963346fb9e150f141d68ec9ad6be2271389313770fcad5"),
+    "triggers": (46, "42bbe67057d87b17cb9a529f36147c08e1f9bcca49db16abb9227762f40d75ae"),
+    "functions": (18, "d307abda89b9585e44c7fcf35c4b4b405766bad74b784254f3477abadfd37290"),
     "views": (1, "099049415234da3d04583c58a693a68fda934f77e9eaf00b0d12e2542842734d"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),
