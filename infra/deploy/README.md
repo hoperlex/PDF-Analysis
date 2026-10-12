@@ -37,6 +37,9 @@ down`. This is the deployed stack.
 | `verify-deployed.sh` | `D-27` — is the stack in front of you this tree? |
 | `reload-proxy.sh` | `D-27` — the step after a rebuild that everyone forgets |
 | `object_attrs.py` | the third part of a dump: each object's S3 attributes |
+| `receive-bundle.sh` | `W54-TRANSPORT-01` — the inbound key's forced command on the stand: `receive`, `status`, `import`, `report`, `requeue`; the boundary for an account that can run `docker` |
+| `push-bundle.sh` | `W54-TRANSPORT-01` — this host's side: re-hash a bundle, send it as `receive <KEY> <size>` |
+| `lib/forced-command.sh` | the one verb dispatcher every forced-command key uses, the bundle-name grammar and the bundle-tree rule both ends apply |
 | `env/alpha.env.example` | the deployment's environment. **Not `.env`** — see below |
 | the `<instance>-web-sessions` volume | `R-51` — the session register, mounted by `web` and by nothing else. See below |
 | `env/provider.env.example` | the model credential, alone, written on the host by the owner |
