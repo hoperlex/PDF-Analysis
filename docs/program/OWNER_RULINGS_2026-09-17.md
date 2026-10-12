@@ -1500,3 +1500,9 @@ same approval.
 | `R-108` | K-16 | Cache removal was not enough, so inactive W48–W53 worktrees are removed whole with `git worktree remove`. Branches and commits stay. If W54's disk stop rule still fires, the owner is asked again about adding disk. Applied 2026-10-12: 72 worktrees removed, about 7.5 GB freed, 22 GB free. Kept: `plan-corpus-chain`, `plan-roadmap-to-beta` (its uncommitted 2026-10-08 layer is preserved in `97127ac`), `prod-project-cleanup` (owner unknown), `w59-*` and `w54-int`. |
 | `R-109` | K-17 | The stand holds only generated test data. At the transition to beta that data must be purged together with everything linked to it — documents, versions, runs, findings, decisions and their Blobs and objects — while the corpus is kept (`D-156`). P1's missing read-back is therefore not a data risk, and `verify-objects` at P2 remains only a technical MinIO check. |
 | `R-110` | K-18 | The one-off copy (`R-88`, `R-93`) applies only from the first real client data. W54 still builds and rehearses the copy tooling (STAND-COPY, its verbs, the attested record and the `deploy.sh` refusals). While the stand holds only generated test data, migrating publications and the corpus import run without the `R-92` window and without the copy, and the corpus is recovered from the bundle on this host. A copy is taken immediately before the first upload of real client data (W55b at the earliest, `R-94`); from then on `R-88` and `R-93` apply in full. The owner's P2 run of `copy-serve.sh` is no longer needed at P2. |
+
+*Owner confirmation of `R-110`, the same day:* the owner had read K-1 and K-6 as the general
+case. `R-88` and `R-93` are therefore general rules: a one-off copy precedes an import or a
+migrating `origin/main` publication whenever the stand holds real client data. They do not
+apply while the stand holds only generated test data (`R-109`), which is the case now. `R-99`
+(W53 exempt) is moot.
