@@ -339,4 +339,3 @@ def test_the_durable_publication_store_delegates_the_streamed_read() -> None:
     )
     assert b"".join(_open(durable, window=(5, 14))) == DATA[5:15]
     assert client.requests[0]["Range"] == "bytes=5-14"
-
