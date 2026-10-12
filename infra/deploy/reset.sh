@@ -242,11 +242,18 @@ if [ -n "$RESTORE" ]; then
     # ALL FIVE of them (`D-17`). Until wave 18 this line reattached `content-sha256` and
     # `Content-Type` -- the two a READ consults -- and dropped `blob-id`, `blob-role` and
     # `content-size`. Wave 14 verified the restore by reading an object back, got its
-    # bytes, and closed. `blob-role` is consulted only by a WRITE: `publish` compares the
-    # recorded role and media type before accepting the same bytes again, so every later
-    # upload of a restored document answered `409` / `BlobAttributeConflictError` while the
-    # identical bytes on a clean stack gave `201`. A restore is proved by writing to the
-    # restored instance, not by reading from it.
+    # bytes, and closed. Then a WRITE consulted what a read does not: `publish` compared
+    # the recorded role and media type before accepting the same bytes again, so every
+    # later upload of a restored document answered `409` / `BlobAttributeConflictError`
+    # while the identical bytes on a clean stack gave `201`. A restore is proved by writing
+    # to the restored instance, not by reading from it.
+    #
+    # Since `R-76` (`W54-CUSTODY-01`) `publish` no longer compares the role: a role belongs
+    # to the binding that uses the bytes, and `blob-role` is the first publisher's recorded
+    # history. It is still reattached, because it is still history -- and `publish` now
+    # also refuses to reuse an object with no recorded `content-sha256`, a different
+    # `content-size` or a different `Content-Type`, so the other four matter on the write
+    # path more than before.
     restore_objects='
         while IFS="	" read -r key id role sha size ctype; do
             [ -n "$key" ] || continue
@@ -587,8 +594,8 @@ if grep -qvE "^[^$TAB]+($TAB[^$TAB]+){5}\$" "$DUMP_DIR/objects.attrs" 2>/dev/nul
     refuse "the object metadata sidecar is incomplete -- a row is missing an attribute." \
            "  expected per row    : key, blob-id, blob-role, content-sha256, content-size, content-type" \
            "  first bad row       : $(grep -nvE "^[^$TAB]+($TAB[^$TAB]+){5}\$" "$DUMP_DIR/objects.attrs" | head -1 | cat -A | head -c 300)" \
-           "Nothing has been purged. A restore missing blob-role gives back an object that" \
-           "reads correctly and answers 409 to the next upload of its own bytes (D-17)."
+           "Nothing has been purged. A restore missing an attribute gives back an object that" \
+           "the next upload of its own bytes refuses to reuse (D-17), or loses its history."
 fi
 MIRRORED="$(find "$DUMP_DIR/objects" -type f | wc -l | tr -d '[:space:]')"
 if [ "${LIVE_OBJECTS:-x}" != "$MIRRORED" ]; then

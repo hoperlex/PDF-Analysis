@@ -241,6 +241,39 @@ _SETTLE_TERMINAL_PROVIDER_EFFECTS = text(
               candidates.previous_state, effect.state
     """
 )
+#: `D-142`: an Attempt-scoped artifact intent whose Attempt is terminal can never be
+#: bound (``bind_artifacts`` requires the current authority), so it is settled
+#: ``prepared -> abandoned``. The blob row is never touched: its identity is
+#: content-derived, and a rerun of the same version re-records and publishes it.
+_SETTLE_TERMINAL_ARTIFACT_PUBLICATIONS = text(
+    """
+    WITH candidates AS (
+        SELECT publication.attempt_id, publication.stage_id, publication.blob_id,
+               publication.blob_role
+          FROM analysis_artifact_publication publication
+          JOIN attempt execution_attempt
+            ON execution_attempt.attempt_id = publication.attempt_id
+           AND execution_attempt.job_id = publication.job_id
+         WHERE publication.state = 'prepared'
+           AND execution_attempt.state IN (
+               'succeeded', 'failed', 'superseded', 'lost', 'cancelled'
+           )
+           AND publication.created_at <= statement_timestamp() - CAST(:older_than AS interval)
+         ORDER BY publication.created_at, publication.attempt_id, publication.stage_id,
+                  publication.blob_id, publication.blob_role
+         LIMIT :batch_size
+         FOR UPDATE OF publication SKIP LOCKED
+    )
+    UPDATE analysis_artifact_publication publication
+       SET state = 'abandoned', abandoned_at = statement_timestamp()
+      FROM candidates
+     WHERE publication.attempt_id = candidates.attempt_id
+       AND publication.stage_id = candidates.stage_id
+       AND publication.blob_id = candidates.blob_id
+       AND publication.blob_role = candidates.blob_role
+    RETURNING publication.run_id, publication.attempt_id, publication.stage_id
+    """
+)
 
 _JOB_TERMINALS = frozenset({"succeeded", "failed", "cancelled", "dead_letter"})
 _ATTEMPT_TERMINALS = frozenset({"succeeded", "failed", "superseded", "lost", "cancelled"})
@@ -891,7 +924,42 @@ class JobRepository:
                 payload={"attempt_id": str(effect["attempt_id"]),
                          "state": "abandoned"},
             )
+        self.settle_terminal_artifact_publications(
+            session, older_than=older_than, batch_size=batch_size
+        )
         return tuple(SettledProviderEffect(**dict(row)) for row in rows)
+
+    def settle_terminal_artifact_publications(
+        self,
+        session: Session,
+        *,
+        older_than: str = "1 hour",
+        batch_size: int = 100,
+    ) -> int:
+        """`D-142`: settle unbound artifact intents of terminal Attempts as ``abandoned``.
+
+        Called by :meth:`settle_terminal_provider_effects`, so every reconciliation
+        pass that settles provider effects settles these too, under the same age
+        threshold and batch bound. Each settled intent is journalled
+        (``artifact.abandoned``) in the caller's transaction. Returns how many were
+        settled; the blob rows they name are left exactly as they were.
+        """
+        if batch_size < 1:
+            raise ValueError("artifact publication settlement batch_size must be positive")
+        rows = session.execute(
+            _SETTLE_TERMINAL_ARTIFACT_PUBLICATIONS,
+            {"older_than": older_than, "batch_size": batch_size},
+        ).mappings().all()
+        for publication in rows:
+            append_execution_event(
+                session, event_type="artifact.abandoned",
+                aggregate_type="Attempt", aggregate_id=str(publication["attempt_id"]),
+                run_id=str(publication["run_id"]),
+                payload={"attempt_id": str(publication["attempt_id"]),
+                         "stage_id": str(publication["stage_id"]),
+                         "state": "abandoned"},
+            )
+        return len(rows)
 
     def _advance_job(
         self, session: Session, job_id: str, from_state: str, to_state: str

@@ -12,8 +12,11 @@ What is canonical
 follows from that single decision:
 
 ``unattributed_blobs``
-    Blob rows with no manifest and no Attempt-scoped analysis publication intent.
-    These may pre-date migration ``0014`` or belong to a newer document upload
+    Blob rows with no manifest, no Attempt-scoped analysis publication intent (in any
+    state) and no norm-corpus custody admission. Custody blobs are custody's to report
+    (``auditmanager.norms.public``'s ``CustodyOperations.report``), and an intent
+    settled ``abandoned`` (`D-142`) still attributes its blob to the Attempt that
+    declared it. The rest may pre-date migration ``0014`` or belong to a newer document upload
     interrupted before its version commit.  Their age cannot be inferred from the
     row, and no Attempt authority proves that rejection is safe.  They remain visible
     and adoptable, never action-ready orphans.  The row includes whether its object
@@ -39,7 +42,11 @@ follows from that single decision:
     opaque temporary handle or the canonical object; neither handle nor storage location
     is exposed, and nothing is adopted or deleted. Such an entry is never rejectable:
     its ``blob_id`` is content-derived and ``rejected`` is terminal, so rejecting it
-    would ban every later run of that document version. A rerun settles it instead.
+    would ban every later run of that document version. Once its Attempt is terminal,
+    the execution reconciliation pass settles it ``prepared -> abandoned``
+    (`D-142`, ``JobRepository.settle_terminal_provider_effects``) and it leaves this
+    list; a rerun of the version publishes the same blob under its own intent, so after
+    a crash and a rerun the report is clean.
 
 ``stale_commands``
     A ``command_record`` still ``in_progress`` long after its executor should have
@@ -122,7 +129,23 @@ _AVAILABLE_WITHOUT_MANIFEST = text(
     ") AND NOT EXISTS ("
     "  SELECT 1 FROM analysis_artifact_publication a "
     "  WHERE a.blob_id = b.blob_id"
+    ") AND NOT EXISTS ("
+    "  SELECT 1 FROM norm_custody_admission c WHERE c.blob_id = b.blob_id"
     ") ORDER BY b.created_at"
+)
+
+#: Unsettled blob rows some durable owner already attributes: any analysis publication
+#: intent (``prepared``, ``bound`` or the `D-142` ``abandoned``) or a custody admission.
+_ATTRIBUTED_UNSETTLED = text(
+    "SELECT b.blob_id FROM blob b "
+    "WHERE b.state IN ('temporary', 'verifying') AND ("
+    "  EXISTS (SELECT 1 FROM analysis_artifact_publication a WHERE a.blob_id = b.blob_id)"
+    "  OR EXISTS (SELECT 1 FROM norm_custody_admission c WHERE c.blob_id = b.blob_id)"
+    ")"
+)
+
+_CUSTODY_AUTHORITY = text(
+    "SELECT 1 FROM norm_custody_admission WHERE blob_id = :blob_id LIMIT 1"
 )
 
 _BOUND_ANALYSIS_ARTIFACTS = text(
@@ -209,8 +232,8 @@ class UnboundAnalysisArtifact:
         record would make each such run fail when it re-records the content
         (``rejected -> verifying`` is undeclared), banning the version's analysis.
         A rerun re-records the same ``temporary``/``verifying`` row and publishes it,
-        so the evidence settles itself. A settlement state that retires the intent
-        without touching the blob needs a migration and is deferred to W54 custody.
+        so the evidence settles itself. The intent itself is retired without touching
+        the blob by `D-142`'s ``prepared -> abandoned`` settlement (migration ``0018``).
         """
         return False
 
@@ -275,6 +298,10 @@ class Reconciler:
             detached = tuple(
                 tuple(row) for row in session.execute(_AVAILABLE_WITHOUT_MANIFEST).all()
             )
+            attributed_unsettled = {
+                parse_blob_id(str(blob_id))
+                for (blob_id,) in session.execute(_ATTRIBUTED_UNSETTLED).all()
+            }
             manifest_blobs = self._documents.manifest_blob_ids(session)
             analysis_artifacts = tuple(
                 (
@@ -344,7 +371,7 @@ class Reconciler:
             for blob_id, state, sha256, size in detached
         ]
         for record in unsettled:
-            if record.blob_id in unbound_blob_ids:
+            if record.blob_id in unbound_blob_ids or record.blob_id in attributed_unsettled:
                 continue
             object_present = self._object_exists(record.blob_id)
             unattributed.append(
@@ -546,14 +573,17 @@ class Reconciler:
     def reject_unpublished(self, blob_id: BlobId) -> None:
         """Refuse to settle a never-published blob as ``rejected``; this release never may.
 
-        An available blob is canonical and refuses as before. A blob without an
-        Attempt-scoped publication intent cannot prove that no producer still owns its
-        content identity (``legacy_unattributed``). A blob that an analysis-artifact
-        intent names is content-addressed: ``rejected`` is terminal, and the next run of
-        the same document version would re-derive the same ``blob_id`` and fail to
-        record it, so the refusal ``content_addressed_rerun_self_heals`` says what to do
-        instead -- a rerun re-records the ``temporary``/``verifying`` row and publishes
-        it. No branch here changes any row.
+        An available blob is canonical and refuses as before. A blob a norm-corpus
+        custody admission declares is custody's (``custody_admission_declares_blob``):
+        a byte mismatch rejects the admission, never the shared Blob row (`R-76`). A
+        blob without an Attempt-scoped publication intent cannot prove that no producer
+        still owns its content identity (``legacy_unattributed``). A blob that an
+        analysis-artifact intent names is content-addressed: ``rejected`` is terminal,
+        and the next run of the same document version would re-derive the same
+        ``blob_id`` and fail to record it, so the refusal
+        ``content_addressed_rerun_self_heals`` says what to do instead -- a rerun
+        re-records the ``temporary``/``verifying`` row and publishes it. No branch here
+        changes any row.
         """
         with session_scope(self._factory) as session:
             record = self._blobs.require(session, blob_id)
@@ -563,6 +593,16 @@ class Reconciler:
                     machine="blob",
                     current_state=record.state.value,
                     requested_state="rejected",
+                )
+            custody = session.execute(
+                _CUSTODY_AUTHORITY, {"blob_id": str(blob_id)}
+            ).first()
+            if custody is not None:
+                raise DomainError(
+                    ErrorCode.STATE_TRANSITION_NOT_ALLOWED,
+                    machine="norm_custody_admission",
+                    current_state="custody_admission_declares_blob",
+                    requested_state="reject_blob",
                 )
             authority = session.execute(
                 _PUBLICATION_AUTHORITY, {"blob_id": str(blob_id)}

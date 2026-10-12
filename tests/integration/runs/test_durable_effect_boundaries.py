@@ -841,6 +841,120 @@ def test_a_stale_terminal_analysis_publication_is_refused_and_a_rerun_publishes_
     assert _blob_state(factory, verified.blob_id) == "available"
 
 
+def _publication_state(factory, run_id: str, blob_id) -> tuple[str, bool]:
+    with factory() as observer:
+        state, abandoned_at = observer.execute(
+            text(
+                "SELECT state, abandoned_at FROM analysis_artifact_publication "
+                "WHERE run_id = :run_id AND blob_id = :blob_id"
+            ),
+            {"run_id": run_id, "blob_id": str(blob_id)},
+        ).one()
+    return str(state), abandoned_at is not None
+
+
+def _artifact_abandoned_events(factory, run_id: str) -> int:
+    with factory() as observer:
+        return int(
+            observer.execute(
+                text(
+                    "SELECT count(*) FROM audit_event WHERE event_type = 'artifact.abandoned' "
+                    "AND aggregate_id IN (SELECT a.attempt_id FROM attempt a "
+                    "JOIN job j ON j.job_id = a.job_id WHERE j.run_id = :run_id)"
+                ),
+                {"run_id": run_id},
+            ).scalar_one()
+        )
+
+
+def test_d142_a_crashed_publication_is_settled_and_the_report_is_clean_after_a_rerun(
+    engine,
+    blob_store,
+    recorded_adapter,
+    provider_config,
+    helpers,
+) -> None:
+    """`D-142`: ``prepared -> abandoned`` once the Attempt is terminal, with its event.
+
+    Before migration ``0018`` an interrupted intent stayed ``prepared`` for ever, so the
+    reconciliation report listed it after every rerun and was never clean again. The
+    settlement retires the intent and leaves the content-addressed blob alone; the rerun's
+    own intent is ``bound``. Scoped to this test's runs: the module shares one database.
+    """
+    factory = _factory(engine)
+    seeded, started, verified = _interrupted_publication(
+        factory, helpers, blob_store, recorded_adapter, provider_config
+    )
+    _expire_and_reclaim(factory, started.run_id)
+    with factory() as session:
+        rerun = start_audit_run(
+            session,
+            version_uid=seeded.version_uid,
+            analysis_profile_id=seeded.analysis_profile_id,
+            prompt_bundle_id=seeded.prompt_bundle_id,
+            provider_mode="recorded",
+            idempotency_key=_key("d142-rerun"),
+        )
+        result = execute_run(
+            session,
+            rerun.run_id,
+            blob_store=blob_store,
+            adapter=recorded_adapter,
+            provider_config=provider_config,
+        )
+        session.commit()
+    assert result.terminal_state == "published"
+
+    reconciler = Reconciler(blob_store, session_factory=factory)
+    ours = {started.run_id, rerun.run_id}
+    before = [e for e in reconciler.report().unbound_analysis_artifacts if e.run_id in ours]
+    assert [entry.run_id for entry in before] == [started.run_id]
+
+    with factory() as controller:
+        JobRepository().settle_terminal_provider_effects(
+            controller, older_than="0 seconds", batch_size=1000
+        )
+        controller.commit()
+    assert _publication_state(factory, started.run_id, verified.blob_id) == ("abandoned", True)
+    assert _publication_state(factory, rerun.run_id, verified.blob_id) == ("bound", False)
+    assert _artifact_abandoned_events(factory, started.run_id) == 1
+    assert _blob_state(factory, verified.blob_id) == "available"
+
+    after = reconciler.report()
+    assert [e for e in after.unbound_analysis_artifacts if e.run_id in ours] == []
+    assert verified.blob_id not in {item.blob_id for item in after.unattributed_blobs}
+    assert [e for e in after.missing_analysis_artifacts if e.run_id in ours] == []
+
+    # A second pass finds nothing left to settle and journals nothing new.
+    with factory() as controller:
+        JobRepository().settle_terminal_provider_effects(
+            controller, older_than="0 seconds", batch_size=1000
+        )
+        controller.commit()
+    assert _artifact_abandoned_events(factory, started.run_id) == 1
+
+
+def test_d142_settlement_leaves_a_live_attempts_intent_prepared(
+    engine,
+    blob_store,
+    recorded_adapter,
+    provider_config,
+    helpers,
+) -> None:
+    """The producing Attempt is still ``running``: its intent may yet be bound."""
+    factory = _factory(engine)
+    _seeded, started, verified = _interrupted_publication(
+        factory, helpers, blob_store, recorded_adapter, provider_config
+    )
+    with factory() as controller:
+        JobRepository().settle_terminal_provider_effects(
+            controller, older_than="0 seconds", batch_size=1000
+        )
+        controller.commit()
+    assert _publication_state(factory, started.run_id, verified.blob_id) == ("prepared", False)
+    assert _artifact_abandoned_events(factory, started.run_id) == 0
+
+
 def test_a_wrong_execution_token_and_a_superseded_attempt_fail_closed(
     engine, blob_store, recorded_adapter, provider_config, helpers
 ) -> None:

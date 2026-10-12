@@ -15,6 +15,7 @@ from auditmanager.runs.commands import cancel_audit_run
 from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import DomainError
 from auditmanager.shared.identity import RunId
+from auditmanager.storage.public import BlobMetadataRepository, declare_blob
 
 
 def _queued_run(session, seeded) -> str:
@@ -165,6 +166,12 @@ def test_terminal_effect_settlement_journals_abandonment(session, blob_store, he
         session, authority, provider="synthetic", model_identity="synthetic",
         provider_mode="recorded", parameters={}, request_sha256="b" * 64,
     )
+    # D-142: an artifact intent of the same Attempt, never bound.
+    artifact = declare_blob(sha256=uuid4().hex * 2, size=7, role="extracted_text",
+                            media_type="text/plain")
+    BlobMetadataRepository().record_declared(session, artifact)
+    jobs.prepare_artifact(session, authority, stage_id="source_preparation",
+                          declaration=artifact)
     cancel_audit_run(
         session, run_id=run_id, roles=frozenset({"expert"}),
         idempotency_key="w53-qa-" + uuid4().hex,
@@ -177,5 +184,14 @@ def test_terminal_effect_settlement_journals_abandonment(session, blob_store, he
     assert any(
         item.aggregate_id == authority.attempt_id
         and item.payload.get("state") == "abandoned"
+        for item in events
+    )
+    assert session.execute(text(
+        "SELECT state FROM analysis_artifact_publication WHERE attempt_id = :attempt"
+    ), {"attempt": authority.attempt_id}).scalar_one() == "abandoned"
+    assert any(
+        item.event_type == "artifact.abandoned"
+        and item.aggregate_id == authority.attempt_id
+        and item.payload.get("stage_id") == "source_preparation"
         for item in events
     )

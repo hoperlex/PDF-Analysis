@@ -324,11 +324,18 @@ class TemporaryBlobLostError(StorageError):
 
 
 class BlobAttributeConflictError(StorageError):
-    """Identical bytes are already published with different declared attributes.
+    """Identical bytes are already published with a different media type.
 
     Blob identity is ``(sha256, size)``. Re-publishing those exact bytes under a
-    different role or media type is refused rather than silently reinterpreting
-    an already-available blob, whose bytes and metadata are immutable.
+    different media type is refused rather than silently reinterpreting an
+    already-available blob, whose bytes and metadata are immutable.
+
+    Until owner ruling ``R-76`` (`W54-CUSTODY-01`) a different *role* was refused
+    here too. It no longer is: a role belongs to the binding that uses the bytes,
+    so a project document and a normative-corpus source may share one blob, and
+    the first publisher's recorded role stays on the object as historical
+    metadata. ``role`` remains in ``allowed_details`` so an existing call shape
+    still constructs; the adapter no longer passes it.
 
     This is the half of ``D-18`` that keeps ``conflict``: durable state really
     does conflict with the request, nothing the caller can do changes that, and

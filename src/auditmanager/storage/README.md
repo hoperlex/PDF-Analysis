@@ -85,7 +85,7 @@ name; a closed enum here would make each of those a rewrite of this package.
 | `SizeMismatchError` | `storage_integrity_error` | Stored byte count ≠ declared. |
 | `BlobIntegrityError` | `storage_integrity_error` | Base of the two above. |
 | `TemporaryBlobLostError` | `staged_upload_lost` | A staged upload vanished mid-sequence. Carried `conflict` until owner ruling `R-8`, which is `D-18`: it and the row below were then one code, one message and one `retryable` for two opposite operator responses. 503 and `retryable: true`, because this upload is worth sending again. |
-| `BlobAttributeConflictError` | `conflict` | Identical bytes already published with a different role or media type. Since `R-8` the only storage error carrying `conflict`, and `retryable: false` is right for it: the published bytes are immutable. |
+| `BlobAttributeConflictError` | `conflict` | Identical bytes already published with a different media type. Since `R-8` the only storage error carrying `conflict`, and `retryable: false` is right for it: the published bytes are immutable. A different *role* is no conflict since `R-76`. |
 | `BlobNotFoundError` | `not_found` | No published blob has that `blob_id`. |
 | `BlobMetadataInvalidError` | `validation_failed` | A declaration is malformed. |
 | `InvalidBlobIdError` | `validation_failed` | A string is not a well-formed `blob_id`. |
@@ -131,9 +131,17 @@ Consequences, each covered by a test:
 * identical verified bytes publish once and return the same `blob_id`;
 * the second publication does not rewrite the canonical object;
 * the second attempt's temporary object is still cleaned up;
-* identical bytes under a **different role or media type** are refused with
+* identical bytes under a **different media type** are refused with
   `BlobAttributeConflictError` rather than silently reinterpreting an immutable
   blob;
+* identical bytes under a **different role** reuse the blob (owner ruling
+  `R-76`, `W54-CUSTODY-01`): a role belongs to the binding that uses the bytes —
+  a manifest entry, an analysis publication, a norm-corpus custody binding — so a
+  project document and a corpus source can be one object. The object keeps the
+  first publisher's `blob-role` as history;
+* an existing canonical object is reused only after its recorded size, SHA-256
+  and media type are checked: no recorded SHA-256 is `BlobMetadataInvalidError`
+  (never reused), a different digest or size is `BlobIntegrityError`;
 * `_BLOB_ID_NAMESPACE` in `models.py` is part of the identity. Changing it
   changes every `blob_id` ever derived, so it is a freeze-break.
 
@@ -220,3 +228,15 @@ would let the negative paths pass by not running.
 * the port's operation set is asserted exactly in
   `test_publication.py::test_the_port_offers_no_way_to_name_or_delete_an_object`.
   Changing it is a deliberate act, not a drive-by.
+
+### Concurrent writers of one blob (`D-146`)
+
+`blob_id` is content-derived, so two writers of equal bytes — two runs of one
+version, an upload and a custody dispatch — address one `blob` row. Every write
+in `BlobMetadataRepository` first takes a per-blob transaction advisory lock
+(`BlobMetadataRepository.lock`, public so the custody dispatcher can hold the
+same lock), and `record_declared` inserts with `ON CONFLICT (blob_id) DO NOTHING`
+and then re-reads and compares. Two declarers serialise until the first commits;
+the second returns the committed row instead of colliding on the primary key.
+`tests/integration/ingest/test_blob_metadata.py` arranges the race by observing
+the second declarer waiting in `pg_stat_activity`, not by timing.

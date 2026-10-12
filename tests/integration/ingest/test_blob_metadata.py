@@ -10,6 +10,7 @@ the declared lifecycle a row actually takes.
 from __future__ import annotations
 
 import dataclasses
+import uuid
 from datetime import UTC, datetime
 
 import pytest
@@ -295,3 +296,125 @@ def test_a_digestless_row_is_refused_as_an_invariant_not_reported_as_empty_bytes
     assert "actual_sha256" not in raised.value.detail_fields
     assert "" not in raised.value.detail_fields.values()
     assert raised.value.envelope("cid-d4").details == {}
+
+
+# --- `D-146`: two concurrent declarers of equal bytes ----------------------------------
+
+
+def _wait_until_blocked(engine, pid: int, *, seconds: float = 15.0) -> None:
+    """Return once backend ``pid`` waits on a lock; fail if it never does."""
+    import time
+
+    deadline = time.monotonic() + seconds
+    with engine.connect() as observer:
+        while time.monotonic() < deadline:
+            waiting = observer.execute(
+                text("SELECT wait_event_type FROM pg_stat_activity WHERE pid = :pid"),
+                {"pid": pid},
+            ).scalar()
+            if waiting == "Lock":
+                return
+            observer.rollback()
+            time.sleep(0.05)
+    pytest.fail("the second declarer never waited for the first; the race was not arranged")
+
+
+def test_two_concurrent_declarers_of_equal_bytes_serialise_and_both_succeed(
+    session_factory, engine
+) -> None:
+    """`D-146`. The first declarer holds its uncommitted ``temporary`` row; the second,
+    in another transaction, declares the same content.
+
+    Before the fix the second declarer's SELECT missed the uncommitted row, its plain
+    INSERT then waited on the primary key, and the first commit turned that wait into a
+    unique violation. Now the second waits on the per-blob advisory lock, re-reads the
+    committed row after the first commit, and returns it. The wait is observed in
+    ``pg_stat_activity`` rather than assumed from timing, so neither outcome is luck.
+    """
+    import threading
+
+    repository = BlobMetadataRepository()
+    content = CONTENT + b"d-146 " + uuid.uuid4().hex.encode()
+    declaration = declare_blob(
+        sha256=sha256_of(content),
+        size=len(content),
+        role=parse_blob_role("norm_source"),
+        media_type="application/pdf",
+    )
+    first = session_factory()
+    second = session_factory()
+    outcome: dict[str, object] = {}
+    try:
+        repository.record_declared(first, declaration)
+        second_pid = second.execute(text("SELECT pg_backend_pid()")).scalar_one()
+
+        def declare_again() -> None:
+            try:
+                outcome["record"] = repository.record_declared(second, declaration)
+                second.commit()
+            except BaseException as exc:  # noqa: BLE001 - reported below, verbatim
+                outcome["error"] = exc
+                second.rollback()
+
+        worker = threading.Thread(target=declare_again)
+        worker.start()
+        _wait_until_blocked(engine, second_pid)
+        first.commit()
+        worker.join(timeout=30)
+        assert not worker.is_alive(), "the second declarer never finished"
+    finally:
+        first.close()
+        second.close()
+
+    assert "error" not in outcome, f"the second declarer collided: {outcome.get('error')!r}"
+    record = outcome["record"]
+    assert isinstance(record, BlobMetadataRecord)
+    assert (record.blob_id, record.state) == (declaration.blob_id, BlobState.TEMPORARY)
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT count(*) FROM blob WHERE blob_id = :b"),
+            {"b": str(declaration.blob_id)},
+        ).scalar_one() == 1
+
+
+def test_a_declarer_that_skips_the_lock_still_cannot_collide(session_factory, engine) -> None:
+    """`D-146`, the second half: ``ON CONFLICT (blob_id) DO NOTHING`` then re-read.
+
+    A row inserted behind the repository's back -- committed after its pre-read missed it,
+    as a writer without the advisory lock would -- is found and compared, not collided with.
+    """
+    content = CONTENT + b"on conflict " + uuid.uuid4().hex.encode()
+    declaration = declare_blob(
+        sha256=sha256_of(content),
+        size=len(content),
+        role=parse_blob_role("norm_source"),
+        media_type="application/pdf",
+    )
+
+    class StaleFirstRead(BlobMetadataRepository):
+        """The first read misses a row another transaction commits right after it."""
+
+        reads = 0
+
+        def get(self, session, blob_id):
+            type(self).reads += 1
+            if type(self).reads == 1:
+                with engine.begin() as other:
+                    other.execute(
+                        text(
+                            "INSERT INTO blob (blob_id, state, sha256, size_bytes, media_type) "
+                            "VALUES (:b, 'temporary', :s, :n, 'application/pdf')"
+                        ),
+                        {
+                            "b": str(declaration.blob_id),
+                            "s": declaration.sha256,
+                            "n": declaration.size,
+                        },
+                    )
+                return None
+            return super().get(session, blob_id)
+
+    with session_scope(session_factory) as session:
+        record = StaleFirstRead().record_declared(session, declaration)
+    assert record.state is BlobState.TEMPORARY
+    assert StaleFirstRead.reads >= 2, "the committed row was never re-read"
