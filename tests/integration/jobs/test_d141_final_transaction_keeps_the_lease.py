@@ -13,12 +13,20 @@ production code reads, and the evidence gate is made to take 4 s -- twice the le
 reclaimer on another connection sweeps every 0.2 s throughout. The run must publish under
 its one Attempt. Revert the commit in ``runs/executor.py`` and this fails: the heartbeat is
 blocked, the lease expires, and ``finish_execution`` refuses the stale Attempt.
+
+The reclaimer counts **only this run's lease** (`W55A-FIX`; `W55A-FIX-DB.md` §4.1). Other
+suites leave runs ``running`` under a 60 s lease (the W48 crash cases), and one expiring
+inside this window was recovered and counted as if it were this run's. Every lease that is
+unreleased when the test starts is parked past the test and given back its expiry after;
+``quiet_queue`` has already recovered the ones that had expired.
 """
 
 from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 from uuid import uuid4
 
@@ -33,6 +41,29 @@ from auditmanager.shared.identity import IdempotencyKey
 
 GATE_SECONDS = 4.0
 LEASE_SECONDS = 2.0
+
+
+@contextmanager
+def _foreign_leases_parked(sessions) -> Iterator[None]:
+    """Every lease unreleased now expires after the test, and gets its own expiry back."""
+    with sessions() as setup:
+        parked = setup.execute(text(
+            "SELECT lease_id, expires_at FROM lease WHERE released_at IS NULL FOR UPDATE"
+        )).all()
+        setup.execute(text(
+            "UPDATE lease SET expires_at = timestamptz '2099-01-01' WHERE released_at IS NULL"
+        ))
+        setup.commit()
+    try:
+        yield
+    finally:
+        with sessions() as cleanup:
+            for lease_id, expires_at in parked:
+                cleanup.execute(text(
+                    "UPDATE lease SET expires_at = :expires_at "
+                    "WHERE lease_id = :lease_id AND released_at IS NULL"
+                ), {"lease_id": lease_id, "expires_at": expires_at})
+            cleanup.commit()
 
 
 def test_a_final_transaction_longer_than_the_lease_is_not_reclaimed(
@@ -79,17 +110,18 @@ def test_a_final_transaction_longer_than_the_lease_is_not_reclaimed(
             stop.wait(0.2)
 
     thread = threading.Thread(target=reclaimer, name="d141-reclaimer", daemon=True)
-    thread.start()
-    try:
-        with sessions() as session:
-            result = execute_run(
-                session, run_id, blob_store=blob_store, adapter=recorded_adapter,
-                provider_config=provider_config,
-            )
-            session.commit()
-    finally:
-        stop.set()
-        thread.join(timeout=10)
+    with _foreign_leases_parked(sessions):
+        thread.start()
+        try:
+            with sessions() as session:
+                result = execute_run(
+                    session, run_id, blob_store=blob_store, adapter=recorded_adapter,
+                    provider_config=provider_config,
+                )
+                session.commit()
+        finally:
+            stop.set()
+            thread.join(timeout=10)
         with sessions() as cleanup:
             state = cleanup.execute(text(
                 "SELECT state FROM audit_run WHERE run_id = :run_id"

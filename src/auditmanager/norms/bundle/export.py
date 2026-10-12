@@ -91,6 +91,7 @@ from .manifest import (
     ManifestFile,
     ObjectSlot,
     SnapshotFacts,
+    is_designatable_chunking,
     validate_manifest,
 )
 
@@ -212,6 +213,17 @@ def _stream_chunks(
         yield ChunkEmbedding(document_ref=current[0], chunk_ordinal=current[1], windows=tuple(windows))
 
 
+def require_designatable_chunking(chunking_profile: str) -> None:
+    """Refuse, before anything is read or written, a profile designation would refuse."""
+    if not is_designatable_chunking(chunking_profile):
+        raise BundleRefused(
+            "chunking_profile_refused",
+            f"{chunking_profile!r} is not characters-v2:<target>: a snapshot is designated "
+            "only over the reliability-aware build, so a bundle over any other profile would "
+            "import and then never become current (W55A-FIX, JUDGE-Y Y-5)",
+        )
+
+
 def read_export_source(
     session: Session,
     *,
@@ -220,6 +232,7 @@ def read_export_source(
     without_build: bool = False,
 ) -> ExportSource:
     """Read what a bundle carries from the promotion database. Writes nothing."""
+    require_designatable_chunking(chunking_profile)
     try:
         identity = NormsSnapshotId.parse(snapshot_id)
     except ValueError as exc:
@@ -512,6 +525,7 @@ def write_bundle(
     copy_objects: bool = False,
 ) -> ExportResult:
     """Write ``<out>/<content_key>+<digest>/`` from ``source`` and the drop."""
+    require_designatable_chunking(source.chunking_profile)
     rows = source.rows
     snapshot = rows.snapshot
     require_content_key(snapshot.content_key)
@@ -725,5 +739,6 @@ __all__ = [
     "read_crops_index",
     "read_drop_sums",
     "read_export_source",
+    "require_designatable_chunking",
     "write_bundle",
 ]

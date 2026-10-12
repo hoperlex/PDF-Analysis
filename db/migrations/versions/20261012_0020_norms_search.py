@@ -16,6 +16,31 @@ Revises: 0019_execution_workers
   ``audit_event_id`` (``evt_``): a designation is an appended audit event, and the domain
   catalog already declares that identity, so none is added. ``to_snapshot_id`` is indexed
   because search accepts an explicit snapshot only if it has been current at least once.
+
+The history is **strict** (`W55A-FIX`; JUDGE-X M4, JUDGE-Y Y-3), so that "has been current"
+and the order of the listing can be trusted against direct SQL too:
+
+* *an event is current when its transaction commits*: a deferred constraint trigger on
+  INSERT requires ``norm_current_snapshot.event_id`` to name the inserted event at COMMIT. An
+  event inserted without moving the current row -- which would make a never-current snapshot
+  searchable by explicit scope -- is refused, and so is a second designation in one
+  transaction (its first event is no longer current at COMMIT);
+* *the current row names the newest event*: the guard requires ``NEW.event_id`` to be first
+  in the listing's order (``changed_at``, then ``event_id`` under ``"C"``, descending). Since
+  every event was current when it committed and only a newer event can displace it, an older
+  event has been referenced by an earlier change; reusing one -- ``A -> B`` again after
+  ``B -> A`` -- is refused. The newest event itself is named only by the row it would replace,
+  which the guard already refuses (``NEW.event_id = OLD.event_id``);
+* *the time is the database's*: a BEFORE INSERT trigger sets ``changed_at`` to
+  ``clock_timestamp()`` -- the column's own default -- whatever the INSERT named, so an event
+  cannot be backdated below, or post-dated above, the history it joins. Not ``now()``: under
+  the setter's advisory lock a designation may begin before the one it waits for commits,
+  and its transaction-start time would then sort it below its predecessor;
+* *TRUNCATE is refused* on both tables (BEFORE TRUNCATE, statement level), including a
+  TRUNCATE that reaches them by CASCADE from ``norms_snapshot``: row triggers do not fire on
+  TRUNCATE, so without this the history could be erased whole. A suite that owns a throwaway
+  database resets it by the owner's ``ALTER TABLE ... DISABLE TRIGGER`` around its TRUNCATE,
+  which no DML can do.
 * ``norm_designation_tokens(text)`` is an ``IMMUTABLE`` SQL function: the slug before
   ``__``, case and Latin/Cyrillic homoglyphs folded by explicit ``translate`` tables (never
   ``lower()``, whose result depends on the database's ``lc_ctype``), split on ``[ ._-]``,
@@ -182,6 +207,7 @@ def _current_snapshot() -> None:
             expected_from text;
             event_from text;
             event_to text;
+            event_at timestamptz;
         BEGIN
             IF TG_OP = 'DELETE' THEN
                 RAISE EXCEPTION
@@ -199,7 +225,8 @@ def _current_snapshot() -> None:
             ELSE
                 expected_from := NULL;
             END IF;
-            SELECT from_snapshot_id, to_snapshot_id INTO event_from, event_to
+            SELECT from_snapshot_id, to_snapshot_id, changed_at
+              INTO event_from, event_to, event_at
               FROM norm_current_snapshot_event WHERE event_id = NEW.event_id;
             IF NOT FOUND
                OR event_to IS DISTINCT FROM NEW.norms_snapshot_id
@@ -207,6 +234,16 @@ def _current_snapshot() -> None:
                 RAISE EXCEPTION
                     'state_transition_not_allowed: the history event does not record this change of the current norms snapshot'
                     USING ERRCODE = 'AM003';
+            END IF;
+            IF EXISTS (
+                SELECT 1 FROM norm_current_snapshot_event later
+                 WHERE (later.changed_at, later.event_id COLLATE "C")
+                       > (event_at, NEW.event_id COLLATE "C")
+            ) THEN
+                RAISE EXCEPTION
+                    'state_transition_not_allowed: a change of the current norms snapshot must name the newest history event'
+                    USING ERRCODE = 'AM003',
+                          HINT = 'An older event was already used by an earlier change; append a new one.';
             END IF;
             RETURN NEW;
         END
@@ -223,6 +260,70 @@ def _current_snapshot() -> None:
         "'R-113 the one current norms snapshot (G-6): what new runs and re-audits pin and "
         "what text search reads. Never deleted; every change names its own history event.';"
     )
+    _strict_history()
+
+
+def _strict_history() -> None:
+    """`W55A-FIX`: the time, the commit-time check and the TRUNCATE refusals (docstring)."""
+    op.execute(
+        """
+        CREATE FUNCTION am_stamp_norm_current_snapshot_event() RETURNS trigger
+        LANGUAGE plpgsql AS $fn$
+        BEGIN
+            NEW.changed_at := clock_timestamp();
+            RETURN NEW;
+        END
+        $fn$;
+        """
+    )
+    op.execute(
+        "CREATE TRIGGER trg_norm_current_snapshot_event_stamp "
+        "BEFORE INSERT ON norm_current_snapshot_event "
+        "FOR EACH ROW EXECUTE FUNCTION am_stamp_norm_current_snapshot_event()"
+    )
+    op.execute(
+        """
+        CREATE FUNCTION am_require_current_norm_snapshot_event() RETURNS trigger
+        LANGUAGE plpgsql AS $fn$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM norm_current_snapshot
+                 WHERE singleton AND event_id = NEW.event_id
+            ) THEN
+                RAISE EXCEPTION
+                    'state_transition_not_allowed: a history event of the current norms snapshot must be the current designation when its transaction commits'
+                    USING ERRCODE = 'AM003',
+                          HINT = 'Insert the event and move the current row to it in one transaction, one designation per transaction.';
+            END IF;
+            RETURN NULL;
+        END
+        $fn$;
+        """
+    )
+    op.execute(
+        "CREATE CONSTRAINT TRIGGER trg_norm_current_snapshot_event_designates "
+        "AFTER INSERT ON norm_current_snapshot_event "
+        "DEFERRABLE INITIALLY DEFERRED "
+        "FOR EACH ROW EXECUTE FUNCTION am_require_current_norm_snapshot_event()"
+    )
+    op.execute(
+        """
+        CREATE FUNCTION am_refuse_norm_current_snapshot_truncate() RETURNS trigger
+        LANGUAGE plpgsql AS $fn$
+        BEGIN
+            RAISE EXCEPTION
+                'state_transition_not_allowed: % is not truncated; the current norms snapshot has no unset and its history is append-only',
+                TG_TABLE_NAME
+                USING ERRCODE = 'AM003';
+        END
+        $fn$;
+        """
+    )
+    for table in ("norm_current_snapshot", "norm_current_snapshot_event"):
+        op.execute(
+            f"CREATE TRIGGER trg_{table}_no_truncate BEFORE TRUNCATE ON {table} "
+            "FOR EACH STATEMENT EXECUTE FUNCTION am_refuse_norm_current_snapshot_truncate()"
+        )
 
 
 def _designation_key() -> None:
@@ -289,3 +390,6 @@ def downgrade() -> None:
     op.execute("DROP TABLE norm_current_snapshot")
     op.execute("DROP FUNCTION am_guard_norm_current_snapshot()")
     op.execute("DROP TABLE norm_current_snapshot_event")
+    op.execute("DROP FUNCTION am_refuse_norm_current_snapshot_truncate()")
+    op.execute("DROP FUNCTION am_require_current_norm_snapshot_event()")
+    op.execute("DROP FUNCTION am_stamp_norm_current_snapshot_event()")

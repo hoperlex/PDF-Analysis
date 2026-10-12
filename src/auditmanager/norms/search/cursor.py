@@ -30,6 +30,7 @@ __all__ = [
     "DesignationPosition",
     "EventPosition",
     "MAX_CURSOR_CHARACTERS",
+    "MAX_ORDINAL",
     "ParagraphPosition",
     "RankPosition",
     "SnapshotPosition",
@@ -48,6 +49,12 @@ __all__ = [
 
 #: ``#/components/schemas/Cursor``: 1..512 characters.
 MAX_CURSOR_CHARACTERS: Final[int] = 512
+
+#: The largest ``ordinal`` a token may carry: ``norm_paragraph.ordinal`` is a PostgreSQL
+#: ``integer``. A larger one names no paragraph, and bound as ``CAST(... AS integer)`` it
+#: would fail the statement (SQLSTATE 22003) instead of being refused here (`W55A-FIX`,
+#: JUDGE-X M1).
+MAX_ORDINAL: Final[int] = 2**31 - 1
 
 _ULID: Final[str] = "[0-9A-HJKMNP-TV-Z]{26}"
 _NPAR: Final[re.Pattern[str]] = re.compile(rf"^npar_{_ULID}$")
@@ -98,7 +105,7 @@ def _string(value: Any, pattern: re.Pattern[str]) -> str:
 
 
 def _ordinal(value: Any) -> int:
-    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+    if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= MAX_ORDINAL:
         raise _refused()
     return value
 
@@ -198,13 +205,21 @@ def _instant(value: datetime) -> str:
 
 
 def _parse_instant(value: Any) -> datetime:
+    """An instant exactly as :func:`_instant` spells it, or a refusal.
+
+    An instant at the edge of :class:`datetime`'s range with an offset -- year 1 at ``+05:00``,
+    year 9999 at ``-05:00`` -- parses, but has no UTC spelling: ``astimezone`` raises
+    ``OverflowError``. No token this module issued names one, so it is refused like any other
+    foreign token rather than escaping as an internal error (`W55A-FIX`, JUDGE-X M1).
+    """
     if not isinstance(value, str):
         raise _refused()
     try:
         parsed = datetime.fromisoformat(value)
-    except ValueError:
+        canonical = None if parsed.tzinfo is None else _instant(parsed)
+    except (ValueError, OverflowError):
         raise _refused() from None
-    if parsed.tzinfo is None or _instant(parsed) != value:
+    if canonical != value:
         raise _refused()
     return parsed
 

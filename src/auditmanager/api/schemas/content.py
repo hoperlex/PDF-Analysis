@@ -46,8 +46,10 @@ PDF_MEDIA_TYPE: Final[str] = "application/pdf"
 
 #: ``bytes=<first>-<last>`` with an optional open end. A multi-range request is not served:
 #: the frozen 206 declares one ``application/pdf`` body, and a multipart/byteranges response
-#: would not be that shape.
-_RANGE: Final[re.Pattern[str]] = re.compile(r"^bytes=(\d*)-(\d*)$")
+#: would not be that shape. Each number is at most 19 ASCII digits -- every offset of a real
+#: object, and far below the 4 300 digits past which ``int()`` raises ``ValueError``; a longer
+#: number is a malformed header (``format``), not an internal error (`W55A-FIX`, JUDGE-X M3).
+_RANGE: Final[re.Pattern[str]] = re.compile(r"^bytes=(\d{0,19})-(\d{0,19})$", re.ASCII)
 
 
 @dataclass(frozen=True, slots=True)

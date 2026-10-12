@@ -20,6 +20,11 @@ an explicit ``norms_snapshot_id`` that has been current at least once; otherwise
 ``required_norm_unavailable`` (``reference_kind: norms_snapshot``). The whole search runs under
 ``statement_timeout`` (``AUDITMANAGER_NORMS_SEARCH_TIMEOUT_MS``); a cancelled statement is
 ``validation_failed`` (``constraint: norms_search_too_broad``), never an empty or partial page.
+
+Before any statement, a ``q`` holding a control character (other than tab, line feed and
+carriage return) or with nothing to search for is ``validation_failed`` on ``q``
+(``format``): a NUL cannot be bound, and a blank text would sort a whole snapshot
+(`W55A-FIX`, JUDGE-X M2, M5; :func:`.query.unsearchable`).
 """
 
 from __future__ import annotations
@@ -64,7 +69,7 @@ from .fragment import (
     fragment_from_headline,
     plain_fragment,
 )
-from .query import ParsedQuery, designation_of, parse_query
+from .query import ParsedQuery, designation_of, parse_query, unsearchable
 
 __all__ = [
     "DocumentView",
@@ -303,6 +308,15 @@ def _too_broad() -> DomainError:
     )
 
 
+def _unsearchable() -> DomainError:
+    return DomainError(
+        ErrorCode.VALIDATION_FAILED,
+        message="The search text holds a control character or nothing to search for.",
+        field="q",
+        constraint="format",
+    )
+
+
 def _cancelled(exc: OperationalError) -> bool:
     return str(getattr(exc.orig, "sqlstate", "") or "") == _QUERY_CANCELED
 
@@ -319,6 +333,8 @@ def search(
     """One page of hits; see the module docstring."""
     if timeout_ms <= 0:  # pragma: no cover - settings refuse it first
         raise ValueError("the norms search timeout must be positive")
+    if unsearchable(q):
+        raise _unsearchable()
     parsed = parse_query(q)
     try:
         session.execute(_SET_TIMEOUT, {"timeout": str(int(timeout_ms))})

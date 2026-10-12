@@ -1,8 +1,16 @@
-"""Real PostgreSQL overlap between periodic and forced lease recovery."""
+"""Real PostgreSQL overlap between periodic and forced lease recovery.
+
+The periodic sweep recovers every expired lease in the database, so the reclaim case parks
+every other unreleased lease past its window and gives each its expiry back after
+(`W55A-FIX`; `W55A-FIX-DB.md` §4.1): the W48 crash cases leave runs ``running`` under a 60 s
+lease, and the sweep counted those as if they were this test's.
+"""
 
 from __future__ import annotations
 
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pytest
 from sqlalchemy import text
@@ -47,6 +55,34 @@ def _queued_run(session, seeded):
     jobs = JobRepository()
     jobs.enqueue(session, run_id=run_id)
     return run_id
+
+
+@contextmanager
+def _foreign_leases_parked(engine, own: set[str]) -> Iterator[None]:
+    """Every unreleased lease but ``own`` expires after the test, and gets its expiry back."""
+    with Session(engine) as setup:
+        parked = [
+            (lease_id, expires_at)
+            for lease_id, expires_at in setup.execute(text(
+                "SELECT lease_id, expires_at FROM lease WHERE released_at IS NULL FOR UPDATE"
+            )).all()
+            if lease_id not in own
+        ]
+        for lease_id, _expires_at in parked:
+            setup.execute(text(
+                "UPDATE lease SET expires_at = timestamptz '2099-01-01' WHERE lease_id = :lease_id"
+            ), {"lease_id": lease_id})
+        setup.commit()
+    try:
+        yield
+    finally:
+        with Session(engine) as cleanup:
+            for lease_id, expires_at in parked:
+                cleanup.execute(text(
+                    "UPDATE lease SET expires_at = :expires_at "
+                    "WHERE lease_id = :lease_id AND released_at IS NULL"
+                ), {"lease_id": lease_id, "expires_at": expires_at})
+            cleanup.commit()
 
 
 def _running_run(session, seeded):
@@ -128,6 +164,13 @@ def test_periodic_and_forced_reclaim_two_runs_never_invert_locks(
         first = _running_run(seed, seeded)
         second = _running_run(seed, seeded)
         seed.commit()
+    own = {first[1].lease_id, second[1].lease_id}
+    with _foreign_leases_parked(engine, own):
+        _sweep_periodic_and_forced(engine, first, second)
+
+
+def _sweep_periodic_and_forced(engine, first, second) -> None:
+    with Session(engine) as seed:
         for _, authority in (first, second):
             seed.execute(text(
                 "UPDATE lease SET expires_at = statement_timestamp() - interval '1 second' "

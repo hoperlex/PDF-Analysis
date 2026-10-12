@@ -82,8 +82,10 @@ def stand_from_environment(with_store: bool) -> Stand:
 def _export(args: argparse.Namespace) -> int:
     from auditmanager.shared.db.session import session_scope
 
-    from .export import export_bundle
+    from .export import export_bundle, require_designatable_chunking
 
+    # Before the promotion database is even opened (`W55A-FIX`, JUDGE-Y Y-5).
+    require_designatable_chunking(args.chunking_profile)
     with session_scope() as session:
         result = export_bundle(
             session,
@@ -131,7 +133,10 @@ def main(argv: Sequence[str] | None = None, *, stand_factory: StandFactory | Non
 
     export = commands.add_parser("export", help="write a verified bundle (this host)")
     export.add_argument("--snapshot", required=True)
-    export.add_argument("--chunking-profile", required=True)
+    export.add_argument(
+        "--chunking-profile", required=True,
+        help="characters-v2:<target> only; any other profile is refused (W55A-FIX)",
+    )
     export.add_argument("--corpus", required=True, type=Path)
     export.add_argument("--drop-sums", required=True, type=Path)
     export.add_argument("--ledger", type=Path)

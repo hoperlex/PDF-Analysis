@@ -54,6 +54,7 @@ from tests.integration.norms.bundle.support import (
     write_drop,
 )
 from tests.integration.norms.embedding.support import FakeEncoder
+from tests.integration.norms.reset import truncate_tables
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 MIGRATE_ARGV = [
@@ -234,8 +235,10 @@ def write_client_rows(engine: Engine) -> None:
 
 @pytest.fixture
 def stand(stand_engine: Engine, store: S3BlobStore) -> Stand:
+    # ``norms_snapshot ... CASCADE`` reaches 0020's current snapshot and history, whose
+    # TRUNCATE refusals ``truncate_tables`` lifts for this reset alone (`W55A-FIX`).
     with stand_engine.begin() as connection:
-        connection.execute(text(f"TRUNCATE TABLE {', '.join(STAND_TABLES)} CASCADE"))
+        truncate_tables(connection, STAND_TABLES)
     write_client_rows(stand_engine)
     return Stand(session_factory=create_session_factory(stand_engine), engine=stand_engine, store=store)
 
