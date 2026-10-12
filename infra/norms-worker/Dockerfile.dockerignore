@@ -1,0 +1,12 @@
+# The norms-worker build context is the repository root (W54-EMBED-01), and this file is its
+# allowlist. BuildKit reads <Dockerfile>.dockerignore beside the Dockerfile in place of the
+# root .dockerignore, so only the paths below reach the daemon: the hashed wheel lock, the
+# self-check and the norms package the embedder runs from. Nothing under .local/ -- the corpus,
+# the promotion dumps, the build checkpoints -- can be sent, whatever a COPY names.
+*
+!infra/norms-worker/requirements.lock
+!infra/norms-worker/self_check.py
+!src/auditmanager/__init__.py
+!src/auditmanager/norms
+**/__pycache__
+**/*.pyc

@@ -2,7 +2,8 @@
 
 # The norms worker: BGE-M3 under the frozen embedding profile `bge-m3-dense-v1`
 # (docs/program/NORM_EMBEDDING_BAKEOFF.md) on a pinned CPU runtime, with the model baked in and
-# no network at run time. Owner W54-BGE-IMAGE, successor writer W54-EMBED-01 (W54-PLAN.md §6).
+# no network at run time. Owner W54-BGE-IMAGE, successor writer W54-EMBED-01 (W54-PLAN.md §6),
+# which baked the embedder in.
 #
 # Every input has an immutable identity, and this file has no build argument, so none of them
 # can be redirected from a call site:
@@ -21,13 +22,23 @@
 # first RUN refuses a wheel lock that still carries the marker. An unpinned build fails; it
 # never falls back to an unverified download.
 #
-# Network: the build fetches the pinned inputs; the self-check then runs under
+# Network: the build fetches the pinned inputs; both self-checks then run under
 # RUN --network=none, and the image sets HF_HUB_OFFLINE=1 and TRANSFORMERS_OFFLINE=1 for every
-# later process. infra/norms-worker/reproduce-mrr.sh runs it with `docker run --network none`.
+# later process. reproduce-mrr.sh, check-windows.sh and run-build.sh run it with
+# `docker run --network none`.
 #
-# Build context is this directory (HEAVY STEP, W54-FREEZE-01: about 6.5 GB, 3.2 GiB, 450 s):
+# The embedder (W54-EMBED-01). The image carries the repository's own
+# src/auditmanager/norms package, which the build and embed-texts entry points
+# (`python -m auditmanager.norms.embedding ...`) need; it imports only the standard library and
+# the runtime above. The build context is therefore the repository root, cut down to an
+# allowlist by infra/norms-worker/Dockerfile.dockerignore (BuildKit reads it in place of the
+# root .dockerignore), so nothing else of the checkout -- above all no .local/ corpus byte --
+# reaches the daemon. The code layers come after the model layers, so a code change rebuilds
+# seconds of layers, not the 2.3 GB model.
+#
+# Build (HEAVY STEP, W54-FREEZE-01: about 6.5 GB, 3.2 GiB, 450 s), from the repository root:
 #   docker build --file infra/norms-worker/Dockerfile \
-#     --tag auditmanager-norms-worker:bge-m3-dense-v1-5617a9f infra/norms-worker
+#     --tag auditmanager-norms-worker:bge-m3-dense-v1-5617a9f .
 FROM python:3.12-slim-bookworm@sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -35,7 +46,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 
-COPY requirements.lock /opt/norms-worker/requirements.lock
+COPY infra/norms-worker/requirements.lock /opt/norms-worker/requirements.lock
 RUN set -eu; \
     if grep -q 'TODO-PIN' /opt/norms-worker/requirements.lock; then \
       echo "refused: infra/norms-worker/requirements.lock still carries a TODO-PIN marker;" \
@@ -83,9 +94,12 @@ ADD --chmod=0444 --checksum=sha256:TODO-PIN-WINDOW \
     https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/tokenizer_config.json \
     /opt/norms-worker/hf/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181/tokenizer_config.json
 
-COPY self_check.py /opt/norms-worker/self_check.py
+COPY infra/norms-worker/self_check.py /opt/norms-worker/self_check.py
+COPY src/auditmanager/__init__.py /opt/norms-worker/src/auditmanager/__init__.py
+COPY src/auditmanager/norms/ /opt/norms-worker/src/auditmanager/norms/
 
 ENV PATH=/opt/norms-worker/venv/bin:$PATH \
+    PYTHONPATH=/opt/norms-worker/src \
     HF_HOME=/opt/norms-worker/hf \
     HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1 \
@@ -101,6 +115,11 @@ ENV PATH=/opt/norms-worker/venv/bin:$PATH \
 # of 1024 dimensions through CLS pooling.
 RUN --network=none python /opt/norms-worker/self_check.py
 
+# Proves, offline, that the baked embedder runs end to end on the real tokenizer and model: an
+# over-limit text becomes its full window set, every window embeds to a unit vector, and
+# embed-texts answers one request byte-identically twice.
+RUN --network=none python -m auditmanager.norms.embedding self-test
+
 RUN useradd --system --no-create-home --home-dir /tmp --uid 10001 norms
 
 LABEL org.opencontainers.image.title="AuditManager norms worker (BGE-M3)" \
@@ -108,7 +127,8 @@ LABEL org.opencontainers.image.title="AuditManager norms worker (BGE-M3)" \
       org.opencontainers.image.source="https://github.com/hoperlex/PDF-Analysis" \
       io.auditmanager.embedding.profile="bge-m3-dense-v1" \
       io.auditmanager.embedding.repository="BAAI/bge-m3" \
-      io.auditmanager.embedding.revision="5617a9f61b028005a4858fdac845db406aefb181"
+      io.auditmanager.embedding.revision="5617a9f61b028005a4858fdac845db406aefb181" \
+      io.auditmanager.embedding.entry="python -m auditmanager.norms.embedding"
 
 USER 10001
 WORKDIR /work
