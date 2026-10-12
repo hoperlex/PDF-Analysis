@@ -53,6 +53,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 DEPLOY = ROOT / "infra/deploy/deploy.sh"
+COMPOSE = ROOT / "infra/deploy/compose.server.yml"
 DOCKERFILE_API = ROOT / "infra/deploy/Dockerfile.api"
 DOCKERFILE_WEB = ROOT / "infra/deploy/Dockerfile.web"
 ENGINE = "tests/contract/api_v1/openapi_conformance.py"
@@ -279,11 +280,21 @@ def _context_paths() -> list[str]:
     return sorted(set(paths))
 
 
+def _compose_without(line: str) -> str:
+    """The real compose file with exactly one line removed -- the shape of a refusal case."""
+    text = COMPOSE.read_text(encoding="utf-8")
+    lines = text.splitlines(keepends=True)
+    matching = [entry for entry in lines if entry.strip() == line]
+    assert len(matching) == 1, f"{line!r} is not one line of compose.server.yml"
+    return "".join(entry for entry in lines if entry.strip() != line)
+
+
 def _stage(
     tmp_path: Path,
     *,
     script: Path | None = None,
     with_compose: bool = True,
+    compose_text: str | None = None,
     drop_context: str | None = None,
     with_engine: bool = True,
     with_example: bool = True,
@@ -306,8 +317,13 @@ def _stage(
         for name, source in (("Dockerfile.api", DOCKERFILE_API), ("Dockerfile.web", DOCKERFILE_WEB)):
             (deploy / name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     if with_compose:
-        # Only its presence is checked, and `docker` is a stub, so its contents never run.
-        (deploy / "compose.server.yml").write_text("# stub\n", encoding="utf-8")
+        # `docker` is a stub, so its contents never run. They ARE read since `W54-WORKER-01`:
+        # `execution-role-declared` parses each service's literal `EXECUTION_ROLE:`, so the
+        # real file is staged and every case below also proves that it passes that guard.
+        (deploy / "compose.server.yml").write_text(
+            compose_text if compose_text is not None else COMPOSE.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
     if with_example:
         (deploy / "env").mkdir(exist_ok=True)
         (deploy / "env/alpha.env.example").write_text(_example_text(), encoding="utf-8")
@@ -431,6 +447,11 @@ def _before_docker_cases(tmp_path: Path, port: int) -> dict[str, tuple[Path, tup
             _stage(tmp_path / "compose", with_compose=False), (), good,
             "compose.server.yml is missing",
         ),
+        "execution-role-declared": (
+            _stage(tmp_path / "role", compose_text=_compose_without("EXECUTION_ROLE: worker")),
+            (), good,
+            "the worker service in",
+        ),
         "build-context-complete": (
             _stage(tmp_path / "context", drop_context="src/"), (), good,
             "missing paths the two Dockerfiles copy",
@@ -445,6 +466,7 @@ BEFORE_DOCKER = (
     "placeholder-secrets",
     "derived-secrets-coherent",
     "compose-file-present",
+    "execution-role-declared",
     "build-context-complete",
 )
 
@@ -471,6 +493,9 @@ class TestTheGuardsThatRefuseBeforeDockerIsTouched:
         # between the two runs is the deleted block.
         staging = {
             "compose-file-present": {"with_compose": False},
+            "execution-role-declared": {
+                "compose_text": _compose_without("EXECUTION_ROLE: worker"),
+            },
             "build-context-complete": {"drop_context": "src/"},
         }.get(guard, {})
         mutant = _stage(tmp_path / f"mutant-{guard}", script=cut, **staging)  # type: ignore[arg-type]
@@ -1081,12 +1106,14 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
 
     The count is a literal for the same reason every other figure in this file is. It was
     12 until `W24-IDEM` added `identity-policy-known`, whose case lives in
-    `test_deploy_image_identity.py` beside this file and is named in the set below, and 13
-    until `D-103`'s repair added `derived-secrets-coherent`, covered above.
+    `test_deploy_image_identity.py` beside this file and is named in the set below, 13
+    until `D-103`'s repair added `derived-secrets-coherent`, covered above, and 14 until
+    `W54-WORKER-01` added `execution-role-declared` (R-105), covered above and in
+    :class:`TestTheExecutionRoleIsDeclaredLiterally`.
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", DEPLOY.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 14, markers
+    assert len(markers) == 15, markers
     covered = set(BEFORE_DOCKER) | {
         "port-not-foreign",
         "images-built",
@@ -1133,3 +1160,119 @@ def test_it_runs_the_gates_own_conformance_engine_and_not_a_second_one() -> None
     # And the frozen contract it compares against is the one the gate calls the authority.
     assert (ROOT / "contracts/api/v1/openapi.json").exists()
     assert "/app/contracts/api/v1/openapi.json" in script
+
+
+# --- `R-105`: which process claims runs is a literal per service -------------------------
+
+
+def _replace_line(old: str, new: str) -> str:
+    text = COMPOSE.read_text(encoding="utf-8")
+    assert text.count(old) == 1, f"{old!r} is not one line of compose.server.yml"
+    return text.replace(old, new)
+
+
+def _without_worker_service() -> str:
+    """The real compose file with the whole `worker:` service block removed."""
+    lines = COMPOSE.read_text(encoding="utf-8").splitlines(keepends=True)
+    start = lines.index("  worker:\n")
+    end = start + 1
+    while end < len(lines) and not (
+        lines[end].startswith("  ") and not lines[end].startswith("   ")
+        and lines[end].strip() and not lines[end].lstrip().startswith("#")
+    ):
+        end += 1
+    # Comments directly above the next service belong to it; keep them.
+    return "".join(lines[:start] + lines[end:])
+
+
+class TestTheExecutionRoleIsDeclaredLiterally:
+    """`R-105` / `W54-PLAN.md` section 3.6: `deploy.sh` refuses a compose file in which
+    `api` or `worker` lacks its literal `EXECUTION_ROLE`, before any `docker` call."""
+
+    @pytest.mark.parametrize(
+        ("compose_text", "says"),
+        [
+            pytest.param(
+                lambda: _compose_without("EXECUTION_ROLE: api"),
+                "the api service in", id="api-without-role",
+            ),
+            pytest.param(
+                lambda: _compose_without("EXECUTION_ROLE: worker"),
+                "the worker service in", id="worker-without-role",
+            ),
+            pytest.param(
+                lambda: _replace_line("      EXECUTION_ROLE: api\n",
+                                      "      EXECUTION_ROLE: ${EXECUTION_ROLE}\n"),
+                "sets EXECUTION_ROLE to '${EXECUTION_ROLE}'", id="api-substituted",
+            ),
+            pytest.param(
+                lambda: _replace_line("      EXECUTION_ROLE: api\n",
+                                      "      EXECUTION_ROLE: worker\n"),
+                "sets EXECUTION_ROLE to 'worker'", id="api-claims-as-worker",
+            ),
+            pytest.param(
+                lambda: _replace_line("      EXECUTION_ROLE: worker\n",
+                                      "      EXECUTION_ROLE: all\n"),
+                "sets EXECUTION_ROLE to 'all'", id="worker-says-all",
+            ),
+            pytest.param(
+                _without_worker_service,
+                "has no worker service", id="api-role-without-a-worker",
+            ),
+        ],
+    )
+    def test_it_refuses_before_docker(
+        self, compose_text, says: str, tmp_path: Path, free_port: int
+    ) -> None:
+        env_file = tmp_path / "alpha.env"
+        env_file.write_text(_env_text(EDITED_SECRETS, port=free_port), encoding="utf-8")
+        script = _stage(tmp_path / "role", compose_text=compose_text())
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert says in completed.stderr, completed.stderr
+        assert "EXECUTION_ROLE" in completed.stderr or "worker service" in completed.stderr
+        assert not log.exists(), f"refused only after running docker: {log.read_text()}"
+
+    def test_the_rollback_shape_is_accepted(
+        self, tmp_path: Path, serving: tuple[int, type]
+    ) -> None:
+        """`W54-PLAN.md` section 3.10: `EXECUTION_ROLE: all` on `api` and no `worker`
+        service is W53's in-process execution, and the guard lets exactly that through --
+        the control that shows the guard does not refuse every file without a worker."""
+        port, _ = serving
+        rollback = _without_worker_service().replace(
+            "      EXECUTION_ROLE: api\n", "      EXECUTION_ROLE: all\n"
+        )
+        assert "  worker:" not in rollback and "EXECUTION_ROLE: all" in rollback
+        script = _stage(tmp_path / "rollback", compose_text=rollback)
+        env_file = tmp_path / "alpha.env"
+        env_file.write_text(_env_text(EDITED_SECRETS, port=port), encoding="utf-8")
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        # No worker service in the file, so none is asked about.
+        assert "container-of-worker" not in completed.stdout
+        assert " worker" not in "".join(
+            line for line in log.read_text().splitlines(keepends=True) if " ps " in line
+        )
+
+    def test_the_shipped_file_passes_and_its_worker_is_checked_for_health(
+        self, tmp_path: Path, serving: tuple[int, type]
+    ) -> None:
+        port, _ = serving
+        script, env_file = _ready(tmp_path, port)
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "--quiet worker" in log.read_text(), "the worker's container was never asked about"
+        assert "  worker " in completed.stdout, completed.stdout
+
+    def test_an_unhealthy_worker_is_refused(
+        self, tmp_path: Path, serving: tuple[int, type]
+    ) -> None:
+        port, _ = serving
+        script, env_file = _ready(tmp_path, port)
+        completed, _ = _run(
+            script, tmp_path=tmp_path, env_file=env_file,
+            stub={"STUB_MISSING_SERVICES": "worker"},
+        )
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "the 'worker' service of" in completed.stderr, completed.stderr

@@ -845,6 +845,13 @@ def _execute_run_body(
             result=text_result,
         )
         outputs.absorb(text_result)
+        # D-141 (`W54-WORKER-01`). Binding the text artifacts checked the authority, which
+        # locks the Lease row. Committing here releases it, so the lease heartbeat keeps
+        # extending the Lease while the evidence gate runs; the final transaction below
+        # takes the Lease lock again only in `finish_execution`, for its last writes. The
+        # deterministic stages already commit at the next `stage_started`, so this makes
+        # the text stage durable exactly as they are.
+        session.commit()
 
     run_repo.advance(session, run_id=run_id, from_state="running", to_state="validating")
 

@@ -65,6 +65,34 @@ def test_backend_context_selects_its_exercising_suite(repo: Path) -> None:
     assert light.classify(light.changed_paths(base)) == light.Selection(("runs",), False)
 
 
+@pytest.mark.parametrize(("path", "expected"), [
+    ("src/auditmanager/workers/service.py", ("jobs", "runs", "workers")),
+    ("src/auditmanager/execution/public.py", ("api", "execution", "runs")),
+    ("src/auditmanager/jobs/repository.py", ("jobs", "runs")),
+])
+def test_execution_contexts_select_their_suites(
+    repo: Path, path: str, expected: tuple[str, ...]
+) -> None:
+    """`W54-WORKER-01`: the worker, execution and jobs contexts are mapped, not unknown."""
+    for suite in expected:
+        directory = repo / "tests/integration" / suite
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "test_it.py").write_text("def test_it(): pass\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-qm", "suites")
+    base = git(repo, "rev-parse", "HEAD")
+    commit_path(repo, path)
+    assert light.classify(light.changed_paths(base)) == light.Selection(expected, False)
+
+
+def test_the_real_execution_suites_exist() -> None:
+    """The mapping names suites this repository really has; an empty one is refused."""
+    for context in ("workers", "execution", "jobs"):
+        for suite in light.CONTEXT_SUITES[context]:
+            directory = ROOT / "tests" / "integration" / suite
+            assert any(directory.rglob("test_*.py")), f"{directory} has no tests"
+
+
 @pytest.mark.parametrize("path", [
     "web/src/_pages/dashboard/ui/page.tsx",
     "web/src/app/bff/session/screen-lock.ts",

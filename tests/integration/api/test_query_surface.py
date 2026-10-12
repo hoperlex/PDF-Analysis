@@ -909,6 +909,9 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         # shipped ExecutionAdapter on this suite's rollback-joined session.
         "listExecutionQueue": "/execution/queue",
         "listExecutionJournal": "/execution/journal",
+        # `W54-WORKER-01`: the worker registry, served through the same adapter; two
+        # registry rows are written below in this test's transaction.
+        "listWorkers": "/execution/workers",
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -926,6 +929,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listUsers": {"include_archived", "cursor", "limit"},
         "listExecutionQueue": {"cursor", "limit"},
         "listExecutionJournal": {"run_id", "cursor", "limit"},
+        "listWorkers": {"cursor", "limit"},
     }, f"the contract's query surface moved: {declared}"
 
     accounts_and_requests = _seed_accounts_and_requests(session, shipped_router)
@@ -960,6 +964,12 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         run_repository.advance(session, run_id=run_id, from_state="created", to_state="queued")
         jobs.enqueue(session, run_id=run_id)
         execution_runs.append(run_id)
+    # Two registry rows, newer than any committed residue (``started_at`` is the clock at
+    # insert), so the first page starts with them. Rolled back with the rest.
+    from auditmanager.workers.public import WorkerRegistry
+
+    for _ in range(2):
+        WorkerRegistry().register(session, version="query-surface", slots=1)
 
     # One supplied value per parameter that the answer must be visibly different for, and
     # the difference each one has to make. Literals, not derived: a case computed from the
@@ -1032,7 +1042,9 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
     for operation_id, names in declared.items():
         target = targets[operation_id]
         surface = (
-            execution_surface if operation_id.startswith("listExecution") else shipped_router
+            execution_surface
+            if operation_id.startswith("listExecution") or operation_id == "listWorkers"
+            else shipped_router
         )
         baseline = ok(get(surface, f"{target}?limit=200"))
         assert len(baseline["items"]) >= 2, (

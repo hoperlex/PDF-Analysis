@@ -79,6 +79,8 @@ if "ps" in argv and "--quiet" in argv:
         sys.exit(0)
     if argv[-1] == "proxy" and os.environ.get("STUB_NO_PROXY") == "yes":
         sys.exit(0)
+    if argv[-1] in os.environ.get("STUB_ABSENT_SERVICES", "").split(","):
+        sys.exit(0)
     print("c0ffee" + argv[-1])
     sys.exit(0)
 
@@ -104,7 +106,10 @@ if "sha256sum" in line:
         if not staged.is_file():
             continue
         digest = hashlib.sha256(staged.read_bytes()).hexdigest()
-        if path in CORRUPT:
+        if path in CORRUPT or (
+            os.environ.get("STUB_STALE_CONTAINER")
+            and os.environ["STUB_STALE_CONTAINER"] in argv
+        ):
             digest = "0" * 64
         print("%s  %s" % (digest, path))
     sys.exit(0)
@@ -713,3 +718,61 @@ class TestTheProxyReload:
         )
         assert completed.returncode == UNANSWERABLE, (completed.stdout, completed.stderr)
         assert "nothing to reload" in completed.stderr, completed.stderr
+
+
+# --- `R-105`, `W54-WORKER-01`: the worker runs the API's image and is compared too --------
+
+#: Just enough compose for the probe's one question: does the stack declare a worker?
+_COMPOSE_WITH_WORKER = "services:\n  api:\n    image: x\n  worker:\n    image: x\n"
+
+
+class TestTheWorkerContainerIsThisTreeToo:
+    def test_a_declared_worker_is_compared_against_the_api_lines(
+        self, world, tmp_path: Path
+    ) -> None:
+        repo, deploy, image = world
+        (deploy / "compose.server.yml").write_text(_COMPOSE_WITH_WORKER, encoding="utf-8")
+        completed, calls = _run(
+            deploy / "verify-deployed.sh", tmp_path=tmp_path, repo=repo,
+            STUB_IMAGE=str(image),
+        )
+        assert completed.returncode == AGREES, (completed.stdout, completed.stderr)
+        assert "-- the worker image against the tree --" in completed.stdout, completed.stdout
+        assert "exec -i c0ffeeworker" in calls, calls
+
+    def test_a_worker_left_on_an_older_image_is_drift(self, world, tmp_path: Path) -> None:
+        """The API is current and the worker is not: a separate container, replaced only
+        when compose recreates it, so it can drift alone."""
+        repo, deploy, image = world
+        (deploy / "compose.server.yml").write_text(_COMPOSE_WITH_WORKER, encoding="utf-8")
+        completed, _ = _run(
+            deploy / "verify-deployed.sh", tmp_path=tmp_path, repo=repo,
+            STUB_IMAGE=str(image), STUB_STALE_CONTAINER="c0ffeeworker",
+        )
+        assert completed.returncode == DRIFT, (completed.stdout, completed.stderr)
+        assert "DIFFERENT BYTES" in completed.stdout, completed.stdout
+
+    def test_a_declared_worker_with_no_container_is_not_a_pass(
+        self, world, tmp_path: Path
+    ) -> None:
+        repo, deploy, image = world
+        (deploy / "compose.server.yml").write_text(_COMPOSE_WITH_WORKER, encoding="utf-8")
+        completed, _ = _run(
+            deploy / "verify-deployed.sh", tmp_path=tmp_path, repo=repo,
+            STUB_IMAGE=str(image), STUB_ABSENT_SERVICES="worker",
+        )
+        assert completed.returncode != AGREES, (completed.stdout, completed.stderr)
+        assert "no running container for the 'worker' service" in completed.stderr
+
+    def test_without_a_worker_service_none_is_asked_about(
+        self, world, tmp_path: Path
+    ) -> None:
+        """The W53 rollback shape: no worker in the file, so the probe asks for none."""
+        repo, deploy, image = world
+        completed, calls = _run(
+            deploy / "verify-deployed.sh", tmp_path=tmp_path, repo=repo,
+            STUB_IMAGE=str(image),
+        )
+        assert completed.returncode == AGREES, (completed.stdout, completed.stderr)
+        assert "the worker image" not in completed.stdout
+        assert "c0ffeeworker" not in calls

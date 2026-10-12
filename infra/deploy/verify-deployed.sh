@@ -204,6 +204,16 @@ grep -q '^web	' <<<"$MAPPINGS" || fail "$UNANSWERABLE" \
     "Dockerfile.web no longer copies web/ into the image, so this probe does not know" \
     "what the web image is made of."
 
+# `R-105`, `W54-WORKER-01`. The worker service runs the API's image, so its container is
+# compared against the same lines as the API's. It is a separate container and is only
+# replaced when compose recreates it, so a worker left on an older image is drift even
+# while the API is current. Asked only when the compose file declares a worker service:
+# the W53 rollback (`EXECUTION_ROLE: all`, no worker) has none to ask about.
+if grep -q '^  worker:[[:space:]]*$' "$COMPOSE_FILE"; then
+    MAPPINGS="$MAPPINGS
+$(grep '^api	' <<<"$MAPPINGS" | sed 's/^api	api	/worker	worker	/')"
+fi
+
 compose() { docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" "$@"; }
 
 WORK="$(mktemp -d)"

@@ -152,7 +152,7 @@ GUARDED = (
     ),
     ("setExecutionPaused", "PUT", "/execution/dispatch"),
     # `W54-SEAL-01`. The worker registry's read and intake switch: behind the seam before
-    # their sealed stubs can answer 503.
+    # anything else can answer (`W54-WORKER-01` replaced their sealed 503 stubs).
     ("listWorkers", "GET", "/execution/workers"),
     (
         "setWorkerIntake", "PUT",

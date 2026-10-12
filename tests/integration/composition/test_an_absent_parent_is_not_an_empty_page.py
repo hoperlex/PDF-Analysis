@@ -103,12 +103,13 @@ RELEASE_OPERATIONS = frozenset({"getProductVersion", "listReleases"})
 # neither may be mistaken for a read of a missing parent.
 EXECUTION_COLLECTIONS = frozenset({"listExecutionQueue", "listExecutionJournal"})
 
-#: `W54-SEAL-01`. Unaddressed collections whose port is a sealed stub: the worker registry
-#: answers ``503 dependency_unavailable`` until `W54-WORKER-01` supplies it, so it is
-#: exempt from the page-shape assertion and asserted to be exactly that stub instead
+#: `W54-SEAL-01`. Unaddressed collections whose port is a sealed stub, exempt from the
+#: page-shape assertion and asserted to be exactly that stub instead
 #: (:func:`test_a_sealed_stub_collection_answers_unavailable_and_never_an_empty_page`).
-#: `W54-WORKER-01` empties this set, and the collection joins the page-shape sweep.
-SEALED_STUB_COLLECTIONS = frozenset({"listWorkers"})
+#: `W54-WORKER-01` emptied it: ``listWorkers`` reads the registry and joins the page-shape
+#: sweep as an ordinary collection (an empty registry is a page with no items, which is a
+#: true statement about a deployment with no worker).
+SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 
 
 def _prefixes() -> dict[str, str]:
@@ -261,6 +262,8 @@ def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None
     """
     unaddressed = _unaddressed(_get_routes(app))
     assert {operation_id for operation_id, _ in unaddressed} >= EXECUTION_COLLECTIONS
+    # `W54-WORKER-01`: the registry is served, so it is swept like the other collections.
+    assert "listWorkers" in {operation_id for operation_id, _ in unaddressed}
     for operation_id, template in unaddressed:
         if (
             operation_id in AGGREGATE_OPERATIONS

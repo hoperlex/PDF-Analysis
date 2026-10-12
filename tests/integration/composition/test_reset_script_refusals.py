@@ -1042,3 +1042,70 @@ class TestAnEmptyBucketIsAStateAndNotAFailure:
         assert "sidecar is short" in completed.stderr, completed.stderr
         calls = log.read_text(encoding="utf-8") if log.exists() else ""
         assert "DROP SCHEMA" not in calls, calls
+
+
+# --- `R-105`, `W54-WORKER-01`: the worker is stopped while the database changes under it ---
+
+#: Just enough of a compose file for `reset.sh`'s one question about it: is there a
+#: `worker` service? `docker` is the staging stub, so nothing here is ever started.
+_COMPOSE_WITH_WORKER = "services:\n  api:\n    image: x\n  worker:\n    image: x\n"
+
+
+def _staged_with_worker(tmp_path: Path) -> Path:
+    script = _staged(tmp_path)
+    (script.parent / "compose.server.yml").write_text(_COMPOSE_WITH_WORKER, encoding="utf-8")
+    return script
+
+
+def _index(lines: list[str], needle: str) -> int:
+    matches = [number for number, line in enumerate(lines) if needle in line]
+    assert matches, f"{needle!r} was never called: {lines}"
+    return matches[0]
+
+
+class TestTheWorkerIsStoppedAroundTheDatabase:
+    def test_the_wipe_stops_the_worker_before_the_drop_and_starts_it_after(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        completed, calls = _run_through_the_dump(
+            _staged_with_worker(tmp_path), tmp_path=tmp_path, env_file=env_file,
+            attrs=_sidecar(2),
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        lines = calls.splitlines()
+        stop = _index(lines, "stop worker")
+        drop = _index(lines, "DROP SCHEMA")
+        migrate = _index(lines, "run --rm migrate")
+        start = _index(lines, "up -d --no-deps worker")
+        assert stop < drop < migrate < start, lines
+
+    def test_the_restore_stops_the_worker_before_pg_restore_and_starts_it_after(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        dump = tmp_path / "dump"
+        dump.mkdir()
+        (dump / "database.dump").write_bytes(b"PGDMP")
+        (dump / "objects.attrs").write_text(_sidecar(1), encoding="utf-8")
+        (dump / "objects").mkdir()
+        completed, calls = _run_through_the_dump(
+            _staged_with_worker(tmp_path), tmp_path=tmp_path, env_file=env_file,
+            attrs=_sidecar(1), mode=("--restore", str(dump)),
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        lines = calls.splitlines()
+        stop = _index(lines, "stop worker")
+        restore = _index(lines, "pg_restore")
+        migrate = _index(lines, "run --rm migrate")
+        start = _index(lines, "up -d --no-deps worker")
+        assert stop < restore < migrate < start, lines
+
+    def test_a_compose_file_without_a_worker_touches_no_worker(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        """The W53 rollback shape (no `worker` service): nothing to stop, nothing asked."""
+        completed, calls = _run_through_the_dump(
+            _staged(tmp_path), tmp_path=tmp_path, env_file=env_file, attrs=_sidecar(2),
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "DROP SCHEMA" in calls
+        assert " worker" not in calls, calls

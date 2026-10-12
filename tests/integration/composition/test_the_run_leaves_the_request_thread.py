@@ -419,9 +419,20 @@ def test_serving_lifespan_dispatches_an_ordinary_run_adapter_submission(
     recorded_adapter: RecordedAdapter, provider_config: Any,
     committed_version: Any,
 ) -> None:
-    """The active carrier wakes from a plain nullary RunCarrier submission."""
+    """The active carrier wakes from a plain nullary RunCarrier submission.
+
+    D-152 (`W54-WORKER-01`): earlier suites leave Jobs behind in the shared lane database,
+    and the serving carrier's first reclaim pass can turn an expired leftover lease back
+    into a queued, available Job at any moment after the lifespan starts. So every expired
+    lease is reclaimed *before* the application starts, every foreign queued Job is parked
+    then and again immediately before unpausing, and this run's Job is given the top
+    priority -- a leftover can no longer reach the gated adapter first.
+    """
     # Quarantine earlier disposable-test queue rows while proving this run's
     # serving path. Restore their availability in the finally block.
+    with sessions() as setup:
+        JobRepository().reclaim_expired(setup)
+        setup.commit()
     with sessions() as setup:
         old_jobs = setup.execute(text(
             "SELECT job_id, available_at FROM job WHERE state = 'queued' FOR UPDATE"
@@ -440,10 +451,21 @@ def test_serving_lifespan_dispatches_an_ordinary_run_adapter_submission(
             started = _start(client, committed_version.version_uid)
             assert started["state"] == "queued"
             with sessions() as controller:
-                # A previous crashed test may have been reclaimed at startup.
+                # A previous crashed test may have been reclaimed at startup. Park every
+                # foreign queued Job, remembering the ones the setup did not see, and put
+                # this run first in the dispatcher's order before unpausing (D-152).
+                old_jobs += controller.execute(text(
+                    "SELECT job_id, available_at FROM job WHERE state = 'queued' "
+                    "AND run_id <> :run_id AND available_at < timestamptz '2099-01-01' "
+                    "FOR UPDATE"
+                ), {"run_id": started["run_id"]}).all()
                 controller.execute(text(
                     "UPDATE job SET available_at = timestamptz '2099-01-01' "
                     "WHERE state = 'queued' AND run_id <> :run_id"
+                ), {"run_id": started["run_id"]})
+                controller.execute(text(
+                    "UPDATE job SET priority = 100 WHERE run_id = :run_id "
+                    "AND state = 'queued'"
                 ), {"run_id": started["run_id"]})
                 JobRepository().set_paused(controller, paused=False)
                 controller.commit()

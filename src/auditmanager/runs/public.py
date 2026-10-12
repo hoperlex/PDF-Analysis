@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from auditmanager.runs.carrier import DurableCarrier, RunCarrier
+from auditmanager.runs.carrier import (
+    DurableCarrier,
+    ReclaimingCarrier,
+    RunCarrier,
+    run_to_terminal,
+)
 from auditmanager.runs.reconciliation import reconcile_at_startup
 from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import ErrorCode
@@ -14,9 +19,11 @@ def start_serving_carrier(carrier: RunCarrier) -> None:
     """Start durable dispatch only when a serving application enters its lifespan.
 
     Constructed applications and direct callers keep their existing inert carrier.
+    ``EXECUTION_ROLE=all`` starts the in-process claimant (:class:`DurableCarrier`);
+    ``EXECUTION_ROLE=api`` starts only the lease reclaim (:class:`ReclaimingCarrier`).
     Other carrier implementations have no serving scheduler to start.
     """
-    if isinstance(carrier, DurableCarrier):
+    if isinstance(carrier, (DurableCarrier, ReclaimingCarrier)):
         carrier.start()
 
 
@@ -39,4 +46,11 @@ def fail_reclaimed_run(
     )
 
 
-__all__ = ["fail_reclaimed_run", "reconcile_at_startup", "start_serving_carrier"]
+__all__ = [
+    "DurableCarrier",
+    "ReclaimingCarrier",
+    "fail_reclaimed_run",
+    "reconcile_at_startup",
+    "run_to_terminal",
+    "start_serving_carrier",
+]

@@ -1,6 +1,7 @@
 """Public durable execution boundary."""
 
 from .repository import (
+    JOB_WAKEUP_CHANNEL,
     AttemptAuthority,
     ExecutionNotClaimed,
     JobRepository,
@@ -9,6 +10,7 @@ from .repository import (
 )
 
 __all__ = [
+    "JOB_WAKEUP_CHANNEL",
     "AttemptAuthority",
     "ExecutionNotClaimed",
     "JobRepository",

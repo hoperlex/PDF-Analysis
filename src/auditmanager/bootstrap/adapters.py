@@ -247,21 +247,88 @@ class ExecutionAdapter(_SessionHolder):
                                                   changed_at=state.changed_at)
         return self._write(write)
 
-    # `W54-SEAL-01`. The worker registry's `listWorkers` and `setWorkerIntake` are sealed
-    # stubs: the `worker` table exists (migration 0019) but nothing registers in it until
-    # `W54-WORKER-01`, which replaces both bodies. Until then they fail explicitly, never
-    # with an empty page.
-    @staticmethod
-    def _worker_registry_unavailable() -> Any:
-        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="worker_registry")
-
+    # `W54-WORKER-01` (R-105, R-80). The worker registry behind `listWorkers` and
+    # `setWorkerIntake`, which `W54-SEAL-01` sealed as stubs. Reads are any role; the
+    # intake switch is an administrator's, checked again by the command itself.
     def list_workers(self, *, cursor: str | None, limit: int) -> models.ExecutionWorkerPage:
-        return self._worker_registry_unavailable()
+        from auditmanager.jobs.public import JobRepository
+        from auditmanager.workers.public import WorkerRegistry
+
+        def read(session: Session) -> models.ExecutionWorkerPage:
+            rows = WorkerRegistry().page(
+                session, cursor=_worker_cursor(cursor), limit=limit + 1,
+            )
+            items = rows[:limit]
+            held = JobRepository().runs_held_by(session, [row.worker_id for row in items])
+            next_cursor = None
+            if len(rows) > limit:
+                last = items[-1]
+                next_cursor = encode_cursor((
+                    "w1", last.started_at.astimezone(timezone.utc).isoformat(),
+                    last.worker_id,
+                ))
+            return models.ExecutionWorkerPage(
+                items=[_worker_view(row, held.get(row.worker_id, ())) for row in items],
+                page=models.PageInfo(next_cursor=next_cursor),
+            )
+        return self._read(read)
 
     def set_worker_intake(
         self, *, worker_id: str, enabled: bool, user_uid: str, idempotency_key: str
     ) -> models.ExecutionWorker:
-        return self._worker_registry_unavailable()
+        from auditmanager.jobs.public import JobRepository
+        from auditmanager.workers.public import set_worker_intake
+
+        def write(session: Session) -> models.ExecutionWorker:
+            record = set_worker_intake(
+                session, worker_id=worker_id, enabled=enabled,
+                roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+            )
+            held = JobRepository().runs_held_by(session, [record.worker_id])
+            return _worker_view(record, held.get(record.worker_id, ()))
+        return self._write(write)
+
+
+def _worker_cursor(raw: str | None) -> Any:
+    """Decode only coordinates issued by the worker page's versioned format.
+
+    Returns a ``workers`` ``WorkerCursor`` or ``None``; imported here, at the one use,
+    like every other boundary this module adapts.
+    """
+    from auditmanager.shared.identity import WorkerId
+    from auditmanager.workers.public import WorkerCursor
+
+    if raw is None:
+        return None
+    parts = decode_cursor(raw)
+    if len(parts) != 3 or parts[0] != "w1":
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    _, started_text, worker_id = parts
+    try:
+        started_at = datetime.fromisoformat(started_text)
+        WorkerId.parse(worker_id)
+    except ValueError:
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format",
+        ) from None
+    if (started_at.tzinfo is None
+            or started_at.astimezone(timezone.utc).isoformat() != started_text):
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    return WorkerCursor(started_at=started_at, worker_id=worker_id)
+
+
+def _worker_view(record: Any, run_ids: Sequence[str]) -> models.ExecutionWorker:
+    return models.ExecutionWorker(**{
+        "worker_id": record.worker_id,
+        "state": record.state,
+        "intake_enabled": record.intake_enabled,
+        "slots": record.slots,
+        "version": record.version,
+        "started_at": record.started_at,
+        "heartbeat_at": record.heartbeat_at,
+        "current_run_ids": list(run_ids),
+    })
 
 
 class ReleasesAdapter:
