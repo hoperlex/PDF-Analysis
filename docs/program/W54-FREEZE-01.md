@@ -76,3 +76,23 @@ Under that reading:
 - `W54-STAND-COPY-01` and the rehearsal still build and prove the copy tooling.
 - The P2 bootstrap of `copy-serve.sh` is deferred to the first real upload.
 - `D-156` registers the beta-transition purge of the test data.
+
+## Amendment 2 — the importer under `R-110` (integrator decision, 2026-10-12)
+
+The owner's answer covers the copy only. The importer's behaviour is technical and is decided
+here.
+
+- **(a) Quiesce stays.** `import` stops the stand's writers for its own duration and leaves
+  them stopped until `resume`, exactly as with a copy. The one-transaction row import is not
+  relied on for consistency against live writers.
+- **Test-data waiver instead of the attested copy record.** `attest --test-data` writes a copy
+  record of kind `test_data_waiver`. It holds the operator's statement, the fingerprint at that
+  moment and a timestamp, and carries no dump or inventory. The importer accepts either a full
+  attested `import` copy record or an unexpired `test_data_waiver` whose fingerprint still
+  matches.
+- **Real-data marker.** A full copy taken under `R-110` before the first real client upload
+  writes a `real_data` marker. From then on any waiver is refused, so `R-88` and `R-93` apply in
+  full.
+- **Owners.** `W54-STAND-COPY-01` owns the waiver verb, the marker and the `deploy.sh`
+  interaction. `W54-BUNDLE-01` owns the importer's acceptance rule. The rehearsal proves the
+  waiver path, the full path and the refusal after the marker.
