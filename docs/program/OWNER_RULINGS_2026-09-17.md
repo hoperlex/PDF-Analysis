@@ -1389,3 +1389,51 @@ Ambiguous failures end with `outcome_unknown` and are not re-spent. The E-7
 limits are three provider tries with 2 s and 8 s delays, `Retry-After` at
 most 60 s; at most three Job Attempts before `dead_letter`; a 60 s lease
 with a 20 s heartbeat. E-7's custody retry numbers remain for W54.
+
+## 3.28 — `R-80` to `R-84`, the 2026-10-12 review poll and the W53-CLOSE instruction
+
+On 2026-10-12 a static review of `origin/dev` `8722660` (waves 48–53) put four
+questions to the owner by direct poll in session `pdf-analysis-62`; the owner then
+instructed that session to compose and run a debt and findings closure wave. The
+answers are recorded verbatim in meaning; implementation details below are the
+integrator's, not the owner's.
+
+### `R-80` — an account without roles reads no product data
+
+Amends `R-60` and `W49-PLAN.md` §3.2, and narrows `R-78`'s "every signed-in account":
+an active account whose role set is empty has **no access to product data** —
+projects, documents, versions, blocks, runs, findings, decisions, the dashboard, the
+execution queue and journal. Its own account operations (read and complete its
+profile, change its password) and the product version and release notes stay open,
+so a role-less person can still sign in and see that no role is assigned. An empty
+role set remains a legal state that an administrator may set; it now means suspended.
+
+### `R-81` — an administrator may grant themselves roles
+
+Kept as implemented: `set_roles` refuses losing one's own administrator role but
+allows a self-grant, including `expert`. The grant is attributed through
+`granted_by`. No change.
+
+### `R-82` — re-audit runs on the current configuration
+
+A re-audit is the same document version analysed on the **current** analysis profile,
+prompt bundle and provider mode. The new run records the configuration it actually
+uses, never the source run's; the source is linked only by `reaudit_of_run_id`.
+
+### `R-83` — MinIO is upgraded with the next `origin/main` publication
+
+The owner accepts that the next `origin/main` publication recreates the working-stand
+MinIO with the `RELEASE.2025-10-15T17-29-55Z` image already pinned in
+`infra/deploy/compose.server.yml`. This replaces `R-75`'s inventory-and-copy
+precondition for that one upgrade. It grants no `origin/main` authority by itself:
+publication still needs a separate direct owner instruction naming the exact SHA.
+
+### `R-84` — W53-CLOSE: debt and findings closure with light checks
+
+Compose and run one wave that closes the 2026-10-12 review findings and the open debts
+that fit without a contract or migration change, executed by parallel subagent lanes.
+Checks are minimal: each lane runs container-free checks of what it changed; the
+integrator runs one light acceptance of the merged candidate (web lint, typecheck and
+Vitest; contract tests; the changed contexts' integration tests on one private lane).
+No full `make gate` is required for an `origin/dev` publication of this wave; `R-70`'s
+full-gate rule before `origin/main` stands.

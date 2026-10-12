@@ -123,6 +123,10 @@ delegates the choice to a session that cannot see the other lanes.**
 | `56960`, `60560/60561`; API `57060`, Next `31560` | `gate-w53qare` — `W53-QA-RECHECK-01`, disposable acceptance | 2026-10-09 | after QA recheck handback and owner-only cleanup |
 | `56970`, `60570/60571` | `gate-w53qtest` — `W53-QUEUE-TEST-REPAIR-02`, disposable focused tests | 2026-10-09 | after test repair handback and owner-only cleanup |
 | `56980`, `60580/60581` | `gate-w53judge-y2` — `W53-JUDGE-Y-RECHECK`, disposable consistency review | 2026-10-09 | after Y recheck handback and owner-only cleanup |
+| `57010`, `60610/60611` | `gate-w53c-int` — `W53-CLOSE-INT`, light acceptance of the merged candidate | 2026-10-12 | after W53-CLOSE publication and integrator cleanup |
+| `57020`, `60620/60621` | `gate-w53c-exec` — `W53C-EXEC-01`, disposable focused tests | 2026-10-12 | after EXEC handback and lane cleanup |
+| `57030`, `60630/60631` | `gate-w53c-identity` — `W53C-IDENTITY-01`, disposable focused tests | 2026-10-12 | after IDENTITY handback and lane cleanup |
+| `57040`, `60640/60641` | `gate-w53c-store` — `W53C-STORE-01`, disposable focused tests | 2026-10-12 | after STORE handback and lane cleanup |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,
