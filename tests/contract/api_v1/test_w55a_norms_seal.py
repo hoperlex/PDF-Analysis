@@ -7,8 +7,9 @@ is ``tests/integration/db/test_norms_search_migration.py``, which runs in the ow
 * the designation fold of ``0020_norms_search`` (`W55-PLAN.md` section A3.4): explicit
   ``translate`` tables, never ``lower()``; ``СП 54`` never finds ``СП_542_...``;
 * :class:`~auditmanager.api.schemas.content.ByteRange` answers exactly what
-  ``streamDocumentVersionContent``'s own range rule answers, so `W55A-CONTENT-01` can move
-  that operation onto it without changing one ``206`` or ``422``;
+  ``streamDocumentVersionContent``'s own range rule answered, so `W55A-CONTENT-01` could move
+  that operation onto it without changing one ``206`` or ``422`` (the retired rule is kept
+  below, verbatim, as the oracle);
 * ``RunStatus.norms_snapshot_id`` is rendered only when a run pinned one (records 14, 15
   and 31 carry none);
 * the sealed stubs refuse explicitly, each naming its dependency.
@@ -24,15 +25,10 @@ from types import ModuleType
 
 import pytest
 
-from auditmanager.api.routers.documents import _resolve_range
 from auditmanager.api.schemas.content import ByteRange, StreamedContent
 from auditmanager.api.schemas.runs import RunStatusView, run_status_body
 from auditmanager.api.security import OPERATION_ROLES
-from auditmanager.bootstrap.adapters import (
-    DocumentAdapter,
-    NormContentAdapter,
-    NormsSearchAdapter,
-)
+from auditmanager.bootstrap.adapters import NormContentAdapter, NormsSearchAdapter
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -132,6 +128,44 @@ def test_latin_homoglyphs_and_case_find_the_same_designation() -> None:
 # --- the byte range ---------------------------------------------------------------------
 
 
+_LEGACY_RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
+
+
+def _resolve_range(header: str, size: int) -> tuple[int, int]:
+    """``documents.py``'s range rule as it stood at `W55A-SEAL-01`, copied verbatim.
+
+    `W55A-CONTENT-01` moved the operation onto :class:`ByteRange` and retired the router's
+    own copy; the oracle stays here so this comparison can still fail.
+    """
+    match = _LEGACY_RANGE.match(header.strip())
+    if match is None:
+        raise _legacy_refusal("format")
+    first, last = match.group(1), match.group(2)
+    if first == "" and last == "":
+        raise _legacy_refusal("format")
+    if first == "":
+        length = int(last)
+        if length == 0:
+            raise _legacy_refusal("unsatisfiable")
+        start = max(0, size - length)
+        end = size - 1
+    else:
+        start = int(first)
+        end = size - 1 if last == "" else min(int(last), size - 1)
+    if size == 0 or start >= size or start > end:
+        raise _legacy_refusal("unsatisfiable")
+    return start, end
+
+
+def _legacy_refusal(constraint: str) -> DomainError:
+    return DomainError(
+        ErrorCode.VALIDATION_FAILED,
+        message="The Range header is not a single satisfiable byte range.",
+        field="Range",
+        constraint=constraint,
+    )
+
+
 _HEADERS = [
     "bytes=0-0", "bytes=0-99", "bytes=5-", "bytes=-1", "bytes=-50", "bytes=-0",
     "bytes=99-99", "bytes=100-", "bytes=10-5", "bytes=0-1000", "  bytes=3-7  ",
@@ -221,12 +255,8 @@ def test_every_sealed_norms_method_refuses_with_its_dependency() -> None:
     assert (error.code, dict(error.detail_fields)) == (
         ErrorCode.DEPENDENCY_UNAVAILABLE, {"dependency": "norm_content"}
     )
-    error = _refusal(lambda: DocumentAdapter(None).stream_content(
-        version_uid="ver_01M2545JSD15ETSNNV904X991J", byte_range=ByteRange(0, 9)
-    ))
-    assert (error.code, dict(error.detail_fields)) == (
-        ErrorCode.DEPENDENCY_UNAVAILABLE, {"dependency": "content_stream"}
-    )
+    # `DocumentAdapter.stream_content` was sealed here too; `W55A-CONTENT-01` gave it its
+    # body, and `tests/integration/api/test_document_content_streaming.py` drives it.
 
 
 def test_the_norms_reads_need_a_role_and_the_designation_needs_admin() -> None:

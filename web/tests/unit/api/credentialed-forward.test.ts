@@ -109,7 +109,7 @@ describe('the browser calls this app, and this app calls the API with the creden
     expect(headersOf(calls[0]!.init).get('content-type')).toBe('application/json');
   });
 
-  it('carries exactly the four request headers the contract surface uses', async () => {
+  it('carries exactly the five request headers the contract surface uses', async () => {
     const { fetch, calls } = recordingFetch(okJson);
     await forwardWithCredential(
       new Request('http://localhost/bff/v1/projects', {
@@ -119,6 +119,7 @@ describe('the browser calls this app, and this app calls the API with the creden
           accept: 'application/json',
           'content-type': 'application/json',
           'idempotency-key': 'idem-123',
+          range: 'bytes=0-1023',
           'x-correlation-id': 'cid-from-browser',
           cookie: 'session=secret',
           'x-forwarded-for': '203.0.113.9',
@@ -133,6 +134,7 @@ describe('the browser calls this app, and this app calls the API with the creden
     expect(sent.get('accept')).toBe('application/json');
     expect(sent.get('content-type')).toBe('application/json');
     expect(sent.get('idempotency-key')).toBe('idem-123');
+    expect(sent.get('range')).toBe('bytes=0-1023');
     expect(sent.get('x-correlation-id')).toBe('cid-from-browser');
     // The allowlist half: a cookie, the proxy's own headers and the user agent do not go.
     expect(sent.get('cookie')).toBeNull();
@@ -143,6 +145,7 @@ describe('the browser calls this app, and this app calls the API with the creden
       'authorization',
       'content-type',
       'idempotency-key',
+      'range',
       'x-correlation-id',
     ]);
   });
@@ -170,7 +173,7 @@ describe('the browser calls this app, and this app calls the API with the creden
     expect(response.headers.get('x-correlation-id')).toBe('cid-abc');
   });
 
-  it('republishes exactly three response headers and drops everything else', async () => {
+  it('republishes exactly its response headers and drops everything else', async () => {
     const { fetch } = recordingFetch(
       () =>
         new Response('bytes', {
@@ -181,6 +184,7 @@ describe('the browser calls this app, and this app calls the API with the creden
             'x-correlation-id': 'cid-csv',
             'set-cookie': 'upstream=leak',
             server: 'uvicorn',
+            etag: '"v1"',
           },
         }),
     );
@@ -195,6 +199,95 @@ describe('the browser calls this app, and this app calls the API with the creden
     expect(response.headers.get('x-correlation-id')).toBe('cid-csv');
     expect(response.headers.get('set-cookie')).toBeNull();
     expect(response.headers.get('server')).toBeNull();
+    expect(response.headers.get('etag')).toBeNull();
+    expect([...response.headers.keys()].sort()).toEqual([
+      'content-disposition',
+      'content-type',
+      'x-correlation-id',
+    ]);
+  });
+
+  // `W55A-CONTENT-01` (plan §A3.5). The viewer's PDF reader pages a large document by
+  // asking for one byte range; the API answers `206` with the window and its position.
+  it('passes one Range up and the 206 with its range headers down, verbatim', async () => {
+    const window = new Uint8Array([37, 80, 68, 70]);
+    const { fetch, calls } = recordingFetch(
+      () =>
+        new Response(window, {
+          status: 206,
+          headers: {
+            'content-type': 'application/pdf',
+            'content-length': '4',
+            'content-range': 'bytes 0-3/58978',
+            'accept-ranges': 'bytes',
+            'x-correlation-id': 'cid-range',
+          },
+        }),
+    );
+    const response = await forwardWithCredential(
+      new Request('http://localhost/bff/v1/versions/ver_01/content', {
+        headers: { range: 'bytes=0-3' },
+      }),
+      ['versions', 'ver_01', 'content'],
+      TARGET,
+      { fetch },
+    );
+    expect(headersOf(calls[0]!.init).get('range')).toBe('bytes=0-3');
+    expect(response.status).toBe(206);
+    expect(response.headers.get('content-type')).toBe('application/pdf');
+    expect(response.headers.get('content-length')).toBe('4');
+    expect(response.headers.get('content-range')).toBe('bytes 0-3/58978');
+    expect(response.headers.get('accept-ranges')).toBe('bytes');
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(window);
+  });
+
+  it('declares the whole document’s length on a 200, so a stopped stream arrives short', async () => {
+    const { fetch } = recordingFetch(
+      () =>
+        new Response('%PDF-1.7', {
+          status: 200,
+          headers: {
+            'content-type': 'application/pdf',
+            'content-length': '8',
+            'accept-ranges': 'bytes',
+            'x-correlation-id': 'cid-whole',
+          },
+        }),
+    );
+    const response = await forwardWithCredential(
+      new Request('http://localhost/bff/v1/versions/ver_01/content'),
+      ['versions', 'ver_01', 'content'],
+      TARGET,
+      { fetch },
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-length')).toBe('8');
+    expect(response.headers.get('accept-ranges')).toBe('bytes');
+    expect(response.headers.get('content-range')).toBeNull();
+  });
+
+  it('drops content-length when the runtime decoded a content-encoding it does not republish', async () => {
+    const { fetch } = recordingFetch(
+      () =>
+        new Response('{"items":[]}', {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-encoding': 'gzip',
+            'content-length': '7',
+            'x-correlation-id': 'cid-gzip',
+          },
+        }),
+    );
+    const response = await forwardWithCredential(
+      new Request('http://localhost/bff/v1/projects'),
+      ['projects'],
+      TARGET,
+      { fetch },
+    );
+    expect(response.headers.get('content-encoding')).toBeNull();
+    expect(response.headers.get('content-length')).toBeNull();
+    expect(response.headers.get('content-type')).toBe('application/json');
   });
 
   it('sends a request body on a write and none on a read', async () => {

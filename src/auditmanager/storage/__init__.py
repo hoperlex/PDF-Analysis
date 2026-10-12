@@ -57,7 +57,7 @@ from .models import (
     parse_blob_id,
     parse_blob_role,
 )
-from .port import BlobSource, BlobStore
+from .port import STREAM_CHUNK_BYTES, BlobChunks, BlobSource, BlobStore
 from .durable_publication import (
     AfterPublish,
     BeforePublish,
@@ -74,7 +74,9 @@ __all__ = [
     "ROLE_FOUNDATION_CHECK",
     "ROLE_SOURCE_DOCUMENT",
     "SAFE_DETAIL_KEYS",
+    "STREAM_CHUNK_BYTES",
     "BlobAttributeConflictError",
+    "BlobChunks",
     "BlobDeclaration",
     "BlobId",
     "BlobIntegrityError",

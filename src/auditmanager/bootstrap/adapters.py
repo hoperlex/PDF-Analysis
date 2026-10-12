@@ -23,7 +23,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
 from auditmanager.api.schemas.blocks import VersionBlockIndexView
-from auditmanager.api.schemas.content import ByteRange, StreamedContent
+from auditmanager.api.schemas.content import (
+    CONTENT_CHUNK_BYTES,
+    PDF_MEDIA_TYPE,
+    ByteRange,
+    StreamedContent,
+)
 from auditmanager.api.schemas.dashboard import (
     DashboardSummaryView,
     ProjectDocumentCountView,
@@ -498,14 +503,28 @@ class DocumentAdapter:
 
         return self._service.read_source_bytes(VersionUid.parse(version_uid))
 
-    # `W55A-SEAL-01`. Sealed: the chunked, ranged read of plan section A3.5 is
-    # `W55A-CONTENT-01`'s, which replaces this body and moves `streamDocumentVersionContent`
-    # onto it. Nothing calls it before then; it refuses explicitly rather than loading the
-    # object whole behind a streaming name.
     def stream_content(
         self, *, version_uid: str, byte_range: ByteRange | None
     ) -> StreamedContent:
-        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="content_stream")
+        """`W55A-CONTENT-01` (plan section A3.5, ``R-115``): the chunked, ranged read.
+
+        The order -- version, range against the manifest's size, object opened -- and
+        the integrity rule are :meth:`IngestService.open_source_stream`'s. The media
+        type is the one the operation has always answered with (records 14 and 15).
+        """
+        from auditmanager.shared.identity import VersionUid
+
+        opened = self._service.open_source_stream(
+            VersionUid.parse(version_uid),
+            resolve_window=None if byte_range is None else byte_range.resolve,
+            chunk_size=CONTENT_CHUNK_BYTES,
+        )
+        return StreamedContent(
+            media_type=PDF_MEDIA_TYPE,
+            total_size=opened.total_size,
+            window=opened.window,
+            chunks=opened.chunks,
+        )
 
     def list_documents(self, *, project_uid: str) -> Sequence[DocumentVersionView]:
         from auditmanager.shared.identity import ProjectUid

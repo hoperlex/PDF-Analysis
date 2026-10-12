@@ -41,6 +41,8 @@ retries, and step 1 is where it is consulted.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from typing import Any, Final, Mapping
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -64,6 +66,7 @@ from auditmanager.shared.identity import (
     VersionUid,
 )
 from auditmanager.storage.public import (
+    BlobChunks,
     BlobNotFoundError,
     BlobStore,
     StorageError,
@@ -85,9 +88,22 @@ from .commands import (
 from .envelope import ACCEPTED_MEDIA_TYPE, AdmissionReport, probe
 from .failures import domain_error_from_storage
 
-__all__ = ["IngestService"]
+__all__ = ["IngestService", "SourceStream"]
 
 _SOURCE_ROLE: Final = parse_blob_role(ROLE_SOURCE_DOCUMENT)
+
+
+@dataclass(frozen=True, slots=True)
+class SourceStream:
+    """One opened read of a version's source bytes (`W55A-CONTENT-01`, ``R-115``).
+
+    ``total_size`` is the manifest's size; ``window`` the inclusive range served, or
+    ``None`` for the whole object; ``chunks`` the body, already opened.
+    """
+
+    total_size: int
+    window: tuple[int, int] | None
+    chunks: Iterator[bytes]
 
 
 class IngestService:
@@ -256,6 +272,60 @@ class IngestService:
                 actual_sha256=actual_sha256,
             )
         return data
+
+    def open_source_stream(
+        self,
+        version_uid: VersionUid,
+        *,
+        resolve_window: Callable[[int], tuple[int, int]] | None,
+        chunk_size: int,
+    ) -> SourceStream:
+        """The source bytes of one published version, opened for a chunked read.
+
+        `W55A-CONTENT-01`, owner ruling ``R-115``. The order is the contract, because
+        the caller sends a status line as soon as this returns:
+
+        1. the manifest entry -- an unknown version is ``not_found``;
+        2. ``resolve_window`` against the **manifest's** size -- an unsatisfiable range
+           is refused before the store is touched;
+        3. the object opened -- absent, unreachable, refusing, or recorded with another
+           digest or size, each the typed failure :meth:`read_source_bytes` gives.
+
+        The digest compared is ``entry.sha256``, for the reason
+        :meth:`read_source_bytes` gives: only the manifest is independent of the
+        object. A whole read is hashed while it streams and its last chunk is held
+        back until that digest matches; a mismatch then stops the stream short (the
+        store logs ``storage_integrity_error``), so the client holds fewer bytes than
+        the declared length and never the complete wrong document. A window relies on
+        the recorded verification -- publication and :meth:`Reconciler.verify_version`
+        -- because it does not read the bytes it would have to hash.
+        """
+        entry = self.require_source_entry(version_uid)
+        window = None if resolve_window is None else resolve_window(entry.size_bytes)
+        try:
+            chunks = self._store.open_stream(
+                entry.blob_id,
+                expected_sha256=entry.sha256,
+                expected_size=entry.size_bytes,
+                window=window,
+                chunk_size=chunk_size,
+            )
+        except BlobNotFoundError:
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                blob_id=str(entry.blob_id),
+                role=entry.role,
+                expected_sha256=entry.sha256,
+            ) from None
+        except StorageError as exc:
+            raise domain_error_from_storage(
+                exc, blob_id=str(entry.blob_id), role=entry.role
+            ) from None
+        return SourceStream(
+            total_size=entry.size_bytes,
+            window=window,
+            chunks=_typed_failures(chunks, entry),
+        )
 
     def require_source_entry(self, version_uid: VersionUid) -> ManifestEntry:
         with session_scope(self._factory) as session:
@@ -461,6 +531,23 @@ class IngestService:
                 self._commands.fail(session, claim.command_id, failure.code)
         except Exception:  # noqa: BLE001
             pass
+
+
+def _typed_failures(chunks: BlobChunks, entry: ManifestEntry) -> Iterator[bytes]:
+    """The opened body, with a failure half-way through raised as a :class:`DomainError`.
+
+    Nothing can be *answered* by then -- the status line is gone and the edge only
+    stops the response -- but the exception that ends it is the system's one typed
+    failure, carrying the same details an unstarted read would have.
+    """
+    try:
+        yield from chunks
+    except StorageError as exc:
+        raise domain_error_from_storage(
+            exc, blob_id=str(entry.blob_id), role=entry.role
+        ) from None
+    finally:
+        chunks.close()
 
 
 def _replayed_version_uid(outcome: Mapping[str, Any]) -> VersionUid:

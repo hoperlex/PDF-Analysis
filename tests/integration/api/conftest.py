@@ -410,14 +410,17 @@ class IngestDocumentAdapter:
         return self._ingest.read_source_bytes(VersionUid(version_uid))
 
     def stream_content(self, *, version_uid: str, byte_range: Any) -> Any:
-        """`W55A-SEAL-01`. Sealed like the shipped adapter's until `W55A-CONTENT-01`.
+        """`W55A-CONTENT-01`. Delegated to the shipped ``DocumentAdapter``.
 
-        Declared so the D-74 guard finds the whole ``DocumentPort`` here; nothing in this
-        suite calls it before the content lane gives both adapters a body.
+        The chunked read, the window and the held-back last chunk are all
+        ``IngestService.open_source_stream``'s, so this suite's content cases drive the
+        shipped body rather than a second implementation of it.
         """
-        from auditmanager.shared.errors import DomainError, ErrorCode
+        from auditmanager.bootstrap.adapters import DocumentAdapter
 
-        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="content_stream")
+        return DocumentAdapter(self._ingest).stream_content(
+            version_uid=version_uid, byte_range=byte_range
+        )
 
     def list_documents(self, *, project_uid: str) -> tuple[DocumentVersionView, ...]:
         """`R-5`. Delegated, which is exactly what the shipped `DocumentAdapter` does.

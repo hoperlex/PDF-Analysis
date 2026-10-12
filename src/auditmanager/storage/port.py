@@ -1,10 +1,10 @@
 """The BlobStore port.
 
 Narrow on purpose. It expresses one sequence -- ``temporary -> verify ->
-publish`` -- plus inspection, read and an access probe. It does not expose
-delete, erase, overwrite, presign, list or any way to name an object: those are
-either later-gate decisions or adapter internals, and a port that offered them
-would make the invariants below unenforceable.
+publish`` -- plus inspection, a whole or a streamed read and an access probe.
+It does not expose delete, erase, overwrite, presign, list or any way to name
+an object: those are either later-gate decisions or adapter internals, and a
+port that offered them would make the invariants below unenforceable.
 
 The two invariants a conforming adapter must hold
 -------------------------------------------------
@@ -30,13 +30,23 @@ shape when it arrives.
 
 from __future__ import annotations
 
-from typing import BinaryIO, Protocol, runtime_checkable
+from collections.abc import Generator
+from typing import BinaryIO, Final, Protocol, runtime_checkable
 
 from .models import BlobId, BlobRole, PublishedBlob, TemporaryBlob, VerifiedBlob
 
 #: Anything the port accepts as content. Bytes for small artifacts, a binary
 #: file object for anything large enough that holding it in memory is wrong.
 BlobSource = bytes | bytearray | BinaryIO
+
+#: The largest chunk :meth:`BlobStore.open_stream` yields unless told otherwise.
+#: `W55A-CONTENT-01` (plan section A3.5): equal to the API's ``CONTENT_CHUNK_BYTES``,
+#: which the content adapters pass explicitly; this package does not import the API.
+STREAM_CHUNK_BYTES: Final[int] = 256 * 1024
+
+#: What :meth:`BlobStore.open_stream` returns: an opened read, consumed chunk by
+#: chunk. ``close()`` releases the connection when a consumer stops early.
+BlobChunks = Generator[bytes, None, None]
 
 
 @runtime_checkable
@@ -111,5 +121,43 @@ class BlobStore(Protocol):
     def read(self, blob_id: BlobId, *, verify: bool = True) -> bytes:
         """Return published bytes, re-verifying their SHA-256 by default."""
 
+    def open_stream(
+        self,
+        blob_id: BlobId,
+        *,
+        expected_sha256: str,
+        expected_size: int,
+        window: tuple[int, int] | None = None,
+        chunk_size: int = STREAM_CHUNK_BYTES,
+    ) -> BlobChunks:
+        """Open published bytes for a chunked read; never hold the object whole.
 
-__all__ = ["BlobSource", "BlobStore"]
+        `W55A-CONTENT-01`, owner ruling ``R-115``. ``expected_sha256`` and
+        ``expected_size`` are the caller's own declaration -- a manifest entry, a
+        custody binding -- never the object's metadata, which only proves the
+        object agrees with itself.
+
+        **Everything that can refuse refuses before this returns**, so a caller
+        that has not yet sent a status line can still answer with a typed
+        failure: an absent object (:class:`BlobNotFoundError`), an unreachable or
+        refusing store, a recorded digest that is absent
+        (:class:`BlobMetadataInvalidError`) or differs from ``expected_sha256``,
+        and a stored size that differs from ``expected_size`` (both
+        :class:`BlobIntegrityError`).
+
+        ``window`` is an inclusive ``(first, last)`` already resolved against
+        ``expected_size``; only those bytes are requested from the store. A
+        windowed read relies on the recorded verification (publication and
+        reconciliation): it cannot hash an object it does not read.
+
+        A whole read (``window is None``) hashes while it streams and **holds
+        back its last chunk** until the digest equals ``expected_sha256``. On a
+        mismatch it logs ``storage_integrity_error`` and raises
+        :class:`ChecksumMismatchError` instead of yielding that chunk, so a
+        consumer that has already declared the length delivers fewer bytes than
+        it declared. A stream that ends short or runs long raises
+        :class:`SizeMismatchError` the same way, on both kinds of read.
+        """
+
+
+__all__ = ["STREAM_CHUNK_BYTES", "BlobChunks", "BlobSource", "BlobStore"]
