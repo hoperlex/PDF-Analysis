@@ -1,14 +1,16 @@
 import { ErrorState } from '@/shared/ui';
+import { SubmitLock } from '@/shared/ui/submit-lock';
 
 import type { RegistrationRefusal } from '../model/exchange';
-import { registrationRefusalMessage } from '../model/exchange';
+import { REGISTRATION_SUBMIT_PATH, registrationRefusalMessage } from '../model/exchange';
 
 export function RegisterForm({ refusal, unknownRefusal = false }: {
   readonly refusal?: RegistrationRefusal | null;
   readonly unknownRefusal?: boolean;
 }) {
   return (
-    <form className="am-form" method="post" action="/bff/v1/registration">
+    <form className="am-form" method="post" action={REGISTRATION_SUBMIT_PATH}>
+      <SubmitLock />
       <p className="am-form__hint">Имя, фамилия и отчество: до 60 символов каждое. Пароль: не менее 8 символов, с учётом правил сервера; избегайте имени и адреса почты. Подтвердите пароль повторным вводом.</p>
       <div className="am-form__field"><label htmlFor="register-last"><strong>Фамилия</strong></label><input id="register-last" name="last_name" type="text" autoComplete="family-name" required maxLength={60} /></div>
       <div className="am-form__field"><label htmlFor="register-first"><strong>Имя</strong></label><input id="register-first" name="first_name" type="text" autoComplete="given-name" required maxLength={60} /></div>

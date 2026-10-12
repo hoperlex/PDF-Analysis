@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 
-import { displayLabelOf, initialsOf, roleLabels, useMe } from '@/entities/account';
+import { displayLabelOf, initialsOf, roleLabels, unreadableAccountDetail, useMe } from '@/entities/account';
 import { EditProfileForm } from '@/features/edit-profile';
-import { ApiError } from '@/shared/api';
+import { failureMessage } from '@/shared/api/failure-message';
+import { CHANGE_PASSWORD_SCREEN } from '@/shared/config';
 import { Avatar, ErrorState, LoadingState, PageShell } from '@/shared/ui';
 
 export interface AccountPageProps {
@@ -15,11 +16,17 @@ export interface AccountPageProps {
 export function AccountPage({ profileComplete, next }: AccountPageProps) {
   const me = useMe();
   if (me.isPending) return <PageShell title="Профиль"><LoadingState what="профиль" /></PageShell>;
-  if (me.isError) return (
-    <PageShell title="Профиль">
-      <ErrorState title="Профиль не загружен" detail={me.error instanceof Error ? me.error.message : 'Неизвестный ответ сервера.'} correlationId={me.error instanceof ApiError ? me.error.correlationId : null} onRetry={() => void me.refetch()} />
-    </PageShell>
-  );
+  if (me.isError) {
+    // `C-23`: the shared Russian reading, never `error.message` (`"<code>: <English>"`).
+    const failure = failureMessage(me.error);
+    return (
+      <PageShell title="Профиль">
+        <div data-account-failure={failure.kind}>
+          <ErrorState title="Профиль не загружен" detail={failure.detail} correlationId={failure.correlationId} onRetry={() => void me.refetch()} />
+        </div>
+      </PageShell>
+    );
+  }
 
   const account = me.data;
   let label: string;
@@ -28,7 +35,7 @@ export function AccountPage({ profileComplete, next }: AccountPageProps) {
     label = displayLabelOf(account);
     roles = roleLabels(account.roles);
   } catch (error) {
-    return <PageShell title="Профиль"><ErrorState title="Данные профиля не распознаны" detail={error instanceof Error ? error.message : 'Неизвестный ответ сервера.'} /></PageShell>;
+    return <PageShell title="Профиль"><ErrorState title="Данные профиля не распознаны" detail={unreadableAccountDetail(error)} /></PageShell>;
   }
 
   return (
@@ -38,7 +45,7 @@ export function AccountPage({ profileComplete, next }: AccountPageProps) {
         <p className="am-note"><strong>{label}</strong></p>
         <p className="am-note">Роли: {roles.length ? roles.join(', ') : 'не назначены'}.</p>
         <EditProfileForm account={account} next={next ?? null} />
-        <p className="am-note"><Link href="/account/password">Сменить пароль</Link></p>
+        <p className="am-note"><Link href={CHANGE_PASSWORD_SCREEN}>Сменить пароль</Link></p>
       </div>
     </PageShell>
   );

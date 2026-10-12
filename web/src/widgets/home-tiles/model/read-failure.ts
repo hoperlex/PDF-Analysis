@@ -7,21 +7,16 @@
  * name substituted into it: a noun pasted into a Russian sentence has to agree with the words
  * around it, and `gender-agreement.guard.test.ts` (`D-95`) is about exactly that defect.
  *
- * **No raw message reaches the screen.** The detail is the catalog's sentence for the code,
- * one of the two authorization sentences, the transport's own Russian sentence, or a fixed
- * sentence here. A thrown value this client does not recognise is never printed, whatever its
- * `message` says.
+ * **No raw message reaches the screen.** The detail is the shared reading's
+ * (`shared/api/failure-message.ts`): the catalog's sentence for the code, one of the two
+ * authorization sentences, or the fixed sentence for a transport failure or an unexpected
+ * error. A thrown value this client does not recognise is never printed, whatever
+ * its `message` says.
  */
 
 import type { ErrorCode } from '@/shared/api';
-import {
-  AUTHENTICATION_REQUIRED_DETAIL,
-  ApiError,
-  PERMISSION_DENIED_DETAIL,
-  TransportError,
-  UnrecognizedApiError,
-  catalogMessage,
-} from '@/shared/api';
+import { ApiError } from '@/shared/api';
+import { failureMessage } from '@/shared/api/failure-message';
 
 export type HomeReadFailureKind =
   | 'request_invalid'
@@ -71,71 +66,39 @@ const REGISTRATIONS_TITLES: ReadTitles = {
 };
 
 const UNRECOGNIZED_TITLE = 'Сервер сообщил об ошибке, которую этот клиент не распознаёт.';
-const UNKNOWN_DETAIL = 'Клиент получил ответ, форму которого он не смог разобрать как отказ.';
 
+/**
+ * The detail, the correlation id and whether to offer a retry are the shared reading's
+ * (`failureMessage`, `C-23`) — the same sentence the identity screens print for the same
+ * failure. This classifier adds only what is the home page's own: the tile's title and the
+ * kind on its `data-` attribute.
+ */
 function classify(error: unknown, titles: ReadTitles): HomeReadFailure {
+  const shared = failureMessage(error);
+  const base = {
+    correlationId: shared.correlationId,
+    retryable: shared.retryable,
+    errorCode: shared.errorCode,
+    detail: shared.detail,
+  };
+
   if (error instanceof ApiError) {
-    const base = {
-      correlationId: error.correlationId,
-      retryable: error.retryable,
-      errorCode: error.errorCode,
-      detail: catalogMessage(error.errorCode),
-    };
     switch (error.errorCode) {
       case 'validation_failed':
         return { ...base, kind: 'request_invalid', title: titles.rejected };
       case 'dependency_unavailable':
         return { ...base, kind: 'dependency_unavailable', title: titles.unavailable };
       case 'authentication_required':
-        return {
-          ...base,
-          kind: 'not_authenticated',
-          title: titles.notAuthenticated,
-          detail: AUTHENTICATION_REQUIRED_DETAIL,
-        };
+        return { ...base, kind: 'not_authenticated', title: titles.notAuthenticated };
       case 'permission_denied':
-        return {
-          ...base,
-          kind: 'not_permitted',
-          title: titles.notPermitted,
-          detail: PERMISSION_DENIED_DETAIL,
-        };
+        return { ...base, kind: 'not_permitted', title: titles.notPermitted };
       default:
         return { ...base, kind: 'server_error', title: titles.failed };
     }
   }
-
-  if (error instanceof UnrecognizedApiError) {
-    return {
-      kind: 'unrecognized',
-      title: UNRECOGNIZED_TITLE,
-      detail: `Код ошибки «${error.rawErrorCode}» этому клиенту не знаком. Повтор не выполнялся.`,
-      correlationId: error.correlationId,
-      retryable: false,
-      errorCode: null,
-    };
-  }
-
-  if (error instanceof TransportError) {
-    // The transport's own sentence: written by this client in Russian, never a server's.
-    return {
-      kind: 'transport',
-      title: titles.undelivered,
-      detail: error.message,
-      correlationId: error.correlationId,
-      retryable: error.retryable,
-      errorCode: null,
-    };
-  }
-
-  return {
-    kind: 'unknown',
-    title: titles.failed,
-    detail: UNKNOWN_DETAIL,
-    correlationId: null,
-    retryable: false,
-    errorCode: null,
-  };
+  if (shared.kind === 'unrecognized') return { ...base, kind: 'unrecognized', title: UNRECOGNIZED_TITLE };
+  if (shared.kind === 'transport') return { ...base, kind: 'transport', title: titles.undelivered };
+  return { ...base, kind: 'unknown', title: titles.failed };
 }
 
 /** Classify anything thrown by the home page's `getDashboardSummary`. */

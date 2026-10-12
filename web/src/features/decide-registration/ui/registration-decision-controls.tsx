@@ -1,5 +1,15 @@
 'use client';
 
+/**
+ * The administrator's decision on one pending registration request (`W51`).
+ *
+ * A rejection is final — the request's password is removed and no account is created — so
+ * «Отклонить заявку» asks first (`C-24`), the way the account screen asks before a purge:
+ * the reason is checked, then a confirmation group offers «Подтвердить отклонение» and
+ * «Отмена», and nothing is sent until the confirmation is pressed. Editing the reason
+ * withdraws a pending confirmation, so what is confirmed is what is sent.
+ */
+
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 
@@ -17,6 +27,7 @@ export function RegistrationDecisionControls({ request }: { readonly request: Re
   const [selectedRoles, setSelectedRoles] = useState<Role[]>([]);
   const [reason, setReason] = useState('');
   const [localFailure, setLocalFailure] = useState<'roles' | 'reason' | null>(null);
+  const [confirmReject, setConfirmReject] = useState<string | null>(null);
   const decision = useDecideRegistration();
   const roles = ROLE_VALUES.filter((role) => selectedRoles.includes(role));
   const idempotencyKey = useIntentKey(approvalIntentSignature(request.request_id, roles));
@@ -42,6 +53,13 @@ export function RegistrationDecisionControls({ request }: { readonly request: Re
     const valid = rejectionReason(reason);
     if (valid === null) { setLocalFailure('reason'); return; }
     setLocalFailure(null);
+    setConfirmReject(valid);
+  }
+
+  function confirmRejection() {
+    if (confirmReject === null) return;
+    const valid = confirmReject;
+    setConfirmReject(null);
     decision.mutate({ kind: 'reject', requestId: request.request_id, reason: valid });
   }
 
@@ -56,9 +74,17 @@ export function RegistrationDecisionControls({ request }: { readonly request: Re
         <button className="am-button" type="submit" disabled={decision.isPending}>Одобрить заявку</button>
       </form>
       <form className="am-form" onSubmit={reject}>
-        <div className="am-form__field"><label htmlFor={`reject-${request.request_id}`}><strong>Причина отказа для администратора</strong></label><textarea id={`reject-${request.request_id}`} value={reason} onChange={(event) => { setReason(event.target.value); setLocalFailure(null); decision.reset(); }} required minLength={1} maxLength={256} /></div>
+        <div className="am-form__field"><label htmlFor={`reject-${request.request_id}`}><strong>Причина отказа для администратора</strong></label><textarea id={`reject-${request.request_id}`} value={reason} onChange={(event) => { setReason(event.target.value); setLocalFailure(null); setConfirmReject(null); decision.reset(); }} required minLength={1} maxLength={256} /></div>
         <p className="am-form__hint">Причина остаётся доступна администраторам и не показывается заявителю.</p>
-        <button className="am-button am-button--quiet" type="submit" disabled={decision.isPending}>Отклонить заявку</button>
+        {confirmReject === null ? (
+          <button className="am-button am-button--quiet" type="submit" disabled={decision.isPending}>Отклонить заявку</button>
+        ) : (
+          <div role="group" aria-label="Подтверждение отклонения">
+            <p className="am-note">Отклонить заявку {request.login}? Учётная запись не будет создана, а решение нельзя будет изменить.</p>
+            <button className="am-button" type="button" disabled={decision.isPending} onClick={confirmRejection}>Подтвердить отклонение</button>
+            <button className="am-button am-button--quiet" type="button" onClick={() => setConfirmReject(null)}>Отмена</button>
+          </div>
+        )}
       </form>
       {localFailure === 'roles' ? <div data-registration-decision-failure="roles"><ErrorState title="Заявка не одобрена" detail="Выберите хотя бы одну роль. Запрос не отправлен." /></div> : null}
       {localFailure === 'reason' ? <div data-registration-decision-failure="reason"><ErrorState title="Заявка не отклонена" detail="Причина должна содержать от 1 до 256 символов. Запрос не отправлен." /></div> : null}

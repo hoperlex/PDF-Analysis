@@ -336,8 +336,17 @@ describe('decision 4: a session lacking every role a screen lists is sent to /40
     );
   });
 
-  it('asks nothing of a row that lists no role: every W50 screen admits an empty role set', async () => {
+  it('asks nothing of a row that lists no role: home and the account screens admit an empty role set', async () => {
     signIn({ roles: [] });
+    expect(await sentTo(requireScreen('/', props()))).toBeNull();
+    expect(await sentTo(requireScreen('/account', props()))).toBeNull();
+    expect(await sentTo(requireScreen('/account/password', props()))).toBeNull();
+  });
+
+  it('R-80: an empty role set is sent to /403 from a product screen; one role opens it', async () => {
+    signIn({ roles: [] });
+    expect(await sentTo(requireScreen('/projects', props()))).toBe(`/403?from=${encodeURIComponent('/projects')}`);
+    signIn({ roles: ['expert'] });
     expect(await sentTo(requireScreen('/projects', props()))).toBeNull();
   });
 });

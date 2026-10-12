@@ -8,6 +8,8 @@
  * password that is about to become live.
  * `web/tests/unit/session/change-password-screen.test.ts` asserts the absence of the client
  * directive rather than trusting this paragraph, the way the sign-in screen's own test does.
+ * Its one script is `shared/ui`'s `SubmitLock` (`C-22`), which disables the submit button
+ * once the browser posts and reads no field.
  *
  * The outcome — success and refusal alike — is rendered from a closed set and carries its
  * machine value on `data-change-password-outcome` beside the Russian sentence. A refusal
@@ -30,6 +32,7 @@
  */
 
 import { ErrorState } from '@/shared/ui';
+import { SubmitLock } from '@/shared/ui/submit-lock';
 
 import type { ChangePasswordOutcome } from '../model/exchange';
 import {
@@ -50,6 +53,7 @@ export function ChangePasswordForm({ outcome, next }: ChangePasswordFormProps) {
 
   return (
     <form className="am-form" method="post" action={action}>
+      <SubmitLock />
       <div className="am-form__field">
         <label htmlFor="change-password-current">
           <strong>Текущий пароль</strong>

@@ -15,6 +15,7 @@ export {
   isKnownRole,
   roleLabel,
   roleLabels,
+  unreadableAccountDetail,
 } from './model/account';
 
 export { meQueryOptions, useMe } from './api/use-me';

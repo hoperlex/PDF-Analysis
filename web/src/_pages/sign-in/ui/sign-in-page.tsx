@@ -1,25 +1,29 @@
 /**
  * `/login` — the screen that exchanges a login and a password for a session.
  *
- * Composition only, like every other page slice: the frame from `shared/ui`, the forms
- * from the `sign-in` feature. No query, no mutation, no domain rule and — the point of the
- * whole design — no client JavaScript. The route above reads the cookie, asks the register
- * who the session belongs to, and hands the answer down as a prop; this file decides only
- * which of the two forms a reviewer is looking at.
+ * Composition only, like every other page slice: the frame from `shared/ui`, the form from
+ * the `sign-in` feature. No query, no mutation, no domain rule and — the point of the whole
+ * design — no client JavaScript that could hold a credential: the form's only script is the
+ * `SubmitLock` island, which reads no field (`C-22`).
  *
- * The screen carries the sign-out control because the application bar belongs to another
- * slice this wave does not own. That is a limitation of where the control sits, not of
- * what it does, and it is recorded in the session report rather than worked around by
- * editing someone else's chrome.
+ * Only a guest sees this screen: the route's guard sends a browser that already holds a
+ * session to `/` (`W50-PLAN.md` §3.2, decision five), and the frame's account menu carries
+ * the way out. So the screen has one shape, the credentials form, and a link to the
+ * registration form for someone who has no account yet (`C-21`).
  */
 
-import { PageShell } from '@/shared/ui';
-import { ErrorState } from '@/shared/ui';
+import Link from 'next/link';
+
+import { REGISTER_SCREEN } from '@/shared/config/screen-registry';
+import { ErrorState, PageShell } from '@/shared/ui';
 import type { SignInRefusal } from '@/features/sign-in';
-import { SignInForm, SignOutForm } from '@/features/sign-in';
+import { SignInForm } from '@/features/sign-in';
 
 export interface SignInPageProps {
-  /** The login of the open session, or `null` when this browser has none. */
+  /**
+   * Unused since `C-25`: the guard never renders this screen for a session. Still accepted
+   * because the route file (`app/login/page.tsx`) passes it; drop it there and here together.
+   */
   readonly login?: string | null | undefined;
   /** The refusal the last attempt was redirected back with, if there was one. */
   readonly refusal?: SignInRefusal | null | undefined;
@@ -28,20 +32,17 @@ export interface SignInPageProps {
   readonly unknownRefusal?: boolean | undefined;
 }
 
-export function SignInPage({ login, refusal, next, unknownRefusal = false }: SignInPageProps) {
-  const signedIn = typeof login === 'string' && login.length > 0;
-
+export function SignInPage({ refusal, next, unknownRefusal = false }: SignInPageProps) {
   return (
     <PageShell
       title="Вход"
-      subtitle={
-        signedIn
-          ? 'Сеанс открыт. Он хранится на сервере приложения; в браузере лежит только его номер.'
-          : 'Адрес электронной почты и пароль уходят на сервер приложения. Для прежней учётной записи до завершения профиля принимается старый логин.'
-      }
+      subtitle="Адрес электронной почты и пароль уходят на сервер приложения. Для прежней учётной записи до завершения профиля принимается старый логин."
     >
-      {signedIn ? <SignOutForm login={login} /> : <SignInForm refusal={refusal} next={next} />}
+      <SignInForm refusal={refusal} next={next} />
       {unknownRefusal ? <div data-sign-in-refusal="unknown"><ErrorState title="Неизвестный ответ входа" detail="Сервер вернул состояние, которое эта версия страницы не понимает." /></div> : null}
+      <p className="am-note" data-sign-in-register="">
+        Нет учётной записи? <Link href={REGISTER_SCREEN}>Подать заявку на доступ</Link>
+      </p>
       <p className="am-note">
         Проверка пары имени и пароля целиком на стороне сервера. Эта страница не хранит
         ни пароль, ни пропуск и не обращается к хранилищу браузера.

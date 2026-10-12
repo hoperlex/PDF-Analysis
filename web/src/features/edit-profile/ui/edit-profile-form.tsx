@@ -1,13 +1,35 @@
 'use client';
 
+/**
+ * The account's own profile form (`W50`/`W51`).
+ *
+ * `C-20`: the frame — the name in the bar, the avatar, the menu — is rendered by the root
+ * layout from the session's subject, which the BFF refreshes when a profile change succeeds.
+ * A client-side save alone does not re-render that layout, so after every successful save the
+ * form calls `router.refresh()`: the server components are rendered again from the refreshed
+ * subject, and a seeded account that has just completed its profile sees its name and its
+ * menu at once. With a `next` address the form then goes there.
+ *
+ * `C-23`: a failure is the shared Russian reading (`failureMessage`) with this form's three
+ * more precise sentences; nothing prints a thrown message.
+ */
+
 import { useRouter } from 'next/navigation';
 import type { FormEvent } from 'react';
 
 import type { Account, UpdateMyProfileRequest } from '@/shared/api';
-import { ApiError, catalogMessage } from '@/shared/api';
+import type { FailureWording } from '@/shared/api/failure-message';
+import { failureMessage } from '@/shared/api/failure-message';
 import { ErrorState } from '@/shared/ui';
 
+import { followProfileSave } from '../model/after-save';
 import { useEditProfile } from '../model/use-edit-profile';
+
+const PROFILE_FAILURE_WORDING: FailureWording = {
+  validation_failed: 'Проверьте имя, фамилию и адрес электронной почты.',
+  authentication_required: 'Сеанс завершён. Войдите снова.',
+  permission_denied: 'Изменение профиля запрещено.',
+};
 
 export function EditProfileForm({ account, next }: { readonly account: Account; readonly next?: string | null }) {
   const router = useRouter();
@@ -25,21 +47,13 @@ export function EditProfileForm({ account, next }: { readonly account: Account; 
     if (middleName) body.middle_name = middleName;
     if (incomplete) body.email = String(form.get('email') ?? '').trim();
     try {
-      const saved = await edit.mutateAsync(body);
-      if (saved.profile_complete && next) router.push(next);
+      followProfileSave(router, await edit.mutateAsync(body), next);
     } catch {
       // The typed mutation error is rendered below; no second action occurs.
     }
   }
 
-  const failure = edit.error;
-  const detail = failure instanceof ApiError
-    ? ({
-        validation_failed: 'Проверьте имя, фамилию и адрес электронной почты.',
-        authentication_required: 'Сеанс завершён. Войдите снова.',
-        permission_denied: 'Изменение профиля запрещено.',
-      } as Partial<Record<string, string>>)[failure.errorCode] ?? catalogMessage(failure.errorCode)
-    : 'Сохранить профиль не удалось. Повторите попытку.';
+  const failure = edit.isError ? failureMessage(edit.error, PROFILE_FAILURE_WORDING) : null;
 
   return (
     <form className="am-form" onSubmit={(event) => void save(event)}>
@@ -50,7 +64,7 @@ export function EditProfileForm({ account, next }: { readonly account: Account; 
       {incomplete ? <p className="am-note">Для завершения профиля укажите фамилию, имя и адрес электронной почты одним сохранением. После этого адрес входа изменить нельзя.</p> : null}
       <div className="am-form__row"><button className="am-button" type="submit" disabled={edit.isPending}>Сохранить профиль</button></div>
       {edit.isSuccess ? <p className="am-note" role="status">Профиль сохранён.</p> : null}
-      {edit.isError ? <ErrorState title="Профиль не сохранён" detail={detail} correlationId={failure instanceof ApiError ? failure.correlationId : null} /> : null}
+      {failure !== null ? <div data-profile-failure={failure.kind}><ErrorState title="Профиль не сохранён" detail={failure.detail} correlationId={failure.correlationId} /></div> : null}
     </form>
   );
 }

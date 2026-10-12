@@ -48,10 +48,14 @@ describe('the live registry gives exactly R-66', () => {
     expect(outline(buildNavigation(EXPERT))).toEqual(R66);
   });
 
-  it('keeps the R-66 groups for a complete session without admin', () => {
-    for (const who of [NO_ROLES, UNKNOWN_ROLE]) {
-      expect(outline(buildNavigation(who)), who.displayLabel).toEqual(R66);
-    }
+  it('keeps the R-66 groups for a complete session holding a role but not admin', () => {
+    // `UNKNOWN_ROLE` holds `expert` beside the unknown value; the unknown one counts for nothing.
+    expect(outline(buildNavigation(UNKNOWN_ROLE)), UNKNOWN_ROLE.displayLabel).toEqual(R66);
+  });
+
+  it('R-80: offers a complete session with no role Главная alone', () => {
+    expect(outline(buildNavigation(NO_ROLES))).toEqual(['Главная /']);
+    expect(outline(buildNavigation({ ...NO_ROLES, roles: ['auditor'] }))).toEqual(['Главная /']);
   });
 
   it('adds the two administrator links last only for a complete admin', () => {
@@ -122,11 +126,13 @@ const WITH_ADMIN_ROW: readonly ScreenEntry[] = [
 
 describe('a group with no row the session may open is absent', () => {
   it('the administration group, for a session without admin — roles [] included', () => {
-    for (const who of [EXPERT, NO_ROLES, UNKNOWN_ROLE]) {
+    for (const who of [EXPERT, UNKNOWN_ROLE]) {
       const groups = buildNavigation(who, WITH_ADMIN_ROW).groups.map((group) => group.group);
       expect(groups, who.displayLabel).not.toContain('admin');
       expect(groups, who.displayLabel).toEqual(['work', 'knowledge', 'system']);
     }
+    // `R-80`: with no role, every product group is absent too, not only the administration one.
+    expect(buildNavigation(NO_ROLES, WITH_ADMIN_ROW).groups).toEqual([]);
   });
 
   it('is present, last, for a session holding admin', () => {

@@ -2,12 +2,19 @@
 
 import Link from 'next/link';
 
-import { displayLabelOf, initialsOf, roleLabels } from '@/entities/account';
+import { displayLabelOf, initialsOf, roleLabels, unreadableAccountDetail } from '@/entities/account';
 import { useUser, userFailure } from '@/entities/user';
 import { ManageUserControls } from '@/features/manage-user';
+import { routes } from '@/shared/lib';
 import { Avatar, ErrorState, LoadingState } from '@/shared/ui';
 
-export function UserCard({ userUid }: { readonly userUid: string }) {
+export interface UserCardProps {
+  readonly userUid: string;
+  /** The signed-in account's login, so a change to one's own account refreshes the frame. */
+  readonly signedInLogin?: string | null | undefined;
+}
+
+export function UserCard({ userUid, signedInLogin = null }: UserCardProps) {
   const query = useUser(userUid);
   if (query.isPending) return <LoadingState what="учётную запись" />;
   if (query.isError) {
@@ -21,17 +28,17 @@ export function UserCard({ userUid }: { readonly userUid: string }) {
     label = displayLabelOf(account);
     roles = roleLabels(account.roles);
   } catch (error) {
-    return <ErrorState title="Данные учётной записи не распознаны" detail={error instanceof Error ? error.message : 'Неизвестный ответ сервера.'} />;
+    return <ErrorState title="Данные учётной записи не распознаны" detail={unreadableAccountDetail(error)} />;
   }
   return (
     <div data-user-state={account.archived_at === null ? 'active' : 'archived'}>
-      <p><Link href="/admin/users">К списку пользователей</Link></p>
+      <p><Link href={routes.users()}>К списку пользователей</Link></p>
       <Avatar initials={initialsOf(label)} colourKey={account.login} label={`Аватар: ${label}`} />
       <h2>{label}</h2>
       <p className="am-note">Адрес входа: {account.login}</p>
       <p className="am-note">Роли: {roles.join(', ') || 'не назначены'}.</p>
       <p className="am-note">Состояние: {account.archived_at === null ? 'действует' : 'в архиве'}.</p>
-      <ManageUserControls account={account} />
+      <ManageUserControls account={account} isSelf={signedInLogin !== null && account.login === signedInLogin} />
     </div>
   );
 }

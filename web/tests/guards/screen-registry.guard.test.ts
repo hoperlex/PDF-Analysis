@@ -83,7 +83,10 @@ function shapeFindings(registry: readonly ScreenEntry[]): string[] {
     if (!(SCREEN_GROUPS as readonly string[]).includes(row.group)) {
       findings.push(`${row.address} is in no known group`);
     }
-    if (row.roles !== 'any') {
+    if (row.roles === 'any-role' && row.access !== 'session') {
+      findings.push(`${row.address} asks for a role on a ${row.access} row`);
+    }
+    if (Array.isArray(row.roles)) {
       if (row.access !== 'session') findings.push(`${row.address} lists roles on a ${row.access} row`);
       if (row.roles.length === 0) findings.push(`${row.address} lists no role`);
       if (new Set(row.roles).size !== row.roles.length) findings.push(`${row.address} repeats a role`);
@@ -177,6 +180,7 @@ describe('every row has the shape §3.1 gives it', () => {
       { address: '/x', label: 'Икс', group: 'work', access: 'session', roles: 'any', inMenu: true },
       { address: '/x', label: 'Ex', group: 'hidden', access: 'public', roles: ['admin'], inMenu: true },
       { address: '/y/[id]', label: 'Игрек', group: 'work', access: 'session', roles: ['admin', 'admin'], inMenu: true },
+      { address: '/z', label: 'Зет', group: 'account', access: 'public', roles: 'any-role', inMenu: false },
     ];
     expect(shapeFindings(broken)).toEqual([
       '/x has two rows',
@@ -185,6 +189,7 @@ describe('every row has the shape §3.1 gives it', () => {
       '/x is hidden and in the menu',
       '/y/[id] repeats a role',
       '/y/[id] is in the menu and needs an identity to open',
+      '/z asks for a role on a public row',
     ]);
   });
 
@@ -204,7 +209,7 @@ describe('every row has the shape §3.1 gives it', () => {
   });
 
   it('R-60: exactly the three administrator screens require admin', () => {
-    expect(REGISTRY.filter((row) => row.roles !== 'any').map((row) => [row.address, row.roles])).toEqual([
+    expect(REGISTRY.filter((row) => Array.isArray(row.roles)).map((row) => [row.address, row.roles])).toEqual([
       ['/admin/users', ['admin']],
       ['/admin/users/[user_uid]', ['admin']],
       ['/admin/registrations', ['admin']],
@@ -245,11 +250,11 @@ describe('R-66: the groups, their members and their order', () => {
     expect(routeAddresses().map((route) => route.address)).toContain('/optimisation');
   });
 
-  it('the four stubs are session screens any account opens', () => {
+  it('the four stubs are session screens any account holding a role opens (R-80)', () => {
     for (const address of R66_STUBS) {
       const row = REGISTRY.find((entry) => entry.address === address);
       expect(row, `${address} is not registered`).toBeDefined();
-      expect([row?.access, row?.roles, row?.inMenu], address).toEqual(['session', 'any', true]);
+      expect([row?.access, row?.roles, row?.inMenu], address).toEqual(['session', 'any-role', true]);
     }
   });
 

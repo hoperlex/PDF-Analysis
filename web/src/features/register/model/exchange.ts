@@ -1,3 +1,13 @@
+/**
+ * The BFF mount, written as the address it is, for the reasons `sign-in`'s copy states: a
+ * password is posted here, so the address may not come from the generated client's base
+ * (which may be an absolute origin) or from the server-only forwarder.
+ */
+const BFF_MOUNT = '/bff/v1';
+
+/** POST the registration form here. Form-encoded, like the sign-in exchange (`C-25`). */
+export const REGISTRATION_SUBMIT_PATH = `${BFF_MOUNT}/registration`;
+
 export const REGISTRATION_REFUSALS = [
   'validation', 'login_taken', 'request_pending', 'queue_full', 'throttled', 'upstream',
 ] as const;
