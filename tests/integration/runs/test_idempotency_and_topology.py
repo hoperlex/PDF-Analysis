@@ -280,7 +280,11 @@ def test_an_audit_run_may_not_be_inserted_in_a_non_initial_state(
 
 
 def test_the_remaining_deferred_aggregates_are_absent(session: Session):
-    """No ``worker``, ``outbox`` or other still-deferred aggregate table exists.
+    """No ``import``, ``export``, ``comparison`` or other still-deferred aggregate table exists.
+
+    `W54-SEAL-01` instantiated ``worker`` (migration 0019) and the custody outbox
+    (``norm_custody_admission``, migration 0018), and removed both from the list; the two
+    tables are asserted present below so the removal cannot outlive them.
 
     Adding one would be a visible scope change rather than a quiet convenience, which
     is precisely why the absence is asserted rather than assumed.
@@ -296,6 +300,10 @@ def test_the_remaining_deferred_aggregates_are_absent(session: Session):
         is not None
     ]
     assert present == [], f"the alpha declares no such aggregate, but these tables exist: {present}"
+    for instantiated in ("worker", "norm_custody_admission"):
+        assert session.execute(
+            text("SELECT to_regclass(:qualified)"), {"qualified": f"public.{instantiated}"}
+        ).scalar_one_or_none() is not None, f"{instantiated} left the absent list but does not exist"
 
 
 # --- isolating the two guards the database would otherwise mask ---------------

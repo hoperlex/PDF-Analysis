@@ -264,4 +264,7 @@ def test_the_scope_note_does_not_deny_a_command_that_exists() -> None:
     cancellation = [e for e in ABSENT_CAPABILITIES if e.startswith("cancellation")]
     assert cancellation and "validating" not in commands._CANCELLABLE_RUN_STATES
     remote = [e for e in ABSENT_CAPABILITIES if e.startswith("remote execution")]
-    assert remote and "worker" in AGGREGATES_NOT_INSTANTIATED
+    # `W54-SEAL-01`: migration 0019 instantiates the `worker` registry table, so it left the
+    # absent-aggregate list; the worker *process* is still absent until W54-WORKER-01, and
+    # the remote-execution note keeps saying so.
+    assert remote and "worker" not in AGGREGATES_NOT_INSTANTIATED

@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193
+ *   sha256 0dbfbee44843c198c533d7a580df0fd8b768db010351c323b9518febfd8ecbfb
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193';
+export const CONTRACT_DIGEST = '0dbfbee44843c198c533d7a580df0fd8b768db010351c323b9518febfd8ecbfb';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -51,6 +51,8 @@ export const SCHEMA_NAMES = [
   'ExecutionJournalPage',
   'ExecutionQueueItem',
   'ExecutionQueuePage',
+  'ExecutionWorker',
+  'ExecutionWorkerPage',
   'Finding',
   'FindingCategory',
   'FindingDetail',
@@ -98,6 +100,7 @@ export const SCHEMA_NAMES = [
   'SectionDocumentCount',
   'SetExecutionPausedRequest',
   'SetJobPriorityRequest',
+  'SetWorkerIntakeRequest',
   'Sha256',
   'StageId',
   'StageState',
@@ -112,6 +115,8 @@ export const SCHEMA_NAMES = [
   'VerdictCount',
   'VersionBlockIndex',
   'VersionUid',
+  'WorkerId',
+  'WorkerState',
 ] as const;
 
 /** One account, as the account itself reads it through `getMe` and an administrator reads it through the account operations. No credential material. */
@@ -405,6 +410,23 @@ export type ExecutionQueuePage = {
   items: Array<ExecutionQueueItem>;
   page: PageInfo;
   paused: boolean;
+};
+
+/** One row of the worker registry (`worker`, migration `0019_execution_workers`) and the runs it currently holds. `intake_enabled` false means it takes no new run. */
+export type ExecutionWorker = {
+  current_run_ids: Array<RunId>;
+  heartbeat_at: string;
+  intake_enabled: boolean;
+  slots: number;
+  started_at: string;
+  state: WorkerState;
+  version: string;
+  worker_id: WorkerId;
+};
+
+export type ExecutionWorkerPage = {
+  items: Array<ExecutionWorker>;
+  page: PageInfo;
 };
 
 /** A published finding. Every listed finding is grounded: its quotations were verified present at their declared anchors. */
@@ -703,7 +725,7 @@ export type ResetUserPasswordRequest = {
   temporary_password: string;
 };
 
-/** One role an account may hold; an account holds a set of them (R-55, R-60). `expert` makes product changes -- projects, uploads, runs, verdicts, comments and the export. `admin` manages accounts and registration requests. Reading product data needs no role: any active account with a complete profile reads it. */
+/** One role an account may hold; an account holds a set of them (R-55, R-60). `expert` makes product changes -- projects, uploads, runs, verdicts, comments and the export. `admin` manages accounts and registration requests. Reading product data needs one of them (R-80): an active account whose role set is empty is suspended and reads only its own account, the product version and the release notes. */
 export const ROLE_VALUES = [
   'expert',
   'admin',
@@ -801,6 +823,10 @@ export type SetExecutionPausedRequest = {
 
 export type SetJobPriorityRequest = {
   priority: number;
+};
+
+export type SetWorkerIntakeRequest = {
+  enabled: boolean;
 };
 
 /** A verification value, never an identity. */
@@ -931,3 +957,18 @@ export type VersionUid = string;
 
 /** The contract pattern for `VersionUid`. Anchored; use with `new RegExp()`. */
 export const VERSION_UID_PATTERN = "^ver_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type WorkerId = string;
+
+/** The contract pattern for `WorkerId`. Anchored; use with `new RegExp()`. */
+export const WORKER_ID_PATTERN = "^wrk_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** The state of one registered worker, derived from its last heartbeat (W54-SEAL-01, plan section 3.6): `online` while it heartbeats, `stale` after 90 seconds without a heartbeat, `offline` after 600 seconds. */
+export const WORKER_STATE_VALUES = [
+  'online',
+  'stale',
+  'offline',
+] as const;
+
+/** WorkerState - the closed value set above. */
+export type WorkerState = (typeof WORKER_STATE_VALUES)[number];

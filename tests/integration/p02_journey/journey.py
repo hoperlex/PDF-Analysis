@@ -88,6 +88,13 @@ P02_TABLES = (
     # `0017_execution_queue`. A P02 replay must not change the deployment's
     # dispatch-pause control row; count it instead of silently omitting it.
     "execution_control",
+    # `0018_norm_custody` and `0019_execution_workers`. A P02 journey admits no custody,
+    # pays for no repair and registers no worker (it runs in-process), so all four counts
+    # are expected unchanged across one.
+    "norm_custody_admission",
+    "norm_custody_binding",
+    "norm_repair_call",
+    "worker",
     "expert_decision_event",
     "finding",
     "norm_chunk",

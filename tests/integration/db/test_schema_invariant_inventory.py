@@ -31,6 +31,20 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: **Pending reseal for ``0019_execution_workers`` (`W54-SEAL-01`).** The lane had no
+#: database (owner ruling R-102: migrations run only in the owner's heavy-step window), so the
+#: digests below are still 0017's and this test is expected red until the integrator runs it
+#: in the window and reseals from the printed inventory. The delta reviewed against the
+#: migration source, family by family: columns +52 (0018: analysis_artifact_publication 1,
+#: norm_custody_admission 17, norm_custody_binding 9, norm_repair_call 16, norm_paragraph 1,
+#: norms_snapshot 1; 0019: worker 6, lease 1) -> 409; relations +4 -> 48; constraints +49
+#: (0018 +42: publication +1 with ck_analysis_artifact_state redefined, admission 14, binding
+#: 9, repair call 16, norm_paragraph 1, norms_snapshot 1 with ck_norms_snapshot_raw_key
+#: redefined; 0019 +7: worker 5, lease 2) -> 434; indexes +16 -> 113; triggers +5 -> 40
+#: (both effect-table state guards redefined as INSERT OR UPDATE, trg_lease_frozen_guard
+#: redefined with worker_id); functions +3 -> 13 (am_guard_durable_effect_transition
+#: redefined); views, extensions, sequences, policies and state topology unchanged. Counts
+#: assume a PostgreSQL that records no NOT NULL rows in pg_constraint.
 #: Resealed by `W53-SEAL-01` for ``0017_execution_queue`` after a fresh upgrade.
 #: The reviewed delta is +9 columns (job 2, lease 2, audit_run 1,
 #: provider_call_effect 1, execution_control 3), +1 relation, +7 constraints

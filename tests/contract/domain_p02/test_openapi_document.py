@@ -99,6 +99,10 @@ REQUIRED_OPERATIONS = {
     "reauditRun",
     "setJobPriority",
     "setExecutionPaused",
+    # `W54-SEAL-01`, `R-105`. The worker registry: a read for any role, an administrator's
+    # intake switch. Sealed as stubs until `W54-WORKER-01`.
+    "listWorkers",
+    "setWorkerIntake",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -127,6 +131,7 @@ WRITE_OPERATIONS = {
     "reauditRun",
     "setJobPriority",
     "setExecutionPaused",
+    "setWorkerIntake",
 }
 
 PAGINATED_OPERATIONS = {
@@ -142,6 +147,7 @@ PAGINATED_OPERATIONS = {
     "listUsers",
     "listExecutionQueue",
     "listExecutionJournal",
+    "listWorkers",
 }
 
 #: Page-level properties a paginated response may carry beside `items` and `page`, by

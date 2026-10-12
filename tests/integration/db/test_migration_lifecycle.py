@@ -29,6 +29,12 @@ EXPECTED_TABLES = {
     "account_release_mark",
     # `0017_execution_queue`: one durable pause-control row, inserted lazily.
     "execution_control",
+    # `0018_norm_custody`: custody admissions and bindings, and the paid repair journal.
+    "norm_custody_admission",
+    "norm_custody_binding",
+    "norm_repair_call",
+    # `0019_execution_workers`: the worker registry.
+    "worker",
     "analysis_artifact_publication",
     "attempt",
     "audit_event",
@@ -63,11 +69,13 @@ EXPECTED_VIEWS = {"finding_current_verdict"}
 
 #: The alpha runner instantiates none of these aggregates. Their absence is a deliverable, so
 #: it is asserted rather than assumed.
+#: `W54-SEAL-01` removed ``worker`` (migration 0019 instantiates the registry under R-105).
+#: ``outbox`` stays forbidden as a table name: the custody outbox is the admission row
+#: itself (``norm_custody_admission``, R-76), never a generic outbox table.
 FORBIDDEN_TABLES = {
     "import",
     "export",
     "export_request",
-    "worker",
     "comparison",
     "outbox",
 }
@@ -113,7 +121,7 @@ def test_clean_install_creates_exactly_the_declared_relations(
     assert tables == EXPECTED_TABLES
     assert _relnames(migrated_engine, "v") == EXPECTED_VIEWS
     assert tables & FORBIDDEN_TABLES == set(), (
-        "This head instantiates no Import, Export, Worker, Comparison or Outbox aggregate; "
+        "This head instantiates no Import, Export, Comparison or generic Outbox aggregate; "
         "a table for one remains a scope change, not an implementation detail."
     )
 

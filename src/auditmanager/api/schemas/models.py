@@ -110,6 +110,11 @@ __all__ = [
     "SetJobPriorityRequest",
     "SetExecutionPausedRequest",
     "ExecutionDispatchStatus",
+    "WorkerId",
+    "WorkerState",
+    "ExecutionWorker",
+    "ExecutionWorkerPage",
+    "SetWorkerIntakeRequest",
     "Sha256",
     "StageId",
     "StageState",
@@ -227,6 +232,8 @@ VersionUid = TypeAliasType(
 )
 RunId = TypeAliasType("RunId", Annotated[str, Field(pattern=rf"^run_{_ULID}$")])
 JobId = TypeAliasType("JobId", Annotated[str, Field(pattern=rf"^job_{_ULID}$")])
+#: `W54-SEAL-01`. One registered worker process (``worker_id``, ``wrk``), migration ``0019``.
+WorkerId = TypeAliasType("WorkerId", Annotated[str, Field(pattern=rf"^wrk_{_ULID}$")])
 FindingUid = TypeAliasType(
     "FindingUid", Annotated[str, Field(pattern=rf"^fnd_{_ULID}$")]
 )
@@ -649,6 +656,37 @@ class SetExecutionPausedRequest(_Object):
 class ExecutionDispatchStatus(_Object):
     paused: bool
     changed_at: datetime
+
+
+class WorkerState(str, enum.Enum):
+    """`W54-SEAL-01`, plan section 3.6. Derived from the worker's last heartbeat: stale
+    after 90 seconds without one, offline after 600 seconds."""
+
+    ONLINE = "online"
+    STALE = "stale"
+    OFFLINE = "offline"
+
+
+class ExecutionWorker(_Object):
+    """One row of the worker registry (``worker``, migration ``0019``) and the runs it holds."""
+
+    worker_id: WorkerId
+    state: WorkerState
+    intake_enabled: bool
+    slots: Annotated[int, Field(ge=1)]
+    version: Annotated[str, Field(min_length=1, max_length=128)]
+    started_at: datetime
+    heartbeat_at: datetime
+    current_run_ids: list[RunId]
+
+
+class ExecutionWorkerPage(_Object):
+    items: list[ExecutionWorker]
+    page: PageInfo
+
+
+class SetWorkerIntakeRequest(_Object):
+    enabled: bool
 
 
 # --- findings ----------------------------------------------------------------------

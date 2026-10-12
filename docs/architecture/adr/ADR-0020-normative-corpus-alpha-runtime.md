@@ -110,3 +110,30 @@ bindings. Reuse requires size, SHA-256 and media type equality; a missing record
 SHA-256 or a changed media type is a refusal. A mismatch rejects the admission or
 Attempt, never the shared Blob row. W54 implements this after reconciling storage and
 ingest public seams; this addendum changes no runtime behavior.
+
+## W54 addendum — R-104, 2026-10-12
+
+Recorded by `W54-SEAL-01` under owner ruling R-104 (`OWNER_RULINGS_2026-09-17.md` §3.30) and
+`docs/program/dispatch/W54-PLAN.md` §3.1, §3.3 and §3.5. It amends decision items 4 and 5.
+
+- **Item 5 (re-recognition input).** Re-recognition no longer reads confirmed crop custody:
+  the repair run happens on this machine, before any custody exists, against a local
+  promotion database. It reads crops from the drop, each checked against the operator's
+  `SHA256SUMS` taken before the run. The drop stays an offline input; it is never admitted
+  to custody and never read by a serving process.
+- **Item 4 (what may sit on the stand).** A verified bundle (`<content_key>+<bundle digest>/`)
+  and the one-off database dump of the K-1 copy may sit transiently on the stand, in staging,
+  read only by the one-shot importer or by `restore-db`. Neither is a serving mount or an
+  environment value, and the importer deletes the bundle's objects after `report` matches.
+- **Item 3 (custody), sequenced.** Custody is two-phase. An *admission*
+  (`norm_custody_admission`, `nad_<ULID>`) is the intent and its outbox row in one record; the
+  dispatcher verifies the bytes and confirms it, and no binding is visible then. *Binding
+  publication* (`publish_bindings(role, target)`) runs in the transaction that holds the target
+  rows and inserts one immutable `norm_custody_binding` (`nbd_<ULID>`) per confirmed admission,
+  checking the target there. Roles map to target kinds through `ck_norm_custody_role_shape`;
+  W57a widens it for its own roles.
+- Both forced-command keys (inbound bundle transport and the one-off copy) are owner-installed;
+  their forced command is the boundary, because the key's account runs `docker`.
+
+Migration `0018_norm_custody` carries the schema; this addendum itself changes no runtime
+behaviour.

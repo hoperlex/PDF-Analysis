@@ -222,6 +222,18 @@ KNOWN_HISTORICAL_SURFACE_CLAIMS: frozenset[tuple[str, str]] = frozenset(
         # An explicitly past-tense account of the pre-W15 deployment, retained in the live
         # environment example so the BFF setting explains why it exists.
         ("web/.env.example", "twelve operations"),
+        # `W54-SEAL-01`: W53 task records under the top-level `tasks/` directory freeze the
+        # surface their wave was dispatched against (36 / 43 / 91, OpenAPI `008a7932`). They
+        # are history and are not rewritten; `pin_sweep.py` does not list `tasks/`.
+        ("tasks/W53-JUDGE-Y.md", "36 paths"),
+        ("tasks/W53-JUDGE-Y.md", "43 operations"),
+        ("tasks/W53-JUDGE-Y.md", "91 schemas"),
+        ("tasks/W53-QA-01.md", "36 paths"),
+        ("tasks/W53-QA-01.md", "43 operations"),
+        ("tasks/W53-QA-01.md", "91 schemas"),
+        ("tasks/W53-REHEARSAL-01.md", "36 paths"),
+        ("tasks/W53-REHEARSAL-01.md", "43 operations"),
+        ("tasks/W53-REHEARSAL-01.md", "91 schemas"),
     }
 )
 
@@ -572,20 +584,20 @@ def test_a_stale_claim_in_a_previously_excluded_conf_file_is_red() -> None:
     """`D-99`: mutate the real extensionless scanner input in memory; `.conf` is not skipped."""
     relative = "infra/deploy/proxy/nginx.conf"
     text = (REPO_ROOT / relative).read_text(encoding="utf-8")
-    mutated = text.replace("the thirty-six paths", "the thirty-five paths", 1)
+    mutated = text.replace("the thirty-eight paths", "the thirty-seven paths", 1)
     assert mutated != text
     wrong = _wrong_surface_claims(relative, mutated)
-    assert any("'thirty-five paths' states 35" in item for item in wrong), wrong
+    assert any("'thirty-seven paths' states 37" in item for item in wrong), wrong
 
 
 def test_a_stale_current_claim_in_p02_seams_is_red() -> None:
     """`D-100`: the once-unscanned live seam document is mutation-tested by path."""
     relative = "docs/program/P02_SEAMS.md"
     text = (REPO_ROOT / relative).read_text(encoding="utf-8")
-    mutated = text.replace("Forty-three operations, sealed.", "Forty-two operations, sealed.", 1)
+    mutated = text.replace("Forty-five operations, sealed.", "Forty-four operations, sealed.", 1)
     assert mutated != text
     wrong = _wrong_surface_claims(relative, mutated)
-    assert any("'Forty-two operations' states 42" in item for item in wrong), wrong
+    assert any("'Forty-four operations' states 44" in item for item in wrong), wrong
 
 
 def test_the_guard_reaches_the_bff_route_handler() -> None:

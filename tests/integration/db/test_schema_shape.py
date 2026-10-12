@@ -51,6 +51,10 @@ IMMUTABLE_TABLES = {
     "norm_embedding_profile",
     "norm_paragraph",
     "norms_snapshot",
+    # `0018_norm_custody`: a published custody binding is never rewritten or removed
+    # (NORM-Q06). The admission and repair-call journals refuse DELETE inside their own
+    # state guards instead, because their state moves.
+    "norm_custody_binding",
 }
 
 
@@ -204,6 +208,10 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     "sequence_no",
     "stage_id",
     "user_uid",
+    # `0018_norm_custody`: a custody target holds the prefix of whichever entity its
+    # ``target_kind`` names, like ``aggregate_id``; ``ck_norm_custody_role_shape`` checks it
+    # per kind.
+    "target_id",
 }
 
 
@@ -240,6 +248,11 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "attempt_id": "att",
         "lease_id": "lse",
         "final_model_call_id": "mc",
+        # `W54-SEAL-01`, migrations 0018 and 0019.
+        "norm_custody_admission_id": "nad",
+        "norm_custody_binding_id": "nbd",
+        "norm_repair_call_id": "nrc",
+        "worker_id": "wrk",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

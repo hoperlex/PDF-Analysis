@@ -72,13 +72,15 @@ ABSENT_CAPABILITIES: Final[tuple[str, ...]] = (
 #: Attempt authority, but still does not claim either remote transport envelope.
 SCHEMAS_NOT_CLAIMED: Final[tuple[str, ...]] = ("JobPackage", "ResultPackage")
 
-#: Aggregates the alpha runner still does not instantiate (P02 §3.1).
+#: Aggregates the alpha runner still does not instantiate (P02 §3.1). `W54-SEAL-01` removed
+#: two: migration ``0019`` instantiates the ``worker`` registry (R-105), and migration
+#: ``0018``'s ``norm_custody_admission`` is the custody outbox (R-76: the intent and its
+#: outbox row are one record), so neither is absent any more. What a worker process *does*
+#: is still absent until `W54-WORKER-01`; :data:`ABSENT_CAPABILITIES` says so.
 AGGREGATES_NOT_INSTANTIATED: Final[tuple[str, ...]] = (
     "import",
     "export",
-    "worker",
     "comparison",
-    "outbox",
 )
 
 #: ``OD-10``: the vocabulary a stale ``running`` run reconciles into. There is no

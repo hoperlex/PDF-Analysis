@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193
+ *   sha256 0dbfbee44843c198c533d7a580df0fd8b768db010351c323b9518febfd8ecbfb
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -74,6 +74,8 @@ import type {
   ListUsersResult,
   ListVersionsInput,
   ListVersionsResult,
+  ListWorkersInput,
+  ListWorkersResult,
   MarkReleaseNotesReadInput,
   MarkReleaseNotesReadResult,
   PurgeUserInput,
@@ -92,6 +94,8 @@ import type {
   SetExecutionPausedResult,
   SetJobPriorityInput,
   SetJobPriorityResult,
+  SetWorkerIntakeInput,
+  SetWorkerIntakeResult,
   StartRunInput,
   StartRunResult,
   StreamDocumentVersionContentInput,
@@ -444,6 +448,18 @@ export function listVersions(
 }
 
 /**
+ * List Workers
+ *
+ * `GET /execution/workers`.
+ */
+export function listWorkers(
+  input: ListWorkersInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListWorkersResult>> {
+  return request<ListWorkersResult>(OPERATIONS.listWorkers, input, options);
+}
+
+/**
  * Mark release notes read through a version.
  *
  * `PUT /me/release-notes`.
@@ -552,6 +568,18 @@ export function setJobPriority(
 }
 
 /**
+ * Set Worker Intake
+ *
+ * `PUT /execution/workers/{worker_id}/intake` - a write; carries a required Idempotency-Key.
+ */
+export function setWorkerIntake(
+  input: SetWorkerIntakeInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetWorkerIntakeResult>> {
+  return request<SetWorkerIntakeResult>(OPERATIONS.setWorkerIntake, input, options);
+}
+
+/**
  * Start a text-consistency run over one published version.
  *
  * `POST /runs` - a write; carries a required Idempotency-Key.
@@ -656,6 +684,7 @@ export const apiClient = {
   listRuns,
   listUsers,
   listVersions,
+  listWorkers,
   markReleaseNotesRead,
   purgeUser,
   readRegistrationStatus,
@@ -665,6 +694,7 @@ export const apiClient = {
   restoreUser,
   setExecutionPaused,
   setJobPriority,
+  setWorkerIntake,
   startRun,
   streamDocumentVersionContent,
   submitRegistration,

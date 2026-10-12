@@ -241,6 +241,22 @@ class NormParagraphId(OpaqueId, prefix="npar", entity="NormParagraph"):
     """Identity of one immutable canonical normative paragraph."""
 
 
+class NormCustodyAdmissionId(OpaqueId, prefix="nad", entity="NormCustodyAdmission"):
+    """Identity of one custody intent and its outbox row (`R-76`, migration ``0018``).
+
+    `W54-SEAL-01` declares it; `W54-CUSTODY-01` allocates it. Never derived from the blob,
+    the declared SHA-256, the anchor or the target.
+    """
+
+
+class NormCustodyBindingId(OpaqueId, prefix="nbd", entity="NormCustodyBinding"):
+    """Identity of one published custody binding of a confirmed admission (`R-76`)."""
+
+
+class NormRepairCallId(OpaqueId, prefix="nrc", entity="NormRepairCall"):
+    """Identity of one paid repair-call try (`R-106`); also its own idempotency scope."""
+
+
 class ModelCallId(OpaqueId, prefix="mc", entity="ModelCallRecord"):
     """Identity of one provider call record."""
 
@@ -258,7 +274,11 @@ class ExportId(OpaqueId, prefix="exp", entity="ExportRequest"):
 
 
 class WorkerId(OpaqueId, prefix="wrk", entity="Worker"):
-    """Identity of a worker. Not allocated in PC-01."""
+    """Identity of one registered worker process (migration ``0019``).
+
+    `W54-SEAL-01` instantiates the ``worker`` registry; `W54-WORKER-01` allocates the
+    identity when a worker process starts, so it is still in :data:`UNALLOCATED_IN_PC01`.
+    """
 
 
 class AuditEventId(OpaqueId, prefix="evt", entity="AuditEvent"):

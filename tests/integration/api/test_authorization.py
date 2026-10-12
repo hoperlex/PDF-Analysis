@@ -151,6 +151,13 @@ GUARDED = (
         "/execution/queue/job_01M2545JSD15ETSNNV904X991K/priority",
     ),
     ("setExecutionPaused", "PUT", "/execution/dispatch"),
+    # `W54-SEAL-01`. The worker registry's read and intake switch: behind the seam before
+    # their sealed stubs can answer 503.
+    ("listWorkers", "GET", "/execution/workers"),
+    (
+        "setWorkerIntake", "PUT",
+        "/execution/workers/wrk_01M2545JSD15ETSNNV904X991K/intake",
+    ),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -224,7 +231,7 @@ def _envelope(answer) -> dict:
 
 
 def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) -> None:
-    """One request per guarded operation, with no credential. Forty of forty-three.
+    """One request per guarded operation, with no credential. Forty-two of forty-five.
 
     The set comparison is what makes this a sweep rather than a list: a twentieth
     operation is either written into ``GUARDED`` and swept, or named in
@@ -232,7 +239,7 @@ def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) ->
     ``test_the_open_surface_is_exactly_the_register`` -- there is no third place for it to
     be, and an operation that is in neither fails here.
     """
-    assert len(GUARDED) == 40
+    assert len(GUARDED) == 42
     assert UNAUTHENTICATED_OPERATIONS == {
         "issueToken",
         "submitRegistration",

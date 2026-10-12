@@ -1,4 +1,9 @@
-"""W53 execution declarations; every operation delegates to a port."""
+"""W53 execution declarations; every operation delegates to a port.
+
+`W54-SEAL-01` adds the worker registry's ``listWorkers`` and ``setWorkerIntake``
+(plan section 3.7). Their port methods are sealed stubs that answer
+``503 dependency_unavailable`` until `W54-WORKER-01` supplies the registry behaviour.
+"""
 
 from __future__ import annotations
 
@@ -113,3 +118,31 @@ def build_execution_routes(router: APIRouter, execution: ExecutionPort) -> None:
             idempotency_key=idempotency_key,
         )
         return json_response(200, encode_json(status.model_dump(mode="json")))
+
+    @router.get(
+        "/execution/workers", operation_id="listWorkers", tags=["execution"],
+        response_model=models.ExecutionWorkerPage,
+        responses={**success(200, "The worker registry: state, intake, slots, version and current runs."),
+                   **envelope_responses(401, 403, 422, 500, 503)},
+    )
+    def list_workers(
+        subject: CurrentSubject, cursor: CursorParam = None, limit: LimitParam = 50,
+    ) -> WireResponse:
+        page = execution.list_workers(cursor=cursor, limit=limit)
+        return json_response(200, encode_json(page.model_dump(mode="json")))
+
+    @router.put(
+        "/execution/workers/{worker_id}/intake", operation_id="setWorkerIntake",
+        tags=["execution"], response_model=models.ExecutionWorker,
+        responses={**success(200, "The worker with its new intake setting."),
+                   **envelope_responses(401, 403, 404, 409, 422, 500, 503)},
+    )
+    def set_worker_intake(
+        subject: CurrentSubject, worker_id: Annotated[models.WorkerId, Path()],
+        body: models.SetWorkerIntakeRequest, idempotency_key: RequiredIdempotencyKey,
+    ) -> WireResponse:
+        worker = execution.set_worker_intake(
+            worker_id=worker_id, enabled=body.enabled, user_uid=subject.user_uid,
+            idempotency_key=idempotency_key,
+        )
+        return json_response(200, encode_json(worker.model_dump(mode="json")))
