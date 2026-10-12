@@ -121,6 +121,11 @@
 
 ## Active development, 2026-10-08 — W52 Stage C backend integration
 
+**2026-10-12 — W53 released as `v0.4.0`.** Under `R-85` … `R-87` the owner accepted W53 by the
+short route: `2653dbf` was published to `origin/main`, the deployment workflow verified it, a
+live preflight passed and `v0.4.0` was tagged (`W53-INT-MAIN-01.md`). No full gate was run.
+The owner's in-product check of the journal, the queue and «Что нового» is still open.
+
 **2026-10-12 — W53-CLOSE.** After W53 reached `origin/dev` (`8722660`, full gate recorded in the
 W53 integrator handoff), a static review of W48–W53 found no Critical or High defect. The owner
 answered four questions (`R-80` … `R-83`) and ordered one closure wave (`R-84`). Six parallel
