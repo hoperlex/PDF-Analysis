@@ -67,7 +67,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-154** | a run in `validating` cannot be cancelled (`R-85`, `W53-EXEC-STOP-02`) | a reviewed state-machine reseal, if ever wanted |
 | **D-155** | the deployment-wide pause is not shown in the run journal (`R-85`, Y-04) | a journal entry without a run identity is a contract change |
 | **D-156** | the stand's generated test data must be purged at the transition to beta, keeping the corpus (`R-109`) | a purge task in the beta wave |
-| **D-157** | W54's migrations `0018`/`0019`, its DB-backed tests, the BGE image build and MRR, and the W54 full gate have not run; consolidated after W55a (`R-111`) | one combined window run and one full gate on the W55a candidate |
+| ~~D-157~~ | W54's DB-backed validation deferred after W55a (`R-111`) | **closed 2026-10-13** by `W55A-INT-GATE-01`: DB suites, BGE build/windows/MRR, literal `GATE OK` on `23fd729` |
 | **D-158** | norms search shares the API's 10-connection pool; ten broad searches can hold every connection for the search timeout (`W55A-JUDGE-X` M6) | measure under the rehearsal timeout, then a per-operation cap or accepted risk |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
@@ -162,7 +162,9 @@ the timeout figure.
 **Check:** `rg -n "pool_size|max_overflow|pool_timeout" src/auditmanager/shared/db/config.py`, and
 the rehearsal's concurrency measurement.
 
-### D-157 — W54's DB-backed validation is deferred to after W55a
+### D-157 — W54's DB-backed validation is deferred to after W55a — **CLOSED 2026-10-13**
+
+**Closed by `W55A-INT-GATE-01`:** every queued DB suite ran green after `W55A-FIX-DB`. The BGE pins, build, real-tokenizer windows and MRR 0.848611 were recorded. The literal `GATE OK` is on clean `23fd729`.
 
 **Opened 2026-10-12 under `R-111`.** `origin/dev` carries W54 (`integration/w54`) with every
 lane's container-free checks green. Nothing has run against a database yet: migrations
