@@ -194,7 +194,6 @@ def test_the_unallocated_list_names_only_declared_identifiers(
 def test_the_unallocated_list_covers_the_remaining_deferred_identities() -> None:
     """The W48 durable slot supersedes the old Job/Attempt/Lease deferral."""
     required = {
-        "worker_id",
         "export_id",
         "comparison_id",
         "sheet_link_id",

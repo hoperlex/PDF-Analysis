@@ -277,7 +277,7 @@ class WorkerId(OpaqueId, prefix="wrk", entity="Worker"):
     """Identity of one registered worker process (migration ``0019``).
 
     `W54-SEAL-01` instantiates the ``worker`` registry; `W54-WORKER-01` allocates the
-    identity when a worker process starts, so it is still in :data:`UNALLOCATED_IN_PC01`.
+    identity when a worker process starts.
     """
 
 
@@ -318,7 +318,6 @@ IDENTITY_TYPES_BY_PREFIX: Final[dict[str, type[OpaqueId]]] = dict(_REGISTRY)
 #: an aggregate nobody builds. The type exists; no active code path calls ``new()``.
 UNALLOCATED_IN_PC01: Final[tuple[str, ...]] = (
     "import_id",
-    "worker_id",
     "export_id",
     "comparison_id",
     "sheet_link_id",

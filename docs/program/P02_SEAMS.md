@@ -754,7 +754,7 @@ Recorded here so the catalog does not silently promise an aggregate nobody build
 
 ### 9.1 Identifiers declared and deliberately unallocated
 
-`import_id`, `worker_id`, `export_id`,
+`import_id`, `export_id`,
 `comparison_id`, `sheet_link_id`, `norms_snapshot_id`, `erasure_request_id`,
 `object_uid`, `discipline_uid`.
 
