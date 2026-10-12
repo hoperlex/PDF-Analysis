@@ -27,6 +27,19 @@ class ParagraphKind(enum.Enum):
     TABLE_ROW = "table_row"
 
 
+class TextReliability(enum.Enum):
+    """Whether a paragraph's text is the document's (`F-4`, `W54-PLAN.md` §3.4).
+
+    A paragraph is ``UNRELIABLE`` when its block is in the repair ledger and did not end
+    ``REPAIRED``: the corpus text stands, because nothing better exists, but it is marked so
+    that a reliability-aware chunking profile skips it and no reader takes it for the norm.
+    The values are the literal vocabulary of ``norm_paragraph.text_reliability`` (`0018`).
+    """
+
+    RELIABLE = "reliable"
+    UNRELIABLE = "unreliable"
+
+
 class SourceAttribution(enum.Enum):
     """Where a document came from, as the document itself says.
 
@@ -73,6 +86,11 @@ class Paragraph:
     kind: ParagraphKind
     clause_number: str | None
     text: str
+    text_reliability: TextReliability = TextReliability.RELIABLE
+
+    @property
+    def is_reliable(self) -> bool:
+        return self.text_reliability is TextReliability.RELIABLE
 
     @property
     def is_numbered_clause(self) -> bool:
@@ -98,6 +116,8 @@ class Chunk:
     paragraph_count: int
     clause_numbers: tuple[str, ...]
     text: str
+    paragraph_ordinal_first: int
+    paragraph_ordinal_last: int
 
     @property
     def content_key(self) -> str:

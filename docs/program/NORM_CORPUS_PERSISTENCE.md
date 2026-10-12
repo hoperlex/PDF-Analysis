@@ -15,6 +15,14 @@ The loader resolves `content_key -> norms_snapshot_id` inside one transaction. T
 same effective bytes therefore converge on one opaque snapshot without deriving identity from
 content.
 
+The key also names how the text is cut (`D-126`, `W54-SNAPSHOT-01`): any segmentation profile
+other than the literal `markdown-v1` appends `+seg-<profile>` after the digest, to both
+`content_key` and `base_content_key`, for example
+`2026-07-23..2026-08-20+17d+118r+3u.<12 hex>+seg-markdown-v2`. A raised profile therefore
+loads as a second snapshot beside the first instead of conflicting on its key; `markdown-v1`
+adds nothing, so every key minted before W54 is unchanged. The repair ledger's
+`base_snapshot_id` stays the unqualified key of the corpus bytes, which no profile changes.
+
 ## Stored topology
 
 ```text
@@ -35,14 +43,30 @@ cross-context identities. A retrieval chunk deliberately has no public identity.
 ## Canonical versus rebuildable
 
 `norm_paragraph` stores the complete substantive segmentation: effective text, source block/page
-anchor, kind, clause number and character offset into effective recognised text. A correction
-creates a different effective content key and therefore a different snapshot; stored canonical
-paragraphs are never updated in place.
+anchor, kind, clause number, character offset into effective recognised text and
+`text_reliability`. A correction creates a different effective content key and therefore a
+different snapshot; stored canonical paragraphs are never updated in place.
 
-`norm_chunk` stores a named `chunking_profile`, currently `characters-v1:1200`. Its text and
+**Reliability (`F-4`, `0018`).** Every block the repair ledger holds that did not end
+`repaired` is unreliable: its corpus text stands, each paragraph drawn from it is stored with
+`text_reliability = 'unreliable'`, and `norms_snapshot.unreliable_count` records the number of
+such blocks (the `m` of the key's `+<m>u`). `ck_norms_snapshot_raw_key` holds
+`repair_count = 0 AND unreliable_count = 0 ⇔ base_content_key = content_key`.
+
+`norm_chunk` stores a named `chunking_profile`: `<version>:<target characters>`. Its text and
 metadata are derived from a consecutive paragraph span. Chunk rows refuse `UPDATE`; a rebuild
 deletes and reinserts one complete profile from canonical paragraphs. No audit fact may treat a
-chunk row as the canonical wording of the norm.
+chunk row as the canonical wording of the norm. Two versions exist:
+
+| version | joins | over `unreliable_count > 0` |
+| --- | --- | --- |
+| `characters-v1` | every paragraph (W33) | refused, by the projection and by the repository on the stored count |
+| `characters-v2` | reliable paragraphs only; each unreliable paragraph ends the chunk | built; the loader's default |
+
+`characters-v2`'s invariant, checked before any chunk row is written: chunks are ordinals
+`0..n-1`, each spans consecutive canonical paragraphs, spans are disjoint and ascending, and
+their union is exactly the reliable paragraph set. With nothing unreliable the two versions
+agree chunk for chunk.
 
 ## Transaction and idempotency boundary
 
@@ -54,6 +78,35 @@ repository then performs only PostgreSQL writes in the caller's transaction:
    those canonical entities and the initial chunk profile;
 3. return counts and the opaque snapshot identity; an exact replay reuses every stored child ID;
 4. caller commits once, or rolls the whole load back.
+
+A replay that names a chunk profile the stored snapshot lacks builds that profile from the
+stored canonical paragraphs inside the same transaction; nothing else is written.
+
+## Import with ids and the row digest
+
+The promotion database (`W54-PLAN.md` §3.2) is the only place opaque norm ids are minted.
+Another database receives them through `import_snapshot(session, rows, chunking_profiles=…,
+expected_row_digest=…)`, which takes `SnapshotRows` — the snapshot row, every document and
+every paragraph with their opaque ids and declared columns — and, in one SAVEPOINT:
+
+1. validates the rows as one snapshot (id formats and uniqueness, counts and ordinals, the
+   vocabularies, unreliable paragraphs only under `unreliable_count > 0`, the `+seg-` term)
+   and compares their digest with the expected one; refuses `characters-v1` over unreliable
+   text — all before reading the database;
+2. **exact replay** (same id, same key, equal stored digest, every named profile built) is a
+   no-op; the same key under another id, the same id under another key, equal ids with other
+   rows, an unbuilt profile on replay, or a document or paragraph id held by another snapshot
+   is refused (`SnapshotImportConflict`) with nothing written;
+3. otherwise inserts every row with its own id (private keys minted and remapped by the
+   document's id), builds each named profile from the inserted paragraphs, and re-reads the
+   row digest, which must equal the rows'.
+
+**Row digest** (`norm-snapshot-rows/1`): SHA-256 over a version line, then one line per row —
+`S`, `D` or `P` followed by a compact JSON array of the declared columns in a fixed order —
+with documents sorted by `norm_document_id` and paragraphs by `(norm_document_id, ordinal)`
+(code-point order, `COLLATE "C"` in SQL). It covers ids, text and `text_reliability`; private
+keys, timestamps, generated columns and the rebuildable chunks are not covered. The loader
+prints it; the repository recomputes it from the database as a stream.
 
 There is no S3 write in this command. Source-PDF/crop custody is a separate workflow requiring
 its own reconciliation/outbox boundary, so a database failure cannot orphan objects here and an
