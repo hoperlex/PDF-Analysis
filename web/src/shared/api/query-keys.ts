@@ -107,6 +107,13 @@ export const queryKeys = {
     queue: (cursor?: string) => ['execution', 'queue', { cursor }] as const,
     journal: (runId?: RunId, cursor?: string) =>
       ['execution', 'journal', { runId, cursor }] as const,
+    /**
+     * One page of `listWorkers` (`W54-WORKERS-WEB`). The page size is part of the key: the
+     * «Исполнители» screen pages through the registry, and the queue and run screens read
+     * one larger first page only to name the worker holding a run.
+     */
+    workers: (cursor?: string, limit?: number) =>
+      ['execution', 'workers', { cursor, limit }] as const,
   },
   releases: {
     all: () => ['releases'] as const,

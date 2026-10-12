@@ -33,6 +33,9 @@ export const routes = {
 
   /** Durable execution queue. */
   queue: (): string => '/queue',
+
+  /** The worker registry, «Исполнители» (`W54-WORKERS-WEB`). */
+  workers: (): string => '/workers',
   /** The project list. The home screen at `/` links here. */
   projects: (): string => '/projects',
 

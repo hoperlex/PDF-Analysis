@@ -5,7 +5,8 @@
  * it graduated out of this file rather than being held to a placeholder's rules it no
  * longer follows -- `web/tests/guards/screen-set.guard.test.ts` and the language guard
  * and contrast census reach it now by walking the route tree, the way they reach every
- * other real screen. W53 graduates `/logs` and `/queue` the same way.
+ * other real screen. W53 graduates `/logs` and `/queue` the same way, and `W54-WORKERS-WEB`
+ * graduates `/workers`: `listWorkers` answers a real registry since `W54-WORKER-01`.
  *
  * `OWNER_RULINGS_2026-09-17.md` §3.11 says preparation is four things and no more: a
  * place in the navigation, a `RoutePlaceholder` carrying a real `promise`, the data shape
@@ -63,14 +64,12 @@ import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
 import { NormsPage } from '@/_pages/norms';
 import { OptimisationPage } from '@/_pages/optimisation';
 import { SectionOptimisationPage } from '@/_pages/section-optimisation';
-import { WorkersPage } from '@/_pages/workers';
 import { RoutePlaceholder } from '@/shared/ui';
 import { forgetEverySession, openSession } from '@/app/bff/session/store';
 import AnalysisSettingsRoute from '@/app/analysis-settings/page';
 import NormsRoute from '@/app/norms/page';
 import OptimisationRoute from '@/app/optimisation/page';
 import SectionOptimisationRoute from '@/app/section-optimisation/page';
-import WorkersRoute from '@/app/workers/page';
 import { newClient, renderScreen } from '../unit/screens/harness';
 
 // ------------------------------------------------------------------ rendering machinery
@@ -113,14 +112,6 @@ const SECTIONS = [
     title: 'Оптимизация',
     screen: OptimisationPage,
     routeFile: OptimisationRoute,
-    stub: false,
-  },
-  {
-    name: 'workers',
-    route: '/workers',
-    title: 'Исполнители',
-    screen: WorkersPage,
-    routeFile: WorkersRoute,
     stub: false,
   },
   {
@@ -229,33 +220,27 @@ export function unpromised(rendered: readonly string[], generic: string): string
  * The words that promise a section is on its way.
  *
  * `«пока»` and `«ещё»` are the whole of it, and they are the component's own two fixed
- * sentences. `R-18` says a stub may not claim something false about the system;
- * `PROTOTYPE_PROFILE.md` §7.2 defers remote/distributed workers and the `Job/Attempt`
- * framework, so on `/workers` a *yet* is exactly such a claim.
+ * sentences. `R-18` says a stub may not claim something false about the system. Until
+ * `W54-WORKERS-WEB` the one section exempt from them was `/workers`, which said instead that
+ * the alpha had no distributed workers; it graduated to a real screen, so every section
+ * still here is one that is on its way and carries them.
  */
 export function futurePromises(strings: readonly string[]): string[] {
   return strings.filter((s) => /Раздел пока недоступен|Этот раздел ещё не готов/.test(s));
 }
 
-describe('R-18: the workers stub does not say a thing is coming that nobody decided to build', () => {
-  it('can fail: the default wording, which is what this screen would render untold', () => {
+describe('R-18: each prepared section says it is coming, and none is exempt', () => {
+  it('can fail: the default wording is recognised', () => {
     expect(futurePromises(['Раздел пока недоступен', 'Исполнители'])).toEqual([
       'Раздел пока недоступен',
     ]);
     expect(futurePromises(['Этот раздел ещё не готов.'])).toEqual(['Этот раздел ещё не готов.']);
   });
 
-  it('workers renders neither of the component\'s two "yet" sentences', () => {
-    const text = visibleText(render(createElement(WorkersPage)));
-    expect(futurePromises(text)).toEqual([]);
-    // Non-vacuous: it says something in their place rather than nothing.
-    expect(text.some((s) => s.includes('в альфе'))).toBe(true);
-  });
-
-  it('the other sections still carry them, so the exemption is one screen and not a hole', () => {
-    // The ratchet's other direction. If this ever fails, either a section was newly
-    // deferred -- in which case say so here -- or the component's default moved.
-    for (const { name, screen } of SECTIONS.filter((s) => s.name !== 'workers')) {
+  it('every section carries them', () => {
+    // If this ever fails, either a section was newly deferred -- in which case say so here
+    // or the component's default moved.
+    for (const { name, screen } of SECTIONS) {
       const text = visibleText(render(createElement(screen)));
       expect(futurePromises(text).length, `${name} no longer says the section is coming`)
         .toBeGreaterThan(0);

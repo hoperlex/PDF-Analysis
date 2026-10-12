@@ -2,8 +2,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import type { ExecutionJournalPage, ExecutionQueuePage, RunId } from '@/shared/api';
-import { listExecutionJournal, listExecutionQueue, queryKeys } from '@/shared/api';
+import type {
+  ExecutionJournalPage, ExecutionQueuePage, ExecutionWorkerPage, RunId,
+} from '@/shared/api';
+import { listExecutionJournal, listExecutionQueue, listWorkers, queryKeys } from '@/shared/api';
 
 export const EXECUTION_PAGE_LIMIT = 25;
 
@@ -47,4 +49,40 @@ export function journalQueryOptions(runId?: RunId, cursor?: string, enabled = tr
 
 export function useExecutionJournal(runId?: RunId, cursor?: string, enabled = true) {
   return useQuery<ExecutionJournalPage>(journalQueryOptions(runId, cursor, enabled));
+}
+
+/** One page of the «Исполнители» screen. */
+export const WORKER_PAGE_LIMIT = 50;
+
+/**
+ * The first page the queue and run screens read to name a run's worker: the contract's
+ * largest page. Newest start first, so the workers that can hold a run — the ones still
+ * heartbeating — come before the accumulated offline rows; past it, `runWorker` says so.
+ */
+export const WORKER_LOOKUP_LIMIT = 200;
+
+/*
+ * The same freshness rule as the queue and the journal (`C-26`): a worker's state is the
+ * thing an operator opens this screen to see now. Refreshed on focus, after an intake
+ * command (`queryKeys.execution.all()`), and by «Обновить».
+ */
+export function workersQueryOptions(cursor?: string, limit = WORKER_PAGE_LIMIT, enabled = true) {
+  return {
+    queryKey: queryKeys.execution.workers(cursor, limit),
+    queryFn: async () => (await listWorkers({
+      query: { limit, ...(cursor === undefined ? {} : { cursor }) },
+    })).data,
+    refetchOnWindowFocus: 'always',
+    staleTime: 0,
+    enabled,
+  } as const;
+}
+
+export function useWorkers(cursor?: string) {
+  return useQuery<ExecutionWorkerPage>(workersQueryOptions(cursor));
+}
+
+/** The first `WORKER_LOOKUP_LIMIT` workers, read only while some run can hold one. */
+export function useWorkerLookup(enabled: boolean) {
+  return useQuery<ExecutionWorkerPage>(workersQueryOptions(undefined, WORKER_LOOKUP_LIMIT, enabled));
 }

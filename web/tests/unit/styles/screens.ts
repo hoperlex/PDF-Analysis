@@ -39,6 +39,7 @@ import { DocumentList } from '@/widgets/document-list';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
+import { WorkerList } from '@/widgets/worker-list';
 import { ExportPanel } from '@/widgets/export-panel';
 import { FindingList } from '@/widgets/finding-list';
 import { ProjectList } from '@/widgets/project-list';
@@ -463,8 +464,43 @@ export function screens(): Screen[] {
       available_at: '2026-10-09T10:00:00Z',
     }],
     roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
-    busy: false, onCancel: noop, onReaudit: noop,
+    busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
     onPriority: noop, onNext: null, onPrevious: null,
+  })));
+  // `W54-WORKERS-WEB`: a running Job names the worker holding its run, with a link to it.
+  add('ExecutionQueue running, its worker named', withRouter(createElement(ExecutionQueue, {
+    items: [{
+      job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+      run_id: RUN_ID, state: 'running', priority: 2,
+      created_at: '2026-10-09T10:00:00Z',
+      available_at: '2026-10-09T10:00:00Z',
+    }],
+    roles: ['expert'], asOf: Date.parse('2026-10-09T10:05:00Z'),
+    busy: false,
+    workerOf: () => ({ kind: 'held' as const, workerId: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A' }),
+    onCancel: noop, onReaudit: noop, onPriority: noop, onNext: null, onPrevious: null,
+  })));
+  // The worker registry: one row per state, the offline one in the collapsed group, and an
+  // administrator's intake switch on each.
+  add('WorkerList loaded', withRouter(createElement(WorkerList, {
+    items: [
+      {
+        worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', state: 'online', intake_enabled: true,
+        slots: 1, version: '0.5.0', started_at: '2026-10-09T10:00:00Z',
+        heartbeat_at: '2026-10-09T10:05:00Z', current_run_ids: [RUN_ID],
+      },
+      {
+        worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', state: 'stale', intake_enabled: false,
+        slots: 2, version: '0.5.0', started_at: '2026-10-09T09:00:00Z',
+        heartbeat_at: '2026-10-09T09:58:00Z', current_run_ids: [],
+      },
+      {
+        worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', state: 'offline', intake_enabled: true,
+        slots: 1, version: '0.4.0', started_at: '2026-10-08T09:00:00Z',
+        heartbeat_at: '2026-10-08T12:00:00Z', current_run_ids: [],
+      },
+    ],
+    roles: ['admin'], busy: false, onIntake: noop, onNext: null, onPrevious: null,
   })));
 
   // The finding list, with a row SELECTED — `aria-current='true'` is the only place

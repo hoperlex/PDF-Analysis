@@ -103,6 +103,9 @@ import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
+import { WorkerList } from '@/widgets/worker-list';
+import { RunWorkerLine, WORKER_PAGE_LIMIT } from '@/entities/execution';
+import type { ExecutionWorker } from '@/shared/api';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { RECENT_PROJECT_LIMIT } from '@/widgets/home-tiles';
@@ -695,6 +698,25 @@ function dashboardSummary(over: Partial<DashboardSummary> = {}): DashboardSummar
   };
 }
 
+/** `W54-WORKERS-WEB`: one registered worker per sealed state, the first holding a run. */
+const WORKERS: readonly ExecutionWorker[] = [
+  {
+    worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', state: 'online', intake_enabled: true,
+    slots: 1, version: '0.5.0', started_at: '2026-10-09T10:00:00Z',
+    heartbeat_at: '2026-10-09T10:05:00Z', current_run_ids: [RUN_ID],
+  },
+  {
+    worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', state: 'stale', intake_enabled: false,
+    slots: 2, version: '0.5.0', started_at: '2026-10-09T09:00:00Z',
+    heartbeat_at: '2026-10-09T09:58:00Z', current_run_ids: [],
+  },
+  {
+    worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', state: 'offline', intake_enabled: true,
+    slots: 1, version: '0.4.0', started_at: '2026-10-08T09:00:00Z',
+    heartbeat_at: '2026-10-08T12:00:00Z', current_run_ids: [],
+  },
+];
+
 const KEYS = {
   projects: queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT),
   project: queryKeys.projects.detail(PROJECT_UID),
@@ -710,6 +732,8 @@ const KEYS = {
   journal: queryKeys.findings.journal({ limit: JOURNAL_PAGE_LIMIT }),
   executionQueue: queryKeys.execution.queue(),
   executionJournal: queryKeys.execution.journal(),
+  // `W54-WORKERS-WEB`: the «Исполнители» screen's first page.
+  workers: queryKeys.execution.workers(undefined, WORKER_PAGE_LIMIT),
   dashboardSummary: queryKeys.dashboard.summary(),
   // The home page's own two reads (`W50-HOME-01`), seeded by `W50-SHELL-FRAME` so the recent
   // list and the administrator's tile render loaded rather than pending in every state.
@@ -820,6 +844,8 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
     }],
     page,
   });
+  // One worker per state, so every row shape and the collapsed offline group render.
+  client.setQueryData(KEYS.workers, { items: WORKERS, page });
   return client;
 }
 
@@ -881,6 +907,7 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.registrations, { items: [], page, pending_total: 0 });
   client.setQueryData(KEYS.executionQueue, { items: [], page, paused: false });
   client.setQueryData(KEYS.executionJournal, { items: [], page });
+  client.setQueryData(KEYS.workers, { items: [], page });
   client.setQueryData(
     KEYS.dashboardSummary,
     dashboardSummary({
@@ -1348,7 +1375,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         available_at: '2026-10-09T10:00:00Z',
       }],
       roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
-      busy: false, onCancel: () => {}, onReaudit: () => {},
+      busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
       onPriority: () => {}, onNext: null, onPrevious: null,
     }),
   },
@@ -1364,7 +1391,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         available_at: '2026-10-09T10:00:00Z',
       }],
       roles: ['admin'], asOf: null,
-      busy: false, onCancel: () => {}, onReaudit: () => {},
+      busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
       onPriority: () => {}, onNext: null, onPrevious: null,
     }),
   },
@@ -1372,9 +1399,45 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'execution-queue-empty-paged',
     make: () => createElement(ExecutionQueue, {
       items: [], roles: [], asOf: null,
-      busy: false, onCancel: () => {}, onReaudit: () => {},
+      busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
       onPriority: () => {}, onNext: null, onPrevious: () => {},
     }),
+  },
+  /*
+   * `W54-WORKERS-WEB`. The worker list's branches the «Исполнители» page reaches only from
+   * a page the cache states do not hold: a state outside the sealed set, an empty later
+   * page, a page with no worker on line; and every sentence a queue or run row uses to name
+   * (or not name) the worker holding a run.
+   */
+  {
+    name: 'worker-list-unknown-state',
+    make: () => createElement(WorkerList, {
+      items: [{ ...(WORKERS[0] as ExecutionWorker), state: 'future' as ExecutionWorker['state'] }],
+      roles: ['admin'], busy: false, onIntake: () => {}, onNext: null, onPrevious: null,
+    }),
+  },
+  {
+    name: 'worker-list-empty-paged',
+    make: () => createElement(WorkerList, {
+      items: [], roles: [], busy: false, onIntake: () => {}, onNext: null, onPrevious: () => {},
+    }),
+  },
+  {
+    name: 'worker-list-none-active',
+    make: () => createElement(WorkerList, {
+      items: WORKERS.filter((worker) => worker.state === 'offline'),
+      roles: ['expert'], busy: false, onIntake: () => {}, onNext: null, onPrevious: null,
+    }),
+  },
+  {
+    name: 'run-worker-lines',
+    make: () => createElement('div', null,
+      createElement(RunWorkerLine, { worker: { kind: 'held', workerId: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A' } }),
+      createElement(RunWorkerLine, { worker: { kind: 'unheld' } }),
+      createElement(RunWorkerLine, { worker: { kind: 'beyond' } }),
+      createElement(RunWorkerLine, { worker: { kind: 'unreadable' } }),
+      createElement(RunWorkerLine, { worker: { kind: 'pending' } }),
+    ),
   },
   /*
    * `app/not-found.tsx` is a FILE in the route tree and not an address, so no derivation
@@ -2293,6 +2356,10 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
   {
     label: 'Команда отклонена',
     why: 'QueuePage can show this only after a command mutation settles with a typed refusal. The static harness cannot fire its confirmation or seed the mutation observer through a query cache.',
+  },
+  {
+    label: 'Команда исполнителю отклонена',
+    why: 'WorkersPage shows this only after the setWorkerIntake mutation settles with a typed refusal, past the confirmation step. One static render cannot press the switch, confirm it or seed the mutation observer through a query cache.',
   },
   {
     label: 'Заявка не одобрена',
