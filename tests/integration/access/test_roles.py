@@ -1,6 +1,9 @@
-"""The role set: grant, revoke, set, the epoch bump, and the §3.2 invariants -- no router.
+"""The role set: grant, set, the epoch bump, and the §3.2 invariants -- no router.
 
-`W49-ACCESS-01c`, `W49-PLAN.md` §3.2.
+`W49-ACCESS-01c`, `W49-PLAN.md` §3.2. `W53C-IDENTITY-01` (C-11) deleted
+``AccountRepository.revoke_role``, which had no production caller and did not refuse an
+archived account (`R-62`); a role is removed only by ``set_roles``, and the removal cases
+below drive it.
 """
 
 from __future__ import annotations
@@ -52,7 +55,7 @@ def _epoch(session: Session, uid: str) -> int:
     )
 
 
-class TestGrantAndRevoke:
+class TestGrantAndRemove:
     def test_a_grant_records_the_administrator_and_bumps_once(self, session: Session) -> None:
         seed = _seed(session)
         uid = _create(session, "anna@example.com", roles=())
@@ -66,23 +69,28 @@ class TestGrantAndRevoke:
         ).scalar_one()
         assert granted_by == seed
 
-    def test_a_revocation_bumps_and_the_standing_sees_it_at_once(self, session: Session) -> None:
+    def test_a_removal_bumps_and_the_standing_sees_it_at_once(self, session: Session) -> None:
         seed = _seed(session)
         uid = _create(session, "anna@example.com", roles=("expert", "admin"))
         before = _epoch(session, uid)
-        assert accounts.revoke_role(session, actor_uid=seed, user_uid=uid, role="expert")
+        accounts.set_roles(session, actor_uid=seed, user_uid=uid, roles={"admin"})
         account = accounts.get_account(session, uid)
         assert account is not None
         assert account.roles == frozenset({"admin"})
-        assert not accounts.revoke_role(session, actor_uid=seed, user_uid=uid, role="expert")
+        accounts.set_roles(session, actor_uid=seed, user_uid=uid, roles={"admin"})
         session.commit()
         assert _epoch(session, uid) == before + 1
+
+    def test_there_is_no_single_role_revocation(self) -> None:
+        """C-11: the dead ``revoke_role`` is gone, so nothing can remove a role from an
+        archived account behind ``set_roles``' `R-62` refusal."""
+        assert not hasattr(AccountRepository, "revoke_role")
 
     def test_an_account_cannot_demote_itself(self, session: Session) -> None:
         seed = _seed(session)
         _create(session, "anna@example.com", roles=("admin",))
         with pytest.raises(AccountInvariantViolation) as caught:
-            accounts.revoke_role(session, actor_uid=seed, user_uid=seed, role="expert")
+            accounts.set_roles(session, actor_uid=seed, user_uid=seed, roles={"admin"})
         assert caught.value.invariant == SELF_ACTION
         assert caught.value.code is ErrorCode.PERMISSION_DENIED
 
@@ -90,12 +98,14 @@ class TestGrantAndRevoke:
         seed = _seed(session)
         other = _create(session, "anna@example.com", roles=("expert",))
         with pytest.raises(AccountInvariantViolation) as caught:
-            accounts.revoke_role(session, actor_uid=other, user_uid=seed, role="admin")
+            accounts.set_roles(session, actor_uid=other, user_uid=seed, roles={"expert"})
         assert caught.value.invariant == LAST_ADMIN
         assert caught.value.code is ErrorCode.CONFLICT
         session.rollback()
         second = _create(session, "boris@example.com", roles=("admin",))
-        assert accounts.revoke_role(session, actor_uid=second, user_uid=seed, role="admin")
+        assert accounts.set_roles(
+            session, actor_uid=second, user_uid=seed, roles={"expert"}
+        ) == frozenset({"expert"})
 
     def test_an_unknown_role_is_refused(self, session: Session) -> None:
         with pytest.raises(DomainError) as caught:
@@ -140,7 +150,7 @@ class TestSetRoles:
         ) == frozenset({"admin", "expert"})
 
 
-def test_two_concurrent_revocations_of_the_last_two_administrators_leave_one(
+def test_two_concurrent_removals_of_the_last_two_administrators_leave_one(
     migrated_engine: Engine,
 ) -> None:
     """As the archive race in ``test_account_management.py``, for losing the role."""
@@ -150,18 +160,18 @@ def test_two_concurrent_revocations_of_the_last_two_administrators_leave_one(
         b = _create(setup, "boris@example.com", roles=("admin",))
         x = _create(setup, "xenia@example.com")
         y = _create(setup, "yuri@example.com")
-        accounts.revoke_role(setup, actor_uid=a, user_uid=seed, role="admin")
+        accounts.set_roles(setup, actor_uid=a, user_uid=seed, roles={"expert"})
         setup.commit()
 
     outcome: dict[str, object] = {}
     first = Session(migrated_engine)
-    accounts.revoke_role(first, actor_uid=x, user_uid=b, role="admin")
+    accounts.set_roles(first, actor_uid=x, user_uid=b, roles=())
 
     def second() -> None:
         with Session(migrated_engine) as other:
             other.execute(text("SET lock_timeout = '20s'"))
             try:
-                accounts.revoke_role(other, actor_uid=y, user_uid=a, role="admin")
+                accounts.set_roles(other, actor_uid=y, user_uid=a, roles=())
                 other.commit()
                 outcome["second"] = "revoked"
             except AccountInvariantViolation as exc:

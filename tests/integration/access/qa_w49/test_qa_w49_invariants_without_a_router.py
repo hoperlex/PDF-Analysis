@@ -95,9 +95,6 @@ _LAST_ADMIN_ACTS: dict[str, Callable[[Session, str, str], object]] = {
     "set_roles (to nothing)": lambda s, actor, target: ACCOUNTS.set_roles(
         s, actor_uid=actor, user_uid=target, roles=()
     ),
-    "revoke_role admin": lambda s, actor, target: ACCOUNTS.revoke_role(
-        s, actor_uid=actor, user_uid=target, role="admin"
-    ),
 }
 
 
@@ -144,9 +141,6 @@ _SELF_ACTS: dict[str, Callable[[Session, str], object]] = {
     ),
     "set_roles (drop expert, add nothing)": lambda s, me: ACCOUNTS.set_roles(
         s, actor_uid=me, user_uid=me, roles=("admin",)
-    ),
-    "revoke_role expert": lambda s, me: ACCOUNTS.revoke_role(
-        s, actor_uid=me, user_uid=me, role="expert"
     ),
     "reset_password": lambda s, me: ACCOUNTS.reset_password(
         s, actor_uid=me, user_uid=me, temporary_password="qa49-temporary-self"

@@ -57,7 +57,9 @@ Four things this module does **not** do, each because the contract or `T-6` says
      -- ``permission_denied``, ``required_capability: profile_completed``;
   4. :data:`OPERATION_ROLES`: the subject holds **at least one** role of the operation's
      set, and the empty set means any active account with a complete profile (`R-60`) --
-     ``permission_denied``, ``required_capability: role:expert`` or ``role:admin``.
+     ``permission_denied``, ``required_capability: role:expert``, ``role:admin`` or, for a
+     set of both, ``role:admin|expert``. Since `R-80` the empty set is the account's own
+     operations and the product version and release notes only: product data needs a role.
 
   A verified subject is published on ``request.state.subject`` with the login and display
   label **its row** holds now, not the ones minted into the credential: a profile completed
@@ -288,12 +290,18 @@ ROLE_EXPERT: Final[str] = "expert"
 ROLE_ADMIN: Final[str] = "admin"
 
 _ANY_COMPLETE_ACCOUNT: Final[frozenset[str]] = frozenset()
+#: `R-80`. Any one role: an active account whose role set is empty is suspended from product
+#: data. Refused with ``required_capability: role:admin|expert``.
+_ANY_ROLE: Final[frozenset[str]] = frozenset({ROLE_EXPERT, ROLE_ADMIN})
 _EXPERT: Final[frozenset[str]] = frozenset({ROLE_EXPERT})
 _ADMIN: Final[frozenset[str]] = frozenset({ROLE_ADMIN})
 
-#: `R-60`, `W49-PLAN.md` section 3.2. What each guarded operation requires, by
-#: ``operationId``: **any of** the roles in its set, and the empty set means any active
-#: account with a complete profile, whatever roles it holds -- none included. Every guarded
+#: `R-60`, `W49-PLAN.md` section 3.2, as `R-80` amends them. What each guarded operation
+#: requires, by ``operationId``: **any of** the roles in its set, and the empty set means any
+#: active account with a complete profile, whatever roles it holds -- none included. `R-80`
+#: keeps the empty set to the account's own operations and the product version and release
+#: notes; every read of product data needs one role, because an empty role set is a legal
+#: state an administrator sets and it now means suspended. Every guarded
 #: operation is named and nothing has a default: an ``operationId`` absent from this map is
 #: refused to everyone, so an operation added to the surface is closed until somebody
 #: writes its line here. ``tests/integration/api/test_role_register.py`` sweeps the served
@@ -303,25 +311,27 @@ _ADMIN: Final[frozenset[str]] = frozenset({ROLE_ADMIN})
 #: account is read for them, so there is no role set to compare.
 OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
     {
-        # Reads of product data: any complete account (R-60).
-        "listProjects": _ANY_COMPLETE_ACCOUNT,
-        "listDocuments": _ANY_COMPLETE_ACCOUNT,
-        "getDocumentVersion": _ANY_COMPLETE_ACCOUNT,
-        "streamDocumentVersionContent": _ANY_COMPLETE_ACCOUNT,
-        "getVersionBlocks": _ANY_COMPLETE_ACCOUNT,
-        "listVersions": _ANY_COMPLETE_ACCOUNT,
-        "listRuns": _ANY_COMPLETE_ACCOUNT,
-        "listExecutionQueue": _ANY_COMPLETE_ACCOUNT,
-        "listExecutionJournal": _ANY_COMPLETE_ACCOUNT,
-        "getRunStatus": _ANY_COMPLETE_ACCOUNT,
-        "listRunFindings": _ANY_COMPLETE_ACCOUNT,
-        "getFinding": _ANY_COMPLETE_ACCOUNT,
-        "listDecisionHistory": _ANY_COMPLETE_ACCOUNT,
-        "listDecisions": _ANY_COMPLETE_ACCOUNT,
-        "getDashboardSummary": _ANY_COMPLETE_ACCOUNT,
+        # Reads of product data: any one role (R-80 amends R-60 and narrows R-78).
+        "listProjects": _ANY_ROLE,
+        "listDocuments": _ANY_ROLE,
+        "getDocumentVersion": _ANY_ROLE,
+        "streamDocumentVersionContent": _ANY_ROLE,
+        "getVersionBlocks": _ANY_ROLE,
+        "listVersions": _ANY_ROLE,
+        "listRuns": _ANY_ROLE,
+        "listExecutionQueue": _ANY_ROLE,
+        "listExecutionJournal": _ANY_ROLE,
+        "getRunStatus": _ANY_ROLE,
+        "listRunFindings": _ANY_ROLE,
+        "getFinding": _ANY_ROLE,
+        "listDecisionHistory": _ANY_ROLE,
+        "listDecisions": _ANY_ROLE,
+        "getDashboardSummary": _ANY_ROLE,
+        # The product version and release notes: any complete account, roles or none
+        # (R-80), so a role-less person can still see what the product is.
         "getProductVersion": _ANY_COMPLETE_ACCOUNT,
         "listReleases": _ANY_COMPLETE_ACCOUNT,
-        # The account itself.
+        # The account itself: any complete account, roles or none (R-80).
         "getMe": _ANY_COMPLETE_ACCOUNT,
         "updateMyProfile": _ANY_COMPLETE_ACCOUNT,
         "changePassword": _ANY_COMPLETE_ACCOUNT,
@@ -361,8 +371,9 @@ ROLES_OF_A_ROUTE_WITHOUT_AN_OPERATION: Final[frozenset[str]] = _ANY_COMPLETE_ACC
 def role_capability(required: frozenset[str]) -> str:
     """The ``required_capability`` a role refusal carries: ``role:`` and the set's members.
 
-    One member today in every set (``role:expert``, ``role:admin``); a set of more would
-    name them all, sorted and joined by ``|``, because the refusal is "any of these".
+    One member (``role:expert``, ``role:admin``), or both for an operation any one role
+    reaches (`R-78`'s cancel and re-audit, `R-80`'s product reads): ``role:admin|expert``,
+    sorted and joined by ``|``, because the refusal is "any of these".
     """
     return "role:" + "|".join(sorted(required))
 
@@ -883,7 +894,8 @@ def build_authorization_dependency(
                 ErrorCode.PERMISSION_DENIED,
                 required_capability=PROFILE_COMPLETED_CAPABILITY,
             )
-        # 4. `R-60`. Any of the operation's roles; the empty set is any complete account.
+        # 4. `R-60`, `R-80`. Any of the operation's roles; the empty set is any complete
+        #    account.
         #    A named operation with no line in the register is refused to everyone -- the
         #    register has no default -- and says nothing about what would open it.
         if operation is None:

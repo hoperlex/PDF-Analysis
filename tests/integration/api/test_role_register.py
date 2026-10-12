@@ -86,26 +86,30 @@ SAMPLES: dict[str, tuple[str, str]] = {
 _ANY: frozenset[str] = frozenset()
 _EXPERT = frozenset({"expert"})
 _ADMIN = frozenset({"admin"})
+#: `R-80`: any one role -- an account whose role set is empty reads no product data.
+_ANY_ROLE = frozenset({"expert", "admin"})
 
-#: `R-60`, written out from the ruling's three sentences and **not** read from the seam:
-#: product reads need any complete account, product changes `expert`, account and request
-#: management `admin`; the account's own three operations need any complete account.
+#: `R-60`, written out from the ruling's three sentences and **not** read from the seam, as
+#: `R-80` amends it: product reads -- projects, documents, versions, blocks, runs, findings,
+#: decisions, the dashboard, the execution queue and journal -- need any one role; product
+#: changes `expert`, account and request management `admin`; the account's own operations
+#: and the product version and release notes need any complete account, roles or none.
 EXPECTED_ROLES: dict[str, frozenset[str]] = {
-    "listProjects": _ANY,
-    "listDocuments": _ANY,
-    "getDocumentVersion": _ANY,
-    "streamDocumentVersionContent": _ANY,
-    "getVersionBlocks": _ANY,
-    "listVersions": _ANY,
-    "listRuns": _ANY,
-    "getRunStatus": _ANY,
-    "listExecutionQueue": _ANY,
-    "listExecutionJournal": _ANY,
-    "listRunFindings": _ANY,
-    "getFinding": _ANY,
-    "listDecisionHistory": _ANY,
-    "listDecisions": _ANY,
-    "getDashboardSummary": _ANY,
+    "listProjects": _ANY_ROLE,
+    "listDocuments": _ANY_ROLE,
+    "getDocumentVersion": _ANY_ROLE,
+    "streamDocumentVersionContent": _ANY_ROLE,
+    "getVersionBlocks": _ANY_ROLE,
+    "listVersions": _ANY_ROLE,
+    "listRuns": _ANY_ROLE,
+    "getRunStatus": _ANY_ROLE,
+    "listExecutionQueue": _ANY_ROLE,
+    "listExecutionJournal": _ANY_ROLE,
+    "listRunFindings": _ANY_ROLE,
+    "getFinding": _ANY_ROLE,
+    "listDecisionHistory": _ANY_ROLE,
+    "listDecisions": _ANY_ROLE,
+    "getDashboardSummary": _ANY_ROLE,
     "getProductVersion": _ANY,
     "listReleases": _ANY,
     "markReleaseNotesRead": _ANY,
@@ -278,6 +282,21 @@ def test_a_role_refusal_names_the_role_and_nothing_else(router: Surface) -> None
     body = json.loads(answer.body)
     assert body["details"] == {"required_capability": "role:admin"}, body
     assert body["retryable"] is False, body
+
+
+def test_a_roleless_account_reads_no_product_data(router: Surface) -> None:
+    """`R-80`: an empty role set is suspension -- no product read, the way out stays open.
+
+    A complete account on a changed password with no role is refused every product read
+    with ``role:admin|expert``, and still reads its own account and the product's version
+    and release notes, so the person can see that no role is assigned.
+    """
+    credentials = router.router.credentials
+    credentials.roles = frozenset()
+    for operation in ("listProjects", "getDashboardSummary", "listExecutionQueue"):
+        assert _observed(router, operation) == "role:admin|expert", operation
+    for operation in ("getMe", "getProductVersion", "listReleases"):
+        assert _observed(router, operation) is None, operation
 
 
 def test_the_subject_carries_the_label_the_row_holds_now(router: Surface) -> None:

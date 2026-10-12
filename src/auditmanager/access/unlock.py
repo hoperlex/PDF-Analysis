@@ -17,11 +17,13 @@ caller can shut is the owner's own.
 There are three ways back and two of them need nobody:
 
 1. **time.** ``COOLING_OFF_SECONDS`` passes and the next attempt starts a fresh allowance;
-2. **a password change.** ``POST /auth/password`` clears the brake in the same UPDATE that
-   writes the new digest, so a reviewer who is shut out of the exchange but still holding a
-   live credential can open their own door;
-3. **this command**, for the case the first two do not cover: the owner cannot sign in,
-   cannot wait, and holds no credential to change a password with.
+2. **a password change.** ``POST /auth/password`` clears the brake's count in the same
+   UPDATE that writes the new digest. Since `W53C-IDENTITY-01` (C-10) the current password
+   it proves is braked like a sign-in, so it clears a count that has not yet shut the
+   account; an account that is already shut is refused there too until time or this
+   command opens it;
+3. **this command**, for the case the first two do not cover: the owner cannot sign in and
+   cannot wait.
 
 Why it is a command and not an operation
 -----------------------------------------

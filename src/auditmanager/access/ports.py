@@ -113,8 +113,11 @@ class UserRepository(Protocol):
     ) -> UserRecord | None:
         """Replace a password and revoke every credential minted under the old one.
 
-        ``None`` when the current password is not this account's, or when there is no such
-        account -- one answer, as everywhere else on this port.
+        ``None`` when the current password is not this account's, when there is no such
+        account, or when the account is shut by the sign-in brake -- one answer, as
+        everywhere else on this port. A wrong current password counts against that brake
+        exactly as a refused sign-in does (`W53C-IDENTITY-01`, C-10), so the caller must
+        commit a ``None`` too.
 
         The two halves are **required to be one write**. An implementation that changed the
         digest and raised the epoch in two statements would have a window in which the

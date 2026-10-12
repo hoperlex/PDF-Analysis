@@ -59,7 +59,12 @@ that named account is the owner's. There are three, and all three are code:
    lockout wearing a temporary one's clothes;
 2. **a password change.** :meth:`UserRepository.change_password` clears all three columns in
    the UPDATE it already performs. An account that has just proved its current password is
-   not the thing this brake exists to slow;
+   not the thing this brake exists to slow. Since `W53C-IDENTITY-01` (C-10) that proof is
+   itself braked: a wrong current password counts against the same allowance as a refused
+   sign-in, and while the account is shut the change does not consult the password -- so
+   this way back clears a count that has not yet shut the account, and an account already
+   shut opens by time or by the operator. Otherwise a credential somebody stole would be an
+   unbraked oracle for the password it was minted under;
 3. **the operator.** :mod:`auditmanager.access.unlock`, immediately, with no redeploy and no
    restart.
 
@@ -260,8 +265,14 @@ _SELECT_CREDENTIAL = text(
 #: caller's request body, which carries no login at all (`api/routers/auth.py`'s
 #: ``ChangePasswordRequest`` docstring says why), and not a second query, which would be a
 #: second read of a row this statement already has open.
+#:
+#: **Carries the lockout too, since `W53C-IDENTITY-01` (C-10)**, computed by the database
+#: against its own ``now()`` exactly as :data:`_SELECT_CREDENTIAL` computes it: the current
+#: password a password change proves is braked by the same per-account allowance as a
+#: sign-in, so while the account is shut the change does not consult it either.
 _SELECT_CREDENTIAL_BY_UID = text(
-    "SELECT password_algorithm, password_iterations, password_salt, password_hash, login "
+    "SELECT password_algorithm, password_iterations, password_salt, password_hash, login, "
+    "COALESCE(sign_in_blocked_until > now(), false) "
     "FROM app_user WHERE user_uid = :user_uid"
 )
 
@@ -367,7 +378,8 @@ _NEXT_FAILED_SIGN_INS: Final[str] = (
 #: occurrences cannot disagree.
 #:
 #: This statement is never reached for an account that is blocked right now --
-#: :meth:`UserRepository.authenticate` refuses before it gets here -- which is what makes
+#: :meth:`UserRepository.authenticate` and :meth:`UserRepository.change_password` refuse
+#: before they get here -- which is what makes
 #: knocking on a shut door free of charge to the account behind it and is why
 #: ``sign_in_blocked_until`` being non-NULL in the returned row means *this attempt shut
 #: it*, rather than *it was already shut*.
@@ -638,9 +650,10 @@ class UserRepository:
 
         Private, and it stays private. It is not on
         :class:`auditmanager.access.ports.UserRepository` because nobody outside this
-        module may decide that an attempt failed: the only thing that knows is the
-        comparison two lines above, and a port method called "note a failure" is a port
-        method somebody eventually calls for a reason of their own.
+        module may decide that an attempt failed: the only things that know are the two
+        comparisons that call it -- the sign-in's and, since `W53C-IDENTITY-01` (C-10), the
+        password change's proof of the current password -- and a port method called "note a
+        failure" is a port method somebody eventually calls for a reason of their own.
 
         The row is never read first. Everything the decision needs is computed inside the
         statement, from the row as the write finds it -- see
@@ -724,10 +737,17 @@ class UserRepository:
     ) -> UserRecord | None:
         """Replace this account's password, and revoke every credential minted under the old one.
 
-        ``None`` when the current password is not this account's, and when there is no such
-        account. One answer for both, for the same reason :meth:`authenticate` gives one:
-        the caller holding a credential for a deleted account learns nothing from being told
-        which it was.
+        ``None`` when the current password is not this account's, when there is no such
+        account, and -- since `W53C-IDENTITY-01` (C-10) -- when the account is shut by the
+        sign-in brake right now. One answer for all three, for the same reason
+        :meth:`authenticate` gives one: the caller holding a credential for a deleted
+        account learns nothing from being told which it was.
+
+        **The current-password check is braked like a sign-in.** A wrong current password
+        is noted against the same per-account allowance :meth:`authenticate` counts, so a
+        stolen credential is not an unbraked oracle for the password; while the account is
+        shut the password is not consulted at all and nothing is written, exactly as a
+        sign-in against a shut door is refused and not counted.
 
         **The order of the five steps is the security property, not house style.**
 
@@ -761,7 +781,19 @@ class UserRepository:
             spend_a_verification(current_password)
             return None
 
-        algorithm, iterations, salt, digest, login = credential
+        algorithm, iterations, salt, digest, login, blocked_now = credential
+        if blocked_now:
+            # The lockout, as in `authenticate`: the password is not consulted, the refusal
+            # costs a derivation, and an attempt against a shut door is not counted.
+            spend_a_verification(current_password)
+            _log.info(
+                "%s: a password change for %r was refused without consulting the current "
+                "password, because this account is inside its cooling-off period.",
+                SIGN_IN_BLOCKED,
+                login,
+            )
+            return None
+
         stored = StoredPassword(
             algorithm=algorithm,
             iterations=int(iterations),
@@ -773,11 +805,15 @@ class UserRepository:
         except DomainError as exc:
             if exc.code is ErrorCode.VALIDATION_FAILED:
                 # An empty or over-long *current* password is a failed attempt, exactly as
-                # in `authenticate`. Anything else -- an unreadable stored credential -- is
-                # a real fault and propagates rather than being reported as a wrong password.
+                # in `authenticate`, and is counted like one (C-10). Anything else -- an
+                # unreadable stored credential -- is a real fault and propagates rather than
+                # being reported as a wrong password.
+                self._note_a_failed_sign_in(session, login)
                 return None
             raise
         if not matched:
+            # C-10: the same per-account brake a refused sign-in moves.
+            self._note_a_failed_sign_in(session, login)
             return None
 
         if is_the_same_password(current_password, new_password):

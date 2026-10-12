@@ -336,8 +336,9 @@ def test_a_shut_account_refuses_the_right_password(
 
     A lockout a correct password defeats does not stop guessing, because a guess that
     succeeds *is* a correct password. The availability that costs is the price of the
-    confidentiality it buys; what bounds it is that it ends, and the three ways it ends are
-    each asserted below.
+    confidentiality it buys; what bounds it is that it ends, and the ways it ends -- time
+    and the operator, with a password change clearing a count that has not shut it yet
+    (C-10) -- are each asserted below.
     """
     _shut_it(session_factory, user.login)
     with session_factory() as session:
@@ -554,11 +555,16 @@ def test_a_lockout_does_not_touch_a_credential_anybody_already_holds(
 
     The probe sends the account's real current password to ``changePassword``: the seam runs
     before the handler, so a credential the seam refuses answers 401 without the port being
-    reached, and 200 means the seam accepted it.
+    reached, and 200 means the seam accepted it. Since C-10 the handler itself refuses a
+    password change while the account is shut, so the probe runs once the block has passed
+    (the row is aged): the credential minted **before** the lockout is still accepted, which
+    a lockout that had revoked it would have turned into a 401 for good.
     """
     minted = _exchange(client, user.login, PASSWORD).json()["token"]  # type: ignore[attr-defined]
     _shut_it(session_factory, user.login)
     assert _row(session_factory, user.login).sign_in_blocked_until is not None
+    assert _row(session_factory, user.login).token_epoch == user.token_epoch
+    _age_the_row(session_factory, user.login, sql_interval="1 day")
     probe = client.post(
         "/auth/password",
         headers={"Authorization": f"Bearer {minted}"},
@@ -594,27 +600,38 @@ def test_a_revoked_account_is_not_thereby_shut(
 
 
 # =======================================================================================
-# The second way back: a password change.
+# The second way back: a password change -- and, since C-10, its own brake.
 # =======================================================================================
 
 
-def test_a_password_change_clears_the_brake(
-    user: UserRecord, session_factory: sessionmaker[Session]
-) -> None:
-    """An account that has just proved its current password is not what the brake exists to
-    slow -- and this is the way back for a reviewer who is shut out of the exchange but
-    still holding a live credential."""
-    _shut_it(session_factory, user.login)
+def _change(
+    session_factory: sessionmaker[Session], user: UserRecord, current_password: str
+) -> UserRecord | None:
+    """One password change through the real path, committed as the adapter commits it --
+    a refusal included, because since C-10 a refusal writes."""
     with session_factory() as session:
         changed = UserRepository().change_password(
             session,
             user_uid=str(user.user_uid),
-            current_password=PASSWORD,
+            current_password=current_password,
             new_password=NEW_PASSWORD,
         )
         session.commit()
+    return changed
+
+
+def test_a_password_change_clears_a_count_that_has_not_shut_the_account(
+    user: UserRecord, session_factory: sessionmaker[Session]
+) -> None:
+    """An account that has just proved its current password is not what the brake exists to
+    slow: the change clears the count the refusals before it left."""
+    for _ in range(3):
+        _refuse_once(session_factory, user.login)
+    assert _row(session_factory, user.login).failed_sign_ins == 3
+    changed = _change(session_factory, user, PASSWORD)
     assert changed is not None
     assert changed.failed_sign_ins == 0
+    assert changed.last_failed_sign_in_at is None
     assert changed.sign_in_blocked_until is None
     with session_factory() as session:
         assert (
@@ -623,28 +640,73 @@ def test_a_password_change_clears_the_brake(
         session.commit()
 
 
-def test_a_wrong_current_password_does_not_move_the_sign_in_brake(
+def test_a_wrong_current_password_counts_against_the_sign_in_brake(
     user: UserRecord, session_factory: sessionmaker[Session]
 ) -> None:
-    """The two counters are deliberately not one. ``changePassword`` is reached only by a
-    caller who already holds a credential for this account, so guessing there is guessing
-    as the account -- and a shared counter would let a stolen credential, or a reviewer
-    mistyping, shut the account's own front door."""
+    """`W53C-IDENTITY-01` C-10: the current-password check of ``changePassword`` is braked.
+
+    Measured like the sign-in allowance -- wrong current passwords driven until the door
+    shuts, bounded by the literal ceiling -- and it takes the same five. After that the
+    lockout is the sign-in's: the right password mints nothing. Before C-10 a credential
+    somebody held was an unbraked oracle for the password it was minted under, and this
+    loop ran to the ceiling.
+    """
+    shut_after = None
+    for attempt in range(1, REFUSAL_CEILING + 1):
+        assert _change(session_factory, user, WRONG_PASSWORD) is None
+        if _row(session_factory, user.login).sign_in_blocked_until is not None:
+            shut_after = attempt
+            break
+    assert shut_after == 5, "wrong current passwords never shut the account"
     with session_factory() as session:
-        for _ in range(REFUSAL_CEILING):
-            assert (
-                UserRepository().change_password(
-                    session,
-                    user_uid=str(user.user_uid),
-                    current_password=WRONG_PASSWORD,
-                    new_password=NEW_PASSWORD,
-                )
-                is None
-            )
+        assert UserRepository().authenticate(session, user.login, PASSWORD) is None
         session.commit()
-    untouched = _row(session_factory, user.login)
-    assert untouched.failed_sign_ins == 0
-    assert untouched.sign_in_blocked_until is None
+
+
+def test_sign_in_and_password_change_refusals_share_one_count(
+    user: UserRecord, session_factory: sessionmaker[Session]
+) -> None:
+    """One allowance per account, not one per door: three refused sign-ins, an empty current
+    password (counted, like an empty sign-in candidate) and one wrong one shut it."""
+    for _ in range(3):
+        _refuse_once(session_factory, user.login)
+    assert _change(session_factory, user, "") is None
+    assert _row(session_factory, user.login).failed_sign_ins == 4
+    assert _row(session_factory, user.login).sign_in_blocked_until is None
+    assert _change(session_factory, user, WRONG_PASSWORD) is None
+    shut = _row(session_factory, user.login)
+    assert shut.failed_sign_ins == 5
+    assert shut.sign_in_blocked_until is not None
+
+
+def test_a_shut_account_cannot_change_its_password_and_is_not_consulted(
+    user: UserRecord,
+    session_factory: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """While the account is shut the change is refused **with the right password**, the
+    password is not consulted -- a derivation is spent instead, as a sign-in against a shut
+    door spends one -- and nothing is written: neither the digest, nor the epoch, nor the
+    block, which knocking must not extend."""
+    _shut_it(session_factory, user.login)
+    before = _row(session_factory, user.login)
+    spent: list[str] = []
+    monkeypatch.setattr(
+        "auditmanager.access.repository.spend_a_verification",
+        lambda password, **_: spent.append(password),
+    )
+    assert _change(session_factory, user, PASSWORD) is None
+    assert spent == [PASSWORD]
+    monkeypatch.undo()
+    after = _row(session_factory, user.login)
+    assert after.token_epoch == before.token_epoch
+    assert after.failed_sign_ins == before.failed_sign_ins
+    assert after.sign_in_blocked_until == before.sign_in_blocked_until
+    # Once the block has passed, the OLD password is still the account's.
+    _age_the_row(session_factory, user.login, sql_interval="1 day")
+    with session_factory() as session:
+        assert UserRepository().authenticate(session, user.login, PASSWORD) is not None
+        session.commit()
 
 
 # =======================================================================================
