@@ -14,7 +14,14 @@ Run on this host only (`W54-CORPUS-OPERATE-01` step 4), against the promotion da
    ``objects/<2 hex>/<sha256>.pdf`` (same filesystem; ``--copy-objects`` copies instead, and
    says so), re-hashed there, and made read-only. A file the sums do not name, or name with
    other bytes, stops the export.
-3. **Rows, build, manifest, ``SHA256SUMS``**, then the directory is renamed
+3. **Identity** (`W54-JUDGE-Y` F1): the base snapshot is derived again from the rows'
+   documents and the drop's ``results.md`` bytes (``snapshot.derive``) and must be the row's
+   ``base_content_key`` and window; ``with_segmentation_profile(repaired_snapshot(base,
+   ledger), profile)`` -- or the base itself without a ledger -- must be its ``content_key``
+   and ``content_digest``; every ledger block's ``crop_sha256`` must be the bundled crop of
+   that ``(slug, block_id)``; and the ledger file must name the ``SHA256SUMS`` given here
+   (`F3`). So a bundle cannot pair one drop's text with another drop's PDFs or ledger.
+4. **Rows, build, manifest, ``SHA256SUMS``**, then the directory is renamed
    ``<content_key>+<sha256(SHA256SUMS)>``. Until that rename the work is
    ``incomplete-*`` beside it, never a name the inbound key would accept.
 
@@ -42,7 +49,8 @@ from sqlalchemy.orm import Session
 
 from auditmanager.shared.identity import NormsSnapshotId
 
-from ..corpus_source import crop_path, read_document
+from ..corpus_source import DropSumsInvalid, crop_path, read_document
+from ..corpus_source import read_drop_sums as _parse_drop_sums
 from ..custody import binding_digest
 from ..embedding import vectors
 from ..embedding.digest import EMBEDDING_SET_DIGEST_VERSION, EmbeddingSetDigest
@@ -50,9 +58,17 @@ from ..embedding.model import ChunkEmbedding, EmbeddedWindow
 from ..embedding.profile import EMBEDDING_PROFILE
 from ..embedding_repository import NormEmbeddingRepository
 from ..model import TextReliability
-from ..repair import RepairLedger
+from ..repair import RepairLedger, repaired_snapshot
+from ..repair_journal import read_ledger_file
 from ..repository import NormsProjectionConflict, NormsRepository
-from ..snapshot import SnapshotRows
+from ..segmentation import drawn_on
+from ..snapshot import (
+    DocumentFingerprint,
+    SnapshotRows,
+    derive,
+    fingerprint,
+    with_segmentation_profile,
+)
 from .contents import BuildWriter, write_rows
 from .errors import BundleRefused
 from .layout import (
@@ -284,32 +300,15 @@ def read_export_source(
 
 
 def read_drop_sums(path: Path) -> tuple[str, dict[str, str]]:
-    """``(sha256 of the file, relative path -> sha256)`` of the operator's drop sums."""
+    """``(sha256 of the file, relative path -> sha256)`` of the operator's drop sums.
+
+    The one parser the repair run also uses (``corpus_source.read_drop_sums``, `F3`).
+    """
     try:
-        data = path.read_bytes()
-    except OSError as exc:
-        raise BundleRefused("drop_sums_absent", f"the drop's SHA256SUMS is unreadable: {exc}") from None
-    entries: dict[str, str] = {}
-    for number, raw in enumerate(data.decode("utf-8").splitlines(), start=1):
-        if not raw.strip():
-            continue
-        sha, separator, name = raw.partition(" ")
-        if (
-            raw.startswith("\\")
-            or len(sha) != 64
-            or any(c not in "0123456789abcdefABCDEF" for c in sha)
-            or separator != " "
-            or name[:1] not in (" ", "*")
-        ):
-            raise BundleRefused("drop_sums_malformed", f"drop SHA256SUMS line {number} is not GNU sha256sum text")
-        relative = name[1:]
-        relative = relative.removeprefix("./")
-        if relative in entries:
-            raise BundleRefused("drop_sums_malformed", f"drop SHA256SUMS names {relative} twice")
-        entries[relative] = sha.lower()
-    if not entries:
-        raise BundleRefused("drop_sums_malformed", "the drop's SHA256SUMS is empty")
-    return hashlib.sha256(data).hexdigest(), entries
+        parsed = _parse_drop_sums(path)
+    except DropSumsInvalid as invalid:
+        raise BundleRefused(invalid.reason, invalid.message) from None
+    return parsed.sha256, dict(parsed.entries)
 
 
 def read_crops_index(corpus: Path) -> dict[str, tuple[str, ...]]:
@@ -334,7 +333,14 @@ def read_crops_index(corpus: Path) -> dict[str, tuple[str, ...]]:
     return {slug: tuple(sorted(blocks)) for slug, blocks in by_slug.items()}
 
 
-def _ledger_facts(path: Path | None, rows: SnapshotRows) -> LedgerFacts | None:
+@dataclass(frozen=True, slots=True)
+class _Ledger:
+    ledger: RepairLedger
+    sha256: str
+
+
+def _read_ledger(path: Path | None, rows: SnapshotRows, drop_sums_sha256: str) -> _Ledger | None:
+    """The ``--ledger`` file, read and checked against the snapshot's counts and the sums."""
     snapshot = rows.snapshot
     if path is None:
         if snapshot.repair_count or snapshot.unreliable_count:
@@ -344,16 +350,25 @@ def _ledger_facts(path: Path | None, rows: SnapshotRows) -> LedgerFacts | None:
                 f"{snapshot.unreliable_count} unreliable blocks; pass --ledger",
             )
         return None
-    data = path.read_bytes()
     try:
-        ledger = RepairLedger.from_document(json.loads(data.decode("utf-8")))
+        data = path.read_bytes()
+    except OSError as exc:
+        raise BundleRefused("ledger_invalid", f"the repair ledger is unreadable: {exc.strerror or exc}") from None
+    try:
+        ledger, ledger_sums = read_ledger_file(data)
     except (KeyError, TypeError, ValueError) as exc:
         raise BundleRefused("ledger_invalid", f"the repair ledger is unreadable: {exc}") from None
-    base = snapshot.base_content_key.split("+seg-")[0]
-    if ledger.base_snapshot_id != base:
+    if ledger_sums is None:
         raise BundleRefused(
-            "ledger_mismatch",
-            f"the ledger is over {ledger.base_snapshot_id!r}; the snapshot's base is {base!r}",
+            "ledger_sums_unrecorded",
+            "the repair ledger names no drop_sums_sha256, so it cannot show which SHA256SUMS "
+            "its crops were checked against; write it again with `repair ledger`",
+        )
+    if ledger_sums != drop_sums_sha256:
+        raise BundleRefused(
+            "ledger_sums_differ",
+            f"the repair checked its crops against SHA256SUMS {ledger_sums}; --drop-sums is "
+            f"{drop_sums_sha256}",
         )
     if (len(ledger.applied), ledger.unreliable_count) != (snapshot.repair_count, snapshot.unreliable_count):
         raise BundleRefused(
@@ -361,8 +376,15 @@ def _ledger_facts(path: Path | None, rows: SnapshotRows) -> LedgerFacts | None:
             f"the ledger applies {len(ledger.applied)} and leaves {ledger.unreliable_count} "
             f"unreliable; the snapshot says {snapshot.repair_count} and {snapshot.unreliable_count}",
         )
+    return _Ledger(ledger=ledger, sha256=hashlib.sha256(data).hexdigest())
+
+
+def _ledger_facts(read: _Ledger | None) -> LedgerFacts | None:
+    if read is None:
+        return None
+    ledger = read.ledger
     return LedgerFacts(
-        sha256=hashlib.sha256(data).hexdigest(),
+        sha256=read.sha256,
         version=ledger.version,
         base_snapshot_id=ledger.base_snapshot_id,
         applied=tuple(sorted(repair.key for repair in ledger.applied)),
@@ -370,6 +392,63 @@ def _ledger_facts(path: Path | None, rows: SnapshotRows) -> LedgerFacts | None:
             sorted((repair.document_slug, repair.block_id, repair.outcome.value) for repair in ledger.unreliable)
         ),
     )
+
+
+def _require_identity(
+    rows: SnapshotRows,
+    fingerprints: list[DocumentFingerprint],
+    ledger: RepairLedger | None,
+    crops: Mapping[tuple[str, str], str],
+) -> None:
+    """`F1`: the rows' keys are the keys the drop's text and the ledger derive, nothing else.
+
+    ``fingerprints`` are the rows' documents with the drop's ``results.md`` bytes and save
+    dates; ``crops`` maps ``(slug, block_id)`` to the SHA-256 of the crop placed in the bundle.
+    """
+    snapshot = rows.snapshot
+    base = derive(fingerprints)
+    try:
+        qualified_base = with_segmentation_profile(base, snapshot.segmentation_profile)
+    except ValueError as exc:
+        raise BundleRefused("base_key_differs", str(exc)) from None
+    derived = (qualified_base.content_key, base.drawn_from, base.drawn_to, base.undated_documents,
+               base.document_count)
+    stored = (snapshot.base_content_key, snapshot.drawn_from, snapshot.drawn_to,
+              snapshot.undated_documents, snapshot.document_count)
+    if derived != stored:
+        raise BundleRefused(
+            "base_key_differs",
+            f"the rows' documents and the drop's results.md derive {derived!r}; the snapshot row "
+            f"says {stored!r}",
+        )
+    effective = base
+    if ledger is not None:
+        try:
+            effective = repaired_snapshot(base, ledger)
+        except ValueError as exc:
+            raise BundleRefused("ledger_mismatch", str(exc)) from None
+        for repair in sorted(ledger.repairs, key=lambda item: item.key):
+            bundled = crops.get(repair.key)
+            if bundled is None:
+                raise BundleRefused(
+                    "ledger_crop_absent",
+                    f"{repair.document_slug}/{repair.block_id}: the ledger names a block whose "
+                    "crop this bundle does not carry",
+                )
+            if bundled != repair.crop_sha256:
+                raise BundleRefused(
+                    "ledger_crop_differs",
+                    f"{repair.document_slug}/{repair.block_id}: the ledger was recognised from crop "
+                    f"{repair.crop_sha256}; the bundle carries {bundled}",
+                )
+    qualified = with_segmentation_profile(effective, snapshot.segmentation_profile)
+    if (qualified.content_key, qualified.content_digest) != (snapshot.content_key, snapshot.content_digest):
+        raise BundleRefused(
+            "content_key_differs",
+            f"the drop and the {'ledger' if ledger is not None else 'absent ledger'} derive "
+            f"{qualified.content_key} / {qualified.content_digest}; the snapshot row says "
+            f"{snapshot.content_key} / {snapshot.content_digest}",
+        )
 
 
 class _ObjectPlacer:
@@ -382,14 +461,15 @@ class _ObjectPlacer:
         self._copy = copy
         self.objects: dict[str, tuple[int, list[ObjectSlot]]] = {}
 
-    def place(self, source: Path, slot: ObjectSlot) -> None:
+    def place(self, source: Path, slot: ObjectSlot) -> str:
+        """Place ``source`` for ``slot``; return the SHA-256 of the object now in the bundle."""
         relative = source.relative_to(self._corpus).as_posix()
         expected = self._sums.get(relative)
         if expected is None:
             raise BundleRefused("drop_file_unsummed", f"the drop's SHA256SUMS does not name {relative}")
         if expected in self.objects:
             self.objects[expected][1].append(slot)
-            return
+            return expected
         target = self._staging / object_path(expected)
         target.parent.mkdir(parents=True, exist_ok=True)
         if self._copy:
@@ -412,6 +492,7 @@ class _ObjectPlacer:
         if mode & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH):
             os.chmod(target, mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
         self.objects[expected] = (size, [slot])
+        return expected
 
 
 @dataclass(frozen=True, slots=True)
@@ -435,13 +516,16 @@ def write_bundle(
     snapshot = rows.snapshot
     require_content_key(snapshot.content_key)
     sums_sha256, sums = read_drop_sums(drop_sums)
-    ledger_facts = _ledger_facts(ledger, rows)
+    read_ledger = _read_ledger(ledger, rows, sums_sha256)
+    ledger_facts = _ledger_facts(read_ledger)
     crops = read_crops_index(corpus)
     out.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix="incomplete-", dir=out))
     try:
         placer = _ObjectPlacer(staging, corpus, sums, copy=copy_objects)
         results: dict[str, str] = {}
+        fingerprints: list[DocumentFingerprint] = []
+        bundled_crops: dict[tuple[str, str], str] = {}
         for document in sorted(rows.documents, key=lambda row: row.norm_document_id):
             directory = corpus / document.slug
             if not directory.is_dir():
@@ -460,6 +544,21 @@ def write_bundle(
                     "drop_file_differs", f"{results_relative} is not the bytes the drop's SHA256SUMS names"
                 )
             results[document.norm_document_id] = results_sha
+            saved_on = drawn_on(text_source.markdown)
+            if saved_on != document.drawn_on:
+                raise BundleRefused(
+                    "drop_document_differs",
+                    f"{document.slug}: results.md states save date {saved_on!r}, the row "
+                    f"{document.drawn_on!r}",
+                )
+            fingerprints.append(
+                fingerprint(
+                    slug=document.slug,
+                    source_document_id=document.source_document_ref,
+                    results_md=text_source.results_bytes,
+                    drawn_on=saved_on,
+                )
+            )
             placer.place(
                 directory / DOCUMENT_PDF,
                 ObjectSlot(document.norm_document_id, "pdf", document.source_document_ref),
@@ -477,10 +576,13 @@ def write_bundle(
                     f"{len(listed)}",
                 )
             for block_id in listed:
-                placer.place(
+                bundled_crops[(document.slug, block_id)] = placer.place(
                     crop_path(corpus, document.slug, block_id),
                     ObjectSlot(document.norm_document_id, "crop", block_id),
                 )
+        _require_identity(
+            rows, fingerprints, None if read_ledger is None else read_ledger.ledger, bundled_crops
+        )
 
         files: list[ManifestFile] = []
         for path in write_rows(staging, rows):

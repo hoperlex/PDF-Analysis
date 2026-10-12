@@ -20,11 +20,16 @@ from auditmanager.norms.embedding import vectors
 from auditmanager.norms.embedding.digest import EmbeddingSetDigest
 from auditmanager.norms.embedding.model import ChunkEmbedding, EmbeddedWindow
 from auditmanager.norms.embedding.profile import DIMENSIONS, EMBEDDING_PROFILE
+from auditmanager.norms.repair import RepairLedger, repaired_snapshot
+from auditmanager.norms.segmentation import drawn_on
 from auditmanager.norms.snapshot import (
+    CorpusSnapshot,
     DocumentRow,
     ParagraphRow,
     SnapshotRow,
     SnapshotRows,
+    derive,
+    fingerprint,
 )
 from auditmanager.shared.identity import (
     NormDocumentId,
@@ -150,10 +155,29 @@ def write_drop(where: Path, documents: Sequence[DropDocument] | None = None) -> 
 # --- rows and a build, without a database ----------------------------------------------
 
 
-def synthetic_rows(documents: Sequence[DropDocument] | None = None) -> SnapshotRows:
+def base_snapshot(documents: Sequence[DropDocument] | None = None) -> CorpusSnapshot:
+    """The base snapshot ``snapshot.derive`` gives for the drop ``write_drop`` writes."""
+    documents = list(default_documents() if documents is None else documents)
+    return derive(
+        fingerprint(
+            slug=document.slug,
+            source_document_id=document.source_ref,
+            results_md=_markdown(document).encode("utf-8"),
+            drawn_on=drawn_on(_markdown(document)),
+        )
+        for document in documents
+    )
+
+
+def synthetic_rows(
+    documents: Sequence[DropDocument] | None = None, *, ledger: RepairLedger | None = None
+) -> SnapshotRows:
+    """Rows whose keys are the ones the drop (and ``ledger``, when given) derive (`F1`)."""
     documents = list(default_documents() if documents is None else documents)
     snapshot_id = str(NormsSnapshotId.new())
-    key = "undated+2d.0123456789ab"
+    base = base_snapshot(documents)
+    effective = base if ledger is None else repaired_snapshot(base, ledger)
+    unreliable_blocks = set() if ledger is None else {repair.key for repair in ledger.unreliable}
     document_rows = []
     paragraph_rows = []
     for document in documents:
@@ -165,7 +189,7 @@ def synthetic_rows(documents: Sequence[DropDocument] | None = None) -> SnapshotR
                 slug=document.slug,
                 title=f"{document.slug}.pdf",
                 doc_type=document.doc_type,
-                drawn_on=None,
+                drawn_on=drawn_on(_markdown(document)),
                 source_attribution="unattributed",
                 pdf_page_count=2,
                 block_count=len(document.blocks),
@@ -187,21 +211,23 @@ def synthetic_rows(documents: Sequence[DropDocument] | None = None) -> SnapshotR
                     kind="clause",
                     clause_number=None,
                     text=text,
-                    text_reliability="reliable",
+                    text_reliability=(
+                        "unreliable" if (document.slug, block_id) in unreliable_blocks else "reliable"
+                    ),
                 )
             )
     return SnapshotRows(
         snapshot=SnapshotRow(
             norms_snapshot_id=snapshot_id,
-            content_key=key,
-            base_content_key=key,
-            content_digest="ab" * 32,
-            drawn_from=None,
-            drawn_to=None,
-            undated_documents=len(documents),
+            content_key=effective.content_key,
+            base_content_key=base.content_key,
+            content_digest=effective.content_digest,
+            drawn_from=base.drawn_from,
+            drawn_to=base.drawn_to,
+            undated_documents=base.undated_documents,
             document_count=len(documents),
-            repair_count=0,
-            unreliable_count=0,
+            repair_count=0 if ledger is None else len(ledger.applied),
+            unreliable_count=0 if ledger is None else ledger.unreliable_count,
             segmentation_profile="markdown-v1",
         ),
         documents=tuple(document_rows),

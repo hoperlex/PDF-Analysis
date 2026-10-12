@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -522,3 +523,73 @@ def degenerate_pages(root: Path) -> Iterator[PageToRecognise]:
                 original_text=block.text,
                 crop=read_crop(root, document.slug, block.block_id),
             )
+
+
+# --- the operator's SHA256SUMS over the drop ----------------------------------------------
+
+#: One line of ``sha256sum`` output: 64 **lowercase** hex digits, a space, the mode character
+#: (`` `` text, ``*`` binary) and the path. Lowercase is what ``sha256sum`` writes; an
+#: uppercase digest is not its output, so it is refused rather than folded (`W54-JUDGE-Y` F3).
+_SUMS_LINE = re.compile(r"([0-9a-f]{64}) [ *](.+)")
+
+
+class DropSumsInvalid(ValueError):
+    """The operator's ``SHA256SUMS`` is absent or is not one canonical ``sha256sum`` listing.
+
+    ``reason`` is ``drop_sums_absent`` or ``drop_sums_malformed``; each consumer (the repair
+    run, the bundle export) re-raises it as its own refusal with the same words.
+    """
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(f"{reason}: {message}")
+        self.reason = reason
+        self.message = message
+
+
+@dataclass(frozen=True, slots=True)
+class DropSums:
+    """One ``SHA256SUMS`` file: its own SHA-256 and ``relative path -> sha256``."""
+
+    sha256: str
+    entries: Mapping[str, str]
+
+
+def read_drop_sums(path: Path) -> DropSums:
+    """The one parser of the operator's ``SHA256SUMS`` (repair step 0 and the export).
+
+    Accepted: ``sha256sum`` text lines ``<64 lowercase hex> <space|*><path>``, paths relative
+    to the drop root with an optional leading ``./`` (removed), blank lines ignored. Refused,
+    as ``drop_sums_malformed``: any other line (an uppercase digest, a ``\\``-escaped name,
+    a missing separator), a file that is not UTF-8, an empty listing, and **a path named
+    twice** (after the ``./`` is removed) -- two lines for one file cannot both be the bytes
+    it has, and keeping either would be a guess.
+    """
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        raise DropSumsInvalid(
+            "drop_sums_absent", f"the drop's SHA256SUMS is unreadable: {exc.strerror or exc}"
+        ) from None
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise DropSumsInvalid("drop_sums_malformed", "the drop's SHA256SUMS is not UTF-8") from None
+    entries: dict[str, str] = {}
+    for number, raw in enumerate(text.split("\n"), start=1):
+        if not raw:
+            continue
+        match = _SUMS_LINE.fullmatch(raw)
+        if match is None:
+            raise DropSumsInvalid(
+                "drop_sums_malformed",
+                f"drop SHA256SUMS line {number} is not '<64 lowercase hex>  <path>' sha256sum text",
+            )
+        relative = match.group(2).removeprefix("./")
+        if not relative:
+            raise DropSumsInvalid("drop_sums_malformed", f"drop SHA256SUMS line {number} names no path")
+        if relative in entries:
+            raise DropSumsInvalid("drop_sums_malformed", f"drop SHA256SUMS names {relative} twice")
+        entries[relative] = match.group(1)
+    if not entries:
+        raise DropSumsInvalid("drop_sums_malformed", "the drop's SHA256SUMS is empty")
+    return DropSums(sha256=hashlib.sha256(data).hexdigest(), entries=entries)

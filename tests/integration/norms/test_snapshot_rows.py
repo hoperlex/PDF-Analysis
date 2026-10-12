@@ -29,7 +29,7 @@ from auditmanager.norms.repository import SnapshotRowsInvalid, validate_snapshot
 SNAPSHOT_ID = "ns_" + "0" * 26
 DOCUMENT_A = "ndoc_" + "1" * 26
 DOCUMENT_B = "ndoc_" + "2" * 26
-KEY = "2026-07-23..2026-07-23+0d+0r+1u." + "a" * 12
+KEY = "2026-07-23..2026-07-23+0d+0r+1u." + "c" * 12
 BASE_KEY = "2026-07-23..2026-07-23+0d." + "b" * 12
 
 
@@ -99,7 +99,7 @@ def test_the_row_digest_is_the_documented_canonical_serialisation() -> None:
     """Written out by hand, so a change to the form is a deliberate change to this test."""
     lines = [
         f"{ROW_DIGEST_VERSION}\n",
-        'S["ns_00000000000000000000000000","2026-07-23..2026-07-23+0d+0r+1u.aaaaaaaaaaaa",'
+        'S["ns_00000000000000000000000000","2026-07-23..2026-07-23+0d+0r+1u.cccccccccccc",'
         '"2026-07-23..2026-07-23+0d.bbbbbbbbbbbb","' + "c" * 64 + '","2026-07-23","2026-07-23",'
         '0,2,0,1,"markdown-v1"]\n',
     ]
@@ -225,6 +225,53 @@ def test_a_qualified_snapshot_validates_when_both_keys_carry_its_profile() -> No
         validate_snapshot_rows(
             _rows(segmentation_profile="markdown-v2", content_key=KEY + "+seg-markdown-v2")
         )
+
+
+# --- the key's terms against the row (`W54-JUDGE-Y` F1) -------------------------------------
+
+
+def _snapshot(rows: SnapshotRows, **changes: object) -> SnapshotRows:
+    return dataclasses.replace(rows, snapshot=dataclasses.replace(rows.snapshot, **changes))
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        # +<n>r against repair_count, +<m>u against unreliable_count
+        (lambda r: _snapshot(r, repair_count=2), r"does not carry \+2r\+1u"),
+        (lambda r: _snapshot(r, content_key=KEY.replace("+0r+1u.", "+0r+2u.")), r"does not carry \+0r\+1u"),
+        (lambda r: _snapshot(r, content_key=KEY.replace("+0r+1u.", "+1r+1u.")), r"does not carry \+0r\+1u"),
+        (lambda r: _snapshot(r, content_key=KEY.replace("+0r+1u.", "+0r.")), r"does not carry \+0r\+1u"),
+        # the 12 hex digits against content_digest
+        (lambda r: _snapshot(r, content_digest="d" * 64), "names digest cccccccccccc"),
+        (lambda r: _snapshot(r, content_digest="C" * 64), "64 lowercase hex"),
+        # the window and +<d>d against the row's dates and undated count
+        (lambda r: _snapshot(r, drawn_to="2026-07-24"), "names window"),
+        (lambda r: _snapshot(r, undated_documents=1), "names window"),
+        (lambda r: _snapshot(r, base_content_key=BASE_KEY.replace("+0d.", "+1d.")), "base_content_key .* names window"),
+        (lambda r: _snapshot(r, base_content_key=KEY), "base_content_key .* carries a repair term"),
+        (lambda r: _snapshot(r, content_key="not a key"), "is not a D-126 snapshot key"),
+    ],
+    ids=["repairs", "unreliable", "repaired-term", "missing-u", "digest", "digest-case", "window",
+         "undated", "base-undated", "base-repaired", "grammar"],
+)
+def test_a_key_whose_terms_are_not_the_rows_is_refused(change, message: str) -> None:
+    with pytest.raises(SnapshotRowsInvalid, match=f"key_terms: .*{message}" if not message.startswith("base") else message):
+        validate_snapshot_rows(change(_rows()))
+
+
+def test_an_unchanged_snapshot_carries_no_repair_term_and_is_its_base() -> None:
+    base = BASE_KEY.replace("b" * 12, "c" * 12)
+    unchanged = dataclasses.replace(
+        _rows(),
+        paragraphs=tuple(dataclasses.replace(p, text_reliability="reliable") for p in _rows().paragraphs),
+    )
+    validate_snapshot_rows(_snapshot(unchanged, unreliable_count=0, content_key=base, base_content_key=base))
+    with pytest.raises(SnapshotRowsInvalid, match="carries a repair term; the row repairs nothing"):
+        validate_snapshot_rows(_snapshot(unchanged, unreliable_count=0, base_content_key=base))
+    with pytest.raises(SnapshotRowsInvalid, match="ck_norms_snapshot_raw_key"):
+        validate_snapshot_rows(_snapshot(unchanged, unreliable_count=0, content_key=base,
+                                         base_content_key=BASE_KEY))
 
 
 # --- import refusals that precede the database -----------------------------------------------

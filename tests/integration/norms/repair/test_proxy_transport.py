@@ -42,6 +42,7 @@ from tests.integration.norms.repair.support import (
     CLEAN_PAGE,
     DEGENERATE_PAGE,
     MODEL,
+    SUMS,
     MemoryStore,
     openai_body,
     page,
@@ -240,7 +241,7 @@ def test_a_503_through_the_real_transport_is_paid_at_most_once(tmp_path: Path) -
     store = MemoryStore()
     for _restart in range(2):
         journal = LocalJournal(tmp_path / "j").open(
-            base_snapshot=BASE, model=MODEL, ceiling_usd=Decimal(10), now="t"
+            base_snapshot=BASE, model=MODEL, ceiling_usd=Decimal(10), drop_sums_sha256=SUMS, now="t"
         )
         runner = DurableRepairRunner(journal=journal, store=store, transport=transport,
                                      clock=lambda: "t", sleep=lambda _s: None)

@@ -23,6 +23,7 @@ from tests.integration.norms.repair.support import (
     BASE,
     CLEAN_PAGE,
     MODEL,
+    SUMS,
     Answer,
     Kit,
     LiveCallAttempted,
@@ -35,7 +36,7 @@ from tests.integration.norms.repair.support import (
 
 def _open(directory: Path) -> LocalJournal:
     return LocalJournal(directory).open(
-        base_snapshot=BASE, model=MODEL, ceiling_usd=Decimal(10), now="t0"
+        base_snapshot=BASE, model=MODEL, ceiling_usd=Decimal(10), drop_sums_sha256=SUMS, now="t0"
     )
 
 
