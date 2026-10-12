@@ -41,12 +41,12 @@ from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import ErrorCode
 from auditmanager.storage import (
     ROLE_SOURCE_DOCUMENT,
-    BlobMetadataRepository,
     StorageUnavailableError,
     VerifiedBlob,
     derive_blob_id,
     sha256_of,
 )
+from auditmanager.storage.public import BlobMetadataRepository
 from auditmanager.storage._object_layout import canonical_key
 
 from .conftest import CustodyKit, insert_target, new_document_id
