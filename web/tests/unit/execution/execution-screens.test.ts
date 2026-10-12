@@ -9,6 +9,7 @@ import {
   canExecute, executionFailure, journalQueryOptions, queueAgeLabel, queueQueryOptions,
   visibleJournal,
 } from '@/entities/execution';
+import type { RunWorker } from '@/entities/execution';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { QueuePage, intentLabel } from '@/_pages/queue/ui/queue-page';
@@ -24,9 +25,12 @@ const queued: ExecutionQueueItem = {
   created_at: INSTANT, available_at: INSTANT,
 };
 
-function queue(roles: Role[], item: ExecutionQueueItem = queued): string {
+function queue(
+  roles: Role[], item: ExecutionQueueItem = queued,
+  workerOf: (runId: string) => RunWorker = () => ({ kind: 'pending' }),
+): string {
   return renderToStaticMarkup(createElement(ExecutionQueue, {
-    items: [item], roles, asOf: Date.parse('2026-10-09T10:05:00Z'), busy: false,
+    items: [item], roles, asOf: Date.parse('2026-10-09T10:05:00Z'), busy: false, workerOf,
     onCancel: noop, onReaudit: noop, onPriority: noop,
     onNext: null, onPrevious: null,
   }));

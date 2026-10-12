@@ -27,6 +27,7 @@ import { describe, expect, it } from 'vitest';
 import type { ErrorCode, RunState, RunStatus } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 import { PROVIDER_MODE_LABELS, STATE_LABELS } from '@/shared/ui';
+import { WORKER_LOOKUP_LIMIT } from '@/entities/execution';
 import { RunProgress } from '@/widgets/run-progress';
 
 import { PROJECT_UID, RUN_ID, runStatus } from '../review/fixtures';
@@ -581,5 +582,46 @@ describe('the stage timings carry a measurement, not two identical stamps (M-13)
     const markup = screen({ state: 'published', published_finding_count: 3, stages: [] });
     expect(markup).toContain('data-stage-elapsed="unknown"');
     expect(markup).not.toContain('data-stage-elapsed="0"');
+  });
+});
+
+describe('W54-WORKERS-WEB: the run names the worker holding it', () => {
+  const WORKER_ID = 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A';
+  const lookupKey = queryKeys.execution.workers(undefined, WORKER_LOOKUP_LIMIT);
+
+  function withWorkers(state: RunState, items: readonly { worker_id: string; current_run_ids: string[] }[]): string {
+    const status = runStatus({ state, terminal_at: null });
+    const client = newClient();
+    client.setQueryData(queryKeys.runs.detail(status.run_id), status);
+    client.setQueryData(lookupKey, {
+      items: items.map((item) => ({
+        state: 'online', intake_enabled: true, slots: 1, version: '0.5.0',
+        started_at: '2026-10-12T10:00:00Z', heartbeat_at: '2026-10-12T10:05:00Z', ...item,
+      })),
+      page: { next_cursor: null },
+    });
+    return renderWith(client, createElement(RunProgress, { projectUid: PROJECT_UID, runId: status.run_id }));
+  }
+
+  it('names it while the run is running or validating, linked to «Исполнители»', () => {
+    for (const state of ['running', 'validating'] as const) {
+      const markup = withWorkers(state, [{ worker_id: WORKER_ID, current_run_ids: [RUN_ID] }]);
+      expect(markup).toContain('data-run-worker="held"');
+      expect(markup).toContain(WORKER_ID);
+      expect(markup).toContain('href="/workers"');
+    }
+  });
+
+  it('says no registered worker holds it when the whole registry names none', () => {
+    const markup = withWorkers('running', [{ worker_id: WORKER_ID, current_run_ids: [] }]);
+    expect(markup).toContain('data-run-worker="unheld"');
+  });
+
+  it('names no worker, and asks for none, in a state where no Lease is held', () => {
+    for (const state of ['queued', 'published', 'failed', 'cancelled'] as const) {
+      const markup = withWorkers(state, [{ worker_id: WORKER_ID, current_run_ids: [RUN_ID] }]);
+      expect(markup).not.toContain('data-run-worker');
+      expect(markup).not.toContain(WORKER_ID);
+    }
   });
 });

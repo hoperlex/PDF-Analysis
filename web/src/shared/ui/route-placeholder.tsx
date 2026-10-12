@@ -32,14 +32,13 @@ export interface RoutePlaceholderProps {
    *
    * Both default to today's wording and neither may be left out where the default is
    * wrong. `«Раздел пока недоступен»` and `«Этот раздел ещё не готов.»` both carry a
-   * *yet*: they tell a reviewer the section is on its way. That is true of the thirteen
-   * project sections and of three of `W43-PREP`'s four, and it is **false of workers** —
-   * `PROTOTYPE_PROFILE.md` §7.2 defers remote/distributed executors and the whole
-   * `Job/Attempt` framework, so nobody has decided to build them. `R-18` says a stub may
-   * not claim something false about the system, and *"coming soon"* is a claim.
+   * *yet*: they tell a reviewer the section is on its way. `R-18` says a stub may not
+   * claim something false about the system, and *"coming soon"* is a claim.
    *
-   * They are optional and default to the existing strings, so every caller that predates
-   * this prop renders exactly the bytes it rendered before.
+   * Their one caller was the `/workers` stub, which said the alpha had no distributed
+   * workers. `W54-WORKERS-WEB` replaced it with the real «Исполнители» screen, so no
+   * section passes them today; they stay for a section deferred by decision rather than
+   * on its way. They are optional and default to the existing strings.
    */
   readonly unavailability?: string | undefined;
   /** The headline above the promise. Defaults to the "not ready yet" wording. */

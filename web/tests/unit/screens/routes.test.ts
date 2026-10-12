@@ -459,6 +459,7 @@ describe('every screen address is built once and matches a route file on disk', 
     expect(routes.logs(RUN_ID)).toBe('/logs?run_id=' + encodeURIComponent(RUN_ID));
     expect(routes.logs()).toBe('/logs');
     expect(routes.queue()).toBe('/queue');
+    expect(routes.workers()).toBe('/workers');
   });
   /*
    * THE LIST OF SIX `{url, file}` PAIRS THAT STOOD HERE IS GONE, and its deletion is
@@ -583,6 +584,7 @@ describe('every screen address is built once and matches a route file on disk', 
     const built: Record<string, string> = {
       logs: routes.logs(RUN_ID),
       queue: routes.queue(),
+      workers: routes.workers(),
       projects: routes.projects(),
       project: routes.project(PROJECT_UID),
       document: routes.document(PROJECT_UID, DOCUMENT_UID),

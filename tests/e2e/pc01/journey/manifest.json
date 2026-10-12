@@ -268,6 +268,7 @@
         }
       ],
       "optional_api": [
+        {"method": "GET", "path": "/execution/workers", "operationId": "listWorkers", "$why_optional": "read only while the run is running or validating, to name the worker holding it (W54-WORKERS-WEB)"},
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": null
@@ -489,13 +490,14 @@
       "path": "/workers",
       "page_module": "web/src/app/workers/page.tsx",
       "$comment": [
-        "Исполнители -- front-end preparation under R-23's addendum. W43-PREP.",
-        "",
-        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
-        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this",
-        "entry gains operations and the assertion starts carrying weight."
+        "Исполнители (W54-WORKERS-WEB) reads the worker registry and the signed-in account's",
+        "roles on a cold route. The intake switch requires explicit administrator intent and",
+        "a confirmation, and is not emitted by this read journey."
       ],
-      "expects_api": [],
+      "expects_api": [
+        {"method": "GET", "path": "/execution/workers", "operationId": "listWorkers"},
+        {"method": "GET", "path": "/me", "operationId": "getMe"}
+      ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
@@ -635,6 +637,7 @@
         {"method": "GET", "path": "/me", "operationId": "getMe"}
       ],
       "optional_api": [
+        {"method": "GET", "path": "/execution/workers", "operationId": "listWorkers", "$why_optional": "read only while a listed job is leased or running, to name the worker holding its run (W54-WORKERS-WEB)"},
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": null

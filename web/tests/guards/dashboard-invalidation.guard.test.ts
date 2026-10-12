@@ -175,6 +175,8 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/reaudit-run/model/use-reaudit-run.ts': true,
   'src/features/set-job-priority/model/use-set-job-priority.ts': false,
   'src/features/pause-execution/model/use-pause-execution.ts': false,
+  // `W54-WORKERS-WEB`: a worker's intake switch changes no number the dashboard reads.
+  'src/features/set-worker-intake/model/use-set-worker-intake.ts': false,
 };
 
 /** A feature model source with an executable mutation call, independent of its filename. */

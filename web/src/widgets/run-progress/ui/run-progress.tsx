@@ -40,6 +40,11 @@
  *   states that can have one — a `cancelled` run published nothing, and "Published
  *   findings: 0" would be a claim about a publication that never happened.
  *
+ *   **The worker is named only while one can hold the run.** In `running` and `validating`
+ *   the run's Job holds a Lease, and `RunHolder` reads the worker registry when it mounts
+ *   and on tab return, never on the poll, to name the worker whose `current_run_ids` lists
+ *   the run (`W54-WORKERS-WEB`). In any other state no worker holds it and nothing is read.
+ *
  *   **A cost is never shown without the count it sums.** `D-15` is open: the total spans
  *   retry attempts. `runCost` returns `unreadable` rather than print a figure whose span
  *   the reader cannot see.
@@ -49,6 +54,7 @@ import Link from 'next/link';
 
 import type { RunStatus } from '@/shared/api';
 import { formatInstant, routes } from '@/shared/lib';
+import { RunWorkerLine, runHoldsLease, runWorker, useWorkerLookup } from '@/entities/execution';
 import {
   ErrorState,
   LoadingState,
@@ -86,6 +92,12 @@ import {
 export interface RunProgressProps {
   readonly projectUid: string;
   readonly runId: string;
+}
+
+/** The worker holding a running or validating run, read from the registry's first page. */
+function RunHolder({ runId }: { readonly runId: string }) {
+  const workers = useWorkerLookup(true);
+  return <RunWorkerLine worker={runWorker(workers.data, workers.error !== null, runId)} />;
 }
 
 const UNKNOWN_RUN_TITLE = 'Прогон содержит неизвестное значение.';
@@ -328,6 +340,8 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
           {formatElapsed(elapsedMs(status.created_at, status.terminal_at))}
         </dd>
       </dl>
+
+      {runHoldsLease(status.state) ? <RunHolder runId={status.run_id} /> : null}
 
       <p>
         <Link href={routes.version(status.project_uid, status.version_uid)}>

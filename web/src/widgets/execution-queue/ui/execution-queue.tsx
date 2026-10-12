@@ -1,6 +1,9 @@
-import type { ExecutionQueueItem, Role } from '@/shared/api';
+import type { ExecutionQueueItem, Role, RunId } from '@/shared/api';
 import { formatInstant, routes } from '@/shared/lib';
-import { canCancel, canExecute, canReaudit, jobStateLabel, queueAgeLabel } from '@/entities/execution';
+import {
+  RunWorkerLine, canCancel, canExecute, canReaudit, jobHoldsLease, jobStateLabel, queueAgeLabel,
+} from '@/entities/execution';
+import type { RunWorker } from '@/entities/execution';
 import { EmptyState, ErrorState } from '@/shared/ui';
 
 import styles from './execution-queue.module.css';
@@ -10,6 +13,11 @@ export interface ExecutionQueueProps {
   readonly roles: readonly Role[];
   readonly asOf: number | null;
   readonly busy: boolean;
+  /**
+   * Who holds a run (`W54-WORKERS-WEB`), asked only for a row whose Job holds a Lease
+   * (`leased`, `running`); a queued or finished Job has no worker to name.
+   */
+  readonly workerOf: (runId: RunId) => RunWorker;
   readonly onCancel: (item: ExecutionQueueItem) => void;
   readonly onReaudit: (item: ExecutionQueueItem) => void;
   readonly onPriority: (item: ExecutionQueueItem, priority: number) => void;
@@ -18,7 +26,7 @@ export interface ExecutionQueueProps {
 }
 
 export function ExecutionQueue({
-  items, roles, asOf, busy, onCancel, onReaudit, onPriority, onNext, onPrevious,
+  items, roles, asOf, busy, workerOf, onCancel, onReaudit, onPriority, onNext, onPrevious,
 }: ExecutionQueueProps) {
   if (items.some((item) => jobStateLabel(item.state) === null)) {
     return <ErrorState title="Неизвестное состояние задачи" detail="Очередь содержит состояние вне набора, который умеет показывать это приложение." />;
@@ -38,6 +46,7 @@ export function ExecutionQueue({
             </div>
             <p className={styles.identity}>Прогон <a href={routes.logs(item.run_id)}><code>{item.run_id}</code></a></p>
             <p className={styles.identity}>Задача <code>{item.job_id}</code></p>
+            {jobHoldsLease(item.state) ? <div className={styles.identity}><RunWorkerLine worker={workerOf(item.run_id)} /></div> : null}
             <p>Принята: <time dateTime={item.created_at}>{formatInstant(item.created_at)}</time></p>
             <p>Возраст: {queueAgeLabel(item.created_at, asOf)}</p>
             <p>Доступна: <time dateTime={item.available_at}>{formatInstant(item.available_at)}</time></p>

@@ -7,7 +7,9 @@ import type { ExecutionQueueItem, RunStatus } from '@/shared/api';
 import { newIdempotencyKey } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { useMe } from '@/entities/account';
-import { canExecute, executionFailure, useExecutionQueue } from '@/entities/execution';
+import {
+  canExecute, executionFailure, jobHoldsLease, runWorker, useExecutionQueue, useWorkerLookup,
+} from '@/entities/execution';
 import type { ExecutionFailure } from '@/entities/execution';
 import { useCancelRun } from '@/features/cancel-run';
 import { useReauditRun } from '@/features/reaudit-run';
@@ -60,6 +62,9 @@ export function QueuePage() {
   const sequence = useRef(0);
   const cursor = cursors.at(-1);
   const queue = useExecutionQueue(cursor);
+  // `W54-WORKERS-WEB`: the worker registry is read only while a listed Job holds a Lease.
+  const holdsLease = queue.data?.items.some((item) => jobHoldsLease(item.state)) ?? false;
+  const workers = useWorkerLookup(holdsLease);
   const account = useMe();
   const cancel = useCancelRun();
   const reaudit = useReauditRun();
@@ -116,7 +121,7 @@ export function QueuePage() {
     <PageShell
       title="Очередь"
       subtitle="Устойчивые задачи прогонов. Данные обновляются при возврате на вкладку и по запросу."
-      actions={<button className="am-button am-button--quiet" type="button" onClick={() => { setAsOf(Date.now()); void queue.refetch(); }}>Обновить</button>}
+      actions={<button className="am-button am-button--quiet" type="button" onClick={() => { setAsOf(Date.now()); void queue.refetch(); if (holdsLease) void workers.refetch(); }}>Обновить</button>}
     >
       {readFailure === null && queue.data?.paused === true ? <p role="status" className="am-note" data-execution-paused>Выдача задач приостановлена.</p> : null}
       {readFailure === null && account.data !== undefined && canExecute(roles, 'pause') && queue.data !== undefined ? (
@@ -149,6 +154,7 @@ export function QueuePage() {
           roles={roles}
           asOf={asOf}
           busy={busy}
+          workerOf={(runId) => runWorker(workers.data, workers.error !== null, runId)}
           onCancel={(item) => select({ kind: 'cancel', item })}
           onReaudit={(item) => select({ kind: 'reaudit', item })}
           onPriority={(item, value) => select({ kind: 'priority', item, priority: value })}
