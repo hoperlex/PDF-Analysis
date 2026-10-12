@@ -28,8 +28,8 @@ from auditmanager.shared.identity import (
     NormDocumentId,
     NormParagraphId,
     NormsSnapshotId,
-    UserUid,
 )
+from auditmanager.shared.identity.ids import UserUid
 
 HEAD = "0020_norms_search"
 PREVIOUS = "0019_execution_workers"
