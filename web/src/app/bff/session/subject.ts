@@ -86,8 +86,21 @@ export function initialsOf(displayLabel: string): string {
     if (letter !== undefined) letters.push(letter);
     if (letters.length === 2) break;
   }
-  const chosen = letters.length > 0 ? letters.join('') : ([...displayLabel.trim()][0] ?? '');
-  return chosen.toLocaleUpperCase('ru-RU');
+  const chosen = letters.length > 0 ? letters : [...displayLabel.trim()].slice(0, 1);
+  return chosen.map(capitalOf).join('');
+}
+
+/**
+ * One letter in capitals, and still one letter (`W53-CLOSE` `C-19`).
+ *
+ * `toLocaleUpperCase` maps some letters to more than one: `ß` becomes `SS`, `ŉ` becomes `ʼN`.
+ * An initial is one letter, so a letter whose capital is longer than one code point is kept as
+ * it is rather than expanded — `«ßmith»` gives `ß`, not `SS`, and a two-word label can never
+ * give three letters.
+ */
+function capitalOf(letter: string): string {
+  const upper = letter.toLocaleUpperCase('ru-RU');
+  return [...upper].length === 1 ? upper : letter;
 }
 
 /** The fields of `Account` this tier reads. Everything is `unknown` until it is checked. */

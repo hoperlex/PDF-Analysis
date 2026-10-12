@@ -52,7 +52,7 @@ describe('the browser calls this app, and this app calls the API with the creden
     expect(BFF_BASE_PATH).toBe('/bff/v1');
   });
 
-  it('attaches the deployment credential as a bearer token', async () => {
+  it('attaches the credential it is given as a bearer token', async () => {
     const { fetch, calls } = recordingFetch(okJson);
     await forwardWithCredential(new Request('http://localhost/bff/v1/projects'), ['projects'], TARGET, {
       fetch,
@@ -87,6 +87,26 @@ describe('the browser calls this app, and this app calls the API with the creden
     const sent = headersOf(calls[0]!.init).get('authorization');
     expect(sent).toBe('Bearer test-token-not-a-real-credential');
     expect(sent).not.toContain('forged-by-the-browser');
+  });
+
+  // `W53-CLOSE` `C-17`. The operations the contract publishes with an empty security
+  // requirement are forwarded with `token: null`, and then nothing at all goes -- not the
+  // browser's own header either, which the inbound allowlist already drops.
+  it('sends no Authorization at all for a null credential, the browser’s included', async () => {
+    const { fetch, calls } = recordingFetch(okJson);
+    await forwardWithCredential(
+      new Request('http://localhost/bff/v1/auth/token', {
+        method: 'POST',
+        headers: { authorization: 'Bearer forged-by-the-browser', 'content-type': 'application/json' },
+        body: '{}',
+      }),
+      ['auth', 'token'],
+      { upstream: UPSTREAM, token: null },
+      { fetch },
+    );
+    expect(calls).toHaveLength(1);
+    expect(headersOf(calls[0]!.init).has('authorization')).toBe(false);
+    expect(headersOf(calls[0]!.init).get('content-type')).toBe('application/json');
   });
 
   it('carries exactly the four request headers the contract surface uses', async () => {
