@@ -13,7 +13,7 @@ from .models import (
     VerifiedBlob,
     declare_blob,
 )
-from .port import BlobSource, BlobStore
+from .port import STREAM_CHUNK_BYTES, BlobChunks, BlobSource, BlobStore
 
 BeforeStage = Callable[[BlobDeclaration], str]
 BeforePublish = Callable[[VerifiedBlob], None]
@@ -124,6 +124,23 @@ class DurablePublicationStore:
 
     def read(self, blob_id: BlobId, *, verify: bool = True) -> bytes:
         return self._store.read(blob_id, verify=verify)
+
+    def open_stream(
+        self,
+        blob_id: BlobId,
+        *,
+        expected_sha256: str,
+        expected_size: int,
+        window: tuple[int, int] | None = None,
+        chunk_size: int = STREAM_CHUNK_BYTES,
+    ) -> BlobChunks:
+        return self._store.open_stream(
+            blob_id,
+            expected_sha256=expected_sha256,
+            expected_size=expected_size,
+            window=window,
+            chunk_size=chunk_size,
+        )
 
 
 __all__ = ["AfterPublish", "BeforePublish", "BeforeStage", "DurablePublicationStore"]

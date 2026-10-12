@@ -4,13 +4,13 @@
 The streaming operation is the one with a rule worth restating: **the server streams the
 bytes itself**. There is no redirect and no presigned link. A URL into object storage is the
 internal address the contract forbids in a response, and it would outlive the request that
-authorised it. The bytes arrive here as ``bytes`` from :meth:`DocumentPort.read_content`,
-having been resolved from a ``blob_id``; nothing on this path knows a bucket or a key.
+authorised it. The bytes arrive here as chunks from :meth:`DocumentPort.stream_content`
+(`W55A-CONTENT-01`, plan section A3.5), having been resolved from a ``blob_id``; nothing on
+this path knows a bucket or a key, and nothing on it holds the object whole.
 """
 
 from __future__ import annotations
 
-import re
 from typing import Annotated, Any, Final
 
 from fastapi import APIRouter, Depends, Form, Header, Path, Response
@@ -27,11 +27,18 @@ from auditmanager.api.routers.multipart import (
     require_a_strict_multipart_body,
 )
 from auditmanager.api.routers.ports import DocumentPort
-from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
+from auditmanager.api.routers.wire import (
+    StreamingWireResponse,
+    WireResponse,
+    encode_json,
+    json_response,
+    streamed_content_response,
+)
 from auditmanager.api.schemas import models
+from auditmanager.api.schemas.content import ByteRange
 from auditmanager.api.schemas.common import page_body, paginate
 from auditmanager.api.schemas.documents import document_version_body
-from auditmanager.shared.errors import DomainError, ErrorCode
+from auditmanager.shared.errors import DomainError
 
 __all__ = ["build_document_routes"]
 
@@ -54,11 +61,6 @@ _MULTIPART_ENCODING: Final[dict[str, Any]] = {
         }
     }
 }
-
-#: ``bytes=<first>-<last>`` with an optional open end. A multi-range request is not served:
-#: the frozen 206 declares one ``application/pdf`` body, and a multipart/byteranges response
-#: would not be that shape.
-_RANGE: Final[re.Pattern[str]] = re.compile(r"^bytes=(\d*)-(\d*)$")
 
 #: ``#/paths./versions/{version_uid}/content.get.parameters`` -- a plain string, optional.
 RangeParam = Annotated[
@@ -209,31 +211,10 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
     def stream_document_version_content(
         version_uid: Annotated[models.VersionUid, Path()],
         range_header: RangeParam = None,  # type: ignore[assignment]
-    ) -> WireResponse:
-        content = documents.read_content(version_uid=version_uid)
-        if range_header is None:
-            return WireResponse(
-                200,
-                (
-                    ("Content-Type", _PDF),
-                    ("Content-Length", str(len(content))),
-                    ("Accept-Ranges", "bytes"),
-                ),
-                content,
-            )
-        start, end = _resolve_range(range_header, len(content))
-        window = content[start : end + 1]
-        return WireResponse(
-            206,
-            (
-                ("Content-Type", _PDF),
-                ("Content-Length", str(len(window))),
-                ("Content-Range", f"bytes {start}-{end}/{len(content)}"),
-                ("Accept-Ranges", "bytes"),
-            ),
-            window,
-        )
-
+    ) -> StreamingWireResponse:
+        byte_range = _parsed_range(documents, version_uid, range_header)
+        streamed = documents.stream_content(version_uid=version_uid, byte_range=byte_range)
+        return streamed_content_response(streamed)
 
 
 def _version_sort_key(view: object) -> tuple[str, ...]:
@@ -249,38 +230,21 @@ def _version_sort_key(view: object) -> tuple[str, ...]:
     return (getattr(view, "version_uid"),)
 
 
-def _resolve_range(header: str, size: int) -> tuple[int, int]:
-    """Resolve one byte range against a known size.
+def _parsed_range(
+    documents: DocumentPort, version_uid: str, header: str | None
+) -> ByteRange | None:
+    """The ``Range`` header's syntax, refused only after the version is known to exist.
 
-    An unsatisfiable or malformed range is ``validation_failed`` rather than a silent full
-    body: a viewer that asked for page 40 of a 30-page document has a bug, and answering
-    with the whole file hides it behind a much larger download.
+    Before `W55A-CONTENT-01` the version was read first and the header checked second, so
+    a malformed header on an unknown version answered ``404``. :class:`ByteRange` parses
+    before the port is called; this keeps that precedence by asking for the version
+    before reporting the malformed header -- a ``404`` stays a ``404`` whatever the header
+    says. ``unsatisfiable`` needs the size and is the port's, after the same lookup.
     """
-    match = _RANGE.match(header.strip())
-    if match is None:
-        raise _unsatisfiable("format")
-    first, last = match.group(1), match.group(2)
-    if first == "" and last == "":
-        raise _unsatisfiable("format")
-    if first == "":
-        # A suffix range: the final `last` bytes.
-        length = int(last)
-        if length == 0:
-            raise _unsatisfiable("unsatisfiable")
-        start = max(0, size - length)
-        end = size - 1
-    else:
-        start = int(first)
-        end = size - 1 if last == "" else min(int(last), size - 1)
-    if size == 0 or start >= size or start > end:
-        raise _unsatisfiable("unsatisfiable")
-    return start, end
-
-
-def _unsatisfiable(constraint: str) -> DomainError:
-    return DomainError(
-        ErrorCode.VALIDATION_FAILED,
-        message="The Range header is not a single satisfiable byte range.",
-        field="Range",
-        constraint=constraint,
-    )
+    if header is None:
+        return None
+    try:
+        return ByteRange.parse(header)
+    except DomainError:
+        documents.get_version(version_uid=version_uid)
+        raise

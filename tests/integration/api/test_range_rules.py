@@ -14,18 +14,24 @@ With the trailing `.*`, `bytes=0-99,200-299` parses as `0-99` and is **answered 
 the first range only**. A caller that asked for two ranges gets one, silently, and the
 response claims to satisfy the request.
 
-`_resolve_range` is private, and is called directly here for the same reason
-`test_composition_root.py` calls `_provenance_mode` directly: the rule is a pure function
-of a header and a size, and driving it through the router would need a published document
-to say nothing more.
+`W55A-CONTENT-01` moved the operation onto :class:`ByteRange` (`W55A-SEAL-01`): the router
+parses the header and the port resolves it against the manifest's size before it opens the
+object. The rule is still a pure function of a header and a size, so it is still called
+directly here -- the parse and the resolve together, which is what the route does -- and
+the anchor still holds.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from auditmanager.api.routers.documents import _resolve_range
+from auditmanager.api.schemas.content import ByteRange
 from auditmanager.shared.errors import DomainError
+
+
+def _resolve_range(header: str, size: int) -> tuple[int, int]:
+    """What ``streamDocumentVersionContent`` does with one header and the recorded size."""
+    return ByteRange.parse(header).resolve(size)
 
 
 class TestTheRangeHeaderShapeIsASingleByteRange:

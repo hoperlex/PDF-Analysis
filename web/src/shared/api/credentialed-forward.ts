@@ -25,8 +25,14 @@
  * the browser supplies is *dropped* and then the caller's chosen one is set — never merged — so
  * a browser can neither substitute a credential of its own nor strip the real one; a `null`
  * credential sends no header at all. Outbound,
- * only the three headers PC-01 reads survive, so no upstream header is republished by
+ * only the headers PC-01 reads survive, so no upstream header is republished by
  * accident.
+ *
+ * **One byte range passes up, and its answer passes down** (`W55A-CONTENT-01`, plan §A3.5).
+ * The viewer's `<object>#page=N` lets the browser's own PDF reader ask for a window of a
+ * large document; `range` goes up, and `content-range`, `content-length` and
+ * `accept-ranges` come back with the API's `206`, so the reader can page through it rather
+ * than download it whole.
  *
  * **The path is rebuilt from segments, never concatenated from a string.** An open
  * forwarder's characteristic defect is that `/bff/v1/../../admin` or an absolute URL in
@@ -48,6 +54,7 @@ export const FORWARDED_REQUEST_HEADERS = [
   'accept',
   'content-type',
   'idempotency-key',
+  'range',
   'x-correlation-id',
 ] as const;
 
@@ -56,12 +63,21 @@ export const FORWARDED_REQUEST_HEADERS = [
  *
  * `x-correlation-id` because `transport.ts` reads it off every response;
  * `content-disposition` because `exportRunCsv` and the evidence stream are downloads and
- * the filename is on that header. `content-length` is deliberately absent: the body is
- * streamed through, so the runtime frames it.
+ * the filename is on that header; `content-range` and `accept-ranges` because a PDF reader
+ * pages a document by them (`W55A-CONTENT-01`).
+ *
+ * `content-length` is forwarded too, so a reader knows the size before the body ends and a
+ * stream the API stops short (the R-115 integrity rule) arrives short of what it declared
+ * rather than looking complete. It is the one header with a condition: the fetch runtime
+ * decodes a `content-encoding` it does not republish, and after decoding the upstream
+ * length no longer describes the body, so it is dropped whenever one was applied.
  */
 export const FORWARDED_RESPONSE_HEADERS = [
   'content-type',
   'content-disposition',
+  'content-length',
+  'content-range',
+  'accept-ranges',
   'x-correlation-id',
 ] as const;
 
@@ -174,11 +190,13 @@ function selectRequestHeaders(source: Headers, token: string | null): Headers {
   return headers;
 }
 
-function selectResponseHeaders(source: Headers): Headers {
+function selectResponseHeaders(source: Headers, bodyless: boolean): Headers {
+  const encoded = (source.get('content-encoding') ?? 'identity').trim().toLowerCase() !== 'identity';
   const headers = new Headers();
   for (const name of FORWARDED_RESPONSE_HEADERS) {
     const value = source.get(name);
     if (value === null) continue;
+    if (name === 'content-length' && (encoded || bodyless)) continue;
     headers.set(name, value);
   }
   return headers;
@@ -243,7 +261,8 @@ export async function forwardWithCredential(
     );
   }
 
-  const responseHeaders = selectResponseHeaders(upstream.headers);
-  const body = BODYLESS_STATUSES.has(upstream.status) ? null : upstream.body;
+  const bodyless = BODYLESS_STATUSES.has(upstream.status);
+  const responseHeaders = selectResponseHeaders(upstream.headers, bodyless);
+  const body = bodyless ? null : upstream.body;
   return new Response(body, { status: upstream.status, headers: responseHeaders });
 }
