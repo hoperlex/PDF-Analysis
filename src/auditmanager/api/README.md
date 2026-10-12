@@ -58,7 +58,7 @@ places in this package exist only because of that, and each says so at its own s
 | `composition.py` | the thin seam to `auditmanager.bootstrap` |
 | `security.py` | `T-6` — the bearer seam, and the alpha's static token behind it |
 | `health.py` | `T-3` — liveness and readiness, a **separate application** on a second port |
-| `routers/wire.py` | `WireResponse`: the exact header list, in the exact order and case |
+| `routers/wire.py` | `WireResponse`: the exact header list, in the exact order and case; `StreamingWireResponse` (`W55A-SEAL-01`) is the same list with a chunked body |
 | `routers/declarations.py` | the response table and the parameters every operation repeats |
 | `routers/handlers.py` | where FastAPI's own failures stop being FastAPI's |
 | `routers/errors.py` | classification: a DBAPIError's SQLSTATE, and the envelope renderer |
@@ -66,9 +66,10 @@ places in this package exist only because of that, and each says so at its own s
 | `routers/idempotency.py` | the required `Idempotency-Key`, as a declared parameter |
 | `routers/multipart.py` | the transport body cap, and the four rules a closed model cannot state |
 | `routers/ports.py` | the nine narrow ports a composition root satisfies |
-| `routers/{projects,documents,runs,findings,decisions,export,blocks,dashboard,auth,me,registrations,users,releases,execution}.py` | the forty-five operations |
-| `schemas/models.py` | the 77 `components.schemas`, as Pydantic models |
+| `routers/{projects,documents,runs,findings,decisions,export,blocks,dashboard,auth,me,registrations,users,releases,execution,norms}.py` | the fifty-two operations |
+| `schemas/models.py` | the 116 `components.schemas`, as Pydantic models |
 | `schemas/{common,projects,documents,runs,findings,decisions}.py` | the view types the ports return, and the functions that render their bytes |
+| `schemas/content.py` | `W55A-SEAL-01`: one parsed `Range` and the `StreamedContent` a content port returns |
 
 **`build_router(...)` takes the same six keyword-only ports it always did and constructs
 none of them**, which is what made `T-1` a transport change rather than a rewrite of the
@@ -223,7 +224,7 @@ the storage port, not a shortcut around it.
 
 `tests/integration/api` — real PostgreSQL, real MinIO, never a skip.
 
-The forty-five-operation assertion compares the router's `(operationId, METHOD, path)` set
+The fifty-two-operation assertion compares the router's `(operationId, METHOD, path)` set
 against the frozen document itself, never against a list in the test. `build_router` also
 refuses a duplicate `operationId` at construction — FastAPI logs a warning and serves a
 document declaring the id twice, which leaves `len(routes) == 12` passing while one frozen

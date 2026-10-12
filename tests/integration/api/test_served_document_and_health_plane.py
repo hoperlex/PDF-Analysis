@@ -134,6 +134,14 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             # `W54-SEAL-01`: the worker registry's paged read and intake switch.
             "listWorkers",
             "setWorkerIntake",
+            # `W55A-SEAL-01`: every norms operation that takes a query, a range or a body.
+            # `getNormDocument` takes only a path identity and declares none.
+            "searchNorms",
+            "listNormParagraphs",
+            "streamNormDocumentContent",
+            "listNormSnapshots",
+            "listNormSnapshotEvents",
+            "setCurrentNormSnapshot",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

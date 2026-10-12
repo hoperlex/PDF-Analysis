@@ -103,6 +103,16 @@ REQUIRED_OPERATIONS = {
     # intake switch. Sealed as stubs until `W54-WORKER-01`.
     "listWorkers",
     "setWorkerIntake",
+    # `W55A-SEAL-01`, `R-112`, `R-113`. Text search over the current norms snapshot, its
+    # documents, paragraphs and PDFs for any role; the snapshot history and the designation
+    # for an administrator. Sealed as stubs until `W55A-SEARCH-01`.
+    "searchNorms",
+    "getNormDocument",
+    "listNormParagraphs",
+    "streamNormDocumentContent",
+    "listNormSnapshots",
+    "listNormSnapshotEvents",
+    "setCurrentNormSnapshot",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -148,6 +158,11 @@ PAGINATED_OPERATIONS = {
     "listExecutionQueue",
     "listExecutionJournal",
     "listWorkers",
+    # `W55A-SEAL-01`. Search pages over an opaque cursor bound to its query and snapshot.
+    "searchNorms",
+    "listNormParagraphs",
+    "listNormSnapshots",
+    "listNormSnapshotEvents",
 }
 
 #: Page-level properties a paginated response may carry beside `items` and `page`, by
@@ -157,6 +172,9 @@ PAGINATED_OPERATIONS = {
 PAGE_AGGREGATES: dict[str, set[str]] = {
     "listRegistrations": {"pending_total"},
     "listExecutionQueue": {"paused"},
+    # `W55A-SEAL-01`, `NORM-Q04`. A document's paragraphs carry its attribution once, on
+    # the page, since every item on it shares one document.
+    "listNormParagraphs": {"source_attribution"},
 }
 
 

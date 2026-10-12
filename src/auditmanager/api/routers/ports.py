@@ -33,6 +33,7 @@ from typing import Protocol, Sequence, runtime_checkable
 
 from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
 from auditmanager.api.schemas.blocks import VersionBlockIndexView
+from auditmanager.api.schemas.content import ByteRange, StreamedContent
 from auditmanager.api.schemas.dashboard import DashboardSummaryView
 from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
 from auditmanager.api.schemas.documents import DocumentVersionView
@@ -54,6 +55,8 @@ __all__ = [
     "DecisionPort",
     "DocumentPort",
     "FindingPort",
+    "NormContentPort",
+    "NormsSearchPort",
     "ProjectPort",
     "RegistrationPort",
     "ReleasesPort",
@@ -202,6 +205,28 @@ class DocumentPort(Protocol):
         contract forbids in a response and would outlive the request that authorised
         it. A ranged request is served by slicing what this returns, so the object key
         stays inside ``auditmanager.storage``'s adapter where ``A3`` put it.
+        """
+
+    def stream_content(
+        self, *, version_uid: str, byte_range: ByteRange | None
+    ) -> StreamedContent:
+        """The source bytes of one published version, in chunks. `W55A-SEAL-01` (R-115).
+
+        ``byte_range`` is the parsed ``Range`` header, or ``None`` for the whole object. The
+        implementation resolves it against the version's recorded size
+        (:meth:`ByteRange.resolve`, ``422`` when unsatisfiable) and **opens the object
+        before returning**, so a missing version is ``404`` and a storage failure a typed
+        ``500``/``503`` before the status line is sent. It never loads the object whole:
+        chunks are at most :data:`~auditmanager.api.schemas.content.CONTENT_CHUNK_BYTES`.
+
+        A full read hashes while streaming and holds back its last chunk until the digest
+        matches the manifest; on a mismatch it logs ``storage_integrity_error`` and stops,
+        so the client receives fewer bytes than ``Content-Length``. A ranged read relies on
+        the recorded verification (publication and ``verify_version``).
+
+        Sealed by `W55A-SEAL-01`; `W55A-CONTENT-01` supplies the streaming implementation and
+        moves ``streamDocumentVersionContent`` onto it. Until then the router still calls
+        :meth:`read_content`.
         """
 
 
@@ -666,3 +691,70 @@ class ReleasesPort(Protocol):
     def list_releases(self, *, user_uid: str) -> ReleaseList: ...
 
     def mark_read(self, *, user_uid: str, read_through: str) -> None: ...
+
+
+@runtime_checkable
+class NormsSearchPort(Protocol):
+    """The norms reads and the current-snapshot designation. `W55A-SEAL-01` (R-112, R-113).
+
+    ``searchNorms``, ``getNormDocument``, ``listNormParagraphs``, ``listNormSnapshots``,
+    ``listNormSnapshotEvents`` and ``setCurrentNormSnapshot`` (plan section A3.6). Sealed as
+    stubs that answer ``503 dependency_unavailable`` (``dependency: norms_search``);
+    `W55A-SEARCH-01` supplies the behaviour. A separate protocol, optional in
+    ``build_router``, for the reason ``BlockPort`` gives.
+
+    Refusals the implementation owns, all under existing codes (CD-19): no current snapshot,
+    or an explicit snapshot that has never been current, is ``required_norm_unavailable``
+    (``reference_kind: norms_snapshot``); a designation target that does not qualify is the
+    same code with ``reference_kind`` ``norm_embedding_build`` or ``norm_source``; a stale
+    ``expected_current`` is ``conflict`` (``conflict_reason: stale_current_snapshot``); a
+    search the statement timeout cancels is ``validation_failed``
+    (``constraint: norms_search_too_broad``), never an empty or partial page.
+    """
+
+    def search(
+        self, *, q: str, norms_snapshot_id: str | None, cursor: str | None, limit: int
+    ) -> models.NormSearchPage:
+        """Reliable paragraphs of the scoped snapshot matching ``q`` (1-200 characters)."""
+
+    def get_document(self, *, norm_document_id: str) -> models.NormDocument:
+        """One norm document; ``not_found`` for an identity that names nothing."""
+
+    def list_paragraphs(
+        self, *, norm_document_id: str, cursor: str | None, limit: int
+    ) -> models.NormParagraphPage:
+        """One document's paragraphs by ``ordinal``, unreliable ones marked, never hidden."""
+
+    def list_snapshots(self, *, cursor: str | None, limit: int) -> models.NormSnapshotPage:
+        """Every loaded snapshot with its counts, build state, ``qualified`` and ``current``."""
+
+    def list_snapshot_events(
+        self, *, cursor: str | None, limit: int
+    ) -> models.NormSnapshotEventPage:
+        """The append-only history of the current snapshot, newest first."""
+
+    def set_current_snapshot(
+        self, *, norms_snapshot_id: str, expected_current: str | None, user_uid: str
+    ) -> models.NormCurrentSnapshot:
+        """Designate a qualifying snapshot as current, writing one history row.
+
+        An already-current target is a replay: the current designation is answered and no
+        history row is written. There is no unset.
+        """
+
+
+@runtime_checkable
+class NormContentPort(Protocol):
+    """``streamNormDocumentContent``. `W55A-SEAL-01` (plan section A3.5).
+
+    Sealed as a stub answering ``503 dependency_unavailable`` (``dependency:
+    norm_content``). The PDF is served only through a **confirmed** custody binding of the
+    document (W54 custody); a document without one is ``required_norm_unavailable``
+    (``reference_kind: norm_source``). The same streaming and range rules as
+    :meth:`DocumentPort.stream_content`.
+    """
+
+    def stream_content(
+        self, *, norm_document_id: str, byte_range: ByteRange | None
+    ) -> StreamedContent:
+        """The document's source PDF, whole or one window, opened before returning."""

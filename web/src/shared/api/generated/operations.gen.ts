@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 0dbfbee44843c198c533d7a580df0fd8b768db010351c323b9518febfd8ecbfb
+ *   sha256 1a17359f0dcee3d37b685fcd6d724ad48f462ebc6c56803b5a66731d8b5797af
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -45,6 +45,14 @@ import type {
   IssueTokenResponse,
   JobId,
   MarkReleaseNotesReadRequest,
+  NormCurrentSnapshot,
+  NormDocument,
+  NormDocumentId,
+  NormParagraphPage,
+  NormSearchPage,
+  NormSnapshotEventPage,
+  NormSnapshotPage,
+  NormsSnapshotId,
   ProductVersion,
   Project,
   ProjectPage,
@@ -60,6 +68,7 @@ import type {
   RunId,
   RunStatus,
   RunStatusPage,
+  SetCurrentNormSnapshotRequest,
   SetExecutionPausedRequest,
   SetJobPriorityRequest,
   SetWorkerIntakeRequest,
@@ -88,6 +97,7 @@ export const OPERATION_IDS = [
   'getDocumentVersion',
   'getFinding',
   'getMe',
+  'getNormDocument',
   'getProductVersion',
   'getRunStatus',
   'getUser',
@@ -98,6 +108,9 @@ export const OPERATION_IDS = [
   'listDocuments',
   'listExecutionJournal',
   'listExecutionQueue',
+  'listNormParagraphs',
+  'listNormSnapshotEvents',
+  'listNormSnapshots',
   'listProjects',
   'listRegistrations',
   'listReleases',
@@ -113,11 +126,14 @@ export const OPERATION_IDS = [
   'rejectRegistration',
   'resetUserPassword',
   'restoreUser',
+  'searchNorms',
+  'setCurrentNormSnapshot',
   'setExecutionPaused',
   'setJobPriority',
   'setWorkerIntake',
   'startRun',
   'streamDocumentVersionContent',
+  'streamNormDocumentContent',
   'submitRegistration',
   'updateMyProfile',
   'updateUser',
@@ -393,6 +409,29 @@ export type GetMeInput = {
 export type GetMeResult = Account;
 
 // ------------------------------------------------------------------------------------
+// getNormDocument - GET /norm-documents/{norm_document_id}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Norm Document
+ *
+ * One norm document of a snapshot, with its attribution (NORM-Q04) and whether its source PDF is available through a confirmed custody binding. Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ */
+export type GetNormDocumentInput = {
+  /** Path parameters, substituted into `/norm-documents/{norm_document_id}`. */
+  path: {
+    norm_document_id: NormDocumentId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getNormDocument` (`application/json`, HTTP 200). */
+export type GetNormDocumentResult = NormDocument;
+
+// ------------------------------------------------------------------------------------
 // getProductVersion - GET /system/version
 // ------------------------------------------------------------------------------------
 
@@ -653,6 +692,88 @@ export type ListExecutionQueueInput = {
 
 /** Success body of `listExecutionQueue` (`application/json`, HTTP 200). */
 export type ListExecutionQueueResult = ExecutionQueuePage;
+
+// ------------------------------------------------------------------------------------
+// listNormParagraphs - GET /norm-documents/{norm_document_id}/paragraphs
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Norm Paragraphs
+ *
+ * The document's canonical paragraphs in `ordinal` order, each with `page_label` (the 1-based PDF page), `block_ref`, clause and `text_reliability`; unreliable paragraphs are marked, never hidden. Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ */
+export type ListNormParagraphsInput = {
+  /** Path parameters, substituted into `/norm-documents/{norm_document_id}/paragraphs`. */
+  path: {
+    norm_document_id: NormDocumentId;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listNormParagraphs` (`application/json`, HTTP 200). */
+export type ListNormParagraphsResult = NormParagraphPage;
+
+// ------------------------------------------------------------------------------------
+// listNormSnapshotEvents - GET /norms/snapshots/events
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Norm Snapshot Events
+ *
+ * The append-only history of the current snapshot, newest first: who designated which snapshot over which, and when (R-113). Roles: `admin` (`role:admin`). Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ */
+export type ListNormSnapshotEventsInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listNormSnapshotEvents` (`application/json`, HTTP 200). */
+export type ListNormSnapshotEventsResult = NormSnapshotEventPage;
+
+// ------------------------------------------------------------------------------------
+// listNormSnapshots - GET /norms/snapshots
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Norm Snapshots
+ *
+ * Every loaded norms snapshot with its content key, counts, `bge-m3-dense-v1` build state, whether it qualifies to be current (a complete build and a confirmed source binding for every document's PDF) and whether it is current. Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ */
+export type ListNormSnapshotsInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listNormSnapshots` (`application/json`, HTTP 200). */
+export type ListNormSnapshotsResult = NormSnapshotPage;
 
 // ------------------------------------------------------------------------------------
 // listProjects - GET /projects
@@ -1036,6 +1157,56 @@ export type RestoreUserInput = {
 export type RestoreUserResult = Account;
 
 // ------------------------------------------------------------------------------------
+// searchNorms - GET /norms/search
+// ------------------------------------------------------------------------------------
+
+/**
+ * Search Norms
+ *
+ * Text search over the canonical paragraphs of the current norms snapshot (R-112, G-5). `q` is 1-200 characters: an optional designation (`ГОСТ 10140`, `СП 54` -- matched on whole leading tokens, so `СП 54` never finds `СП 542`), an optional clause (`п. 7.1.4`, a dotted-segment prefix) and words (Russian morphology, ranked by `ts_rank_cd`). Unreliable paragraphs never appear. With no current snapshot, or an explicit `norms_snapshot_id` that has never been current, the answer is `422 required_norm_unavailable` with `reference_kind: norms_snapshot` -- never an empty page. A query the statement timeout cancels is `422 validation_failed` with `constraint: norms_search_too_broad`, never an empty or partial page. The cursor is opaque and bound to the query and snapshot; another query or snapshot refuses it, and the result window is capped at 1 000. Every hit carries its `source_attribution` (NORM-Q04); the corpus is internal (D-4.1). Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ */
+export type SearchNormsInput = {
+  /** Query string parameters. */
+  query: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+    norms_snapshot_id?: NormsSnapshotId;
+    /** The search text: a designation, a clause, words, or a combination. */
+    q: string;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `searchNorms` (`application/json`, HTTP 200). */
+export type SearchNormsResult = NormSearchPage;
+
+// ------------------------------------------------------------------------------------
+// setCurrentNormSnapshot - PUT /norms/snapshots/current
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Current Norm Snapshot
+ *
+ * Designate a qualifying snapshot as the current one (R-113, G-6), which every new run and re-audit then pins. `expected_current` is the snapshot the caller believes is current (`null` for none); a stale belief is `409 conflict` with `conflict_reason: stale_current_snapshot`. An already-current target answers the current designation as a replay and writes no history row; any other change writes exactly one. A target that does not qualify is `422 required_norm_unavailable` with `reference_kind` `norm_embedding_build` (no complete build) or `norm_source` (a document's PDF has no confirmed binding); an unknown snapshot is `404`. There is no unset. No `Idempotency-Key`: the request is a compare-and-set on durable state. Roles: `admin` (`role:admin`). Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ */
+export type SetCurrentNormSnapshotInput = {
+  /** Request body, sent as `application/json`. */
+  body: SetCurrentNormSnapshotRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setCurrentNormSnapshot` (`application/json`, HTTP 200). */
+export type SetCurrentNormSnapshotResult = NormCurrentSnapshot;
+
+// ------------------------------------------------------------------------------------
 // setExecutionPaused - PUT /execution/dispatch
 // ------------------------------------------------------------------------------------
 
@@ -1162,6 +1333,34 @@ export type StreamDocumentVersionContentInput = {
 
 /** Success body of `streamDocumentVersionContent` (`application/pdf`, HTTP 200/206). */
 export type StreamDocumentVersionContentResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// streamNormDocumentContent - GET /norm-documents/{norm_document_id}/content
+// ------------------------------------------------------------------------------------
+
+/**
+ * Stream Norm Document Content
+ *
+ * The document's source PDF, streamed by the server in chunks; never a redirect or a storage link. One `Range` is honoured with `206` and `Content-Range`; an unsatisfiable range is `422`. Served only through a confirmed custody binding; a document without one is `422 required_norm_unavailable` with `reference_kind: norm_source`. A full read verifies the bytes while streaming and stops short on a mismatch (R-115). Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ */
+export type StreamNormDocumentContentInput = {
+  /** Path parameters, substituted into `/norm-documents/{norm_document_id}/content`. */
+  path: {
+    norm_document_id: NormDocumentId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+  /** Additional declared request headers. */
+  headers?: {
+    /** Byte range, so the viewer can page a large document without fetching all of it. */
+    'Range'?: string;
+  };
+};
+
+/** Success body of `streamNormDocumentContent` (`application/pdf`, HTTP 200/206). */
+export type StreamNormDocumentContentResult = Blob;
 
 // ------------------------------------------------------------------------------------
 // submitRegistration - POST /registrations
@@ -1425,6 +1624,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 500, 503],
     tags: ['account'],
   },
+  getNormDocument: {
+    operationId: 'getNormDocument',
+    method: 'GET',
+    path: '/norm-documents/{norm_document_id}',
+    pathParams: ['norm_document_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['norms'],
+  },
   getProductVersion: {
     operationId: 'getProductVersion',
     method: 'GET',
@@ -1564,6 +1777,48 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['execution'],
+  },
+  listNormParagraphs: {
+    operationId: 'listNormParagraphs',
+    method: 'GET',
+    path: '/norm-documents/{norm_document_id}/paragraphs',
+    pathParams: ['norm_document_id'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['norms'],
+  },
+  listNormSnapshotEvents: {
+    operationId: 'listNormSnapshotEvents',
+    method: 'GET',
+    path: '/norms/snapshots/events',
+    pathParams: [],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['norms'],
+  },
+  listNormSnapshots: {
+    operationId: 'listNormSnapshots',
+    method: 'GET',
+    path: '/norms/snapshots',
+    pathParams: [],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['norms'],
   },
   listProjects: {
     operationId: 'listProjects',
@@ -1775,6 +2030,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['users'],
   },
+  searchNorms: {
+    operationId: 'searchNorms',
+    method: 'GET',
+    path: '/norms/search',
+    pathParams: [],
+    queryParams: ['cursor', 'limit', 'norms_snapshot_id', 'q'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['norms'],
+  },
+  setCurrentNormSnapshot: {
+    operationId: 'setCurrentNormSnapshot',
+    method: 'PUT',
+    path: '/norms/snapshots/current',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['norms'],
+  },
   setExecutionPaused: {
     operationId: 'setExecutionPaused',
     method: 'PUT',
@@ -1844,6 +2127,20 @@ export const OPERATIONS = {
     successStatuses: [200, 206],
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['documents'],
+  },
+  streamNormDocumentContent: {
+    operationId: 'streamNormDocumentContent',
+    method: 'GET',
+    path: '/norm-documents/{norm_document_id}/content',
+    pathParams: ['norm_document_id'],
+    queryParams: [],
+    headerParams: ['Range'],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/pdf',
+    successStatuses: [200, 206],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['norms'],
   },
   submitRegistration: {
     operationId: 'submitRegistration',

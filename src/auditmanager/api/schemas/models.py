@@ -1,4 +1,4 @@
-"""The 83 ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
+"""The 116 ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
 
 `T-1` makes FastAPI generate the served document, and `W13-CONF`'s conformance gate compares
 that document against the frozen contract. **The contract stays the authority**: every class
@@ -35,7 +35,7 @@ the *document*, and validate the declared request bodies.
 from __future__ import annotations
 
 import enum
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import UploadFile
@@ -115,6 +115,26 @@ __all__ = [
     "ExecutionWorker",
     "ExecutionWorkerPage",
     "SetWorkerIntakeRequest",
+    "NormsSnapshotId",
+    "NormDocumentId",
+    "NormParagraphId",
+    "NormSourceAttribution",
+    "NormParagraphKind",
+    "NormTextReliability",
+    "NormBuildState",
+    "NormHighlight",
+    "NormFragment",
+    "NormSearchHit",
+    "NormSearchPage",
+    "NormDocument",
+    "NormParagraph",
+    "NormParagraphPage",
+    "NormSnapshot",
+    "NormSnapshotPage",
+    "NormSnapshotEvent",
+    "NormSnapshotEventPage",
+    "SetCurrentNormSnapshotRequest",
+    "NormCurrentSnapshot",
     "Sha256",
     "StageId",
     "StageState",
@@ -234,6 +254,17 @@ RunId = TypeAliasType("RunId", Annotated[str, Field(pattern=rf"^run_{_ULID}$")])
 JobId = TypeAliasType("JobId", Annotated[str, Field(pattern=rf"^job_{_ULID}$")])
 #: `W54-SEAL-01`. One registered worker process (``worker_id``, ``wrk``), migration ``0019``.
 WorkerId = TypeAliasType("WorkerId", Annotated[str, Field(pattern=rf"^wrk_{_ULID}$")])
+#: `W55A-SEAL-01`. The normative corpus's three public identities (`NORM-Q07`), declared in
+#: ``contracts/domain/v1/identifiers.json`` since `0012_norms_corpus`, cross the wire.
+NormsSnapshotId = TypeAliasType(
+    "NormsSnapshotId", Annotated[str, Field(pattern=rf"^ns_{_ULID}$")]
+)
+NormDocumentId = TypeAliasType(
+    "NormDocumentId", Annotated[str, Field(pattern=rf"^ndoc_{_ULID}$")]
+)
+NormParagraphId = TypeAliasType(
+    "NormParagraphId", Annotated[str, Field(pattern=rf"^npar_{_ULID}$")]
+)
 FindingUid = TypeAliasType(
     "FindingUid", Annotated[str, Field(pattern=rf"^fnd_{_ULID}$")]
 )
@@ -580,6 +611,11 @@ class RunStatus(_Object):
     prompt_bundle_id: PromptBundleId = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+    #: `W55A-SEAL-01` (R-113, CD-6). The norms snapshot the run pinned when it was created:
+    #: the current snapshot then, absent while none is current.
+    norms_snapshot_id: NormsSnapshotId = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
     stages: list[StageState]
     degradation_set: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     terminal_reason: ErrorCode | None = Field(default=None, json_schema_extra=optional_property)
@@ -687,6 +723,161 @@ class ExecutionWorkerPage(_Object):
 
 class SetWorkerIntakeRequest(_Object):
     enabled: bool
+
+
+# --- norms (`W55A-SEAL-01`, plan section A3.6) ------------------------------------------
+
+
+class NormSourceAttribution(str, enum.Enum):
+    """`NORM-Q04`. Where a norm document's text came from, carried exactly on every norms
+    response. The corpus is internal (D-4.1); nothing here is a publication claim."""
+
+    CONSULTANT_PLUS = "consultant_plus"
+    UNATTRIBUTED = "unattributed"
+
+
+class NormParagraphKind(str, enum.Enum):
+    BODY = "body"
+    HEADING = "heading"
+    TABLE_ROW = "table_row"
+
+
+class NormTextReliability(str, enum.Enum):
+    """F-4. An ``unreliable`` paragraph's recognised text did not survive repair; it is
+    shown marked in a document view and is never a search result."""
+
+    RELIABLE = "reliable"
+    UNRELIABLE = "unreliable"
+
+
+class NormBuildState(str, enum.Enum):
+    """The snapshot's ``bge-m3-dense-v1`` build (D-127) over its reliability-aware chunks."""
+
+    COMPLETE = "complete"
+    INCOMPLETE = "incomplete"
+    ABSENT = "absent"
+
+
+class NormHighlight(_Object):
+    """One matched span of a fragment, as character offsets into ``NormFragment.text``."""
+
+    char_start: Annotated[int, Field(ge=0)]
+    char_end: Annotated[int, Field(ge=1)]
+
+
+class NormFragment(_Object):
+    """`NORM-Q01`. A plain-text excerpt of the canonical paragraph text, with the matched
+    spans as offsets rather than markup."""
+
+    text: Annotated[str, Field(min_length=1, max_length=4000)]
+    highlights: list[NormHighlight]
+
+
+class NormSearchHit(_Object):
+    """One reliable canonical paragraph of the searched snapshot."""
+
+    norms_snapshot_id: NormsSnapshotId
+    norm_document_id: NormDocumentId
+    norm_paragraph_id: NormParagraphId
+    designation: Annotated[str, Field(min_length=1, max_length=500)]
+    title: Annotated[str, Field(min_length=1, max_length=1000)]
+    doc_type: Annotated[str, Field(min_length=1, max_length=100)]
+    clause_number: Annotated[str, Field(min_length=1, max_length=100)] | None
+    page_label: Annotated[int, Field(ge=1)]
+    block_ref: Annotated[str, Field(min_length=1, max_length=200)]
+    fragment: NormFragment
+    source_attribution: NormSourceAttribution
+
+
+class NormSearchPage(_Object):
+    items: list[NormSearchHit]
+    page: PageInfo
+
+
+class NormDocument(_Object):
+    """One document of a snapshot. ``content_available`` is true exactly when its PDF has a
+    confirmed custody binding, which is the only way ``streamNormDocumentContent`` serves it."""
+
+    norm_document_id: NormDocumentId
+    norms_snapshot_id: NormsSnapshotId
+    designation: Annotated[str, Field(min_length=1, max_length=500)]
+    title: Annotated[str, Field(min_length=1, max_length=1000)]
+    doc_type: Annotated[str, Field(min_length=1, max_length=100)]
+    drawn_on: date | None
+    pdf_page_count: Annotated[int, Field(ge=1)]
+    paragraph_count: Annotated[int, Field(ge=0)]
+    unreliable_paragraph_count: Annotated[int, Field(ge=0)]
+    content_available: bool
+    source_attribution: NormSourceAttribution
+
+
+class NormParagraph(_Object):
+    norm_paragraph_id: NormParagraphId
+    ordinal: Annotated[int, Field(ge=0)]
+    page_label: Annotated[int, Field(ge=1)]
+    block_ref: Annotated[str, Field(min_length=1, max_length=200)]
+    kind: NormParagraphKind
+    clause_number: Annotated[str, Field(min_length=1, max_length=100)] | None
+    text: Annotated[str, Field(min_length=1)]
+    text_reliability: NormTextReliability
+
+
+class NormParagraphPage(_Object):
+    """One document's canonical paragraphs in ``ordinal`` order, and its attribution."""
+
+    items: list[NormParagraph]
+    page: PageInfo
+    source_attribution: NormSourceAttribution
+
+
+class NormSnapshot(_Object):
+    """One loaded snapshot. ``qualified`` is the setter's own predicate (a complete build
+    and a confirmed source binding for every document's PDF); ``current`` marks the one
+    current snapshot."""
+
+    norms_snapshot_id: NormsSnapshotId
+    content_key: Annotated[str, Field(min_length=1, max_length=240)]
+    document_count: Annotated[int, Field(ge=1)]
+    paragraph_count: Annotated[int, Field(ge=0)]
+    unreliable_count: Annotated[int, Field(ge=0)]
+    build_state: NormBuildState
+    qualified: bool
+    current: bool
+    created_at: datetime
+
+
+class NormSnapshotPage(_Object):
+    items: list[NormSnapshot]
+    page: PageInfo
+
+
+class NormSnapshotEvent(_Object):
+    """One row of the append-only history of the current snapshot, newest first."""
+
+    event_id: Annotated[str, Field(pattern=rf"^evt_{_ULID}$")]
+    from_norms_snapshot_id: NormsSnapshotId | None
+    to_norms_snapshot_id: NormsSnapshotId
+    actor_user_uid: UserUid
+    changed_at: datetime
+
+
+class NormSnapshotEventPage(_Object):
+    items: list[NormSnapshotEvent]
+    page: PageInfo
+
+
+class SetCurrentNormSnapshotRequest(_Object):
+    """``expected_current`` is the snapshot the caller believes is current, ``null`` when it
+    believes none is; a stale belief is ``conflict`` (``stale_current_snapshot``)."""
+
+    norms_snapshot_id: NormsSnapshotId
+    expected_current: NormsSnapshotId | None
+
+
+class NormCurrentSnapshot(_Object):
+    norms_snapshot_id: NormsSnapshotId
+    designated_at: datetime
+    designated_by: UserUid
 
 
 # --- findings ----------------------------------------------------------------------

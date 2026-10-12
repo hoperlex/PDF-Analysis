@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 0dbfbee44843c198c533d7a580df0fd8b768db010351c323b9518febfd8ecbfb
+ *   sha256 1a17359f0dcee3d37b685fcd6d724ad48f462ebc6c56803b5a66731d8b5797af
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '0dbfbee44843c198c533d7a580df0fd8b768db010351c323b9518febfd8ecbfb';
+export const CONTRACT_DIGEST = '1a17359f0dcee3d37b685fcd6d724ad48f462ebc6c56803b5a66731d8b5797af';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -67,6 +67,25 @@ export const SCHEMA_NAMES = [
   'JobId',
   'MarkReleaseNotesReadRequest',
   'ModelCallId',
+  'NormBuildState',
+  'NormCurrentSnapshot',
+  'NormDocument',
+  'NormDocumentId',
+  'NormFragment',
+  'NormHighlight',
+  'NormParagraph',
+  'NormParagraphId',
+  'NormParagraphKind',
+  'NormParagraphPage',
+  'NormSearchHit',
+  'NormSearchPage',
+  'NormSnapshot',
+  'NormSnapshotEvent',
+  'NormSnapshotEventPage',
+  'NormSnapshotPage',
+  'NormSourceAttribution',
+  'NormTextReliability',
+  'NormsSnapshotId',
   'ObservationProvenance',
   'PageInfo',
   'PersonNames',
@@ -98,6 +117,7 @@ export const SCHEMA_NAMES = [
   'RunStatus',
   'RunStatusPage',
   'SectionDocumentCount',
+  'SetCurrentNormSnapshotRequest',
   'SetExecutionPausedRequest',
   'SetJobPriorityRequest',
   'SetWorkerIntakeRequest',
@@ -539,6 +559,178 @@ export type ModelCallId = string;
 /** The contract pattern for `ModelCallId`. Anchored; use with `new RegExp()`. */
 export const MODEL_CALL_ID_PATTERN = "^mc_[0-9A-HJKMNP-TV-Z]{26}$";
 
+/** The snapshot's ``bge-m3-dense-v1`` build (D-127) over its reliability-aware chunks. */
+export const NORM_BUILD_STATE_VALUES = [
+  'complete',
+  'incomplete',
+  'absent',
+] as const;
+
+/** NormBuildState - the closed value set above. */
+export type NormBuildState = (typeof NORM_BUILD_STATE_VALUES)[number];
+
+export type NormCurrentSnapshot = {
+  designated_at: string;
+  designated_by: UserUid;
+  norms_snapshot_id: NormsSnapshotId;
+};
+
+/**
+ * One document of a snapshot. ``content_available`` is true exactly when its PDF has a
+ * confirmed custody binding, which is the only way ``streamNormDocumentContent`` serves it.
+ */
+export type NormDocument = {
+  content_available: boolean;
+  designation: string;
+  doc_type: string;
+  drawn_on: string | null;
+  norm_document_id: NormDocumentId;
+  norms_snapshot_id: NormsSnapshotId;
+  paragraph_count: number;
+  pdf_page_count: number;
+  source_attribution: NormSourceAttribution;
+  title: string;
+  unreliable_paragraph_count: number;
+};
+
+export type NormDocumentId = string;
+
+/** The contract pattern for `NormDocumentId`. Anchored; use with `new RegExp()`. */
+export const NORM_DOCUMENT_ID_PATTERN = "^ndoc_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * `NORM-Q01`. A plain-text excerpt of the canonical paragraph text, with the matched
+ * spans as offsets rather than markup.
+ */
+export type NormFragment = {
+  highlights: Array<NormHighlight>;
+  text: string;
+};
+
+/** One matched span of a fragment, as character offsets into ``NormFragment.text``. */
+export type NormHighlight = {
+  char_end: number;
+  char_start: number;
+};
+
+export type NormParagraph = {
+  block_ref: string;
+  clause_number: string | null;
+  kind: NormParagraphKind;
+  norm_paragraph_id: NormParagraphId;
+  ordinal: number;
+  page_label: number;
+  text: string;
+  text_reliability: NormTextReliability;
+};
+
+export type NormParagraphId = string;
+
+/** The contract pattern for `NormParagraphId`. Anchored; use with `new RegExp()`. */
+export const NORM_PARAGRAPH_ID_PATTERN = "^npar_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** NormParagraphKind. */
+export const NORM_PARAGRAPH_KIND_VALUES = [
+  'body',
+  'heading',
+  'table_row',
+] as const;
+
+/** NormParagraphKind - the closed value set above. */
+export type NormParagraphKind = (typeof NORM_PARAGRAPH_KIND_VALUES)[number];
+
+/** One document's canonical paragraphs in ``ordinal`` order, and its attribution. */
+export type NormParagraphPage = {
+  items: Array<NormParagraph>;
+  page: PageInfo;
+  source_attribution: NormSourceAttribution;
+};
+
+/** One reliable canonical paragraph of the searched snapshot. */
+export type NormSearchHit = {
+  block_ref: string;
+  clause_number: string | null;
+  designation: string;
+  doc_type: string;
+  fragment: NormFragment;
+  norm_document_id: NormDocumentId;
+  norm_paragraph_id: NormParagraphId;
+  norms_snapshot_id: NormsSnapshotId;
+  page_label: number;
+  source_attribution: NormSourceAttribution;
+  title: string;
+};
+
+export type NormSearchPage = {
+  items: Array<NormSearchHit>;
+  page: PageInfo;
+};
+
+/**
+ * One loaded snapshot. ``qualified`` is the setter's own predicate (a complete build
+ * and a confirmed source binding for every document's PDF); ``current`` marks the one
+ * current snapshot.
+ */
+export type NormSnapshot = {
+  build_state: NormBuildState;
+  content_key: string;
+  created_at: string;
+  current: boolean;
+  document_count: number;
+  norms_snapshot_id: NormsSnapshotId;
+  paragraph_count: number;
+  qualified: boolean;
+  unreliable_count: number;
+};
+
+/** One row of the append-only history of the current snapshot, newest first. */
+export type NormSnapshotEvent = {
+  actor_user_uid: UserUid;
+  changed_at: string;
+  event_id: string;
+  from_norms_snapshot_id: NormsSnapshotId | null;
+  to_norms_snapshot_id: NormsSnapshotId;
+};
+
+export type NormSnapshotEventPage = {
+  items: Array<NormSnapshotEvent>;
+  page: PageInfo;
+};
+
+export type NormSnapshotPage = {
+  items: Array<NormSnapshot>;
+  page: PageInfo;
+};
+
+/**
+ * `NORM-Q04`. Where a norm document's text came from, carried exactly on every norms
+ * response. The corpus is internal (D-4.1); nothing here is a publication claim.
+ */
+export const NORM_SOURCE_ATTRIBUTION_VALUES = [
+  'consultant_plus',
+  'unattributed',
+] as const;
+
+/** NormSourceAttribution - the closed value set above. */
+export type NormSourceAttribution = (typeof NORM_SOURCE_ATTRIBUTION_VALUES)[number];
+
+/**
+ * F-4. An ``unreliable`` paragraph's recognised text did not survive repair; it is
+ * shown marked in a document view and is never a search result.
+ */
+export const NORM_TEXT_RELIABILITY_VALUES = [
+  'reliable',
+  'unreliable',
+] as const;
+
+/** NormTextReliability - the closed value set above. */
+export type NormTextReliability = (typeof NORM_TEXT_RELIABILITY_VALUES)[number];
+
+export type NormsSnapshotId = string;
+
+/** The contract pattern for `NormsSnapshotId`. Anchored; use with `new RegExp()`. */
+export const NORMS_SNAPSHOT_ID_PATTERN = "^ns_[0-9A-HJKMNP-TV-Z]{26}$";
+
 /** What produced this observation. Checksums and identities only: never the prompt, the request or the response body. */
 export type ObservationProvenance = {
   analysis_profile_id: AnalysisProfileId;
@@ -787,6 +979,8 @@ export type RunStatus = {
   interrupted_reason?: string | null;
   /** How many provider calls `cost_micros` sums. Published rather than left to be inferred: a reader who cannot see it cannot tell a run answered first time from one that was retried, and the two spent differently. Present exactly when `cost_micros` is. */
   model_call_count?: number;
+  /** W55A-SEAL-01 (R-113, CD-6): the norms snapshot this run pinned when it was created -- the current snapshot at that moment. Absent while no snapshot is current, which until W57 is the expected state of every run. */
+  norms_snapshot_id?: NormsSnapshotId;
   project_uid: ProjectUid;
   prompt_bundle_id?: PromptBundleId;
   provider_mode: ProviderMode;
@@ -815,6 +1009,15 @@ export type SectionDocumentCount = {
   document_count: number;
   /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
+};
+
+/**
+ * ``expected_current`` is the snapshot the caller believes is current, ``null`` when it
+ * believes none is; a stale belief is ``conflict`` (``stale_current_snapshot``).
+ */
+export type SetCurrentNormSnapshotRequest = {
+  expected_current: NormsSnapshotId | null;
+  norms_snapshot_id: NormsSnapshotId;
 };
 
 export type SetExecutionPausedRequest = {

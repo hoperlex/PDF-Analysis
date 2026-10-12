@@ -19,9 +19,9 @@
  * knows how many operations there are. Swapping the credential later is an edit to the
  * credential selection below, not a sweep through a handler per operation.
  *
- * Those figures are **forty-five operations across thirty-eight paths**, which is what the
- * frozen document declares after the `W54-SEAL-01` reseal that added the worker registry's
- * `listWorkers` and `setWorkerIntake`.
+ * Those figures are **fifty-two operations across forty-five paths**, which is what the
+ * frozen document declares after the `W55A-SEAL-01` reseal that added the seven norms
+ * operations.
  * This file said fifteen and twelve once, sixteen and thirteen after that, and nineteen and
  * sixteen after `W45-BLOCKS`, each true until the next reseal, and it is the fifth stale count in this programme, so it is no
  * longer corrected by hand:

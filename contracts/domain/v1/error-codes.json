@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.errors",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 10,
-  "revision_note": "Candidate revision 10 of the unreleased 1.0.0-draft.1 candidate, written by W54-SEAL-01 under owner rulings R-76, R-104, R-105 and R-106 (OWNER_RULINGS_2026-09-17.md sections 3.27 and 3.30) and the W54 plan (docs/program/dispatch/W54-PLAN.md sections 3.1, 3.3 and 3.6). No code is added or changed: the custody, repair-journal and worker-registry refusals of W54 reuse the existing codes (the worker registry's sealed stubs answer dependency_unavailable with dependency worker_registry), so the catalog stays at twenty-three codes and the stored vocabulary at twenty-two. The family carries one candidate_revision, so all three catalogs and the three family schemas' const pins move to 10 together; contract_version stays 1.0.0-draft.1 because this is an additive change to an unreleased draft candidate.",
+  "candidate_revision": 11,
+  "revision_note": "Candidate revision 11 of the unreleased 1.0.0-draft.1 candidate, written by W55A-SEAL-01 under owner rulings R-112, R-113 and R-115 (OWNER_RULINGS_2026-09-17.md section 3.31) and the W55a plan (docs/program/dispatch/W55-PLAN.md sections A3.2 to A3.6; review decision CD-19). No code is added or changed: the norms search, current-snapshot and norm-content refusals reuse existing codes, and this revision registers their classifier values in the notes of required_norm_unavailable (reference_kind), conflict (conflict_reason stale_current_snapshot) and validation_failed (constraint norms_search_too_broad). The catalog stays at twenty-three codes and the stored vocabulary at twenty-two. The family carries one candidate_revision, so all three catalogs and the three family schemas' const pins move to 11 together; contract_version stays 1.0.0-draft.1 because this is an additive change to an unreleased draft candidate.",
   "status": "draft_candidate",
   "frozen": false,
   "envelope": {
@@ -111,6 +111,9 @@
       "evidence": [
         "WS-02",
         "WS-03"
+      ],
+      "notes": [
+        "constraint norms_search_too_broad (W55A-SEAL-01, R-112): the operator's search statement timeout (AUDITMANAGER_NORMS_SEARCH_TIMEOUT_MS) cancelled a searchNorms query. Nothing was created; the caller narrows the query. It is never answered as an empty or partial page."
       ]
     },
     "not_found": {
@@ -165,7 +168,8 @@
         "DW-02"
       ],
       "notes": [
-        "conflict_reason (W49-SEAL-01, R-55/R-61) classifies the account and registration conflicts: login_taken (an active account holds the login), request_pending (a registration request for the login is already pending), queue_full (the pending registration queue is at its cap), account_referenced (a purge was refused because something references the account) and last_admin (the change would leave no active account holding admin). It is an enum-like classifier and never raw input; the values are the closed set above, and a refusal of an act on oneself is permission_denied with no detail, not a conflict. That login_taken and request_pending tell a submitter that a login is known is an accepted, registered limitation (W49-PLAN.md section 3.3)."
+        "conflict_reason (W49-SEAL-01, R-55/R-61) classifies the account and registration conflicts: login_taken (an active account holds the login), request_pending (a registration request for the login is already pending), queue_full (the pending registration queue is at its cap), account_referenced (a purge was refused because something references the account) and last_admin (the change would leave no active account holding admin). It is an enum-like classifier and never raw input; the values are the closed set above, and a refusal of an act on oneself is permission_denied with no detail, not a conflict. That login_taken and request_pending tell a submitter that a login is known is an accepted, registered limitation (W49-PLAN.md section 3.3).",
+        "conflict_reason stale_current_snapshot (W55A-SEAL-01, R-113): setCurrentNormSnapshot named an expected_current that is no longer the current norms snapshot, so the designation was not changed. Re-read the snapshot list and decide again; an already-current target is a replay, not a conflict."
       ]
     },
     "state_transition_not_allowed": {
@@ -322,6 +326,9 @@
       "evidence": [
         "AN-06",
         "inventory section 5 normative verification"
+      ],
+      "notes": [
+        "reference_kind (W55A-SEAL-01, R-112, R-113, CD-19) names which authoritative reference could not be resolved. Values registered for the norms operations: norms_snapshot (no norms snapshot is current, or an explicitly named snapshot has never been current, so text search has nothing it may read; W57 uses the same value when a run that reads norms finds no usable snapshot), norm_embedding_build (a snapshot named for designation as current has no complete bge-m3-dense-v1 build over its reliability-aware chunks) and norm_source (a snapshot named for designation, or a norm document whose PDF is requested, lacks a confirmed custody binding of the source PDF). W57 adds norm_retrieval_set. It is an enum-like classifier and never raw input; norms_snapshot_id may accompany it."
       ]
     },
     "analysis_input_invalid": {

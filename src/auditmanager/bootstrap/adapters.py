@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
 from auditmanager.api.schemas.blocks import VersionBlockIndexView
+from auditmanager.api.schemas.content import ByteRange, StreamedContent
 from auditmanager.api.schemas.dashboard import (
     DashboardSummaryView,
     ProjectDocumentCountView,
@@ -496,6 +497,15 @@ class DocumentAdapter:
         from auditmanager.shared.identity import VersionUid
 
         return self._service.read_source_bytes(VersionUid.parse(version_uid))
+
+    # `W55A-SEAL-01`. Sealed: the chunked, ranged read of plan section A3.5 is
+    # `W55A-CONTENT-01`'s, which replaces this body and moves `streamDocumentVersionContent`
+    # onto it. Nothing calls it before then; it refuses explicitly rather than loading the
+    # object whole behind a streaming name.
+    def stream_content(
+        self, *, version_uid: str, byte_range: ByteRange | None
+    ) -> StreamedContent:
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="content_stream")
 
     def list_documents(self, *, project_uid: str) -> Sequence[DocumentVersionView]:
         from auditmanager.shared.identity import ProjectUid
@@ -1689,3 +1699,63 @@ class RegistrationAdapter(_SessionHolder):
                 )
             )
         )
+
+
+class NormsSearchAdapter(_SessionHolder):
+    """`W55A-SEAL-01`. The six norms reads and the designation, as sealed stubs.
+
+    Migration ``0020_norms_search`` carries the current snapshot, its history and the
+    search columns, but the search, the qualification predicate and the setter are
+    `W55A-SEARCH-01`'s (``norms/search/**``, ``norms/current_snapshot.py``), which replaces
+    every body below. Until then each refuses explicitly with ``503 dependency_unavailable``
+    -- never an empty page, which would read as "no snapshot is loaded".
+    """
+
+    @staticmethod
+    def _norms_search_unavailable() -> Any:
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norms_search")
+
+    def search(
+        self, *, q: str, norms_snapshot_id: str | None, cursor: str | None, limit: int
+    ) -> models.NormSearchPage:
+        return self._norms_search_unavailable()
+
+    def get_document(self, *, norm_document_id: str) -> models.NormDocument:
+        return self._norms_search_unavailable()
+
+    def list_paragraphs(
+        self, *, norm_document_id: str, cursor: str | None, limit: int
+    ) -> models.NormParagraphPage:
+        return self._norms_search_unavailable()
+
+    def list_snapshots(self, *, cursor: str | None, limit: int) -> models.NormSnapshotPage:
+        return self._norms_search_unavailable()
+
+    def list_snapshot_events(
+        self, *, cursor: str | None, limit: int
+    ) -> models.NormSnapshotEventPage:
+        return self._norms_search_unavailable()
+
+    def set_current_snapshot(
+        self, *, norms_snapshot_id: str, expected_current: str | None, user_uid: str
+    ) -> models.NormCurrentSnapshot:
+        return self._norms_search_unavailable()
+
+
+class NormContentAdapter(_SessionHolder):
+    """`W55A-SEAL-01`. ``streamNormDocumentContent`` as a sealed stub.
+
+    The PDF is served only through a confirmed custody binding and streamed in chunks;
+    `W55A-SEARCH-01` supplies the binding read over `W55A-CONTENT-01`'s storage stream and
+    replaces this body. ``blob_store`` is taken now so the composition root's wiring does
+    not move when it does.
+    """
+
+    def __init__(self, sessions: sessionmaker[Session], *, blob_store: Any) -> None:
+        super().__init__(sessions)
+        self._blob_store = blob_store
+
+    def stream_content(
+        self, *, norm_document_id: str, byte_range: ByteRange | None
+    ) -> StreamedContent:
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_content")

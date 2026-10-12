@@ -72,8 +72,11 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 #: ``listReleases``. Stage C now serves both from the release adapter.
 # `W53-SEAL-01` added the two execution collection reads, both unaddressed.
 # `W54-SEAL-01` added ``listWorkers``, an unaddressed collection (its intake switch is a PUT).
-EXPECTED_ADDRESSED = 12
-EXPECTED_UNADDRESSED = 11
+# `W55A-SEAL-01` added three addressed GETs (``getNormDocument``, ``listNormParagraphs``,
+# ``streamNormDocumentContent``, all on ``norm_document_id``) and three unaddressed ones
+# (``searchNorms``, ``listNormSnapshots``, ``listNormSnapshotEvents``).
+EXPECTED_ADDRESSED = 15
+EXPECTED_UNADDRESSED = 14
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -109,7 +112,25 @@ EXECUTION_COLLECTIONS = frozenset({"listExecutionQueue", "listExecutionJournal"}
 #: `W54-WORKER-01` emptied it: ``listWorkers`` reads the registry and joins the page-shape
 #: sweep as an ordinary collection (an empty registry is a page with no items, which is a
 #: true statement about a deployment with no worker).
-SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
+#: `W55A-SEAL-01` fills it again with the two norms snapshot listings, whose port is a sealed
+#: stub until `W55A-SEARCH-01`; that lane empties it. The sweep's account holds ``admin``, so
+#: the administrator's history reaches its stub rather than the seam's ``403``.
+SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset({"listNormSnapshots", "listNormSnapshotEvents"})
+
+#: `W55A-SEAL-01`. Addressed ``GET`` operations whose port is a sealed stub: they cannot
+#: answer ``404`` for an absent identity until something reads the identity, so they are
+#: exempt from the ``404`` sweep and asserted to be exactly the stub instead
+#: (:func:`test_a_sealed_stub_get_with_a_parent_answers_unavailable`). `W55A-SEARCH-01`
+#: empties it and the three join the sweep: an absent ``ndoc_`` is ``404 not_found``.
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset(
+    {"getNormDocument", "listNormParagraphs", "streamNormDocumentContent"}
+)
+
+#: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
+#: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a
+#: page. Exempt from the page check and checked for that refusal instead
+#: (:func:`test_a_query_without_its_text_is_refused_and_never_a_page`).
+QUERY_OPERATIONS = frozenset({"searchNorms"})
 
 
 def _prefixes() -> dict[str, str]:
@@ -236,6 +257,8 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
     """
     disagreements = []
     for operation_id, template in _addressed(_get_routes(app)):
+        if operation_id in SEALED_STUB_ADDRESSED:
+            continue
         path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
         status, body = _get(app, path)
         code = body.get("error_code") if isinstance(body, dict) else None
@@ -270,6 +293,7 @@ def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None
             or operation_id in SELF_OPERATIONS
             or operation_id in RELEASE_OPERATIONS
             or operation_id in SEALED_STUB_COLLECTIONS
+            or operation_id in QUERY_OPERATIONS
         ):
             continue
         status, body = _get(app, template)
@@ -296,6 +320,44 @@ def test_a_sealed_stub_collection_answers_unavailable_and_never_an_empty_page(
         assert status == 503, f"{operation_id} answered {status}: {body}"
         assert isinstance(body, dict) and body.get("error_code") == "dependency_unavailable", body
         assert "items" not in body, body
+
+
+def test_a_sealed_stub_get_with_a_parent_answers_unavailable(app: Composed) -> None:
+    """`W55A-SEAL-01`. The addressed exemption is as narrow as the unaddressed one.
+
+    A sealed norms read cannot tell an absent ``ndoc_`` from a present one -- nothing reads
+    it yet -- so it must not answer either ``404`` or a page: ``503 dependency_unavailable``
+    says the norms reads are not served yet.
+    """
+    addressed = _addressed(_get_routes(app))
+    stubs = [(op, path) for op, path in addressed if op in SEALED_STUB_ADDRESSED]
+    assert {op for op, _ in stubs} == SEALED_STUB_ADDRESSED
+    for operation_id, template in stubs:
+        path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
+        status, body = _get(app, path)
+        assert status == 503, f"{operation_id} answered {status}: {body}"
+        assert isinstance(body, dict) and body.get("error_code") == "dependency_unavailable", body
+        assert "items" not in body, body
+
+
+def test_a_query_without_its_text_is_refused_and_never_a_page(app: Composed) -> None:
+    """`W55A-SEAL-01`. ``searchNorms`` with no ``q`` is a malformed request, not a page.
+
+    With a ``q`` it reaches its port, which is a sealed stub until `W55A-SEARCH-01` and then
+    refuses ``required_norm_unavailable`` while no snapshot is current -- in neither case an
+    empty page, which would read as "nothing in the corpus matches".
+    """
+    unaddressed = _unaddressed(_get_routes(app))
+    queries = [(op, path) for op, path in unaddressed if op in QUERY_OPERATIONS]
+    assert {op for op, _ in queries} == QUERY_OPERATIONS
+    for operation_id, template in queries:
+        status, body = _get(app, template)
+        assert status == 422, f"{operation_id} answered {status}: {body}"
+        assert body.get("error_code") == "validation_failed", body
+        status, body = _get(app, f"{template}?q=%D0%93%D0%9E%D0%A1%D0%A2%2010140")
+        assert status in (422, 503), f"{operation_id} answered {status}: {body}"
+        assert isinstance(body, dict) and "items" not in body, body
+        assert body.get("error_code") in ("dependency_unavailable", "required_norm_unavailable"), body
 
 
 def test_release_gets_serve_the_running_version_and_history(app: Composed) -> None:

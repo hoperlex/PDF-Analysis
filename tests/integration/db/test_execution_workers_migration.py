@@ -73,7 +73,8 @@ def _register(connection, *, slots: int = 1, version: str = "0.5.0+test") -> str
 
 def test_a_fresh_upgrade_creates_the_registry_and_the_lease_column(migrated_engine: Engine) -> None:
     with migrated_engine.connect() as connection:
-        assert _head(connection) == "0019_execution_workers"
+        # `W55A-SEAL-01` moved the head past this revision; the registry is still there.
+        assert _head(connection) == "0020_norms_search"
         assert connection.execute(text("SELECT to_regclass('public.worker')")).scalar_one()
         assert connection.execute(text(
             "SELECT is_nullable FROM information_schema.columns "
@@ -100,7 +101,7 @@ def test_a_populated_0018_upgrades_and_its_leases_name_no_worker(
         upgraded = foundation_command(_alembic("upgrade", "head"), url)
         assert upgraded.returncode == 0, upgraded.describe()
         with engine.connect() as connection:
-            assert _head(connection) == "0019_execution_workers"
+            assert _head(connection) == "0020_norms_search"
             assert connection.execute(text(
                 "SELECT worker_id, expires_at IS NOT NULL FROM lease WHERE lease_id = :lease"
             ), ids).one() == (None, True)
@@ -114,7 +115,9 @@ def test_retained_worker_data_refuses_the_downgrade(
     empty_database, foundation_command, retained: str,
 ) -> None:
     url = empty_database.url.render_as_string(hide_password=False)
-    up = foundation_command(_alembic("upgrade", "head"), url)
+    # Pinned to this revision rather than `head` (`W55A-SEAL-01`): the whole downgrade is one
+    # transaction, so from `0020` a refusal would leave the head at `0020`, not here.
+    up = foundation_command(_alembic("upgrade", "0019_execution_workers"), url)
     assert up.returncode == 0, up.describe()
     engine = create_database_engine(empty_database)
     try:

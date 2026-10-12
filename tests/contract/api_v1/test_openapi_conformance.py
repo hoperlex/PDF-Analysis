@@ -529,7 +529,9 @@ class TestN1ComponentReferenceResolution:
         # a request by identity each declare one too.
         # W53 adds three identity-addressed commands with the same 404 envelope.
         # `W54-SEAL-01` adds `setWorkerIntake`, which addresses a worker by identity.
-        assert len(report) == 26, report
+        # `W55A-SEAL-01` adds four more 404s: the three norm-document reads address a
+        # document by identity and `setCurrentNormSnapshot` names a snapshot that may not exist.
+        assert len(report) == 30, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

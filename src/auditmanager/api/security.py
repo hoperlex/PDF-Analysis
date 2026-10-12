@@ -328,6 +328,13 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listDecisionHistory": _ANY_ROLE,
         "listDecisions": _ANY_ROLE,
         "getDashboardSummary": _ANY_ROLE,
+        # `W55A-SEAL-01`. The norms reads: text search, documents, paragraphs, the PDF and
+        # the snapshot list are product data, so any one role (R-80, plan section A3.6).
+        "searchNorms": _ANY_ROLE,
+        "getNormDocument": _ANY_ROLE,
+        "listNormParagraphs": _ANY_ROLE,
+        "streamNormDocumentContent": _ANY_ROLE,
+        "listNormSnapshots": _ANY_ROLE,
         # The product version and release notes: any complete account, roles or none
         # (R-80), so a role-less person can still see what the product is.
         "getProductVersion": _ANY_COMPLETE_ACCOUNT,
@@ -359,6 +366,9 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "setJobPriority": _ADMIN,
         "setExecutionPaused": _ADMIN,
         "setWorkerIntake": _ADMIN,
+        # `W55A-SEAL-01` (R-113). Who designated which snapshot, and the designation itself.
+        "listNormSnapshotEvents": _ADMIN,
+        "setCurrentNormSnapshot": _ADMIN,
     }
 )
 
