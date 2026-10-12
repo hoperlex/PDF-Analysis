@@ -154,9 +154,11 @@
     },
     "norms_worker": {
       "role": "repository-owned BGE-M3 norms-worker image for the frozen embedding profile bge-m3-dense-v1; no network at run time",
-      "status": "definition only: pins listed under pending_pins are measured, and the image built and its MRR reproduced, in an owner window (W54-FREEZE-01)",
+      "status": "definition only: pins listed under pending_pins are measured, and the image built with the embedder inside, its MRR reproduced and its windows checked against the real tokenizer, in an owner window (W54-FREEZE-01)",
       "dockerfile": "infra/norms-worker/Dockerfile",
-      "build_context": "infra/norms-worker",
+      "build_context": ".",
+      "dockerignore": "infra/norms-worker/Dockerfile.dockerignore",
+      "context_rule": "the repository root, cut to the allowlist in dockerignore (the wheel lock, the self-check, src/auditmanager/__init__.py and src/auditmanager/norms); nothing under .local reaches the daemon",
       "local_image": "auditmanager-norms-worker:bge-m3-dense-v1-5617a9f",
       "image_id": "TODO-PIN-WINDOW",
       "base_image": "python:3.12-slim-bookworm@sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254",
@@ -207,6 +209,28 @@
         "candidate_windows": 563,
         "status": "pending: heavy step for the first W54 window"
       },
+      "embedder": {
+        "package": "src/auditmanager/norms/embedding",
+        "baked_at": "/opt/norms-worker/src",
+        "entry": "python -m auditmanager.norms.embedding",
+        "commands_in_image": [
+          "build",
+          "embed-texts",
+          "self-test",
+          "status"
+        ],
+        "commands_on_host": [
+          "prepare",
+          "load",
+          "status"
+        ],
+        "build_self_check": "RUN --network=none python -m auditmanager.norms.embedding self-test",
+        "build_runner": "infra/norms-worker/run-build.sh",
+        "window_check": "infra/norms-worker/check-windows.sh",
+        "window_check_status": "pending: heavy step for a W54 window",
+        "embed_texts_format": "auditmanager-embed-texts/1",
+        "digest_format": "norm-embedding-set/2"
+      },
       "pending_pins": [
         "wheel_lock",
         "image_id",
@@ -222,7 +246,7 @@
         "model_files_sha256/tokenizer.json",
         "model_files_sha256/tokenizer_config.json"
       ],
-      "owner": "W54-BGE-IMAGE; successor writer W54-EMBED-01 (W54-PLAN.md section 6)"
+      "owner": "W54-BGE-IMAGE; successor writer W54-EMBED-01 (W54-PLAN.md section 6), which baked the embedder in"
     },
     "policy": "Every third-party image input is pinned by tag and multi-arch index digest. No floating tag and no 'latest' reference exists in the foundation. Repository-owned PostgreSQL and MinIO derivatives additionally pin their official source by commit and archive SHA-256. An absent or changed input is a single-owner successor pin task, never a lane-side choice.",
     "immutability": {

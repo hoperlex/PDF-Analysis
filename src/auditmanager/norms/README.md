@@ -27,6 +27,8 @@ projection that can be rebuilt from the drop at any time.
 | `corpus_source.py` | the only module that reads the filesystem; strict manifest/projection boundary |
 | `repository.py` | transaction-local PostgreSQL writes, content-key idempotency, rows read back with their ids, the streamed row digest, chunk builds from stored paragraphs |
 | `loader.py` | the atomic loader and its operator CLI; `import_snapshot`, which inserts rows with the ids they carry |
+| `embedding/` | the resumable, batch-bounded `bge-m3-dense-v1` embedder: the 512/64 windowing ported from the bake-off runner, the plan and per-batch checkpoint files, the encode phase, `embed-texts`, and the `norm-embedding-set/2` digest; standard library only at module level |
+| `embedding_repository.py` | transaction-local embedding persistence: a build accepted only with every chunk's full window set and loaded in one transaction ending with its completion row (`D-127`); the filtered HNSW search with its scan settings (`D-124`) |
 
 ## Rules this context keeps
 
@@ -51,9 +53,10 @@ projection that can be rebuilt from the drop at any time.
   text. A stale or partially applicable ledger is refused rather than silently ignored.
 - **Paragraphs are canonical; chunks are rebuildable.** Stored paragraphs and their source
   anchors are immutable. A named chunking profile may be deleted and rebuilt from those
-  paragraphs, never edited in place. The measured `bge-m3-dense-v1` profile starts from
-  table-row paragraphs and applies deterministic 512-total-token windows with 64-content-token
-  overlap to any over-limit paragraph; it never truncates or substitutes an AI summary.
+  paragraphs, never edited in place. A stored `bge-m3-dense-v1` build embeds the chunks of one
+  profile (`characters-v2` for a repaired snapshot) and applies deterministic 512-total-token
+  windows with 64-content-token overlap to any over-limit chunk; it never truncates or
+  substitutes an AI summary.
 - **Unreliable text is marked, and only the reliability-aware profile is built over it**
   (`F-4`). A block the repair ledger holds that did not end `repaired` keeps its corpus text;
   each of its paragraphs is stored with `text_reliability = 'unreliable'`, and the snapshot
@@ -83,3 +86,40 @@ The command commits one database transaction, performs no S3/provider side effec
 the snapshot id, content key, chunk profile, `unreliable_count`, the row digest and the counts.
 A replay that names a chunk profile the stored snapshot lacks builds it from the stored
 paragraphs.
+
+## The embedding build (`W54-EMBED-01`)
+
+- **Three restartable phases.** `prepare` (host, `DATABASE_URL`) streams the profile's chunks
+  in canonical `(source_document_ref, ordinal)` order into `plan.json` and one input file per
+  batch. `build` runs inside the norms-worker image with `--network none` and no database
+  (`infra/norms-worker/run-build.sh`): it windows and embeds every batch that has no verified
+  checkpoint, writes each checkpoint fsynced and renamed before its SHA-256 sidecar, and skips
+  verified batches on a restart, so a kill costs at most the batch in flight and the ≈ 14 h
+  corpus build spans night windows. `load` (host) verifies every checkpoint and streams them
+  into one transaction that ends with the completion row. Memory is bounded by one batch in
+  every phase.
+- **Complete means the full window set (`D-127`).** Each chunk's windows start at its first
+  character, end at its last, overlap pairwise, carry the SHA-256 of exactly their slice and the
+  paragraph span that slice touches, and every chunk of the profile is present once. The
+  repository applies this against the stored chunk text before it inserts anything.
+- **The digest names content, not rows (`D-127`).** `embedding_set_sha256` is
+  `norm-embedding-set/2` over `content_key ‖ source_document_ref ‖ chunking_profile ‖ ordinal`
+  and each window's fields; no private key enters it. After a load the database recomputes it
+  from the stored rows, and it must equal the checkpoints'.
+- **Invisible until complete.** Windows and their completion row commit together; another
+  transaction sees all of a build or none of it, and `nearest` refuses a build with no
+  completion row.
+- **Filtered search (`D-124`).** The one HNSW index spans every snapshot. `nearest` sets
+  `hnsw.iterative_scan = strict_order`, `hnsw.ef_search` and `hnsw.max_scan_tuples` for its
+  transaction and refuses a scan that returns fewer rows than the build holds.
+
+```
+PYTHONPATH=src .venv/bin/python -m auditmanager.norms.embedding prepare --snapshot <ns_id> --chunking-profile characters-v2:1200 --checkpoint .local/norms/builds/<content_key>
+infra/norms-worker/run-build.sh auditmanager-norms-worker:bge-m3-dense-v1-5617a9f .local/norms/builds/<content_key> <ns_id> characters-v2:1200 [<max batches>]
+PYTHONPATH=src .venv/bin/python -m auditmanager.norms.embedding load --snapshot <ns_id> --chunking-profile characters-v2:1200 --checkpoint .local/norms/builds/<content_key>
+```
+
+`build` exits 0 when every batch is verified, 75 when `--max-batches` left work for the next
+window, and 2 on a refusal. `embed-texts --in <request.json> --out <response.json>` answers a
+`auditmanager-embed-texts-request/1` file with base64 big-endian float32 vectors, the profile,
+the model revision and each vector's SHA-256; a text over 512 tokens is refused, never cut.

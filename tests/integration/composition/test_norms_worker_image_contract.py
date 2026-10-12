@@ -11,7 +11,11 @@ definition, and this file holds all of it:
   runs under `RUN --network=none`, and the reproduction runs `docker run --network none`;
 * the profile constants equal the bake-off record, the `0013` profile row and the lock;
 * every pin the repository has not recorded is spelled `TODO-PIN-WINDOW` and declared under
-  `images.norms_worker.pending_pins` -- an undeclared gap and a stale declaration both fail.
+  `images.norms_worker.pending_pins` -- an undeclared gap and a stale declaration both fail;
+* (`W54-EMBED-01`) the embedder is baked in from exactly the norms package, after the model
+  layers, behind a build context cut to an allowlist, and checked offline at build time; the
+  build runner and the window check each make one offline `docker run`; the embedder's profile
+  constants equal the self-check's.
 
 Each structural check is a function returning its errors, and each is shown able to fail on a
 mutant of the real text. The reproduction runner is driven end to end against a `docker` stub
@@ -32,13 +36,16 @@ from types import ModuleType
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[3]
 WORKER = ROOT / "infra/norms-worker"
 DOCKERFILE = WORKER / "Dockerfile"
 REQUIREMENTS_IN = WORKER / "requirements.in"
 REQUIREMENTS_LOCK = WORKER / "requirements.lock"
 REPRODUCE = WORKER / "reproduce-mrr.sh"
+RUN_BUILD = WORKER / "run-build.sh"
+CHECK_WINDOWS = WORKER / "check-windows.sh"
+DOCKERIGNORE = WORKER / "Dockerfile.dockerignore"
+EMBEDDER_PROFILE = ROOT / "src/auditmanager/norms/embedding/profile.py"
 SELF_CHECK = WORKER / "self_check.py"
 COMPARATOR = WORKER / "compare_bakeoff.py"
 LOCK = ROOT / "docs/program/FOUNDATION_LOCK.json"
@@ -485,7 +492,8 @@ def test_foundation_lock_matches_the_executable_definition() -> None:
     recorded = json.loads(RECORDED.read_text(encoding="utf-8"))
 
     assert entry["dockerfile"] == "infra/norms-worker/Dockerfile"
-    assert entry["build_context"] == "infra/norms-worker"
+    assert entry["build_context"] == "."
+    assert entry["dockerignore"] == "infra/norms-worker/Dockerfile.dockerignore"
     assert entry["local_image"] == LOCAL_IMAGE
     assert entry["base_image"] == BASE
     assert entry["wheel_inputs"] == "infra/norms-worker/requirements.in"
@@ -514,7 +522,14 @@ def test_foundation_lock_matches_the_executable_definition() -> None:
     assert reproduction["queries"] == recorded["benchmark"]["queries"]
     assert reproduction["candidate_windows"] == recorded["benchmark"]["candidate_windows"]
     assert "infra/norms-worker" in lock["images"]["immutability"]["rule"]
-    assert f"--tag {LOCAL_IMAGE} infra/norms-worker" in DOCKERFILE.read_text(encoding="utf-8")
+    assert f"--tag {LOCAL_IMAGE} ." in DOCKERFILE.read_text(encoding="utf-8")
+    embedder = entry["embedder"]
+    assert embedder["package"] == "src/auditmanager/norms/embedding"
+    assert embedder["build_runner"] == "infra/norms-worker/run-build.sh"
+    assert embedder["window_check"] == "infra/norms-worker/check-windows.sh"
+    assert embedder["build_self_check"] == f"RUN {EMBEDDER_SELF_TEST}"
+    assert embedder["digest_format"] == "norm-embedding-set/2"
+    assert embedder["embed_texts_format"] == "auditmanager-embed-texts/1"
 
 
 # --- the comparator and the runner, driven without a container ---------------------------------
@@ -712,5 +727,282 @@ def test_each_runner_refusal_happens_before_docker_and_can_fail(case: str, tmp_p
         tmp_path / "mutant", real.replace(_GUARDS[case], "", 1)
     )
     completed = _run(mutant, corpus, _arrange(case, corpus, tmp_path / "mutant"), environment)
+    assert "refused:" not in completed.stderr
+    assert argv_log.exists(), "without its guard the runner reaches docker"
+
+
+# --- W54-EMBED-01: the embedder inside the image ------------------------------------------------
+
+EMBEDDER_SELF_TEST = "--network=none python -m auditmanager.norms.embedding self-test"
+#: (source in the repository-root context, destination) -- every COPY the Dockerfile may hold.
+COPIES = [
+    ("infra/norms-worker/requirements.lock", "/opt/norms-worker/requirements.lock"),
+    ("infra/norms-worker/self_check.py", "/opt/norms-worker/self_check.py"),
+    ("src/auditmanager/__init__.py", "/opt/norms-worker/src/auditmanager/__init__.py"),
+    ("src/auditmanager/norms/", "/opt/norms-worker/src/auditmanager/norms/"),
+]
+ALLOWLIST = [
+    "infra/norms-worker/requirements.lock",
+    "infra/norms-worker/self_check.py",
+    "src/auditmanager/__init__.py",
+    "src/auditmanager/norms",
+]
+
+
+def _patterns(dockerignore: str) -> list[str]:
+    return [
+        line.strip() for line in dockerignore.splitlines() if line.strip() and not line.startswith("#")
+    ]
+
+
+def embedder_errors(dockerfile: str, dockerignore: str) -> list[str]:
+    errors: list[str] = []
+    instructions = _instructions(dockerfile)
+    copies = [tuple(arguments.split()) for keyword, arguments in instructions if keyword == "COPY"]
+    if copies != COPIES:
+        errors.append(f"COPY set {copies} != {COPIES}")
+    last_model = max((index for index, (keyword, _) in enumerate(instructions) if keyword == "ADD"), default=-1)
+    code = [
+        index for index, (keyword, arguments) in enumerate(instructions)
+        if keyword == "COPY" and arguments.startswith("src/")
+    ]
+    if not code or min(code) < last_model:
+        errors.append("the embedder code is copied before the model layers")
+    if _env(dockerfile).get("PYTHONPATH") != "/opt/norms-worker/src":
+        errors.append("PYTHONPATH does not name the baked package")
+    runs = [index for index, (keyword, arguments) in enumerate(instructions) if (keyword, arguments) == ("RUN", EMBEDDER_SELF_TEST)]
+    if len(runs) != 1:
+        errors.append("the embedder self-test does not run once under RUN --network=none")
+    elif code and runs[0] < max(code):
+        errors.append("the embedder self-test runs before the embedder is copied")
+
+    patterns = _patterns(dockerignore)
+    if not patterns or patterns[0] != "*":
+        errors.append("the context allowlist does not start by excluding everything")
+    included = [pattern[1:] for pattern in patterns if pattern.startswith("!")]
+    if included != ALLOWLIST:
+        errors.append(f"the context allowlist re-includes {included}, not {ALLOWLIST}")
+    for source, _ in copies:
+        if not any(source.rstrip("/") == entry or source.startswith(entry + "/") for entry in included):
+            errors.append(f"COPY {source} is outside the context allowlist")
+    if any(".local" in pattern and pattern.startswith("!") for pattern in patterns):
+        errors.append("the context allowlist re-includes .local")
+    return errors
+
+
+def runner_errors(script: str, *, mounts: dict[str, str], command: str) -> list[str]:
+    """One offline ``docker run``; exactly these mount targets with these modes; this command."""
+    errors: list[str] = []
+    joined = script.replace("\\\n", " ")
+    invocations = [line for line in joined.splitlines() if line.strip().startswith("docker ")]
+    if len(invocations) != 1:
+        return [f"expected exactly one docker invocation, found {len(invocations)}"]
+    line = " ".join(invocations[0].split())
+    if not line.startswith("docker run "):
+        errors.append("the runner calls docker without run")
+    for flag in ("--network none", "--pull never", "--rm"):
+        if flag not in line:
+            errors.append(f"docker run lacks {flag}")
+    found = dict(re.findall(r"target=(/\w+)(,readonly)?", line))
+    expected = {target: (",readonly" if mode == "readonly" else "") for target, mode in mounts.items()}
+    if found != expected:
+        errors.append(f"mounts {found} != {expected}")
+    if command not in line:
+        errors.append(f"the container does not run {command!r}")
+    return errors
+
+
+RUN_BUILD_MOUNTS = {"/checkpoint": "rw"}
+RUN_BUILD_COMMAND = "python -m auditmanager.norms.embedding build"
+CHECK_MOUNTS = {"/work": "readonly", "/corpus": "readonly", "/out": "rw"}
+CHECK_COMMAND = "python /work/infra/norms-worker/check_windows.py"
+
+
+def test_the_embedder_is_baked_from_exactly_the_norms_package_behind_an_allowlist() -> None:
+    assert embedder_errors(DOCKERFILE.read_text(encoding="utf-8"), DOCKERIGNORE.read_text(encoding="utf-8")) == []
+
+
+def test_the_build_runner_and_the_window_check_are_one_offline_docker_run_each() -> None:
+    assert runner_errors(RUN_BUILD.read_text(encoding="utf-8"), mounts=RUN_BUILD_MOUNTS, command=RUN_BUILD_COMMAND) == []
+    assert runner_errors(CHECK_WINDOWS.read_text(encoding="utf-8"), mounts=CHECK_MOUNTS, command=CHECK_COMMAND) == []
+
+
+@pytest.mark.parametrize(
+    ("target", "old", "new", "expected"),
+    [
+        ("dockerfile", "COPY src/auditmanager/norms/ /opt/norms-worker/src/auditmanager/norms/",
+         "COPY src/ /opt/norms-worker/src/", "COPY set"),
+        ("dockerfile", "COPY src/auditmanager/__init__.py /opt/norms-worker/src/auditmanager/__init__.py\n",
+         "COPY src/auditmanager/__init__.py /opt/norms-worker/src/auditmanager/__init__.py\nCOPY .local/norms /corpus\n",
+         "COPY set"),
+        ("dockerfile", "    PYTHONPATH=/opt/norms-worker/src \\\n", "", "PYTHONPATH"),
+        ("dockerfile", "RUN --network=none python -m auditmanager.norms.embedding self-test",
+         "RUN python -m auditmanager.norms.embedding self-test", "self-test does not run"),
+        ("dockerignore", "*\n!infra", "!infra", "excluding everything"),
+        ("dockerignore", "!src/auditmanager/norms\n", "!src/auditmanager/norms\n!.local/norms/corpus\n", "re-includes"),
+        ("dockerignore", "!src/auditmanager/norms\n", "", "outside the context allowlist"),
+    ],
+)
+def test_the_embedder_check_can_fail(target: str, old: str, new: str, expected: str) -> None:
+    dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+    dockerignore = DOCKERIGNORE.read_text(encoding="utf-8")
+    if target == "dockerfile":
+        assert old in dockerfile
+        dockerfile = dockerfile.replace(old, new, 1)
+    else:
+        assert old in dockerignore
+        dockerignore = dockerignore.replace(old, new, 1)
+    errors = embedder_errors(dockerfile, dockerignore)
+    assert any(expected in error for error in errors), errors
+
+
+def test_the_code_layers_come_after_the_model_layers_and_the_check_sees_it() -> None:
+    dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+    line = "COPY src/auditmanager/norms/ /opt/norms-worker/src/auditmanager/norms/\n"
+    moved = dockerfile.replace(line, "", 1).replace(
+        "COPY infra/norms-worker/requirements.lock", line + "COPY infra/norms-worker/requirements.lock", 1
+    )
+    errors = embedder_errors(moved, DOCKERIGNORE.read_text(encoding="utf-8"))
+    assert any("before the model layers" in error for error in errors), errors
+
+
+@pytest.mark.parametrize(
+    ("script", "old", "new", "expected"),
+    [
+        ("build", "--network none", "", "--network none"),
+        ("build", "--pull never ", "", "--pull never"),
+        ("build", 'target=/checkpoint"', 'target=/checkpoint" --mount "type=bind,source=/,target=/host"', "mounts"),
+        ("build", "python -m auditmanager.norms.embedding build", "python -c pass", "does not run"),
+        ("check", "target=/corpus,readonly", "target=/corpus", "mounts"),
+        ("check", "target=/work,readonly", "target=/work", "mounts"),
+    ],
+)
+def test_the_runner_check_can_fail(script: str, old: str, new: str, expected: str) -> None:
+    path, mounts, command = (
+        (RUN_BUILD, RUN_BUILD_MOUNTS, RUN_BUILD_COMMAND) if script == "build" else (CHECK_WINDOWS, CHECK_MOUNTS, CHECK_COMMAND)
+    )
+    text = path.read_text(encoding="utf-8")
+    assert old in text
+    errors = runner_errors(text.replace(old, new, 1), mounts=mounts, command=command)
+    assert any(expected in error for error in errors), errors
+
+
+def test_the_embedder_profile_equals_the_self_check() -> None:
+    profile = _load(EMBEDDER_PROFILE, "norms_embedding_profile")
+    assert profile.EMBEDDING_PROFILE == SELF.PROFILE_ID
+    assert profile.MODEL_REPOSITORY == SELF.REPOSITORY
+    assert profile.MODEL_REVISION == SELF.REVISION == REVISION
+    assert profile.DIMENSIONS == SELF.DIMENSIONS
+    assert (profile.MAX_TOKENS, profile.OVERLAP_TOKENS) == (SELF.MAX_TOKENS, SELF.OVERLAP_TOKENS)
+    assert profile.SPECIAL_TOKENS == SELF.SPECIAL_TOKENS
+    assert profile.THREADS == SELF.THREADS
+    assert profile.ENCODE_BATCH_SIZE == _recorded()["model"]["batch_size"]
+    assert profile.PASSAGE_PREFIX == _recorded()["tokenization"]["passage_prefix"]
+
+
+# --- run-build.sh, driven against a docker stub ---------------------------------------------------
+
+_BUILD_STUB = """#!/usr/bin/env bash
+printf '%s\\n' "$@" > "$STUB_ARGV"
+exit "${STUB_EXIT:-0}"
+"""
+SNAPSHOT_ID = "ns_" + "0" * 26
+
+
+def _build_sandbox(tmp_path: Path, script_text: str | None = None) -> tuple[Path, Path, Path, dict[str, str]]:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    runner = tmp_path / "run-build.sh"
+    runner.write_text(script_text or RUN_BUILD.read_text(encoding="utf-8"), encoding="utf-8")
+    checkpoint = tmp_path / "builds" / "key"
+    checkpoint.mkdir(parents=True)
+    (checkpoint / "plan.json").write_text("{}", encoding="utf-8")
+    stubs = tmp_path / "bin"
+    stubs.mkdir()
+    docker = stubs / "docker"
+    docker.write_text(_BUILD_STUB, encoding="utf-8")
+    docker.chmod(0o755)
+    environment = dict(
+        os.environ, PATH=f"{stubs}{os.pathsep}{os.environ['PATH']}", STUB_ARGV=str(tmp_path / "docker.argv")
+    )
+    return runner, checkpoint, tmp_path / "docker.argv", environment
+
+
+def _run_build(runner: Path, *arguments: str, environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["bash", str(runner), LOCAL_IMAGE, *arguments],
+        capture_output=True, text=True, env=environment, check=False, timeout=60,
+    )
+
+
+def test_run_build_makes_one_offline_docker_run_and_passes_the_exit_status_through(tmp_path: Path) -> None:
+    runner, checkpoint, argv_log, environment = _build_sandbox(tmp_path)
+    completed = _run_build(runner, str(checkpoint), SNAPSHOT_ID, "characters-v2:1200", "3", environment=environment)
+    assert completed.returncode == 0, completed.stderr
+    argv = argv_log.read_text(encoding="utf-8").splitlines()
+    assert argv[:10] == ["run", "--rm", "--pull", "never", "--network", "none", "--memory", "5g", "--memory-swap", "5g"]
+    assert f"type=bind,source={checkpoint.resolve()},target=/checkpoint" in argv
+    assert argv[argv.index(LOCAL_IMAGE) + 1 :] == [
+        "python", "-m", "auditmanager.norms.embedding", "build",
+        "--snapshot", SNAPSHOT_ID, "--chunking-profile", "characters-v2:1200",
+        "--checkpoint", "/checkpoint", "--max-batches", "3",
+    ]
+    environment["STUB_EXIT"] = "75"
+    completed = _run_build(runner, str(checkpoint), SNAPSHOT_ID, "characters-v2:1200", environment=environment)
+    assert completed.returncode == 75
+    assert "--max-batches" not in argv_log.read_text(encoding="utf-8").splitlines()
+
+
+_BUILD_GUARDS = {
+    "no-plan": (
+        'if [ ! -f "$checkpoint/plan.json" ]; then\n'
+        '  echo "refused: $checkpoint holds no plan.json; run prepare first" >&2\n'
+        "  exit 2\n"
+        "fi\n"
+    ),
+    "inside-the-corpus": (
+        'case "$checkpoint/" in\n'
+        "  */.local/norms/corpus/*)\n"
+        '    echo "refused: the checkpoint directory $checkpoint lies inside the corpus drop" >&2\n'
+        "    exit 2\n"
+        "    ;;\n"
+        "esac\n"
+    ),
+    "bad-snapshot": (
+        'if ! [[ "$snapshot" =~ ^ns_[0-9A-HJKMNP-TV-Z]{26}$ ]]; then\n'
+        '  echo "refused: $snapshot is not a norms snapshot id" >&2\n'
+        "  exit 2\n"
+        "fi\n"
+    ),
+}
+
+
+def _arrange_build(case: str, checkpoint: Path) -> tuple[str, str]:
+    if case == "no-plan":
+        (checkpoint / "plan.json").unlink()
+        return str(checkpoint), SNAPSHOT_ID
+    if case == "inside-the-corpus":
+        inside = checkpoint.parent / ".local" / "norms" / "corpus" / "x"
+        inside.mkdir(parents=True)
+        (inside / "plan.json").write_text("{}", encoding="utf-8")
+        return str(inside), SNAPSHOT_ID
+    return str(checkpoint), "ns_not-an-id"
+
+
+@pytest.mark.parametrize("case", sorted(_BUILD_GUARDS))
+def test_each_run_build_refusal_happens_before_docker_and_can_fail(case: str, tmp_path: Path) -> None:
+    real = RUN_BUILD.read_text(encoding="utf-8")
+    assert real.count(_BUILD_GUARDS[case]) == 1
+
+    runner, checkpoint, argv_log, environment = _build_sandbox(tmp_path / "real")
+    directory, snapshot = _arrange_build(case, checkpoint)
+    completed = _run_build(runner, directory, snapshot, "characters-v2:1200", environment=environment)
+    assert completed.returncode == 2 and "refused:" in completed.stderr
+    assert not argv_log.exists(), "docker was invoked before the refusal"
+
+    mutant, checkpoint, argv_log, environment = _build_sandbox(
+        tmp_path / "mutant", real.replace(_BUILD_GUARDS[case], "", 1)
+    )
+    directory, snapshot = _arrange_build(case, checkpoint)
+    completed = _run_build(mutant, directory, snapshot, "characters-v2:1200", environment=environment)
     assert "refused:" not in completed.stderr
     assert argv_log.exists(), "without its guard the runner reaches docker"

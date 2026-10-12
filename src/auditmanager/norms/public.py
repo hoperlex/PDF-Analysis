@@ -51,6 +51,24 @@ from auditmanager.norms.custody import (
     report,
     requeue,
 )
+from auditmanager.norms.embedding import (  # W54-EMBED-01
+    EMBEDDING_PROFILE,
+    EMBEDDING_SET_DIGEST_VERSION,
+    EmbeddingSetDigest,
+)
+from auditmanager.norms.embedding import (
+    REQUEST_FORMAT as EMBED_TEXTS_REQUEST_FORMAT,  # W54-EMBED-01
+)
+from auditmanager.norms.embedding import (
+    RESPONSE_FORMAT as EMBED_TEXTS_RESPONSE_FORMAT,  # W54-EMBED-01
+)
+from auditmanager.norms.embedding_repository import (  # W54-EMBED-01
+    NearestEmbedding,
+    NormEmbeddingConflict,
+    NormEmbeddingRepository,
+    NormEmbeddingScanShort,
+    StoredEmbeddingBuild,
+)
 from auditmanager.norms.loader import (  # W54-SNAPSHOT-01
     CorpusLoadResult,
     SnapshotImportResult,
@@ -82,6 +100,10 @@ __all__ = [
     "ADMIT_COMMAND_TYPE",
     "D143_MESSAGE",
     "D143_REASON",
+    "EMBEDDING_PROFILE",
+    "EMBEDDING_SET_DIGEST_VERSION",
+    "EMBED_TEXTS_REQUEST_FORMAT",
+    "EMBED_TEXTS_RESPONSE_FORMAT",
     "LEDGER_VERSION",
     "MAX_ATTEMPTS",
     "NORM_SOURCE",
@@ -113,8 +135,13 @@ __all__ = [
     "DispatchResult",
     "DispatchStep",
     "DocumentRow",
+    "EmbeddingSetDigest",
     "IncidentKind",
     "ManifestIndex",
+    "NearestEmbedding",
+    "NormEmbeddingConflict",
+    "NormEmbeddingRepository",
+    "NormEmbeddingScanShort",
     "NormsProjectionConflict",
     "ParagraphRow",
     "RejectedBlob",
@@ -126,6 +153,7 @@ __all__ = [
     "SnapshotRow",
     "SnapshotRows",
     "SnapshotRowsInvalid",
+    "StoredEmbeddingBuild",
     "TextReliability",
     "admit",
     "binding_digest",
