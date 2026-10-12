@@ -247,7 +247,7 @@ def test_a_lost_listen_is_logged_and_the_poll_still_claims(
     )
     lost = [r for r in caplog.records if "was lost" in r.getMessage()]
     assert lost[0].levelno == logging.WARNING
-    assert "0.5" in lost[0].getMessage() or "poll" in lost[0].getMessage()
+    assert "0.5 s poll" in lost[0].getMessage(), lost[0].getMessage()
 
     run_id = _queue_run(sessions, blob_store, helpers)
     _wait_for(lambda: _run_state(sessions, run_id) in _TERMINALS, what="a run after the loss")

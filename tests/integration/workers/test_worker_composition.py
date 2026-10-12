@@ -191,7 +191,7 @@ def test_a_listen_that_cannot_be_established_is_logged_once(
         engine.dispose()
     warnings = [r for r in caplog.records if "LISTEN" in r.getMessage()]
     assert len(warnings) == 1, [r.getMessage() for r in caplog.records]
-    assert "polling every 5 s" in warnings[0].getMessage()
+    assert "polling every 5 s" in warnings[0].getMessage(), warnings[0].getMessage()
     assert not wakeup.listening
 
 

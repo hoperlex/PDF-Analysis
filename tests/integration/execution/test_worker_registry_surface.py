@@ -31,8 +31,8 @@ def _insert_worker(session, *, heartbeat_age_seconds: int, started_age_seconds: 
     session.execute(text(
         "INSERT INTO worker (worker_id, version, started_at, heartbeat_at, slots) VALUES "
         "(:worker_id, 'registry-suite', "
-        "clock_timestamp() - make_interval(secs => :started), "
-        "clock_timestamp() - make_interval(secs => :heartbeat), 1)"
+        "statement_timestamp() - make_interval(secs => :started), "
+        "statement_timestamp() - make_interval(secs => :heartbeat), 1)"
     ), {"worker_id": worker_id, "started": float(started_age_seconds),
         "heartbeat": float(heartbeat_age_seconds)})
     return worker_id
@@ -64,9 +64,10 @@ def test_each_worker_reports_its_derived_state(session) -> None:
 
 
 def test_pages_follow_the_immutable_start_newest_first(session) -> None:
-    # Newer than any committed residue, so the first page starts with them.
+    # Both start "now", so they are newer than any committed residue and the first page
+    # starts with them; the registered one is the later of the two.
+    older = _insert_worker(session, heartbeat_age_seconds=0, started_age_seconds=0)
     newest = WorkerRegistry().register(session, version="registry-suite", slots=1)
-    older = _insert_worker(session, heartbeat_age_seconds=1, started_age_seconds=1)
     adapter = _adapter(session)
     first = adapter.list_workers(cursor=None, limit=1)
     assert [item.worker_id for item in first.items] == [newest]

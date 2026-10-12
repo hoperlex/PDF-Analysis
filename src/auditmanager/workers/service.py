@@ -71,9 +71,13 @@ class JobWakeup:
     pooled one held forever.
     """
 
-    def __init__(self, engine: Engine, *, channel: str = JOB_WAKEUP_CHANNEL) -> None:
+    def __init__(
+        self, engine: Engine, *, channel: str = JOB_WAKEUP_CHANNEL,
+        poll_seconds: float = POLL_SECONDS,
+    ) -> None:
         self._engine = engine
         self._channel = channel
+        self._poll_seconds = poll_seconds
         self._connection: Any = None
         self._lost = False
 
@@ -98,7 +102,8 @@ class JobWakeup:
             if not self._lost:
                 _log.warning(
                     "worker LISTEN on %s could not be established (%s); polling every "
-                    "%.0f s until it is", self._channel, type(failure).__name__, POLL_SECONDS,
+                    "%g s until it is", self._channel, type(failure).__name__,
+                    self._poll_seconds,
                 )
                 self._lost = True
             return False
@@ -114,14 +119,15 @@ class JobWakeup:
             stop.wait(timeout)
             return False
         try:
-            for _notification in self._connection.notifies(timeout=timeout, stop_after=1):
-                return True
-            return False
+            # Consumed to the end so the generator releases the connection's lock here,
+            # not whenever it happens to be collected.
+            received = list(self._connection.notifies(timeout=timeout, stop_after=1))
+            return bool(received)
         except Exception as failure:
             _log.warning(
                 "worker LISTEN connection on %s was lost (%s: %s); falling back to a "
-                "%.0f s poll until it is re-established",
-                self._channel, type(failure).__name__, failure, POLL_SECONDS,
+                "%g s poll until it is re-established",
+                self._channel, type(failure).__name__, failure, self._poll_seconds,
             )
             self._lost = True
             self.close()
@@ -174,7 +180,7 @@ class WorkerService:
         self._in_flight: set[Future[None]] = set()
         self._pool = ThreadPoolExecutor(max_workers=slots, thread_name_prefix="auditmanager-worker-run")
         self._threads: list[threading.Thread] = []
-        self.wakeup = JobWakeup(engine)
+        self.wakeup = JobWakeup(engine, poll_seconds=poll_seconds)
 
     # -- identity -----------------------------------------------------------------
     @property
@@ -272,14 +278,19 @@ class WorkerService:
                 if self._poll_now.is_set():
                     self._poll_now.clear()
                     woken = True
-                if (not self._draining.is_set() and self.busy < self._slots
-                        and (woken or now >= next_poll)):
+                can_claim = not self._draining.is_set() and self.busy < self._slots
+                if can_claim and (woken or now >= next_poll):
                     woken = False
                     claimed = self._claim_next()
                     next_poll = monotonic() + self._poll_seconds
                     if claimed:
                         continue
-                tick = min(_TICK_SECONDS, max(0.01, next_poll - monotonic()))
+                # Busy or draining: nothing to claim until a slot frees (`_poll_now`), so
+                # wait a whole tick instead of spinning on an overdue poll.
+                tick = (
+                    min(_TICK_SECONDS, max(0.01, next_poll - monotonic())) if can_claim
+                    else _TICK_SECONDS
+                )
                 woken = self.wakeup.wait(tick, stop=self._stopped) or woken
         finally:
             self.wakeup.close()
