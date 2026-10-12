@@ -1,6 +1,15 @@
 """The normative corpus: drawn, dated, attributed, segmented into retrievable chunks."""
 
-from .chunking import DEFAULT_TARGET_CHARACTERS, join_into_chunks
+from .chunking import (
+    CHUNKING_PROFILE_VERSION,
+    DEFAULT_CHUNKING_VERSION,
+    DEFAULT_TARGET_CHARACTERS,
+    RELIABLE_CHUNKING_PROFILE_VERSION,
+    ChunkingRefused,
+    chunk_paragraphs,
+    join_into_chunks,
+    verify_coverage,
+)
 from .degeneracy import DegeneracySignal, DegeneracyVerdict, inspect, is_degenerate
 from .model import (
     BlockBody,
@@ -10,6 +19,7 @@ from .model import (
     ParagraphKind,
     SegmentationReport,
     SourceAttribution,
+    TextReliability,
 )
 from .repair import (
     LEDGER_VERSION,
@@ -31,34 +41,59 @@ from .rerecognition import (
     rerecognise,
 )
 from .segmentation import attribution, blocks, drawn_on, recognised_text, segment
-from .snapshot import CorpusSnapshot, DocumentFingerprint, derive, fingerprint
+from .snapshot import (
+    ROW_DIGEST_VERSION,
+    CorpusSnapshot,
+    DocumentFingerprint,
+    DocumentRow,
+    ParagraphRow,
+    RowDigest,
+    SnapshotRow,
+    SnapshotRows,
+    derive,
+    fingerprint,
+    row_digest,
+    with_segmentation_profile,
+)
 
 __all__ = [
+    "CHUNKING_PROFILE_VERSION",
+    "DEFAULT_CHUNKING_VERSION",
+    "DEFAULT_TARGET_CHARACTERS",
     "LEDGER_VERSION",
     "MAX_ATTEMPTS",
     "MINIMUM_REPLACEMENT_CHARACTERS",
     "RECOGNITION_SYSTEM_PROMPT",
+    "RELIABLE_CHUNKING_PROFILE_VERSION",
+    "ROW_DIGEST_VERSION",
     "BlockBody",
     "Chunk",
+    "ChunkingRefused",
     "CorpusSnapshot",
     "CorpusTotals",
-    "DEFAULT_TARGET_CHARACTERS",
     "DegeneracySignal",
     "DegeneracyVerdict",
     "DocumentFingerprint",
+    "DocumentRow",
     "PageRecogniser",
     "PageRepair",
     "PageToRecognise",
     "Paragraph",
     "ParagraphKind",
+    "ParagraphRow",
     "RecognisedPage",
     "RepairAttempt",
     "RepairLedger",
     "RepairOutcome",
+    "RowDigest",
     "SegmentationReport",
+    "SnapshotRow",
+    "SnapshotRows",
     "SourceAttribution",
+    "TextReliability",
     "attribution",
     "blocks",
+    "chunk_paragraphs",
     "derive",
     "drawn_on",
     "fingerprint",
@@ -70,5 +105,8 @@ __all__ = [
     "recognised_text",
     "repaired_snapshot",
     "rerecognise",
+    "row_digest",
     "segment",
+    "verify_coverage",
+    "with_segmentation_profile",
 ]

@@ -536,3 +536,538 @@ def test_the_raw_key_check_refuses_a_key_that_disagrees_with_its_counts(
             )
         transaction.rollback()
     assert "ck_norms_snapshot_raw_key" in str(refused.value)
+
+
+# --- `W54-SNAPSHOT-01`: reliability-aware loads, `D-126`, and import with ids ------------------
+
+THREE_BLOCK_SLUG = "СП_003_13330_2026"
+THREE_BLOCK_IDS = tuple(f"blk_{letter * 32}" for letter in "def")
+THREE_BLOCK_MARKDOWN = f"""# Document: {THREE_BLOCK_SLUG}.pdf
+
+Path: normative/{THREE_BLOCK_SLUG}.pdf
+
+Generated: 2026-08-25 09:47:54 UTC
+
+## Page 1
+
+### BLOCK #1 [TEXT]: {THREE_BLOCK_IDS[0]}
+
+> **Created:** 2026-08-25 09:22:54 UTC
+> **Crop:** [Crop](https://example.invalid/crop/1)
+
+1.1. Первый пункт устанавливает требования к проектированию зданий и сооружений.
+
+1.2. Второй пункт уточняет порядок приёмки выполненных строительных работ.
+
+Дата сохранения: 23.07.2026
+
+## Page 2
+
+### BLOCK #2 [TEXT]: {THREE_BLOCK_IDS[1]}
+
+> **Created:** 2026-08-25 09:22:54 UTC
+> **Crop:** [Crop](https://example.invalid/crop/2)
+
+Модель распознавания рассуждает о таблице вместо того чтобы её переписать.
+
+Вторая строка того же нечитаемого блока, которую нельзя показывать эксперту.
+
+## Page 3
+
+### BLOCK #3 [TEXT]: {THREE_BLOCK_IDS[2]}
+
+> **Created:** 2026-08-25 09:22:54 UTC
+> **Crop:** [Crop](https://example.invalid/crop/3)
+
+3.1. Третий пункт описывает испытания конструкций при приёмке.
+
+3.2. Четвёртый пункт завершает раздел о контроле качества работ.
+"""
+
+
+def _write_three_block_corpus(root: Path) -> Path:
+    document = root / THREE_BLOCK_SLUG
+    document.mkdir(parents=True)
+    (document / "results.md").write_text(THREE_BLOCK_MARKDOWN, encoding="utf-8")
+    (document / "blocks.json").write_text(
+        json.dumps({"document_id": "doc_source_0003"}), encoding="utf-8"
+    )
+    (root / "MANIFEST.json").write_text(
+        json.dumps(
+            {
+                "documents": [
+                    {
+                        "slug": THREE_BLOCK_SLUG,
+                        "document_id": "doc_source_0003",
+                        "document_name": f"{THREE_BLOCK_SLUG}.pdf",
+                        "doc_type": "СП",
+                        "pdf_pages": 3,
+                        "blocks_count": 3,
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return root
+
+
+def _three_block_ledger(corpus: Path, *, repaired: bool = True, unreliable: bool = True):
+    """Block 1 repaired, block 2 left unreliable — the shape operator step (3) loads."""
+    import hashlib
+
+    from auditmanager.norms import PageRepair, RepairOutcome, ledger_of
+    from auditmanager.norms.corpus_source import snapshot_of
+    from auditmanager.norms.segmentation import blocks
+
+    parsed = blocks(THREE_BLOCK_MARKDOWN)
+    entries = []
+    for index, outcome, replacement in (
+        (0, RepairOutcome.REPAIRED, "1.1. Исправленный первый пункт, прочитанный повторно."),
+        (1, RepairOutcome.STILL_DEGENERATE, None),
+    ):
+        if (index == 0 and not repaired) or (index == 1 and not unreliable):
+            continue
+        block = parsed[index]
+        entries.append(
+            PageRepair(
+                document_slug=THREE_BLOCK_SLUG,
+                block_id=block.block_id,
+                page_label=block.page_label,
+                original_sha256=hashlib.sha256(block.text.encode("utf-8")).hexdigest(),
+                original_characters=len(block.text),
+                crop_sha256="3" * 64,
+                outcome=outcome,
+                replacement=replacement,
+                attempts=(),
+            )
+        )
+    return ledger_of(snapshot_of(corpus).content_key, "2026-10-12T00:00:00+00:00", entries)
+
+
+def _chunk_spans(connection, snapshot: str, profile: str) -> list[tuple[int, int, int]]:
+    return [
+        tuple(row)
+        for row in connection.execute(
+            text(
+                "SELECT ordinal, paragraph_ordinal_first, paragraph_ordinal_last FROM norm_chunk "
+                "WHERE norms_snapshot_id = :snapshot AND chunking_profile = :profile "
+                "ORDER BY norm_document_pk, ordinal"
+            ),
+            {"snapshot": snapshot, "profile": profile},
+        )
+    ]
+
+
+_COVERAGE = text(
+    """
+    -- Every reliable paragraph covered exactly once; no unreliable paragraph covered.
+    SELECT p.ordinal, p.text_reliability, count(c.norm_chunk_pk) AS covering
+    FROM norm_paragraph p
+    LEFT JOIN norm_chunk c
+      ON c.norms_snapshot_id = p.norms_snapshot_id
+     AND c.norm_document_pk = p.norm_document_pk
+     AND c.chunking_profile = :profile
+     AND p.ordinal BETWEEN c.paragraph_ordinal_first AND c.paragraph_ordinal_last
+    WHERE p.norms_snapshot_id = :snapshot
+    GROUP BY p.norm_paragraph_pk, p.ordinal, p.text_reliability
+    ORDER BY p.ordinal
+    """
+)
+
+
+def test_the_repaired_snapshot_loads_with_its_unreliable_count_and_marks(
+    migrated_engine: Engine, tmp_path: Path
+) -> None:
+    """REPAIR's hand-back: before this lane the load broke `ck_norms_snapshot_raw_key`."""
+    corpus = _write_three_block_corpus(tmp_path / "corpus")
+    ledger = _three_block_ledger(corpus)
+
+    with Session(migrated_engine) as session:
+        with session.begin():
+            result = load_corpus(session, corpus, repair_ledger=ledger)
+
+    assert "+1r+1u." in result.content_key
+    assert result.chunking_profile == "characters-v2:1200"
+    assert result.unreliable_count == 1
+    with migrated_engine.connect() as connection:
+        snapshot = connection.execute(
+            text(
+                "SELECT repair_count, unreliable_count, base_content_key <> content_key "
+                "FROM norms_snapshot WHERE norms_snapshot_id = :snapshot"
+            ),
+            {"snapshot": str(result.norms_snapshot_id)},
+        ).one()
+        marks = connection.execute(
+            text(
+                "SELECT block_ref, text_reliability FROM norm_paragraph "
+                "WHERE norms_snapshot_id = :snapshot ORDER BY ordinal"
+            ),
+            {"snapshot": str(result.norms_snapshot_id)},
+        ).all()
+        coverage = connection.execute(
+            _COVERAGE,
+            {"snapshot": str(result.norms_snapshot_id), "profile": result.chunking_profile},
+        ).all()
+    assert tuple(snapshot) == (1, 1, True)
+    assert [tuple(row) for row in marks] == [
+        (THREE_BLOCK_IDS[0], "reliable"),
+        (THREE_BLOCK_IDS[1], "unreliable"),
+        (THREE_BLOCK_IDS[1], "unreliable"),
+        (THREE_BLOCK_IDS[2], "reliable"),
+        (THREE_BLOCK_IDS[2], "reliable"),
+    ]
+    assert [(row.text_reliability, row.covering) for row in coverage] == [
+        ("reliable", 1),
+        ("unreliable", 0),
+        ("unreliable", 0),
+        ("reliable", 1),
+        ("reliable", 1),
+    ]
+
+
+def test_a_characters_v1_load_over_unreliable_text_is_refused_and_leaves_nothing(
+    migrated_engine: Engine, tmp_path: Path
+) -> None:
+    from auditmanager.norms.chunking import ChunkingRefused
+
+    corpus = _write_three_block_corpus(tmp_path / "corpus")
+    ledger = _three_block_ledger(corpus)
+    with Session(migrated_engine) as session:
+        with session.begin():
+            with pytest.raises(ChunkingRefused, match="1 unreliable block"):
+                load_corpus(
+                    session, corpus, repair_ledger=ledger, chunking_version="characters-v1"
+                )
+    with migrated_engine.connect() as connection:
+        assert connection.execute(text("SELECT count(*) FROM norms_snapshot")).scalar_one() == 0
+
+
+def test_the_database_refuses_a_characters_v1_build_by_the_stored_count(
+    migrated_engine: Engine, tmp_path: Path
+) -> None:
+    """A rebuild that bypasses the projection is refused on ``unreliable_count`` itself."""
+    from auditmanager.norms.chunking import ChunkingRefused
+    from auditmanager.norms.repository import NormsRepository
+
+    corpus = _write_three_block_corpus(tmp_path / "corpus")
+    with Session(migrated_engine) as session:
+        with session.begin():
+            result = load_corpus(session, corpus, repair_ledger=_three_block_ledger(corpus))
+        with session.begin():
+            repository = NormsRepository(session)
+            with pytest.raises(ChunkingRefused, match="1 unreliable block"):
+                repository.build_chunks_from_stored(
+                    result.norms_snapshot_id, result.content_key, "characters-v1:1200"
+                )
+            with pytest.raises(ChunkingRefused):
+                repository.finish_chunk_build(
+                    result.norms_snapshot_id, "characters-v1:600", 600, 0
+                )
+
+
+def test_a_replay_naming_another_profile_builds_it_from_the_stored_paragraphs(
+    migrated_engine: Engine, tmp_path: Path
+) -> None:
+    corpus = _write_three_block_corpus(tmp_path / "corpus")
+    with Session(migrated_engine) as session:
+        with session.begin():
+            first = load_corpus(session, corpus, target_characters=150)
+        with session.begin():
+            second = load_corpus(
+                session, corpus, target_characters=150, chunking_version="characters-v1"
+            )
+        with session.begin():
+            again = load_corpus(session, corpus, target_characters=150)
+
+    assert first.created and not second.created and not again.created
+    assert {first.norms_snapshot_id, second.norms_snapshot_id, again.norms_snapshot_id} == {
+        first.norms_snapshot_id
+    }
+    assert first.row_digest == second.row_digest == again.row_digest
+    with migrated_engine.connect() as connection:
+        v1 = _chunk_spans(connection, str(first.norms_snapshot_id), "characters-v1:150")
+        v2 = _chunk_spans(connection, str(first.norms_snapshot_id), "characters-v2:150")
+        texts = connection.execute(
+            text(
+                "SELECT chunking_profile, array_agg(text ORDER BY ordinal) FROM norm_chunk "
+                "GROUP BY chunking_profile ORDER BY chunking_profile"
+            )
+        ).all()
+    # Nothing is unreliable here, so the two profiles agree chunk for chunk.
+    assert v1 == v2 and len(v1) > 1
+    assert texts[0][1] == texts[1][1]
+    assert second.counts == again.counts
+
+
+def test_raising_the_segmentation_profile_loads_a_second_snapshot_beside_the_first(
+    migrated_engine: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`D-126`: before this lane the second load raised `NormsProjectionConflict`."""
+    from auditmanager.norms import segmentation
+
+    corpus = _write_three_block_corpus(tmp_path / "corpus")
+    with Session(migrated_engine) as session:
+        with session.begin():
+            first = load_corpus(session, corpus)
+        monkeypatch.setattr(segmentation, "SEGMENTATION_PROFILE_VERSION", "markdown-v2")
+        with session.begin():
+            second = load_corpus(session, corpus)
+        with session.begin():
+            replay = load_corpus(session, corpus)
+
+    assert second.created and not replay.created
+    assert second.norms_snapshot_id != first.norms_snapshot_id
+    assert replay.norms_snapshot_id == second.norms_snapshot_id
+    assert second.content_key == f"{first.content_key}+seg-markdown-v2"
+    with migrated_engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT content_key, base_content_key, segmentation_profile FROM norms_snapshot "
+                "ORDER BY segmentation_profile"
+            )
+        ).all()
+    assert [tuple(row) for row in rows] == [
+        (first.content_key, first.content_key, "markdown-v1"),
+        (second.content_key, second.content_key, "markdown-v2"),
+    ]
+
+
+def test_the_row_digest_read_back_equals_the_digest_of_the_rows_read_back(
+    migrated_engine: Engine, tmp_path: Path
+) -> None:
+    from auditmanager.norms import row_digest
+    from auditmanager.norms.repository import NormsRepository
+
+    corpus = _write_three_block_corpus(tmp_path / "corpus")
+    with Session(migrated_engine) as session:
+        with session.begin():
+            result = load_corpus(session, corpus, repair_ledger=_three_block_ledger(corpus))
+            rows = NormsRepository(session).read_snapshot_rows(result.norms_snapshot_id)
+    assert row_digest(rows) == result.row_digest
+    assert rows.snapshot.unreliable_count == 1
+    assert [p.text_reliability for p in rows.paragraphs].count("unreliable") == 2
+    assert all(p.norm_paragraph_id.startswith("npar_") for p in rows.paragraphs)
+
+
+def _exported(engine: Engine, corpus: Path, **load):
+    from auditmanager.norms.repository import NormsRepository
+
+    with Session(engine) as session:
+        with session.begin():
+            result = load_corpus(session, corpus, **load)
+            rows = NormsRepository(session).read_snapshot_rows(result.norms_snapshot_id)
+    return result, rows
+
+
+def _chunk_rows(engine: Engine) -> list[tuple]:
+    with engine.connect() as connection:
+        return [
+            tuple(row)
+            for row in connection.execute(
+                text(
+                    """
+                    SELECT d.norm_document_id, c.chunking_profile, c.ordinal, c.page_first,
+                           c.page_last, c.char_offset, c.char_length,
+                           c.paragraph_ordinal_first, c.paragraph_ordinal_last,
+                           c.paragraph_count, c.clause_numbers, c.contains_clause, c.text,
+                           c.content_sha256
+                    FROM norm_chunk c JOIN norm_document d USING (norms_snapshot_id, norm_document_pk)
+                    ORDER BY d.norm_document_id, c.chunking_profile, c.ordinal
+                    """
+                )
+            )
+        ]
+
+
+def _table_counts(engine: Engine) -> tuple[int, ...]:
+    with engine.connect() as connection:
+        return tuple(
+            connection.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()
+            for table in ("norms_snapshot", "norm_document", "norm_paragraph", "norm_chunk", "norm_chunk_build")
+        )
+
+
+def test_an_import_carries_every_id_and_rebuilds_identical_chunks_in_another_database(
+    migrated_database_factory, tmp_path: Path
+) -> None:
+    from auditmanager.norms.loader import import_snapshot
+    from auditmanager.shared.db.engine import create_database_engine
+
+    origin = create_database_engine(migrated_database_factory())
+    target = create_database_engine(migrated_database_factory())
+    try:
+        corpus = _write_three_block_corpus(tmp_path / "corpus")
+        loaded, rows = _exported(origin, corpus, repair_ledger=_three_block_ledger(corpus))
+
+        with Session(target) as session:
+            with session.begin():
+                imported = import_snapshot(
+                    session, rows, chunking_profiles=["characters-v2:1200"],
+                    expected_row_digest=loaded.row_digest,
+                )
+        assert imported.created is True
+        assert imported.norms_snapshot_id == loaded.norms_snapshot_id
+        assert imported.row_digest == loaded.row_digest
+        assert dict(imported.counts)["characters-v2:1200"] == loaded.counts
+        assert _chunk_rows(target) == _chunk_rows(origin)
+
+        before = _table_counts(target)
+        with Session(target) as session:
+            with session.begin():
+                replay = import_snapshot(
+                    session, rows, chunking_profiles=["characters-v2:1200"],
+                    expected_row_digest=loaded.row_digest,
+                )
+        assert replay.created is False
+        assert replay.row_digest == loaded.row_digest
+        assert _table_counts(target) == before
+    finally:
+        origin.dispose()
+        target.dispose()
+
+
+def test_import_conflicts_are_refused_and_write_nothing(
+    migrated_database_factory, tmp_path: Path
+) -> None:
+    import dataclasses
+
+    from auditmanager.norms.loader import import_snapshot
+    from auditmanager.norms.repository import SnapshotImportConflict
+    from auditmanager.shared.db.engine import create_database_engine
+    from auditmanager.shared.identity import NormParagraphId, NormsSnapshotId
+
+    origin = create_database_engine(migrated_database_factory())
+    target = create_database_engine(migrated_database_factory())
+    try:
+        corpus = _write_three_block_corpus(tmp_path / "corpus")
+        _loaded, rows = _exported(origin, corpus, repair_ledger=_three_block_ledger(corpus))
+        with Session(target) as session:
+            with session.begin():
+                import_snapshot(session, rows, chunking_profiles=["characters-v2:1200"])
+        before = _table_counts(target)
+
+        other_id = str(NormsSnapshotId.new())
+        other_key = rows.snapshot.content_key.replace("+1r+1u.", "+1r+2u.")
+        changed_text = dataclasses.replace(
+            rows,
+            paragraphs=(dataclasses.replace(rows.paragraphs[0], text=rows.paragraphs[0].text + " ."),
+                        *rows.paragraphs[1:]),
+        )
+        changed_text = dataclasses.replace(
+            changed_text,
+            paragraphs=(
+                dataclasses.replace(
+                    changed_text.paragraphs[0], char_length=len(changed_text.paragraphs[0].text)
+                ),
+                *changed_text.paragraphs[1:],
+            ),
+        )
+
+        def other_snapshot(snapshot_id: str, key: str, *, keep_children: bool):
+            snapshot = dataclasses.replace(rows.snapshot, norms_snapshot_id=snapshot_id, content_key=key)
+            if keep_children:
+                return dataclasses.replace(rows, snapshot=snapshot)
+            from auditmanager.shared.identity import NormDocumentId
+
+            documents = {d.norm_document_id: str(NormDocumentId.new()) for d in rows.documents}
+            return dataclasses.replace(
+                rows,
+                snapshot=snapshot,
+                documents=tuple(
+                    dataclasses.replace(d, norm_document_id=documents[d.norm_document_id])
+                    for d in rows.documents
+                ),
+                paragraphs=tuple(
+                    dataclasses.replace(
+                        p,
+                        norm_document_id=documents[p.norm_document_id],
+                        norm_paragraph_id=str(NormParagraphId.new()),
+                    )
+                    for p in rows.paragraphs
+                ),
+            )
+
+        fresh_children = other_snapshot(other_id, other_key, keep_children=False)
+        one_reused = dataclasses.replace(
+            fresh_children,
+            paragraphs=(
+                dataclasses.replace(
+                    fresh_children.paragraphs[0], norm_paragraph_id=rows.paragraphs[0].norm_paragraph_id
+                ),
+                *fresh_children.paragraphs[1:],
+            ),
+        )
+        cases = {
+            "the same key under another id": (
+                other_snapshot(other_id, rows.snapshot.content_key, keep_children=False),
+                "the key is held by",
+            ),
+            "the same id under another key": (
+                other_snapshot(rows.snapshot.norms_snapshot_id, other_key, keep_children=True),
+                "the id names key",
+            ),
+            "equal ids with other rows": (changed_text, "is stored with row digest"),
+            "a child id held by another snapshot": (one_reused, "belong to another snapshot"),
+            "a replay naming an unbuilt profile": (rows, "is not built"),
+        }
+        for name, (candidate, message) in cases.items():
+            profiles = (
+                ["characters-v2:600"] if name == "a replay naming an unbuilt profile"
+                else ["characters-v2:1200"]
+            )
+            with Session(target) as session:
+                with session.begin():
+                    with pytest.raises(SnapshotImportConflict, match=message):
+                        import_snapshot(session, candidate, chunking_profiles=profiles)
+            assert _table_counts(target) == before, name
+    finally:
+        origin.dispose()
+        target.dispose()
+
+
+def test_an_import_the_database_refuses_midway_leaves_nothing_behind(
+    migrated_engine: Engine, tmp_path: Path
+) -> None:
+    """`ck_norms_snapshot_raw_key` refuses after the checks pass; the SAVEPOINT takes it all back."""
+    import dataclasses
+
+    from auditmanager.norms.loader import import_snapshot
+    from auditmanager.shared.identity import (
+        NormDocumentId,
+        NormParagraphId,
+        NormsSnapshotId,
+    )
+
+    corpus = _write_three_block_corpus(tmp_path / "corpus")
+    loaded, rows = _exported(migrated_engine, corpus)
+    documents = {d.norm_document_id: str(NormDocumentId.new()) for d in rows.documents}
+    contradictory = dataclasses.replace(
+        rows,
+        snapshot=dataclasses.replace(
+            rows.snapshot,
+            norms_snapshot_id=str(NormsSnapshotId.new()),
+            content_key="+0r+1u.".join(rows.snapshot.content_key.rsplit(".", 1)),
+            unreliable_count=0,  # a moved key with nothing unreliable: refused by the CHECK
+        ),
+        documents=tuple(
+            dataclasses.replace(d, norm_document_id=documents[d.norm_document_id])
+            for d in rows.documents
+        ),
+        paragraphs=tuple(
+            dataclasses.replace(
+                p,
+                norm_document_id=documents[p.norm_document_id],
+                norm_paragraph_id=str(NormParagraphId.new()),
+            )
+            for p in rows.paragraphs
+        ),
+    )
+    before = _table_counts(migrated_engine)
+    with Session(migrated_engine) as session:
+        with session.begin():
+            with pytest.raises(IntegrityError, match="ck_norms_snapshot_raw_key"):
+                import_snapshot(session, contradictory, chunking_profiles=["characters-v2:1200"])
+    assert loaded.created
+    assert _table_counts(migrated_engine) == before

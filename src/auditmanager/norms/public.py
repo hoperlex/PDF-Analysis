@@ -7,6 +7,10 @@ here in plan §6's order (REPAIR, SNAPSHOT, EMBED, BUNDLE); nothing outside
 
 from __future__ import annotations
 
+from auditmanager.norms.chunking import (  # W54-SNAPSHOT-01
+    RELIABLE_CHUNKING_PROFILE_VERSION,
+    ChunkingRefused,
+)
 from auditmanager.norms.custody import (
     ADMIT_COMMAND_TYPE,
     D143_MESSAGE,
@@ -47,11 +51,31 @@ from auditmanager.norms.custody import (
     report,
     requeue,
 )
+from auditmanager.norms.loader import (  # W54-SNAPSHOT-01
+    CorpusLoadResult,
+    SnapshotImportResult,
+    import_snapshot,
+    load_corpus,
+)
+from auditmanager.norms.model import TextReliability  # W54-SNAPSHOT-01
 from auditmanager.norms.repair import (  # W54-REPAIR-01
     LEDGER_VERSION,
     RepairLedger,
     RepairOutcome,
     repaired_snapshot,
+)
+from auditmanager.norms.repository import (  # W54-SNAPSHOT-01
+    NormsProjectionConflict,
+    SnapshotImportConflict,
+    SnapshotRowsInvalid,
+)
+from auditmanager.norms.snapshot import (  # W54-SNAPSHOT-01
+    ROW_DIGEST_VERSION,
+    DocumentRow,
+    ParagraphRow,
+    SnapshotRow,
+    SnapshotRows,
+    row_digest,
 )
 
 __all__ = [
@@ -61,8 +85,10 @@ __all__ = [
     "LEDGER_VERSION",
     "MAX_ATTEMPTS",
     "NORM_SOURCE",
+    "RELIABLE_CHUNKING_PROFILE_VERSION",
     "RETRY_DELAYS_SECONDS",
     "ROLE_SHAPES",
+    "ROW_DIGEST_VERSION",
     "Admission",
     "AdmissionRequest",
     "AdmissionState",
@@ -71,6 +97,8 @@ __all__ = [
     "BindingDigestEntry",
     "BindingPublication",
     "Checkpoint",
+    "ChunkingRefused",
+    "CorpusLoadResult",
     "CustodyDispatcher",
     "CustodyIncident",
     "CustodyManifest",
@@ -84,17 +112,29 @@ __all__ = [
     "DispatchReport",
     "DispatchResult",
     "DispatchStep",
+    "DocumentRow",
     "IncidentKind",
     "ManifestIndex",
+    "NormsProjectionConflict",
+    "ParagraphRow",
     "RejectedBlob",
     "RepairLedger",
     "RepairOutcome",
     "RoleShape",
+    "SnapshotImportConflict",
+    "SnapshotImportResult",
+    "SnapshotRow",
+    "SnapshotRows",
+    "SnapshotRowsInvalid",
+    "TextReliability",
     "admit",
     "binding_digest",
     "blob_id_for",
+    "import_snapshot",
+    "load_corpus",
     "publish_bindings",
     "repaired_snapshot",
     "report",
     "requeue",
+    "row_digest",
 ]

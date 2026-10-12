@@ -14,16 +14,32 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from .model import BlockBody, Chunk, CorpusTotals, Paragraph, SegmentationReport
-from .chunking import DEFAULT_TARGET_CHARACTERS, join_into_chunks
+from . import segmentation
+from .chunking import (
+    CHUNKING_PROFILE_VERSION,
+    DEFAULT_CHUNKING_VERSION,
+    DEFAULT_TARGET_CHARACTERS,
+    RELIABLE_CHUNKING_PROFILE_VERSION,
+    ChunkingRefused,
+    chunk_paragraphs,
+    chunking_profile,
+    join_into_chunks,
+)
 from .degeneracy import is_degenerate
+from .model import BlockBody, Chunk, CorpusTotals, Paragraph, SegmentationReport
 from .repair import RepairLedger, RepairOutcome, repaired_snapshot
 from .rerecognition import PageToRecognise
 from .segmentation import blocks, drawn_on, segment
-from .snapshot import CorpusSnapshot, DocumentFingerprint, derive, fingerprint
+from .snapshot import (
+    CorpusSnapshot,
+    DocumentFingerprint,
+    derive,
+    fingerprint,
+    with_segmentation_profile,
+)
 
 RESULTS_FILENAME = "results.md"
 BLOCKS_FILENAME = "blocks.json"
@@ -74,7 +90,14 @@ class ProjectedCorpusDocument:
 
 @dataclass(frozen=True, slots=True)
 class CorpusProjection:
-    """A re-iterable, prevalidated view over one effective corpus snapshot."""
+    """A re-iterable, prevalidated view over one effective corpus snapshot.
+
+    ``snapshot`` and ``base_content_key`` are both qualified by ``segmentation_profile``
+    (`D-126`), so they are equal exactly when nothing is repaired and nothing is unreliable —
+    the equivalence ``0018``'s ``ck_norms_snapshot_raw_key`` states. ``unreliable_count`` is
+    the ledger's count of blocks that did not end ``REPAIRED`` (`F-4`), and
+    ``unreliable_by_document`` names them so their paragraphs are marked.
+    """
 
     root: Path
     snapshot: CorpusSnapshot
@@ -84,6 +107,14 @@ class CorpusProjection:
     documents: tuple[tuple[Path, CorpusManifestDocument], ...]
     base_fingerprints: tuple[DocumentFingerprint, ...]
     replacements_by_document: Mapping[str, Mapping[str, str]]
+    unreliable_count: int = 0
+    unreliable_by_document: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    segmentation_profile: str = segmentation.SEGMENTATION_PROFILE_VERSION
+    chunking_version: str = DEFAULT_CHUNKING_VERSION
+
+    @property
+    def chunking_profile(self) -> str:
+        return chunking_profile(self.target_characters, self.chunking_version)
 
     def iter_documents(self) -> Iterator[ProjectedCorpusDocument]:
         for (directory, metadata), expected in zip(
@@ -101,6 +132,7 @@ class CorpusProjection:
                 document.slug,
                 document.markdown,
                 replacements=self.replacements_by_document.get(document.slug),
+                unreliable_blocks=self.unreliable_by_document.get(document.slug),
             )
             if report.blocks != metadata.block_count:
                 raise CorpusUnavailable(
@@ -112,8 +144,11 @@ class CorpusProjection:
                     f"{metadata.slug}: parsed {report.page_headings} page headings "
                     f"exceed manifest PDF page count {metadata.pdf_page_count}"
                 )
-            chunks = join_into_chunks(
-                paragraphs, self.snapshot.content_key, self.target_characters
+            chunks = chunk_paragraphs(
+                paragraphs,
+                self.snapshot.content_key,
+                self.target_characters,
+                version=self.chunking_version,
             )
             yield ProjectedCorpusDocument(metadata, report, paragraphs, chunks)
 
@@ -199,21 +234,21 @@ def segment_corpus(
     for projection. When a repair ledger is present, every ledger row is also checked
     against the raw block's key, page, character count and SHA-256 before any replacement
     is made. A partially applicable ledger is refused rather than projected partly.
+
+    This is the diagnostic projection: its chunks are ``characters-v1``'s join over every
+    paragraph, unreliable ones included and marked. A stored build goes through
+    :func:`open_corpus_projection`, where ``characters-v1`` over unreliable text is refused.
     """
     directories = document_directories(root)
     base_snapshot, fingerprints = _snapshot_with_fingerprints(directories)
-    effective_snapshot = (
-        base_snapshot
-        if repair_ledger is None
-        else repaired_snapshot(base_snapshot, repair_ledger)
-    )
+    _base, effective_snapshot = _qualified_snapshots(base_snapshot, repair_ledger)
     if snapshot_id != effective_snapshot.snapshot_id:
         raise RepairProjectionMismatch(
             f"projection snapshot {snapshot_id!r} does not identify the effective corpus "
             f"{effective_snapshot.snapshot_id!r}"
         )
 
-    replacements_by_document = _validated_replacements(root, repair_ledger)
+    replacements_by_document, unreliable_by_document = _validated_ledger(root, repair_ledger)
     for directory, expected in zip(directories, fingerprints, strict=True):
         document = read_document(directory)
         _verify_fingerprint(document, expected)
@@ -221,21 +256,44 @@ def segment_corpus(
             document.slug,
             document.markdown,
             replacements=replacements_by_document.get(document.slug),
+            unreliable_blocks=unreliable_by_document.get(document.slug),
         )
         chunks = join_into_chunks(paragraphs, snapshot_id, target_characters)
         yield report, paragraphs, chunks
 
 
-def _validated_replacements(
+def _qualified_snapshots(
+    base: CorpusSnapshot, repair_ledger: RepairLedger | None
+) -> tuple[CorpusSnapshot, CorpusSnapshot]:
+    """The base and effective snapshots under the current segmentation profile (`D-126`).
+
+    The ledger names the corpus bytes (``snapshot_of``), which no segmentation profile
+    changes; the profile qualifies both stored keys after the repair has been folded in.
+    ``SEGMENTATION_PROFILE_VERSION`` is read when called, so raising it moves the key.
+    """
+    profile = segmentation.SEGMENTATION_PROFILE_VERSION
+    effective = base if repair_ledger is None else repaired_snapshot(base, repair_ledger)
+    return (
+        with_segmentation_profile(base, profile),
+        with_segmentation_profile(effective, profile),
+    )
+
+
+def _validated_ledger(
     root: Path, repair_ledger: RepairLedger | None
-) -> dict[str, dict[str, str]]:
-    """Return applied replacements only after every ledger row matches its source block."""
+) -> tuple[dict[str, dict[str, str]], dict[str, frozenset[str]]]:
+    """Applied replacements and unreliable blocks, only after every ledger row matches.
+
+    Every row is checked against its source block, whatever its outcome; then a ``REPAIRED``
+    row contributes its replacement and every other row marks its block unreliable (`F-4`).
+    """
     if repair_ledger is None:
-        return {}
+        return {}, {}
 
     directories = {directory.name: directory for directory in document_directories(root)}
     source_blocks: dict[str, dict[str, BlockBody]] = {}
     replacements: dict[str, dict[str, str]] = {}
+    unreliable: dict[str, set[str]] = {}
 
     for repair in repair_ledger.repairs:
         directory = directories.get(repair.document_slug)
@@ -282,8 +340,10 @@ def _validated_replacements(
             replacements.setdefault(repair.document_slug, {})[
                 repair.block_id
             ] = repair.replacement
+        else:
+            unreliable.setdefault(repair.document_slug, set()).add(repair.block_id)
 
-    return replacements
+    return replacements, {slug: frozenset(ids) for slug, ids in unreliable.items()}
 
 
 def _required_text(document: Mapping[str, object], key: str, slug: str) -> str:
@@ -356,27 +416,39 @@ def open_corpus_projection(
     target_characters: int = DEFAULT_TARGET_CHARACTERS,
     *,
     repair_ledger: RepairLedger | None = None,
+    chunking_version: str = DEFAULT_CHUNKING_VERSION,
 ) -> CorpusProjection:
-    """Validate the source and return a re-iterable effective corpus projection."""
-    if target_characters <= 0:
-        raise ValueError("target_characters must be positive")
+    """Validate the source and return a re-iterable effective corpus projection.
+
+    ``characters-v1`` is refused here, before any document is read for projection, when the
+    ledger marks any block unreliable (`F-4`): that profile joins every paragraph, and a build
+    of it would carry text the ledger says is not the document's.
+    """
+    profile = chunking_profile(target_characters, chunking_version)
     directories = document_directories(root)
     base_snapshot, fingerprints = _snapshot_with_fingerprints(directories)
-    effective_snapshot = (
-        base_snapshot
-        if repair_ledger is None
-        else repaired_snapshot(base_snapshot, repair_ledger)
-    )
-    replacements = _validated_replacements(root, repair_ledger)
+    base, effective = _qualified_snapshots(base_snapshot, repair_ledger)
+    replacements, unreliable = _validated_ledger(root, repair_ledger)
+    unreliable_count = 0 if repair_ledger is None else repair_ledger.unreliable_count
+    if chunking_version == CHUNKING_PROFILE_VERSION and unreliable_count > 0:
+        raise ChunkingRefused(
+            f"{profile} over {effective.content_key!r} is refused: the snapshot carries "
+            f"{unreliable_count} unreliable block(s); build "
+            f"{RELIABLE_CHUNKING_PROFILE_VERSION} instead"
+        )
     return CorpusProjection(
         root=root,
-        snapshot=effective_snapshot,
-        base_content_key=base_snapshot.content_key,
+        snapshot=effective,
+        base_content_key=base.content_key,
         repair_count=0 if repair_ledger is None else len(repair_ledger.applied),
         target_characters=target_characters,
         documents=_manifest_documents(root, directories),
         base_fingerprints=fingerprints,
         replacements_by_document=replacements,
+        unreliable_count=unreliable_count,
+        unreliable_by_document=unreliable,
+        segmentation_profile=segmentation.SEGMENTATION_PROFILE_VERSION,
+        chunking_version=chunking_version,
     )
 
 

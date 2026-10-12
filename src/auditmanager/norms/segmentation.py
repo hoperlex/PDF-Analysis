@@ -20,13 +20,23 @@ block's `> **Crop:**` line, up to the next `## Page` or `### BLOCK`, is that blo
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 
-from .model import BlockBody, Paragraph, ParagraphKind, SegmentationReport, SourceAttribution
+from .model import (
+    BlockBody,
+    Paragraph,
+    ParagraphKind,
+    SegmentationReport,
+    SourceAttribution,
+    TextReliability,
+)
 from .running_heads import is_publisher_noise, repeated_offcuts
 
 #: Stored with a durable snapshot. A semantic segmentation change must increment this value
 #: rather than silently replacing canonical paragraph anchors for the same content key.
+#: `D-126`: any value other than ``markdown-v1`` is also written into the snapshot's
+#: ``content_key`` (``+seg-<profile>``, :func:`snapshot.with_segmentation_profile`), so raising
+#: it yields a new snapshot beside the old one instead of a conflict on the old key.
 SEGMENTATION_PROFILE_VERSION = "markdown-v1"
 
 _PAGE = re.compile(r"^## Page (\d+)\s*$")
@@ -119,6 +129,21 @@ def _validate_replacement_keys(blocks: list[_Block], replacements: Mapping[str, 
         )
 
 
+def _validate_unreliable_keys(
+    blocks: list[_Block], unreliable: Collection[str], replacements: Mapping[str, str]
+) -> None:
+    unknown = sorted(set(unreliable) - {block.block_id for block in blocks})
+    if unknown:
+        raise ValueError(
+            "unreliable mark names block(s) absent from the document: " + ", ".join(unknown)
+        )
+    both = sorted(set(unreliable) & set(replacements))
+    if both:
+        raise ValueError(
+            "a block cannot be both replaced and unreliable: " + ", ".join(both)
+        )
+
+
 def recognised_text(markdown: str, *, replacements: Mapping[str, str] | None = None) -> str:
     """The document's recognised text: block bodies in block order, joined by a blank line.
 
@@ -173,6 +198,7 @@ def segment(
     markdown: str,
     *,
     replacements: Mapping[str, str] | None = None,
+    unreliable_blocks: Collection[str] | None = None,
 ) -> tuple[tuple[Paragraph, ...], SegmentationReport]:
     """Parse one `results.md` into substantive paragraphs plus the counts behind them.
 
@@ -180,10 +206,16 @@ def segment(
     ``block_id``. The raw markdown remains immutable; offsets and counts describe the
     effective text a downstream reader receives. Corpus-level validation that the ledger was
     taken against these exact source bytes lives in :func:`corpus_source.segment_corpus`.
+
+    ``unreliable_blocks`` names the blocks the ledger holds that did not end ``REPAIRED``
+    (`F-4`). Their text is segmented exactly as before — no paragraph, offset or count moves —
+    and every paragraph drawn from them is marked :attr:`TextReliability.UNRELIABLE`.
     """
     parsed, page_headings = _parse_blocks(markdown)
     effective = replacements or {}
     _validate_replacement_keys(parsed, effective)
+    unreliable = frozenset(unreliable_blocks or ())
+    _validate_unreliable_keys(parsed, unreliable, effective)
 
     candidates: list[tuple[int, str, str]] = []  # (page_label, block_id, text)
     offset_by_index: list[int] = []
@@ -242,6 +274,11 @@ def segment(
                 kind=kind,
                 clause_number=clause,
                 text=text,
+                text_reliability=(
+                    TextReliability.UNRELIABLE
+                    if block_id in unreliable
+                    else TextReliability.RELIABLE
+                ),
             )
         )
 
