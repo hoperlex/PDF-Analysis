@@ -141,12 +141,12 @@ def test_authored_shape_and_form() -> None:
     for _, entry in entries:
         assert _shape_valid(schema, entry)
     # Authored revisions: 0.2.0 and 0.3.0 were revised once (W52); 0.4.0 is first authored by
-    # W53-INT-CLOSE under R-86.
+    # W53-INT-CLOSE under R-86; 0.5.0 by W54-RELNOTES-01.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
-        "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
+        "0.5.0": 1, "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
-    assert [entry["version"] for _, entry in entries] == ["0.4.0", "0.3.0", "0.2.0"]
+    assert [entry["version"] for _, entry in entries] == ["0.5.0", "0.4.0", "0.3.0", "0.2.0"]
     archive = entries[-1][1]
     assert archive["is_archive"] is True
     assert archive["range_label"] == "0.1–0.2"
