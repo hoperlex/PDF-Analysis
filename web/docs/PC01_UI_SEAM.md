@@ -301,9 +301,17 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.execution.all()` | `['execution']` | `W53-EXEC-WEB` |
 | `queryKeys.execution.queue(cursor?)` | `['execution','queue',{cursor}]` | `W53-EXEC-WEB` |
 | `queryKeys.execution.journal(runId?, cursor?)` | `['execution','journal',{runId,cursor}]` | `W53-EXEC-WEB` |
+| `queryKeys.execution.workers(cursor?, limit?)` | `['execution','workers',{cursor,limit}]` | `W54-WORKERS-WEB` |
+| `queryKeys.norms.all()` | `['norms']` | `W55A-WEB-NORMS` |
+| `queryKeys.norms.snapshots(cursor?, limit?)` | `['norms','snapshots',{cursor,limit}]` | `W55A-WEB-NORMS` |
+| `queryKeys.norms.events(cursor?, limit?)` | `['norms','events',{cursor,limit}]` | `W55A-WEB-NORMS` |
+| `queryKeys.norms.search(q, cursor?, limit?)` | `['norms','search',{q,cursor,limit}]` | `W55A-WEB-NORMS` |
+| `queryKeys.norms.document(normDocumentId)` | `['norms','document',id]` | `W55A-WEB-NORMS` |
+| `queryKeys.norms.paragraphs(normDocumentId, cursor?, limit?)` | `['norms','paragraphs',id,{cursor,limit}]` | `W55A-WEB-NORMS` |
+| `queryKeys.norms.content(normDocumentId)` | `['norms','content',id]` | `W55A-WEB-NORMS` |
 
 `projects`, `versions`, `runs`, `findings`, `dashboard`, `account`, `users`, `registrations`,
-`releases`, `execution` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
+`releases`, `execution`, `norms` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
 is the signed-in account (`getMe`), `users` the administrator's view of the accounts, and
 `registrations` the requests awaiting or past a decision. A later lane adds key factories inside
 them and no new root.
@@ -316,6 +324,10 @@ whole deployment, so more of the seam writes to it than to any other key here.
 W53 execution reads share the `execution` prefix: cancel/re-audit invalidate that prefix,
 `runs.all()` and the dashboard; priority/pause invalidate `execution`. A focused
 journal cursor includes its run id in the key so another run cannot reuse that page.
+`norms` entered in `W55A-WEB-NORMS` (the W55 plan names it): the normative corpus belongs to
+no project, run or finding. `setCurrentNormSnapshot` invalidates the whole `norms` prefix when
+it settles — a designation changes the snapshot list, the history and what search reads, and
+a stale refusal means the list must be read again. It changes nothing the dashboard reads.
 
 There is **no global domain store.** The query client in `_app` is the only cache. PC-01's
 state lives on the server; a second copy of it in the browser is a second source of truth

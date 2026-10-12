@@ -1,0 +1,48 @@
+.results {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.results ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.hit {
+  min-width: 0;
+  max-width: 100%;
+  padding: 1rem;
+  border: 1px solid var(--am-line-strong);
+  border-radius: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.hit p {
+  margin: 0 0 0.4rem;
+}
+
+.fragment {
+  margin: 0.5rem 0;
+  white-space: pre-wrap;
+}
+
+.match {
+  background: var(--am-accent-light);
+  color: var(--am-ink);
+  border-radius: 2px;
+}
+
+.search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.search input {
+  min-width: 0;
+  width: min(36rem, 100%);
+}

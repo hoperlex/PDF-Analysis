@@ -90,8 +90,10 @@ export interface ScreenEntry {
  * `R-66`: **Работа** — Проекты, Дашборд, «Оптимизация разделов»; **Знания** — База знаний,
  * Блоки, «Нормы»; **Система** — Журнал выполнения, Исполнители, «Настройки анализа»,
  * «Очередь». `/optimisation` left the menu and stays a registered, reachable screen in
- * `hidden` until project optimisation becomes a project tab. The four new sections are
- * honest stubs, `session`/`any-role`.
+ * `hidden` until project optimisation becomes a project tab. The four new sections were
+ * honest stubs, `session`/`any-role`; «Очередь» graduated in W53 and «Нормы» in
+ * `W55A-WEB-NORMS`, which adds its document view `/norms/document` beside it (reached from a
+ * search result, so out of the menu).
  *
  * `R-80`: every product screen is `any-role`; only home, the account's own screens and the
  * public ones stay `any`, so a role-less account sees its home page saying no role is
@@ -173,6 +175,14 @@ export const SCREEN_REGISTRY = [
   },
   { address: '/blocks', label: 'Блоки', group: 'knowledge', access: 'session', roles: 'any-role', inMenu: true },
   { address: '/norms', label: 'Нормы', group: 'knowledge', access: 'session', roles: 'any-role', inMenu: true },
+  {
+    address: '/norms/document',
+    label: 'Нормативный документ',
+    group: 'knowledge',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: false,
+  },
 
   {
     address: '/logs',

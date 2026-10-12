@@ -52,6 +52,7 @@ import { ProjectsPage } from '@/_pages/projects';
 import { RunPage } from '@/_pages/run';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
+import { NormDocumentPage, NormsPage } from '@/_pages/norms';
 
 import DocumentRoute from '@/app/projects/[project_uid]/documents/[document_uid]/page';
 import ProjectRoute from '@/app/projects/[project_uid]/page';
@@ -62,6 +63,8 @@ import ReviewRoute from '@/app/projects/[project_uid]/runs/[run_id]/review/page'
 import RootPage from '@/app/page';
 import RunRoute from '@/app/projects/[project_uid]/runs/[run_id]/page';
 import AdminUserRoute from '@/app/admin/users/[user_uid]/page';
+import NormsRoute from '@/app/norms/page';
+import NormDocumentRoute from '@/app/norms/document/page';
 
 import { GET, POST } from '@/app/bff/v1/[...path]/route';
 import RootLayout, { metadata } from '@/app/layout';
@@ -72,7 +75,7 @@ import { forgetEverySession, openSession } from '@/app/bff/session/store';
 
 import { DOCUMENT_UID, PROJECT_UID, RUN_ID, VERSION_UID } from '../review/fixtures';
 import { newClient, renderScreen } from './harness';
-import { routeAddresses } from './route-screens';
+import { NORM_DOCUMENT_ID, routeAddresses } from './route-screens';
 import { screens as censusScreens } from '../styles/screens';
 
 /** The account the jar's session belongs to: one every W50 screen admits. */
@@ -99,6 +102,7 @@ const A_RUN = RUN_ID.replace(/.$/, 'C');
 const A_DOCUMENT = DOCUMENT_UID.replace(/.$/, 'D');
 const A_VERSION = VERSION_UID.replace(/.$/, 'E');
 const A_USER = 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+const A_NORM_DOCUMENT = 'ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8D';
 
 describe('each route delegates to its screen and to no other', () => {
   it('/projects renders the projects screen', async () => {
@@ -165,6 +169,33 @@ describe('each route delegates to its screen and to no other', () => {
     expect(element.props).toEqual({ userUid: A_USER, signedInLogin: SIGNED_IN.login });
     expect(routes.user(A_USER)).toBe(`/admin/users/${A_USER}`);
     expect(routes.users()).toBe('/admin/users');
+  });
+
+  it('/norms hands the screen the session roles and the search the address carries (W55A-WEB-NORMS)', async () => {
+    const plain = await NormsRoute({ searchParams: Promise.resolve({}) });
+    expect(plain.type).toBe(NormsPage);
+    expect(plain.props).toEqual({ roles: ['expert'], query: null });
+    const searched = await NormsRoute({ searchParams: Promise.resolve({ q: '  СП 54 п. 5.1 ' }) });
+    expect(searched.props).toEqual({ roles: ['expert'], query: 'СП 54 п. 5.1' });
+    // A blank search is no search, and a repeated parameter is not read as one.
+    expect((await NormsRoute({ searchParams: Promise.resolve({ q: '   ' }) })).props).toEqual({ roles: ['expert'], query: null });
+    expect((await NormsRoute({ searchParams: Promise.resolve({ q: ['а', 'б'] }) })).props).toEqual({ roles: ['expert'], query: null });
+    jar.value = openSession({ ...SIGNED_IN, roles: ['admin'] }, 'a-credential', 3600);
+    expect((await NormsRoute({ searchParams: Promise.resolve({}) })).props).toEqual({ roles: ['admin'], query: null });
+  });
+
+  it('/norms/document delegates the document identity and the page, unparsed beyond their shape', async () => {
+    const opened = await NormDocumentRoute({ searchParams: Promise.resolve({ id: A_NORM_DOCUMENT, page: '12' }) });
+    expect(opened.type).toBe(NormDocumentPage);
+    expect(opened.props).toEqual({ normDocumentId: A_NORM_DOCUMENT, page: 12 });
+    const whole = await NormDocumentRoute({ searchParams: Promise.resolve({ id: A_NORM_DOCUMENT }) });
+    expect(whole.props).toEqual({ normDocumentId: A_NORM_DOCUMENT, page: null });
+    // No document named: the screen says so, and a page alone opens nothing.
+    const none = await NormDocumentRoute({ searchParams: Promise.resolve({ page: '3' }) });
+    expect(none.props).toEqual({ normDocumentId: null, page: null });
+    expect(routes.normDocument(A_NORM_DOCUMENT)).toBe(`/norms/document?id=${A_NORM_DOCUMENT}`);
+    expect(routes.normDocument(A_NORM_DOCUMENT, 12)).toBe(`/norms/document?id=${A_NORM_DOCUMENT}&page=12`);
+    expect(routes.norms()).toBe('/norms');
   });
 
   it('comparison is mounted under the version, not under a run', () => {
@@ -274,6 +305,29 @@ describe('a malformed address is a 404, not a screen reporting a failure', () =>
     jar.value = openSession({ ...SIGNED_IN, roles: ['expert'] }, 'a-credential', 3600);
     await expect(
       AdminUserRoute({ params: Promise.resolve({ user_uid: BAD }), ...NO_QUERY }),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+  });
+
+  it('a malformed norm document identity or page is a 404 after the guard (W55A-WEB-NORMS)', async () => {
+    for (const query of [
+      { id: BAD },
+      { id: 'ndoc_short' },
+      { id: `prj_${A_NORM_DOCUMENT.slice(5)}` },
+      { id: [A_NORM_DOCUMENT, A_NORM_DOCUMENT] },
+      { id: A_NORM_DOCUMENT, page: '0' },
+      { id: A_NORM_DOCUMENT, page: 'двенадцать' },
+      { id: A_NORM_DOCUMENT, page: '1.5' },
+      { id: A_NORM_DOCUMENT, page: '-3' },
+    ]) {
+      await expect(
+        NormDocumentRoute({ searchParams: Promise.resolve(query) }),
+        JSON.stringify(query),
+      ).rejects.toMatchObject({ digest: 'NEXT_HTTP_ERROR_FALLBACK;404' });
+    }
+    // The guard still decides first: a role-less session is sent away, not told 404 (`R-80`).
+    jar.value = openSession({ ...SIGNED_IN, roles: [] }, 'a-credential', 3600);
+    await expect(
+      NormDocumentRoute({ searchParams: Promise.resolve({ id: BAD }) }),
     ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
   });
 
@@ -594,6 +648,9 @@ describe('every screen address is built once and matches a route file on disk', 
       review: routes.review(PROJECT_UID, RUN_ID),
       user: routes.user(A_USER),
       users: routes.users(),
+      // `W55A-WEB-NORMS`: the search's own address, and a document as a result's title links it.
+      norms: routes.norms(),
+      normDocument: routes.normDocument(NORM_DOCUMENT_ID),
     };
     // The names are checked against the module rather than trusted, so a builder added
     // without a line here is red rather than silently unlinked.

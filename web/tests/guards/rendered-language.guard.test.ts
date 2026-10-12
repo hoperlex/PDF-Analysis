@@ -109,6 +109,14 @@ import type { ExecutionWorker } from '@/shared/api';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { RECENT_PROJECT_LIMIT } from '@/widgets/home-tiles';
+import { NORM_EVENT_PAGE_LIMIT, NORM_PARAGRAPH_PAGE_LIMIT, NORM_SEARCH_PAGE_LIMIT, NORM_SNAPSHOT_LIMIT } from '@/entities/norms';
+import { NormsPage } from '@/_pages/norms';
+import { NormSearchResults } from '@/widgets/norm-search';
+import { NormParagraphList, NormPdf } from '@/widgets/norm-document';
+import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
+import {
+  NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_QUERY, NORM_SNAPSHOTS, normDocument,
+} from '../unit/norms/fixtures';
 
 import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles } from './lib/repo';
 import { join } from 'node:path';
@@ -648,6 +656,19 @@ function apiError(status: number, code: ErrorCode): ApiError {
   return new ApiError(status, envelope, '0f0e9d8c-7b6a-4948-b726-150413021100');
 }
 
+/** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
+function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
+  const envelope: ErrorEnvelope = {
+    contract_version: '1.0.0-draft.1',
+    error_code: code,
+    message: 'Сообщение об отказе.',
+    correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    retryable: false,
+    details,
+  };
+  return new ApiError(422, envelope, '0f0e9d8c-7b6a-4948-b726-150413021100');
+}
+
 /** Every `RunState`, at zero. The base every `run_activity.by_state` fixture starts from. */
 const ZERO_BY_STATE: readonly RunStateCount[] = RUN_STATE_VALUES.map((state) => ({
   state,
@@ -743,6 +764,13 @@ const KEYS = {
   users: queryKeys.users.list({ includeArchived: false, limit: USER_PAGE_LIMIT }),
   user: queryKeys.users.detail('usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F'),
   registrations: queryKeys.registrations.list({ limit: REGISTRATION_PAGE_LIMIT, status: 'pending' }),
+  // `W55A-WEB-NORMS`: the «Нормы» screens' reads, under the keys their seeds ask for. The PDF
+  // bytes (`norms.content`) are not seeded, so the document view's PDF panel reads pending.
+  normSnapshots: queryKeys.norms.snapshots(undefined, NORM_SNAPSHOT_LIMIT),
+  normEvents: queryKeys.norms.events(undefined, NORM_EVENT_PAGE_LIMIT),
+  normSearch: queryKeys.norms.search(NORM_QUERY, undefined, NORM_SEARCH_PAGE_LIMIT),
+  normDocument: queryKeys.norms.document(NORM_DOCUMENT_ID),
+  normParagraphs: queryKeys.norms.paragraphs(NORM_DOCUMENT_ID, undefined, NORM_PARAGRAPH_PAGE_LIMIT),
 } as const;
 
 /**
@@ -846,6 +874,13 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   });
   // One worker per state, so every row shape and the collapsed offline group render.
   client.setQueryData(KEYS.workers, { items: WORKERS, page });
+  // A current snapshot and the three ways another one can stand; two designations; two hits;
+  // a document with a heading, a body paragraph and an unreliable table row.
+  client.setQueryData(KEYS.normSnapshots, { items: NORM_SNAPSHOTS, page });
+  client.setQueryData(KEYS.normEvents, { items: NORM_EVENTS, page });
+  client.setQueryData(KEYS.normSearch, { items: NORM_HITS, page });
+  client.setQueryData(KEYS.normDocument, normDocument());
+  client.setQueryData(KEYS.normParagraphs, { items: NORM_PARAGRAPHS, page, source_attribution: 'consultant_plus' });
   return client;
 }
 
@@ -908,6 +943,12 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.executionQueue, { items: [], page, paused: false });
   client.setQueryData(KEYS.executionJournal, { items: [], page });
   client.setQueryData(KEYS.workers, { items: [], page });
+  // No snapshot loaded, so none is current: «Нормы» renders its refusal, not an empty list.
+  client.setQueryData(KEYS.normSnapshots, { items: [], page });
+  client.setQueryData(KEYS.normEvents, { items: [], page });
+  client.setQueryData(KEYS.normSearch, { items: [], page });
+  client.setQueryData(KEYS.normDocument, normDocument({ unreliable_paragraph_count: 0, paragraph_count: 0 }));
+  client.setQueryData(KEYS.normParagraphs, { items: [], page, source_attribution: 'consultant_plus' });
   client.setQueryData(
     KEYS.dashboardSummary,
     dashboardSummary({
@@ -1439,6 +1480,59 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       createElement(RunWorkerLine, { worker: { kind: 'pending' } }),
     ),
   },
+  /*
+   * `W55A-WEB-NORMS`. The «Нормы» branches a cache state does not select: the three ways a
+   * search is refused by the server, the empty first and later pages of each list, and the
+   * PDF panel's other shapes (no binding, a page past the end, no page asked for, open).
+   */
+  ...(['norms_search_too_broad', null] as const).map((constraint) => ({
+    name: `norms-search-refused-${constraint ?? 'request'}`,
+    make: () => createElement(NormsPage, { roles: ['expert'], query: NORM_QUERY }),
+    seedClient: (client: Client) => seedError(client, KEYS.normSearch, normsRefusal(
+      'validation_failed', constraint === null ? {} : { constraint },
+    )),
+  })),
+  {
+    name: 'norms-search-no-current-snapshot',
+    make: () => createElement(NormsPage, { roles: ['expert'], query: NORM_QUERY }),
+    seedClient: (client: Client) => seedError(client, KEYS.normSearch, normsRefusal(
+      'required_norm_unavailable', { reference_kind: 'norms_snapshot' },
+    )),
+  },
+  {
+    name: 'norm-search-nothing-found',
+    make: () => createElement(NormSearchResults, { items: [], onFirst: null, onNext: null }),
+  },
+  {
+    name: 'norm-search-empty-later-page',
+    make: () => createElement(NormSearchResults, { items: [], onFirst: () => {}, onNext: null }),
+  },
+  {
+    name: 'norm-paragraphs-empty-later-page',
+    make: () => createElement(NormParagraphList, {
+      normDocumentId: NORM_DOCUMENT_ID, items: [], onFirst: () => {}, onNext: null,
+    }),
+  },
+  {
+    name: 'norm-history-empty-later-page',
+    make: () => createElement(NormSnapshotHistory, { items: [], onFirst: () => {}, onNext: null }),
+  },
+  {
+    name: 'norm-snapshots-current-beyond',
+    make: () => createElement(NormSnapshotList, {
+      items: NORM_SNAPSHOTS.slice(1), current: { kind: 'beyond' }, canDesignate: true, busy: false,
+      onDesignate: () => {},
+    }),
+  },
+  ...([
+    ['unbound', normDocument({ content_available: false }), 12, null],
+    ['page-beyond', normDocument(), 99, null],
+    ['closed', normDocument(), null, null],
+    ['open', normDocument(), 12, 'blob:http://web.test/0f0e9d8c-7b6a-4948-b726-150413021100'],
+  ] as const).map(([shape, document, page, documentUrl]) => ({
+    name: `norm-pdf-${shape}`,
+    make: () => createElement(NormPdf, { document, page, documentUrl, isLoading: false, error: null }),
+  })),
   /*
    * `app/not-found.tsx` is a FILE in the route tree and not an address, so no derivation
    * reaches it and it stays a hand-written entry. It carried a WHOLE ENGLISH SENTENCE to a
@@ -2362,6 +2456,14 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
     why: 'WorkersPage shows this only after the setWorkerIntake mutation settles with a typed refusal, past the confirmation step. One static render cannot press the switch, confirm it or seed the mutation observer through a query cache.',
   },
   {
+    label: 'Снимок не назначен',
+    why: 'NormsPage shows this only after the setCurrentNormSnapshot mutation settles with a typed refusal, past the confirmation step. One static render cannot press «Сделать текущим», confirm it or seed the mutation observer through a query cache.',
+  },
+  {
+    label: 'Назначение не выполнено',
+    why: 'NormsPage shows this only after the setCurrentNormSnapshot mutation rejects with a failure that is not a refusal. Same mechanism as the entry above: a settled mutation observer cannot be seeded through a query cache.',
+  },
+  {
     label: 'Заявка не одобрена',
     why: 'The approval form sets its local roles failure only after submit with no role selected. One static server render cannot fire that submit handler or seed component useState.',
   },
@@ -2415,14 +2517,9 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
       'refusal cases drive in a real browser, and `tests/e2e/pc01/journey/refusals.mjs` is ' +
       'the only instrument that reaches it.',
   },
-  {
-    label: 'В начало',
-    why:
-      "The pager's first-page control, rendered only when a list widget's own `cursor` " +
-      'state is set — which one render cannot do. `W38-KB` stated this limit when it added ' +
-      'the `paged` cache state and it is unchanged: the NEXT-page control is reached, the ' +
-      'return to the first page is not.',
-  },
+  // `В начало` left this list in `W55A-WEB-NORMS`: the norms lists take their first-page
+  // control as a prop (`onFirst`), so a static pass of their later-page shapes renders it,
+  // and the ratchet below said so. The other lists still hold it in their own `cursor` state.
   // `W45-BLOCKS`. `blocks-page.tsx` picks a version in three client-side steps — a
   // project, then one of its documents, then the block index for that document's
   // version — and each step mounts a component that calls its own query only after a
