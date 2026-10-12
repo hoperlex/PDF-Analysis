@@ -1,8 +1,8 @@
 """Streamed content: one requested byte range, and what a port hands back to stream.
 
-`W55A-SEAL-01` (`W55-PLAN.md` section A3.5; owner ruling R-115). Two operations stream a
-PDF -- ``streamDocumentVersionContent`` and ``streamNormDocumentContent`` -- and both honour
-one ``Range``. This module is the shape between their routers and their ports, and nothing
+`W55A-SEAL-01` (`W55-PLAN.md` section A3.5; owner ruling R-115). The PDF streams --
+``streamDocumentVersionContent`` and ``streamNormDocumentContent`` -- both honour one
+``Range``. This module is the shape between their routers and their ports, and nothing
 else: it reaches no database, no object store and no clock.
 
 * :class:`ByteRange` is the **syntax** of one ``Range`` header, parsed before the port is
