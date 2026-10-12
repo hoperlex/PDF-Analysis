@@ -68,6 +68,7 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-155** | the deployment-wide pause is not shown in the run journal (`R-85`, Y-04) | a journal entry without a run identity is a contract change |
 | **D-156** | the stand's generated test data must be purged at the transition to beta, keeping the corpus (`R-109`) | a purge task in the beta wave |
 | **D-157** | W54's migrations `0018`/`0019`, its DB-backed tests, the BGE image build and MRR, and the W54 full gate have not run; consolidated after W55a (`R-111`) | one combined window run and one full gate on the W55a candidate |
+| **D-158** | norms search shares the API's 10-connection pool; ten broad searches can hold every connection for the search timeout (`W55A-JUDGE-X` M6) | measure under the rehearsal timeout, then a per-operation cap or accepted risk |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
@@ -147,6 +148,19 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-158 — norms search shares the API connection pool
+
+**Opened 2026-10-13 from `W55A-JUDGE-X` M6.** `searchNorms` runs on the API's pool:
+`pool_size` 5 plus `max_overflow` 5, with a 30 s `pool_timeout`. Ten concurrent broad
+searches, for example a negation that no index serves, hold every connection for the full
+`AUDITMANAGER_NORMS_SEARCH_TIMEOUT_MS`. Every other operation then waits, and fails after
+30 s. Measure this in `W55A-REHEARSAL-01` with the stand timeout. Then either cap concurrent
+searches (a semaphore or a separate small pool) or record it as an accepted risk alongside
+the timeout figure.
+
+**Check:** `rg -n "pool_size|max_overflow|pool_timeout" src/auditmanager/shared/db/config.py`, and
+the rehearsal's concurrency measurement.
 
 ### D-157 — W54's DB-backed validation is deferred to after W55a
 

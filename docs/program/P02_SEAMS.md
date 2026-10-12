@@ -795,8 +795,10 @@ Two guard clauses are recorded unevaluated rather than generated and left
 unreachable:
 
 1. the `NormsSnapshot` clause of the `created → queued` reference-resolution guard —
-   PC-01 pins no norms snapshot. The input-manifest, `AnalysisProfile` and
-   `PromptBundle` clauses of that same guard **are** evaluated;
+   since `W55A-PIN-01` a run pins the current norms snapshot when one is designated and
+   NULL otherwise (`R-113`); no stage reads norms before W57, so the clause is still not
+   evaluated as a guard. The input-manifest, `AnalysisProfile` and `PromptBundle` clauses
+   of that same guard **are** evaluated;
 2. the `ResultPackage` **schema** clause of `validating → published`. PC-01 publishes
    no result package and validates declared checksums and required artifact roles
    directly.
