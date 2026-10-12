@@ -177,6 +177,9 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/pause-execution/model/use-pause-execution.ts': false,
   // `W54-WORKERS-WEB`: a worker's intake switch changes no number the dashboard reads.
   'src/features/set-worker-intake/model/use-set-worker-intake.ts': false,
+  // `W55A-WEB-NORMS`: designating the current norms snapshot changes no number the dashboard
+  // reads; it invalidates the `norms` root instead.
+  'src/features/set-current-snapshot/model/use-set-current-snapshot.ts': false,
 };
 
 /** A feature model source with an executable mutation call, independent of its filename. */

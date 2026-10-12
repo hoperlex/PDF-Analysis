@@ -7,9 +7,10 @@
  * `/knowledge-base`, Блоки `/blocks`, «Нормы» `/norms` (stub); **Система** — Журнал выполнения
  * `/logs`, Исполнители `/workers`, «Настройки анализа» `/analysis-settings` (stub), «Очередь»
  * `/queue`; `/optimisation` leaves the menu and stays a registered, reachable screen
- * (group `hidden`). W53 built `/logs` and `/queue`; the remaining three R-66 stubs
- * still use `RoutePlaceholder`, say they are not implemented, show no digit and invent
- * no data. Access remains `session`, roles `any`.
+ * (group `hidden`). W53 built `/logs` and `/queue`, and `W55A-WEB-NORMS` built `/norms`; the
+ * remaining two R-66 stubs still use `RoutePlaceholder`, say they are not implemented, show no
+ * digit and invent no data. Access remains `session`, roles `any-role`. `/norms` keeps its
+ * ruled place in the menu, asserted by `RULING` below and by the case after `STUBS`.
  *
  * The expectation below is typed from the ruling, not read from the registry, and the menu is
  * read three ways: the data the frame builds (`buildNavigation`), and the two rendered states of
@@ -79,10 +80,12 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
   },
 ];
 
-/** The three remaining stubs of `R-66`, each with the group the ruling puts it in. */
+/**
+ * The two remaining stubs of `R-66`, each with the group the ruling puts it in. `/norms` left
+ * this list in `W55A-WEB-NORMS`: it is a built screen now, held below as one.
+ */
 const STUBS: readonly { readonly address: string; readonly label: string; readonly group: string }[] = [
   { address: '/section-optimisation', label: 'Оптимизация разделов', group: 'work' },
-  { address: '/norms', label: 'Нормы', group: 'knowledge' },
   { address: '/analysis-settings', label: 'Настройки анализа', group: 'system' },
 ];
 
@@ -211,7 +214,7 @@ const fetchSpy = vi.fn(async () => {
   throw new Error('a stub made a network call');
 });
 
-describe('R-66: each of the three remaining stubs is an honest RoutePlaceholder', () => {
+describe('R-66: each of the two remaining stubs is an honest RoutePlaceholder', () => {
   beforeEach(() => {
     forgetEverySession();
     jar.value = openSession(COMPLETE, 'qa-credential', 3600);
@@ -285,7 +288,28 @@ describe('R-66: each of the three remaining stubs is an honest RoutePlaceholder'
     });
   }
 
-  it('all R-66 menu addresses remain registered after two stubs graduate', () => {
+  it('/norms graduated (W55A-WEB-NORMS): its ruled row and place are kept, and it reads the snapshot list', async () => {
+    expect(screenAt('/norms')).toEqual({
+      address: '/norms',
+      label: 'Нормы',
+      group: 'knowledge',
+      access: 'session',
+      roles: 'any-role',
+      inMenu: true,
+    });
+    const module = (await import(/* @vite-ignore */ join(WEB_ROOT, 'src', 'app', 'norms', 'page.tsx'))) as {
+      default: (props: unknown) => Promise<ReactElement>;
+    };
+    const routed = await module.default({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
+    const client = newClient();
+    const markup = renderScreen(client, routed);
+    expect(markup).not.toContain('Раздел пока недоступен');
+    expect(markup).not.toContain('data-route="/norms"');
+    // It asks the server which snapshot is current, and searches nothing until asked to.
+    expect(client.getQueryCache().getAll().map((query) => query.queryKey[1])).toEqual(['snapshots']);
+  });
+
+  it('all R-66 menu addresses remain registered after stubs graduate', () => {
     const menuRows = SCREEN_REGISTRY.filter((row) => row.inMenu && !['home', 'admin'].includes(row.group)).map((row) => row.address);
     expect(menuRows.sort()).toEqual(RULING.flatMap((group) => group.items.map(([address]) => address)).sort());
   });

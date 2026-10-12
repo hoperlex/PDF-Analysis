@@ -6,7 +6,7 @@
  * owner, and `web/docs/PC01_UI_SEAM.md` records which Gate B session uses which.
  *
  * Rules:
- *   - every key starts with one of the ten root namespaces below;
+ *   - every key starts with one of the eleven root namespaces below;
  *   - a key is built by calling a function here, never by writing an array literal;
  *   - invalidation targets a prefix — `queryKeys.runs.all()` invalidates every run key;
  *   - a key filled by more than one site carries its value type, as a `DataTag`. See
@@ -39,6 +39,7 @@ import type { DataTag } from '@tanstack/react-query';
 import type {
   DocumentUid,
   FindingCategory,
+  NormDocumentId,
   FindingUid,
   ProjectUid,
   RegistrationStatus,
@@ -50,11 +51,15 @@ import type {
 } from './generated/types.gen';
 
 /**
- * The ten root namespaces. Nothing else is a legal first key segment.
+ * The eleven root namespaces. Nothing else is a legal first key segment.
  *
  * `account`, `users` and `registrations` entered together, once, in `W50-REGISTRY-01`
  * (`W50-PLAN.md` §3.6): the signed-in account, the administrator's account list and the
  * registration requests. Later lanes add key factories inside them and no new root.
+ *
+ * `norms` entered once, in `W55A-WEB-NORMS` (`W55-PLAN.md` §A4 Stage B item 4, which names
+ * the namespace): the normative corpus belongs to no project, run or finding, and one
+ * designation of the current snapshot changes every answer under it at once.
  */
 export const QUERY_NAMESPACES = [
   'projects',
@@ -67,6 +72,7 @@ export const QUERY_NAMESPACES = [
   'registrations',
   'releases',
   'execution',
+  'norms',
 ] as const;
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
@@ -102,6 +108,26 @@ export interface FindingListFilters {
 }
 
 export const queryKeys = {
+  /**
+   * The «Нормы» screens (`W55A-WEB-NORMS`). One root, because `setCurrentNormSnapshot`
+   * changes what every key under it answers: the snapshot list's `current` flag, the
+   * history, and which snapshot a search reads. The designation invalidates `norms.all()`.
+   *
+   * A search page is keyed by its text and its cursor (the cursor is bound to the text and
+   * the snapshot on the server); a document's paragraphs by the document and the cursor.
+   * `content` holds the PDF bytes of one norm document while a viewer is open.
+   */
+  norms: {
+    all: () => ['norms'] as const,
+    snapshots: (cursor?: string, limit?: number) => ['norms', 'snapshots', { cursor, limit }] as const,
+    events: (cursor?: string, limit?: number) => ['norms', 'events', { cursor, limit }] as const,
+    search: (q: string, cursor?: string, limit?: number) =>
+      ['norms', 'search', { q, cursor, limit }] as const,
+    document: (normDocumentId: NormDocumentId) => ['norms', 'document', normDocumentId] as const,
+    paragraphs: (normDocumentId: NormDocumentId, cursor?: string, limit?: number) =>
+      ['norms', 'paragraphs', normDocumentId, { cursor, limit }] as const,
+    content: (normDocumentId: NormDocumentId) => ['norms', 'content', normDocumentId] as const,
+  },
   execution: {
     all: () => ['execution'] as const,
     queue: (cursor?: string) => ['execution', 'queue', { cursor }] as const,

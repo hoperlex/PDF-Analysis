@@ -150,8 +150,9 @@ describe('the registry is the route tree: every page has a row and every row a p
   });
 
   it('reads a tree and a registry of a credible size', () => {
-    expect(routeAddresses().length).toBe(27);
-    expect(REGISTRY.length).toBe(27);
+    // `W55A-WEB-NORMS` added the norms document view: 27 -> 28.
+    expect(routeAddresses().length).toBe(28);
+    expect(REGISTRY.length).toBe(28);
   });
 
   it('has no page without a row and no row without a page', () => {
@@ -256,6 +257,15 @@ describe('R-66: the groups, their members and their order', () => {
       expect(row, `${address} is not registered`).toBeDefined();
       expect([row?.access, row?.roles, row?.inMenu], address).toEqual(['session', 'any-role', true]);
     }
+  });
+
+  it('«Нормы» keeps its menu place, and its document view is an any-role screen out of the menu (W55A-WEB-NORMS)', () => {
+    const view = REGISTRY.find((entry) => entry.address === '/norms/document');
+    expect(view, '/norms/document is not registered').toBeDefined();
+    expect([view?.group, view?.access, view?.roles, view?.inMenu]).toEqual(['knowledge', 'session', 'any-role', false]);
+    expect(view?.label).toBe('Нормативный документ');
+    // The menu still offers «Нормы» once, and not its document view.
+    expect(menu(REGISTRY).knowledge).toEqual(['/knowledge-base', '/blocks', '/norms']);
   });
 
   it('the labels are the ruling\'s words', () => {

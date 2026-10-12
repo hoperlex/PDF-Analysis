@@ -1,0 +1,41 @@
+.paragraphs {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.paragraphs ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.paragraph {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.5rem 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.paragraph p {
+  margin: 0 0 0.25rem;
+}
+
+.unreliable {
+  border-left: 3px solid var(--am-degraded);
+  background: var(--am-degraded-light);
+}
+
+.text {
+  white-space: pre-wrap;
+}
+
+.facts {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.facts p {
+  margin: 0 0 0.4rem;
+}

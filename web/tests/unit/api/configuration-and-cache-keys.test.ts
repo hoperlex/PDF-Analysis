@@ -188,10 +188,12 @@ const RUN_ID = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const FINDING_UID = 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const VERSION_UID = 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const USER_UID = 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+const NORM_DOCUMENT_ID = 'ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 
 describe('every cache key starts in its own namespace', () => {
-  it('declares exactly the ten roots', () => {
-    // `account`, `users` and `registrations` entered once, in `W50-REGISTRY-01`.
+  it('declares exactly the eleven roots', () => {
+    // `account`, `users` and `registrations` entered once, in `W50-REGISTRY-01`; `norms` in
+    // `W55A-WEB-NORMS`, which the W55 plan names (§A4 Stage B item 4).
     expect([...QUERY_NAMESPACES]).toEqual([
       'projects',
       'versions',
@@ -203,6 +205,7 @@ describe('every cache key starts in its own namespace', () => {
       'registrations',
       'releases',
       'execution',
+      'norms',
     ]);
   });
 
@@ -223,6 +226,12 @@ describe('every cache key starts in its own namespace', () => {
     expect(queryKeys.releases.list()[0]).toBe('releases');
     expect(queryKeys.execution.queue()[0]).toBe('execution');
     expect(queryKeys.execution.journal(RUN_ID)[0]).toBe('execution');
+    expect(queryKeys.norms.snapshots()[0]).toBe('norms');
+    expect(queryKeys.norms.events()[0]).toBe('norms');
+    expect(queryKeys.norms.search('СП 54')[0]).toBe('norms');
+    expect(queryKeys.norms.document(NORM_DOCUMENT_ID)[0]).toBe('norms');
+    expect(queryKeys.norms.paragraphs(NORM_DOCUMENT_ID)[0]).toBe('norms');
+    expect(queryKeys.norms.content(NORM_DOCUMENT_ID)[0]).toBe('norms');
   });
 
   it('keeps who-am-I apart from who-is-there: account.me is not under users', () => {
@@ -253,6 +262,9 @@ describe('every cache key starts in its own namespace', () => {
       queryKeys.users.detail(USER_UID),
       queryKeys.users.list(),
       queryKeys.registrations.list(),
+      queryKeys.norms.document(NORM_DOCUMENT_ID),
+      queryKeys.norms.paragraphs(NORM_DOCUMENT_ID),
+      queryKeys.norms.content(NORM_DOCUMENT_ID),
     ].map((key) => JSON.stringify(key));
     expect(new Set(keys).size).toBe(keys.length);
   });

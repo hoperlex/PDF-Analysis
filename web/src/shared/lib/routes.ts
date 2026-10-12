@@ -36,6 +36,22 @@ export const routes = {
 
   /** The worker registry, «Исполнители» (`W54-WORKERS-WEB`). */
   workers: (): string => '/workers',
+
+  /** «Нормы»: the search over the current norms snapshot (`W55A-WEB-NORMS`). */
+  norms: (): string => '/norms',
+
+  /**
+   * One norm document, optionally opened at one page of its PDF (`W55A-WEB-NORMS`).
+   *
+   * The identity travels in the query rather than in a path segment. The search is the only
+   * road to a norm document, and a cold walk of the application (`tests/e2e/pc01/journey`)
+   * never searches, so an address with a `[norm_document_id]` segment would be one the
+   * journey cannot fill; `/norms/document` with no `id` is a screen of its own that says no
+   * document was chosen. `page` is the PDF's own 1-based page number (`page_label`).
+   */
+  normDocument: (normDocumentId: string, page?: number): string =>
+    `/norms/document?id=${encodeURIComponent(normDocumentId)}` +
+    (page === undefined ? '' : `&page=${page}`),
   /** The project list. The home screen at `/` links here. */
   projects: (): string => '/projects',
 

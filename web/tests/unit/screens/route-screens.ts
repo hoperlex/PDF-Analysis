@@ -101,7 +101,7 @@ import { ForbiddenPage } from '@/_pages/forbidden';
 import { HomePage } from '@/_pages/home';
 import { KnowledgeBasePage } from '@/_pages/knowledge-base';
 import { LogsPage } from '@/_pages/logs';
-import { NormsPage } from '@/_pages/norms';
+import { NormDocumentPage, NormsPage } from '@/_pages/norms';
 import { OptimisationPage } from '@/_pages/optimisation';
 import { ProjectDetailPage } from '@/_pages/project-detail';
 import { ProjectsPage } from '@/_pages/projects';
@@ -219,6 +219,15 @@ export interface OptedOutSeed {
 
 export type Seed = RenderedSeed | OptedOutSeed;
 
+/**
+ * The norms values the seeds above render and the instruments seed answers for
+ * (`W55A-WEB-NORMS`): one search text, one norm document and the PDF page it is opened at.
+ * Cyrillic, like every value this file seeds.
+ */
+export const NORM_QUERY = 'СП 54 п. 5.1 высота помещений';
+export const NORM_DOCUMENT_ID = 'ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8D';
+export const NORM_PAGE = 12;
+
 export const SEEDS: readonly Seed[] = [
   {
     /*
@@ -329,7 +338,40 @@ export const SEEDS: readonly Seed[] = [
     discipline: {},
   },
   { address: '/logs', name: 'logs', make: () => createElement(LogsPage, {}), discipline: {} },
-  { address: '/norms', name: 'norms', make: () => createElement(NormsPage, {}), discipline: {} },
+  /*
+   * `W55A-WEB-NORMS`. «Нормы» is three screens to a reader and one address: an administrator's
+   * landing (the snapshot list, the designation control and the history), and a search — an
+   * expert's, so the administrator's half is absent from it. The search text is seeded, as a
+   * route would hand it over from `?q=`; the instruments seed the answers under the same key.
+   */
+  {
+    address: '/norms',
+    name: 'norms',
+    make: () => createElement(NormsPage, { roles: ['admin', 'expert'], query: null }),
+    discipline: {},
+  },
+  {
+    address: '/norms',
+    name: 'norms-search',
+    make: () => createElement(NormsPage, { roles: ['expert'], query: NORM_QUERY }),
+    discipline: {},
+  },
+  /*
+   * The document view: opened at a page, as «Открыть» opens it, and with no document named,
+   * which is what the address shows when it carries no `id` (the journey's cold walk).
+   */
+  {
+    address: '/norms/document',
+    name: 'norm-document',
+    make: () => createElement(NormDocumentPage, { normDocumentId: NORM_DOCUMENT_ID, page: NORM_PAGE }),
+    discipline: {},
+  },
+  {
+    address: '/norms/document',
+    name: 'norm-document-unchosen',
+    make: () => createElement(NormDocumentPage, { normDocumentId: null, page: null }),
+    discipline: {},
+  },
   {
     address: '/optimisation',
     name: 'optimisation',

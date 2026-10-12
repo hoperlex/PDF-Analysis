@@ -40,6 +40,9 @@ import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
+import { NormSearchResults } from '@/widgets/norm-search';
+import { NormDocumentFacts, NormParagraphList } from '@/widgets/norm-document';
+import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { ExportPanel } from '@/widgets/export-panel';
 import { FindingList } from '@/widgets/finding-list';
 import { ProjectList } from '@/widgets/project-list';
@@ -87,6 +90,9 @@ import {
 } from '../review/fixtures';
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
 import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
+import {
+  NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS, normDocument,
+} from '../norms/fixtures';
 
 import type { Screen } from './contrast';
 
@@ -501,6 +507,26 @@ export function screens(): Screen[] {
       },
     ],
     roles: ['admin'], busy: false, onIntake: noop, onNext: null, onPrevious: null,
+  })));
+
+  // `W55A-WEB-NORMS`: the norms widgets with rows in them — a search hit with its matched
+  // spans marked, a document's paragraphs with an unreliable one marked, an administrator's
+  // snapshot list with its control, and the designation history.
+  add('NormSearchResults loaded', withRouter(createElement(NormSearchResults, {
+    items: NORM_HITS, onFirst: noop, onNext: noop,
+  })));
+  add('NormDocument with an unreliable paragraph', withRouter(createElement('div', null,
+    createElement(NormDocumentFacts, { document: normDocument() }),
+    createElement(NormParagraphList, {
+      normDocumentId: NORM_DOCUMENT_ID, items: NORM_PARAGRAPHS, onFirst: null, onNext: noop,
+    }),
+  )));
+  add('NormSnapshotList loaded, administrator', withRouter(createElement(NormSnapshotList, {
+    items: NORM_SNAPSHOTS, current: { kind: 'current', snapshot: NORM_SNAPSHOTS[0]! },
+    canDesignate: true, busy: false, onDesignate: noop,
+  })));
+  add('NormSnapshotHistory loaded', withRouter(createElement(NormSnapshotHistory, {
+    items: NORM_EVENTS, onFirst: null, onNext: noop,
   })));
 
   // The finding list, with a row SELECTED — `aria-current='true'` is the only place

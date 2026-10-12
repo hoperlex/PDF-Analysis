@@ -595,11 +595,35 @@
       "path": "/norms",
       "page_module": "web/src/app/norms/page.tsx",
       "$comment": [
-        "Нормы -- an honest stub on its way, R-66 (W50-REGISTRY-01).",
-        "",
-        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
-        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this entry",
-        "gains operations and the assertion starts carrying weight."
+        "Нормы (W55A-WEB-NORMS; was the R-66 stub). A cold route carries no search, so the",
+        "screen reads only the snapshot list -- to say which snapshot search reads, or to",
+        "render the refusal before one is current -- and, for an administrator (the journey",
+        "signs in as one), the designation history. `searchNorms` is called only for an",
+        "address carrying `?q=`, and the document view only from a search result, so neither",
+        "is part of this cold walk. «Сделать текущим» requires explicit administrator intent",
+        "and a confirmation, and is not emitted by this read journey."
+      ],
+      "expects_api": [
+        {"method": "GET", "path": "/norms/snapshots", "operationId": "listNormSnapshots"},
+        {"method": "GET", "path": "/norms/snapshots/events", "operationId": "listNormSnapshotEvents"}
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
+      "follow": null
+    },
+    {
+      "name": "norm-document",
+      "path": "/norms/document",
+      "page_module": "web/src/app/norms/document/page.tsx",
+      "$comment": [
+        "Нормативный документ (W55A-WEB-NORMS). A norm document is reached only from a search",
+        "result, as `/norms/document?id=ndoc_...&page=N`, and a cold walk never searches, so this",
+        "route walks the address with no `id`: the screen says no document was chosen and calls",
+        "nothing. `expects_api` is EMPTY and that is the claim. The document read",
+        "(`getNormDocument`, `listNormParagraphs`, and `streamNormDocumentContent` for a page)",
+        "is held by `web/tests/unit/norms` and checked by hand in the window after a current",
+        "snapshot exists."
       ],
       "expects_api": [],
       "optional_api": [

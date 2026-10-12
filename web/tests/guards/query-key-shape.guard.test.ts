@@ -47,6 +47,34 @@ describe('execution query pages stay in one invalidation namespace', () => {
   });
 });
 
+describe('norms query keys stay in one invalidation namespace (W55A-WEB-NORMS)', () => {
+  it('files every norms read under the root a designation invalidates', () => {
+    const root = queryKeys.norms.all();
+    expect(root).toEqual(['norms']);
+    for (const key of [
+      queryKeys.norms.snapshots(undefined, 200),
+      queryKeys.norms.events('a', 50),
+      queryKeys.norms.search('СП 54', 'a', 20),
+      queryKeys.norms.document('ndoc_A'),
+      queryKeys.norms.paragraphs('ndoc_A', 'a', 200),
+      queryKeys.norms.content('ndoc_A'),
+    ]) {
+      expect(key.slice(0, 1)).toEqual(root);
+    }
+  });
+
+  it('separates searches by text and cursor, and a document from its paragraphs and bytes', () => {
+    expect(queryKeys.norms.search('СП 54')).not.toEqual(queryKeys.norms.search('СП 542'));
+    expect(queryKeys.norms.search('СП 54', 'a')).not.toEqual(queryKeys.norms.search('СП 54', 'b'));
+    const keys = [
+      queryKeys.norms.document('ndoc_A'),
+      queryKeys.norms.paragraphs('ndoc_A'),
+      queryKeys.norms.content('ndoc_A'),
+    ].map((key) => JSON.stringify(key));
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
 const TSC_BIN = join(WEB_ROOT, 'node_modules', '.bin', 'tsc');
 const FIXTURE_PROJECT = 'tests/guards/fixtures/query-keys/tsconfig.json';
 
