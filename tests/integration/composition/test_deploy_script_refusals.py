@@ -46,7 +46,7 @@ import re
 import socket
 import subprocess
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -390,6 +390,11 @@ def _run(
     environment["STUB_LOG"] = str(log)
     if env_file is not None:
         environment["ALPHA_ENV_FILE"] = str(env_file)
+    # `W54-STAND-COPY-01`: the copy record and the import lock default to the stand's
+    # `/srv` paths. Every case reads its own, absent unless the case writes one, so no case
+    # depends on what this host happens to have under `/srv`.
+    environment["STAND_COPY_RECORD"] = str(tmp_path / "stand-copy" / "record.json")
+    environment["BUNDLE_STAGING"] = str(tmp_path / "stand-staging")
     environment.update(stub or {})
 
     completed = subprocess.run(
@@ -1109,12 +1114,13 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     `test_deploy_image_identity.py` beside this file and is named in the set below, 13
     until `D-103`'s repair added `derived-secrets-coherent`, covered above, and 14 until
     `W54-WORKER-01` added `execution-role-declared` (R-105), covered above and in
-    :class:`TestTheExecutionRoleIsDeclaredLiterally`.
+    :class:`TestTheExecutionRoleIsDeclaredLiterally`, and 20 since `W54-STAND-COPY-01` added
+    the five stand-copy guards, covered in :class:`TestNoDeployWhileACopyOrAnImportIsOpen`.
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", DEPLOY.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 15, markers
-    covered = set(BEFORE_DOCKER) | {
+    assert len(markers) == 20, markers
+    covered = set(BEFORE_DOCKER) | set(STAND_GUARDS) | {
         "port-not-foreign",
         "images-built",
         "services-healthy",
@@ -1276,3 +1282,151 @@ class TestTheExecutionRoleIsDeclaredLiterally:
         )
         assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
         assert "the 'worker' service of" in completed.stderr, completed.stderr
+
+
+# --- `W54-STAND-COPY-01`: no deploy while a copy or an import is open --------------------
+
+
+def _stand_record(
+    *,
+    kind: str = "copy",
+    state: str = "open",
+    purpose: str = "publish",
+    attested: bool = True,
+    target_sha: str | None = None,
+) -> str:
+    """A copy record in `lib/forced-command.sh`'s canonical layout, as `copy-serve.sh`
+    writes it. `test_stand_copy_refusals.py` drives deploy.sh with records the real
+    `copy-serve.sh` wrote, so this literal cannot drift from the writer unnoticed."""
+    fields = {
+        "kind": kind, "stamp": "20261012T180000Z", "state": state, "purpose": purpose,
+        "target_sha": target_sha,
+        "attestation": {"dump_sha256": "d" * 64, "restore_report_sha256": "c" * 64,
+                        "attested_at": "2026-10-12T18:10:00Z"} if attested else None,
+        "waiver": None, "real_data_marker": kind == "copy", "closed_at": None,
+    }
+    lines = ['  "record_version": 1'] + [f'  "{key}": {json.dumps(value)}' for key, value in fields.items()]
+    return "{\n" + ",\n".join(lines) + "\n}\n"
+
+
+def _commit(repo: Path) -> str:
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+            cwd=repo, check=True, capture_output=True, text=True,
+        ).stdout.strip()
+    git("init", "-q")
+    git("add", "-A")
+    git("commit", "-qm", "the candidate")
+    return git("rev-parse", "HEAD")
+
+
+def _hold(path: Path) -> object:
+    import fcntl
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = path.open("a")
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    return handle
+
+
+#: guard -> (typed word, how the case prepares the stand). `prepare` gets the case's
+#: tmp_path and the staged clone's HEAD, and returns whatever must stay alive (a lock).
+STAND_GUARDS: dict[str, tuple[str, Callable[[Path, str], object]]] = {
+    "stand-import-locked": (
+        "stand_import_locked", lambda tmp, head: _hold(tmp / "stand-staging" / "import.lock"),
+    ),
+    "stand-copy-readable": (
+        "stand_copy_unreadable",
+        lambda tmp, head: _write(tmp / "stand-copy" / "record.json", '{"record_version": 1}\n'),
+    ),
+    "stand-import-open": (
+        "stand_import_open",
+        lambda tmp, head: _write(tmp / "stand-copy" / "record.json", _stand_record(purpose="import")),
+    ),
+    "stand-copy-unattested": (
+        "stand_copy_unattested",
+        lambda tmp, head: _write(tmp / "stand-copy" / "record.json",
+                                 _stand_record(purpose="none", attested=False)),
+    ),
+    "stand-copy-other-target": (
+        "stand_copy_other_target",
+        lambda tmp, head: _write(tmp / "stand-copy" / "record.json", _stand_record(target_sha="e" * 40)),
+    ),
+}
+
+
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+class TestNoDeployWhileACopyOrAnImportIsOpen:
+    """`W54-PLAN.md` §4 Stage C: deploy.sh refuses with a typed word before any `docker`
+    call while the importer lock is held, while an open record is an import record, while
+    an open record is unattested, or when an open publication record binds another SHA --
+    so no `main` push deploys during P4 -- and it accepts exactly the bound SHA."""
+
+    @pytest.mark.parametrize("guard", sorted(STAND_GUARDS))
+    def test_it_refuses_before_docker_with_its_word(self, guard: str, tmp_path: Path, free_port: int) -> None:
+        word, prepare = STAND_GUARDS[guard]
+        env_file = tmp_path / "alpha.env"
+        env_file.write_text(_env_text(EDITED_SECRETS, port=free_port), encoding="utf-8")
+        script = _stage(tmp_path / "stand")
+        keep = prepare(tmp_path, _commit(script.parents[2]))
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
+        del keep
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert f"deploy.sh: REFUSED: [{word}]" in completed.stderr, completed.stderr
+        assert not log.exists(), f"{guard} refused only after running docker: {log.read_text()}"
+
+    @pytest.mark.parametrize("guard", sorted(STAND_GUARDS))
+    def test_deleting_the_guard_removes_the_refusal(self, guard: str, tmp_path: Path, free_port: int) -> None:
+        word, prepare = STAND_GUARDS[guard]
+        env_file = tmp_path / "alpha.env"
+        env_file.write_text(_env_text(EDITED_SECRETS, port=free_port), encoding="utf-8")
+        script = _stage(tmp_path / "mutant-stage", script=_mutant(tmp_path, guard))
+        keep = prepare(tmp_path, _commit(script.parents[2]))
+        completed, _ = _run(script, tmp_path=tmp_path, env_file=env_file)
+        del keep
+        assert f"[{word}]" not in completed.stderr, (
+            f"the {guard} guard was deleted and the refusal happened anyway"
+        )
+
+    @pytest.mark.parametrize(
+        "record",
+        [
+            pytest.param(None, id="no-record"),
+            pytest.param(lambda head: _stand_record(state="closed", purpose="import"), id="closed-import-record"),
+            pytest.param(lambda head: _stand_record(target_sha=head), id="attested-for-this-sha"),
+        ],
+    )
+    def test_it_deploys_without_a_record_after_one_closes_and_under_its_own_sha(
+        self, record, tmp_path: Path, serving: tuple[int, type]
+    ) -> None:
+        port, _ = serving
+        script, env_file = _ready(tmp_path, port)
+        head = _commit(script.parents[2])
+        if record is not None:
+            _write(tmp_path / "stand-copy" / "record.json", record(head))
+        # A free import lock file is not a held one.
+        _write(tmp_path / "stand-staging" / "import.lock", "")
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert _up_calls(log), "nothing was brought up"
+        under_open_copy = record is not None and '"state": "open"' in record(head)
+        assert (f"attested for this commit {head}" in completed.stdout) == under_open_copy, completed.stdout
+
+    def test_a_publication_record_without_a_readable_head_is_refused(
+        self, tmp_path: Path, free_port: int
+    ) -> None:
+        """The staged clone is not a git repository: whose SHA it is cannot be said, so
+        an open publication record binds nothing here."""
+        env_file = tmp_path / "alpha.env"
+        env_file.write_text(_env_text(EDITED_SECRETS, port=free_port), encoding="utf-8")
+        script = _stage(tmp_path / "nogit")
+        _write(tmp_path / "stand-copy" / "record.json", _stand_record(target_sha="e" * 40))
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
+        assert completed.returncode == REFUSED
+        assert "[stand_copy_other_target]" in completed.stderr and "<unknown HEAD>" in completed.stderr
+        assert not log.exists()

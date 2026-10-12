@@ -141,6 +141,108 @@ while [ "$#" -gt 0 ]; do
 done
 # <<< guard: known-options
 
+# --- the one-off stand copy and the corpus import (`W54-STAND-COPY-01`) ---------------
+# A deploy restarts every writer. While the importer runs, or while a copy is open for
+# anything but THIS commit, that would write into the database the copy or the import is
+# standing on -- so deploy.sh refuses, here, before it reads anything else and before any
+# `docker` call, with a typed word an operator and deploy-auto's log can both grep:
+#
+#   stand_import_locked      the importer holds `<BUNDLE_STAGING>/import.lock`
+#   stand_copy_unreadable    a record exists and is not one copy-serve.sh wrote
+#   stand_import_open        the open record is an import record (or a test-data waiver)
+#   stand_copy_unattested    the open record has no attestation yet
+#   stand_copy_other_target  the open record is attested for a publication of another SHA
+#
+# An open publication record attested for exactly this checkout's HEAD is accepted: that
+# is P2's push (`W54-PLAN.md` §3.10), and `resume` closes the record afterwards. No record,
+# or a closed one, changes nothing -- `R-110`: while the stand holds only test data no copy
+# is required. The paths are copy-serve.sh's and receive-bundle.sh's defaults; deploy-auto
+# passes no environment, so on the stand they are what is read.
+#
+# The record's layout is `lib/forced-command.sh`'s canonical one -- one top-level key per
+# line -- and it is read here by this small reader rather than that library, because
+# this file is staged and run alone by several suites.
+STAND_COPY_RECORD="${STAND_COPY_RECORD:-/srv/auditmanager-copy/record.json}"
+STAND_IMPORT_LOCK="${BUNDLE_STAGING:-/srv/auditmanager-bundles}/import.lock"
+
+stand_record() {
+    local lines
+    lines="$(LC_ALL=C sed -n "s/^  \"$1\": \(.*\)\$/\1/p" "$STAND_COPY_RECORD" 2>/dev/null)" || return 1
+    [ -n "$lines" ] && [ "$(printf '%s\n' "$lines" | wc -l)" -eq 1 ] || return 1
+    printf '%s\n' "${lines%,}"
+}
+
+# >>> guard: stand-import-locked
+if [ -e "$STAND_IMPORT_LOCK" ] && ! flock --nonblock "$STAND_IMPORT_LOCK" true 2>/dev/null; then
+    refuse "[stand_import_locked] the corpus importer holds $STAND_IMPORT_LOCK." \
+           "A deploy would restart the writers under a running import. Nothing was read," \
+           "built or started. The inbound key's 'status' shows the import; deploy after it" \
+           "has exited and the copy key's 'resume' has closed its record."
+fi
+# <<< guard: stand-import-locked
+
+# Each top-level key the guards below read, raw (strings keep their quotes); empty when
+# there is no record or the key is not on exactly one line.
+STAND_PRESENT=no
+STAND_VERSION="" STAND_STATE="" STAND_STAMP="" STAND_KIND="" STAND_PURPOSE="" STAND_ATTESTATION="" STAND_TARGET=""
+if [ -e "$STAND_COPY_RECORD" ] || [ -L "$STAND_COPY_RECORD" ]; then
+    STAND_PRESENT=yes
+    STAND_VERSION="$(stand_record record_version || true)"
+    STAND_STATE="$(stand_record state || true)"
+    STAND_STAMP="$(stand_record stamp | tr -d '"' || true)"
+    STAND_KIND="$(stand_record kind || true)"
+    STAND_PURPOSE="$(stand_record purpose || true)"
+    STAND_ATTESTATION="$(stand_record attestation || true)"
+    STAND_TARGET="$(stand_record target_sha || true)"
+fi
+
+# >>> guard: stand-copy-readable
+if [ "$STAND_PRESENT" = yes ] && {
+        [ "$STAND_VERSION" != 1 ] \
+        || { [ "$STAND_STATE" != '"open"' ] && [ "$STAND_STATE" != '"closed"' ]; } \
+        || [ -z "$STAND_KIND" ] || [ -z "$STAND_PURPOSE" ] || [ -z "$STAND_ATTESTATION" ] \
+        || [ -z "$STAND_TARGET" ]; }; then
+    refuse "[stand_copy_unreadable] $STAND_COPY_RECORD is not a copy record copy-serve.sh wrote." \
+           "Whether a copy or an import is open cannot be told, so nothing is deployed." \
+           "The owner inspects it; the copy key's 'status' reads it."
+fi
+# <<< guard: stand-copy-readable
+
+STAND_OPEN=no
+[ "$STAND_STATE" != '"open"' ] || STAND_OPEN=yes
+
+# >>> guard: stand-import-open
+if [ "$STAND_OPEN" = yes ] && { [ "$STAND_PURPOSE" = '"import"' ] || [ "$STAND_KIND" = '"test_data_waiver"' ]; }; then
+    refuse "[stand_import_open] the open record $STAND_STAMP is an import record (${STAND_KIND//\"/})." \
+           "The corpus import stands on its fingerprint and its writers are stopped until" \
+           "the copy key's 'resume $STAND_STAMP'. Nothing was built or started."
+fi
+# <<< guard: stand-import-open
+
+# >>> guard: stand-copy-unattested
+if [ "$STAND_OPEN" = yes ] && [ "$STAND_ATTESTATION" = null ]; then
+    refuse "[stand_copy_unattested] the copy $STAND_STAMP is open and not attested." \
+           "R-93: a migrating publication follows an attested copy -- dump-db, inventory-s3," \
+           "fetch, the restore test here, then 'attest $STAND_STAMP ... publish <sha>'."
+fi
+# <<< guard: stand-copy-unattested
+
+STAND_HEAD=""
+if [ "$STAND_OPEN" = yes ]; then
+    STAND_HEAD="$(git -C "$REPO" rev-parse --verify --quiet 'HEAD^{commit}' 2>/dev/null || true)"
+fi
+# >>> guard: stand-copy-other-target
+if [ "$STAND_OPEN" = yes ] && {
+        [ "$STAND_PURPOSE" != '"publish"' ] || [ -z "$STAND_HEAD" ] || [ "$STAND_TARGET" != "\"$STAND_HEAD\"" ]; }; then
+    refuse "[stand_copy_other_target] the open copy $STAND_STAMP is attested for ${STAND_TARGET//\"/}, not this checkout's ${STAND_HEAD:-<unknown HEAD>}." \
+           "Re-attest it for this commit ('attest $STAND_STAMP <dump> <report> publish <sha>')," \
+           "or deploy the commit it names. Nothing was built or started."
+fi
+# <<< guard: stand-copy-other-target
+if [ "$STAND_OPEN" = yes ]; then
+    echo "deploy.sh: under the open copy $STAND_STAMP, attested for this commit $STAND_HEAD"
+fi
+
 # >>> guard: env-file-present
 # The environment is the operator's, not the clone's: `env/alpha.env` is git-ignored, so a
 # clean clone does NOT have one and must not be given a default. A deploy that invented an

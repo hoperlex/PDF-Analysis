@@ -34,6 +34,16 @@
 #   ALPHA_ENV_FILE               as for deploy.sh (default infra/deploy/env/alpha.env)
 #   BUNDLE_MAX_BYTES             largest <size> accepted (default 12 GiB)
 #   BUNDLE_STAGING_MARGIN_BYTES  free space kept on staging beyond 2 x <size> (default 2 GiB)
+#   STAND_COPY_WINDOW_SECONDS    how long after its quiesce an attested copy admits an
+#                                import (default 43200, 12 h); a waiver carries its own expiry
+#
+# THE COPY RECORD (`W54-STAND-COPY-01`). `import` starts only under an open record that
+# admits it -- an attested copy inside its window, or an unexpired `test_data_waiver` while
+# no `real_data` marker exists beside the record -- and only while every writer the
+# deployed compose file declares is stopped. A `receive` or an `import` under an open
+# record makes it an import record (`W54-PLAN.md` §3.5), which `deploy.sh` then refuses to
+# deploy under (`stand_import_open`). The importer re-checks the record and the fingerprint
+# itself (`W54-BUNDLE-01`); this is the boundary's half.
 #
 # STAGING LAYOUT (everything this script writes is under BUNDLE_STAGING):
 #
@@ -64,6 +74,11 @@ STAGING="${BUNDLE_STAGING:-/srv/auditmanager-bundles}"
 COPY_RECORD="${STAND_COPY_RECORD:-/srv/auditmanager-copy/record.json}"
 MAX_BYTES="${BUNDLE_MAX_BYTES:-12884901888}"
 MARGIN_BYTES="${BUNDLE_STAGING_MARGIN_BYTES:-2147483648}"
+WINDOW_SECONDS="${STAND_COPY_WINDOW_SECONDS:-43200}"
+REAL_DATA_MARKER="${COPY_RECORD%/*}/real_data"
+
+#: The services that write on their own; `copy-serve.sh` stops the same three.
+WRITERS=(web api worker)
 
 #: The only module `import`, `report` and `requeue` run, and where the bundle and the copy
 #: record appear inside its container.
@@ -138,18 +153,103 @@ require_stack() {
 # by the daemon as an EMPTY DIRECTORY rather than refused, so the importer would be handed
 # a directory where a record was promised. Whether the record is attested, open, recent
 # and unchanged is the importer's refusal (`W54-BUNDLE-01`) and `W54-STAND-COPY-01`'s
-# pre-check here; this guard only keeps the mount honest.
+# pre-check below (`require_record_admits_import`); this guard only keeps the mount honest.
 require_record() {
+    local record="$COPY_RECORD"
     # >>> guard: copy-record-present
-    case "$COPY_RECORD" in
+    case "$record" in
         /*) ;;
-        *) fc_refuse copy-record-present "STAND_COPY_RECORD is '$COPY_RECORD'; it must be an absolute path." ;;
+        *) fc_refuse copy-record-present "STAND_COPY_RECORD is '$record'; it must be an absolute path." ;;
     esac
-    if [ -L "$COPY_RECORD" ] || [ ! -f "$COPY_RECORD" ] || [ ! -r "$COPY_RECORD" ]; then
-        fc_refuse copy-record-present "there is no copy record at $COPY_RECORD." \
+    if [ -L "$record" ] || [ ! -f "$record" ] || [ ! -r "$record" ]; then
+        fc_refuse copy-record-present "there is no copy record at $record." \
             "the importer runs only after the one-off copy (R-88): dump-db, inventory-s3, fetch, attest."
     fi
     # <<< guard: copy-record-present
+}
+
+# The record is one `copy-serve.sh` wrote. Checked wherever the record is about to be
+# read or rewritten; a record nobody can read is never taken for "no record".
+require_record_readable() {
+    local record="$COPY_RECORD"
+    # >>> guard: copy-record-readable
+    if ! fc_record_valid "$record"; then
+        fc_refuse copy-record-readable "$record is not a copy record copy-serve.sh wrote. Nothing was read." \
+            "The copy key's status reads it; the owner inspects it."
+    fi
+    # <<< guard: copy-record-readable
+}
+
+# An import starts only under an open record that admits it, with every writer stopped.
+require_record_admits_import() {
+    local kind state now epoch writer ids running=()
+    require_record_readable
+    kind="$(fc_record_string "$COPY_RECORD" kind)"
+    state="$(fc_record_string "$COPY_RECORD" state)"
+
+    # >>> guard: copy-record-open
+    if [ "$state" != open ]; then
+        fc_refuse copy-record-open "the copy record $(fc_record_string "$COPY_RECORD" stamp) is closed." \
+            "Open one with the copy key: dump-db ... attest, or attest --test-data while R-110 allows it."
+    fi
+    # <<< guard: copy-record-open
+
+    # >>> guard: copy-record-attested
+    if { [ "$kind" = copy ] && [ "$(fc_record_value "$COPY_RECORD" attestation)" = null ]; } \
+        || { [ "$kind" = test_data_waiver ] && [ "$(fc_record_value "$COPY_RECORD" waiver)" = null ]; }; then
+        fc_refuse copy-record-attested "the open record is a $kind without its attestation." \
+            "The copy key's attest binds the dump and the restore report to it first."
+    fi
+    # <<< guard: copy-record-attested
+
+    # >>> guard: waiver-before-real-data
+    if [ "$kind" = test_data_waiver ] \
+        && { [ -e "$REAL_DATA_MARKER" ] || [ "$(fc_record_value "$COPY_RECORD" real_data_marker)" != false ]; }; then
+        fc_refuse waiver-before-real-data "a test_data_waiver is refused once the real_data marker exists ($REAL_DATA_MARKER)." \
+            "R-88 and R-93 apply in full from the first full copy (W54-FREEZE-01 amendment 2)."
+    fi
+    # <<< guard: waiver-before-real-data
+
+    now="$(date -u +%s)"
+    if [ "$kind" = copy ]; then
+        epoch="$(fc_epoch "$(fc_record_string "$COPY_RECORD" quiesced_at || true)" || echo 0)"
+        epoch=$(( epoch + WINDOW_SECONDS ))
+    else
+        epoch="$(fc_epoch "$(fc_json_member "$(fc_record_value "$COPY_RECORD" waiver)" expires_at || true)" || echo 0)"
+    fi
+    # >>> guard: copy-record-in-window
+    if [ "$now" -gt "$epoch" ]; then
+        fc_refuse copy-record-in-window "the open $kind $(fc_record_string "$COPY_RECORD" stamp) is past its window." \
+            "resume it with the copy key and open a new one."
+    fi
+    # <<< guard: copy-record-in-window
+
+    for writer in "${WRITERS[@]}"; do
+        if grep -q "^  $writer:[[:space:]]*\$" "$COMPOSE_FILE"; then
+            if ! ids="$(docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" ps --quiet "$writer" 2>/dev/null)" \
+                || [ -n "$ids" ]; then
+                running+=("$writer")
+            fi
+        fi
+    done
+    # >>> guard: writers-still-stopped
+    if [ "${#running[@]}" -gt 0 ]; then
+        fc_refuse writers-still-stopped "${running[*]} is running (or docker could not say), so the database is not quiesced." \
+            "W54-FREEZE-01 amendment 2: the writers stay stopped from the copy (or waiver) until resume."
+    fi
+    # <<< guard: writers-still-stopped
+}
+
+# `W54-PLAN.md` §3.5: an open record becomes an import record when a bundle is received
+# or an import starts under it. No record, or a closed one, is left alone.
+mark_record_import() {
+    [ -e "$COPY_RECORD" ] || return 0
+    fc_record_valid "$COPY_RECORD" || return 0
+    [ "$(fc_record_string "$COPY_RECORD" state)" = open ] || return 0
+    [ "$(fc_record_string "$COPY_RECORD" purpose)" != import ] || return 0
+    fc_record_set "$COPY_RECORD" purpose '"import"'
+    fc_record_set "$COPY_RECORD" target_sha null
+    echo "receive-bundle.sh: the open copy record $(fc_record_string "$COPY_RECORD" stamp) is now an import record." >&2
 }
 
 # Takes the import lock on fd 9 and keeps it until this process -- and every child that
@@ -213,6 +313,10 @@ verb_receive() {
     fi
     # <<< guard: receive-lock-free
 
+    if [ -e "$COPY_RECORD" ] || [ -L "$COPY_RECORD" ]; then
+        require_record_readable
+    fi
+
     # >>> guard: staging-has-room
     avail="$(df -B1 --output=avail -- "$STAGING" | tail -n 1 | tr -d ' ')"
     need=$(( 2 * size + MARGIN_BYTES ))
@@ -250,6 +354,7 @@ verb_receive() {
     printf 'received_at=%s\nsize=%s\nfiles=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$size" \
         "$(grep -c . "$BUNDLES/$key/SHA256SUMS")" > "$LOGS/$key.received"
     echo "receive-bundle.sh: received $key ($size bytes, $(grep -c . "$BUNDLES/$key/SHA256SUMS") files verified)."
+    mark_record_import
 }
 
 # The tar is listed, never trusted, before a byte of it is extracted: every member is a
@@ -324,8 +429,10 @@ verb_import() {
     require_bundle "$key"
     require_stack
     require_record
+    require_record_admits_import
     ensure_layout
     take_import_lock
+    mark_record_import
     bundle_module import "$key"
 
     rm -f -- "$LOGS/$key.import.exit"
@@ -345,6 +452,7 @@ verb_report() {
     require_bundle "$key"
     require_stack
     require_record
+    require_record_readable
     take_import_lock
     bundle_module report "$key"
     "${MODULE_COMMAND[@]}" < /dev/null
