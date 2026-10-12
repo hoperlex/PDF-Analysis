@@ -15,7 +15,9 @@
 #                          state, the last lines of each import log, this script's SHA-256
 #   import <KEY>           start the importer DETACHED under the import lock; re-entrant
 #                          (run it again until it exits 0); `status` shows its progress
-#   report <KEY>           the importer's read-only report, synchronously, exit passed on
+#   report <KEY>           the importer's read-only report, synchronously, exit passed on;
+#                          after a match that follows a successful import it removes
+#                          bundles/<KEY>/objects/ (`W54-BUNDLE-01`, plan §3.5 step 5)
 #   requeue <KEY>          custody `requeue` of that bundle's poisoned admissions
 #
 # `import`, `report` and `requeue` each run ONE fixed command -- the api image's
@@ -50,7 +52,8 @@
 #   incoming/<KEY>/      one receive in progress: bundle.tar, then tree/<KEY>/. Removed on
 #                        any refusal or failure, and the tar removed after extraction
 #   bundles/<KEY>/       a received bundle; it is here only if every rule held
-#   logs/                <KEY>.received, <KEY>.import.{started,log,exit}
+#   logs/                <KEY>.received, <KEY>.import.{started,log,exit},
+#                        <KEY>.report, <KEY>.discarded
 #   receive.lock         one receive at a time
 #   import.lock          held for the whole of an import, report or requeue. `deploy.sh`
 #                        (`W54-STAND-COPY-01`) refuses while it is held
@@ -446,16 +449,36 @@ verb_import() {
     echo "receive-bundle.sh: import of $key started (detached, pid $!). Follow it with: status"
 }
 
+# `W54-BUNDLE-01` -- the importer's step 5 (`W54-PLAN.md` §3.5: "after `report` matches,
+# delete the objects, keep manifest and report"). The container reads the bundle through a
+# read-only mount, so the deletion is here, inside staging, under the import lock: only
+# when this report exited 0 AND the last import of the same <KEY> exited 0. It removes
+# `bundles/<KEY>/objects/` alone; the manifest, SHA256SUMS, rows and build stay, the
+# report's output is kept as logs/<KEY>.report and the act as logs/<KEY>.discarded.
+# Not a refusal and not a verb: a report that does not match, or follows no successful
+# import, deletes nothing and is otherwise the same report.
 verb_report() {
-    local key="$1"
+    local key="$1" status=0 objects
     require_staging
     require_bundle "$key"
     require_stack
     require_record
     require_record_readable
+    ensure_layout
     take_import_lock
     bundle_module report "$key"
-    "${MODULE_COMMAND[@]}" < /dev/null
+    "${MODULE_COMMAND[@]}" < /dev/null | tee "$LOGS/$key.report.tmp" || status=$?
+    mv -f -- "$LOGS/$key.report.tmp" "$LOGS/$key.report"
+    objects="$BUNDLES/$key/objects"
+    if [ "$status" -eq 0 ] && [ -f "$LOGS/$key.import.exit" ] \
+        && [ "$(cat -- "$LOGS/$key.import.exit")" = 0 ] \
+        && [ -d "$objects" ] && [ ! -L "$objects" ]; then
+        rm -rf -- "$objects"
+        printf 'discarded_at=%s\nreport_sha256=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            "$(sha256sum < "$LOGS/$key.report" | cut -c1-64)" > "$LOGS/$key.discarded"
+        echo "receive-bundle.sh: report matched after a successful import; removed $key/objects/ (manifest, rows, build and logs/$key.report kept)." >&2
+    fi
+    return "$status"
 }
 
 verb_requeue() {

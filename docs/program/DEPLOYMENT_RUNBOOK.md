@@ -825,12 +825,59 @@ the SHA-256 of the bundle's `SHA256SUMS`. The exact grammar is in
 | `receive <KEY> <size>` | `infra/deploy/push-bundle.sh --host <user@stand> --identity <key> <bundle dir>` | refuses on size, existing bundle, a running receive or free space **before reading a byte**; then reads exactly `<size>` bytes, lists the tar before extracting it, and keeps the tree only if `SHA256SUMS` matches the name, the files are exactly the listed ones and every file re-hashes. A refusal removes `incoming/<KEY>/` and nothing else |
 | `status` | `ssh -i <key> -o IdentitiesOnly=yes <user@stand> status` | read-only: staging and its free bytes, the import lock, each bundle and its import state with the log tail, and the script's SHA-256 |
 | `import <KEY>` | `ssh … import <KEY>` | starts `python -m auditmanager.norms.bundle import /bundles/<KEY> --copy-record …` **detached** in a one-shot `api` container, under the import lock. Re-run it until `status` shows `import: exited 0`. A second `import`, `report` or `requeue` is refused while it runs |
-| `report <KEY>` | `ssh … report <KEY>` | the module's `report`, run synchronously. Its exit status is passed on, and 0 means a full match |
+| `report <KEY>` | `ssh … report <KEY>` | the module's `report`, run synchronously. Its exit status is passed on, and 0 means a full match. Its output is kept as `logs/<KEY>.report`; when it exits 0 **and** the last `import` of the same bundle exited 0, it then removes `bundles/<KEY>/objects/` (below) |
 | `requeue <KEY>` | `ssh … requeue <KEY>` | the module's `requeue` of that bundle's poisoned admissions. Run `import` again afterwards |
 
 `import`, `report` and `requeue` each run **one fixed command**. The bundle is mounted
 read-only, and the copy record is mounted read-only for `import` and `report`. The only thing
 the client supplies is the validated `<KEY>`.
+
+### The importer and `report` (`W54-BUNDLE-01`)
+
+The module behind `import`, `report` and `requeue` is `python -m auditmanager.norms.bundle`
+(`src/auditmanager/norms/README.md`). The bundle it reads was written on this host by
+`… bundle export` and checked with `… bundle verify` before `push-bundle.sh` sent it.
+
+**`import`** works in `W54-PLAN.md` §3.5's order and can be re-run until it exits 0:
+
+1. it verifies the bundle (name, `SHA256SUMS`, every file, the manifest), that the manifest
+   declares a complete build, the database at the code's migration head, and the copy record:
+   an open attested `import` copy inside 12 h of its quiesce, or an open unexpired
+   `test_data_waiver` whose `real_data_marker` is `false`; in both cases the fingerprint the
+   importer recomputes must equal the record's. It refuses a `rejected` manifest Blob
+   (`D-143`), a snapshot conflict, and — on the first run — a manifest Blob already held by a
+   client row;
+2. it admits every custody slot and dispatches until idle. An admission still `pending`
+   (a store outage: due again in 30 s … 2 h) or `poisoned` (five failed tries) ends the run
+   with exit **75**: nothing else was written, the bundle is kept. Run `import` again later;
+   for poisoned admissions run `requeue <KEY>` first;
+3. in one transaction it inserts the rows with the ids the promotion database minted and
+   publishes the bindings; then it loads the build; then it runs the same comparison as
+   `report` and exits 0 only on a full match (1 otherwise).
+
+`status` shows the run's exit in `import: exited <n>` and the last log lines.
+
+| Exit | Meaning | What to do |
+|---|---|---|
+| 0 | imported and reported a full match | `report <KEY>` (P4 step 5), then `resume <STAMP>` with the copy key |
+| 1 | imported, but the report differs | read `logs/<KEY>.import.log`; do not `resume` or designate; the owner decides |
+| 2 | refused: `bundle: REFUSED [<reason>]` in the log | the reason names the rule. `copy_record_*`, `waiver_after_real_data`, `fingerprint_drifted`: open a new copy or waiver with the copy key. `build_absent`, `bundle_*`, `manifest_invalid`: export the bundle again here. `manifest_blob_rejected`, `manifest_blob_held_outside_custody`, `snapshot_conflict`: an owner decision. `blob_store_unavailable`: the deployed image lacks the storage export (`W54-BUNDLE-01` §5) |
+| 75 | not finished; the bundle is kept | `import <KEY>` again later; `requeue <KEY>` first if `poisoned` is non-zero |
+
+**`report`** is read-only. It prints, and compares with the manifest: the content key, the
+recomputed row digest, documents, paragraphs, unreliable paragraphs, chunks, windows and the
+build digest; admissions confirmed, pending and poisoned; the binding count and digest; the
+manifest Blobs' count, bytes, `available` and `rejected` counts. It compares the client side
+with the open copy record: the record still open, every client table's rows and digest, the
+fingerprint, and the `rejected` Blobs outside the manifest. The other Blobs' count and bytes
+are printed, not compared. Exit 0 only on a full match.
+
+**The objects go after the match (§3.5 step 5).** The container cannot delete through its
+read-only mount, so the inbound key's `report` verb does it: when the report exits 0 and
+`logs/<KEY>.import.exit` holds 0, it removes `bundles/<KEY>/objects/` and nothing else, keeps
+the manifest, `SHA256SUMS`, rows and build, and writes `logs/<KEY>.report` and
+`logs/<KEY>.discarded`. A later `import` of the same bundle is then a no-op that needs no
+object; `import` refuses `objects_discarded` if anything was still unconfirmed.
 
 ### Reading a refusal
 
@@ -858,10 +905,9 @@ first.
 
 ### What it does not do
 
-* It does not delete a staged bundle. A bundle stays under `bundles/<KEY>/` until the owner
-  removes it. The importer's step 5 (delete objects after `report` matches) needs write
-  access, which this read-only mount does not give; `docs/program/W54-STAND-COPY-01.md` §4
-  proposes the verb that does it.
+* It does not delete a staged bundle as a whole. After a matched `report` that follows a
+  successful `import`, the `report` verb removes `bundles/<KEY>/objects/` (above); the rest of
+  the bundle stays under `bundles/<KEY>/` until the owner removes it.
 * It does not open, attest or close the copy record; that is the copy key (§13). It does
   read it before an `import` (the guards above), and a `receive` or an `import` under an open
   record makes it an import record, as `W54-PLAN.md` §3.5 says.
