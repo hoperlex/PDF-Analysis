@@ -20,7 +20,12 @@ from auditmanager.analysis.stages.extraction import extract_document
 from auditmanager.analysis.text import AR_TEXT_PROFILE, build_request, load_text_layer
 from auditmanager.exports import export_run_csv
 from auditmanager.findings import published_finding_count, published_findings
-from auditmanager.runs import PC01_STAGES, execute_run, start_audit_run
+from auditmanager.runs import (
+    PC01_STAGES,
+    current_norms_snapshot,
+    execute_run,
+    start_audit_run,
+)
 
 RECORDED_MODEL_ID = "claude-opus-5"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -173,8 +178,8 @@ def test_the_frozen_input_digest_is_recorded_before_execution(
     )
     before = helpers.audit_run_row(session, started.run_id)
     assert before["state"] == "created"
-    assert before["norms_snapshot_id"] is None, (
-        "PC-01 pins no norms snapshot; the OD-24 note records that clause unevaluated"
+    assert before["norms_snapshot_id"] == current_norms_snapshot(session), (
+        "W55A-PIN-01: a new run pins the current norms snapshot, NULL while none is current"
     )
     assert len(before["frozen_input_digest"]) == 64
 

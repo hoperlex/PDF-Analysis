@@ -361,8 +361,11 @@ class RunRepository:
     ) -> RunRow:
         """Insert the run in ``created``. The frozen set is written once, here.
 
-        A fresh PC-01 run passes the default NULL. Re-audit preserves a source's
-        already frozen snapshot identity without consulting or changing it.
+        ``norms_snapshot_id`` is the snapshot the creating command pinned
+        (`W55A-PIN-01`): ``start_audit_run`` and ``reaudit_run`` read the current one in
+        the same transaction and pass it, NULL while none is current. This method
+        consults nothing; it writes what it is given, and the default NULL is only for
+        callers that build rows outside those two commands.
         """
         assert_initial(self.topology(session), RUN_MACHINE, INITIAL_STATE)
         try:

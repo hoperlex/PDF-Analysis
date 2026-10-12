@@ -38,9 +38,11 @@ UNEVALUATED_GUARDS: Final[tuple[UnevaluatedGuard, ...]] = (
         transition="created -> queued",
         clause="the NormsSnapshot clause of the reference-resolution guard",
         reason=(
-            "PC-01 pins no norms snapshot; audit_run.norms_snapshot_id is written NULL "
-            "and read by no PC-01 path. The input-manifest, AnalysisProfile and "
-            "PromptBundle clauses of this same guard ARE evaluated."
+            "a run pins the current norms snapshot at creation (W55A-PIN-01), so a "
+            "pinned snapshot resolves by construction, but a NULL pin -- written while "
+            "no snapshot is current -- is admitted and no stage reads the pin before "
+            "W57 (CD-6). The input-manifest, AnalysisProfile and PromptBundle clauses "
+            "of this same guard ARE evaluated."
         ),
     ),
     UnevaluatedGuard(

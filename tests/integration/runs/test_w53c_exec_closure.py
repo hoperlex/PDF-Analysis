@@ -143,6 +143,8 @@ def test_reaudit_records_the_current_configuration_not_the_source(
         blob_ids={helpers.MANIFEST_ROLE_SOURCE: seeded.source_blob_id},
         analysis_profile_id=profile,
         prompt_bundle_id=bundle,
+        # `W55A-PIN-01`: the re-audit pins whatever is current in this database.
+        norms_snapshot_id=child.norms_snapshot_id,
     )
     assert child.frozen_input_digest != source.frozen_input_digest
     assert child.version_uid == source.version_uid
