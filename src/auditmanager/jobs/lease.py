@@ -11,7 +11,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.jobs.repository import AttemptAuthority, JobRepository
 
-LEASE_SECONDS = 60
+# The lease length is not a Python constant: PostgreSQL stamps it, as the 60-second
+# ``lease.expires_at`` default of migration 0017 and the extension in
+# ``repository._HEARTBEAT``, so a lease is always measured on database time. Three
+# heartbeats fit inside one lease.
 HEARTBEAT_SECONDS = 20
 ATTEMPT_WATCHDOG_SECONDS = 900
 

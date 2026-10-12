@@ -11,8 +11,11 @@ Durable local authority
 -----------------------
 W48 gives each accepted run one local ``Job``, current ``Attempt``, lease and opaque
 execution token before its first external effect. Provider-call retries remain a bounded
-loop *inside* that execution Attempt. Remote dispatch, heartbeat/failover, run-level
-resume and outbox delivery are still absent.
+loop *inside* that execution Attempt. W53 adds the durable PostgreSQL dispatcher, the
+lease heartbeat and lease-expiry recovery: a lost Attempt is fenced and the run is
+executed again from its first stage only when no provider effect can have spent, and
+cancellation, re-audit, pause and priority are commands. Remote dispatch and outbox
+delivery are still absent.
 
 There is also **no ``succeeded`` run state**: the success terminal is ``published``, and
 ``succeeded`` is a *stage* status. :mod:`auditmanager.runs.scope` records, as data, every

@@ -16,7 +16,7 @@ from auditmanager.bootstrap.adapters import ExecutionAdapter
 from auditmanager.api.schemas.common import encode_cursor
 from auditmanager.analysis.text import ProviderMode
 from auditmanager.jobs.public import JobRepository, set_execution_paused
-from auditmanager.runs.commands import cancel_audit_run, reaudit_run
+from auditmanager.runs.commands import cancel_audit_run, frozen_input_digest, reaudit_run
 from auditmanager.runs import execute_run
 from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -48,7 +48,7 @@ def _key() -> str:
     return "w53-exec-" + uuid4().hex
 
 
-def test_reaudit_copies_nonnull_frozen_snapshot_and_replays_once(
+def test_reaudit_copies_nonnull_norms_snapshot_and_replays_once(
     session, blob_store, helpers
 ):
     seeded = helpers.seed_version(session, blob_store)
@@ -61,26 +61,36 @@ def test_reaudit_copies_nonnull_frozen_snapshot_and_replays_once(
     ), {"snapshot": snapshot, "content_key": content_key, "digest": "b" * 64})
     source_id = _run(session, seeded, snapshot=snapshot, terminal=True)
     key = _key()
+    # `R-82`: the deployment's configuration, here the same profile and bundle as the
+    # source, so the only digest difference would be a copied placeholder.
+    configuration = {
+        "analysis_profile_id": seeded.analysis_profile_id,
+        "prompt_bundle_id": seeded.prompt_bundle_id,
+        "provider_mode": "recorded",
+    }
     first = reaudit_run(
         session, source_run_id=source_id, roles=frozenset({"expert"}),
-        idempotency_key=key,
+        idempotency_key=key, **configuration,
     )
     replay = reaudit_run(
         session, source_run_id=source_id, roles=frozenset({"expert"}),
-        idempotency_key=key,
+        idempotency_key=key, **configuration,
     )
     assert replay.replayed is True and replay.run_id == first.run_id
     child = RunRepository().get(session, first.run_id)
     assert child.norms_snapshot_id == snapshot
-    assert child.frozen_input_digest == "a" * 64
+    assert child.frozen_input_digest == frozen_input_digest(
+        version_uid=seeded.version_uid,
+        blob_ids={helpers.MANIFEST_ROLE_SOURCE: seeded.source_blob_id},
+        analysis_profile_id=seeded.analysis_profile_id,
+        prompt_bundle_id=seeded.prompt_bundle_id,
+    )
     assert child.state == "queued"
-    assert session.execute(text(
-        "SELECT reaudit_of_run_id FROM audit_run WHERE run_id = :run_id"
-    ), {"run_id": first.run_id}).scalar_one() == source_id
+    assert child.reaudit_of_run_id == source_id
     with pytest.raises(DomainError) as busy:
         reaudit_run(
             session, source_run_id=source_id, roles=frozenset({"expert"}),
-            idempotency_key=_key(),
+            idempotency_key=_key(), **configuration,
         )
     assert busy.value.code is ErrorCode.CONFLICT
 

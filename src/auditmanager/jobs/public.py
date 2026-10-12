@@ -8,6 +8,7 @@ from auditmanager.jobs.events import append_execution_event
 from auditmanager.jobs.commands import set_execution_paused, set_job_priority
 from auditmanager.jobs.repository import (
     AttemptAuthority,
+    ExecutionNotClaimed,
     JobRepository,
     SettledProviderEffect,
     UnresolvedProviderEffect,
@@ -26,6 +27,7 @@ def stop_attempt_lease_heartbeat() -> None:
 
 __all__ = [
     "AttemptAuthority",
+    "ExecutionNotClaimed",
     "JobRepository",
     "SettledProviderEffect",
     "UnresolvedProviderEffect",

@@ -2,6 +2,7 @@
 
 from .repository import (
     AttemptAuthority,
+    ExecutionNotClaimed,
     JobRepository,
     SettledProviderEffect,
     UnresolvedProviderEffect,
@@ -9,6 +10,7 @@ from .repository import (
 
 __all__ = [
     "AttemptAuthority",
+    "ExecutionNotClaimed",
     "JobRepository",
     "SettledProviderEffect",
     "UnresolvedProviderEffect",
