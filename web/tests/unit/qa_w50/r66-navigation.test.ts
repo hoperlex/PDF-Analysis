@@ -136,7 +136,8 @@ const RULED_LINKS: [string, string][] = [['/', 'Главная'], ...RULING.flat
 
 describe('R-66: the menu’s groups and items equal the ruling’s, in order', () => {
   it('as data: non-admin sessions see exactly the R-66 groups and their order', () => {
-    for (const roles of [['expert'], []] as const) {
+    // `R-80`: an empty role set is not among them — it sees Главная alone (below).
+    for (const roles of [['expert']] as const) {
       const navigation = buildNavigation({ roles, isDefaultCredential: false, profileComplete: true });
       expect(navigation.home, `roles [${roles.join(',')}]`).toEqual({ address: '/', label: 'Главная' });
       expect(
@@ -182,8 +183,8 @@ describe('R-66: the menu’s groups and items equal the ruling’s, in order', (
 });
 
 describe('R-66: /optimisation is in no menu group, registered in hidden, and opens', () => {
-  it('is registered: group hidden, not in the menu, session/any', () => {
-    expect(screenAt('/optimisation')).toMatchObject({ group: 'hidden', inMenu: false, access: 'session', roles: 'any' });
+  it('is registered: group hidden, not in the menu, session/any-role', () => {
+    expect(screenAt('/optimisation')).toMatchObject({ group: 'hidden', inMenu: false, access: 'session', roles: 'any-role' });
   });
 
   it('is absent from every group, as data and in the rendered frame', () => {
@@ -195,9 +196,9 @@ describe('R-66: /optimisation is in no menu group, registered in hidden, and ope
     expect(renderFrame(frameSession())).not.toContain('href="/optimisation"');
   });
 
-  it('a complete-profile session opens it: the guard returns and the route renders its screen', async () => {
+  it('a complete session holding a role opens it: the guard returns and the route renders its screen', async () => {
     forgetEverySession();
-    jar.value = openSession({ ...COMPLETE, roles: [] }, 'qa-credential', 3600);
+    jar.value = openSession({ ...COMPLETE, roles: ['expert'] }, 'qa-credential', 3600);
     const { default: OptimisationRoute } = await import('@/app/optimisation/page');
     const element = await OptimisationRoute({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
     expect(isValidElement(element) && element.type === OptimisationPage).toBe(true);
@@ -223,13 +224,13 @@ describe('R-66: each of the three remaining stubs is an honest RoutePlaceholder'
 
   for (const stub of STUBS) {
     describe(stub.address, () => {
-      it('is registered session / any, in the ruled group, in the menu, under the ruled label', () => {
+      it('is registered session / any-role, in the ruled group, in the menu, under the ruled label', () => {
         expect(screenAt(stub.address)).toEqual({
           address: stub.address,
           label: stub.label,
           group: stub.group,
           access: 'session',
-          roles: 'any',
+          roles: 'any-role',
           inMenu: true,
         });
       });
@@ -309,9 +310,11 @@ describe('the frame’s menu per kind of visitor', () => {
     }
   });
 
-  it('a complete profile with an empty role set: the whole ruled menu, and the account menu', () => {
+  it('R-80: a complete profile with an empty role set: Главная alone, and the account menu', () => {
     const markup = renderFrame(frameSession({ roles: [] }));
-    expect(readMenu(region(markup, 'data-nav-state="row"')).links).toEqual(RULED_LINKS);
+    expect(readMenu(region(markup, 'data-nav-state="row"')).links).toEqual([['/', 'Главная']]);
+    expect(readMenu(region(markup, 'data-nav-state="row"')).groups).toEqual([]);
+    expect(markup).toContain('aria-haspopup="menu"');
     expect(markup).toContain('Роли не назначены.');
   });
 

@@ -18,6 +18,27 @@ export type UserCommandResult =
   | { readonly kind: 'account'; readonly account: Account }
   | { readonly kind: 'purged' };
 
+/** The two router calls the controls make after a command — `next/navigation`'s, narrowed. */
+export interface UserCommandRouter {
+  refresh(): void;
+  push(href: string): void;
+}
+
+/**
+ * What follows a successful command (`C-20`): a purge leaves the deleted account's screen for
+ * the list; a change to the signed-in account re-renders the server components, so the
+ * frame's name and menu follow it (the BFF refreshes the session's subject on that write).
+ */
+export function followUserCommand(
+  router: UserCommandRouter,
+  result: UserCommandResult,
+  isSelf: boolean,
+  usersAddress: string,
+): void {
+  if (result.kind === 'purged') router.push(usersAddress);
+  else if (isSelf) router.refresh();
+}
+
 export function refreshManagedUser(queryClient: QueryClient, account: Account): void {
   queryClient.setQueryData(queryKeys.users.detail(account.user_uid), account);
   void queryClient.invalidateQueries({ queryKey: queryKeys.users.all() });

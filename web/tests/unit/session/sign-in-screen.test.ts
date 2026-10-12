@@ -11,7 +11,9 @@
  * The other half is structural. The password input must be plain HTML: no `'use client'`
  * anywhere in the slice, so the field is never a React state, never a value in a bundle and
  * never something a later dependency can read. That is asserted against the source text,
- * because it is a property of the files rather than of the markup.
+ * because it is a property of the files rather than of the markup. The one island the form
+ * mounts, `shared/ui/submit-lock.tsx` (`C-22`), is held to reading no field by
+ * `submit-lock.test.ts`.
  */
 
 import { readFileSync } from 'node:fs';
@@ -22,7 +24,8 @@ import { describe, expect, it } from 'vitest';
 
 import { SignInPage } from '@/_pages/sign-in';
 import type { SignInRefusal } from '@/features/sign-in';
-import { SESSION_CLOSE_PATH, SESSION_OPEN_PATH, SIGN_IN_REFUSALS, signInRefusalMessage } from '@/features/sign-in';
+import { SESSION_OPEN_PATH, SIGN_IN_REFUSALS, signInRefusalMessage } from '@/features/sign-in';
+import { REGISTER_SCREEN } from '@/shared/config/screen-registry';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
 import { render } from '../review/fixtures';
@@ -30,7 +33,6 @@ import { render } from '../review/fixtures';
 const SLICE_FILES = [
   'src/features/sign-in/model/exchange.ts',
   'src/features/sign-in/ui/sign-in-form.tsx',
-  'src/features/sign-in/ui/sign-out-form.tsx',
   'src/features/sign-in/index.ts',
   'src/_pages/sign-in/ui/sign-in-page.tsx',
   'src/_pages/sign-in/index.ts',
@@ -95,15 +97,26 @@ describe('the screen offers a credentials form and nothing that holds a credenti
   });
 });
 
-describe('the signed-in shape offers the way out, on the server', () => {
-  const markup = render(createElement(SignInPage, { login: 'проверяющий' }));
+describe('the screen has one shape, and offers the way to register (C-21, C-25)', () => {
+  it('renders the credentials form whatever login the route passes: the guard sends a session away', () => {
+    // Decision five of the guard redirects a session on `/login` to `/`, so the signed-in
+    // shape this screen used to carry was unreachable and is gone, with its sign-out form.
+    const markup = render(createElement(SignInPage, { login: 'проверяющий' }));
+    expect(markup).toContain('name="password"');
+    expect(markup).not.toContain('data-session-login');
+    expect(markup).not.toContain('Выйти');
+  });
 
-  it('posts the logout to the address that ends the session', () => {
-    expect(markup).toContain(`action="${SESSION_CLOSE_PATH}"`);
-    expect(markup).toContain('Выйти');
-    expect(markup).toContain('data-session-login="проверяющий"');
-    // And the credentials form is gone: there is nothing to sign into while signed in.
-    expect(markup).not.toContain('name="password"');
+  it('links «Подать заявку на доступ» to the registration screen the registry names', () => {
+    const markup = render(createElement(SignInPage, {}));
+    expect(REGISTER_SCREEN).toBe('/register');
+    expect(markup).toMatch(new RegExp(`<a href="${REGISTER_SCREEN}"[^>]*>Подать заявку на доступ</a>`));
+  });
+
+  it('mounts the submit lock inside the credentials form', () => {
+    const markup = render(createElement(SignInPage, {}));
+    const form = /<form[^>]*>[\s\S]*?<\/form>/.exec(markup)?.[0] ?? '';
+    expect(form).toContain('data-submit-lock=""');
   });
 });
 

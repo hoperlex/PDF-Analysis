@@ -9,8 +9,8 @@
  * (`R-60` — managing requests is an administrator's operation). A count and nothing else: no
  * applicant's name, e-mail or reason is selected out of the answer.
  *
- * `href` is the registration screen when the registry has its row, and `null` until then
- * (`registrationsScreenLink`); in `W50` there is no row, so the count stands without a link.
+ * `href` is the registration screen when the registry has its row, and `null` otherwise
+ * (`registrationsScreenLink`), in which case the count stands without a link.
  */
 
 import Link from 'next/link';
@@ -27,7 +27,7 @@ import {
 import styles from './home-tiles.module.css';
 
 export interface PendingRegistrationsTileProps {
-  /** The registration screen's address, or `null` while the registry has no row for it. */
+  /** The registration screen's address, or `null` when the registry has no row for it. */
   readonly href: string | null;
 }
 

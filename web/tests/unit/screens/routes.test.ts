@@ -157,12 +157,14 @@ describe('each route delegates to its screen and to no other', () => {
     expect(element.props).toEqual({ projectUid: A_PROJECT, versionUid: A_VERSION });
   });
 
-  it('/admin/users/{user_uid} delegates the opaque identity unchanged', async () => {
+  it('/admin/users/{user_uid} delegates the opaque identity unchanged, with the signed-in login', async () => {
     jar.value = openSession({ ...SIGNED_IN, roles: ['admin'] }, 'a-credential', 3600);
     const element = await AdminUserRoute({ params: Promise.resolve({ user_uid: A_USER }), ...NO_QUERY });
     expect(element.type).toBe(AdminUserPage);
-    expect(element.props).toEqual({ userUid: A_USER });
+    // `C-20`: the login lets the card tell a change to one's own account, which refreshes the frame.
+    expect(element.props).toEqual({ userUid: A_USER, signedInLogin: SIGNED_IN.login });
     expect(routes.user(A_USER)).toBe(`/admin/users/${A_USER}`);
+    expect(routes.users()).toBe('/admin/users');
   });
 
   it('comparison is mounted under the version, not under a run', () => {
@@ -256,6 +258,23 @@ describe('a malformed address is a 404, not a screen reporting a failure', () =>
     await expect(
       VersionRoute({ params: Promise.resolve({ project_uid: BAD, version_uid: A_VERSION }), ...NO_QUERY }),
     ).rejects.toMatchObject({ digest: expect.stringContaining('404') });
+  });
+
+  it('C-24: a malformed account address 404s like a project one, after the guard', async () => {
+    jar.value = openSession({ ...SIGNED_IN, roles: ['admin'] }, 'a-credential', 3600);
+    for (const bad of [BAD, 'usr_short', `prj_${A_USER.slice(4)}`]) {
+      await expect(
+        AdminUserRoute({ params: Promise.resolve({ user_uid: bad }), ...NO_QUERY }),
+      ).rejects.toMatchObject({ digest: 'NEXT_HTTP_ERROR_FALLBACK;404' });
+    }
+    await expect(
+      AdminUserRoute({ params: Promise.resolve({ user_uid: A_USER }), ...NO_QUERY }),
+    ).resolves.toBeDefined();
+    // The guard still decides first: a session without admin is sent to /403, not told 404.
+    jar.value = openSession({ ...SIGNED_IN, roles: ['expert'] }, 'a-credential', 3600);
+    await expect(
+      AdminUserRoute({ params: Promise.resolve({ user_uid: BAD }), ...NO_QUERY }),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
   });
 
   it('a well-formed address is NOT a 404 — the guard is not simply always red', async () => {
@@ -572,6 +591,7 @@ describe('every screen address is built once and matches a route file on disk', 
       run: routes.run(PROJECT_UID, RUN_ID),
       review: routes.review(PROJECT_UID, RUN_ID),
       user: routes.user(A_USER),
+      users: routes.users(),
     };
     // The names are checked against the module rather than trusted, so a builder added
     // without a line here is red rather than silently unlinked.

@@ -28,6 +28,7 @@ const PUBLIC = row('public');
 const OPEN_TO_DEFAULT = row('open-to-default-credential');
 const ANY_SESSION = row('session');
 const ADMIN_ROW = row('session', ['admin']);
+const ANY_ROLE = row('session', 'any-role');
 
 describe('the four decisions, in order', () => {
   it('1. a guest opens public screens and is sent to sign in from every other', () => {
@@ -61,10 +62,23 @@ describe('the four decisions, in order', () => {
     expect(screenDecision(ANY_SESSION, NO_ROLES)).toBe('open');
   });
 
+  it('R-80: an any-role screen needs at least one role, and an empty set is refused', () => {
+    expect(screenDecision(ANY_ROLE, EXPERT)).toBe('open');
+    expect(screenDecision(ANY_ROLE, ADMIN_ONLY)).toBe('open');
+    expect(screenDecision(ANY_ROLE, ADMIN_AND_EXPERT)).toBe('open');
+    expect(screenDecision(ANY_ROLE, NO_ROLES)).toBe('forbidden');
+    // The earlier decisions still come first.
+    expect(screenDecision(ANY_ROLE, null)).toBe('sign-in');
+    expect(screenDecision(ANY_ROLE, DEFAULT_CREDENTIAL)).toBe('change-password');
+    expect(screenDecision(ANY_ROLE, INCOMPLETE_PROFILE)).toBe('complete-profile');
+  });
+
   it('an unknown role value matches no row and is never read as any', () => {
     const unknownOnly = { ...UNKNOWN_ROLE, roles: ['auditor'] };
     expect(screenDecision(ADMIN_ROW, unknownOnly)).toBe('forbidden');
     expect(screenDecision(ANY_SESSION, unknownOnly)).toBe('open');
+    // Nor is it "a role" for an any-role screen: an account holding only it holds none.
+    expect(screenDecision(ANY_ROLE, unknownOnly)).toBe('forbidden');
     expect(screenDecision(row('session', ['expert']), UNKNOWN_ROLE)).toBe('open');
   });
 
@@ -81,9 +95,20 @@ describe('the four decisions, in order', () => {
 
 describe('the live registry', () => {
   it('has exactly three administrator-only rows', () => {
-    expect(SCREEN_REGISTRY.filter((screen) => screen.roles !== 'any').map((screen) => screen.address)).toEqual([
+    expect(SCREEN_REGISTRY.filter((screen) => Array.isArray(screen.roles)).map((screen) => screen.address)).toEqual([
       '/admin/users', '/admin/users/[user_uid]', '/admin/registrations',
     ]);
+  });
+
+  it('R-80: only home, the account screens and the public ones open without a role', () => {
+    expect(SCREEN_REGISTRY.filter((screen) => screen.roles === 'any').map((screen) => screen.address)).toEqual([
+      '/', '/login', '/register', '/register/submitted', '/account', '/account/password', '/403',
+    ]);
+    for (const screen of SCREEN_REGISTRY.filter((entry) => entry.roles === 'any-role')) {
+      expect(screen.access, screen.address).toBe('session');
+      expect(screenDecision(screen, NO_ROLES), screen.address).toBe('forbidden');
+      expect(screenDecision(screen, EXPERT), screen.address).toBe('open');
+    }
   });
 
   it('admits admins to every menu row, and an expert only to non-admin rows', () => {
@@ -92,7 +117,8 @@ describe('the live registry', () => {
     for (const screen of menu) {
       expect(screenDecision(screen, ADMIN_ONLY), screen.address).toBe('open');
       expect(screenDecision(screen, EXPERT), screen.address).toBe(screen.group === 'admin' ? 'forbidden' : 'open');
-      expect(screenDecision(screen, NO_ROLES), screen.address).toBe(screen.group === 'admin' ? 'forbidden' : 'open');
+      // `R-80`: a role-less account opens only Главная from the menu.
+      expect(screenDecision(screen, NO_ROLES), screen.address).toBe(screen.address === '/' ? 'open' : 'forbidden');
       expect(screenDecision(screen, null), screen.address).toBe('sign-in');
       expect(screenDecision(screen, DEFAULT_CREDENTIAL), screen.address).toBe('change-password');
     }

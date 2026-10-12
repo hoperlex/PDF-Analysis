@@ -1,29 +1,49 @@
 'use client';
 
+/**
+ * The administrator's controls for one account (`W51`).
+ *
+ * Two of them take effect at once and cannot be taken back by pressing again, so both ask
+ * first (`C-24`): «Архивировать» refuses every credential the account holds from its next
+ * request, and «Удалить навсегда» removes it. Each shows a confirmation group with its own
+ * «Подтвердить …» and «Отмена»; nothing is sent until the confirmation is pressed.
+ *
+ * When the account is the signed-in one (`isSelf`), a successful change also re-renders the
+ * server components (`router.refresh()`, `C-20`), so the frame's name and menu — read once
+ * from the session by the root layout — follow the change instead of staying stale.
+ */
+
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 
 import type { Account } from '@/shared/api';
 import { ROLE_VALUES } from '@/shared/api';
+import { routes } from '@/shared/lib';
 import { roleLabels } from '@/entities/account';
 import { userFailure } from '@/entities/user';
 import { ErrorState } from '@/shared/ui';
 
 import type { UserCommand } from '../model/use-manage-user';
-import { useManageUser } from '../model/use-manage-user';
+import { followUserCommand, useManageUser } from '../model/use-manage-user';
 import { confirmedTemporaryPassword } from '../model/confirmation';
 
-export function ManageUserControls({ account }: { readonly account: Account }) {
+export interface ManageUserControlsProps {
+  readonly account: Account;
+  /** Whether `account` is the signed-in account; its changes then refresh the frame. */
+  readonly isSelf?: boolean | undefined;
+}
+
+export function ManageUserControls({ account, isSelf = false }: ManageUserControlsProps) {
   const router = useRouter();
   const manage = useManageUser(account.user_uid);
   const [confirmPurge, setConfirmPurge] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const [passwordMismatch, setPasswordMismatch] = useState(false);
 
   async function execute(command: UserCommand): Promise<boolean> {
     try {
-      const result = await manage.mutateAsync(command);
-      if (result.kind === 'purged') router.push('/admin/users');
+      followUserCommand(router, await manage.mutateAsync(command), isSelf, routes.users());
       return true;
     } catch {
       // The typed failure is shown below. No second write or optimistic state follows.
@@ -84,7 +104,13 @@ export function ManageUserControls({ account }: { readonly account: Account }) {
 
       {account.archived_at === null ? (
         <div>
-          <button className="am-button am-button--quiet" type="button" disabled={manage.isPending} onClick={() => void execute({ kind: 'archive' })}>Архивировать учётную запись</button>
+          {confirmArchive ? (
+            <div role="group" aria-label="Подтверждение архивирования">
+              <p className="am-note">Архивировать учётную запись {account.login}? Она не сможет войти, а все её пропуска перестанут приниматься. Учётную запись можно будет восстановить.</p>
+              <button className="am-button" type="button" disabled={manage.isPending} onClick={() => { setConfirmArchive(false); void execute({ kind: 'archive' }); }}>Подтвердить архивирование</button>
+              <button className="am-button am-button--quiet" type="button" onClick={() => setConfirmArchive(false)}>Отмена</button>
+            </div>
+          ) : <button className="am-button am-button--quiet" type="button" disabled={manage.isPending} onClick={() => setConfirmArchive(true)}>Архивировать учётную запись</button>}
           <form className="am-form" onSubmit={resetPassword}>
             <h2>Временный пароль</h2>
             <p className="am-form__hint">После сброса все прежние пропуска отзываются, а новый пароль нужно будет сменить при следующем входе. Значение не показывается после отправки.</p>

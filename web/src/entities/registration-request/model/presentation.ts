@@ -1,5 +1,5 @@
 import type { RegistrationStatus } from '@/shared/api';
-import { ApiError, catalogMessage } from '@/shared/api';
+import { failureMessage } from '@/shared/api/failure-message';
 
 import { UnknownRegistrationStatusError } from '../api/use-registration-requests';
 
@@ -15,15 +15,17 @@ export interface RegistrationFailure {
   readonly correlationId: string | null;
 }
 
+/**
+ * What a failed read or decision on registration requests says (`C-23`): the shared reading
+ * (`failureMessage`) with this screen's one more precise sentence. A value that is not a
+ * request failure is an unexpected error, never a transport failure.
+ */
 export function registrationFailure(error: unknown): RegistrationFailure {
   if (error instanceof UnknownRegistrationStatusError) {
-    return { kind: 'unknown_status', detail: error.message, correlationId: null };
+    return { kind: 'unknown_status', detail: 'Заявка содержит состояние, которого эта версия приложения не знает.', correlationId: null };
   }
-  if (!(error instanceof ApiError)) {
-    return { kind: 'transport', detail: 'Ответ сервера получить не удалось. Повторите попытку.', correlationId: null };
-  }
-  if (error.errorCode === 'state_transition_not_allowed') {
-    return { kind: 'state_transition_not_allowed', detail: 'Решение по этой заявке уже принято. Повторное решение невозможно.', correlationId: error.correlationId };
-  }
-  return { kind: error.errorCode, detail: catalogMessage(error.errorCode), correlationId: error.correlationId };
+  const failure = failureMessage(error, {
+    state_transition_not_allowed: 'Решение по этой заявке уже принято. Повторное решение невозможно.',
+  });
+  return { kind: failure.kind, detail: failure.detail, correlationId: failure.correlationId };
 }

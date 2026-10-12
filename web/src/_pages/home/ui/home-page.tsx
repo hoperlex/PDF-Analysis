@@ -5,6 +5,15 @@
  * most recent projects, the summary the dashboard reads, and — for a session holding `admin`
  * only — how many registration requests wait for a decision.
  *
+ * ## Which tiles: the registry decides, as it does for the screens they summarise
+ *
+ * Each tile summarises one registered screen — `/projects`, `/dashboard`,
+ * `/admin/registrations` — and is mounted only when the screen registry's
+ * `screenRolesAdmit` opens that screen to this role set. So a tile cannot offer what the menu
+ * and the guard refuse. `R-80`: an account with no role is suspended and the API refuses it
+ * every product read, so its home page says «Роли не назначены.», mounts no tile and asks
+ * the API nothing.
+ *
  * **The props are `W50-REGISTRY-01`'s contract** and this task keeps them: the `/` route and
  * its seed in `web/tests/unit/screens/route-screens.ts` hand down the name and the roles of
  * the subject the route's guard returns. **That subject is the one source of both**: the page
@@ -29,6 +38,9 @@
  */
 
 import type { Role } from '@/shared/api';
+import type { ScreenAddress } from '@/shared/config';
+import { screenAt } from '@/shared/config';
+import { screenRolesAdmit } from '@/shared/config/screen-registry';
 import { ErrorState } from '@/shared/ui';
 import { UnknownRoleError, roleLabels } from '@/entities/account';
 import {
@@ -65,8 +77,17 @@ function rolesSentence(labels: readonly string[]): string {
   return labels.length === 0 ? 'Роли не назначены.' : `Роли: ${labels.join(', ')}.`;
 }
 
+/** Whether the registry opens `address` to this role set — the one rule the menu uses too. */
+function opens(address: ScreenAddress, roles: readonly Role[]): boolean {
+  const screen = screenAt(address);
+  return screen !== undefined && screenRolesAdmit(screen.roles, roles);
+}
+
 export function HomePage({ displayLabel, roles }: HomePageProps) {
   const labels = labelsOf(roles);
+  const projects = opens('/projects', roles);
+  const summary = opens('/dashboard', roles);
+  const registrations = opens('/admin/registrations', roles);
 
   return (
     <section className="am-page" data-screen="home">
@@ -89,14 +110,16 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
           <div data-home-fault="closed-vocabulary">
             <ErrorState title={UNKNOWN_ROLE_TITLE} detail={UNKNOWN_ROLE_DETAIL} />
           </div>
-        ) : (
+        ) : projects || summary || registrations ? (
           <div className={styles.tiles}>
-            <RecentProjectsTile />
-            <SummaryTile />
-            {roles.includes('admin') ? (
-              <PendingRegistrationsTile href={registrationsScreenLink()} />
-            ) : null}
+            {projects ? <RecentProjectsTile /> : null}
+            {summary ? <SummaryTile /> : null}
+            {registrations ? <PendingRegistrationsTile href={registrationsScreenLink()} /> : null}
           </div>
+        ) : (
+          <p className="am-note" data-home-tiles="none">
+            Разделы с данными откроются, когда администратор назначит учётной записи роль.
+          </p>
         )}
       </div>
     </section>

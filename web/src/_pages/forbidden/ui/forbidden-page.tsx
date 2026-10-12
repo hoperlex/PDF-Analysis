@@ -20,6 +20,7 @@ import Link from 'next/link';
 
 import { roleLabels } from '@/entities/account';
 import type { Role } from '@/shared/api';
+import { HOME_SCREEN } from '@/shared/config';
 import { PageShell, UnsupportedState } from '@/shared/ui';
 
 export interface ForbiddenPageProps {
@@ -39,7 +40,7 @@ function requirement(requiredRoles: readonly Role[] | null): string {
 
 export function ForbiddenPage({ requiredRoles }: ForbiddenPageProps) {
   return (
-    <PageShell title="Доступ закрыт" actions={<Link href="/">На главную</Link>}>
+    <PageShell title="Доступ закрыт" actions={<Link href={HOME_SCREEN}>На главную</Link>}>
       <UnsupportedState
         title={requirement(requiredRoles)}
         detail="Роли учётным записям назначает администратор. Повторная попытка ничего не изменит, пока роль не назначена."

@@ -95,3 +95,15 @@ export function initialsOf(displayLabel: string): string {
   const chosen = letters.length > 0 ? letters.join('') : ([...displayLabel.trim()][0] ?? '');
   return chosen.toLocaleUpperCase('ru-RU');
 }
+
+/**
+ * What a screen says when an account answer cannot be shown (`C-23`): one fixed Russian
+ * sentence per typed fault, never the thrown value's own message.
+ */
+export function unreadableAccountDetail(error: unknown): string {
+  if (error instanceof UnknownRoleError) return 'Сервер назвал роль, которой эта версия приложения не знает.';
+  if (error instanceof MalformedAccountError) {
+    return 'Сервер вернул учётную запись, данные которой не соответствуют договору, поэтому показать её нельзя.';
+  }
+  return 'Данные учётной записи не удалось обработать. Повторите попытку; если ошибка повторится, сообщите администратору.';
+}

@@ -28,6 +28,7 @@ import { ROLE_LABELS } from '@/entities/account';
 import type { Role } from '@/shared/api';
 import type { ScreenDecisionSubject, ScreenEntry } from '@/shared/config';
 import { SCREEN_REGISTRY, requiredRolesFor } from '@/shared/config';
+import { screenRolesAdmit } from '@/shared/config/screen-registry';
 
 const jar = vi.hoisted(() => ({ value: null as string | null }));
 
@@ -140,7 +141,8 @@ describe('6 (live): the administrator rows are role-gated in the real registry',
   it('the live role-gated set contains exactly the three admin screens', () => {
     const rows: readonly ScreenEntry[] = SCREEN_REGISTRY;
     const admin = ['/admin/users', '/admin/users/[user_uid]', '/admin/registrations'];
-    expect(rows.filter((row) => row.roles !== 'any').map((row) => row.address)).toEqual(admin);
+    // `R-80`: every other product row asks for any role (`any-role`), not for a listed one.
+    expect(rows.filter((row) => Array.isArray(row.roles)).map((row) => row.address)).toEqual(admin);
     expect(rows.filter((row) => row.group === 'admin').map((row) => row.address)).toEqual(admin);
   });
 
@@ -148,6 +150,9 @@ describe('6 (live): the administrator rows are role-gated in the real registry',
     for (const who of [EXPERT, NONE]) {
       expect(buildNavigation(who).groups.map((group) => group.group)).not.toContain('admin');
     }
+    // `R-80`: an empty role set sees no product group at all — only Главная.
+    expect(buildNavigation(NONE).groups).toEqual([]);
+    expect(buildNavigation(NONE).home?.address).toBe('/');
     for (const who of [ADMIN, BOTH]) {
       expect(buildNavigation(who).groups.at(-1)?.items.map((item) => item.address)).toEqual([
         '/admin/users', '/admin/registrations',
@@ -187,7 +192,7 @@ function visibleText(markup: string): string {
 /** The sessions that lack every role of `row`, as real register sessions. */
 function lacking(row: ScreenEntry): readonly (readonly Role[])[] {
   const all: readonly (readonly Role[])[] = [[], ['expert'], ['admin'], ['expert', 'admin']];
-  return all.filter((roles) => row.roles !== 'any' && !row.roles.some((role) => roles.includes(role)));
+  return all.filter((roles) => row.roles !== 'any' && !screenRolesAdmit(row.roles, roles));
 }
 
 beforeEach(() => {
@@ -248,6 +253,9 @@ describe('8 (live): /403 names admin for every live administrator row', () => {
       expect(text, row.address).toContain('Доступ закрыт');
       if (row.roles === 'any') {
         for (const label of Object.values(ROLE_LABELS)) expect(text, row.address).not.toContain(`«${label}»`);
+      } else if (row.roles === 'any-role') {
+        // `R-80`: a product screen opens with any one role, and the screen names each.
+        for (const label of Object.values(ROLE_LABELS)) expect(text, row.address).toContain(`«${label}»`);
       } else {
         expect(text, row.address).toContain('«Администратор»');
         expect(text, row.address).not.toContain('«Эксперт»');

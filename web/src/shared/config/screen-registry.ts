@@ -24,7 +24,17 @@
  *                                 password, or with an incomplete profile, may open it — the
  *                                 screens that get such a session out of that state;
  *   `session`                     a session with a changed password, a complete profile and
- *                                 one of the row's `roles`.
+ *                                 what the row's `roles` ask for.
+ *
+ * ## Who, among complete sessions (`R-80`)
+ *
+ *   `'any'`       any complete account, an empty role set included — home, the account's own
+ *                 screens and the screens around the guard;
+ *   `'any-role'`  an account holding at least one role this tier knows — every product
+ *                 screen. `R-80`: an empty role set means suspended, and the API refuses
+ *                 such an account every product read, so a screen that only reads product
+ *                 data is not offered to it either;
+ *   a role list   any one of the listed roles — the administration screens.
  *
  * The guard that reads this is `requireScreen` in `web/src/app/bff/session/screen-lock.ts`,
  * called by every route file. **None of it authorises anything:** the API refuses every
@@ -42,6 +52,7 @@
  */
 
 import type { Role } from '@/shared/api/generated/types.gen';
+import { ROLE_VALUES } from '@/shared/api/generated/types.gen';
 
 /** The three access levels, most open first. */
 export const SCREEN_ACCESS_LEVELS = ['public', 'open-to-default-credential', 'session'] as const;
@@ -55,10 +66,11 @@ export const SCREEN_GROUPS = ['home', 'work', 'knowledge', 'system', 'admin', 'a
 export type ScreenGroup = (typeof SCREEN_GROUPS)[number];
 
 /**
- * Who may open a `session` screen: `'any'` account, or any one of the listed roles (any-of,
- * as the API's own register reads a role set). A list is never empty.
+ * Who may open a `session` screen: `'any'` complete account (an empty role set included),
+ * `'any-role'` — an account holding at least one role (`R-80`) — or any one of the listed
+ * roles (any-of, as the API's own register reads a role set). A list is never empty.
  */
-export type ScreenRoles = 'any' | readonly [Role, ...Role[]];
+export type ScreenRoles = 'any' | 'any-role' | readonly [Role, ...Role[]];
 
 export interface ScreenEntry {
   /** The Next address, dynamic segments as their directory names: `/projects/[project_uid]`. */
@@ -79,7 +91,11 @@ export interface ScreenEntry {
  * Блоки, «Нормы»; **Система** — Журнал выполнения, Исполнители, «Настройки анализа»,
  * «Очередь». `/optimisation` left the menu and stays a registered, reachable screen in
  * `hidden` until project optimisation becomes a project tab. The four new sections are
- * honest stubs, `session`/`any`.
+ * honest stubs, `session`/`any-role`.
+ *
+ * `R-80`: every product screen is `any-role`; only home, the account's own screens and the
+ * public ones stay `any`, so a role-less account sees its home page saying no role is
+ * assigned, its profile and its password, and nothing that reads product data.
  *
  * The screens under a project are in `work` with `inMenu: false`: they belong to the group
  * the navigation marks current while one of them is open, and they are reached from a
@@ -88,14 +104,14 @@ export interface ScreenEntry {
 export const SCREEN_REGISTRY = [
   { address: '/', label: 'Главная', group: 'home', access: 'session', roles: 'any', inMenu: true },
 
-  { address: '/projects', label: 'Проекты', group: 'work', access: 'session', roles: 'any', inMenu: true },
-  { address: '/dashboard', label: 'Дашборд', group: 'work', access: 'session', roles: 'any', inMenu: true },
+  { address: '/projects', label: 'Проекты', group: 'work', access: 'session', roles: 'any-role', inMenu: true },
+  { address: '/dashboard', label: 'Дашборд', group: 'work', access: 'session', roles: 'any-role', inMenu: true },
   {
     address: '/section-optimisation',
     label: 'Оптимизация разделов',
     group: 'work',
     access: 'session',
-    roles: 'any',
+    roles: 'any-role',
     inMenu: true,
   },
   {
@@ -103,7 +119,7 @@ export const SCREEN_REGISTRY = [
     label: 'Проект',
     group: 'work',
     access: 'session',
-    roles: 'any',
+    roles: 'any-role',
     inMenu: false,
   },
   {
@@ -111,7 +127,7 @@ export const SCREEN_REGISTRY = [
     label: 'Документ',
     group: 'work',
     access: 'session',
-    roles: 'any',
+    roles: 'any-role',
     inMenu: false,
   },
   {
@@ -119,7 +135,7 @@ export const SCREEN_REGISTRY = [
     label: 'Версия документа',
     group: 'work',
     access: 'session',
-    roles: 'any',
+    roles: 'any-role',
     inMenu: false,
   },
   {
@@ -127,7 +143,7 @@ export const SCREEN_REGISTRY = [
     label: 'Сравнение прогонов',
     group: 'work',
     access: 'session',
-    roles: 'any',
+    roles: 'any-role',
     inMenu: false,
   },
   {
@@ -135,7 +151,7 @@ export const SCREEN_REGISTRY = [
     label: 'Прогон',
     group: 'work',
     access: 'session',
-    roles: 'any',
+    roles: 'any-role',
     inMenu: false,
   },
   {
@@ -143,7 +159,7 @@ export const SCREEN_REGISTRY = [
     label: 'Разбор находок',
     group: 'work',
     access: 'session',
-    roles: 'any',
+    roles: 'any-role',
     inMenu: false,
   },
 
@@ -152,37 +168,37 @@ export const SCREEN_REGISTRY = [
     label: 'База знаний',
     group: 'knowledge',
     access: 'session',
-    roles: 'any',
+    roles: 'any-role',
     inMenu: true,
   },
-  { address: '/blocks', label: 'Блоки', group: 'knowledge', access: 'session', roles: 'any', inMenu: true },
-  { address: '/norms', label: 'Нормы', group: 'knowledge', access: 'session', roles: 'any', inMenu: true },
+  { address: '/blocks', label: 'Блоки', group: 'knowledge', access: 'session', roles: 'any-role', inMenu: true },
+  { address: '/norms', label: 'Нормы', group: 'knowledge', access: 'session', roles: 'any-role', inMenu: true },
 
   {
     address: '/logs',
     label: 'Журнал выполнения',
     group: 'system',
     access: 'session',
-    roles: 'any',
+    roles: 'any-role',
     inMenu: true,
   },
-  { address: '/workers', label: 'Исполнители', group: 'system', access: 'session', roles: 'any', inMenu: true },
+  { address: '/workers', label: 'Исполнители', group: 'system', access: 'session', roles: 'any-role', inMenu: true },
   {
     address: '/analysis-settings',
     label: 'Настройки анализа',
     group: 'system',
     access: 'session',
-    roles: 'any',
+    roles: 'any-role',
     inMenu: true,
   },
-  { address: '/queue', label: 'Очередь', group: 'system', access: 'session', roles: 'any', inMenu: true },
+  { address: '/queue', label: 'Очередь', group: 'system', access: 'session', roles: 'any-role', inMenu: true },
 
   {
     address: '/optimisation',
     label: 'Оптимизация',
     group: 'hidden',
     access: 'session',
-    roles: 'any',
+    roles: 'any-role',
     inMenu: false,
   },
 
@@ -257,6 +273,9 @@ export const CHANGE_PASSWORD_SCREEN = '/account/password' satisfies ScreenAddres
 export const PROFILE_SCREEN = '/account' satisfies ScreenAddress;
 export const FORBIDDEN_SCREEN = '/403' satisfies ScreenAddress;
 
+/** The registration form a guest is offered from the sign-in screen (`C-21`). */
+export const REGISTER_SCREEN = '/register' satisfies ScreenAddress;
+
 /** The query parameters the guard's redirects carry the asked-for address in. */
 export const NEXT_PARAM = 'next';
 export const FROM_PARAM = 'from';
@@ -294,8 +313,10 @@ export type ScreenDecision = 'open' | 'sign-in' | 'change-password' | 'complete-
  *   1. a guest opens only `public` screens, and is sent to sign in from any other;
  *   2. `R-50`: a default credential opens no `session` screen — only the ones that change it;
  *   3. `R-59`: nor does an incomplete profile — only the ones that complete it;
- *   4. a `session` screen with roles needs any one of them; a role value this tier does not
- *      know matches no row, so it is refused like a missing one and never read as `any`.
+ *   4. a `session` screen with roles needs what {@link screenRolesAdmit} says: any one of a
+ *      listed set, or — `any-role`, `R-80` — any role at all; a role value this tier does not
+ *      know matches no row and counts as no role, so it is refused like a missing one and
+ *      never read as `any`.
  *
  * It decides where a browser is *sent* and what a menu *offers*; it authorises nothing. The
  * API refuses every operation on its own evidence.
@@ -305,9 +326,24 @@ export function screenDecision(screen: ScreenEntry, subject: ScreenDecisionSubje
   if (screen.access === 'session') {
     if (subject.isDefaultCredential) return 'change-password';
     if (!subject.profileComplete) return 'complete-profile';
-    if (screen.roles !== 'any' && !screen.roles.some((role) => subject.roles.includes(role))) return 'forbidden';
+    if (!screenRolesAdmit(screen.roles, subject.roles)) return 'forbidden';
   }
   return 'open';
+}
+
+/**
+ * Whether a role set satisfies a row's `roles`, and nothing else — no access level, no
+ * credential state. {@link screenDecision} asks it for decision four; the home page asks it
+ * which of its tiles' screens the session may open, so a tile and the screen it summarises
+ * can never disagree.
+ *
+ * A held value outside the contract's role set counts for nothing: it opens no listed row
+ * and does not make an account "hold a role" for `any-role`.
+ */
+export function screenRolesAdmit(required: ScreenRoles, held: readonly string[]): boolean {
+  if (required === 'any') return true;
+  if (required === 'any-role') return held.some((role) => (ROLE_VALUES as readonly string[]).includes(role));
+  return required.some((role) => held.includes(role));
 }
 
 /** The registry row for an address, or `undefined` for one that is not registered. */
@@ -434,7 +470,8 @@ export function concreteAddress(
 
 /**
  * The roles the screen at `from` requires, for the `/403` screen to name — or `null` when
- * `from` is not a valid return address, or names a screen that requires no role.
+ * `from` is not a valid return address, or names a screen that requires no role. An
+ * `any-role` screen requires any one of every role the contract knows, and is named so.
  *
  * Takes the registry as a parameter so the case `W50` cannot reach with its own rows — a
  * role-gated screen; `R-60` gives none of W50's screens a role — is testable against a
@@ -449,5 +486,5 @@ export function requiredRolesFor(
   const queryAt = valid.indexOf('?');
   const screen = screenMatching(queryAt === -1 ? valid : valid.slice(0, queryAt), registry);
   if (screen === undefined || screen.roles === 'any') return null;
-  return screen.roles;
+  return screen.roles === 'any-role' ? ROLE_VALUES : screen.roles;
 }

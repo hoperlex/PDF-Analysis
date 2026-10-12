@@ -1,7 +1,8 @@
 /**
  * Public API of the `sign-in` feature slice.
  *
- * The two forms and the vocabulary of the exchange. Nothing here holds a credential: the
+ * The credentials form and the vocabulary of the exchange (the way out is the frame's
+ * account menu, which posts to `SESSION_CLOSE_PATH`). Nothing here holds a credential: the
  * credential lives in the Node process, in `app/bff/session/store.ts`, and this slice
  * knows only the two addresses to post to and the six ways the exchange can refuse.
  */
@@ -22,6 +23,3 @@ export {
 
 export type { SignInFormProps } from './ui/sign-in-form';
 export { SignInForm } from './ui/sign-in-form';
-
-export type { SignOutFormProps } from './ui/sign-out-form';
-export { SignOutForm } from './ui/sign-out-form';

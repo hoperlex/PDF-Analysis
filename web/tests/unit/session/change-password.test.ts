@@ -448,11 +448,13 @@ describe('the screen this seam redirects to can render every outcome it produces
     for (const input of inputs) expect(input).toContain('type="password"');
   });
 
-  it('shows no form at all without a session, because it could only be refused', () => {
+  it('has one shape: the guard admits only a session, so the guest branch is gone (C-25)', () => {
+    // `/account/password` is `open-to-default-credential`: the route's guard sends a guest to
+    // sign in before this renders, so a "no session" shape could never be reached.
     const markup = render(createElement(ChangePasswordPage, {}));
-    expect(markup).not.toContain('name="current_password"');
-    expect(markup).toContain('data-change-password-session="none"');
-    expect(markup).toContain(SIGN_IN_PATH);
+    expect(markup).toContain('name="current_password"');
+    expect(markup).not.toContain('data-change-password-session');
+    expect(markup).not.toContain(`href="${SIGN_IN_PATH}`);
   });
 
   it('says out loud that changing the password revokes what was issued', () => {

@@ -43,6 +43,7 @@ import type {
 } from '@/shared/api';
 import { ApiError, RUN_STATE_VALUES, VERDICT_VALUES, queryKeys } from '@/shared/api';
 import { SCREEN_REGISTRY } from '@/shared/config';
+import { screenRolesAdmit } from '@/shared/config/screen-registry';
 import { routes } from '@/shared/lib';
 import {
   HOME_TILE_COPY,
@@ -302,10 +303,17 @@ describe('the administrator’s tile, and what the page asks the API', () => {
 
   it('decides by admin alone, and an empty role set is not admin', async () => {
     expect(draw(home(['admin']), loaded())).toContain('data-home-tile="registrations"');
-    expect(await requestsOf(home([]))).toEqual([
-      'GET /bff/v1/dashboard',
-      'GET /bff/v1/projects?limit=5',
-    ]);
+    expect(draw(home(['expert']), loaded())).not.toContain('data-home-tile="registrations"');
+  });
+
+  it('R-80: an empty role set gets no tile at all and asks the API nothing', async () => {
+    const markup = draw(home([]), loaded());
+    expect(markup).toContain('Роли не назначены.');
+    expect(markup).not.toContain('data-home-tile=');
+    expect(markup).toContain('data-home-tiles="none"');
+    expect(await requestsOf(home([]))).toEqual([]);
+    // The page decides by the registry's rule, so a role it does not know opens nothing either.
+    expect(screenRolesAdmit('any-role', [])).toBe(false);
   });
 
   it('does not invent a link if the registration screen has no registry row', () => {
@@ -501,6 +509,7 @@ describe('a maximum-length displayLabel does not widen the page', () => {
 describe('every branch is rendered by some state here, and none carries English', () => {
   const states: readonly { readonly name: string; readonly markup: () => string }[] = [
     { name: 'cold, expert', markup: () => draw(home(EXPERT)) },
+    { name: 'no roles', markup: () => draw(home([])) },
     { name: 'cold, administrator', markup: () => draw(home(ADMIN)) },
     { name: 'loaded, administrator', markup: () => draw(home(ADMIN), loaded()) },
     {
