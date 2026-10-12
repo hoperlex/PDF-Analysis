@@ -19,6 +19,10 @@
  * cost is known. The other half of that panel, `run_activity.spend`, only settles once
  * the run reaches a terminal state; that invalidation is `useRunStatus`'s, at its own
  * terminal reading, not here.
+ *
+ * `C-26`: the execution queue and journal are invalidated as well — an accepted run is a new
+ * queued job and a new journal entry, and both screens would otherwise keep the page they
+ * read before the command.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -43,6 +47,7 @@ export function useStartRun() {
     onSuccess: (run) => {
       queryClient.setQueryData(queryKeys.runs.detail(run.run_id), run);
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.execution.all() });
     },
   });
 }

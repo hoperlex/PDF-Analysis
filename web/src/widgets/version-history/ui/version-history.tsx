@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 
 import type { ReleaseEntry, ReleaseList } from '@/shared/api';
-import { UnknownReleaseKindError, releaseDate, releaseKindLabel, useProductVersion, useReleases } from '@/entities/release';
+import { isKnownReleaseKind, releaseDate, releaseKindLabel, useProductVersion, useReleases } from '@/entities/release';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 
 import styles from './version-history.module.css';
@@ -25,7 +25,8 @@ function ReleaseCard({ entry }: { readonly entry: ReleaseEntry }) {
       <ul className={styles.items}>
         {entry.items.map((item, index) => (
           <li key={`${entry.version}-${index}`} className={styles.item}>
-            <span className={styles[item.kind]}>{releaseKindLabel(item.kind)}</span>
+            {/* `C-29`: an unknown kind gets the generic label and no kind colour; its raw value is not echoed into the markup. */}
+            <span className={isKnownReleaseKind(item.kind) ? styles[item.kind] : undefined}>{releaseKindLabel(item.kind)}</span>
             <p className={styles.where}>{item.where}</p>
             <p className={styles.text}>{item.text}</p>
           </li>
@@ -56,8 +57,8 @@ export function VersionHistoryView({ version, listing, loading, error, onClose, 
         {loading ? <LoadingState what="истории версий" /> : null}
         {error !== null ? (
           <ErrorState
-            title={error instanceof UnknownReleaseKindError ? 'Неизвестная категория изменения' : 'История версий недоступна'}
-            detail={error instanceof UnknownReleaseKindError ? error.message : 'Повторите запрос позже.'}
+            title="История версий недоступна"
+            detail="Повторите запрос позже."
             onRetry={onRetry}
           />
         ) : null}

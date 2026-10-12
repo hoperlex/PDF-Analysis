@@ -4,14 +4,16 @@ import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import type { ExecutionJournalEntry, ExecutionQueueItem, Role } from '@/shared/api';
-import { ApiError, TransportError } from '@/shared/api';
+import { ApiError, TransportError, queryKeys } from '@/shared/api';
 import {
   canExecute, executionFailure, journalQueryOptions, queueAgeLabel, queueQueryOptions,
   visibleJournal,
 } from '@/entities/execution';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
-import { intentLabel } from '@/_pages/queue/ui/queue-page';
+import { QueuePage, intentLabel } from '@/_pages/queue/ui/queue-page';
+
+import { newClient, renderScreen, seedError } from '../screens/harness';
 
 const RUN_ID = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 const JOB_ID = 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
@@ -120,7 +122,7 @@ describe('bounded journal and queue presentation', () => {
     expect(visibleJournal(unknown).code).toBeNull();
   });
 
-  it('keeps queue cursors and run-filtered journal cursors separate and refreshes on focus', () => {
+  it('keeps queue cursors and run-filtered journal cursors separate and refreshes on focus, never stale (C-26)', () => {
     expect(queueQueryOptions('first').queryKey).not.toEqual(queueQueryOptions('second').queryKey);
     expect(journalQueryOptions(RUN_ID, 'first').queryKey).not.toEqual(
       journalQueryOptions(RUN_ID, 'second').queryKey,
@@ -130,6 +132,8 @@ describe('bounded journal and queue presentation', () => {
     );
     expect(queueQueryOptions().refetchOnWindowFocus).toBe('always');
     expect(journalQueryOptions().refetchOnWindowFocus).toBe('always');
+    expect(queueQueryOptions().staleTime).toBe(0);
+    expect(journalQueryOptions(RUN_ID, 'first', false).staleTime).toBe(0);
   });
 
   it('shows age without a timer and preserves long opaque identities at 780 px', () => {
@@ -148,5 +152,40 @@ describe('bounded journal and queue presentation', () => {
     }));
     expect(markup).toContain('На этой странице записей нет');
     expect(markup).toContain('>Назад</button>');
+  });
+});
+
+describe('C-27: the queue does not wait for the account read', () => {
+  function seededQueue() {
+    const client = newClient();
+    client.setQueryData(queryKeys.execution.queue(), {
+      items: [queued], page: { next_cursor: null }, paused: false,
+    });
+    return client;
+  }
+
+  it('renders the rows without any command when getMe fails, and says why', () => {
+    const client = seededQueue();
+    seedError(client, queryKeys.account.me(), new TransportError('connection closed'));
+    const markup = renderScreen(client, createElement(QueuePage));
+    expect(markup).toContain(RUN_ID);
+    expect(markup).toContain(JOB_ID);
+    expect(markup).toContain('data-execution-controls-withheld');
+    expect(markup).toContain('Очередь показана без команд: права не прочитаны.');
+    expect(markup).toContain('data-execution-account-failure');
+    expect(markup).not.toContain('Отменить прогон');
+    expect(markup).not.toContain('Изменить</button>');
+    expect(markup).not.toContain('Приостановить выдачу');
+  });
+
+  it('keeps the commands an account holds once getMe answers', () => {
+    const client = seededQueue();
+    client.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
+    const markup = renderScreen(client, createElement(QueuePage));
+    expect(markup).toContain(RUN_ID);
+    expect(markup).toContain('Отменить прогон');
+    expect(markup).toContain('Изменить</button>');
+    expect(markup).toContain('Приостановить выдачу');
+    expect(markup).not.toContain('data-execution-controls-withheld');
   });
 });

@@ -1184,6 +1184,15 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       onClose: () => undefined, onRetry: () => undefined,
     }),
   },
+  // `C-29` (W53 close): the failed read's title became a literal when the unknown-kind fault
+  // left, so its branch is now visible to this matrix and needs a state that renders it.
+  {
+    name: 'release-history-failed',
+    make: () => createElement(VersionHistoryView, {
+      version: null, listing: null, loading: false, error: new Error('network'),
+      onClose: () => undefined, onRetry: () => undefined,
+    }),
+  },
   /*
    * `AppFrame` is a SCREEN here, not a wrapper, and that is the repair.
    *

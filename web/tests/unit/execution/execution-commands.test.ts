@@ -21,14 +21,16 @@ vi.mock('@/shared/api', async (importOriginal) => {
     reauditRun: vi.fn(),
     setJobPriority: vi.fn(),
     setExecutionPaused: vi.fn(),
+    startRun: vi.fn(),
   };
 });
 
-import { cancelRun, queryKeys, reauditRun, setExecutionPaused, setJobPriority } from '@/shared/api';
+import { cancelRun, queryKeys, reauditRun, setExecutionPaused, setJobPriority, startRun } from '@/shared/api';
 import { useCancelRun } from '@/features/cancel-run';
 import { useReauditRun } from '@/features/reaudit-run';
 import { useSetJobPriority } from '@/features/set-job-priority';
 import { usePauseExecution } from '@/features/pause-execution';
+import { useStartRun } from '@/features/start-run';
 
 const RUN_ID = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 const JOB_ID = 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
@@ -95,5 +97,17 @@ describe('sealed execution commands', () => {
     ]);
     expect(priority.retry).toBe(false);
     expect(pause.retry).toBe(false);
+  });
+
+  it('C-26: an accepted start seeds the run and invalidates the dashboard and every execution read', async () => {
+    vi.mocked(startRun).mockResolvedValue({ data: RUN } as never);
+    const command = useStartRun() as unknown as Captured<{ versionUid: string; idempotencyKey: string }, typeof RUN>;
+    const answer = await command.mutationFn({ versionUid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', idempotencyKey: KEY });
+    command.onSuccess(answer);
+    expect(calls.writes).toEqual([[queryKeys.runs.detail(RUN_ID), RUN]]);
+    expect(calls.invalidations).toEqual([
+      [{ queryKey: queryKeys.dashboard.summary() }],
+      [{ queryKey: queryKeys.execution.all() }],
+    ]);
   });
 });

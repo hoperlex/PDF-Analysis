@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AppFrame, FRAME_FOOTER } from '@/_app';
 import type { AppFrameSession } from '@/_app';
-import { UNKNOWN_ROLE_LINE, accountMenuProps } from '@/_app/account-menu';
+import { UNKNOWN_ROLE_LINE, accountMenuProps, canReadReleaseHistory } from '@/_app/account-menu';
 import styles from '@/_app/app-frame.module.css';
 import { SESSION_CLOSE_PATH } from '@/features/sign-in';
 import { SCREEN_REGISTRY } from '@/shared/config';
@@ -126,6 +126,19 @@ describe('the account menu', () => {
       expect(markup, session.login).not.toContain('<nav');
       expect(hrefs(markup), session.login).toEqual(['/', '/account', '/account/password']);
     }
+  });
+
+  it('C-28: offers «История версий» only where the API answers it — a complete profile on a changed credential', () => {
+    for (const session of [DEFAULT_CREDENTIAL, INCOMPLETE_PROFILE, { ...EXPERT, isDefaultCredential: true }]) {
+      const label = JSON.stringify([session.isDefaultCredential, session.profileComplete]);
+      expect(canReadReleaseHistory(session), label).toBe(false);
+      expect(accountMenuProps(session).items.map((item) => item.label), label).toEqual([
+        'Профиль', 'Сменить пароль', 'Выйти',
+      ]);
+      expect(frame(session), label).not.toContain('История версий');
+    }
+    expect(canReadReleaseHistory(EXPERT)).toBe(true);
+    expect(accountMenuProps(EXPERT).items.map((item) => item.label)).toContain('История версий');
   });
 
   it('renders the account as text: a hostile name cannot inject markup', () => {

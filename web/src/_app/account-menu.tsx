@@ -4,7 +4,7 @@
  * A generated avatar opens it; its header names the account (`displayLabel`), its e-mail —
  * the session subject's `login`, which is the e-mail once the profile is complete and the
  * legacy login before — and its roles; its items are the profile, the password, release
- * history and the way out. The keyboard, focus and outside-click behaviour are `Menu`'s (`@/shared/ui`, the APG
+ * history (for a complete account only, {@link canReadReleaseHistory}) and the way out. The keyboard, focus and outside-click behaviour are `Menu`'s (`@/shared/ui`, the APG
  * menu button), and this module only decides what it holds.
  *
  * A client component: it computes the props and hosts the history panel beside `Menu`.
@@ -46,6 +46,21 @@ export interface AccountMenuSession {
   readonly displayLabel: string;
   readonly initials: string;
   readonly roles: readonly string[];
+  /** `R-50`: still on the seeded credential. */
+  readonly isDefaultCredential: boolean;
+  /** `R-59`: names and e-mail given. */
+  readonly profileComplete: boolean;
+}
+
+/**
+ * `C-28`: whether «История версий» can work for this session. The API answers
+ * `listReleases` and `getProductVersion` only to a complete account — a changed credential
+ * and a complete profile (`OPERATION_ROLES`, `_ANY_COMPLETE_ACCOUNT`) — so the item is
+ * offered on exactly that condition, the one the frame already applies to release notices.
+ * Offering it elsewhere opened a panel that could only show a refusal.
+ */
+export function canReadReleaseHistory(session: AccountMenuSession): boolean {
+  return session.profileComplete && !session.isDefaultCredential;
 }
 
 /** The account's roles in words, or `null` when the set holds a value this build cannot name. */
@@ -105,7 +120,9 @@ export function accountMenuProps(session: AccountMenuSession, onHistory?: () => 
     items: [
       { kind: 'link', label: profileLabel(), href: PROFILE_SCREEN },
       { kind: 'link', label: 'Сменить пароль', href: CHANGE_PASSWORD_SCREEN },
-      { kind: 'action', label: 'История версий', onChoose: onHistory },
+      ...(canReadReleaseHistory(session)
+        ? [{ kind: 'action', label: 'История версий', onChoose: onHistory } as const]
+        : []),
       { kind: 'submit', label: 'Выйти', action: SESSION_CLOSE_PATH },
     ],
   };
@@ -121,7 +138,7 @@ export function AccountMenu({ session }: { readonly session: AccountMenuSession 
   return (
     <div className={styles.accountMenu} data-account-menu="" ref={root}>
       <Menu {...accountMenuProps(session, () => setHistoryOpen(true))} />
-      {historyOpen ? <VersionHistory onClose={closeHistory} /> : null}
+      {historyOpen && canReadReleaseHistory(session) ? <VersionHistory onClose={closeHistory} /> : null}
     </div>
   );
 }
