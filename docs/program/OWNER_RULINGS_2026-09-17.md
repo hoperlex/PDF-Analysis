@@ -1466,7 +1466,7 @@ complete `make gate`. For this candidate this replaces `R-70`'s full gate before
 and the gate clause of `MAIN_AUTODEPLOY_POLICY.md`; the separate direct owner instruction
 naming the exact SHA is still required.
 
-## 3.30 — `R-88` to `R-107`, the corpus-chain answers and the W54 records (`W54-RULE-01`)
+## 3.30 — `R-88` to `R-108`, the corpus-chain answers and the W54 records (`W54-RULE-01`)
 
 On 2026-10-12 the owner answered the corpus-chain review polls K-1…K-15. They were put by
 session `pdf-analysis-4e`, except K-15, which was put by `pdf-analysis-62`. The verbatim answers
@@ -1497,3 +1497,4 @@ same approval.
 | `R-105` | K-13 | The worker service and the `ADR-0002` addendum. |
 | `R-106` | K-13 | Repairs (F-3, F-4, W-4): the journal and its write order, `R-79`'s tries, the sample stop (`R-95`), the cumulative $10, and the local journal (`R-98`). |
 | `R-107` | K-13 | Real-document scope (F-7). |
+| `R-108` | K-16 | Cache removal was not enough, so inactive W48–W53 worktrees are removed whole with `git worktree remove`. Branches and commits stay. If W54's disk stop rule still fires, the owner is asked again about adding disk. Applied 2026-10-12: 72 worktrees removed, about 7.5 GB freed, 22 GB free. Kept: `plan-corpus-chain`, `plan-roadmap-to-beta` (its uncommitted 2026-10-08 layer is preserved in `97127ac`), `prod-project-cleanup` (owner unknown), `w59-*` and `w54-int`. |

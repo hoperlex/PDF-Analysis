@@ -127,6 +127,8 @@ delegates the choice to a session that cannot see the other lanes.**
 | `57020`, `60620/60621` | `gate-w53c-exec` — `W53C-EXEC-01`, disposable focused tests | 2026-10-12 | after EXEC handback and lane cleanup |
 | `57030`, `60630/60631` | `gate-w53c-identity` — `W53C-IDENTITY-01`, disposable focused tests | 2026-10-12 | after IDENTITY handback and lane cleanup |
 | `57040`, `60640/60641` | `gate-w53c-store` — `W53C-STORE-01`, disposable focused tests | 2026-10-12 | after STORE handback and lane cleanup |
+| `57100`, `60700/60701` | `gate-w54-int` — W54 integrator, light acceptance and the final gate | 2026-10-12 | after W54-INT-CLOSE |
+| `57110`, `60710/60711` | `gate-w54-seal` — `W54-SEAL-01`, migration tests in a window | 2026-10-12 | after SEAL handback and lane cleanup |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,
