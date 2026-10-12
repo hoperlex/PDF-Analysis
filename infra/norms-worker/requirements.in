@@ -1,0 +1,9 @@
+# The norms-worker runtime: exactly the versions the bake-off recorded
+# (docs/program/NORM_EMBEDDING_BAKEOFF.md, "Models and runtime"). Not a root dependency set:
+# tokenizers/transformers stay out of uv.lock (W54-PLAN.md §3.4). The installable form is the
+# hashed closure in requirements.lock, never this file.
+torch==2.7.1+cpu
+transformers==4.53.3
+sentence-transformers==5.0.0
+tokenizers==0.21.4
+numpy==2.5.3

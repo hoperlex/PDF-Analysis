@@ -1,0 +1,18 @@
+# TODO-PIN-WINDOW: the hashed wheel closure of the norms-worker image is NOT YET MEASURED.
+#
+# The bake-off recorded the five top-level versions (requirements.in) but no wheel hash and no
+# transitive version, so nothing is invented here. The Dockerfile refuses to build while this
+# marker is present. Replace this whole file, in a window, with the output of:
+#
+#   uv pip compile infra/norms-worker/requirements.in \
+#     --python-version 3.12 --python-platform x86_64-manylinux_2_28 \
+#     --index-url https://pypi.org/simple \
+#     --extra-index-url https://download.pytorch.org/whl/cpu \
+#     --index-strategy unsafe-best-match \
+#     --generate-hashes --emit-index-url --no-header \
+#     --output-file infra/norms-worker/requirements.lock
+#
+# then remove "wheel_lock" from images.norms_worker.pending_pins in
+# docs/program/FOUNDATION_LOCK.json. Every line must carry --hash=sha256:...; the image installs
+# with --require-hashes --no-deps --only-binary=:all:, so a missing transitive wheel is a build
+# failure, not a resolution.
