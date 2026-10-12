@@ -12,7 +12,8 @@ is ``tests/integration/db/test_norms_search_migration.py``, which runs in the ow
   below, verbatim, as the oracle);
 * ``RunStatus.norms_snapshot_id`` is rendered only when a run pinned one (records 14, 15
   and 31 carry none);
-* the sealed stubs refuse explicitly, each naming its dependency.
+* the roles of the seven operations (`W55A-SEARCH-01` retired the sealed-stub case when it
+  gave the adapters their bodies).
 """
 
 from __future__ import annotations
@@ -28,7 +29,6 @@ import pytest
 from auditmanager.api.schemas.content import ByteRange, StreamedContent
 from auditmanager.api.schemas.runs import RunStatusView, run_status_body
 from auditmanager.api.security import OPERATION_ROLES
-from auditmanager.bootstrap.adapters import NormContentAdapter, NormsSearchAdapter
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -220,43 +220,12 @@ def test_a_pinned_run_renders_its_snapshot_after_the_bundle() -> None:
     assert keys.index("norms_snapshot_id") == keys.index("prompt_bundle_id") + 1
 
 
-# --- the sealed stubs and their roles ------------------------------------------------------
-
-
-def _refusal(call) -> DomainError:
-    with pytest.raises(DomainError) as caught:
-        call()
-    return caught.value
-
-
-def test_every_sealed_norms_method_refuses_with_its_dependency() -> None:
-    search = NormsSearchAdapter(None)  # type: ignore[arg-type]
-    calls = [
-        lambda: search.search(q="СП 54", norms_snapshot_id=None, cursor=None, limit=50),
-        lambda: search.get_document(norm_document_id="ndoc_01M2545JSD15ETSNNV904X991V"),
-        lambda: search.list_paragraphs(
-            norm_document_id="ndoc_01M2545JSD15ETSNNV904X991V", cursor=None, limit=50
-        ),
-        lambda: search.list_snapshots(cursor=None, limit=50),
-        lambda: search.list_snapshot_events(cursor=None, limit=50),
-        lambda: search.set_current_snapshot(
-            norms_snapshot_id="ns_01M2545JSD15ETSNNV904X991N", expected_current=None,
-            user_uid="usr_01M2545JSD15ETSNNV904X991S",
-        ),
-    ]
-    for call in calls:
-        error = _refusal(call)
-        assert error.code is ErrorCode.DEPENDENCY_UNAVAILABLE
-        assert dict(error.detail_fields) == {"dependency": "norms_search"}
-    content = NormContentAdapter(None, blob_store=None)  # type: ignore[arg-type]
-    error = _refusal(lambda: content.stream_content(
-        norm_document_id="ndoc_01M2545JSD15ETSNNV904X991V", byte_range=None
-    ))
-    assert (error.code, dict(error.detail_fields)) == (
-        ErrorCode.DEPENDENCY_UNAVAILABLE, {"dependency": "norm_content"}
-    )
-    # `DocumentAdapter.stream_content` was sealed here too; `W55A-CONTENT-01` gave it its
-    # body, and `tests/integration/api/test_document_content_streaming.py` drives it.
+# --- the roles -----------------------------------------------------------------------------
+#
+# `W55A-SEAL-01` asserted here that every norms adapter method refused as a sealed stub
+# (``503 dependency_unavailable``). `W55A-SEARCH-01` gave them their bodies, so that case is
+# gone; ``tests/integration/norms/search/`` drives the bodies, container-free and in the
+# window, and ``tests/integration/composition/test_router_answers.py`` no longer exempts them.
 
 
 def test_the_norms_reads_need_a_role_and_the_designation_needs_admin() -> None:

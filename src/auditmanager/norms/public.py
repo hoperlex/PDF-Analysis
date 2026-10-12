@@ -65,6 +65,17 @@ from auditmanager.norms.custody import (
     report,
     requeue,
 )
+from auditmanager.norms.current_snapshot import (  # W55A-SEARCH-01
+    CurrentSnapshot,
+    Designation,
+    Qualification,
+    SnapshotEvent,
+    current_snapshot,
+    has_been_current,
+    list_snapshot_events,
+    qualification,
+    set_current_snapshot,
+)
 from auditmanager.norms.embedding import (  # W54-EMBED-01
     EMBEDDING_PROFILE,
     EMBEDDING_SET_DIGEST_VERSION,
@@ -101,6 +112,19 @@ from auditmanager.norms.repository import (  # W54-SNAPSHOT-01
     SnapshotImportConflict,
     SnapshotRowsInvalid,
 )
+from auditmanager.norms.search import (  # W55A-SEARCH-01
+    SEARCH_WINDOW,
+    EventPosition,
+    decode_event_cursor,
+    encode_event_cursor,
+)
+from auditmanager.norms.search import get_document as get_norm_document  # W55A-SEARCH-01
+from auditmanager.norms.search import (
+    list_paragraphs as list_norm_paragraphs,  # W55A-SEARCH-01
+)
+from auditmanager.norms.search import list_snapshots as list_norm_snapshots  # W55A-SEARCH-01
+from auditmanager.norms.search import pdf_binding as norm_pdf_binding  # W55A-SEARCH-01
+from auditmanager.norms.search import search as search_norms  # W55A-SEARCH-01
 from auditmanager.norms.snapshot import (  # W54-SNAPSHOT-01
     ROW_DIGEST_VERSION,
     DocumentRow,
@@ -127,6 +151,7 @@ __all__ = [
     "RETRY_DELAYS_SECONDS",
     "ROLE_SHAPES",
     "ROW_DIGEST_VERSION",
+    "SEARCH_WINDOW",
     "Admission",
     "AdmissionRequest",
     "AdmissionState",
@@ -138,6 +163,7 @@ __all__ = [
     "Checkpoint",
     "ChunkingRefused",
     "CorpusLoadResult",
+    "CurrentSnapshot",
     "CustodyDispatcher",
     "CustodyIncident",
     "CustodyManifest",
@@ -148,11 +174,13 @@ __all__ = [
     "CustodySlot",
     "CustodySource",
     "DeclaredContent",
+    "Designation",
     "DispatchReport",
     "DispatchResult",
     "DispatchStep",
     "DocumentRow",
     "EmbeddingSetDigest",
+    "EventPosition",
     "IncidentKind",
     "Manifest",
     "ManifestIndex",
@@ -162,10 +190,12 @@ __all__ = [
     "NormEmbeddingScanShort",
     "NormsProjectionConflict",
     "ParagraphRow",
+    "Qualification",
     "RejectedBlob",
     "RepairLedger",
     "RepairOutcome",
     "RoleShape",
+    "SnapshotEvent",
     "SnapshotImportConflict",
     "SnapshotImportResult",
     "SnapshotRow",
@@ -178,17 +208,29 @@ __all__ = [
     "binding_digest",
     "blob_id_for",
     "compute_fingerprint",
+    "current_snapshot",
+    "decode_event_cursor",
+    "encode_event_cursor",
     "export_bundle",
+    "get_norm_document",
+    "has_been_current",
     "import_bundle",
     "import_snapshot",
+    "list_norm_paragraphs",
+    "list_norm_snapshots",
+    "list_snapshot_events",
     "load_corpus",
+    "norm_pdf_binding",
     "parse_manifest",
     "publish_bindings",
+    "qualification",
     "repaired_snapshot",
     "report",
     "report_bundle",
     "requeue",
     "requeue_bundle",
     "row_digest",
+    "search_norms",
+    "set_current_snapshot",
     "verify_bundle",
 ]

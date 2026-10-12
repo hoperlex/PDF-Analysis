@@ -16,9 +16,13 @@ operation                      method and path                                  
 The roles live in :data:`auditmanager.api.security.OPERATION_ROLES`, decided before a
 handler runs. Every operation delegates to one port method and renders what comes back:
 :class:`~auditmanager.api.routers.ports.NormsSearchPort` for six of them and
-:class:`~auditmanager.api.routers.ports.NormContentPort` for the PDF. Both are **sealed
-stubs** until `W55A-SEARCH-01` replaces their bodies in ``bootstrap/adapters.py``; this module
-does not change when they do.
+:class:`~auditmanager.api.routers.ports.NormContentPort` for the PDF. `W55A-SEARCH-01`
+gave both their bodies in ``bootstrap/adapters.py`` (over ``auditmanager.norms.search`` and
+``auditmanager.norms.current_snapshot``).
+
+A malformed ``Range`` on a norm document that does not exist is ``404``, not ``422``: the
+document is asked for before the parse refusal is re-raised, the precedence
+``streamDocumentVersionContent`` keeps (``_parsed_range``).
 
 ``setCurrentNormSnapshot`` takes no ``Idempotency-Key``: it is a compare-and-set on durable
 state. ``expected_current`` is the caller's belief about the current snapshot, a stale belief
@@ -52,6 +56,7 @@ from auditmanager.api.schemas import models
 from auditmanager.api.schemas.content import PDF_MEDIA_TYPE, ByteRange
 from auditmanager.api.schemas.models import optional_property
 from auditmanager.api.security import CurrentSubject
+from auditmanager.shared.errors import DomainError
 
 __all__ = ["build_norm_routes"]
 
@@ -146,7 +151,7 @@ def build_norm_routes(
         norm_document_id: NormDocumentIdParam,
         range_header: RangeParam = None,  # type: ignore[assignment]
     ) -> Response:
-        byte_range = None if range_header is None else ByteRange.parse(range_header)
+        byte_range = _parsed_range(norms, norm_document_id, range_header)
         streamed = content.stream_content(
             norm_document_id=norm_document_id, byte_range=byte_range
         )
@@ -200,3 +205,16 @@ def build_norm_routes(
             user_uid=subject.user_uid,
         )
         return json_response(200, encode_json(current.model_dump(mode="json")))
+
+
+def _parsed_range(
+    norms: NormsSearchPort, norm_document_id: str, header: str | None
+) -> ByteRange | None:
+    """The ``Range`` syntax, refused only after the document is known to exist."""
+    if header is None:
+        return None
+    try:
+        return ByteRange.parse(header)
+    except DomainError:
+        norms.get_document(norm_document_id=norm_document_id)
+        raise

@@ -72,6 +72,18 @@ EXECUTION_ROLES: Final[frozenset[str]] = frozenset({"all", "api", "worker"})
 #: it writes nothing and the container health check has nothing to read.
 WORKER_STATE_DIR_ENV: Final[str] = "AUDITMANAGER_WORKER_STATE_DIR"
 
+#: `W55A-SEARCH-01` (`W55-PLAN.md` section A3.4, owner ruling R-112). The
+#: ``statement_timeout`` every ``searchNorms`` query runs under, in milliseconds; a cancelled
+#: search answers ``validation_failed`` (``norms_search_too_broad``). Read from the process
+#: environment -- on the stand the owner sets it in the host-owned ``provider.env`` on the
+#: integrator's rehearsal figure -- and never from the ``.env`` and its fifteen frozen names.
+NORMS_SEARCH_TIMEOUT_ENV: Final[str] = "AUDITMANAGER_NORMS_SEARCH_TIMEOUT_MS"
+#: The default `W55A-FREEZE-01` fixed provisionally; `W55A-D124-MEASURE` re-fixes it from the
+#: promotion database.
+DEFAULT_NORMS_SEARCH_TIMEOUT_MS: Final[int] = 3000
+#: Ten minutes: anything longer is not a search a person waits for.
+MAX_NORMS_SEARCH_TIMEOUT_MS: Final[int] = 600_000
+
 PROXY_BASE_URL_ENV: Final[str] = "PROXY_LLM_BASE_URL"
 PROXY_TOKEN_ENV: Final[str] = "PROXY_LLM_TOKEN"
 PROXY_MODEL_ENV: Final[str] = "PROXY_LLM_MODEL"
@@ -110,6 +122,8 @@ class AppSettings:
     execution_role: str = "all"
     #: :data:`WORKER_STATE_DIR_ENV`; read by the worker service only.
     worker_state_dir: str | None = None
+    #: :data:`NORMS_SEARCH_TIMEOUT_ENV`, validated; milliseconds.
+    norms_search_timeout_ms: int = DEFAULT_NORMS_SEARCH_TIMEOUT_MS
 
     @property
     def requires_credential(self) -> bool:
@@ -141,6 +155,27 @@ def _api_token(role: str, environ: dict[str, str]) -> str | None:
             "service runs with the API's environment except that secret"
         )
     return None
+
+
+def _norms_search_timeout_ms(environ: dict[str, str]) -> int:
+    """:data:`NORMS_SEARCH_TIMEOUT_ENV`: unset or blank is the default; anything else must be
+    a whole number of milliseconds in ``1 .. MAX_NORMS_SEARCH_TIMEOUT_MS``. A value that does
+    not parse refuses the start: a timeout that silently fell back would be a search bound
+    nobody chose."""
+    raw = environ.get(NORMS_SEARCH_TIMEOUT_ENV, "").strip()
+    if not raw:
+        return DEFAULT_NORMS_SEARCH_TIMEOUT_MS
+    if not raw.isdecimal() or raw != str(int(raw)):
+        raise ConfigurationError(
+            f"{NORMS_SEARCH_TIMEOUT_ENV} is {raw!r}; it is a whole number of milliseconds"
+        )
+    value = int(raw)
+    if not 1 <= value <= MAX_NORMS_SEARCH_TIMEOUT_MS:
+        raise ConfigurationError(
+            f"{NORMS_SEARCH_TIMEOUT_ENV} is {value}; it must be between 1 and "
+            f"{MAX_NORMS_SEARCH_TIMEOUT_MS} milliseconds"
+        )
+    return value
 
 
 def load(environ: dict[str, str] | None = None) -> AppSettings:
@@ -213,6 +248,7 @@ def load(environ: dict[str, str] | None = None) -> AppSettings:
         api_token=_api_token(role, env),
         execution_role=role,
         worker_state_dir=env.get(WORKER_STATE_DIR_ENV, "").strip() or None,
+        norms_search_timeout_ms=_norms_search_timeout_ms(env),
         proxy_base_url=proxy_base_url,
         proxy_token=proxy_token,
         # The stub the proxy reads as "I am not choosing a model", so the operator's default
