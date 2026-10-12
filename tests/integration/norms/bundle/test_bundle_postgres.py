@@ -304,7 +304,10 @@ def test_postgres_report_fails_on_a_tampered_row_and_on_a_client_write(
     assert _import(promoted.bundle, record, stand)[0] == EXIT_OK
     with stand.engine.begin() as connection:
         connection.execute(text("ALTER TABLE norm_paragraph DISABLE TRIGGER USER"))
-        connection.execute(text("UPDATE norm_paragraph SET text = text || ' (tampered)' WHERE ordinal = 0 "
+        # `ck_norm_paragraph_char_length` holds `char_length` to the text, so the tamper keeps
+        # them consistent: the row digest, not a constraint, is what must catch it.
+        connection.execute(text("UPDATE norm_paragraph SET text = text || ' (tampered)', "
+                                "char_length = char_length(text || ' (tampered)') WHERE ordinal = 0 "
                                 "AND norms_snapshot_id = :s"), {"s": promoted.snapshot_id})
         connection.execute(text("ALTER TABLE norm_paragraph ENABLE TRIGGER USER"))
     status, lines = _report(promoted.bundle, record, stand)

@@ -180,8 +180,9 @@ def test_an_unregistered_worker_cannot_claim(session, blob_store, helpers) -> No
 @pytest.fixture
 def listener(engine):
     pooled = engine.raw_connection()
-    pooled.detach()
+    # Before `detach()`: afterwards SQLAlchemy 2.0 answers `None` for `driver_connection`.
     connection = pooled.driver_connection
+    pooled.detach()
     connection.rollback()
     connection.autocommit = True
     connection.execute(f"LISTEN {JOB_WAKEUP_CHANNEL}")

@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import replace
+from typing import Any
 
 import pytest
 from sqlalchemy import text
@@ -59,11 +60,14 @@ from auditmanager.ingest import Reconciler
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode, screen_message
 from auditmanager.storage import (
+    ChecksumMismatchError,
+    SizeMismatchError,
     StorageUnavailableError,
     derive_blob_id,
     parse_blob_role,
     sha256_of,
 )
+from auditmanager.storage._object_layout import canonical_key  # noqa: PLC2701
 from auditmanager.storage.blob_repository import BlobMetadataRepository
 
 DISPLAY_TITLE = "Annual report 2026"
@@ -104,7 +108,12 @@ def _unique_pdf(baseline: bytes) -> bytes:
 
 
 def _publish_impostor_at(store, *, blob_id, content: bytes, record_sha256=None):
-    """Put ``content`` at the canonical location of ``blob_id``, through the real adapter.
+    """Try to put ``content`` at the canonical location of ``blob_id``, through the real adapter.
+
+    Since `W54-CUSTODY-01` ``publish`` checks an existing canonical object's recorded digest
+    and size against the publication and refuses a disagreement instead of reusing it, so
+    over an already published document this route is **closed**; the tests below assert
+    that, then build the fault out of band with :func:`_replace_out_of_band`.
 
     Every step is the port's own public surface — ``stage_temporary``,
     ``verify_temporary``, ``publish``. The bytes really are staged and really are verified
@@ -136,11 +145,35 @@ def _publish_impostor_at(store, *, blob_id, content: bytes, record_sha256=None):
     )
 
 
+def _replace_out_of_band(raw_s3: Any, bucket: str, *, blob_id, content: bytes, record_sha256=None):
+    """Replace the canonical object of ``blob_id`` behind the adapter's back.
+
+    What the pre-`W54-CUSTODY-01` route left in the store: ``content`` as the body, stamped
+    as the adapter stamps a publication of it -- its own length and, unless
+    ``record_sha256`` says otherwise, its own digest -- under ``blob_id``. The independent
+    ``raw_s3`` client is the only way to get there now, as in
+    ``test_the_read_path_answers_the_manifest.py``: the fault is a restore from the wrong
+    backup, not a sequence of port operations.
+    """
+    key_name = canonical_key(blob_id)
+    before = raw_s3.head_object(Bucket=bucket, Key=key_name)
+    metadata = {k.lower(): v for k, v in (before.get("Metadata") or {}).items()}
+    metadata["content-sha256"] = sha256_of(content) if record_sha256 is None else record_sha256
+    metadata["content-size"] = str(len(content))
+    raw_s3.put_object(
+        Bucket=bucket,
+        Key=key_name,
+        Body=content,
+        ContentType=before.get("ContentType", "application/pdf"),
+        Metadata=metadata,
+    )
+
+
 # --- a published version whose bytes are present and are the wrong bytes -------
 
 
 def test_a_version_whose_stored_checksum_disagrees_with_its_manifest_is_refused(
-    store, service, project, baseline_pdf, key, track, reconciler
+    store, service, project, baseline_pdf, key, track, reconciler, raw_s3: Any, s3_settings
 ) -> None:
     """The *other* integrity failure: the object is there, and it is not the right object.
 
@@ -161,10 +194,6 @@ def test_a_version_whose_stored_checksum_disagrees_with_its_manifest_is_refused(
     assert len(impostor_bytes) == len(content)
     impostor_sha256 = sha256_of(impostor_bytes)
     assert impostor_sha256 != honest_sha256
-    # Published under the document's identity *before* the document is uploaded:
-    # publication is idempotent by (sha256, size), so the upload that follows adopts this
-    # object instead of writing its own, exactly as a re-upload adopts an orphan.
-    _publish_impostor_at(store, blob_id=blob_id, content=impostor_bytes)
 
     outcome = service.upload_single_pdf(
         project_uid=project.project_uid,
@@ -173,6 +202,14 @@ def test_a_version_whose_stored_checksum_disagrees_with_its_manifest_is_refused(
         display_title=DISPLAY_TITLE,
         idempotency_key=key("wrong-bytes"),
     )
+    # It verifies first: the replacement below is the only thing that changes.
+    reconciler.verify_version(outcome.version.version_uid)
+
+    # The port cannot put other bytes under a published identity (`W54-CUSTODY-01`).
+    with pytest.raises(ChecksumMismatchError):
+        _publish_impostor_at(store, blob_id=blob_id, content=impostor_bytes)
+    assert service.read_source_bytes(outcome.version.version_uid) == content
+    _replace_out_of_band(raw_s3, s3_settings.bucket, blob_id=blob_id, content=impostor_bytes)
 
     # The precondition: the manifest froze the honest digest and the honest length, and
     # the store holds something else of the same length under that identity.
@@ -225,7 +262,7 @@ def test_a_version_whose_stored_checksum_disagrees_with_its_manifest_is_refused(
 
 
 def test_a_version_whose_stored_size_disagrees_with_its_manifest_is_refused(
-    store, service, project, baseline_pdf, key, track, reconciler
+    store, service, project, baseline_pdf, key, track, reconciler, raw_s3: Any, s3_settings
 ) -> None:
     """The same clause's other half, reached with the digests left agreeing.
 
@@ -240,9 +277,6 @@ def test_a_version_whose_stored_size_disagrees_with_its_manifest_is_refused(
 
     truncated = content[: len(content) // 2]
     assert len(truncated) != len(content)
-    _publish_impostor_at(
-        store, blob_id=blob_id, content=truncated, record_sha256=honest_sha256
-    )
 
     outcome = service.upload_single_pdf(
         project_uid=project.project_uid,
@@ -250,6 +284,15 @@ def test_a_version_whose_stored_size_disagrees_with_its_manifest_is_refused(
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("wrong-size"),
+    )
+    reconciler.verify_version(outcome.version.version_uid)
+    with pytest.raises(SizeMismatchError):
+        _publish_impostor_at(
+            store, blob_id=blob_id, content=truncated, record_sha256=honest_sha256
+        )
+    _replace_out_of_band(
+        raw_s3, s3_settings.bucket, blob_id=blob_id, content=truncated,
+        record_sha256=honest_sha256,
     )
     entry = outcome.version.source
     assert entry.sha256 == honest_sha256

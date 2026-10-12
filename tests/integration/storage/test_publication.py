@@ -171,6 +171,10 @@ def test_the_port_offers_no_way_to_name_or_delete_an_object() -> None:
         "check_access",
         "discard_temporary",
         "inspect",
+        # `W55A-CONTENT-01` (R-115): a chunked read of published bytes by their opaque
+        # `BlobId`, checked against the caller's declaration. It names no key and deletes
+        # nothing.
+        "open_stream",
         "publish",
         "put_blob",
         "read",

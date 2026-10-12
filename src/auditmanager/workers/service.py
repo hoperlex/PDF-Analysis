@@ -93,8 +93,12 @@ class JobWakeup:
     def connect(self) -> bool:
         try:
             pooled = self._engine.raw_connection()
-            pooled.detach()
+            # Read the driver connection *before* detaching: SQLAlchemy 2.0's
+            # ``_ConnectionFairy.driver_connection`` answers ``None`` once the fairy has
+            # no pool record, which made every LISTEN fail with AttributeError and left
+            # the worker on its poll alone (W55A-FIX-DB).
             connection = pooled.driver_connection
+            pooled.detach()
             connection.rollback()
             connection.autocommit = True
             connection.execute(f"LISTEN {self._channel}")

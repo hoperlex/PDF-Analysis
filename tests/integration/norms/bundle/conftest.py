@@ -242,11 +242,12 @@ def stand(stand_engine: Engine, store: S3BlobStore) -> Stand:
 
 def open_waiver(stand: Stand, where: Path, **overrides: Any) -> Path:
     """A test-data waiver over the stand as it is now (what ``attest --test-data`` writes)."""
-    fields = record_fields(
-        fingerprint=fingerprint_document(compute_fingerprint(stand.engine)),
-        migration_head=current_revision(stand.engine),
+    # An override (e.g. a stale `migration_head`) replaces the stand's own value.
+    fields = record_fields(**{
+        "fingerprint": fingerprint_document(compute_fingerprint(stand.engine)),
+        "migration_head": current_revision(stand.engine),
         **overrides,
-    )
+    })
     path = where / "record.json"
     path.write_text(record_text(fields), encoding="utf-8")
     return path
