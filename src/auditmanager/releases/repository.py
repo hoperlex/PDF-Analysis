@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -9,9 +10,11 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
-from auditmanager.releases.notes import ReleaseNote
+from auditmanager.releases.notes import ReleaseNote, servable_content
 from auditmanager.releases.versioning import canonical_semver_sort_key
 from auditmanager.shared.errors import DomainError, ErrorCode
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,34 +64,44 @@ class ReleaseRepository:
             if standing is None:
                 raise DomainError(ErrorCode.NOT_FOUND)
             account_created_at, _, marked_key = standing
+            # Every revision, newest first within each release: a revision appended by
+            # a newer image may use an item kind or field this image cannot serve, and
+            # after a rollback the release must still show its newest servable one.
             rows = session.execute(
                 text(
-                    "SELECT r.version, r.sort_key, r.is_archive, latest.revision, "
-                    "latest.released_on, latest.title, latest.content, first_load.loaded_at "
+                    "SELECT r.pk, r.version, r.sort_key, r.is_archive, rr.revision, "
+                    "rr.released_on, rr.title, rr.content, "
+                    "min(rr.loaded_at) OVER (PARTITION BY r.pk) AS first_loaded "
                     "FROM release AS r "
-                    "JOIN LATERAL (SELECT rr.revision, rr.released_on, rr.title, rr.content "
-                    "  FROM release_revision AS rr WHERE rr.release_pk = r.pk "
-                    "  ORDER BY rr.revision DESC LIMIT 1) AS latest ON true "
-                    "JOIN LATERAL (SELECT min(rr.loaded_at) AS loaded_at "
-                    "  FROM release_revision AS rr WHERE rr.release_pk = r.pk) "
-                    "  AS first_load ON true "
+                    "JOIN release_revision AS rr ON rr.release_pk = r.pk "
                     "WHERE r.sort_key <= :max_key "
-                    "ORDER BY r.is_archive ASC, r.sort_key DESC"
+                    "ORDER BY r.is_archive ASC, r.sort_key DESC, rr.revision DESC"
                 ),
                 {"max_key": self._max_key},
             ).all()
         items: list[VisibleRelease] = []
         whats_new: list[str] = []
-        for version, sort_key, is_archive, revision, released_on, title, content, first_loaded in rows:
-            if not isinstance(content, dict):
-                raise RuntimeError("release content is not a JSON object")
-            note_items = content.get("items")
-            if not isinstance(note_items, list):
-                raise RuntimeError("release content has no items")
+        chosen: set[int] = set()
+        for (
+            pk, version, sort_key, is_archive, revision, released_on, title, content,
+            first_loaded,
+        ) in rows:
+            if pk in chosen:
+                continue
+            servable = servable_content(content)
+            if servable is None:
+                _log.warning(
+                    "release %s revision %s is not servable by this image; "
+                    "serving an older revision instead",
+                    version, revision,
+                )
+                continue
+            chosen.add(pk)
+            range_label, note_items = servable
             items.append(
                 VisibleRelease(
                     version, revision, released_on, title, is_archive,
-                    content.get("range_label"), tuple(note_items),
+                    range_label, note_items,
                 )
             )
             if (

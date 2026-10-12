@@ -37,7 +37,9 @@ follows from that single decision:
     The entry retains run/Attempt/stage attribution, Attempt state, creation time and
     staleness classification, and says whether point inspection found either its exact
     opaque temporary handle or the canonical object; neither handle nor storage location
-    is exposed, and nothing is adopted or deleted.
+    is exposed, and nothing is adopted or deleted. Such an entry is never rejectable:
+    its ``blob_id`` is content-derived and ``rejected`` is terminal, so rejecting it
+    would ban every later run of that document version. A rerun settles it instead.
 
 ``stale_commands``
     A ``command_record`` still ``in_progress`` long after its executor should have
@@ -80,6 +82,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import NoReturn
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
@@ -140,19 +143,9 @@ _UNBOUND_ANALYSIS_ARTIFACTS = text(
     "ORDER BY a.created_at, a.attempt_id, a.stage_id, a.blob_id, a.blob_role"
 )
 
-_REJECTION_AUTHORITY = text(
-    "SELECT a.upload_token, a.blob_role, a.created_at, b.sha256, b.size_bytes, "
-    "b.media_type, execution_attempt.state AS attempt_state, "
-    "a.created_at <= statement_timestamp() - CAST(:older_than AS interval) AS is_stale "
-    "FROM analysis_artifact_publication a "
-    "JOIN blob b ON b.blob_id = a.blob_id "
-    "JOIN attempt execution_attempt ON execution_attempt.attempt_id = a.attempt_id "
-    "WHERE a.blob_id = :blob_id AND a.state = 'prepared' "
-    "ORDER BY a.created_at, a.attempt_id, a.stage_id, a.blob_role "
-    "FOR UPDATE OF a, execution_attempt"
+_PUBLICATION_AUTHORITY = text(
+    "SELECT 1 FROM analysis_artifact_publication WHERE blob_id = :blob_id LIMIT 1"
 )
-
-_ATTEMPT_TERMINALS = frozenset({"succeeded", "failed", "superseded", "lost", "cancelled"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,13 +202,17 @@ class UnboundAnalysisArtifact:
 
     @property
     def rejection_eligible(self) -> bool:
-        """Whether the ordinary rejection action may safely settle this evidence."""
-        return (
-            self.attempt_state in _ATTEMPT_TERMINALS
-            and self.is_stale
-            and not self.object_present
-            and not self.temporary_present
-        )
+        """Never: an analysis artifact's blob identity is derived from its content.
+
+        ``rejected`` is terminal for a blob, and every later run of the same document
+        version produces the same bytes and so the same ``blob_id``. Rejecting this
+        record would make each such run fail when it re-records the content
+        (``rejected -> verifying`` is undeclared), banning the version's analysis.
+        A rerun re-records the same ``temporary``/``verifying`` row and publishes it,
+        so the evidence settles itself. A settlement state that retires the intent
+        without touching the blob needs a migration and is deferred to W54 custody.
+        """
+        return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -546,15 +543,17 @@ class Reconciler:
                 self._commands.abandon(session, record.command_id)
             return tuple(record.command_id for record in stale)
 
-    def reject_unpublished(
-        self, blob_id: BlobId, *, older_than: str = "1 hour"
-    ) -> None:
-        """Settle one never-published blob record as ``rejected``.
+    def reject_unpublished(self, blob_id: BlobId) -> None:
+        """Refuse to settle a never-published blob as ``rejected``; this release never may.
 
-        Eligibility requires Attempt-scoped W48 authority, a terminal producing Attempt,
-        and an explicit age threshold. Legacy rows cannot prove that authority. A
-        canonical or temporary object also requires a separate recovery decision and is
-        refused here rather than burned under a content-derived identity.
+        An available blob is canonical and refuses as before. A blob without an
+        Attempt-scoped publication intent cannot prove that no producer still owns its
+        content identity (``legacy_unattributed``). A blob that an analysis-artifact
+        intent names is content-addressed: ``rejected`` is terminal, and the next run of
+        the same document version would re-derive the same ``blob_id`` and fail to
+        record it, so the refusal ``content_addressed_rerun_self_heals`` says what to do
+        instead -- a rerun re-records the ``temporary``/``verifying`` row and publishes
+        it. No branch here changes any row.
         """
         with session_scope(self._factory) as session:
             record = self._blobs.require(session, blob_id)
@@ -565,29 +564,12 @@ class Reconciler:
                     current_state=record.state.value,
                     requested_state="rejected",
                 )
-            authorities = session.execute(
-                _REJECTION_AUTHORITY,
-                {"blob_id": str(blob_id), "older_than": older_than},
-            ).mappings().all()
-            if not authorities:
+            authority = session.execute(
+                _PUBLICATION_AUTHORITY, {"blob_id": str(blob_id)}
+            ).first()
+            if authority is None:
                 self._refuse_rejection("legacy_unattributed")
-            if any(row["attempt_state"] not in _ATTEMPT_TERMINALS for row in authorities):
-                self._refuse_rejection("attempt_not_terminal")
-            if any(not bool(row["is_stale"]) for row in authorities):
-                self._refuse_rejection("publication_not_stale")
-            if self._object_exists(blob_id):
-                self._refuse_rejection("canonical_object_present")
-            for row in authorities:
-                temporary = TemporaryBlob(
-                    upload_token=str(row["upload_token"]),
-                    declared_sha256=str(row["sha256"]),
-                    declared_size=int(row["size_bytes"]),
-                    role=parse_blob_role(str(row["blob_role"])),
-                    media_type=str(row["media_type"]),
-                )
-                if self._store.temporary_exists(temporary):
-                    self._refuse_rejection("temporary_object_present")
-            self._blobs.mark_rejected(session, blob_id)
+            self._refuse_rejection("content_addressed_rerun_self_heals")
 
     # -- internals -----------------------------------------------------------
 
@@ -604,7 +586,7 @@ class Reconciler:
         return True
 
     @staticmethod
-    def _refuse_rejection(current_state: str) -> None:
+    def _refuse_rejection(current_state: str) -> NoReturn:
         raise DomainError(
             ErrorCode.STATE_TRANSITION_NOT_ALLOWED,
             machine="analysis_artifact_publication",

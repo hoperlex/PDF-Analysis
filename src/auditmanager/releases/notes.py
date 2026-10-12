@@ -14,6 +14,7 @@ from auditmanager.releases.versioning import canonical_semver_sort_key
 
 _ENTRY_NAME = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?\.json$")
 _KINDS = frozenset({"new", "improved", "fixed"})
+_ITEM_FIELDS = frozenset({"kind", "screen", "where", "text"})
 _KNOWN_NON_ENTRIES = frozenset({"schema.json", "dictionary.json"})
 _SCHEMA_KEYS = frozenset({
     "$schema", "$defs", "$ref", "title", "type", "additionalProperties",
@@ -133,7 +134,7 @@ def parse_note(raw: Any, *, filename: str) -> ReleaseNote:
         raise ValueError(f"release note items must be a nonempty array: {filename}")
     items: list[dict[str, str]] = []
     for item in items_raw:
-        if not isinstance(item, dict) or set(item) != {"kind", "screen", "where", "text"}:
+        if not isinstance(item, dict) or set(item) != _ITEM_FIELDS:
             raise ValueError(f"release note item has wrong fields: {filename}")
         if not isinstance(item["kind"], str) or item["kind"] not in _KINDS:
             raise ValueError(f"release note item has unknown kind: {filename}")
@@ -152,6 +153,35 @@ def parse_note(raw: Any, *, filename: str) -> ReleaseNote:
         version, revision, released_on, title, is_archive, range_label,
         tuple(items), content, hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
     )
+
+
+def servable_content(content: Any) -> tuple[str | None, tuple[dict[str, str], ...]] | None:
+    """Return ``(range_label, items)`` when this image can serve a stored revision.
+
+    A revision another image wrote may carry an item kind or field this image's API
+    cannot express, for example after a rollback below the image that appended it.
+    Such a revision answers ``None`` instead of raising, so the reader can fall back to
+    an older revision it does understand. The rules are this image's own: the same
+    item fields and kinds :func:`parse_note` accepts.
+    """
+    if not isinstance(content, dict):
+        return None
+    range_label = content.get("range_label")
+    if range_label is not None and not isinstance(range_label, str):
+        return None
+    items_raw = content.get("items")
+    if not isinstance(items_raw, list) or not items_raw:
+        return None
+    items: list[dict[str, str]] = []
+    for item in items_raw:
+        if not isinstance(item, dict) or set(item) != _ITEM_FIELDS:
+            return None
+        if not all(isinstance(item[name], str) and item[name].strip() for name in _ITEM_FIELDS):
+            return None
+        if item["kind"] not in _KINDS:
+            return None
+        items.append({name: item[name] for name in ("kind", "screen", "where", "text")})
+    return range_label, tuple(items)
 
 
 def read_notes(directory: Path) -> dict[str, ReleaseNote]:

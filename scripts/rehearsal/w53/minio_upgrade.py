@@ -30,6 +30,15 @@ BUCKET = "w53-versioned-disposable"
 ENDPOINT = "http://127.0.0.1:60480"
 
 
+def require(condition: object, message: object) -> None:
+    """A verification ``python -O`` cannot strip, unlike ``assert``.
+
+    An optimised run would otherwise skip every check below and print PASS.
+    """
+    if not condition:
+        raise SystemExit(f"minio_upgrade: check failed: {message}")
+
+
 def docker(*args: str, capture: bool = False) -> str:
     run = subprocess.run(
         ["docker", *args], check=True, text=True, stdout=subprocess.PIPE,
@@ -115,15 +124,15 @@ def listed_versions(client) -> list[dict]:
     seen_markers: set[tuple[str, str]] = set()
     while True:
         listed = client.list_object_versions(Bucket=BUCKET, **markers)
-        assert not listed.get("DeleteMarkers"), "unexpected delete marker"
+        require(not listed.get("DeleteMarkers"), "unexpected delete marker")
         rows.extend(listed.get("Versions", []))
         if not listed.get("IsTruncated", False):
             return rows
         key_marker = listed.get("NextKeyMarker")
         version_marker = listed.get("NextVersionIdMarker")
-        assert key_marker, "truncated listing without key marker"
+        require(key_marker, "truncated listing without key marker")
         pair = (key_marker, version_marker or "")
-        assert pair not in seen_markers, "repeated version-list marker"
+        require(pair not in seen_markers, "repeated version-list marker")
         seen_markers.add(pair)
         markers = {"KeyMarker": key_marker}
         if version_marker is not None:
@@ -133,11 +142,11 @@ def listed_versions(client) -> list[dict]:
 def export_versions(client) -> list[ExportedVersion]:
     """Export old-to-new versions from the upgraded server's S3 API."""
     listed = listed_versions(client)
-    assert listed, "empty upgraded source"
+    require(listed, "empty upgraded source")
     exported: list[ExportedVersion] = []
     for key in sorted({row["Key"] for row in listed}):
         by_key = [row for row in listed if row["Key"] == key]
-        assert sum(bool(row["IsLatest"]) for row in by_key) == 1, key
+        require(sum(bool(row["IsLatest"]) for row in by_key) == 1, key)
         # ListObjectVersions is newest first within each key; PUT restores oldest first.
         for row in reversed(by_key):
             observed = client.get_object(
@@ -147,7 +156,7 @@ def export_versions(client) -> list[ExportedVersion]:
             exported.append(ExportedVersion(
                 key, row["VersionId"], body, observed["Metadata"]
             ))
-    assert len(exported) == len(listed)
+    require(len(exported) == len(listed), "export count differs from the listing")
     return exported
 
 
@@ -164,7 +173,7 @@ def export_manifest(exported: list[ExportedVersion]) -> list[Version]:
 
 
 def restore_export(client, exported: list[ExportedVersion]) -> None:
-    assert exported, "empty S3 export"
+    require(exported, "empty S3 export")
     client.create_bucket(Bucket=BUCKET)
     client.put_bucket_versioning(
         Bucket=BUCKET, VersioningConfiguration={"Status": "Enabled"}
@@ -181,21 +190,23 @@ def manifest(client, payloads: list[tuple[str, bytes, dict[str, str]]]) -> list[
     for key, body, metadata in payloads:
         expected.setdefault(key, []).append((body, metadata))
     versions = listed_versions(client)
-    assert len(versions) == len(payloads), (len(versions), len(payloads))
-    assert {row["Key"] for row in versions} == set(expected)
+    require(len(versions) == len(payloads), (len(versions), len(payloads)))
+    require(
+        {row["Key"] for row in versions} == set(expected), "listed keys differ from writes"
+    )
     result: list[Version] = []
     for key, wanted in expected.items():
         by_key = [row for row in versions if row["Key"] == key]
-        assert len(by_key) == len(wanted), key
-        assert sum(bool(row["IsLatest"]) for row in by_key) == 1, key
+        require(len(by_key) == len(wanted), key)
+        require(sum(bool(row["IsLatest"]) for row in by_key) == 1, key)
         # S3 ListObjectVersions returns newest first within a key.
         for row, (body, metadata) in zip(by_key, reversed(wanted), strict=True):
             observed = client.get_object(
                 Bucket=BUCKET, Key=key, VersionId=row["VersionId"]
             )
             actual = observed["Body"].read()
-            assert actual == body, (key, row["VersionId"])
-            assert observed["Metadata"] == metadata, key
+            require(actual == body, (key, row["VersionId"]))
+            require(observed["Metadata"] == metadata, key)
             result.append(Version(
                 key, row["VersionId"], hashlib.sha256(actual).hexdigest(),
                 len(actual), metadata,
@@ -214,12 +225,24 @@ def main() -> None:
     args = parser.parse_args()
     if args.old_only == args.full:
         parser.error("choose exactly one of --old-only or --full")
-    assert docker("image", "inspect", OLD, "--format", "{{.Id}}", capture=True)
-    if args.full:
-        assert docker("image", "inspect", NEW, "--format", "{{.Id}}", capture=True)
-    assert not docker("ps", "-aq", "--filter", f"name=^/{CONTAINER}$", capture=True)
+    # Preflight refusals are explicit raises, never ``assert``: ``python -O`` strips
+    # asserts, and these are what keep the script off resources it does not own.
+    if not docker("image", "inspect", OLD, "--format", "{{.Id}}", capture=True):
+        raise SystemExit(f"minio_upgrade: refusing to start, old image {OLD} is absent")
+    if args.full and not docker("image", "inspect", NEW, "--format", "{{.Id}}", capture=True):
+        raise SystemExit(f"minio_upgrade: refusing to start, new image {NEW} is absent")
+    if docker("ps", "-aq", "--filter", f"name=^/{CONTAINER}$", capture=True):
+        raise SystemExit(
+            f"minio_upgrade: refusing to start, container {CONTAINER} already exists; "
+            "it is not this run's to reuse or remove"
+        )
     names = (OLD_VOLUME, COPY_VOLUME, RESTORE_VOLUME) if args.full else (OLD_VOLUME,)
-    assert not set(docker("volume", "ls", "-q", capture=True).splitlines()) & set(names)
+    clashing = set(docker("volume", "ls", "-q", capture=True).splitlines()) & set(names)
+    if clashing:
+        raise SystemExit(
+            f"minio_upgrade: refusing to start, volumes already exist: {sorted(clashing)}; "
+            "they are not this run's to reuse or remove"
+        )
     user = "w53rehearsal"
     password = secrets.token_urlsafe(32)
     created: list[str] = []
@@ -248,9 +271,14 @@ def main() -> None:
         running = True
         upgraded = ready(user, password)
         new_manifest = manifest(upgraded, payloads)
-        assert new_manifest == old_manifest, "version IDs/keys/bytes changed on volume copy"
+        require(
+            new_manifest == old_manifest, "version IDs/keys/bytes changed on volume copy"
+        )
         exported = export_versions(upgraded)
-        assert export_manifest(exported) == new_manifest, "S3 export differs from new-image read"
+        require(
+            export_manifest(exported) == new_manifest,
+            "S3 export differs from new-image read",
+        )
         print("old-volume-copy/new-image-read: PASS, exact version IDs and bytes")
         stop()
         running = False
@@ -261,7 +289,10 @@ def main() -> None:
         rollback_manifest = manifest(
             restored, [(entry.key, entry.body, entry.metadata) for entry in exported]
         )
-        assert logical_manifest(rollback_manifest) == logical_manifest(old_manifest)
+        require(
+            logical_manifest(rollback_manifest) == logical_manifest(old_manifest),
+            "rolled-back logical versions differ from the old image's",
+        )
         print("S3-restore/old-image-read: PASS, logical versions and bytes")
         print("S3 restore creates new VersionIds; only the volume copy preserves them")
     finally:
