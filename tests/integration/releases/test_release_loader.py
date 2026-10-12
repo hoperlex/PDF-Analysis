@@ -21,6 +21,15 @@ def _notes():
     return read_notes(ROOT / "release-notes")
 
 
+def _history():
+    """The two-release history the database tests load under product version 0.3.0.
+
+    The loader refuses an image whose highest note is not its VERSION, so the full authored
+    tree (0.4.0, 0.5.0, ...) cannot be loaded as 0.3.0.
+    """
+    return {version: note for version, note in _notes().items() if version in {"0.2.0", "0.3.0"}}
+
+
 def _changed(note, *, revision: int, title: str):
     return parse_note(
         {
@@ -55,7 +64,7 @@ def test_shape_schema_matches_the_served_item_and_kind() -> None:
     assert set(schema["$defs"]["item"]["required"]) == set(
         served["ReleaseNoteItem"]["required"]
     )
-    assert set(_notes()) == {"0.2.0", "0.3.0", "0.4.0"}
+    assert set(_notes()) == {"0.2.0", "0.3.0", "0.4.0", "0.5.0"}
 
 
 @pytest.mark.parametrize(
@@ -81,7 +90,8 @@ def test_loader_is_idempotent_and_serves_the_highest_revision(
     migrated_engine: Engine,
 ) -> None:
     sessions = create_session_factory(migrated_engine)
-    # The two-release history this test was written against; 0.4.0 (R-86) is not part of it.
+    # The two-release history this test was written against; 0.4.0 (R-86) and 0.5.0 are not
+    # part of it.
     notes = {version: note for version, note in _notes().items() if version in {"0.2.0", "0.3.0"}}
     archive_revision = notes["0.2.0"].revision
     current_revision = notes["0.3.0"].revision
@@ -119,7 +129,7 @@ def test_conflicts_and_missing_history_roll_back_the_whole_load(
     migrated_engine: Engine,
 ) -> None:
     sessions = create_session_factory(migrated_engine)
-    notes = _notes()
+    notes = _history()
     current_revision = notes["0.3.0"].revision
     load_notes(sessions, notes=notes, product_version="0.3.0")
     original = _revisions(migrated_engine)
@@ -144,7 +154,7 @@ def test_future_database_release_survives_rollback_and_is_hidden(
     migrated_engine: Engine,
 ) -> None:
     sessions = create_session_factory(migrated_engine)
-    notes = _notes()
+    notes = _history()
     load_notes(sessions, notes=notes, product_version="0.3.0")
     with migrated_engine.begin() as connection:
         pk = connection.execute(
@@ -174,7 +184,7 @@ def test_account_mark_only_rises_and_new_accounts_see_no_old_whats_new(
     migrated_engine: Engine,
 ) -> None:
     sessions = create_session_factory(migrated_engine)
-    load_notes(sessions, notes=_notes(), product_version="0.3.0")
+    load_notes(sessions, notes=_history(), product_version="0.3.0")
     repo = ReleaseRepository(sessions, product_version="0.3.0")
     old_uid = _seeded_uid(migrated_engine)
     assert repo.list_for_account(old_uid).whats_new == ("0.3.0",)
@@ -205,7 +215,7 @@ def test_account_mark_only_rises_and_new_accounts_see_no_old_whats_new(
             {"uid": new_uid},
         )
     assert repo.list_for_account(new_uid).whats_new == ()
-    notes = _notes()
+    notes = _history()
     revised = {
         **notes,
         "0.3.0": _changed(
@@ -245,7 +255,7 @@ def test_a_newer_images_revision_falls_back_to_the_newest_servable_one(
     from auditmanager.bootstrap.adapters import ReleasesAdapter
 
     sessions = create_session_factory(migrated_engine)
-    notes = _notes()
+    notes = _history()
     current = notes["0.3.0"]
     load_notes(sessions, notes=notes, product_version="0.3.0")
     with migrated_engine.begin() as connection:
@@ -287,7 +297,7 @@ def test_a_release_with_no_servable_revision_is_omitted_not_fatal(
 ) -> None:
     """A release this image can serve no revision of drops out; the others still answer."""
     sessions = create_session_factory(migrated_engine)
-    load_notes(sessions, notes=_notes(), product_version="0.3.0")
+    load_notes(sessions, notes=_history(), product_version="0.3.0")
     with migrated_engine.begin() as connection:
         pk = connection.execute(
             text("INSERT INTO release(version, sort_key, is_archive) "
