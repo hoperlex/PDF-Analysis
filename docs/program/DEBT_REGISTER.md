@@ -14,6 +14,9 @@ direction. D-137 and D-138 stay open and block any W51 release verdict.
 **The owner's continuing code-first direction (2026-10-08) opened `D-139` and `D-140`:**
 W52 and subsequent code-only wave candidates accrue QA/live checks and full-gate evidence for a
 separately planned validation wave. Each candidate must be named by exact SHA there.
+**`W53-CLOSE-INT` (2026-10-12) opened `D-141` … `D-152`:** the findings of the 2026-10-12
+W48–W53 review that need a contract, a migration, a dependency, production access or a later
+wave's design; every other confirmed finding was closed by the W53-CLOSE lanes.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
 register that had been entirely obsolete while still reading as the list of what was open, and this
@@ -48,6 +51,18 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-138** | W51 development implementation closed without its full end-of-wave `make gate` | a separate validation wave must run and record `GATE OK` for the exact candidate before any release claim |
 | **D-139** | W52 and subsequent code-only candidates defer QA, independent review, built-stand and manual acceptance | the validation wave must inventory every accumulated candidate and run the applicable checks on exact SHAs |
 | **D-140** | W52 and subsequent code-only candidates defer the full end-of-wave gate | the validation wave must record literal `GATE OK` on the release candidate after corrections |
+| **D-141** | the final run transaction blocks the lease heartbeat; a slow evidence gate can lose a paid result | W54 worker service |
+| **D-142** | artifact publication intents have no settlement state, so reconciliation never becomes clean after an interrupted publication | W54 custody (migration) |
+| **D-143** | a content-addressed artifact already rejected before W53-CLOSE stays banned (`rejected` is terminal) | W54 custody, with D-142 |
+| **D-144** | behind an outer TLS terminator every guest shares one throttle bucket and the session cookie lacks `Secure` | a production probe first, then trusted forwarded headers |
+| **D-145** | the queue's re-audit control follows job state, not run state | an `ExecutionQueueItem` field at the W58 contract |
+| **D-146** | concurrent runs of one version race on a content-addressed blob row insert | W54, before a second worker |
+| **D-147** | a pending request and an active account can hold one login | approval/profile completion take the queue lock |
+| **D-148** | the effect tables' state triggers guard UPDATE only | the next migration on those tables |
+| **D-149** | web islands have no interaction-test layer (Vitest in `node`) | owner/W58: a DOM test dependency |
+| **D-150** | a recorded run's prepared effect still reclaims as `outcome_unknown` | W54 worker-service freeze |
+| **D-151** | the frozen OpenAPI and `P02_SEAMS.md` prose still describe product reads without a role (`R-80`) | the next contract reseal (W58) |
+| **D-152** | one composition test is order-sensitive to leftover queued Jobs | test isolation |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
@@ -127,6 +142,128 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-152 — one composition test assumes no other queued job is claimable
+
+**Opened 2026-10-12 by `W53-CLOSE-INT`.** `tests/integration/composition/test_the_run_leaves_the_request_thread.py::test_serving_lifespan_dispatches_an_ordinary_run_adapter_submission`
+failed once inside the combined changed-context run (`queued` where `running` was expected) and
+passed 13/13 alone; `W53C-EXEC-01` saw the same. Earlier suites leave queued Jobs in the shared
+lane database, and the test parks other queued Jobs only after its own run starts, so a
+leftover Job can enter the gated adapter first. Since `W53C-EXEC-01` a pause race leaves a run
+queued instead of failing it, which makes such leftovers more likely. Test isolation, not
+product behaviour: park every foreign queued Job before unpausing, or give the test its own
+database clone.
+
+**Check:** the combined run `pytest tests/integration/runs tests/integration/composition` on one
+lane database passes twice in a row.
+
+### D-151 — R-80 left two prose descriptions of the old read rule
+
+**Opened 2026-10-12 by `W53-CLOSE-INT`.** `R-80` makes every product-data read require one
+role. The frozen OpenAPI operation descriptions and `docs/program/P02_SEAMS.md` still say
+that a complete account is enough. The behaviour and its literal register
+(`tests/integration/api/test_role_register.py`) are correct. The prose waits for the next
+contract reseal (W58), because W53-CLOSE changes no contract.
+
+**Check:** `rg -n "complete account" contracts/api/v1/openapi.json docs/program/P02_SEAMS.md`
+lists no sentence that grants product reads without a role.
+
+### D-150 — a recorded run's prepared effect still reclaims as `outcome_unknown`
+
+**Opened 2026-10-12 by `W53-CLOSE-INT` from `W53C-EXEC-01` C-05.** A failed recorded replay
+is now journalled `not_processed`. Lease reclaim still turns a recorded `prepared` effect
+into `outcome_unknown`, because the independent QA test
+`tests/integration/qa_w53/test_queue_and_effect_journal.py::test_lease_reclaim_journals_the_effect_outcome`
+pins that outcome. The rule only affects replay and tests: a recorded call spends nothing.
+Decide at W54's worker-service freeze whether recorded effects are reclaimable.
+
+**Check:** that QA test and `reclaim_expired` in `src/auditmanager/jobs/repository.py`.
+
+### D-149 — web islands have no interaction-test layer
+
+**Opened 2026-10-12 by `W53-CLOSE-INT`.** Vitest runs in `node`, with no DOM. Focus moves,
+outside clicks, the submit lock, the confirmation steps and post-mutation screens are tested
+through pure functions and recorded calls, never in a rendered DOM. Adding jsdom or Testing
+Library is a dependency and lock change. Owner or W58 decision.
+
+**Check:** `grep -n environment web/vitest.config.ts` prints `node`.
+
+### D-148 — the effect tables' state triggers guard UPDATE only
+
+**Opened 2026-10-12 by `W53-CLOSE-INT` from the W48 review (F8).** The triggers on
+`provider_call_effect` and `analysis_artifact_publication` in migration 0014 run on UPDATE,
+while `job` and `attempt` also guard INSERT. A direct INSERT can therefore create a terminal
+row. There is one writer, so the impact is low. Fold this into the next migration that
+touches these tables (W54).
+
+**Check:** `rg -n "BEFORE (INSERT OR )?UPDATE" db/migrations/versions/20261002_0014_durable_analysis_effects.py`.
+
+### D-147 — a pending request and an active account can hold one login
+
+**Opened 2026-10-12 by `W53-CLOSE-INT` from the W49 review (L-4).** Approval and profile
+completion take neither the registration queue lock nor a pending-request check. An approval
+that interleaves with a submit leaves a pending request that can never be approved
+(`login_taken`). The unique index prevents data damage.
+
+**Check:** `rg -n "advisory" src/auditmanager/access/registrations.py src/auditmanager/access/accounts.py`.
+
+### D-146 — concurrent runs of one version race on a content-addressed blob row
+
+**Opened 2026-10-12 by `W53-CLOSE-INT` from the W48 review (F5).** `record_declared` is a
+SELECT followed by an INSERT, with no `ON CONFLICT`. Two claimants of the same version would
+collide. This is masked today by one worker (`RUN_CONCURRENCY=1`). W54 custody must make the
+blob row idempotent before a second worker exists.
+
+**Check:** `rg -n "_INSERT" src/auditmanager/storage/blob_repository.py`.
+
+### D-145 — the queue's re-audit control is keyed to job state, not run state
+
+**Opened 2026-10-12 by `W53-CLOSE-INT` from the W52/W53 web review (F3).** A terminal run
+whose job is stuck non-terminal shows only «Отменить прогон». The run state is not on
+`ExecutionQueueItem`, so fixing this needs a contract field. Due at the W58 contract
+`1.0.0`.
+
+**Check:** `rg -n "reaudit" web/src/entities/execution/model/presentation.ts`.
+
+### D-144 — the edge behind an outer TLS terminator: one guest bucket, no `Secure`
+
+**Opened 2026-10-12 by `W53-CLOSE-INT` from the BFF review (F1, F2).** If production
+terminates TLS in front of this nginx, `X-Real-IP` and `$scheme` describe the terminator, not
+the browser. In that case every guest shares one throttle bucket, so sign-in can be denied
+cheaply, and the session cookie is set without `Secure`. Repair: measure production first,
+then trust the terminator with `set_real_ip_from` and a forwarded scheme.
+
+**Check:** on the deployed host, `curl -si -X POST https://<host>/bff/v1/session` shows
+`Secure` in `Set-Cookie`, and the proxy access log shows distinct client addresses.
+
+### D-143 — a content-addressed artifact that was already rejected stays banned
+
+**Opened 2026-10-12 by `W53-CLOSE-INT` from the W48 review (F1).** `W53C-STORE-01` stops any
+new rejection of an analysis artifact (`reject_unpublished` refuses). A blob that was
+rejected before this wave cannot re-enter, because `rejected` is terminal. Resolve this in
+W54 custody together with D-142.
+
+**Check:** `SELECT count(*) FROM blob WHERE state = 'rejected'` on the working stand is `0`,
+or W54 provides a re-entry.
+
+### D-142 — artifact publication intents have no settlement state
+
+**Opened 2026-10-12 by `W53-CLOSE-INT` from the W48 review (F2).** Only `prepared → bound`
+exists. An interrupted publication therefore stays `prepared`, and the reconciliation report
+is never clean again. A settlement state is a migration (W54 custody).
+
+**Check:** `rg -n "prepared|bound" db/migrations/versions/20261009_0017_execution_queue.py`
+and the report's `is_clean` after a crash → rerun cycle.
+
+### D-141 — the final run transaction blocks the lease heartbeat
+
+**Opened 2026-10-12 by `W53-CLOSE-INT` from the W53 review (F4).** The text stage holds the
+lease row `FOR UPDATE` through the evidence gate and the terminal writes. Each heartbeat
+waits its 2 s lock timeout and fails. A gate that runs past the remaining lease margin
+(about 40 s) loses a paid result, which is recorded as `provider_outcome_unknown`. This needs
+a worker-service design: W54.
+
+**Check:** `rg -n "lock_timeout|require_current" src/auditmanager/jobs/repository.py src/auditmanager/runs/executor.py`.
 
 ### D-139 — later code-only waves defer QA and live checks
 

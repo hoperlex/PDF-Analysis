@@ -121,6 +121,17 @@
 
 ## Active development, 2026-10-08 — W52 Stage C backend integration
 
+**2026-10-12 — W53-CLOSE.** After W53 reached `origin/dev` (`8722660`, full gate recorded in the
+W53 integrator handoff), a static review of W48–W53 found no Critical or High defect. The owner
+answered four questions (`R-80` … `R-83`) and ordered one closure wave (`R-84`). Six parallel
+lanes closed thirty findings (`dispatch/W53-CLOSE-PLAN.md` §2): a pause no longer fails a queued
+run; a re-audit records the configuration it runs; a role-less account reads no product data;
+BFF form doors refuse cross-site requests; the edge sends security headers; analysis artifacts
+can no longer be banned by reconciliation; and release history survives an image rollback. No
+contract, migration or dependency changed. Acceptance was light by `R-84`, recorded in
+`W53-CLOSE-INT.md`. The deferred remainder is `D-141` … `D-152`. W53's own owner stops are still
+open, as are `D-137` … `D-140`. The next planned wave is W54.
+
 W49 — accounts with e-mail sign-in, a role set `{expert, admin}`, registration requests and
 administrator account management (`R-55` … `R-61`) — was published to `origin/dev` by
 `W49-INT-CLOSE`. W50 (the shell) adds one registry for **22** real screens, guards and validated
