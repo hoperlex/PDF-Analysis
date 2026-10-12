@@ -257,7 +257,7 @@ def _ordered_sql(parsed: ParsedQuery) -> str:
     return f"""
     WITH hits AS (
         SELECT p.norm_paragraph_id, d.norm_document_id, p.ordinal,
-               array_to_string(d.designation_tokens, ' ') AS designation_key
+               array_to_string(d.designation_tokens, ' ') COLLATE "C" AS designation_key
           FROM norm_paragraph p
           JOIN norm_document d
             ON d.norms_snapshot_id = p.norms_snapshot_id
@@ -266,7 +266,7 @@ def _ordered_sql(parsed: ParsedQuery) -> str:
            AND p.text_reliability = 'reliable'
            {designation}
            {clause}
-         ORDER BY designation_key COLLATE "C", d.norm_document_id COLLATE "C", p.ordinal
+         ORDER BY designation_key, d.norm_document_id COLLATE "C", p.ordinal
          LIMIT :search_window
     ),
     page AS (
