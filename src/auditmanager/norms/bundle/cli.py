@@ -14,10 +14,16 @@
     python -m auditmanager.norms.bundle report /bundles/<KEY> --copy-record /run/copy-record.json
     python -m auditmanager.norms.bundle requeue /bundles/<KEY>
 
-Exit status: 0 done (``report``: a full match); 1 ``report`` found a difference; 2 refused
-(``bundle: REFUSED [<reason>]: …`` on stderr, nothing written by the refused step); 75 the
-import is not finished (an admission is pending or poisoned; the bundle is kept, run
-``import`` again, after ``requeue`` for poisoned ones).
+Exit status: 0 done (``report``: a full match and no custody incident); 1 ``report`` found a
+difference or a custody incident; 2 refused (``bundle: REFUSED [<reason>]: …`` on stderr,
+nothing written by the refused step) -- including an object store or database that cannot
+be configured or reached (``blob_store_unavailable``, ``database_unavailable``,
+`W54-JUDGE-A` F5); 75 the import is not finished (an admission is pending or poisoned; the
+bundle is kept, run ``import`` again, after ``requeue`` for poisoned ones).
+
+``import`` and ``report`` both open the object store: ``report`` runs the custody reconciler
+before its comparison (`W54-JUDGE-A` F2), because the inbound key discards ``objects/`` after
+a report that exits 0.
 """
 
 from __future__ import annotations
@@ -29,7 +35,7 @@ from pathlib import Path
 
 from auditmanager.shared.db.errors import DatabaseError
 from auditmanager.shared.errors import DomainError
-from auditmanager.storage.public import BlobStore
+from auditmanager.storage.public import BlobStore, StorageError
 
 from .errors import EXIT_OK, EXIT_REFUSED, BundleRefused
 from .layout import MANIFEST_NAME, verify_bundle
@@ -153,7 +159,7 @@ def main(argv: Sequence[str] | None = None, *, stand_factory: StandFactory | Non
         if args.command == "import":
             return import_bundle(args.bundle, copy_record=args.copy_record, stand=build_stand(True))
         if args.command == "report":
-            return report_bundle(args.bundle, copy_record=args.copy_record, stand=build_stand(False))
+            return report_bundle(args.bundle, copy_record=args.copy_record, stand=build_stand(True))
         return requeue_bundle(args.bundle, stand=build_stand(False))
     except BundleRefused as exc:
         print(f"bundle: REFUSED [{exc.reason}]: {exc.message}", file=sys.stderr)
@@ -164,6 +170,12 @@ def main(argv: Sequence[str] | None = None, *, stand_factory: StandFactory | Non
         return EXIT_REFUSED
     except DatabaseError as exc:
         print(f"bundle: REFUSED [database_unavailable]: {exc}", file=sys.stderr)
+        return EXIT_REFUSED
+    except StorageError as exc:
+        # The settings (`StorageConfigurationError`), a missing bucket, an outage or an
+        # integrity failure: all render key-free (`storage.errors`), and none is a report
+        # mismatch, which is what exit 1 would say.
+        print(f"bundle: REFUSED [blob_store_unavailable]: {exc}", file=sys.stderr)
         return EXIT_REFUSED
 
 

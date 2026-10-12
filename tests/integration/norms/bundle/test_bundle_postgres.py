@@ -51,7 +51,7 @@ from auditmanager.norms.custody import blob_id_for
 from auditmanager.norms.embedding_repository import NormEmbeddingRepository
 from auditmanager.norms.repository import NormsRepository
 from auditmanager.shared.identity import NormsSnapshotId
-from auditmanager.storage import S3BlobStore, StorageUnavailableError
+from auditmanager.storage import BlobNotFoundError, S3BlobStore, StorageUnavailableError
 from auditmanager.storage.public import (
     BlobMetadataRepository,
     declare_blob,
@@ -218,6 +218,42 @@ class OutageStore:
 
     def __getattr__(self, name: str):
         return getattr(self._store, name)
+
+
+class MissingObjectStore:
+    """The real store, except that one Blob's object is gone (`W54-JUDGE-A` F2)."""
+
+    def __init__(self, store: S3BlobStore, blob_id: str) -> None:
+        self._store = store
+        self._missing = blob_id
+
+    def inspect(self, blob_id):
+        if str(blob_id) == self._missing:
+            raise BlobNotFoundError()
+        return self._store.inspect(blob_id)
+
+    def __getattr__(self, name: str):
+        return getattr(self._store, name)
+
+
+def test_postgres_a_missing_object_fails_the_report_and_the_import(
+    promoted: Promoted, stand: Stand, tmp_path: Path
+) -> None:
+    """The custody reconciler runs in ``report`` and in the import's step 5; an incident is
+    a mismatch, so the inbound key's discard (exit 0 only) stays closed."""
+    record = open_waiver(stand, tmp_path)
+    status, lines = _import(promoted.bundle, record, stand)
+    assert status == EXIT_OK and "custody_incidents: 0 match" in lines, lines
+    missing = _manifest(promoted.bundle).blob_ids[0]
+    broken = dataclasses.replace(stand, store=MissingObjectStore(stand.store, missing))  # type: ignore[arg-type]
+    status, lines = _report(promoted.bundle, record, broken)
+    assert status == EXIT_MISMATCH, lines
+    assert any(line.startswith("custody incident: object_missing") and missing in line for line in lines)
+    # One incident per confirmed admission of that Blob: one or two (a shared object).
+    assert any(line.startswith("custody_incidents: stand ") and line.endswith(" expected 0 MISMATCH")
+               for line in lines), lines
+    status, lines = _import(promoted.bundle, record, broken)
+    assert status == EXIT_MISMATCH, lines
 
 
 def _make_due(engine: Engine) -> None:

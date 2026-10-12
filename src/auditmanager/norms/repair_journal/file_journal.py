@@ -93,6 +93,7 @@ class LocalJournal:
         base_snapshot: str | None = None,
         model: str | None = None,
         ceiling_usd: Decimal | None = None,
+        drop_sums_sha256: str | None = None,
         now: str = "",
         read_only: bool = False,
     ) -> LocalJournal:
@@ -100,7 +101,14 @@ class LocalJournal:
 
         A writer takes the lock exclusively, so two runners never append to one journal; a
         reader takes it shared. A writer's header must agree with the one on file: a journal
-        is bound to one base snapshot, one model and one ceiling.
+        is bound to one base snapshot, one model, one ceiling and one operator
+        ``SHA256SUMS`` (its SHA-256, ``drop_sums_sha256``: the sums file step 0 checked the
+        crops against, `W54-JUDGE-Y` F3).
+
+        **A header written before the sums were recorded** carries no
+        ``drop_sums_sha256``. A writer naming one is refused (``journal_sums_unrecorded``)
+        rather than appending under a header that cannot say which drop it was taken over;
+        no paid journal predates this rule, so nothing is migrated.
         """
         if not read_only:
             created = not self.directory.exists()
@@ -132,8 +140,11 @@ class LocalJournal:
             return self
         self._handle = open(self.path, "ab")  # noqa: SIM115 - held until close()
         if self.header is None:
-            if base_snapshot is None or model is None or ceiling_usd is None:
-                raise JournalRefused("a new journal needs its base snapshot, model and ceiling")
+            if base_snapshot is None or model is None or ceiling_usd is None or not drop_sums_sha256:
+                raise JournalRefused(
+                    "a new journal needs its base snapshot, model, ceiling and the SHA-256 of "
+                    "the operator's SHA256SUMS"
+                )
             self._append(
                 "header",
                 {
@@ -141,20 +152,29 @@ class LocalJournal:
                     "base_snapshot": base_snapshot,
                     "model": model,
                     "ceiling_usd": str(ceiling_usd),
+                    "drop_sums_sha256": drop_sums_sha256,
                 },
                 now,
             )
         else:
+            if drop_sums_sha256 is not None and "drop_sums_sha256" not in self.header:
+                raise JournalRefused(
+                    "journal_sums_unrecorded: this journal's header records no SHA256SUMS "
+                    "digest, so it cannot say which drop its crops were checked against; "
+                    "start a new journal directory"
+                )
             expected = {
                 "base_snapshot": base_snapshot,
                 "model": model,
                 "ceiling_usd": None if ceiling_usd is None else str(ceiling_usd),
+                "drop_sums_sha256": drop_sums_sha256,
             }
             for name, value in expected.items():
                 if value is not None and self.header.get(name) != value:
                     raise JournalRefused(
                         f"this journal was opened for {name} {self.header.get(name)!r}, not "
-                        f"{value!r}; a journal is bound to one base snapshot, model and ceiling"
+                        f"{value!r}; a journal is bound to one base snapshot, model, ceiling "
+                        "and SHA256SUMS"
                     )
         return self
 

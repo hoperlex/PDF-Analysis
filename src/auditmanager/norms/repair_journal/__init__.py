@@ -6,6 +6,7 @@ provider: :mod:`auditmanager.norms.__main__` composes the proxy behind :class:`R
 """
 
 from .file_journal import LocalJournal
+from .ledger_file import LEDGER_SUMS_FIELD, ledger_document, read_ledger_file
 from .model import (
     CEILING_USD,
     MAX_CONSECUTIVE_UNKNOWN,
@@ -44,6 +45,7 @@ from .runner import (
 
 __all__ = [
     "CEILING_USD",
+    "LEDGER_SUMS_FIELD",
     "MAX_CONSECUTIVE_UNKNOWN",
     "MAX_PROVIDER_TRIES",
     "RATE_CARD",
@@ -76,8 +78,10 @@ __all__ = [
     "StoreConflict",
     "UnreadableAnswer",
     "build_ledger",
+    "ledger_document",
     "money",
     "page_progress",
     "rate_for",
+    "read_ledger_file",
     "unknown_outcome_bound",
 ]

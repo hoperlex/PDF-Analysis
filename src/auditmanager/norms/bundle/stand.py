@@ -22,12 +22,16 @@ serving process (`W54-PLAN.md` §3.5). The bundle is mounted read-only at
    another key, is refused.
 4. *The build*, by the computed chunk key, in its own transaction ending with the completion
    row; its digest must be the manifest's.
-5. *Report*: the same comparison ``report`` prints; exit 0 only on a full match. Deleting
-   the objects is the inbound key's ``report`` verb, after a matched report and a successful
-   import (`W54-BUNDLE-01` report §4); the container cannot write the read-only mount.
+5. *Reconcile and report*: the custody reconciler point-inspects (``HEAD``) the object of
+   every confirmed admission (`W54-JUDGE-A` F2), then the same comparison ``report`` prints;
+   exit 0 only on a full match **and** no custody incident. Deleting the objects is the
+   inbound key's ``report`` verb, after a matched report and a successful import
+   (`W54-BUNDLE-01` report §4); the container cannot write the read-only mount.
 
-``report`` is read-only. ``requeue`` returns this bundle's ``poisoned`` admissions to
-``pending``.
+``report`` is read-only. With an object store (the command line always gives it one) it runs
+the same reconciler first, so the shell's discard follows a report that has just seen every
+confirmed object in the store, never a database-only one. ``requeue`` returns this bundle's
+``poisoned`` admissions to ``pending``.
 """
 
 from __future__ import annotations
@@ -53,6 +57,8 @@ from ..custody import (
     Admission,
     AdmissionState,
     CustodyDispatcher,
+    CustodyReconciler,
+    CustodyReconciliation,
     CustodyReport,
     admit,
     publish_bindings,
@@ -67,6 +73,7 @@ from ..repository import (
     SnapshotImportConflict,
     SnapshotRowsInvalid,
 )
+from ..snapshot import SnapshotRow
 from .contents import iter_build, read_rows
 from .copy_record import (
     CopyRecord,
@@ -78,7 +85,7 @@ from .copy_record import (
 )
 from .errors import EXIT_INCOMPLETE, EXIT_MISMATCH, EXIT_OK, BundleRefused
 from .layout import MANIFEST_NAME, object_path, verify_bundle
-from .manifest import Manifest, parse_manifest
+from .manifest import Manifest, SnapshotFacts, parse_manifest
 
 Say = Callable[[str], None]
 
@@ -153,6 +160,18 @@ def _verified_manifest(directory: Path, *, only_manifest: bool) -> tuple[Manifes
     return manifest, bundle.objects_discarded
 
 
+def snapshot_facts(snapshot: SnapshotRow) -> SnapshotFacts:
+    """The manifest's ``snapshot`` object as the rows state it (`W54-JUDGE-Y` F2)."""
+    return SnapshotFacts(
+        norms_snapshot_id=snapshot.norms_snapshot_id,
+        base_content_key=snapshot.base_content_key,
+        content_digest=snapshot.content_digest,
+        segmentation_profile=snapshot.segmentation_profile,
+        repair_count=snapshot.repair_count,
+        unreliable_count=snapshot.unreliable_count,
+    )
+
+
 def _custody(session: Session, manifest: Manifest) -> CustodyReport:
     return report(session, role=NORM_SOURCE, targets=manifest.targets)
 
@@ -193,6 +212,12 @@ def import_bundle(
     if rows.row_digest != manifest.row_digest:
         raise BundleRefused(
             "bundle_rows_invalid", f"the rows digest to {rows.row_digest}; the manifest says {manifest.row_digest}"
+        )
+    row_facts = snapshot_facts(rows.snapshot)
+    if row_facts != manifest.snapshot:
+        raise BundleRefused(
+            "manifest_snapshot_differs",
+            f"the manifest's snapshot facts {manifest.snapshot!r} are not the rows' {row_facts!r}",
         )
     say(f"bundle: {manifest.content_key} verified ({len(manifest.files)} files"
         f"{', objects already discarded' if discarded else ''})")
@@ -264,6 +289,13 @@ def import_bundle(
                 "bundle again",
             )
         session.rollback()
+    if stand.store is None:
+        raise BundleRefused(
+            "blob_store_unavailable",
+            "the import has no object store: step 2 dispatches to it and step 5 reconciles "
+            "custody against it",
+        )
+    store = stand.store
     reached("verified")
 
     # 2. Admit, then dispatch until idle.
@@ -277,10 +309,8 @@ def import_bundle(
     say(f"admissions: {admitted} new, {replayed} already held")
     reached("admitted")
     if not discarded:
-        if stand.store is None:
-            raise BundleRefused("blob_store_unavailable", "the import has no object store to dispatch to")
         dispatched = CustodyDispatcher(
-            stand.store, source=BundleSource(directory), session_factory=stand.session_factory
+            store, source=BundleSource(directory), session_factory=stand.session_factory
         ).dispatch(until_idle=True)
         say(f"dispatch: {len(dispatched.steps)} tries this pass")
     reached("dispatched")
@@ -352,7 +382,7 @@ def import_bundle(
     say(f"build: {'loaded' if build.created else 'already stored'} {build.embedding_set_sha256}")
     reached("build")
 
-    # 5. The report decides.
+    # 5. The reconciler, then the report, decide.
     status = report_bundle(directory, copy_record=copy_record, stand=stand, say=say)
     reached("reported")
     return status
@@ -480,18 +510,44 @@ def compare_stand(
     return out
 
 
+def reconcile_custody(stand: Stand, say: Say = print) -> list[Comparison]:
+    """`W54-JUDGE-A` F2: the custody reconciler over every confirmed admission. Read-only.
+
+    Every incident is printed and makes the report a mismatch, so the shell's discard of
+    ``objects/`` (which needs exit 0) stays closed while any confirmed object is missing or
+    differs. The scope is all of custody, not this bundle: an integrity incident anywhere
+    is a reason not to throw away the bytes that could repair it.
+    """
+    if stand.store is None:
+        raise BundleRefused("blob_store_unavailable", "custody cannot be reconciled without the object store")
+    result: CustodyReconciliation = CustodyReconciler(
+        stand.store, session_factory=stand.session_factory
+    ).reconcile()
+    for incident in result.incidents:
+        say(f"custody incident: {incident.kind.value} admission {incident.admission_id} "
+            f"blob {incident.blob_id}")
+    return [
+        Comparison("custody_objects_checked", result.checked_blobs, None, compared=False),
+        Comparison("custody_incidents", len(result.incidents), 0),
+        Comparison("custody_redrive_due", len(result.redrive_due), None, compared=False),
+    ]
+
+
 def report_bundle(directory: Path, *, copy_record: Path | None, stand: Stand, say: Say = print) -> int:
-    """``report``: read-only. Exit 0 only when every figure matches."""
+    """``report``: read-only. Exit 0 only when every figure matches and, with a store, no
+    custody incident is found."""
     manifest, discarded = _verified_manifest(directory, only_manifest=True)
     record = read_copy_record(copy_record)
     fingerprint = compute_fingerprint(stand.engine)
+    custody = [] if stand.store is None else reconcile_custody(stand, say)
     session = stand.session_factory()
     try:
-        comparisons = compare_stand(session, manifest, record, fingerprint)
+        comparisons = compare_stand(session, manifest, record, fingerprint) + custody
     finally:
         session.rollback()
         session.close()
-    say(f"report: {manifest.content_key} ({'objects discarded' if discarded else 'objects staged'})")
+    say(f"report: {manifest.content_key} ({'objects discarded' if discarded else 'objects staged'}"
+        f"{'' if stand.store is not None else '; custody not reconciled: no object store'})")
     for comparison in comparisons:
         say(comparison.render())
     mismatched = [comparison.name for comparison in comparisons if not comparison.matches]
@@ -525,6 +581,8 @@ __all__ = [
     "Stand",
     "compare_stand",
     "import_bundle",
+    "reconcile_custody",
+    "snapshot_facts",
     "report_bundle",
     "requeue_bundle",
 ]

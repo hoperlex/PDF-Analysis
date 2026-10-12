@@ -35,6 +35,8 @@ from auditmanager.norms.rerecognition import PageToRecognise
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 MODEL = "claude-opus-5"
 BASE = "2026-07-23..2026-08-20+17d.4b74348debf7"
+#: The SHA-256 of the operator's ``SHA256SUMS`` a journal header records (`W54-JUDGE-Y` F3).
+SUMS = "5" * 64
 PIXELS = 1241 * 1754
 
 CLEAN_PAGE = (
@@ -339,7 +341,7 @@ class Kit:
             self.journal.close()
         self.journal = LocalJournal(self.directory).open(
             base_snapshot=BASE, model=self.transport.model, ceiling_usd=self.ceiling,
-            now=self.clock(),
+            drop_sums_sha256=SUMS, now=self.clock(),
         )
         return DurableRepairRunner(
             journal=self.journal, store=self.store, transport=self.transport,

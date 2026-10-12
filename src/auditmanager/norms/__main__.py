@@ -66,7 +66,14 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Self
 
-from auditmanager.norms.corpus_source import crop_path, degenerate_pages, snapshot_of
+from auditmanager.norms.corpus_source import (
+    DropSums,
+    DropSumsInvalid,
+    crop_path,
+    degenerate_pages,
+    read_drop_sums,
+    snapshot_of,
+)
 from auditmanager.norms.repair_journal import (
     CEILING_USD,
     CallFailure,
@@ -80,6 +87,7 @@ from auditmanager.norms.repair_journal import (
     SqlCallStore,
     UnreadableAnswer,
     build_ledger,
+    ledger_document,
     money,
     rate_for,
     unknown_outcome_bound,
@@ -111,7 +119,6 @@ EXIT_REFUSED = 2
 EXIT_STOPPED = 3
 
 _RULING = re.compile(r"^R-[0-9]{1,4}$")
-_SUM_LINE = re.compile(r"^([0-9a-f]{64}) [ *](.+)$")
 
 
 class RunRefused(RuntimeError):
@@ -179,30 +186,26 @@ def recognition_body(png: bytes, *, model: str, max_output_tokens: int) -> dict[
     }
 
 
-def verify_crops_against_sums(root: Path, pages: Iterable[PageToRecognise], sums: Path) -> int:
+def verify_crops_against_sums(root: Path, pages: Iterable[PageToRecognise], sums: Path) -> DropSums:
     """Every crop to be paid for, checked against the operator's ``SHA256SUMS`` (step 0).
 
-    The file is ``sha256sum`` output taken over the drop: ``<64 hex>  <path>`` with paths
-    relative to the corpus root (a leading ``./`` is accepted). A crop with no line, or with
-    other bytes than its line says, refuses the run before anything is spent.
+    The file is ``sha256sum`` output taken over the drop, read by the one parser the bundle
+    export also uses (:func:`~auditmanager.norms.corpus_source.read_drop_sums`: lowercase
+    digests, a leading ``./`` accepted, a path named twice refused). A crop with no line, or
+    with other bytes than its line says, refuses the run before anything is spent. Returns
+    the parsed file, whose SHA-256 the journal header and the ledger record (`W54-JUDGE-Y` F3).
     """
     import hashlib
 
     if not sums.is_file():
         raise RunRefused("no SHA256SUMS file at the path given to --sums")
-    recorded: dict[str, str] = {}
-    for number, raw in enumerate(sums.read_text(encoding="utf-8").splitlines(), start=1):
-        if not raw.strip():
-            continue
-        match = _SUM_LINE.match(raw)
-        if match is None:
-            raise RunRefused(f"SHA256SUMS line {number} is not '<sha256>  <path>'")
-        path = match.group(2)
-        recorded[path.removeprefix("./")] = match.group(1)
-    checked = 0
+    try:
+        parsed = read_drop_sums(sums)
+    except DropSumsInvalid as invalid:
+        raise RunRefused(f"{invalid.reason}: {invalid.message}") from None
     for page in pages:
         relative = crop_path(root, page.document_slug, page.block_id).relative_to(root).as_posix()
-        expected = recorded.get(relative)
+        expected = parsed.entries.get(relative)
         if expected is None:
             raise RunRefused(f"{page.document_slug}/{page.block_id}: the crop has no SHA256SUMS line")
         if hashlib.sha256(page.crop).hexdigest() != expected:
@@ -210,8 +213,7 @@ def verify_crops_against_sums(root: Path, pages: Iterable[PageToRecognise], sums
                 f"{page.document_slug}/{page.block_id}: the crop differs from its SHA256SUMS "
                 "line; the drop changed since step 0"
             )
-        checked += 1
-    return checked
+    return parsed
 
 
 # --- the proxy behind the journal's transport port ----------------------------------------
@@ -564,7 +566,7 @@ def _open_run(
     base_url, token, model = resolve_transport(environment)
     rate_for(model)
     pages = _pages(args.corpus)
-    verify_crops_against_sums(args.corpus, pages, args.sums)
+    sums = verify_crops_against_sums(args.corpus, pages, args.sums)
     base = snapshot_of(args.corpus).snapshot_id
     if args.base_snapshot and args.base_snapshot != base:
         raise RunRefused(
@@ -573,10 +575,22 @@ def _open_run(
     store = store_factory(environment)
     transport = transport_factory(base_url=base_url, token=token, model=model, dpi=args.dpi)
     journal = LocalJournal(args.journal_dir).open(
-        base_snapshot=base, model=model, ceiling_usd=CEILING_USD, now=_now()
+        base_snapshot=base, model=model, ceiling_usd=CEILING_USD,
+        drop_sums_sha256=sums.sha256, now=_now(),
     )
     runner = DurableRepairRunner(journal=journal, store=store, transport=transport, clock=_now)
     return runner, pages, journal, base
+
+
+def _journal_sums(header: dict[str, Any] | None) -> str:
+    """The SHA-256 of the ``SHA256SUMS`` the journal's crops were checked against."""
+    value = (header or {}).get("drop_sums_sha256")
+    if not isinstance(value, str) or not value:
+        raise RunRefused(
+            "journal_sums_unrecorded: the journal header records no SHA256SUMS digest, so a "
+            "ledger from it could not name the drop its crops came from"
+        )
+    return value
 
 
 def _finish(
@@ -593,7 +607,10 @@ def _finish(
             runner.journal, pages, runner.transport, model=runner.model,
             base_snapshot_id=base, generated_at=_now(),
         )
-        _write_json_atomically(journal_dir / LEDGER_FILENAME, ledger.as_document())
+        _write_json_atomically(
+            journal_dir / LEDGER_FILENAME,
+            ledger_document(ledger, drop_sums_sha256=_journal_sums(runner.journal.header)),
+        )
         document["ledger"] = {
             "path": str(journal_dir / LEDGER_FILENAME),
             "applied": len(ledger.applied),
@@ -653,13 +670,14 @@ def _command_ledger(args: argparse.Namespace, _environment: dict[str, str]) -> i
         base = snapshot_of(args.corpus).snapshot_id
         if header.get("base_snapshot") != base:
             raise RunRefused("the corpus is not the snapshot this journal was taken against")
+        drop_sums = _journal_sums(header)
         ledger = build_ledger(
             journal, _pages(args.corpus), ReplayReader(), model=str(header.get("model")),
             base_snapshot_id=base, generated_at=_now(),
         )
     finally:
         journal.close()
-    _write_json_atomically(args.out, ledger.as_document())
+    _write_json_atomically(args.out, ledger_document(ledger, drop_sums_sha256=drop_sums))
     print(json.dumps({"ledger": str(args.out), "applied": len(ledger.applied),
                       "unreliable": ledger.unreliable_count}, indent=2))
     return 0

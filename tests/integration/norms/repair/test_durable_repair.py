@@ -31,6 +31,7 @@ from tests.integration.norms.repair.support import (
     DEGENERATE_PAGE,
     MODEL,
     PIXELS,
+    SUMS,
     Answer,
     AnswerThenFail,
     Fail,
@@ -486,5 +487,6 @@ def test_a_journal_is_bound_to_its_model(kit: Kit) -> None:
     kit.close()
     with pytest.raises(JournalRefused, match="model"):
         LocalJournal(kit.directory).open(
-            base_snapshot=BASE, model="claude-sonnet-5", ceiling_usd=kit.ceiling, now="t",
+            base_snapshot=BASE, model="claude-sonnet-5", ceiling_usd=kit.ceiling,
+            drop_sums_sha256=SUMS, now="t",
         )

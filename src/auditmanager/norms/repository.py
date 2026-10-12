@@ -10,6 +10,7 @@ lifetime belongs to the caller.
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
@@ -36,6 +37,7 @@ from .corpus_source import CorpusProjection, ProjectedCorpusDocument
 from .model import Chunk, Paragraph, ParagraphKind, TextReliability
 from .snapshot import (
     BASE_SEGMENTATION_PROFILE,
+    DIGEST_CHARACTERS,
     SEGMENTATION_TERM,
     DocumentRow,
     ParagraphRow,
@@ -295,6 +297,82 @@ _RELIABILITY_VALUES = frozenset(value.value for value in TextReliability)
 _KIND_VALUES = frozenset(value.value for value in ParagraphKind)
 
 
+#: `D-126`'s key, as ``snapshot.derive``, ``repair.repaired_snapshot`` and
+#: ``snapshot.with_segmentation_profile`` mint it:
+#: ``<window>+<d>d[+<n>r[+<m>u]].<12 hex>[+seg-<profile>]``.
+_KEY = re.compile(
+    r"(?P<window>undated|[0-9]{4}-[0-9]{2}-[0-9]{2}\.\.[0-9]{4}-[0-9]{2}-[0-9]{2})"
+    r"\+(?P<undated>0|[1-9][0-9]*)d"
+    r"(?:\+(?P<repaired>0|[1-9][0-9]*)r(?:\+(?P<unreliable>[1-9][0-9]*)u)?)?"
+    rf"\.(?P<digest>[0-9a-f]{{{DIGEST_CHARACTERS}}})"
+    r"(?:\+seg-[a-z0-9]+(?:-[a-z0-9]+)*)?"
+)
+_FULL_DIGEST = re.compile(r"[0-9a-f]{64}")
+
+
+def _require_key_terms(snapshot: SnapshotRow) -> None:
+    """`W54-JUDGE-Y` F1: each key's terms say what the row's own columns say.
+
+    Both keys carry the row's window and ``+<d>d``. The base key carries no repair term. The
+    content key carries ``+<n>r`` (and ``+<m>u`` when ``m > 0``) exactly when something was
+    repaired or marked unreliable, with ``n = repair_count`` and ``m = unreliable_count``,
+    and its 12 hex digits are the head of ``content_digest``; otherwise it *is* the base key.
+    ``ck_norms_snapshot_raw_key`` states the last equivalence in the database; this states
+    all of them before a row is written.
+    """
+    if _FULL_DIGEST.fullmatch(snapshot.content_digest) is None:
+        raise SnapshotRowsInvalid(
+            f"key_terms: content_digest {snapshot.content_digest!r} is not 64 lowercase hex digits"
+        )
+    if (snapshot.drawn_from is None) != (snapshot.drawn_to is None):
+        raise SnapshotRowsInvalid("key_terms: drawn_from and drawn_to are set together or not at all")
+    window = "undated" if snapshot.drawn_from is None else f"{snapshot.drawn_from}..{snapshot.drawn_to}"
+    changed = bool(snapshot.repair_count or snapshot.unreliable_count)
+    for name in ("content_key", "base_content_key"):
+        key = getattr(snapshot, name)
+        terms = _KEY.fullmatch(key)
+        if terms is None:
+            raise SnapshotRowsInvalid(f"key_terms: {name} {key!r} is not a D-126 snapshot key")
+        if terms["window"] != window or int(terms["undated"]) != snapshot.undated_documents:
+            raise SnapshotRowsInvalid(
+                f"key_terms: {name} {key!r} names window {terms['window']} and "
+                f"+{terms['undated']}d; the row says {window} and +{snapshot.undated_documents}d"
+            )
+        repaired = terms["repaired"]
+        if name == "base_content_key":
+            if repaired is not None:
+                raise SnapshotRowsInvalid(f"key_terms: base_content_key {key!r} carries a repair term")
+            continue
+        if not changed:
+            if repaired is not None:
+                raise SnapshotRowsInvalid(
+                    f"key_terms: content_key {key!r} carries a repair term; the row repairs "
+                    "nothing and marks nothing unreliable"
+                )
+        else:
+            unreliable = int(terms["unreliable"] or 0)
+            if repaired is None or (int(repaired), unreliable) != (
+                snapshot.repair_count, snapshot.unreliable_count
+            ):
+                raise SnapshotRowsInvalid(
+                    f"key_terms: content_key {key!r} does not carry "
+                    f"+{snapshot.repair_count}r"
+                    + (f"+{snapshot.unreliable_count}u" if snapshot.unreliable_count else "")
+                    + f" (repair_count {snapshot.repair_count}, unreliable_count "
+                    f"{snapshot.unreliable_count})"
+                )
+        if terms["digest"] != snapshot.content_digest[:DIGEST_CHARACTERS]:
+            raise SnapshotRowsInvalid(
+                f"key_terms: content_key {key!r} names digest {terms['digest']}; content_digest "
+                f"begins {snapshot.content_digest[:DIGEST_CHARACTERS]}"
+            )
+    if changed == (snapshot.content_key == snapshot.base_content_key):
+        raise SnapshotRowsInvalid(
+            "key_terms: the base key equals the content key exactly when nothing was repaired "
+            "and nothing is unreliable (ck_norms_snapshot_raw_key)"
+        )
+
+
 def validate_snapshot_rows(rows: SnapshotRows) -> None:
     """Refuse rows that are not one well-formed snapshot, before anything is read or written.
 
@@ -303,7 +381,9 @@ def validate_snapshot_rows(rows: SnapshotRows) -> None:
     document's paragraph count and its ordinals ``0..n-1`` agree with the rows; every
     paragraph names a document in the set; vocabularies are the stored ones; an unreliable
     paragraph implies ``unreliable_count > 0``; and the key carries the segmentation profile
-    exactly as `D-126` mints it. The repaired-key equivalence is ``ck_norms_snapshot_raw_key``'s.
+    exactly as `D-126` mints it; and each key's window, ``+<d>d``, ``+<n>r``/``+<m>u`` and 12
+    hex digits agree with the row's dates, counts and ``content_digest`` (`W54-JUDGE-Y` F1,
+    :func:`_require_key_terms`), which includes ``ck_norms_snapshot_raw_key``'s equivalence.
     """
     snapshot = rows.snapshot
     try:
@@ -363,6 +443,7 @@ def validate_snapshot_rows(rows: SnapshotRows) -> None:
         raise SnapshotRowsInvalid(
             f"{unreliable} unreliable paragraph(s) under a snapshot with unreliable_count = 0"
         )
+    _require_key_terms(snapshot)
 
 
 def _batches(rows: list[dict[str, object]], size: int = 1000):

@@ -567,28 +567,37 @@ def _run_text_analysis_stage(
     return result, outcome.artifact, attempts
 
 
-def _run_evidence_gate(
-    session: Session,
+@dataclass(frozen=True)
+class _GateInputs:
+    """The three artifacts the evidence gate consumes, read before the run row is locked."""
+
+    observation_set: ObservationSet
+    text_layer: TextLayer
+    block_index: BlockIndex
+
+
+def _read_gate_inputs(
     *,
-    run: RunRow,
     observations_document: Mapping[str, Any] | None,
     outputs: _StageOutputs,
     blob_store: BlobStore,
-) -> tuple[bool, PublicationResult | None]:
-    """Ground every proposed observation and publish what survives.
+) -> _GateInputs | None:
+    """Read what the evidence gate consumes from the store. No database statement.
 
-    ``B4`` owns every decision here. This function reads the three artifacts the gate
-    consumes and hands them over; it applies no normalization, searches for no better
-    anchor, and does not filter the verdicts. An ungrounded observation is written as a
-    diagnostic with no ``finding_uid``, which is what keeps it out of every finding
-    query and out of the CSV — enforced by the database, not by a ``WHERE`` clause.
+    `W54-JUDGE-Y` F5: this runs **before** ``running -> validating``. That advance locks the
+    ``audit_run`` row until the caller's final commit, and the S3 reads below used to run
+    inside it, so a slow store held the run row lock for as long as the reads took. Reading
+    first keeps the lock span to the gate's own writes and the terminal transition. `D-141`'s
+    commit is untouched: it precedes this read, so the Lease is free throughout.
+
+    ``None`` when the gate has nothing to ground (no observations, or no text layer).
     """
     if observations_document is None:
-        return False, None
+        return None
 
     text_layer_ref = outputs.refs.get(ROLE_TEXT_LAYER)
     if text_layer_ref is None:
-        return False, None
+        return None
 
     text_layer_document, _ = read_artifact(
         blob_store, parse_blob_id(text_layer_ref.blob_id), expected_role=ROLE_TEXT_LAYER
@@ -600,15 +609,34 @@ def _run_evidence_gate(
             blob_store, parse_blob_id(block_ref.blob_id), expected_role=ROLE_BLOCK_INDEX
         )
         block_index = BlockIndex.from_artifact(block_document)
-
-    observation_set = ObservationSet.from_artifact(observations_document)
-    gate_result = run_grounding_gate(
-        observation_set, TextLayer.from_artifact(text_layer_document), block_index
+    return _GateInputs(
+        observation_set=ObservationSet.from_artifact(observations_document),
+        text_layer=TextLayer.from_artifact(text_layer_document),
+        block_index=block_index,
     )
+
+
+def _run_evidence_gate(
+    session: Session,
+    *,
+    run: RunRow,
+    inputs: _GateInputs | None,
+) -> tuple[bool, PublicationResult | None]:
+    """Ground every proposed observation and publish what survives.
+
+    ``B4`` owns every decision here. This function hands the gate the three artifacts
+    :func:`_read_gate_inputs` already read; it applies no normalization, searches for no
+    better anchor, and does not filter the verdicts. An ungrounded observation is written
+    as a diagnostic with no ``finding_uid``, which is what keeps it out of every finding
+    query and out of the CSV — enforced by the database, not by a ``WHERE`` clause.
+    """
+    if inputs is None:
+        return False, None
+    gate_result = run_grounding_gate(inputs.observation_set, inputs.text_layer, inputs.block_index)
     publication = publish_gate_result(
         session,
         gate_result=gate_result,
-        observation_set=observation_set,
+        observation_set=inputs.observation_set,
         run_id=run.run_id,
         project_uid=run.project_uid,
         version_uid=run.version_uid,
@@ -853,16 +881,16 @@ def _execute_run_body(
         # the text stage durable exactly as they are.
         session.commit()
 
+    # `W54-JUDGE-Y` F5: the gate's artifacts are read from the store here, before the
+    # advance below locks the run row, so no S3 read happens under that lock.
+    gate_inputs = _read_gate_inputs(
+        observations_document=observations_document, outputs=outputs, blob_store=blob_store
+    )
+
     run_repo.advance(session, run_id=run_id, from_state="running", to_state="validating")
 
     # -- validating: the evidence gate, then the terminal it implies ----------
-    gate_ran, publication = _run_evidence_gate(
-        session,
-        run=run,
-        observations_document=observations_document,
-        outputs=outputs,
-        blob_store=blob_store,
-    )
+    gate_ran, publication = _run_evidence_gate(session, run=run, inputs=gate_inputs)
 
     statuses = run_repo.stage_statuses(session, run_id)
     missing = [stage for stage in PC01_STAGES if stage not in statuses]
