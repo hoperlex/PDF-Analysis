@@ -13,9 +13,9 @@ locale may reword, and the SQLSTATE is the contract.
 
 What is not here
 ----------------
-Job/Attempt/Lease authority is deliberately owned by :mod:`auditmanager.jobs`, not by
-this run-row repository. Remote heartbeat/failover, resume and outbox delivery remain
-absent. There is also no ``succeeded`` run state: the success terminal is ``published``, and
+Job/Attempt/Lease authority, its lease heartbeat and lease-expiry recovery are
+deliberately owned by :mod:`auditmanager.jobs`, not by this run-row repository. Remote
+workers and outbox delivery remain absent. There is also no ``succeeded`` run state: the success terminal is ``published``, and
 ``succeeded`` is a *stage* status. The two vocabularies are separate and this module
 keeps them separate.
 
@@ -63,7 +63,7 @@ _RUN_COLUMNS = (
     "run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id, "
     "norms_snapshot_id, provider_mode, frozen_input_digest, command_id, terminal_reason, "
     "terminal_detail, "
-    "interrupted_reason, degradation_set, terminal_at, created_at"
+    "interrupted_reason, degradation_set, terminal_at, created_at, reaudit_of_run_id"
 )
 
 _INSERT_RUN = text(
@@ -244,6 +244,9 @@ class RunRow:
     #: migration and simply was not selected, so a required API property had no producer.
     created_at: datetime
     terminal_at: datetime | None
+    #: W53 lineage: the terminal run this one re-audits, or ``None`` for a run started
+    #: from a document version. Written once by ``create`` and frozen by the database.
+    reaudit_of_run_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -302,6 +305,7 @@ def _run_row(row: Any) -> RunRow:
         degradation_set,
         terminal_at,
         created_at,
+        reaudit_of_run_id,
     ) = tuple(row)
     return RunRow(
         run_id=run_id,
@@ -320,6 +324,7 @@ def _run_row(row: Any) -> RunRow:
         degradation_set=tuple(degradation_set or ()),
         terminal_at=terminal_at,
         created_at=created_at,
+        reaudit_of_run_id=reaudit_of_run_id,
     )
 
 

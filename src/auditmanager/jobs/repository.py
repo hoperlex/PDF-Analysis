@@ -246,6 +246,21 @@ _JOB_TERMINALS = frozenset({"succeeded", "failed", "cancelled", "dead_letter"})
 _ATTEMPT_TERMINALS = frozenset({"succeeded", "failed", "superseded", "lost", "cancelled"})
 
 
+class ExecutionNotClaimed(DomainError):
+    """``start_execution`` refused before the caller held any execution authority.
+
+    Raised only by the claim itself: the dispatch pause, a Run or Job that is not
+    claimable, or the duplicate-executor guard. No Attempt, Lease or token exists for
+    the caller when it is raised, and the caller's transaction still holds every row
+    the claim touched. A carrier must therefore leave the Run and its Job as it found
+    them; turning this refusal into a crash terminal would destroy a run that this
+    process never owned (`W53C-EXEC-01` C-01). The code and details are the original
+    refusal's, so an API caller sees the same envelope as before.
+    """
+
+    __slots__ = ()
+
+
 @dataclass(frozen=True, slots=True)
 class AttemptAuthority:
     run_id: str
@@ -433,6 +448,22 @@ class JobRepository:
         return recovered
 
     def start_execution(self, session: Session, *, run_id: str) -> AttemptAuthority:
+        """Claim the Run's Job with a new current Attempt, Lease and token.
+
+        Every catalog refusal raised here precedes the returned authority, so it is
+        re-raised as :class:`ExecutionNotClaimed` with its code and details intact.
+        """
+        try:
+            return self._claim(session, run_id=run_id)
+        except ExecutionNotClaimed:
+            raise
+        except DomainError as refusal:
+            raise ExecutionNotClaimed(
+                refusal.code, message=refusal.custom_message,
+                **dict(refusal.detail_fields),
+            ) from refusal
+
+    def _claim(self, session: Session, *, run_id: str) -> AttemptAuthority:
         # The singleton must exist before it can be locked. Its insert races with
         # an administrator's upsert safely: whichever transaction commits first
         # is observed by the other before a new Attempt can be created.
@@ -532,7 +563,7 @@ class JobRepository:
 
     def finish_execution(
         self, session: Session, authority: AttemptAuthority, *, publishes_result: bool
-    ) -> str:
+    ) -> None:
         self.require_current(session, authority)
         target = "succeeded" if publishes_result else "failed"
         self._advance_attempt(session, authority.attempt_id, "running", target)
@@ -921,6 +952,7 @@ class JobRepository:
 
 __all__ = [
     "AttemptAuthority",
+    "ExecutionNotClaimed",
     "JobRepository",
     "SettledProviderEffect",
     "UnresolvedProviderEffect",

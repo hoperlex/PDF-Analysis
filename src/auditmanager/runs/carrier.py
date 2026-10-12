@@ -27,9 +27,10 @@ only means anything if something other than the accepting call can read it in be
 
 So: **one bounded pool inside the serving process**, :data:`RUN_CONCURRENCY` wide, owned by
 the composition root. W48 adds a durable local Job, current Attempt and Lease before the
-first effect, but no remote queue, heartbeat scheduler or worker protocol. A queue that outlives
-the process, a second machine, or work that can be handed from one process to another would
-be the deferred thing; a thread that outlives one HTTP response is not.
+first effect; W53 adds :class:`DurableCarrier`, which discovers queued Jobs in PostgreSQL,
+and a lease heartbeat with lease-expiry recovery. There is still no remote queue, second
+machine or worker protocol: those would be the deferred thing; a thread that outlives one
+HTTP response, polling the database this process already uses, is not.
 
 :data:`RUN_CONCURRENCY` is **1**, so runs still execute one at a time exactly as they did
 inline. That is the profile's "one local execution process is sufficient" taken literally,
@@ -84,7 +85,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import text
 
 from auditmanager.runs.executor import execute_run
-from auditmanager.jobs.public import JobRepository
+from auditmanager.jobs.public import ExecutionNotClaimed, JobRepository
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.scope import RECONCILIATION_TERMINAL
 from auditmanager.shared.errors import ErrorCode
@@ -331,10 +332,12 @@ def run_to_terminal(
     the same thing either way, which is the point.
 
     Called with a run that is not ``queued`` (or ``created``, which an in-process caller
-    hands over) it fails at ``execute_run``'s own compare-and-set -- the same one every
-    other move uses -- and is then recorded as the failure terminal like any other. It is
-    not silently tolerated: a carrier handed a run somebody else is already executing must
-    not join in.
+    hands over) it fails at ``execute_run``'s own compare-and-set or at the Job claim. A
+    carrier handed a run somebody else is already executing must not join in, and it
+    must not terminate that run either: a refusal of the claim
+    (:class:`~auditmanager.jobs.public.ExecutionNotClaimed`, which includes the dispatch
+    pause) and a fence by another Attempt are logged and re-raised with the Run and Job
+    left untouched. Every other failure is recorded as the failure terminal.
     """
     run_repo = runs or RunRepository()
 
@@ -349,6 +352,17 @@ def run_to_terminal(
                 runs=run_repo,
             )
             session.commit()
+    except ExecutionNotClaimed as refusal:
+        # The claim itself was refused -- dispatch was paused between the poller's
+        # hint and this claim, or another process holds the Job. This process never
+        # held authority, so the Run and Job stay exactly as the claim found them
+        # (`W53C-EXEC-01` C-01); a crash terminal here would destroy a queued run
+        # that a later dispatch still owns.
+        _log.info(
+            "run %s was not claimed (%s); left for a later dispatch",
+            run_id, refusal.code.value,
+        )
+        raise
     except DomainError as failure:
         if failure.code in {
             ErrorCode.STATE_TRANSITION_NOT_ALLOWED, ErrorCode.STALE_ATTEMPT,

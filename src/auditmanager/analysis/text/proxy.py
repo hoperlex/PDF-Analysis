@@ -24,6 +24,7 @@ Two constraints from the proxy that shape this file:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from http.client import HTTPException
@@ -63,20 +64,43 @@ _ERROR_BODY_LIMIT: Final[int] = 4096
 _LOGGER = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class ReceivedResponse:
+    """What is known of a complete HTTP answer whose body could not be used.
+
+    The provider was reached and answered, so the call may have been paid for. When the
+    answer's usage block is readable, this is the evidence a call journal records as
+    ``response_received``: the checksum of the exact bytes received, the provider's own
+    token counts and the latency. It never carries the body itself.
+    """
+
+    response_sha256: str
+    input_tokens: int
+    output_tokens: int
+    latency_ms: int
+
+
 class ProxyDispatchError(DomainError):
     """A catalog error with transport evidence kept outside envelope details."""
 
-    __slots__ = ("dispatch_class", "retry_safe", "retry_after_seconds")
+    __slots__ = ("dispatch_class", "retry_safe", "retry_after_seconds", "received")
 
     def __init__(
         self, code: ErrorCode, *, dispatch_class: str, retry_safe: bool,
         retry_after_seconds: float = 0.0, message: str | None = None,
         details: Mapping[str, Any] | None = None,
+        received: ReceivedResponse | None = None,
     ) -> None:
         super().__init__(code, message=message, **dict(details or {}))
         self.dispatch_class = dispatch_class
         self.retry_safe = retry_safe
         self.retry_after_seconds = retry_after_seconds
+        #: Set only for an unusable answer that arrived with a readable usage block.
+        self.received = received
+
+
+class _UnusableAnswer(ValueError):
+    """A 200 body that is not the documented chat-completions shape."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,12 +242,24 @@ class ProxyAdapter(ModelAdapter):
             raise _classified_http_failure(
                 status, raw, headers=getattr(response, "headers", None)
             )
+        # From here on an answer was received, so the model call may have been paid for:
+        # every refusal is `outcome_unknown` and never retry-safe. `W53C-EXEC-01` C-04: a
+        # body of any shape is classified here, so no `AttributeError`/`TypeError` from
+        # an unexpected shape escapes the effect journal.
         try:
-            return _from_openai_response(json.loads(raw), latency_ms)
+            document = json.loads(raw)
         except (ValueError, UnicodeError):
-            raise ProxyDispatchError(
-                ErrorCode.ANALYSIS_FAILED, dispatch_class="outcome_unknown",
-                retry_safe=False, message="the model proxy returned an invalid answer",
+            raise _unusable_answer(
+                raw, latency_ms, None, "the model proxy returned an invalid answer",
+            ) from None
+        try:
+            return _from_openai_response(document, latency_ms)
+        except _UnusableAnswer as unusable:
+            raise _unusable_answer(raw, latency_ms, document, str(unusable)) from None
+        except (ValueError, TypeError, AttributeError, KeyError, IndexError,
+                OverflowError):
+            raise _unusable_answer(
+                raw, latency_ms, document, "the model proxy returned an invalid answer",
             ) from None
 
 
@@ -325,22 +361,96 @@ def _to_openai_body(request: ModelRequest, model: str) -> dict[str, Any]:
     return {k: v for k, v in body.items() if v is not None}
 
 
-def _from_openai_response(document: Mapping[str, Any], latency_ms: int) -> ModelResponse:
-    choices = document.get("choices") or []
-    if not choices:
-        raise DomainError(
-            ErrorCode.ANALYSIS_FAILED,
-            message="the model proxy returned no choices, so there is nothing to publish",
+def _unusable_answer(
+    raw: bytes, latency_ms: int, document: Any, message: str
+) -> ProxyDispatchError:
+    """The typed refusal for a complete answer that cannot be used.
+
+    ``received`` carries the usage evidence when the body is an object whose usage
+    block holds two readable token counts; otherwise the journal can only say the
+    outcome is unknown.
+    """
+    received = None
+    tokens = _usage_tokens(document)
+    if tokens is not None:
+        received = ReceivedResponse(
+            response_sha256=hashlib.sha256(raw).hexdigest(),
+            input_tokens=tokens[0],
+            output_tokens=tokens[1],
+            latency_ms=latency_ms,
         )
-    message = choices[0].get("message") or {}
-    usage = document.get("usage") or {}
+    return ProxyDispatchError(
+        ErrorCode.ANALYSIS_FAILED, dispatch_class="outcome_unknown", retry_safe=False,
+        message=message, received=received,
+    )
+
+
+def _token_count(value: Any) -> int:
+    """One usage count: absent means zero, anything but a non-negative integer is refused."""
+    if value is None:
+        return 0
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise _UnusableAnswer("the model proxy returned a usage count that is not a count")
+    return value
+
+
+def _usage_tokens(document: Any) -> tuple[int, int] | None:
+    """The provider's two token counts, or ``None`` when they cannot be read."""
+    if not isinstance(document, Mapping):
+        return None
+    usage = document.get("usage")
+    if not isinstance(usage, Mapping):
+        return None
+    try:
+        return (
+            _token_count(usage.get("prompt_tokens")),
+            _token_count(usage.get("completion_tokens")),
+        )
+    except _UnusableAnswer:
+        return None
+
+
+def _from_openai_response(document: Any, latency_ms: int) -> ModelResponse:
+    """Read the documented chat-completions shape, refusing anything else by name."""
+    if not isinstance(document, Mapping):
+        raise _UnusableAnswer("the model proxy returned an answer that is not an object")
+    choices = document.get("choices")
+    if choices is None:
+        choices = []
+    if not isinstance(choices, list):
+        raise _UnusableAnswer("the model proxy returned choices that are not a list")
+    if not choices:
+        raise _UnusableAnswer(
+            "the model proxy returned no choices, so there is nothing to publish"
+        )
+    choice = choices[0]
+    if not isinstance(choice, Mapping):
+        raise _UnusableAnswer("the model proxy returned a choice that is not an object")
+    message = choice.get("message")
+    if message is None:
+        message = {}
+    if not isinstance(message, Mapping):
+        raise _UnusableAnswer("the model proxy returned a message that is not an object")
+    content = message.get("content")
+    if content is not None and not isinstance(content, str):
+        raise _UnusableAnswer("the model proxy returned message content that is not text")
+    finish_reason = choice.get("finish_reason")
+    if finish_reason is not None and not isinstance(finish_reason, str):
+        raise _UnusableAnswer("the model proxy returned a finish reason that is not text")
+    usage = document.get("usage")
+    if usage is None:
+        usage = {}
+    if not isinstance(usage, Mapping):
+        raise _UnusableAnswer("the model proxy returned usage that is not an object")
     return ModelResponse(
-        output_text=message.get("content") or "",
+        output_text=content or "",
         # OpenAI's `length` is the truncation stop. It is translated into the *stop
         # reason* vocabulary the seam speaks, not into the call-status vocabulary.
-        stop_reason=_stop_reason(choices[0].get("finish_reason")),
-        input_tokens=int(usage.get("prompt_tokens") or 0),
-        output_tokens=int(usage.get("completion_tokens") or 0),
+        stop_reason=_stop_reason(finish_reason),
+        input_tokens=_token_count(usage.get("prompt_tokens")),
+        output_tokens=_token_count(usage.get("completion_tokens")),
         latency_ms=latency_ms,
         # The proxy returns the real spend for the call, including whatever the upstream
         # actually charged. It is the only number here that is measured rather than derived.
@@ -350,6 +460,8 @@ def _from_openai_response(document: Mapping[str, Any], latency_ms: int) -> Model
 
 def _reported_cost(usage: Mapping[str, Any]) -> float | None:
     value = usage.get("cost")
+    if isinstance(value, bool):
+        return None
     return float(value) if isinstance(value, (int, float)) else None
 
 

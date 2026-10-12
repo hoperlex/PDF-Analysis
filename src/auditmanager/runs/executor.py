@@ -54,8 +54,13 @@ load-bearing and are each guarded by a test in ``tests/integration/runs``:
 
 Every execution now commits one local ``Job`` and current ``Attempt`` before its first
 external effect. Provider-call retries remain bounded call attempts inside that one
-execution Attempt; an ambiguous live outcome is never retried automatically. Remote
-workers, heartbeat-driven failover and resume remain out of scope.
+execution Attempt; an ambiguous live outcome is never retried automatically. Since W53
+the Attempt's database lease is extended by an independent heartbeat
+(:mod:`auditmanager.jobs.lease`), and an expired lease is reclaimed by the durable
+dispatcher: the lost Attempt is fenced and the run is executed again from its first
+stage under a new Attempt, but only when no provider effect of the lost Attempt can
+have spent; otherwise the run fails with that uncertainty recorded. Remote workers and
+outbox delivery remain out of scope.
 """
 
 from __future__ import annotations
@@ -64,7 +69,7 @@ import time
 from functools import wraps
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Protocol
 
 from sqlalchemy.orm import Session
 
@@ -90,7 +95,6 @@ from auditmanager.analysis.public import (
     ModelCallJournal,
     ModelCallRecord,
     ModelRequest,
-    ModelResponse,
     ProviderConfig,
     ProviderMode,
     TextAnalysisOutcome,
@@ -229,6 +233,23 @@ def _persist(
     runs.record_stage_result(session, run_id=run_id, document=result.to_document())
 
 
+class _ResponseEvidence(Protocol):
+    """What the effect journal records of an answer: a full response or the evidence of
+    an unusable one (the proxy's ``ReceivedResponse``)."""
+
+    @property
+    def response_sha256(self) -> str: ...
+
+    @property
+    def input_tokens(self) -> int: ...
+
+    @property
+    def output_tokens(self) -> int: ...
+
+    @property
+    def latency_ms(self) -> int: ...
+
+
 class _DurableCallJournal(ModelCallJournal):
     """Commit every provider boundary under the current Attempt authority."""
 
@@ -265,7 +286,7 @@ class _DurableCallJournal(ModelCallJournal):
         return model_call_id
 
     def response_received(
-        self, model_call_id: ModelCallId, response: ModelResponse
+        self, model_call_id: ModelCallId, response: _ResponseEvidence
     ) -> None:
         self._jobs.record_provider_response(
             self._session,

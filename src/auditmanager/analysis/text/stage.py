@@ -55,7 +55,7 @@ from auditmanager.analysis.text.provenance import (
     assert_consistent_mode,
 )
 from auditmanager.analysis.text.response import parse_response
-from auditmanager.analysis.text.proxy import ProxyDispatchError
+from auditmanager.analysis.text.proxy import ProxyDispatchError, ReceivedResponse
 from auditmanager.analysis.text.textlayer import TextLayer, load_text_layer
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId, RunId
@@ -104,7 +104,7 @@ class ModelCallJournal(Protocol):
     def prepare(self, request: ModelRequest, *, mode: ProviderMode) -> ModelCallId: ...
 
     def response_received(
-        self, model_call_id: ModelCallId, response: ModelResponse
+        self, model_call_id: ModelCallId, response: ModelResponse | ReceivedResponse
     ) -> None: ...
 
     def complete(self, call: ModelCallRecord) -> None: ...
@@ -220,6 +220,35 @@ def _pages_analysed(
     return analysed
 
 
+def _journal_failed_call(
+    journal: ModelCallJournal,
+    model_call_id: ModelCallId,
+    error: DomainError,
+    *,
+    mode: ProviderMode,
+) -> None:
+    """Record a provider call that raised, in the one effect class its evidence proves.
+
+    * A **recorded** replay reads a committed file and dispatches nothing, so it can never
+      have spent: it is ``not_processed``/``not_sent`` whatever it raised, and a crash
+      after it leaves the Attempt resumable (`W53C-EXEC-01` C-05).
+    * A proxy refusal proven to precede processing keeps its own dispatch class.
+    * A proxy answer that arrived but could not be used, with a readable usage block, is
+      ``response_received`` with that usage: the provider answered and may have charged,
+      and the run's journal keeps what it reported (C-04).
+    * Everything else on a live call is ``outcome_unknown``: no answer is not proof that
+      the provider did no billable work.
+    """
+    if mode is ProviderMode.RECORDED:
+        journal.not_processed(model_call_id, error, "not_sent")
+    elif isinstance(error, ProxyDispatchError) and error.dispatch_class != "outcome_unknown":
+        journal.not_processed(model_call_id, error, error.dispatch_class)
+    elif isinstance(error, ProxyDispatchError) and error.received is not None:
+        journal.response_received(model_call_id, error.received)
+    else:
+        journal.outcome_unknown(model_call_id, error)
+
+
 def run_text_analysis(
     *,
     run_id: RunId,
@@ -294,10 +323,7 @@ def run_text_analysis(
         response = adapter.complete(request)
     except DomainError as error:
         if call_journal is not None:
-            if isinstance(error, ProxyDispatchError) and error.dispatch_class != "outcome_unknown":
-                call_journal.not_processed(model_call_id, error, error.dispatch_class)
-            else:
-                call_journal.outcome_unknown(model_call_id, error)
+            _journal_failed_call(call_journal, model_call_id, error, mode=mode)
         return TextAnalysisOutcome(
             status=STATUS_FAILED,
             artifact=None,

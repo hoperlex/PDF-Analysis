@@ -20,7 +20,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy import text
 
 from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
 from auditmanager.api.schemas.blocks import VersionBlockIndexView
@@ -200,10 +199,16 @@ class ExecutionAdapter(_SessionHolder):
     def reaudit_run(self, *, run_id: str, user_uid: str, idempotency_key: str) -> RunStatusView:
         from auditmanager.runs.commands import reaudit_run
 
+        profile, bundle, mode = self._runs.current_configuration()
+
         def write(session: Session) -> tuple[str, bool, RunStatusView]:
+            # `R-82`: the new run records the configuration this deployment executes,
+            # exactly as `startRun` does, never the source run's.
             result = reaudit_run(session, source_run_id=run_id,
                                  roles=self._roles(session, user_uid),
-                                 idempotency_key=idempotency_key)
+                                 idempotency_key=idempotency_key,
+                                 analysis_profile_id=profile, prompt_bundle_id=bundle,
+                                 provider_mode=mode)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
         new_id, replayed, view = self._write(write)
         if not replayed:
@@ -596,6 +601,14 @@ class RunAdapter(_SessionHolder):
 
         return job
 
+    def current_configuration(self) -> tuple[str, str, str]:
+        """The analysis profile, prompt bundle and provider mode a new run receives.
+
+        `R-82`. The same three values ``start_run`` stamps, read from the same fields, so
+        a re-audit can only ever record the configuration this deployment executes.
+        """
+        return self._profile, self._bundle, self._provider_mode
+
     def submit_existing(self, run_id: str) -> None:
         """Wake execution for a durable re-audit accepted in another command."""
         self._carrier.submit(self._job(run_id))
@@ -658,10 +671,7 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     # one attempt's provenance, and that ambiguity is not being inherited into a contract.
     cost = repository.cost(session, run_id)
     return RunStatusView(
-        reaudit_of_run_id=session.execute(
-            text("SELECT reaudit_of_run_id FROM audit_run WHERE run_id = :run_id"),
-            {"run_id": run_id},
-        ).scalar_one(),
+        reaudit_of_run_id=run.reaudit_of_run_id,
         run_id=str(run.run_id),
         project_uid=str(run.project_uid),
         version_uid=str(run.version_uid),

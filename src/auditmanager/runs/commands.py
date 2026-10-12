@@ -351,10 +351,23 @@ def cancel_audit_run(
 
 def reaudit_run(
     session: Session, *, source_run_id: str, roles: frozenset[str],
-    idempotency_key: str, runs: RunRepository | None = None,
+    idempotency_key: str, analysis_profile_id: str, prompt_bundle_id: str,
+    provider_mode: str, runs: RunRepository | None = None,
     jobs: JobRepository | None = None, commands: CommandRepository | None = None,
+    documents: DocumentRepository | None = None,
 ) -> StartedRun:
-    """Create one new run from a terminal source's frozen input set."""
+    """Create one new run of a terminal source's document version, on today's configuration.
+
+    `R-82`: a re-audit is the same document version analysed on the **current** analysis
+    profile, prompt bundle and provider mode. The caller passes the configuration the
+    deployment executes (the same values ``start_run`` stamps); the new run records
+    those, and a ``frozen_input_digest`` computed from them by the same guard and digest
+    ``start_audit_run`` uses. The source is linked only by ``reaudit_of_run_id``. Its
+    norms snapshot is carried over: PC-01 pins none of its own and the digest excludes it.
+
+    The idempotency fingerprint is still the request -- the source run and its frozen
+    digest -- because the configuration is the server's, not the caller's.
+    """
     _require_run_control_role(roles)
     repository = runs or RunRepository()
     ledger = commands or CommandRepository()
@@ -387,14 +400,28 @@ def reaudit_run(
     ), {"source": source_run_id}).scalar_one_or_none()
     if busy is not None:
         raise DomainError(ErrorCode.CONFLICT, message="a re-audit of this source is in progress")
+    version_uid = VersionUid.parse(source.version_uid)
+    _version, blob_ids = _resolve_references(
+        session,
+        version_uid=version_uid,
+        analysis_profile_id=analysis_profile_id,
+        prompt_bundle_id=prompt_bundle_id,
+        documents=documents or DocumentRepository(),
+    )
+    digest = frozen_input_digest(
+        version_uid=str(version_uid),
+        blob_ids=blob_ids,
+        analysis_profile_id=analysis_profile_id,
+        prompt_bundle_id=prompt_bundle_id,
+    )
     new_id = str(RunId.new())
     repository.create(
         session, run_id=new_id, project_uid=source.project_uid,
         version_uid=source.version_uid,
-        analysis_profile_id=source.analysis_profile_id,
-        prompt_bundle_id=source.prompt_bundle_id,
-        provider_mode=source.provider_mode,
-        frozen_input_digest=source.frozen_input_digest,
+        analysis_profile_id=analysis_profile_id,
+        prompt_bundle_id=prompt_bundle_id,
+        provider_mode=provider_mode,
+        frozen_input_digest=digest,
         command_id=str(claimed.command_id), reaudit_of_run_id=source_run_id,
         norms_snapshot_id=source.norms_snapshot_id,
     )

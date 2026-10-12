@@ -10,9 +10,10 @@ that a reviewer can diff between releases.
 
 Note the distinction the task draws and this module preserves. An **unevaluated guard**
 is a clause of a declared transition guard that the alpha runner does not check. An
-**absent capability** is a thing it does not have at all. Cancellation remains the
-second kind. W48-DURABLE-01 made Job/Attempt publication authority executable, so it is
-no longer in either list.
+**absent capability** is a thing it does not have at all. W48-DURABLE-01 made
+Job/Attempt publication authority executable and W53 added ``cancel_audit_run``, so
+neither is in either list any more; what stays absent is remote execution and the
+cancellation of a run that has already reached ``validating``.
 """
 
 from __future__ import annotations
@@ -56,8 +57,14 @@ UNEVALUATED_GUARDS: Final[tuple[UnevaluatedGuard, ...]] = (
 #: Not guards left unevaluated — capabilities PC-01 does not have. Recorded separately
 #: and deliberately not merged into ``UNEVALUATED_GUARDS``.
 ABSENT_CAPABILITIES: Final[tuple[str, ...]] = (
-    "cancellation: no cancel command exists, so the terminal 'cancelled' is declared "
-    "by the topology and unreachable in PC-01",
+    (
+        "remote execution: no worker process, remote queue or JobPackage/ResultPackage "
+        "transport exists; every Attempt runs inside the serving process"
+    ),
+    (
+        "cancellation after validating: cancel_audit_run fences created, queued and "
+        "running runs only, so the terminal 'cancelled' is unreachable from validating"
+    ),
 )
 
 #: Schemas this module makes no conformance claim to, per C-3. PC-01 constructs neither:
