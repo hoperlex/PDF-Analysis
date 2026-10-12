@@ -40,6 +40,7 @@ from auditmanager.shared.db.session import create_session_factory
 from auditmanager.shared.identity import NormDocumentId, NormsSnapshotId
 from auditmanager.storage import S3BlobStore, S3StorageSettings, StorageError, sha256_of
 from auditmanager.storage.settings import REQUIRED_VARS
+from tests.integration.norms.reset import truncate_tables
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 MIGRATE_ARGV = [
@@ -143,8 +144,10 @@ def session_factory(engine: Engine) -> sessionmaker[Session]:
 
 @pytest.fixture
 def clean_tables(engine: Engine) -> None:
+    # ``norms_snapshot ... CASCADE`` reaches 0020's current snapshot and history, whose
+    # TRUNCATE refusals ``truncate_tables`` lifts for this reset alone (`W55A-FIX`).
     with engine.begin() as connection:
-        connection.execute(text(f"TRUNCATE TABLE {', '.join(TABLES)} CASCADE"))
+        truncate_tables(connection, TABLES)
 
 
 # --- object storage --------------------------------------------------------------------

@@ -12,7 +12,9 @@ the same bytes on every export::
                          segmentation profile, repair and unreliable counts)
     row_digest           {"version": "norm-snapshot-rows/1", "sha256": ...} over ids, text
                          and text_reliability (``snapshot.row_digest``)
-    chunking_profile     the chunk profile the import derives and the build is over
+    chunking_profile     the chunk profile the import derives and the build is over:
+                         ``characters-v2:<target>`` only (`W55A-FIX`, JUDGE-Y Y-5), the
+                         reliability-aware profile a snapshot can be designated over
     build                {"embedding_profile", "digest_version", "embedding_set_sha256",
                           "chunk_count", "window_count"} -- or null: a bundle without a
                          complete build, which the importer refuses
@@ -41,6 +43,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
+from ..chunking import RELIABLE_CHUNKING_PROFILE_VERSION, parse_chunking_profile
 from ..custody import (
     NORM_SOURCE,
     ROLE_SHAPES,
@@ -78,6 +81,21 @@ ANCHOR_KINDS: Final[frozenset[str]] = ROLE_SHAPES[NORM_SOURCE].anchor_kinds
 
 def _refuse(message: str) -> BundleRefused:
     return BundleRefused("manifest_invalid", message)
+
+
+def is_designatable_chunking(profile: str) -> bool:
+    """Whether ``profile`` is a well-formed ``characters-v2:<target>``.
+
+    Designation (`W55A-SEARCH-01`, condition (a)) admits only a build over the
+    reliability-aware profile. A bundle over any other one would import, report clean and
+    then be refused at designation, after the stand had taken it in (`W55A-FIX`, JUDGE-Y
+    Y-5); so the export refuses to write one and the parser refuses to read one.
+    """
+    try:
+        version, _target = parse_chunking_profile(profile)
+    except ValueError:
+        return False
+    return version == RELIABLE_CHUNKING_PROFILE_VERSION
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -531,6 +549,11 @@ def _parse_file(item: Any, index: int) -> ManifestFile:
 def validate_manifest(manifest: Manifest) -> None:
     """The manifest's internal arithmetic: what it says about itself must add up."""
     require_content_key(manifest.content_key)
+    if not is_designatable_chunking(manifest.chunking_profile):
+        raise _refuse(
+            f"chunking profile {manifest.chunking_profile!r} is not "
+            f"{RELIABLE_CHUNKING_PROFILE_VERSION}:<target>; only a build over it can be designated"
+        )
     paths = [entry.path for entry in manifest.files]
     if len(set(paths)) != len(paths):
         raise _refuse("files names one path twice")
@@ -612,6 +635,7 @@ __all__ = [
     "ManifestFile",
     "ObjectSlot",
     "SnapshotFacts",
+    "is_designatable_chunking",
     "parse_manifest",
     "validate_manifest",
 ]

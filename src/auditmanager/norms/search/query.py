@@ -20,11 +20,25 @@ document-type word it folds case and Latin/Cyrillic homoglyphs with :func:`fold`
 the character map of migration ``0020`` written out again (a ``src`` module cannot import a
 migration); ``tests/integration/norms/search/test_query_parsing.py`` asserts the two maps
 are the same map.
+
+**The designation is handed over with ASCII separators** (`W55A-FIX`, JUDGE-Y Y-4). This
+module finds tokens between any Unicode whitespace, dot, underscore or hyphen, and treats the
+dashes U+2010-U+2015 (``‐ ‑ ‒ – — ―``) as the hyphen; ``norm_designation_tokens`` splits on
+``[ ._-]`` only. So the designation is rebuilt from its tokens before it is bound: every run
+of whitespace (a no-break space, a tab) becomes one space and every such dash ``-``. ``СП 54``
+typed with a no-break space and ``СНиП 2.01.07–85`` typed with an en dash then reach the
+database as the same tokens the slug holds.
+
+:func:`unsearchable` names the two texts the search refuses as ``q`` ``format`` before any
+statement (`W55A-FIX`, JUDGE-X M2, M5): one holding a control character other than tab,
+line feed or carriage return (a NUL cannot even be bound), and one with nothing to search
+for -- no designation, no clause and no words -- which would otherwise sort a whole snapshot.
 """
 
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Final
 
@@ -37,6 +51,7 @@ __all__ = [
     "designation_of",
     "fold",
     "parse_query",
+    "unsearchable",
 ]
 
 #: ``q``'s declared bounds (``searchNorms``); the router enforces them, this restates them.
@@ -98,8 +113,16 @@ DESIGNATION_TYPES: Final[frozenset[str]] = frozenset(
 )
 
 #: A token of ``q``: a run of anything but the separators ``norm_designation_tokens`` splits
-#: on (space, dot, underscore, hyphen).
+#: on (space, dot, underscore, hyphen) -- read on the text with :data:`_DASHES` applied, and
+#: with any Unicode whitespace as a space.
 _TOKEN: Final[re.Pattern[str]] = re.compile(r"[^\s._\-]+")
+#: U+2010 hyphen, U+2011 non-breaking hyphen, U+2012 figure dash, U+2013 en dash, U+2014 em
+#: dash and U+2015 horizontal bar, each to the ASCII hyphen. One character for one, so a span
+#: found in the mapped text is the same span of the typed text.
+_DASHES: Final[dict[int, str]] = {code: "-" for code in range(0x2010, 0x2016)}
+_WHITESPACE: Final[re.Pattern[str]] = re.compile(r"\s+")
+#: The control characters a pasted search text may carry; they separate words as a space does.
+_WHITESPACE_CONTROLS: Final[frozenset[str]] = frozenset("\t\n\r")
 _DIGIT: Final[re.Pattern[str]] = re.compile(r"\d")
 _LETTERS: Final[re.Pattern[str]] = re.compile(r"^[^\W\d_]{1,4}$")
 
@@ -124,13 +147,19 @@ class ParsedQuery:
         """Words are ranked by ``ts_rank_cd``; a designation or clause alone is ordered."""
         return self.words is not None
 
+    @property
+    def empty(self) -> bool:
+        """Nothing to search for: ``q`` was blank (Unicode whitespace only)."""
+        return self.designation is None and self.clause is None and self.words is None
+
 
 def parse_query(q: str) -> ParsedQuery:
     """Split ``q`` into its designation, clause and words.
 
     The clause is taken first, so ``СП 54 п. 7.1`` does not read ``п`` as part of the
-    designation. Then the first designation run in what is left. Whatever remains, with its
-    whitespace collapsed, is the words.
+    designation. Then the first designation run in what is left, rebuilt with ASCII
+    separators (module docstring). Whatever remains, with its whitespace collapsed, is the
+    words.
     """
     text = q
     clause: str | None = None
@@ -140,9 +169,11 @@ def parse_query(q: str) -> ParsedQuery:
         text = text[: match.start()] + " " + text[match.end():]
 
     designation: str | None = None
-    span = _designation_span(text)
+    dashed = text.translate(_DASHES)
+    span = _designation_span(dashed)
     if span is not None:
-        designation = text[span[0]: span[1]]
+        # Its tokens with ASCII separators only: what ``norm_designation_tokens`` splits.
+        designation = _WHITESPACE.sub(" ", dashed[span[0]: span[1]])
         text = text[: span[0]] + " " + text[span[1]:]
 
     words = " ".join(text.split()) or None
@@ -168,6 +199,17 @@ def _designation_span(text: str) -> tuple[int, int] | None:
         if end is not None:
             return token.start(), end
     return None
+
+
+def unsearchable(q: str) -> bool:
+    """Whether ``q`` is refused before any statement: it holds a control character other
+    than tab, line feed or carriage return, or a surrogate code point (neither can be a
+    search text, and a NUL cannot be bound at all); or it parses to nothing to search for."""
+    for character in q:
+        category = unicodedata.category(character)
+        if category == "Cs" or (category == "Cc" and character not in _WHITESPACE_CONTROLS):
+            return True
+    return parse_query(q).empty
 
 
 def designation_of(slug: str) -> str:

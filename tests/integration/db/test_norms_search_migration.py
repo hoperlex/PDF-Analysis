@@ -173,7 +173,15 @@ def test_a_fresh_upgrade_creates_the_current_snapshot_and_the_search_columns(
             "SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgrelid IN "
             "('norm_current_snapshot'::regclass, 'norm_current_snapshot_event'::regclass)"
         )).scalars())
-        assert triggers == {"trg_norm_current_snapshot_guard", "trg_norm_current_snapshot_event_immutable"}
+        assert triggers == {
+            "trg_norm_current_snapshot_guard",
+            "trg_norm_current_snapshot_event_immutable",
+            # `W55A-FIX`: the strict history (``test_norms_current_snapshot_strict_history.py``).
+            "trg_norm_current_snapshot_event_stamp",
+            "trg_norm_current_snapshot_event_designates",
+            "trg_norm_current_snapshot_no_truncate",
+            "trg_norm_current_snapshot_event_no_truncate",
+        }
 
 
 def test_a_populated_0019_upgrades_and_fills_the_generated_columns(
@@ -218,10 +226,12 @@ def test_a_populated_0019_upgrades_and_fills_the_generated_columns(
         engine.dispose()
 
 
-@pytest.mark.parametrize("retained", ["norm_current_snapshot", "norm_current_snapshot_event"])
-def test_a_retained_current_snapshot_or_history_refuses_the_downgrade(
-    empty_database, foundation_command, retained: str,
+def test_a_retained_current_snapshot_and_history_refuse_the_downgrade(
+    empty_database, foundation_command,
 ) -> None:
+    """Since `W55A-FIX` a history row cannot outlive its transaction without the current row
+    naming it, so the one retained state is both; the refusal names each table, which is
+    each of the downgrade's two probes answering on its own."""
     url = empty_database.url.render_as_string(hide_password=False)
     up = foundation_command(_alembic("upgrade", "head"), url)
     assert up.returncode == 0, up.describe()
@@ -230,14 +240,13 @@ def test_a_retained_current_snapshot_or_history_refuses_the_downgrade(
         with engine.begin() as connection:
             snapshot = str(_snapshot(connection)["snapshot"])
             event = _event(connection, to=snapshot, before=None)
-            if retained == "norm_current_snapshot":
-                connection.execute(text(
-                    "INSERT INTO norm_current_snapshot (norms_snapshot_id, event_id) VALUES (:s, :e)"
-                ), {"s": snapshot, "e": event})
+            connection.execute(text(
+                "INSERT INTO norm_current_snapshot (norms_snapshot_id, event_id) VALUES (:s, :e)"
+            ), {"s": snapshot, "e": event})
         refused = foundation_command(_alembic("downgrade", PREVIOUS), url)
         assert refused.returncode != 0
         assert "refusing to downgrade 0020_norms_search" in refused.stderr
-        assert retained in refused.stderr
+        assert "(norm_current_snapshot, norm_current_snapshot_event)" in refused.stderr
         with engine.connect() as connection:
             assert _head(connection) == HEAD
             assert connection.execute(text(
@@ -281,7 +290,10 @@ def test_an_empty_0020_downgrades_and_upgrades_again(empty_database, foundation_
 
 
 def test_the_current_snapshot_changes_only_with_its_own_history_event(migrated_engine: Engine) -> None:
-    with migrated_engine.begin() as connection:
+    # Rolled back, not committed: the refused attempts leave history rows the current row
+    # never names, which `W55A-FIX`'s commit-time check refuses (proved on its own in
+    # ``test_norms_current_snapshot_strict_history.py``). Every assertion here is a statement's.
+    with migrated_engine.connect() as connection, connection.begin() as transaction:
         first = str(_snapshot(connection)["snapshot"])
         second = str(_snapshot(connection, slugs=(SP542,))["snapshot"])
         insert = "INSERT INTO norm_current_snapshot (norms_snapshot_id, event_id) VALUES (:s, :e)"
@@ -316,12 +328,18 @@ def test_the_current_snapshot_changes_only_with_its_own_history_event(migrated_e
         )).scalar_one() == second
         # There is no unset.
         _refused(connection, "DELETE FROM norm_current_snapshot", {}, sqlstate="AM003")
+        transaction.rollback()
 
 
 def test_the_history_is_append_only_and_records_a_change(migrated_engine: Engine) -> None:
     with migrated_engine.begin() as connection:
         snapshot = str(_snapshot(connection)["snapshot"])
         event = _event(connection, to=snapshot, before=None)
+        # A designation, so the transaction may commit (`W55A-FIX`: an event the current row
+        # does not name is refused at COMMIT).
+        connection.execute(text(
+            "INSERT INTO norm_current_snapshot (norms_snapshot_id, event_id) VALUES (:s, :e)"
+        ), {"s": snapshot, "e": event})
         _refused(connection, "UPDATE norm_current_snapshot_event SET actor_user_uid = :a "
                  "WHERE event_id = :e", {"a": str(UserUid.new()), "e": event}, sqlstate="AM003")
         _refused(connection, "DELETE FROM norm_current_snapshot_event WHERE event_id = :e",

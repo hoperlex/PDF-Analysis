@@ -3,9 +3,12 @@
 `W55A-SEARCH-01` (`W55-PLAN.md` section A3.2; owner rulings R-112, R-113). Migration
 ``0020`` holds the state -- ``norm_current_snapshot`` (one row) and
 ``norm_current_snapshot_event`` (append-only) -- and refuses a change that does not name
-its own history event. This module is the only writer and the only reader other contexts
-use, through ``auditmanager.norms.public``: `W55A-PIN-01` reads :func:`current_snapshot`
-inside the run-creating transaction, and W57a extends :func:`qualification` here.
+its own history event. Since `W55A-FIX` it also requires that event to be the newest, refuses
+at COMMIT an event the current row does not name (so one designation per transaction, which
+is what the setter writes), stamps ``changed_at`` itself and refuses TRUNCATE. This module is
+the only writer and the only reader other contexts use, through ``auditmanager.norms.public``:
+`W55A-PIN-01` reads :func:`current_snapshot` inside the run-creating transaction, and W57a
+extends :func:`qualification` here.
 
 **Qualification.** A snapshot may be designated only when
 

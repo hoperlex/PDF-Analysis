@@ -8,8 +8,10 @@ autouse.
 Isolation follows ``tests/integration/norms/custody/conftest.py``: one throwaway database
 per session, migrated by the literal ``alembic`` command, and every norms, custody and blob
 table truncated before each database test (``TRUNCATE`` because the history and the corpus
-tables refuse ``DELETE`` by trigger). The rows are written by plain SQL here -- never by the
-code under test -- so a seeding helper cannot share a defect with what it seeds.
+tables refuse ``DELETE`` by trigger; ``0020`` refuses TRUNCATE of the history too, which
+``tests/integration/norms/reset.py`` lifts for this reset alone). The rows are written by
+plain SQL here -- never by the code under test -- so a seeding helper cannot share a defect
+with what it seeds.
 """
 
 from __future__ import annotations
@@ -41,6 +43,7 @@ from auditmanager.shared.identity import (
 from auditmanager.shared.identity.ulid import new_ulid
 from auditmanager.storage import S3BlobStore, S3StorageSettings, StorageError, derive_blob_id
 from auditmanager.storage.public import BlobMetadataRepository, VerifiedBlob, parse_blob_role
+from tests.integration.norms.reset import truncate_tables
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 MIGRATE_ARGV = [
@@ -266,24 +269,26 @@ class Corpus:
         return blob_id
 
     def designate(self, snapshot: str, actor: str = ADMIN) -> str:
-        """A designation by plain SQL: the event, then the singleton row naming it."""
-        current = self.scalar("SELECT norms_snapshot_id FROM norm_current_snapshot")
+        """A designation by plain SQL: the event, then the singleton row naming it, in one
+        transaction -- ``0020`` refuses at COMMIT an event the current row does not name."""
         event = str(AuditEventId.new())
-        self.run(
-            "INSERT INTO norm_current_snapshot_event (event_id, from_snapshot_id, "
-            "to_snapshot_id, actor_user_uid) VALUES (:e, :f, :t, :a)",
-            e=event, f=current, t=snapshot, a=actor,
-        )
-        if current is None:
-            self.run(
-                "INSERT INTO norm_current_snapshot (norms_snapshot_id, event_id) VALUES (:t, :e)",
-                t=snapshot, e=event,
-            )
-        else:
-            self.run(
-                "UPDATE norm_current_snapshot SET norms_snapshot_id = :t, event_id = :e",
-                t=snapshot, e=event,
-            )
+        with self.engine.begin() as connection:
+            current = connection.execute(
+                text("SELECT norms_snapshot_id FROM norm_current_snapshot")
+            ).scalar()
+            connection.execute(text(
+                "INSERT INTO norm_current_snapshot_event (event_id, from_snapshot_id, "
+                "to_snapshot_id, actor_user_uid) VALUES (:e, :f, :t, :a)"
+            ), {"e": event, "f": current, "t": snapshot, "a": actor})
+            if current is None:
+                connection.execute(text(
+                    "INSERT INTO norm_current_snapshot (norms_snapshot_id, event_id) "
+                    "VALUES (:t, :e)"
+                ), {"t": snapshot, "e": event})
+            else:
+                connection.execute(text(
+                    "UPDATE norm_current_snapshot SET norms_snapshot_id = :t, event_id = :e"
+                ), {"t": snapshot, "e": event})
         return event
 
     def qualify(self, snapshot: str) -> None:
@@ -300,7 +305,7 @@ class Corpus:
 @pytest.fixture
 def corpus(search_engine: Engine) -> Corpus:
     with search_engine.begin() as connection:
-        connection.execute(text(f"TRUNCATE TABLE {', '.join(TABLES)} CASCADE"))
+        truncate_tables(connection, TABLES)
     return Corpus(search_engine, create_session_factory(search_engine))
 
 
