@@ -30,6 +30,7 @@ import hashlib
 import json
 import uuid
 from typing import Any, Iterator, Mapping, Sequence
+from urllib.parse import quote
 
 import pytest
 from sqlalchemy import text
@@ -38,9 +39,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from w13_api_driver import Answer, Request, Surface, dispatch
 from auditmanager.api.routers import Router
 from auditmanager.api.routers.execution import build_execution_routes
+from auditmanager.api.routers.norms import build_norm_routes
 from auditmanager.api.schemas.common import DEFAULT_LIMIT, MAX_LIMIT, MIN_LIMIT
 from auditmanager.api.schemas.models import FindingCategory, Verdict
-from auditmanager.bootstrap.adapters import ExecutionAdapter
+from auditmanager.bootstrap.adapters import ExecutionAdapter, NormsSearchAdapter
 from auditmanager.findings import TextLayer
 from auditmanager.jobs.public import JobRepository
 from auditmanager.runs.repository import RunRepository
@@ -821,12 +823,100 @@ def _resolve(document: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[st
     return node
 
 
-#: `W55A-SEAL-01`. Operations whose query parameters are declared but whose port is a sealed
-#: stub, so the drive below cannot show a parameter changing the answer. Emptied by
-#: `W55A-SEARCH-01`.
-SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset(
+#: Operations whose query parameters are declared but whose port is a sealed stub, so the
+#: drive below cannot show a parameter changing the answer (`CONTRACT_PIN_REGISTRY.md`'s
+#: sealed-stub rule). `W55A-SEAL-01` listed the four norms operations here;
+#: `W55A-SEARCH-01` gave them bodies and `W55A-PIN-01` emptied it and drives them below.
+SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset()
+
+#: The four norms listings, driven over the shipped ``NormsSearchAdapter`` on this suite's
+#: rollback-joined session (`W55A-PIN-01`).
+NORMS_QUERY_OPERATIONS: frozenset[str] = frozenset(
     {"searchNorms", "listNormParagraphs", "listNormSnapshots", "listNormSnapshotEvents"}
 )
+
+#: The words the seeded norms paragraphs carry. ``SEARCH_WORD`` (``здания``) stems to the
+#: lexeme every paragraph holds; ``NARROW_WORD`` is in one paragraph only.
+SEARCH_WORD = "здания"
+NARROW_WORD = "лифтами"
+NORM_PARAGRAPHS = (
+    "Здания жилые многоквартирные проектируют с учётом требований",
+    "Здания общественные оборудуют лифтами",
+    "Лестницы зданий выполняют из негорючих материалов",
+)
+
+
+def _seed_norms(session: Session) -> dict[str, Any]:
+    """Two snapshots, ``first`` then ``current``, each designated once, in this transaction.
+
+    Plain SQL, as ``tests/integration/norms/search/conftest.py`` seeds: a seeding helper must
+    not share a defect with what it seeds. The designation writes what
+    ``set_current_snapshot`` writes -- a history event from the current snapshot (or none),
+    then the singleton row -- without its qualification, which needs a complete embedding
+    build and custody bindings that have nothing to do with a query parameter. Rolled back
+    with everything else; a lane that already has a current snapshot is moved from it.
+    """
+    from auditmanager.norms.public import current_snapshot
+    from auditmanager.shared.identity import (
+        AuditEventId,
+        NormDocumentId,
+        NormParagraphId,
+        NormsSnapshotId,
+    )
+    from auditmanager.shared.identity.ids import UserUid
+
+    def snapshot() -> tuple[str, str]:
+        snapshot_id = str(NormsSnapshotId.new())
+        key = f"query-surface-{snapshot_id[-12:].lower()}"
+        session.execute(text(
+            "INSERT INTO norms_snapshot (norms_snapshot_id, content_key, base_content_key, "
+            "content_digest, undated_documents, document_count, segmentation_profile) "
+            "VALUES (:s, :k, :k, :d, 0, 1, 'query-surface')"
+        ), {"s": snapshot_id, "k": key, "d": "f" * 64})
+        document_id = str(NormDocumentId.new())
+        pk = session.execute(text(
+            "INSERT INTO norm_document (norm_document_id, norms_snapshot_id, "
+            "source_document_ref, slug, title, doc_type, source_attribution, pdf_page_count, "
+            "block_count, page_heading_count, recognised_characters, paragraph_count) "
+            "VALUES (:d, :s, 'query-surface', "
+            "'СП_54_13330_2022__Свод_правил__Здания_жилые_многоквартирные', "
+            "'Свод правил', 'СП', 'consultant_plus', 3, 3, 0, 200, :n) "
+            "RETURNING norm_document_pk"
+        ), {"d": document_id, "s": snapshot_id, "n": len(NORM_PARAGRAPHS)}).scalar_one()
+        for ordinal, body in enumerate(NORM_PARAGRAPHS):
+            session.execute(text(
+                "INSERT INTO norm_paragraph (norm_paragraph_id, norms_snapshot_id, "
+                "norm_document_pk, ordinal, page_label, block_ref, char_offset, char_length, "
+                "kind, clause_number, text, text_reliability) VALUES (:p, :s, :pk, :o, :page, "
+                ":block, 0, :n, 'body', NULL, :body, 'reliable')"
+            ), {"p": str(NormParagraphId.new()), "s": snapshot_id, "pk": pk, "o": ordinal,
+                "page": ordinal + 1, "block": f"block-{ordinal}", "n": len(body),
+                "body": body})
+        return snapshot_id, document_id
+
+    def designate(snapshot_id: str) -> None:
+        before = current_snapshot(session)
+        previous = None if before is None else str(before.norms_snapshot_id)
+        event = str(AuditEventId.new())
+        session.execute(text(
+            "INSERT INTO norm_current_snapshot_event (event_id, from_snapshot_id, "
+            "to_snapshot_id, actor_user_uid) VALUES (:e, :f, :t, :a)"
+        ), {"e": event, "f": previous, "t": snapshot_id, "a": str(UserUid.new())})
+        if previous is None:
+            session.execute(text(
+                "INSERT INTO norm_current_snapshot (norms_snapshot_id, event_id) "
+                "VALUES (:s, :e)"
+            ), {"s": snapshot_id, "e": event})
+        else:
+            session.execute(text(
+                "UPDATE norm_current_snapshot SET norms_snapshot_id = :s, event_id = :e"
+            ), {"s": snapshot_id, "e": event})
+
+    first, _ = snapshot()
+    designate(first)
+    current, document = snapshot()
+    designate(current)
+    return {"first": first, "current": current, "document": document}
 
 
 def _declared_query_parameters(document: Mapping[str, Any]) -> dict[str, set[str]]:
@@ -893,21 +983,9 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
     """
     declared = _declared_query_parameters(contract)
     assert declared, "no query parameters found in the frozen document"
-    # `W55A-SEAL-01`. The norms operations are sealed stubs answering `503` until
-    # `W55A-SEARCH-01`, so no parameter can visibly change their answer yet. Their declared
-    # parameters are pinned here instead, and the lane that gives them a body empties
-    # `SEALED_STUB_QUERY_OPERATIONS` and drives them below like every other listing.
-    sealed = {
-        operation_id: declared.pop(operation_id)
-        for operation_id in sorted(SEALED_STUB_QUERY_OPERATIONS)
-        if operation_id in declared
-    }
-    assert sealed == {
-        "searchNorms": {"q", "norms_snapshot_id", "cursor", "limit"},
-        "listNormParagraphs": {"cursor", "limit"},
-        "listNormSnapshots": {"cursor", "limit"},
-        "listNormSnapshotEvents": {"cursor", "limit"},
-    }, f"the sealed norms query surface moved: {sealed}"
+    for operation_id in SEALED_STUB_QUERY_OPERATIONS:
+        declared.pop(operation_id, None)
+    norms = _seed_norms(session)
 
     targets = {
         "listProjects": "/projects",
@@ -935,6 +1013,12 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         # `W54-WORKER-01`: the worker registry, served through the same adapter; two
         # registry rows are written below in this test's transaction.
         "listWorkers": "/execution/workers",
+        # `W55A-PIN-01`. The four norms operations, over the rows `_seed_norms` wrote:
+        # `searchNorms` scopes to the current snapshot by default.
+        "searchNorms": f"/norms/search?q={quote(SEARCH_WORD)}",
+        "listNormParagraphs": f"/norm-documents/{norms['document']}/paragraphs",
+        "listNormSnapshots": "/norms/snapshots",
+        "listNormSnapshotEvents": "/norms/snapshots/events",
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -953,6 +1037,10 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listExecutionQueue": {"cursor", "limit"},
         "listExecutionJournal": {"run_id", "cursor", "limit"},
         "listWorkers": {"cursor", "limit"},
+        "searchNorms": {"q", "norms_snapshot_id", "cursor", "limit"},
+        "listNormParagraphs": {"cursor", "limit"},
+        "listNormSnapshots": {"cursor", "limit"},
+        "listNormSnapshotEvents": {"cursor", "limit"},
     }, f"the contract's query surface moved: {declared}"
 
     accounts_and_requests = _seed_accounts_and_requests(session, shipped_router)
@@ -967,6 +1055,18 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         ExecutionAdapter(session_factory, runs=None),  # type: ignore[arg-type]
     )
     execution_surface = Surface(execution_router)
+
+    # `W55A-PIN-01`. The norms routes over the shipped adapter, built the same way. The
+    # caller already holds `admin` (above), which `listNormSnapshotEvents` needs. A generous
+    # timeout: the search's `SET LOCAL statement_timeout` outlives its savepoint in this
+    # suite's one transaction.
+    norms_router = Router(credentials=shipped_router.router.credentials)
+    build_norm_routes(
+        norms_router,
+        NormsSearchAdapter(session_factory, timeout_ms=600_000),
+        None,  # type: ignore[arg-type]
+    )
+    norms_surface = Surface(norms_router)
 
     # Three distinct queued Runs provide three Jobs and at least two journal events
     # per Run. Their events are newer than any committed residue in a reused lane,
@@ -1064,40 +1164,43 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
 
     for operation_id, names in declared.items():
         target = targets[operation_id]
-        surface = (
-            execution_surface
-            if operation_id.startswith("listExecution") or operation_id == "listWorkers"
-            else shipped_router
-        )
-        baseline = ok(get(surface, f"{target}?limit=200"))
+        # `searchNorms`' target already carries its required `q`.
+        sep = "&" if "?" in target else "?"
+        if operation_id.startswith("listExecution") or operation_id == "listWorkers":
+            surface = execution_surface
+        elif operation_id in NORMS_QUERY_OPERATIONS:
+            surface = norms_surface
+        else:
+            surface = shipped_router
+        baseline = ok(get(surface, f"{target}{sep}limit=200"))
         assert len(baseline["items"]) >= 2, (
             f"{operation_id} returned {len(baseline['items'])} items; this test needs at "
             "least two for a filter or a page boundary to be visible"
         )
 
         # limit: one item, and the first one.
-        limited = ok(get(surface, f"{target}?limit=1"))
+        limited = ok(get(surface, f"{target}{sep}limit=1"))
         if [item for item in limited["items"]] != [baseline["items"][0]]:
             inert.setdefault(operation_id, []).append("limit")
 
         # cursor: the page after the first item starts at the second.
         cursor = limited["page"]["next_cursor"]
         assert cursor, f"{operation_id}: a truncated page carried no cursor"
-        resumed = ok(get(surface, f"{target}?limit=1&cursor={cursor}"))
+        resumed = ok(get(surface, f"{target}{sep}limit=1&cursor={cursor}"))
         if [item for item in resumed["items"]] != [baseline["items"][1]]:
             inert.setdefault(operation_id, []).append("cursor")
 
         if "category" in names:
             for category in categories:
-                filtered = ok(get(surface, f"{target}?category={category}&limit=200"))
+                filtered = ok(get(surface, f"{target}{sep}category={category}&limit=200"))
                 if {item["category"] for item in filtered["items"]} != {category}:
                     inert.setdefault(operation_id, []).append(f"category={category}")
 
         if "verdict" in names and operation_id != "listDecisions":
             # Every finding of a fresh run is `pending`, so the discriminating case is the
             # verdict that must return nothing rather than the one that returns everything.
-            everything = ok(get(surface, f"{target}?verdict=pending&limit=200"))
-            nothing = ok(get(surface, f"{target}?verdict=rejected&limit=200"))
+            everything = ok(get(surface, f"{target}{sep}verdict=pending&limit=200"))
+            nothing = ok(get(surface, f"{target}{sep}verdict=rejected&limit=200"))
             if not everything["items"] or nothing["items"]:
                 inert.setdefault(operation_id, []).append("verdict")
 
@@ -1105,7 +1208,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             # `W49-SEAL-01`: one pending and one rejected request exist (seeded above), so
             # each value must return a non-empty page of exactly that status.
             for status in ("pending", "rejected"):
-                filtered = ok(get(surface, f"{target}?status={status}&limit=200"))
+                filtered = ok(get(surface, f"{target}{sep}status={status}&limit=200"))
                 carried = {item["status"] for item in filtered["items"]}
                 if carried != {status}:
                     inert.setdefault(operation_id, []).append(f"status={status}")
@@ -1113,8 +1216,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         if "include_archived" in names:
             # One account was archived above: absent by default, present when asked for.
             archived_uid = accounts_and_requests["archived"]
-            default = ok(get(surface, f"{target}?limit=200"))
-            asked = ok(get(surface, f"{target}?include_archived=true&limit=200"))
+            default = ok(get(surface, f"{target}{sep}limit=200"))
+            asked = ok(get(surface, f"{target}{sep}include_archived=true&limit=200"))
             if archived_uid in {item["user_uid"] for item in default["items"]} or (
                 archived_uid not in {item["user_uid"] for item in asked["items"]}
             ):
@@ -1128,13 +1231,32 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             # this run has certainly produced against the one nothing can produce:
             # `accepted`, from the `accept` appended above, and `needs_manual_review`,
             # which is in the closed union and has no PC-01 producer at all.
-            accepted = ok(get(surface, f"{target}?verdict=accepted&limit=200"))
+            accepted = ok(get(surface, f"{target}{sep}verdict=accepted&limit=200"))
             impossible = ok(
-                get(surface, f"{target}?verdict=needs_manual_review&limit=200")
+                get(surface, f"{target}{sep}verdict=needs_manual_review&limit=200")
             )
             carried = {item["current_verdict"] for item in accepted["items"]}
             if not accepted["items"] or carried != {"accepted"} or impossible["items"]:
                 inert.setdefault(operation_id, []).append("verdict")
+
+        if "q" in names:
+            # Another query is another answer: one paragraph instead of three.
+            narrow = ok(get(surface, f"/norms/search?q={quote(NARROW_WORD)}&limit=200"))
+            ids = [item["norm_paragraph_id"] for item in baseline["items"]]
+            if len(narrow["items"]) != 1 or [
+                item["norm_paragraph_id"] for item in narrow["items"]
+            ] == ids:
+                inert.setdefault(operation_id, []).append("q")
+
+        if "norms_snapshot_id" in names:
+            # The default scope is the current snapshot; an explicit once-current one moves it.
+            scoped = ok(get(
+                surface, f"{target}{sep}norms_snapshot_id={norms['first']}&limit=200"
+            ))
+            if {item["norms_snapshot_id"] for item in baseline["items"]} != {
+                norms["current"]
+            } or {item["norms_snapshot_id"] for item in scoped["items"]} != {norms["first"]}:
+                inert.setdefault(operation_id, []).append("norms_snapshot_id")
 
         if "run_id" in names:
             own_run = execution_runs[-1]
@@ -1142,7 +1264,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             assert foreign_run in {item["run_id"] for item in baseline["items"]}, (
                 "the unfiltered journal has no foreign Run to exclude"
             )
-            filtered = ok(get(surface, f"{target}?run_id={own_run}&limit=200"))
+            filtered = ok(get(surface, f"{target}{sep}run_id={own_run}&limit=200"))
             if len(filtered["items"]) < 2 or {
                 item["run_id"] for item in filtered["items"]
             } != {own_run}:

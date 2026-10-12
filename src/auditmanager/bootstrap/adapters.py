@@ -209,7 +209,8 @@ class ExecutionAdapter(_SessionHolder):
 
         def write(session: Session) -> tuple[str, bool, RunStatusView]:
             # `R-82`: the new run records the configuration this deployment executes,
-            # exactly as `startRun` does, never the source run's.
+            # exactly as `startRun` does, never the source run's. The command reads the
+            # current norms snapshot in this same transaction (`W55A-PIN-01`).
             result = reaudit_run(session, source_run_id=run_id,
                                  roles=self._roles(session, user_uid),
                                  idempotency_key=idempotency_key,
@@ -645,10 +646,11 @@ class RunAdapter(_SessionHolder):
                 # The contract's guard on this edge is "the input manifest and the
                 # AnalysisProfile, PromptBundle and NormsSnapshot references resolve to
                 # immutable versioned records" (`state-machines.json`, audit_run guards;
-                # PC-01 leaves the NormsSnapshot clause unevaluated, `runs/scope.py`).
-                # `start_audit_run` has just resolved exactly those references, three
-                # statements ago and in this transaction. Queueing anywhere else would
-                # evaluate the guard in one place and take the edge in another.
+                # a NULL NormsSnapshot pin is admitted until W57, `runs/scope.py`).
+                # `start_audit_run` has just resolved exactly those references and read
+                # the current norms snapshot (`W55A-PIN-01`), in this transaction.
+                # Queueing anywhere else would evaluate the guard in one place and take
+                # the edge in another.
                 #
                 # And it is what makes the answer true. A run this method has handed to a
                 # carrier is scheduled; saying `created` -- "exists, nothing has scheduled
@@ -784,6 +786,9 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     cost = repository.cost(session, run_id)
     return RunStatusView(
         reaudit_of_run_id=run.reaudit_of_run_id,
+        # `W55A-PIN-01` (R-113). The snapshot the run pinned at creation, from the row;
+        # `run_status_body` renders it only when one was pinned.
+        norms_snapshot_id=run.norms_snapshot_id,
         run_id=str(run.run_id),
         project_uid=str(run.project_uid),
         version_uid=str(run.version_uid),

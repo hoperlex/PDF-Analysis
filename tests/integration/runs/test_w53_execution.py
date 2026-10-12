@@ -16,7 +16,12 @@ from auditmanager.bootstrap.adapters import ExecutionAdapter
 from auditmanager.api.schemas.common import encode_cursor
 from auditmanager.analysis.text import ProviderMode
 from auditmanager.jobs.public import JobRepository, set_execution_paused
-from auditmanager.runs.commands import cancel_audit_run, frozen_input_digest, reaudit_run
+from auditmanager.runs.commands import (
+    cancel_audit_run,
+    current_norms_snapshot,
+    frozen_input_digest,
+    reaudit_run,
+)
 from auditmanager.runs import execute_run
 from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -48,9 +53,12 @@ def _key() -> str:
     return "w53-exec-" + uuid4().hex
 
 
-def test_reaudit_copies_nonnull_norms_snapshot_and_replays_once(
+def test_reaudit_pins_the_current_snapshot_not_the_sources_and_replays_once(
     session, blob_store, helpers
 ):
+    """`W55A-PIN-01` replaced W53's carry-over: the source pinned a snapshot that has never
+    been current, and the re-audit pins the current one (NULL while none is), never the
+    source's. ``test_w55a_pin_window.py`` designates one and asserts the non-NULL case."""
     seeded = helpers.seed_version(session, blob_store)
     snapshot = str(NormsSnapshotId.new())
     content_key = _key()
@@ -78,12 +86,14 @@ def test_reaudit_copies_nonnull_norms_snapshot_and_replays_once(
     )
     assert replay.replayed is True and replay.run_id == first.run_id
     child = RunRepository().get(session, first.run_id)
-    assert child.norms_snapshot_id == snapshot
+    assert child.norms_snapshot_id != snapshot, "the re-audit carried the source's snapshot over"
+    assert child.norms_snapshot_id == current_norms_snapshot(session)
     assert child.frozen_input_digest == frozen_input_digest(
         version_uid=seeded.version_uid,
         blob_ids={helpers.MANIFEST_ROLE_SOURCE: seeded.source_blob_id},
         analysis_profile_id=seeded.analysis_profile_id,
         prompt_bundle_id=seeded.prompt_bundle_id,
+        norms_snapshot_id=child.norms_snapshot_id,
     )
     assert child.state == "queued"
     assert child.reaudit_of_run_id == source_id

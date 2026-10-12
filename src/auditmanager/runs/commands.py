@@ -11,20 +11,37 @@ duplicates, and the record is the thing a retry consults.
 The frozen-at-creation set
 --------------------------
 A run freezes what it will analyse *before* it runs: the document version, the blob set
-taken from that version's immutable input manifest, the analysis profile and the prompt
-bundle. Those four go into ``frozen_input_digest``, so a later reader can tell whether
-two runs saw the same inputs without trusting that nothing moved underneath them. The
-norms snapshot stays NULL and is read by no PC-01 path — see
-:mod:`auditmanager.runs.scope` for why that is a recorded ``OD-24`` non-evaluation
-rather than an oversight.
+taken from that version's immutable input manifest, the analysis profile, the prompt
+bundle and the norms snapshot. The first four are the **input basis**
+(:func:`input_basis_digest`), the computation every run before W55 stored. The stored
+``frozen_input_digest`` is that basis plus the pinned snapshot when one is pinned
+(:func:`frozen_input_digest`), so a later reader can tell whether two runs saw the same
+inputs without trusting that nothing moved underneath them.
+
+The norms snapshot (`W55A-PIN-01`; plan section A3.3; R-82, R-113, CD-6)
+-------------------------------------------------------------------------
+``start_audit_run`` and ``reaudit_run`` read the **current** norms snapshot through
+``auditmanager.norms.public.current_snapshot`` inside the run-creating transaction, after
+the command ledger has accepted the key, and write it to ``audit_run.norms_snapshot_id``.
+The snapshot is database state, read in the transaction; profile, bundle and mode stay the
+caller's configuration. While no snapshot is current the pin is NULL and the stored digest
+is byte-identical to the basis. No stage reads the pin before W57, so a NULL pin is
+admitted; :mod:`auditmanager.runs.scope` records that as the ``OD-24`` non-evaluation.
+
+**Neither idempotency fingerprint holds the snapshot.** ``start_run_fingerprint`` takes the
+basis, under the key it has always used, so a key accepted before W55 replays and a retry
+after an administrator designated another snapshot replays the run the first acceptance
+created rather than refusing as a different payload. The re-audit fingerprint stays the
+source run and the source's stored digest.
 
 The reference-resolution guard PC-01 *does* evaluate
 ----------------------------------------------------
 ``created -> queued`` requires the run's references to resolve. PC-01 evaluates three of
 the four clauses and does it here, at creation, where the answer is still actionable:
 the version must exist and carry a ``source.document`` manifest entry, and the analysis
-profile and prompt bundle identities must be well-formed. The fourth clause, the
-``NormsSnapshot`` one, has nothing to resolve.
+profile and prompt bundle identities must be well-formed. A pinned snapshot resolves by
+construction (it is the current one, and ``fk_audit_run_norms_snapshot`` holds it); a NULL
+pin is admitted until W57.
 
 Why the command succeeds at creation
 ------------------------------------
@@ -41,12 +58,13 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any, Final, Mapping
+from typing import Any, Callable, Final, Mapping
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from auditmanager.documents.public import DocumentRepository
+from auditmanager.norms.public import current_snapshot
 from auditmanager.jobs.public import JobRepository
 from auditmanager.ingest.public import (
     CommandReplay,
@@ -91,29 +109,94 @@ class StartedRun:
     replayed: bool
 
 
-def frozen_input_digest(
+#: Reads the norms snapshot a run being created pins: its ``ns_`` identity, or ``None``
+#: while no snapshot is current. Called inside the run-creating transaction.
+NormsSnapshotReader = Callable[[Session], str | None]
+
+
+def current_norms_snapshot(session: Session) -> str | None:
+    """The current norms snapshot's identity, or ``None`` while none is current (CD-6).
+
+    The one reader every run-creating command uses: ``norms.public.current_snapshot``,
+    which takes no lock. A designation committed concurrently is either seen or not; the
+    run pins whichever snapshot was current when this statement ran.
+    """
+    current = current_snapshot(session)
+    return None if current is None else str(current.norms_snapshot_id)
+
+
+def _frozen_document(
+    *,
+    version_uid: str,
+    blob_ids: Mapping[str, str],
+    analysis_profile_id: str,
+    prompt_bundle_id: str,
+) -> dict[str, Any]:
+    return {
+        "analysis_profile_id": analysis_profile_id,
+        "blob_ids": dict(sorted(blob_ids.items())),
+        "prompt_bundle_id": prompt_bundle_id,
+        "version_uid": version_uid,
+    }
+
+
+def _sha256_of(document: Mapping[str, Any]) -> str:
+    payload = json.dumps(
+        document, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def input_basis_digest(
     *,
     version_uid: str,
     blob_ids: Mapping[str, str],
     analysis_profile_id: str,
     prompt_bundle_id: str,
 ) -> str:
-    """sha256 over the canonical serialization of the frozen-at-creation set.
+    """sha256 over the canonical serialization of the input basis.
 
     Sorted keys and no insignificant whitespace, so the digest depends on the values
-    and not on dict ordering. ``norms_snapshot_id`` is deliberately absent: including a
-    field that is always NULL would suggest PC-01 pins one.
+    and not on dict ordering. This is exactly the computation every run before W55
+    stored as its ``frozen_input_digest``, and it **never** holds the norms snapshot:
+    it is what ``start_run_fingerprint`` takes, so a designation can never turn a retry
+    into a different payload.
     """
-    document = {
-        "analysis_profile_id": analysis_profile_id,
-        "blob_ids": dict(sorted(blob_ids.items())),
-        "prompt_bundle_id": prompt_bundle_id,
-        "version_uid": version_uid,
-    }
-    payload = json.dumps(
-        document, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    ).encode("utf-8")
-    return hashlib.sha256(payload).hexdigest()
+    return _sha256_of(
+        _frozen_document(
+            version_uid=version_uid,
+            blob_ids=blob_ids,
+            analysis_profile_id=analysis_profile_id,
+            prompt_bundle_id=prompt_bundle_id,
+        )
+    )
+
+
+def frozen_input_digest(
+    *,
+    version_uid: str,
+    blob_ids: Mapping[str, str],
+    analysis_profile_id: str,
+    prompt_bundle_id: str,
+    norms_snapshot_id: str | None,
+) -> str:
+    """The stored ``frozen_input_digest``: the input basis plus the pinned snapshot.
+
+    The same canonical document as :func:`input_basis_digest`, with ``norms_snapshot_id``
+    added when a snapshot is pinned. With none pinned the key is absent rather than null,
+    so a NULL run's stored digest is **byte-identical** to its basis -- and to what the
+    same run would have stored before W55. ``norms_snapshot_id`` has no default: a caller
+    that forgot the pin would silently store a digest that claims none.
+    """
+    document = _frozen_document(
+        version_uid=version_uid,
+        blob_ids=blob_ids,
+        analysis_profile_id=analysis_profile_id,
+        prompt_bundle_id=prompt_bundle_id,
+    )
+    if norms_snapshot_id is not None:
+        document["norms_snapshot_id"] = norms_snapshot_id
+    return _sha256_of(document)
 
 
 def start_run_fingerprint(
@@ -122,19 +205,27 @@ def start_run_fingerprint(
     analysis_profile_id: str,
     prompt_bundle_id: str,
     provider_mode: str,
-    frozen_input_digest_value: str,
+    input_basis_digest_value: str,
 ) -> PayloadFingerprint:
     """The comparison value that distinguishes a repeat from a same-key conflict.
 
     Public because it is the *rule*, not an implementation detail: a caller that needs
     to know whether two requests are the same payload must ask the same question this
     command asks, and a second derivation of it elsewhere would be a second place to be
-    wrong. It covers everything that would change what the run analyses or how.
+    wrong. It covers everything the **request** decides about what the run analyses or
+    how.
+
+    It takes the input basis (:func:`input_basis_digest`), never the stored digest: the
+    norms snapshot is database state the server reads, not part of the request, so a
+    retry after a designation change is the same payload and replays. The basis is
+    recorded under the key ``frozen_input_digest`` -- the name it has carried since
+    before W55, when the basis *was* the stored digest -- so every key accepted then
+    still produces the fingerprint its ``command_record`` holds.
     """
     return payload_fingerprint(
         {
             "analysis_profile_id": analysis_profile_id,
-            "frozen_input_digest": frozen_input_digest_value,
+            "frozen_input_digest": input_basis_digest_value,
             "prompt_bundle_id": prompt_bundle_id,
             "provider_mode": provider_mode,
             "version_uid": version_uid,
@@ -154,7 +245,8 @@ def _resolve_references(
 
     Evaluated at creation rather than at the transition, because a run whose references
     do not resolve should never have become a row. The fourth clause is the
-    ``NormsSnapshot`` one and there is nothing to resolve for it.
+    ``NormsSnapshot`` one: the snapshot is read later, after the ledger accepts the key,
+    and a NULL pin is admitted until W57 (CD-6).
     """
     version = documents.get_version(session, version_uid)
 
@@ -188,11 +280,14 @@ def start_audit_run(
     commands: CommandRepository | None = None,
     runs: RunRepository | None = None,
     documents: DocumentRepository | None = None,
+    norms_snapshot: NormsSnapshotReader = current_norms_snapshot,
 ) -> StartedRun:
     """Create one durable ``AuditRun``, or answer what already happened under this key.
 
     The caller owns the transaction. This function opens no engine, commits nothing and
-    writes no rollback of its own.
+    writes no rollback of its own. The norms snapshot the new run pins is read here, in
+    that transaction, by ``norms_snapshot`` -- the current one, or NULL while none is
+    current.
 
     Outcomes:
 
@@ -224,7 +319,7 @@ def start_audit_run(
         documents=document_repo,
     )
 
-    digest = frozen_input_digest(
+    basis = input_basis_digest(
         version_uid=str(resolved_version),
         blob_ids=blob_ids,
         analysis_profile_id=analysis_profile_id,
@@ -233,13 +328,14 @@ def start_audit_run(
 
     # Two requests differing in any of it are different payloads, so a client that
     # reuses a key after changing the profile learns about it rather than silently
-    # receiving the first run back.
+    # receiving the first run back. The norms snapshot is not in it: it is not the
+    # request's, and a retry after a designation change must replay.
     fingerprint = start_run_fingerprint(
         version_uid=str(resolved_version),
         analysis_profile_id=analysis_profile_id,
         prompt_bundle_id=prompt_bundle_id,
         provider_mode=provider_mode,
-        frozen_input_digest_value=digest,
+        input_basis_digest_value=basis,
     )
 
     claimed = command_repo.begin(
@@ -262,6 +358,8 @@ def start_audit_run(
         )
 
     assert isinstance(claimed, CommandStarted)
+    # `W55A-PIN-01`. Read only once the key is this caller's: a replay pins nothing new.
+    snapshot = norms_snapshot(session)
     run_id = RunId.new().value
     run_repo.create(
         session,
@@ -271,8 +369,15 @@ def start_audit_run(
         analysis_profile_id=analysis_profile_id,
         prompt_bundle_id=prompt_bundle_id,
         provider_mode=provider_mode,
-        frozen_input_digest=digest,
+        frozen_input_digest=frozen_input_digest(
+            version_uid=str(resolved_version),
+            blob_ids=blob_ids,
+            analysis_profile_id=analysis_profile_id,
+            prompt_bundle_id=prompt_bundle_id,
+            norms_snapshot_id=snapshot,
+        ),
         command_id=str(claimed.command_id),
+        norms_snapshot_id=snapshot,
     )
     command_repo.succeed(session, claimed.command_id, {"run_id": run_id})
     return StartedRun(
@@ -355,6 +460,7 @@ def reaudit_run(
     provider_mode: str, runs: RunRepository | None = None,
     jobs: JobRepository | None = None, commands: CommandRepository | None = None,
     documents: DocumentRepository | None = None,
+    norms_snapshot: NormsSnapshotReader = current_norms_snapshot,
 ) -> StartedRun:
     """Create one new run of a terminal source's document version, on today's configuration.
 
@@ -362,11 +468,15 @@ def reaudit_run(
     profile, prompt bundle and provider mode. The caller passes the configuration the
     deployment executes (the same values ``start_run`` stamps); the new run records
     those, and a ``frozen_input_digest`` computed from them by the same guard and digest
-    ``start_audit_run`` uses. The source is linked only by ``reaudit_of_run_id``. Its
-    norms snapshot is carried over: PC-01 pins none of its own and the digest excludes it.
+    ``start_audit_run`` uses. The source is linked only by ``reaudit_of_run_id``.
 
-    The idempotency fingerprint is still the request -- the source run and its frozen
-    digest -- because the configuration is the server's, not the caller's.
+    `W55A-PIN-01` (R-82, R-113, CD-6): the new run pins the **current** norms snapshot,
+    read in this transaction exactly as ``start_audit_run`` reads it, never the source's.
+    It is NULL while none is current, whatever the source pinned.
+
+    The idempotency fingerprint is still the request -- the source run and its stored
+    digest -- because the configuration and the snapshot are the server's, not the
+    caller's. The source row never changes, so a retry after a designation change replays.
     """
     _require_run_control_role(roles)
     repository = runs or RunRepository()
@@ -408,11 +518,13 @@ def reaudit_run(
         prompt_bundle_id=prompt_bundle_id,
         documents=documents or DocumentRepository(),
     )
+    snapshot = norms_snapshot(session)
     digest = frozen_input_digest(
         version_uid=str(version_uid),
         blob_ids=blob_ids,
         analysis_profile_id=analysis_profile_id,
         prompt_bundle_id=prompt_bundle_id,
+        norms_snapshot_id=snapshot,
     )
     new_id = str(RunId.new())
     repository.create(
@@ -423,7 +535,7 @@ def reaudit_run(
         provider_mode=provider_mode,
         frozen_input_digest=digest,
         command_id=str(claimed.command_id), reaudit_of_run_id=source_run_id,
-        norms_snapshot_id=source.norms_snapshot_id,
+        norms_snapshot_id=snapshot,
     )
     repository.advance(session, run_id=new_id, from_state="created", to_state="queued")
     (jobs or JobRepository()).enqueue(session, run_id=new_id)
@@ -433,9 +545,12 @@ def reaudit_run(
 
 __all__ = [
     "COMMAND_TYPE_START_RUN",
+    "NormsSnapshotReader",
     "ROLE_SOURCE_DOCUMENT",
     "StartedRun",
+    "current_norms_snapshot",
     "frozen_input_digest",
+    "input_basis_digest",
     "run_of_command",
     "cancel_audit_run",
     "reaudit_run",

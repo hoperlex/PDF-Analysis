@@ -25,7 +25,7 @@ from auditmanager.runs import (
     RunRepository,
     abandon_stale_commands,
     execute_run,
-    frozen_input_digest,
+    input_basis_digest,
     start_audit_run,
     start_run_fingerprint,
 )
@@ -151,7 +151,7 @@ def test_a_repeat_under_an_abandoned_key_is_idempotency_key_stale(
     abandons it — a terminal state — so the key is permanently spent.
     """
     key = new_key("abandoned-key")
-    digest = frozen_input_digest(
+    digest = input_basis_digest(
         version_uid=seeded.version_uid,
         blob_ids={"source.document": seeded.source_blob_id},
         analysis_profile_id=seeded.analysis_profile_id,
@@ -162,7 +162,7 @@ def test_a_repeat_under_an_abandoned_key_is_idempotency_key_stale(
         analysis_profile_id=seeded.analysis_profile_id,
         prompt_bundle_id=seeded.prompt_bundle_id,
         provider_mode="recorded",
-        frozen_input_digest_value=digest,
+        input_basis_digest_value=digest,
     )
     commands = CommandRepository()
     claimed = commands.begin(
