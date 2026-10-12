@@ -456,6 +456,13 @@ def _report_while_locked(stand: Stand) -> Ran:
         return _inbound(stand, f"report {key}")
 
 
+def _import_under_a_copy_verb(stand: Stand) -> Ran:
+    """A copy-key verb holds `copy.lock` beside the record (`W54-JUDGE-A` F4)."""
+    key = _place(stand, _bundle(stand.root / "made"))
+    with _holding(stand.record.parent / "copy.lock"):
+        return _inbound(stand, f"import {key}")
+
+
 def _receive_while_locked(stand: Stand) -> Ran:
     bundle = _bundle(stand.root / "made")
     data = _tar(bundle)
@@ -552,6 +559,7 @@ GUARD_CASES: dict[str, Case] = {
         _reported(env={"STAND_COPY_RECORD": "/nonexistent/record.json"}, verb="import"),
     ),
     "import-lock-free": Case("receive-bundle.sh", _report_while_locked),
+    "copy-lock-free": Case("receive-bundle.sh", _import_under_a_copy_verb),
     # receive-bundle.sh -- the copy record admits the import (`W54-STAND-COPY-01`)
     "copy-record-readable": Case(
         "receive-bundle.sh", _reported(verb="import", prepare=lambda s: s.record.write_text('{"record_version": 1}\n'))
@@ -1110,6 +1118,59 @@ def test_an_attested_copy_older_than_the_window_admits_no_import(tmp_path: Path)
     ran = _inbound(stand, f"import {key}")
     assert ran.refused("copy-record-in-window"), ran.err
     assert stand.docker_calls() == []
+
+
+def test_import_takes_the_import_lock_before_it_reads_the_record(tmp_path: Path) -> None:
+    """`W54-JUDGE-A` F3: the lock comes first. With the lock held and a record that would
+    be refused, the refusal is the lock's -- so nothing the record check saw can change
+    under the import before the lock is its own."""
+    stand = _stage(tmp_path)
+    stand.record.write_text(_record_text(state="closed"))
+    key = _place(stand, _bundle(tmp_path / "made"))
+    with _holding(stand.staging / "import.lock"):
+        ran = _inbound(stand, f"import {key}")
+    assert ran.refused("import-lock-free"), ran.err
+    assert "[copy-record-open]" not in ran.err
+    assert _inbound(stand, f"import {key}").refused("copy-record-open"), "the record check went missing"
+
+
+def test_a_receive_under_a_running_copy_verb_is_refused_before_reading(tmp_path: Path) -> None:
+    """`W54-JUDGE-A` F4: receive rewrites the record at its end, so it takes `copy.lock`
+    before a byte is read, and keeps it -- the record cannot change under the receive."""
+    stand = _stage(tmp_path)
+    stand.record.write_text(_record_text(kind="copy", purpose="publish", target_sha="e" * 40))
+    before = stand.record.read_text()
+    bundle = _bundle(tmp_path / "made")
+    data = _tar(bundle)
+    with _holding(stand.record.parent / "copy.lock"):
+        ran = _inbound(stand, f"receive {bundle.name} {len(data)}", stdin=data)
+    assert ran.refused("copy-lock-free"), ran.err
+    assert ran.consumed == 0
+    assert stand.record.read_text() == before
+    assert not (stand.staging / "bundles" / bundle.name).exists()
+
+
+def test_an_import_converts_the_record_under_the_copy_lock_and_lets_it_go(tmp_path: Path) -> None:
+    """The conversion to an import record happens under `copy.lock`, and the detached
+    importer does not inherit it: while the importer runs, the copy lock is free and the
+    import lock is held."""
+    stand = _stage(tmp_path)
+    stand.record.write_text(_record_text(kind="copy", purpose="publish", target_sha="e" * 40))
+    key = _place(stand, _bundle(tmp_path / "made"))
+    release = tmp_path / "release"
+    started = _inbound(stand, f"import {key}", env={"STUB_RELEASE": str(release)})
+    assert started.code == 0, started.err
+    try:
+        _wait_for(stand.docker_log)
+        assert _record(stand)["purpose"] == "import"
+        copy_lock = stand.record.parent / "copy.lock"
+        assert copy_lock.exists()
+        with copy_lock.open("a") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # raises if the importer kept it
+        assert "import_lock: held" in _inbound(stand, "status").out
+    finally:
+        release.write_text("go\n")
+    _wait_for(stand.staging / "logs" / f"{key}.import.exit")
 
 
 def test_a_waiver_written_after_the_marker_is_refused_even_without_the_file(tmp_path: Path) -> None:

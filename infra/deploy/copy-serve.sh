@@ -36,9 +36,12 @@
 #                               their recorded size and SHA-256
 #   restore-db <STAMP> <sha256> the owner's way back: stops the writers again, checks the
 #                               dump's digest, restores it, compares the fingerprint, and
-#                               leaves the writers stopped and the record open
-#   resume <STAMP>              starts the stopped writers and closes the record; refused
-#                               while the importer holds its lock
+#                               leaves the writers stopped and the record open. <STAMP> is
+#                               the record's, or -- while a newer dump-db has not completed
+#                               -- the previous record's (`record.prev.json`)
+#   resume <STAMP>              starts the stopped writers and closes the record, holding
+#                               the importer's lock throughout; refused while the importer
+#                               holds it
 #   status                      read-only: the record, its age, the marker, the import lock,
 #                               the deployed tree and this script's SHA-256
 #
@@ -49,16 +52,26 @@
 #   ALPHA_ENV_FILE               default $ALPHA_CHECKOUT/infra/deploy/env/alpha.env
 #   STAND_COPY_DIR               absolute, owner-created, owned by this account, not group-
 #                                or world-writable, outside the checkout (default
-#                                /srv/auditmanager-copy). Holds `record.json`, the marker
+#                                /srv/auditmanager-copy). Holds `record.json`, while a new
+#                                copy is incomplete `record.prev.json`, the marker
 #                                `real_data`, `copy.lock` and `<STAMP>/{db.dump,inventory.tsv}`
-#   BUNDLE_STAGING               the inbound key's staging; only its `import.lock` is read
+#   BUNDLE_STAGING               the inbound key's staging; only its `import.lock` is used
 #                                (default /srv/auditmanager-bundles)
 #   STAND_COPY_MARGIN_BYTES      free space kept beyond the database's size (default 2 GiB)
 #   STAND_COPY_WINDOW_SECONDS    how long a copy may stay open before it is attested, and how
 #                                long a waiver lasts (default 43200, the importer's 12 h)
 #
 # THE RECORD (`record.json`, schema in `docs/program/W54-STAND-COPY-01.md` §3) is kept on
-# the stand and never enters Git, a report or a chat. Only the latest copy is kept.
+# the stand and never enters Git, a report or a chat. Only the latest copy is kept -- but
+# only once it is whole: until a new `dump-db` has completed, the previous copy's record
+# stays beside it as `record.prev.json`, and its dump stays restorable (`W54-JUDGE-A` F6).
+#
+# LOCKS (`lib/forced-command.sh`). Every verb that changes anything holds `copy.lock` for
+# its whole run, and every rewrite of the record requires it -- the inbound key takes the
+# same lock before it turns an open record into an import record. Every verb that could
+# change what the importer stands on also holds `<BUNDLE_STAGING>/import.lock` for its
+# whole run, so `resume` cannot start the writers under an import that started after its
+# check, nor an import start while `resume` runs.
 #
 # Exit: 0 done; 3 refused (`REFUSED [<guard>]` names which). Guards sit between
 # `# >>> guard: <name>` / `# <<< guard: <name>` markers;
@@ -83,6 +96,7 @@ MARGIN_BYTES="${STAND_COPY_MARGIN_BYTES:-2147483648}"
 WINDOW_SECONDS="${STAND_COPY_WINDOW_SECONDS:-43200}"
 
 RECORD="$COPY_DIR/record.json"
+PREV_RECORD="$COPY_DIR/record.prev.json"
 MARKER="$COPY_DIR/real_data"
 
 #: The services that write to PostgreSQL or the bucket on their own. `migrate` and
@@ -169,21 +183,28 @@ require_copy_dir() {
     # <<< guard: copy-dir-outside-checkout
 }
 
-# One mutating verb at a time. fd 7 is held until this process exits.
+# One mutating verb at a time, and the record rewritten by no one else meanwhile: the
+# lock is held until this process exits.
 take_copy_lock() {
-    exec 7>>"$COPY_DIR/copy.lock"
     # >>> guard: copy-lock-free
-    if ! flock --nonblock 7; then
-        fc_refuse copy-lock-free "another copy verb is running; nothing was done." "status shows the record."
+    if ! fc_take_record_lock "$RECORD"; then
+        fc_refuse copy-lock-free "another copy verb, or the inbound key's receive or import, holds $COPY_DIR/copy.lock; nothing was done." \
+            "status shows the record."
     fi
     # <<< guard: copy-lock-free
 }
 
-require_import_lock_free() {
+# HOLDS the importer's lock until this process exits (`W54-JUDGE-A` F3): a check alone
+# would let an import start between it and the writers' start. No staging directory at
+# all means no inbound key is installed -- receive-bundle.sh refuses every verb without
+# one -- so there is no import and no lock to hold. A staging directory this account
+# cannot open the lock in is refused, never passed.
+hold_import_lock() {
     local lock="$STAGING/import.lock"
+    [ -e "$STAGING" ] || [ -L "$STAGING" ] || return 0
     # >>> guard: import-lock-free
-    if fc_lock_held "$lock"; then
-        fc_refuse import-lock-free "the corpus importer holds $lock; nothing was done." \
+    if ! fc_take_lock "$lock"; then
+        fc_refuse import-lock-free "the corpus importer holds $lock, or this account cannot open it; nothing was done." \
             "The writers stay stopped until the import has exited. The inbound key's status shows it."
     fi
     # <<< guard: import-lock-free
@@ -191,9 +212,19 @@ require_import_lock_free() {
 
 # --- the record -----------------------------------------------------------------------
 
+#: The record `rec` and `rec_str` read: always `record.json`, except while `restore-db`
+#: checks the previous record before it puts that record back in place.
+READ_RECORD="$RECORD"
+
 record_exists() { [ -e "$RECORD" ] || [ -L "$RECORD" ]; }
-rec() { fc_record_value "$RECORD" "$1"; }
-rec_str() { fc_record_string "$RECORD" "$1"; }
+rec() { fc_record_value "$READ_RECORD" "$1"; }
+rec_str() { fc_record_string "$READ_RECORD" "$1"; }
+
+# previous_record_is <STAMP>: `record.prev.json` is a record this script wrote, of <STAMP>.
+previous_record_is() {
+    [ -e "$PREV_RECORD" ] && fc_record_valid "$PREV_RECORD" \
+        && [ "$(fc_record_string "$PREV_RECORD" stamp)" = "$1" ]
+}
 
 require_record_readable() {
     local record="$RECORD"
@@ -240,7 +271,7 @@ require_stamp() {
     # >>> guard: record-stamp-matches
     if [ "$(rec_str stamp)" != "$stamp" ]; then
         fc_refuse record-stamp-matches "$stamp is not the latest record; that is $(rec_str stamp)." \
-            "Only the latest copy is kept."
+            "Only the latest copy is kept; restore-db also takes the previous one while a newer dump-db is incomplete."
     fi
     # <<< guard: record-stamp-matches
 }
@@ -272,8 +303,9 @@ render_record() {
         printf '  "%s": %s\n' "$1" "$2"
         printf '}\n'
     } > "$file.tmp.$$"
-    chmod 0644 -- "$file.tmp.$$"
-    mv -f -- "$file.tmp.$$" "$file"
+    if ! fc_record_install "$file.tmp.$$" "$file"; then
+        fc_refuse record-readable "$file could not be written: this process does not hold copy.lock."
+    fi
 }
 
 set_rec() {
@@ -431,12 +463,26 @@ new_stamp() {
     printf '%s\n' "$stamp"
 }
 
+# `W54-JUDGE-A` F6: the record a new one is about to replace (closed, or the caller
+# refused). A closed copy whose dump is on disk becomes `record.prev.json` and stays
+# restorable until the new dump is whole. Any other record -- a waiver, a copy whose
+# dump-db failed -- is simply replaced, and an earlier `record.prev.json` is kept.
+keep_previous_record() {
+    record_exists || return 0
+    if [ "$(rec_str kind)" = copy ] && [ "$(rec dump)" != null ] && [ -f "$COPY_DIR/$(rec_str stamp)/db.dump" ]; then
+        if ! fc_record_install "$RECORD" "$PREV_RECORD"; then
+            fc_refuse record-readable "$RECORD could not be kept as $PREV_RECORD: this process does not hold copy.lock."
+        fi
+    fi
+}
+
 # Opens a record (copy or waiver) BEFORE anything is stopped, so a failure at any later
 # step leaves an open record that `resume` can close and whose writers it can restart.
 open_record() {
     local stamp="$1" kind="$2" purpose="$3" waiver="$4" present_json
     shift 4
     present_json="$(json_words "$@")"
+    keep_previous_record
     render_record "$RECORD" \
         kind "\"$kind\"" \
         stamp "\"$stamp\"" \
@@ -558,7 +604,7 @@ verb_dump_db() {
     require_checkout
     require_copy_dir
     take_copy_lock
-    require_import_lock_free
+    hold_import_lock
     require_no_open_record
 
     db_size="$(db_scalar 'SELECT pg_database_size(current_database())' '[0-9]+')"
@@ -596,7 +642,9 @@ verb_dump_db() {
     sha="$(sha256_of "$dump")"
     set_rec dump "{\"file\": \"db.dump\", \"size_bytes\": $size, \"sha256\": \"$sha\"}"
 
-    # Only the latest copy is kept, and only once the new one is whole.
+    # Only the latest copy is kept, and only once the new one is whole: first the previous
+    # record, so it never names a dump that is gone, then every older copy.
+    rm -f -- "$PREV_RECORD"
     for old in "$COPY_DIR"/*; do
         old="${old##*/}"
         if [[ $old =~ ^${FC_STAMP_ERE}$ ]] && [ "$old" != "$stamp" ]; then
@@ -670,7 +718,7 @@ verb_attest() {
     require_checkout
     require_copy_dir
     take_copy_lock
-    require_import_lock_free
+    hold_import_lock
     require_open_record "$stamp"
     require_dump "$stamp"
 
@@ -735,7 +783,7 @@ attest_test_data() {
     require_checkout
     require_copy_dir
     take_copy_lock
-    require_import_lock_free
+    hold_import_lock
     # >>> guard: real-data-absent
     if [ -e "$MARKER" ] || [ -L "$MARKER" ]; then
         fc_refuse real-data-absent "the real_data marker exists ($MARKER): a full copy was attested, so R-88 and R-93 apply in full." \
@@ -822,17 +870,24 @@ verb_verify_objects() {
 }
 
 verb_restore_db() {
-    local stamp="$1" sha="$2" actual present=() writer stopped recorded restored
+    local stamp="$1" sha="$2" actual present=() writer stopped recorded restored previous=no carried=()
     require_checkout
     require_copy_dir
     take_copy_lock
-    require_import_lock_free
+    hold_import_lock
     # >>> guard: restore-record-present
     if ! record_exists; then
         fc_refuse restore-record-present "there is no copy record, so there is no dump to restore."
     fi
     # <<< guard: restore-record-present
     require_record_readable
+    # `W54-JUDGE-A` F6: the previous copy, while the dump-db that replaced its record has
+    # not completed. It is checked here exactly as the latest one is, and put back in place
+    # only once the digest matches.
+    if [ "$(rec_str stamp)" != "$stamp" ] && previous_record_is "$stamp"; then
+        previous=yes
+        READ_RECORD="$PREV_RECORD"
+    fi
     require_stamp "$stamp"
     require_dump "$stamp"
     actual="$(sha256_of "$COPY_DIR/$stamp/db.dump")"
@@ -843,12 +898,27 @@ verb_restore_db() {
     fi
     # <<< guard: dump-digest-matches-restore
 
+    # The previous record goes back in place, and it inherits every writer the record it
+    # replaces had stopped -- a failed dump-db stops them all and starts none.
+    if [ "$previous" = yes ]; then
+        if [ "$(fc_record_string "$RECORD" state)" = open ]; then
+            while IFS= read -r writer; do
+                [ -n "$writer" ] && carried+=("$writer")
+            done < <(fc_json_words "$(fc_record_value "$RECORD" writers_stopped)")
+        fi
+        if ! fc_record_install "$PREV_RECORD" "$RECORD"; then
+            fc_refuse record-readable "$PREV_RECORD could not be put back as $RECORD: this process does not hold copy.lock."
+        fi
+        READ_RECORD="$RECORD"
+        echo "copy-serve.sh: the previous record $stamp is the record again" >&2
+    fi
+
     # Quiesce AGAIN: a deploy since the copy restarted the writers. The record reopens and
     # remembers every writer it has stopped, so `resume` restarts them all.
     find_running_writers
     present=("${PRESENT[@]}")
     stopped="$(fc_json_words "$(rec writers_stopped)" | tr '\n' ' ')"
-    for writer in "${present[@]}"; do
+    for writer in "${carried[@]}" "${present[@]}"; do
         case " $stopped " in *" $writer "*) ;; *) stopped="$stopped $writer" ;; esac
     done
     # shellcheck disable=SC2086  # the words are writer names this script wrote
@@ -881,7 +951,7 @@ verb_resume() {
     require_checkout
     require_copy_dir
     take_copy_lock
-    require_import_lock_free
+    hold_import_lock
     require_open_record "$stamp"
     while IFS= read -r writer; do
         [ -n "$writer" ] && stopped+=("$writer")
@@ -924,6 +994,9 @@ verb_status() {
         printf 'real_data_marker: present (%s)\n' "$(tr '\n' ' ' < "$MARKER")"
     else
         printf 'real_data_marker: absent\n'
+    fi
+    if [ -e "$PREV_RECORD" ] && fc_record_valid "$PREV_RECORD"; then
+        printf 'previous_record: %s (restorable until a new dump-db completes)\n' "$(fc_record_string "$PREV_RECORD" stamp)"
     fi
     if ! record_exists; then
         printf 'record: none\n'

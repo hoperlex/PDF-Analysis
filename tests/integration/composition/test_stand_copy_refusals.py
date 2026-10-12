@@ -57,6 +57,7 @@ PULL = DEPLOY_DIR / "pull-copy.sh"
 LIB = DEPLOY_DIR / "lib/forced-command.sh"
 RESTORE_TEST = ROOT / "scripts/stand-copy/restore-test.sh"
 DEPLOY_SH = DEPLOY_DIR / "deploy.sh"
+RECEIVE = DEPLOY_DIR / "receive-bundle.sh"
 COMPOSE = DEPLOY_DIR / "compose.server.yml"
 
 #: Every script with guards here, by the name its refusals print and its file.
@@ -98,6 +99,7 @@ DOCKER_STUB = r'''#!/usr/bin/env python3
 import json
 import os
 import sys
+import time
 
 argv = sys.argv[1:]
 with open(os.environ["STUB_LOG"], "a", encoding="utf-8") as handle:
@@ -121,6 +123,18 @@ def drain():
     return sys.stdin.buffer.read().decode("utf-8", "replace")
 
 
+def hold(name):
+    """Pause, if the case asked: say so in `entered`, then wait for `release`."""
+    spec = state.get(name)
+    if not spec:
+        return
+    with open(spec["entered"], "w", encoding="utf-8") as handle:
+        handle.write("entered\n")
+    deadline = time.time() + 30
+    while not os.path.exists(spec["release"]) and time.time() < deadline:
+        time.sleep(0.05)
+
+
 if argv[:1] == ["compose"]:
     sub, rest = argv[5], argv[6:]
     if sub == "ps":
@@ -135,6 +149,7 @@ if argv[:1] == ["compose"]:
         save()
         sys.exit(0)
     if sub == "start":
+        hold("start_hold")
         for service in rest:
             if service not in state.get("start_fails", []) and service not in state["running"]:
                 state["running"].append(service)
@@ -183,6 +198,11 @@ if argv[:1] == ["compose"]:
             sys.exit(0)
         sys.exit(0)
     if sub == "run":
+        if "auditmanager.norms.bundle" in rest:
+            # The inbound key's importer, started detached by receive-bundle.sh.
+            hold("import_hold")
+            out("importer stand-in\n")
+            sys.exit(0)
         if "s3-init" in rest:
             out(state.get("mc_output", ""))
             sys.exit(int(state.get("mc_exit", 0)))
@@ -972,6 +992,58 @@ def test_only_the_latest_copy_is_kept(tmp_path: Path) -> None:
     assert first != second
     assert not (stand.copy / first).exists()
     assert (stand.copy / second / "db.dump").is_file()
+    assert not (stand.copy / "record.prev.json").exists(), "a whole new copy kept the previous record"
+    assert _copy_key(stand, f"restore-db {first} {'d' * 64}").refused("record-stamp-matches")
+
+
+def test_a_failed_dump_keeps_the_previous_copy_restorable(tmp_path: Path) -> None:
+    """`W54-JUDGE-A` F6: until a new dump is whole, the previous copy's record stays as
+    `record.prev.json`, its dump stays on disk, and `restore-db` takes its stamp -- putting
+    that record back, with every writer the failed dump stopped."""
+    stand = _stage(tmp_path)
+    first = _resumed(stand)
+    first_sha = _dump_sha(stand)
+    stand.set_state(restore_list_exit=1)
+    failed = _copy_key(stand, "dump-db")
+    assert failed.refused("dump-readable"), failed.err
+    second = stand.rec()["stamp"]
+    assert second != first and stand.rec()["state"] == "open" and stand.rec()["dump"] is None
+    previous = json.loads((stand.copy / "record.prev.json").read_text())
+    assert previous["stamp"] == first and previous["state"] == "closed"
+    assert previous["dump"]["sha256"] == first_sha
+    assert (stand.copy / first / "db.dump").is_file(), "the previous dump went before the new one was whole"
+    assert f"previous_record: {first}" in _copy_key(stand, "status").out
+    assert stand.state()["running"] == []
+
+    stand.set_state(restore_list_exit=0)
+    assert _copy_key(stand, f"restore-db {A_STAMP} {first_sha}").refused("record-stamp-matches")
+    assert _copy_key(stand, f"restore-db {first} {'d' * 64}").refused("dump-digest-matches-restore")
+    assert stand.rec()["stamp"] == second, "a refused restore-db moved the records"
+
+    restored = _copy_key(stand, f"restore-db {first} {first_sha}")
+    assert restored.code == 0, (restored.out, restored.err)
+    assert stand.state()["restored"] and stand.state()["restored_bytes"] == len(DUMP_BYTES)
+    record = stand.rec()
+    assert record["stamp"] == first and record["state"] == "open" and record["closed_at"] is None
+    assert record["restored_at"] and record["writers_stopped"] == ["web", "api", "worker"]
+    assert not (stand.copy / "record.prev.json").exists()
+
+    resumed = _copy_key(stand, f"resume {first}")
+    assert resumed.code == 0, resumed.err
+    assert sorted(stand.state()["running"]) == ["api", "web", "worker"]
+
+
+def test_a_waiver_replaces_the_record_and_keeps_the_previous_copy(tmp_path: Path) -> None:
+    """A waiver has no dump, so the copy before it stays the one `restore-db` can reach --
+    through the waiver, and through a dump-db after it that fails."""
+    stand = _stage(tmp_path)
+    first = _resumed(stand)
+    waiver = _waiver(stand)
+    assert _copy_key(stand, f"resume {waiver}").code == 0
+    assert json.loads((stand.copy / "record.prev.json").read_text())["stamp"] == first
+    stand.set_state(restore_list_exit=1)
+    assert _copy_key(stand, "dump-db").refused("dump-readable")
+    assert json.loads((stand.copy / "record.prev.json").read_text())["stamp"] == first
 
 
 # --- the whole copy, as P2 runs it (`W54-PLAN.md` §3.10), and what deploy.sh makes of it --
@@ -1089,6 +1161,108 @@ def test_resume_is_refused_under_the_import_lock_and_the_writers_stay_stopped(tm
     status = _copy_key(stand, "status")
     assert status.code == 0 and "import_lock: free" in status.out
     assert _copy_key(stand, f"resume {stamp}").code == 0
+
+
+#: A bundle name the inbound key's grammar admits (`lib/forced-command.sh`).
+BUNDLE_KEY = "2026-07-23..2026-08-20+17d.4b74348debf7+" + "a" * 64
+
+
+def _inbound_key(stand: Stand, command: str) -> Ran:
+    """The real `receive-bundle.sh`, in the deployed checkout as deploy-auto leaves it, on
+    the same copy record and staging as the copy key."""
+    deploy = stand.checkout / "infra/deploy"
+    script = deploy / "receive-bundle.sh"
+    if not script.exists():
+        (deploy / "lib").mkdir(exist_ok=True)
+        script.write_text(RECEIVE.read_text(encoding="utf-8"), encoding="utf-8")
+        (deploy / "lib/forced-command.sh").write_text(LIB.read_text(encoding="utf-8"), encoding="utf-8")
+    return Ran(subprocess.run(
+        ["bash", str(script)], capture_output=True, text=True, cwd=stand.root, timeout=120,
+        stdin=subprocess.DEVNULL,
+        env=_environment(stand, {"SSH_ORIGINAL_COMMAND": command, "STAND_COPY_RECORD": str(stand.record)}),
+    ))
+
+
+def _received_bundle(stand: Stand) -> str:
+    """A bundle as a completed receive leaves it; `import` does not re-check the tree."""
+    bundle = stand.staging / "bundles" / BUNDLE_KEY
+    bundle.mkdir(parents=True)
+    (bundle / "SHA256SUMS").write_text("")
+    return BUNDLE_KEY
+
+
+def _wait_for(path: Path, seconds: float = 30.0) -> None:
+    deadline = time.monotonic() + seconds
+    while not path.exists():
+        assert time.monotonic() < deadline, f"{path} did not appear"
+        time.sleep(0.05)
+
+
+def _importer_runs(stand: Stand) -> list[list[str]]:
+    return [call for call in stand.docker_calls() if "auditmanager.norms.bundle" in call]
+
+
+@pytest.mark.parametrize("mutant", [None, ("copy-serve.sh", "import-lock-free")], ids=["as-shipped", "without-the-hold"])
+def test_no_import_starts_while_resume_starts_the_writers(tmp_path: Path, mutant: tuple[str, str] | None) -> None:
+    """`W54-JUDGE-A` F3: `resume` HOLDS the importer's lock while it starts the writers and
+    closes the record, so an import that arrives meanwhile is refused in words -- and so is
+    a receive, which needs `copy.lock` (F4). Without the hold (the mutant), the import is
+    still refused: `copy.lock`, which resume holds and import takes, closes the same race
+    a second time -- but no longer by `import-lock-free`."""
+    stand = _stage(tmp_path, mutant=mutant)
+    stamp = _waiver(stand)
+    key = _received_bundle(stand)
+    entered, release = tmp_path / "start-entered", tmp_path / "start-release"
+    stand.set_state(start_hold={"entered": str(entered), "release": str(release)})
+    resume = subprocess.Popen(
+        ["bash", str(stand.install / "copy-serve.sh")], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, cwd=stand.root, stdin=subprocess.DEVNULL,
+        env=_environment(stand, {"SSH_ORIGINAL_COMMAND": f"resume {stamp}"}),
+    )
+    try:
+        _wait_for(entered)
+        imported = _inbound_key(stand, f"import {key}")
+        received = _inbound_key(stand, f"receive {key.replace('a' * 64, 'b' * 64)} 10")
+    finally:
+        release.write_text("go\n")
+        _, resume_err = resume.communicate(timeout=60)
+    assert resume.returncode == 0, resume_err
+    assert stand.rec()["state"] == "closed"
+    assert _importer_runs(stand) == [], "an import started while resume started the writers"
+    assert received.refused("copy-lock-free"), received.err
+    if mutant is None:
+        assert imported.refused("import-lock-free"), imported.err
+    else:
+        assert imported.refused("copy-lock-free"), imported.err
+
+
+def test_resume_is_refused_while_the_importer_runs_and_succeeds_after(tmp_path: Path) -> None:
+    """The other direction, with the real inbound key: its detached importer holds
+    `import.lock` until it exits, and `resume` is refused until then."""
+    stand = _stage(tmp_path)
+    stamp = _waiver(stand)
+    key = _received_bundle(stand)
+    entered, release = tmp_path / "import-entered", tmp_path / "import-release"
+    stand.set_state(import_hold={"entered": str(entered), "release": str(release)})
+    started = _inbound_key(stand, f"import {key}")
+    assert started.code == 0, started.err
+    try:
+        _wait_for(entered)
+        refused = _copy_key(stand, f"resume {stamp}")
+    finally:
+        release.write_text("go\n")
+    assert refused.refused("import-lock-free"), refused.err
+    assert stand.compose_calls("start") == [] and stand.state()["running"] == []
+    assert stand.rec()["state"] == "open"
+
+    _wait_for(stand.staging / "logs" / f"{key}.import.exit")
+    deadline = time.monotonic() + 30
+    while not (resumed := _copy_key(stand, f"resume {stamp}")).code == 0:
+        assert resumed.refused("import-lock-free"), resumed.err
+        assert time.monotonic() < deadline, "the import lock outlived the importer"
+        time.sleep(0.05)
+    assert sorted(stand.state()["running"]) == ["api", "web", "worker"]
+    assert stand.rec()["state"] == "closed"
 
 
 def test_restore_db_quiesces_again_checks_the_digest_and_leaves_the_writers_stopped(tmp_path: Path) -> None:
@@ -1329,7 +1503,7 @@ def test_the_record_layout_is_read_and_rewritten_line_by_line(tmp_path: Path) ->
     _dump(stand)
     record = stand.record
     before = record.read_text().splitlines()
-    ran = _lib(f'fc_record_valid "{record}" && fc_record_set "{record}" purpose \'"import"\' '
+    ran = _lib(f'fc_take_record_lock "{record}" && fc_record_valid "{record}" && fc_record_set "{record}" purpose \'"import"\' '
                f'&& fc_record_set "{record}" closed_at \'"2026-10-12T00:00:00Z"\' '
                f'&& fc_record_string "{record}" purpose && fc_json_member "$(fc_record_value "{record}" dump)" size_bytes',
                tmp_path)
@@ -1338,7 +1512,32 @@ def test_the_record_layout_is_read_and_rewritten_line_by_line(tmp_path: Path) ->
     after = record.read_text().splitlines()
     assert len(after) == len(before) and after[-2] == '  "closed_at": "2026-10-12T00:00:00Z"'
     assert json.loads(record.read_text())["purpose"] == "import"
-    assert _lib(f'fc_record_set "{record}" no_such_key 1', tmp_path).returncode != 0
+    assert _lib(f'fc_take_record_lock "{record}" && fc_record_set "{record}" no_such_key 1', tmp_path).returncode != 0
+
+
+def test_the_record_is_rewritten_only_under_the_copy_lock_beside_it(tmp_path: Path) -> None:
+    """`W54-JUDGE-A` F4: one lock for every writer. A rewrite without `copy.lock` -- or
+    under the lock of another directory -- fails and changes nothing, and the lock is not
+    taken while another process holds it."""
+    stand = _stage(tmp_path)
+    _dump(stand)
+    record = stand.record
+    before = record.read_text()
+    rewrite = f'fc_record_set "{record}" purpose \'"import"\''
+
+    assert _lib(rewrite, tmp_path).returncode != 0, "a rewrite without copy.lock went through"
+    elsewhere = tmp_path / "elsewhere" / "record.json"
+    elsewhere.parent.mkdir()
+    assert _lib(f'fc_take_record_lock "{elsewhere}" && {rewrite}', tmp_path).returncode != 0, (
+        "the lock of another directory admitted the rewrite"
+    )
+    with _holding(stand.copy / "copy.lock"):
+        assert _lib(f'fc_take_record_lock "{record}"', tmp_path).returncode != 0, "a held lock was taken"
+    assert record.read_text() == before
+    assert not list(stand.copy.glob("record.json.tmp.*")), "a refused rewrite left its temporary file"
+
+    assert _lib(f'fc_take_record_lock "{record}" && {rewrite}', tmp_path).returncode == 0
+    assert stand.rec()["purpose"] == "import"
 
 
 @pytest.mark.parametrize(

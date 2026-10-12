@@ -292,8 +292,80 @@ fc_record_valid() {
     case "$(fc_record_string "$file" state)" in open|closed) ;; *) return 1 ;; esac
 }
 
+# --- locks ----------------------------------------------------------------------------
+#
+# `copy.lock` beside the record serialises EVERY writer of the record (`W54-JUDGE-A` F4):
+# each copy-key verb that changes anything holds it for its whole run, and the inbound key
+# holds it from its read of the record to its rewrite. `import.lock` in the inbound key's
+# staging is held by the importer for its whole run and by every copy-key verb that could
+# change what the importer stands on -- `resume` above all (`W54-JUDGE-A` F3). Both are
+# taken without waiting, so two scripts that take them in opposite orders refuse one
+# another in words and never deadlock.
+
+# fc_take_lock <lock file>: an exclusive flock(2) lock, taken without waiting, on a new
+# descriptor that stays open -- and the lock held -- until this process and every child
+# that inherits the descriptor has exited, or until fc_drop_lock closes it. The descriptor
+# is left in FC_LOCK_FD. Fails when another process holds the lock, and when the file can
+# be neither opened for appending nor, as an existing file, for reading: a lock this
+# account cannot take is never taken for a free one.
+FC_LOCK_FD=""
+fc_take_lock() {
+    local lock="$1" fd
+    FC_LOCK_FD=""
+    { exec {fd}>>"$lock"; } 2>/dev/null || { exec {fd}<"$lock"; } 2>/dev/null || return 1
+    if ! flock --nonblock "$fd"; then
+        exec {fd}>&-
+        return 1
+    fi
+    FC_LOCK_FD="$fd"
+}
+
+# fc_drop_lock <descriptor>: close it, which releases its lock unless a child still holds
+# a copy of the descriptor.
+fc_drop_lock() {
+    local fd="$1"
+    exec {fd}>&-
+}
+
+# fc_take_record_lock <record file>: `copy.lock` in the record's directory, as the lock
+# every rewrite of that record requires (fc_record_locked). Fails as fc_take_lock does.
+FC_RECORD_LOCK_FD=""
+FC_RECORD_LOCK_DIR=""
+fc_take_record_lock() {
+    local dir="${1%/*}"
+    fc_take_lock "$dir/copy.lock" || return 1
+    FC_RECORD_LOCK_FD="$FC_LOCK_FD"
+    FC_RECORD_LOCK_DIR="$dir"
+}
+
+fc_drop_record_lock() {
+    [ -n "$FC_RECORD_LOCK_FD" ] || return 0
+    fc_drop_lock "$FC_RECORD_LOCK_FD"
+    FC_RECORD_LOCK_FD=""
+    FC_RECORD_LOCK_DIR=""
+}
+
+# fc_record_locked <record file>: 0 while THIS process holds `copy.lock` beside it.
+fc_record_locked() {
+    [ -n "$FC_RECORD_LOCK_FD" ] && [ "$FC_RECORD_LOCK_DIR" = "${1%/*}" ]
+}
+
+# fc_record_install <new file> <record file>: rename a complete record (or the previous
+# record, `record.prev.json`) into place, readable by every account that reads it. Fails,
+# removing <new file>, unless this process holds `copy.lock` beside <record file>.
+fc_record_install() {
+    local new="$1" file="$2"
+    if ! fc_record_locked "$file"; then
+        rm -f -- "$new"
+        return 1
+    fi
+    chmod 0644 -- "$new"
+    mv -f -- "$new" "$file"
+}
+
 # fc_record_set <file> <key> <raw JSON value>: rewrite exactly one top-level line, keeping
-# its comma, atomically (a temporary file beside it, then a rename).
+# its comma, atomically (a temporary file beside it, then a rename, fc_record_install).
+# Fails without changing anything unless this process holds `copy.lock` beside the record.
 fc_record_set() {
     local file="$1" key="$2" value="$3" tmp
     case "$value" in *\\*|*$'\n'*) return 1 ;; esac
@@ -310,8 +382,7 @@ fc_record_set() {
         rm -f -- "$tmp"
         return 1
     fi
-    chmod 0644 -- "$tmp"
-    mv -f -- "$tmp" "$file"
+    fc_record_install "$tmp" "$file"
 }
 
 # fc_lock_held <lock file>: 0 while another process holds the flock(2) lock on it. A lock
