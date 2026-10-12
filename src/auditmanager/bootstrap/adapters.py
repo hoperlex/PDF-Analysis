@@ -290,8 +290,12 @@ class ExecutionAdapter(_SessionHolder):
         return self._write(write)
 
 
-def _worker_cursor(raw: str | None) -> "WorkerCursor | None":
-    """Decode only coordinates issued by the worker page's versioned format."""
+def _worker_cursor(raw: str | None) -> Any:
+    """Decode only coordinates issued by the worker page's versioned format.
+
+    Returns a ``workers`` ``WorkerCursor`` or ``None``; imported here, at the one use,
+    like every other boundary this module adapts.
+    """
     from auditmanager.shared.identity import WorkerId
     from auditmanager.workers.public import WorkerCursor
 
