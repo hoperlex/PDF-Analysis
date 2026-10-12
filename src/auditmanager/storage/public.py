@@ -25,7 +25,8 @@ from auditmanager.storage.models import (
     parse_blob_role,
 )
 from auditmanager.storage.port import BlobSource, BlobStore
-from auditmanager.storage.s3 import sha256_of
+from auditmanager.storage.s3 import S3BlobStore, sha256_of
+from auditmanager.storage.settings import S3StorageSettings
 
 __all__ = [
     "BlobAttributeConflictError",
@@ -38,6 +39,8 @@ __all__ = [
     "BlobNotFoundError",
     "BlobSource",
     "BlobState",
+    "S3BlobStore",
+    "S3StorageSettings",
     "BlobStore",
     "DurablePublicationStore",
     "PublishedBlob",
