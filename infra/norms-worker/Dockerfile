@@ -60,37 +60,37 @@ RUN set -eu; \
 
 # The frozen revision's files, laid out as a Hugging Face hub-cache snapshot of that commit, so
 # `from_pretrained("BAAI/bge-m3", revision="5617a9f...")` resolves them with the hub offline.
-ADD --chmod=0444 --checksum=sha256:TODO-PIN-WINDOW \
+ADD --chmod=0444 --checksum=sha256:e54c164a07274f2eb45bb724f54a79d1efcc90c41573887cd9a29aeee0597352 \
     https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/1_Pooling/config.json \
     /opt/norms-worker/hf/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181/1_Pooling/config.json
-ADD --chmod=0444 --checksum=sha256:TODO-PIN-WINDOW \
+ADD --chmod=0444 --checksum=sha256:0b81ccf9134e5874d620a86e6905062ea999e779c34eb1a7e65eaeb7fe00e450 \
     https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/README.md \
     /opt/norms-worker/hf/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181/README.md
-ADD --chmod=0444 --checksum=sha256:TODO-PIN-WINDOW \
+ADD --chmod=0444 --checksum=sha256:26159e7ad065073448460117eb24b7a4572f6f4e78eadff65dc0a11c052449fa \
     https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/config.json \
     /opt/norms-worker/hf/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181/config.json
-ADD --chmod=0444 --checksum=sha256:TODO-PIN-WINDOW \
+ADD --chmod=0444 --checksum=sha256:1eef72430e7194a1e59680e635aed81ffa083f05668dbc5bb1c56c04c0999c38 \
     https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/config_sentence_transformers.json \
     /opt/norms-worker/hf/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181/config_sentence_transformers.json
-ADD --chmod=0444 --checksum=sha256:TODO-PIN-WINDOW \
+ADD --chmod=0444 --checksum=sha256:84e40c8e006c9b1d6c122e02cba9b02458120b5fb0c87b746c41e0207cf642cf \
     https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/modules.json \
     /opt/norms-worker/hf/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181/modules.json
-ADD --chmod=0444 --checksum=sha256:TODO-PIN-WINDOW \
+ADD --chmod=0444 --checksum=sha256:b5e0ce3470abf5ef3831aa1bd5553b486803e83251590ab7ff35a117cf6aad38 \
     https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/pytorch_model.bin \
     /opt/norms-worker/hf/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181/pytorch_model.bin
-ADD --chmod=0444 --checksum=sha256:TODO-PIN-WINDOW \
+ADD --chmod=0444 --checksum=sha256:eb9b44b13c0f52a3b3685c3b1cbdea1ba8b04bea123b98f61610048940776eb1 \
     https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/sentence_bert_config.json \
     /opt/norms-worker/hf/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181/sentence_bert_config.json
-ADD --chmod=0444 --checksum=sha256:TODO-PIN-WINDOW \
+ADD --chmod=0444 --checksum=sha256:cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865 \
     https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/sentencepiece.bpe.model \
     /opt/norms-worker/hf/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181/sentencepiece.bpe.model
-ADD --chmod=0444 --checksum=sha256:TODO-PIN-WINDOW \
+ADD --chmod=0444 --checksum=sha256:8c785abebea9ae3257b61681b4e6fd8365ceafde980c21970d001e834cf10835 \
     https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/special_tokens_map.json \
     /opt/norms-worker/hf/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181/special_tokens_map.json
-ADD --chmod=0444 --checksum=sha256:TODO-PIN-WINDOW \
+ADD --chmod=0444 --checksum=sha256:21106b6d7dab2952c1d496fb21d5dc9db75c28ed361a05f5020bbba27810dd08 \
     https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/tokenizer.json \
     /opt/norms-worker/hf/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181/tokenizer.json
-ADD --chmod=0444 --checksum=sha256:TODO-PIN-WINDOW \
+ADD --chmod=0444 --checksum=sha256:a62b2b6784f990259fddef5f16388693a8043be4f69179e6a5257eeb3f9abac4 \
     https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/tokenizer_config.json \
     /opt/norms-worker/hf/hub/models--BAAI--bge-m3/snapshots/5617a9f61b028005a4858fdac845db406aefb181/tokenizer_config.json
 
