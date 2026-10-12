@@ -214,6 +214,7 @@ inventory until the registry and the owning change move together.
 | OpenAPI reseal | move the hand-maintained `surface` facts, regenerate the client/mirror/lock, then inspect every `surface` consumer |
 | error-code addition/removal | move the separate API and stored-vocabulary facts as applicable, reseal the enum and inspect every `error_catalog` consumer |
 | new migration | move the hand-maintained `migration_head` fact with the migration; never derive it from the same graph it judges |
+| sealed stub operation (`W54-SEAL-01`) | name each stub GET in `SEALED_STUB_COLLECTIONS` (`tests/integration/composition/test_an_absent_parent_is_not_an_empty_page.py`) and `SEALED_STUB_GETS` (`test_router_answers.py`), where it must answer exactly `503 dependency_unavailable`; the lane that implements it empties both and the GET joins the page-shape and 5xx sweeps |
 | current-state history heading change | move the heading deliberately and rerun the duplicate/early-boundary mutations before accepting `history_boundary` |
 
 The scanner is intentionally conservative: HTTP status literals, pagination bounds, local enum

@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193
+ *   sha256 0dbfbee44843c198c533d7a580df0fd8b768db010351c323b9518febfd8ecbfb
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -34,6 +34,8 @@ import type {
   ExecutionJournalPage,
   ExecutionQueueItem,
   ExecutionQueuePage,
+  ExecutionWorker,
+  ExecutionWorkerPage,
   FindingCategory,
   FindingDetail,
   FindingPage,
@@ -60,6 +62,7 @@ import type {
   RunStatusPage,
   SetExecutionPausedRequest,
   SetJobPriorityRequest,
+  SetWorkerIntakeRequest,
   StartRunRequest,
   SubmitRegistrationRequest,
   UpdateMyProfileRequest,
@@ -69,6 +72,7 @@ import type {
   Verdict,
   VersionBlockIndex,
   VersionUid,
+  WorkerId,
 } from './types.gen';
 
 /** Every operationId in the contract, sorted. */
@@ -101,6 +105,7 @@ export const OPERATION_IDS = [
   'listRuns',
   'listUsers',
   'listVersions',
+  'listWorkers',
   'markReleaseNotesRead',
   'purgeUser',
   'readRegistrationStatus',
@@ -110,6 +115,7 @@ export const OPERATION_IDS = [
   'restoreUser',
   'setExecutionPaused',
   'setJobPriority',
+  'setWorkerIntake',
   'startRun',
   'streamDocumentVersionContent',
   'submitRegistration',
@@ -846,6 +852,28 @@ export type ListVersionsInput = {
 export type ListVersionsResult = DocumentVersionPage;
 
 // ------------------------------------------------------------------------------------
+// listWorkers - GET /execution/workers
+// ------------------------------------------------------------------------------------
+
+/** List Workers */
+export type ListWorkersInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listWorkers` (`application/json`, HTTP 200). */
+export type ListWorkersResult = ExecutionWorkerPage;
+
+// ------------------------------------------------------------------------------------
 // markReleaseNotesRead - PUT /me/release-notes
 // ------------------------------------------------------------------------------------
 
@@ -1054,6 +1082,32 @@ export type SetJobPriorityInput = {
 
 /** Success body of `setJobPriority` (`application/json`, HTTP 200). */
 export type SetJobPriorityResult = ExecutionQueueItem;
+
+// ------------------------------------------------------------------------------------
+// setWorkerIntake - PUT /execution/workers/{worker_id}/intake
+// ------------------------------------------------------------------------------------
+
+/** Set Worker Intake */
+export type SetWorkerIntakeInput = {
+  /** Path parameters, substituted into `/execution/workers/{worker_id}/intake`. */
+  path: {
+    worker_id: WorkerId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetWorkerIntakeRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setWorkerIntake` (`application/json`, HTTP 200). */
+export type SetWorkerIntakeResult = ExecutionWorker;
 
 // ------------------------------------------------------------------------------------
 // startRun - POST /runs
@@ -1609,6 +1663,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['documents'],
   },
+  listWorkers: {
+    operationId: 'listWorkers',
+    method: 'GET',
+    path: '/execution/workers',
+    pathParams: [],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['execution'],
+  },
   markReleaseNotesRead: {
     operationId: 'markReleaseNotesRead',
     method: 'PUT',
@@ -1726,6 +1794,20 @@ export const OPERATIONS = {
     method: 'PUT',
     path: '/execution/queue/{job_id}/priority',
     pathParams: ['job_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
+  setWorkerIntake: {
+    operationId: 'setWorkerIntake',
+    method: 'PUT',
+    path: '/execution/workers/{worker_id}/intake',
+    pathParams: ['worker_id'],
     queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: true,

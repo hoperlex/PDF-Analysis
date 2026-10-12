@@ -131,6 +131,9 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "reauditRun",
             "setJobPriority",
             "setExecutionPaused",
+            # `W54-SEAL-01`: the worker registry's paged read and intake switch.
+            "listWorkers",
+            "setWorkerIntake",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

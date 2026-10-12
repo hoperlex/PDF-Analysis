@@ -1,13 +1,13 @@
-# Domain contract v1 — candidate `1.0.0-draft.1`, revision 9
+# Domain contract v1 — candidate `1.0.0-draft.1`, revision 10
 
 Owner lane: [W0-DOM-01](../../../docs/program/tasks/W0-DOM-01.md) (domain contract
 owner); the additive norm-identity amendment is owned by
 [NORM-ID-01](../../../docs/program/tasks/NORM-ID-01.md). Status: **candidate draft —
 working-tree amendment, not frozen, not ratified.** Every
 catalog in this directory declares `contract_version` `1.0.0-draft.1`,
-`candidate_revision` `9`, `status` `draft_candidate` and `frozen` `false`, and the three
-family schemas pin `candidate_revision` `const: 9` to match: see
-[What changed in revision 9](#what-changed-in-revision-9-and-what-breaks-for-a-reader-of-revision-8).
+`candidate_revision` `10`, `status` `draft_candidate` and `frozen` `false`, and the three
+family schemas pin `candidate_revision` `const: 10` to match: see
+[What changed in revision 10](#what-changed-in-revision-10-and-what-breaks-for-a-reader-of-revision-9).
 
 This family defines three primitives that every other bounded context depends on:
 opaque identity, durable lifecycle and the externally visible failure shape. It is a
@@ -66,6 +66,12 @@ become declared machines, the error catalog gains `rate_limited` and `conflict` 
 detail key `conflict_reason`. See
 [What changed in revision 9](#what-changed-in-revision-9-and-what-breaks-for-a-reader-of-revision-8).
 
+Revision 10 (`W54-SEAL-01`, owner rulings `R-76`, `R-104`, `R-105` and `R-106`) adds the three
+identities migration `0018_norm_custody` allocates: a custody admission (`nad`), a published
+custody binding (`nbd`) and a paid repair-call try (`nrc`). `worker_id` (`wrk`) is unchanged and
+is now instantiated by migration `0019_execution_workers`. No machine, state or code changed. See
+[What changed in revision 10](#what-changed-in-revision-10-and-what-breaks-for-a-reader-of-revision-9).
+
 ## Files
 
 | File | Role |
@@ -88,7 +94,7 @@ schema identity; neither is a contract version. The bare `version` key that revi
 used as the contract-envelope version is gone.
 
 The `1.0.0-draft.1` base was integrated at
-`cf7740474b1786163f54d93b013a0d526ef989e0`. Revisions 8 and 9 are later working-tree amendments:
+`cf7740474b1786163f54d93b013a0d526ef989e0`. Revisions 8, 9 and 10 are later working-tree amendments:
 it is neither committed here, frozen nor ratified. Every catalog still declares
 `contract_version` `1.0.0-draft.1`, `status` `draft_candidate` and `frozen` `false`;
 `1.0.0-draft.0` is the version it supersedes. Until an integrator records a freeze, an
@@ -97,9 +103,9 @@ owner-authorized round edits this unreleased candidate in place and advances
 version procedure.
 
 So the version line stays `1.0.0-draft.0` → `1.0.0-draft.1`, and each review round is
-recorded by `candidate_revision`, which the owning schemas pin with `const`. Revision 9 is
-additive and changes the unreleased candidate identity, lifecycle and error surfaces, so consumers
-must pin and review candidate revision 9. The draft version string does not move because this is still the same
+recorded by `candidate_revision`, which the owning schemas pin with `const`. Revision 10 is
+additive and changes the unreleased candidate identity surface, so consumers
+must pin and review candidate revision 10. The draft version string does not move because this is still the same
 unfrozen `1.0.0-draft.1` candidate; `candidate_revision` is the machine-readable
 discriminator that prevents meaning from changing under the same revision. A freeze or release
 would move this change onto the formal version procedure.
@@ -153,7 +159,7 @@ must read `contract_version`, whose value did not change.
 
 ## Identity
 
-`<prefix>_<ULID>`, Crockford base32, uppercase, 26 characters. 29 identifiers, 29
+`<prefix>_<ULID>`, Crockford base32, uppercase, 26 characters. 32 identifiers, 32
 entity bindings, all prefixes unique.
 
 Load-bearing rules (full text in [identifiers.json](identifiers.json)):
@@ -739,6 +745,24 @@ assumption.
   - `attempt` gains the `lost` terminal, distinct from `superseded`;
   - the error envelope gains required `contract_version` and required `retryable`;
   - two identifiers are added: `lease_id` (`lse`) and `command_id` (`cmd`).
+
+### What changed in revision 10, and what breaks for a reader of revision 9
+
+Revision 10 is written by `W54-SEAL-01` with migrations `0018_norm_custody` and
+`0019_execution_workers` and the API reseal that declares the worker registry
+(`docs/program/dispatch/W54-PLAN.md` §3.1, §3.3 and §3.6).
+
+| Change | Consumer impact |
+|---|---|
+| `norm_custody_admission_id` with prefix `nad`, bound to `NormCustodyAdmission` | **Additive.** One custody intent and its outbox row (`R-76`). Closed identity/entity enums must add the member. |
+| `norm_custody_binding_id` with prefix `nbd`, bound to `NormCustodyBinding` | **Additive.** One published binding of a confirmed admission to a role, a target and an opaque anchor. |
+| `norm_repair_call_id` with prefix `nrc`, bound to `NormRepairCall` | **Additive.** One paid repair-call try; its idempotency scope is the identity itself (`R-106`). |
+| `custody_identity` and `repair_call_identity` distinctions | **Clarifying.** A shared content-derived Blob, the declared SHA-256, an anchor, a target or a block reference is never a custody or repair identity. |
+| `candidate_revision` `9` → `10` in all three catalogs and the three schema `const` pins | Readers pinning the candidate revision must move. The identifier-name enums of `identifiers.schema.json` admit the three new names. |
+
+No existing identifier, machine, state, transition, guard, code, summary or detail key is
+removed or renamed; the error catalog stays at twenty-three codes. `contract_version` remains
+`1.0.0-draft.1` and `frozen` remains `false`.
 
 ### What changed in revision 9, and what breaks for a reader of revision 8
 

@@ -71,8 +71,9 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 #: `W52-SEAL-01` added two unaddressed GETs: ``getProductVersion`` and
 #: ``listReleases``. Stage C now serves both from the release adapter.
 # `W53-SEAL-01` added the two execution collection reads, both unaddressed.
+# `W54-SEAL-01` added ``listWorkers``, an unaddressed collection (its intake switch is a PUT).
 EXPECTED_ADDRESSED = 12
-EXPECTED_UNADDRESSED = 10
+EXPECTED_UNADDRESSED = 11
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -101,6 +102,13 @@ RELEASE_OPERATIONS = frozenset({"getProductVersion", "listReleases"})
 # W53 adds two unaddressed collection reads. They stay in the page-shape sweep;
 # neither may be mistaken for a read of a missing parent.
 EXECUTION_COLLECTIONS = frozenset({"listExecutionQueue", "listExecutionJournal"})
+
+#: `W54-SEAL-01`. Unaddressed collections whose port is a sealed stub: the worker registry
+#: answers ``503 dependency_unavailable`` until `W54-WORKER-01` supplies it, so it is
+#: exempt from the page-shape assertion and asserted to be exactly that stub instead
+#: (:func:`test_a_sealed_stub_collection_answers_unavailable_and_never_an_empty_page`).
+#: `W54-WORKER-01` empties this set, and the collection joins the page-shape sweep.
+SEALED_STUB_COLLECTIONS = frozenset({"listWorkers"})
 
 
 def _prefixes() -> dict[str, str]:
@@ -258,6 +266,7 @@ def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None
             operation_id in AGGREGATE_OPERATIONS
             or operation_id in SELF_OPERATIONS
             or operation_id in RELEASE_OPERATIONS
+            or operation_id in SEALED_STUB_COLLECTIONS
         ):
             continue
         status, body = _get(app, template)
@@ -265,6 +274,25 @@ def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None
         assert isinstance(body, dict) and isinstance(body.get("items"), list), (
             f"{operation_id} answered 200 without a page: {body}"
         )
+
+
+def test_a_sealed_stub_collection_answers_unavailable_and_never_an_empty_page(
+    app: Composed,
+) -> None:
+    """`W54-SEAL-01`. The exemption above is narrow: the stub fails explicitly.
+
+    An empty page would read as "no worker is registered", which is a claim about the
+    deployment the stub cannot make; ``503 dependency_unavailable`` says the registry is
+    not served yet.
+    """
+    unaddressed = _unaddressed(_get_routes(app))
+    stubs = [(op, path) for op, path in unaddressed if op in SEALED_STUB_COLLECTIONS]
+    assert {op for op, _ in stubs} == SEALED_STUB_COLLECTIONS
+    for operation_id, template in stubs:
+        status, body = _get(app, template)
+        assert status == 503, f"{operation_id} answered {status}: {body}"
+        assert isinstance(body, dict) and body.get("error_code") == "dependency_unavailable", body
+        assert "items" not in body, body
 
 
 def test_release_gets_serve_the_running_version_and_history(app: Composed) -> None:

@@ -444,7 +444,8 @@ def test_c3_the_surface_declares_no_operation_that_can_mutate_a_version(
     own profile (``PATCH /me``), an administrator's account change (``PATCH /users/{uid}``)
     and purge (``DELETE /users/{uid}``). W52 adds the account's own release read mark
     (``PUT /me/release-notes``). W53 adds priority and dispatch controls under
-    ``/execution``. The set is pinned exactly, so another is a decision someone
+    ``/execution``, and `W54-SEAL-01` the worker intake switch
+    (``PUT /execution/workers/{worker_id}/intake``). The set is pinned exactly, so another is a decision someone
     has to make here, and none of them may address a document or a version.
     """
     mutating = {
@@ -459,6 +460,7 @@ def test_c3_the_surface_declares_no_operation_that_can_mutate_a_version(
         "markReleaseNotesRead",
         "setJobPriority",
         "setExecutionPaused",
+        "setWorkerIntake",
     }, mutating
     assert not [
         path for path in mutating.values() if "/versions" in path or "/documents" in path

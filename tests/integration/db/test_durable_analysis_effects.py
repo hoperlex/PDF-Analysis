@@ -218,7 +218,7 @@ def test_final_model_call_is_composite_bound_to_the_effect_run(migrated_engine) 
     assert unique == "UNIQUE (run_id, model_call_id)"
 
 
-def test_cross_run_final_model_call_insert_is_refused_by_the_composite_fk(
+def test_cross_run_final_model_call_is_refused_by_the_composite_fk(
     migrated_engine,
 ) -> None:
     with migrated_engine.begin() as connection:
@@ -254,27 +254,43 @@ def test_cross_run_final_model_call_insert_is_refused_by_the_composite_fk(
             },
         )
 
+        # `W54-SEAL-01` (D-148): an effect row is now inserted `prepared` only, so the
+        # cross-run final call is reached along the real edges -- prepared, then
+        # response_received, then completed -- and the composite FK refuses the last one.
+        connection.execute(
+            text(
+                "INSERT INTO provider_call_effect (model_call_id, run_id, job_id, "
+                "attempt_id, stage_id, provider, model_identity, provider_mode, "
+                "parameters, request_sha256) "
+                "VALUES (:effect_id, :run_id, :job_id, :attempt_id, "
+                "'text_analysis', 'anthropic', 'a-model', 'recorded', '{}'::jsonb, "
+                ":request_sha)"
+            ),
+            {
+                "effect_id": foreign_call_id,
+                "run_id": owner["run_id"],
+                "job_id": job_id,
+                "attempt_id": attempt_id,
+                "request_sha": "e" * 64,
+            },
+        )
+        connection.execute(
+            text(
+                "UPDATE provider_call_effect SET state = 'response_received', "
+                "response_sha256 = :response_sha, input_tokens = 1, output_tokens = 1, "
+                "latency_ms = 1 WHERE model_call_id = :effect_id"
+            ),
+            {"effect_id": foreign_call_id, "response_sha": "f" * 64},
+        )
         with pytest.raises(DBAPIError) as refused:
             with connection.begin_nested():
                 connection.execute(
                     text(
-                        "INSERT INTO provider_call_effect (model_call_id, run_id, job_id, "
-                        "attempt_id, stage_id, provider, model_identity, provider_mode, "
-                        "parameters, request_sha256, state, response_sha256, input_tokens, "
-                        "output_tokens, latency_ms, final_model_call_id) "
-                        "VALUES (:effect_id, :run_id, :job_id, :attempt_id, "
-                        "'text_analysis', 'anthropic', 'a-model', 'recorded', '{}'::jsonb, "
-                        ":request_sha, 'completed', :response_sha, 1, 1, 1, :foreign_call_id)"
+                        "UPDATE provider_call_effect SET state = 'completed', "
+                        "final_model_call_id = :foreign_call_id "
+                        "WHERE model_call_id = :effect_id"
                     ),
-                    {
-                        "effect_id": foreign_call_id,
-                        "run_id": owner["run_id"],
-                        "job_id": job_id,
-                        "attempt_id": attempt_id,
-                        "request_sha": "e" * 64,
-                        "response_sha": "f" * 64,
-                        "foreign_call_id": foreign_call_id,
-                    },
+                    {"effect_id": foreign_call_id, "foreign_call_id": foreign_call_id},
                 )
         _assert_database_refusal(refused, sqlstate="23503")
         assert (

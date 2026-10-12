@@ -91,14 +91,14 @@ class TestWhatItActuallyWires:
     def test_it_builds_all_the_frozen_operations(self) -> None:
         app = build_application(environ=_base_env())
         assert len(app.router.routes) == FACTS.operation_count, (
-            "the router does not carry the thirty-four operations the frozen document "
+            "the router does not carry the operations the frozen document "
             "declares -- fifteen until `W34-CONTRACT` added the credential exchange, "
             "sixteen until `W38-KB` added the decision journal under `R-24`, seventeen "
             "until `W39-REVOKE` added the password change under `R-26`, eighteen until "
             "`W42-SEAL` (no path or operation added), nineteen once `W45-BLOCKS` added "
             "`getVersionBlocks`, twenty once `W46-SEAL` added `getDashboardSummary` "
             "under `R-44`, thirty-four once `W49-SEAL-01` added the account and "
-            "registration operations"
+            "registration operations, forty-five once `W54-SEAL-01` added the worker registry"
         )
 
     def test_the_wired_mode_is_the_configured_one(self) -> None:

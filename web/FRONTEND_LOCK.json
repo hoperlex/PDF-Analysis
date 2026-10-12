@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193",
-    "content_commit": "2e458ca9",
-    "content_commit_subject": "W53-SEAL-01 dispatch base; atomic reseal has no self-commit",
-    "dispatch_named_commit": "2e458ca9",
-    "commit_note": "W53-SEAL-01 adds six execution operations, eight schemas and optional RunStatus.reaudit_of_run_id; the domain error catalog and contract_version are unchanged. Stage B supplies behavior.",
+    "sha256": "0dbfbee44843c198c533d7a580df0fd8b768db010351c323b9518febfd8ecbfb",
+    "content_commit": "7ebf162",
+    "content_commit_subject": "W54-SEAL-01 dispatch base; atomic reseal has no self-commit",
+    "dispatch_named_commit": "7ebf162",
+    "commit_note": "W54-SEAL-01 adds listWorkers and setWorkerIntake (sealed stubs answering dependency_unavailable until W54-WORKER-01), five schemas and the WorkerId path parameter; the domain error catalog and contract_version are unchanged.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 36,
-    "operations": 43,
-    "component_schemas": 91,
+    "paths": 38,
+    "operations": 45,
+    "component_schemas": 96,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "008a7932ac0b6aa6d44076dc6b394b25af38865edea6cb66083a0811bc96f193",
+    "snapshot_sha256": "0dbfbee44843c198c533d7a580df0fd8b768db010351c323b9518febfd8ecbfb",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "c98e43ae60ba0418fefaf2246e2fbf4db69a9a37eac15f25072bbb9f48375094",
-      "index.ts": "5a65d548d95f99caf100e902545fb5f7307b8729e3cf5933d9941ad6374113a4",
-      "operations.gen.ts": "990df0d62e080851641552aa5f43aa1740d919dc518078bee484587a7c0dcb0d",
-      "types.gen.ts": "9f03b43ee8df62072a2877f65a4cf08aa120a29ecb59aa2ea072d2cbc5ed78bb"
+      "client.gen.ts": "0a8ca6b16ef9bbe48929cd99a0a515f6d22058e2503abb64424fb74f15ace378",
+      "index.ts": "850790d5094a441e6ac78944d1f315eba4abcc83f7cd88d24ff0bfe0579ba63e",
+      "operations.gen.ts": "efaaa4e50be05cff3b2143fee2f517d3cdc4d63c984eee474abdadff46923b45",
+      "types.gen.ts": "ba9b600157649a753d614c37947e878661815029ad1a6d5949905578e5bbf9e2"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

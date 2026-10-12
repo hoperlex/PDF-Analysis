@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.identifiers",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 9,
-  "revision_note": "Candidate revision 9 of the unreleased 1.0.0-draft.1 candidate, written by W49-SEAL-01 under owner rulings R-55, R-56, R-60 and R-61 (OWNER_RULINGS_2026-09-17.md section 3.19) and the seal decisions of 2026-10-06. Two identifiers and entity bindings are added because both now cross the wire: user_uid (usr) names one account (entity User, the app_user row of migration 0006), and request_id (reg) names one registration request (entity RegistrationRequest, migration 0015). Both are opaque, globally unique and generated once; neither is derived from a login, an e-mail address, a name or a database sequence, and an e-mail address is a sign-in identifier and a unique key among active accounts, never an identity. Both prefixes were already minted in this shape by the access boundary before the seal (usr since 0006, reg since 0015); the seal moves them into the shared registry (src/auditmanager/shared/identity/ids.py) in the same change, so the registry and this catalog stay equal. No existing identifier, prefix, rule or binding is removed or renamed. The family carries one candidate_revision, so all three catalogs move to 9. contract_version stays 1.0.0-draft.1 because this is an additive change to an unreleased draft candidate.",
+  "candidate_revision": 10,
+  "revision_note": "Candidate revision 10 of the unreleased 1.0.0-draft.1 candidate, written by W54-SEAL-01 under owner rulings R-76, R-104, R-105 and R-106 (OWNER_RULINGS_2026-09-17.md sections 3.27 and 3.30) and the W54 plan (docs/program/dispatch/W54-PLAN.md sections 3.1, 3.3 and 3.6). Three identifiers and entity bindings are added because migration 0018_norm_custody allocates them: norm_custody_admission_id (nad) names one custody intent and outbox row (entity NormCustodyAdmission), norm_custody_binding_id (nbd) names one published custody binding (entity NormCustodyBinding), and norm_repair_call_id (nrc) names one paid repair-call try (entity NormRepairCall), whose idempotency scope is that id itself. All three are opaque, generated once and never derived from a blob_id, a SHA-256, an anchor, a target, a block reference or a file name. worker_id (wrk, entity Worker) was already declared and is now instantiated by migration 0019_execution_workers; it is unchanged. Two distinct-identity rules are added (custody_identity, repair_call_identity). No existing identifier, prefix, rule or binding is removed or renamed. The family carries one candidate_revision, so all three catalogs and the three family schemas' const pins move to 10 together; contract_version stays 1.0.0-draft.1 because this is an additive change to an unreleased draft candidate.",
   "status": "draft_candidate",
   "frozen": false,
   "format": "<prefix>_<ULID>",
@@ -49,6 +49,9 @@
     "norms_snapshot_id": "ns",
     "norm_document_id": "ndoc",
     "norm_paragraph_id": "npar",
+    "norm_custody_admission_id": "nad",
+    "norm_custody_binding_id": "nbd",
+    "norm_repair_call_id": "nrc",
     "model_call_id": "mc",
     "comparison_id": "cmp",
     "sheet_link_id": "sln",
@@ -80,6 +83,9 @@
     "NormsSnapshot": "norms_snapshot_id",
     "NormDocument": "norm_document_id",
     "NormParagraph": "norm_paragraph_id",
+    "NormCustodyAdmission": "norm_custody_admission_id",
+    "NormCustodyBinding": "norm_custody_binding_id",
+    "NormRepairCall": "norm_repair_call_id",
     "ModelCallRecord": "model_call_id",
     "Comparison": "comparison_id",
     "SheetLink": "sheet_link_id",
@@ -173,6 +179,31 @@
       "evidence": [
         "W49-PLAN.md section 3.1",
         "W49-PLAN.md section 3.3"
+      ]
+    },
+    {
+      "name": "custody_identity",
+      "identifiers": [
+        "norm_custody_admission_id",
+        "norm_custody_binding_id",
+        "blob_id"
+      ],
+      "rule": "A NormCustodyAdmission is one custody intent with its outbox row; a NormCustodyBinding is the one published relation a confirmed admission becomes, binding a role, a target and an opaque anchor to a Blob. The Blob is content-derived and shared: equal verified bytes reuse one blob_id under any number of bindings and roles, and a failed admission is rejected without ever rejecting the shared Blob. Neither custody identity is derived from the blob_id, the declared SHA-256, the anchor, the target or a file name, and none of those is a custody identity or a foreign key in its place.",
+      "authority": "R-76 owner ruling 2026-10-09 and R-104 owner ruling 2026-10-12",
+      "evidence": [
+        "NORM_CORPUS_CUSTODY.md",
+        "W54-PLAN.md section 3.1"
+      ]
+    },
+    {
+      "name": "repair_call_identity",
+      "identifiers": [
+        "norm_repair_call_id"
+      ],
+      "rule": "A NormRepairCall is one paid provider try of the corpus repair run, and its idempotency scope is its own norm_repair_call_id. A retry is a new try with a new identity and the next attempt number; an outcome_unknown try is never re-paid. The block anchor, crop SHA-256 and request SHA-256 are verification and lookup values, never the identity.",
+      "authority": "R-79 and R-106 owner rulings",
+      "evidence": [
+        "W54-PLAN.md section 3.3"
       ]
     }
   ],

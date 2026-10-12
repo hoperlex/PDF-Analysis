@@ -82,6 +82,14 @@ class ExecutionPort(Protocol):
     def set_paused(
         self, *, paused: bool, user_uid: str, idempotency_key: str
     ) -> models.ExecutionDispatchStatus: ...
+    # `W54-SEAL-01`. The worker registry (plan section 3.7). Sealed as stubs that answer
+    # `503 dependency_unavailable`; `W54-WORKER-01` supplies the behaviour.
+    def list_workers(
+        self, *, cursor: str | None, limit: int
+    ) -> models.ExecutionWorkerPage: ...
+    def set_worker_intake(
+        self, *, worker_id: str, enabled: bool, user_uid: str, idempotency_key: str
+    ) -> models.ExecutionWorker: ...
 
 
 class UploadedDocument(Protocol):

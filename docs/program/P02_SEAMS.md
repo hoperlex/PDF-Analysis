@@ -110,7 +110,10 @@ expected.
 
 **Original P02 head: `0002_pc01_schema`; W48 durable-effects head:
 `0014_durable_analysis_effects`.** The W48 slot is the single owner of the new execution
-authority/effect-journal DDL; earlier migrations remain immutable.
+authority/effect-journal DDL; earlier migrations remain immutable. `W54-SEAL-01` owns
+`0018_norm_custody` (custody admissions and bindings, the repair-call journal, D-142's
+`abandoned` publication and D-148's insert guards) and `0019_execution_workers` (the
+worker registry and `lease.worker_id`).
 
 ### 3.1 Tables
 
@@ -127,9 +130,13 @@ authority/effect-journal DDL; earlier migrations remain immutable.
 | `model_call` | `model_call_id` | **immutable after insert** |
 | `job` | `job_id`; one per `run_id` | state transitions only; current Attempt is fenced |
 | `attempt` | `attempt_id` | state transitions only; execution token is secret-class |
-| `lease` | `lease_id`; one per Attempt | acquired once, released at terminal |
-| `provider_call_effect` | `model_call_id` | explicit effect-state transitions; request identity frozen |
-| `analysis_artifact_publication` | `(attempt_id, stage_id, blob_id, blob_role)` | `prepared → bound`; identity frozen |
+| `lease` | `lease_id`; one per Attempt | acquired once, released at terminal; `worker_id` frozen |
+| `provider_call_effect` | `model_call_id` | inserted `prepared`; explicit effect-state transitions; request identity frozen |
+| `analysis_artifact_publication` | `(attempt_id, stage_id, blob_id, blob_role)` | inserted `prepared`; `prepared → bound \| abandoned`; identity frozen |
+| `worker` | `worker_id` | registry row; only `heartbeat_at` and `intake_enabled` change |
+| `norm_custody_admission` | `norm_custody_admission_id` | custody intent and outbox; inserted `pending`; `pending → confirmed \| poisoned \| rejected`, `poisoned → pending \| rejected`; never deleted |
+| `norm_custody_binding` | `norm_custody_binding_id`; one per confirmed admission | **immutable after insert**; insert needs a confirmed admission, its verified Blob and the target |
+| `norm_repair_call` | `norm_repair_call_id` (its own idempotency scope) | inserted `prepared`; `prepared → response_received → completed`, `prepared → not_processed \| outcome_unknown`; never deleted |
 | `finding` | `finding_uid` | mutable |
 | `finding_observation` | `finding_observation_id` | **immutable after insert** |
 | `finding_evidence` | `(finding_observation_id, evidence_ordinal)` | **immutable after insert** |
@@ -139,9 +146,11 @@ authority/effect-journal DDL; earlier migrations remain immutable.
 
 Plus the view `finding_current_verdict`, which is §5.4.
 
-**There is still no `import`, `export`, `worker`, `comparison` or `outbox` table.**
-W48-DURABLE-01 intentionally instantiates `job`, `attempt` and `lease`; the remaining
-absence set is asserted so another scope change cannot arrive as a quiet convenience.
+**There is still no `import`, `export` or `comparison` table.**
+W48-DURABLE-01 intentionally instantiates `job`, `attempt` and `lease`; `W54-SEAL-01`
+instantiates the `worker` registry and the custody outbox (`norm_custody_admission`,
+whose intent and outbox row are one record under R-76). The remaining absence set is
+asserted so another scope change cannot arrive as a quiet convenience.
 
 ### 3.2 What the database refuses, and how to read the refusal
 
@@ -597,7 +606,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Forty-three operations, sealed. `A5` generates the typed client from this document; `B6`
+Forty-five operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -609,7 +618,10 @@ added `changePassword` under `R-26` on 2026-09-23, and nineteen after `W45-BLOCK
 `getVersionBlocks` under `R-29` on 2026-09-25, twenty after `W46-SEAL` added
 `getDashboardSummary` under `R-44` on 2026-09-25, and `W49-SEAL-01` then added
 the account, registration and account-management operations under `R-55` ... `R-61` on
-2026-10-06. `W52-SEAL-01` added the three release operations on 2026-10-08.
+2026-10-06. `W52-SEAL-01` added the three release operations on 2026-10-08,
+`W53-SEAL-01` the six execution operations on 2026-10-09, and `W54-SEAL-01` the worker
+registry's `listWorkers` and `setWorkerIntake` on 2026-10-12 (stubs answering
+`dependency_unavailable` until `W54-WORKER-01`).
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -670,12 +682,14 @@ could.
 | `reauditRun` | `POST /runs/{run_id}/reaudit` |
 | `setJobPriority` | `PUT /execution/queue/{job_id}/priority` |
 | `setExecutionPaused` | `PUT /execution/dispatch` |
+| `listWorkers` | `GET /execution/workers` |
+| `setWorkerIntake` | `PUT /execution/workers/{worker_id}/intake` |
 
 Rules that hold across the whole surface:
 
 * the writes that take a required `Idempotency-Key` header are `createProject`,
   `uploadDocument`, `startRun`, `appendDecision`, `approveRegistration`, `cancelRun`,
-  `reauditRun`, `setJobPriority` and `setExecutionPaused`, and no others.
+  `reauditRun`, `setJobPriority`, `setExecutionPaused` and `setWorkerIntake`, and no others.
   The key is passed through to the owning command handler and never re-derived in the
   router: an identical repeat replays the first answer, and another payload under the same
   key is `idempotency_key_reuse`. The other writes take no key. What a repeat of each does
@@ -745,9 +759,13 @@ Recorded here so the catalog does not silently promise an aggregate nobody build
 `object_uid`, `discipline_uid`.
 
 The value types exist — the catalog is complete — but no PC-01 code path allocates
-one, and no table carries a column for one, with the single exception of
+one, and no table carries a column for one, with two exceptions:
 `audit_run.norms_snapshot_id`, which exists and stays `NULL` so that restoring norms
-pinning later is not a schema change.
+pinning later is not a schema change; and `worker.worker_id` with `lease.worker_id`
+(migration `0019`), which `W54-SEAL-01` sealed and which stay empty and `NULL` until
+`W54-WORKER-01` registers a worker process. The custody and repair identities `nad`,
+`nbd` and `nrc` (migration `0018`) are not listed here: their Stage-B owners allocate
+them in this same wave.
 
 There is no `Import` aggregate at all: PC-01 ingests one PDF through a direct upload
 command, the `import` state machine is not implemented, and PC-01 claims no

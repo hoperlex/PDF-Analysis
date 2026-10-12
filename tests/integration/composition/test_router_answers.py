@@ -37,6 +37,10 @@ DEPLOYMENT_SECRET = "composition-static-token"
 # Stage C serves both release GETs through the composed adapter.
 RELEASE_GETS = frozenset({"/system/version", "/releases"})
 
+# `W54-SEAL-01`. The worker registry's read is a sealed stub until `W54-WORKER-01`: its one
+# expected answer is the explicit `503 dependency_unavailable`, never a 500 and never a page.
+SEALED_STUB_GETS = frozenset({"/execution/workers"})
+
 _STATIC_TOKEN_CACHE: str | None = None
 
 
@@ -197,11 +201,17 @@ class TestNoOperationAnswersWithAServerFault:
 
         assert len(probes) >= 5, f"the sweep found too few GET routes: {probes}"
         assert RELEASE_GETS <= {path for _method, path in probes}
+        assert SEALED_STUB_GETS <= {path for _method, path in probes}
         faults = []
         for method, path in probes:
             status, body = call(app, method, path)
             if path in RELEASE_GETS:
                 if status != 200 or not isinstance(body, dict):
+                    faults.append((path, status, body))
+            elif path in SEALED_STUB_GETS:
+                if status != 503 or not isinstance(body, dict) or (
+                    body.get("error_code") != "dependency_unavailable"
+                ):
                     faults.append((path, status, body))
             elif status >= 500:
                 faults.append((path, status, body))

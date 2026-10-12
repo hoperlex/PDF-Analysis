@@ -247,6 +247,22 @@ class ExecutionAdapter(_SessionHolder):
                                                   changed_at=state.changed_at)
         return self._write(write)
 
+    # `W54-SEAL-01`. The worker registry's `listWorkers` and `setWorkerIntake` are sealed
+    # stubs: the `worker` table exists (migration 0019) but nothing registers in it until
+    # `W54-WORKER-01`, which replaces both bodies. Until then they fail explicitly, never
+    # with an empty page.
+    @staticmethod
+    def _worker_registry_unavailable() -> Any:
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="worker_registry")
+
+    def list_workers(self, *, cursor: str | None, limit: int) -> models.ExecutionWorkerPage:
+        return self._worker_registry_unavailable()
+
+    def set_worker_intake(
+        self, *, worker_id: str, enabled: bool, user_uid: str, idempotency_key: str
+    ) -> models.ExecutionWorker:
+        return self._worker_registry_unavailable()
+
 
 class ReleasesAdapter:
     """Transport views over the release context's immutable history and account mark."""

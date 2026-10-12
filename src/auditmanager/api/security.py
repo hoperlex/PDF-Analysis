@@ -321,6 +321,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listRuns": _ANY_ROLE,
         "listExecutionQueue": _ANY_ROLE,
         "listExecutionJournal": _ANY_ROLE,
+        "listWorkers": _ANY_ROLE,
         "getRunStatus": _ANY_ROLE,
         "listRunFindings": _ANY_ROLE,
         "getFinding": _ANY_ROLE,
@@ -357,6 +358,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "resetUserPassword": _ADMIN,
         "setJobPriority": _ADMIN,
         "setExecutionPaused": _ADMIN,
+        "setWorkerIntake": _ADMIN,
     }
 )
 

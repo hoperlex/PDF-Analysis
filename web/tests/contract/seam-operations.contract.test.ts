@@ -84,7 +84,7 @@ describe('the seam operations', () => {
     expect(OPERATIONS.issueToken.requiresIdempotencyKey).toBe(false);
   });
 
-  it('requires an idempotency key on exactly the nine keyed writes', () => {
+  it('requires an idempotency key on exactly the ten keyed writes', () => {
     const writes = Object.values(OPERATIONS)
       .filter((op) => op.requiresIdempotencyKey)
       .map((op) => op.operationId)
@@ -99,6 +99,8 @@ describe('the seam operations', () => {
       'reauditRun',
       'setExecutionPaused',
       'setJobPriority',
+      // `W54-SEAL-01`: the worker intake switch is keyed like the other execution controls.
+      'setWorkerIntake',
       'startRun',
       'uploadDocument',
     ]);
@@ -111,7 +113,7 @@ describe('the seam operations', () => {
 
   it('cursor-paginates every growing list', () => {
     for (const id of ['listProjects', 'listRunFindings', 'listDecisionHistory',
-      'listExecutionQueue', 'listExecutionJournal'] as const) {
+      'listExecutionQueue', 'listExecutionJournal', 'listWorkers'] as const) {
       expect(OPERATIONS[id].queryParams).toContain('cursor');
       expect(OPERATIONS[id].queryParams).toContain('limit');
     }

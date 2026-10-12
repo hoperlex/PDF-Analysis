@@ -58,6 +58,9 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "reauditRun": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/reaudit"),
     "setJobPriority": ("PUT", "/execution/queue/job_01M2545JSD15ETSNNV904X991T/priority"),
     "setExecutionPaused": ("PUT", "/execution/dispatch"),
+    # `W54-SEAL-01`. The worker registry (R-80 any-role read, administrator intake).
+    "listWorkers": ("GET", "/execution/workers"),
+    "setWorkerIntake": ("PUT", "/execution/workers/wrk_01M2545JSD15ETSNNV904X991T/intake"),
     "listRunFindings": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     "exportRunCsv": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),
     "getFinding": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
@@ -91,7 +94,7 @@ _ANY_ROLE = frozenset({"expert", "admin"})
 
 #: `R-60`, written out from the ruling's three sentences and **not** read from the seam, as
 #: `R-80` amends it: product reads -- projects, documents, versions, blocks, runs, findings,
-#: decisions, the dashboard, the execution queue and journal -- need any one role; product
+#: decisions, the dashboard, the execution queue and journal, the worker registry -- need any one role; product
 #: changes `expert`, account and request management `admin`; the account's own operations
 #: and the product version and release notes need any complete account, roles or none.
 EXPECTED_ROLES: dict[str, frozenset[str]] = {
@@ -105,6 +108,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "getRunStatus": _ANY_ROLE,
     "listExecutionQueue": _ANY_ROLE,
     "listExecutionJournal": _ANY_ROLE,
+    "listWorkers": _ANY_ROLE,
     "listRunFindings": _ANY_ROLE,
     "getFinding": _ANY_ROLE,
     "listDecisionHistory": _ANY_ROLE,
@@ -135,6 +139,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "resetUserPassword": _ADMIN,
     "setJobPriority": _ADMIN,
     "setExecutionPaused": _ADMIN,
+    "setWorkerIntake": _ADMIN,
 }
 
 ROLE_SETS: tuple[frozenset[str], ...] = (

@@ -60,7 +60,8 @@ def test_populated_0016_upgrade_backfills_job_expires_lease_and_refuses_downgrad
             connection.execute(text("INSERT INTO lease(lease_id, job_id, attempt_id) "
                                     "VALUES (:lease, :job, :attempt)"),
                                {"lease": lease_id, "job": job_id, "attempt": attempt_id})
-        upgraded = foundation_command(_alembic("upgrade", "head"), url)
+        # `W54-SEAL-01`: pinned to this revision rather than `head`, which is now 0019.
+        upgraded = foundation_command(_alembic("upgrade", "0017_execution_queue"), url)
         assert upgraded.returncode == 0, upgraded.describe()
         with engine.connect() as connection:
             assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0017_execution_queue"

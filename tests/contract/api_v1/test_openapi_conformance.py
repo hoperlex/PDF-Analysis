@@ -528,7 +528,8 @@ class TestN1ComponentReferenceResolution:
         # Fourteen until `W49-SEAL-01`, whose eight operations that address an account or
         # a request by identity each declare one too.
         # W53 adds three identity-addressed commands with the same 404 envelope.
-        assert len(report) == 25, report
+        # `W54-SEAL-01` adds `setWorkerIntake`, which addresses a worker by identity.
+        assert len(report) == 26, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

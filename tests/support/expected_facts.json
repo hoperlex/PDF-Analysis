@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 36,
+    "path_count": 38,
     "operations": [
       [
         "POST",
@@ -217,6 +217,16 @@
         "PUT",
         "/execution/dispatch",
         "setExecutionPaused"
+      ],
+      [
+        "GET",
+        "/execution/workers",
+        "listWorkers"
+      ],
+      [
+        "PUT",
+        "/execution/workers/{worker_id}/intake",
+        "setWorkerIntake"
       ]
     ],
     "schema_names": [
@@ -310,13 +320,18 @@
       "ExecutionQueuePage",
       "JobId",
       "SetExecutionPausedRequest",
-      "SetJobPriorityRequest"
+      "SetJobPriorityRequest",
+      "ExecutionWorker",
+      "ExecutionWorkerPage",
+      "SetWorkerIntakeRequest",
+      "WorkerId",
+      "WorkerState"
     ]
   },
   "error_catalog": {
     "api_codes": 23,
     "stored_vocabulary": 22
   },
-  "migration_head": "0017_execution_queue",
+  "migration_head": "0019_execution_workers",
   "contract_version": "1.0.0-draft.1"
 }
