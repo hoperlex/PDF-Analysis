@@ -607,7 +607,9 @@ def test_pdfium_is_only_ever_called_with_its_lock_held(tmp_path: Path) -> None:
 
 
 def test_two_probes_in_two_threads_do_not_overlap_in_pdfium(tmp_path: Path) -> None:
-    """The lock serialises: a second thread's blocks are never read while the first's are."""
+    """The lock serialises: while one thread's blocks are being read for PDFium, no other
+    thread's are -- judged from the reads themselves, not from the lock's state, so a probe
+    that stopped taking the lock would be seen."""
     path = _file_of(NAMED["ar_baseline.pdf"], tmp_path)
     active = 0
     overlapped = threading.Event()
@@ -615,21 +617,22 @@ def test_two_probes_in_two_threads_do_not_overlap_in_pdfium(tmp_path: Path) -> N
 
     def on_read(kind: str) -> None:
         nonlocal active
-        if kind == "readinto" and new_envelope.PDFIUM_LOCK.locked():
-            with guard:
-                active += 1
-                if active > 1:
-                    overlapped.set()
-            threading.Event().wait(0.0005)
-            with guard:
-                active -= 1
+        if kind != "readinto":  # only PDFium reads with readinto
+            return
+        with guard:
+            active += 1
+            if active > 1:
+                overlapped.set()
+        threading.Event().wait(0.002)
+        with guard:
+            active -= 1
 
     def work() -> None:
-        for _ in range(6):
+        for _ in range(8):
             with path.open("rb") as inner:
                 new_envelope.probe(RecordingHandle(inner, on_read=on_read), source_filename="a.pdf")  # type: ignore[arg-type]
 
-    threads = [threading.Thread(target=work) for _ in range(3)]
+    threads = [threading.Thread(target=work) for _ in range(4)]
     for thread in threads:
         thread.start()
     for thread in threads:
