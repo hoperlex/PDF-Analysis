@@ -9,6 +9,17 @@
 - **State left behind:** a portal bundle is accepted, and a bare PDF is **still accepted** (the branch marked `W55B-LEGACY-BARE-PDF`).
   Nothing was pushed, merged or tagged; no contract, migration, lock file or composition root was touched.
 
+## Part B (the browser upload, the browser journey, the final switch): status
+
+Written by a third writer from `1f9daab4`. Section 5 ("For part B") is the work order; this list is the living state, one line per step, updated in
+each commit. A successor continues from `git log` and this list alone.
+
+- B1 the browser upload (envelope, form, panel, failure classifier, the web tests): **in progress**
+- B2 the journey inputs and the runbook (`manifest.json`, `refusals.mjs`, `journey.mjs`, `cdp.mjs`, generated inputs, `manual-alpha-check.sh`): next
+- B3 the live journey on the lane stand (command, exit code, sentinel, envelope path): next
+- B4 the final switch (the bare-PDF branch deleted, seven tests rewritten, the probe in reverse, the HTTP refusal test): next
+- B5 the whole-lane hand-back (this file rewritten as the six items), the lane stack and every process torn down: next
+
 ## 1. Changed files (`git diff --name-status 588773e9..HEAD`, before this file's last rewrite)
 
 Product code: `src/auditmanager/ingest/{bundle_archive,bundle_envelope,bundle_members}.py` (new), `ingest/{__init__,commands,envelope,service}.py`,
