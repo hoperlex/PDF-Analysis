@@ -1246,6 +1246,12 @@ def test_the_journey_inputs_tool_writes_a_sparse_oversize_and_a_501_page_bundle(
     assert oversize.read_bytes()[:4] == b"PK\x03\x04"
     assert stat.st_blocks * 512 <= 1024 * 1024, "the stand-in was allocated, not sparse"
     assert (tmp_path / "bundle_501_pages.zip").read_bytes()[:4] == b"PK\x03\x04"
+    # one page past the limit: not 500 (which the server accepts) and not 31 (the old one)
+    import zipfile
+
+    with zipfile.ZipFile(tmp_path / "bundle_501_pages.zip") as archive:
+        pdf = next(name for name in archive.namelist() if name.endswith(".pdf"))
+        assert re.findall(rb"/Count (\d+)", archive.read(pdf)) == [b"501"]
 
 
 def test_the_journey_inputs_tool_refuses_to_allocate_the_oversize_file(tmp_path: Path) -> None:
