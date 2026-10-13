@@ -24,7 +24,7 @@
  */
 
 /** U+202F NARROW NO-BREAK SPACE: the separator between groups of three digits. */
-export const DIGIT_GROUP_SEPARATOR = ' ';
+export const DIGIT_GROUP_SEPARATOR = '\u202F';
 
 export interface InputBudgetFigures {
   readonly characterCount: number;

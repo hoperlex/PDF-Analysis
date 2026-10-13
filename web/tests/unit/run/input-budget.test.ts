@@ -37,7 +37,7 @@ import {
 import { executionFailure } from '@/entities/execution';
 import { StartRunControl } from '@/features/start-run';
 
-const NNBSP = ' ';
+const NNBSP = '\u202F';
 
 function refusal(details?: Record<string, string | number | boolean | null>): ApiError {
   const envelope: ErrorEnvelope = {
