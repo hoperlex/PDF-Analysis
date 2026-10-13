@@ -52,6 +52,35 @@ Structural facts of its `_blocks.json` (types and null counts only): every block
 `crop_url` are `null` on the 26 stamps and set on every other block; `polygon_points` is `null` on all 117 rectangles and a list of three
 or more points on the 12 polygons; `status` and `export_status` are `recognized` on all 129.
 
+## The 250 MiB measurement (item 9)
+
+**Method.** `.local/w55b-tools/measure_bundle.py VARIANT` (untracked; under `.local/`): builds a valid bundle with the `portal_bundle`
+builders, starts `infra/deploy/serve.py` as a child it owns (lane `.env`, `AUDITMANAGER_API_PORT=57531`, health `57532`, loopback),
+mints a credential through `tests/support/accounts.py`, creates a project, streams one multipart upload with a `Content-Length`
+(1 MiB writes, `Content-Type: application/zip`) and reads the child's `VmHWM` (the kernel's peak resident set,
+`/proc/<pid>/status`) before and after. **One API process per variant**, so every row is the growth of a fresh process over its own
+idle peak. Tree: this branch at `27729ae8` (the `bundle_archive` fix below included); host load 1-3, 2.4-3.4 GiB free before each run.
+No `nginx`/BFF in the path (loopback API only), so the time is the API's own, not the stand's.
+
+| Bundle (archive size) | Answer | Time | `VmHWM` growth over the idle process (idle = 157-165 MiB) |
+| --- | --- | --- | --- |
+| the committed `ar_baseline.zip` (0.09 MiB), control | `201` | 0.5 s | +5.7 MiB |
+| PDF = baseline + 30 MiB of comment lines after `%%EOF`, stored (30.07 MiB) | `201` | 1.0 s | +45.7 MiB |
+| the same, 120 MiB (120.07 MiB) | `201` | 2.6 s | +127.6 MiB |
+| the same, 244 MiB (244.07 MiB) | `201` | 3.4 s | +147.2 MiB |
+| valid text PDF carrying one 244 MiB unreferenced stream before a correct xref, **stored** (244.04 MiB) | `201` | 1.9 s | +146.5 MiB |
+| the same document, PDF member **deflated** (incompressible noise; 244.10 MiB) | `201` | 2.1 s | +146.0 MiB |
+| baseline PDF + a 244 MiB `_results.html` of noise, stored (244.07 MiB): nothing near the PDF's size reaches PDFium | `201` | 2.9 s | +22.4 MiB |
+
+**Reading.** The archive path alone (the HTML row) costs +22 MiB for a 244 MiB body: the members are counted and hashed in 64 KiB
+pieces and written to temporary files. A large PDF member costs about +147 MiB on top of an idle process and **does not grow with
+size past that**: 120 MiB gave +127.6 MiB, 244 MiB gave +147.2 MiB (+20 MiB for +124 MiB), and the document with its padding inside a
+stream, with a correct xref and nothing to rebuild, gives the same figure (so it is not PDFium's xref rebuild). The plateau is what
+the object store's multipart upload buffers and PDFium's page cache hold; it was not decomposed further. The plan's bound is that the
+API answers an accepted 250 MiB upload within about 240 s: it answered in 1.9-3.4 s on loopback. **Memory is bounded and not
+proportional to the bundle** (an idle API process of 165 MiB reached 308-315 MiB for a 244 MiB upload); the stand's own figures
+belong to REHEARSAL. The generated archives were deleted after each run.
+
 ## The migration probe (item 8)
 
 **Method.** In a scratch edit (reverted; `git diff` empty afterwards) `DocumentAdapter.upload_document` and
