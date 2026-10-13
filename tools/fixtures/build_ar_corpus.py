@@ -288,6 +288,25 @@ def checksum_bytes(entries: list[tuple[str, bytes]]) -> bytes:
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 
+# `SHA256SUMS` lines under these prefixes belong to another generator
+# (`build_portal_bundles.py` appends the `bundles/` ones). This script keeps them exactly
+# as they are, so each generator's --check judges its own lines and neither rewrites the
+# other's.
+APPENDED_PREFIXES = ("bundles/",)
+
+
+def keep_appended_lines(fresh: bytes, existing_path: Path) -> bytes:
+    if not existing_path.is_file():
+        return fresh
+    kept = [
+        line for line in existing_path.read_text(encoding="utf-8").splitlines()
+        if line.split("  ", 1)[-1].startswith(APPENDED_PREFIXES)
+    ]
+    if not kept:
+        return fresh
+    return fresh + ("\n".join(kept) + "\n").encode("utf-8")
+
+
 # --------------------------------------------------------------------------------------
 # Build
 # --------------------------------------------------------------------------------------
@@ -331,6 +350,7 @@ def build_all() -> list[tuple[Path, bytes]]:
     checksums = checksum_bytes([
         (str(path.relative_to(OUT_DIR)), data) for path, data in artefacts
     ])
+    checksums = keep_appended_lines(checksums, OUT_DIR / CHECKSUM_NAME)
     artefacts.append((OUT_DIR / CHECKSUM_NAME, checksums))
     return artefacts
 
