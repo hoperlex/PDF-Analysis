@@ -162,6 +162,7 @@ No `nginx`/BFF in the path (loopback API only), so the time is the API's own, no
 | valid text PDF carrying one 244 MiB unreferenced stream before a correct xref, **stored** (244.04 MiB) | `201` | 1.9 s | +146.5 MiB |
 | the same document, PDF member **deflated** (incompressible noise; 244.10 MiB) | `201` | 2.1 s | +146.0 MiB |
 | baseline PDF + a 244 MiB `_results.html` of noise, stored (244.07 MiB): nothing near the PDF's size reaches PDFium | `201` | 2.9 s | +22.4 MiB |
+| a generated 500-page bundle (`generated.bundle_with_pages(500)`, 0.80 MiB): the page ceiling, end to end | `201` | 0.8 s | +15.8 MiB |
 
 **Reading.** The archive path alone (the HTML row) costs +22 MiB for a 244 MiB body: the members are counted and hashed in 64 KiB
 pieces and written to temporary files. A large PDF member costs about +147 MiB on top of an idle process and **does not grow with
