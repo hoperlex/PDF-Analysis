@@ -1,17 +1,18 @@
-"""Ingest: the admission envelope, the single-PDF upload command, and reconciliation.
+"""Ingest: the admission envelope, the portal-bundle upload command, and reconciliation.
 
     from auditmanager.ingest import IngestService, Reconciler
 
     service = IngestService(store)
     project = service.create_project("Q3 review")
-    outcome = service.upload_single_pdf(
-        project_uid=project.project_uid,
-        content=pdf_bytes,
-        source_filename="annual_report.pdf",
-        display_title="Annual report",
-        idempotency_key=IdempotencyKey("upload-2026-09-10-0001"),
-    )
-    outcome.version.source.blob_id      # the only handle to the stored bytes
+    with open("annual_report.zip", "rb") as bundle:      # a portal bundle: the PDF and its files
+        outcome = service.upload_bundle(
+            project_uid=project.project_uid,
+            content=bundle,
+            source_filename="annual_report.zip",
+            display_title="Annual report",
+            idempotency_key=IdempotencyKey("upload-2026-09-10-0001"),
+        )
+    outcome.version.source.blob_id      # the only handle to the stored PDF
 
 The accepted envelope is one portal bundle -- a ZIP holding an unencrypted PDF of at most
 250 MiB and one to five hundred pages, the portal's block list and its recognised-text file
