@@ -43,7 +43,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any, Final, Mapping
+from typing import Any, BinaryIO, Final, Mapping
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -343,7 +343,7 @@ class IngestService:
         self,
         *,
         project_uid: ProjectUid,
-        content: bytes,
+        content: bytes | BinaryIO,
         source_filename: str,
         display_title: str,
         idempotency_key: IdempotencyKey,
@@ -351,6 +351,12 @@ class IngestService:
         section: str | None = None,
     ) -> UploadOutcome:
         """Publish one PDF as one immutable version, or explain why not.
+
+        ``content`` is the PDF as a **seekable binary handle** or, for the callers that
+        hold one, a byte string (`W55B-STREAM-01`). A handle is never read whole here:
+        the envelope measures it, hashes it in fixed-size chunks and lets PDFium read the
+        blocks it needs, and the store then streams it to the temporary object from the
+        start. The handle is the caller's -- this method neither closes nor keeps it.
 
         ``display_title`` is the caller's own display label and is what a reviewer
         sees. It is a separate argument from ``source_filename`` on purpose: the file
@@ -365,7 +371,9 @@ class IngestService:
         """
         # Step 0. The envelope, before any service is touched. A refusal here has
         # created nothing anywhere, including no command record, because nothing has
-        # been attempted yet.
+        # been attempted yet. For a handle this is also the one pass that measures it:
+        # the size and the SHA-256 come from the handle, chunk by chunk, and it is left
+        # positioned at its start.
         report = probe(content, source_filename=source_filename)
 
         fingerprint = payload_fingerprint(
@@ -404,7 +412,11 @@ class IngestService:
         temporary: TemporaryBlob | None = None
         try:
             # Steps 2 and 3. Nothing is canonical until verification has passed; the
-            # adapter removes the staged bytes itself on a mismatch.
+            # adapter removes the staged bytes itself on a mismatch. A handle is rewound
+            # here, where it is read, rather than trusted to still be at its start after
+            # the claim above: staging streams from wherever the handle stands.
+            if not isinstance(content, (bytes, bytearray)):
+                content.seek(0)
             temporary = self._store.stage_temporary(
                 content,
                 declared_sha256=report.sha256,

@@ -486,14 +486,14 @@ class DocumentAdapter:
         from auditmanager.shared.identity import IdempotencyKey, ProjectUid
 
         name = source_filename or "upload.pdf"
-        # `W55B-SEAL-01`: the port now takes the part's file handle. Until
-        # `W55B-STREAM-01` reads it through the envelope and `W55B-INGEST-01` reads the
-        # archive member by member, this adapter keeps today's behaviour exactly -- the
-        # whole body, in memory, handed to the service -- and says so here, in the one
-        # place that pays for it.
+        # `W55B-STREAM-01`: the part's file handle goes through to the service unread. The
+        # envelope measures and hashes it chunk by chunk and the store streams it to the
+        # temporary object, so nothing on this path holds the upload whole. (Until
+        # `W55B-INGEST-01` reads the archive member by member the service still receives
+        # one PDF.)
         outcome = self._service.upload_single_pdf(
             project_uid=ProjectUid.parse(project_uid),
-            content=content.read(),
+            content=content,
             source_filename=name,
             display_title=display_title or name,
             idempotency_key=IdempotencyKey(idempotency_key),

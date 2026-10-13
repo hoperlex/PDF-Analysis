@@ -111,8 +111,10 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
         # has a filename, and `checked.display_title` is the text the caller actually
         # encoded rather than Starlette's latin-1 reading of it.
         # `W55B-SEAL-01`: the part's own file handle goes to the port unread. It is positioned
-        # at the start and readable once; what reads it, and how much of it at a time, is the
-        # port's to say (`DocumentPort.upload_document`).
+        # at the start; what reads it, and how much of it at a time, is the port's to say
+        # (`DocumentPort.upload_document`). `W55B-STREAM-01`: Starlette has already spooled
+        # a part this size to a temporary file, so the handle is seekable and the bytes
+        # are never in memory here -- nothing on this route reads, joins or copies them.
         filename = body.file.filename or ""
         outcome = documents.upload_document(
             project_uid=project_uid,
