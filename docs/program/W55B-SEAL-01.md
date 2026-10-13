@@ -57,7 +57,8 @@ rc 0, the two lane volumes removed, `.env` deleted.
 | `git diff --check` | rc 0 |
 | `.venv/bin/python -m compileall -q` over `src/auditmanager/{api,bootstrap,shared/errors}`, the migration and the changed test packages | rc 0 |
 | `uv lock --check --offline` | rc 0; with `pillow`'s specifier broken in a scratch copy rc 1 |
-| `.venv/bin/python -m pytest -q tests/contract` (minus `test_cp00_candidate.py`, `test_cp00_final_state.py`, `test_validate_bootstrap.py`) with `tests/integration/composition/test_every_port_implementation_is_whole.py`, `tests/e2e/test_pc01_journey_conformance.py`, `tests/integration/api/{test_portal_block_routes,test_streaming_wire_response}.py`, `test_role_register.py::test_the_registers_are_the_ruled_ones` | all passed except `test_alpha_acceptance_command.py`, which needs a clean checkout; on the committed tree `tests/contract/test_alpha_acceptance_command.py`: **25 passed** |
+| `.venv/bin/python -m pytest -q tests/contract --ignore=tests/contract/test_cp00_candidate.py --ignore=tests/contract/test_cp00_final_state.py --ignore=tests/contract/test_validate_bootstrap.py` on the final committed tree, clean | **656 passed** (includes `test_alpha_acceptance_command.py`, 25) |
+| `… tests/integration/composition/test_every_port_implementation_is_whole.py tests/e2e/test_pc01_journey_conformance.py tests/integration/api/test_portal_block_routes.py tests/integration/api/test_streaming_wire_response.py "tests/integration/api/test_role_register.py::test_the_registers_are_the_ruled_ones"` | all passed (container-free) |
 | `npm --prefix web run api:verify` | OK, 54 operations, contract SHA-256 `8e1d0b23…` |
 | `npm --prefix web run typecheck` / `lint` | rc 0 / rc 0 |
 | Vitest, one full run in two parts (below) | **131 files, 1944 tests passed** (130 files / 1930 tests, then `tests/guards/query-key-shape.guard.test.ts` 14) |
@@ -224,7 +225,7 @@ handle unread, `DocumentAdapter` still reads it whole and calls the service with
 
 ## 6. Containment
 
-- `git diff --name-only 7216d8b..HEAD`: the paths of §1, checked mechanically against the §B4 grant and the 107 sweep
+- `git diff --name-only 7216d8b..HEAD`: 84 paths, the ones of §1, checked mechanically against the §B4 grant and the 107 sweep
   paths — **all inside except `web/src/shared/api/authorization.ts`** (§5.5, the same line `W55A-SEAL-01` flagged). No path of
   the exclusions (`tests/contract/fixtures_ar/**`, `tests/integration/api/test_multipart_rules.py`,
   `tests/characterization/w13_baseline/**`, the `nginx.conf` body directives) is touched.
