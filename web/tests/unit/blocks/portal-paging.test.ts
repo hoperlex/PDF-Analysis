@@ -13,6 +13,7 @@ import { InfiniteQueryObserver, QueryClient } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PortalBlock, PortalBlockPage } from '@/shared/api';
+import { ClientUsageError } from '@/shared/api';
 import { MissingConfigurationError } from '@/shared/config';
 import {
   PORTAL_BLOCK_PAGE_LIMIT,
@@ -146,6 +147,11 @@ describe('the crop address', () => {
       `/bff/v1/versions/${BLOCKS_VERSION_UID}/portal-blocks/${blockId(2)}/crop`,
     );
     expect(portalBlockCropUrl('ver_a/b', 'blk_c?d')).toBe('/bff/v1/versions/ver_a%2Fb/portal-blocks/blk_c%3Fd/crop');
+  });
+
+  it('refuses an empty identifier rather than addressing a different resource', () => {
+    expect(() => portalBlockCropUrl(BLOCKS_VERSION_UID, '')).toThrow(ClientUsageError);
+    expect(() => portalBlockCropUrl('', blockId(2))).toThrow(ClientUsageError);
   });
 
   it('refuses an unconfigured build rather than defaulting', () => {

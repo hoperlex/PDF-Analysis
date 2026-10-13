@@ -19,7 +19,7 @@
  */
 
 import type { PortalBlockId, VersionUid } from '@/shared/api';
-import { OPERATIONS } from '@/shared/api';
+import { ClientUsageError, OPERATIONS } from '@/shared/api';
 import { getApiBaseUrl } from '@/shared/config';
 
 export function portalBlockCropUrl(versionUid: VersionUid, portalBlockId: PortalBlockId): string {
@@ -34,7 +34,10 @@ export function portalBlockCropUrl(versionUid: VersionUid, portalBlockId: Portal
       // A template parameter this builder does not supply is a reseal it has not followed:
       // said, never filled with an empty segment.
       if (value === undefined || value === '') {
-        throw new Error(`portalBlockCropUrl: no value for the path parameter «${name}».`);
+        throw new ClientUsageError(
+          `${OPERATIONS.streamVersionPortalBlockCrop.operationId}: параметр пути «${name}» ` +
+            'требуется шаблоном и не был передан.',
+        );
       }
       return encodeURIComponent(value);
     },
