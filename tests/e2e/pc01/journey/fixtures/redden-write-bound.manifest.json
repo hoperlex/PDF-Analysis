@@ -240,7 +240,7 @@
       "from the typed name, so a fixed name would make every run the same command and the",
       "second run of the day would assert nothing about creation."
     ],
-    "fixture": "fixtures/synthetic/ar/ar_baseline.pdf",
+    "fixture": "fixtures/synthetic/ar/bundles/ar_baseline.zip",
     "steps": [
       {
         "name": "create-project",
@@ -326,8 +326,8 @@
             "content_type_starts_with": "multipart/form-data",
             "body_contains": [
               "name=\"file\"",
-              "ar_baseline.pdf",
-              "application/pdf"
+              "ar_baseline.zip",
+              "application/zip"
             ]
           }
         ],

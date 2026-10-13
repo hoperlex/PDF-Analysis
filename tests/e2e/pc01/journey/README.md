@@ -7,7 +7,7 @@ E2E_PC01_LOGIN=<login> E2E_PC01_PASSWORD=<password> \
 
 A sign-in, two phases, one instrument, one envelope, one exit code.
 
-**The write half** creates a project, uploads the AR PDF and starts a run — through the
+**The write half** creates a project, uploads the AR portal bundle (a ZIP) and starts a run — through the
 app's own controls, on the public origin — then waits for the run's terminal by reading
 what the run screen's own poller renders.
 
@@ -48,7 +48,7 @@ cannot both be the last admin and remove their own role. The human A13–A20 che
 the observations. `D-137` records that the continuation has not run on a built stand.
 
 The existing `--phase all` runner and `manual-alpha-check.sh --automated` still cover the
-PC-01 product journey and PDF refusals. Run this identity continuation separately and keep
+PC-01 product journey and the six upload refusals. Run this identity continuation separately and keep
 both envelopes for W51 validation; its result is not folded into the earlier release
 verifier until the separate validation wave.
 
@@ -95,7 +95,7 @@ Three steps, declared in `manifest.json` under `write`:
 | step | at | what a user does | what is asserted |
 |---|---|---|---|
 | `create-project` | `/projects` | types a name, presses **Create** | `POST /projects` → `201`, `project_uid` matches the identifier pattern, the screen states what it created, no alert |
-| `upload-document` | `/projects/{project_uid}` | chooses `fixtures/synthetic/ar/ar_baseline.pdf`, presses **Upload** | `POST /projects/{uid}/documents` → `201`, sent as `multipart/form-data` with `name="file"`, `ar_baseline.pdf` and `application/pdf` on the wire, the screen navigates to the published version |
+| `upload-document` | `/projects/{project_uid}` | chooses `fixtures/synthetic/ar/bundles/ar_baseline.zip`, presses **Upload** | `POST /projects/{uid}/documents` → `201`, sent as `multipart/form-data` with `name="file"`, `ar_baseline.zip` and `application/zip` on the wire, the screen navigates to the published version |
 | `start-run` | `/projects/{project_uid}/versions/{version_uid}` | presses **Start run** | `POST /runs` → **`202`** with `state: "queued"`, the screen navigates to run progress, and the run reaches a terminal |
 
 Nothing is typed into a URL and no identifier is handed in: each step's address is built
@@ -426,3 +426,25 @@ was not entirely (see below).
 So: one instrument, one manifest, one envelope, one exit code — but not "plus the walk".
 Anyone planning the next write section should price the primitives, which now exist, and
 not the walk, which was never going to do it.
+
+## The upload refusals take a bundle, and two of their files are made on the spot
+
+`W55B-INGEST-01`. The upload takes a portal bundle, a ZIP, and refuses a bare PDF, so the six
+drives of `refusals.mjs` are now: a bare PDF (`ar_baseline.pdf`), a text file (`not_a_pdf.txt`)
+and a sparse file past 250 MiB, each refused by the **browser** before a byte is sent; and
+`encrypted.zip`, `image_only.zip` and a 501-page bundle, each refused by the **server** with a
+constraint the screen states in Russian. The bare PDF is refused by the browser here, so the
+server's own refusal of one (`portal_bundle_required`) is covered by
+`tests/integration/api/test_multipart_rules.py` through the HTTP route, not by this screen.
+
+Two of the six files are never committed: 250 MiB is too large and 501 pages exist only to sit
+one past the limit. The drive builds them into a temporary directory with
+`tools/fixtures/build_journey_inputs.py` (Python, standard library; `E2E_PC01_PYTHON` names the
+interpreter, default `python3`) and deletes the directory afterwards. The oversize file is
+sparse (it costs a few kilobytes of disk) and the tool refuses to build it on a file system that
+would allocate it. `manifest.json` declares the set twice (`generated: true` on the case and
+`refusals.generated.files`) and the conformance guard holds both equal to `--list`.
+
+```
+node tests/e2e/pc01/journey/refusals.mjs --origin http://127.0.0.1:PORT
+```

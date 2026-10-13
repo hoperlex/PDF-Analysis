@@ -30,7 +30,7 @@
  * the BFF route handler server-side; the journey asserts the browser never presented one.
  *
  * **Two phases, one instrument, one exit code.** The *write* half -- create a project,
- * upload the AR PDF, start a run, wait for the run's terminal -- is `write.mjs`, driven
+ * upload the AR portal bundle, start a run, wait for the run's terminal -- is `write.mjs`, driven
  * from the `write` section of the same `manifest.json` and recorded into the same
  * envelope. `W21-E2E` left it named in `D-30` rather than written unexecuted; `W22-E2E`
  * built it against a stack it could write to. `--phase read|write|all` selects, and the

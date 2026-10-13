@@ -193,21 +193,23 @@ across all fifteen domain tables are unchanged.
 
 | Input | Refused by |
 |---|---|
-| `negative/not_a_pdf.txt` | PDF magic bytes |
-| `negative/encrypted.pdf` | detected as encrypted, before any page is read |
-| `negative/image_only.pdf` | no extractable text on a page; OCR is never substituted |
-| `negative/too_many_pages.pdf` | 31 pages against the 30-page envelope |
-| `negative/oversize.pdf` | 26 MiB against the 25 MiB envelope |
+| `negative/not_a_pdf.txt` (and a bare PDF) | not a ZIP: `portal_bundle_required`; a PDF alone is no longer an upload |
+| `bundles/encrypted.zip` | detected as encrypted, before any page is read |
+| `bundles/image_only.zip` | no extractable text on a page and no portal block for it; OCR is never substituted |
+| a 501-page bundle (`portal_bundle.generated.bundle_with_pages(501)`, made at test time) | 501 pages against the 500-page envelope |
+| a ZIP-headed hole one byte past 250 MiB (`generated.oversize_sparse_file`, made at test time) | the 250 MiB size rule, `byte_size <= 262144000` |
 | provider unreachable | `dependency_unavailable`, **retryable**, with the run failing rather than publishing |
 
-`W6-CERT` and `W12-CERT` each measured the five refusals rather than trusting the table,
+`W6-CERT` and `W12-CERT` each measured the five refusals of the time rather than trusting the table,
 because the acceptance suite still pins only the error-code class — and a three-way class at
 that (`validation_failed`, `analysis_input_invalid`, `storage_integrity_error`) — and asserts
-nothing about which rule refused. Measure `details.constraint` and check that you get **five
-distinct values from five fixtures**; five refusals sharing one constraint would satisfy the
-suite and would mean four of the five rules were not exercised. All five answer **HTTP 422
-`validation_failed`** with a distinct `details.constraint`: `pdf_magic_bytes`,
-`not_encrypted`, `every_page_has_extractable_text`, `1 <= page_count <= 30` and `max_bytes`.
+nothing about which rule refused. Measure `details.constraint` and check that every row has
+its **own value**; rows sharing one constraint would satisfy the suite and would mean some of
+the rules were not exercised. All five file rows answer **HTTP 422 `validation_failed`**:
+`portal_bundle_required`, `not_encrypted`, `every_page_has_extractable_text`,
+`1 <= page_count <= 500` and `byte_size <= 262144000`. (Before `W55B-INGEST-01` the upload was a
+bare PDF and the table read `pdf_magic_bytes`, `1 <= page_count <= 30` and `max_bytes`; the
+bundle keeps `pdf_magic_bytes` and `max_bytes` for its PDF member and for the transport.)
 The unreachable provider fails the run at `terminal_reason dependency_unavailable` after
 three attempts over ~10.4 s on the pinned `(2.0, 8.0)` ladder, publishing nothing.
 

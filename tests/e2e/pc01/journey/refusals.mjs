@@ -58,7 +58,9 @@
  * envelope file. No dependency: `cdp.mjs`, committed, drives the browser.
  */
 
-import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -136,8 +138,57 @@ const CASES = manifestCases(REFUSALS);
 /** The classifications that mean "the client could not say what went wrong". Declared. */
 const GENERIC_KINDS_DECLARED = REFUSALS?.generic_kinds ?? null;
 
-/** Where the negative fixtures live, declared once and read by both checkers. */
+/**
+ * Where the negative fixtures live, declared once and read by both checkers. A case may
+ * name its own `fixture_dir` (the bundles live beside the corpus, not under `negative/`).
+ */
 const FIXTURE_DIR = REFUSALS?.fixture_dir ?? 'fixtures/synthetic/ar/negative';
+
+/**
+ * The two inputs that are never committed, `W55B-INGEST-01`: a sparse file past 250 MiB and a
+ * 501-page bundle. The generators are Python (`tools/fixtures/portal_bundle/generated.py`) and
+ * this drive is Node, so the tool named in `manifest.json` writes them into a temporary
+ * directory that exists for the length of the drive. Nothing is written to the repository and
+ * the sparse file is never allocated on disk (the tool refuses to build it otherwise).
+ */
+const GENERATED = REFUSALS?.generated ?? null;
+
+/** Fill a fresh temporary directory with the generated inputs, or `null` when none is needed. */
+function buildGeneratedInputs(cases) {
+  if (!cases.some((c) => c.generated === true)) return null;
+  if (GENERATED === null || typeof GENERATED.tool !== 'string') {
+    throw new Error(
+      'a refusal case says `generated: true` but manifest.json declares no `refusals.generated.tool` ' +
+        'to make it; nothing could be attached.',
+    );
+  }
+  const directory = mkdtempSync(join(tmpdir(), 'pc01-journey-inputs-'));
+  const python = process.env.E2E_PC01_PYTHON ?? 'python3';
+  try {
+    // `-I`: isolated, so a stray module in the working directory is never imported by the tool.
+    execFileSync(python, ['-I', resolve(REPO, GENERATED.tool), directory], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    rmSync(directory, { recursive: true, force: true });
+    throw new Error(
+      `${GENERATED.tool} could not build the generated inputs with '${python}': ` +
+        `${error.stderr?.toString().trim() || error.message}. Set E2E_PC01_PYTHON to a Python 3 interpreter.`,
+    );
+  }
+  return directory;
+}
+
+/** Where one case's file is: the generated directory, or the case's own or the section's directory. */
+function fixturePath(testCase, generatedDirectory) {
+  if (testCase.generated === true) {
+    if (generatedDirectory === null) {
+      throw new Error(`${testCase.fixture} is generated and no generated directory was built`);
+    }
+    return join(generatedDirectory, testCase.fixture);
+  }
+  return resolve(REPO, testCase.fixture_dir ?? FIXTURE_DIR, testCase.fixture);
+}
 
 /**
  * Proving it can fail.
@@ -296,8 +347,8 @@ async function seedProject(origin, stamp, cookies) {
 }
 
 /** One fixture, one cold browser, at the app's own upload control. */
-async function drive(origin, projectUid, testCase, stamp, cookies) {
-  const file = resolve(REPO, FIXTURE_DIR, testCase.fixture);
+async function drive(origin, projectUid, testCase, stamp, cookies, generatedDirectory) {
+  const file = fixturePath(testCase, generatedDirectory);
   if (!existsSync(file)) {
     return { fixture: testCase.fixture, drivingError: `${file} is not on disk`, findings: [`${testCase.fixture}: the fixture is not on disk at ${file}`] };
   }
@@ -540,16 +591,22 @@ async function main() {
   console.log(`seeded project ${seeded.projectUid} ("${seeded.name}")`);
 
   const cases = only === null ? table : table.filter((c) => c.fixture === only);
+  const generatedDirectory = buildGeneratedInputs(cases);
+  if (generatedDirectory !== null) console.log(`generated inputs in ${generatedDirectory} (deleted afterwards)`);
   const records = [];
-  for (const testCase of cases) {
-    process.stdout.write(`\n-- ${testCase.fixture} (${testCase.rule}) `);
-    const record = await drive(origin, seeded.projectUid, testCase, stamp, session.cookies);
-    records.push(record);
-    console.log(`${record.findings.length === 0 ? 'as declared' : `${record.findings.length} FINDING(S)`} in ${record.timingsMs.total} ms`);
-    console.log(`   refused by: ${record.refusedBy ?? '(nothing refused it)'}`);
-    console.log(`   API:        ${(record.uploadCalls ?? []).join(', ') || '(no upload request)'}`);
-    console.log(`   screen:     ${JSON.stringify((record.renderedPanel ?? '').replace(/\n/g, ' ⏎ '))}`);
-    for (const finding of record.findings) console.log(`   ! ${finding}`);
+  try {
+    for (const testCase of cases) {
+      process.stdout.write(`\n-- ${testCase.fixture} (${testCase.rule}) `);
+      const record = await drive(origin, seeded.projectUid, testCase, stamp, session.cookies, generatedDirectory);
+      records.push(record);
+      console.log(`${record.findings.length === 0 ? 'as declared' : `${record.findings.length} FINDING(S)`} in ${record.timingsMs.total} ms`);
+      console.log(`   refused by: ${record.refusedBy ?? '(nothing refused it)'}`);
+      console.log(`   API:        ${(record.uploadCalls ?? []).join(', ') || '(no upload request)'}`);
+      console.log(`   screen:     ${JSON.stringify((record.renderedPanel ?? '').replace(/\n/g, ' ⏎ '))}`);
+      for (const finding of record.findings) console.log(`   ! ${finding}`);
+    }
+  } finally {
+    if (generatedDirectory !== null) rmSync(generatedDirectory, { recursive: true, force: true });
   }
 
   const envelope = {

@@ -2,7 +2,7 @@
   {
     "$why": "not_a_pdf.txt is refused by the browser's own pre-check and no request leaves. Declaring a server refusal here must go red on WHERE, on the pre-check that fired, on the missing request and on the sentence the screen never rendered.",
     "fixture": "not_a_pdf.txt",
-    "rule": "ENV-PDF",
+    "rule": "BUNDLE-REQUIRED",
     "refused_by": "server",
     "status": 422,
     "error_code": "validation_failed",
@@ -11,8 +11,9 @@
     "must_say": ["the server examined this file"]
   },
   {
-    "$why": "encrypted.pdf really is refused by the server with not_encrypted. Declaring a different constraint, a different classification and a sentence no screen renders must go red on each.",
-    "fixture": "encrypted.pdf",
+    "$why": "encrypted.zip (a bundle whose PDF is encrypted) really is refused by the server with not_encrypted. Declaring a different constraint, a different classification and a sentence no screen renders must go red on each.",
+    "fixture": "encrypted.zip",
+    "fixture_dir": "fixtures/synthetic/ar/bundles",
     "rule": "ENV-ENCRYPTED",
     "refused_by": "server",
     "status": 422,

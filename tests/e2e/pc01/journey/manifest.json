@@ -764,7 +764,7 @@
       "",
       "`D-5` was `POST /api/v1/runs` -> 500, twice, through a browser, on 2026-09-16. The",
       "read walk above would not have caught it: it makes no POST. These three steps do what",
-      "a user does -- name a project and press Create, choose the AR PDF and press Upload,",
+      "a user does -- name a project and press Create, choose the AR portal bundle (a ZIP) and press Upload,",
       "press Start run -- through the app's own controls, on the public origin.",
       "",
       "Read by the same two checkers as `routes`. At RUN TIME `write.mjs` presses these",
@@ -785,7 +785,7 @@
       "from the typed name, so a fixed name would make every run the same command and the",
       "second run of the day would assert nothing about creation."
     ],
-    "fixture": "fixtures/synthetic/ar/ar_baseline.pdf",
+    "fixture": "fixtures/synthetic/ar/bundles/ar_baseline.zip",
     "steps": [
       {
         "name": "create-project",
@@ -872,8 +872,8 @@
             "content_type_starts_with": "multipart/form-data",
             "body_contains": [
               "name=\"file\"",
-              "ar_baseline.pdf",
-              "application/pdf"
+              "ar_baseline.zip",
+              "application/zip"
             ]
           }
         ],
@@ -1015,6 +1015,15 @@
     "$comment": [
       "The REFUSAL half. `D-44`, and before it `W27-REFUSE`'s six drives.",
       "",
+      "`W55B-INGEST-01`: the upload takes a portal bundle (a ZIP) and a bare PDF is refused, so",
+      "the six are now: three refused by the BROWSER before any byte is sent (a bare PDF, a",
+      "text file, and a sparse file past 250 MiB) and three refused by the SERVER with a",
+      "constraint the screen states in Russian (an encrypted PDF, an image-only PDF, 501",
+      "pages). A bare PDF is refused by the browser here; the server's own refusal of one",
+      "(`portal_bundle_required`) is covered by a server-side test, because no screen can send",
+      "it. Two of the six files are GENERATED when the drive starts (`generated`, below):",
+      "250 MiB is too large to commit and 501 pages exist only to sit one past the limit.",
+      "",
       "`routes` and `write` both declare steps that SUCCEED. These six declare what happens",
       "when a person drops the wrong file into the upload control: where the refusal happened,",
       "what the screen said, and that the screen named the specific rule rather than a generic",
@@ -1040,12 +1049,26 @@
       "against `web/src` -- it is checked against the `constraint` beside it instead, which is",
       "data and therefore guardable.",
       "",
-      "`fixture` is relative to `fixture_dir`."
+      "`fixture` is relative to the case's own `fixture_dir` when it names one, else to the section's; a case",
+      "with `generated: true` is found in the temporary directory the tool filled instead."
     ],
     "at": "/projects/{project_uid}",
     "page_module": "web/src/app/projects/[project_uid]/page.tsx",
     "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
     "fixture_dir": "fixtures/synthetic/ar/negative",
+    "generated": {
+      "$comment": [
+        "Two of the six files are not committed. A case that says `\"generated\": true` has its file in a",
+        "temporary directory that `refusals.mjs` fills, by running `tool`, before the first drive and",
+        "deletes after the last. `files` is the set the tool writes (`--list` prints the same names",
+        "and the conformance guard holds the two equal); a sparse file is never allocated on disk."
+      ],
+      "tool": "tools/fixtures/build_journey_inputs.py",
+      "files": [
+        "oversize_bundle.zip",
+        "bundle_501_pages.zip"
+      ]
+    },
     "api": {
       "method": "POST",
       "path": "/projects/{project_uid}/documents",
@@ -1091,27 +1114,30 @@
     ],
     "cases": [
       {
+        "fixture": "ar_baseline.pdf",
+        "fixture_dir": "fixtures/synthetic/ar",
+        "rule": "BUNDLE-REQUIRED",
+        "refused_by": "client",
+        "precheck_problem": "not_zip",
+        "expects_rendered": [
+          "не является ZIP-архивом",
+          "Ничего не отправлено"
+        ],
+        "$why_a_bare_pdf_is_client_side": "The committed baseline PDF is exactly what a person holds before they have a bundle. The browser refuses it before sending, so the server's own refusal (`portal_bundle_required`, a bare PDF that reaches the route) is covered by tests/integration/api/test_multipart_rules.py through the HTTP route, not by this screen. `Отдельный PDF не принимается` is NOT declared here: the upload panel prints it before any file is chosen, so it could not fail (D-61)."
+      },
+      {
         "fixture": "not_a_pdf.txt",
-        "rule": "ENV-PDF",
+        "rule": "BUNDLE-REQUIRED",
         "refused_by": "client",
-        "precheck_problem": "not_pdf",
+        "precheck_problem": "not_zip",
         "expects_rendered": [
-          "не является PDF",
+          "не является ZIP-архивом",
           "Ничего не отправлено"
         ]
       },
       {
-        "fixture": "companion_archive.zip",
-        "rule": "ENV-PDF",
-        "refused_by": "client",
-        "precheck_problem": "not_pdf",
-        "expects_rendered": [
-          "не является PDF",
-          "Ничего не отправлено"
-        ]
-      },
-      {
-        "fixture": "oversize.pdf",
+        "fixture": "oversize_bundle.zip",
+        "generated": true,
         "rule": "ENV-SIZE",
         "refused_by": "client",
         "precheck_problem": "too_large",
@@ -1119,12 +1145,13 @@
           "Этот файл больше, чем",
           "Ничего не отправлено"
         ],
-        "$why_the_size_case_is_client_side": "`D-44`. It is client-side only while the pre-check limit stays strictly below nginx's `client_max_body_size`; tests/e2e/test_upload_limit_headroom.py is what keeps that true.",
-        "$why_not_the_limit": "D-61, W41-BLIND 2026-09-23. This case declared \"25 MiB\" as well, and the upload panel prints `Не более 25 MiB.` before any file is chosen -- so that half of the assertion was satisfied by the envelope notice on an untouched screen. `Ничего не отправлено` is rendered only by the pre-check refusal panel and is the half that is evidence.",
-        "$why_the_rule_specific_half_is_back": "W44-JOURNEY 2026-09-24. W41-BLIND removed \"25 MiB\" from this case because the upload panel prints `Не более 25 MiB.` before any file is chosen, so that half could not fail -- and left the case with only `Ничего не отправлено`, which says a refusal happened and not WHICH rule was broken. This is the rule-specific half in the form D-61 asks for: `Этот файл больше, чем` is authored in entities/document-version/model/upload-envelope.ts and rendered by the too_large pre-check and by nothing else. The size itself is interpolated, so the sentence stops where the template does -- declaring the number back would be declaring a value the source does not author."
+        "$why_the_size_case_is_client_side": "`D-44`. It is client-side only while the pre-check limit stays strictly below nginx's `client_max_body_size`; tests/e2e/test_upload_limit_headroom.py is what keeps that true. The file is a sparse 251 MiB stand-in with a ZIP's first bytes, generated into a temporary directory when the drive starts; the pre-check reads its size and its name, so not one byte of it is read or sent.",
+        "$why_not_the_limit": "D-61, W41-BLIND 2026-09-23. This case declared the limit as well, and the upload panel prints `Не более 250 MiB на архив.` before any file is chosen -- so that half of the assertion was satisfied by the envelope notice on an untouched screen. `Ничего не отправлено` is rendered only by the pre-check refusal panel and is the half that is evidence.",
+        "$why_the_rule_specific_half_is_back": "W44-JOURNEY 2026-09-24. `Этот файл больше, чем` is authored in entities/document-version/model/upload-envelope.ts and rendered by the too_large pre-check and by nothing else. The size itself is interpolated, so the sentence stops where the template does -- declaring the number back would be declaring a value the source does not author."
       },
       {
-        "fixture": "encrypted.pdf",
+        "fixture": "encrypted.zip",
+        "fixture_dir": "fixtures/synthetic/ar/bundles",
         "rule": "ENV-ENCRYPTED",
         "refused_by": "server",
         "expect_status": 422,
@@ -1132,14 +1159,16 @@
         "constraint": "not_encrypted",
         "failure_kind": "unsupported_input",
         "expects_rendered": [
-          "выходит за допустимые ограничения"
+          "выходит за допустимые ограничения",
+          "PDF зашифрован"
         ],
         "expects_rendered_from_envelope": [
           "not_encrypted"
         ]
       },
       {
-        "fixture": "image_only.pdf",
+        "fixture": "image_only.zip",
+        "fixture_dir": "fixtures/synthetic/ar/bundles",
         "rule": "ENV-TEXT",
         "refused_by": "server",
         "expect_status": 422,
@@ -1147,26 +1176,30 @@
         "constraint": "every_page_has_extractable_text",
         "failure_kind": "unsupported_input",
         "expects_rendered": [
-          "выходит за допустимые ограничения"
+          "выходит за допустимые ограничения",
+          "не несёт ни извлекаемого встроенного текста, ни блока портала"
         ],
         "expects_rendered_from_envelope": [
           "every_page_has_extractable_text"
         ]
       },
       {
-        "fixture": "too_many_pages.pdf",
+        "fixture": "bundle_501_pages.zip",
+        "generated": true,
         "rule": "ENV-PAGES",
         "refused_by": "server",
         "expect_status": 422,
         "error_code": "validation_failed",
-        "constraint": "1 <= page_count <= 30",
+        "constraint": "1 <= page_count <= 500",
         "failure_kind": "unsupported_input",
         "expects_rendered": [
-          "выходит за допустимые ограничения"
+          "выходит за допустимые ограничения",
+          "Число страниц PDF вне допустимых границ"
         ],
         "expects_rendered_from_envelope": [
           "page_count"
-        ]
+        ],
+        "$why_it_is_generated": "501 pages is the smallest document past the limit; it exists to sit one past it and is built into a temporary directory when the drive starts (tools/fixtures/build_journey_inputs.py)."
       }
     ]
   }

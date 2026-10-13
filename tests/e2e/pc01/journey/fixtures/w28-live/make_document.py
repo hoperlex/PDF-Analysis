@@ -18,7 +18,10 @@ it. This is a driver fixture for one measurement, under `tests/e2e/**`.
 
     python3 tests/e2e/pc01/journey/fixtures/w28-live/make_document.py
 
-Writes `w28_own_document.pdf` beside this file and prints its size and sha256.
+Writes `w28_own_document.pdf` beside this file and prints its size and sha256. Since
+`W55B-INGEST-01` an upload takes a portal bundle and refuses a bare PDF, so it also writes
+`w28_own_document.zip`: the same document with the block list and recognised text the portal
+exports, packed by the fixtures' deterministic writer (`tools/fixtures/portal_bundle`).
 """
 
 from __future__ import annotations
@@ -35,6 +38,7 @@ from ar_corpus import content, document, pdfwrite  # noqa: E402
 
 sys.path.insert(0, str(REPO / "tools"))
 from fixtures.build_ar_corpus import load_font  # noqa: E402
+from portal_bundle.bundle import build_bundle, make_files  # noqa: E402
 
 H1 = 13.0
 H2 = 11.5
@@ -157,11 +161,20 @@ def build() -> bytes:
     return document.simple_text_pdf(font, placements)
 
 
+def bundle(pdf: bytes) -> bytes:
+    """The portal bundle around `pdf`: a block list and recognised text per text page."""
+    return build_bundle(make_files(pdf, "w28_own_document")).data
+
+
 def main() -> int:
     pdf = build()
     target = HERE / "w28_own_document.pdf"
     target.write_bytes(pdf)
     print(f"{target}  {len(pdf)} bytes  sha256 {hashlib.sha256(pdf).hexdigest()}")
+    archive = bundle(pdf)
+    target = HERE / "w28_own_document.zip"
+    target.write_bytes(archive)
+    print(f"{target}  {len(archive)} bytes  sha256 {hashlib.sha256(archive).hexdigest()}")
     return 0
 
 

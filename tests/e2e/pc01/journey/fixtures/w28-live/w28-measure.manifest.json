@@ -1,7 +1,7 @@
 {
   "$comment": [
     "W28-LIVE's measuring manifest. It is a copy of the journey's own write half with",
-    "one document swapped: `tests/e2e/pc01/journey/fixtures/w28-live/w28_own_document.pdf`,",
+    "one document swapped: `tests/e2e/pc01/journey/fixtures/w28-live/w28_own_document.zip`,",
     "a synthetic AR document that is NOT `ar_baseline.pdf` and therefore has no recording",
     "under `fixtures/recorded/text_analysis/`. That is the whole point: the question was",
     "what a person gets when they upload THEIR OWN PDF.",
@@ -23,7 +23,7 @@
     "$comment": [
       "See the top-level $comment. Steps are the journey's own; the fixture is not."
     ],
-    "fixture": "tests/e2e/pc01/journey/fixtures/w28-live/w28_own_document.pdf",
+    "fixture": "tests/e2e/pc01/journey/fixtures/w28-live/w28_own_document.zip",
     "steps": [
       {
         "name": "create-project",
@@ -112,8 +112,8 @@
             "content_type_starts_with": "multipart/form-data",
             "body_contains": [
               "name=\"file\"",
-              "w28_own_document.pdf",
-              "application/pdf"
+              "w28_own_document.zip",
+              "application/zip"
             ]
           }
         ],

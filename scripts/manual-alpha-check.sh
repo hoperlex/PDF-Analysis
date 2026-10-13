@@ -24,12 +24,12 @@ usage() {
 
 Параметры:
   --origin URL        Проверяемый origin без пути. Обязателен, кроме --files-only.
-  --preflight-only    Проверить PDF, TLS/redirect/login и закрытый API (по умолчанию).
-  --automated         Выполнить sign-in, 3 записи, cold routes и 6 PDF-отказов из manifest.
+  --preflight-only    Проверить файлы, TLS/redirect/login и закрытый API (по умолчанию).
+  --automated         Выполнить sign-in, 3 записи, cold routes и 6 отказов загрузки из manifest.
   --candidate-sha SHA Полный SHA проверяемого чистого checkout.
   --deployed-sha SHA  Полный SHA, засвидетельствованный оператором из deployment evidence.
   --interactive       После preflight записать ручные A01-A20 как PASS/FAIL/BLOCKED.
-  --files-only        Проверить только локальные PDF; сеть не используется.
+  --files-only        Проверить только локальные файлы загрузки; сеть не используется.
   --evidence-dir DIR  Каталог отчёта (по умолчанию .local/manual-alpha/<UTC timestamp>-<pid>).
   -h, --help          Показать эту справку.
 
@@ -96,13 +96,12 @@ while (($# > 0)); do
   esac
 done
 
-for command_name in sha256sum stat git; do
+for command_name in sha256sum stat git python3; do
   command -v "$command_name" >/dev/null 2>&1 || die "не найдена команда $command_name"
 done
 
 if [[ "$MODE" != "files" ]]; then
   command -v curl >/dev/null 2>&1 || die "не найдена команда curl"
-  command -v python3 >/dev/null 2>&1 || die "не найдена команда python3"
   [[ -n "$ORIGIN" ]] || blocked "укажите --origin"
   ORIGIN="${ORIGIN%/}"
   case "$ORIGIN" in
@@ -243,6 +242,7 @@ check_fixture() {
   local relative_path="$2"
   local expected_sha="$3"
   local expected_size="$4"
+  local expected_magic="${5:-}"
   local file_path="$REPO_ROOT/$relative_path"
 
   if [[ ! -f "$file_path" ]]; then
@@ -253,31 +253,46 @@ check_fixture() {
   local actual_sha actual_size magic
   actual_sha="$(sha256sum -- "$file_path" | awk '{print $1}')"
   actual_size="$(stat -c '%s' -- "$file_path")"
-  magic="$(LC_ALL=C head -c 5 -- "$file_path")"
-  if [[ "$actual_sha" == "$expected_sha" && "$actual_size" == "$expected_size" && "$magic" == '%PDF-' ]]; then
+  magic=""
+  if [[ -n "$expected_magic" ]]; then
+    magic="$(LC_ALL=C head -c "${#expected_magic}" -- "$file_path")"
+  fi
+  if [[ "$actual_sha" == "$expected_sha" && "$actual_size" == "$expected_size" && "$magic" == "$expected_magic" ]]; then
     record_auto "$check_id" "PASS" "$relative_path; $actual_size B; sha256=${actual_sha:0:12}…"
   else
     record_auto "$check_id" "FAIL" "$relative_path; size=$actual_size/$expected_size; sha256=$actual_sha/$expected_sha; magic=$magic"
   fi
 }
 
-check_fixture "PDF-positive" "fixtures/synthetic/ar/ar_baseline.pdf" \
-  "6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f" "58978"
-check_fixture "PDF-encrypted" "fixtures/synthetic/ar/negative/encrypted.pdf" \
-  "9513362c5d85dec1438406ffd4e77fef6d08bb18f104a5b107afc610dde8faba" "40514"
-check_fixture "PDF-image-only" "fixtures/synthetic/ar/negative/image_only.pdf" \
-  "8917d48af68cffac071fdf75040d181a548d27d952baa05defbca48a2ca94325" "246242"
-# `W55B-INGEST-01` deleted `negative/too_many_pages.pdf` and `negative/oversize.pdf`: the limits are
-# 500 pages and 250 MiB, and a file that size is generated when a test runs, not committed. The two
-# runbook checks that pinned them went with them; the next lane (the browser upload) puts back
-# whatever the runbook needs for the generated cases.
+# `W55B-INGEST-01`: the upload takes a portal bundle (a ZIP) and refuses a bare PDF. The journey's
+# six refusals attach these files: two bundles the SERVER refuses, a bare PDF and a text file the
+# BROWSER refuses, and two inputs that are generated, never committed (a sparse file past 250 MiB
+# and a 501-page bundle). The positive upload is the committed baseline bundle.
+check_fixture "BUNDLE-positive" "fixtures/synthetic/ar/bundles/ar_baseline.zip" \
+  "14df5af5ef45cbb6a4846cba45cb6cab12c1dda9869137d5da2557c42d12db92" "92161" "PK"
+check_fixture "BUNDLE-encrypted" "fixtures/synthetic/ar/bundles/encrypted.zip" \
+  "a55a46b111ee7b78de1c7e8751bce02d6696aa2c29400097e16bcafb53567947" "43352" "PK"
+check_fixture "BUNDLE-image-only" "fixtures/synthetic/ar/bundles/image_only.zip" \
+  "bc0c611469d7b168bebf63139896a7d2acd80f8bd92cd8526abfa71540557b4a" "247400" "PK"
+check_fixture "PDF-bare" "fixtures/synthetic/ar/ar_baseline.pdf" \
+  "6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f" "58978" "%PDF-"
+check_fixture "TEXT-not-a-pdf" "fixtures/synthetic/ar/negative/not_a_pdf.txt" \
+  "ef968094226cd1559df9e2169eac549a8160ded5787fac492900fa899da5187d" "489"
+
+# The two generated inputs: built into a temporary directory and judged (a ZIP's first bytes, past the
+# size limit, sparse, 501 pages), then deleted. The same tool fills them for the refusal drive.
+if journey_inputs="$(python3 -I "$REPO_ROOT/tools/fixtures/build_journey_inputs.py" --check 2>&1)"; then
+  record_auto "BUNDLE-generated" "PASS" "tools/fixtures/build_journey_inputs.py --check: ${journey_inputs}"
+else
+  record_auto "BUNDLE-generated" "FAIL" "tools/fixtures/build_journey_inputs.py --check: ${journey_inputs//$'\n'/ }"
+fi
 
 if [[ "$MODE" == "files" ]]; then
   if ((AUTO_FAILURES > 0)); then
     printf '\nFILES FAIL: %d проверок не прошло; отчёт: %s\n' "$AUTO_FAILURES" "$REPORT" >&2
     exit 1
   fi
-  printf '\nFILES OK: три синтетических PDF совпадают с manifest; отчёт: %s\n' "$REPORT"
+  printf '\nFILES OK: файлы загрузки совпадают с manifest, сгенерированные входы строятся; отчёт: %s\n' "$REPORT"
   exit 0
 fi
 
@@ -363,7 +378,7 @@ if ((AUTO_BLOCKED > 0)); then
   exit 2
 fi
 
-printf '\nPREFLIGHT OK: origin доступен, API закрыт, три PDF целы; отчёт: %s\n' "$REPORT"
+printf '\nPREFLIGHT OK: origin доступен, API закрыт, файлы загрузки целы; отчёт: %s\n' "$REPORT"
 
 if [[ "$MODE" == "preflight" ]]; then
   exit 0
@@ -498,8 +513,8 @@ record_manual "A01" "deploy SHA и вход" \
   "Workflow/verify-deployed подтверждает deployed SHA, равный проверенному candidate SHA; вход приводит на /."
 record_manual "A02" "проект" \
   "Создан один проект с уникальным именем; project_uid переживает cold reload."
-record_manual "A03" "положительный PDF" \
-  "ar_baseline.pdf создаёт версию; version_uid доступен после reload; upload failure отсутствует."
+record_manual "A03" "положительный комплект" \
+  "bundles/ar_baseline.zip создаёт версию; version_uid доступен после reload; upload failure отсутствует."
 record_manual "A04" "прогон" \
   "POST /runs -> 202 queued; <=150 s итог published/partial; четыре стадии; provider_mode=live."
 record_manual "A05" "находки и evidence" \
@@ -512,8 +527,8 @@ record_manual "A08" "сравнение" \
   "Второй прогон той же версии сравнивается с первым; four-way verdict не смешивает absence и same."
 record_manual "A09" "все экраны и 780px" \
   "Все маршруты из списка A09 в runbook открываются после cold reload; нет console error и горизонтального overflow."
-record_manual "A10" "отрицательные PDF" \
-  "Четыре PDF отклонены точными правилами; oversize не отправлен; новых документов/версий нет."
+record_manual "A10" "отрицательные входы" \
+  "Шесть входов отклонены точными правилами: отдельный PDF, текстовый файл и файл больше 250 MiB не отправлены; encrypted.zip, image_only.zip и комплект на 501 страницу отклонены сервером с названным правилом; новых документов/версий нет."
 record_manual "A11" "dashboard и сохранность" \
   "Четыре панели без fault; тестовые данные достижимы из списка после cold reload."
 record_manual "A12" "выход" \
