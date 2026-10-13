@@ -214,6 +214,8 @@ describe('every cache key starts in its own namespace', () => {
     expect(queryKeys.projects.detail(PROJECT_UID)[0]).toBe('projects');
     expect(queryKeys.versions.detail(VERSION_UID)[0]).toBe('versions');
     expect(queryKeys.versions.content(VERSION_UID)[0]).toBe('versions');
+    expect(queryKeys.versions.blocks(VERSION_UID)[0]).toBe('versions');
+    expect(queryKeys.versions.portalBlocks(VERSION_UID, 100)[0]).toBe('versions');
     expect(queryKeys.runs.detail(RUN_ID)[0]).toBe('runs');
     expect(queryKeys.runs.findings(RUN_ID)[0]).toBe('runs');
     expect(queryKeys.findings.detail(FINDING_UID)[0]).toBe('findings');

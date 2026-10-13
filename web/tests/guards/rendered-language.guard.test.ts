@@ -117,6 +117,12 @@ import { NormsPage } from '@/_pages/norms';
 import { NormSearchResults } from '@/widgets/norm-search';
 import { NormParagraphList, NormPdf } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
+import { VersionBlockViews } from '@/_pages/blocks';
+import { portalBlocksQueryOptions } from '@/entities/block';
+import { CropFigureView, PortalBlockListView } from '@/widgets/portal-blocks';
+import {
+  BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, TEST_CROP_SRC, blocksVersion, everyKindOfBlock, notProducedPage, portalPage,
+} from '../unit/blocks/fixtures';
 import {
   NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_QUERY, NORM_SNAPSHOTS, normDocument,
 } from '../unit/norms/fixtures';
@@ -299,6 +305,9 @@ const MACHINE_SHAPES: readonly { readonly name: string; readonly pattern: RegExp
     pattern: /\b[0-9A-HJKMNP-TV-Z]{26}\b|\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g,
   },
   { name: 'hex digests', pattern: /\b[0-9a-f]{32,128}\b/g },
+  // `W55B-WEB-BLOCKS`. The text-line index's block id, which «Строки текста» prints as the
+  // block's identifier: `openapi.json` pins `BlockGeometry.block_id` to `^b_[0-9]{6}$`.
+  { name: 'text-line block ids', pattern: /\bb_[0-9]{6}\b/g },
   // RFC 6838. `application/pdf` is the only one this application names, but the shape is
   // the authority, not the value.
   { name: 'media types', pattern: /\b[a-z]+\/[a-z0-9.+-]+\b/g },
@@ -1228,6 +1237,110 @@ function queueLanguageShape(request: RegistrationRequest): Pick<ScreenCase, 'mak
   };
 }
 
+/*
+ * `W55B-WEB-BLOCKS`: «Блоки» once a version is chosen. The page reaches its two tabs only
+ * after three clicks (a project, a document, a tab), which one static pass cannot make, so
+ * the tabs are rendered here through `VersionBlockViews` -- the component the page itself
+ * renders -- over a cache seeded with every answer each tab distinguishes, one version per
+ * answer. The loaded portal list is rendered through `PortalBlockListView`, the view the
+ * widget renders, because a crop's address is read from configuration this harness does
+ * not set; `TEST_CROP_SRC` spells the same address. Every `PortalBlockType` and
+ * `PortalGeometryState` member, every flag the backend emits and one it does not, and a
+ * portal status the screen does not know are on screen in the second shape.
+ */
+const BLOCK_ANSWERS = [
+  { tab: 'portal', uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', bundle: true, portal: 'not_produced' },
+  { tab: 'portal', uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', bundle: false, portal: 'not_produced' },
+  { tab: 'portal', uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8E', bundle: true, portal: 'empty' },
+  { tab: 'portal', uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', bundle: true, portal: 'refused' },
+  { tab: 'portal', uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8G', bundle: true, portal: 'pending' },
+  { tab: 'lines', uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8H', bundle: true, lines: 'not_produced' },
+  { tab: 'lines', uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8J', bundle: true, lines: 'empty' },
+  { tab: 'lines', uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8K', bundle: true, lines: 'refused' },
+  { tab: 'lines', uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8M', bundle: true, lines: 'pending' },
+  { tab: 'lines', uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8N', bundle: true, lines: 'loaded' },
+] as const;
+
+function seedBlockAnswers(client: ReturnType<typeof newClient>): void {
+  for (const answer of BLOCK_ANSWERS) {
+    if ('portal' in answer) {
+      const key = portalBlocksQueryOptions(answer.uid).queryKey;
+      if (answer.portal === 'not_produced') client.setQueryData(key, { pages: [notProducedPage()], pageParams: [undefined] });
+      if (answer.portal === 'empty') client.setQueryData(key, { pages: [portalPage([])], pageParams: [undefined] });
+      if (answer.portal === 'refused') seedError(client, key, apiError(503, 'dependency_unavailable'));
+    } else {
+      const key = queryKeys.versions.blocks(answer.uid);
+      const absent = { version_uid: answer.uid, block_count: 0, blocks: [], produced_by_run_id: null, text_layer_sha256: null };
+      if (answer.lines === 'not_produced') client.setQueryData(key, { ...absent, status: 'not_produced' });
+      if (answer.lines === 'empty') {
+        client.setQueryData(key, { ...absent, status: 'produced', produced_by_run_id: RUN_ID, text_layer_sha256: SHA });
+      }
+      if (answer.lines === 'refused') seedError(client, key, apiError(503, 'dependency_unavailable'));
+      if (answer.lines === 'loaded') {
+        client.setQueryData(key, {
+          ...absent, status: 'produced', produced_by_run_id: RUN_ID, text_layer_sha256: SHA, block_count: 1,
+          blocks: [{
+            block_id: 'b_000001', page_number: 1, block_ordinal: 0, char_start: 0, char_end: 12,
+            bbox: { x0: 10, y0: 20, x1: 200, y1: 32 }, bbox_unit: 'pt', bbox_origin: 'top_left',
+          }],
+        });
+      }
+    }
+  }
+}
+
+const BLOCKS_SHAPES: readonly ScreenCase[] = [
+  {
+    name: 'blocks-tabs-every-answer',
+    make: () =>
+      createElement(
+        'div',
+        null,
+        ...BLOCK_ANSWERS.map((answer) =>
+          createElement(VersionBlockViews, {
+            key: answer.uid,
+            version: blocksVersion(answer.bundle, { version_uid: answer.uid }),
+            tab: answer.tab,
+            onTab: () => {},
+          }),
+        ),
+      ),
+    seedClient: seedBlockAnswers,
+  },
+  {
+    name: 'blocks-portal-loaded',
+    make: () =>
+      createElement(
+        'div',
+        null,
+        createElement(PortalBlockListView, {
+          projectUid: BLOCKS_PROJECT_UID, blockCount: 129, producedByRunId: BLOCKS_RUN_ID,
+          blocks: everyKindOfBlock(), cropSrc: TEST_CROP_SRC, hasMore: true, loadingMore: false,
+          moreFailure: null, onMore: () => {},
+        }),
+        createElement(PortalBlockListView, {
+          projectUid: BLOCKS_PROJECT_UID, blockCount: 129, producedByRunId: null,
+          blocks: everyKindOfBlock().slice(0, 1), cropSrc: TEST_CROP_SRC, hasMore: true, loadingMore: true,
+          moreFailure: null, onMore: () => {},
+        }),
+        createElement(PortalBlockListView, {
+          projectUid: BLOCKS_PROJECT_UID, blockCount: 129, producedByRunId: BLOCKS_RUN_ID,
+          blocks: everyKindOfBlock().slice(0, 1), cropSrc: TEST_CROP_SRC, hasMore: true, loadingMore: false,
+          moreFailure: {
+            kind: 'dependency_unavailable', title: 'Зависимость, нужная чтобы прочитать следующие блоки портала, недоступна.',
+            detail: 'Повторите позже.', correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: true,
+            errorCode: 'dependency_unavailable',
+          },
+          onMore: () => {},
+        }),
+        createElement(CropFigureView, {
+          src: TEST_CROP_SRC(everyKindOfBlock()[1] as never), widthPx: 1177, heightPx: 593,
+          alt: 'Изображение: фрагмент страницы 1 PDF', failed: true, onError: () => {},
+        }),
+      ),
+  },
+];
+
 const EXTRA_SHAPES: readonly ScreenCase[] = [
   {
     name: 'update-banner',
@@ -1599,6 +1712,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         ],
       }),
   },
+  ...BLOCKS_SHAPES,
 ];
 
 const SCREENS: readonly ScreenCase[] = [
@@ -1822,6 +1936,10 @@ const TRANSLATED_SCHEMAS = [
   'StageId',
   'ProviderMode',
   'CostBasis',
+  // `W55B-WEB-BLOCKS`: the portal block's type and its page's geometry verdict, both rendered
+  // by «Блоки» in Russian (`entities/block`'s vocabulary) with the value in a `data-` attribute.
+  'PortalBlockType',
+  'PortalGeometryState',
 ] as const;
 
 function translatedVocabulary(): ReadonlySet<string> {
@@ -1926,6 +2044,9 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     expect(unexplainedLatin('окончаниями _blocks.json и _results.md', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('файл с окончанием _results.html', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('0f0e9d8c-7b6a-4948-b726-150413021100', VOCABULARY)).toEqual([]);
+    // `W55B-WEB-BLOCKS`: the text-line block id in the contract's own shape, and only in it.
+    expect(unexplainedLatin('b_000003', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('блок b_12', VOCABULARY)).toEqual(['b']);
   });
 
   it('reads every upload rule and every upload refusal as Russian prose (W55B-INGEST-01)', () => {
@@ -1984,12 +2105,15 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     // `D-62`: the stage table's whole first column. `analysis` alone is already an offence
     // below, so this also shows the compound is not teaching the guard a bare word.
     //
-    // `W55B-SEAL-01`: `PortalBlockType` publishes a bare `text`, so the compound no longer
-    // reddens that half; `analysis` still does. The bare `text` becomes an offence again, and
-    // the new schemas get their markers, in `W55B-WEB-BLOCKS`, which is the lane that renders
-    // them: adding `PortalBlockType` and `PortalGeometryState` to `TRANSLATED_SCHEMAS` here
-    // would demand a marker for a screen that does not exist yet.
-    expect(unexplainedLatin('text_analysis', VOCABULARY)).toEqual(['analysis']);
+    // `W55B-SEAL-01` published a bare `text` (`PortalBlockType`) and this read `['analysis']`
+    // until `W55B-WEB-BLOCKS` registered the two portal schemas above with their markers: the
+    // bare `text` is translated again, so both halves of the compound redden as they did.
+    expect(unexplainedLatin('text_analysis', VOCABULARY)).toEqual(['text', 'analysis']);
+    // And the other portal values the screen translates are offences as bare words too.
+    for (const value of ['text', 'image', 'stamp', 'ok']) {
+      expect(unexplainedLatin(value, VOCABULARY)).toEqual([value]);
+    }
+    expect(unexplainedLatin('geometry_mismatch', VOCABULARY)).toEqual(['geometry', 'mismatch']);
     expect(unexplainedLatin('source_preparation', VOCABULARY)).toEqual(['source', 'preparation']);
     // And the machine value keeps its home: `visibleText` reads text nodes and four
     // attributes and never `data-*`, so a badge carrying its contract value is untouched.
@@ -2163,6 +2287,16 @@ const SCHEMA_MARKERS: readonly {
     schema: 'CostBasis',
     attribute: 'data-cost-basis',
     why: "the run screen's cost block, which prints the basis beside the amount.",
+  },
+  {
+    schema: 'PortalBlockType',
+    attribute: 'data-portal-block-type',
+    why: '`widgets/portal-blocks/ui/portal-block-card.tsx`, one per block, its type said as Текст / Изображение / Штамп.',
+  },
+  {
+    schema: 'PortalGeometryState',
+    attribute: 'data-portal-geometry',
+    why: "`widgets/portal-blocks/ui/portal-block-card.tsx`, one per block; a mismatch page's sentence is said beside it.",
   },
 ];
 
@@ -2589,6 +2723,12 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
   // project list itself) needs no click and IS reached by this matrix, which is why it
   // carries no entry here. The words below are judged by `no branch label carries
   // English, reachable or not` rather than by this matrix, same as every entry above.
+  //
+  // `W55B-WEB-BLOCKS` deleted the four `BlockMarkup` entries that stood after these three,
+  // because this guard said a state now renders them: the chosen version's two tabs are
+  // exported as `VersionBlockViews`, and `BLOCKS_SHAPES` renders the «Строки текста» tab over
+  // every answer `getVersionBlocks` distinguishes. The document chooser below still needs a
+  // click on a project row before it exists, so its three stay.
   {
     label: 'Список документов не удалось прочитать.',
     why:
@@ -2610,40 +2750,6 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
       "`DocumentChooser`'s empty answer, reached only once a project is chosen and that " +
       'project turns out to have published nothing. Same mechanism: the component that ' +
       'would render it is never mounted by a single static pass.',
-  },
-  {
-    label: 'Разметку блоков не удалось прочитать.',
-    why:
-      "`BlockMarkup`, mounted only after a version is chosen by clicking a document row " +
-      'in `DocumentChooser` — a second `useState` set by a second click this harness ' +
-      'cannot fire. `useVersionBlocks` is never called until then, so there is no query ' +
-      'this pass could seed an error into.',
-  },
-  {
-    label: 'Загрузка: разметку блоков…',
-    why:
-      "`BlockMarkup`'s pending read. Same mechanism as the entry above it: the component " +
-      'and its query both come into existence only after the second click.',
-  },
-  {
-    label: 'Разметка блоков для этой версии ещё не построена.',
-    why:
-      "`BlockMarkup`'s `NotApplicableState` branch, for `status: \"not_produced\"` -- " +
-      'absent, not empty, which is the whole point of `getVersionBlocks` carrying the ' +
-      'field at all. Reached only past both clicks and only for a version whose most ' +
-      'recent successful run never reached `page_geometry_extraction`; the integration ' +
-      'suite (`tests/integration/composition/test_version_blocks_wire_shape.py`) is the ' +
-      'instrument that actually drives this branch, over a real HTTP response.',
-  },
-  {
-    label: 'Блоков не обнаружено.',
-    why:
-      "`BlockMarkup`'s `EmptyState` branch, for `status: \"produced\"` with zero blocks -- " +
-      'the OTHER answer that shares `blocks: []` with the branch above it and must read ' +
-      'differently on screen, which is the property this pair exists to prove. Reached ' +
-      'only past both clicks; the corpus fixture this product ships never exercises a ' +
-      'zero-block produced version, so even a browser drive does not reach this one today ' +
-      '-- reported in docs/program/W45-BLOCKS.md rather than manufactured here.',
   },
 ];
 

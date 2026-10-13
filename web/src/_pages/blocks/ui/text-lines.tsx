@@ -19,6 +19,22 @@ import { EmptyState, ErrorState, LoadingState, NotApplicableState } from '@/shar
 
 import { useVersionBlocks } from '../api/use-version-blocks';
 
+/*
+ * `R-18`, applied when `W55B-WEB-BLOCKS` first rendered this view in the language guard:
+ * the coordinates printed the contract's own words — `x0`/`y0`/`x1`/`y1`, `pt`, `top_left` —
+ * as visible text since `W45-BLOCKS`, and no instrument had reached a loaded index to see
+ * them. The values are unchanged and the machine words keep their home in `data-` attributes;
+ * the two single-member vocabularies are `Record`s, so a reseal that adds a unit or an origin
+ * stops this file type-checking until it is worded.
+ */
+const BBOX_UNIT_LABELS: Readonly<Record<BlockGeometry['bbox_unit'], string>> = {
+  pt: 'в пунктах',
+};
+
+const BBOX_ORIGIN_LABELS: Readonly<Record<BlockGeometry['bbox_origin'], string>> = {
+  top_left: 'от левого верхнего угла страницы',
+};
+
 export function TextLines({ versionUid }: { readonly versionUid: VersionUid }) {
   return (
     <>
@@ -94,9 +110,10 @@ function BlockMarkup({ versionUid }: BlockMarkupProps) {
                     <p>
                       <code>{block.block_id}</code>
                     </p>
-                    <p>
-                      x0 {block.bbox.x0} · y0 {block.bbox.y0} · x1 {block.bbox.x1} · y1{' '}
-                      {block.bbox.y1} {block.bbox_unit} · начало координат {block.bbox_origin}
+                    <p data-bbox-unit={block.bbox_unit} data-bbox-origin={block.bbox_origin}>
+                      левый край {block.bbox.x0} · верхний край {block.bbox.y0} · правый край{' '}
+                      {block.bbox.x1} · нижний край {block.bbox.y1}, {BBOX_UNIT_LABELS[block.bbox_unit]}{' '}
+                      {BBOX_ORIGIN_LABELS[block.bbox_origin]}
                     </p>
                     <p>
                       символы {block.char_start}–{block.char_end}

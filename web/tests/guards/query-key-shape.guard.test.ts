@@ -75,6 +75,30 @@ describe('norms query keys stay in one invalidation namespace (W55A-WEB-NORMS)',
   });
 });
 
+describe('portal block pages stay beside the text-line index under versions (W55B-WEB-BLOCKS)', () => {
+  it('files the portal blocks under the root a version invalidation reaches', () => {
+    const key = queryKeys.versions.portalBlocks('ver_A', 100);
+    expect(key.slice(0, 1)).toEqual(queryKeys.versions.all());
+    expect(key).toEqual(['versions', 'portal-blocks', 'ver_A', { limit: 100 }]);
+  });
+
+  it('never meets the text-line index, another version, or another page size', () => {
+    const keys = [
+      queryKeys.versions.portalBlocks('ver_A', 100),
+      queryKeys.versions.portalBlocks('ver_B', 100),
+      queryKeys.versions.portalBlocks('ver_A', 50),
+      queryKeys.versions.blocks('ver_A'),
+      queryKeys.versions.content('ver_A'),
+    ].map((key) => JSON.stringify(key));
+    expect(new Set(keys).size).toBe(keys.length);
+    // A prefix of the text-line key is not a prefix of the portal key, so invalidating one
+    // never refetches the other.
+    expect(JSON.stringify(queryKeys.versions.portalBlocks('ver_A', 100)).startsWith(
+      JSON.stringify(queryKeys.versions.blocks('ver_A')).slice(0, -1),
+    )).toBe(false);
+  });
+});
+
 const TSC_BIN = join(WEB_ROOT, 'node_modules', '.bin', 'tsc');
 const FIXTURE_PROJECT = 'tests/guards/fixtures/query-keys/tsconfig.json';
 

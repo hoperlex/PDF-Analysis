@@ -438,7 +438,18 @@
         "through every wave since, so this red predates this wave and was found only by",
         "driving the journey live rather than reading this row (`docs/program/reviews/",
         "W46-JUDGE-A.md` F-4). Declared now: the one call every cold load of this screen",
-        "makes, regardless of what a reviewer chooses next."
+        "makes, regardless of what a reviewer chooses next.",
+        "",
+        "`W55B-WEB-BLOCKS`: once a version is chosen the screen has two tabs, «Блоки портала»",
+        "(`listVersionPortalBlocks`, and one `streamVersionPortalBlockCrop` per IMAGE block the",
+        "reader scrolls to) and «Строки текста» (`getVersionBlocks`). A cold load chooses",
+        "nothing, so those calls are declared OPTIONAL below with the choice that makes each,",
+        "which also puts every one of them through the contract check. The tab's sentence",
+        "before a bundle's first run is «Блоки портала появятся после первого запуска анализа",
+        "этой версии.». It is written here for a reader and checked by nothing in this file:",
+        "a route entry carries no sentence key and the cold walk never chooses a version. It is",
+        "pinned by `web/tests/unit/blocks/portal-states.test.ts` and rendered by the language",
+        "guard's `BLOCKS_SHAPES`."
       ],
       "expects_api": [
         {
@@ -448,7 +459,11 @@
         }
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents", "operationId": "listDocuments", "$why_optional": "only after the reader chooses a project"},
+        {"method": "GET", "path": "/versions/{version_uid}/portal-blocks", "operationId": "listVersionPortalBlocks", "$why_optional": "only after the reader chooses a version; «Блоки портала» is the tab it opens on"},
+        {"method": "GET", "path": "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop", "operationId": "streamVersionPortalBlockCrop", "$why_optional": "only for an IMAGE block with a crop, loaded lazily by the browser as it is scrolled to"},
+        {"method": "GET", "path": "/versions/{version_uid}/blocks", "operationId": "getVersionBlocks", "$why_optional": "only after the reader opens «Строки текста»"}
       ],
       "follow": null
     },

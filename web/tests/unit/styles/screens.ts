@@ -50,6 +50,9 @@ import { RunList } from '@/widgets/run-list';
 import { RunProgress } from '@/widgets/run-progress';
 import { UploadPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
+import { CropFigureView } from '@/widgets/portal-blocks';
+import { VersionBlockViews } from '@/_pages/blocks';
+import { portalBlocksQueryOptions } from '@/entities/block';
 import type {
   DecisionEvent,
   DecisionRecord,
@@ -93,6 +96,8 @@ import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-
 import {
   NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS, normDocument,
 } from '../norms/fixtures';
+
+import { BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, portalPage } from '../blocks/fixtures';
 
 import type { Screen } from './contrast';
 
@@ -508,6 +513,45 @@ export function screens(): Screen[] {
     ],
     roles: ['admin'], busy: false, onIntake: noop, onNext: null, onPrevious: null,
   })));
+
+  /*
+   * `W55B-WEB-BLOCKS`: «Блоки» once a version is chosen, which the derived `/blocks` screen
+   * cannot reach (a project, a document and a tab are three clicks). Rendered through
+   * `VersionBlockViews`, the component the page renders, over a seeded block list holding
+   * every kind of block -- each type, a mismatch page, a polygon, a crop, flags, a
+   * description, a TEXT block with no recognised text -- so every rule of the tab and the
+   * portal-block modules meets the ink and tint it really sits on, in both palettes. The open
+   * and the closed tab are both in the one render. The crop's address is read from the API
+   * base, set for this render only and restored, the way the instance label is above; the
+   * failed crop is its own view, because only a browser's `error` event selects it.
+   */
+  {
+    const before = process.env.NEXT_PUBLIC_API_BASE_URL;
+    process.env.NEXT_PUBLIC_API_BASE_URL = '/bff/v1';
+    try {
+      for (const tab of ['portal', 'lines'] as const) {
+        const client = newClient();
+        client.setQueryData(portalBlocksQueryOptions(BLOCKS_VERSION_UID).queryKey, {
+          pages: [portalPage(everyKindOfBlock(), { block_count: 129, page: { next_cursor: 'c1' } })],
+          pageParams: [undefined],
+        });
+        client.setQueryData(queryKeys.versions.blocks(BLOCKS_VERSION_UID), {
+          version_uid: BLOCKS_VERSION_UID, status: 'not_produced', produced_by_run_id: null,
+          text_layer_sha256: null, block_count: 0, blocks: [],
+        });
+        add(
+          `VersionBlockViews, «${tab === 'portal' ? 'Блоки портала' : 'Строки текста'}» open`,
+          renderScreen(client, createElement(VersionBlockViews, { version: blocksVersion(true), tab, onTab: noop })),
+        );
+      }
+    } finally {
+      if (before === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL;
+      else process.env.NEXT_PUBLIC_API_BASE_URL = before;
+    }
+    add('CropFigureView, the image failed to load', withRouter(createElement(CropFigureView, {
+      src: '/bff/v1/x', widthPx: 1177, heightPx: 593, alt: 'фрагмент', failed: true, onError: noop,
+    })));
+  }
 
   // `W55A-WEB-NORMS`: the norms widgets with rows in them — a search hit with its matched
   // spans marked, a document's paragraphs with an unreliable one marked, an administrator's

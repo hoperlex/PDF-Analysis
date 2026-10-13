@@ -286,6 +286,8 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.projects.detail(projectUid)` | `['projects','detail',uid]` | `B7` |
 | `queryKeys.versions.detail(versionUid)` | `['versions','detail',uid]` | `B7` |
 | `queryKeys.versions.content(versionUid)` | `['versions','content',uid]` | `B8` |
+| `queryKeys.versions.blocks(versionUid)` | `['versions','blocks',uid]` | `W45-BLOCKS` |
+| `queryKeys.versions.portalBlocks(versionUid, limit)` | `['versions','portal-blocks',uid,{limit}]` | `W55B-WEB-BLOCKS` |
 | `queryKeys.runs.all()` | `['runs']` | `B7` |
 | `queryKeys.runs.detail(runId)` | `['runs','detail',id]` | `B7` |
 | `queryKeys.runs.findings(runId, filters?)` | `['runs','findings',id,filters]` | `B8` |
@@ -324,6 +326,14 @@ whole deployment, so more of the seam writes to it than to any other key here.
 W53 execution reads share the `execution` prefix: cancel/re-audit invalidate that prefix,
 `runs.all()` and the dashboard; priority/pause invalidate `execution`. A focused
 journal cursor includes its run id in the key so another run cannot reuse that page.
+`versions.blocks` (`W45-BLOCKS`, the text-line index) was in `query-keys.ts` and missing from
+this table until `W55B-WEB-BLOCKS` added the row beside its own. `versions.portalBlocks` holds
+every loaded page of `listVersionPortalBlocks` for one version as ONE infinite query: each
+further page is fetched by the reader's «Показать ещё» with the last page's cursor, and the page
+size is in the key so two readers asking different sizes never share pages. Both are under
+`versions` because a version's geometry is a property of the version, read from its latest
+run whose geometry stage succeeded, not of any one run; their third segments differ, so
+invalidating one never refetches the other.
 `norms` entered in `W55A-WEB-NORMS` (the W55 plan names it): the normative corpus belongs to
 no project, run or finding. `setCurrentNormSnapshot` invalidates the whole `norms` prefix when
 it settles — a designation changes the snapshot list, the history and what search reads, and
