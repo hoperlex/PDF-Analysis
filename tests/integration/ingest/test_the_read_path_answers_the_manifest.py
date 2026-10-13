@@ -26,6 +26,7 @@ from __future__ import annotations
 import secrets
 from typing import Any
 
+from tests.integration.ingest.bundle_support import bundle_around
 import pytest
 
 from auditmanager.shared.errors import DomainError, ErrorCode, screen_message
@@ -42,9 +43,9 @@ def test_a_source_object_carrying_no_recorded_digest_is_not_read_as_the_document
     service, project, baseline_pdf, key, track, raw_s3: Any, s3_settings
 ) -> None:
     content = baseline_pdf + b"\n% " + secrets.token_hex(16).encode("ascii") + b"\n"
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=content,
+        content=bundle_around(content),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("no-recorded-digest"),

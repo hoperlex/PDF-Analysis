@@ -58,6 +58,11 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CORPUS = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar"
 BASELINE_PDF = CORPUS / "ar_baseline.pdf"
 NEGATIVE = CORPUS / "negative"
+#: `W55B-INGEST-01`: an upload is a portal bundle. The journey uploads the committed bundle
+#: around the baseline PDF (its three required members plus the HTML, which is hashed and not
+#: stored, and the stamp audit); the version's own bytes are still the baseline PDF's.
+BUNDLES = CORPUS / "bundles"
+BASELINE_BUNDLE = BUNDLES / "ar_baseline.zip"
 RECORDINGS = REPOSITORY_ROOT / "fixtures" / "recorded" / "text_analysis"
 
 #: Every base table in the P02 head. Counted before and after a replayed journey, because
@@ -271,7 +276,7 @@ def drive_journey(
     run_key: IdempotencyKey,
     provider_mode: str = "recorded",
     content: bytes | None = None,
-    source_filename: str = "ar_baseline.pdf",
+    source_filename: str = "ar_baseline.zip",
     project_uid: str | None = None,
 ) -> JourneyRecord:
     """Steps 1 and 2 of the journey: project, upload, start, execute.
@@ -284,9 +289,9 @@ def drive_journey(
         project = ingest.create_project(name=project_name)
         project_uid = str(project.project_uid)
 
-    outcome = ingest.upload_single_pdf(
+    outcome = ingest.upload_bundle(
         project_uid=_project_uid(project_uid),
-        content=BASELINE_PDF.read_bytes() if content is None else content,
+        content=BASELINE_BUNDLE.read_bytes() if content is None else content,
         source_filename=source_filename,
         display_title="AR baseline",
         idempotency_key=upload_key,

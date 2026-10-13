@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import Any, Iterator
 
+from tests.integration.ingest.bundle_support import bundle_around
 import pytest
 from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
@@ -35,9 +36,9 @@ SOURCE_FILENAME = "annual_report_2026.pdf"
 
 
 def _upload(service: IngestService, project_uid, content: bytes, key) -> Any:
-    return service.upload_single_pdf(
+    return service.upload_bundle(
         project_uid=project_uid,
-        content=content,
+        content=bundle_around(content),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("count"),

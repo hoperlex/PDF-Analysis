@@ -7,6 +7,7 @@ know the record is actually consulted rather than merely written.
 
 from __future__ import annotations
 
+from tests.integration.ingest.bundle_support import bundle_around
 import pytest
 from sqlalchemy import text
 
@@ -28,9 +29,9 @@ def test_same_key_and_payload_replays_the_version_and_creates_nothing(
     service, project, baseline_pdf, key, engine, bucket_keys, track
 ) -> None:
     shared_key = key("repeat")
-    first = service.upload_single_pdf(
+    first = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=shared_key,
@@ -38,9 +39,9 @@ def test_same_key_and_payload_replays_the_version_and_creates_nothing(
     track(first.version.source.blob_id)
     keys_after_first = set(bucket_keys())
 
-    second = service.upload_single_pdf(
+    second = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=shared_key,
@@ -50,9 +51,9 @@ def test_same_key_and_payload_replays_the_version_and_creates_nothing(
     assert first.replayed is False
     assert second.version == first.version
     assert counts(engine, "document_version") == 1
-    assert counts(engine, "input_manifest_entry") == 1
+    assert counts(engine, "input_manifest_entry") == 3      # the PDF, the block list, the markdown
     assert counts(engine, "document") == 1
-    assert counts(engine, "blob") == 1
+    assert counts(engine, "blob") == 3
     assert counts(engine, "command_record") == 1
     assert set(bucket_keys()) == keys_after_first
 
@@ -61,9 +62,9 @@ def test_same_key_with_a_different_payload_is_idempotency_key_reuse(
     service, project, baseline_pdf, key, engine, bucket_keys, track
 ) -> None:
     shared_key = key("conflict")
-    first = service.upload_single_pdf(
+    first = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=shared_key,
@@ -72,9 +73,9 @@ def test_same_key_with_a_different_payload_is_idempotency_key_reuse(
     keys_after_first = set(bucket_keys())
 
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=baseline_pdf + b"\n% different bytes\n",
+            content=bundle_around(baseline_pdf + b"\n% different bytes\n"),
             source_filename=SOURCE_FILENAME,
             display_title=DISPLAY_TITLE,
             idempotency_key=shared_key,
@@ -94,7 +95,7 @@ def test_same_key_with_a_different_payload_is_idempotency_key_reuse(
 
     # Nothing was created by the refused attempt.
     assert counts(engine, "document_version") == 1
-    assert counts(engine, "blob") == 1
+    assert counts(engine, "blob") == 3
     assert counts(engine, "command_record") == 1
     assert set(bucket_keys()) == keys_after_first
 
@@ -104,9 +105,9 @@ def test_the_file_name_is_part_of_the_payload_fingerprint(
 ) -> None:
     """Same bytes, same key, a different declared name is still a different payload."""
     shared_key = key("renamed")
-    first = service.upload_single_pdf(
+    first = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=shared_key,
@@ -114,9 +115,9 @@ def test_the_file_name_is_part_of_the_payload_fingerprint(
     track(first.version.source.blob_id)
 
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=baseline_pdf,
+            content=bundle_around(baseline_pdf),
             source_filename="renamed.pdf",
             display_title=DISPLAY_TITLE,
             idempotency_key=shared_key,
@@ -131,9 +132,9 @@ def test_a_rejected_payload_never_claims_the_key(
     shared_key = key("reusable")
 
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=negative_pdf("encrypted.pdf"),
+            content=bundle_around(negative_pdf("encrypted.pdf")),
             source_filename="encrypted.pdf",
             display_title=DISPLAY_TITLE,
             idempotency_key=shared_key,
@@ -142,9 +143,9 @@ def test_a_rejected_payload_never_claims_the_key(
     assert counts(engine, "command_record") == 0
 
     # The very same key now works, because the refusal claimed nothing.
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=shared_key,
@@ -157,9 +158,9 @@ def test_a_rejected_payload_never_claims_the_key(
 def test_the_command_record_ends_succeeded_with_a_replayable_outcome(
     service, project, baseline_pdf, key, engine, track
 ) -> None:
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("recorded"),

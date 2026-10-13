@@ -1,9 +1,15 @@
 """Every out-of-envelope input is refused by the rule it breaks, and publishes nothing.
 
-Each fixture in ``fixtures/synthetic/ar/negative`` violates exactly one rule, so these
-tests assert the *specific* ``constraint`` rather than merely that something failed. A
-test that only asserted ``validation_failed`` would pass against a probe that rejected
-everything for the wrong reason.
+Each case violates exactly one rule, so these tests assert the *specific* ``constraint``
+rather than merely that something failed. A test that only asserted ``validation_failed``
+would pass against a probe that rejected everything for the wrong reason.
+
+`W55B-INGEST-01`: the upload is a portal bundle, so each case is a bundle whose PDF member
+(or whose archive) is the document the case is about -- the committed bundles
+(``encrypted.zip``, ``image_only.zip``), the committed text file and ZIP of other files, and
+the two stand-ins generated when the test runs (a sparse file past 250 MiB and a 501-page PDF).
+The bare-PDF path these cases used to take is exercised at the envelope itself by
+``test_envelope_differential.py`` and by the legacy tests marked ``W55B-LEGACY-BARE-PDF``.
 
 "Nothing was published" is proved from outside the code under test: the bucket is read
 with a plain boto3 client and the tables are counted with raw SQL.
@@ -16,22 +22,22 @@ from sqlalchemy import text
 
 from auditmanager.ingest import MAX_BYTES, MAX_PAGES, MIN_PAGES
 from auditmanager.shared.errors import DomainError, ErrorCode, screen_message
+from tests.integration.ingest.bundle_support import bundle_around, committed
 
 #: fixture name -> (field, constraint) the probe must attribute the refusal to.
 #:
 #: ``oversize.pdf`` and ``too_many_pages.pdf`` are no longer committed (`W55B-INGEST-01`): the
 #: limits are 250 MiB and 500 pages, and a file that size is generated when the test runs --
-#: a sparse file one byte past the bound, and a 501-page PDF. The case names are kept so the
-#: rule each one breaks reads the same as it always did.
+#: a ZIP-headed sparse file one byte past the bound, and a 501-page PDF in a bundle. The case
+#: names are kept so the rule each one breaks reads the same as it always did.
 NEGATIVE_CASES = [
     ("not_a_pdf.txt", "content", "pdf_magic_bytes"),
-    ("companion_archive.zip", "content", "pdf_magic_bytes"),
+    ("companion_archive.zip", "file", "bundle_member_set"),
     ("oversize.pdf", "content", f"byte_size <= {MAX_BYTES}"),
     ("encrypted.pdf", "content", "not_encrypted"),
     ("too_many_pages.pdf", "page_count", f"{MIN_PAGES} <= page_count <= {MAX_PAGES}"),
     ("image_only.pdf", "page_text", "every_page_has_extractable_text"),
 ]
-GENERATED_CASES = {"oversize.pdf", "too_many_pages.pdf"}
 
 
 def counts(engine) -> dict[str, int]:
@@ -61,16 +67,23 @@ def test_negative_fixture_is_refused_by_its_own_rule_and_publishes_nothing(
     before_counts = counts(engine)
     assert before_counts["project"] == 1, "the project fixture should be the only row"
 
+    opened = None
     if fixture == "oversize.pdf":
-        opened = sparse_upload(MAX_BYTES + 1).open("rb")
+        opened = sparse_upload(MAX_BYTES + 1, head=b"PK\x03\x04").open("rb")
         content: object = opened
     elif fixture == "too_many_pages.pdf":
-        opened, content = None, pdf_with_501_pages
+        content = bundle_around(pdf_with_501_pages)
+    elif fixture == "encrypted.pdf":
+        content = committed("encrypted.zip")
+    elif fixture == "image_only.pdf":
+        content = committed("image_only.zip")
+    elif fixture == "not_a_pdf.txt":
+        content = bundle_around(negative_pdf(fixture))
     else:
-        opened, content = None, negative_pdf(fixture)
+        content = negative_pdf(fixture)
     try:
         with pytest.raises(DomainError) as raised:
-            service.upload_single_pdf(
+            service.upload_bundle(
                 project_uid=project.project_uid,
                 content=content,
                 source_filename=fixture,
@@ -107,18 +120,19 @@ def test_negative_fixture_is_refused_by_its_own_rule_and_publishes_nothing(
 
 
 def test_empty_payload_is_refused(service, project, key, engine, bucket_keys) -> None:
+    """An empty upload is not a ZIP, so the bundle sentence refuses it."""
     before = set(bucket_keys())
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
             content=b"",
-            source_filename="empty.pdf",
+            source_filename="empty.zip",
             display_title="Empty",
             idempotency_key=key("empty"),
         )
     envelope = raised.value.envelope("corr_empty")
     assert raised.value.code is ErrorCode.VALIDATION_FAILED
-    assert envelope.details == {"field": "content", "constraint": "non_empty"}
+    assert envelope.details == {"field": "file", "constraint": "portal_bundle_required"}
     assert set(bucket_keys()) == before
     assert counts(engine)["blob"] == 0
 
@@ -139,14 +153,14 @@ TRAVERSAL_CASES = [
 
 @pytest.mark.parametrize(("source_filename", "constraint"), TRAVERSAL_CASES)
 def test_traversal_shaped_file_names_are_refused_without_being_echoed(
-    service, project, baseline_pdf, key, engine, bucket_keys, source_filename, constraint
+    service, project, baseline_bundle, key, engine, bucket_keys, source_filename, constraint
 ) -> None:
     """``GJ-01-FC-03``. The name is refused by its own rule and never appears in the answer."""
     before = set(bucket_keys())
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=baseline_pdf,
+            content=baseline_bundle,
             source_filename=source_filename,
             display_title="Traversal attempt",
             idempotency_key=key("traversal"),
@@ -179,9 +193,9 @@ def test_probe_runs_before_the_target_is_even_looked_up(
 
     before = set(bucket_keys())
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=ProjectUid.new(),
-            content=negative_pdf("image_only.pdf"),
+            content=committed("image_only.zip"),
             source_filename="image_only.pdf",
             display_title="Nowhere",
             idempotency_key=key("nowhere"),
@@ -204,9 +218,9 @@ def test_no_ocr_path_exists_for_a_page_without_text(
     from pathlib import Path
 
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=negative_pdf("image_only.pdf"),
+            content=committed("image_only.zip"),
             source_filename="image_only.pdf",
             display_title="Scanned",
             idempotency_key=key("ocr"),

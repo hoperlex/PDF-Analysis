@@ -52,6 +52,7 @@ import secrets
 from dataclasses import replace
 from typing import Any
 
+from tests.integration.ingest.bundle_support import bundle_around
 import pytest
 from sqlalchemy import text
 
@@ -195,9 +196,9 @@ def test_a_version_whose_stored_checksum_disagrees_with_its_manifest_is_refused(
     impostor_sha256 = sha256_of(impostor_bytes)
     assert impostor_sha256 != honest_sha256
 
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=content,
+        content=bundle_around(content),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("wrong-bytes"),
@@ -278,9 +279,9 @@ def test_a_version_whose_stored_size_disagrees_with_its_manifest_is_refused(
     truncated = content[: len(content) // 2]
     assert len(truncated) != len(content)
 
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=content,
+        content=bundle_around(content),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("wrong-size"),
@@ -411,9 +412,9 @@ def test_an_unreachable_store_is_reported_as_an_outage_not_as_missing_bytes(
     ``storage_integrity_error`` and is not. Both come off the envelope, which reads them
     from the frozen catalog rather than from anything restated here.
     """
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("outage"),

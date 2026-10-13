@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 
+from tests.integration.ingest.bundle_support import bundle_around
 import pytest
 from sqlalchemy import text
 
@@ -26,13 +27,13 @@ DISPLAY_TITLE = "Annual report 2026"
 def upload(service: IngestService, project, content, key, **overrides):
     arguments = {
         "project_uid": project.project_uid,
-        "content": content,
+        "content": bundle_around(content),
         "source_filename": SOURCE_FILENAME,
         "display_title": DISPLAY_TITLE,
         "idempotency_key": key("baseline"),
     }
     arguments.update(overrides)
-    return service.upload_single_pdf(**arguments)
+    return service.upload_bundle(**arguments)
 
 
 def test_project_is_created_and_listed(service: IngestService) -> None:
@@ -44,7 +45,7 @@ def test_project_is_created_and_listed(service: IngestService) -> None:
     assert service.get_project(created.project_uid) == created
 
 
-def test_baseline_publishes_one_version_and_one_available_blob(
+def test_baseline_publishes_one_version_and_its_three_members_as_available_blobs(
     service, project, baseline_pdf, key, engine, bucket_keys, track, store
 ) -> None:
     expected_sha = hashlib.sha256(baseline_pdf).hexdigest()
@@ -61,8 +62,9 @@ def test_baseline_publishes_one_version_and_one_available_blob(
     assert version.media_type == ACCEPTED_MEDIA_TYPE
     assert version.project_uid == project.project_uid
 
-    # Exactly one manifest row, and it addresses the bytes by derived identity.
-    assert len(version.manifest) == 1
+    # One manifest row per stored member (`W55B-INGEST-01`: the PDF, the block list and the
+    # markdown), and the PDF's addresses the bytes by derived identity.
+    assert len(version.manifest) == 3
     entry = version.source
     assert entry.role == MANIFEST_ROLE_SOURCE_DOCUMENT
     assert entry.sha256 == expected_sha
@@ -73,18 +75,23 @@ def test_baseline_publishes_one_version_and_one_available_blob(
     # One row in each table, and the blob is available with its content facts recorded.
     with engine.connect() as connection:
         assert connection.execute(text("SELECT count(*) FROM document_version")).scalar_one() == 1
-        assert connection.execute(text("SELECT count(*) FROM input_manifest_entry")).scalar_one() == 1
+        assert connection.execute(text("SELECT count(*) FROM input_manifest_entry")).scalar_one() == 3
+        blobs = connection.execute(
+            text("SELECT state, sha256, size_bytes, media_type FROM blob ORDER BY media_type")
+        ).all()
         state, sha256, size, media_type = connection.execute(
-            text("SELECT state, sha256, size_bytes, media_type FROM blob")
+            text("SELECT state, sha256, size_bytes, media_type FROM blob WHERE sha256 = :s"),
+            {"s": expected_sha},
         ).one()
+    assert [row[0] for row in blobs] == ["available"] * 3
     assert state == "available"
     assert sha256 == expected_sha
     assert int(size) == len(baseline_pdf)
     assert media_type == ACCEPTED_MEDIA_TYPE
 
-    # Exactly one new object, and the staged copy is gone: no temporary residue.
+    # Exactly three new objects (one per stored member), and no staged copy is left.
     added = set(bucket_keys()) - before
-    assert len(added) == 1, added
+    assert len(added) == 3, added
     assert not [item for item in added if item.startswith("temporary/")]
 
     # The bytes are readable by identity alone and are byte-identical.
@@ -101,7 +108,11 @@ def test_manifest_query_is_the_seam_b5_consumes(
     manifest = service.manifest_for(outcome.version.version_uid)
 
     assert manifest == outcome.version.manifest
-    assert [entry.role for entry in manifest] == [MANIFEST_ROLE_SOURCE_DOCUMENT]
+    assert [entry.role for entry in manifest] == [
+        MANIFEST_ROLE_SOURCE_DOCUMENT,
+        "source.markdown",
+        "source.structured_companion",
+    ]
 
 
 def test_return_value_carries_no_filename_ordinal_key_or_path(
@@ -185,7 +196,10 @@ def test_return_value_carries_no_filename_ordinal_key_or_path(
         stored_filename, stored_ordinal = connection.execute(
             text("SELECT source_filename, version_ordinal FROM document_version")
         ).one()
-    assert stored_filename == SOURCE_FILENAME
+    # `W55B-INGEST-01`: what is stored is the PDF *member's* decoded name, not the name the
+    # upload carried (the ZIP's); neither crosses the boundary.
+    assert stored_filename == "member.pdf"
+    assert "member.pdf" not in rendered
     assert int(stored_ordinal) == 1
 
 
@@ -197,9 +211,9 @@ def test_second_version_of_one_document_gets_the_next_ordinal(
 
     # Different bytes, so a different blob identity, appended to the same document.
     altered = baseline_pdf + b"\n% a trailing comment\n"
-    second = service.upload_single_pdf(
+    second = service.upload_bundle(
         project_uid=project.project_uid,
-        content=altered,
+        content=bundle_around(altered),
         source_filename="annual_report_2026_rev2.pdf",
         display_title=DISPLAY_TITLE,
         idempotency_key=key("second"),
@@ -248,7 +262,7 @@ def test_identical_content_under_a_new_key_reuses_the_blob(
     assert set(bucket_keys()) == after_first, "identical content wrote a second object"
 
     with engine.connect() as connection:
-        assert connection.execute(text("SELECT count(*) FROM blob")).scalar_one() == 1
+        assert connection.execute(text("SELECT count(*) FROM blob")).scalar_one() == 3
         assert (
             connection.execute(text("SELECT count(*) FROM document_version")).scalar_one()
             == 2
@@ -262,9 +276,9 @@ def test_unknown_project_is_refused_before_anything_is_published(
 
     before = set(bucket_keys())
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=ProjectUid.new(),
-            content=baseline_pdf,
+            content=bundle_around(baseline_pdf),
             source_filename=SOURCE_FILENAME,
             display_title=DISPLAY_TITLE,
             idempotency_key=key("orphan-project"),

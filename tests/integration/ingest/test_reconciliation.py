@@ -12,6 +12,7 @@ what happens *after* that is forced.
 
 from __future__ import annotations
 
+from tests.integration.ingest.bundle_support import bundle_around
 import pytest
 from sqlalchemy import text
 
@@ -47,7 +48,9 @@ class CorruptOnTheWire(_Delegating):
     """
 
     def stage_temporary(self, source, **kwargs):
-        payload = bytes(source)
+        # A bundle's members arrive as file handles (`W55B-INGEST-01`); the first one staged,
+        # the PDF, is the one whose bytes are altered on the way.
+        payload = bytes(source) if isinstance(source, (bytes, bytearray)) else source.read()
         flipped = bytes([payload[0] ^ 0xFF]) + payload[1:]
         return self._inner.stage_temporary(flipped, **kwargs)
 
@@ -88,9 +91,9 @@ def test_a_checksum_mismatch_leaves_no_available_blob_and_no_version(
     before = set(bucket_keys())
 
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=baseline_pdf,
+            content=bundle_around(baseline_pdf),
             source_filename=SOURCE_FILENAME,
             display_title=DISPLAY_TITLE,
             idempotency_key=key("corrupt"),
@@ -129,9 +132,9 @@ def interrupted(store, session_factory, project, baseline_pdf, key, track):
     blob_id = derive_blob_id(sha256=sha256_of(baseline_pdf), size=len(baseline_pdf))
     track(blob_id)
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=baseline_pdf,
+            content=bundle_around(baseline_pdf),
             source_filename=SOURCE_FILENAME,
             display_title=DISPLAY_TITLE,
             idempotency_key=key("interrupted"),
@@ -159,9 +162,14 @@ def test_a_current_document_upload_interruption_is_unattributed_not_an_orphan(
 
     report = reconciler.report()
 
-    assert [item.blob_id for item in report.unattributed_blobs] == [blob_id]
-    assert report.unattributed_blobs[0].recorded_state == "verifying"
-    assert report.unattributed_blobs[0].object_present is True
+    # The interrupted attempt had three members (the PDF, the block list, the markdown) and
+    # had published the first of them: all three have a breadcrumb, and one has an object.
+    assert len(report.unattributed_blobs) == 3
+    by_blob = {item.blob_id: item for item in report.unattributed_blobs}
+    assert blob_id in by_blob
+    assert {item.recorded_state for item in report.unattributed_blobs} == {"verifying"}
+    assert by_blob[blob_id].object_present is True
+    assert [item.object_present for item in report.unattributed_blobs].count(True) == 1
     assert report.missing_objects == ()
     assert not report.is_clean
     screen_message(report.describe())
@@ -180,18 +188,19 @@ def test_a_re_upload_adopts_the_orphan_instead_of_writing_a_second_object(
     blob_id = interrupted
     keys_before = set(bucket_keys())
 
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("recovery"),
     )
 
     assert outcome.version.source.blob_id == blob_id
-    assert set(bucket_keys()) == keys_before, "the recovery wrote a second copy"
+    assert keys_before <= set(bucket_keys()), "the recovery wrote the adopted object again"
+    assert len(bucket_keys()) == 3, "one object per stored member, the adopted PDF among them"
     assert blob_state(engine, blob_id) == "available"
-    assert counts(engine, "blob") == 1
+    assert counts(engine, "blob") == 3
     assert counts(engine, "document_version") == 1
     assert service.read_source_bytes(outcome.version.version_uid) == baseline_pdf
 
@@ -211,9 +220,9 @@ def test_a_record_with_no_object_is_reported_as_unattributed(
         PublishThenLoseTheStore(store), session_factory=session_factory
     )
     with pytest.raises(DomainError):
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=baseline_pdf,
+            content=bundle_around(baseline_pdf),
             source_filename=SOURCE_FILENAME,
             display_title=DISPLAY_TITLE,
             idempotency_key=key("no-object"),
@@ -222,9 +231,11 @@ def test_a_record_with_no_object_is_reported_as_unattributed(
 
     report = reconciler.report()
 
-    assert [item.blob_id for item in report.unattributed_blobs] == [blob_id]
-    assert report.unattributed_blobs[0].recorded_state == "verifying"
-    assert report.unattributed_blobs[0].object_present is False
+    # All three members of the interrupted attempt have a breadcrumb and none has an object.
+    assert len(report.unattributed_blobs) == 3
+    assert blob_id in {item.blob_id for item in report.unattributed_blobs}
+    assert {item.recorded_state for item in report.unattributed_blobs} == {"verifying"}
+    assert {item.object_present for item in report.unattributed_blobs} == {False}
 
 
 # --- a published version whose bytes have gone -------------------------------
@@ -233,9 +244,9 @@ def test_a_record_with_no_object_is_reported_as_unattributed(
 def test_a_version_whose_blob_is_missing_fails_with_storage_integrity_error(
     service, project, baseline_pdf, key, engine, store, reconciler
 ) -> None:
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("vanishing"),
@@ -274,9 +285,9 @@ def test_a_version_whose_blob_is_missing_fails_with_storage_integrity_error(
 def test_report_is_clean_on_a_healthy_instance(
     service, project, baseline_pdf, key, track, reconciler
 ) -> None:
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("healthy"),
@@ -299,9 +310,9 @@ def test_a_stale_in_progress_command_is_reported_and_can_be_abandoned(
     service, project, baseline_pdf, key, engine, reconciler, track
 ) -> None:
     """A command whose executor is gone. Abandonment is terminal, and deliberately so."""
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("stranded"),
@@ -358,9 +369,9 @@ def test_an_unattributed_blob_cannot_be_rejected_without_attempt_authority(
     assert raised.value.detail_fields["current_state"] == "legacy_unattributed"
     assert blob_state(engine, blob_id) == "verifying"
 
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("after-refusal"),
@@ -372,9 +383,9 @@ def test_an_unattributed_blob_cannot_be_rejected_without_attempt_authority(
 def test_an_available_blob_is_never_rejected(
     service, project, baseline_pdf, key, track, reconciler
 ) -> None:
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("no-reject"),

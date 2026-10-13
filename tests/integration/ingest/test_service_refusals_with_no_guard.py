@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import secrets
 
+from tests.integration.ingest.bundle_support import bundle_around
 import pytest
 from sqlalchemy import text
 
@@ -105,9 +106,9 @@ def test_a_document_from_another_project_is_refused_and_names_the_document(
     owner = service.create_project("owning project")
     stranger = service.create_project("some other project")
 
-    first = service.upload_single_pdf(
+    first = service.upload_bundle(
         project_uid=owner.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("owned"),
@@ -116,9 +117,9 @@ def test_a_document_from_another_project_is_refused_and_names_the_document(
     document_uid = first.version.document_uid
 
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=stranger.project_uid,
-            content=baseline_pdf + b"\n% a second version\n",
+            content=bundle_around(baseline_pdf + b"\n% a second version\n"),
             source_filename=SOURCE_FILENAME,
             display_title=DISPLAY_TITLE,
             idempotency_key=key("cross-project"),
@@ -161,18 +162,18 @@ def test_a_document_from_the_same_project_is_accepted(
     Without this the test above would pass against a service that refused ``document_uid``
     outright, which would be a different — and also wrong — behaviour.
     """
-    first = service.upload_single_pdf(
+    first = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("same-project-1"),
     )
     track(first.version.source.blob_id)
 
-    second = service.upload_single_pdf(
+    second = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf + b"\n% a second version\n",
+        content=bundle_around(baseline_pdf + b"\n% a second version\n"),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("same-project-2"),
@@ -189,9 +190,9 @@ def test_an_unknown_document_is_refused_and_also_names_the_document(
 ) -> None:
     """A ``document_uid`` that resolves to nothing is the same answer from the same guard."""
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=baseline_pdf,
+            content=bundle_around(baseline_pdf),
             source_filename=SOURCE_FILENAME,
             display_title=DISPLAY_TITLE,
             idempotency_key=key("ghost-document"),
@@ -240,9 +241,9 @@ def test_an_upload_replay_whose_outcome_names_no_version_is_stale(
     """
     label = f"stale-outcome-{secrets.token_hex(6)}"
     upload_key = key(label)
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=upload_key,
@@ -250,9 +251,9 @@ def test_an_upload_replay_whose_outcome_names_no_version_is_stale(
     track(outcome.version.source.blob_id)
 
     # The precondition: the same key replays cleanly while the outcome is intact.
-    replayed = service.upload_single_pdf(
+    replayed = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=upload_key,
@@ -263,9 +264,9 @@ def test_an_upload_replay_whose_outcome_names_no_version_is_stale(
     _blank_the_outcome(engine, str(upload_key))
 
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=baseline_pdf,
+            content=bundle_around(baseline_pdf),
             source_filename=SOURCE_FILENAME,
             display_title=DISPLAY_TITLE,
             idempotency_key=upload_key,
@@ -404,9 +405,9 @@ def test_a_failure_after_staging_leaves_no_temporary_object(
     content = baseline_pdf + b"\n% " + secrets.token_hex(16).encode("ascii") + b"\n"
 
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=content,
+            content=bundle_around(content),
             source_filename=SOURCE_FILENAME,
             display_title=DISPLAY_TITLE,
             idempotency_key=key("stranded-bytes"),

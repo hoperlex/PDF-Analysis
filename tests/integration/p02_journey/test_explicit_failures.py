@@ -7,12 +7,35 @@ failure, and asserting only the exception would not see it.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
 from sqlalchemy import text
 
-NEGATIVE = Path(__file__).resolve().parents[3] / "fixtures" / "synthetic" / "ar" / "negative"
+ROOT = Path(__file__).resolve().parents[3]
+NEGATIVE = ROOT / "fixtures" / "synthetic" / "ar" / "negative"
+BUNDLES = ROOT / "fixtures" / "synthetic" / "ar" / "bundles"
+
+
+def _refused_upload(name: str) -> bytes:
+    """The upload for one refused case (`W55B-INGEST-01`).
+
+    The PDF rules judge the PDF member of a bundle, so those cases are bundles: the committed
+    ``encrypted.zip`` and ``image_only.zip``, and a 501-page bundle generated here (the
+    31-page negative is a valid document now, and nothing that big is committed). A text file
+    and a ZIP of other files are refused as what they are.
+    """
+    if name == "too_many_pages.pdf":
+        tools = str(ROOT / "tools" / "fixtures")
+        if tools not in sys.path:
+            sys.path.insert(0, tools)
+        from portal_bundle import generated
+
+        return generated.bundle_with_pages(501)
+    if name in {"encrypted.pdf", "image_only.pdf"}:
+        return (BUNDLES / name.replace(".pdf", ".zip")).read_bytes()
+    return (NEGATIVE / name).read_bytes()
 
 
 @pytest.mark.parametrize(
@@ -26,12 +49,12 @@ def test_unsupported_input_is_refused_and_creates_nothing(
     from auditmanager.shared.identity import ProjectUid
 
     h = journey_harness
-    payload = (NEGATIVE / filename).read_bytes()
+    payload = _refused_upload(filename)
     project = ingest.create_project(name=f"B-III negative {filename} {h.new_key('p')}")
 
     before = int(session.execute(text("SELECT count(*) FROM document_version")).scalar_one())
     with pytest.raises(DomainError) as refusal:
-        ingest.upload_single_pdf(
+        ingest.upload_bundle(
             project_uid=ProjectUid(str(project.project_uid)),
             content=payload,
             source_filename=filename,

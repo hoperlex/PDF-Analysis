@@ -24,6 +24,7 @@ from __future__ import annotations
 import secrets
 from typing import Any
 
+from tests.integration.ingest.bundle_support import bundle_around
 import pytest
 
 from auditmanager.documents import MANIFEST_ROLE_SOURCE_DOCUMENT
@@ -52,9 +53,9 @@ def _unique_pdf(baseline: bytes) -> bytes:
 
 
 def _publish_one(service, project, key, label: str, content: bytes):
-    return service.upload_single_pdf(
+    return service.upload_bundle(
         project_uid=project.project_uid,
-        content=content,
+        content=bundle_around(content),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key(label),
@@ -255,13 +256,13 @@ def test_the_body_is_read_once_per_entry_and_not_at_all_when_the_record_already_
     honest_sha256 = sha256_of(content)
     outcome = _publish_one(service, project, key, "cost", content)
     blob_id = track(outcome.version.source.blob_id)
-    assert len(outcome.version.manifest) == 1
+    assert len(outcome.version.manifest) == 3        # the PDF, the markdown, the block list
 
     counting = CountingReads(store)
     reconciler = Reconciler(counting, session_factory=session_factory)
 
     reconciler.verify_version(outcome.version.version_uid)
-    assert counting.reads == [str(blob_id)], (
+    assert counting.reads == [str(entry.blob_id) for entry in outcome.version.manifest], (
         "a healthy version must cost one body transfer per manifest entry: that is the "
         "whole of what the wave-12 repair buys and the whole of what it costs"
     )

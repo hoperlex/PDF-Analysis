@@ -69,3 +69,16 @@ def bundle_around(pdf: bytes, stem: str = "member", **options: Any) -> bytes:
     baseline = (REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar" / "ar_baseline.pdf").read_bytes()
     files = dataclasses.replace(builders.make_files(baseline, stem, **options), pdf=pdf)
     return zipwrite.build_zip(builders.pack(files))
+
+
+def bundle_for(pdf: bytes, stem: str = "document", **options: Any) -> bytes:
+    """A minimal bundle (PDF, block list, markdown) built around ``pdf`` from its own text.
+
+    One TEXT block per page that has a text layer, carrying that text; for a PDF the fixtures'
+    independent reader can read. Use ``bundle_around`` for a PDF that is broken, or that is the
+    AR baseline with something appended.
+    """
+    from portal_bundle import bundle as builders
+    from portal_bundle import zipwrite
+
+    return zipwrite.build_zip(builders.pack(builders.make_files(pdf, stem, **options)))

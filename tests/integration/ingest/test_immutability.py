@@ -12,6 +12,7 @@ caller, including one that bypasses the repository entirely.
 
 from __future__ import annotations
 
+from tests.integration.ingest.bundle_support import bundle_around
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
@@ -34,9 +35,9 @@ SOURCE_FILENAME = "annual_report_2026.pdf"
 
 @pytest.fixture
 def published(service, project, baseline_pdf, key, track):
-    outcome = service.upload_single_pdf(
+    outcome = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=bundle_around(baseline_pdf),
         source_filename=SOURCE_FILENAME,
         display_title=DISPLAY_TITLE,
         idempotency_key=key("immutable"),
@@ -94,7 +95,7 @@ def test_published_input_state_refuses_every_later_write(
         assert connection.execute(
             text("SELECT count(*) FROM input_manifest_entry WHERE version_uid = :v"),
             {"v": str(published.version_uid)},
-        ).scalar_one() == 1
+        ).scalar_one() == 3     # a bundle's three stored members: no attempt removed one
 
 
 def test_verified_blob_metadata_is_write_once(engine, published) -> None:

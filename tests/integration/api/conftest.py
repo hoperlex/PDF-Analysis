@@ -393,17 +393,22 @@ class IngestDocumentAdapter:
         idempotency_key: str,
         section: str | None = None,
     ) -> _Uploaded:
-        # `W55B-SEAL-01`: the port takes the part's file handle; this fixture, like the shipped
-        # adapter until `W55B-INGEST-01`, hands the service the whole body.
-        outcome = self._ingest.upload_single_pdf(
-            project_uid=ProjectUid(project_uid),
-            content=content.read(),
+        # `W55B-INGEST-01`: the shipped adapter's own body, as for `stream_content` below. The
+        # port takes the part's file handle; the adapter reads its magic bytes, hands a ZIP to
+        # `IngestService.upload_bundle` (a portal bundle, the upload) and, until the last step
+        # of that lane, anything else to the single-PDF entry. A second copy of that routing
+        # here would be a second place for it to drift.
+        from auditmanager.bootstrap.adapters import DocumentAdapter
+
+        uploaded = DocumentAdapter(self._ingest).upload_document(
+            project_uid=project_uid,
+            content=content,
             source_filename=source_filename,
-            display_title=display_title or source_filename,
+            display_title=display_title,
             idempotency_key=idempotency_key,
             section=section,
         )
-        return _Uploaded(version=self._view(outcome.version), replayed=outcome.replayed)
+        return _Uploaded(version=uploaded.version, replayed=uploaded.replayed)
 
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
         return self._view(self._ingest.get_version(VersionUid(version_uid)))

@@ -93,7 +93,7 @@ def _framed(payload_size: int, head: bytes, filename: str) -> tuple[dict[str, st
     opening = (
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
-        "Content-Type: application/pdf\r\n\r\n"
+        "Content-Type: application/zip\r\n\r\n"
     ).encode() + head
     closing = f"\r\n--{boundary}--\r\n".encode()
 
@@ -114,8 +114,8 @@ def _framed(payload_size: int, head: bytes, filename: str) -> tuple[dict[str, st
     return headers, len(opening) + (payload_size - len(head)) + len(closing), chunks()
 
 
-def _upload(app, project_uid: str, payload_size: int, head: bytes = b"%PDF-1.7\n"):
-    headers, framed, chunks = _framed(payload_size, head, "between.pdf")
+def _upload(app, project_uid: str, payload_size: int, head: bytes = b"PK\x03\x04"):
+    headers, framed, chunks = _framed(payload_size, head, "between.zip")
     assert framed <= UPLOAD_MAX_BODY, (
         f"the framed body is {framed}, over the transport limit {UPLOAD_MAX_BODY}; this "
         "test would measure the transport guard instead of ENV-SIZE"
@@ -232,14 +232,14 @@ def test_a_body_past_the_limit_every_other_route_keeps_still_reaches_the_envelop
     ``uploadDocument`` it was the transport's limit until that lane, and a body one byte
     over it was refused as ``max_bytes`` (``records/22``). It now passes the transport. Since
     `W55B-INGEST-01` the envelope's bound is 250 MiB, so this body is no longer *too big*:
-    it is a PDF header and zeros, and the envelope judges what it holds -- a document it
-    cannot parse -- which is the proof that it was the envelope, and not the transport, that
+    it is a ZIP header and zeros, and the envelope judges what it holds -- an archive it
+    cannot read -- which is the proof that it was the envelope, and not the transport, that
     answered.
     """
     import json
 
     size = MAX_BODY                      # the framed body is then past the ordinary cap
-    headers, framed, chunks = _framed(size, b"%PDF-1.7\n", "past.pdf")
+    headers, framed, chunks = _framed(size, b"PK\x03\x04", "past.zip")
     assert MAX_BODY < framed <= UPLOAD_MAX_BODY
     response = app.client.post(
         f"/projects/{project_uid}/documents", headers=headers, content=chunks
@@ -247,4 +247,4 @@ def test_a_body_past_the_limit_every_other_route_keeps_still_reaches_the_envelop
     body = json.loads(response.content)
 
     assert response.status_code == 422, response.content[:300]
-    assert (body.get("details") or {}).get("constraint") == "parseable_pdf", body
+    assert (body.get("details") or {}).get("constraint") == "bundle_unreadable", body

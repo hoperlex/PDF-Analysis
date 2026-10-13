@@ -29,6 +29,7 @@ import io
 import pytest
 from pypdf import PdfWriter
 
+from tests.integration.ingest.bundle_support import bundle_around
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.errors.envelope import screen_message
 
@@ -69,16 +70,16 @@ def _refusal(raised: pytest.ExceptionInfo[DomainError]) -> dict:
 
 
 def test_the_case_really_does_discriminate(
-    service, project, baseline_pdf, key, engine, bucket_keys
+    service, project, baseline_bundle, key, engine, bucket_keys
 ) -> None:
     """The precondition: the same call succeeds with a good document and a plain name.
 
     Without it, every refusal below could be caused by a broken fixture and would still
     look like the rule working.
     """
-    published = service.upload_single_pdf(
+    published = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=baseline_bundle,
         source_filename="baseline.pdf",
         display_title="Admissible",
         idempotency_key=key("envelope-rule-control"),
@@ -96,9 +97,9 @@ def test_a_pdf_with_no_pages_is_refused_by_the_page_count_rule(
     """
     before = set(bucket_keys())
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=_pdf_with_no_pages(),
+            content=bundle_around(_pdf_with_no_pages()),
             source_filename="no-pages.pdf",
             display_title="No pages",
             idempotency_key=key("no-pages"),
@@ -114,14 +115,14 @@ def test_a_pdf_with_no_pages_is_refused_by_the_page_count_rule(
 
 
 def test_a_blank_source_file_name_is_refused_as_non_empty(
-    service, project, baseline_pdf, key, engine, bucket_keys
+    service, project, baseline_bundle, key, engine, bucket_keys
 ) -> None:
     """Deleting this check entirely reddened nothing, because no test sent a blank name."""
     before = set(bucket_keys())
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=baseline_pdf,
+            content=baseline_bundle,
             source_filename="   ",
             display_title="Blank name",
             idempotency_key=key("blank-name"),
@@ -134,7 +135,7 @@ def test_a_blank_source_file_name_is_refused_as_non_empty(
 
 
 def test_an_over_long_source_file_name_is_refused_by_its_own_length_rule(
-    service, project, baseline_pdf, key, engine, bucket_keys
+    service, project, baseline_bundle, key, engine, bucket_keys
 ) -> None:
     """One character past the limit, so the boundary itself is what is being read.
 
@@ -146,9 +147,9 @@ def test_an_over_long_source_file_name_is_refused_by_its_own_length_rule(
     assert len(name) == FILENAME_LIMIT + 1
     before = set(bucket_keys())
     with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
+        service.upload_bundle(
             project_uid=project.project_uid,
-            content=baseline_pdf,
+            content=baseline_bundle,
             source_filename=name,
             display_title="Long name",
             idempotency_key=key("long-name"),
@@ -170,7 +171,7 @@ def test_an_over_long_source_file_name_is_refused_by_its_own_length_rule(
 
 
 def test_a_name_at_the_limit_is_accepted(
-    service, project, baseline_pdf, key, engine, bucket_keys
+    service, project, baseline_bundle, key, engine, bucket_keys
 ) -> None:
     """The other side of the boundary, so the rule is a limit and not a prohibition.
 
@@ -179,9 +180,9 @@ def test_a_name_at_the_limit_is_accepted(
     """
     name = "a" * (FILENAME_LIMIT - len(".pdf")) + ".pdf"
     assert len(name) == FILENAME_LIMIT
-    published = service.upload_single_pdf(
+    published = service.upload_bundle(
         project_uid=project.project_uid,
-        content=baseline_pdf,
+        content=baseline_bundle,
         source_filename=name,
         display_title="Name at the limit",
         idempotency_key=key("name-at-limit"),

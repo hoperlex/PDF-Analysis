@@ -71,10 +71,10 @@ def test_the_role_a_real_upload_writes_matches_the_contract(session, ingest, jou
 
     h = journey_harness
     project = ingest.create_project(name=f"B-III manifest role {h.new_key('p')}")
-    outcome = ingest.upload_single_pdf(
+    outcome = ingest.upload_bundle(
         project_uid=ProjectUid(str(project.project_uid)),
-        content=h.BASELINE_PDF.read_bytes(),
-        source_filename="ar_baseline.pdf",
+        content=h.BASELINE_BUNDLE.read_bytes(),
+        source_filename="ar_baseline.zip",
         display_title="AR baseline",
         idempotency_key=h.new_key("upload"),
     )
@@ -107,10 +107,10 @@ def test_a_real_upload_can_start_a_run(session, ingest, journey_harness) -> None
 
     h = journey_harness
     project = ingest.create_project(name=f"B-III start from upload {h.new_key('p')}")
-    outcome = ingest.upload_single_pdf(
+    outcome = ingest.upload_bundle(
         project_uid=ProjectUid(str(project.project_uid)),
-        content=h.BASELINE_PDF.read_bytes(),
-        source_filename="ar_baseline.pdf",
+        content=h.BASELINE_BUNDLE.read_bytes(),
+        source_filename="ar_baseline.zip",
         display_title="AR baseline",
         idempotency_key=h.new_key("upload"),
     )

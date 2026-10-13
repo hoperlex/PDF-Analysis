@@ -10,18 +10,16 @@
 
 Updated in each commit. `[x]` done and committed, `[~]` in progress, `[ ]` not started.
 
-- [x] 1. Bundle reader (`src/auditmanager/ingest/bundle_archive.py`): central directory, names, every archive rule, extraction to temporary files. Agrees with the FIXTURES validator on all 67 small archive negatives, 11 positives and the 7 committed bundles (scratch differential; the committed test is still to write, see 10).
-- [x] 2. Bundle envelope (`bundle_envelope.py`): PDF member, `_blocks.json`, `_results.md` both ways, text-layer rule, counts.
-- [x] 3. Counts on `document_version`, `documents/{models,public,repository}.py` (NULL for a bare PDF).
-- [x] 4. `IngestService.upload_bundle`: stored inputs, fingerprint, one publication transaction (code written; tests still to write, see 10).
+- [x] 1. Bundle reader `src/auditmanager/ingest/bundle_archive.py`: central directory, names, every archive rule, members extracted to temporary files with the actual bytes counted. Tests: `tests/integration/ingest/test_bundle_archive.py` (one refusal test per rule, product vs the FIXTURES reference validator on all 67 small negatives, the size rules declared and counted, names, ZIP64/descriptors/real deflate, memory).
+- [x] 2. Bundle envelope `bundle_envelope.py`: PDF member (the bare PDF's own refusals), `_blocks.json` against the pinned schema (hand-written, compared with the contract file and with the generic checker over a seeded fuzz), `_results.md` both ways, text-layer rule, the three counts. Tests: `test_bundle_envelope.py`.
+- [x] 3. Counts on `document_version` (`documents/{models,public,repository}.py`; NULL for a bare PDF). Not on the API wire.
+- [x] 4. `IngestService.upload_bundle`: four stored members, fingerprint over all five digests, all staged before any is recorded, one breadcrumb transaction, one publication transaction. Tests: `test_bundle_publication.py` (fingerprint, HTML not stored, partial member set, refused bundle leaves nothing, reconciliation).
 - [x] 5. `DocumentAdapter` routes by magic bytes (`looks_like_zip`; the bare-PDF branch is marked `W55B-LEGACY-BARE-PDF`).
-- [~] 6. Limits: `envelope.py` and `ingest/__init__.py` done (500 / 250 MiB). Still: headroom chain (`tests/e2e/test_upload_limit_headroom.py`, `prove_the_headroom_guard_can_fail.py`), `ar_corpus` `MAX_PAGES`.
-- [ ] 7. Negatives: `oversize.pdf`, `too_many_pages.pdf` consumers moved to the generators, files deleted, `SHA256SUMS`, `pages_31.zip`.
-- [ ] 8. The suite: every Python/JSON SUITE file moved to a bundle; the probe.
-- [ ] 9. 250 MiB bundle: memory and time measured.
-- [ ] 10. New tests for 1-5 (archive rules one by one, envelope, counts, publication, fingerprint, partial member set, reconciliation, adapter), mutation proofs, checks, containment, hand-back. **Not written yet at the time of the commit that added this line.**
-
-Existing tests moved to the new limits in the same commit as the source: `tests/integration/ingest/*` (differential oracle at the new numbers, size window, negatives from generators), characterization records 02, 13, 17-21, 26, 32, 33 (re-captured; only the request side, the manifest and the two numbers moved), `test_portal_block_routes.py` (one line, the service entry). `tests/integration/ingest` + `tests/characterization`: 249 passed on the lane stack.
+- [x] 6. Limits: `envelope.py` and `ingest/__init__.py` 500 / 250 MiB; headroom chain gains `pre-check <= MAX_BYTES < UPLOAD_MAX_BODY < nginx` (`test_upload_limit_headroom.py` + 3 prover mutations); `ar_corpus` `MAX_PAGES` 500.
+- [x] 7. Negatives: `oversize.pdf`, `too_many_pages.pdf` deleted; generators replace them; `SHA256SUMS`, `expected_issues.json`, `bundle_manifest.json`, `tests/contract/fixtures_ar/**` follow; both generators' `--check` and `sha256sum -c` are green.
+- [~] 8. The suite: moved so far: characterization journey and records, `tests/e2e/pc01/{driver,test_acceptance,test_live_text_analysis}.py`, `tests/integration/ingest/*`, `tests/integration/p02_journey/*`, `tests/integration/api/conftest.py` (now delegates to the shipped adapter). Still to do: the probe over every directory, `tests/integration/api/*` tests that upload over HTTP, and the report's list of files left for part B.
+- [ ] 9. 250 MiB bundle: memory and time measured (`.local/w55b-tools/measure_upload.py`, lane ports 57531/57532).
+- [ ] 10. Mutation proofs, final checks, containment, hand-back.
 
 ## Design decisions (made while writing; each is open to the integrator's veto)
 

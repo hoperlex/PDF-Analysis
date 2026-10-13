@@ -356,6 +356,21 @@ def baseline_pdf() -> bytes:
 
 
 @pytest.fixture
+def baseline_bundle() -> bytes:
+    """The accepted AR document as an upload (`W55B-INGEST-01`): the minimal portal bundle
+    around ``ar_baseline.pdf`` -- the PDF, the block list and the recognised-text markdown, the
+    three members every bundle has. Its PDF member is ``baseline_pdf``, byte for byte."""
+    return (BUNDLES / "ar_baseline_minimal.zip").read_bytes()
+
+
+@pytest.fixture
+def full_bundle() -> bytes:
+    """``baseline_bundle`` with the two optional members: the HTML rendering (hashed, not
+    stored) and the stamp audit (stored)."""
+    return (BUNDLES / "ar_baseline.zip").read_bytes()
+
+
+@pytest.fixture
 def negative_pdf():
     def _read(name: str) -> bytes:
         path = NEGATIVE / name

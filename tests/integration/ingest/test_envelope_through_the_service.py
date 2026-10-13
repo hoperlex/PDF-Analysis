@@ -1,18 +1,21 @@
 """An upload handed over as a file handle is published from the handle, and only from it.
 
-`W55B-STREAM-01`. ``IngestService.upload_single_pdf`` takes ``bytes | BinaryIO``. For a
-handle the whole chain -- the envelope's digest, PDFium's parse, the store's staging, the
-verification read-back -- has to work from the file without a copy of it in memory, and the
-published version has to be the same version the bytes would have given. Real PostgreSQL and
-real MinIO, as the rest of this directory; the store is wrapped only to *watch* what it is
-given, never to change it.
+`W55B-STREAM-01` made the upload a file handle end to end; `W55B-INGEST-01` carries that through a
+portal bundle. ``IngestService.upload_bundle`` takes ``bytes | BinaryIO``. For a handle the whole
+chain -- the archive reader, the envelope's PDFium parse, the store's staging, the verification
+read-back -- has to work from files without a copy of the upload in memory, and the published
+version has to be the same version the bytes would have given. Real PostgreSQL and real MinIO, as
+the rest of this directory; the store is wrapped only to *watch* what it is given, never to
+change it.
 
 What each test is for:
 
-* the store is handed the handle itself, rewound to its start, not a ``bytes``;
+* the store is handed **file handles** for the members, each at its start -- never a ``bytes`` --
+  and the digests and sizes it is told are the members' own;
+* the handle the caller passes may stand anywhere: the reader starts from the beginning;
 * a version published from a handle is identical, field for field and byte for byte, to one
-  published from the bytes of the same file, and its stored object reads back whole;
-* a refused handle publishes nothing, wherever in the envelope it was refused;
+  published from the bytes of the same archive, and its stored objects read back whole;
+* a refused upload publishes nothing, wherever in the envelope it was refused;
 * an identical upload replayed from a handle is replayed, not published twice.
 """
 
@@ -20,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import tempfile
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +32,7 @@ import pytest
 from auditmanager.ingest import MAX_BYTES
 from auditmanager.shared.errors import DomainError
 from portal_bundle import generated  # tools/fixtures, put on the path by this directory's conftest
+from tests.integration.ingest.bundle_support import bundle_around, committed
 from tests.integration.ingest.test_negative_envelope import counts  # type: ignore[import-not-found]
 
 
@@ -46,6 +51,7 @@ class WatchingStore:
                 "position": source.tell() if hasattr(source, "tell") else None,
                 "declared_sha256": kwargs["declared_sha256"],
                 "declared_size": kwargs["declared_size"],
+                "role": str(kwargs["role"]),
             }
         )
         return self._inner.stage_temporary(source, **kwargs)
@@ -70,83 +76,66 @@ def _spooled(data: bytes) -> Any:
     return handle
 
 
-def test_the_store_is_handed_the_handle_itself_rewound_to_its_start(
-    watched, project, baseline_pdf, key
+def _upload(service: Any, project: Any, content: Any, key: Any, label: str, **overrides: Any):
+    arguments = {
+        "project_uid": project.project_uid,
+        "content": content,
+        "source_filename": "baseline.zip",
+        "display_title": "From a handle",
+        "idempotency_key": key(label),
+    }
+    arguments.update(overrides)
+    return service.upload_bundle(**arguments)
+
+
+def test_the_store_is_handed_file_handles_at_their_start_and_the_members_own_digests(
+    watched, project, baseline_bundle, baseline_pdf, key
 ) -> None:
     service, watching = watched
-    handle = _spooled(baseline_pdf)
+    handle = _spooled(baseline_bundle)
     try:
-        outcome = service.upload_single_pdf(
-            project_uid=project.project_uid,
-            content=handle,
-            source_filename="baseline.pdf",
-            display_title="From a handle",
-            idempotency_key=key("handle"),
-        )
+        outcome = _upload(service, project, handle, key, "handle")
     finally:
         handle.close()
 
-    assert len(watching.staged) == 1
-    staged = watching.staged[0]
-    assert staged["source"] is handle, f"the store was handed a {staged['type'].__name__}"
-    assert not isinstance(staged["source"], (bytes, bytearray))
-    assert staged["position"] == 0, "staging would have uploaded from the middle of the file"
-    assert staged["declared_sha256"] == hashlib.sha256(baseline_pdf).hexdigest()
-    assert staged["declared_size"] == len(baseline_pdf)
+    # The PDF first, then the block list and the markdown: the order of publication.
+    assert [item["role"] for item in watching.staged] == [
+        "source_document", "source_structured_companion", "source_markdown",
+    ]
+    for item in watching.staged:
+        assert not isinstance(item["source"], (bytes, bytearray)), (
+            f"the store was handed a {item['type'].__name__}"
+        )
+        assert item["position"] == 0, "staging would have uploaded from the middle of a file"
+        assert item["source"] is not handle, "the archive itself was staged, not a member"
+    pdf = watching.staged[0]
+    assert pdf["declared_sha256"] == hashlib.sha256(baseline_pdf).hexdigest()
+    assert pdf["declared_size"] == len(baseline_pdf)
     assert outcome.version.byte_size == len(baseline_pdf)
 
 
-def test_a_handle_is_rewound_where_it_is_staged_whatever_the_probe_left_of_it(
-    watched, project, baseline_pdf, key, monkeypatch
+@pytest.mark.parametrize("where", ["end", "middle"])
+def test_the_upload_handle_may_stand_anywhere_the_reader_starts_from_the_beginning(
+    watched, project, baseline_bundle, key, where
 ) -> None:
-    """The rewind is the service's own, made where the handle is read, and not a thing it
-    trusts the envelope's last line (or a database round trip in between) to have left true."""
-    import auditmanager.ingest.service as service_module
-
-    real = service_module.probe
-
-    def leaves_the_handle_at_its_end(content, *, source_filename):
-        report = real(content, source_filename=source_filename)
-        content.seek(0, 2)
-        return report
-
-    monkeypatch.setattr(service_module, "probe", leaves_the_handle_at_its_end)
-    service, watching = watched
-    handle = _spooled(baseline_pdf)
+    service, _watching = watched
+    handle = _spooled(baseline_bundle)
+    handle.seek(0, 2) if where == "end" else handle.seek(len(baseline_bundle) // 2)
     try:
-        outcome = service.upload_single_pdf(
-            project_uid=project.project_uid,
-            content=handle,
-            source_filename="baseline.pdf",
-            display_title="Left at the end",
-            idempotency_key=key("rewind"),
-        )
+        outcome = _upload(service, project, handle, key, f"left-{where}")
     finally:
         handle.close()
-    assert watching.staged[0]["position"] == 0
-    assert service.read_source_bytes(outcome.version.version_uid) == baseline_pdf
+    assert outcome.version.page_count == 8
 
 
 def test_a_version_published_from_a_handle_is_the_version_the_bytes_would_give(
-    service, project, baseline_pdf, key, tmp_path: Path
+    service, project, baseline_bundle, key, tmp_path: Path
 ) -> None:
-    from_bytes = service.upload_single_pdf(
-        project_uid=project.project_uid,
-        content=baseline_pdf,
-        source_filename="baseline.pdf",
-        display_title="From bytes",
-        idempotency_key=key("bytes"),
-    )
-    path = tmp_path / "baseline.pdf"
-    path.write_bytes(baseline_pdf)
+    from_bytes = _upload(service, project, baseline_bundle, key, "bytes", display_title="From bytes")
+    path = tmp_path / "baseline.zip"
+    path.write_bytes(baseline_bundle)
     with path.open("rb") as handle:
-        from_handle = service.upload_single_pdf(
-            project_uid=project.project_uid,
-            content=handle,
-            source_filename="baseline.pdf",
-            display_title="From a file",
-            idempotency_key=key("file"),
-        )
+        from_handle = _upload(service, project, handle, key, "file", display_title="From a file")
 
     a, b = from_bytes.version, from_handle.version
     assert (a.sha256, a.byte_size, a.page_count, a.media_type) == (
@@ -155,34 +144,30 @@ def test_a_version_published_from_a_handle_is_the_version_the_bytes_would_give(
         b.page_count,
         b.media_type,
     )
+    assert (a.text_character_count, a.textless_pages, a.recognised_character_count) == (
+        b.text_character_count, b.textless_pages, b.recognised_character_count,
+    )
     assert [(e.role, e.sha256, e.size_bytes) for e in a.manifest] == [
         (e.role, e.sha256, e.size_bytes) for e in b.manifest
     ]
-    assert service.read_source_bytes(b.version_uid) == baseline_pdf
+    with zipfile.ZipFile(path) as archive:
+        pdf = archive.read(next(n for n in archive.namelist() if n.endswith(".pdf")))
+    assert service.read_source_bytes(b.version_uid) == pdf
 
 
-def test_a_handle_larger_than_the_s3_part_size_is_staged_whole_and_verified(
-    service, project, key, tmp_path: Path
+def test_a_member_larger_than_the_s3_part_size_is_staged_whole_and_verified(
+    service, project, baseline_pdf, key, tmp_path: Path
 ) -> None:
-    """A 20 MiB document is past boto3's multipart threshold, so the store streams it in
-    parts from the handle; the read-back verification still agrees on every byte."""
-    from tests.integration.ingest.test_envelope_differential import (  # type: ignore[import-not-found]
-        hand_pdf_of_size,
-    )
-
-    data = hand_pdf_of_size(20 * 1024 * 1024)
-    path = tmp_path / "big.pdf"
-    path.write_bytes(data)
+    """A 20 MiB PDF member is past boto3's multipart threshold, so the store streams it in
+    parts from the extracted file; the read-back verification still agrees on every byte."""
+    padding = (b"%" + b"x" * 78 + b"\n") * (20 * 1024 * 1024 // 80)
+    pdf = baseline_pdf + padding
+    path = tmp_path / "big.zip"
+    path.write_bytes(bundle_around(pdf))
     with path.open("rb") as handle:
-        outcome = service.upload_single_pdf(
-            project_uid=project.project_uid,
-            content=handle,
-            source_filename="big.pdf",
-            display_title="Twenty mebibytes",
-            idempotency_key=key("big"),
-        )
-    assert outcome.version.sha256 == hashlib.sha256(data).hexdigest()
-    assert outcome.version.byte_size == len(data)
+        outcome = _upload(service, project, handle, key, "big", source_filename="big.zip")
+    assert outcome.version.sha256 == hashlib.sha256(pdf).hexdigest()
+    assert outcome.version.byte_size == len(pdf) > 20 * 1024 * 1024
     assert hashlib.sha256(service.read_source_bytes(outcome.version.version_uid)).hexdigest() == (
         outcome.version.sha256
     )
@@ -191,17 +176,18 @@ def test_a_handle_larger_than_the_s3_part_size_is_staged_whole_and_verified(
 @pytest.mark.parametrize(
     ("label", "build", "constraint"),
     [
-        ("image only", lambda pdf, neg: neg("image_only.pdf"), "every_page_has_extractable_text"),
-        ("encrypted", lambda pdf, neg: neg("encrypted.pdf"), "not_encrypted"),
+        ("image only", lambda pdf, neg: committed("image_only.zip"), "every_page_has_extractable_text"),
+        ("encrypted", lambda pdf, neg: committed("encrypted.zip"), "not_encrypted"),
         # `W55B-INGEST-01`: the committed 31-page negative is valid now; 501 pages are the
         # smallest document over the ceiling, built at test time by the fixtures' generator.
         (
             "501 pages",
-            lambda pdf, neg: generated.pdf_with_n_pages(501),
+            lambda pdf, neg: generated.bundle_with_pages(501),
             "1 <= page_count <= 500",
         ),
-        ("not a pdf", lambda pdf, neg: neg("not_a_pdf.txt"), "pdf_magic_bytes"),
-        ("truncated", lambda pdf, neg: pdf[:3000], "parseable_pdf"),
+        ("not a pdf", lambda pdf, neg: bundle_around(neg("not_a_pdf.txt")), "pdf_magic_bytes"),
+        ("truncated", lambda pdf, neg: bundle_around(pdf[:3000]), "parseable_pdf"),
+        ("not a zip", lambda pdf, neg: pdf, "portal_bundle_required"),
     ],
 )
 def test_a_refused_handle_publishes_nothing(
@@ -214,13 +200,7 @@ def test_a_refused_handle_publishes_nothing(
     handle = _spooled(build(baseline_pdf, negative_pdf))
     try:
         with pytest.raises(DomainError) as refused:
-            service.upload_single_pdf(
-                project_uid=project.project_uid,
-                content=handle,
-                source_filename=f"{label}.pdf",
-                display_title="Refused",
-                idempotency_key=key("refused"),
-            )
+            _upload(service, project, handle, key, "refused", source_filename=f"{label}.zip")
     finally:
         handle.close()
 
@@ -235,23 +215,14 @@ def test_an_oversize_sparse_handle_is_refused_without_being_read(
 ) -> None:
     """The case the lane's memory measurement drives over HTTP, here without the transport.
 
-    The stand-in is one byte past the bound: a PDF header and a hole, so it costs a few
+    The stand-in is one byte past the bound: a ZIP header and a hole, so it costs a few
     kilobytes of disk and is refused on its length alone."""
     service, watching = watched
-    path = tmp_path / "oversize.bin"
-    with path.open("wb") as out:
-        out.write(b"%PDF-1.7\n")
-        out.truncate(MAX_BYTES + 1)
+    path = generated.oversize_sparse_file(tmp_path / "oversize.stand-in", MAX_BYTES + 1)
     before = set(bucket_keys())
     with path.open("rb") as handle:
         with pytest.raises(DomainError) as refused:
-            service.upload_single_pdf(
-                project_uid=project.project_uid,
-                content=handle,
-                source_filename="oversize.pdf",
-                display_title="Too big",
-                idempotency_key=key("oversize"),
-            )
+            _upload(service, project, handle, key, "oversize", source_filename="oversize.zip")
     assert refused.value.envelope("c").details == {
         "field": "content",
         "constraint": f"byte_size <= {MAX_BYTES}",
@@ -261,26 +232,20 @@ def test_an_oversize_sparse_handle_is_refused_without_being_read(
 
 
 def test_an_identical_upload_from_a_handle_is_replayed_not_published_twice(
-    watched, project, baseline_pdf, key, engine
+    watched, project, baseline_bundle, key, engine
 ) -> None:
     service, watching = watched
     idempotency = key("replay")
     outcomes = []
     for _ in range(2):
-        handle = _spooled(baseline_pdf)
+        handle = _spooled(baseline_bundle)
         try:
             outcomes.append(
-                service.upload_single_pdf(
-                    project_uid=project.project_uid,
-                    content=handle,
-                    source_filename="baseline.pdf",
-                    display_title="Replayed",
-                    idempotency_key=idempotency,
-                )
+                _upload(service, project, handle, key, "replay", idempotency_key=idempotency)
             )
         finally:
             handle.close()
     assert [o.replayed for o in outcomes] == [False, True]
     assert outcomes[0].version.version_uid == outcomes[1].version.version_uid
-    assert len(watching.staged) == 1, "the replay staged the bytes a second time"
+    assert len(watching.staged) == 3, "the replay staged the members a second time"
     assert counts(engine)["document_version"] == 1
