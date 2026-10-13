@@ -95,6 +95,37 @@ def test_the_store_is_handed_the_handle_itself_rewound_to_its_start(
     assert outcome.version.byte_size == len(baseline_pdf)
 
 
+def test_a_handle_is_rewound_where_it_is_staged_whatever_the_probe_left_of_it(
+    watched, project, baseline_pdf, key, monkeypatch
+) -> None:
+    """The rewind is the service's own, made where the handle is read, and not a thing it
+    trusts the envelope's last line (or a database round trip in between) to have left true."""
+    import auditmanager.ingest.service as service_module
+
+    real = service_module.probe
+
+    def leaves_the_handle_at_its_end(content, *, source_filename):
+        report = real(content, source_filename=source_filename)
+        content.seek(0, 2)
+        return report
+
+    monkeypatch.setattr(service_module, "probe", leaves_the_handle_at_its_end)
+    service, watching = watched
+    handle = _spooled(baseline_pdf)
+    try:
+        outcome = service.upload_single_pdf(
+            project_uid=project.project_uid,
+            content=handle,
+            source_filename="baseline.pdf",
+            display_title="Left at the end",
+            idempotency_key=key("rewind"),
+        )
+    finally:
+        handle.close()
+    assert watching.staged[0]["position"] == 0
+    assert service.read_source_bytes(outcome.version.version_uid) == baseline_pdf
+
+
 def test_a_version_published_from_a_handle_is_the_version_the_bytes_would_give(
     service, project, baseline_pdf, key, tmp_path: Path
 ) -> None:
