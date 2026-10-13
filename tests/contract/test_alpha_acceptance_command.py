@@ -621,3 +621,100 @@ def test_root_redirect_must_resolve_to_sign_in_on_the_declared_origin(
         assert result.returncode == 1, output
         assert "PREFLIGHT OK" not in output
         assert "| HTTP-root | FAIL |" in report
+
+
+# ---------------------------------------------------------------------------------------
+# `W55B-INGEST-01`: the upload files the runbook checks are bundles, a bare PDF, a text
+# file, and two inputs that are generated and never committed.
+# ---------------------------------------------------------------------------------------
+
+#: The checks `--files-only` records for the upload, by id: three committed bundles, the bare
+#: PDF and the text file the BROWSER refuses, and the build of the two generated inputs.
+UPLOAD_FILE_CHECKS = (
+    "BUNDLE-positive",
+    "BUNDLE-encrypted",
+    "BUNDLE-image-only",
+    "PDF-bare",
+    "TEXT-not-a-pdf",
+    "BUNDLE-generated",
+)
+
+
+def _files_only(repo: Path, evidence: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(repo / "scripts" / "manual-alpha-check.sh"), "--files-only", "--evidence-dir",
+         str(evidence)],
+        cwd=repo, text=True, capture_output=True, check=False,
+    )
+
+
+def _upload_file_sandbox(tmp_path: Path) -> Path:
+    """A copy of the script with only the files it checks, and the generator linked in."""
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copy2(SCRIPT, repo / "scripts" / SCRIPT.name)
+    for relative in (
+        "fixtures/synthetic/ar/ar_baseline.pdf",
+        "fixtures/synthetic/ar/negative/not_a_pdf.txt",
+        "fixtures/synthetic/ar/bundles/ar_baseline.zip",
+        "fixtures/synthetic/ar/bundles/encrypted.zip",
+        "fixtures/synthetic/ar/bundles/image_only.zip",
+    ):
+        (repo / relative).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / relative, repo / relative)
+    (repo / "tools").symlink_to(ROOT / "tools")
+    return repo
+
+
+def test_files_only_checks_the_bundles_the_journey_uploads_and_builds_the_generated_inputs(
+    tmp_path: Path,
+) -> None:
+    repo = _upload_file_sandbox(tmp_path)
+    result = _files_only(repo, tmp_path / "evidence")
+    assert result.returncode == 0, result.stdout + result.stderr
+    for check_id in UPLOAD_FILE_CHECKS:
+        assert re.search(rf"^{re.escape(check_id)}\s+PASS\b", result.stdout, flags=re.M), (
+            f"{check_id} is not a PASS in:\n{result.stdout}"
+        )
+    assert "PDF-image-only" not in result.stdout and "PDF-encrypted" not in result.stdout, (
+        "the runbook still checks the bare negative PDFs the upload no longer takes"
+    )
+
+
+@pytest.mark.parametrize(
+    ("relative", "check_id"),
+    [
+        ("fixtures/synthetic/ar/bundles/ar_baseline.zip", "BUNDLE-positive"),
+        ("fixtures/synthetic/ar/bundles/encrypted.zip", "BUNDLE-encrypted"),
+        ("fixtures/synthetic/ar/bundles/image_only.zip", "BUNDLE-image-only"),
+        ("fixtures/synthetic/ar/ar_baseline.pdf", "PDF-bare"),
+        ("fixtures/synthetic/ar/negative/not_a_pdf.txt", "TEXT-not-a-pdf"),
+    ],
+)
+def test_files_only_fails_when_an_upload_file_is_not_the_file_it_pins(
+    tmp_path: Path, relative: str, check_id: str
+) -> None:
+    """The guard can fail: one changed byte is a FAIL naming the file, and the exit is 1."""
+    repo = _upload_file_sandbox(tmp_path)
+    target = repo / relative
+    target.write_bytes(target.read_bytes() + b"\n")
+    result = _files_only(repo, tmp_path / "evidence")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert re.search(rf"^{re.escape(check_id)}\s+FAIL\b", result.stdout, flags=re.M), result.stdout
+
+
+def test_files_only_fails_when_a_pinned_upload_file_is_missing(tmp_path: Path) -> None:
+    repo = _upload_file_sandbox(tmp_path)
+    (repo / "fixtures/synthetic/ar/bundles/encrypted.zip").unlink()
+    result = _files_only(repo, tmp_path / "evidence")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert re.search(r"^BUNDLE-encrypted\s+FAIL\s+missing", result.stdout, flags=re.M), result.stdout
+
+
+def test_files_only_fails_when_the_generated_inputs_cannot_be_built(tmp_path: Path) -> None:
+    repo = _upload_file_sandbox(tmp_path)
+    (repo / "tools").unlink()
+    (repo / "tools").mkdir()  # no generator: the check must report it, not skip it
+    result = _files_only(repo, tmp_path / "evidence")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert re.search(r"^BUNDLE-generated\s+FAIL\b", result.stdout, flags=re.M), result.stdout
