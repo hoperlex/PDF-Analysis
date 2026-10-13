@@ -458,10 +458,7 @@ Readings are decisions 1-14 at the end of this file. In addition:
 
 Part B, in addition:
 
-- **`docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md` is stale and is not this lane's** (it is outside the grant): its fixture table (lines 47 to 51) still lists `ar_baseline.pdf`, `encrypted.pdf`,
-  `image_only.pdf`, `too_many_pages.pdf` (30 pages) and `oversize.pdf` (25 MiB), line 161 says to choose `ar_baseline.pdf`, line 276 says the browser rejects `oversize.pdf`. `scripts/manual-alpha-check.sh`
-  points a reviewer at that document. No test reads those lines. The integrator (or the lane that owns the runbook) rewrites them against `bundles/ar_baseline.zip`, `bundles/encrypted.zip`,
-  `bundles/image_only.zip`, the bare `ar_baseline.pdf`, `negative/not_a_pdf.txt` and the two generated inputs (`tools/fixtures/build_journey_inputs.py`).
+- **Resolved by the executor after part B (`4369245f`, outside the grant):** `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md` and the human-tester pack under `artifacts/manual-alpha/` still named the two deleted fixtures (the pack's `SHA256SUMS` check failed, the runbook told a tester to upload bare PDFs). The runbook's file table, A03 and A10 now follow the bundle upload (six rejected files), and the pack is `alpha-test-files.tar.gz` (a deterministic tar of the three committed bundles, the bare PDF and text file the browser refuses, and the generated 501-page bundle; the 251 MiB stand-in is a `truncate -s 251M` sparse file). `sha256sum -c artifacts/manual-alpha/SHA256SUMS` passes.
 - **The browser pre-check is a closed list**: `application/zip`, `application/x-zip-compressed`, or an empty type with a `.zip` name. A browser that labels a ZIP `application/octet-stream` or anything else
   would have it refused before it is sent (`not_zip`); the server would have accepted it (it decides by the first bytes). Not seen on Chrome or Firefox; the list is the brief's. Widening it is one array.
 - **The server's own sentences are English except one**, and the web client cannot tell a catalog message from a call site's (`catalog-message.ts`), so the client states each constraint's rule itself
@@ -497,7 +494,7 @@ stored whole as `source.structured_companion` and `page_geometry_extraction` (GE
    proxy in the path); the stand's nginx upload locations with the 250 MiB body (STREAM's, `nginx -t` and the body test) and the 250 MiB memory figures on the stand (REHEARSAL, section 2.2);
    `make alpha-acceptance` / `manual-alpha-check.sh --automated` against a deployed candidate.
 3. Register the PC-02 corpus-check debt (section 4) with the command and result given there.
-4. Rewrite `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md` (section 4, "stale"); it is the runbook the acceptance script prints.
+4. `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md` and `artifacts/manual-alpha/**` were rewritten by the executor (section 4); review that diff.
 5. GEOMETRY must read an empty `polygon_points` list as no polygon (section 4.1).
 6. The journey needs a Python 3 interpreter for the two generated inputs (`E2E_PC01_PYTHON`, default `python3`) and Chrome for Testing (`E2E_PC01_CHROME`); the lane's host has both.
 
