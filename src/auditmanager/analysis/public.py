@@ -66,6 +66,7 @@ from auditmanager.analysis.text import (
 )
 from auditmanager.analysis.text.budget import REFERENCE_DOCUMENT_CHARACTERS, input_budget_characters
 from auditmanager.analysis.recognised import KIND_PORTAL_DESCRIPTION, KIND_RECOGNISED_TEXT, QUOTE_SOURCE_RECOGNISED  # W55B-RECOGNISED-01
+from auditmanager.analysis.ports.artifacts import ROLE_CROP_IMAGE, ROLE_PORTAL_BLOCKS  # W55B-GEOMETRY-01
 from auditmanager.analysis.text.proxy import ProxyDispatchError
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
 
@@ -81,9 +82,11 @@ __all__ = [
     "QUOTE_SOURCE_RECOGNISED",
     "REFERENCE_DOCUMENT_CHARACTERS",
     "ROLE_BLOCK_INDEX",
+    "ROLE_CROP_IMAGE",
     "ROLE_DOCUMENT_GRAPH",
     "ROLE_PAGE_CROPS",
     "ROLE_PAGE_INVENTORY",
+    "ROLE_PORTAL_BLOCKS",
     "ROLE_RECOGNISED_TEXT",
     "ROLE_SOURCE_DOCUMENT",
     "ROLE_SOURCE_MARKDOWN",

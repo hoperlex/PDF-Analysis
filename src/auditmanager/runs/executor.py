@@ -809,7 +809,12 @@ def _execute_run_body(
             "source_preparation",
             (ROLE_SOURCE_DOCUMENT, ROLE_SOURCE_MARKDOWN, ROLE_SOURCE_STRUCTURED_COMPANION),
         ),
-        ("page_geometry_extraction", (ROLE_PAGE_INVENTORY, ROLE_TEXT_LAYER)),
+        # `W55B-GEOMETRY-01`: the block list, when the version has one, is normalised into
+        # `geometry.portal_blocks` and its IMAGE blocks are cut as crops.
+        (
+            "page_geometry_extraction",
+            (ROLE_PAGE_INVENTORY, ROLE_TEXT_LAYER, ROLE_SOURCE_STRUCTURED_COMPANION),
+        ),
         ("document_context_build", (ROLE_BLOCK_INDEX, ROLE_TEXT_LAYER)),
     )
     halted = False

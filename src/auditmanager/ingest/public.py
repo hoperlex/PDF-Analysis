@@ -8,6 +8,7 @@ from auditmanager.ingest.commands import (
     CommandStarted,
     payload_fingerprint,
 )
+from auditmanager.ingest.envelope import PDFIUM_LOCK as PDFIUM_LOCK  # W55B-GEOMETRY-01: the process's one PDFium lock, for analysis's page renderer
 
 __all__ = [
     "CommandReplay",

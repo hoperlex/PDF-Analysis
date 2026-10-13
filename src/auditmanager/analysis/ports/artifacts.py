@@ -41,6 +41,10 @@ ROLE_PAGE_CROPS: Final[str] = "geometry.page_crops"
 ROLE_DOCUMENT_GRAPH: Final[str] = "context.document_graph"
 #: The portal's recognised text, ``P02_SEAMS`` section 4.8 (`W55B-RECOGNISED-01`).
 ROLE_RECOGNISED_TEXT: Final[str] = "prepared.recognised_text"
+#: The portal's blocks normalised, ``P02_SEAMS`` section 4.9, and the crops' PNG blobs,
+#: section 4.10 (`W55B-GEOMETRY-01`).
+ROLE_PORTAL_BLOCKS: Final[str] = "geometry.portal_blocks"
+ROLE_CROP_IMAGE: Final[str] = "geometry.crop_image"
 
 #: Every artifact document shape in ``P02_SEAMS`` section 4 is at 1.0.0.
 ARTIFACT_VERSION: Final[str] = "1.0.0"
@@ -145,9 +149,11 @@ def read_artifact(
 __all__ = [
     "ARTIFACT_VERSION",
     "ROLE_BLOCK_INDEX",
+    "ROLE_CROP_IMAGE",
     "ROLE_DOCUMENT_GRAPH",
     "ROLE_PAGE_CROPS",
     "ROLE_PAGE_INVENTORY",
+    "ROLE_PORTAL_BLOCKS",
     "ROLE_RECOGNISED_TEXT",
     "ROLE_SOURCE_DOCUMENT",
     "ROLE_SOURCE_MARKDOWN",

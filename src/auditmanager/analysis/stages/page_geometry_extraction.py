@@ -18,28 +18,62 @@ pdfplumber's ``top``/``bottom`` are already in that space, so nothing is flipped
 stating it once in the artifact is cheaper than four consumers each guessing PDF's
 bottom-left default.
 
-The page-crop manifest and ``OD-04``
-------------------------------------
-The registry marks ``geometry.page_crops`` a required output of a stage that allows
-neither ``partial`` nor ``skipped``, and ``PC-01`` does no visual detection. So the
-role is present, schema-valid and explicitly empty under a declared
-``crop_policy: none``, echoed in the metrics as ``crop_policy=none`` and
-``crop_count=0``. Its only contract consumer, ``block_analysis``, is out of ``PC-01``
-scope and would fail closed on an empty list rather than degrade.
+The source PDF is read from a temporary file
+--------------------------------------------
+Plan section B3.3: the blob is streamed to a temporary file with its digest checked as it
+streams, the extractor and the page renderer open the file by its path, and the file is
+removed when the stage leaves, whether it succeeded or not
+(:func:`auditmanager.analysis.geometry.source_file`).
 
-**Flip condition, carried from OD-04:** if any task adds a content schema for the crop
-manifest, this decision reopens.
+The page-crop manifest and ``OD-04`` (flipped by `W55B-SEAL-01`, ``R-119``)
+------------------------------------------------------------------------
+The registry marks ``geometry.page_crops`` a required output of a stage that allows
+neither ``partial`` nor ``skipped``; it is a manifest with a content schema
+(``contracts/analysis/v1/crop-manifest.schema.json``) under one of two policies, echoed in
+the metrics as ``crop_policy`` and ``crop_count``:
+
+* ``none`` -- a version without a portal bundle (no ``source.structured_companion``
+  supplied): ``crops: []`` and nothing else, exactly as before.
+* ``portal_image_blocks`` -- a portal bundle (`W55B-GEOMETRY-01`, ``P02_SEAMS`` sections
+  4.5, 4.9 and 4.10). The block list is normalised into ``geometry.portal_blocks``; each
+  page's box is checked against the PDF (:mod:`auditmanager.analysis.geometry.maths`); every
+  IMAGE block on a page that passed gets a crop, a clip render of the PDF page published as
+  a content-addressed PNG blob of role ``geometry.crop_image``; the manifest lists them. A
+  page that failed the check is ``geometry: geometry_mismatch`` in the artifact and cuts no
+  crop, and the stage still succeeds: the mismatch is visible in the artifact, in the
+  metrics and in «Блоки», never a silent fallback.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Final
 
+from auditmanager.analysis.engine.result import ArtifactRef, MetricValue
+from auditmanager.analysis.geometry import (
+    GEOMETRY_MISMATCH,
+    IMAGE,
+    CropPublisher,
+    DegenerateCrop,
+    PdfiumDocument,
+    base_scale,
+    check_page,
+    crop_record,
+    encode_png,
+    image_blocks_to_crop,
+    plan_crop,
+    portal_blocks_body,
+    read_layout,
+    renderer_name,
+    source_file,
+)
 from auditmanager.analysis.ports.artifacts import (
     ROLE_BLOCK_INDEX,
     ROLE_PAGE_CROPS,
     ROLE_PAGE_INVENTORY,
+    ROLE_PORTAL_BLOCKS,
     ROLE_SOURCE_DOCUMENT,
+    ROLE_SOURCE_STRUCTURED_COMPANION,
     ROLE_TEXT_LAYER,
     envelope,
     publish_artifact,
@@ -48,18 +82,29 @@ from auditmanager.analysis.ports.artifacts import (
 from auditmanager.analysis.ports.stage import StageContext, StageProduction
 from auditmanager.analysis.stages.extraction import ExtractedDocument, extract_document
 from auditmanager.shared.errors import DomainError, ErrorCode
+from auditmanager.storage.public import BlobStore
 
 STAGE_ID = "page_geometry_extraction"
 
-#: ``OD-04``. Declared in the artifact and echoed in the stage metrics.
+#: ``OD-04``: a version without a portal bundle. Declared in the artifact and echoed in the
+#: stage metrics.
 CROP_POLICY: Final[str] = "none"
+#: ``OD-04`` flipped (``R-119``): a portal bundle, one crop per IMAGE block on a page that
+#: passed the page-box check.
+CROP_POLICY_PORTAL: Final[str] = "portal_image_blocks"
+
+#: The ``reason`` for a block list the store could not hand back.
+REASON_PORTAL_UNREADABLE: Final[str] = "portal_input_unreadable"
+#: The ``reason`` for an IMAGE block too small to be cut (``maths.DegenerateCrop``).
+REASON_BLOCK_DEGENERATE: Final[str] = "portal_block_degenerate"
 
 BBOX_UNIT: Final[str] = "pt"
 BBOX_ORIGIN: Final[str] = "top_left"
 
 
 def run(context: StageContext) -> StageProduction:
-    """Derive the block index and publish it with the declared empty crop manifest."""
+    """Derive the block index and publish it with the crop manifest, and for a portal
+    bundle the normalised block list and the crops."""
     text_layer, text_layer_sha256 = read_artifact(
         context.blob_store,
         context.blob(ROLE_TEXT_LAYER),
@@ -78,22 +123,24 @@ def run(context: StageContext) -> StageProduction:
         # bytes the geometry must be re-derived from.
         source_blob = _source_blob_from(inventory)
 
-    try:
-        payload = context.blob_store.read(source_blob, verify=True)
-    except DomainError:
-        raise
-    except Exception as exc:  # noqa: BLE001 - re-raised as a typed refusal
-        raise DomainError(
-            ErrorCode.ANALYSIS_INPUT_INVALID,
-            message="the source document referenced by the page inventory is unreadable",
-            stage_id=STAGE_ID,
-            reason="source_unreadable",
-        ) from exc
+    companion = _companion(context)
 
-    document = extract_document(payload)
-    _refuse_text_layer_mismatch(document, text_layer)
+    with source_file(context.blob_store, source_blob, stage_id=STAGE_ID) as path:
+        document = extract_document(path)
+        _refuse_text_layer_mismatch(document, text_layer)
+        blocks = _build_blocks(document, text_layer)
+        portal = (
+            None
+            if companion is None
+            else _portal_geometry(
+                context.blob_store,
+                path,
+                companion,
+                page_count=document.page_count,
+                version_uid=context.version_uid,
+            )
+        )
 
-    blocks = _build_blocks(document, text_layer)
     block_index = envelope(
         ROLE_BLOCK_INDEX,
         context.version_uid,
@@ -103,20 +150,137 @@ def run(context: StageContext) -> StageProduction:
     crops = envelope(
         ROLE_PAGE_CROPS,
         context.version_uid,
-        crop_policy=CROP_POLICY,
-        crops=[],
+        crop_policy=CROP_POLICY if portal is None else CROP_POLICY_PORTAL,
+        crops=[] if portal is None else portal.crops,
     )
 
     block_ref, _ = publish_artifact(context.blob_store, ROLE_BLOCK_INDEX, block_index)
     crops_ref, _ = publish_artifact(context.blob_store, ROLE_PAGE_CROPS, crops)
 
+    metrics: dict[str, MetricValue] = {
+        "block_count": len(blocks),
+        "page_count": len(document.pages),
+        "crop_policy": CROP_POLICY,
+        "crop_count": 0,
+    }
+    if portal is None:
+        return StageProduction(artifacts=(block_ref, crops_ref), metrics=metrics)
+
+    portal_ref, _ = publish_artifact(context.blob_store, ROLE_PORTAL_BLOCKS, portal.document)
+    metrics.update(portal.metrics)
     return StageProduction(
-        artifacts=(block_ref, crops_ref),
+        artifacts=(block_ref, crops_ref, portal_ref, *portal.crop_images),
+        metrics=metrics,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _PortalGeometry:
+    """What a portal bundle adds: the normalised list, the crops and their blobs."""
+
+    document: dict[str, Any]
+    crops: list[dict[str, Any]]
+    crop_images: tuple[ArtifactRef, ...]
+    metrics: dict[str, MetricValue]
+
+
+def _companion(context: StageContext) -> bytes | None:
+    """The stored ``_blocks.json`` of a portal bundle, or ``None`` for a version without one.
+
+    Only the block list is read: the markdown is ``source_preparation``'s. A member the store
+    cannot hand back is refused, never treated as absent.
+    """
+    blob_id = context.inputs.get(ROLE_SOURCE_STRUCTURED_COMPANION)
+    if blob_id is None:
+        return None
+    try:
+        return context.blob_store.read(blob_id, verify=True)
+    except DomainError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - re-raised as a typed refusal
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="the portal bundle's block list could not be read from storage",
+            stage_id=STAGE_ID,
+            reason=REASON_PORTAL_UNREADABLE,
+        ) from exc
+
+
+def _portal_geometry(
+    store: BlobStore, path: str, companion: bytes, *, page_count: int, version_uid: str
+) -> _PortalGeometry:
+    """Normalise the block list, check every page's box, and cut the IMAGE blocks' crops.
+
+    PDFium reads the same temporary file the extractor read. Each crop is published as soon
+    as it is encoded, so one crop at a time is held in memory; equal crops share one blob.
+    """
+    layout = read_layout(companion, page_count=page_count, stage_id=STAGE_ID)
+    renderer = renderer_name()
+    publisher = CropPublisher(store)
+    records: list[dict[str, Any]] = []
+    with PdfiumDocument(path, stage_id=STAGE_ID) as pdf:
+        if pdf.page_count != page_count:
+            raise DomainError(
+                ErrorCode.ANALYSIS_INPUT_INVALID,
+                message=(
+                    "the page renderer and the extractor disagree on the page count; the "
+                    "stage refuses rather than choosing one"
+                ),
+                stage_id=STAGE_ID,
+                reason="page_count_disagreement",
+            )
+        pages = {page.page_number: pdf.page_geometry(page.page_number) for page in layout.pages}
+        verdicts = {
+            page.page_number: check_page(
+                portal_width_px=page.width_px,
+                portal_height_px=page.height_px,
+                portal_rotation=page.rotation_deg,
+                page_width_pt=pages[page.page_number].width_pt,
+                page_height_pt=pages[page.page_number].height_pt,
+                page_rotation=pages[page.page_number].rotation_deg,
+            )
+            for page in layout.pages
+        }
+        for block in image_blocks_to_crop(layout, verdicts):
+            page = pages[block.page_number]
+            try:
+                plan = plan_crop(
+                    block.bbox_norm,
+                    page.width_pt,
+                    page.height_pt,
+                    base_scale(layout.page(block.page_number).width_px, page.width_pt),
+                )
+            except DegenerateCrop as exc:
+                raise DomainError(
+                    ErrorCode.ANALYSIS_INPUT_INVALID,
+                    message=(
+                        "an IMAGE block of the portal block list is too small to be cut as a "
+                        "crop; the stage refuses rather than leaving the block without one"
+                    ),
+                    stage_id=STAGE_ID,
+                    reason=REASON_BLOCK_DEGENERATE,
+                ) from exc
+            image = pdf.render(block.page_number, plan)
+            reference = publisher.publish(encode_png(image))
+            records.append(crop_record(block, plan, reference, renderer))
+
+    mismatched = {number for number, verdict in verdicts.items() if verdict == GEOMETRY_MISMATCH}
+    images = [block for block in layout.blocks if block.block_type == IMAGE]
+    document = envelope(ROLE_PORTAL_BLOCKS, version_uid, **portal_blocks_body(layout, verdicts))
+    return _PortalGeometry(
+        document=document,
+        crops=records,
+        crop_images=publisher.references,
         metrics={
-            "block_count": len(blocks),
-            "page_count": len(document.pages),
-            "crop_policy": CROP_POLICY,
-            "crop_count": 0,
+            "crop_policy": CROP_POLICY_PORTAL,
+            "crop_count": len(records),
+            "crop_blob_count": len(publisher.references),
+            "crop_skipped_for_mismatch_count": sum(
+                1 for block in images if block.page_number in mismatched
+            ),
+            "portal_block_count": len(layout.blocks),
+            "portal_image_block_count": len(images),
+            "geometry_mismatch_page_count": len(mismatched),
         },
     )
 
@@ -240,4 +404,13 @@ def _build_blocks(
     return blocks
 
 
-__all__ = ["BBOX_ORIGIN", "BBOX_UNIT", "CROP_POLICY", "STAGE_ID", "run"]
+__all__ = [
+    "BBOX_ORIGIN",
+    "BBOX_UNIT",
+    "CROP_POLICY",
+    "CROP_POLICY_PORTAL",
+    "REASON_BLOCK_DEGENERATE",
+    "REASON_PORTAL_UNREADABLE",
+    "STAGE_ID",
+    "run",
+]

@@ -922,13 +922,21 @@ def _finding_view(row: Any, evidence: Sequence[Any], verdict: Any) -> FindingVie
 
 
 class BlockAdapter(_SessionHolder):
-    """``getVersionBlocks``. `W45-BLOCKS`.
+    """``getVersionBlocks`` (`W45-BLOCKS`), ``listVersionPortalBlocks`` and
+    ``streamVersionPortalBlockCrop`` (`W55B-GEOMETRY-01`).
 
     Reads through ``RunRepository`` rather than through ``auditmanager.analysis`` --
     there is no analysis-side reader for a published artifact, only a writer
     (``publish_artifact`` in ``analysis/ports/artifacts.py``), and this needed the other
     direction. ``stage_result.artifacts`` already carries every ``ArtifactRef`` a stage
     published, so the blob is resolved from that JSON rather than from a second index.
+
+    The portal reads join three artifacts of one run on ``portal_block_id``:
+    ``geometry.portal_blocks`` and ``geometry.page_crops`` of its ``page_geometry_extraction``
+    and ``prepared.recognised_text`` of its ``source_preparation``. Each is read with the
+    SHA-256 and size its ``stage_result`` recorded as the declaration (not the object's own
+    metadata), and so is a crop's PNG with the digest its manifest recorded: a blob that is
+    missing or differs is ``storage_integrity_error``, never an empty or shorter answer.
     """
 
     def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any) -> None:
@@ -1005,23 +1013,250 @@ class BlockAdapter(_SessionHolder):
 
         return self._read(work)
 
-    # `W55B-SEAL-01`. The two portal-block reads are sealed as stubs: the stage that
-    # produces ``geometry.portal_blocks`` and the crops is `W55B-GEOMETRY-01`'s, and it
-    # replaces both bodies. Until then each refuses explicitly with
-    # ``503 dependency_unavailable`` -- never ``not_produced``, which would be a true
-    # statement about a version whose run did not produce portal geometry, and a false one
-    # about a deployment that cannot yet.
+    # `W55B-GEOMETRY-01`. The two portal-block reads, which `W55B-SEAL-01` sealed as
+    # stubs answering `503 dependency_unavailable`.
+
+    #: The crop's media type: the wire's ``PortalCrop.media_type`` const and the blob's.
+    _PNG_MEDIA_TYPE = "image/png"
+
+    class _PortalSource:
+        """The run a version's portal geometry is read from, and the references to join."""
+
+        __slots__ = ("run_id", "portal_blocks", "page_crops", "recognised_text")
+
+        def __init__(
+            self,
+            *,
+            run_id: str,
+            portal_blocks: Mapping[str, Any],
+            page_crops: Mapping[str, Any] | None,
+            recognised_text: Mapping[str, Any] | None,
+        ) -> None:
+            self.run_id = run_id
+            self.portal_blocks = portal_blocks
+            self.page_crops = page_crops
+            self.recognised_text = recognised_text
+
     @staticmethod
-    def _portal_blocks_unavailable() -> Any:
-        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="portal_blocks")
+    def _artifact_reference(
+        artifacts: Sequence[Mapping[str, Any]], role: str
+    ) -> Mapping[str, Any] | None:
+        return next((artifact for artifact in artifacts if artifact.get("role") == role), None)
+
+    @staticmethod
+    def _portal_integrity(role: str) -> DomainError:
+        """The artifacts one run published disagree with each other or with the record."""
+        return DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role=role)
+
+    def _portal_source(self, version_uid: str) -> "BlockAdapter._PortalSource | None":
+        """The latest run of the version that produced portal geometry, or ``None``.
+
+        Proves the version exists first (an unknown one is ``not_found``, never the empty
+        shape), then walks the version's runs newest first for one whose
+        ``page_geometry_extraction`` succeeded **and** published ``geometry.portal_blocks``:
+        a run over a version without a bundle succeeds without it and is not portal geometry.
+        """
+        from auditmanager.analysis.public import (
+            ROLE_PAGE_CROPS,
+            ROLE_PORTAL_BLOCKS,
+            ROLE_RECOGNISED_TEXT,
+        )
+        from auditmanager.documents.repository import DocumentRepository
+        from auditmanager.runs import RunRepository
+        from auditmanager.shared.identity import VersionUid
+
+        def work(session: Session) -> BlockAdapter._PortalSource | None:
+            DocumentRepository().get_version(session, VersionUid.parse(version_uid))
+            repository = RunRepository()
+            for run in repository.list_for_version(session, version_uid):
+                stages = {
+                    stage.stage_id: stage
+                    for stage in repository.stage_results(session, str(run.run_id))
+                }
+                geometry = stages.get("page_geometry_extraction")
+                if geometry is None or geometry.status != "succeeded":
+                    continue
+                portal_blocks = self._artifact_reference(geometry.artifacts, ROLE_PORTAL_BLOCKS)
+                if portal_blocks is None:
+                    continue
+                preparation = stages.get("source_preparation")
+                return BlockAdapter._PortalSource(
+                    run_id=str(run.run_id),
+                    portal_blocks=portal_blocks,
+                    page_crops=self._artifact_reference(geometry.artifacts, ROLE_PAGE_CROPS),
+                    recognised_text=(
+                        None
+                        if preparation is None
+                        else self._artifact_reference(preparation.artifacts, ROLE_RECOGNISED_TEXT)
+                    ),
+                )
+            return None
+
+        return self._read(work)
 
     def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
-        return self._portal_blocks_unavailable()
+        from auditmanager.analysis.public import (
+            KIND_PORTAL_DESCRIPTION,
+            KIND_RECOGNISED_TEXT,
+            ROLE_PAGE_CROPS,
+            ROLE_PORTAL_BLOCKS,
+            ROLE_RECOGNISED_TEXT,
+        )
+        from auditmanager.api.schemas.blocks import (
+            STATUS_NOT_PRODUCED,
+            STATUS_PRODUCED,
+            PortalBlockView,
+            PortalCropView,
+            PortalRecognisedTextView,
+        )
+
+        source = self._portal_source(version_uid)
+        if source is None:
+            # No run of this version produced portal geometry: absent, never rendered as
+            # the same answer a produced geometry with no blocks gives.
+            return PortalBlockIndexView(version_uid, STATUS_NOT_PRODUCED, None, ())
+
+        blocks = self._portal_document(source.portal_blocks, ROLE_PORTAL_BLOCKS, version_uid)
+        crops = self._portal_document(source.page_crops, ROLE_PAGE_CROPS, version_uid)
+        recognised = self._portal_document(
+            source.recognised_text, ROLE_RECOGNISED_TEXT, version_uid
+        )
+        identifiers = {block["portal_block_id"] for block in blocks["blocks"]}
+        entries = {entry["portal_block_id"]: entry for entry in recognised["entries"]}
+        records = {record["portal_block_id"]: record for record in crops["crops"]}
+        if not set(entries) <= identifiers:
+            raise self._portal_integrity(ROLE_RECOGNISED_TEXT)
+        if not set(records) <= identifiers:
+            raise self._portal_integrity(ROLE_PAGE_CROPS)
+
+        views: list[PortalBlockView] = []
+        for block in blocks["blocks"]:
+            identifier = block["portal_block_id"]
+            text: PortalRecognisedTextView | None = None
+            description: str | None = None
+            entry = entries.get(identifier)
+            if entry is not None:
+                if entry["kind"] == KIND_RECOGNISED_TEXT and block["block_type"] == "text":
+                    # The wire's `text` is `minLength: 1`: an empty body is left out.
+                    if entry["text"]:
+                        text = PortalRecognisedTextView(entry["text"], tuple(entry["flags"]))
+                elif entry["kind"] == KIND_PORTAL_DESCRIPTION and block["block_type"] == "image":
+                    if entry["text"]:
+                        description = entry["text"]
+                else:
+                    raise self._portal_integrity(ROLE_RECOGNISED_TEXT)
+            crop: PortalCropView | None = None
+            record = records.get(identifier)
+            if record is not None:
+                if block["block_type"] != "image" or block["geometry"] != "ok":
+                    raise self._portal_integrity(ROLE_PAGE_CROPS)
+                crop = PortalCropView(
+                    self._PNG_MEDIA_TYPE, record["width_px"], record["height_px"], record["sha256"]
+                )
+            polygon = block.get("polygon_points")
+            views.append(
+                PortalBlockView(
+                    portal_block_id=identifier,
+                    page_number=block["page_number"],
+                    page_label=block["page_label"],
+                    ordinal=block["ordinal"],
+                    block_type=block["block_type"],
+                    status=block["status"],
+                    bbox_norm=tuple(block["bbox_norm"]),
+                    geometry=block["geometry"],
+                    polygon_points=(
+                        tuple((point[0], point[1]) for point in polygon) if polygon else None
+                    ),
+                    crop=crop,
+                    recognised_text=text,
+                    portal_description=description,
+                )
+            )
+        # The artifact is written in the port's order (page, ordinal with a null one last,
+        # id) by the stage; it is passed on as written and never re-sorted here.
+        return PortalBlockIndexView(version_uid, STATUS_PRODUCED, source.run_id, tuple(views))
 
     def read_portal_block_crop(
         self, *, version_uid: str, portal_block_id: str
     ) -> PortalCropContent:
-        return self._portal_blocks_unavailable()
+        from auditmanager.analysis.public import ROLE_CROP_IMAGE, ROLE_PAGE_CROPS
+
+        source = self._portal_source(version_uid)
+        if source is None:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="PortalBlock")
+        crops = self._portal_document(source.page_crops, ROLE_PAGE_CROPS, version_uid)
+        record = next(
+            (item for item in crops["crops"] if item["portal_block_id"] == portal_block_id),
+            None,
+        )
+        if record is None:
+            # Not a block of this version, not an IMAGE block, or on a page marked
+            # `geometry_mismatch`: the same fact for the caller, there is no such image.
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="PortalBlock")
+        content = self._verified_bytes(
+            {
+                "role": ROLE_CROP_IMAGE,
+                "blob_id": record["blob_id"],
+                "sha256": record["sha256"],
+                "size_bytes": record["size_bytes"],
+            }
+        )
+        return PortalCropContent(self._PNG_MEDIA_TYPE, record["sha256"], content)
+
+    def _portal_document(
+        self, reference: Mapping[str, Any] | None, role: str, version_uid: str
+    ) -> dict[str, Any]:
+        """One JSON artifact of the join, verified against its recorded digest.
+
+        A reference the run did not record, bytes that are not that artifact of this
+        version, or an artifact version this reader does not implement all fail closed.
+        """
+        import json
+
+        from auditmanager.analysis.public import ARTIFACT_VERSION
+
+        if reference is None:
+            raise self._portal_integrity(role)
+        try:
+            document = json.loads(self._verified_bytes(reference).decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            raise self._portal_integrity(role) from None
+        if not isinstance(document, dict):
+            raise self._portal_integrity(role)
+        if document.get("artifact_version") != ARTIFACT_VERSION:
+            raise DomainError(ErrorCode.UNSUPPORTED_CONTRACT_VERSION)
+        if document.get("artifact_role") != role or document.get("version_uid") != version_uid:
+            raise self._portal_integrity(role)
+        return document
+
+    def _verified_bytes(self, reference: Mapping[str, Any]) -> bytes:
+        """The blob's bytes, held to the SHA-256 and size the reference recorded."""
+        from auditmanager.ingest import domain_error_from_storage
+        from auditmanager.storage.public import BlobNotFoundError, StorageError, parse_blob_id
+
+        blob_id = str(reference["blob_id"])
+        role = str(reference["role"])
+        try:
+            chunks = self._blob_store.open_stream(
+                parse_blob_id(blob_id),
+                expected_sha256=str(reference["sha256"]),
+                expected_size=int(reference["size_bytes"]),
+            )
+            try:
+                return b"".join(chunks)
+            finally:
+                close = getattr(chunks, "close", None)
+                if close is not None:
+                    close()
+        except BlobNotFoundError:
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                blob_id=blob_id,
+                role=role,
+                expected_sha256=str(reference["sha256"]),
+            ) from None
+        except StorageError as exc:
+            raise domain_error_from_storage(exc, blob_id=blob_id, role=role) from None
 
     def _read_artifact(self, artifact: Mapping[str, Any]) -> dict[str, Any]:
         import json
