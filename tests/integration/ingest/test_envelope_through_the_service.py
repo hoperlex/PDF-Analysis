@@ -231,6 +231,40 @@ def test_an_oversize_sparse_handle_is_refused_without_being_read(
     assert set(bucket_keys()) == before
 
 
+def test_an_upload_of_exactly_the_bound_is_judged_by_what_it_holds_not_by_its_size(
+    watched, project, key, tmp_path: Path
+) -> None:
+    """The bound is inclusive: 250 MiB itself passes the size rule (this stand-in is a ZIP
+    header and a hole, so the reader then cannot read it), where one byte more does not."""
+    service, watching = watched
+    path = generated.oversize_sparse_file(tmp_path / "at-the-bound.stand-in", MAX_BYTES)
+    with path.open("rb") as handle:
+        with pytest.raises(DomainError) as refused:
+            _upload(service, project, handle, key, "at-bound", source_filename="at.zip")
+    assert refused.value.envelope("c").details == {
+        "field": "file",
+        "constraint": "bundle_unreadable",
+    }
+    assert watching.staged == []
+
+
+def test_a_non_zip_is_a_non_zip_before_it_is_anything_else_whatever_its_size(
+    watched, project, key, sparse_upload
+) -> None:
+    """A PDF-headed file past 250 MiB is told it is not a bundle, not that it is too big: the
+    first question is what the upload is, and the answer to the second (the bound) would send a
+    person with the wrong file to the wrong remedy."""
+    service, watching = watched
+    with sparse_upload(MAX_BYTES + 1).open("rb") as handle:
+        with pytest.raises(DomainError) as refused:
+            _upload(service, project, handle, key, "wrong-kind", source_filename="big.pdf")
+    assert refused.value.envelope("c").details == {
+        "field": "file",
+        "constraint": "portal_bundle_required",
+    }
+    assert watching.staged == []
+
+
 def test_an_identical_upload_from_a_handle_is_replayed_not_published_twice(
     watched, project, baseline_bundle, key, engine
 ) -> None:

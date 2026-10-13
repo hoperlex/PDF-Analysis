@@ -177,6 +177,22 @@ def test_two_members_inside_the_member_bound_that_pass_the_total_are_refused(
     assert judge(path, LOW)[:2] == ("file", "bundle_total_size")
 
 
+def test_the_counted_total_is_held_to_the_bound_when_a_header_says_less(tmp_path: Path) -> None:
+    """The total, by the bytes that come out. The PDF member is honest and sits at the member
+    bound; the HTML's header declares 1 000 bytes (so the declared total passes) and it unpacks
+    to 1.2 MiB, which carries the running total past 3 MiB -- inside its own member bound. Only
+    counting as the bytes arrive can refuse it, and it does so before the header is compared
+    with the bytes (a mismatch would have answered `bundle_unreadable`)."""
+    items = an.members()
+    items[0] = Member(b"bundle.pdf", zipwrite.Fill(LOW.member_bytes, 0, b"%PDF-1.7\n"), method=0)
+    items.append(
+        Member(b"bundle_results.html", zipwrite.Fill(MiB + MiB // 5, 0), method=0, declared_size=1000)
+    )
+    path = tmp_path / "counted-total.zip"
+    zipwrite.write_zip(path, items)
+    assert judge(path, LOW)[:2] == ("file", "bundle_total_size")
+
+
 def test_a_ratio_above_the_bound_is_refused(tmp_path: Path) -> None:
     path = an.compression_ratio(tmp_path / "r.zip", size=MiB)
     assert judge(path, LOW)[:2] == ("file", "bundle_compression_ratio")
@@ -272,6 +288,38 @@ def test_a_block_list_or_markdown_over_the_memory_bound_is_refused_as_a_member_s
     path = tmp_path / "text.zip"
     zipwrite.write_zip(path, items)
     assert judge(path, LOW)[:2] == ("file", "bundle_member_size")
+
+
+@pytest.mark.parametrize(
+    "suffix", [b".pdf", b"_blocks.json", b"_results.md", b"_stamp_audit.json"]
+)
+def test_a_member_declared_over_its_bound_is_refused_before_a_byte_of_it_is_unpacked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suffix: bytes
+) -> None:
+    """The declared size is the cheap refusal: nothing is inflated or written for a member whose
+    own header already says it is too big. (The counted bound would refuse the same archive
+    with the same constraint, a moment and many bytes later; this is what tells them apart.)"""
+    reads: list[int] = []
+    real = ba._Archive.read_chunks
+
+    def spy(self: object, entry: object):  # type: ignore[no-untyped-def]
+        reads.append(entry.index)  # type: ignore[attr-defined]
+        return real(self, entry)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ba._Archive, "read_chunks", spy)
+    items = an.members()
+    if suffix == b"_stamp_audit.json":
+        items.append(Member(b"bundle_stamp_audit.json", b"{}"))
+    target = next(i for i in items if i.name.endswith(suffix))
+    bound = {b".pdf": LOW.member_bytes, b"_blocks.json": LOW.text_member_bytes,
+             b"_results.md": LOW.text_member_bytes,
+             b"_stamp_audit.json": LOW.stamp_audit_bytes}[suffix]
+    target.payload = b"x" * (bound + 1)
+    path = tmp_path / "declared.zip"
+    zipwrite.write_zip(path, items)
+    expected = "stamp_audit_invalid" if suffix == b"_stamp_audit.json" else "bundle_member_size"
+    assert judge(path, LOW)[:2] == ("file", expected)
+    assert reads == [], f"members were unpacked ({reads}) before the declared size was judged"
 
 
 def test_the_stamp_audit_cap_holds_declared_and_counted() -> None:
