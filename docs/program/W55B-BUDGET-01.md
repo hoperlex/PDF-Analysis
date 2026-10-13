@@ -88,7 +88,7 @@ PYTHONPATH=src .venv/bin/python <script>        # scratch, not committed; the te
 * **(b) tokens per character.** A request's characters (system prompt, schema, rendered document) per input token: **2.119 to 2.178** for the fourteen
   PC-02 documents (mean 2.139) and **1.958** for the AR baseline, the densest and the nearest to real architectural text. A least-squares line through
   the fourteen is 1 808 tokens of fixed prompt plus 0.4575 tokens per pypdfium2 character with a 26-token worst residual, so the density is stable across
-  the PC-02 documents; the AR baseline sits 12 % above it and is why the constant is set from it and not from the mean.
+  the PC-02 documents; the AR baseline is 9 % denser than the PC-02 mean per request character (20 % denser per character of its own text) and is why the constant is set from it and not from the mean.
 * **(c) the page framing.** `render_document` adds a preamble and `=== Страница N ===` with blank lines around every page: 29 to 37 characters per page on
   the measured documents, **11 472 characters for 500 empty pages** (the upload envelope's maximum, `ingest.MAX_PAGES`).
 * **(d) what a real run spends.** Replies were 10 to 546 output tokens (PC-02), $0.013 to $0.030 a run; the single most expensive thing a run can do is
@@ -98,7 +98,7 @@ PYTHONPATH=src .venv/bin/python <script>        # scratch, not committed; the te
 
 | Constant | Value | Why |
 | --- | --- | --- |
-| `CHARACTERS_PER_TOKEN` | **1.4** (exact `7/5`) | the densest measured request (1.958) less **40 %**; 53 % below the PC-02 mean (2.139) |
+| `CHARACTERS_PER_TOKEN` | **1.4** (exact `7/5`) | assumes **40 % more tokens per character** than the densest measured request (1.958 / 1.4) and 53 % more than the PC-02 mean (2.139 / 1.4) |
 | `PAGE_FRAMING_ALLOWANCE_CHARACTERS` | **12 000** | covers the measured 11 472 for 500 pages; a test fails if the envelope's page limit or the rendering outgrows it |
 | fixed prompt | **3 639** characters (3 012 + 627), read from `prompt.py` | sent with every request; moves with a prompt edit instead of silently outgrowing the budget |
 | output cap | **16 000** tokens, read from the prompt bundle | priced at the pinned output rate, in full |

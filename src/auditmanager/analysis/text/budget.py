@@ -74,7 +74,8 @@ from auditmanager.analysis.text.prompt import (
 #: Each request's tokens over the characters it carried (system prompt + response schema +
 #: the rendered document) are 0.459 to 0.472 tokens per character for the fourteen PC-02
 #: documents (2.12 to 2.18 characters per token) and 0.511 for the AR baseline (1.958
-#: characters per token), the densest. 1.4 is that densest figure less 40 %: real
+#: characters per token), the densest. 1.4 assumes **40 % more tokens per character** than
+#: that densest figure (1.958 / 1.4) and 53 % more than the PC-02 mean (2.14): real
 #: architectural text (dimensions, tables, designations) is denser than a synthetic
 #: document, and the AR baseline is the nearest thing to it that was measured. A
 #: ``Fraction`` so the arithmetic below is exact and the budget monotone.
