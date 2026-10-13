@@ -78,6 +78,8 @@ from auditmanager.analysis.public import (
     ROLE_DOCUMENT_GRAPH,
     ROLE_PAGE_INVENTORY,
     ROLE_SOURCE_DOCUMENT,
+    ROLE_SOURCE_MARKDOWN,
+    ROLE_SOURCE_STRUCTURED_COMPANION,
     ROLE_TEXT_LAYER,
     ArtifactRef,
     StageError,
@@ -786,12 +788,27 @@ def _execute_run_body(
         size_bytes=source_entry.size_bytes,
         media_type=source_entry.media_type,
     )
+    # `W55B-RECOGNISED-01`: a portal bundle's markdown and block list, when the version's
+    # manifest holds them, reach `source_preparation` as its two optional inputs. A version
+    # without a bundle has neither, and the stage runs exactly as before.
+    for entry in version.manifest:
+        if entry.role in (ROLE_SOURCE_MARKDOWN, ROLE_SOURCE_STRUCTURED_COMPANION):
+            outputs.refs[entry.role] = ArtifactRef(
+                role=entry.role,
+                blob_id=str(entry.blob_id),
+                sha256=entry.sha256,
+                size_bytes=entry.size_bytes,
+                media_type=entry.media_type,
+            )
 
     observations_document: Mapping[str, Any] | None = None
 
     # -- the three deterministic stages, in registry dependency order ---------
     deterministic = (
-        ("source_preparation", (ROLE_SOURCE_DOCUMENT,)),
+        (
+            "source_preparation",
+            (ROLE_SOURCE_DOCUMENT, ROLE_SOURCE_MARKDOWN, ROLE_SOURCE_STRUCTURED_COMPANION),
+        ),
         ("page_geometry_extraction", (ROLE_PAGE_INVENTORY, ROLE_TEXT_LAYER)),
         ("document_context_build", (ROLE_BLOCK_INDEX, ROLE_TEXT_LAYER)),
     )
