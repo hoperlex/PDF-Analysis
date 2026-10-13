@@ -238,9 +238,10 @@ def block_entry(block: PortalBlockGeometry, geometry: str) -> dict[str, Any]:
         "status": block.status,
         "bbox_norm": list(block.bbox_norm),
         "geometry": geometry,
+        "polygon_points": [list(point) for point in block.polygon_points or ()],
     }
-    if block.polygon_points:
-        entry["polygon_points"] = [list(point) for point in block.polygon_points]
+    if not entry["polygon_points"]:
+        del entry["polygon_points"]  # a rectangle: absent, never `null` or `[]`
     return entry
 
 

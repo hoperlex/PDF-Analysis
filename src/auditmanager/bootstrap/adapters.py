@@ -1236,11 +1236,13 @@ class BlockAdapter(_SessionHolder):
 
         blob_id = str(reference["blob_id"])
         role = str(reference["role"])
+        # The declaration is the reference's record, never the object's own metadata.
+        declared_sha256, declared_size = str(reference["sha256"]), int(reference["size_bytes"])
         try:
             chunks = self._blob_store.open_stream(
                 parse_blob_id(blob_id),
-                expected_sha256=str(reference["sha256"]),
-                expected_size=int(reference["size_bytes"]),
+                expected_sha256=declared_sha256,
+                expected_size=declared_size,
             )
             try:
                 return b"".join(chunks)
@@ -1253,7 +1255,7 @@ class BlockAdapter(_SessionHolder):
                 ErrorCode.STORAGE_INTEGRITY_ERROR,
                 blob_id=blob_id,
                 role=role,
-                expected_sha256=str(reference["sha256"]),
+                expected_sha256=declared_sha256,
             ) from None
         except StorageError as exc:
             raise domain_error_from_storage(exc, blob_id=blob_id, role=role) from None

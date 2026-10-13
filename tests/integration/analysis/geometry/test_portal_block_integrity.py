@@ -37,7 +37,12 @@ new_key = harness.new_key
 
 
 class _SwappingStore:
-    """The real store, except that one blob is read as another, or is missing."""
+    """The real store, except that one blob has been replaced by another, or is gone.
+
+    Every way of reaching the blob -- its recorded facts, a whole read, a stream -- answers
+    for the replacement, so only a reader that holds the bytes to the digest **its own
+    record** names can tell.
+    """
 
     def __init__(self, inner: Any, swap: dict[str, str | None]) -> None:
         self._inner = inner
@@ -46,13 +51,22 @@ class _SwappingStore:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
 
-    def open_stream(self, blob_id: Any, **kwargs: Any) -> Any:
+    def _target(self, blob_id: Any) -> Any:
         if str(blob_id) in self._swap:
             other = self._swap[str(blob_id)]
             if other is None:
                 raise BlobNotFoundError(blob_id=str(blob_id))
-            return self._inner.open_stream(parse_blob_id(other), **kwargs)
-        return self._inner.open_stream(blob_id, **kwargs)
+            return parse_blob_id(other)
+        return blob_id
+
+    def inspect(self, blob_id: Any) -> Any:
+        return self._inner.inspect(self._target(blob_id))
+
+    def read(self, blob_id: Any, **kwargs: Any) -> bytes:
+        return self._inner.read(self._target(blob_id), **kwargs)
+
+    def open_stream(self, blob_id: Any, **kwargs: Any) -> Any:
+        return self._inner.open_stream(self._target(blob_id), **kwargs)
 
 
 @pytest.mark.parametrize("fault", ["missing", "other bytes"])

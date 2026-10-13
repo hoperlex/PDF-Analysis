@@ -272,7 +272,23 @@ def test_a_page_whose_box_disagrees_cuts_no_crop_and_the_stage_still_succeeds(st
 # -- equal crops ---------------------------------------------------------------------------
 
 
-def test_equal_crops_are_one_blob(store) -> None:
+class _CountingStore:
+    """The real store, counting the crop PNGs published through it."""
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+        self.crop_publications = 0
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    def put_blob(self, source: Any, **kwargs: Any) -> Any:
+        if str(kwargs.get("role")) == "geometry_crop_image":
+            self.crop_publications += 1
+        return self._inner.put_blob(source, **kwargs)
+
+
+def test_equal_crops_are_one_blob_published_once(store) -> None:
     pages = [_square_page(), _square_page()]
     box = _over_square(pages[0])
     blocks = [
@@ -280,8 +296,16 @@ def test_equal_crops_are_one_blob(store) -> None:
         BlockSpec("image", 1, box, ordinal=2),     # the same box on the same page
         BlockSpec("image", 2, box, ordinal=1),     # the same box on an identical page
     ]
-    result = run_geometry(store, prepare(store, bundle_members(pages, blocks)))
+    prepared = prepare(store, bundle_members(pages, blocks))
+    counting = _CountingStore(store)
+    from auditmanager.analysis.public import run_stage
+
+    result = run_stage(
+        "page_geometry_extraction", version_uid=VERSION_UID, inputs=prepared.geometry_inputs(),
+        blob_store=counting,
+    )
     assert result.status is StageStatus.SUCCEEDED, result.error
+    assert counting.crop_publications == 1, "an equal crop is published once"
     manifest = artifact_document(store, result, ROLE_PAGE_CROPS)
     assert len(manifest["crops"]) == 3
     assert len({c["blob_id"] for c in manifest["crops"]}) == 1
