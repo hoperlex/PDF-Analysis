@@ -238,6 +238,32 @@ fix (the refused-archive row), the other had been run against the wrong test fil
 | `looks_like_zip` routing in the adapter | the ZIP branch is `if False` | `test_envelope_handle_adapter::test_a_zip_is_a_bundle_and_anything_else_is_still_the_single_pdf_entry[PK\x03\x04 a local header-upload_bundle]` |
 | a non-ZIP is a non-ZIP before anything else (service) | the service's own check is `if False` | `test_envelope_through_the_service::test_a_non_zip_is_a_non_zip_before_it_is_anything_else_whatever_its_size` (**selected wrongly in the first run**, where the reader's second check made the mutant look equivalent) |
 
+### 2.5 The 62 files of the freeze's SUITE list: which moved, which were left, and why
+
+The list came from `git grep -l -E 'upload_single_pdf\(|files=|"file": \(|upload_document\(|uploadDocument' -- tests web/tests scripts`;
+on this tree the same command matches 53 files (the 4 it matches outside the list are this lane's own legacy-path tests). The pattern is
+broad: many matches are the word `files=` of another API or the operation's name in a table.
+
+- **Moved to bundles (31 files, each now uploads a portal bundle or asserts what a bundle does):** the characterization `journey.py`
+  and records 02, 17, 18, 19, 20, 21, 26, 33 (records 13 and 32 moved as well; the plan grants them beyond the list); `tests/e2e/pc01/{driver,test_acceptance,
+  test_live_text_analysis}.py` and `tests/e2e/test_pc01_journey_conformance.py`; `tests/integration/api/{conftest,test_document_content_window,
+  test_multipart_rules,test_no_internal_identifiers}.py`; the eleven `tests/integration/ingest/` modules of the list; and
+  `tests/integration/p02_journey/{journey,test_explicit_failures,test_manifest_role_seam}.py`.
+- **Left, because they send no PDF (16 files; the match is a word, and the probe of 2.3 confirms none fails with the bare-PDF paths
+  refused):** `scripts/light_acceptance.py`, `scripts/validate_bootstrap.py`, `tests/contract/{test_cp00_candidate,test_deploy_auto_workflow,
+  test_validate_bootstrap}.py` (the words `--untracked-files=all` and `json_files=`); `tests/characterization/.../test_response_baseline.py`
+  and `tests/contract/domain_p02/test_openapi_document.py` (the operation's name in a list); `tests/integration/api/{test_authorization,
+  test_listing_surface,test_role_register,test_served_document_and_health_plane}.py` (the operation in a table or in prose; no body);
+  `tests/integration/composition/test_deploy_script_refusals.py`, `tests/integration/db/test_norms_corpus_migration.py`,
+  `tests/integration/norms/test_snapshot_rows.py`, `tests/integration/norms/bundle/test_manifest.py` (keyword arguments named `files=`
+  or `...profiles=`); `tests/characterization/.../22-uploadDocument.refusal.max_bytes.json` (a request with no body at all, refused by
+  the transport cap STREAM set).
+- **Left for part B (14 files, browser or journey, not to be edited here):** `web/tests/contract/seam-operations.contract.test.ts`,
+  `web/tests/guards/{dashboard-invalidation,rendered-language}.guard.test.ts`, `web/tests/unit/projects/upload-failure.test.ts`,
+  `web/tests/unit/screens/cold-load.test.ts`; `tests/e2e/pc01/journey/{manifest.json,refusals.mjs,prove_the_guard_can_fail.py}` and the six
+  `tests/e2e/pc01/journey/fixtures/**/*.manifest.json`. (`prove_the_guard_can_fail.py` matches only operation names.)
+- **Not this lane's:** `tests/support/expected_facts.json` (`tests/support/**`).
+
 ## 3. Contracts
 
 **None changed.** `contracts/**` was not touched (the sealed schemas, the stage registry and the OpenAPI document are SEAL's), no migration
