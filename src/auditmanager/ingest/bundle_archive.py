@@ -36,8 +36,9 @@ Order of the rules, cheapest first (each refusal answers a registered
    symbolic link, an encrypted member, a method other than stored or deflate; then names
    that repeat (after case folding and NFC), the member set, one stem;
 2. the declared sizes (per member, then in total), then the declared compression ratios;
-3. each member unpacked and counted: its actual bytes against the bounds, against its
-   declaration, its CRC-32, its ratio; then the archive's own ratio.
+3. each member unpacked and counted: its actual bytes against the bounds and against its
+   declaration, and its CRC-32. (The ratio needs no second look: once the bytes counted
+   equal the declared size, the declared ratio is the ratio of these bytes.)
 """
 
 from __future__ import annotations
@@ -696,8 +697,8 @@ def _unpack(
                 sink.close()
         if actual != entry.size or crc & 0xFFFFFFFF != entry.crc:
             raise refuse("bundle_unreadable")
-        if _ratio_exceeded(actual, entry.compressed_size, limits.ratio):
-            raise refuse("bundle_compression_ratio")
+        # No ratio check here: the bytes counted equal the declared size by now, so the
+        # ratio the declared sizes gave (``_judge_declared``) is already the ratio of these.
         members[role] = ExtractedMember(
             role=role,
             display_name=_display_stem_name(entry),
@@ -705,8 +706,6 @@ def _unpack(
             sha256=digest.hexdigest(),
             path=None if sink is None else target,
         )
-    if _ratio_exceeded(total, archive.size, limits.ratio):
-        raise refuse("bundle_compression_ratio")
     return members
 
 
