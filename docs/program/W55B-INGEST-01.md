@@ -1,36 +1,127 @@
-# W55B-INGEST-01 — part A (backend and the test suite): living report
+# W55B-INGEST-01 — part A (backend and the test suite): report
 
 - Task: `dispatch/W55-PLAN.md` §B3.1, §B3.2 (limits, database), §B3.4, §B3.5, §B4 Stage B 1 `W55B-INGEST-01`, §B5.
 - Branch `agent/w55b`, worktree `.local/worktrees/w55b-exec`, base `588773e9` (STREAM report; below it FIXTURES `461411b6`, SEAL `85fd99f0`).
-- **Part A is this file's author. Part B** (the browser upload form, the browser journey, the final switch that refuses a bare PDF)
-  is written afterwards by another writer. A successor can continue from `git log` and this file alone.
-- This report is rewritten in every commit. The final form follows the six-item layout of the other lane reports.
+- Written by two writers: the first died after twelve commits (`d4d4e483` to `5179fe75`), the second continued from `git log` and the
+  first version of this file (`3287aa23` onward) and wrote the sections marked "second writer".
+- **Part A is complete; part B is not started.** Part B (the browser upload form, the browser journey, the final switch that refuses a
+  bare PDF) is written afterwards by another writer; section 5 says exactly what it changes.
+- **State left behind:** a portal bundle is accepted, and a bare PDF is **still accepted** (the branch marked `W55B-LEGACY-BARE-PDF`).
+  Nothing was pushed, merged or tagged; no contract, migration, lock file or composition root was touched.
 
-## Status
+## 1. Changed files (`git diff --name-status 588773e9..HEAD`, before this file's last rewrite)
 
-Updated in each commit. `[x]` done and committed, `[~]` in progress, `[ ]` not started.
+Product code: `src/auditmanager/ingest/{bundle_archive,bundle_envelope,bundle_members}.py` (new), `ingest/{__init__,commands,envelope,service}.py`,
+`documents/{__init__,models,public,repository}.py`, `bootstrap/adapters.py` (`DocumentAdapter` only). Tests: `tests/integration/ingest/`
+(three new modules `test_bundle_archive`, `test_bundle_envelope`, `test_bundle_publication`, the helper `bundle_support.py`, and the existing
+modules moved to bundles), `tests/integration/api/`, `p02_journey/`, `tests/characterization/` (the journey and ten records), `tests/e2e/`
+(driver, acceptance, live text analysis, journey conformance, the two headroom files), `tests/contract/fixtures_ar/`. Generators and fixtures:
+`tools/fixtures/` (the negatives as generators, `MAX_PAGES`), `fixtures/synthetic/ar/` (`oversize.pdf` and `too_many_pages.pdf` deleted).
 
-- [x] 1. Bundle reader `src/auditmanager/ingest/bundle_archive.py`: central directory, names, every archive rule, members extracted to temporary files with the actual bytes counted. Tests: `tests/integration/ingest/test_bundle_archive.py` (one refusal test per rule, product vs the FIXTURES reference validator on all 67 small negatives, the size rules declared and counted, names, ZIP64/descriptors/real deflate, memory).
-- [x] 2. Bundle envelope `bundle_envelope.py`: PDF member (the bare PDF's own refusals), `_blocks.json` against the pinned schema (hand-written, compared with the contract file and with the generic checker over a seeded fuzz), `_results.md` both ways, text-layer rule, the three counts. Tests: `test_bundle_envelope.py`.
-- [x] 3. Counts on `document_version` (`documents/{models,public,repository}.py`; NULL for a bare PDF). Not on the API wire.
-- [x] 4. `IngestService.upload_bundle`: four stored members, fingerprint over all five digests, all staged before any is recorded, one breadcrumb transaction, one publication transaction. Tests: `test_bundle_publication.py` (fingerprint, HTML not stored, partial member set, refused bundle leaves nothing, reconciliation).
-- [x] 5. `DocumentAdapter` routes by magic bytes (`looks_like_zip`; the bare-PDF branch is marked `W55B-LEGACY-BARE-PDF`).
-- [x] 6. Limits: `envelope.py` and `ingest/__init__.py` 500 / 250 MiB; headroom chain gains `pre-check <= MAX_BYTES < UPLOAD_MAX_BODY < nginx` (`test_upload_limit_headroom.py` + 3 prover mutations); `ar_corpus` `MAX_PAGES` 500.
-- [x] 7. Negatives: `oversize.pdf`, `too_many_pages.pdf` deleted; generators replace them; `SHA256SUMS`, `expected_issues.json`, `bundle_manifest.json`, `tests/contract/fixtures_ar/**` follow; both generators' `--check` and `sha256sum -c` are green.
-- [~] 8. The suite: moved so far: characterization journey and records, `tests/e2e/pc01/{driver,test_acceptance,test_live_text_analysis}.py`,
-  `tests/integration/ingest/*`, `tests/integration/p02_journey/*`, `tests/integration/api/*` (the conftest double delegates to the shipped
-  adapter; the tests that upload over HTTP send bundles). Still to do: the probe over every directory (item C of the successor's brief)
-  and the report's list of files left for part B.
-- [ ] 9. 250 MiB bundle: memory and time measured (`.local/w55b-tools/measure_bundle.py`, lane ports 57531/57532).
-- [ ] 10. Mutation proofs, final checks, containment, hand-back.
+```text
+A docs/program/W55B-INGEST-01.md
+M fixtures/synthetic/ar/README.md
+M fixtures/synthetic/ar/SHA256SUMS
+M fixtures/synthetic/ar/bundles/bundle_manifest.json
+M fixtures/synthetic/ar/expected_issues.json
+D fixtures/synthetic/ar/negative/oversize.pdf
+D fixtures/synthetic/ar/negative/too_many_pages.pdf
+M scripts/manual-alpha-check.sh
+M src/auditmanager/bootstrap/adapters.py
+M src/auditmanager/documents/__init__.py
+M src/auditmanager/documents/models.py
+M src/auditmanager/documents/public.py
+M src/auditmanager/documents/repository.py
+M src/auditmanager/ingest/__init__.py
+A src/auditmanager/ingest/bundle_archive.py
+A src/auditmanager/ingest/bundle_envelope.py
+A src/auditmanager/ingest/bundle_members.py
+M src/auditmanager/ingest/commands.py
+M src/auditmanager/ingest/envelope.py
+M src/auditmanager/ingest/service.py
+M tests/characterization/w13_baseline/journey.py
+M tests/characterization/w13_baseline/records/02-uploadDocument.success.json
+M tests/characterization/w13_baseline/records/13-getDocumentVersion.success.json
+M tests/characterization/w13_baseline/records/17-uploadDocument.refusal.pdf_magic_bytes.json
+M tests/characterization/w13_baseline/records/18-uploadDocument.refusal.byte_size.json
+M tests/characterization/w13_baseline/records/19-uploadDocument.refusal.not_encrypted.json
+M tests/characterization/w13_baseline/records/20-uploadDocument.refusal.page_count.json
+M tests/characterization/w13_baseline/records/21-uploadDocument.refusal.every_page_has_extractable_text.json
+M tests/characterization/w13_baseline/records/26-uploadDocument.refusal.additionalProperties.json
+M tests/characterization/w13_baseline/records/32-listDocuments.success.json
+M tests/characterization/w13_baseline/records/33-listVersions.success.json
+M tests/contract/fixtures_ar/test_negative_fixtures.py
+M tests/contract/fixtures_ar/test_portal_bundles.py
+M tests/e2e/pc01/driver.py
+M tests/e2e/pc01/test_acceptance.py
+M tests/e2e/pc01/test_live_text_analysis.py
+M tests/e2e/prove_the_headroom_guard_can_fail.py
+M tests/e2e/test_pc01_journey_conformance.py
+M tests/e2e/test_upload_limit_headroom.py
+M tests/integration/analysis_engine/test_fail_closed.py
+M tests/integration/api/conftest.py
+M tests/integration/api/test_document_content_window.py
+M tests/integration/api/test_journey.py
+M tests/integration/api/test_multipart_rules.py
+M tests/integration/api/test_no_internal_identifiers.py
+M tests/integration/api/test_portal_block_routes.py
+M tests/integration/api/test_schema_conformance.py
+M tests/integration/composition/test_a_published_run_reports_itself.py
+M tests/integration/composition/test_version_blocks_wire_shape.py
+A tests/integration/ingest/bundle_support.py
+M tests/integration/ingest/conftest.py
+A tests/integration/ingest/test_bundle_archive.py
+A tests/integration/ingest/test_bundle_envelope.py
+A tests/integration/ingest/test_bundle_publication.py
+M tests/integration/ingest/test_envelope_differential.py
+M tests/integration/ingest/test_envelope_handle_adapter.py
+M tests/integration/ingest/test_envelope_rules_with_no_negative_fixture.py
+M tests/integration/ingest/test_envelope_through_the_service.py
+M tests/integration/ingest/test_idempotency.py
+M tests/integration/ingest/test_immutability.py
+M tests/integration/ingest/test_negative_envelope.py
+M tests/integration/ingest/test_project_document_count.py
+M tests/integration/ingest/test_publication.py
+M tests/integration/ingest/test_reconciliation.py
+M tests/integration/ingest/test_reconciliation_reads_the_bytes.py
+M tests/integration/ingest/test_reconciliation_rules_with_no_guard.py
+M tests/integration/ingest/test_service_refusals_with_no_guard.py
+M tests/integration/ingest/test_size_guard_boundary.py
+M tests/integration/ingest/test_the_read_path_answers_the_manifest.py
+M tests/integration/p02_journey/journey.py
+M tests/integration/p02_journey/test_explicit_failures.py
+M tests/integration/p02_journey/test_manifest_role_seam.py
+M tools/fixtures/ar_corpus/document.py
+M tools/fixtures/ar_corpus/envelope.py
+M tools/fixtures/ar_corpus/negatives.py
+M tools/fixtures/build_portal_bundles.py
+M tools/fixtures/portal_bundle/committed.py
+```
 
-### Successor writer: verification of the predecessor's tree (2026-10-13, lane stack 57430/61030)
+## 2. Checks, and how each new test was shown to fail
 
-The first writer died after twelve commits. The second writer re-ran, on the lane stack and one invocation at a time:
-`tests/integration/ingest` 540 passed; `tests/integration/api` 568 passed; `tests/integration/p02_journey` 59 passed;
-`tests/characterization` 61 passed. `git diff --check` and `compileall` of the changed modules are clean.
+Run on this branch with the lane stack up (PostgreSQL 57430, S3 61030/61031), one invocation at a time, the host shared and loaded.
 
-## The owner's real export as an acceptance test (counts only, F-7)
+| Check | Result |
+| --- | --- |
+| `git diff --check` | clean |
+| `python -m compileall -q` of the changed source, tools and test directories | exit 0 |
+| `tests/contract` without `test_cp00_candidate.py`, `test_cp00_final_state.py`, `test_validate_bootstrap.py`, `test_alpha_acceptance_command.py` | 717 passed |
+| `tests/contract/test_alpha_acceptance_command.py` (clean committed tree) | 25 passed |
+| `tools/fixtures/build_ar_corpus.py --check`, `tools/fixtures/build_portal_bundles.py --check` | exit 0 both |
+| `sha256sum -c SHA256SUMS` in `fixtures/synthetic/ar` | exit 0, no line that is not `OK` |
+| lane stack: `tests/integration/ingest` | 542 passed |
+| lane stack: `tests/integration/api` | 568 passed |
+| lane stack: `tests/integration/p02_journey` | 59 passed |
+| lane stack: `tests/characterization` | 61 passed |
+| lane stack: `tests/e2e` (no browser) | 159 passed, 5 skipped (the opt-in live-model tests of `test_live_text_analysis.py`) |
+| lane stack: the two composition files and `analysis_engine/test_fail_closed.py` the first writer touched, and `tests/unit` | 29 passed |
+| a full `make gate`, the live browser journey, `npm` suites | **not run** (not this lane's: light acceptance, `R-102`; no web file was touched) |
+
+Every new behaviour was shown to fail without its code (section 2.4). The same sections below hold the real export, the 250 MiB
+measurement and the migration probe.
+
+### 2.1 The owner's real export as an acceptance test (counts only, F-7)
 
 Run read-only over `.local/portal-exports/<the owner's export>.zip` (9 035 796 bytes; never copied, extracted into the repository,
 committed, or quoted; the file's SHA-256 prefix and mtime were identical before and after). Method: `python -I` with `src/` on
@@ -52,7 +143,7 @@ Structural facts of its `_blocks.json` (types and null counts only): every block
 `crop_url` are `null` on the 26 stamps and set on every other block; `polygon_points` is `null` on all 117 rectangles and a list of three
 or more points on the 12 polygons; `status` and `export_status` are `recognized` on all 129.
 
-## The 250 MiB measurement (item 9)
+### 2.2 The 250 MiB measurement (second writer)
 
 **Method.** `.local/w55b-tools/measure_bundle.py VARIANT` (untracked; under `.local/`): builds a valid bundle with the `portal_bundle`
 builders, starts `infra/deploy/serve.py` as a child it owns (lane `.env`, `AUDITMANAGER_API_PORT=57531`, health `57532`, loopback),
@@ -81,12 +172,40 @@ API answers an accepted 250 MiB upload within about 240 s: it answered in 1.9-3.
 proportional to the bundle** (an idle API process of 165 MiB reached 308-315 MiB for a 244 MiB upload); the stand's own figures
 belong to REHEARSAL. The generated archives were deleted after each run.
 
-## Mutation proofs (item 10)
+### 2.3 The migration probe (second writer)
+
+**Method.** In a scratch edit (reverted; `git diff` empty afterwards) `DocumentAdapter.upload_document` and
+`IngestService.upload_single_pdf` were made to raise `portal_bundle_required` for anything that is not a ZIP. Then, on the lane stack
+(PostgreSQL 57430, S3 61030/61031), one invocation at a time with `--tb=no -rf`:
+
+| Directory | Result with the bare-PDF paths refused |
+| --- | --- |
+| `tests/integration/ingest` | 533 passed, **7 failed** (all deliberate, below) |
+| `tests/integration/api` | 568 passed |
+| `tests/integration/p02_journey` | 59 passed |
+| `tests/characterization` | 61 passed |
+| `tests/integration/composition` | 725 passed, 2 skipped |
+| `tests/integration/db` | 360 passed |
+| `tests/integration/norms` | 753 passed |
+| `tests/e2e` (no browser) | 159 passed, 5 skipped (`test_live_text_analysis.py`, opt-in `C2_PC01_LIVE=1`, spends money) |
+| every other `tests/integration/*` directory (`access`, `analysis`, `analysis_engine`, `analysis_text`, `auth`, `decisions`, `execution`, `exports`, `findings`, `foundation`, `jobs`, `qa_w52`, `qa_w53`, `releases`, `runs`, `shared_kernel`, `storage`, `workers`) and `tests/unit`, `tests/replay` | all passed |
+
+**The 7 tests that still send a bare PDF** (they test the legacy branch itself, so they are the final switch's to change):
+
+- `tests/integration/ingest/test_bundle_publication.py`: `test_a_bare_pdf_still_publishes_with_no_counts_until_the_last_step`,
+  `test_a_bundle_key_and_a_bare_pdf_key_never_replay_each_other`;
+- `tests/integration/ingest/test_envelope_handle_adapter.py`: `test_a_zip_is_a_bundle_and_anything_else_is_still_the_single_pdf_entry`
+  (three parameters: a bare PDF, `hello`, empty), `test_nothing_else_about_the_call_changed`, `test_a_missing_title_and_name_still_fall_back_as_they_did`.
+
+No other Python test sends a bare PDF to the upload path; the five skipped tests of `test_live_text_analysis.py` upload through
+`tests/e2e/pc01/driver.py`, which builds a bundle.
+
+### 2.4 Mutation proofs (second writer, and the first writer's)
 
 Method (`.local`-side driver, not committed): the mutation is a textual replacement in the **committed** source file, the named
 tests run with `-x` on the lane stack, the file is restored from memory and its SHA-256 compared before and after (restored in every
-row). Every mutation below made its test fail; the first failing test is named. The first run of the set left two mutations alive;
-both led to a test fix, shown in the last two rows of the first block.
+row). Every mutation below made its test fail; the first failing test is named. The first run of the set left two mutations alive: one led to a test
+fix (the refused-archive row), the other had been run against the wrong test file (the last row).
 
 | Enforcement | The mutation | First failing test (in `tests/integration/ingest/`) |
 | --- | --- | --- |
@@ -119,35 +238,42 @@ both led to a test fix, shown in the last two rows of the first block.
 | `looks_like_zip` routing in the adapter | the ZIP branch is `if False` | `test_envelope_handle_adapter::test_a_zip_is_a_bundle_and_anything_else_is_still_the_single_pdf_entry[PK\x03\x04 a local header-upload_bundle]` |
 | a non-ZIP is a non-ZIP before anything else (service) | the service's own check is `if False` | `test_envelope_through_the_service::test_a_non_zip_is_a_non_zip_before_it_is_anything_else_whatever_its_size` (**selected wrongly in the first run**, where the reader's second check made the mutant look equivalent) |
 
-## The migration probe (item 8)
+## 3. Contracts
 
-**Method.** In a scratch edit (reverted; `git diff` empty afterwards) `DocumentAdapter.upload_document` and
-`IngestService.upload_single_pdf` were made to raise `portal_bundle_required` for anything that is not a ZIP. Then, on the lane stack
-(PostgreSQL 57430, S3 61030/61031), one invocation at a time with `--tb=no -rf`:
+**None changed.** `contracts/**` was not touched (the sealed schemas, the stage registry and the OpenAPI document are SEAL's), no migration
+was added or edited (the counts columns and the 1-500 page check are SEAL's migration, which this lane only reads and writes), and
+`pyproject.toml`, `uv.lock` and `bootstrap/composition.py` are untouched. New or changed Python interfaces, all behind
+`auditmanager.ingest` and `auditmanager.documents`: `IngestService.upload_bundle`; `looks_like_zip` and `ZIP_MAGICS` (exported from
+`auditmanager.ingest`); `inspect_pdf`, `PdfFacts`, `as_handle`, `page_text_refusal`, `TEXTLESS_PAGE_CHARACTERS` in `ingest/envelope.py`;
+the three counts on the version record (`documents.models`, `documents.public`) and the manifest-role and blob-role constants for the
+markdown, the structured companion and the stamp audit on `documents.public`. The wire is unchanged: the counts are on the
+`document_version` row and its record, not on the API.
 
-| Directory | Result with the bare-PDF paths refused |
-| --- | --- |
-| `tests/integration/ingest` | 533 passed, **7 failed** (all deliberate, below) |
-| `tests/integration/api` | 568 passed |
-| `tests/integration/p02_journey` | 59 passed |
-| `tests/characterization` | 61 passed |
-| `tests/integration/composition` | 725 passed, 2 skipped |
-| `tests/integration/db` | 360 passed |
-| `tests/integration/norms` | 753 passed |
-| `tests/e2e` (no browser) | 159 passed, 5 skipped (`test_live_text_analysis.py`, opt-in `C2_PC01_LIVE=1`, spends money) |
-| every other `tests/integration/*` directory (`access`, `analysis`, `analysis_engine`, `analysis_text`, `auth`, `decisions`, `execution`, `exports`, `findings`, `foundation`, `jobs`, `qa_w52`, `qa_w53`, `releases`, `runs`, `shared_kernel`, `storage`, `workers`) and `tests/unit`, `tests/replay` | all passed |
+## 4. Risks, known limits and readings where the plan was silent
 
-**The 7 tests that still send a bare PDF** (they test the legacy branch itself, so they are the final switch's to change):
+Readings are decisions 1-14 at the end of this file. In addition:
 
-- `tests/integration/ingest/test_bundle_publication.py`: `test_a_bare_pdf_still_publishes_with_no_counts_until_the_last_step`,
-  `test_a_bundle_key_and_a_bare_pdf_key_never_replay_each_other`;
-- `tests/integration/ingest/test_envelope_handle_adapter.py`: `test_a_zip_is_a_bundle_and_anything_else_is_still_the_single_pdf_entry`
-  (three parameters: a bare PDF, `hello`, empty), `test_nothing_else_about_the_call_changed`, `test_a_missing_title_and_name_still_fall_back_as_they_did`.
+- **Memory is bounded, not small.** An accepted 244 MiB bundle took an idle 165 MiB API process to 308-315 MiB (section 2.2). The
+  figure is the API process alone on loopback, with no nginx or BFF in the path and a local object store; the stand's own numbers
+  belong to REHEARSAL (the A13 decision).
+- **The first writer's reader had a hang** (decision 13) and **hid a padded stream's ratio** (decision 14). Both are fixed and covered;
+  the FIXTURES reference validator (`tools/fixtures/portal_bundle/validate.py`) shares neither defect-fix, so its differential
+  agreement with the product holds for every fixture there is, not for those two adversarial shapes.
+- **The sealed block-list schema differs from Amendment 1 in three places** (section 4.1). The product follows the sealed schema, as a test
+  requires, so the owner's real export passes; whether the contract or the amendment is right is the integrator's.
+- **Text-less pages and the recognised count rest on a reading** (decision 8) of "the characters recognised on those pages".
+- **PC-02's corpus check is red, as the plan registers it.** `.venv/bin/python tools/validation/corpus_check.py
+  fixtures/validation/PC-02/corpus_manifest.json --quiet` exits 1 with `CHK-NEGATIVE-RULE` for `PC02-N03` (a 26 MiB file declared to break
+  `ENV-SIZE`) and `PC02-N04` (31 pages declared to break `ENV-PAGES`): both are now inside the limits `tools/fixtures/ar_corpus/envelope.py`
+  carries since `7b713b32`. Nothing in the gate or the test suites runs it. Debt, not changed here (`tools/validation/**` is not in this
+  lane's grant).
+- **The live browser journey is red until part B**, by construction: `tests/e2e/pc01/journey/manifest.json` still names the deleted
+  `oversize.pdf` and `too_many_pages.pdf` and a 30-page constraint, and the browser pre-check still says 25 MiB and 30 pages. The
+  container-free conformance test was changed to accept the generated cases; the live drive was not run (no browser, no web file touched).
+- **One file part B owns was touched** (`scripts/manual-alpha-check.sh`): its preflight asked for the two deleted fixtures, so it
+  stopped asking for them (commit `5179fe75`).
 
-No other Python test sends a bare PDF to the upload path; the five skipped tests of `test_live_text_analysis.py` upload through
-`tests/e2e/pc01/driver.py`, which builds a bundle.
-
-## The sealed `_blocks.json` schema against Amendment 1 of the freeze (for the integrator; the schema is not edited here)
+### 4.1 The sealed `_blocks.json` schema against Amendment 1 of the freeze (the schema is not edited here)
 
 `contracts/analysis/v1/portal-blocks.schema.json` (SEAL) and `bundle_envelope.py` agree with each other (a test compares them keyword by
 keyword). Against `W55B-FREEZE-01` Amendment 1 they differ in these places:
@@ -166,7 +292,81 @@ nullable; `export_status` tolerated; unknown top-level and block keys ignored; t
 (lower case, three values) read as named. "`shape_type` stored" has no ingest-side effect: the block list is stored whole as
 `source.structured_companion` and `page_geometry_extraction` (GEOMETRY) normalises it.
 
-## Design decisions (made while writing; each is open to the integrator's veto)
+## 5. Instructions
+
+### For the integrator
+
+1. Merge `agent/w55b` through the commit that carries this file; nothing here needs a migration, a lock change or a contract edit.
+2. Register the PC-02 corpus-check debt (section 4) with the command and result given there.
+3. Decide the three disagreements between the sealed block-list schema and Amendment 1 (section 4.1); until then the schema rules.
+4. Run the lane's tests again after merging dev's `0.5.1`: the checks above were run on this branch's own base.
+5. The 250 MiB figures are loopback figures (section 2.2); the stand's belong to REHEARSAL.
+
+### For part B (the browser upload, the journey, the final switch)
+
+*Browser constants still at the old envelope* (do not change them in this lane; part B owns them):
+
+- `web/src/entities/document-version/model/upload-envelope.ts`: `mediaType: 'application/pdf'`, `maxBytes: 25 * 1024 * 1024`,
+  `maxBytesLabel: '25 MiB'`, `maxPages: 30`, the `.pdf` name test, the sentences built from them; `web/src/features/upload-document/ui/upload-document-form.tsx`
+  (`accept={PC01_UPLOAD_ENVELOPE.mediaType}`), `web/src/widgets/upload-panel/ui/upload-panel.tsx` (prints the limits), the comment in
+  `web/src/shared/ui/states.tsx`.
+- The plan's web tests: `web/tests/unit/projects/**` (including `upload-failure.test.ts`), `web/tests/unit/screens/{widgets,forms-and-pages,cold-load}.test.ts`,
+  `web/tests/guards/{upload-precheck-wiring,dashboard-invalidation,rendered-language}.guard.test.ts`,
+  `web/tests/contract/seam-operations.contract.test.ts`. The browser must send a ZIP (`application/zip` or no type), refuse a
+  non-ZIP before sending, state 250 MiB / 500 pages, and the 250 MiB pre-check must stay strictly below nginx's `client_max_body_size`
+  (`tests/e2e/test_upload_limit_headroom.py` holds that).
+- The journey: `tests/e2e/pc01/journey/{journey,cdp,refusals}.mjs`, `manifest.json` (line 788 uploads `ar_baseline.pdf`; the refusals
+  section names `oversize.pdf` and `too_many_pages.pdf`, the constraint `1 <= page_count <= 30`, and `fixture_dir` `fixtures/synthetic/ar/negative`),
+  `fixtures/{redden-write,redden-write-bound}.manifest.json`, `fixtures/w28-live/*.manifest.json`, `prove_the_guard_can_fail.py`,
+  `scripts/manual-alpha-check.sh` (the fixture preflight and the runbook steps that name PDFs), `tests/contract/test_alpha_acceptance_command.py`
+  (reads that script), `tests/support/expected_facts.json` (not in this lane's grant either). The generated cases (a sparse over-bound
+  file, a 501-page PDF) come from `tools/fixtures/portal_bundle/generated.py` (`oversize_sparse_file`, `pdf_with_n_pages`).
+
+*The final switch* (the lane's last commit, after the suite moved; the browser and the journey must send bundles first):
+
+1. `src/auditmanager/bootstrap/adapters.py`: delete the `else` branch marked `W55B-LEGACY-BARE-PDF` in `DocumentAdapter.upload_document`
+   and the `looks_like_zip` routing that guards it; every upload goes to `IngestService.upload_bundle`, which already refuses a non-ZIP
+   with `portal_bundle_required` and the Russian sentence.
+2. `src/auditmanager/ingest/service.py`: delete `upload_single_pdf` and its docstring part; `ingest/envelope.py`: `probe()` and
+   `AdmissionReport` serve only that path (`inspect_pdf` stays: the bundle's PDF member uses it), so remove them if nothing else imports them,
+   and the module docstring's "until the last step" sentences (here and in `ingest/__init__.py`).
+3. The seven tests that send a bare PDF on purpose (section 2.3): `test_bundle_publication.py::test_a_bare_pdf_still_publishes_with_no_counts_until_the_last_step`
+   and `::test_a_bundle_key_and_a_bare_pdf_key_never_replay_each_other`; `test_envelope_handle_adapter.py::test_a_zip_is_a_bundle_and_anything_else_is_still_the_single_pdf_entry`
+   (three parameters), `::test_nothing_else_about_the_call_changed`, `::test_a_missing_title_and_name_still_fall_back_as_they_did`. They must assert
+   the refusal instead (the first of them becomes "a bare PDF is refused with `portal_bundle_required`").
+   `test_envelope_through_the_service.py::test_a_non_zip_is_a_non_zip_before_it_is_anything_else_whatever_its_size` already asserts that
+   refusal for a PDF-headed file, and it is the order the switch must keep (a non-ZIP is told it is not a bundle before its size is judged).
+4. Characterization: records 17 and 26 and the rest of 02, 13, 17-21, 26, 32, 33 are bundle-based already and need no change; record 22 is the
+   transport cap and is not this lane's. The columns' NULL for a bare PDF stay in the schema for the 30-page documents that exist.
+5. Re-run the probe of section 2.3 in reverse: with the branch deleted, no test outside those seven may fail.
+
+## 6. Containment: `git diff --name-only 588773e9..HEAD` against the grant
+
+Inside the grant: everything under `src/auditmanager/ingest/**`, `src/auditmanager/documents/**`, `tests/integration/ingest/**`,
+`tools/fixtures/**`, `tests/contract/fixtures_ar/**`, `fixtures/synthetic/ar/{negative/**,SHA256SUMS,expected_issues.json,bundles/**}`,
+`src/auditmanager/bootstrap/adapters.py` (`DocumentAdapter` only: one routing branch), the SUITE files of `W55B-FREEZE-01.md`
+(`tests/integration/api/{conftest,test_document_content_window,test_multipart_rules,test_no_internal_identifiers}.py`,
+`tests/e2e/pc01/{driver,test_acceptance,test_live_text_analysis}.py`, `tests/e2e/test_pc01_journey_conformance.py`, the characterization
+`journey.py` and records 02, 13, 17-21, 26, 32, 33, `p02_journey/{journey,test_manifest_role_seam,test_explicit_failures}.py`),
+`tests/e2e/{test_upload_limit_headroom,prove_the_headroom_guard_can_fail}.py`, `tests/integration/api/test_portal_block_routes.py` (the plan's
+one-line follow-up) and this file.
+
+**Outside the grant, each with its reason (7 files):**
+
+| File | Why |
+| --- | --- |
+| `scripts/manual-alpha-check.sh` | its preflight asked for the two deleted fixtures (part B's file; minimal change, `5179fe75`) |
+| `fixtures/synthetic/ar/README.md` | its table described the two deleted fixtures and the old limits |
+| `tests/integration/analysis_engine/test_fail_closed.py` | read `negative/too_many_pages.pdf`; now reads the same bytes from `bundles/pages_31.zip` |
+| `tests/integration/api/test_journey.py`, `test_schema_conformance.py` | uploaded a bare PDF over HTTP (found by the migration probe, `9bc3d6d5`, separable) |
+| `tests/integration/composition/test_a_published_run_reports_itself.py`, `test_version_blocks_wire_shape.py` | the same |
+
+Forbidden hotspots: `contracts/**`, migrations, root dependency and lock files, `bootstrap/composition.py` and global styles are not in
+`git diff --name-only 588773e9..HEAD`; no `web/**` file is either.
+
+## 7. Appendix
+
+### Design decisions (made while writing; each is open to the integrator's veto)
 
 1. **The reader is hand-written, `zipfile` is the second opinion.** `bundle_archive.py` reads the end record, the ZIP64
    records and the central directory itself (raw name bytes, flags, external attributes, the `0x7075` field are what the
