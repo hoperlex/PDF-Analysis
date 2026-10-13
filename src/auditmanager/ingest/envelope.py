@@ -1,4 +1,4 @@
-"""The admission probe: the accepted input envelope, answered before anything is stored.
+"""The PDF rules of the admission envelope, answered before anything is stored.
 
 ``P2-META-01``: "an admission probe rejecting, **before any publication**, non-PDF magic
 bytes, an encrypted PDF, an oversize file, an over-page-count file and any page without
@@ -10,20 +10,25 @@ outside it is a typed :class:`~auditmanager.shared.errors.DomainError`, and the 
 reaches the store or the database, so "nothing was published" is true because nothing was
 attempted.
 
+Since the last step of `W55B-INGEST-01` the upload is a portal bundle and a bare PDF is
+refused before it reaches these rules (``portal_bundle_required``). They judge the PDF
+*member* of a bundle (:func:`inspect_pdf`), and a refusal of the member keeps the ``field``,
+``constraint`` and message it had when the upload was a bare PDF.
+
 **OCR is always marked, and never substituted.** A page with no embedded text layer is a
 rejection with a named constraint, not an input to a different extraction path -- *unless*
 the page has at least one portal block (:mod:`auditmanager.ingest.bundle_envelope`), in
 which case the recognised text is kept as its own marked artifact and nothing here merges it
-into a text layer. A bare PDF has no blocks, so for it every page must still carry a layer.
+into a text layer. Where there is no block for a page, the page must still carry a layer.
 There is no OCR dependency in the root lock and this module must never acquire one: the
 point of the rule is that a reader can trust that published text came off the page.
 
 A file handle, not a byte string (`W55B-STREAM-01`)
 ---------------------------------------------------
-:func:`probe` takes the upload as a **seekable binary handle** -- in the served
+:func:`inspect_pdf` takes the upload as a **seekable binary handle** -- in the served
 application, the temporary file the multipart parser already spooled the part to -- and
 never reads it whole. The size is the handle's length, the magic bytes are its first
-five, the digest is computed over fixed-size chunks, and the structure is read by
+five, and the structure is read by
 ``pypdfium2`` **from the handle**, which asks the file for the blocks it needs. A byte
 string is still accepted, for the callers that have one; it is wrapped, not copied.
 
@@ -51,7 +56,7 @@ so a rejection is attributable to a rule rather than to a coincidence of two:
 5. the document is not encrypted -- the security handler is read straight after the
    document opens, before any page is touched;
 6. the page count is within bounds;
-7. every page yields extractable text (a bare PDF), or the pages are counted for the bundle
+7. every page yields extractable text (``require_text``), or the pages are counted for the bundle
    envelope, which decides the text rule with the portal's blocks in hand.
 
 A file extension is deliberately **not** a rule. It is a presentation value and a caller
@@ -65,7 +70,6 @@ of the member keeps the ``field``, ``constraint`` and message of a refusal of a 
 
 from __future__ import annotations
 
-import hashlib
 import io
 import os
 import re
@@ -84,12 +88,10 @@ __all__ = [
     "PDFIUM_LOCK",
     "PDF_MAGIC",
     "TEXTLESS_PAGE_CHARACTERS",
-    "AdmissionReport",
     "PdfFacts",
     "as_handle",
     "inspect_pdf",
     "page_text_refusal",
-    "probe",
     "validate_source_filename",
 ]
 
@@ -111,9 +113,6 @@ MAX_SOURCE_FILENAME: Final[int] = 255
 #: A plain base name: no directory separator, no traversal, no control character, no NUL.
 _PLAIN_BASENAME: Final[re.Pattern[str]] = re.compile(r"^[^\x00-\x1f/\\]+$")
 
-#: How much of the upload the digest reads at a time. The whole upload is never held.
-_DIGEST_CHUNK: Final[int] = 1024 * 1024
-
 #: PDFium is not thread-safe (pypdfium2's own documentation), and the upload route runs in a
 #: thread pool where two uploads may be admitted at once. Every call into PDFium made here
 #: is under this lock; any other caller of ``pypdfium2`` in the same process must take it.
@@ -123,16 +122,6 @@ PDFIUM_LOCK: Final[threading.Lock] = threading.Lock()
 #: (4), a document it cannot open without one, and ``SECURITY`` (5), a security scheme it
 #: does not support. Every other code is a structure it could not parse.
 _PDFIUM_ENCRYPTED: Final[frozenset[int]] = frozenset({4, 5})
-
-
-@dataclass(frozen=True, slots=True)
-class AdmissionReport:
-    """What the probe established. Facts about content, never about a location."""
-
-    byte_size: int
-    sha256: str
-    page_count: int
-    media_type: str = ACCEPTED_MEDIA_TYPE
 
 
 def _refuse(field: str, constraint: str, message: str) -> DomainError:
@@ -176,33 +165,6 @@ def validate_source_filename(source_filename: str) -> str:
             "no traversal segment and no control character.",
         )
     return candidate
-
-
-def probe(content: bytes | bytearray | BinaryIO, *, source_filename: str) -> AdmissionReport:
-    """Answer whether this upload is inside the accepted envelope.
-
-    ``content`` is a seekable binary handle (or a byte string). Returns the facts a
-    published version records and leaves a handle positioned at its start. Raises
-    ``validation_failed`` with a ``field`` and a ``constraint`` for anything
-    outside the envelope, having stored nothing, contacted no service and opened no
-    transaction.
-    """
-    validate_source_filename(source_filename)
-
-    handle = as_handle(content)
-    facts = inspect_pdf(handle, require_text=True)
-
-    handle.seek(0)
-    digest = hashlib.sha256()
-    while chunk := handle.read(_DIGEST_CHUNK):
-        digest.update(chunk)
-    handle.seek(0)
-
-    return AdmissionReport(
-        byte_size=facts.byte_size,
-        sha256=digest.hexdigest(),
-        page_count=facts.page_count,
-    )
 
 
 @dataclass(frozen=True, slots=True)

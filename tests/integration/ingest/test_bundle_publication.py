@@ -10,7 +10,8 @@ What is asserted, and the failure each assertion exists to catch:
   ``source.structured_companion``, ``source.markdown`` and, when the bundle has one,
   ``source.stamp_audit`` -- and each entry's object is the member's own bytes;
 * the version's own ``byte_size``, ``sha256`` and ``media_type`` stay **the PDF member's**;
-* the three counts are stored together (NULL together for a bare PDF);
+* the three counts are stored together (a version published before the last step of the lane,
+  as a bare PDF, carries all three NULL; the columns stay nullable for it);
 * ``_results.html`` is **hashed and not stored**: no object, no blob row, no manifest entry;
 * the **command fingerprint covers every member's digest, the HTML's included**, and nothing
   about how the archive was packed;
@@ -199,25 +200,27 @@ def test_a_version_without_text_layer_trouble_stores_an_empty_list_not_null(
     assert value == [], "an empty list must be stored as an empty list"
 
 
-def test_a_bare_pdf_still_publishes_with_no_counts_until_the_last_step(
-    service, project, baseline_pdf, key, engine
+def test_a_bare_pdf_is_refused_with_portal_bundle_required_through_the_adapter(
+    service, project, baseline_pdf, key, engine, bucket_keys
 ) -> None:
-    """`W55B-LEGACY-BARE-PDF`: the single-PDF entry is still there, under the new limits, and
-    its version carries no bundle counts -- all three NULL, never one without the others."""
-    outcome = service.upload_single_pdf(
-        project_uid=project.project_uid, content=baseline_pdf, source_filename="a.pdf",
-        display_title="Bare", idempotency_key=key("bare"),
-    )
-    version = outcome.version
-    assert (version.text_character_count, version.textless_pages,
-            version.recognised_character_count) == (None, None, None)
-    assert [e.role for e in version.manifest] == [MANIFEST_ROLE_SOURCE_DOCUMENT]
-    with engine.connect() as connection:
-        row = connection.execute(
-            text("SELECT text_character_count, textless_pages, recognised_character_count "
-                 "FROM document_version")
-        ).one()
-    assert tuple(row) == (None, None, None)
+    """The last step of the lane: the single-PDF entry is gone, and a bare PDF -- the very
+    document that used to publish a version with no counts -- is refused where it used to be
+    routed, with the registered constraint, its field and the Russian sentence on how to
+    obtain the bundle. Nothing is stored, no row is written and no command is recorded."""
+    from auditmanager.bootstrap.adapters import DocumentAdapter
+
+    before_keys, before_counts = set(bucket_keys()), table_counts(engine)
+    with pytest.raises(DomainError) as raised:
+        DocumentAdapter(service).upload_document(
+            project_uid=str(project.project_uid), content=io.BytesIO(baseline_pdf),
+            source_filename="a.pdf", display_title="Bare", idempotency_key=str(key("bare")),
+        )
+    assert raised.value.code is ErrorCode.VALIDATION_FAILED
+    assert dict(raised.value.detail_fields) == {
+        "field": "file", "constraint": "portal_bundle_required",
+    }
+    assert "комплект портала распознавания" in str(raised.value)
+    assert set(bucket_keys()) == before_keys and table_counts(engine) == before_counts
 
 
 def test_a_partial_set_of_counts_is_refused_before_a_statement_is_issued(
@@ -377,17 +380,22 @@ def test_a_different_upload_name_or_project_under_the_same_key_is_a_conflict(
     assert raised.value.code is ErrorCode.IDEMPOTENCY_KEY_REUSE
 
 
-def test_a_bundle_key_and_a_bare_pdf_key_never_replay_each_other(
-    service, project, baseline_pdf, key
+def test_a_refused_bare_pdf_does_not_burn_the_key_a_bundle_then_uses(
+    service, project, baseline_pdf, key, engine
 ) -> None:
+    """A bare PDF used to publish under a key and make a bundle under the same key a conflict.
+    Now the refusal records no command, so the key is still free: the bundle that follows
+    under it publishes, and a replay of it is the same version."""
     idempotency = key("mixed")
-    service.upload_single_pdf(
-        project_uid=project.project_uid, content=baseline_pdf, source_filename="a.pdf",
-        display_title="Bare", idempotency_key=idempotency,
-    )
     with pytest.raises(DomainError) as raised:
-        upload(service, project, committed("ar_baseline.zip"), key, idempotency_key=idempotency)
-    assert raised.value.code is ErrorCode.IDEMPOTENCY_KEY_REUSE
+        upload(service, project, baseline_pdf, key, idempotency_key=idempotency)
+    assert dict(raised.value.detail_fields)["constraint"] == "portal_bundle_required"
+    assert table_counts(engine)["command_record"] == 0
+
+    first = upload(service, project, committed("ar_baseline.zip"), key, idempotency_key=idempotency)
+    again = upload(service, project, committed("ar_baseline.zip"), key, idempotency_key=idempotency)
+    assert not first.replayed and again.replayed
+    assert again.version.version_uid == first.version.version_uid
 
 
 def test_a_member_that_is_identical_to_another_shares_its_blob_and_both_roles_are_listed(

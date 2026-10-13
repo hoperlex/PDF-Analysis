@@ -268,6 +268,25 @@ class TestEachRefusalNamesItsOwnRule:
         )
         assert body["details"] == {"field": "file", "constraint": "filename"}
 
+    def test_a_bare_pdf_is_refused_as_portal_bundle_required_and_publishes_nothing(
+        self, router: Surface, project_uid: str, corpus_pdf: bytes
+    ) -> None:
+        """`W55B-INGEST-01`, last step: the committed baseline PDF -- a real, valid document --
+        sent as the ``file`` part through the route is refused, with the registered
+        constraint, ``field: file`` and the Russian sentence on how to obtain the bundle.
+
+        Whatever its label (``application/pdf`` here) and whatever its name (``.pdf``): a
+        ZIP is recognised by its first bytes alone. Nothing is published, which is read back
+        through the route rather than assumed from the status.
+        """
+        body = _refusal(router, project_uid, _body((FILE_PART, corpus_pdf)))
+        assert body["details"] == {"field": "file", "constraint": "portal_bundle_required"}
+        assert body["message"].startswith("Загрузите комплект портала распознавания")
+        assert "Отдельный PDF не принимается" in body["message"]
+        listed = dispatch(router, Request.build("GET", f"/projects/{project_uid}/documents"))
+        assert listed.status == 200, listed.body
+        assert json.loads(listed.body)["items"] == []
+
     def test_a_display_title_that_is_not_utf8_is_accepted_and_that_is_declared(
         self, router: Surface, project_uid: str, corpus_bundle: bytes
     ) -> None:

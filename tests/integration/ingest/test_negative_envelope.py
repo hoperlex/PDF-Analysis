@@ -8,8 +8,9 @@ would pass against a probe that rejected everything for the wrong reason.
 (or whose archive) is the document the case is about -- the committed bundles
 (``encrypted.zip``, ``image_only.zip``), the committed text file and ZIP of other files, and
 the two stand-ins generated when the test runs (a sparse file past 250 MiB and a 501-page PDF).
-The bare-PDF path these cases used to take is exercised at the envelope itself by
-``test_envelope_differential.py`` and by the legacy tests marked ``W55B-LEGACY-BARE-PDF``.
+The bare-PDF path these cases used to take is gone (the last step of the lane): the PDF
+rules are exercised at the envelope itself by ``test_envelope_differential.py``, and a bare
+PDF is refused with ``portal_bundle_required`` by ``test_bundle_publication.py``.
 
 "Nothing was published" is proved from outside the code under test: the bucket is read
 with a plain boto3 client and the tables are counted with raw SQL.

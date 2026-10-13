@@ -17,11 +17,9 @@
 The accepted envelope is one portal bundle -- a ZIP holding an unencrypted PDF of at most
 250 MiB and one to five hundred pages, the portal's block list and its recognised-text file
 (and optionally an HTML rendering, kept as a digest only, and a stamp audit) -- entered with
-``IngestService.upload_bundle``. Until the last step of ``W55B-INGEST-01`` a bare PDF is still
-accepted through ``upload_single_pdf``, under the same limits and with every page carrying
-extractable embedded text. Everything outside the envelope is ``validation_failed`` with a
-``field`` and a ``constraint``, raised before any service is touched, so nothing is
-published. **OCR is always marked, and never substituted for a missing text layer.**
+``IngestService.upload_bundle``. A bare PDF is refused (``portal_bundle_required``), as is
+anything else outside the envelope: ``validation_failed`` with a ``field`` and a
+``constraint``, raised before any service is touched, so nothing is published. **OCR is always marked, and never substituted for a missing text layer.**
 
 The publication order and the reconciliation model are documented in
 :mod:`auditmanager.ingest.service` and :mod:`auditmanager.ingest.reconciliation`. The
@@ -48,8 +46,6 @@ from .envelope import (
     MAX_SOURCE_FILENAME,
     MIN_PAGES,
     PDF_MAGIC,
-    AdmissionReport,
-    probe,
     validate_source_filename,
 )
 from .failures import domain_error_from_storage
@@ -71,7 +67,6 @@ __all__ = [
     "MIN_PAGES",
     "PDF_MAGIC",
     "ZIP_MAGICS",
-    "AdmissionReport",
     "CommandRecord",
     "CommandReplay",
     "CommandRepository",
@@ -84,6 +79,5 @@ __all__ = [
     "domain_error_from_storage",
     "looks_like_zip",
     "payload_fingerprint",
-    "probe",
     "validate_source_filename",
 ]

@@ -44,6 +44,7 @@ import threading
 import tracemalloc
 import warnings
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO, Sequence
 
@@ -51,7 +52,7 @@ import pytest
 from pypdf import PdfWriter
 
 from auditmanager.ingest import envelope as new_envelope
-from auditmanager.ingest.envelope import AdmissionReport, validate_source_filename
+from auditmanager.ingest.envelope import as_handle, inspect_pdf, validate_source_filename
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -87,6 +88,38 @@ def clean_tables() -> None:  # type: ignore[override]
 def _old_refuse(field: str, constraint: str, message: str) -> DomainError:
     return DomainError(
         ErrorCode.VALIDATION_FAILED, message=message, field=field, constraint=constraint
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class AdmissionReport:
+    """What a bare PDF's admission established: the report of the probe this file compares.
+
+    `W55B-INGEST-01`, last step: the product no longer admits a bare PDF -- ``probe`` and its
+    report were deleted with the single-PDF entry -- but the PDF rules it applied are the PDF
+    member's (:func:`inspect_pdf`), and the comparison with the previous implementation below is
+    still what keeps their refusals byte for byte. So the probe is rebuilt here from the
+    product's own pieces and nothing more: the file name rule, the rules of ``inspect_pdf``
+    with the text rule on, and the digest over the handle in fixed-size chunks.
+    """
+
+    byte_size: int
+    sha256: str
+    page_count: int
+    media_type: str = "application/pdf"
+
+
+def new_probe(content: Any, *, source_filename: str) -> AdmissionReport:
+    validate_source_filename(source_filename)
+    handle = as_handle(content)
+    facts = inspect_pdf(handle, require_text=True)
+    handle.seek(0)
+    digest = hashlib.sha256()
+    while chunk := handle.read(1024 * 1024):
+        digest.update(chunk)
+    handle.seek(0)
+    return AdmissionReport(
+        byte_size=facts.byte_size, sha256=digest.hexdigest(), page_count=facts.page_count
     )
 
 
@@ -227,19 +260,19 @@ def new_verdicts(data: bytes, directory: Path) -> dict[str, tuple[Any, ...]]:
     path = directory / "upload.bin"
     path.write_bytes(data)
     results: dict[str, tuple[Any, ...]] = {}
-    results["bytes"] = verdict(lambda: new_envelope.probe(data, source_filename="upload.pdf"))
+    results["bytes"] = verdict(lambda: new_probe(data, source_filename="upload.pdf"))
     results["BytesIO"] = verdict(
-        lambda: new_envelope.probe(io.BytesIO(data), source_filename="upload.pdf")
+        lambda: new_probe(io.BytesIO(data), source_filename="upload.pdf")
     )
     with path.open("rb") as handle:
         results["file"] = verdict(
-            lambda: new_envelope.probe(handle, source_filename="upload.pdf")
+            lambda: new_probe(handle, source_filename="upload.pdf")
         )
     with tempfile.SpooledTemporaryFile(max_size=1024) as spooled:  # rolled to disk at once
         spooled.write(data)
         spooled.seek(0)
         results["spooled"] = verdict(
-            lambda: new_envelope.probe(spooled, source_filename="upload.pdf")
+            lambda: new_probe(spooled, source_filename="upload.pdf")
         )
     return results
 
@@ -473,7 +506,7 @@ def test_the_size_refusal_of_record_18_is_the_same_bytes(tmp_path: Path) -> None
     # The oracle takes bytes: the whole sparse file, once. It refuses on its length alone.
     assert old_verdict(path.read_bytes()) == expected
     with path.open("rb") as handle:
-        found = verdict(lambda: new_envelope.probe(handle, source_filename="a.pdf"))
+        found = verdict(lambda: new_probe(handle, source_filename="a.pdf"))
     assert found == expected
 
 
@@ -538,7 +571,7 @@ def _file_of(data: bytes, directory: Path) -> Path:
 def test_the_handle_is_left_at_its_start_ready_to_be_staged(tmp_path: Path) -> None:
     path = _file_of(NAMED["ar_baseline.pdf"], tmp_path)
     with path.open("rb") as handle:
-        report = new_envelope.probe(handle, source_filename="a.pdf")
+        report = new_probe(handle, source_filename="a.pdf")
         assert handle.tell() == 0, "the staging step would upload from the middle of the file"
         assert handle.read() == NAMED["ar_baseline.pdf"]
     assert report.sha256 == hashlib.sha256(NAMED["ar_baseline.pdf"]).hexdigest()
@@ -551,7 +584,7 @@ def test_no_read_is_unbounded_or_larger_than_one_chunk(tmp_path: Path) -> None:
     path = _file_of(data, tmp_path)
     with path.open("rb") as inner:
         handle = RecordingHandle(inner)
-        report = new_envelope.probe(handle, source_filename="a.pdf")  # type: ignore[arg-type]
+        report = new_probe(handle, source_filename="a.pdf")  # type: ignore[arg-type]
     assert report.sha256 == hashlib.sha256(data).hexdigest()
     assert handle.unbounded_reads == 0, "the envelope read the whole handle in one call"
     assert handle.largest_read <= 1024 * 1024, handle.largest_read
@@ -570,7 +603,7 @@ def test_peak_python_memory_is_a_small_fraction_of_the_upload(tmp_path: Path) ->
     tracemalloc.start()
     try:
         with path.open("rb") as handle:
-            new_envelope.probe(handle, source_filename="a.pdf")
+            new_probe(handle, source_filename="a.pdf")
         _, peak = tracemalloc.get_traced_memory()
     finally:
         tracemalloc.stop()
@@ -591,7 +624,7 @@ def test_an_oversize_upload_is_refused_after_reading_its_header_and_nothing_else
     with path.open("rb") as inner:
         handle = RecordingHandle(inner)
         with pytest.raises(DomainError) as refused:
-            new_envelope.probe(handle, source_filename="a.pdf")  # type: ignore[arg-type]
+            new_probe(handle, source_filename="a.pdf")  # type: ignore[arg-type]
     details = refused.value.envelope("c").details
     assert details == {"field": "content", "constraint": f"byte_size <= {OLD_MAX_BYTES}"}
     assert handle.bytes_read == 5, f"{handle.bytes_read} bytes were read before the size refusal"
@@ -610,7 +643,7 @@ def test_pdfium_is_only_ever_called_with_its_lock_held(tmp_path: Path) -> None:
         handle = RecordingHandle(
             inner, on_read=lambda kind: seen.append((kind, new_envelope.PDFIUM_LOCK.locked()))
         )
-        new_envelope.probe(handle, source_filename="a.pdf")  # type: ignore[arg-type]
+        new_probe(handle, source_filename="a.pdf")  # type: ignore[arg-type]
     pdfium = [locked for kind, locked in seen if kind == "readinto"]
     assert pdfium, "PDFium never read through the handle"
     assert all(pdfium), f"PDFium read a block without holding the lock: {seen}"
@@ -643,7 +676,7 @@ def test_two_probes_in_two_threads_do_not_overlap_in_pdfium(tmp_path: Path) -> N
     def work() -> None:
         for _ in range(8):
             with path.open("rb") as inner:
-                new_envelope.probe(RecordingHandle(inner, on_read=on_read), source_filename="a.pdf")  # type: ignore[arg-type]
+                new_probe(RecordingHandle(inner, on_read=on_read), source_filename="a.pdf")  # type: ignore[arg-type]
 
     threads = [threading.Thread(target=work) for _ in range(4)]
     for thread in threads:
@@ -671,7 +704,7 @@ def test_a_failed_load_never_borrows_the_last_error_of_an_earlier_one() -> None:
         encrypted_pdf("secret"),
         hand_pdf([]),
     ]
-    found = [verdict(lambda d=d: new_envelope.probe(d, source_filename="a.pdf")) for d in sequence]
+    found = [verdict(lambda d=d: new_probe(d, source_filename="a.pdf")) for d in sequence]
     constraints = [entry[4]["constraint"] for entry in found]
     assert constraints == [
         "not_encrypted",
@@ -696,7 +729,7 @@ def test_a_handle_that_cannot_be_read_is_not_blamed_on_the_document(tmp_path: Pa
 
     with path.open("rb") as inner:
         with pytest.raises(OSError):
-            new_envelope.probe(Failing(inner), source_filename="a.pdf")  # type: ignore[arg-type]
+            new_probe(Failing(inner), source_filename="a.pdf")  # type: ignore[arg-type]
 
 
 def test_a_handle_that_cannot_seek_is_a_programming_error_not_a_refusal() -> None:
@@ -717,7 +750,7 @@ def test_a_handle_that_cannot_seek_is_a_programming_error_not_a_refusal() -> Non
             raise io.UnsupportedOperation("seek")
 
     with pytest.raises(TypeError, match="seekable"):
-        new_envelope.probe(Stream(), source_filename="a.pdf")  # type: ignore[arg-type]
+        new_probe(Stream(), source_filename="a.pdf")  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("not_an_upload", ["a string", 42, None, object()])
@@ -725,7 +758,7 @@ def test_anything_that_is_neither_bytes_nor_a_handle_gets_the_old_refusal(
     not_an_upload: Any,
 ) -> None:
     expected = verdict(lambda: old_probe(not_an_upload, source_filename="a.pdf"))
-    found = verdict(lambda: new_envelope.probe(not_an_upload, source_filename="a.pdf"))
+    found = verdict(lambda: new_probe(not_an_upload, source_filename="a.pdf"))
     assert found == expected
     assert found[4] == {"field": "content", "constraint": "bytes"}
 

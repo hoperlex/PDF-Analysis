@@ -38,7 +38,8 @@ from auditmanager.ingest.envelope import (
     PDFIUM_LOCK,
     TEXTLESS_PAGE_CHARACTERS,
     page_text_refusal,
-    probe,
+    as_handle,
+    inspect_pdf,
 )
 from auditmanager.shared.errors import DomainError
 from portal_bundle import archive_negatives as an  # tools/fixtures, on the path via conftest
@@ -103,7 +104,9 @@ def pdfium_characters(pdf: bytes) -> list[int]:
 
 def _bare_refusal(pdf: bytes) -> tuple[str, str, str]:
     with pytest.raises(DomainError) as raised:
-        probe(pdf, source_filename="member.pdf")
+        # The PDF rules of the member, text rule on: what a bare PDF was judged by before the
+        # last step of the lane, and what the member of a bundle is judged by still.
+        inspect_pdf(as_handle(pdf), require_text=True)
     fields = dict(raised.value.detail_fields)
     return fields["field"], fields["constraint"], str(raised.value)
 

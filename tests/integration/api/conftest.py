@@ -436,10 +436,9 @@ class IngestDocumentAdapter:
         section: str | None = None,
     ) -> _Uploaded:
         # `W55B-INGEST-01`: the shipped adapter's own body, as for `stream_content` below. The
-        # port takes the part's file handle; the adapter reads its magic bytes, hands a ZIP to
-        # `IngestService.upload_bundle` (a portal bundle, the upload) and, until the last step
-        # of that lane, anything else to the single-PDF entry. A second copy of that routing
-        # here would be a second place for it to drift.
+        # port takes the part's file handle; the adapter hands it, unread, to
+        # `IngestService.upload_bundle` (a portal bundle, the upload), which refuses what is not
+        # a ZIP. A second copy of that call here would be a second place for it to drift.
         from auditmanager.bootstrap.adapters import DocumentAdapter
 
         uploaded = DocumentAdapter(self._ingest).upload_document(

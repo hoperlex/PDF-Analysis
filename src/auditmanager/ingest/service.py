@@ -1,4 +1,4 @@
-"""The direct single-PDF upload use case.
+"""The portal-bundle upload use case.
 
 One public sequence, written out in one place, because the order is the design.
 
@@ -12,7 +12,7 @@ publication boundary, which is what makes the interrupted case recoverable:
 ===== ============================================ =========================
 step   what happens                                 committed when it ends
 ===== ============================================ =========================
-0      admission probe                              nothing; no service touched
+0      admission envelope                           nothing; no service touched
 1      claim the idempotency key                    ``command_record`` in_progress
 2      stage temporary bytes                        nothing canonical
 3      verify checksum and size                     nothing canonical
@@ -65,7 +65,6 @@ from typing import Any, BinaryIO, Final, Mapping
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.documents.public import (
-    MANIFEST_ROLE_SOURCE_DOCUMENT,
     ROLE_SOURCE_DOCUMENT,
     DocumentRepository,
     DocumentVersionRecord,
@@ -116,9 +115,7 @@ from .bundle_members import STORED_MEMBERS, StoredMember, fingerprint_members, s
 from .envelope import (
     ACCEPTED_MEDIA_TYPE,
     MAX_BYTES,
-    AdmissionReport,
     as_handle,
-    probe,
     validate_source_filename,
 )
 from .failures import domain_error_from_storage
@@ -374,140 +371,6 @@ class IngestService:
 
     # -- the upload command --------------------------------------------------
 
-    def upload_single_pdf(
-        self,
-        *,
-        project_uid: ProjectUid,
-        content: bytes | BinaryIO,
-        source_filename: str,
-        display_title: str,
-        idempotency_key: IdempotencyKey,
-        document_uid: DocumentUid | None = None,
-        section: str | None = None,
-    ) -> UploadOutcome:
-        """Publish one PDF as one immutable version, or explain why not.
-
-        ``content`` is the PDF as a **seekable binary handle** or, for the callers that
-        hold one, a byte string (`W55B-STREAM-01`). A handle is never read whole here:
-        the envelope measures it, hashes it in fixed-size chunks and lets PDFium read the
-        blocks it needs, and the store then streams it to the temporary object from the
-        start. The handle is the caller's -- this method neither closes nor keeps it.
-
-        ``display_title`` is the caller's own display label and is what a reviewer
-        sees. It is a separate argument from ``source_filename`` on purpose: the file
-        name is retained for the record but never travels back out, so a title the
-        caller chose is the only presentation value a consumer receives.
-
-        ``section`` (`R-40`) is set only when this call **creates** a document, i.e.
-        when ``document_uid`` is ``None``: a section classifies the document, not the
-        version being published, so a second upload against an existing document does
-        not get a second chance to (mis)state it. It is never defaulted -- ``None`` means
-        the caller did not supply one, and the document is created with none.
-        """
-        # Step 0. The envelope, before any service is touched. A refusal here has
-        # created nothing anywhere, including no command record, because nothing has
-        # been attempted yet. For a handle this is also the one pass that measures it:
-        # the size and the SHA-256 come from the handle, chunk by chunk, and it is left
-        # positioned at its start.
-        report = probe(content, source_filename=source_filename)
-
-        fingerprint = payload_fingerprint(
-            {
-                "project_uid": str(project_uid),
-                "document_uid": None if document_uid is None else str(document_uid),
-                "content_sha256": report.sha256,
-                "byte_size": report.byte_size,
-                "media_type": report.media_type,
-                "source_filename": source_filename,
-            }
-        )
-
-        # Step 1. Claim the key, having first proved the target exists so a bad target
-        # does not burn a key.
-        with session_scope(self._factory) as session:
-            self._documents.get_project(session, project_uid)
-            if document_uid is not None:
-                owner = self._documents.require_document(session, document_uid)
-                if owner != project_uid:
-                    raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Document")
-            claim = self._commands.begin(
-                session,
-                command_type=COMMAND_TYPE_UPLOAD,
-                idempotency_key=idempotency_key,
-                fingerprint=fingerprint,
-            )
-
-        if isinstance(claim, CommandReplay):
-            return UploadOutcome(
-                version=self.get_version(_replayed_version_uid(claim.outcome)),
-                replayed=True,
-            )
-        assert isinstance(claim, CommandStarted)
-
-        temporary: TemporaryBlob | None = None
-        try:
-            # Steps 2 and 3. Nothing is canonical until verification has passed; the
-            # adapter removes the staged bytes itself on a mismatch. A handle is rewound
-            # here, where it is read, rather than trusted to still be at its start after
-            # the claim above: staging streams from wherever the handle stands.
-            if not isinstance(content, (bytes, bytearray)):
-                content.seek(0)
-            temporary = self._store.stage_temporary(
-                content,
-                declared_sha256=report.sha256,
-                declared_size=report.byte_size,
-                role=_SOURCE_ROLE,
-                media_type=report.media_type,
-            )
-            verified = self._store.verify_temporary(temporary)
-
-            # Step 4. Committed before publication: this row is what makes step 5's
-            # object findable if step 6 never happens.
-            with session_scope(self._factory) as session:
-                self._blobs.record_verified(session, verified)
-
-            # Step 5. The object becomes canonical. Idempotent by (sha256, size), so a
-            # resumed publication of the same content re-uses the existing object.
-            published = self._store.publish(verified)
-            temporary = None
-
-            # Step 6. One transaction: the blob becomes available, the version and its
-            # manifest appear, and the command records its outcome, or none of it does.
-            with session_scope(self._factory) as session:
-                version_uid = self._commit_publication(
-                    session,
-                    report=report,
-                    verified=verified,
-                    project_uid=project_uid,
-                    document_uid=document_uid,
-                    display_title=display_title,
-                    source_filename=source_filename,
-                    section=section,
-                )
-                self._commands.succeed(
-                    session,
-                    claim.command_id,
-                    {
-                        "version_uid": str(version_uid),
-                        "blob_id": str(published.blob_id),
-                    },
-                )
-                version = self._documents.get_version(session, version_uid)
-            return UploadOutcome(version=version, replayed=False)
-
-        except Exception as exc:
-            # Deliberately ``Exception`` and not ``BaseException``: a KeyboardInterrupt
-            # or SystemExit must stay an interrupt rather than be reported to a caller
-            # as a domain failure. It leaves the command ``in_progress``, which is
-            # exactly the case ``Reconciler.report`` names as a stale command.
-            failure = self._as_domain_error(exc)
-            if temporary is not None:
-                # Staged bytes that will never be published. Deleting an absent object
-                # is a no-op, so this is safe on every failure path.
-                self._discard_quietly(temporary)
-            self._record_failure(claim, failure)
-            raise failure from None
-
     def upload_bundle(
         self,
         *,
@@ -655,42 +518,6 @@ class IngestService:
                 raise failure from None
 
     # -- internals -----------------------------------------------------------
-
-    def _commit_publication(
-        self,
-        session: Session,
-        *,
-        report: AdmissionReport,
-        verified: VerifiedBlob,
-        project_uid: ProjectUid,
-        document_uid: DocumentUid | None,
-        display_title: str,
-        source_filename: str,
-        section: str | None = None,
-    ) -> VersionUid:
-        self._blobs.mark_available(session, verified.blob_id)
-        target = document_uid
-        if target is None:
-            target = self._documents.create_document(
-                session, project_uid, display_title, section
-            )
-        entry = ManifestEntry(
-            role=MANIFEST_ROLE_SOURCE_DOCUMENT,
-            blob_id=verified.blob_id,
-            sha256=verified.sha256,
-            size_bytes=verified.size,
-            media_type=ACCEPTED_MEDIA_TYPE,
-        )
-        return self._documents.publish_version(
-            session,
-            document_uid=target,
-            media_type=report.media_type,
-            byte_size=report.byte_size,
-            sha256=report.sha256,
-            page_count=report.page_count,
-            source_filename=source_filename,
-            entries=(entry,),
-        )
 
     def _commit_bundle(
         self,

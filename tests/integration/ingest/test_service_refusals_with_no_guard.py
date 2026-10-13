@@ -92,7 +92,7 @@ def test_a_document_from_another_project_is_refused_and_names_the_document(
 ) -> None:
     """Naming another project's document must not add a version to it.
 
-    ``document_uid`` is an optional argument to ``upload_single_pdf``: supplied, it says
+    ``document_uid`` is an optional argument to ``upload_bundle``: supplied, it says
     "this is a new version of that existing document" instead of "create a new document".
     Nothing but this check ties the named document to the project the caller also named,
     and the project is what every listing and every export scopes by. With the check gone
