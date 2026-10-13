@@ -83,7 +83,52 @@ Each decision names the alternative rejected.
 
 ## 2. Checks, and how each new test was shown to fail
 
-Pending.
+The light-acceptance table is filled in at the end of the lane.
+
+### 2.1 Mutation proofs
+
+Method: a scratch driver (session scratchpad, not committed) makes a one-line textual replacement in the **committed** file (the old text must
+occur exactly once), runs the named test file with `pytest -x -q --tb=no -rf` on the lane stack (one invocation at a time), writes the
+original bytes back and compares the file's SHA-256 before and after. **31 mutations, 31 red, every file restored** (`restored=yes` in each
+row). Test paths are relative to `tests/integration/analysis/recognised/`.
+
+| Behaviour | Mutation | First failing test |
+| --- | --- | --- |
+| `mixed_script` | `mixed.append(word)` becomes `pass` | `test_quality_flags.py::test_each_seeded_flaw_raises_its_flag_on_the_recognised_word[page5-mixed_script_word-...]` |
+| `homoglyph`, within a word | `if _within_word_homoglyph(word):` becomes `if False:` | `test_quality_flags.py::test_each_seeded_flaw_raises_its_flag_on_the_recognised_word[page2-latin_homoglyph-...]` |
+| `homoglyph`, a whole Latin word | the neighbour condition becomes `if False:` | `test_quality_flags.py::test_the_designations_block_would_be_flagged_without_the_exemption` |
+| `cjk` | `if _CJK.search(normalised) is not None:` becomes `if False:` | `test_quality_flags.py::test_each_seeded_flaw_raises_its_flag_on_the_recognised_word[page3-cjk_character-...]` |
+| `doubled_list_marker` | `if marker is not None:` becomes `if False:` | `test_quality_flags.py::test_each_seeded_flaw_raises_its_flag_on_the_recognised_word[page4-doubled_list_marker-...]` |
+| a thematic break is not doubled | `if _THEMATIC_BREAK.match(line):` becomes `if False:` | `test_quality_flags.py::test_a_single_marker_a_thematic_break_or_a_marker_inside_a_line_is_not[- - -]` |
+| the degeneracy flags | the loop over the verdict iterates `zip((), ())` | `test_quality_flags.py::test_flags_are_deduplicated_and_in_the_pinned_order` |
+| `empty_text` | `if not normalised.strip():` becomes `if False:` | `test_quality_flags.py::test_an_empty_body_is_empty_text[]` |
+| the designation exemption | `if is_exempt:` becomes `if False:` | `test_quality_flags.py::test_each_seeded_designation_raises_nothing[B25]` |
+| the exemption's narrowing (one capital needs two digits) | `\d{{2,}}` becomes `\d{{1,}}` | `test_quality_flags.py::test_a_look_alike_letter_where_the_other_script_belongs_is_a_homoglyph[класс C0 здания-C0]` |
+| the `quote_source: recognised` marker | the line is deleted | `test_recognised_artifact.py::test_every_accepted_bundle_builds_the_sealed_shape[ar_baseline.zip]` |
+| an IMAGE entry carries no flags | `"flags": []` added to the description entry | `test_recognised_artifact.py::test_every_accepted_bundle_builds_the_sealed_shape[ar_baseline.zip]` |
+| the entry order | `ranked.sort(...)` becomes `pass` | `test_recognised_artifact.py::test_entries_are_ordered_by_page_then_by_place_in_the_markdown` |
+| `results_sha256` | the digest of `b""` | `test_recognised_artifact.py::test_every_accepted_bundle_builds_the_sealed_shape[ar_baseline.zip]` |
+| the reader skips the quote lines | the skipping loop becomes `while False:` | `test_markdown_reader.py::test_the_reader_counts_every_body_as_ingest_does[ar_baseline.zip]` |
+| the reader drops a trailing CR | `line.rstrip("\r")` becomes `line` | `test_markdown_reader.py::test_a_crlf_file_reads_to_the_same_bodies_as_its_lf_twin` |
+| agreement, list to markdown | the per-block check becomes `if False:` | `test_portal_agreement.py::test_a_header_of_the_other_type_is_refused` |
+| agreement, markdown to list | the extra-header check becomes `if False:` | `test_portal_agreement.py::test_a_header_for_a_stamp_is_refused` |
+| a block on a page the PDF lacks | `if page_index >= page_count:` becomes `if False:` | `test_portal_agreement.py::test_a_block_on_a_page_the_pdf_does_not_have_is_refused` |
+| textless rule, admitted with a block | the block condition is dropped (`if page.char_count == 0:`) | `test_source_preparation_bundle.py::test_a_textless_page_that_holds_a_portal_block_is_admitted_and_marked` |
+| textless rule, refused without one | the condition becomes `... and False` | `test_source_preparation_bundle.py::test_a_textless_page_with_no_portal_block_is_refused` |
+| `has_text_layer: false` on such a page | the value becomes `True` | `test_source_preparation_bundle.py::test_a_textless_page_that_holds_a_portal_block_is_admitted_and_marked` |
+| both members or neither | `if markdown_blob is None or blocks_blob is None:` becomes `if False:` | `test_source_preparation_bundle.py::test_one_member_without_the_other_is_refused[markdown]` |
+| never in the text layer | the text layer of a bundle gains a `recognised` member holding the bodies | `test_source_preparation_bundle.py::test_the_text_layer_of_a_bundle_is_byte_for_byte_the_text_layer_of_its_bare_pdf` |
+| the extractor gets a path | `extract_document(path)` becomes `extract_document(Path(path).read_bytes())` | `test_source_preparation_bundle.py::test_the_pdf_is_opened_from_a_temporary_file_that_is_gone_afterwards` |
+| the PDF is streamed, never read whole | the stream becomes `[store.read(blob_id, verify=True)]` | `test_source_preparation_bundle.py::test_a_stream_that_breaks_is_source_unreadable_and_leaves_no_file` |
+| the temporary file is removed | `Path(name).unlink(missing_ok=True)` becomes `pass` | `test_source_preparation_bundle.py::test_the_pdf_is_opened_from_a_temporary_file_that_is_gone_afterwards` |
+| the metrics | `recognised_entry_count` becomes `0` | `test_source_preparation_bundle.py::test_a_bundle_publishes_the_recognised_text_beside_the_two_prepared_artifacts` |
+| executor, the role tuple | back to `(ROLE_SOURCE_DOCUMENT,)` (the stage gets no markdown) | `test_run_hands_the_bundle_to_preparation.py::test_a_run_over_a_bundle_version_publishes_the_recognised_text` |
+| executor, the seeding | the manifest loop's condition becomes `if False:` | `test_run_hands_the_bundle_to_preparation.py::test_a_run_over_a_bundle_version_publishes_the_recognised_text` |
+| the isolation guard | `import auditmanager.analysis.recognised` planted in `analysis/text/prompt.py` | `test_recognised_never_reaches_analysis.py::test_the_prompt_path_imports_nothing_from_the_recognised_package` |
+
+The first run of the set left one row unrun, not alive: the narrowing row's old text did not match because the pattern held a literal
+no-break space instead of its escape. That was a defect of the source (an invisible character in a pinned pattern), fixed in `803c89c9`
+with a test for the spelling; the row then ran red.
 
 ## 3. Contracts
 
