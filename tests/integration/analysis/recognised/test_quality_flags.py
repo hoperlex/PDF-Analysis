@@ -193,6 +193,7 @@ def test_no_homoglyph_without_a_look_alike_in_the_wrong_script(text: str) -> Non
     [
         "Бетон B25, арматура A500C, оси 1.A, предел REI 150.",
         "предел RЕI 150 принят",  # the R E I mixed: Cyrillic Е
+        "предел RЕI\u00a0150 принят",  # and with a no-break space
         "шифр CП 7-AР лист",  # an СП 7-АР-style code with Latin C and A
         "шифр СП 7-АР лист",
         "оси 2.1.Б и 12.А",
@@ -208,6 +209,7 @@ def test_engineering_designations_raise_neither_script_flag(text: str) -> None:
     ("text", "expected"),
     [
         ("предел RЕI 150 принят", {"mixed_script", "homoglyph"}),
+        ("предел RЕI\u00a0150 принят", {"mixed_script", "homoglyph"}),
         ("шифр CП 7-AР лист", {"mixed_script", "homoglyph"}),
         ("Бетон B25, арматура A500C", {"homoglyph"}),
         ("оси 1.A, предел", {"homoglyph"}),
