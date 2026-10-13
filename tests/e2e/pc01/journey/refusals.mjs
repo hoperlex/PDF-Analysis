@@ -350,7 +350,7 @@ async function seedProject(origin, stamp, cookies) {
 async function drive(origin, projectUid, testCase, stamp, cookies, generatedDirectory) {
   const file = fixturePath(testCase, generatedDirectory);
   if (!existsSync(file)) {
-    return { fixture: testCase.fixture, drivingError: `${file} is not on disk`, findings: [`${testCase.fixture}: the fixture is not on disk at ${file}`] };
+    return { fixture: testCase.fixture, drivingError: `${file} is not on disk`, timingsMs: { total: 0 }, findings: [`${testCase.fixture}: the fixture is not on disk at ${file}`] };
   }
   const bytesOnDisk = statSync(file).size;
 
