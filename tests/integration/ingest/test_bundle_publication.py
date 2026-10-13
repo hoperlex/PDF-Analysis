@@ -383,12 +383,17 @@ def test_a_different_upload_name_or_project_under_the_same_key_is_a_conflict(
 def test_a_refused_bare_pdf_does_not_burn_the_key_a_bundle_then_uses(
     service, project, baseline_pdf, key, engine
 ) -> None:
-    """A bare PDF used to publish under a key and make a bundle under the same key a conflict.
-    Now the refusal records no command, so the key is still free: the bundle that follows
-    under it publishes, and a replay of it is the same version."""
+    """A bare PDF sent through the adapter used to publish under a key and make a bundle under
+    the same key a conflict. Now the refusal records no command, so the key is still free: the
+    bundle that follows under it publishes, and a replay of it is the same version."""
+    from auditmanager.bootstrap.adapters import DocumentAdapter
+
     idempotency = key("mixed")
     with pytest.raises(DomainError) as raised:
-        upload(service, project, baseline_pdf, key, idempotency_key=idempotency)
+        DocumentAdapter(service).upload_document(
+            project_uid=str(project.project_uid), content=io.BytesIO(baseline_pdf),
+            source_filename="a.pdf", display_title="Bare", idempotency_key=str(idempotency),
+        )
     assert dict(raised.value.detail_fields)["constraint"] == "portal_bundle_required"
     assert table_counts(engine)["command_record"] == 0
 
