@@ -44,14 +44,10 @@ RELEASE_GETS = frozenset({"/system/version", "/releases"})
 #: they meet the sweep's ordinary rule: an absent `ndoc_` is `404`, the snapshot list a page,
 #: `/norms/search` without `q` a `422`, and the administrator's history the seam's `403` for
 #: this suite's `expert` -- never a `5xx`.
-#: `W55B-SEAL-01` names the two portal-block reads its port serves as sealed stubs: each must
-#: answer exactly `503 dependency_unavailable` until `W55B-GEOMETRY-01`, which empties this set.
-SEALED_STUB_GETS: frozenset[str] = frozenset(
-    {
-        "/versions/ver_01ARZ3NDEKTSV4RRFFQ69G5FAV/portal-blocks",
-        "/versions/ver_01ARZ3NDEKTSV4RRFFQ69G5FAV/portal-blocks/blk_00000000000000000000000000000000/crop",
-    }
-)
+#: `W55B-SEAL-01` named the two portal-block reads its port served as sealed stubs, each
+#: answering exactly `503 dependency_unavailable`. `W55B-GEOMETRY-01` serves them and empties
+#: this set, so they meet the sweep's ordinary rule: an absent `ver_` is `404`, never a `5xx`.
+SEALED_STUB_GETS: frozenset[str] = frozenset()
 WORKER_GETS = frozenset({"/execution/workers"})
 
 _STATIC_TOKEN_CACHE: str | None = None

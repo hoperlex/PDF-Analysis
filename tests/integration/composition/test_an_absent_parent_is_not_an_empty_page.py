@@ -76,7 +76,7 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # ``streamNormDocumentContent``, all on ``norm_document_id``) and three unaddressed ones
 # (``searchNorms``, ``listNormSnapshots``, ``listNormSnapshotEvents``).
 # `W55B-SEAL-01` added two addressed GETs on `version_uid` (``listVersionPortalBlocks`` and
-# ``streamVersionPortalBlockCrop``), both sealed stubs until `W55B-GEOMETRY-01`.
+# ``streamVersionPortalBlockCrop``), sealed stubs until `W55B-GEOMETRY-01` served them.
 EXPECTED_ADDRESSED = 17
 EXPECTED_UNADDRESSED = 14
 
@@ -127,10 +127,8 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 #: emptied it and the three joined the sweep: an absent ``ndoc_`` is ``404 not_found`` --
 #: the document, its paragraphs and its PDF alike.
 #: `W55B-SEAL-01` filled it again with the two portal-block reads; `W55B-GEOMETRY-01` serves
-#: them and empties it, and an absent `ver_` is then `404 not_found` for both.
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset(
-    {"listVersionPortalBlocks", "streamVersionPortalBlockCrop"}
-)
+#: them and empties it, and an absent `ver_` is now `404 not_found` for both.
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a

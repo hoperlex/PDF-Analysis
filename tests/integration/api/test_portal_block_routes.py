@@ -2,10 +2,10 @@
 
 The routes are driven over a bare FastAPI application with a fake ``BlockPort``, so what is
 asserted is the router's own work -- paging, the order the cursor carries, the body shape,
-the PNG's headers -- and not any adapter's. The shipped ``BlockAdapter`` is then asked the
-two questions directly: until `W55B-GEOMETRY-01` it refuses with ``dependency_unavailable``
-and never answers ``not_produced``, which would be a true statement about a version and a false
-one about a deployment that cannot yet produce anything.
+the PNG's headers -- and not any adapter's. The shipped ``BlockAdapter`` sealed the two reads
+as ``dependency_unavailable`` stubs; `W55B-GEOMETRY-01` serves them, so here it is only shown
+to reach for the version instead of refusing (its answers over a real run are
+``tests/integration/analysis/geometry/test_portal_block_reads.py``'s).
 """
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ from auditmanager.api.schemas.blocks import (
     PortalCropContent,
 )
 from auditmanager.bootstrap.adapters import BlockAdapter, DocumentAdapter
-from auditmanager.shared.errors import DomainError, ErrorCode
 
 VERSION = "ver_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 RUN = "run_01ARZ3NDEKTSV4RRFFQ69G5FAV"
@@ -153,16 +152,32 @@ def test_the_crop_is_streamed_as_a_png_with_the_wire_header_order(client) -> Non
 # --- the shipped adapters until their lanes -----------------------------------------------
 
 
-def test_the_shipped_block_adapter_refuses_both_reads_until_geometry_serves_them() -> None:
-    adapter = BlockAdapter(session_factory=None, blob_store=None)  # type: ignore[arg-type]
+def test_the_shipped_block_adapter_serves_both_reads_and_no_longer_refuses_them() -> None:
+    """`W55B-GEOMETRY-01`: neither read is the sealed ``dependency_unavailable`` stub any more.
+
+    The session factory stands in for the database and records that each read opened a
+    session to prove the version exists -- the first thing either read does -- instead of
+    refusing before it.
+    """
+
+    class Reached(Exception):
+        pass
+
+    opened: list[str] = []
+
+    def session_factory() -> Any:
+        opened.append("session")
+        raise Reached
+
+    adapter = BlockAdapter(session_factory=session_factory, blob_store=None)  # type: ignore[arg-type]
     for call in (
         lambda: adapter.list_portal_blocks(version_uid=VERSION),
         lambda: adapter.read_portal_block_crop(version_uid=VERSION, portal_block_id=f"blk_{0:032x}"),
     ):
-        with pytest.raises(DomainError) as refused:
+        with pytest.raises(Reached):
             call()
-        assert refused.value.code is ErrorCode.DEPENDENCY_UNAVAILABLE
-        assert dict(refused.value.detail_fields) == {"dependency": "portal_blocks"}
+    assert opened == ["session", "session"]
+    assert not hasattr(BlockAdapter, "_portal_blocks_unavailable")
 
 
 def test_the_document_adapter_hands_the_service_the_handle_it_was_given_unread() -> None:
