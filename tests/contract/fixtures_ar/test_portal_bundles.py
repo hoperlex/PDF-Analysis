@@ -569,6 +569,23 @@ class ValidatorTest(unittest.TestCase):
             expect="pdf_magic_bytes")
         self.assertEqual(wrong_magic.verdict.violations[0].field, "content")
 
+    def test_the_committed_negatives_judged_as_uploads_under_the_bundle_rules(self) -> None:
+        # What INGEST will see when it feeds the old negatives to the new envelope: none is
+        # a bundle, and each is refused under the rule that says why.
+        expected = {
+            "not_a_pdf.txt": "portal_bundle_required",
+            "encrypted.pdf": "portal_bundle_required",
+            "image_only.pdf": "portal_bundle_required",
+            "too_many_pages.pdf": "portal_bundle_required",
+            "oversize.pdf": "portal_bundle_required",
+            "companion_archive.zip": "bundle_member_set",
+        }
+        for name, constraint in expected.items():
+            verdict = validate.validate((CORPUS_DIR / "negative" / name).read_bytes(),
+                                        bundle.GENERATOR_LIMITS)
+            with self.subTest(negative=name):
+                self.assertEqual(verdict.constraints, (constraint,))
+
     def test_the_entry_count_gate_sits_between_eight_and_nine(self) -> None:
         eight = validate.validate(archive_negatives.entry_count(8), bundle.GENERATOR_LIMITS)
         nine = validate.validate(archive_negatives.entry_count(9), bundle.GENERATOR_LIMITS)
