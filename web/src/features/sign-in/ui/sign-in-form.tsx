@@ -14,7 +14,8 @@
  *
  * The refusal is rendered through `shared/ui`'s `ErrorState` — the same block every other
  * screen uses for a failure the server will not change on retry — and carries its machine
- * value on `data-sign-in-refusal` beside the Russian sentence.
+ * value on `data-sign-in-refusal` beside the Russian sentence. It stands above the fields,
+ * where a reader who was sent back looks first.
  */
 
 import { ErrorState } from '@/shared/ui';
@@ -22,6 +23,8 @@ import { SubmitLock } from '@/shared/ui/submit-lock';
 
 import type { SignInRefusal } from '../model/exchange';
 import { SESSION_OPEN_PATH, SIGN_IN_NEXT_FIELD, signInRefusalMessage } from '../model/exchange';
+
+import styles from './sign-in-form.module.css';
 
 export interface SignInFormProps {
   /** The refusal the previous attempt was redirected back with, if there was one. */
@@ -37,15 +40,20 @@ export interface SignInFormProps {
 export function SignInForm({ refusal, next }: SignInFormProps) {
   const action = next ? `${SESSION_OPEN_PATH}?next=${encodeURIComponent(next)}` : SESSION_OPEN_PATH;
   return (
-    <form className="am-form" method="post" action={action}>
+    <form className={styles.form} method="post" action={action}>
       <SubmitLock />
       {typeof next === 'string' && next.length > 0 ? (
         <input type="hidden" name={SIGN_IN_NEXT_FIELD} value={next} />
       ) : null}
-      <div className="am-form__field">
-        <label htmlFor="sign-in-login">
-          <strong>Адрес электронной почты</strong>
-        </label>
+
+      {refusal !== null && refusal !== undefined ? (
+        <div data-sign-in-refusal={refusal}>
+          <ErrorState title="Вход не выполнен" detail={signInRefusalMessage(refusal)} />
+        </div>
+      ) : null}
+
+      <div className={styles.field}>
+        <label htmlFor="sign-in-login">Адрес электронной почты</label>
         <input
           id="sign-in-login"
           name="login"
@@ -53,14 +61,12 @@ export function SignInForm({ refusal, next }: SignInFormProps) {
           autoComplete="username"
           required
           maxLength={320}
-          placeholder="Электронная почта или прежний логин"
+          placeholder="Почта или прежний логин"
         />
       </div>
 
-      <div className="am-form__field">
-        <label htmlFor="sign-in-password">
-          <strong>Пароль</strong>
-        </label>
+      <div className={styles.field}>
+        <label htmlFor="sign-in-password">Пароль</label>
         <input
           id="sign-in-password"
           name="password"
@@ -72,23 +78,14 @@ export function SignInForm({ refusal, next }: SignInFormProps) {
         />
       </div>
 
-      <div className="am-form__row">
-        <button type="submit" className="am-button">
-          Войти
-        </button>
-      </div>
+      <button type="submit" className={`am-button ${styles.submit}`}>
+        Войти
+      </button>
 
-      <p className="am-form__hint">
-        Пароль уходит на сервер этого приложения и обменивается на пропуск там же. В браузер
-        пропуск не попадает и в хранилище браузера не кладётся: сюда возвращается только
-        непрозрачный номер сеанса, недоступный сценариям страницы.
+      <p className={styles.hint}>
+        Пароль проверяет сервер приложения. Страница не хранит ни пароль, ни пропуск и не
+        обращается к хранилищу браузера.
       </p>
-
-      {refusal !== null && refusal !== undefined ? (
-        <div data-sign-in-refusal={refusal}>
-          <ErrorState title="Вход не выполнен" detail={signInRefusalMessage(refusal)} />
-        </div>
-      ) : null}
     </form>
   );
 }

@@ -1532,3 +1532,11 @@ G-10 and G-11 of `ROADMAP-TO-BETA.md` §10.13 and K-7 of §10.16.
 | `R-117` | `R-Y6` | Portal descriptions are shown, marked, and never used in analysis (G-7). |
 | `R-118` | `R-Y7` | Until chunked analysis lands, a start or re-audit over a version above the analysis input budget is refused up front (G-11). |
 | `R-119` | `R-Y8` | OD-04 is flipped as `W55-PLAN.md` §B4 describes. Real client portal bundles may be uploaded before the beta backup wave without conditions; the owner accepts the risk (K-7, `R-94`). From the first real upload, `R-110`'s copy rule applies in full. |
+
+### `R-120` — the W54 vision probe through Codex, this task only (owner, 2026-10-13)
+
+The owner authorised running `W54-VISION-PROBE` through the Codex VS Code extension on the
+owner's subscription. It applies to that single task: eight crops of the owner's portal export,
+sent to Codex's model, with no proxy key. It sets no precedent for product paths or other
+probes. The owner also authorised the integrator to read `.local/probes/w54/vision/` and write
+its report. Report: `reviews/W54-VISION-PROBE.md`.

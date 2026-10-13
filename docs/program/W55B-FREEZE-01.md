@@ -130,3 +130,38 @@ web/tests/guards/rendered-language.guard.test.ts
 web/tests/unit/projects/upload-failure.test.ts
 web/tests/unit/screens/cold-load.test.ts
 ```
+
+## Amendment 1 — the owner's portal export checked against §B3.1 and §B3.5 (2026-10-13)
+
+The owner supplied `.local/portal-exports/13АВ-РД-АР-ТП1-ТП2_V1.zip` (9 035 796 bytes, never
+committed, F-7). It is a fresh export of the same АР document the plan measured. The check was
+read-only, run with `python -I` over the archive in memory.
+
+**Holds as planned:**
+
+- **Archive:** 4 entries, deflate only, UTF-8 name flag (bit 11) set, no data descriptors, no ZIP64, compression ratio ≤ 6.2, total uncompressed 9.9 MB.
+- **Members:** one stem; one `.pdf`, `_blocks.json`, `_results.md` and `_results.html` each.
+- **Pages:** PDF 30 pages = `pages[]` 30, `page_index` 0…29, every `rotation` 0. The page-box aspect differs by 0.012 %, inside the 0.5 % tolerance.
+- **Blocks:** 129 (56 text, 47 image, 26 stamp), `blk_<32hex>` ids unique, every `coords_norm` inside [0,1] and ordered.
+- **Agreement:** `_results.md` and `_blocks.json` agree both ways for text and image blocks (103 ids, 103 crop links). Stamps appear only in `_blocks.json`.
+- **Text layer:** every page has one (≥ 50 characters).
+
+**Differs from the plan's wording; the implementation follows the export:**
+
+| Item | Plan text | Real export | Rule adopted |
+| --- | --- | --- | --- |
+| stamp audit | every corpus ZIP holds `_stamp_audit.json` | **absent** in this client export | stays **optional** (§B3.1 already says so); its absence is not a refusal |
+| id field | "unique ids" | `block_id` | read `block_id` |
+| type field | TEXT / IMAGE | `block_type` ∈ {`text`, `image`, `stamp`}, lower case | case-sensitive enum of these three; `_results.md` headers carry `[TEXT]`/`[IMAGE]` |
+| extra block fields | — | `shape_type` ∈ {`rectangle`, `polygon`}, `export_status` | accepted; `shape_type` stored, `export_status` tolerated like `status` |
+| `polygon_points` | "optional (12)" | a list of `[x, y]` pairs of variable length (6–11) on `polygon` blocks; empty on rectangles | a list of 3…64 normalised points, required non-empty only when `shape_type` is `polygon` |
+| `ordinal` | non-unique | non-unique, **`null` on every stamp** | nullable |
+| `crop_url` | capability URL | `https://…/api/crops/…`, **`null` on stamps** | nullable; never fetched (§B3.1) |
+| top-level keys | `pages`, `blocks`, `document_id` | also `schema_version` (1), `coordinate_space` (`normalized_page_top_left`), `document_name`, `document_path`, `generated_at` | `schema_version` must be 1 and `coordinate_space` that literal, otherwise refuse; the rest are ignored (`document_path` is never identity or displayed) |
+| `status` values | the portal's set, `failed` tolerated | only `recognized` in this export | keep the planned set |
+
+**Not exercised by this export:** low-text or raster pages, rotations other than 0, failed
+blocks, a stamp audit. Those stay covered by `W55B-FIXTURES-01`'s synthetic bundles.
+
+**Unblocked:** the real-export step of `W55B-REHEARSAL-01`, and the report-only `W54-OCR-PROBE`,
+which needs no network. `W54-VISION-PROBE` still waits for the proxy key on this host.
