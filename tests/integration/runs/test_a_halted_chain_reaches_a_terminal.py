@@ -22,8 +22,10 @@ proved it by mutating each away on a copy of ``src/`` and running the whole batt
 How the halt is produced
 ------------------------
 Through the real chain, by making the source bytes unreadable *at the port*. The store is
-wrapped so that a ``read`` of the one seeded source blob returns bytes that are not a PDF;
-every other call delegates to the real adapter. Nothing about ``source_preparation`` is
+wrapped so that a read of the one seeded source blob -- whole (``read``) or streamed
+(``open_stream``, which ``source_preparation`` uses since `W55B-RECOGNISED-01` streams the PDF
+to a temporary file) -- returns bytes that are not a PDF; every other call delegates to the
+real adapter. Nothing about ``source_preparation`` is
 special-cased and no stage is stubbed: the stage really runs, really reads, and really
 fails on what it got.
 
@@ -73,6 +75,12 @@ class UnreadableSource:
             self.reads_of_the_source += 1
             return b"this is not a PDF and no page parser will accept it\n"
         return self._inner.read(blob_id, **kwargs)
+
+    def open_stream(self, blob_id, **kwargs):
+        if str(blob_id) == self._blob_id:
+            self.reads_of_the_source += 1
+            return iter((b"this is not a PDF and no page parser will accept it\n",))
+        return self._inner.open_stream(blob_id, **kwargs)
 
 
 class ProviderThatMustNotBeAsked:
