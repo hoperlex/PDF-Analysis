@@ -568,8 +568,18 @@ def test_a_refused_archive_leaves_no_temporary_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    # The refusals are kept while the directory is looked at: an exception holds its traceback,
+    # and the traceback holds the frame that made the directory, so a directory that only a
+    # finalizer would remove (when the exception is freed) is still there. Only the reader's own
+    # clean-up on the way out passes this.
+    held: list[DomainError] = []
     for negative in NEGATIVES:
-        judge(negative.build())
+        try:
+            with extract_bundle(io.BytesIO(negative.build())) as bundle:
+                admit_bundle(bundle)
+        except DomainError as refused:
+            held.append(refused)
+    assert len(held) == len(NEGATIVES), "every small negative is refused"
     assert list(tmp_path.iterdir()) == [], "a refusal left temporary files behind"
 
 

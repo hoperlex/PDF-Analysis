@@ -81,6 +81,44 @@ API answers an accepted 250 MiB upload within about 240 s: it answered in 1.9-3.
 proportional to the bundle** (an idle API process of 165 MiB reached 308-315 MiB for a 244 MiB upload); the stand's own figures
 belong to REHEARSAL. The generated archives were deleted after each run.
 
+## Mutation proofs (item 10)
+
+Method (`.local`-side driver, not committed): the mutation is a textual replacement in the **committed** source file, the named
+tests run with `-x` on the lane stack, the file is restored from memory and its SHA-256 compared before and after (restored in every
+row). Every mutation below made its test fail; the first failing test is named. The first run of the set left two mutations alive;
+both led to a test fix, shown in the last two rows of the first block.
+
+| Enforcement | The mutation | First failing test (in `tests/integration/ingest/`) |
+| --- | --- | --- |
+| symlink | `is_symlink` returns `False` | `test_bundle_archive::test_each_small_negative_is_refused_for_exactly_the_rule_it_was_built_to_break[symlink]` |
+| ratio, declared | `_ratio_exceeded` returns `False` | `test_bundle_archive::test_a_ratio_above_the_bound_is_refused` |
+| ratio, the bound itself passes | `>` becomes `>=` | `test_bundle_archive::test_the_ratio_rule_is_above_the_bound_and_not_at_it` |
+| ratio, on what the stream used (new) | the check in `_unpack` is `if False` | `test_bundle_archive::test_a_header_that_claims_more_compressed_bytes_than_the_stream_holds_cannot_hide_the_ratio` |
+| the stream ends at its end (new) | the `inflater.eof` break is `if False` | `test_bundle_archive::test_a_stream_that_ends_exactly_at_the_output_piece_with_bytes_behind_it_still_ends` (5 s alarm) |
+| declared-size lie | the declared member bound is `if False` | `test_bundle_archive::test_a_member_one_byte_over_the_bound_is_refused_whether_stored_or_deflated[deflate]` |
+| actual-size lie | the counted member bound is `if False` | `test_bundle_archive::test_a_header_that_declares_less_than_the_member_holds_is_caught_by_counting` |
+| duplicate after NFC and case folding | the key is `shown.casefold()` | `test_bundle_archive::...built_to_break[duplicate_nfc_cyrillic]` |
+| stem mismatch | the stem check is `if False` | `test_bundle_archive::...built_to_break[stem_mismatch_name]` |
+| `0x7075` display name | the field is always skipped | `test_bundle_archive::test_the_display_name_is_decoded_in_the_ruled_order` |
+| cp866 display name | cp866 decodes as latin-1 | `test_bundle_archive::test_the_four_name_encodings_decode_to_one_display_name[cp866]` |
+| markdown to block list (a block with no single header) | the check is `if False` | `test_bundle_envelope::test_each_way_the_markdown_and_the_block_list_can_disagree_is_a_mismatch[duplicate_header]` |
+| block list to markdown (a header for a block not held) | the check is `if False` | `test_bundle_envelope::...can_disagree_is_a_mismatch[extra_header]` |
+| text-less pages computed | the admission returns `()` | `test_bundle_envelope::test_a_page_is_textless_below_fifty_characters_and_not_at_fifty` |
+| text-less pages stored | the version gets `()` | `test_bundle_publication::test_the_three_counts_are_stored_together_and_exposed_on_the_version_record` |
+| the HTML is hashed and dropped | the reader keeps it on disk | `test_bundle_archive::test_the_html_is_hashed_and_dropped_and_the_directory_holds_the_other_four` |
+| the HTML is never stored | the reader keeps it and `STORED_MEMBERS` gets a row for it | `test_bundle_publication::test_the_html_is_hashed_and_never_stored` |
+| the fingerprint covers the HTML | the HTML's digest is left out | `test_bundle_publication::test_a_bundle_that_differs_in_any_one_member_under_the_same_key_is_a_conflict[the HTML rendering-<lambda>]` |
+| every member verified before any is recorded | a breadcrumb is written after each member | `test_bundle_publication::test_a_failure_while_staging_or_verifying_leaves_no_version_no_row_and_no_residue[2-stage_temporary]` |
+| no version after a publication failure | a `publish` failure is swallowed | `test_bundle_publication::test_a_failure_while_publishing_leaves_no_version_and_the_reconciler_names_the_blobs[1]` |
+| the version binds the complete member set | the version is bound to two members | `test_bundle_publication::test_a_complete_bundle_publishes_one_version_with_one_manifest_entry_per_stored_member` |
+| a refused archive keeps nothing | the reader's clean-up on refusal is removed | `test_bundle_archive::test_a_refused_archive_leaves_no_temporary_directory` (**fixed**: it passed before, because the directory's finalizer removed it once the caught exception was freed; the test now holds the exceptions) |
+| a refused bundle leaves nothing at the service | the same removal | `test_bundle_publication::test_a_refused_bundle_leaves_no_object_no_row_and_no_command_record[a size rule]` |
+| 500 pages | `MAX_PAGES` is 30 | `test_bundle_envelope::test_the_page_ceiling_is_five_hundred_pages_inclusive` |
+| 250 MiB | `MAX_BYTES` is 25 MiB | `test_bundle_archive::test_the_production_bounds_are_the_ruled_ones` |
+| `looks_like_zip` (reader) | always `False` | `test_bundle_archive::test_the_magic_is_a_zip_local_header_an_empty_archive_or_a_spanning_marker` |
+| `looks_like_zip` routing in the adapter | the ZIP branch is `if False` | `test_envelope_handle_adapter::test_a_zip_is_a_bundle_and_anything_else_is_still_the_single_pdf_entry[PK\x03\x04 a local header-upload_bundle]` |
+| a non-ZIP is a non-ZIP before anything else (service) | the service's own check is `if False` | `test_envelope_through_the_service::test_a_non_zip_is_a_non_zip_before_it_is_anything_else_whatever_its_size` (**selected wrongly in the first run**, where the reader's second check made the mutant look equivalent) |
+
 ## The migration probe (item 8)
 
 **Method.** In a scratch edit (reverted; `git diff` empty afterwards) `DocumentAdapter.upload_document` and
