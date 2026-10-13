@@ -267,7 +267,8 @@ broad: many matches are the word `files=` of another API or the operation's name
 
 ## 3. Contracts
 
-**None changed.** `contracts/**` was not touched (the sealed schemas, the stage registry and the OpenAPI document are SEAL's), no migration
+**One edit, after the report was first written** (`f5057e1d`, section 4.1): `contracts/analysis/v1/portal-blocks.schema.json` now follows
+Amendment 1. Otherwise **none changed.** `contracts/**` was not touched (the sealed schemas, the stage registry and the OpenAPI document are SEAL's), no migration
 was added or edited (the counts columns and the 1-500 page check are SEAL's migration, which this lane only reads and writes), and
 `pyproject.toml`, `uv.lock` and `bootstrap/composition.py` are untouched. New or changed Python interfaces, all behind
 `auditmanager.ingest` and `auditmanager.documents`: `IngestService.upload_bundle`; `looks_like_zip` and `ZIP_MAGICS` (exported from
@@ -286,8 +287,7 @@ Readings are decisions 1-14 at the end of this file. In addition:
 - **The first writer's reader had a hang** (decision 13) and **hid a padded stream's ratio** (decision 14). Both are fixed and covered;
   the FIXTURES reference validator (`tools/fixtures/portal_bundle/validate.py`) shares neither defect-fix, so its differential
   agreement with the product holds for every fixture there is, not for those two adversarial shapes.
-- **The sealed block-list schema differs from Amendment 1 in three places** (section 4.1). The product follows the sealed schema, as a test
-  requires, so the owner's real export passes; whether the contract or the amendment is right is the integrator's.
+- **The sealed block-list schema differed from Amendment 1 in three places** (section 4.1): resolved by `f5057e1d`.
 - **Text-less pages and the recognised count rest on a reading** (decision 8) of "the characters recognised on those pages".
 - **PC-02's corpus check is red, as the plan registers it.** `.venv/bin/python tools/validation/corpus_check.py
   fixtures/validation/PC-02/corpus_manifest.json --quiet` exits 1 with `CHK-NEGATIVE-RULE` for `PC02-N03` (a 26 MiB file declared to break
@@ -300,32 +300,29 @@ Readings are decisions 1-14 at the end of this file. In addition:
 - **One file part B owns was touched** (`scripts/manual-alpha-check.sh`): its preflight asked for the two deleted fixtures, so it
   stopped asking for them (commit `5179fe75`).
 
-### 4.1 The sealed `_blocks.json` schema against Amendment 1 of the freeze (the schema is not edited here)
+### 4.1 The sealed `_blocks.json` schema against Amendment 1 of the freeze
 
-`contracts/analysis/v1/portal-blocks.schema.json` (SEAL) and `bundle_envelope.py` agree with each other (a test compares them keyword by
-keyword). Against `W55B-FREEZE-01` Amendment 1 they differ in these places:
+Resolved by `f5057e1d`. The schema (`contracts/analysis/v1/portal-blocks.schema.json`, SEAL's file), `bundle_envelope.py` and the FIXTURES
+reference validator now state the same three rules, and `W55B-SEAL-01.md` ("Amendment 1 follow-up") records the contract edit:
+`shape_type`, when present, is `rectangle` or `polygon`; `polygon_points` is `null` or empty on a rectangle and 3..64 normalised points
+otherwise; a `polygon` block must carry a non-empty list. `status` is unchanged: the schema takes any lower-case token (`failed`
+tolerated) and the plan never enumerated a set. `test_bundle_envelope.py` compares the three readings (product, reference, and a third
+reading of the amendment) over every `shape_type` against every `polygon_points` case.
 
-1. **`polygon_points` on a rectangle.** Amendment 1 writes "empty on rectangles" and adopts "a list of 3..64 normalised points, required
-   non-empty only when `shape_type` is `polygon`". The schema allows `null` or a list of 3..64 points: **`[]` is refused**. The owner's real
-   export has `null` on every rectangle, so it passes; a portal build that wrote `[]` would be refused by the schema and by the product.
-2. **No conditional rule.** Amendment 1 requires a non-empty `polygon_points` when `shape_type` is `polygon`. The schema has no such rule
-   (a `polygon` block with `null` or no `polygon_points` is accepted), and neither has the product.
-3. **`shape_type` is any string** in the schema and in the product; Amendment 1 names the set {`rectangle`, `polygon`}.
-4. `status`: the schema takes any lower-case token (`^[a-z][a-z0-9_]{0,39}$`, `failed` tolerated); Amendment 1 "keeps the planned set".
-   Not a conflict in effect (every value of the real export is `recognized`), recorded for completeness.
-
-The rest of Amendment 1 holds in both: `schema_version` 1 and `coordinate_space` the literal, otherwise refused; `ordinal` and `crop_url`
-nullable; `export_status` tolerated; unknown top-level and block keys ignored; the stamp audit optional; `block_id` / `block_type`
-(lower case, three values) read as named. "`shape_type` stored" has no ingest-side effect: the block list is stored whole as
-`source.structured_companion` and `page_geometry_extraction` (GEOMETRY) normalises it.
+The rest of Amendment 1 holds in both and is covered by tests: `schema_version` 1 and `coordinate_space` the literal, otherwise refused;
+`ordinal` and `crop_url` nullable; `export_status` tolerated; unknown top-level and block keys ignored; the stamp audit optional;
+`block_id` / `block_type` (lower case, three values) read as named. "`shape_type` stored" has no ingest-side effect: the block list is
+stored whole as `source.structured_companion` and `page_geometry_extraction` (GEOMETRY) normalises it. Since a rectangle's
+`polygon_points` may now be `[]`, GEOMETRY must read an empty list as no polygon: the API's block view takes none or 3..64 points.
 
 ## 5. Instructions
 
 ### For the integrator
 
-1. Merge `agent/w55b` through the commit that carries this file; nothing here needs a migration, a lock change or a contract edit.
+1. Merge `agent/w55b` through the commit that carries this file; nothing here needs a migration or a lock change, and the one
+   contract edit is the follow-up `f5057e1d` (section 4.1).
 2. Register the PC-02 corpus-check debt (section 4) with the command and result given there.
-3. Decide the three disagreements between the sealed block-list schema and Amendment 1 (section 4.1); until then the schema rules.
+3. The three disagreements between the sealed block-list schema and Amendment 1 are resolved (section 4.1); nothing to decide.
 4. Run the lane's tests again after merging dev's `0.5.1`: the checks above were run on this branch's own base.
 5. The 250 MiB figures are loopback figures (section 2.2); the stand's belong to REHEARSAL.
 

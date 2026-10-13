@@ -182,6 +182,16 @@ handle unread, `DocumentAdapter` still reads it whole and calls the service with
 7. **The "twenty-three-code" / "23-code" prose and `116` / `52` / `45` literals** in the swept files were re-measured,
    not replaced blindly: of the 54 operations 39 declare their own `422`, 15 declare none and 51 require a credential.
 
+### Amendment 1 follow-up (the block-list schema)
+
+`W55B-FREEZE-01` Amendment 1 (the owner's real portal export) named three rules of a `_blocks.json` block that the schema sealed here
+did not state. `contracts/analysis/v1/portal-blocks.schema.json` was edited afterwards, by `W55B-INGEST-01` (`f5057e1d`), which moved the
+product's hand-written check and the fixtures' reference validator with it. (1) `shape_type`, when present, is `rectangle` or `polygon`,
+case-sensitive (it was any string; it stays optional). (2) `polygon_points` is `null` or an empty list on a rectangle (the empty list was
+refused) and 3..64 `[x, y]` points otherwise, and a block whose `shape_type` is `polygon` must carry a non-empty list: stated with
+`if`/`then`, so `x-envelope-rules` is unchanged. (3) `status` and `export_status`: no change; the plan never enumerated a "planned set"
+(the lower-case token pattern stays, `recognized` is the only value in the real export, `failed` is tolerated). `contract_version` was not bumped.
+
 ## 4. Risks and known limitations
 
 - **Contract and implementation disagree until `W55B-INGEST-01`** — by the plan's own staging: the contract says ZIP,
