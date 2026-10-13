@@ -36,23 +36,29 @@ DevTools export.
 Choose a unique data prefix such as `ALPHA-MANUAL-20261001-1530-<initials>`.
 Do not delete or rename another person's projects.
 
-## 2. Test PDF pack
+## 2. Test file pack
 
-All five files are synthetic: they contain no real project, customer, address, or
-personal data. The canonical files are in `fixtures/synthetic/ar/`; the portable
-archive is `artifacts/manual-alpha/alpha-test-pdfs.tar.gz`.
+An upload is a **portal bundle**: a ZIP holding the PDF with the portal's block list and recognised
+text. A bare PDF is refused. The files are synthetic: they contain no real project, customer,
+address, or personal data. The canonical files are in `fixtures/synthetic/ar/`; the portable archive
+is `artifacts/manual-alpha/alpha-test-files.tar.gz` (see `artifacts/manual-alpha/README.md`).
 
 | File | Purpose | Size | SHA-256 | Expected result |
 | --- | --- | ---: | --- | --- |
-| `ar_baseline.pdf` | valid eight-page AR document | 58 978 B | `6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f` | version created |
-| `encrypted.pdf` | password-protected PDF | 40 514 B | `9513362c5d85dec1438406ffd4e77fef6d08bb18f104a5b107afc610dde8faba` | 422, `not_encrypted` |
-| `image_only.pdf` | two image-only pages | 246 242 B | `8917d48af68cffac071fdf75040d181a548d27d952baa05defbca48a2ca94325` | 422, `every_page_has_extractable_text` |
-| `too_many_pages.pdf` | 31 text pages | 66 487 B | `acb3c347dbfe4b38efbc7e56f4389e97725b529966defa2a39c21e34f74da12a` | 422, `1 <= page_count <= 30` |
-| `oversize.pdf` | valid 26 MiB PDF | 27 303 204 B | `623bf92bbbf989c1d350f9c8038f9dd6379ee1538100374fd230a81812a665ef` | client refusal `too_large`; no request sent |
+| `ar_baseline.zip` | valid bundle: an eight-page AR document with its blocks | 92 161 B | `14df5af5ef45cbb6a4846cba45cb6cab12c1dda9869137d5da2557c42d12db92` | version created |
+| `encrypted.zip` | bundle whose PDF is password-protected | 43 352 B | `a55a46b111ee7b78de1c7e8751bce02d6696aa2c29400097e16bcafb53567947` | 422, `not_encrypted` |
+| `image_only.zip` | bundle whose two pages have no text layer and no block | 247 400 B | `bc0c611469d7b168bebf63139896a7d2acd80f8bd92cd8526abfa71540557b4a` | 422, `every_page_has_extractable_text` |
+| `bundle_501_pages.zip` | generated: a bundle around a 501-page PDF | about 0.8 MiB | not pinned | 422, `1 <= page_count <= 500` |
+| `ar_baseline.pdf` | a bare PDF (no longer accepted) | 58 978 B | `6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f` | client refusal (not a ZIP); no request sent |
+| `not_a_pdf.txt` | a text file | 489 B | `ef968094226cd1559df9e2169eac549a8160ded5787fac492900fa899da5187d` | client refusal (not a ZIP); no request sent |
+| `oversize_bundle.zip` | generated: a sparse 251 MiB file (`truncate -s 251M`) | 251 MiB | not pinned | client refusal `too_large`; no request sent |
 
-The password for `encrypted.pdf` (`synthetic-user-pw`) is only for an independent
-check that the file is encrypted. Do not enter it in the application: the file must
-be rejected.
+The two generated files come from the archive (`generated/bundle_501_pages.zip`) and
+`truncate -s 251M oversize_bundle.zip`, or from a checkout with
+`python3 tools/fixtures/build_journey_inputs.py <empty-dir>`.
+
+The password for the PDF inside `encrypted.zip` (`synthetic-user-pw`) is only for an independent
+check that the PDF is encrypted. Do not enter it in the application: the bundle must be rejected.
 
 ## 3. Automated preflight and release command
 
@@ -67,7 +73,7 @@ From the repository root:
 Substitute the actual authorized origin if the temporary address has changed. The
 script:
 
-1. checks the SHA-256 and size of all five PDFs;
+1. checks the SHA-256, size and first bytes of the five committed files and builds and judges the two generated inputs;
 2. checks TLS and the root response without a session (`307/308` to
    `/login?next=%2F` on the same origin);
 3. checks that `/login` is available (`200`);
@@ -158,7 +164,7 @@ the form `prj_<ULID>`; the project opens after a full page reload.
 
 ### A03 — valid upload
 
-Open the project, choose `ar_baseline.pdf`, enter a synthetic title, and click
+Open the project, choose `ar_baseline.zip`, enter a synthetic title, and click
 «Загрузить» (Upload).
 
 **PASS:** the browser navigates to
@@ -267,17 +273,17 @@ number equals the routes in `tests/e2e/pc01/journey/manifest.json`:
 screens may honestly show «не реализовано» (not implemented); that does not
 permit a crash or invented data.
 
-### A10 — four rejected PDFs
+### A10 — six rejected files
 
-Record the document count in the test project. Select each of the four PDFs
-from the §2 table in turn; after each refusal use the form's retry or reset
+Record the document count in the test project. Select each of the six files from the §2
+table other than `ar_baseline.zip` in turn; after each refusal use the form's retry or reset
 control without reloading another person's file.
 
-**PASS:** the browser rejects `oversize.pdf` as `too_large` and sends no upload
-request; the other three return HTTP 422 `validation_failed` with their exact
-`details.constraint` from the table. Document and version counts remain
-unchanged after every case. One generic error without a rule-specific value,
-HTTP 500, or a created object is **FAIL**.
+**PASS:** the browser rejects `ar_baseline.pdf` and `not_a_pdf.txt` (not a ZIP) and
+`oversize_bundle.zip` (`too_large`) and sends no upload request; the other three return
+HTTP 422 `validation_failed` with their exact `details.constraint` from the table. Document and
+version counts remain unchanged after every case. One generic error without a rule-specific
+value, HTTP 500, or a created object is **FAIL**.
 
 ### A11 — dashboard and persistence
 
@@ -411,7 +417,7 @@ Git.
 - Infrastructure backup, restore, or rollback;
 - load handling, multi-user isolation, or hostile security testing;
 - quality on real project documents;
-- OCR: the image-only PDF must be explicitly rejected;
+- OCR: a page with neither a text layer nor a portal block must be explicitly rejected;
 - the origin and correspondence of the deployed SHA: the release command
   links supplied SHAs to evidence only as an operator attestation. Establish
   `origin/dev` publication, `origin/main` authorization, and the revision
