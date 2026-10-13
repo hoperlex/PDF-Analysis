@@ -15,8 +15,14 @@ while the other two still look right, so each is read and each is checked:
   never in `tls-server.conf` (a second declaration stops nginx from starting);
 * the map keys exactly the registration calls the frozen OpenAPI document names, by
   method and by the full served path, and nothing else -- no regex key, no prefix;
-* both server bodies throttle inside the existing `location /api/v1/` and nowhere else,
-  with no new `/api/v1` location;
+* both server bodies throttle inside the existing `location /api/v1/` and in the one other
+  API location there is -- `W55B-STREAM-01`'s upload location, which a regex match takes out
+  of the prefix location and which therefore repeats the same three lines -- and nowhere
+  else, with no other `/api/v1` location;
+* the two upload locations (`/api/v1/projects/*/documents` and `/bff/v1/projects/*/documents`)
+  are the only places `client_max_body_size` is raised, to `260m`, with the explicit timeouts
+  the plan fixes, the `rewrite` and the URI-less `proxy_pass` the API one needs, and neither
+  declares a header of its own (that would drop the server's security headers);
 * the named location both bodies send a 429 to returns JSON whose `error_code`,
   `retryable`, status, message and `contract_version` are the catalog's for `rate_limited`,
   whose correlation id is nginx's per-request `$request_id`, and which a real Draft 2020-12
@@ -68,7 +74,18 @@ LIMIT_LINE = re.compile(r"^limit_req zone=(\w+) burst=\d+( nodelay)?;$")
 RETURN_LINE = re.compile(r"^return (\d{3}) '(.*)';$")
 CLIENT_ADDRESS = "$binary_remote_addr"
 NAMED_LOCATION = "@rate_limited"
-API_LOCATIONS = frozenset({"location = /api/v1 {", "location /api/v1/ {"})
+#: `W55B-STREAM-01`. The two regex locations that take the larger body, written out.
+UPLOAD_API_LOCATION = "location ~ ^/api/v1/projects/[^/]+/documents$ {"
+UPLOAD_BFF_LOCATION = "location ~ ^/bff/v1/projects/[^/]+/documents$ {"
+API_LOCATIONS = frozenset(
+    {"location = /api/v1 {", "location /api/v1/ {", UPLOAD_API_LOCATION}
+)
+#: What the two upload locations say about size and time, and the default beside them.
+UPLOAD_BODY_CAP = "client_max_body_size 260m;"
+DEFAULT_BODY_CAP = "client_max_body_size 32m;"
+UPLOAD_TIMEOUTS = ("client_body_timeout 120s;", "proxy_read_timeout 300s;")
+UPLOAD_REWRITE = "rewrite ^/api/v1/(.*)$ /$1 break;"
+HEADER_DIRECTIVES = ("add_header ", "proxy_set_header ")
 PROXY_FLAG = "AUDITMANAGER_BEHIND_PROXY"
 #: The shape of nginx's `$request_id`: 32 hexadecimal digits, fresh for every request.
 SAMPLE_REQUEST_ID = "0123456789abcdef0123456789abcdef"
@@ -264,14 +281,81 @@ def throttle_problems(name: str, config: str, zone: str | None, status: int) -> 
     for needed in (f"limit_req_status {status};", f"error_page {status} = {NAMED_LOCATION};"):
         if needed not in inner:
             problems.append(f"{name}: `location /api/v1/` lacks {needed!r}")
+    uploads = blocks(lines, UPLOAD_API_LOCATION)
+    if len(uploads) != 1:
+        return problems + [
+            f"{name}: expected one `{UPLOAD_API_LOCATION}` block, found {len(uploads)}"
+        ]
+    upload_inner = [_norm(line) for line in uploads[0]]
     for prefix in ("limit_req ", "limit_req_status ", "error_page "):
         everywhere = [line for line in lines if line.startswith(prefix)]
         inside = [line for line in inner if line.startswith(prefix)]
-        if len(everywhere) != len(inside):
+        inside_upload = [line for line in upload_inner if line.startswith(prefix)]
+        if len(everywhere) != len(inside) + len(inside_upload):
             problems.append(
-                f"{name}: a `{prefix.strip()}` outside `location /api/v1/` would reach "
-                f"requests the plan never throttles: {everywhere}"
+                f"{name}: a `{prefix.strip()}` outside the two API locations that proxy "
+                f"every `/api/v1/` request would reach requests the plan never throttles: "
+                f"{everywhere}"
             )
+        if inside != inside_upload:
+            problems.append(
+                f"{name}: the upload location must repeat `location /api/v1/`'s "
+                f"`{prefix.strip()}` lines exactly: {inside} against {inside_upload}"
+            )
+    return problems
+
+
+def upload_location_problems(name: str, config: str) -> list[str]:
+    """The two upload locations: the only larger body, the explicit timeouts, no header."""
+    problems: list[str] = []
+    lines = statements(config)
+    normalised = [_norm(line) for line in lines]
+    caps = [line for line in normalised if line.startswith("client_max_body_size ")]
+    if sorted(caps) != sorted([DEFAULT_BODY_CAP, UPLOAD_BODY_CAP, UPLOAD_BODY_CAP]):
+        problems.append(
+            f"{name}: `client_max_body_size` must be 32m once at server level and 260m in "
+            f"the two upload locations and nowhere else: {caps}"
+        )
+    server_level = top_level(blocks(lines, "server {")[0])
+    if DEFAULT_BODY_CAP not in [_norm(line) for line in server_level]:
+        problems.append(f"{name}: the server-wide default is no longer {DEFAULT_BODY_CAP!r}")
+    for header, proxy in ((UPLOAD_API_LOCATION, "proxy_pass http://api:8000;"),
+                          (UPLOAD_BFF_LOCATION, "proxy_pass http://web:3000;")):
+        found = blocks(lines, header)
+        if len(found) != 1:
+            problems.append(f"{name}: expected one `{header}`, found {len(found)}")
+            continue
+        inner = [_norm(line) for line in found[0]]
+        for needed in (UPLOAD_BODY_CAP, *UPLOAD_TIMEOUTS, proxy):
+            if needed not in inner:
+                problems.append(f"{name}: `{header}` lacks {needed!r}")
+        proxies = [line for line in inner if line.startswith("proxy_pass ")]
+        if proxies != [proxy]:
+            problems.append(
+                f"{name}: `{header}` must proxy with the URI-less {proxy!r}, "
+                f"a URI is ignored after a rewrite: {proxies}"
+            )
+        for directive in HEADER_DIRECTIVES:
+            if any(line.startswith(directive) for line in inner):
+                problems.append(
+                    f"{name}: `{header}` declares `{directive.strip()}`, which drops every "
+                    "header inherited from the server level"
+                )
+        if header == UPLOAD_API_LOCATION:
+            if UPLOAD_REWRITE not in inner:
+                problems.append(f"{name}: `{header}` does not strip the prefix: {UPLOAD_REWRITE!r}")
+            redirects = [line for line in inner if line.startswith("proxy_redirect ")]
+            prefix_block = blocks(lines, "location /api/v1/ {")
+            wanted = (
+                [_norm(l) for l in prefix_block[0] if l.startswith("proxy_redirect ")]
+                if prefix_block
+                else []
+            )
+            if not wanted or redirects != wanted:
+                problems.append(
+                    f"{name}: `{header}` must repeat `location /api/v1/`'s proxy_redirect: "
+                    f"{redirects} against {wanted}"
+                )
     return problems
 
 
@@ -407,7 +491,11 @@ def all_problems(texts: dict[str, str]) -> list[str]:
     problems = declaration_problems(plain, tls)
     for name in ("nginx.conf", "tls-server.conf"):
         problems += throttle_problems(name, texts[name], zone, status)
+        problems += upload_location_problems(name, texts[name])
         problems += envelope_problems(name, texts[name])
+    for header in (UPLOAD_API_LOCATION, UPLOAD_BFF_LOCATION):
+        if blocks(statements(plain), header) != blocks(statements(tls), header):
+            problems.append(f"the two `{header}` locations differ")
     if blocks(statements(plain), f"location {NAMED_LOCATION} {{") != blocks(
         statements(tls), f"location {NAMED_LOCATION} {{"
     ):
@@ -433,6 +521,11 @@ def test_the_server_body_throttles_inside_the_one_api_location(name: str) -> Non
 @pytest.mark.parametrize("name", ["nginx.conf", "tls-server.conf"])
 def test_the_refusal_is_the_catalog_rate_limited_envelope(name: str) -> None:
     assert envelope_problems(name, _texts()[name]) == []
+
+
+@pytest.mark.parametrize("name", ["nginx.conf", "tls-server.conf"])
+def test_the_upload_locations_alone_take_the_larger_body(name: str) -> None:
+    assert upload_location_problems(name, _texts()[name]) == []
 
 
 def test_the_web_service_runs_behind_the_proxy_flag() -> None:
@@ -536,6 +629,78 @@ MUTATIONS = [
         "nginx.conf",
         "    client_max_body_size 32m;\n",
         "    client_max_body_size 32m;\n    limit_req zone=guest_registration burst=10 nodelay;\n",
+    ),
+    (
+        "the upload location raised in the server-wide default",
+        "nginx.conf",
+        "    client_max_body_size 32m;\n",
+        "    client_max_body_size 260m;\n",
+    ),
+    (
+        "the larger cap leaking into another location",
+        "tls-server.conf",
+        "    location / {\n        proxy_pass http://web:3000;\n",
+        "    location / {\n        client_max_body_size 260m;\n        proxy_pass http://web:3000;\n",
+    ),
+    (
+        "the web upload location loses its cap",
+        "nginx.conf",
+        "    location ~ ^/bff/v1/projects/[^/]+/documents$ {\n        client_max_body_size 260m;\n",
+        "    location ~ ^/bff/v1/projects/[^/]+/documents$ {\n",
+    ),
+    (
+        "the api upload location loses its body timeout",
+        "tls-server.conf",
+        "        client_body_timeout 120s;\n        proxy_read_timeout 300s;\n        rewrite",
+        "        proxy_read_timeout 300s;\n        rewrite",
+    ),
+    (
+        "the api upload location reads for the server's default",
+        "nginx.conf",
+        "        proxy_read_timeout 300s;\n        rewrite",
+        "        rewrite",
+    ),
+    (
+        "the api upload location forgets to strip the prefix",
+        "nginx.conf",
+        "        rewrite ^/api/v1/(.*)$ /$1 break;\n",
+        "",
+    ),
+    (
+        "the api upload location proxies with a URI the rewrite makes useless",
+        "tls-server.conf",
+        "        rewrite ^/api/v1/(.*)$ /$1 break;\n        proxy_pass http://api:8000;\n",
+        "        rewrite ^/api/v1/(.*)$ /$1 break;\n        proxy_pass http://api:8000/;\n",
+    ),
+    (
+        "the api upload location forgets the proxy_redirect",
+        "nginx.conf",
+        "        proxy_pass http://api:8000;\n        proxy_redirect ~^(https?://[^/]+)/(.*)$ $1/api/v1/$2;\n        limit_req zone=guest_registration burst=10 nodelay;\n        limit_req_status 429;\n        error_page 429 = @rate_limited;\n    }\n\n    location ~ ^/bff",
+        "        proxy_pass http://api:8000;\n        limit_req zone=guest_registration burst=10 nodelay;\n        limit_req_status 429;\n        error_page 429 = @rate_limited;\n    }\n\n    location ~ ^/bff",
+    ),
+    (
+        "the api upload location forgets the throttle",
+        "tls-server.conf",
+        "        proxy_pass http://api:8000;\n        proxy_redirect ~^(https?://[^/]+)/(.*)$ $1/api/v1/$2;\n        limit_req zone=guest_registration burst=10 nodelay;\n        limit_req_status 429;\n        error_page 429 = @rate_limited;\n    }\n\n    location ~ ^/bff",
+        "        proxy_pass http://api:8000;\n        proxy_redirect ~^(https?://[^/]+)/(.*)$ $1/api/v1/$2;\n    }\n\n    location ~ ^/bff",
+    ),
+    (
+        "an upload location that adds a header of its own",
+        "nginx.conf",
+        "        client_body_timeout 120s;\n        proxy_read_timeout 300s;\n        proxy_pass http://web:3000;\n",
+        "        client_body_timeout 120s;\n        proxy_read_timeout 300s;\n        add_header Cache-Control \"no-store\" always;\n        proxy_pass http://web:3000;\n",
+    ),
+    (
+        "an upload location that sets a header of its own",
+        "tls-server.conf",
+        "        client_body_timeout 120s;\n        proxy_read_timeout 300s;\n        proxy_pass http://web:3000;\n",
+        "        client_body_timeout 120s;\n        proxy_read_timeout 300s;\n        proxy_set_header Host $host;\n        proxy_pass http://web:3000;\n",
+    ),
+    (
+        "the upload location widened to a prefix",
+        "nginx.conf",
+        "location ~ ^/bff/v1/projects/[^/]+/documents$ {",
+        "location ~ ^/bff/v1/projects/ {",
     ),
     (
         "a new /api/v1 location for the registration path",
