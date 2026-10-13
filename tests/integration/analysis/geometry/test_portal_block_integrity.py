@@ -22,7 +22,7 @@ import pytest
 from auditmanager.analysis.public import ROLE_PAGE_CROPS, ROLE_PORTAL_BLOCKS
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.storage.public import BlobNotFoundError, parse_blob_id
-from tests.integration.analysis.geometry.reads_support import IMAGE_ID, harness, produced
+from tests.integration.analysis.geometry.reads_support import IMAGE_ID, TEXT_ID, harness, produced
 from tests.integration.analysis.geometry.reads_support import crop_blobs as _crop_blobs
 from tests.integration.analysis.geometry.reads_support import block_adapter as _adapter
 from tests.integration.analysis.geometry.reads_support import stage_result as _stage
@@ -98,3 +98,39 @@ def test_a_joined_artifact_that_is_missing_or_altered_is_an_integrity_error(
                 version_uid=produced["version_uid"]
             )
         assert refused.value.code is ErrorCode.STORAGE_INTEGRITY_ERROR, (role, swap)
+
+
+@pytest.mark.parametrize("fault", ["crop of a text block", "crop on a mismatch page"])
+def test_a_crop_recorded_for_a_block_that_cannot_have_one_is_an_integrity_error(
+    produced, monkeypatch, fault
+) -> None:
+    """The stage never cuts a crop for a block that is not an IMAGE block or for a block on a
+    page marked ``geometry_mismatch``; the reader, which joins three artifacts by identifier,
+    refuses a manifest that says otherwise instead of serving a crop for the wrong thing.
+
+    The manifest and the block list are doctored **after** their digests were checked, because
+    the digest check is a different guard (the two tests above); this one is the join's own."""
+    adapter = produced["adapter"]
+    read = adapter._portal_document
+
+    def doctored(reference, role, version_uid):
+        document = read(reference, role, version_uid)
+        if fault == "crop of a text block" and role == ROLE_PAGE_CROPS:
+            record = dict(document["crops"][0])
+            record["portal_block_id"] = TEXT_ID
+            return {**document, "crops": [*document["crops"], record]}
+        if fault == "crop on a mismatch page" and role == ROLE_PORTAL_BLOCKS:
+            return {
+                **document,
+                "blocks": [
+                    {**block, "geometry": "geometry_mismatch"} if block["portal_block_id"] == IMAGE_ID else block
+                    for block in document["blocks"]
+                ],
+            }
+        return document
+
+    monkeypatch.setattr(adapter, "_portal_document", doctored)
+    with pytest.raises(DomainError) as refused:
+        adapter.list_portal_blocks(version_uid=produced["version_uid"])
+    assert refused.value.code is ErrorCode.STORAGE_INTEGRITY_ERROR
+    assert dict(refused.value.detail_fields) == {"role": ROLE_PAGE_CROPS}

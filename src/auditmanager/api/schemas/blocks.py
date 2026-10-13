@@ -12,10 +12,11 @@ the version genuinely has no blocks" -- both answer ``blocks=()``, and only ``st
 differs between them. See ``P02_SEAMS.md`` and `OPERATING_CONSTRAINTS.md` section 12 on
 never letting the length of a collection carry a distinction it cannot carry alone.
 
-Carries no crops. ``page_geometry_extraction`` also publishes ``ROLE_PAGE_CROPS``, and this
-pipeline renders no visual detection so that artifact is unconditionally ``crops: []`` --
-it is a separate artifact this view does not restate, rather than a field shipped here
-always empty and unexplained.
+Carries no crops. ``page_geometry_extraction`` also publishes ``ROLE_PAGE_CROPS``: ``crops: []``
+under ``crop_policy: none`` for a version without a portal bundle, one crop per IMAGE block
+under ``portal_image_blocks`` for a bundle (`W55B-GEOMETRY-01`). It is a separate artifact this
+view does not restate, rather than a field shipped here that a version could leave empty and
+unexplained; the portal crops are served by :class:`PortalBlockView`.
 """
 
 from __future__ import annotations

@@ -296,9 +296,9 @@ measured on this export.
 5. **`listVersionPortalBlocks` for a version without a bundle stays `not_produced` after its runs** (decision 11): true by the
    sealed description ("no run of which has produced portal geometry"), but «Блоки» must not read it as "after the first run"
    for such a version. Only versions published before W55b are affected (ingest now refuses a bare PDF). See section 5.
-6. **Stale prose outside the grant:** the module docstring of `src/auditmanager/api/schemas/blocks.py` (sealed by SEAL) still
-   says `geometry.page_crops` is "unconditionally `crops: []`". It describes `getVersionBlocks`' view and is now wrong about the
-   manifest; a one-sentence fix for the integrator or WEB-BLOCKS.
+6. **Stale prose outside the grant (fixed by the wave executor, section 7):** the module docstring of
+   `src/auditmanager/api/schemas/blocks.py` (sealed by SEAL) said `geometry.page_crops` is "unconditionally `crops: []`". It
+   describes `getVersionBlocks`' view and was wrong about the manifest; the docstring now states the two policies.
 7. **The `PDFIUM_LOCK` re-export is not in `ingest.public.__all__`** (the grant was one line); an explicit import works, a star
    import would not carry it.
 8. **`P02_SEAMS` section 4.9's example shows no per-block `geometry`**; the artifact carries it (the brief and the wire both
@@ -318,7 +318,7 @@ measured on this export.
    `geometry_mismatch` page; `PortalBlock.geometry` says which.
 5. **For REHEARSAL:** measure the geometry stage's time and peak memory on the 500-page low-text bundle with an IMAGE block per
    page (risk 1); `crop_count`, `crop_blob_count`, `geometry_mismatch_page_count` and `duration_ms` are in the stage result.
-6. Prose follow-up outside the grant: risk 6 (`api/schemas/blocks.py` docstring).
+6. Prose follow-up outside the grant: risk 6 (`api/schemas/blocks.py` docstring) is done, in the wave executor's commit (section 7).
 7. The lane stack is down: `make down`, `docker volume rm auditmanager-w55b-geometry-postgres-data
    auditmanager-w55b-geometry-s3-data`, `.env` removed.
 
@@ -333,10 +333,12 @@ measured on this export.
   `tests/integration/composition/{test_version_blocks_wire_shape,test_router_answers,test_an_absent_parent_is_not_an_empty_page}.py`;
   `docs/program/W55B-GEOMETRY-01.md`;
 - **outside, each with its reason:** `src/auditmanager/runs/executor.py`, `src/auditmanager/ingest/public.py`,
-  `tests/integration/api/test_portal_block_routes.py` (section 2.2).
+  `tests/integration/api/test_portal_block_routes.py` (section 2.2); and, added after the writer's hand-back by the wave
+  executor, the module docstring of `src/auditmanager/api/schemas/blocks.py` (documentation only, section 7). With that edit the
+  lane is 27 paths from `887a8254`.
 - **Forbidden hotspots untouched:** `contracts/**`, `db/migrations/**`, `pyproject.toml`, `uv.lock`, any `conftest.py`,
   `tests/support/**`, `fixtures/**`, `tools/**`, `web/**`, `P02_SEAMS.md`, `source_preparation.py`, `api/routers/blocks.py`,
-  `api/schemas/**`; in `bootstrap/` only `BlockAdapter`.
+  `api/schemas/**` (but for that one docstring); in `bootstrap/` only `BlockAdapter`.
 - `git status --porcelain -uall` is empty at the tip.
 
 ## Appendix: design decisions (made while writing; each is open to the integrator's veto)
@@ -389,3 +391,27 @@ Each decision names the alternative rejected.
     the declaration), and a crop against its manifest record; a missing blob or a disagreement between the run's artifacts
     is `storage_integrity_error` with the `role`; an unknown artifact version is `unsupported_contract_version`. The crop
     404 is `not_found` with `aggregate_type: PortalBlock`.
+
+## 7. Verification by the wave executor (after the writer's hand-back)
+
+Run by the wave executor on its own lane stack (same ports), a freshly migrated database, tip `27682d07` before its commit, one
+invocation at a time; exit codes read directly.
+
+| Check | Result |
+| --- | --- |
+| `git diff --check 887a8254..HEAD`; `git status --porcelain -uall`; `am-*` temporary files | exit 0; empty; none |
+| `tests/integration/analysis`, `analysis_engine`, `runs`, `api`, `p02_journey`, `ingest` | 576, 47, 200, 569, 59, 593 passed (the writer's counts) |
+| the three composition files of the grant | 27 passed |
+| spot mutations (restored byte for byte, SHA-256 compared): the executor's role tuple; the PDFium lock removed from the render; the page-box tolerance ten times looser; the portal-rotation comparison removed; equal crops published twice; an empty recognised text kept; a crop served with no portal run; the pixel cap ignored; the 800 px floor ignored | all red |
+| the guard of `list_portal_blocks` that refuses a crop recorded for a non-IMAGE block or for a block on a `geometry_mismatch` page | **green under mutation: no test covered it** |
+
+**The gap, and its closure.** The guard (`if block["block_type"] != "image" or block["geometry"] != "ok": raise ...` in
+`BlockAdapter.list_portal_blocks`) could be removed with the whole suite green. The wave executor added
+`test_a_crop_recorded_for_a_block_that_cannot_have_one_is_an_integrity_error` to `test_portal_block_integrity.py` (two cases: a manifest
+record naming a TEXT block, and the IMAGE block's page marked `geometry_mismatch`; the join is doctored after the digest checks, which are a
+different guard). With the guard removed it fails; with only the type half removed it fails; with only the geometry half removed it fails.
+
+**The docstring.** `src/auditmanager/api/schemas/blocks.py`'s module docstring said the crop manifest is unconditionally empty; it now says
+which policy gives which. Documentation only, no code.
+
+The writer's hand-back message needed no correction: its counts (10 commits, 26 paths, the suites) were confirmed.
