@@ -14,7 +14,7 @@
 Written by a third writer from `1f9daab4`. Section 5 ("For part B") is the work order; this list is the living state, one line per step, updated in
 each commit. A successor continues from `git log` and this list alone.
 
-- B1 the browser upload (envelope, form, panel, failure classifier, the web tests): **done** (`0333d58e`, `df`-wording fix after it): lint and typecheck exit 0, the full Vitest run (130 files, the query-key guard run alone) green, 18 mutations of the committed files all killed and restored (SHA-256 compared)
+- B1 the browser upload (envelope, form, panel, failure classifier, the web tests): **done** (`0333d58e`, then a wording fix for the gender guard): lint and typecheck exit 0, the full Vitest run (130 files, the query-key guard run alone) green, 18 mutations of the committed files all killed and restored (SHA-256 compared)
 - B2 the journey inputs and the runbook: committed; the manifest uploads `bundles/ar_baseline.zip`, the six refusal cases are bundle-based, `tools/fixtures/build_journey_inputs.py` makes the two generated files (`oversize_bundle.zip` sparse, `bundle_501_pages.zip`), `manual-alpha-check.sh` checks the new files, the conformance test and the guard prover follow (`prove_the_guard_can_fail.py`: 39 mutations, 39 reds). `cdp.mjs` and `write.mjs` needed no change. Still owed: the live drive of the refusals (B3)
 - B3 the live journey on the lane stand (command, exit code, sentinel, envelope path): next
 - B4 the final switch (the bare-PDF branch deleted, seven tests rewritten, the probe in reverse, the HTTP refusal test): next
