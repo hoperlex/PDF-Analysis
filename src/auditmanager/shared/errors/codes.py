@@ -15,7 +15,7 @@ from auditmanager.shared.errors.catalog import CODES, UNKNOWN_INTERNAL_CODE
 
 
 class ErrorCode(str, Enum):
-    """Exactly the twenty-three codes of ``contracts/domain/v1/error-codes.json``."""
+    """Exactly the twenty-four codes of ``contracts/domain/v1/error-codes.json``."""
 
     VALIDATION_FAILED = "validation_failed"
     NOT_FOUND = "not_found"
@@ -36,6 +36,9 @@ class ErrorCode(str, Enum):
     ANALYSIS_FAILED = "analysis_failed"
     PARTIAL_RESULT_NOT_PUBLISHABLE = "partial_result_not_publishable"
     COST_BUDGET_EXCEEDED = "cost_budget_exceeded"
+    #: `W55B-SEAL-01` (R-118, G-11). Answered by ``startRun`` and ``reauditRun`` before any run
+    #: exists, when the version's text is larger than the analysis input budget.
+    ANALYSIS_INPUT_BUDGET_EXCEEDED = "analysis_input_budget_exceeded"
     STALE_ATTEMPT = "stale_attempt"
     EXECUTION_TOKEN_INVALID = "execution_token_invalid"
     #: `W49-SEAL-01`. Answered only by the edge in front of ``/api/v1`` (the proxy's throttle

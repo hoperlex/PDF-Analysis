@@ -27,7 +27,13 @@ NOT_INSTANTIATED_MACHINES = ("import", "job", "attempt")
 #: writes. The set is an explicit, named exception and not a tolerance: a stored code put
 #: here would make the database refuse a legal value, and the two assertions below are
 #: what turn either mistake red.
-EDGE_ONLY_CODES: frozenset[str] = frozenset({"rate_limited"})
+#:
+#: `analysis_input_budget_exceeded` (`W55B-SEAL-01`, `R-118`) joins it for a different reason
+#: with the same consequence: ``startRun`` and ``reauditRun`` refuse a version above the
+#: analysis input budget **before any run, job or attempt exists**, so nothing can terminate
+#: with it and no stored ``error_code`` can carry it. The name says "edge" for the first
+#: member; the set is "codes nothing stores".
+EDGE_ONLY_CODES: frozenset[str] = frozenset({"rate_limited", "analysis_input_budget_exceeded"})
 
 
 def test_error_code_domain_equals_the_frozen_catalog(

@@ -1,13 +1,13 @@
-# Domain contract v1 — candidate `1.0.0-draft.1`, revision 11
+# Domain contract v1 — candidate `1.0.0-draft.1`, revision 12
 
 Owner lane: [W0-DOM-01](../../../docs/program/tasks/W0-DOM-01.md) (domain contract
 owner); the additive norm-identity amendment is owned by
 [NORM-ID-01](../../../docs/program/tasks/NORM-ID-01.md). Status: **candidate draft —
 working-tree amendment, not frozen, not ratified.** Every
 catalog in this directory declares `contract_version` `1.0.0-draft.1`,
-`candidate_revision` `11`, `status` `draft_candidate` and `frozen` `false`, and the three
-family schemas pin `candidate_revision` `const: 11` to match: see
-[What changed in revision 11](#what-changed-in-revision-11-and-what-breaks-for-a-reader-of-revision-10).
+`candidate_revision` `12`, `status` `draft_candidate` and `frozen` `false`, and the three
+family schemas pin `candidate_revision` `const: 12` to match: see
+[What changed in revision 12](#what-changed-in-revision-12-and-what-breaks-for-a-reader-of-revision-11).
 
 This family defines three primitives that every other bounded context depends on:
 opaque identity, durable lifecycle and the externally visible failure shape. It is a
@@ -79,6 +79,13 @@ values of the norms refusals under existing codes (CD-19): `reference_kind` on
 changed. See
 [What changed in revision 11](#what-changed-in-revision-11-and-what-breaks-for-a-reader-of-revision-10).
 
+Revision 12 (`W55B-SEAL-01`, owner rulings `R-116` to `R-119`) adds one code,
+`analysis_input_budget_exceeded`, registers the portal-bundle upload's `constraint` values on
+`validation_failed` and the busy refusal as a dependency class of `dependency_unavailable`, and
+registers `portal_block_id` (`blk_` and 32 hexadecimal digits) as an **external** identifier
+beside the identities and not among them. No machine, state or product identity changed. See
+[What changed in revision 12](#what-changed-in-revision-12-and-what-breaks-for-a-reader-of-revision-11).
+
 ## Files
 
 | File | Role |
@@ -110,9 +117,9 @@ owner-authorized round edits this unreleased candidate in place and advances
 version procedure.
 
 So the version line stays `1.0.0-draft.0` → `1.0.0-draft.1`, and each review round is
-recorded by `candidate_revision`, which the owning schemas pin with `const`. Revision 11 is
-additive and changes the unreleased candidate error-classifier register, so consumers
-must pin and review candidate revision 11. The draft version string does not move because this is still the same
+recorded by `candidate_revision`, which the owning schemas pin with `const`. Revision 12 is
+additive and changes the unreleased candidate error catalog and identifier register, so consumers
+must pin and review candidate revision 12. The draft version string does not move because this is still the same
 unfrozen `1.0.0-draft.1` candidate; `candidate_revision` is the machine-readable
 discriminator that prevents meaning from changing under the same revision. A freeze or release
 would move this change onto the formal version procedure.
@@ -443,7 +450,7 @@ appended a new decision event.
 
 ## Errors
 
-23 codes across 10 categories. Each code declares `http`, `retryable`, `category`, a
+24 codes across 10 categories. Each code declares `http`, `retryable`, `category`, a
 `summary`, its `safe_detail_keys` and its inventory evidence.
 
 The envelope is:
@@ -752,6 +759,23 @@ assumption.
   - `attempt` gains the `lost` terminal, distinct from `superseded`;
   - the error envelope gains required `contract_version` and required `retryable`;
   - two identifiers are added: `lease_id` (`lse`) and `command_id` (`cmd`).
+
+### What changed in revision 12, and what breaks for a reader of revision 11
+
+Revision 12 is written by `W55B-SEAL-01` with migration `0021_portal_bundles` and the API reseal
+that declares the two portal-block reads (`docs/program/dispatch/W55-PLAN.md` §B3).
+
+| Change | Consumer impact |
+|---|---|
+| New code `analysis_input_budget_exceeded` (`422`, not retryable, category `policy`, detail keys `character_count` and `budget_characters`) | **Additive.** `startRun` and `reauditRun` refuse a version above the analysis input budget before any run exists (`R-118`). Never stored: the database's code vocabulary is the catalog minus this code and `rate_limited`. |
+| `validation_failed` notes register the bundle `constraint` values (`portal_bundle_required`, `bundle_*`, `blocks_json_invalid`, `blocks_page_count`, `results_blocks_mismatch`, `stamp_audit_invalid`) | **Additive.** A caller can tell which rule of the portal-bundle envelope refused an upload. |
+| `dependency_unavailable` notes register `dependency: upload_capacity` | **Additive.** A third upload in flight in one API process is refused before its body is read, with a `Retry-After` header. |
+| `identifiers.json` gains `external_identifiers.portal_block_id` and `identifiers.schema.json` its shape | **Additive.** The portal's block identity is carried verbatim and addressed only under a `version_uid`; it is not an entry of `identifiers`, not a ULID and never generated here. |
+| `candidate_revision` `11` → `12` in all three catalogs and the three schema `const` pins | Readers pinning the candidate revision must move. |
+
+No machine, state, transition, guard or product identity is added, removed or renamed; the error
+catalog goes from twenty-three to twenty-four codes and the identity count stays 32.
+`contract_version` remains `1.0.0-draft.1` and `frozen` remains `false`.
 
 ### What changed in revision 11, and what breaks for a reader of revision 10
 

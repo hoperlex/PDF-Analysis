@@ -370,7 +370,9 @@ def test_analysis_upload_handle_is_opaque_unique_and_frozen(migrated_engine) -> 
 #: the edge in front of ``/api/v1``; no provider call can end with it, and widening this
 #: CHECK would need a migration for a value nothing writes. The same named exception as
 #: ``tests/contract/domain_p02/test_contract_vocabulary.py::EDGE_ONLY_CODES``.
-EDGE_ONLY_CODES: frozenset[str] = frozenset({"rate_limited"})
+#: `analysis_input_budget_exceeded` (`W55B-SEAL-01`) is refused before any run exists, so it
+#: is stored by nothing either.
+EDGE_ONLY_CODES: frozenset[str] = frozenset({"rate_limited", "analysis_input_budget_exceeded"})
 
 
 def test_provider_effect_error_code_is_the_closed_catalog(migrated_engine) -> None:

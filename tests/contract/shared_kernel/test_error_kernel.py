@@ -31,14 +31,17 @@ class TheEnumIsExactlyTheCatalog(unittest.TestCase):
     def test_member_set_equals_the_catalog_key_set(self) -> None:
         self.assertEqual(frozenset(c.value for c in ErrorCode), frozenset(RAW["codes"]))
 
-    def test_there_are_twenty_three(self) -> None:
-        """Twenty-three since `W49-SEAL-01` added `rate_limited`, which only the edge in
-        front of ``/api/v1`` answers.
+    def test_there_are_twenty_four(self) -> None:
+        """Twenty-four since `W55B-SEAL-01` added `analysis_input_budget_exceeded`, the
+        up-front refusal of a version above the analysis input budget (`R-118`).
+
+        The twenty-third was `rate_limited` (`W49-SEAL-01`), which only the edge in front of
+        ``/api/v1`` answers.
 
         The twenty-second was `staged_upload_lost`, added under `R-8` settling `D-18`; the
         twenty-first `dependency_credential_refused`, added by `R-3` at the wave-13 reseal.
         """
-        self.assertEqual(len(list(ErrorCode)), 23)
+        self.assertEqual(len(list(ErrorCode)), 24)
 
     def test_contract_version_is_read_not_restated(self) -> None:
         self.assertEqual(CONTRACT_VERSION, RAW["contract_version"])

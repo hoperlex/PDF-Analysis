@@ -39,6 +39,7 @@
         "analysis_failed",
         "partial_result_not_publishable",
         "cost_budget_exceeded",
+        "analysis_input_budget_exceeded",
         "stale_attempt",
         "execution_token_invalid",
         "rate_limited",
@@ -467,6 +468,25 @@
         "properties": {
           "error_code": {
             "const": "cost_budget_exceeded"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "analysis_input_budget_exceeded"
           }
         },
         "required": [

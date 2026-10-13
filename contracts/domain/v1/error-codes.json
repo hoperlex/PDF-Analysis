@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.errors",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 11,
-  "revision_note": "Candidate revision 11 of the unreleased 1.0.0-draft.1 candidate, written by W55A-SEAL-01 under owner rulings R-112, R-113 and R-115 (OWNER_RULINGS_2026-09-17.md section 3.31) and the W55a plan (docs/program/dispatch/W55-PLAN.md sections A3.2 to A3.6; review decision CD-19). No code is added or changed: the norms search, current-snapshot and norm-content refusals reuse existing codes, and this revision registers their classifier values in the notes of required_norm_unavailable (reference_kind), conflict (conflict_reason stale_current_snapshot) and validation_failed (constraint norms_search_too_broad). The catalog stays at twenty-three codes and the stored vocabulary at twenty-two. The family carries one candidate_revision, so all three catalogs and the three family schemas' const pins move to 11 together; contract_version stays 1.0.0-draft.1 because this is an additive change to an unreleased draft candidate.",
+  "candidate_revision": 12,
+  "revision_note": "Candidate revision 12 of the unreleased 1.0.0-draft.1 candidate, written by W55B-SEAL-01 under owner rulings R-116, R-117, R-118 and R-119 (OWNER_RULINGS_2026-09-17.md section 3.32) and the W55b plan (docs/program/dispatch/W55-PLAN.md sections B3.1 to B3.7). One code is added, analysis_input_budget_exceeded (G-11, R-118): a start or re-audit over a version above the analysis input budget is refused up front, before any run exists. The portal-bundle upload registers its classifier values under existing codes: the bundle constraints on validation_failed and the busy refusal as a dependency class of dependency_unavailable. The family carries one candidate_revision, so all three catalogs and the three family schemas' const pins move to 12 together; contract_version stays 1.0.0-draft.1 because this is an additive change to an unreleased draft candidate.",
   "status": "draft_candidate",
   "frozen": false,
   "envelope": {
@@ -113,7 +113,8 @@
         "WS-03"
       ],
       "notes": [
-        "constraint norms_search_too_broad (W55A-SEAL-01, R-112): the operator's search statement timeout (AUDITMANAGER_NORMS_SEARCH_TIMEOUT_MS) cancelled a searchNorms query. Nothing was created; the caller narrows the query. It is never answered as an empty or partial page."
+        "constraint norms_search_too_broad (W55A-SEAL-01, R-112): the operator's search statement timeout (AUDITMANAGER_NORMS_SEARCH_TIMEOUT_MS) cancelled a searchNorms query. Nothing was created; the caller narrows the query. It is never answered as an empty or partial page.",
+        "constraint, portal bundle (W55B-SEAL-01, R-116): uploadDocument accepts one ZIP holding a portal bundle and nothing else; a bare PDF is refused. The registered values, all with field file: portal_bundle_required (the part is not a ZIP, a bare PDF included; the message says how to obtain the bundle), bundle_unreadable (the archive's directory cannot be read), bundle_entry_count (more than eight entries), bundle_directory_entry (a directory entry or a __MACOSX/ entry), bundle_member_name (an absolute, drive-letter, backslash or .. name), bundle_symlink (an entry marked as a symbolic link), bundle_encrypted_member (an encrypted entry), bundle_compression_method (a method other than stored or deflate), bundle_duplicate_member (a name that repeats, also after case folding and NFC), bundle_stem_mismatch (members that do not share one stem), bundle_member_set (a member missing, an unknown member, or one repeated by suffix), bundle_member_size (one member over its size bound, declared or actual), bundle_total_size (the members' uncompressed bytes over the total bound, declared or actual), bundle_compression_ratio (a member or the archive above the compression-ratio bound), blocks_json_invalid (the portal block list is not valid against the pinned schema), blocks_page_count (its pages do not match the PDF's page count), results_blocks_mismatch (the recognised-text markdown and the block list disagree about a TEXT or IMAGE block, in either direction) and stamp_audit_invalid (the stamp audit is not JSON or is over its size cap). The PDF member keeps the existing envelope constraints unchanged: pdf_magic_bytes, not_encrypted, the page-count and byte-size bounds, every_page_has_extractable_text (a page with neither a text layer nor a portal block) and max_bytes (the transport's body cap). The part name and the member names are never echoed."
       ]
     },
     "not_found": {
@@ -270,7 +271,8 @@
         "DW-05"
       ],
       "notes": [
-        "The dependency detail carries a stable dependency class name only, never a host, URL, credential or vendor endpoint."
+        "The dependency detail carries a stable dependency class name only, never a host, URL, credential or vendor endpoint.",
+        "dependency upload_capacity (W55B-SEAL-01, R-116): two uploads are already in flight in this API process, so a third is refused before its body is read. Nothing was created; the response carries a Retry-After header and the caller sends the same upload again later. It names a stable dependency class only, never a count or a host."
       ]
     },
     "dependency_credential_refused": {
@@ -385,6 +387,24 @@
       ],
       "evidence": [
         "AN-09"
+      ]
+    },
+    "analysis_input_budget_exceeded": {
+      "http": 422,
+      "retryable": false,
+      "category": "policy",
+      "summary": "The document version's text is larger than the analysis input budget derived from the configured model and the per-run cost ceiling. The run was refused up front: no run exists and nothing was sent to a model.",
+      "safe_detail_keys": [
+        "character_count",
+        "budget_characters"
+      ],
+      "evidence": [
+        "W55-PLAN.md section B3.3",
+        "R-118"
+      ],
+      "notes": [
+        "Answered by startRun and reauditRun, before the run is created, when the version's recorded text_character_count (pypdfium2's count over the whole document) exceeds the budget. character_count is that count and budget_characters is the budget in force now; both are integers. A re-audit runs on the current configuration (R-82), so it faces today's budget, not the source run's. A version with no recorded count (published before the portal-bundle upload) is not refused by this rule. The budget is an operator setting derived at start-up from the configured model and the cost ceiling; changing either changes the answer for the same version, which is why this is a refusal and not a property of the document.",
+        "Never stored: it is answered before any run or job exists, so no column carries it and the database's code vocabulary is the catalog minus this code and rate_limited."
       ]
     },
     "stale_attempt": {

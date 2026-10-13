@@ -20,6 +20,7 @@
     "ulid",
     "rules",
     "identifiers",
+    "external_identifiers",
     "entities",
     "distinct_identities",
     "non_identity",
@@ -41,7 +42,7 @@
       "const": "1.0.0-draft.0"
     },
     "candidate_revision": {
-      "const": 11,
+      "const": 12,
       "description": "Review round of this unreleased candidate. It is pinned here so the candidate cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned for a released version."
     },
     "revision_note": {
@@ -137,6 +138,59 @@
       "additionalProperties": {
         "type": "string",
         "pattern": "^[a-z][a-z0-9]{1,7}$"
+      }
+    },
+    "external_identifiers": {
+      "type": "object",
+      "description": "Identifiers that cross the API but are minted outside this product. They are not prefix_ULID identities and are never an entry of identifiers.",
+      "required": [
+        "portal_block_id"
+      ],
+      "additionalProperties": false,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*_id$"
+      },
+      "properties": {
+        "portal_block_id": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "prefix",
+            "pattern",
+            "origin",
+            "scope",
+            "is_entity_identity",
+            "rules"
+          ],
+          "properties": {
+            "prefix": {
+              "const": "blk"
+            },
+            "pattern": {
+              "const": "^blk_[0-9a-f]{32}$"
+            },
+            "origin": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scope": {
+              "type": "string",
+              "minLength": 1
+            },
+            "is_entity_identity": {
+              "const": false
+            },
+            "rules": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
       }
     },
     "entities": {
