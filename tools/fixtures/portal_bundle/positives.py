@@ -10,9 +10,12 @@ caller sees it.
 
 from __future__ import annotations
 
+import dataclasses
+import json
 from collections.abc import Callable
 
 from . import archive_negatives as base
+from . import blocklist
 from . import portal_format as fmt
 from .blocklist import Block
 from .bundle import NAME_ENCODINGS, STAMP_CONTEXT, PortalFiles, build_bundle, make_files
@@ -49,6 +52,32 @@ def polygon_image_block() -> bytes:
     pdf = base.base_files().pdf
     extra = [Block(fmt.KIND_IMAGE, 1, (0, 0, 0, 0), polygon=SCHEME_POLYGON, image=SCHEME_IMAGE)]
     return _options_bundle(make_files(pdf, base.STEM, extra_blocks=extra))
+
+
+def _rectangles_edited(edit: Callable[[dict], None]) -> bytes:
+    """The base bundle with `edit` applied to each rectangle block of its block list."""
+    files = base.base_files()
+    document = json.loads(files.blocks_json)
+    rectangles = [b for b in document["blocks"] if b["shape_type"] == "rectangle"]
+    assert rectangles, "the base bundle holds no rectangle block"
+    for block in rectangles:
+        edit(block)
+    return _options_bundle(dataclasses.replace(files, blocks_json=blocklist.dump(document)))
+
+
+def rectangle_with_empty_polygon_points() -> bytes:
+    """Amendment 1: the vertices are "empty on rectangles"; this export writes `[]`."""
+    return _rectangles_edited(lambda block: block.update(polygon_points=[]))
+
+
+def rectangle_with_null_polygon_points() -> bytes:
+    """The owner's real export writes `null` on every rectangle."""
+    return _rectangles_edited(lambda block: block.update(polygon_points=None))
+
+
+def block_without_shape_type() -> bytes:
+    """`shape_type` is optional: a block without it (and without vertices) is accepted."""
+    return _rectangles_edited(lambda block: block.pop("shape_type"))
 
 
 def zip64_sizes() -> bytes:
@@ -91,6 +120,9 @@ POSITIVES: dict[str, Callable[[], bytes]] = {
     "minimal": minimal,
     "every_optional_member": every_optional_member,
     "polygon_image_block": polygon_image_block,
+    "rectangle_with_empty_polygon_points": rectangle_with_empty_polygon_points,
+    "rectangle_with_null_polygon_points": rectangle_with_null_polygon_points,
+    "block_without_shape_type": block_without_shape_type,
     "zip64_sizes": zip64_sizes,
     "zip64_end_record_only": zip64_end_record_only,
     "data_descriptors": data_descriptors,

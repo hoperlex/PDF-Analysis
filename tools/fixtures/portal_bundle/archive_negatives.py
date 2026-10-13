@@ -363,6 +363,16 @@ def _two_point_polygon(document: dict) -> None:
     document["blocks"][0]["polygon_points"] = [[0.1, 0.1], [0.2, 0.2]]
 
 
+def _polygon_without_points(document: dict) -> None:
+    """A block that says it is a polygon and carries no vertices (the key is there, `null`)."""
+    document["blocks"][0].update(shape_type="polygon", polygon_points=None)
+
+
+def _unknown_shape_type(document: dict) -> None:
+    """A shape the portal's set {rectangle, polygon} does not hold."""
+    document["blocks"][0]["shape_type"] = "circle"
+
+
 def _set_page(key: str, value: object) -> Callable[[dict], None]:
     def mutate(document: dict) -> None:
         document["pages"][0][key] = value
@@ -390,6 +400,8 @@ BLOCKS_INVALID: dict[str, Callable[[], bytes]] = {
     "bad_rotation": lambda: _with_blocks(_set_page("rotation", 45)),
     "zero_width": lambda: _with_blocks(_set_page("width_px", 0)),
     "polygon_with_two_points": lambda: _with_blocks(_two_point_polygon),
+    "polygon_without_points": lambda: _with_blocks(_polygon_without_points),
+    "unknown_shape_type": lambda: _with_blocks(_unknown_shape_type),
     "ordinal_a_string": lambda: _with_blocks(_set_first("ordinal", "1")),
 }
 

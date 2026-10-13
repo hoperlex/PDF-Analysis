@@ -3,7 +3,7 @@
   "$id": "urn:auditmanager:analysis:portal-blocks-input:v1",
   "title": "PortalBlockList v1 (the bundle's _blocks.json)",
   "contract_version": "1.0.0-draft.1",
-  "description": "Validates the `<stem>_blocks.json` member of a portal bundle (W55-PLAN.md sections B3.1 and B3.5). It is the portal's file, so unknown properties are tolerated at every level: the portal may add some, and refusing them would refuse a good bundle. What this product reads is required. Rules a JSON Schema cannot state are code rules of the ingest envelope and are listed in `x-envelope-rules`. `document_id`, `document_name`, `document_path` and every `crop_url` are the portal's: `document_id` collides with this product's `doc_` prefix and is ignored, and a `crop_url` is a capability URL that is never fetched, stored for display or rendered.",
+  "description": "Validates the `<stem>_blocks.json` member of a portal bundle (W55-PLAN.md sections B3.1 and B3.5). It is the portal's file, so unknown properties are tolerated at every level: the portal may add some, and refusing them would refuse a good bundle. What this product reads is required. Rules a JSON Schema cannot state are code rules of the ingest envelope and are listed in `x-envelope-rules`. `document_id`, `document_name`, `document_path` and every `crop_url` are the portal's: `document_id` collides with this product's `doc_` prefix and is ignored, and a `crop_url` is a capability URL that is never fetched, stored for display or rendered. A rule between two properties of one block that JSON Schema can state is stated in the schema with `if`/`then` (a `polygon` block carries its vertices), not in `x-envelope-rules`.",
   "type": "object",
   "required": [
     "schema_version",
@@ -58,6 +58,7 @@
       "type": "array",
       "items": {
         "type": "object",
+        "description": "One block of the portal's list. A block whose `shape_type` is `polygon` must carry a non-empty `polygon_points` (`if`/`then` below).",
         "required": [
           "block_id",
           "page_index",
@@ -95,12 +96,16 @@
             ]
           },
           "shape_type": {
-            "type": "string"
+            "enum": [
+              "rectangle",
+              "polygon"
+            ],
+            "description": "The portal's shape, case-sensitive: `rectangle` or `polygon`. Optional; a block without it is accepted, and the field is stored with the block list as written. A `polygon` block must carry `polygon_points` (the `if`/`then` of this block)."
           },
           "status": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,39}$",
-            "description": "The portal's status. Observed: `recognized` and `failed`. A `failed` block is tolerated and shown as such."
+            "description": "The portal's status token. Only `recognized` has been seen in a real export and `failed` is tolerated and shown as such; the set was never enumerated, so any lower-case token is accepted."
           },
           "export_status": {
             "type": "string"
@@ -120,7 +125,6 @@
               "array",
               "null"
             ],
-            "minItems": 3,
             "maxItems": 64,
             "items": {
               "type": "array",
@@ -132,13 +136,41 @@
                 "maximum": 1
               }
             },
-            "description": "The polygon's [x, y] vertices in the same normalised space, or null for a rectangle. Observed: 6 to 11 vertices."
+            "if": {
+              "type": "array",
+              "minItems": 1
+            },
+            "then": {
+              "minItems": 3
+            },
+            "description": "The polygon's [x, y] vertices in the same normalised space. `null` or an empty list on a rectangle (the portal writes `null`); a non-empty list holds 3 to 64 vertices, so a list of 1 or 2 is refused. A block whose `shape_type` is `polygon` must carry a non-empty list. Observed: 6 to 11 vertices."
           },
           "crop_url": {
             "type": [
               "string",
               "null"
             ]
+          }
+        },
+        "if": {
+          "required": [
+            "shape_type"
+          ],
+          "properties": {
+            "shape_type": {
+              "const": "polygon"
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "polygon_points"
+          ],
+          "properties": {
+            "polygon_points": {
+              "type": "array",
+              "minItems": 1
+            }
           }
         }
       }

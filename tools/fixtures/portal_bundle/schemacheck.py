@@ -21,6 +21,7 @@ ANNOTATIONS = frozenset({
 CONSTRAINTS = frozenset({
     "type", "enum", "const", "required", "properties", "items",
     "minItems", "maxItems", "minimum", "maximum", "pattern",
+    "if", "then",
 })
 
 
@@ -34,10 +35,18 @@ def assert_supported(schema: object, where: str = "$") -> None:
     unknown = sorted(set(schema) - ANNOTATIONS - CONSTRAINTS)
     if unknown:
         raise SchemaSubsetError(f"{where}: unsupported keyword(s) {unknown}")
+    if ("if" in schema) != ("then" in schema):
+        # JSON Schema ignores a lone `then` and a lone `if`; a rule that does nothing is a
+        # mistake in the contract, and this checker will not carry it silently. (`else` is
+        # not in the subset, so it is refused above.)
+        raise SchemaSubsetError(f"{where}: `if` and `then` come together")
     for name, sub in schema.get("properties", {}).items():
         assert_supported(sub, f"{where}.{name}")
     if "items" in schema:
         assert_supported(schema["items"], f"{where}[]")
+    for keyword in ("if", "then"):
+        if keyword in schema:
+            assert_supported(schema[keyword], f"{where}.{keyword}")
 
 
 def _is_type(value: object, name: str) -> bool:
@@ -97,4 +106,7 @@ def check(value: object, schema: dict, path: str = "$") -> list[str]:
         for name, sub in schema.get("properties", {}).items():
             if name in value:
                 errors += check(value[name], sub, f"{path}.{name}")
+    if "if" in schema and not check(value, schema["if"], path):
+        # The condition holds, so the `then` schema applies to the same value.
+        errors += check(value, schema["then"], path)
     return errors

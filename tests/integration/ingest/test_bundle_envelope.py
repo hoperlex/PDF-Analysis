@@ -42,7 +42,7 @@ from auditmanager.ingest.envelope import (
 )
 from auditmanager.shared.errors import DomainError
 from portal_bundle import archive_negatives as an  # tools/fixtures, on the path via conftest
-from portal_bundle import blocklist, generated, schemacheck, validate, zipwrite
+from portal_bundle import blocklist, generated, positives, schemacheck, validate, zipwrite
 from portal_bundle import portal_format as fmt
 from portal_bundle.blocklist import Block
 from portal_bundle.bundle import build_bundle, make_files, pack, text_blocks
@@ -194,8 +194,27 @@ def test_the_constants_in_code_are_the_pinned_schemas() -> None:
     assert tuple(block["properties"]["block_type"]["enum"]) == be.BLOCK_TYPES
     assert block["properties"]["block_id"]["pattern"] == be.BLOCK_ID_PATTERN.pattern
     assert block["properties"]["status"]["pattern"] == be.STATUS_PATTERN.pattern
+    # Amendment 1 of the freeze: `shape_type` is optional and one of two words, `polygon_points`
+    # is null or empty on a rectangle and 3..64 points otherwise, and a polygon must carry them.
+    assert tuple(block["properties"]["shape_type"]["enum"]) == be.SHAPE_TYPES == ("rectangle", "polygon")
+    assert "shape_type" not in block["required"]
     polygon = block["properties"]["polygon_points"]
-    assert (polygon["minItems"], polygon["maxItems"]) == (be.POLYGON_MIN, be.POLYGON_MAX)
+    assert polygon["type"] == ["array", "null"]
+    assert polygon["maxItems"] == be.POLYGON_MAX and "minItems" not in polygon
+    assert polygon["if"] == {"type": "array", "minItems": 1}
+    assert polygon["then"] == {"minItems": be.POLYGON_MIN}
+    assert polygon["items"]["minItems"] == polygon["items"]["maxItems"] == 2
+    assert block["if"] == {
+        "required": ["shape_type"], "properties": {"shape_type": {"const": be.POLYGON_SHAPE}},
+    }
+    assert block["then"] == {
+        "required": ["polygon_points"],
+        "properties": {"polygon_points": {"type": "array", "minItems": 1}},
+    }
+    assert {"if", "then"} <= set(block) and not {"else", "oneOf", "anyOf", "allOf", "not"} & set(block)
+    # `status` and `export_status` are the portal's tokens: a pattern, never a list of words.
+    assert "enum" not in block["properties"]["status"]
+    assert block["properties"]["export_status"] == {"type": "string"}
     coords = block["properties"]["coords_norm"]
     assert (coords["minItems"], coords["maxItems"]) == (4, 4)
     assert coords["items"] == {"type": "number", "minimum": 0, "maximum": 1}
@@ -231,6 +250,7 @@ def _mutations(seed: int, count: int) -> list[tuple[str, Any]]:
         None, "", "x", "recognized", "blk_" + "0" * 32, "blk_" + "g" * 32, -1, 0, 1, 2, 90,
         45, 1.5, 1.0, 0.5, 1e9, True, False, [], {}, [0.1, 0.2, 0.3, 0.4], [0.5, 0.1, 0.4, 0.9],
         [0.1, 0.1], [[0.1, 0.1], [0.2, 0.2], [0.3, 0.1]], "text", "table", 501,
+        "rectangle", "polygon", "Polygon", "circle", [[0.1, 0.1], [0.2, 0.2]],
     ]
     generator = random.Random(seed)
     found: list[tuple[str, Any]] = []
@@ -263,10 +283,83 @@ def test_the_hand_written_check_agrees_with_the_generic_one_over_a_seeded_fuzz()
         assert (be._blocks_problem(document) is None) == _reference_valid(document), label
 
 
+_ABSENT = object()
+
+
+def _ring(count: int) -> list[list[float]]:
+    """``count`` vertices, every coordinate inside [0, 1]."""
+    step = max(count - 1, 1)
+    return [[round(0.1 + 0.8 * i / step, 3), round(0.9 - 0.8 * i / step, 3)] for i in range(count)]
+
+
+SHAPE_CASES: dict[str, Any] = {
+    "absent": _ABSENT, "rectangle": "rectangle", "polygon": "polygon",
+    "Polygon": "Polygon", "RECTANGLE": "RECTANGLE", "circle": "circle", "empty string": "",
+    "null": None, "number": 1, "true": True, "list": ["polygon"],
+}
+POINTS_CASES: dict[str, Any] = {
+    "absent": _ABSENT, "null": None, "empty list": [], "one point": _ring(1), "two points": _ring(2),
+    "three points": _ring(3), "eleven points": _ring(11), "sixty-four points": _ring(64),
+    "sixty-five points": _ring(65), "x above one": [[1.2, 0.1], [0.2, 0.2], [0.3, 0.1]],
+    "y below zero": [[0.1, -0.1], [0.2, 0.2], [0.3, 0.1]],
+    "a point of three": [[0.1, 0.1, 0.1], [0.2, 0.2, 0.2], [0.3, 0.1, 0.1]],
+    "a point of one": [[0.1], [0.2], [0.3]], "a point that is a string": [[0.1, 0.1], [0.2, 0.2], "x"],
+    "a boolean coordinate": [[True, 0.1], [0.2, 0.2], [0.3, 0.1]],
+    "a string": "x", "an object": {}, "zero": 0, "false": False,
+}
+
+
+def _amendment_accepts(shape: Any, points: Any) -> bool:
+    """Amendment 1 of the freeze, read on its own (not from the schema or from the product).
+
+    ``shape_type``: absent, or exactly ``rectangle`` or ``polygon``. ``polygon_points``: absent,
+    ``null`` or empty, or 3..64 ``[x, y]`` pairs inside [0, 1]. A ``polygon`` block carries a
+    non-empty list.
+    """
+    shape_ok = shape is _ABSENT or (isinstance(shape, str) and shape in ("rectangle", "polygon"))
+    if points is _ABSENT or points is None:
+        return shape_ok and shape != "polygon"
+    if not isinstance(points, list):
+        return False
+    if points and not 3 <= len(points) <= 64:
+        return False
+    for point in points:
+        if not (isinstance(point, list) and len(point) == 2):
+            return False
+        if not all(type(c) in (int, float) and 0 <= c <= 1 for c in point):
+            return False
+    return shape_ok and not (shape == "polygon" and not points)
+
+
+def test_shape_type_and_polygon_points_are_judged_alike_by_the_product_the_reference_and_the_amendment(
+) -> None:
+    """Every ``shape_type`` against every ``polygon_points`` on a block of the real block list:
+    the hand-written check, the generic one reading the contract file, and a third reading of
+    the amendment that shares code with neither. A drift in any of the three, in either
+    direction, is a disagreement here."""
+    base = json.loads(committed_blocks_json())
+    verdicts: set[bool] = set()
+    for shape_label, shape in SHAPE_CASES.items():
+        for points_label, points in POINTS_CASES.items():
+            document = copy.deepcopy(base)
+            block = document["blocks"][0]
+            for key, value in (("shape_type", shape), ("polygon_points", points)):
+                if value is _ABSENT:
+                    block.pop(key, None)
+                else:
+                    block[key] = value
+            label = f"shape_type {shape_label} / polygon_points {points_label}"
+            wanted = _amendment_accepts(shape, points)
+            verdicts.add(wanted)
+            assert (be._blocks_problem(document) is None) == wanted, f"product: {label}"
+            assert _reference_valid(document) == wanted, f"reference: {label}"
+    assert verdicts == {True, False}
+
+
 @pytest.mark.parametrize("kind", sorted(an.BLOCKS_INVALID))
 def test_each_block_list_defect_is_refused_as_an_invalid_block_list(kind: str) -> None:
-    """The twenty ways the fixtures break a block list, each refused for that and for nothing
-    the markdown or the page count could be blamed for."""
+    """Every way the fixtures break a block list, each refused for that and for nothing the
+    markdown or the page count could be blamed for."""
     assert judge(an.blocks_json_invalid(kind))[:2] == ("file", "blocks_json_invalid"), kind
 
 
@@ -285,16 +378,115 @@ def test_each_block_list_defect_is_refused_as_an_invalid_block_list(kind: str) -
         pytest.param(lambda d: d["blocks"][1].update(ordinal=d["blocks"][0]["ordinal"]),
                      id="ordinals need not be unique"),
         pytest.param(lambda d: d["blocks"][0].update(crop_url=None), id="a null crop_url"),
+        # Amendment 1, `shape_type` and `polygon_points`.
+        pytest.param(lambda d: d["blocks"][0].update(polygon_points=None),
+                     id="a rectangle with a null polygon_points"),
+        pytest.param(lambda d: d["blocks"][0].update(polygon_points=[]),
+                     id="a rectangle with an empty polygon_points"),
+        pytest.param(lambda d: d["blocks"][0].pop("polygon_points"),
+                     id="a rectangle without polygon_points"),
+        pytest.param(lambda d: d["blocks"][0].pop("shape_type"), id="a block without shape_type"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="rectangle"),
+                     id="shape_type rectangle"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="polygon", polygon_points=_ring(3)),
+                     id="a polygon with three vertices"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="polygon", polygon_points=_ring(11)),
+                     id="a polygon with eleven vertices"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="polygon", polygon_points=_ring(64)),
+                     id="a polygon with sixty-four vertices"),
+        pytest.param(lambda d: d["blocks"][0].update(polygon_points=_ring(6)),
+                     id="vertices on a rectangle are not refused"),
+        # `status` and `export_status`: the portal's tokens, a pattern and not a list of words.
+        pytest.param(lambda d: d["blocks"][0].update(status="queued", export_status="queued"),
+                     id="another lower-case status token"),
+        pytest.param(lambda d: d["blocks"][0].update(status="a" * 40), id="a forty-character status"),
+        pytest.param(lambda d: d["blocks"][0].update(export_status="Anything At All"),
+                     id="export_status is any string"),
     ],
 )
 def test_what_the_portal_may_say_is_accepted(edit: Any) -> None:
+    assert _judged_after(edit) == (None, None)
+
+
+def _judged_after(edit: Any) -> tuple[str | None, str | None]:
+    """(field, constraint) of a three-page bundle whose block list ``edit`` has changed."""
     pdf = generated.pdf_with_n_pages(3)           # three pages, a TEXT block on each
     files = make_files(pdf, an.STEM)
     document = json.loads(files.blocks_json)
     edit(document)
     items = pack(files)
     items[1].payload = blocklist.dump(document)
-    assert judge(zipwrite.build_zip(items))[:2] == (None, None)
+    return judge(zipwrite.build_zip(items))[:2]
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        # `shape_type` is one of two words, case-sensitive; null and the empty string are not words.
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="circle"), id="an unknown shape_type"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="Polygon", polygon_points=_ring(6)),
+                     id="shape_type Polygon"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="RECTANGLE"), id="shape_type RECTANGLE"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type=""), id="an empty shape_type"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type=None), id="a null shape_type"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type=["polygon"]), id="a list shape_type"),
+        # A polygon carries its vertices: not null, not absent, not empty.
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="polygon", polygon_points=None),
+                     id="a polygon with null polygon_points"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="polygon"),
+                     id="a polygon without polygon_points"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="polygon", polygon_points=[]),
+                     id="a polygon with an empty polygon_points"),
+        # A non-empty list holds 3..64 pairs inside the unit square.
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="polygon", polygon_points=_ring(1)),
+                     id="a polygon with one vertex"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="polygon", polygon_points=_ring(2)),
+                     id="a polygon with two vertices"),
+        pytest.param(lambda d: d["blocks"][0].update(polygon_points=_ring(2)),
+                     id="two vertices on a rectangle"),
+        pytest.param(lambda d: d["blocks"][0].update(polygon_points=_ring(1)),
+                     id="one vertex on a rectangle"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="polygon", polygon_points=_ring(65)),
+                     id="a polygon with sixty-five vertices"),
+        pytest.param(lambda d: d["blocks"][0].update(shape_type="polygon",
+                                                     polygon_points=[[1.2, 0.1], [0.2, 0.2], [0.3, 0.1]]),
+                     id="a vertex outside the unit square"),
+        pytest.param(lambda d: d["blocks"][0].update(polygon_points="x"), id="polygon_points a string"),
+        # `status` stays a lower-case token.
+        pytest.param(lambda d: d["blocks"][0].update(status="Recognized"), id="status in capitals"),
+        pytest.param(lambda d: d["blocks"][0].update(status="a" * 41), id="a forty-one-character status"),
+        pytest.param(lambda d: d["blocks"][0].update(status=""), id="an empty status"),
+        pytest.param(lambda d: d["blocks"][0].update(export_status=None), id="a null export_status"),
+        # The rest of Amendment 1 that already held.
+        pytest.param(lambda d: d.update(schema_version=2), id="schema_version 2"),
+        pytest.param(lambda d: d.update(coordinate_space="normalized_page_bottom_left"),
+                     id="another coordinate space"),
+        pytest.param(lambda d: d["blocks"][0].update(block_type="TEXT"), id="block_type in capitals"),
+        pytest.param(lambda d: d["blocks"][0].update(block_type="table"), id="a fourth block_type"),
+    ],
+)
+def test_what_the_amendment_does_not_allow_is_refused_as_an_invalid_block_list(edit: Any) -> None:
+    assert _judged_after(edit) == ("file", "blocks_json_invalid")
+
+
+def test_the_new_negatives_and_positives_are_in_the_fixture_registries() -> None:
+    """The fixtures' own cases for the three rules, so `test_each_block_list_defect...` above and
+    the ``every valid but unusual positive`` test of the fixtures run them."""
+    assert {"polygon_with_two_points", "polygon_without_points", "unknown_shape_type"} <= set(
+        an.BLOCKS_INVALID)
+    for name in ("rectangle_with_empty_polygon_points", "rectangle_with_null_polygon_points",
+                 "block_without_shape_type"):
+        assert judge(positives.POSITIVES[name]())[:2] == (None, None), name
+
+
+def test_every_block_type_and_a_stamp_without_an_ordinal_or_a_crop_are_accepted() -> None:
+    """The real export's stamps have a null ordinal and a null crop_url; the committed
+    baseline's two STAMP blocks have the same, and all three types are in it."""
+    document = json.loads(committed_blocks_json())
+    stamps = [b for b in document["blocks"] if b["block_type"] == "stamp"]
+    assert stamps and all(b["ordinal"] is None and b["crop_url"] is None for b in stamps)
+    assert {b["block_type"] for b in document["blocks"]} == set(be.BLOCK_TYPES)
+    assert be._blocks_problem(document) is None
 
 
 def test_a_block_id_with_a_trailing_newline_is_refused() -> None:

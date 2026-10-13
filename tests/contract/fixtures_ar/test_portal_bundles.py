@@ -619,6 +619,54 @@ class ValidatorTest(unittest.TestCase):
             schemacheck.assert_supported({"type": "object", "oneOf": []})
         with self.assertRaises(schemacheck.SchemaSubsetError):
             schemacheck.assert_supported({"properties": {"a": {"allOf": []}}})
+        # `if`/`then` are in the subset, together and with their own subschemas checked; `else`
+        # and a lone half are not.
+        schemacheck.assert_supported({"if": {"type": "array"}, "then": {"minItems": 1}})
+        for bad in ({"if": {"type": "array"}}, {"then": {"minItems": 1}},
+                    {"if": {}, "then": {}, "else": {}},
+                    {"if": {"oneOf": []}, "then": {}}, {"if": {}, "then": {"allOf": []}},
+                    {"properties": {"a": {"if": {}, "then": {"not": {}}}}}):
+            with self.subTest(schema=bad), self.assertRaises(schemacheck.SchemaSubsetError):
+                schemacheck.assert_supported(bad)
+
+    def test_then_applies_only_where_if_holds(self) -> None:
+        schema = {"type": "object", "if": {"required": ["a"], "properties": {"a": {"const": 1}}},
+                  "then": {"required": ["b"]}}
+        self.assertEqual(schemacheck.check({}, schema), [])
+        self.assertEqual(schemacheck.check({"a": 2}, schema), [])
+        self.assertEqual(schemacheck.check({"a": 1, "b": 0}, schema), [])
+        missing = schemacheck.check({"a": 1}, schema)
+        self.assertEqual(len(missing), 1, missing)
+        self.assertIn("'b'", missing[0])
+
+    def test_the_shape_rules_of_amendment_1_are_judged_by_the_reference(self) -> None:
+        """`shape_type` is one of two words, a polygon carries its vertices, a rectangle may
+        carry none: each rule has a positive and a negative here, refused for its own rule."""
+        for name in ("rectangle_with_empty_polygon_points", "rectangle_with_null_polygon_points",
+                     "block_without_shape_type", "polygon_image_block"):
+            with self.subTest(positive=name):
+                verdict = validate.validate(positives.POSITIVES[name](), bundle.GENERATOR_LIMITS)
+                self.assertEqual(verdict.constraints, ())
+        # The positives really carry what their names say (a positive that was not edited would
+        # prove nothing).
+        def block_list(name: str) -> list[dict]:
+            return json.loads(members_by_role(positives.POSITIVES[name]())[fmt.ROLE_BLOCKS])["blocks"]
+
+        empty = block_list("rectangle_with_empty_polygon_points")
+        self.assertTrue(empty and all(b["polygon_points"] == [] for b in empty))
+        null = block_list("rectangle_with_null_polygon_points")
+        self.assertTrue(null and all(b["polygon_points"] is None for b in null))
+        bare = block_list("block_without_shape_type")
+        self.assertTrue(bare and all("shape_type" not in b for b in bare))
+        for name, fragment in (("polygon_with_two_points", "polygon_points"),
+                               ("polygon_without_points", "polygon_points"),
+                               ("unknown_shape_type", "shape_type")):
+            with self.subTest(negative=name):
+                verdict = validate.validate(archive_negatives.blocks_json_invalid(name),
+                                            bundle.GENERATOR_LIMITS)
+                self.assertEqual(verdict.constraints, ("blocks_json_invalid",))
+                self.assertEqual({v.field for v in verdict.violations}, {"file"})
+                self.assertIn(fragment, verdict.violations[0].detail)
 
     def test_the_schema_subset_checker_can_fail(self) -> None:
         schema = validate.load_schema()

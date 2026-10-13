@@ -84,6 +84,12 @@ BLOCK_REQUIRED: Final[tuple[str, ...]] = (
 BLOCK_TYPES: Final[tuple[str, ...]] = ("text", "image", "stamp")
 BLOCK_ID_PATTERN: Final[re.Pattern[str]] = re.compile(r"^blk_[0-9a-f]{32}$")
 STATUS_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
+#: ``shape_type`` is optional; when present it is one of these, case-sensitively.
+SHAPE_TYPES: Final[tuple[str, ...]] = ("rectangle", "polygon")
+#: The shape that must carry its vertices (the block's ``if``/``then`` in the schema).
+POLYGON_SHAPE: Final[str] = "polygon"
+#: ``polygon_points`` is ``null`` or an empty list on a rectangle; a non-empty list holds
+#: ``POLYGON_MIN`` to ``POLYGON_MAX`` vertices, so a list of one or two is refused.
 POLYGON_MIN, POLYGON_MAX = 3, 64
 #: The ``x-envelope-rules`` this module implements, one per entry of the schema.
 IMPLEMENTED_ENVELOPE_RULES: Final[int] = 5
@@ -214,7 +220,9 @@ def _block_problem(block: Any) -> str | None:
         return "status"
     if not _coordinates_ok(block["coords_norm"], 4):
         return "coords_norm"
-    if "shape_type" in block and not isinstance(block["shape_type"], str):
+    if "shape_type" in block and (
+        not isinstance(block["shape_type"], str) or block["shape_type"] not in SHAPE_TYPES
+    ):
         return "shape_type"
     if "export_status" in block and not isinstance(block["export_status"], str):
         return "export_status"
@@ -224,10 +232,14 @@ def _block_problem(block: Any) -> str | None:
         return "crop_url"
     polygon = block.get("polygon_points")
     if polygon is not None:
-        if not isinstance(polygon, list) or not POLYGON_MIN <= len(polygon) <= POLYGON_MAX:
+        if not isinstance(polygon, list) or len(polygon) > POLYGON_MAX:
+            return "polygon_points"
+        if polygon and len(polygon) < POLYGON_MIN:        # empty is a rectangle's; 1 or 2 is not
             return "polygon_points"
         if not all(_coordinates_ok(point, 2) for point in polygon):
             return "polygon_points"
+    if block.get("shape_type") == POLYGON_SHAPE and not polygon:
+        return "polygon_points"                           # a polygon carries its vertices
     return None
 
 
