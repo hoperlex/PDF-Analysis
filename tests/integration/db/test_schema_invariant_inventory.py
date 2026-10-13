@@ -31,6 +31,18 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `W55B-SEAL-01` for ``0021_portal_bundles`` from a fresh upgrade on PostgreSQL 17 +
+#: pgvector 0.8.6 (the lane's own stack). Three families moved and each by exactly what the
+#: migration's DDL adds: columns +3 -> 422 (``document_version.text_character_count``,
+#: ``textless_pages``, ``recognised_character_count``); constraints +4 -> 454
+#: (``ck_document_version_text_character_count``, ``..._recognised_character_count``,
+#: ``..._textless_pages`` and ``..._bundle_counts_together``), with ``ck_document_version_page_count``
+#: redefined from ``BETWEEN 1 AND 30`` to ``BETWEEN 1 AND 500`` -- same row count, new definition,
+#: which is why the digest moves beyond the count; functions +1 -> 19 (``am_is_ascending_page_list``).
+#: The other eight families (relations, indexes, triggers, views, extensions, sequences, policies and
+#: the state topology) were observed identical to the 0020 seal. The comparison is the three counts
+#: against the DDL and the eight untouched digests; a row-by-row diff against a second database
+#: upgraded to ``0020`` was not run.
 #: Resealed by `W55A-FIX` for its amendment of ``0020_norms_search``'s guard triggers (the
 #: strict current-snapshot history, JUDGE-X M4 / JUDGE-Y Y-3), measured, not predicted: two
 #: fresh databases, one upgraded with ``0020`` as at ``cb4bdf1`` (whose inventory equalled the
@@ -88,12 +100,12 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (419, "3fcfac716b7dacdcafaa1dd1dafeeadcc1ff255dbc16a6af97a48843c17f1e40"),
+    "columns": (422, "fce7cf026dbe28de0258157f5495d83ac4ec8f5b68658a77fb01ad5d299dcd62"),
     "relations": (50, "92a0ec6d035d72f0bb16e8ae867621a77a235a1c9a379237cf4aef2d28dd52de"),
-    "constraints": (450, "2882f6e8a6101efb4686652626d8fba42c62705122a75a7e78204d8e33a68bdd"),
+    "constraints": (454, "c2e81198ddeebe7e179b56041fd2a920f932ad93b0a7bdaed269d93fb5f968e4"),
     "indexes": (121, "aa69f427e5b85d0d306931e4ecee46535c0a215b34799f58976bf789774a624e"),
     "triggers": (46, "42bbe67057d87b17cb9a529f36147c08e1f9bcca49db16abb9227762f40d75ae"),
-    "functions": (18, "d307abda89b9585e44c7fcf35c4b4b405766bad74b784254f3477abadfd37290"),
+    "functions": (19, "851f818fa7a1794404b24679fbafddeb1733876018f66e0738ab20beda705697"),
     "views": (1, "099049415234da3d04583c58a693a68fda934f77e9eaf00b0d12e2542842734d"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),
