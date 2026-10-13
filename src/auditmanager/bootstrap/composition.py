@@ -250,6 +250,9 @@ def build_application(
         analysis_profile_id=profile_id,
         prompt_bundle_id=bundle_id,
         carrier=carrier,
+        # `W55B-BUDGET-01`: derived once by `settings.load` from the model and the ceiling, and
+        # refused there when it cannot hold the AR document set. Always passed, never None.
+        input_budget_characters=resolved.input_budget_characters,
     )
     if isinstance(carrier, DurableCarrier):
         carrier.configure_runner(run_adapter._job)

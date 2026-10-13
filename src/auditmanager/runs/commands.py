@@ -43,6 +43,30 @@ profile and prompt bundle identities must be well-formed. A pinned snapshot reso
 construction (it is the current one, and ``fk_audit_run_norms_snapshot`` holds it); a NULL
 pin is admitted until W57.
 
+The analysis input budget (`W55B-BUDGET-01`; plan section B3.3, G-11, R-118)
+------------------------------------------------------------------------------
+``start_audit_run`` and ``reaudit_run`` refuse a version whose recorded
+``text_character_count`` is **above** ``input_budget_characters`` with
+``analysis_input_budget_exceeded`` (``422``; ``character_count`` and ``budget_characters``).
+A count exactly at the budget is accepted, and a version with **no** recorded count (published
+before the portal-bundle upload) is not refused by this rule. A re-audit runs on the current
+configuration (R-82), so it is checked against the budget in force now, never the source run's.
+
+**Where the refusal sits.** After the version is read and *before* the idempotency key is
+claimed, so a refusal leaves no ``command_record``, run, job or event behind -- it is not a
+recorded outcome. That is the point: the budget is an operator setting, so a retry of the same
+key after the operator raised the ceiling is a **fresh start**, not a replay of a stored
+refusal. The one exception is a key that already exists: it is left to the ledger, which
+replays the run that key created (or answers ``idempotency_key_reuse`` or ``..._in_progress``).
+A client retrying an accepted start must be told what happened, not that the version it
+already started has become too large for today's configuration.
+
+``input_budget_characters`` is a keyword that defaults to ``None`` so the many callers that
+predate the budget stay untouched. ``None`` means *no configuration* and is reachable only
+from tests: the served application derives the budget once at start-up and always passes it
+(``bootstrap/settings.py``, ``RunAdapter``; held by
+``tests/integration/composition/test_the_served_application_always_passes_a_budget.py``).
+
 Why the command succeeds at creation
 ------------------------------------
 The command's outcome is *the run identity*, and that identity exists the moment the row
@@ -269,6 +293,44 @@ def _resolve_references(
     return version, blob_ids
 
 
+def _checked_budget(input_budget_characters: int | None) -> int | None:
+    """The budget argument, or the refusal of one that cannot be a budget.
+
+    ``None`` is "no configuration" (tests only). Anything else must be a whole number of
+    characters, zero or more: a negative or fractional budget handed in by a caller is a wiring
+    fault, and treating it as "no budget" would be the silent fallback this check exists to
+    prevent.
+    """
+    if input_budget_characters is None:
+        return None
+    if (
+        isinstance(input_budget_characters, bool)
+        or not isinstance(input_budget_characters, int)
+        or input_budget_characters < 0
+    ):
+        raise ValueError("input_budget_characters must be a non-negative whole number or None")
+    return input_budget_characters
+
+
+def _refuse_over_budget(
+    character_count: int | None, input_budget_characters: int | None
+) -> None:
+    """``analysis_input_budget_exceeded`` when the version's text is above the budget.
+
+    Strictly above: a count equal to the budget is accepted. ``None`` on either side is
+    accepted -- no budget configured (tests), or a version published before the bundle upload
+    that recorded no count -- and is never read as zero.
+    """
+    if input_budget_characters is None or character_count is None:
+        return
+    if character_count > input_budget_characters:
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_BUDGET_EXCEEDED,
+            character_count=int(character_count),
+            budget_characters=int(input_budget_characters),
+        )
+
+
 def start_audit_run(
     session: Session,
     *,
@@ -281,6 +343,7 @@ def start_audit_run(
     runs: RunRepository | None = None,
     documents: DocumentRepository | None = None,
     norms_snapshot: NormsSnapshotReader = current_norms_snapshot,
+    input_budget_characters: int | None = None,
 ) -> StartedRun:
     """Create one durable ``AuditRun``, or answer what already happened under this key.
 
@@ -288,6 +351,12 @@ def start_audit_run(
     writes no rollback of its own. The norms snapshot the new run pins is read here, in
     that transaction, by ``norms_snapshot`` -- the current one, or NULL while none is
     current.
+
+    ``input_budget_characters`` is the analysis input budget in force (`W55B-BUDGET-01`; see
+    the module docstring). A version whose recorded character count is above it is refused
+    with ``analysis_input_budget_exceeded`` **before** the key is claimed, so nothing is
+    written. ``None`` means "no configuration" and is reachable only from tests: the served
+    application always passes the budget it derived at start-up.
 
     Outcomes:
 
@@ -311,6 +380,8 @@ def start_audit_run(
         else IdempotencyKey(idempotency_key)
     )
 
+    budget = _checked_budget(input_budget_characters)
+
     _version, blob_ids = _resolve_references(
         session,
         version_uid=resolved_version,
@@ -318,6 +389,19 @@ def start_audit_run(
         prompt_bundle_id=prompt_bundle_id,
         documents=document_repo,
     )
+
+    # `W55B-BUDGET-01`. Up front: after the version is read, before the key is claimed, so a
+    # refusal writes no command record and a retry after the operator raises the ceiling is a
+    # fresh start. A key the ledger already knows is not refused here -- it is answered below,
+    # as a replay, whatever today's budget is.
+    if (
+        budget is not None
+        and command_repo.find(
+            session, command_type=COMMAND_TYPE_START_RUN, idempotency_key=key
+        )
+        is None
+    ):
+        _refuse_over_budget(_version.text_character_count, budget)
 
     basis = input_basis_digest(
         version_uid=str(resolved_version),
@@ -461,6 +545,7 @@ def reaudit_run(
     jobs: JobRepository | None = None, commands: CommandRepository | None = None,
     documents: DocumentRepository | None = None,
     norms_snapshot: NormsSnapshotReader = current_norms_snapshot,
+    input_budget_characters: int | None = None,
 ) -> StartedRun:
     """Create one new run of a terminal source's document version, on today's configuration.
 
@@ -477,14 +562,34 @@ def reaudit_run(
     The idempotency fingerprint is still the request -- the source run and its stored
     digest -- because the configuration and the snapshot are the server's, not the
     caller's. The source row never changes, so a retry after a designation change replays.
+
+    `W55B-BUDGET-01`: the source's version is checked against ``input_budget_characters``,
+    the budget in force **now** -- a re-audit runs on the current configuration, so it faces
+    today's budget and not the one the source run was accepted under. The refusal precedes
+    the key's claim (see the module docstring), and a key the ledger already knows replays.
+    ``None`` means "no configuration" and is reachable only from tests.
     """
     _require_run_control_role(roles)
+    budget = _checked_budget(input_budget_characters)
     repository = runs or RunRepository()
     ledger = commands or CommandRepository()
     session.execute(text(
         "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
     ), {"run_id": source_run_id}).scalar_one_or_none()
     source = repository.get(session, source_run_id)
+    if (
+        budget is not None
+        and ledger.find(
+            session, command_type="reaudit_run", idempotency_key=IdempotencyKey(idempotency_key)
+        )
+        is None
+    ):
+        _refuse_over_budget(
+            (documents or DocumentRepository())
+            .get_version(session, VersionUid.parse(source.version_uid))
+            .text_character_count,
+            budget,
+        )
     claimed = ledger.begin(
         session, command_type="reaudit_run",
         idempotency_key=IdempotencyKey(idempotency_key),

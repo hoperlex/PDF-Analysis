@@ -210,16 +210,20 @@ class ExecutionAdapter(_SessionHolder):
         from auditmanager.runs.commands import reaudit_run
 
         profile, bundle, mode = self._runs.current_configuration()
+        budget = self._runs.input_budget_characters
 
         def write(session: Session) -> tuple[str, bool, RunStatusView]:
             # `R-82`: the new run records the configuration this deployment executes,
             # exactly as `startRun` does, never the source run's. The command reads the
-            # current norms snapshot in this same transaction (`W55A-PIN-01`).
+            # current norms snapshot in this same transaction (`W55A-PIN-01`). The analysis
+            # input budget is part of that configuration (`W55B-BUDGET-01`, R-118): the
+            # version is checked against the budget in force now, and the budget is always
+            # passed -- the one served path that reaches `reaudit_run` never omits it.
             result = reaudit_run(session, source_run_id=run_id,
                                  roles=self._roles(session, user_uid),
                                  idempotency_key=idempotency_key,
                                  analysis_profile_id=profile, prompt_bundle_id=bundle,
-                                 provider_mode=mode)
+                                 provider_mode=mode, input_budget_characters=budget)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
         new_id, replayed, view = self._write(write)
         if not replayed:
@@ -599,6 +603,7 @@ class RunAdapter(_SessionHolder):
         analysis_profile_id: str,
         prompt_bundle_id: str,
         carrier: Any,
+        input_budget_characters: int | None = None,
     ) -> None:
         super().__init__(session_factory)
         self._blob_store = blob_store
@@ -608,6 +613,14 @@ class RunAdapter(_SessionHolder):
         self._profile = analysis_profile_id
         self._bundle = prompt_bundle_id
         self._carrier = carrier
+        # `W55B-BUDGET-01`. The analysis input budget, derived once at start-up
+        # (``AppSettings.input_budget_characters``) and handed to ``start_audit_run`` and,
+        # through ``ExecutionAdapter``, to ``reaudit_run``. ``None`` means "no configuration"
+        # and exists so the many tests that build a bare adapter stay as they are; the
+        # composition root always passes a positive integer, and
+        # ``test_the_served_application_always_passes_a_budget`` is red for any path that
+        # does not.
+        self._input_budget_characters = input_budget_characters
 
     def start_run(
         self,
@@ -650,6 +663,7 @@ class RunAdapter(_SessionHolder):
                 # not on a request.
                 provider_mode=self._provider_mode,
                 idempotency_key=idempotency_key,
+                input_budget_characters=self._input_budget_characters,
             )
             if not started.replayed:
                 # `D-20`. `created -> queued` happens here, in the transaction that
@@ -727,6 +741,15 @@ class RunAdapter(_SessionHolder):
             )
 
         return job
+
+    @property
+    def input_budget_characters(self) -> int | None:
+        """The analysis input budget a new run is checked against (`W55B-BUDGET-01`).
+
+        The same value ``start_run`` passes, read by ``ExecutionAdapter.reaudit_run`` so a
+        re-audit faces exactly the budget a start does -- today's, not the source run's.
+        """
+        return self._input_budget_characters
 
     def current_configuration(self) -> tuple[str, str, str]:
         """The analysis profile, prompt bundle and provider mode a new run receives.

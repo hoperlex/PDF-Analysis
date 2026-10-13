@@ -21,6 +21,7 @@ import os
 from dataclasses import dataclass
 from typing import Final
 
+from auditmanager.analysis.public import REFERENCE_DOCUMENT_CHARACTERS, input_budget_characters
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 #: The application-layer names, distinct from the fifteen FF-01 freezes for the services.
@@ -112,6 +113,14 @@ class AppSettings:
     proxy_token: str | None
     proxy_model: str
     run_cost_ceiling_usd: float
+    #: `W55B-BUDGET-01` (G-11, R-118). The most pypdfium2 characters a document version may
+    #: have for ``startRun`` and ``reauditRun`` to accept it, derived **once** here from
+    #: :attr:`model_id` and :attr:`run_cost_ceiling_usd` by
+    #: ``analysis.public.input_budget_characters``. Never a literal and never read from the
+    #: environment: the two operator settings it follows are, and :func:`load` refuses a pair
+    #: whose figure cannot hold the 30-page AR document set. The composition root hands it to every
+    #: adapter that starts a run.
+    input_budget_characters: int
     api_key: str | None
     #: The deployment secret the credential signer is derived from; see
     #: :data:`API_TOKEN_ENV`. Still required, still refused when empty, and no longer a
@@ -155,6 +164,40 @@ def _api_token(role: str, environ: dict[str, str]) -> str | None:
             "service runs with the API's environment except that secret"
         )
     return None
+
+
+def _input_budget(model_id: str, ceiling_usd: float) -> int:
+    """The analysis input budget for this model and ceiling, or the refusal to start.
+
+    Two ways to refuse, both at start-up and both naming the settings to change: a model the
+    P02 lock does not pin (its rates, hence its budget, are unknown -- the runtime would
+    refuse it at the first run anyway), and a pair whose budget does not reach the 30-page
+    AR document set, which would leave the product unable to analyse the one document it exists for.
+    The figures are in the message because an operator fixing it needs both numbers.
+    """
+    try:
+        budget = input_budget_characters(model_id, ceiling_usd)
+    except DomainError:
+        raise ConfigurationError(
+            f"{MODEL_ID_ENV} is {model_id!r}, which the P02 lock does not pin; the analysis "
+            "input budget is derived from the pinned rates and cannot be derived for an "
+            "unpinned model"
+        ) from None
+    except ValueError:
+        # `float()` parses "nan" and "inf", and neither is a ceiling anyone set on purpose.
+        raise ConfigurationError(
+            f"{COST_CEILING_ENV} is {ceiling_usd!r}; the run cost ceiling is a finite number "
+            "of US dollars, and the analysis input budget cannot be derived from anything else"
+        ) from None
+    if budget < REFERENCE_DOCUMENT_CHARACTERS:
+        raise ConfigurationError(
+            f"{COST_CEILING_ENV} is {ceiling_usd:g} for {MODEL_ID_ENV} {model_id!r}, which "
+            f"leaves an analysis input budget of {budget} characters; the 30-page AR document "
+            f"set is {REFERENCE_DOCUMENT_CHARACTERS} characters, so the product could not "
+            "analyse the document it exists for. Raise the ceiling or choose a cheaper "
+            "pinned model"
+        )
+    return budget
 
 
 def _norms_search_timeout_ms(environ: dict[str, str]) -> int:
@@ -234,6 +277,9 @@ def load(environ: dict[str, str] | None = None) -> AppSettings:
             "be served and the process refuses to start rather than discover it later"
         )
 
+    model_id = env.get(MODEL_ID_ENV, "").strip() or "claude-opus-5"
+    budget = _input_budget(model_id, ceiling)
+
     return AppSettings(
         database_url=_require("DATABASE_URL", env),
         s3_endpoint_url=_require("S3_ENDPOINT_URL", env),
@@ -242,8 +288,9 @@ def load(environ: dict[str, str] | None = None) -> AppSettings:
         s3_secret_access_key=_require("S3_SECRET_ACCESS_KEY", env),
         s3_bucket=_require("S3_BUCKET", env),
         provider_mode=mode,
-        model_id=env.get(MODEL_ID_ENV, "").strip() or "claude-opus-5",
+        model_id=model_id,
         run_cost_ceiling_usd=ceiling,
+        input_budget_characters=budget,
         api_key=api_key,
         api_token=_api_token(role, env),
         execution_role=role,
