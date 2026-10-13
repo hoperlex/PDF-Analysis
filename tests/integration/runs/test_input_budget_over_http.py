@@ -158,8 +158,10 @@ def _credential() -> str:
 
 
 def _client(sessions: sessionmaker[Session], world: Any, budget: int | None) -> tuple[TestClient, _Carrier]:
+    # Named `run_adapter`, not `runs`: `test_every_port_implementation_is_whole.py` resolves a wired port by
+    # the variable's name anywhere in the module, and `runs` above this function is a `RunRepository`.
     carrier = _Carrier()
-    runs = RunAdapter(
+    run_adapter = RunAdapter(
         sessions, blob_store=None, adapter=None, provider_config=None, provider_mode="recorded",
         analysis_profile_id=world.seeded.analysis_profile_id,
         prompt_bundle_id=world.seeded.prompt_bundle_id, carrier=carrier,
@@ -170,14 +172,14 @@ def _client(sessions: sessionmaker[Session], world: Any, budget: int | None) -> 
     router = build_router(
         projects=None,  # type: ignore[arg-type]
         documents=None,  # type: ignore[arg-type]
-        runs=runs,
+        runs=run_adapter,
         findings=None,  # type: ignore[arg-type]
         decisions=None,  # type: ignore[arg-type]
         exports=None,  # type: ignore[arg-type]
         credentials=CredentialAdapter(
             sessions, users=UserAccessRepository(), accounts=AccountAccessRepository(), signer=signer
         ),
-        execution=ExecutionAdapter(sessions, runs=runs),
+        execution=ExecutionAdapter(sessions, runs=run_adapter),
     )
     app = create_asgi_app(environ={API_TOKEN_VARIABLE: SECRET}, application=_Built(router, carrier, sessions))  # type: ignore[arg-type]
     return TestClient(app, raise_server_exceptions=False), carrier
