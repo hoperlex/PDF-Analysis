@@ -120,4 +120,3 @@ lets the application start, is **$0.79 + 0.0005** (the budget reaches 93 690 bet
 *Does the run finish under the ceiling?* A document exactly at the budget costs, at the densest density actually measured (1.958), (3 639 + 152 361 +
 12 000) / 1.958 = 85 800 tokens = **$0.43** of input plus at most **$0.40** of output = **$0.83**: 17 % under the ceiling even if the model spends its whole
 output cap. At the constant's own density the same document lands on $1.00 to within a character. The committed test re-derives both.
-

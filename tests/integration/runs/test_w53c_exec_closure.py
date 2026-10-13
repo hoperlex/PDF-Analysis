@@ -153,7 +153,14 @@ def test_reaudit_records_the_current_configuration_not_the_source(
 
 
 class _ConfiguredRuns:
-    """The two things ExecutionAdapter asks of RunAdapter."""
+    """The things ExecutionAdapter asks of RunAdapter.
+
+    ``input_budget_characters`` is the third (`W55B-BUDGET-01`): ``None`` is "no
+    configuration", which this stub, like any test-built adapter, may carry and the served
+    application never does. The budget's own cases are ``test_input_budget*.py``.
+    """
+
+    input_budget_characters: int | None = None
 
     def __init__(self, configuration: tuple[str, str, str]) -> None:
         self.configuration = configuration
