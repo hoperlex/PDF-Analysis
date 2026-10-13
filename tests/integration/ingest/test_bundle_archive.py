@@ -182,6 +182,25 @@ def test_a_ratio_above_the_bound_is_refused(tmp_path: Path) -> None:
     assert judge(path, LOW)[:2] == ("file", "bundle_compression_ratio")
 
 
+def test_the_archive_as_a_whole_is_held_to_the_ratio_too() -> None:
+    """The declared members together against the archive's own size.
+
+    No real archive can reach this alone (the archive is at least as large as its members'
+    compressed bytes, so every member inside the ratio puts the total inside it), which is why
+    the rule is shown on entries built for it: two members each exactly at 100 : 1, in an
+    archive smaller than the compressed bytes they claim -- a directory that lies about where
+    its data is. A reader that stopped at the per-member ratio would let it through."""
+    entry = lambda index: ba._Entry(  # noqa: E731
+        index, f"m{index}".encode(), 0, 8, 0, 10, 1000, 0, 3, 0, b""
+    )
+    chosen = {"pdf": entry(0), "blocks": entry(1)}
+    assert all(not ba._ratio_exceeded(e.size, e.compressed_size, ba.MAX_RATIO) for e in chosen.values())
+    with pytest.raises(DomainError) as refused:
+        ba._judge_declared(chosen, 19, BundleLimits())
+    assert dict(refused.value.detail_fields)["constraint"] == "bundle_compression_ratio"
+    ba._judge_declared(chosen, 20, BundleLimits())          # 2000 against 20: exactly 100 : 1
+
+
 def test_the_ratio_rule_is_above_the_bound_and_not_at_it() -> None:
     assert ba._ratio_exceeded(100 * 7, 7, ba.MAX_RATIO) is False
     assert ba._ratio_exceeded(100 * 7 + 1, 7, ba.MAX_RATIO) is True

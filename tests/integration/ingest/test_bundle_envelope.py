@@ -452,3 +452,37 @@ def test_recognised_text_is_never_merged_into_the_text_layer_count() -> None:
     admission = admit(committed("image_only_with_block.zip"))
     assert admission.text_character_count == 0
     assert admission.recognised_character_count > 0
+
+
+def test_a_crop_url_is_never_fetched_stored_for_display_or_rendered() -> None:
+    """The portal's capability URLs: every ``crop_url`` and every ``> **Crop:**`` link of a bundle
+    points at a port this test is listening on, the bundle is admitted, and nothing connects.
+
+    "Stored for display" is the other half: no count, no field and no part of the admission
+    carries a URL (it is a handful of integers), and the block list is stored byte for byte as
+    the portal wrote it, so a later reader can see the link was never used."""
+    import socket
+
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(8)
+    listener.settimeout(0.5)
+    try:
+        port = listener.getsockname()[1]
+        files = an.base_files()
+        url = f"http://127.0.0.1:{port}/api/crops/"
+        document = json.loads(files.blocks_json)
+        for block in document["blocks"]:
+            block["crop_url"] = url + block["block_id"]
+        markdown = re.sub(r"https://portal\.invalid/api/crops/\S+?\)", url + "x)",
+                          files.results_md.decode("utf-8"))
+        assert str(port) in markdown
+        items = pack(files)
+        items[1].payload = blocklist.dump(document)
+        items[2].payload = markdown.encode("utf-8")
+        admission = admit(zipwrite.build_zip(items))
+        with pytest.raises(socket.timeout):
+            listener.accept()
+        assert "http" not in repr(admission)
+    finally:
+        listener.close()
