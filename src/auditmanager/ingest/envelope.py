@@ -4,15 +4,19 @@
 bytes, an encrypted PDF, an oversize file, an over-page-count file and any page without
 extractable embedded text, each with ``validation_failed`` and a constraint detail."
 
-The envelope is exactly one unencrypted PDF, at most 25 MiB, between one and thirty
-pages, every page carrying extractable embedded text. Anything outside it is a typed
-:class:`~auditmanager.shared.errors.DomainError`, and the caller never reaches the
-store or the database, so "nothing was published" is true because nothing was attempted.
+The envelope of a PDF is: unencrypted, at most 250 MiB, between one and five hundred
+pages (`W55B-INGEST-01`, owner ruling R-116; it was 25 MiB and thirty pages). Anything
+outside it is a typed :class:`~auditmanager.shared.errors.DomainError`, and the caller never
+reaches the store or the database, so "nothing was published" is true because nothing was
+attempted.
 
-**OCR is never silently substituted.** A page with no embedded text is a rejection with
-a named constraint, not an input to a different extraction path. There is no OCR
-dependency in the root lock and this module must never acquire one: the point of the
-rule is that a reader can trust that published text came off the page.
+**OCR is always marked, and never substituted.** A page with no embedded text layer is a
+rejection with a named constraint, not an input to a different extraction path -- *unless*
+the page has at least one portal block (:mod:`auditmanager.ingest.bundle_envelope`), in
+which case the recognised text is kept as its own marked artifact and nothing here merges it
+into a text layer. A bare PDF has no blocks, so for it every page must still carry a layer.
+There is no OCR dependency in the root lock and this module must never acquire one: the
+point of the rule is that a reader can trust that published text came off the page.
 
 A file handle, not a byte string (`W55B-STREAM-01`)
 ---------------------------------------------------
@@ -47,12 +51,16 @@ so a rejection is attributable to a rule rather than to a coincidence of two:
 5. the document is not encrypted -- the security handler is read straight after the
    document opens, before any page is touched;
 6. the page count is within bounds;
-7. every page yields extractable text.
+7. every page yields extractable text (a bare PDF), or the pages are counted for the bundle
+   envelope, which decides the text rule with the portal's blocks in hand.
 
 A file extension is deliberately **not** a rule. It is a presentation value and a caller
 controls it; the magic bytes and the parser decide what the content is, which is the
 strictly stronger check. ``not_a_pdf.txt`` and ``companion_archive.zip`` are both refused
 on their content at rule 3.
+
+The same rules judge the PDF member of a portal bundle (:func:`inspect_pdf`), so a refusal
+of the member keeps the ``field``, ``constraint`` and message of a refusal of a bare PDF.
 """
 
 from __future__ import annotations
@@ -75,16 +83,27 @@ __all__ = [
     "MIN_PAGES",
     "PDFIUM_LOCK",
     "PDF_MAGIC",
+    "TEXTLESS_PAGE_CHARACTERS",
     "AdmissionReport",
+    "PdfFacts",
+    "as_handle",
+    "inspect_pdf",
+    "page_text_refusal",
     "probe",
     "validate_source_filename",
 ]
 
-#: One unencrypted PDF, at most 25 MiB.
-MAX_BYTES: Final[int] = 25 * 1024 * 1024
-#: The schema agrees: ``ck_document_version_page_count CHECK (page_count BETWEEN 1 AND 30)``.
+#: One unencrypted PDF, at most 250 MiB (R-116). The whole upload is held to the same figure:
+#: the PDF is almost all of a bundle, and the browser pre-check, the API's body cap and the
+#: proxy's are set around it (``tests/e2e/test_upload_limit_headroom.py``).
+MAX_BYTES: Final[int] = 250 * 1024 * 1024
+#: The schema agrees: ``ck_document_version_page_count CHECK (page_count BETWEEN 1 AND 500)``.
 MIN_PAGES: Final[int] = 1
-MAX_PAGES: Final[int] = 30
+MAX_PAGES: Final[int] = 500
+#: A page with fewer pypdfium2 characters than this is counted as text-less (the
+#: ``textless_pages`` of a version; ``W55B-FREEZE-01``). It is a count of what pypdfium2
+#: reads, line breaks included -- not a statement that the page has no text layer.
+TEXTLESS_PAGE_CHARACTERS: Final[int] = 50
 ACCEPTED_MEDIA_TYPE: Final[str] = "application/pdf"
 PDF_MAGIC: Final[bytes] = b"%PDF-"
 MAX_SOURCE_FILENAME: Final[int] = 255
@@ -163,14 +182,54 @@ def probe(content: bytes | bytearray | BinaryIO, *, source_filename: str) -> Adm
     """Answer whether this upload is inside the accepted envelope.
 
     ``content`` is a seekable binary handle (or a byte string). Returns the facts a
-    published version records and leaves a handle positioned at its start, ready to be
-    staged. Raises ``validation_failed`` with a ``field`` and a ``constraint`` for anything
+    published version records and leaves a handle positioned at its start. Raises
+    ``validation_failed`` with a ``field`` and a ``constraint`` for anything
     outside the envelope, having stored nothing, contacted no service and opened no
     transaction.
     """
     validate_source_filename(source_filename)
 
-    handle = _handle_of(content)
+    handle = as_handle(content)
+    facts = inspect_pdf(handle, require_text=True)
+
+    handle.seek(0)
+    digest = hashlib.sha256()
+    while chunk := handle.read(_DIGEST_CHUNK):
+        digest.update(chunk)
+    handle.seek(0)
+
+    return AdmissionReport(
+        byte_size=facts.byte_size,
+        sha256=digest.hexdigest(),
+        page_count=facts.page_count,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PdfFacts:
+    """What reading a PDF established: its size, its page count and what each page holds.
+
+    ``page_characters[i]`` is the number of characters pypdfium2 reads on page ``i + 1``
+    (``get_text_range()``, generated line breaks included); ``page_has_layer[i]`` is whether
+    that text, stripped, is not empty -- the existing definition of an embedded text layer.
+    """
+
+    byte_size: int
+    page_count: int
+    page_characters: tuple[int, ...]
+    page_has_layer: tuple[bool, ...]
+
+
+def inspect_pdf(content: bytes | bytearray | BinaryIO, *, require_text: bool) -> PdfFacts:
+    """The PDF rules, in the order above, for a bare PDF or for the PDF member of a bundle.
+
+    ``require_text=True`` is the bare-PDF rule: the first page without an embedded text
+    layer is refused (``every_page_has_extractable_text``) and no page after it is read.
+    ``require_text=False`` reads every page and hands the counts back; the bundle envelope
+    then decides the text rule with the portal's blocks, which a page may rest on instead of
+    a layer. The handle is left positioned at its start.
+    """
+    handle = as_handle(content)
     size = handle.seek(0, os.SEEK_END)
     handle.seek(0)
 
@@ -193,22 +252,17 @@ def probe(content: bytes | bytearray | BinaryIO, *, source_filename: str) -> Adm
         )
 
     handle.seek(0)
-    page_count = _inspect_pages(handle)
-
+    page_characters, page_has_layer = _inspect_pages(handle, require_text=require_text)
     handle.seek(0)
-    digest = hashlib.sha256()
-    while chunk := handle.read(_DIGEST_CHUNK):
-        digest.update(chunk)
-    handle.seek(0)
-
-    return AdmissionReport(
+    return PdfFacts(
         byte_size=size,
-        sha256=digest.hexdigest(),
-        page_count=page_count,
+        page_count=len(page_characters),
+        page_characters=page_characters,
+        page_has_layer=page_has_layer,
     )
 
 
-def _handle_of(content: Any) -> BinaryIO:
+def as_handle(content: Any) -> BinaryIO:
     """The upload as a seekable binary handle, or the one refusal for anything else.
 
     A byte string is wrapped in :class:`io.BytesIO`, which shares the buffer until it is
@@ -229,7 +283,9 @@ def _handle_of(content: Any) -> BinaryIO:
     raise _refuse("content", "bytes", "The upload payload must be raw bytes.")
 
 
-def _inspect_pages(handle: BinaryIO) -> int:
+def _inspect_pages(
+    handle: BinaryIO, *, require_text: bool
+) -> tuple[tuple[int, ...], tuple[bool, ...]]:
     """Encryption, page count and per-page text, in that order, read from the handle.
 
     The encryption flag is read as soon as the document opens: a document PDFium cannot
@@ -251,8 +307,7 @@ def _inspect_pages(handle: BinaryIO) -> int:
             page_count = len(document)
             if page_count < MIN_PAGES or page_count > MAX_PAGES:
                 raise _page_count_refusal()
-            _require_text_on_every_page(document, page_count)
-            return page_count
+            return _read_pages(document, page_count, require_text=require_text)
         finally:
             document.close()
             opened.release()
@@ -334,6 +389,22 @@ def _encrypted() -> DomainError:
     )
 
 
+def page_text_refusal() -> DomainError:
+    """A page the rule refuses: ``every_page_has_extractable_text``, field ``page_text``.
+
+    One sentence for both entries. The bundle's rule is wider -- a page is also fine when it
+    has a portal block -- but a page it refuses has no embedded text layer all the same, and
+    the sentence says exactly that; it is also what characterization record 21 pinned before
+    the bundle existed, and the record stays byte for byte what it was.
+    """
+    return _refuse(
+        "page_text",
+        "every_page_has_extractable_text",
+        "At least one page carries no extractable embedded text. "
+        "This prototype never substitutes OCR for a text layer.",
+    )
+
+
 def _page_count_refusal() -> DomainError:
     return _refuse(
         "page_count",
@@ -343,8 +414,16 @@ def _page_count_refusal() -> DomainError:
     )
 
 
-def _require_text_on_every_page(document: Any, page_count: int) -> None:
-    """Every page must yield extractable embedded text. No page is ever sent to OCR."""
+def _read_pages(
+    document: Any, page_count: int, *, require_text: bool
+) -> tuple[tuple[int, ...], tuple[bool, ...]]:
+    """Read every page's text once: its length, and whether it carries a text layer.
+
+    ``require_text`` refuses the first page without a layer, as the bare-PDF envelope always
+    has; no page is ever sent to OCR.
+    """
+    characters: list[int] = []
+    layers: list[bool] = []
     try:
         for index in range(page_count):
             page = document[index]
@@ -356,13 +435,11 @@ def _require_text_on_every_page(document: Any, page_count: int) -> None:
                     text_page.close()
             finally:
                 page.close()
-            if not text.strip():
-                raise _refuse(
-                    "page_text",
-                    "every_page_has_extractable_text",
-                    "At least one page carries no extractable embedded text. "
-                    "This prototype never substitutes OCR for a text layer.",
-                )
+            has_layer = bool(text.strip())
+            if require_text and not has_layer:
+                raise page_text_refusal()
+            characters.append(len(text))
+            layers.append(has_layer)
     except DomainError:
         raise
     except Exception:
@@ -371,3 +448,4 @@ def _require_text_on_every_page(document: Any, page_count: int) -> None:
             "parseable_pdf",
             "The upload payload could not be read for its text layer.",
         ) from None
+    return tuple(characters), tuple(layers)

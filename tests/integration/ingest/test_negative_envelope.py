@@ -18,6 +18,11 @@ from auditmanager.ingest import MAX_BYTES, MAX_PAGES, MIN_PAGES
 from auditmanager.shared.errors import DomainError, ErrorCode, screen_message
 
 #: fixture name -> (field, constraint) the probe must attribute the refusal to.
+#:
+#: ``oversize.pdf`` and ``too_many_pages.pdf`` are no longer committed (`W55B-INGEST-01`): the
+#: limits are 250 MiB and 500 pages, and a file that size is generated when the test runs --
+#: a sparse file one byte past the bound, and a 501-page PDF. The case names are kept so the
+#: rule each one breaks reads the same as it always did.
 NEGATIVE_CASES = [
     ("not_a_pdf.txt", "content", "pdf_magic_bytes"),
     ("companion_archive.zip", "content", "pdf_magic_bytes"),
@@ -26,6 +31,7 @@ NEGATIVE_CASES = [
     ("too_many_pages.pdf", "page_count", f"{MIN_PAGES} <= page_count <= {MAX_PAGES}"),
     ("image_only.pdf", "page_text", "every_page_has_extractable_text"),
 ]
+GENERATED_CASES = {"oversize.pdf", "too_many_pages.pdf"}
 
 
 def counts(engine) -> dict[str, int]:
@@ -48,20 +54,32 @@ def counts(engine) -> dict[str, int]:
 
 @pytest.mark.parametrize(("fixture", "field", "constraint"), NEGATIVE_CASES)
 def test_negative_fixture_is_refused_by_its_own_rule_and_publishes_nothing(
-    service, project, negative_pdf, key, engine, bucket_keys, fixture, field, constraint
+    service, project, negative_pdf, sparse_upload, pdf_with_501_pages, key, engine, bucket_keys,
+    fixture, field, constraint
 ) -> None:
     before_keys = set(bucket_keys())
     before_counts = counts(engine)
     assert before_counts["project"] == 1, "the project fixture should be the only row"
 
-    with pytest.raises(DomainError) as raised:
-        service.upload_single_pdf(
-            project_uid=project.project_uid,
-            content=negative_pdf(fixture),
-            source_filename=fixture,
-            display_title="Rejected upload",
-            idempotency_key=key("negative"),
-        )
+    if fixture == "oversize.pdf":
+        opened = sparse_upload(MAX_BYTES + 1).open("rb")
+        content: object = opened
+    elif fixture == "too_many_pages.pdf":
+        opened, content = None, pdf_with_501_pages
+    else:
+        opened, content = None, negative_pdf(fixture)
+    try:
+        with pytest.raises(DomainError) as raised:
+            service.upload_single_pdf(
+                project_uid=project.project_uid,
+                content=content,
+                source_filename=fixture,
+                display_title="Rejected upload",
+                idempotency_key=key("negative"),
+            )
+    finally:
+        if opened is not None:
+            opened.close()
 
     failure = raised.value
     envelope = failure.envelope("corr_negative_case")

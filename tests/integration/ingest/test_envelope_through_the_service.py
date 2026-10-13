@@ -27,6 +27,7 @@ import pytest
 
 from auditmanager.ingest import MAX_BYTES
 from auditmanager.shared.errors import DomainError
+from portal_bundle import generated  # tools/fixtures, put on the path by this directory's conftest
 from tests.integration.ingest.test_negative_envelope import counts  # type: ignore[import-not-found]
 
 
@@ -192,10 +193,15 @@ def test_a_handle_larger_than_the_s3_part_size_is_staged_whole_and_verified(
     [
         ("image only", lambda pdf, neg: neg("image_only.pdf"), "every_page_has_extractable_text"),
         ("encrypted", lambda pdf, neg: neg("encrypted.pdf"), "not_encrypted"),
-        ("31 pages", lambda pdf, neg: neg("too_many_pages.pdf"), "1 <= page_count <= 30"),
+        # `W55B-INGEST-01`: the committed 31-page negative is valid now; 501 pages are the
+        # smallest document over the ceiling, built at test time by the fixtures' generator.
+        (
+            "501 pages",
+            lambda pdf, neg: generated.pdf_with_n_pages(501),
+            "1 <= page_count <= 500",
+        ),
         ("not a pdf", lambda pdf, neg: neg("not_a_pdf.txt"), "pdf_magic_bytes"),
         ("truncated", lambda pdf, neg: pdf[:3000], "parseable_pdf"),
-        ("26 MiB", lambda pdf, neg: b"%PDF-1.7\n" + b"0" * (26 * 1024 * 1024), f"byte_size <= {MAX_BYTES}"),
     ],
 )
 def test_a_refused_handle_publishes_nothing(
@@ -227,12 +233,15 @@ def test_a_refused_handle_publishes_nothing(
 def test_an_oversize_sparse_handle_is_refused_without_being_read(
     watched, project, key, tmp_path: Path, bucket_keys
 ) -> None:
-    """The case the lane's memory measurement drives over HTTP, here without the transport."""
+    """The case the lane's memory measurement drives over HTTP, here without the transport.
+
+    The stand-in is one byte past the bound: a PDF header and a hole, so it costs a few
+    kilobytes of disk and is refused on its length alone."""
     service, watching = watched
     path = tmp_path / "oversize.bin"
     with path.open("wb") as out:
         out.write(b"%PDF-1.7\n")
-        out.truncate(250 * 1024 * 1024)
+        out.truncate(MAX_BYTES + 1)
     before = set(bucket_keys())
     with path.open("rb") as handle:
         with pytest.raises(DomainError) as refused:

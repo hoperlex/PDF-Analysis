@@ -1,7 +1,7 @@
 {
   "case": "18-uploadDocument.refusal.byte_size",
   "operation": "uploadDocument",
-  "purpose": "a framed body of exactly the 26 MiB every other route is capped at: well inside the upload route's 263192576, it passes the transport, and the envelope refuses it with byte_size <= 26214400",
+  "purpose": "a framed body one byte past the envelope's 250 MiB and inside the upload route's 263192576: it passes the transport, and the envelope refuses it with byte_size <= 262144000",
   "captured_through": "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()",
   "pre_authorization": "Captured after the T-6 seam landed. Every request here presents the configured bearer credential and is answered. No record here exercises a caller's rights, so none pins 401 or 403.",
   "exception": null,
@@ -23,8 +23,8 @@
         "w13base-{{session_tag}}-atlimit"
       ]
     ],
-    "body_length": 27262976,
-    "body_note": "a framed multipart body of exactly 27262976 bytes, built in process; no fixture is added to the repository"
+    "body_length": 262144153,
+    "body_note": "a framed multipart body of exactly 262144153 bytes, built in process: a ZIP header and zeros, one byte past the envelope's bound; no fixture is added to the repository"
   },
   "response": {
     "status": 422,
@@ -44,8 +44,8 @@
     ],
     "body": {
       "kind": "text",
-      "length": 300,
-      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"validation_failed\", \"message\": \"The upload payload is larger than the accepted envelope allows.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"content\", \"constraint\": \"byte_size <= 26214400\"}}",
+      "length": 301,
+      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"validation_failed\", \"message\": \"The upload payload is larger than the accepted envelope allows.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"content\", \"constraint\": \"byte_size <= 262144000\"}}",
       "note": ""
     }
   },

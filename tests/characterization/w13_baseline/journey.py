@@ -55,6 +55,11 @@ RECORDS = Path(__file__).resolve().with_name("records")
 CORPUS = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar"
 BASELINE_PDF = CORPUS / "ar_baseline.pdf"
 NEGATIVE = CORPUS / "negative"
+#: `W55B-INGEST-01`: an upload is a portal bundle. The committed bundles are the request bodies
+#: of the cases that need a document; the cases that need a broken one build it with the
+#: fixtures' builders (``tools/fixtures``, put on the path where the journey is loaded).
+BUNDLES = CORPUS / "bundles"
+TOOLS_FIXTURES = REPOSITORY_ROOT / "tools" / "fixtures"
 
 # --- pinned literals ---------------------------------------------------------------
 # Each of these is written out here rather than imported from the code it describes.
@@ -97,9 +102,9 @@ TRANSPORT_MAX_BODY = 27262976
 #: The upload route's own limit, ``multipart.UPLOAD_MAX_BODY`` (`W55B-STREAM-01`): a 250 MiB
 #: bundle and the framing around it. 251 MiB.
 TRANSPORT_UPLOAD_MAX_BODY = 263192576
-#: The admission envelope's size bound, ``ingest.MAX_BYTES``. 25 MiB, and the number that
-#: appears in the refusal as ``byte_size <= 26214400``.
-ENVELOPE_MAX_BYTES = 26214400
+#: The admission envelope's size bound, ``ingest.MAX_BYTES``. 250 MiB (`W55B-INGEST-01`; it
+#: was 25 MiB), and the number that appears in the refusal as ``byte_size <= 262144000``.
+ENVELOPE_MAX_BYTES = 262144000
 
 #: The AR baseline document, measured. Also pinned by ``tests/e2e/pc01``.
 BASELINE_SHA256 = "6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f"
@@ -570,6 +575,10 @@ class Exchange:
     #: :func:`unordered_declaration`. Written into the record, so a reader meets the
     #: declaration in the record's own bytes rather than in a module they may not open.
     unordered: Mapping[str, str] | None = None
+    #: The request body's length when the body itself is not kept (`W55B-INGEST-01`): record
+    #: 18 sends 250 MiB, which the exchange must not hold for the rest of the session. ``-1``
+    #: means "the length of ``request_body``".
+    request_length: int = -1
 
 
 class Tokens:
@@ -769,10 +778,11 @@ def multipart(
     title: str | None = "AR baseline",
     extra_part: tuple[str, str] | None = None,
     boundary: str = MULTIPART_BOUNDARY,
+    content_type: str = "application/pdf",
 ) -> bytes:
     head = (
         f'--{boundary}\r\nContent-Disposition: form-data; name="file"; '
-        f'filename="{filename}"\r\nContent-Type: application/pdf\r\n\r\n'
+        f'filename="{filename}"\r\nContent-Type: {content_type}\r\n\r\n'
     ).encode("utf-8")
     parts = [head, payload]
     if title is not None:
@@ -795,18 +805,29 @@ def multipart(
 
 
 def sized_multipart(total: int) -> bytes:
-    """A framed multipart body of exactly ``total`` bytes, whose file part is a PDF header.
+    """A framed multipart body of exactly ``total`` bytes, whose file part is a ZIP header.
 
-    Used for both sides of the transport boundary. The payload is padded, so the body
-    reaches the size the case names without any fixture being added to the repository --
+    Used for the transport boundary. The payload is padded, so the body reaches the size the
+    case names without any fixture being added to the repository --
     ``fixtures/synthetic/ar/**`` and ``fixtures/validation/PC-02/**`` are frozen evidence
-    and this session adds no bytes to either.
+    and this session adds no bytes to either. The part is a ZIP header followed by zeros
+    (`W55B-INGEST-01`: an upload is a bundle, and what the envelope reads first is its size).
+    The body is built once, in one allocation, because it is 250 MiB.
     """
-    frame = len(multipart(b"", filename="between.pdf", title=None))
-    payload = b"%PDF-1.7\n" + b"0" * (total - frame - 9)
-    body = multipart(payload, filename="between.pdf", title=None)
-    assert len(body) == total, (len(body), total)
-    return body
+    frame = len(
+        multipart(b"", filename="between.zip", title=None, content_type="application/zip")
+    )
+    head = multipart(b"", filename="between.zip", title=None, content_type="application/zip")
+    magic = b"PK\x03\x04"
+    # The closing boundary line is the tail of the frame; the opening is its head.
+    tail = f"\r\n--{MULTIPART_BOUNDARY}--\r\n".encode("utf-8")
+    opening = head[: len(head) - len(tail)]
+    body = bytearray(total)
+    body[: len(opening)] = opening
+    body[len(opening) : len(opening) + len(magic)] = magic
+    body[total - len(tail) :] = tail
+    assert frame <= total
+    return bytes(body)
 
 
 # --- the journey -------------------------------------------------------------------
@@ -857,6 +878,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         response_note: str = "",
         exception: Mapping[str, str] | None = None,
         unordered: Mapping[str, str] | None = None,
+        keep_body: bool = True,
     ) -> Exchange:
         # `T-6`: every operation is behind the authorization dependency, so every request
         # in this journey presents the credential -- and every record says so. The header
@@ -872,8 +894,9 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
             method=method,
             target=target,
             request_headers=tuple(sorted(headers.items())),
-            request_body=body,
+            request_body=body if keep_body else b"",
             request_body_note=body_note,
+            request_length=len(body),
             status=status,
             headers=response_headers,
             body=payload,
@@ -986,6 +1009,10 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         "the AR baseline document is not the one this baseline was measured against"
     )
     assert len(pdf) == BASELINE_BYTE_SIZE
+    # `W55B-INGEST-01`: the upload is the committed portal bundle around that very PDF, so the
+    # version's own facts (size, digest, pages, the document's bytes in 14, 15 and 31) are what
+    # they always were and the manifest lists one entry per stored member.
+    baseline_bundle = (BUNDLES / "ar_baseline.zip").read_bytes()
     upload = record(
         "02-uploadDocument.success",
         "uploadDocument",
@@ -996,10 +1023,14 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
             "Idempotency-Key": f"w13base-{tag}-upload",
             "Content-Type": f"multipart/form-data; boundary={MULTIPART_BOUNDARY}",
         },
-        body=multipart(pdf),
+        body=multipart(
+            baseline_bundle, filename="ar_baseline.zip", content_type="application/zip"
+        ),
         body_note=(
-            "multipart/form-data: the file part is fixtures/synthetic/ar/ar_baseline.pdf "
-            f"(sha256 {BASELINE_SHA256}), plus display_title"
+            "multipart/form-data: the file part is the portal bundle "
+            "fixtures/synthetic/ar/bundles/ar_baseline.zip, whose PDF member is "
+            f"fixtures/synthetic/ar/ar_baseline.pdf (sha256 {BASELINE_SHA256}), plus "
+            "display_title"
         ),
         tokens=t,
     )
@@ -1448,35 +1479,61 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     correlation(listed, t)
     content_length(listed, t)
 
-    # --- the five negative-envelope refusals, each with its own constraint ----------
-    for case, filename, label, constraint, purpose in (
+    # --- the negative-envelope refusals, each with its own constraint ----------------
+    # `W55B-INGEST-01`: each request is a portal bundle whose PDF member is the document the
+    # case is about, so the refusal is the PDF rule's and its answer is the one the bare PDF
+    # got -- the same field, constraint and message, with the numbers the new ceilings give.
+    sys.path[:0] = [str(TOOLS_FIXTURES)] if str(TOOLS_FIXTURES) not in sys.path else []
+    from portal_bundle import bundle as portal_bundle_builders
+    from portal_bundle import generated as portal_generated
+    from portal_bundle import zipwrite as portal_zipwrite
+
+    def bundle_around(pdf_bytes: bytes, stem: str) -> bytes:
+        """The three required members around ``pdf_bytes``, whatever it is.
+
+        The block list and the markdown are those of the baseline document: the case is
+        refused by the PDF member before either is read, which is the point of the case.
+        """
+        import dataclasses
+
+        files = dataclasses.replace(
+            portal_bundle_builders.make_files(BASELINE_PDF.read_bytes(), stem), pdf=pdf_bytes
+        )
+        return portal_zipwrite.build_zip(portal_bundle_builders.pack(files))
+
+    for case, stem, upload_bytes, label, constraint, purpose in (
         (
             "17-uploadDocument.refusal.pdf_magic_bytes",
-            "not_a_pdf.txt",
+            "not_a_pdf",
+            bundle_around((NEGATIVE / "not_a_pdf.txt").read_bytes(), "not_a_pdf"),
             "magic",
             "pdf_magic_bytes",
-            "content that does not begin with a PDF header, whatever its name says",
+            "a bundle whose PDF member does not begin with a PDF header, whatever its name says",
         ),
         (
             "19-uploadDocument.refusal.not_encrypted",
-            "encrypted.pdf",
+            "encrypted",
+            (BUNDLES / "encrypted.zip").read_bytes(),
             "encrypted",
             "not_encrypted",
-            "an encrypted document, refused before any page is read",
+            "a bundle whose PDF member is encrypted, refused before any page is read",
         ),
         (
             "20-uploadDocument.refusal.page_count",
-            "too_many_pages.pdf",
+            "pages_501",
+            portal_generated.bundle_with_pages(501),
             "pages",
-            "1 <= page_count <= 30",
-            "a document outside the one-to-thirty page bound",
+            "1 <= page_count <= 500",
+            "a bundle whose PDF member is outside the one-to-five-hundred page bound",
         ),
         (
             "21-uploadDocument.refusal.every_page_has_extractable_text",
-            "image_only.pdf",
+            "image_only",
+            (BUNDLES / "image_only.zip").read_bytes(),
             "imageonly",
             "every_page_has_extractable_text",
-            "a page with no embedded text; OCR is never silently substituted",
+            "a bundle with a page that has neither a text layer nor a portal block; OCR is "
+            "never silently substituted",
         ),
     ):
         t = Tokens()
@@ -1490,8 +1547,16 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
                 "Idempotency-Key": f"w13base-{tag}-{label}",
                 "Content-Type": f"multipart/form-data; boundary={MULTIPART_BOUNDARY}",
             },
-            body=multipart((NEGATIVE / filename).read_bytes(), filename=filename),
-            body_note=f"the file part is fixtures/synthetic/ar/negative/{filename}",
+            body=multipart(upload_bytes, filename=f"{stem}.zip", content_type="application/zip"),
+            body_note=(
+                f"the file part is a portal bundle ({stem}.zip): "
+                + (
+                    "fixtures/synthetic/ar/bundles/" + stem + ".zip"
+                    if (BUNDLES / f"{stem}.zip").is_file()
+                    else "built by tools/fixtures/portal_bundle at capture time, "
+                    "never committed"
+                )
+            ),
             tokens=t,
         )
         observed = json_of(refusal)["details"]["constraint"]
@@ -1504,33 +1569,40 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
 
     # 18 -- the envelope's own size bound, reached through the transport -------------
     # tests/integration/ingest/test_size_guard_boundary.py: every oversize fixture in the
-    # repository is over BOTH limits of the old transport, so the transport always answered
-    # first. The body below is framed to exactly the limit every OTHER route still has, which
-    # is far under the upload route's own (`W55B-STREAM-01`), so the transport lets it through
-    # and the envelope is the guard that speaks. Its answer has not changed by a byte; what
-    # moved is why the transport lets it through.
-    assert ENVELOPE_MAX_BYTES < TRANSPORT_MAX_BODY < TRANSPORT_UPLOAD_MAX_BODY, (
+    # repository used to be over BOTH limits of the old transport, so the transport always
+    # answered first. The body below is a framed upload one byte past the envelope's 250 MiB
+    # and one mebibyte under the upload route's own cap (`W55B-STREAM-01`), so the
+    # transport lets it through and the envelope is the guard that speaks. It is built when the
+    # case runs -- 250 MiB is never committed -- and the exchange keeps its length only.
+    assert ENVELOPE_MAX_BYTES < TRANSPORT_UPLOAD_MAX_BODY, (
         "no body can reach the envelope's size bound through the transport"
     )
+    oversize_frame = len(
+        multipart(b"", filename="between.zip", title=None, content_type="application/zip")
+    )
+    oversize_total = oversize_frame + ENVELOPE_MAX_BYTES + 1
+    assert oversize_total <= TRANSPORT_UPLOAD_MAX_BODY
     t = Tokens()
     at_limit = record(
         "18-uploadDocument.refusal.byte_size",
         "uploadDocument",
-        "a framed body of exactly the 26 MiB every other route is capped at: well inside "
-        f"the upload route's {TRANSPORT_UPLOAD_MAX_BODY}, it passes the transport, and the "
-        f"envelope refuses it with byte_size <= {ENVELOPE_MAX_BYTES}",
+        "a framed body one byte past the envelope's 250 MiB and inside the upload route's "
+        f"{TRANSPORT_UPLOAD_MAX_BODY}: it passes the transport, and the envelope refuses "
+        f"it with byte_size <= {ENVELOPE_MAX_BYTES}",
         "POST",
         f"/projects/{project_uid}/documents",
         headers={
             "Idempotency-Key": f"w13base-{tag}-atlimit",
             "Content-Type": f"multipart/form-data; boundary={MULTIPART_BOUNDARY}",
         },
-        body=sized_multipart(TRANSPORT_MAX_BODY),
+        body=sized_multipart(oversize_total),
         body_note=(
-            f"a framed multipart body of exactly {TRANSPORT_MAX_BODY} bytes, built in "
-            "process; no fixture is added to the repository"
+            f"a framed multipart body of exactly {oversize_total} bytes, built in "
+            "process: a ZIP header and zeros, one byte past the envelope's bound; no "
+            "fixture is added to the repository"
         ),
         tokens=t,
+        keep_body=False,
     )
     assert json_of(at_limit)["details"]["constraint"] == f"byte_size <= {ENVELOPE_MAX_BYTES}", (
         "the transport answered first; this case is not measuring the envelope"
@@ -1640,9 +1712,14 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
             "Idempotency-Key": f"w13base-{tag}-extrapart",
             "Content-Type": f"multipart/form-data; boundary={MULTIPART_BOUNDARY}",
         },
-        body=multipart(pdf, extra_part=("reviewer", "someone")),
-        body_note="the declared file and display_title parts plus one the schema "
-        "does not declare",
+        body=multipart(
+            baseline_bundle,
+            filename="ar_baseline.zip",
+            content_type="application/zip",
+            extra_part=("reviewer", "someone"),
+        ),
+        body_note="the declared file (a portal bundle) and display_title parts plus one the "
+        "schema does not declare",
         tokens=t,
     )
     assert json_of(extra_part)["details"]["constraint"] == "additionalProperties"
@@ -1913,7 +1990,11 @@ def to_record(exchange: Exchange) -> dict[str, Any]:
             "headers": [
                 [name, _sub(exchange, value)] for name, value in exchange.request_headers
             ],
-            "body_length": len(exchange.request_body),
+            "body_length": (
+                len(exchange.request_body)
+                if exchange.request_length < 0
+                else exchange.request_length
+            ),
             "body_note": exchange.request_body_note,
         },
         "response": {

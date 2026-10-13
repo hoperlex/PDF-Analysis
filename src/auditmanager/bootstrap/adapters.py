@@ -483,22 +483,34 @@ class DocumentAdapter:
         nothing said so. A parameter renamed in an adapter is not a rename, it is a deletion
         with a plausible signature.
         """
+        from auditmanager.ingest import looks_like_zip
         from auditmanager.shared.identity import IdempotencyKey, ProjectUid
 
         name = source_filename or "upload.pdf"
-        # `W55B-STREAM-01`: the part's file handle goes through to the service unread. The
-        # envelope measures and hashes it chunk by chunk and the store streams it to the
-        # temporary object, so nothing on this path holds the upload whole. (Until
-        # `W55B-INGEST-01` reads the archive member by member the service still receives
-        # one PDF.)
-        outcome = self._service.upload_single_pdf(
-            project_uid=ProjectUid.parse(project_uid),
-            content=content,
-            source_filename=name,
-            display_title=display_title or name,
-            idempotency_key=IdempotencyKey(idempotency_key),
-            section=section,
-        )
+        # `W55B-STREAM-01`: the part's file handle goes through to the service. The envelope
+        # measures and hashes it chunk by chunk and the store streams it to the temporary
+        # object, so nothing on this path holds the upload whole.
+        #
+        # `W55B-INGEST-01` (R-116): an upload is a portal bundle -- a ZIP, recognised by its
+        # magic bytes whatever label the browser sent. The one read made here is those
+        # four bytes, and the handle is put back at its start.
+        arguments = {
+            "project_uid": ProjectUid.parse(project_uid),
+            "content": content,
+            "source_filename": name,
+            "idempotency_key": IdempotencyKey(idempotency_key),
+            "section": section,
+        }
+        if looks_like_zip(content):
+            outcome = self._service.upload_bundle(display_title=display_title, **arguments)
+        else:
+            # W55B-LEGACY-BARE-PDF: a body that is not a ZIP still takes the single-PDF path,
+            # now under the 500-page / 250 MiB limits, until `W55B-INGEST-01`'s last step
+            # (part B) refuses it with `portal_bundle_required`. That step deletes this
+            # branch and `IngestService.upload_single_pdf`.
+            outcome = self._service.upload_single_pdf(
+                display_title=display_title or name, **arguments
+            )
         return _Uploaded(
             _version_view(outcome.version), bool(getattr(outcome, "replayed", False))
         )

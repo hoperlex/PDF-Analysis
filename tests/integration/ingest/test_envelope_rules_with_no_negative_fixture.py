@@ -43,10 +43,10 @@ from tests.integration.ingest.test_negative_envelope import counts  # type: igno
 #: from the thing it was meant to check.
 #:
 #: The independent authority is the schema, which the module's own comment cites:
-#: ``ck_document_version_page_count CHECK (page_count BETWEEN 1 AND 30)``. A change to the
+#: ``ck_document_version_page_count CHECK (page_count BETWEEN 1 AND 500)``. A change to the
 #: envelope constant that does not also change the migration is a disagreement worth a red
 #: test, and literals are what make that visible.
-PAGE_COUNT_CONSTRAINT = "1 <= page_count <= 30"
+PAGE_COUNT_CONSTRAINT = "1 <= page_count <= 500"
 FILENAME_LIMIT = 255
 FILENAME_CONSTRAINT = f"char_length <= {FILENAME_LIMIT}"
 

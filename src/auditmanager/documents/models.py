@@ -30,8 +30,14 @@ from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
 from auditmanager.storage.public import BlobId
 
 __all__ = [
+    "MANIFEST_ROLE_MARKDOWN",
     "MANIFEST_ROLE_SOURCE_DOCUMENT",
+    "MANIFEST_ROLE_STAMP_AUDIT",
+    "MANIFEST_ROLE_STRUCTURED_COMPANION",
     "ROLE_SOURCE_DOCUMENT",
+    "ROLE_SOURCE_MARKDOWN",
+    "ROLE_SOURCE_STAMP_AUDIT",
+    "ROLE_SOURCE_STRUCTURED_COMPANION",
     "DocumentVersionRecord",
     "ManifestEntry",
     "ProjectListingRecord",
@@ -42,6 +48,12 @@ __all__ = [
 #: The blob role, in ``auditmanager.storage``'s namespace. Validated by
 #: ``parse_blob_role`` and written on the object, not on the manifest entry.
 ROLE_SOURCE_DOCUMENT: Final[str] = "source_document"
+#: The blob roles of the other stored members of a portal bundle (`W55B-INGEST-01`). Each is a
+#: first publisher's historical metadata on the object (``R-76``); the manifest entry below is
+#: what binds the bytes to a version, under the registry's own role name.
+ROLE_SOURCE_STRUCTURED_COMPANION: Final[str] = "source_structured_companion"
+ROLE_SOURCE_MARKDOWN: Final[str] = "source_markdown"
+ROLE_SOURCE_STAMP_AUDIT: Final[str] = "source_stamp_audit"
 
 
 def _required_source_role() -> str:
@@ -76,12 +88,40 @@ def _required_source_role() -> str:
     )
 
 
+def _declared_source_role(role: str, media_type: str) -> str:
+    """A bundle member's manifest role, confirmed against ``source_preparation``'s inputs.
+
+    The same derivation as :func:`_required_source_role`, for the optional inputs a portal
+    bundle adds: the role is not restated here, it is looked up in the registry by name and
+    media type, and a registry that no longer declares it stops the import.
+    """
+    registry = json.loads(_STAGE_REGISTRY.read_text(encoding="utf-8"))
+    for stage in registry.get("stages") or registry.get("registry") or []:
+        if stage.get("stage_id") != "source_preparation":
+            continue
+        for declared in stage.get("required_inputs") or stage.get("inputs") or []:
+            if declared.get("role") == role and declared.get("media_type") == media_type:
+                return str(declared["role"])
+    raise RuntimeError(
+        f"contracts/analysis/v1/stage-registry.json declares no {role} input of type "
+        f"{media_type} for source_preparation; the manifest role cannot be derived"
+    )
+
+
 _STAGE_REGISTRY = (
     Path(__file__).resolve().parents[3] / "contracts" / "analysis" / "v1" / "stage-registry.json"
 )
 
 #: The manifest-entry role PC-01 publishes, derived from the stage registry.
 MANIFEST_ROLE_SOURCE_DOCUMENT: Final[str] = _required_source_role()
+#: The roles a portal bundle adds (`W55B-INGEST-01`, plan section B3.4).
+MANIFEST_ROLE_STRUCTURED_COMPANION: Final[str] = _declared_source_role(
+    "source.structured_companion", "application/json"
+)
+MANIFEST_ROLE_MARKDOWN: Final[str] = _declared_source_role("source.markdown", "text/markdown")
+MANIFEST_ROLE_STAMP_AUDIT: Final[str] = _declared_source_role(
+    "source.stamp_audit", "application/json"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +218,19 @@ class DocumentVersionRecord:
     page_count: int
     published_at: datetime
     manifest: tuple[ManifestEntry, ...]
+    #: The three counts of a portal bundle (`W55B-INGEST-01`, migration ``0021``): all
+    #: ``None`` for a version published without a bundle, all set for one published with
+    #: it -- the database refuses a half-set row. They are facts about the PDF as
+    #: pypdfium2 reads it and are **not** on the API wire.
+    #:
+    #: ``text_character_count`` -- pypdfium2's character count over the whole document,
+    #: line breaks included (the analysis input budget's measure, G-11);
+    #: ``textless_pages`` -- the ascending, 1-based pages with fewer than fifty such
+    #: characters, empty when none; ``recognised_character_count`` -- the characters of
+    #: recognised text the portal's markdown holds for those pages.
+    text_character_count: int | None = None
+    textless_pages: tuple[int, ...] | None = None
+    recognised_character_count: int | None = None
 
     def entry(self, role: str) -> ManifestEntry:
         """The manifest entry for one role.

@@ -10,8 +10,9 @@ both:
 
 * the committed negatives, the baseline document and every PDF in the committed bundles;
 * documents written by hand for this file, one rule each: a page with no text and a page
-  with only spaces, no pages at all, 31 and 30 and 1 pages, and exactly ``MAX_BYTES`` and one
-  byte more;
+  with only spaces, no pages at all, 501 and 31 and 30 and 1 pages (`W55B-INGEST-01` moved
+  the ceilings to 500 pages and 250 MiB; the boundary at exactly 250 MiB is asserted on a
+  sparse file in its own test, because the oracle would have to read it);
 * encrypted documents -- one that needs a password and one that opens with an empty one;
 * truncated and byte-flipped copies of the baseline.
 
@@ -57,10 +58,14 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CORPUS = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar"
 RECORDS = REPOSITORY_ROOT / "tests" / "characterization" / "w13_baseline" / "records"
 
-#: Written out, never imported from the module under test: the envelope's three numbers as
-#: the previous implementation had them.
-OLD_MAX_BYTES = 25 * 1024 * 1024
-OLD_MAX_PAGES = 30
+#: Written out, never imported from the module under test: the envelope's numbers. The
+#: oracle is the *previous implementation* (pypdf and pdfplumber), and the previous
+#: implementation is held to the ceilings the product has now -- `W55B-INGEST-01` raised them
+#: from 25 MiB and 30 pages to 250 MiB and 500 pages, and an oracle that kept the old numbers
+#: would refuse documents the envelope is meant to accept. What the comparison tests is the
+#: parser, not the number.
+OLD_MAX_BYTES = 250 * 1024 * 1024
+OLD_MAX_PAGES = 500
 OLD_MAGIC = b"%PDF-"
 
 
@@ -315,6 +320,7 @@ def no_page_pdf() -> bytes:
 def _committed() -> dict[str, bytes]:
     found: dict[str, bytes] = {"ar_baseline.pdf": (CORPUS / "ar_baseline.pdf").read_bytes()}
     for path in sorted((CORPUS / "negative").iterdir()):
+        # `oversize.pdf` and `too_many_pages.pdf` are generated at test time now, not committed.
         found[f"negative/{path.name}"] = path.read_bytes()
     for archive in sorted((CORPUS / "bundles").glob("*.zip")):
         with zipfile.ZipFile(archive) as bundle:
@@ -329,6 +335,7 @@ def _written() -> dict[str, bytes]:
         "hand/one page": hand_pdf(["Hello world"]),
         "hand/thirty pages": hand_pdf([f"Page {n}" for n in range(1, 31)]),
         "hand/thirty one pages": hand_pdf([f"Page {n}" for n in range(1, 32)]),
+        "hand/five hundred and one pages": hand_pdf([f"Page {n}" for n in range(1, 502)]),
         "hand/no pages": hand_pdf([]),
         "hand/an empty page": hand_pdf(["Hello", None]),
         "hand/a page of spaces only": hand_pdf(["Hello", "     "]),
@@ -336,8 +343,7 @@ def _written() -> dict[str, bytes]:
         "pypdf/no pages": no_page_pdf(),
         "pypdf/encrypted, password needed": encrypted_pdf("secret"),
         "pypdf/encrypted, empty user password": encrypted_pdf(""),
-        "size/exactly the bound": hand_pdf_of_size(OLD_MAX_BYTES),
-        "size/one byte over": hand_pdf_of_size(OLD_MAX_BYTES + 1),
+        "size/a few mebibytes": hand_pdf_of_size(3 * 1024 * 1024),
     }
 
 
@@ -438,7 +444,7 @@ def _recorded(record: str) -> tuple[str, dict[str, Any]]:
     [
         ("17", "negative/not_a_pdf.txt"),
         ("19", "negative/encrypted.pdf"),
-        ("20", "negative/too_many_pages.pdf"),
+        ("20", "hand/five hundred and one pages"),
         ("21", "negative/image_only.pdf"),
     ],
 )
@@ -454,14 +460,21 @@ def test_the_oracle_and_the_new_envelope_both_say_what_the_record_says(
 
 
 def test_the_size_refusal_of_record_18_is_the_same_bytes(tmp_path: Path) -> None:
-    """Record 18's body is the envelope's size refusal for a 26 MiB framed body: the part is
-    a PDF header and padding, past 25 MiB and parsed by nobody."""
+    """Record 18's body is the envelope's size refusal for an upload past 250 MiB: the part is
+    a PDF header and padding, past the bound and parsed by nobody. The record's request is a
+    sparse file one byte over the bound (`W55B-INGEST-01` moved it from a 26 MiB body); its
+    response differs from the earlier one in the number alone."""
     message, details = _recorded("18")
-    data = b"%PDF-1.7\n" + b"0" * (26 * 1024 * 1024 - 400)
+    path = tmp_path / "over.bin"
+    with path.open("wb") as out:
+        out.write(b"%PDF-1.7\n")
+        out.truncate(OLD_MAX_BYTES + 1)
     expected = ("refused", 422, "validation_failed", message, details)
-    assert old_verdict(data) == expected
-    for how, found in new_verdicts(data, tmp_path).items():
-        assert found == expected, how
+    # The oracle takes bytes: the whole sparse file, once. It refuses on its length alone.
+    assert old_verdict(path.read_bytes()) == expected
+    with path.open("rb") as handle:
+        found = verdict(lambda: new_envelope.probe(handle, source_filename="a.pdf"))
+    assert found == expected
 
 
 # ---------------------------------------------------------------------------------------
@@ -570,11 +583,11 @@ def test_peak_python_memory_is_a_small_fraction_of_the_upload(tmp_path: Path) ->
 def test_an_oversize_upload_is_refused_after_reading_its_header_and_nothing_else(
     tmp_path: Path,
 ) -> None:
-    """Rule 4 comes before any parse or hash: 250 MiB of sparse file, five bytes read."""
+    """Rule 4 comes before any parse or hash: 250 MiB and a byte of sparse file, five bytes read."""
     path = tmp_path / "oversize.bin"
     with path.open("wb") as out:
         out.write(b"%PDF-1.7\n")
-        out.truncate(250 * 1024 * 1024)
+        out.truncate(OLD_MAX_BYTES + 1)
     with path.open("rb") as inner:
         handle = RecordingHandle(inner)
         with pytest.raises(DomainError) as refused:
@@ -662,13 +675,13 @@ def test_a_failed_load_never_borrows_the_last_error_of_an_earlier_one() -> None:
     constraints = [entry[4]["constraint"] for entry in found]
     assert constraints == [
         "not_encrypted",
-        "1 <= page_count <= 30",
+        "1 <= page_count <= 500",
         "every_page_has_extractable_text",
-        "1 <= page_count <= 30",
+        "1 <= page_count <= 500",
         "parseable_pdf",
-        "1 <= page_count <= 30",
+        "1 <= page_count <= 500",
         "not_encrypted",
-        "1 <= page_count <= 30",
+        "1 <= page_count <= 500",
     ]
 
 

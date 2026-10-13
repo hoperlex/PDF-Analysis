@@ -37,6 +37,23 @@ manifest with the version is that a later run knows its exact input set.
 Nothing here retries. ``docs/program/P02_SEAMS.md`` section 3.5: a retry that does not
 consult the command record writes duplicates. The command record is how a caller
 retries, and step 1 is where it is consulted.
+
+A portal bundle (`W55B-INGEST-01`)
+----------------------------------
+:meth:`IngestService.upload_bundle` is the same sequence over several members. The
+envelope (steps 0) extracts the archive to temporary files, judges them and counts their
+digests; the fingerprint covers **every** member's digest, ``_results.html``'s included; and
+the members that are stored -- the PDF, the block list, the markdown and, when there is
+one, the stamp audit -- go through steps 2 to 6 together:
+
+* all are staged and verified before any is recorded, so a failure while staging leaves no
+  breadcrumb at all and every staged object is discarded;
+* their ``verifying`` rows are committed in **one** transaction (step 4), so either every
+  member has a breadcrumb or none does;
+* they are published one by one (step 5), and a failure here leaves the members already
+  published as unattributed blobs that ``Reconciler.report`` names -- no version exists;
+* step 6 binds all of them in the one transaction that also writes the version: **no
+  version ever exists with a partial member set**.
 """
 
 from __future__ import annotations
@@ -85,7 +102,25 @@ from .commands import (
     CommandStarted,
     payload_fingerprint,
 )
-from .envelope import ACCEPTED_MEDIA_TYPE, AdmissionReport, probe
+from .bundle_archive import (
+    ROLE_PDF,
+    BundleLimits,
+    DEFAULT_LIMITS,
+    ExtractedBundle,
+    extract_bundle,
+    looks_like_zip,
+    refuse,
+)
+from .bundle_envelope import BundleAdmission, admit_bundle
+from .bundle_members import STORED_MEMBERS, StoredMember, fingerprint_members, source_filename_of
+from .envelope import (
+    ACCEPTED_MEDIA_TYPE,
+    MAX_BYTES,
+    AdmissionReport,
+    as_handle,
+    probe,
+    validate_source_filename,
+)
 from .failures import domain_error_from_storage
 
 __all__ = ["IngestService", "SourceStream"]
@@ -473,6 +508,152 @@ class IngestService:
             self._record_failure(claim, failure)
             raise failure from None
 
+    def upload_bundle(
+        self,
+        *,
+        project_uid: ProjectUid,
+        content: bytes | BinaryIO,
+        source_filename: str,
+        display_title: str | None,
+        idempotency_key: IdempotencyKey,
+        document_uid: DocumentUid | None = None,
+        section: str | None = None,
+        limits: BundleLimits = DEFAULT_LIMITS,
+    ) -> UploadOutcome:
+        """Publish one portal bundle as one immutable version, or explain why not.
+
+        ``content`` is the ZIP as a **seekable binary handle** (or a byte string). The
+        archive is never read whole: its members are counted and written to temporary files
+        as they are unpacked (:mod:`auditmanager.ingest.bundle_archive`), judged
+        (:mod:`auditmanager.ingest.bundle_envelope`) and then staged from those files. The
+        handle is the caller's -- this method neither closes nor keeps it.
+
+        ``source_filename`` is the uploaded file's own name and is validated like any
+        other; the version records the *PDF member's* decoded name instead, for display.
+        ``display_title`` ``None`` (or blank) takes that name as the document's title.
+        ``limits`` exist for the tests, which lower them to exercise a bound without
+        building hundreds of MiB; the served application never passes it.
+
+        A part that is not a ZIP is refused here with ``portal_bundle_required``.
+        """
+        validate_source_filename(source_filename)
+        handle = as_handle(content)
+        size = handle.seek(0, 2)
+        handle.seek(0)
+        if not looks_like_zip(handle):
+            raise refuse("portal_bundle_required")
+        if size > MAX_BYTES:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                message="The upload payload is larger than the accepted envelope allows.",
+                field="content",
+                constraint=f"byte_size <= {MAX_BYTES}",
+            )
+
+        # Step 0. The envelope, before any service is touched. A refusal leaves no
+        # temporary file behind (the extraction removes its directory) and no command
+        # record, because nothing has been attempted yet.
+        with extract_bundle(handle, limits=limits) as bundle:
+            admission = admit_bundle(bundle)
+            pdf = bundle.members[ROLE_PDF]
+            stored = tuple(
+                (spec, bundle.members[spec.member])
+                for spec in STORED_MEMBERS
+                if spec.member in bundle.members
+            )
+            filename = source_filename_of(bundle)
+            fingerprint = payload_fingerprint(
+                {
+                    "command": "upload_bundle.v1",
+                    "project_uid": str(project_uid),
+                    "document_uid": None if document_uid is None else str(document_uid),
+                    "members": fingerprint_members(bundle),
+                    "media_type": ACCEPTED_MEDIA_TYPE,
+                    "source_filename": source_filename,
+                }
+            )
+
+            # Step 1. Claim the key, having first proved the target exists.
+            with session_scope(self._factory) as session:
+                self._documents.get_project(session, project_uid)
+                if document_uid is not None:
+                    owner = self._documents.require_document(session, document_uid)
+                    if owner != project_uid:
+                        raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Document")
+                claim = self._commands.begin(
+                    session,
+                    command_type=COMMAND_TYPE_UPLOAD,
+                    idempotency_key=idempotency_key,
+                    fingerprint=fingerprint,
+                )
+            if isinstance(claim, CommandReplay):
+                return UploadOutcome(
+                    version=self.get_version(_replayed_version_uid(claim.outcome)),
+                    replayed=True,
+                )
+            assert isinstance(claim, CommandStarted)
+
+            staged: list[tuple[StoredMember, TemporaryBlob]] = []
+            try:
+                # Steps 2 and 3, for every member before any is recorded.
+                verified: list[tuple[StoredMember, VerifiedBlob]] = []
+                for spec, member in stored:
+                    with bundle.open(spec.member) as source:
+                        temporary = self._store.stage_temporary(
+                            source,
+                            declared_sha256=member.sha256,
+                            declared_size=member.size,
+                            role=spec.blob_role,
+                            media_type=spec.media_type,
+                        )
+                    staged.append((spec, temporary))
+                    verified.append((spec, self._store.verify_temporary(temporary)))
+
+                # Step 4. One transaction: every member has its breadcrumb, or none does.
+                with session_scope(self._factory) as session:
+                    for _spec, blob in verified:
+                        self._blobs.record_verified(session, blob)
+
+                # Step 5. Each object becomes canonical. Idempotent by (sha256, size).
+                published = []
+                for spec, blob in verified:
+                    published.append(self._store.publish(blob))
+                    staged = [pair for pair in staged if pair[0] is not spec]
+
+                # Step 6. One transaction: every blob available, the version with its
+                # complete manifest and counts, and the command's outcome.
+                with session_scope(self._factory) as session:
+                    version_uid = self._commit_bundle(
+                        session,
+                        verified=tuple(verified),
+                        admission=admission,
+                        pdf_sha256=pdf.sha256,
+                        project_uid=project_uid,
+                        document_uid=document_uid,
+                        display_title=display_title,
+                        source_filename=filename,
+                        section=section,
+                    )
+                    self._commands.succeed(
+                        session,
+                        claim.command_id,
+                        {
+                            "version_uid": str(version_uid),
+                            "blob_id": str(published[0].blob_id),
+                        },
+                    )
+                    version = self._documents.get_version(session, version_uid)
+                return UploadOutcome(version=version, replayed=False)
+
+            except Exception as exc:
+                failure = self._as_domain_error(exc)
+                for _spec, temporary in staged:
+                    # Staged bytes that will never be published; deleting an absent
+                    # object is a no-op, so this is safe on every failure path.
+                    self._discard_quietly(temporary)
+                self._record_failure(claim, failure)
+                raise failure from None
+
     # -- internals -----------------------------------------------------------
 
     def _commit_publication(
@@ -509,6 +690,54 @@ class IngestService:
             page_count=report.page_count,
             source_filename=source_filename,
             entries=(entry,),
+        )
+
+    def _commit_bundle(
+        self,
+        session: Session,
+        *,
+        verified: tuple[tuple[StoredMember, VerifiedBlob], ...],
+        admission: BundleAdmission,
+        pdf_sha256: str,
+        project_uid: ProjectUid,
+        document_uid: DocumentUid | None,
+        display_title: str | None,
+        source_filename: str,
+        section: str | None,
+    ) -> VersionUid:
+        """Step 6 for a bundle: the whole member set bound in one transaction."""
+        entries: list[ManifestEntry] = []
+        for spec, blob in verified:
+            self._blobs.mark_available(session, blob.blob_id)
+            entries.append(
+                ManifestEntry(
+                    role=spec.manifest_role,
+                    blob_id=blob.blob_id,
+                    sha256=blob.sha256,
+                    size_bytes=blob.size,
+                    media_type=spec.media_type,
+                )
+            )
+        target = document_uid
+        if target is None:
+            target = self._documents.create_document(
+                session,
+                project_uid,
+                display_title if display_title and display_title.strip() else source_filename,
+                section,
+            )
+        return self._documents.publish_version(
+            session,
+            document_uid=target,
+            media_type=ACCEPTED_MEDIA_TYPE,
+            byte_size=admission.pdf_size,
+            sha256=pdf_sha256,
+            page_count=admission.page_count,
+            source_filename=source_filename,
+            entries=tuple(entries),
+            text_character_count=admission.text_character_count,
+            textless_pages=admission.textless_pages,
+            recognised_character_count=admission.recognised_character_count,
         )
 
     @staticmethod

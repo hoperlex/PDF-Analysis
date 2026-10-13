@@ -23,8 +23,8 @@
         "w13base-{{session_tag}}-extrapart"
       ]
     ],
-    "body_length": 59309,
-    "body_note": "the declared file and display_title parts plus one the schema does not declare"
+    "body_length": 92492,
+    "body_note": "the declared file (a portal bundle) and display_title parts plus one the schema does not declare"
   },
   "response": {
     "status": 422,

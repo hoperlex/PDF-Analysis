@@ -172,7 +172,7 @@ def test_the_document_adapter_hands_the_service_the_handle_it_was_given_unread()
     seen: dict[str, Any] = {}
 
     class Service:
-        def upload_single_pdf(self, **kwargs: Any) -> Any:
+        def upload_bundle(self, **kwargs: Any) -> Any:   # the payload below is a ZIP
             seen.update(kwargs)
             raise RuntimeError("stop after the call; the outcome is not under test")
 

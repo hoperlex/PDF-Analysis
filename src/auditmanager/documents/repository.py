@@ -107,13 +107,19 @@ _NEXT_ORDINAL = text(
     "SELECT coalesce(max(version_ordinal), 0) + 1 FROM document_version "
     "WHERE document_uid = :document_uid"
 )
+#: The three counts are written together or not at all (``0021``'s
+#: ``ck_document_version_bundle_counts_together``): all three NULL for a version published
+#: without a portal bundle. The list is cast because an empty one has no element to type it.
 _INSERT_VERSION = text(
     "INSERT INTO document_version ("
     "  version_uid, document_uid, version_ordinal, source_filename,"
-    "  media_type, byte_size, sha256, page_count"
+    "  media_type, byte_size, sha256, page_count,"
+    "  text_character_count, textless_pages, recognised_character_count"
     ") VALUES ("
     "  :version_uid, :document_uid, :version_ordinal, :source_filename,"
-    "  :media_type, :byte_size, :sha256, :page_count"
+    "  :media_type, :byte_size, :sha256, :page_count,"
+    "  :text_character_count, CAST(:textless_pages AS integer[]),"
+    "  :recognised_character_count"
     ")"
 )
 _INSERT_MANIFEST_ENTRY = text(
@@ -128,7 +134,8 @@ _POINT_DOCUMENT_AT_VERSION = text(
 _SELECT_VERSION = text(
     "SELECT v.version_uid, v.document_uid, d.project_uid, v.version_ordinal,"
     "       d.display_title, d.section, v.media_type, v.byte_size,"
-    "       v.sha256, v.page_count, v.published_at "
+    "       v.sha256, v.page_count, v.published_at,"
+    "       v.text_character_count, v.textless_pages, v.recognised_character_count "
     "FROM document_version v JOIN document d ON d.document_uid = v.document_uid "
     "WHERE v.version_uid = :version_uid"
 )
@@ -151,7 +158,8 @@ _SELECT_MANIFEST = text(
 _LIST_DOCUMENTS = text(
     "SELECT v.version_uid, v.document_uid, d.project_uid, v.version_ordinal,"
     "       d.display_title, d.section, v.media_type, v.byte_size,"
-    "       v.sha256, v.page_count, v.published_at "
+    "       v.sha256, v.page_count, v.published_at,"
+    "       v.text_character_count, v.textless_pages, v.recognised_character_count "
     "FROM document d JOIN document_version v ON v.version_uid = d.current_version_uid "
     "WHERE d.project_uid = :project_uid "
     "ORDER BY v.published_at DESC, v.version_uid DESC"
@@ -166,7 +174,8 @@ _LIST_DOCUMENTS = text(
 _LIST_VERSIONS = text(
     "SELECT v.version_uid, v.document_uid, d.project_uid, v.version_ordinal,"
     "       d.display_title, d.section, v.media_type, v.byte_size,"
-    "       v.sha256, v.page_count, v.published_at "
+    "       v.sha256, v.page_count, v.published_at,"
+    "       v.text_character_count, v.textless_pages, v.recognised_character_count "
     "FROM document_version v JOIN document d ON d.document_uid = v.document_uid "
     "WHERE v.document_uid = :document_uid "
     "ORDER BY v.version_ordinal DESC"
@@ -222,7 +231,7 @@ def _version_record(
     """One ``document_version`` row, in the column order every SELECT here uses.
 
     Written once. ``get_version``, ``list_documents`` and ``list_versions`` project the
-    same eleven columns in the same order, and three hand-unpacked copies of that tuple
+    same fourteen columns in the same order, and three hand-unpacked copies of that tuple
     would be three places for one of them to shift a column silently -- which is a fault
     the reader cannot see, because every value here is a string, an int or (``section``)
     possibly ``None``.
@@ -239,6 +248,9 @@ def _version_record(
         sha256,
         page_count,
         published_at,
+        text_character_count,
+        textless_pages,
+        recognised_character_count,
     ) = tuple(row)
     return DocumentVersionRecord(
         version_uid=VersionUid(version_uid),
@@ -253,6 +265,15 @@ def _version_record(
         page_count=int(page_count),
         published_at=published_at,
         manifest=manifest,
+        text_character_count=(
+            None if text_character_count is None else int(text_character_count)
+        ),
+        textless_pages=(
+            None if textless_pages is None else tuple(int(page) for page in textless_pages)
+        ),
+        recognised_character_count=(
+            None if recognised_character_count is None else int(recognised_character_count)
+        ),
     )
 
 
@@ -345,6 +366,9 @@ class DocumentRepository:
         page_count: int,
         source_filename: str | None,
         entries: tuple[ManifestEntry, ...],
+        text_character_count: int | None = None,
+        textless_pages: tuple[int, ...] | None = None,
+        recognised_character_count: int | None = None,
     ) -> VersionUid:
         """Insert one immutable version with its complete manifest.
 
@@ -352,7 +376,19 @@ class DocumentRepository:
         work, so a version never becomes visible without the manifest that makes it
         reproducible. The ordinal is derived here rather than supplied: it is a display
         value, and letting a caller choose one would make it look like a key.
+
+        The three counts of a portal bundle are all given or all absent; a partial set is
+        refused here with the typed error the database would refuse it with, so a caller
+        learns before a statement is issued.
         """
+        given = (text_character_count, textless_pages, recognised_character_count)
+        if any(value is None for value in given) and any(value is not None for value in given):
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                aggregate_type="DocumentVersion",
+                field="text_character_count",
+                constraint="the three counts are all set or all absent",
+            )
         if not entries:
             raise DomainError(
                 ErrorCode.STORAGE_INTEGRITY_ERROR, role=ROLE_SOURCE_DOCUMENT
@@ -372,6 +408,9 @@ class DocumentRepository:
                 "byte_size": byte_size,
                 "sha256": sha256,
                 "page_count": page_count,
+                "text_character_count": text_character_count,
+                "textless_pages": None if textless_pages is None else list(textless_pages),
+                "recognised_character_count": recognised_character_count,
             },
         )
         for entry in entries:

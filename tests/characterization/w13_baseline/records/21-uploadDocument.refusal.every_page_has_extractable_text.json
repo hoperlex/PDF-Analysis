@@ -1,7 +1,7 @@
 {
   "case": "21-uploadDocument.refusal.every_page_has_extractable_text",
   "operation": "uploadDocument",
-  "purpose": "negative envelope: a page with no embedded text; OCR is never silently substituted",
+  "purpose": "negative envelope: a bundle with a page that has neither a text layer nor a portal block; OCR is never silently substituted",
   "captured_through": "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()",
   "pre_authorization": "Captured after the T-6 seam landed. Every request here presents the configured bearer credential and is answered. No record here exercises a caller's rights, so none pins 401 or 403.",
   "exception": null,
@@ -23,8 +23,8 @@
         "w13base-{{session_tag}}-imageonly"
       ]
     ],
-    "body_length": 246489,
-    "body_note": "the file part is fixtures/synthetic/ar/negative/image_only.pdf"
+    "body_length": 247647,
+    "body_note": "the file part is a portal bundle (image_only.zip): fixtures/synthetic/ar/bundles/image_only.zip"
   },
   "response": {
     "status": 422,

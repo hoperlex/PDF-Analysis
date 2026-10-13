@@ -13,10 +13,14 @@
     )
     outcome.version.source.blob_id      # the only handle to the stored bytes
 
-The accepted envelope is one unencrypted PDF, at most 25 MiB, one to thirty pages, every
-page carrying extractable embedded text. Everything outside it is ``validation_failed``
-with a ``field`` and a ``constraint``, raised before any service is touched, so nothing
-is published. **OCR is never substituted for a missing text layer.**
+The accepted envelope is one portal bundle -- a ZIP holding an unencrypted PDF of at most
+250 MiB and one to five hundred pages, the portal's block list and its recognised-text file
+(and optionally an HTML rendering, kept as a digest only, and a stamp audit) -- entered with
+``IngestService.upload_bundle``. Until the last step of ``W55B-INGEST-01`` a bare PDF is still
+accepted through ``upload_single_pdf``, under the same limits and with every page carrying
+extractable embedded text. Everything outside the envelope is ``validation_failed`` with a
+``field`` and a ``constraint``, raised before any service is touched, so nothing is
+published. **OCR is always marked, and never substituted for a missing text layer.**
 
 The publication order and the reconciliation model are documented in
 :mod:`auditmanager.ingest.service` and :mod:`auditmanager.ingest.reconciliation`. The
@@ -35,6 +39,7 @@ from .commands import (
     CommandStarted,
     payload_fingerprint,
 )
+from .bundle_archive import ZIP_MAGICS, looks_like_zip
 from .envelope import (
     ACCEPTED_MEDIA_TYPE,
     MAX_BYTES,
@@ -64,6 +69,7 @@ __all__ = [
     "MAX_SOURCE_FILENAME",
     "MIN_PAGES",
     "PDF_MAGIC",
+    "ZIP_MAGICS",
     "AdmissionReport",
     "CommandRecord",
     "CommandReplay",
@@ -75,6 +81,7 @@ __all__ = [
     "ReconciliationReport",
     "UnattributedBlob",
     "domain_error_from_storage",
+    "looks_like_zip",
     "payload_fingerprint",
     "probe",
     "validate_source_filename",

@@ -29,6 +29,7 @@ from __future__ import annotations
 import os
 import secrets
 import subprocess
+import sys
 from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
@@ -51,6 +52,14 @@ from auditmanager.storage.settings import REQUIRED_VARS
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar"
 NEGATIVE = FIXTURES / "negative"
+BUNDLES = FIXTURES / "bundles"
+
+# `W55B-INGEST-01`: the portal-bundle builders and the oracle live under tools/fixtures, which
+# is not a package of the product. Tests import them the way `tests/contract/fixtures_ar`
+# imports `ar_corpus`: by putting the directory on the path.
+_TOOLS_FIXTURES = str(REPOSITORY_ROOT / "tools" / "fixtures")
+if _TOOLS_FIXTURES not in sys.path:
+    sys.path.insert(0, _TOOLS_FIXTURES)
 
 MIGRATE_ARGV = [
     ".venv/bin/python",
@@ -355,6 +364,39 @@ def negative_pdf():
         return path.read_bytes()
 
     return _read
+
+
+@pytest.fixture(scope="session")
+def pdf_with_501_pages() -> bytes:
+    """The smallest document past the ceiling (`W55B-INGEST-01`): built once, a few hundred KiB.
+
+    It replaces the committed ``too_many_pages.pdf`` (31 pages), which is a valid document
+    under the 500-page ceiling and lives on as ``bundles/pages_31.zip``.
+    """
+    from portal_bundle import generated
+
+    return generated.pdf_with_n_pages(501)
+
+
+@pytest.fixture
+def sparse_upload(tmp_path: Path):
+    """A file of a chosen length with a chosen beginning and a hole after it.
+
+    ``sparse_upload(size, head=b"%PDF-1.7\n")`` costs a few kilobytes of disk whatever
+    ``size`` is, and replaces the committed ``oversize.pdf`` (26 MiB written out): the limit
+    is 250 MiB now, and a file that size is never committed. The default beginning is a PDF
+    header; ``tools/fixtures``' ``generated.oversize_sparse_file`` is the ZIP-headed one.
+    """
+    counter = iter(range(10_000))
+
+    def make(size: int, head: bytes = b"%PDF-1.7\n") -> Path:
+        path = tmp_path / f"sparse-{next(counter)}.bin"
+        with path.open("wb") as out:
+            out.write(head)
+            out.truncate(size)
+        return path
+
+    return make
 
 
 @pytest.fixture
