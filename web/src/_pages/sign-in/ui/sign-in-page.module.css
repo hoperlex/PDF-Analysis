@@ -1,0 +1,46 @@
+/* A guest's screen: one card in the middle of the work area, and the way to register under it. */
+.screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--am-gap-lg);
+  min-height: min(40rem, 75dvh);
+  padding: var(--am-gap-xl) 0;
+}
+
+.card {
+  box-sizing: border-box;
+  width: min(100%, 26rem);
+  padding: var(--am-gap-xl);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius-lg);
+  color: var(--am-ink);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-2);
+}
+
+.header {
+  margin-bottom: var(--am-gap-lg);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--am-text-2xl);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.lead {
+  margin: 6px 0 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  line-height: var(--am-leading-base);
+}
+
+.register {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  text-align: center;
+}

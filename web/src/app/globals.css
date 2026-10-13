@@ -458,6 +458,25 @@
   --am-ring: 0 0 0 3px rgba(122, 169, 224, 0.35);
 }
 
+/*
+ * The browser's own controls follow the theme. A checkbox, a select's open list, a scrollbar
+ * and an autofilled field are drawn by the browser rather than by a rule here, and without
+ * this they stay light on the dark palette. No attribute is the system's choice, exactly as
+ * for the tokens above; an explicit choice wins over it. Kept out of the token blocks, which
+ * declare tokens and nothing else.
+ */
+:root {
+  color-scheme: light dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -689,6 +708,7 @@ label {
 input[type='text'],
 input[type='search'],
 input[type='email'],
+input[type='password'],
 input[type='number'],
 textarea,
 select {
@@ -704,6 +724,7 @@ select {
 }
 
 input[type='text']:hover,
+input[type='password']:hover,
 textarea:hover,
 select:hover {
   border-color: var(--am-ink-soft);
@@ -712,6 +733,7 @@ select:hover {
 input[type='text']:focus,
 input[type='search']:focus,
 input[type='email']:focus,
+input[type='password']:focus,
 input[type='number']:focus,
 textarea:focus,
 select:focus {

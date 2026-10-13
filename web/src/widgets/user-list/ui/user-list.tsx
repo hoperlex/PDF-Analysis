@@ -23,8 +23,8 @@ export function UserList() {
   return (
     <div>
       <div className={styles.filters}>
-        <label><input type="checkbox" checked={includeArchived} onChange={(event) => changeArchived(event.target.checked)} /> Включить архивные</label>
-        <label>Роль на текущей странице{' '}
+        <label className={styles.filter}><input type="checkbox" checked={includeArchived} onChange={(event) => changeArchived(event.target.checked)} /> Включить архивные</label>
+        <label className={styles.filter}>Роль на текущей странице{' '}
           <select value={role} onChange={(event) => changeRole(event.target.value as Role | '')}>
             <option value="">Все роли</option>
             {ROLE_VALUES.map((value) => <option key={value} value={value}>{roleLabels([value])[0]}</option>)}

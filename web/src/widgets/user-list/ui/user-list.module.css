@@ -2,4 +2,8 @@
 .table { width: 100%; table-layout: fixed; border-collapse: collapse; }
 .table th, .table td { padding: 0.75rem; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
 .name { min-width: 0; overflow-wrap: anywhere; }
-.filters { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; margin-bottom: 1rem; }
+/* The two filters on one line: each label centres its control on its own text. */
+.filters { display: flex; flex-wrap: wrap; gap: var(--am-gap-sm) var(--am-gap-lg); align-items: center; margin-bottom: 1rem; }
+.filter { display: inline-flex; align-items: center; gap: var(--am-gap-sm); }
+.filter input[type='checkbox'] { width: 16px; height: 16px; margin: 0; }
+.filter select { padding: 4px 8px; font-size: var(--am-text-sm); font-weight: 400; }

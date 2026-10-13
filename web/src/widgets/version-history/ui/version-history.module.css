@@ -11,39 +11,228 @@
   background: color-mix(in srgb, var(--am-ink) 45%, transparent);
 }
 
+/* A drawer: the heading stays put and only the body scrolls. */
 .panel {
   position: absolute;
   inset: 0 0 0 auto;
   box-sizing: border-box;
-  width: min(32rem, 100vw);
+  display: flex;
+  flex-direction: column;
+  width: min(36rem, 100vw);
   max-height: 100dvh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 1.25rem;
+  overflow: hidden;
   color: var(--am-ink);
-  background: var(--am-surface);
+  background: var(--am-paper);
   box-shadow: var(--am-shadow-3);
 }
 
 .heading {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  flex: none;
+  padding: 14px var(--am-gap-lg) 14px 14px;
+  border-bottom: 1px solid var(--am-line-soft);
 }
 
-.heading h2 { margin: 0; }
-.legend { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1rem 0; }
-.new { color: var(--am-ok); }
-.improved { color: var(--am-accent); }
-.fixed { color: var(--am-degraded); }
-.feed { display: grid; gap: 1rem; }
-.card { min-width: 0; border-top: 1px solid var(--am-line); padding-top: 1rem; }
-.card h3 { margin: 0; overflow-wrap: anywhere; }
-.meta, .where { color: var(--am-ink-muted); }
-.items { list-style: none; padding: 0; margin: .5rem 0 0; display: grid; gap: .8rem; }
-.item { min-width: 0; overflow-wrap: anywhere; }
-.item p { margin: .15rem 0; }
-.text { white-space: pre-wrap; overflow-wrap: anywhere; }
-.archive { margin-top: 1rem; }
-.archive summary { cursor: pointer; }
+.heading h2 {
+  margin: 0;
+  font-size: var(--am-text-lg);
+  font-weight: 600;
+  line-height: var(--am-leading-tight);
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--am-radius-sm);
+  color: var(--am-ink-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--am-motion-fast) var(--am-ease), color var(--am-motion-fast) var(--am-ease);
+}
+
+.close:hover {
+  color: var(--am-ink);
+  background: var(--am-surface-sunken);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--am-ink);
+  outline-offset: 2px;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px var(--am-gap-lg) var(--am-gap-xl);
+}
+
+.current {
+  margin: 0;
+  font-size: var(--am-text-base);
+  font-weight: 600;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: var(--am-gap-sm) 0 var(--am-gap-lg);
+  padding: 0;
+  list-style: none;
+  font-size: var(--am-text-sm);
+  color: var(--am-ink-muted);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The kind of a change, drawn as a dot in the kind's colour; the legend names the colours. */
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  /* `C-29`: a kind this build does not know keeps the neutral dot. */
+  background: var(--am-inert);
+}
+
+.new { background: var(--am-ok); }
+.improved { background: var(--am-accent); }
+.fixed { background: var(--am-degraded); }
+
+/*
+ * The timeline. Each release is a node: a ring on the left, joined to the next release by a
+ * line. The ring sits on the version line, and the last release of a list ends the line.
+ */
+.feed {
+  display: grid;
+  gap: 28px;
+}
+
+.card {
+  position: relative;
+  min-width: 0;
+  padding-left: 28px;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 0;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--am-line);
+  border-radius: 50%;
+  background: var(--am-paper);
+}
+
+.card::after {
+  content: '';
+  position: absolute;
+  top: 20px;
+  bottom: -24px;
+  left: 5px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--am-line-soft);
+}
+
+.card:last-child::after {
+  display: none;
+}
+
+.meta {
+  margin: 0;
+  font-size: var(--am-text-sm);
+  line-height: 20px;
+  color: var(--am-ink-muted);
+}
+
+.version {
+  font-weight: 600;
+  color: var(--am-ink);
+}
+
+.title {
+  margin: 2px 0 0;
+  font-size: var(--am-text-lg);
+  font-weight: 600;
+  line-height: var(--am-leading-tight);
+  overflow-wrap: anywhere;
+}
+
+.items {
+  display: grid;
+  gap: 14px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.where {
+  display: flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  margin: 0;
+  font-size: var(--am-text-sm);
+  font-weight: 600;
+  color: var(--am-ink);
+}
+
+/* Read aloud with the item, never drawn: the dot before it is what a sighted reader sees. */
+.kindLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.text {
+  margin: 4px 0 0 16px;
+  font-size: var(--am-text-md);
+  line-height: var(--am-leading-base);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.archive {
+  margin-top: var(--am-gap-lg);
+  padding-top: var(--am-gap);
+  border-top: 1px solid var(--am-line-soft);
+}
+
+.archive summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--am-ink-muted);
+}
+
+.archive[open] summary {
+  margin-bottom: var(--am-gap);
+}

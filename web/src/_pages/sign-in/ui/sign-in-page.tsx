@@ -1,8 +1,9 @@
 /**
  * `/login` — the screen that exchanges a login and a password for a session.
  *
- * Composition only, like every other page slice: the frame from `shared/ui`, the form from
- * the `sign-in` feature. No query, no mutation, no domain rule and — the point of the whole
+ * Composition only, like every other page slice: a centred card of its own rather than the
+ * `PageShell` frame, because a guest has no work area yet, and the form from the `sign-in`
+ * feature. No query, no mutation, no domain rule and — the point of the whole
  * design — no client JavaScript that could hold a credential: the form's only script is the
  * `SubmitLock` island, which reads no field (`C-22`).
  *
@@ -15,9 +16,11 @@
 import Link from 'next/link';
 
 import { REGISTER_SCREEN } from '@/shared/config/screen-registry';
-import { ErrorState, PageShell } from '@/shared/ui';
+import { ErrorState } from '@/shared/ui';
 import type { SignInRefusal } from '@/features/sign-in';
 import { SignInForm } from '@/features/sign-in';
+
+import styles from './sign-in-page.module.css';
 
 export interface SignInPageProps {
   /**
@@ -34,19 +37,21 @@ export interface SignInPageProps {
 
 export function SignInPage({ refusal, next, unknownRefusal = false }: SignInPageProps) {
   return (
-    <PageShell
-      title="Вход"
-      subtitle="Адрес электронной почты и пароль уходят на сервер приложения. Для прежней учётной записи до завершения профиля принимается старый логин."
-    >
-      <SignInForm refusal={refusal} next={next} />
-      {unknownRefusal ? <div data-sign-in-refusal="unknown"><ErrorState title="Неизвестный ответ входа" detail="Сервер вернул состояние, которое эта версия страницы не понимает." /></div> : null}
-      <p className="am-note" data-sign-in-register="">
+    <section className={styles.screen}>
+      <div className={styles.card}>
+        <header className={styles.header}>
+          <h1 className={styles.title}>Вход</h1>
+          <p className={styles.lead}>
+            Войдите по адресу электронной почты. Для прежней учётной записи до завершения
+            профиля подойдёт старый логин.
+          </p>
+        </header>
+        {unknownRefusal ? <div data-sign-in-refusal="unknown"><ErrorState title="Неизвестный ответ входа" detail="Сервер вернул состояние, которое эта версия страницы не понимает." /></div> : null}
+        <SignInForm refusal={refusal} next={next} />
+      </div>
+      <p className={styles.register} data-sign-in-register="">
         Нет учётной записи? <Link href={REGISTER_SCREEN}>Подать заявку на доступ</Link>
       </p>
-      <p className="am-note">
-        Проверка пары имени и пароля целиком на стороне сервера. Эта страница не хранит
-        ни пароль, ни пропуск и не обращается к хранилищу браузера.
-      </p>
-    </PageShell>
+    </section>
   );
 }

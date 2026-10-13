@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 
 import type { ReleaseEntry, ReleaseList } from '@/shared/api';
 import { isKnownReleaseKind, releaseDate, releaseKindLabel, useProductVersion, useReleases } from '@/entities/release';
-import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
+import { EmptyState, ErrorState, Icon, LoadingState } from '@/shared/ui';
 
 import styles from './version-history.module.css';
 
@@ -17,17 +17,33 @@ interface HistoryViewProps {
   readonly onRetry: () => void;
 }
 
+/** One release as a node on the timeline: the version and date, the title, then its items. */
 function ReleaseCard({ entry }: { readonly entry: ReleaseEntry }) {
   return (
     <article className={styles.card} data-release-version={entry.version}>
-      <h3>{entry.title}</h3>
-      <p className={styles.meta}>Версия {entry.version} · {releaseDate(entry.date)}</p>
+      <p className={styles.meta}>
+        <span className={styles.version}>{entry.version}</span>
+        <span aria-hidden="true"> — </span>
+        <time dateTime={entry.date}>{releaseDate(entry.date)}</time>
+      </p>
+      <h3 className={styles.title}>{entry.title}</h3>
       <ul className={styles.items}>
         {entry.items.map((item, index) => (
           <li key={`${entry.version}-${index}`} className={styles.item}>
-            {/* `C-29`: an unknown kind gets the generic label and no kind colour; its raw value is not echoed into the markup. */}
-            <span className={isKnownReleaseKind(item.kind) ? styles[item.kind] : undefined}>{releaseKindLabel(item.kind)}</span>
-            <p className={styles.where}>{item.where}</p>
+            {/*
+              * The kind is a coloured dot, as the legend above says; its label stays in the markup
+              * for a screen reader and as the dot's tooltip. `C-29`: an unknown kind gets the
+              * generic label and the neutral dot; its raw value is not echoed into the markup.
+              */}
+            <p className={styles.where}>
+              <span
+                className={isKnownReleaseKind(item.kind) ? `${styles.dot} ${styles[item.kind]}` : styles.dot}
+                title={releaseKindLabel(item.kind)}
+                aria-hidden="true"
+              />
+              <span className={styles.kindLabel}>{releaseKindLabel(item.kind)}</span>
+              {item.where}
+            </p>
             <p className={styles.text}>{item.text}</p>
           </li>
         ))}
@@ -44,38 +60,42 @@ export function VersionHistoryView({ version, listing, loading, error, onClose, 
     <div className={styles.overlay} data-version-history="">
       <button type="button" className={styles.backdrop} aria-label="Закрыть историю версий" onClick={onClose} />
       <aside className={styles.panel} role="dialog" aria-modal="true" aria-label="История версий">
-        <div className={styles.heading}>
+        <header className={styles.heading}>
+          <button type="button" className={styles.close} autoFocus onClick={onClose}>
+            <Icon name="reject" size={20} label="Закрыть" />
+          </button>
           <h2>История версий</h2>
-          <button type="button" className="am-button" autoFocus onClick={onClose}>Закрыть</button>
+        </header>
+        <div className={styles.body}>
+          {version !== null ? <p className={styles.current}>Текущая версия: {version}</p> : null}
+          <ul className={styles.legend} aria-label="Обозначения изменений">
+            <li><span className={`${styles.dot} ${styles.new}`} aria-hidden="true" />Новое</li>
+            <li><span className={`${styles.dot} ${styles.improved}`} aria-hidden="true" />Улучшено</li>
+            <li><span className={`${styles.dot} ${styles.fixed}`} aria-hidden="true" />Исправлено</li>
+          </ul>
+          {loading ? <LoadingState what="истории версий" /> : null}
+          {error !== null ? (
+            <ErrorState
+              title="История версий недоступна"
+              detail="Повторите запрос позже."
+              onRetry={onRetry}
+            />
+          ) : null}
+          {!loading && error === null && listing !== null && listing.items.length === 0 ? (
+            <EmptyState title="История версий пока пуста" />
+          ) : null}
+          {!loading && error === null ? (
+            <>
+              <div className={styles.feed}>{current.map((entry) => <ReleaseCard key={entry.version} entry={entry} />)}</div>
+              {archive.length > 0 ? (
+                <details className={styles.archive}>
+                  <summary>Архив ({archive.length})</summary>
+                  <div className={styles.feed}>{archive.map((entry) => <ReleaseCard key={entry.version} entry={entry} />)}</div>
+                </details>
+              ) : null}
+            </>
+          ) : null}
         </div>
-        {version !== null ? <p>Текущая версия: {version}</p> : null}
-        <div className={styles.legend} aria-label="Обозначения изменений">
-          <span className={styles.new}>Новое</span>
-          <span className={styles.improved}>Улучшено</span>
-          <span className={styles.fixed}>Исправлено</span>
-        </div>
-        {loading ? <LoadingState what="истории версий" /> : null}
-        {error !== null ? (
-          <ErrorState
-            title="История версий недоступна"
-            detail="Повторите запрос позже."
-            onRetry={onRetry}
-          />
-        ) : null}
-        {!loading && error === null && listing !== null && listing.items.length === 0 ? (
-          <EmptyState title="История версий пока пуста" />
-        ) : null}
-        {!loading && error === null ? (
-          <>
-            <div className={styles.feed}>{current.map((entry) => <ReleaseCard key={entry.version} entry={entry} />)}</div>
-            {archive.length > 0 ? (
-              <details className={styles.archive}>
-                <summary>Архив ({archive.length})</summary>
-                {archive.map((entry) => <ReleaseCard key={entry.version} entry={entry} />)}
-              </details>
-            ) : null}
-          </>
-        ) : null}
       </aside>
     </div>
   );
