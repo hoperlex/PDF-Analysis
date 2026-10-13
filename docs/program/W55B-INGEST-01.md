@@ -52,6 +52,34 @@ Structural facts of its `_blocks.json` (types and null counts only): every block
 `crop_url` are `null` on the 26 stamps and set on every other block; `polygon_points` is `null` on all 117 rectangles and a list of three
 or more points on the 12 polygons; `status` and `export_status` are `recognized` on all 129.
 
+## The migration probe (item 8)
+
+**Method.** In a scratch edit (reverted; `git diff` empty afterwards) `DocumentAdapter.upload_document` and
+`IngestService.upload_single_pdf` were made to raise `portal_bundle_required` for anything that is not a ZIP. Then, on the lane stack
+(PostgreSQL 57430, S3 61030/61031), one invocation at a time with `--tb=no -rf`:
+
+| Directory | Result with the bare-PDF paths refused |
+| --- | --- |
+| `tests/integration/ingest` | 533 passed, **7 failed** (all deliberate, below) |
+| `tests/integration/api` | 568 passed |
+| `tests/integration/p02_journey` | 59 passed |
+| `tests/characterization` | 61 passed |
+| `tests/integration/composition` | 725 passed, 2 skipped |
+| `tests/integration/db` | 360 passed |
+| `tests/integration/norms` | 753 passed |
+| `tests/e2e` (no browser) | 159 passed, 5 skipped (`test_live_text_analysis.py`, opt-in `C2_PC01_LIVE=1`, spends money) |
+| every other `tests/integration/*` directory (`access`, `analysis`, `analysis_engine`, `analysis_text`, `auth`, `decisions`, `execution`, `exports`, `findings`, `foundation`, `jobs`, `qa_w52`, `qa_w53`, `releases`, `runs`, `shared_kernel`, `storage`, `workers`) and `tests/unit`, `tests/replay` | all passed |
+
+**The 7 tests that still send a bare PDF** (they test the legacy branch itself, so they are the final switch's to change):
+
+- `tests/integration/ingest/test_bundle_publication.py`: `test_a_bare_pdf_still_publishes_with_no_counts_until_the_last_step`,
+  `test_a_bundle_key_and_a_bare_pdf_key_never_replay_each_other`;
+- `tests/integration/ingest/test_envelope_handle_adapter.py`: `test_a_zip_is_a_bundle_and_anything_else_is_still_the_single_pdf_entry`
+  (three parameters: a bare PDF, `hello`, empty), `test_nothing_else_about_the_call_changed`, `test_a_missing_title_and_name_still_fall_back_as_they_did`.
+
+No other Python test sends a bare PDF to the upload path; the five skipped tests of `test_live_text_analysis.py` upload through
+`tests/e2e/pc01/driver.py`, which builds a bundle.
+
 ## The sealed `_blocks.json` schema against Amendment 1 of the freeze (for the integrator; the schema is not edited here)
 
 `contracts/analysis/v1/portal-blocks.schema.json` (SEAL) and `bundle_envelope.py` agree with each other (a test compares them keyword by
