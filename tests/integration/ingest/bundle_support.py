@@ -51,3 +51,21 @@ def judge(
             return field, constraint, None
     finally:
         handle.close()
+
+
+def bundle_around(pdf: bytes, stem: str = "member", **options: Any) -> bytes:
+    """The three required members around ``pdf``, whatever ``pdf`` is.
+
+    The block list and the markdown are those of the AR baseline document, so a PDF that is
+    broken (not a PDF, encrypted, too many pages) is refused for the PDF member's own rule
+    before either is read -- which is the point of using this for it. ``options`` reach
+    ``portal_bundle.bundle.make_files`` (e.g. ``html=True``).
+    """
+    import dataclasses
+
+    from portal_bundle import bundle as builders
+    from portal_bundle import zipwrite
+
+    baseline = (REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar" / "ar_baseline.pdf").read_bytes()
+    files = dataclasses.replace(builders.make_files(baseline, stem, **options), pdf=pdf)
+    return zipwrite.build_zip(builders.pack(files))
