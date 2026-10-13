@@ -629,6 +629,16 @@ def stack(inner: Any, **options: Any) -> Any:
     return CorrelationMiddleware(gate), gate
 
 
+def run(scenario: Awaitable[Any], seconds: float = 20.0) -> Any:
+    """Run a scenario to the end or fail it.
+
+    A gate that stopped refusing leaves a request waiting for a release the scenario would
+    only give afterwards, and that would hang the suite instead of failing the test. The
+    deadline turns the hang into the failure it is.
+    """
+    return asyncio.run(asyncio.wait_for(scenario, seconds))
+
+
 async def until(condition: Callable[[], bool], what: str) -> None:
     for _ in range(2000):
         if condition():
@@ -663,7 +673,7 @@ class TestTheUploadGate:
             assert [(await first).status, (await second).status] == [204, 204]
             assert gate.gate.in_flight == 0
 
-        asyncio.run(scenario())
+        run(scenario())
 
     def test_the_refusal_carries_retry_after_between_the_length_and_the_correlation_id(
         self,
@@ -689,7 +699,7 @@ class TestTheUploadGate:
             inner.release.set()
             await asyncio.gather(*held)
 
-        asyncio.run(scenario())
+        run(scenario())
 
     @pytest.mark.parametrize("mode", ["finish", "fail", "cancel", "disconnect"])
     def test_a_slot_comes_back_however_the_request_ends(self, mode: str) -> None:
@@ -734,7 +744,7 @@ class TestTheUploadGate:
             await asyncio.gather(*held)
             assert gate.gate.in_flight == 0
 
-        asyncio.run(scenario())
+        run(scenario())
 
     def test_only_an_upload_takes_a_slot(self) -> None:
         """The gate counts ``POST`` of the upload route. Nothing else waits behind it."""
@@ -756,7 +766,7 @@ class TestTheUploadGate:
                 assert answer.status == 204, f"{label} was refused as busy: {answer.status}"
             await asyncio.gather(*held)
 
-        asyncio.run(scenario())
+        run(scenario())
 
     @pytest.mark.parametrize(
         ("label", "kwargs", "constraint"),
@@ -783,7 +793,7 @@ class TestTheUploadGate:
             inner.release.set()
             await asyncio.gather(*held)
 
-        asyncio.run(scenario())
+        run(scenario())
 
     def test_the_capacity_is_the_gates_and_not_a_constant_of_two(self) -> None:
         async def scenario() -> None:
@@ -796,7 +806,7 @@ class TestTheUploadGate:
             await held
             assert gate.gate.in_flight == 0
 
-        asyncio.run(scenario())
+        run(scenario())
 
     def test_the_assembled_application_admits_two_and_caps_each_route(self) -> None:
         """The numbers the application is wired with, read off its middleware stack."""
@@ -853,7 +863,7 @@ class TestEveryRouteHasItsOwnCap:
             app, _ = stack(ConsumingApp())
             return await drive(app, path=path, declared=declared)
 
-        answer = asyncio.run(scenario())
+        answer = run(scenario())
         if admitted:
             assert answer.status == 204, answer.body
         else:
@@ -868,7 +878,7 @@ class TestEveryRouteHasItsOwnCap:
                 app, path=OTHER_PATH, content_type=JSON_TYPE, declared=TRANSPORT_LIMIT + 1
             )
 
-        answer = asyncio.run(scenario())
+        answer = run(scenario())
         assert answer.status == 422
         assert answer.envelope["details"] == {"field": "body", "constraint": "max_bytes"}
         assert answer.envelope["message"] == "The request body exceeds the maximum accepted size."
@@ -887,7 +897,7 @@ class TestEveryRouteHasItsOwnCap:
             app, _ = stack(inner, limit=limit, upload_limit=upload_limit)
             return await drive(app, path=path, chunks=(b"y" * 400,) * 3), inner  # 1200 bytes
 
-        answer, inner = asyncio.run(scenario())
+        answer, inner = run(scenario())
         if refused:
             assert answer.status == 422
             assert answer.envelope["details"] == {"field": "file", "constraint": "max_bytes"}
@@ -901,7 +911,7 @@ class TestEveryRouteHasItsOwnCap:
             app, _ = stack(inner, limit=1000, upload_limit=5000)
             return await drive(app, chunks=(b"y" * 1000,) * 8), inner
 
-        answer, inner = asyncio.run(scenario())
+        answer, inner = run(scenario())
         assert answer.status == 422
         assert answer.envelope["details"] == {"field": "file", "constraint": "max_bytes"}
         assert inner.read <= 5000
