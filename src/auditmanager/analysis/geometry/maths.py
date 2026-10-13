@@ -45,8 +45,9 @@ The scale rule
   :data:`MIN_LONG_SIDE_PX`.
 * **Cap:** lowered, if needed, so the crop holds at most :data:`MAX_PIXELS` pixels.
 * The scale is kept to :data:`SCALE_DIGITS` decimals, so the recorded ``render_profile.scale``
-  is exactly the scale that was rendered, and the integer rectangle is then nudged (one
-  step of ``10**-SCALE_DIGITS`` at least) until both bounds hold.
+  is exactly the scale that was rendered. Both bounds are computed with the integer clip's
+  worst rounding included (half a pixel of canvas rounding; a pixel at each outward edge),
+  so the rectangle meets them by construction.
 
 **The corner where the two bounds meet.** At the floor the crop has a long side of 800 px and
 so at most 800 x 800 = 640 000 pixels, far under the cap; at the cap it holds about
@@ -56,10 +57,11 @@ not for any box this module accepts), **the cap wins**: it bounds the memory of 
 the floor is a resolution wish. :func:`plan_crop` encodes that order.
 
 **A degenerate box.** PDFium positions a clip with 32-bit floats, which hold every integer up
-to 2**24 exactly. A box so thin that the floor would need a page canvas wider than that
-(:data:`MAX_CANVAS_SIDE`; a block narrower than about a tenth of a pixel of a 300 dpi portal
-raster) cannot be rendered accurately and raises :class:`DegenerateCrop`; the stage refuses
-the bundle rather than cutting a crop it cannot vouch for.
+to 2**24 exactly. A box so small that the floor would need a page canvas wider than that
+(:data:`MAX_CANVAS_SIDE`: a long side under ``800 / 2**24`` of the page's longer side, about a
+sixth of a pixel of a 300 dpi A4 raster) cannot be rendered accurately and raises
+:class:`DegenerateCrop`; the stage refuses the bundle rather than cutting a crop it cannot
+vouch for.
 """
 
 from __future__ import annotations
@@ -89,7 +91,10 @@ ROTATIONS: Final[tuple[int, ...]] = (0, 90, 180, 270)
 _QUARTER_TURNS: Final[frozenset[int]] = frozenset({90, 270})
 
 _STEP: Final[float] = 10.0**-SCALE_DIGITS
-_MAX_ADJUSTMENTS: Final[int] = 64
+#: How much shorter (rounding of the canvas) and longer (that, plus a pixel at each outward
+#: edge) than ``side_pt * scale`` an integer clip side can be.
+_ROUNDING_LOSS: Final[float] = 0.5
+_ROUNDING_GAIN: Final[float] = 2.5
 
 
 class DegenerateCrop(ValueError):
@@ -258,8 +263,34 @@ def _layout(
     )
 
 
-def _rounded(scale: float) -> float:
-    return round(scale, SCALE_DIGITS)
+def _round_up(scale: float) -> float:
+    return round(math.ceil(scale / _STEP) * _STEP, SCALE_DIGITS)
+
+
+def _round_down(scale: float) -> float:
+    return round(math.floor(scale / _STEP) * _STEP, SCALE_DIGITS)
+
+
+def _floor_scale(clip_long_pt: float) -> float:
+    """The least scale whose clip has a long side of at least :data:`MIN_LONG_SIDE_PX`.
+
+    The integer clip is never shorter than ``side_pt * scale - 0.5`` (the canvas is rounded
+    to the nearest pixel, the clip's edges outward), so ``(800 + 0.5) / side_pt`` suffices.
+    """
+    return _round_up((MIN_LONG_SIDE_PX + _ROUNDING_LOSS) / clip_long_pt)
+
+
+def _cap_scale(clip_width_pt: float, clip_height_pt: float) -> float:
+    """The greatest scale whose clip holds at most :data:`MAX_PIXELS` pixels.
+
+    The integer clip is never longer than ``side_pt * scale + 2.5`` per side (half a pixel
+    of canvas rounding, a pixel at each outward edge), so the scale is the positive root of
+    ``(w * s + 2.5) * (h * s + 2.5) = MAX_PIXELS``.
+    """
+    a = clip_width_pt * clip_height_pt
+    b = _ROUNDING_GAIN * (clip_width_pt + clip_height_pt)
+    c = _ROUNDING_GAIN**2 - MAX_PIXELS
+    return _round_down((-b + math.sqrt(b * b - 4 * a * c)) / (2 * a))
 
 
 def plan_crop(
@@ -270,31 +301,22 @@ def plan_crop(
 ) -> CropPlan:
     """The crop of ``bbox_norm`` on a displayed page, under the floor and the cap.
 
-    See the module docstring for the rule and for why the two bounds never meet.
+    ``scale = min(max(base, floor), cap)``: the base raised to the floor, then lowered to
+    the cap, which wins (module docstring). Both bounds are computed with the integer clip's
+    worst rounding included, so the plan meets them by construction, not by a search.
     """
     bbox = _validated_bbox(bbox_norm)
     if not (page_width_pt > 0 and page_height_pt > 0):
         raise DegenerateCrop("a page has a positive width and height")
     clip_width = (bbox[2] - bbox[0]) * page_width_pt
     clip_height = (bbox[3] - bbox[1]) * page_height_pt
-    scale = base if math.isfinite(base) and base > 0 else 0.0
-    scale = max(scale, MIN_LONG_SIDE_PX / max(clip_width, clip_height))  # the floor
-    scale = min(scale, math.sqrt(MAX_PIXELS / (clip_width * clip_height)))  # the cap
-    for _ in range(_MAX_ADJUSTMENTS):
-        plan = _layout(bbox, page_width_pt, page_height_pt, _rounded(scale))
-        if plan.pixels > MAX_PIXELS:
-            shrunk = plan.scale * math.sqrt(MAX_PIXELS / plan.pixels)
-            scale = math.floor(min(shrunk, plan.scale - _STEP) / _STEP) * _STEP
-            continue
-        if plan.long_side < MIN_LONG_SIDE_PX:
-            grown = plan.scale * MIN_LONG_SIDE_PX / plan.long_side
-            raised = math.ceil(max(grown, plan.scale + _STEP) / _STEP) * _STEP
-            if _layout(bbox, page_width_pt, page_height_pt, _rounded(raised)).pixels > MAX_PIXELS:
-                return plan  # the cap wins; unreachable for an accepted box (docstring)
-            scale = raised
-            continue
-        return plan
-    raise DegenerateCrop("no scale satisfies the crop budget")  # pragma: no cover
+    scale = round(base, SCALE_DIGITS) if math.isfinite(base) and base > 0 else 0.0
+    scale = max(scale, _floor_scale(max(clip_width, clip_height)))  # the floor
+    scale = min(scale, _cap_scale(clip_width, clip_height))  # the cap, which wins
+    plan = _layout(bbox, page_width_pt, page_height_pt, scale)
+    if plan.pixels > MAX_PIXELS:  # pragma: no cover - excluded by _cap_scale's bound
+        raise DegenerateCrop("the crop exceeds the pixel budget")
+    return plan
 
 
 __all__ = [

@@ -126,8 +126,9 @@ class PdfiumDocument:
         with pdfium_lock():
             page = self._document[page_number - 1]
             try:
+                # PDFium writes BGR; ``to_pil`` reads it as such and gives an RGB image.
                 bitmap = pdfium.PdfBitmap.new_native(
-                    plan.width, plan.height, pdfium_raw.FPDFBitmap_BGR, rev_byteorder=True
+                    plan.width, plan.height, pdfium_raw.FPDFBitmap_BGR
                 )
                 try:
                     bitmap.fill_rect(_WHITE, 0, 0, plan.width, plan.height)
