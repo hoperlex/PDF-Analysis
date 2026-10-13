@@ -11,7 +11,7 @@ on `33fe3f7`; its findings and this revision's dispositions are recorded in
 released as `v0.4.0`); migration slots per CD-2 (`0023`, `0024`, re-assigned by `pin_sweep migration`);
 check levels per R-70/R-84 (CD-10), the full gate before every `main`; pins measured on `origin/dev`
 `4fe7615` and re-swept at each freeze; rules recorded by each `*-RULE-01` under the next free number at
-its freeze (≥ R-120); `contract_version` does not move (additive changes only).
+its freeze (≥ R-121); `contract_version` does not move (additive changes only).
 **The wave is two waves (I-9)**, each with its own rule, freeze, seal, judges, close and budget. **Order
 (I-12):** W56a → **W57a → W57b** → W56b → W58.
 
@@ -363,7 +363,7 @@ into a data write.
 
 ### A4. Tasks
 
-**`W57A-RULE-01`** (integrator) records, under the next free numbers (≥ R-120): norms in the same call,
+**`W57A-RULE-01`** (integrator) records, under the next free numbers (≥ R-121): norms in the same call,
 citations by label, quote and value, any failure withholds (I-1, I-5); the reviewed map, offline vectors,
 no run-time embedding (I-2, I-8); the five categories with applicability and the fire-safety scope (I-4,
 K-2, CD-5); the split and order (I-9, I-12); the $8 ceiling with one re-record (K-10); norm text in
