@@ -122,10 +122,13 @@ def test_an_encrypted_source_is_refused_rather_than_read_as_empty(store: Any) ->
 
 
 def test_an_image_only_source_is_refused_with_validation_failed(store: Any) -> None:
-    """Section 4.2: ``has_text_layer`` is ``true`` for every page, or nothing is published.
+    """Section 4.2: a version without a portal bundle needs a text layer on every page.
 
-    OCR is not silently substituted, and the page never reaches the inventory - which
-    is what makes the refusal provable rather than a field a consumer must check.
+    OCR is never substituted, and the page never reaches the inventory - which is what
+    makes the refusal provable rather than a field a consumer must check. Since
+    `W55B-RECOGNISED-01` (``R-116``) a textless page is admitted only when the version's
+    portal block list holds a block on it; that case, and its refusal without one, are in
+    ``tests/integration/analysis/recognised/test_source_preparation_bundle.py``.
     """
     blob_id = _publish(store, (NEGATIVE / "image_only.pdf").read_bytes())
 
