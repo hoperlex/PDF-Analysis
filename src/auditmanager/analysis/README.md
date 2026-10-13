@@ -50,6 +50,8 @@ normalize model output before writing an anchor.
 | `ports/stage.py` | `StageContext` and `StageProduction`, the stage seam. |
 | `stages/extraction.py` | The pinned `pdfplumber` extraction and the single normalization. |
 | `stages/*.py` | The three stage implementations. |
+| `recognised/` | The portal's recognised text, `prepared.recognised_text` (`W55B-RECOGNISED-01`). |
+| `geometry/` | The portal's blocks and the crops: the page-box check, the clip render, `geometry.portal_blocks` and `geometry.crop_image` (`W55B-GEOMETRY-01`). |
 
 `src/auditmanager/analysis/text/**` is **not** part of this task. It belongs to
 `P2-AI-01`, which registers `text_analysis` on this same seam.
@@ -104,15 +106,17 @@ nothing.
 
 ## The artifact shapes
 
-All four carry `artifact_role` and `artifact_version` at their root, and a consumer
-reading an unexpected `artifact_version` **fails closed**. Shapes are `P02_SEAMS`
-sections 4.2 to 4.6 verbatim.
+Every JSON artifact carries `artifact_role` and `artifact_version` at its root, and a
+consumer reading an unexpected `artifact_version` **fails closed**. Shapes are `P02_SEAMS`
+sections 4.2 to 4.10 verbatim.
 
 * **`prepared.page_inventory`** — `page_count` and, per page, `page_number` (1-based,
   contiguous), `width_pt`, `height_pt`, `rotation_deg`, `has_text_layer`, `char_count`.
-  `has_text_layer` is `true` for every page or nothing is published: a page with no
-  extractable embedded text is refused with `validation_failed`, and OCR is never
-  silently substituted.
+  A page with no extractable embedded text is refused with `validation_failed` **unless**
+  the version is a portal bundle whose block list holds a block on that page (`R-116`,
+  section 4.2): such a page is admitted with `has_text_layer: false` and `char_count: 0`,
+  and its text exists only in `prepared.recognised_text`, marked `recognised`. OCR is
+  always marked, never substituted for a text layer.
 * **`prepared.text_layer`** — `extractor`, `normalization`, `total_char_count` and the
   per-page `char_start`/`char_end`/`text` spans. See the offset rule above.
 * **`geometry.block_index`** — one block per extracted line, `block_id` matching
@@ -124,23 +128,43 @@ sections 4.2 to 4.6 verbatim.
   so a span that resolves is not evidence that it resolves to the right characters.
   **`block_id` is not a contract identifier**: it is an anchor inside one artifact,
   never a foreign key, and it never crosses a version boundary.
-* **`geometry.page_crops`** — present, schema-valid and explicitly empty under a
-  declared `crop_policy: none`, echoed in the metrics as `crop_policy=none` and
-  `crop_count=0`.
+* **`geometry.page_crops`** — the crop manifest, with a content schema
+  (`contracts/analysis/v1/crop-manifest.schema.json`), under the `crop_policy` the next
+  section describes, echoed in the metrics as `crop_policy` and `crop_count`.
+* **`prepared.recognised_text`** (a portal bundle only) — per TEXT block the portal's OCR
+  text marked `quote_source: recognised` with quality flags, per IMAGE block its
+  description; never merged into the text layer and never read by analysis (`R-117`).
+* **`geometry.portal_blocks`** (a portal bundle only) — the bundle's block list normalised:
+  `page_number = page_index + 1`, the portal's `blk_` identifier verbatim, blocks ordered by
+  page, ordinal (null last) and id, and per page and per block the page-box check's
+  `geometry: ok | geometry_mismatch`. `polygon_points` only when the portal gave a polygon;
+  the portal's `crop_url` is never copied.
+* **`geometry.crop_image`** (a portal bundle only) — PNG blobs, content-addressed (an equal
+  crop is one blob), referenced only from the manifest.
 * **`context.document_graph`** — `sections`, `references` and `neighbourhood` over
   stable block identities, bound by `block_index_sha256`.
 
 ## The page-crop policy actually implemented
 
-`crop_policy: none`, with an empty `crops` list — `OD-04` as fixed in `P02_SEAMS`
-section 4.5. `PC-01` does no visual detection, and the registry marks the role a
-required output of a stage that allows neither `partial` nor `skipped`, so the role is
-present and explicitly empty rather than absent. Its only contract consumer,
-`block_analysis`, is out of `PC-01` scope and would fail closed on an empty list rather
-than degrade.
+`OD-04` is **flipped** (`W55B-SEAL-01`, `R-119`): the manifest has a content schema and one
+of two policies, `P02_SEAMS` section 4.5.
 
-**Flip condition, carried from `OD-04`:** if any task adds a content schema for the
-crop manifest, this decision reopens.
+* **`crop_policy: none`**, `crops: []` — a version without a portal bundle, exactly as
+  before: the registry marks the role a required output of a stage that allows neither
+  `partial` nor `skipped`, so it is present and explicitly empty rather than absent.
+* **`crop_policy: portal_image_blocks`** — a portal bundle (`W55B-GEOMETRY-01`). Each page's
+  box is checked: the portal's `rotation` must be the PDF's `/Rotate`, and the aspect of its
+  `width_px` x `height_px` must be the CropBox's (clipped to the MediaBox, after `/Rotate`)
+  within 0.5 % per side (`max(r, 1/r) - 1 <= 0.005`). Every IMAGE block on a page that
+  passed gets one crop: a **clip render** with `pypdfium2` (a bitmap of the crop's size,
+  never the page cut afterwards) at the portal raster's density, raised to a long side of
+  800 px and lowered to 4 000 000 pixels, PNG-encoded. A page that failed is
+  `geometry_mismatch` and cuts no crop, and the stage still succeeds: the mismatch is
+  visible in `geometry.portal_blocks`, in the metrics and in «Блоки». Every PDFium call
+  holds ingest's `PDFIUM_LOCK` (`auditmanager.ingest.public`), one operation at a time.
+
+No model looks at a crop in W55b; `block_analysis` (W56) is the consumer the manifest
+waits for. The rules and their reasons are in `geometry/maths.py`'s docstring.
 
 ## The document graph is a convenience, never evidence
 
@@ -170,7 +194,10 @@ to any of the three is a new `artifact_version`. `extractor.options_sha256` reco
 options. Artifacts are serialized by `canonical_bytes` — sorted keys, no insignificant
 whitespace, `ensure_ascii=False` — so two runs over one source publish byte-identical
 text layer and block index bytes, and `blob_id` is derived from `(sha256, size)` so a
-rerun resolves to the same identity.
+rerun resolves to the same identity. A crop's PNG bytes are stable **within one
+environment** only (the renderer and Pillow are part of them): tests assert properties and
+same-environment repeatability, never a recorded crop, and a consumer relies on the
+`sha256` its manifest records.
 
 ## Notes for the sessions downstream
 
