@@ -118,6 +118,15 @@ from auditmanager.storage import S3BlobStore, S3StorageSettings, StorageError
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CORPUS_PDF = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar" / "ar_baseline.pdf"
+#: `W55B-INGEST-01`: an upload is a portal bundle. This is the committed bundle around the
+#: baseline PDF; its PDF member is `CORPUS_PDF`, byte for byte.
+CORPUS_BUNDLE = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar" / "bundles" / "ar_baseline.zip"
+
+# The bundle builders live under tools/fixtures, which is on no import path; tests that must
+# build a bundle around a PDF of their own (a unique one, one with a chosen name) import them.
+_TOOLS_FIXTURES = str(REPOSITORY_ROOT / "tools" / "fixtures")
+if _TOOLS_FIXTURES not in sys.path:
+    sys.path.insert(0, _TOOLS_FIXTURES)
 
 #: The governance interpreter, the only one carrying `jsonschema`. Section-7 conformance
 #: is checked with a real Draft 2020-12 implementation, driven exactly the way
@@ -272,6 +281,36 @@ def corpus_pdf() -> bytes:
     return CORPUS_PDF.read_bytes()
 
 
+@pytest.fixture(scope="session")
+def corpus_bundle() -> bytes:
+    """The upload: the committed portal bundle around ``corpus_pdf`` (`W55B-INGEST-01`)."""
+    if not CORPUS_BUNDLE.is_file():
+        pytest.fail(f"the committed corpus bundle is missing at {CORPUS_BUNDLE}")
+    return CORPUS_BUNDLE.read_bytes()
+
+
+@pytest.fixture(scope="session")
+def bundle_around():
+    """A bundle around a PDF of the test's own, with a stem of its choosing.
+
+    The block list and the markdown are the baseline's, so the PDF must be the baseline with
+    something appended after ``%%EOF`` (a unique digest, a comment): the same pages, the same
+    text. The member names carry ``stem``, which becomes the stored display name.
+    """
+    import dataclasses
+
+    from portal_bundle import bundle as builders
+    from portal_bundle import zipwrite
+
+    def build(pdf: bytes, stem: str = "document") -> bytes:
+        files = dataclasses.replace(
+            builders.make_files(CORPUS_PDF.read_bytes(), stem), pdf=pdf
+        )
+        return zipwrite.build_zip(builders.pack(files))
+
+    return build
+
+
 # ---------------------------------------------------------------------------
 # Port adapters
 # ---------------------------------------------------------------------------
@@ -371,6 +410,9 @@ class IngestDocumentAdapter:
             page_count=record.page_count,
             published_at=record.published_at,
             media_type=record.media_type,
+            # The shipped adapter's view carries the title (`W55B-INGEST-01`: this double now
+            # delegates its upload to that adapter, so its reads must say the same).
+            display_title=record.display_title,
             section=record.section,
             input_manifest=tuple(
                 ManifestEntryView(

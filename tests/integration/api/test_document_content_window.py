@@ -45,8 +45,8 @@ def _upload_body(content: bytes) -> bytes:
         (
             (
                 f"--{BOUNDARY}\r\n"
-                'Content-Disposition: form-data; name="file"; filename="content.pdf"\r\n'
-                "Content-Type: application/pdf\r\n\r\n"
+                'Content-Disposition: form-data; name="file"; filename="content.zip"\r\n'
+                "Content-Type: application/zip\r\n\r\n"
             ).encode("utf-8"),
             content,
             f"\r\n--{BOUNDARY}--\r\n".encode("utf-8"),
@@ -75,7 +75,7 @@ def raw_s3(store: S3BlobStore) -> Any:
 
 @pytest.fixture
 def published(
-    router: Surface, store: S3BlobStore, corpus_pdf: bytes
+    router: Surface, store: S3BlobStore, corpus_pdf: bytes, bundle_around
 ) -> Iterator[tuple[dict[str, Any], bytes]]:
     content = _unique_pdf(corpus_pdf)
     project = _ok(
@@ -100,7 +100,7 @@ def published(
                     "Idempotency-Key": f"w55a-content-{secrets.token_hex(4)}",
                     "Content-Type": f"multipart/form-data; boundary={BOUNDARY}",
                 },
-                body=_upload_body(content),
+                body=_upload_body(bundle_around(content, "content")),
             ),
         )
     )

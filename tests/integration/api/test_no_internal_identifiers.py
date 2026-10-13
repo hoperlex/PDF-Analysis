@@ -35,6 +35,8 @@ from auditmanager.storage import S3StorageSettings
 from .conftest import PublishedRun
 
 #: The uploaded file name the suite really uploads under.
+#: The name of the upload and of the PDF inside the committed bundle (`W55B-INGEST-01`): both are
+#: "ar_baseline", the first with `.zip` and the second with `.pdf`, and neither may come back.
 SOURCE_FILENAME = "ar_baseline.pdf"
 
 
@@ -153,7 +155,7 @@ def _headers_and_body(response: Answer) -> tuple[dict[str, str], Any]:
 
 def test_the_whole_surface_leaks_nothing(
     router: Surface,
-    corpus_pdf: bytes,
+    corpus_bundle: bytes,
     published_run: PublishedRun,
     forbidden_values: tuple[str, ...],
 ) -> None:
@@ -176,9 +178,15 @@ def test_the_whole_surface_leaks_nothing(
     upload_body = (
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="file"; filename="{SOURCE_FILENAME}"\r\n'
-        "Content-Type: application/pdf\r\n\r\n"
-    ).encode("utf-8") + corpus_pdf + (
-        f"\r\n--{boundary}--\r\n"
+        "Content-Type: application/zip\r\n\r\n"
+    ).encode("utf-8") + corpus_bundle + (
+        # A title of the caller's own. Without one the version's title defaults to the PDF
+        # member's display name -- a file name, by design, and one that comes back as
+        # `display_title`: the caller supplies a label, as the upload form always does.
+        f"\r\n--{boundary}\r\n"
+        'Content-Disposition: form-data; name="display_title"\r\n\r\n'
+        "Годовой отчёт\r\n"
+        f"--{boundary}--\r\n"
     ).encode("utf-8")
 
     requests = {
@@ -247,7 +255,7 @@ def test_the_whole_surface_leaks_nothing(
 
 
 def test_the_uploaded_filename_never_comes_back(
-    router: Surface, corpus_pdf: bytes, forbidden_values: tuple[str, ...]
+    router: Surface, corpus_pdf: bytes, bundle_around, forbidden_values: tuple[str, ...]
 ) -> None:
     """The name really was supplied, and really is absent from the response.
 
@@ -266,13 +274,20 @@ def test_the_uploaded_filename_never_comes_back(
             ),
         ).body
     )
+    # The name is carried twice: by the upload (`.zip`) and by the PDF member inside it (`.pdf`,
+    # the one the version stores). Neither may come back.
     distinctive = "very-distinctive-source-name.pdf"
     boundary = "----b6"
     body = (
         f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="file"; filename="{distinctive}"\r\n'
-        "Content-Type: application/pdf\r\n\r\n"
-    ).encode("utf-8") + corpus_pdf + (f"\r\n--{boundary}--\r\n").encode("utf-8")
+        'Content-Disposition: form-data; name="file"; filename="very-distinctive-source-name.zip"\r\n'
+        "Content-Type: application/zip\r\n\r\n"
+    ).encode("utf-8") + bundle_around(corpus_pdf, "very-distinctive-source-name") + (
+        f"\r\n--{boundary}\r\n"
+        'Content-Disposition: form-data; name="display_title"\r\n\r\n'
+        "Годовой отчёт\r\n"
+        f"--{boundary}--\r\n"
+    ).encode("utf-8")
 
     response = dispatch(
         router,
@@ -289,7 +304,7 @@ def test_the_uploaded_filename_never_comes_back(
     assert response.status == 201, response.body
     raw = response.body.decode("utf-8")
     assert distinctive not in raw, "the uploaded file name came back in the response"
-    assert "very-distinctive-source-name" not in raw
+    assert "very-distinctive-source-name" not in raw, "the PDF member's name or the upload's came back"
 
     version = json.loads(raw)
     fetched = dispatch(router, Request.build("GET", f"/versions/{version['version_uid']}"))
@@ -297,7 +312,7 @@ def test_the_uploaded_filename_never_comes_back(
 
 
 def test_the_streamed_content_response_carries_no_address(
-    router: Surface, corpus_pdf: bytes, forbidden_values: tuple[str, ...]
+    router: Surface, corpus_pdf: bytes, corpus_bundle: bytes, forbidden_values: tuple[str, ...]
 ) -> None:
     """The viewer receives bytes, and its headers name no location.
 
@@ -320,8 +335,8 @@ def test_the_streamed_content_response_carries_no_address(
     body = (
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="file"; filename="{SOURCE_FILENAME}"\r\n'
-        "Content-Type: application/pdf\r\n\r\n"
-    ).encode("utf-8") + corpus_pdf + (f"\r\n--{boundary}--\r\n").encode("utf-8")
+        "Content-Type: application/zip\r\n\r\n"
+    ).encode("utf-8") + corpus_bundle + (f"\r\n--{boundary}--\r\n").encode("utf-8")
     version = json.loads(
         dispatch(
             router,

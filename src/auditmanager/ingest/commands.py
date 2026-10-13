@@ -26,6 +26,13 @@ command is the target project, the content digest, the byte size, the media type
 the source file name. Two requests that differ in any of those are different payloads,
 so a client that reuses a key after changing the file learns about it instead of
 silently getting the first upload back.
+
+For a portal bundle (`W55B-INGEST-01`) the content is **every member's digest** -- the
+PDF's, the block list's, the markdown's, the stamp audit's and the HTML rendering's, the
+last of which is hashed and never stored -- and nothing about how the archive was packed:
+the same members in another order, compressed another way or named in another encoding are
+the same upload. The command type is the same one, so a bundle and a bare PDF can never
+replay each other's key.
 """
 
 from __future__ import annotations

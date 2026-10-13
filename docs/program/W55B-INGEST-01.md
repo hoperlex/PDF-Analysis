@@ -23,4 +23,50 @@ Updated in each commit. `[x]` done and committed, `[~]` in progress, `[ ]` not s
 
 ## Design decisions (made while writing; each is open to the integrator's veto)
 
-Filled in as they are made. See the end of the file for the readings where the plan was silent.
+1. **The reader is hand-written, `zipfile` is the second opinion.** `bundle_archive.py` reads the end record, the ZIP64
+   records and the central directory itself (raw name bytes, flags, external attributes, the `0x7075` field are what the
+   rules are about), inflates with `zlib` in 64 KiB pieces and never trusts a declared size. The standard library reads
+   the same archives in the tests and must agree. A differential test runs every one of the FIXTURES' 67 small archive
+   negatives, 11 positives and 7 committed bundles through the product and through FIXTURES' reference validator and
+   requires the same first constraint.
+2. **Bounds** (named constants with their reason in `bundle_archive.py`): any member 250 MiB (`MEMBER_BYTES`, the PDF's
+   own bound); the two members read into memory, `_blocks.json` and `_results.md`, 16 MiB (`TEXT_MEMBER_BYTES`: the
+   norms corpus' worst case is 7.6 KB per page, 3.8 MB for 500 pages, and 1.1 KB per page for the block list; a 19.6 MB
+   block list parses in 0.7 s and peaks at 80 MiB of Python objects); the stamp audit 4 MiB (`STAMP_AUDIT_BYTES`: worst
+   62 KB, 547 bytes per page); total 300 MiB; ratio 100 : 1; 8 entries. FIXTURES' oracle needs `member_bytes >= 250 000` and
+   `stamp_audit_bytes >= 4 000`: both hold. A text member over its bound answers `bundle_member_size`; a stamp audit over
+   its cap answers `stamp_audit_invalid` (as the validator does).
+3. **Order of refusal** is the validator's: archive (count, per-entry rules in directory order, duplicates, member set,
+   stem, declared sizes, declared ratios, counted bytes), then the PDF, the block list, the markdown, the page count, the
+   text-layer rule, the stamp audit. The first violation is raised. Ratio is judged on declared sizes only: once the
+   counted bytes equal the declared size, the declared ratio is the real one, and a second check could not fire.
+4. **What is stored.** `source.document`, `source.structured_companion`, `source.markdown`, `source.stamp_audit` (blob roles
+   `source_document`, `source_structured_companion`, `source_markdown`, `source_stamp_audit`); `_results.html` is hashed
+   while it is unpacked and dropped. Manifest roles are looked up in the stage registry at import, as the existing role is.
+5. **Publication order** (service docstring): every member is staged and verified before any is recorded; the `verifying`
+   rows of all members are committed in one transaction; objects are published one by one; one transaction marks every
+   blob available, creates the document, the version with its manifest and counts, and the command's outcome. A failure
+   discards every staged temporary. The reconciliation never assumed one temporary per attempt (it works from `blob` rows),
+   so it needed no change; the tests show it naming several unattributed blobs of one attempt.
+6. **Fingerprint** = project, target document, the digest of every member (`None` for an absent optional one), the PDF media
+   type and the upload's own file name. Not the archive's bytes, compression, member order or name encoding.
+7. **Display name.** `document_version.source_filename` is the PDF member's decoded name reduced to a plain base name (last
+   path component, control characters to `_`, at most 255 characters); a missing title defaults to it. The upload's own file
+   name is validated as before and used in the fingerprint, not stored.
+8. **Counts** (precise definitions in `bundle_envelope.py`'s docstring). `text_character_count` is the sum of the lengths of
+   pypdfium2's `get_text_range()` per page; `textless_pages` the 1-based pages below 50 such characters; `recognised_character_count`
+   the length of the bodies in `_results.md` of the TEXT blocks of the block list that sit on a textless page. A body starts
+   after the block's header and its `> **Key:** value` quote lines and ends at the next block header or page heading, trimmed
+   of blank lines; line breaks inside it count one each. IMAGE bodies (the portal's descriptions) and stamps are not recognised
+   text and do not count. All three are NULL together for a bare PDF.
+9. **The bare-PDF path stays, marked `W55B-LEGACY-BARE-PDF`.** `DocumentAdapter.upload_document` reads the first four bytes
+   (`looks_like_zip`), sends a ZIP to `upload_bundle`, anything else to `upload_single_pdf` under the new limits. `upload_bundle`
+   itself already refuses a non-ZIP with `portal_bundle_required` and the Russian sentence, so the final switch is one deleted
+   branch (see the instructions for part B).
+10. **A bundle's text-layer message is the bare PDF's** (`page_text_refusal()`): characterization record 21 must stay byte for
+    byte, and a page the rule refuses has no embedded text layer in either entry.
+11. **The envelope rule is "a text layer or a block of any type"** (FIXTURES' reading, kept). A STAMP-only or IMAGE-only page
+    passes the rule and counts as textless.
+12. **Stricter than the reference in one place**: a `block_id` with a trailing newline is refused (JSON Schema's `$` does not
+    match before a final newline, Python's `re.search` does; the product uses `fullmatch`). A CRLF markdown is accepted
+    (the reference would refuse its headers).

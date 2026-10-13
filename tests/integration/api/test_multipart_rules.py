@@ -86,6 +86,8 @@ UPLOAD_LIMIT = 263192576
 #: baseline document is not used: this file adds no bytes to any frozen corpus and needs
 #: none, because every case here is refused before a byte reaches ``auditmanager.ingest``.
 PDF = b"%PDF-1.7\n"
+#: `W55B-INGEST-01`: the first bytes of an upload that is a ZIP -- what the envelope reads.
+ZIP = b"PK\x03\x04"
 
 FILE_PART = 'form-data; name="file"; filename="between.pdf"'
 
@@ -267,7 +269,7 @@ class TestEachRefusalNamesItsOwnRule:
         assert body["details"] == {"field": "file", "constraint": "filename"}
 
     def test_a_display_title_that_is_not_utf8_is_accepted_and_that_is_declared(
-        self, router: Surface, project_uid: str, corpus_pdf: bytes
+        self, router: Surface, project_uid: str, corpus_bundle: bytes
     ) -> None:
         """**The one refusal of the retired reader this transport does not reproduce.**
 
@@ -287,7 +289,7 @@ class TestEachRefusalNamesItsOwnRule:
             router,
             project_uid,
             _body(
-                (FILE_PART, corpus_pdf),
+                (FILE_PART, corpus_bundle),
                 ('form-data; name="display_title"', b"\xff\xfe\xfa"),
             ),
         )
@@ -322,7 +324,7 @@ class TestATitleTheCallerTypedArrivesAsTheCallerTypedIt:
     """
 
     def test_a_utf8_title_survives_the_round_trip(
-        self, router: Surface, project_uid: str, corpus_pdf: bytes, session
+        self, router: Surface, project_uid: str, corpus_bundle: bytes, session
     ) -> None:
         """A real published version, and the title read back out of the row that holds it.
 
@@ -330,7 +332,7 @@ class TestATitleTheCallerTypedArrivesAsTheCallerTypedIt:
         against is silent -- no refusal, no log, a wrong string in the database -- and the
         title sits on ``document``, not on ``DocumentVersion``, so no response on this
         surface would show it. A test that stopped at the 201 could not see the defect at
-        all. ``corpus_pdf`` is the AR baseline document the rest of this suite publishes;
+        all. ``corpus_bundle`` is the AR baseline bundle the rest of this suite publishes;
         nothing is added to any frozen corpus.
         """
         from sqlalchemy import text
@@ -340,7 +342,7 @@ class TestATitleTheCallerTypedArrivesAsTheCallerTypedIt:
             router,
             project_uid,
             _body(
-                (FILE_PART, corpus_pdf),
+                (FILE_PART, corpus_bundle),
                 ('form-data; name="display_title"', title.encode("utf-8")),
             ),
         )
@@ -354,7 +356,7 @@ class TestATitleTheCallerTypedArrivesAsTheCallerTypedIt:
         )
 
     def test_a_title_made_only_of_latin1_characters_is_accepted(
-        self, router: Surface, project_uid: str, corpus_pdf: bytes, session
+        self, router: Surface, project_uid: str, corpus_bundle: bytes, session
     ) -> None:
         """``coûts`` -- every character under U+0100, and valid UTF-8 on the wire.
 
@@ -370,7 +372,7 @@ class TestATitleTheCallerTypedArrivesAsTheCallerTypedIt:
             router,
             project_uid,
             _body(
-                (FILE_PART, corpus_pdf),
+                (FILE_PART, corpus_bundle),
                 ('form-data; name="display_title"', title.encode("utf-8")),
             ),
         )
@@ -385,15 +387,15 @@ class TestATitleTheCallerTypedArrivesAsTheCallerTypedIt:
         )
 
 
-def _framed(total: int) -> bytes:
-    """A multipart body of exactly ``total`` bytes whose file part is a PDF header and padding.
+def _framed(total: int, head: bytes = PDF) -> bytes:
+    """A multipart body of exactly ``total`` bytes whose file part is ``head`` and padding.
 
     The same construction ``characterization/w13_baseline/journey.sized_multipart`` uses for
     records 18 and 22: the padding is the point, so a body can reach any size without a
     fixture being added to a frozen corpus.
     """
     frame = len(_body((FILE_PART, b"")))
-    payload = PDF + b"0" * (total - frame - len(PDF))
+    payload = head + b"0" * (total - frame - len(head))
     body = _body((FILE_PART, payload))
     assert len(body) == total, (len(body), total)
     return body
@@ -404,7 +406,7 @@ class TestTheTransportBodyLimit:
 
     26 MiB is the limit of every route that is not an upload and 251 MiB the upload route's;
     no external authority declares either: the frozen OpenAPI document declares the
-    *document* maximum, which is the envelope's 25 MiB ``ENV-SIZE``, not these. So the
+    *document* maximum, which is the envelope's 250 MiB ``ENV-SIZE``, not these. So the
     numbers are pinned here, which is what makes a drift in them a red test.
     """
 
@@ -445,12 +447,14 @@ class TestTheTransportBodyLimit:
         """The same 26 MiB-and-one-byte body, framed, sent to ``uploadDocument``.
 
         Until `W55B-STREAM-01` this was ``max_bytes`` (record 22). The upload route's cap is
-        251 MiB, so the transport lets it through and the envelope is the guard that speaks:
-        ``byte_size <= 26214400``, record 18's answer.
+        251 MiB, so the transport lets it through and the envelope is the guard that speaks.
+        Since `W55B-INGEST-01` the envelope's bound is 250 MiB and this body is far inside
+        it: what the envelope answers is about what the body *holds* -- a ZIP header and
+        zeros, an archive it cannot read -- and never about its size.
         """
-        body = _refusal(router, project_uid, _framed(TRANSPORT_LIMIT + 1))
-        assert body["details"] == {"field": "content", "constraint": "byte_size <= 26214400"}
-        assert body["message"] == "The upload payload is larger than the accepted envelope allows."
+        body = _refusal(router, project_uid, _framed(TRANSPORT_LIMIT + 1, ZIP))
+        assert body["details"] == {"field": "file", "constraint": "bundle_unreadable"}
+        assert body["message"] == "The archive could not be read as a ZIP file."
 
     def test_the_limit_is_checked_before_the_body_is_parsed(self, router: Surface) -> None:
         """An oversize body that is *also* unparseable answers ``max_bytes``.
