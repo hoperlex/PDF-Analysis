@@ -343,7 +343,7 @@ def decode_png(payload: bytes) -> Any:
 _ANNOTATIONS = frozenset({"$schema", "$id", "title", "description", "contract_version"})
 _KEYWORDS = frozenset({
     "type", "enum", "const", "required", "properties", "additionalProperties", "items",
-    "minItems", "maxItems", "minimum", "maximum", "exclusiveMinimum", "pattern", "$ref",
+    "minItems", "maxItems", "minimum", "maximum", "exclusiveMinimum", "minLength", "pattern", "$ref",
     "$defs", "if", "then",
 })
 
@@ -395,6 +395,8 @@ def _check(value: Any, schema: dict[str, Any], root: dict[str, Any], path: str) 
         errors.append(f"{path}: enum")
     if isinstance(value, str) and "pattern" in schema and re.search(schema["pattern"], value) is None:
         errors.append(f"{path}: pattern")
+    if isinstance(value, str) and "minLength" in schema and len(value) < schema["minLength"]:
+        errors.append(f"{path}: minLength")
     if _type_ok(value, "number"):
         if "minimum" in schema and value < schema["minimum"]:
             errors.append(f"{path}: minimum")
