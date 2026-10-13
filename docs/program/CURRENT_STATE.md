@@ -121,6 +121,13 @@
 
 ## Active development, 2026-10-08 — W52 Stage C backend integration
 
+**2026-10-13 — W54 + W55a released as `v0.5.0`.** After `R-111`'s consolidated validation
+(`W55A-INT-GATE-01`: literal `GATE OK` on `23fd729`), the owner instructed publication of that
+exact SHA. It is deployed (run `38356461757`), passed the live preflight and is tagged `v0.5.0`
+(`W54-INT-MAIN-01.md`). Migration head `0020_norms_search`; a separate `worker` service runs
+jobs. «Нормы» awaits the corpus import (P4). The corpus operations — repairs, embedding build,
+bundle — are not yet run.
+
 **2026-10-12 — W53 released as `v0.4.0`.** Under `R-85` … `R-87` the owner accepted W53 by the
 short route: `2653dbf` was published to `origin/main`, the deployment workflow verified it, a
 live preflight passed and `v0.4.0` was tagged (`W53-INT-MAIN-01.md`). No full gate was run.
