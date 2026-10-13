@@ -228,7 +228,9 @@ last; nothing derived from it is in the repository.
 Cyrillic `х` counts as true though a reader might call it typography; (2) there is no recall figure on the real export (no ground truth of
 its OCR errors); (3) `cjk`, the degeneracy flags and `empty_text` never fired on real text, so they rest on synthetic and unit cases alone
 (no committed portal text carries a degenerate or empty body, and fixtures are FIXTURES'); (4) one document, one portal, one recognition
-model.
+model; (5) **the final precision is in-sample**: two rules (decisions 7 and 8) were changed because of what the same export showed, so
+1.000 is the figure after tuning on the document it is measured on, not an estimate for an unseen one. The wave executor re-ran the
+suites and six spot mutations independently (section 7).
 
 ### 4.2 Other risks
 
@@ -271,7 +273,7 @@ model.
 
 ## 6. Containment
 
-`git diff --name-only 19ea1525..HEAD` is the list of section 1 (23 paths). Against the grant:
+`git diff --name-only 19ea1525..HEAD` is the list of section 1 (22 paths). Against the grant:
 
 - **inside:** `src/auditmanager/analysis/stages/source_preparation.py`; `src/auditmanager/analysis/recognised/**` (5 files);
   `src/auditmanager/analysis/ports/artifacts.py` and `src/auditmanager/analysis/public.py` (role constants and export lines only);
@@ -348,3 +350,20 @@ Each decision names the alternative rejected.
     measurement; the mutation method and its results are in section 2.1. Rejected: a committed mutation tool (outside the grant).
 17. **The two bundle members are read whole** (`read(verify=True)`): INGEST bounds each at 16 MiB, and the reader needs the whole markdown
     to agree it with the list. Only the PDF, up to 250 MiB, is streamed. Rejected: streaming the markdown too (no gain at that bound).
+
+## 7. Verification by the wave executor (after the writer's hand-back)
+
+Run by the wave executor on its own lane stack (same ports), a freshly migrated database, tip `79b88974`, one invocation at a time; exit codes read directly.
+
+| Check | Result |
+| --- | --- |
+| `git diff --check 19ea1525..HEAD`; `git status --porcelain -uall` | exit 0; empty |
+| `tests/contract` (the three files excluded) on the committed tip | 752 passed, 18 927 subtests |
+| `tests/integration/analysis`, `analysis_engine`, `runs`, `p02_journey` | 411, 47, 200, 59 passed (the writer's counts) |
+| spot mutations (restored byte for byte, SHA-256 compared): the executor's role tuple; `has_text_layer` always true; the temporary file kept; the exemption widened to one capital and one digit; a wrong `source_sha256` in the inventory; a wrong digest held to the stream | all six red |
+
+The sixth and fifth are not rows of section 2.1: the existing `test_page_inventory_shape` and the S3 stage cases catch them. The temporary-file mutation
+left 19 `am-source-*` files in the temporary directory, as section 2 says it does; they were removed by name.
+
+Two corrections to the writer's hand-back message (not to this report): the lane is 12 commits above `19ea1525`, not 14, and the report's
+containment count was 23 paths where the list holds 22 (fixed above).
