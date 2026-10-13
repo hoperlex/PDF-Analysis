@@ -1,7 +1,7 @@
 {
   "case": "22-uploadDocument.refusal.max_bytes",
   "operation": "uploadDocument",
-  "purpose": "the 26 MiB transport boundary, over side: one byte more and the transport guard answers instead, with a different constraint",
+  "purpose": "the upload route's cap, over side: a request that declares one byte more than 263192576 is refused by the transport with a different constraint from the envelope's, before any of its body is read",
   "captured_through": "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()",
   "pre_authorization": "Captured after the T-6 seam landed. Every request here presents the configured bearer credential and is answered. No record here exercises a caller's rights, so none pins 401 or 403.",
   "exception": null,
@@ -15,6 +15,10 @@
         "Bearer w13-baseline-static-token"
       ],
       [
+        "Content-Length",
+        "263192577"
+      ],
+      [
         "Content-Type",
         "multipart/form-data; boundary=w13baselineboundary"
       ],
@@ -23,8 +27,8 @@
         "w13base-{{session_tag}}-overlimit"
       ]
     ],
-    "body_length": 27262977,
-    "body_note": "a framed multipart body of exactly 27262977 bytes"
+    "body_length": 0,
+    "body_note": "no body at all: the request declares a Content-Length of 263192577 bytes, one over the upload route's cap, and is refused before the body is read"
   },
   "response": {
     "status": 422,

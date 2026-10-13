@@ -91,8 +91,12 @@ TIMESTAMP_FIELDS = (
     "completed_at",
 )
 
-#: The transport's multipart body limit, ``multipart.MAX_BODY``. 26 MiB.
+#: The transport's multipart body limit for every route that is not an upload,
+#: ``multipart.MAX_BODY``. 26 MiB.
 TRANSPORT_MAX_BODY = 27262976
+#: The upload route's own limit, ``multipart.UPLOAD_MAX_BODY`` (`W55B-STREAM-01`): a 250 MiB
+#: bundle and the framing around it. 251 MiB.
+TRANSPORT_UPLOAD_MAX_BODY = 263192576
 #: The admission envelope's size bound, ``ingest.MAX_BYTES``. 25 MiB, and the number that
 #: appears in the refusal as ``byte_size <= 26214400``.
 ENVELOPE_MAX_BYTES = 26214400
@@ -1500,19 +1504,21 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
 
     # 18 -- the envelope's own size bound, reached through the transport -------------
     # tests/integration/ingest/test_size_guard_boundary.py: every oversize fixture in the
-    # repository is over BOTH limits, so the transport always answers first. The body
-    # below is framed to exactly the transport limit, so the transport lets it through
-    # and the envelope is the guard that speaks.
-    assert ENVELOPE_MAX_BYTES < TRANSPORT_MAX_BODY, (
+    # repository is over BOTH limits of the old transport, so the transport always answered
+    # first. The body below is framed to exactly the limit every OTHER route still has, which
+    # is far under the upload route's own (`W55B-STREAM-01`), so the transport lets it through
+    # and the envelope is the guard that speaks. Its answer has not changed by a byte; what
+    # moved is why the transport lets it through.
+    assert ENVELOPE_MAX_BYTES < TRANSPORT_MAX_BODY < TRANSPORT_UPLOAD_MAX_BODY, (
         "no body can reach the envelope's size bound through the transport"
     )
     t = Tokens()
     at_limit = record(
         "18-uploadDocument.refusal.byte_size",
         "uploadDocument",
-        "the 26 MiB transport boundary, under side: a framed body of exactly "
-        f"{TRANSPORT_MAX_BODY} bytes passes the transport, and the envelope refuses it "
-        f"with byte_size <= {ENVELOPE_MAX_BYTES}",
+        "a framed body of exactly the 26 MiB every other route is capped at: well inside "
+        f"the upload route's {TRANSPORT_UPLOAD_MAX_BODY}, it passes the transport, and the "
+        f"envelope refuses it with byte_size <= {ENVELOPE_MAX_BYTES}",
         "POST",
         f"/projects/{project_uid}/documents",
         headers={
@@ -1533,25 +1539,38 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     correlation(at_limit, t)
     content_length(at_limit, t)
 
-    # 22 -- the same boundary, over side --------------------------------------------
+    # 22 -- the upload route's own cap, over side ------------------------------------
+    # `W55B-STREAM-01` moved this boundary: a body one byte over 26 MiB is no longer the
+    # transport's to refuse on the upload route (it reaches the envelope, as record 18's
+    # does), so the over side is now one byte over the route's 251 MiB. A body that size
+    # is not built in a test process: the request DECLARES it -- ``Content-Length`` is one
+    # byte over the cap -- and carries no body, because the cap is applied to the
+    # declaration before a byte is read. That is the path the old record exercised (its
+    # declared length was over the limit too), and the answer is the same bytes.
     t = Tokens()
     over = record(
         "22-uploadDocument.refusal.max_bytes",
         "uploadDocument",
-        "the 26 MiB transport boundary, over side: one byte more and the transport "
-        "guard answers instead, with a different constraint",
+        "the upload route's cap, over side: a request that declares one byte more than "
+        f"{TRANSPORT_UPLOAD_MAX_BODY} is refused by the transport with a different "
+        "constraint from the envelope's, before any of its body is read",
         "POST",
         f"/projects/{project_uid}/documents",
         headers={
             "Idempotency-Key": f"w13base-{tag}-overlimit",
             "Content-Type": f"multipart/form-data; boundary={MULTIPART_BOUNDARY}",
+            "Content-Length": str(TRANSPORT_UPLOAD_MAX_BODY + 1),
         },
-        body=sized_multipart(TRANSPORT_MAX_BODY + 1),
-        body_note=f"a framed multipart body of exactly {TRANSPORT_MAX_BODY + 1} bytes",
+        body=b"",
+        body_note=(
+            f"no body at all: the request declares a Content-Length of "
+            f"{TRANSPORT_UPLOAD_MAX_BODY + 1} bytes, one over the upload route's cap, and "
+            "is refused before the body is read"
+        ),
         tokens=t,
     )
     assert json_of(over)["details"]["constraint"] == "max_bytes", (
-        "one byte over the transport limit did not reach the transport guard"
+        "one byte over the upload route's cap did not reach the transport guard"
     )
     t.add("project_uid", project_uid, "the identity case 01 allocated")
     correlation(over, t)
