@@ -474,9 +474,17 @@ def test_the_new_negatives_and_positives_are_in_the_fixture_registries() -> None
     the ``every valid but unusual positive`` test of the fixtures run them."""
     assert {"polygon_with_two_points", "polygon_without_points", "unknown_shape_type"} <= set(
         an.BLOCKS_INVALID)
-    for name in ("rectangle_with_empty_polygon_points", "rectangle_with_null_polygon_points",
-                 "block_without_shape_type"):
-        assert judge(positives.POSITIVES[name]())[:2] == (None, None), name
+    expected = {
+        "rectangle_with_empty_polygon_points": lambda b: b["polygon_points"] == [],
+        "rectangle_with_null_polygon_points": lambda b: b["polygon_points"] is None,
+        "block_without_shape_type": lambda b: "shape_type" not in b,
+    }
+    for name, shows in expected.items():
+        data = positives.POSITIVES[name]()
+        assert judge(data)[:2] == (None, None), name
+        with extract_bundle(io.BytesIO(data)) as bundle:
+            blocks = json.loads(bundle.read_bytes("blocks"))["blocks"]
+        assert blocks and all(shows(b) for b in blocks), f"{name} does not show what its name says"
 
 
 def test_every_block_type_and_a_stamp_without_an_ordinal_or_a_crop_are_accepted() -> None:
