@@ -123,8 +123,8 @@
 
 **2026-10-13 — W54 + W55a released as `v0.5.0`.** After `R-111`'s consolidated validation
 (`W55A-INT-GATE-01`: literal `GATE OK` on `23fd729`), the owner instructed publication of that
-exact SHA. It is deployed (run `38356461757`), passed the live preflight and is tagged `v0.5.0`
-(`W54-INT-MAIN-01.md`). Migration head `0020_norms_search`; a separate `worker` service runs
+exact SHA, tagged `v0.5.0`; the publication record is `W54-INT-MAIN-01.md`. What the stand runs
+now is answered by `infra/deploy/verify-deployed.sh`, not by this file. Migration head `0020_norms_search`; a separate `worker` service runs
 jobs. «Нормы» awaits the corpus import (P4). The corpus operations — repairs, embedding build,
 bundle — are not yet run.
 
