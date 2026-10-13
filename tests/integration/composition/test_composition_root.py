@@ -187,11 +187,15 @@ class TestTheInjectedEnvironmentGovernsTheWholeWiring:
     def test_the_wired_provider_takes_its_ceiling_from_the_injected_environment(
         self,
     ) -> None:
+        # 0.95, not the 0.01 W5CERT-DEF-2 was found with: since `W55B-BUDGET-01` a ceiling
+        # below about 0.79 USD leaves no input budget for the 30-page AR set and refuses the
+        # start. The case needs a value the process does not carry, and any accepted
+        # non-default one is that.
         app = build_application(
-            environ=_base_env() | {COST_CEILING_ENV: "0.01", PROVIDER_MODE_ENV: "recorded"}
+            environ=_base_env() | {COST_CEILING_ENV: "0.95", PROVIDER_MODE_ENV: "recorded"}
         )
-        assert app.settings.run_cost_ceiling_usd == 0.01
-        assert app.provider_config.run_cost_ceiling_usd == 0.01, (
+        assert app.settings.run_cost_ceiling_usd == 0.95
+        assert app.provider_config.run_cost_ceiling_usd == 0.95, (
             "the provider enforces the ceiling; if it reads a different environment from "
             "the one that produced AppSettings, the ceiling a caller set is not the "
             "ceiling the run obeys"
@@ -205,7 +209,7 @@ class TestTheInjectedEnvironmentGovernsTheWholeWiring:
         back to the same 1.00 default and looked consistent. A test pinning 1.00 would
         have passed against the defect. These values are ones the process does not carry.
         """
-        for ceiling in ("0.25", "2.50"):
+        for ceiling in ("0.90", "2.50"):
             app = build_application(
                 environ=_base_env()
                 | {COST_CEILING_ENV: ceiling, PROVIDER_MODE_ENV: "recorded"}

@@ -30,6 +30,7 @@ from pathlib import Path
 
 import pytest
 
+from auditmanager.analysis.public import REFERENCE_DOCUMENT_CHARACTERS, input_budget_characters
 from auditmanager.bootstrap.settings import (
     COST_CEILING_ENV,
     MODEL_ID_ENV,
@@ -90,9 +91,15 @@ def test_an_empty_ceiling_falls_back_to_the_same_value_not_to_zero() -> None:
 
 
 def test_an_explicit_ceiling_still_wins() -> None:
-    """The default must not be applied over a configured value."""
-    env = _base_env() | {COST_CEILING_ENV: "0.25"}
-    assert load(env).run_cost_ceiling_usd == 0.25
+    """The default must not be applied over a configured value.
+
+    0.90, not the 0.25 this case used before `W55B-BUDGET-01`: a ceiling below about 0.79 USD
+    leaves the primary model no input budget for the 30-page AR set and now refuses the
+    start (``TestTheAnalysisInputBudget``). Any accepted value other than the 1.00 default
+    discriminates equally well.
+    """
+    env = _base_env() | {COST_CEILING_ENV: "0.90"}
+    assert load(env).run_cost_ceiling_usd == 0.90
 
 
 class TestTheModelDefaults:
@@ -189,3 +196,97 @@ class TestTheNormsSearchTimeout:
         env = _base_env() | {NORMS_SEARCH_TIMEOUT_ENV: value}
         with pytest.raises(ConfigurationError):
             load(env)
+
+
+class TestTheAnalysisInputBudget:
+    """`W55B-BUDGET-01` (G-11, R-118): derived once at start-up, never a literal, refused when too small.
+
+    ``AppSettings.input_budget_characters`` is the figure ``startRun`` and ``reauditRun`` are
+    checked against. It follows the two operator settings it is derived from -- the model and
+    the per-run cost ceiling -- so the cases below move those and watch the figure move, and a
+    pair that cannot hold the 30-page AR document set (93 690 pypdfium2 characters) is refused
+    with ``ConfigurationError`` before anything is wired.
+    """
+
+    def test_an_unconfigured_process_derives_the_budget_of_the_pinned_model_and_the_owner_s_ceiling(
+        self,
+    ) -> None:
+        env = _base_env()
+        env.pop(MODEL_ID_ENV, None)
+        env.pop(COST_CEILING_ENV, None)
+        settings = load(env)
+        assert type(settings.input_budget_characters) is int
+        assert settings.input_budget_characters == input_budget_characters(
+            "claude-opus-5", _declared_ceiling()
+        )
+        # "≈ 50 pages of text" (plan section B3.3): the 30-page AR set fits with room.
+        assert 140_000 <= settings.input_budget_characters <= 160_000
+        assert settings.input_budget_characters >= 1.5 * REFERENCE_DOCUMENT_CHARACTERS
+
+    def test_the_ceiling_moves_the_budget(self) -> None:
+        low = load(_base_env() | {COST_CEILING_ENV: "0.90"}).input_budget_characters
+        high = load(_base_env() | {COST_CEILING_ENV: "2.50"}).input_budget_characters
+        assert low < load(_base_env() | {COST_CEILING_ENV: "1.00"}).input_budget_characters < high
+        assert high == input_budget_characters("claude-opus-5", 2.5)
+
+    def test_the_model_moves_the_budget(self) -> None:
+        opus = load(_base_env() | {MODEL_ID_ENV: "claude-opus-5"}).input_budget_characters
+        sonnet = load(_base_env() | {MODEL_ID_ENV: "claude-sonnet-5"}).input_budget_characters
+        assert sonnet == input_budget_characters("claude-sonnet-5", _declared_ceiling())
+        assert sonnet > opus, "the cheaper tier buys more input for the same ceiling"
+
+    def test_the_budget_is_derived_from_the_settings_the_process_really_carries(self) -> None:
+        """Not from the module's default: the figure follows what ``load`` resolved."""
+        env = _base_env() | {COST_CEILING_ENV: "1.37", MODEL_ID_ENV: "claude-sonnet-5"}
+        settings = load(env)
+        assert settings.input_budget_characters == input_budget_characters(
+            settings.model_id, settings.run_cost_ceiling_usd
+        )
+        assert settings.run_cost_ceiling_usd == 1.37 and settings.model_id == "claude-sonnet-5"
+
+    @pytest.mark.parametrize("ceiling", ["0.01", "0.25", "0.50", "0.79"])
+    def test_a_ceiling_that_cannot_hold_the_ar_set_refuses_the_start_with_the_figures(
+        self, ceiling: str
+    ) -> None:
+        with pytest.raises(ConfigurationError) as refused:
+            load(_base_env() | {COST_CEILING_ENV: ceiling})
+        message = str(refused.value)
+        derived = input_budget_characters("claude-opus-5", float(ceiling))
+        assert str(derived) in message, "the message must carry the budget the pair leaves"
+        assert str(REFERENCE_DOCUMENT_CHARACTERS) in message, "...and the figure it fell short of"
+        assert COST_CEILING_ENV in message and MODEL_ID_ENV in message
+
+    def test_the_refusal_bites_exactly_where_the_budget_stops_admitting_the_ar_set(self) -> None:
+        refused = [
+            cents for cents in range(60, 100)
+            if input_budget_characters("claude-opus-5", cents / 100) < REFERENCE_DOCUMENT_CHARACTERS
+        ]
+        first_admitted = (max(refused) + 1) / 100
+        load(_base_env() | {COST_CEILING_ENV: f"{first_admitted:.2f}"})
+        with pytest.raises(ConfigurationError):
+            load(_base_env() | {COST_CEILING_ENV: f"{max(refused) / 100:.2f}"})
+
+    def test_the_same_ceiling_is_enough_for_a_cheaper_model(self) -> None:
+        """The refusal is of the *pair*: 0.40 USD starves the primary model and feeds the cheaper tier."""
+        with pytest.raises(ConfigurationError):
+            load(_base_env() | {COST_CEILING_ENV: "0.40", MODEL_ID_ENV: "claude-opus-5"})
+        assert load(
+            _base_env() | {COST_CEILING_ENV: "0.40", MODEL_ID_ENV: "claude-sonnet-5"}
+        ).input_budget_characters >= REFERENCE_DOCUMENT_CHARACTERS
+
+    def test_a_model_the_lock_does_not_pin_refuses_the_start(self) -> None:
+        with pytest.raises(ConfigurationError, match=MODEL_ID_ENV):
+            load(_base_env() | {MODEL_ID_ENV: "claude-opus-4"})
+
+    @pytest.mark.parametrize("ceiling", ["nan", "inf", "-inf"])
+    def test_a_ceiling_that_is_not_a_finite_amount_refuses_the_start(self, ceiling: str) -> None:
+        with pytest.raises(ConfigurationError, match=COST_CEILING_ENV):
+            load(_base_env() | {COST_CEILING_ENV: ceiling})
+
+    def test_the_refusal_reads_as_a_ceiling_finding_to_the_readiness_command(self) -> None:
+        """``infra/deploy/readiness.sh`` sorts a ``CONFIG-ERROR`` by the variable it names: this
+        one must name the ceiling and must not name the provider mode."""
+        with pytest.raises(ConfigurationError) as refused:
+            load(_base_env() | {COST_CEILING_ENV: "0.5"})
+        assert COST_CEILING_ENV in str(refused.value)
+        assert PROVIDER_MODE_ENV not in str(refused.value)
