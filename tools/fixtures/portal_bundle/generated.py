@@ -15,7 +15,8 @@ from pathlib import Path
 from ar_corpus import document, pdfwrite
 from ar_corpus.pdfwrite import Name
 
-from .bundle import PortalFiles, make_files, text_blocks
+from . import portal_format as fmt
+from .bundle import PortalFiles, build_bundle, make_files, text_blocks
 from .pdffacts import read_pages
 
 OVERSIZE_MAGIC = b"PK\x03\x04"           # the part still sniffs as a ZIP
@@ -140,3 +141,26 @@ def files_with_block(stem: str = "page_without_text_with_block", *, page_count: 
                          "Текст получен только из блока портала."}
     blocks = text_blocks(pages, only=range(len(pages)), bodies=recognised)
     return make_files(pdf, stem, blocks=blocks)
+
+
+def bundle_with_pages(count: int) -> bytes:
+    """A bundle around `pdf_with_n_pages(count)`: accepted up to 500 pages, refused past it.
+
+    The block list is capped at 500 pages because the pinned schema allows no more, so a
+    501-page bundle breaks the page-count rule and nothing else.
+    """
+    pdf = pdf_with_n_pages(count)
+    pages = read_pages(pdf)
+    files = make_files(pdf, f"pages_{count}", pages=pages[:fmt.MAX_PAGES])
+    expect = None if count <= fmt.MAX_PAGES else "page_count"
+    return build_bundle(files, expect=expect).data
+
+
+def bundle_without_block_on_textless_page() -> bytes:
+    """`files_without_block` as an archive: refused, because one page has neither."""
+    return build_bundle(files_without_block(), expect="every_page_has_extractable_text").data
+
+
+def bundle_with_block_on_textless_page() -> bytes:
+    """`files_with_block` as an archive: the same PDF, accepted."""
+    return build_bundle(files_with_block()).data

@@ -255,7 +255,8 @@ class Archive:
             offset = take()
         return csize, usize, offset
 
-    def _data_start(self, entry: Entry) -> int:
+    def data_offset(self, entry: Entry) -> int:
+        """Where the member's data starts, after checking its local header agrees."""
         header = self._read(entry.header_offset, 30)
         if header[:4] != _LOCAL_SIGNATURE:
             raise ArchiveError(f"entry {entry.index}: no local header signature")
@@ -275,7 +276,7 @@ class Archive:
         """
         if entry.method not in (zw.STORED, zw.DEFLATED):
             raise ArchiveError(f"entry {entry.index}: compression method {entry.method}")
-        start = self._data_start(entry)
+        start = self.data_offset(entry)
         remaining = entry.compressed_size
         if entry.method == zw.STORED:
             position = start

@@ -167,16 +167,18 @@ def _member_name(stem: str, role: str, encoding: str) -> tuple[bytes, int, bytes
 def pack(
     files: PortalFiles, *, encoding: str = "utf8_flag", deflate: str = "stored_blocks",
     descriptors: bool = False, zip64: bool = False, stored: bool = False,
+    roles: Sequence[str] | None = None,
 ) -> list[zipwrite.Member]:
     """The archive members for a bundle's files, in the fixed member order.
 
     The PDF is stored (it is compressed already); the others are method 8, with a
-    compressor chosen by `deflate`. `stored=True` stores everything.
+    compressor chosen by `deflate`. `stored=True` stores everything. `roles` limits the
+    archive to the named members, which is how a member is left out.
     """
     members: list[zipwrite.Member] = []
     present = files.member_bytes()
     for role in fmt.ROLE_ORDER:
-        if role not in present:
+        if role not in present or (roles is not None and role not in roles):
             continue
         name, flags, local_extra, central_extra = _member_name(files.stem, role, encoding)
         method = zipwrite.STORED if stored or role == fmt.ROLE_PDF else zipwrite.DEFLATED
