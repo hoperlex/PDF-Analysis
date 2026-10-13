@@ -61,6 +61,7 @@ from auditmanager.analysis.text import (
     load_provider_config,
     run_text_analysis,
 )
+from auditmanager.analysis.text.budget import REFERENCE_DOCUMENT_CHARACTERS, input_budget_characters
 from auditmanager.analysis.text.proxy import ProxyDispatchError
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
 
@@ -71,6 +72,7 @@ __all__ = [
     "CONTRACT_VERSION",
     "NORMALIZATION_DESCRIPTION",
     "NORMALIZATION_ID",
+    "REFERENCE_DOCUMENT_CHARACTERS",
     "ROLE_BLOCK_INDEX",
     "ROLE_DOCUMENT_GRAPH",
     "ROLE_PAGE_CROPS",
@@ -101,6 +103,7 @@ __all__ = [
     "TextAnalysisOutcome",
     "default_registry",
     "document_text",
+    "input_budget_characters",
     "load_provider_config",
     "publish_artifact",
     "read_artifact",
