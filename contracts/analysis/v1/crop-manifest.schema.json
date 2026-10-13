@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auditmanager:analysis:crop-manifest:v1",
+  "title": "CropManifest v1 (the content of geometry.page_crops)",
+  "contract_version": "1.0.0-draft.1",
+  "description": "The content schema of the `geometry.page_crops` artifact (P02_SEAMS.md section 4.5). Until `W55B-SEAL-01` the manifest was explicitly empty under `crop_policy: none` (OD-04); adding this content schema is the flip condition OD-04 carried. The manifest names crops by `portal_block_id` and `blob_id` and never carries an object key or a URL; the PNGs are blobs of role `geometry.crop_image`, referenced only from here. Pixel bytes are stable within one image only, so a consumer relies on `sha256` as recorded and a test asserts properties, never recorded bytes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_role",
+    "artifact_version",
+    "version_uid",
+    "crop_policy",
+    "crops"
+  ],
+  "properties": {
+    "artifact_role": {
+      "const": "geometry.page_crops"
+    },
+    "artifact_version": {
+      "const": "1.0.0"
+    },
+    "version_uid": {
+      "type": "string",
+      "pattern": "^ver_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "crop_policy": {
+      "enum": [
+        "none",
+        "portal_image_blocks"
+      ]
+    },
+    "crops": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/crop"
+      }
+    }
+  },
+  "if": {
+    "properties": {
+      "crop_policy": {
+        "const": "none"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "crops": {
+        "maxItems": 0
+      }
+    }
+  },
+  "$defs": {
+    "crop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "portal_block_id",
+        "page_number",
+        "bbox_norm",
+        "render_profile",
+        "blob_id",
+        "sha256",
+        "size_bytes",
+        "width_px",
+        "height_px"
+      ],
+      "properties": {
+        "portal_block_id": {
+          "type": "string",
+          "pattern": "^blk_[0-9a-f]{32}$"
+        },
+        "page_number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "bbox_norm": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "render_profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "renderer",
+            "scale",
+            "min_long_side_px",
+            "max_pixels",
+            "format"
+          ],
+          "properties": {
+            "renderer": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Renderer name and version as pinned in the lock, e.g. `pypdfium2 5.13.0`."
+            },
+            "scale": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Pixels per PDF point of the clip render."
+            },
+            "min_long_side_px": {
+              "const": 800
+            },
+            "max_pixels": {
+              "const": 4000000
+            },
+            "format": {
+              "const": "png"
+            }
+          }
+        },
+        "blob_id": {
+          "type": "string",
+          "pattern": "^blob_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "width_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

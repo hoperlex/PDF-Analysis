@@ -145,7 +145,7 @@ def test_every_artifact_shape_names_a_consumer_or_declares_it_has_none(
 def test_every_artifact_shape_points_at_its_section(artifact_rows) -> None:
     for row in artifact_rows:
         section = next(value for key, value in row.items() if key.strip() == "§")
-        assert re.fullmatch(r"4\.\d", section.strip()), (
+        assert re.fullmatch(r"4\.\d{1,2}", section.strip()), (
             f"{row['Artifact role']} points at section {section!r}"
         )
 
@@ -160,8 +160,11 @@ def test_each_declared_shape_has_a_body_in_section_4(
         heading = f"### {section} `{role}`"
         assert heading in seam_register_text, f"no body for {role} at {heading!r}"
         body = seam_register_text.split(heading, 1)[1]
-        assert f'"artifact_role": "{role}"' in body.split("\n### ")[0], (
-            f"{role}'s example does not declare its own artifact_role"
+        example = body.split("\n### ")[0]
+        # A blob role (`W55B-SEAL-01`: `geometry.crop_image`, a PNG) has no JSON root to carry
+        # `artifact_role`; its example is the `ArtifactRef` that names it, with `"role"`.
+        assert f'"artifact_role": "{role}"' in example or f'"role": "{role}"' in example, (
+            f"{role}'s example does not declare its own role"
         )
 
 

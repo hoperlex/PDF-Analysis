@@ -146,10 +146,20 @@ The first working product is one deliberately narrow audit use case:
 > review, opens each finding beside its source quotations, records an accept/reject
 > decision with a comment, and downloads a CSV for that exact document version and run.
 
-The accepted input envelope is one unencrypted PDF, at most 25 MiB and 30 pages. Every
-page must have extractable embedded text. Scanned/image-only,
-password-protected, mixed-file, ZIP and companion-file inputs fail explicitly as
-unsupported; OCR is not silently substituted.
+The accepted input envelope was one unencrypted PDF, at most 25 MiB and 30 pages, every
+page with extractable embedded text; scanned/image-only, password-protected, mixed-file, ZIP
+and companion-file inputs failed explicitly as unsupported, and OCR was not silently
+substituted.
+
+**Superseded by `W55B-SEAL-01` (owner rulings `R-116`, `R-117` and `R-119`).** An upload is now
+a *portal bundle*: one ZIP holding the PDF, the portal's block list and its recognised-text
+markdown, and optionally the portal's HTML (kept as a digest only) and its stamp audit, up to
+500 pages and 250 MiB. A bare PDF is refused. Every page needs an embedded text layer **or**
+at least one portal block, and the sentence "OCR is not silently substituted" becomes **"OCR
+is always marked"**: the portal's recognised text is stored as its own artifact, flagged for
+quality, shown beside the document marked as recognised, and never merged into the text layer
+or sent to a model. The rules are `docs/program/dispatch/W55-PLAN.md` section B3.1 and
+`P02_SEAMS.md` section 4.
 
 The only product question answered by PC-01 is:
 
@@ -209,7 +219,8 @@ Included:
 
 Deferred:
 
-- OCR, ZIP and every legacy companion format;
+- OCR as an analysis input and every legacy companion format other than the portal bundle
+  (the portal's recognised text is stored, marked and shown since `W55B-SEAL-01`, never analysed);
 - disciplines other than the single AR validation profile;
 - visual finding detection, block-analysis, finding merge, grounding-review,
   correction, normative verification and every optimization pipeline;

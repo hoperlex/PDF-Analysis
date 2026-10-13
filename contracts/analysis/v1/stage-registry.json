@@ -211,13 +211,19 @@
           "role": "source.markdown",
           "media_type": "text/markdown",
           "required": false,
-          "description": "Optional recognized Markdown companion for the same version."
+          "description": "The portal's recognised-text markdown (`<stem>_results.md`) for the same version. Optional only for a version that predates the portal-bundle upload; a bundle always carries it."
         },
         {
           "role": "source.structured_companion",
           "media_type": "application/json",
           "required": false,
-          "description": "Optional recognized structured companion produced by ingest, never a live provider response."
+          "description": "The portal's block list (`<stem>_blocks.json`) produced by ingest, never a live provider response. Optional only for a version that predates the portal-bundle upload; a bundle always carries it."
+        },
+        {
+          "role": "source.stamp_audit",
+          "media_type": "application/json",
+          "required": false,
+          "description": "The portal's stamp audit (`<stem>_stamp_audit.json`), stored with the version (G-10) and not read by any analysis stage. It is listed so that the version's input manifest names only roles this registry declares."
         }
       ],
       "produced_outputs": [
@@ -232,6 +238,12 @@
           "media_type": "application/json",
           "required": true,
           "description": "Deterministically extracted text layer with page and offset anchors."
+        },
+        {
+          "role": "prepared.recognised_text",
+          "media_type": "application/json",
+          "required": false,
+          "description": "Per portal block, the portal's recognised text marked quote_source=recognised with quality flags, and the portal's descriptions of IMAGE blocks as portal_description. Never merged into prepared.text_layer; absent for a version without a portal bundle."
         }
       ],
       "execution": {
@@ -279,6 +291,12 @@
           "media_type": "application/json",
           "required": true,
           "description": "Extracted text layer used to align blocks with text."
+        },
+        {
+          "role": "source.structured_companion",
+          "media_type": "application/json",
+          "required": false,
+          "description": "The portal's block list, normalised into geometry.portal_blocks. Absent for a version that predates the portal-bundle upload, which then publishes an empty crop manifest under crop_policy none."
         }
       ],
       "produced_outputs": [
@@ -292,7 +310,19 @@
           "role": "geometry.page_crops",
           "media_type": "application/json",
           "required": true,
-          "description": "Manifest of rendered crops referenced by blob_id and SHA-256; the manifest never contains an object key or URL."
+          "description": "Manifest of rendered crops referenced by blob_id and SHA-256; the manifest never contains an object key or URL. Its crop_policy is none (no crops; a version without a portal bundle) or portal_image_blocks (one crop per IMAGE block whose page passed the page-box check). Content schema: contracts/analysis/v1/crop-manifest.schema.json."
+        },
+        {
+          "role": "geometry.portal_blocks",
+          "media_type": "application/json",
+          "required": false,
+          "description": "The portal's blocks normalised to this product's page numbering, with the page-box check result per page. portal_block_id is the bundle's external identifier, not an identity of this product. Absent for a version without a portal bundle."
+        },
+        {
+          "role": "geometry.crop_image",
+          "media_type": "image/png",
+          "required": false,
+          "description": "Zero or more PNG blobs, one per crop listed in geometry.page_crops, content-addressed and referenced only from that manifest."
         }
       ],
       "execution": {

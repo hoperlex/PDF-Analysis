@@ -115,7 +115,9 @@ authority/effect-journal DDL; earlier migrations remain immutable. `W54-SEAL-01`
 `abandoned` publication and D-148's insert guards) and `0019_execution_workers` (the
 worker registry and `lease.worker_id`). `W55A-SEAL-01` owns `0020_norms_search` (the one
 current norms snapshot and its append-only history, `norm_paragraph.text_tsv` and
-`norm_document.designation_tokens`).
+`norm_document.designation_tokens`). `W55B-SEAL-01` owns `0021_portal_bundles` (the
+portal-bundle page ceiling of 500 and three nullable text-count columns on
+`document_version`).
 
 ### 3.1 Tables
 
@@ -247,9 +249,12 @@ guess.
 | `prepared.page_inventory` | `B2` `source_preparation` | `B2` `page_geometry_extraction` | 4.2 |
 | `prepared.text_layer` | `B2` `source_preparation` | `B2` `page_geometry_extraction`, `B2` `document_context_build`, `B3` `text_analysis`, `B4` grounding gate | 4.3 |
 | `geometry.block_index` | `B2` `page_geometry_extraction` | `B2` `document_context_build`, `B4` grounding gate | 4.4 |
-| `geometry.page_crops` | `B2` `page_geometry_extraction` | none in PC-01 (`OD-04`) | 4.5 |
+| `geometry.page_crops` | `B2` `page_geometry_extraction` | `B6` `listVersionPortalBlocks`; `block_analysis` is W56 (`OD-04` flipped by `W55B-SEAL-01`) | 4.5 |
 | `context.document_graph` | `B2` `document_context_build` | `B3` `text_analysis` | 4.6 |
 | `analysis.text_observations` | `B3` `text_analysis` | `B4` grounding gate | 4.7 |
+| `prepared.recognised_text` | `B2` `source_preparation` | `B6` `listVersionPortalBlocks`; no analysis stage (`R-117`) | 4.8 |
+| `geometry.portal_blocks` | `B2` `page_geometry_extraction` | `B6` `listVersionPortalBlocks`; `block_analysis` is W56 | 4.9 |
+| `geometry.crop_image` | `B2` `page_geometry_extraction` | `B6` `streamVersionPortalBlockCrop` | 4.10 |
 
 ### 4.1 The offset rule — read this before anything else
 
@@ -270,6 +275,13 @@ Python, `text[char_start:char_end]` on the concatenated sequence is the definiti
 The normalization is declared once, in `text_layer.normalization.id`, and applied
 once, by `source_preparation`. **No later stage normalizes again.** The grounding gate
 compares exactly, after that one declared normalization and nothing else.
+
+**What is not in this sequence** (`W55B-SEAL-01`, `R-116`, `R-117`). The portal's recognised
+text (§4.8) is a separate artifact: it is never merged into `prepared.text_layer`, it has no
+offsets here, and no evidence anchor indexes it. `document_version.text_character_count` is
+pypdfium2's character count over the whole document -- it includes generated line breaks and
+differs from this sequence's length -- and it is an input to the analysis input budget, never
+an offset and never a statement about this sequence.
 
 ### 4.2 `prepared.page_inventory`
 
@@ -297,9 +309,15 @@ compares exactly, after that one declared normalization and nothing else.
 * `page_number` is 1-based, contiguous from 1 to `page_count`, and is the **only**
   page addressing in this system. There is no page index, no page label and no
   PDF-internal object number anywhere in a seam.
-* `has_text_layer` must be `true` for every page. A page without extractable embedded
-  text is refused at ingest with `validation_failed`; it never reaches this artifact.
-  The field exists so the refusal is provable, not so a consumer can degrade.
+* `has_text_layer` is `true` for a page with extractable embedded text. A page with none is
+  admitted only when the portal's block list holds at least one block on that page
+  (`W55B-SEAL-01`, `R-116`: *OCR is always marked*, never substituted); otherwise it is refused
+  at ingest with `validation_failed` (`every_page_has_extractable_text`) and never reaches
+  this artifact. A page admitted that way is `has_text_layer: false` with `char_count: 0`, its
+  text comes only from §4.8 marked `recognised`, and its number is in
+  `document_version.textless_pages` when its pypdfium2 character count is below the frozen
+  threshold (50). The field exists so a consumer can tell the two cases apart, not so it can
+  degrade silently.
 * `rotation_deg` ∈ {0, 90, 180, 270}. Geometry in §4.4 is expressed **after** rotation
   is applied, so a consumer never re-applies it.
 
@@ -363,6 +381,9 @@ else, so `B3` must not normalize model output before writing an anchor.
 * `block_id` matches `^b_[0-9]{6}$` and is assigned deterministically in
   `(page_number, block_ordinal)` order across the whole document, starting at
   `b_000001`. It is stable for one `(version_uid, artifact_version)` pair.
+* **`block_id` is not `portal_block_id`.** `portal_block_id` (§4.9) is the portal's external
+  identifier for a block of its own block list; the two never mix, and neither is an
+  identity of this product.
 * **`block_id` is not a contract identifier.** It is an anchor inside one artifact.
   It is never a foreign key, never crosses a version boundary and never appears in the
   identifier catalog. `finding_evidence.block_id` stores it as a nullable secondary
@@ -387,15 +408,52 @@ else, so `B3` must not normalize model output before writing an anchor.
 }
 ```
 
-`OD-04`. The registry marks this a required output of a stage that allows neither
-`partial` nor `skipped`, and PC-01 does no visual detection. So the role is present,
-schema-valid and explicitly empty under a declared `crop_policy: none`, echoed in the
-stage metrics as `crop_policy=none` and `crop_count=0`. Its only contract consumer,
-`block_analysis`, is out of PC-01 scope and would fail closed on an empty list rather
-than degrade.
+`OD-04`, **flipped by `W55B-SEAL-01`** (`R-119`). The registry marks this a required output of
+a stage that allows neither `partial` nor `skipped`. It is now a manifest with a content
+schema, `contracts/analysis/v1/crop-manifest.schema.json`, under one of two policies:
 
-**Flip condition, carried from `OD-04`:** if any task adds a content schema for the
-crop manifest, this decision reopens.
+* `none` -- `crops: []`. A version without a portal bundle (published before W55b), exactly
+  as before: present, schema-valid and explicitly empty, echoed in the stage metrics as
+  `crop_policy=none` and `crop_count=0`.
+* `portal_image_blocks` -- one crop for each IMAGE block of the portal's block list whose page
+  passed the page-box check. A block on a page marked `geometry_mismatch` has **no** crop, by
+  design: a wrong crop is worse than none, and the page says so in §4.9.
+
+```json
+{
+  "artifact_role": "geometry.page_crops",
+  "artifact_version": "1.0.0",
+  "version_uid": "ver_01M2545JSD15ETSNNV904X991J",
+  "crop_policy": "portal_image_blocks",
+  "crops": [
+    {
+      "portal_block_id": "blk_4fd3e4dfbe094e4eafafda3adfb990a3",
+      "page_number": 13,
+      "bbox_norm": [0.763, 0.565, 0.973, 0.704],
+      "render_profile": {
+        "renderer": "pypdfium2 5.13.0", "scale": 2.5,
+        "min_long_side_px": 800, "max_pixels": 4000000, "format": "png"
+      },
+      "blob_id": "blob_01M2545JSD15ETSNNV904X991H",
+      "sha256": "…",
+      "size_bytes": 412039,
+      "width_px": 1026,
+      "height_px": 800
+    }
+  ]
+}
+```
+
+* The crop is a **clip render** of the PDF page, never the portal's `crop_url`, which is a
+  capability URL and is neither fetched, stored for display nor rendered.
+* The PNGs are content-addressed blobs of role `geometry.crop_image` (§4.10) and are referenced
+  only from this manifest; the manifest carries a `blob_id` and a digest and never an object
+  key or a URL.
+* **Pixel bytes are stable within one image only** (the renderer and its dependencies are part
+  of the bytes). A test asserts properties and same-environment repeatability, never a
+  recorded crop; a consumer relies on the `sha256` recorded in the manifest it read.
+* `block_analysis` still consumes this manifest as a required input and nothing consumes a
+  crop in W55b: no model looks at one. The API reads it for `listVersionPortalBlocks`.
 
 ### 4.6 `context.document_graph`
 
@@ -479,10 +537,113 @@ never evidence: the grounding gate resolves against §4.3 and §4.4 only.
   before writing the artifact.
 * `char_start`/`char_end` are document-global offsets per §4.1, and
   `char_end - char_start` must equal the code-point length of `quote`.
+* Analysis reads `prepared.text_layer` and nothing else of the document: the portal's
+  recognised text and its descriptions of images (§4.8) are shown, marked, and **never sent
+  to a model** (`R-117`), so an `evidence.quote` is always a span of the PDF's own text layer.
 * `pages_analysed` is what makes the `partial` mapping checkable: `partial` is
   reported only when usable observations were produced over a **strict subset** of
   pages, with a typed error. An unavailable provider is `failed` with
   `dependency_unavailable`, never `partial`.
+
+### 4.8 `prepared.recognised_text`
+
+```json
+{
+  "artifact_role": "prepared.recognised_text",
+  "artifact_version": "1.0.0",
+  "version_uid": "ver_01M2545JSD15ETSNNV904X991J",
+  "results_sha256": "…",
+  "entries": [
+    {
+      "portal_block_id": "blk_41a8095edd934772829072bbb72b4ab1",
+      "page_number": 1,
+      "kind": "recognised_text",
+      "quote_source": "recognised",
+      "text": "ООО «СУ-10» …",
+      "flags": ["mixed_script"]
+    },
+    {
+      "portal_block_id": "blk_4fd3e4dfbe094e4eafafda3adfb990a3",
+      "page_number": 13,
+      "kind": "portal_description",
+      "text": "План этажа подземной автостоянки …"
+    }
+  ]
+}
+```
+
+`W55B-RECOGNISED-01` produces it from the bundle's `_results.md`. It is **optional**: absent for
+a version without a portal bundle, and `source_preparation` succeeds without it.
+
+* One entry per TEXT or IMAGE block the markdown holds (a STAMP block is only in the block
+  list). A TEXT body is `kind: recognised_text` with `quote_source: recognised`; an IMAGE body
+  is `kind: portal_description`, shown as «описание портала — в анализе не используется» and
+  never an input of any analysis stage (`R-117`).
+* `flags` is a lowercase snake_case list of quality signals: mixed-script words, Latin/Cyrillic
+  homoglyphs, CJK characters, doubled list markers and the norms degeneracy signals. Engineering
+  designations (`1.A`, `B25`, `A500C`, `REI 150`) are exempt by a pinned pattern.
+* `text` is markdown, kept as text. Nothing renders it as HTML.
+* Never merged into `prepared.text_layer` (§4.1), and no entry has offsets.
+
+### 4.9 `geometry.portal_blocks`
+
+```json
+{
+  "artifact_role": "geometry.portal_blocks",
+  "artifact_version": "1.0.0",
+  "version_uid": "ver_01M2545JSD15ETSNNV904X991J",
+  "blocks_sha256": "…",
+  "pages": [
+    { "page_number": 13, "width_px": 2482, "height_px": 3510, "rotation_deg": 0, "geometry": "ok" }
+  ],
+  "blocks": [
+    {
+      "portal_block_id": "blk_4fd3e4dfbe094e4eafafda3adfb990a3",
+      "page_number": 13,
+      "page_label": 13,
+      "ordinal": 18,
+      "block_type": "image",
+      "status": "recognized",
+      "bbox_norm": [0.763, 0.565, 0.973, 0.704]
+    }
+  ]
+}
+```
+
+`W55B-GEOMETRY-01` normalises the bundle's `_blocks.json` into it. **Optional**, for the reason
+§4.8 gives.
+
+* `page_number = page_index + 1`: the true 1-based PDF page and the only page addressing in this
+  system. `page_label` is the portal's own integer label, kept for display.
+* `portal_block_id` is the bundle's `blk_` and 32 hexadecimal digits: an **external**
+  identifier (`contracts/domain/v1/identifiers.json`, `external_identifiers`), never generated
+  here and addressed only together with a `version_uid`. `ordinal` is the portal's, not unique,
+  and `null` for a stamp. Blocks are ordered by page, ordinal (null last) and id.
+* **The page-box check.** The portal's `width_px` / `height_px` aspect is compared with the PDF
+  CropBox after `/Rotate`, within the frozen tolerance (0.5 % per side; the real pages differ by
+  about 0.06 %). A mismatch marks the page `geometry: geometry_mismatch`; no crop is cut for it
+  and the stage still reports success -- the mismatch is visible here and in «Блоки», never a
+  silent fallback.
+* `rotation_deg` ∈ {0, 90, 180, 270}; `bbox_norm` is in the page's normalised top-left space
+  (`coordinate_space: normalized_page_top_left`), each coordinate in [0, 1].
+* The wire shape `PortalBlock` joins this artifact with §4.8 and §4.5 on `portal_block_id`.
+
+### 4.10 `geometry.crop_image`
+
+```json
+{
+  "role": "geometry.crop_image",
+  "blob_id": "blob_01M2545JSD15ETSNNV904X991H",
+  "sha256": "…",
+  "size_bytes": 412039,
+  "media_type": "image/png"
+}
+```
+
+Not a JSON document: a PNG blob, shown here as the `ArtifactRef` that names it. **Zero or more
+per run**, one for each crop in §4.5, content-addressed (an equal crop is the same blob), and
+referenced only from the manifest. It carries no `artifact_role` root field because there is no
+root; the registry declares it so that the blob role is a known one.
 
 ## 5. Finding, observation, evidence and decision shapes
 
@@ -610,7 +771,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Fifty-two operations, sealed. `A5` generates the typed client from this document; `B6`
+Fifty-four operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -627,7 +788,8 @@ the account, registration and account-management operations under `R-55` ... `R-
 registry's `listWorkers` and `setWorkerIntake` on 2026-10-12 (stubs answering
 `dependency_unavailable` until `W54-WORKER-01`). `W55A-SEAL-01` added the seven norms
 operations on 2026-10-12 under `R-112` and `R-113` (stubs answering `dependency_unavailable`
-until `W55A-SEARCH-01`).
+until `W55A-SEARCH-01`). `W55B-SEAL-01` added the two portal-block reads on 2026-10-13 under
+`R-116` and `R-119` (stubs answering `dependency_unavailable` until `W55B-GEOMETRY-01`).
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -697,6 +859,8 @@ could.
 | `listNormSnapshots` | `GET /norms/snapshots` |
 | `listNormSnapshotEvents` | `GET /norms/snapshots/events` |
 | `setCurrentNormSnapshot` | `PUT /norms/snapshots/current` |
+| `listVersionPortalBlocks` | `GET /versions/{version_uid}/portal-blocks` |
+| `streamVersionPortalBlockCrop` | `GET /versions/{version_uid}/portal-blocks/{portal_block_id}/crop` |
 
 Rules that hold across the whole surface:
 
@@ -758,7 +922,10 @@ Rules that hold across the whole surface:
 
 | Decision | Where it lands |
 |---|---|
-| `OD-04` | §4.5 — empty crop manifest under `crop_policy: none`, with its flip condition |
+| `OD-04` | §4.5 — empty crop manifest under `crop_policy: none`; **flipped** by `W55B-SEAL-01` (`R-119`): a content schema, and `crop_policy: portal_image_blocks` for a bundle |
+| `R-116` | §4.2, §4.8 — uploads are portal bundles; OCR is always marked and never merged into the text layer |
+| `R-117` | §4.7, §4.8 — portal descriptions are shown, marked, and never used in analysis |
+| `R-118` | §7 — `startRun` and `reauditRun` refuse a version above the analysis input budget up front |
 | `OD-10` | `audit_run.interrupted_reason`; a stale `running` run reconciles to `failed`, and no `interrupted` state is invented |
 | `OD-11` | §6 in full — bytes, granularity, sort key and the `publishes_result` discriminator |
 | `OD-12` | `expert_decision_event.author_label`, a column, because deciding it later would have been a schema change |
@@ -784,8 +951,8 @@ pinning later is not a schema change; and `worker.worker_id` with `lease.worker_
 `nbd` and `nrc` (migration `0018`) are not listed here: their Stage-B owners allocate
 them in this same wave.
 
-There is no `Import` aggregate at all: PC-01 ingests one PDF through a direct upload
-command, the `import` state machine is not implemented, and PC-01 claims no
+There is no `Import` aggregate at all: PC-01 ingests one portal bundle (since `W55B-SEAL-01`; one PDF
+before it) through a direct upload command, the `import` state machine is not implemented, and PC-01 claims no
 conformance to it.
 
 ### 9.2 `audit_run` guards recorded as unevaluated — `OD-24`

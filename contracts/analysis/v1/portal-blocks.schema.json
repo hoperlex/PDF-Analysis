@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auditmanager:analysis:portal-blocks-input:v1",
+  "title": "PortalBlockList v1 (the bundle's _blocks.json)",
+  "contract_version": "1.0.0-draft.1",
+  "description": "Validates the `<stem>_blocks.json` member of a portal bundle (W55-PLAN.md sections B3.1 and B3.5). It is the portal's file, so unknown properties are tolerated at every level: the portal may add some, and refusing them would refuse a good bundle. What this product reads is required. Rules a JSON Schema cannot state are code rules of the ingest envelope and are listed in `x-envelope-rules`. `document_id`, `document_name`, `document_path` and every `crop_url` are the portal's: `document_id` collides with this product's `doc_` prefix and is ignored, and a `crop_url` is a capability URL that is never fetched, stored for display or rendered.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "coordinate_space",
+    "pages",
+    "blocks"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "coordinate_space": {
+      "const": "normalized_page_top_left"
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "required": [
+          "page_index",
+          "width_px",
+          "height_px",
+          "rotation"
+        ],
+        "properties": {
+          "page_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "width_px": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "height_px": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "rotation": {
+            "enum": [
+              0,
+              90,
+              180,
+              270
+            ]
+          }
+        }
+      }
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "block_id",
+          "page_index",
+          "page_label",
+          "ordinal",
+          "block_type",
+          "status",
+          "coords_norm"
+        ],
+        "properties": {
+          "block_id": {
+            "type": "string",
+            "pattern": "^blk_[0-9a-f]{32}$"
+          },
+          "page_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "page_label": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "ordinal": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "block_type": {
+            "enum": [
+              "text",
+              "image",
+              "stamp"
+            ]
+          },
+          "shape_type": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,39}$",
+            "description": "The portal's status. Observed: `recognized` and `failed`. A `failed` block is tolerated and shown as such."
+          },
+          "export_status": {
+            "type": "string"
+          },
+          "coords_norm": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "polygon_points": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "minItems": 3,
+            "maxItems": 64,
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "description": "The polygon's [x, y] vertices in the same normalised space, or null for a rectangle. Observed: 6 to 11 vertices."
+          },
+          "crop_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "x-envelope-rules": [
+    "pages[].page_index runs 0..n-1 without a gap or a repeat, and n equals the PDF's page count.",
+    "blocks[].block_id is unique in the file; every blocks[].page_index names a page.",
+    "coords_norm is [x0, y0, x1, y1] with x0 < x1 and y0 < y1.",
+    "ordinal is not unique (the portal numbers per page, and a stamp has none); order is by page, ordinal and block_id.",
+    "Every TEXT and IMAGE block has exactly one header in the recognised-text markdown, with the same type, and the markdown has no header for a block the list does not hold; a STAMP block has none."
+  ]
+}

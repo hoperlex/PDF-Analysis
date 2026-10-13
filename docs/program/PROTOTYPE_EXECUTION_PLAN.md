@@ -577,7 +577,7 @@ cannot recur.
 | `OD-01` | PDF text-extraction library | `P2-INT-00` pin, `P2-BHV-01`, `P2-META-01`, `P2-ENG-01` | a permissively licensed extractor giving per-character boxes plus a separate page-count and encryption probe; a copyleft library is blocked until the owner rules on its licence | `P2-INT-00` dispatch |
 | `OD-02` | model provider and model id | `P2-INT-00` pin, `P2-AI-01` | Anthropic first-party API with `claude-opus-5` (1M context; $5.00 per MTok input and $25.00 per MTok output on the 2026-06-24 cached rate table), with `claude-sonnet-5` ($2.00/$10.00) as the cheaper alternative. Confirm current pricing at decision time rather than quoting this row | `P2-INT-00` dispatch |
 | `OD-03` | live-run cost ceiling, payer and halt behavior | `P2-AI-01` guard, `P4-OPS-01`, `P4-BHV-01` | a per-run ceiling enforced by `cost_budget_exceeded` that never truncates the document, plus a campaign ceiling; automated tests make zero live calls | before the first live run |
-| `OD-04` | `geometry.page_crops` policy | `P2-ENG-01` scope and estimate | emit a schema-valid manifest with an empty crop list under a declared `crop_policy: none`, recorded in the stage metrics. Its only contract consumer is `block_analysis`, which is out of PC-01 scope and would fail closed rather than degrade. **Flip-condition:** if any task adds a content schema for the crop manifest, this decision reopens | `P2-ENG-01` dispatch |
+| `OD-04` | `geometry.page_crops` policy | `P2-ENG-01` scope and estimate | emit a schema-valid manifest with an empty crop list under a declared `crop_policy: none`, recorded in the stage metrics. Its only contract consumer is `block_analysis`, which is out of PC-01 scope and would fail closed rather than degrade. **Flip-condition:** if any task adds a content schema for the crop manifest, this decision reopens. **Flipped by `W55B-SEAL-01`** (`R-119`): `contracts/analysis/v1/crop-manifest.schema.json` is that schema, and a version with a portal bundle publishes `crop_policy: portal_image_blocks` | `P2-ENG-01` dispatch |
 | `OD-05` | finding and recommendation text language | `P2-AI-01` prompt bundle | Russian prose for reviewers, with machine fields, categories and identities ASCII | `P2-AI-01` dispatch |
 | `OD-06` | post-P1 root-lock owner | every P02 dependency addition | `P2-INT-00`, recorded as an ownership transfer at `PF-01` | `PF-01` acceptance |
 | `OD-07` | backend composition-root owner | all wiring | `P2-INT-01`, a single task dispatched once | `PF-01` acceptance |
@@ -610,7 +610,9 @@ stage metrics: the required *role* is present, no schema anywhere in `contracts/
 the manifest's body, and the emptiness is declared, attributable and tested, so it is not a
 silent fallback. Its only contract consumer, `block_analysis`, is out of PC-01 scope and
 would fail closed on an empty list rather than degrade silently. This is `OD-04`, and it
-carries a flip-condition.
+carries a flip-condition. *`W55B-SEAL-01` flipped it* (`R-119`): the manifest has a content
+schema and is non-empty for a version with a portal bundle; PC-01's empty manifest remains the
+answer for a version without one.
 
 **C-2 — `published` versus `succeeded`.** The `audit_run` machine has no `succeeded` state;
 its success terminal is `published`. `succeeded` exists only as a `StageResult` status on a
