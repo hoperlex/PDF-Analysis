@@ -33,9 +33,13 @@ index whose spans quietly point at the wrong characters.
 
 from __future__ import annotations
 
+import io
+import os
 import unicodedata
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import Any, BinaryIO, Final, Union
 
 from auditmanager.analysis.engine.serialization import canonical_bytes, sha256_hex
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -121,58 +125,86 @@ class ExtractedDocument:
         return len(self.pages)
 
 
-def probe_envelope(payload: bytes) -> int:
+#: What :func:`extract_document` reads: the document's bytes, or the path of a file that
+#: holds them. `W55B-RECOGNISED-01` (plan section B3.3): ``source_preparation`` streams the
+#: blob to a temporary file and hands its path, so a document of five hundred pages is never
+#: held whole in memory here -- ``pypdf`` reads the open file as it needs it and
+#: ``pdfplumber`` opens the path itself. Bytes remain accepted for the callers that have
+#: them. Neither library is ``pypdfium2``, so nothing here takes
+#: ``auditmanager.ingest``'s ``PDFIUM_LOCK``.
+PdfSource = Union[bytes, str, "os.PathLike[str]"]
+
+
+@contextmanager
+def _binary(source: PdfSource) -> Iterator[BinaryIO]:
+    """The source as an open binary stream, closed when the block ends."""
+    if isinstance(source, (bytes, bytearray)):
+        yield io.BytesIO(source)
+        return
+    with open(os.fspath(source), "rb") as handle:
+        yield handle
+
+
+def probe_envelope(source: PdfSource) -> int:
     """Page count and encryption, answered by ``pypdf`` without parsing content.
 
     ``OD-01`` requires this probe to be a separate library from the extractor, so an
     extractor that silently returns empty text for an encrypted file cannot be
     mistaken for one that read an empty document.
     """
-    import io
-
     from pypdf import PdfReader
     from pypdf.errors import PdfReadError
 
+    unreadable = DomainError(
+        ErrorCode.ANALYSIS_INPUT_INVALID,
+        message="the source blob is not a readable PDF document",
+        reason="source_unreadable",
+    )
     try:
-        reader = PdfReader(io.BytesIO(payload))
-    except (PdfReadError, ValueError, OSError) as exc:
-        raise DomainError(
-            ErrorCode.ANALYSIS_INPUT_INVALID,
-            message="the source blob is not a readable PDF document",
-            reason="source_unreadable",
-        ) from exc
+        with _binary(source) as stream:
+            try:
+                reader = PdfReader(stream)
+            except (PdfReadError, ValueError, OSError) as exc:
+                raise unreadable from exc
 
-    if reader.is_encrypted:
-        raise DomainError(
-            ErrorCode.ANALYSIS_INPUT_INVALID,
-            message=(
-                "the source document is encrypted; its content cannot be read and "
-                "the stage refuses rather than publishing an empty text layer"
-            ),
-            reason="source_encrypted",
-        )
-    try:
-        return len(reader.pages)
-    except (PdfReadError, ValueError) as exc:
-        raise DomainError(
-            ErrorCode.ANALYSIS_INPUT_INVALID,
-            message="the source document's page tree could not be read",
-            reason="source_unreadable",
-        ) from exc
+            if reader.is_encrypted:
+                raise DomainError(
+                    ErrorCode.ANALYSIS_INPUT_INVALID,
+                    message=(
+                        "the source document is encrypted; its content cannot be read and "
+                        "the stage refuses rather than publishing an empty text layer"
+                    ),
+                    reason="source_encrypted",
+                )
+            try:
+                return len(reader.pages)
+            except (PdfReadError, ValueError) as exc:
+                raise DomainError(
+                    ErrorCode.ANALYSIS_INPUT_INVALID,
+                    message="the source document's page tree could not be read",
+                    reason="source_unreadable",
+                ) from exc
+    except OSError as exc:  # the file itself could not be opened or read
+        raise unreadable from exc
 
 
-def extract_document(payload: bytes) -> ExtractedDocument:
-    """Extract every page's normalized text and line geometry, in page order."""
-    import io
+def extract_document(source: PdfSource) -> ExtractedDocument:
+    """Extract every page's normalized text and line geometry, in page order.
 
+    ``source`` is the document's bytes or the path of a file holding them
+    (:data:`PdfSource`); the result is the same for the same bytes either way.
+    """
     import pdfplumber
     from pdfminer.pdfparser import PDFSyntaxError
 
-    declared_pages = probe_envelope(payload)
+    declared_pages = probe_envelope(source)
+    opened: Any = (
+        io.BytesIO(source) if isinstance(source, (bytes, bytearray)) else os.fspath(source)
+    )
 
     pages: list[ExtractedPage] = []
     try:
-        with pdfplumber.open(io.BytesIO(payload)) as pdf:
+        with pdfplumber.open(opened) as pdf:
             if len(pdf.pages) != declared_pages:
                 raise DomainError(
                     ErrorCode.ANALYSIS_INPUT_INVALID,
@@ -267,6 +299,7 @@ __all__ = [
     "EXTRACTOR_NAME",
     "NORMALIZATION_DESCRIPTION",
     "NORMALIZATION_ID",
+    "PdfSource",
     "ExtractedDocument",
     "ExtractedLine",
     "ExtractedPage",
