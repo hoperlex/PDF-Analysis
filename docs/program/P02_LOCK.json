@@ -32,11 +32,29 @@
       "consumed_by": [
         "B3"
       ]
+    },
+    "pypdfium2": {
+      "version": "5.13.0",
+      "licence": "BSD-3-Clause OR Apache-2.0",
+      "purpose": "the portal-bundle envelope's reader: structure, encryption, page count and per-page character counts, opened from a file handle; renders the clip region of a portal IMAGE block. Not the text extractor: pdfplumber stays that.",
+      "consumed_by": [
+        "W55B-STREAM-01",
+        "W55B-INGEST-01",
+        "W55B-GEOMETRY-01"
+      ]
+    },
+    "Pillow": {
+      "version": "12.3.0",
+      "licence": "MIT-CMU",
+      "purpose": "encodes the crop PNGs that pypdfium2 renders",
+      "consumed_by": [
+        "W55B-GEOMETRY-01"
+      ]
     }
   },
   "rejected_candidates": {
     "PyMuPDF/fitz": "AGPL. OD-01 blocks a copyleft library until the owner rules otherwise. Not evaluated further.",
-    "pypdfium2 as the direct extractor": "Scored 12/12 on the corpus oracle and offers per-character boxes, so it was a genuine alternative. Rejected on API fit: pdfplumber's per-character dicts and line grouping map directly onto B2's block index with page, bounding box and text-span anchors, whereas pypdfium2 is lower level. It enters the lock anyway as a pdfplumber dependency, BSD-3-Clause and Apache-2.0."
+    "pypdfium2 as the direct extractor": "Scored 12/12 on the corpus oracle and offers per-character boxes, so it was a genuine alternative. Rejected on API fit: pdfplumber's per-character dicts and line grouping map directly onto B2's block index with page, bounding box and text-span anchors, whereas pypdfium2 is lower level. It entered the lock as a pdfplumber dependency, BSD-3-Clause and Apache-2.0, and W55B-SEAL-01 pins it directly (see pins) for the envelope and for crop rendering; the text extractor stays pdfplumber."
   },
   "models": {
     "$comment": "Recorded here so B3's cost ceiling and P4-OPS-01's cost measurement read one source. Rates are the 2026-06-24 cached rate table, per USD per million tokens.",

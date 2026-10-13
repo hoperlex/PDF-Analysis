@@ -35,6 +35,17 @@ dependencies = [
     # inside the envelope" without parsing content, so a 31-page or encrypted input is
     # refused before any extraction runs. BSD-3.
     "pypdf==6.18.0",
+    # `W55B-SEAL-01` (`W55-PLAN.md` section B3). These two were only transitive, through
+    # pdfplumber; the portal-bundle upload now depends on them directly, so a pdfplumber
+    # upgrade can no longer move them silently. Pinned at the versions the lock already held.
+    #
+    # pypdfium2 is the envelope's reader (structure, encryption, page count, per-page
+    # character counts) and renders the clip region of a crop; it reads a PDF from a file
+    # handle, which is what lets a 250 MiB upload stay out of memory. BSD-3-Clause OR
+    # Apache-2.0, with PDFium's own licences bundled.
+    "pypdfium2==5.13.0",
+    # Encodes the crop PNGs pypdfium2 renders (bitmap to PNG). MIT-CMU (HPND).
+    "Pillow==12.3.0",
     # Model provider SDK (OD-02). Anthropic first-party API. MIT.
     "anthropic==1.4.0",
     # --- Alpha transport pins, owner-ruled 2026-09-17 (R-2). ---
