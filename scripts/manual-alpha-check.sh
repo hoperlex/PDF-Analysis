@@ -267,17 +267,17 @@ check_fixture "PDF-encrypted" "fixtures/synthetic/ar/negative/encrypted.pdf" \
   "9513362c5d85dec1438406ffd4e77fef6d08bb18f104a5b107afc610dde8faba" "40514"
 check_fixture "PDF-image-only" "fixtures/synthetic/ar/negative/image_only.pdf" \
   "8917d48af68cffac071fdf75040d181a548d27d952baa05defbca48a2ca94325" "246242"
-check_fixture "PDF-pages" "fixtures/synthetic/ar/negative/too_many_pages.pdf" \
-  "acb3c347dbfe4b38efbc7e56f4389e97725b529966defa2a39c21e34f74da12a" "66487"
-check_fixture "PDF-size" "fixtures/synthetic/ar/negative/oversize.pdf" \
-  "623bf92bbbf989c1d350f9c8038f9dd6379ee1538100374fd230a81812a665ef" "27303204"
+# `W55B-INGEST-01` deleted `negative/too_many_pages.pdf` and `negative/oversize.pdf`: the limits are
+# 500 pages and 250 MiB, and a file that size is generated when a test runs, not committed. The two
+# runbook checks that pinned them went with them; the next lane (the browser upload) puts back
+# whatever the runbook needs for the generated cases.
 
 if [[ "$MODE" == "files" ]]; then
   if ((AUTO_FAILURES > 0)); then
     printf '\nFILES FAIL: %d проверок не прошло; отчёт: %s\n' "$AUTO_FAILURES" "$REPORT" >&2
     exit 1
   fi
-  printf '\nFILES OK: пять синтетических PDF совпадают с manifest; отчёт: %s\n' "$REPORT"
+  printf '\nFILES OK: три синтетических PDF совпадают с manifest; отчёт: %s\n' "$REPORT"
   exit 0
 fi
 
@@ -363,7 +363,7 @@ if ((AUTO_BLOCKED > 0)); then
   exit 2
 fi
 
-printf '\nPREFLIGHT OK: origin доступен, API закрыт, пять PDF целы; отчёт: %s\n' "$REPORT"
+printf '\nPREFLIGHT OK: origin доступен, API закрыт, три PDF целы; отчёт: %s\n' "$REPORT"
 
 if [[ "$MODE" == "preflight" ]]; then
   exit 0
