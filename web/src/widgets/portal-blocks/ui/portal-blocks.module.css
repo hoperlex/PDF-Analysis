@@ -1,0 +1,181 @@
+/*
+ * The «Блоки портала» tab (`W55B-WEB-BLOCKS`).
+ *
+ * Every colour is a token read and nothing here declares a token (`styling-layer.test.ts`):
+ * both palettes live in `globals.css`, so this file reaches the dark theme by construction.
+ * No `:not()` and no custom property, because the contrast census cannot read either; every
+ * rule below is reached by a screen in `tests/unit/styles/screens.ts`.
+ *
+ * Containment is the rule of the whole file. A recognised text is the portal model's
+ * output and can hold a line of any length (a markdown table, a URL, a run of digits), and a
+ * crop is up to 4 000 000 pixels: on a phone neither may widen the page. Text wraps anywhere
+ * it must; an image scales down to its column and never past a fixed height.
+ */
+
+.portal {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.summary {
+  margin: var(--am-gap-sm) 0 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.page {
+  margin-top: var(--am-gap-lg);
+  min-width: 0;
+}
+
+.pageTitle {
+  margin: 0 0 var(--am-gap-sm);
+  font-size: var(--am-text-lg);
+}
+
+.blocks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--am-gap-sm);
+}
+
+.block {
+  min-width: 0;
+  max-width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  overflow-wrap: anywhere;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+}
+
+.type {
+  margin: 0;
+  font-size: var(--am-text-md);
+  font-weight: 600;
+}
+
+.meta {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+/* The page-box verdict when it failed: a sentence, so it wraps where a badge would not. */
+.mismatch {
+  margin: var(--am-gap-sm) 0 0;
+  padding: 4px 10px;
+  border: 1px solid var(--am-degraded);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-degraded-light);
+  color: var(--am-degraded);
+  font-size: var(--am-text-sm);
+}
+
+.recognised,
+.description {
+  margin-top: var(--am-gap-sm);
+  min-width: 0;
+}
+
+/* «распознано»: the portal's OCR, never the PDF's text layer (`R-116`). */
+.marker {
+  display: inline-block;
+  margin: 0 0 var(--am-gap-xs);
+  padding: 0 9px;
+  border: 1px solid var(--am-accent);
+  border-radius: var(--am-radius-pill);
+  background: var(--am-accent-light);
+  color: var(--am-accent);
+  font-size: var(--am-text-xs);
+  line-height: 1.7;
+}
+
+/* «описание портала — в анализе не используется» (`R-117`). */
+.descriptionMarker {
+  display: inline-block;
+  margin: 0 0 var(--am-gap-xs);
+  padding: 0 9px;
+  border: 1px solid var(--am-inert);
+  border-radius: var(--am-radius-pill);
+  background: var(--am-inert-light);
+  color: var(--am-inert);
+  font-size: var(--am-text-xs);
+  line-height: 1.7;
+}
+
+/* The text itself: preformatted, escaped by React, wrapped wherever it must. */
+.text {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  font-family: inherit;
+  font-size: var(--am-text-md);
+  line-height: var(--am-leading-base);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.flags {
+  list-style: none;
+  margin: var(--am-gap-sm) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--am-gap-xs);
+}
+
+.flag {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.figure {
+  margin: var(--am-gap-sm) 0 0;
+  min-width: 0;
+}
+
+/*
+ * The crop. `width`/`height` come from the response, so the box is reserved before a byte
+ * arrives (no layout shift); `max-width` scales it to the column and `max-height` stops a
+ * tall drawing taking several screens, with `object-fit: contain` keeping its proportions
+ * inside the reserved box.
+ */
+.crop {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: 32rem;
+  object-fit: contain;
+  object-position: left top;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface-sunken);
+}
+
+.caption {
+  margin-top: var(--am-gap-xs);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.absent {
+  margin: var(--am-gap-sm) 0 0;
+  color: var(--am-ink-muted);
+  font-style: italic;
+}

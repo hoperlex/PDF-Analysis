@@ -34,20 +34,31 @@
  * character span, a coordinate — is carried on the response exactly as `getVersionBlocks`
  * answered it; nothing here is computed, rounded further or guessed at while data is
  * loading.
+ *
+ * **Two tabs since `W55B-WEB-BLOCKS`** (plan §B3.9). Once a version is chosen the screen
+ * shows «Блоки портала» — what the version's portal bundle brought, page by page
+ * (`widgets/portal-blocks`) — and, as the second tab, «Строки текста», the text-line index
+ * this screen showed before, moved to `text-lines.tsx` unchanged. The tab is page state like
+ * the choice of version, and like it does not survive a reload.
  */
 
 import { useState } from 'react';
 
-import type { BlockGeometry, DocumentVersion, Project, ProjectUid, VersionUid } from '@/shared/api';
-import { EmptyState, ErrorState, LoadingState, NotApplicableState, PageShell } from '@/shared/ui';
+import type { DocumentVersion, Project, ProjectUid } from '@/shared/api';
+import { EmptyState, ErrorState, LoadingState, PageShell } from '@/shared/ui';
 import { useProjectList } from '@/entities/project';
 import { useDocumentList } from '@/entities/document-version';
+import { PortalBlocks } from '@/widgets/portal-blocks';
 
-import { useVersionBlocks } from '../api/use-version-blocks';
+import { DEFAULT_BLOCK_TAB } from '../model/tabs';
+import type { BlockTab } from '../model/tabs';
+import { BlocksTabs } from './blocks-tabs';
+import { TextLines } from './text-lines';
 
 export function BlocksPage() {
   const [projectUid, setProjectUid] = useState<ProjectUid | null>(null);
   const [version, setVersion] = useState<DocumentVersion | null>(null);
+  const [tab, setTab] = useState<BlockTab>(DEFAULT_BLOCK_TAB);
 
   return (
     <PageShell
@@ -58,11 +69,6 @@ export function BlocksPage() {
           : version.display_title ?? version.source_filename ?? version.version_uid
       }
     >
-      <p>
-        Векторный граф блока здесь пока не строится: приложение вычисляет прямоугольные
-        границы блока на странице, но не его контур. Ниже показано то, что есть.
-      </p>
-
       <h2>1. Версия</h2>
       {version === null ? (
         <VersionChooser
@@ -87,6 +93,7 @@ export function BlocksPage() {
               onClick={() => {
                 setVersion(null);
                 setProjectUid(null);
+                setTab(DEFAULT_BLOCK_TAB);
               }}
             >
               Выбрать другую версию
@@ -98,7 +105,7 @@ export function BlocksPage() {
       {version === null ? null : (
         <>
           <h2>2. Блоки</h2>
-          <BlockMarkup versionUid={version.version_uid} />
+          <VersionBlockViews version={version} tab={tab} onTab={setTab} />
         </>
       )}
     </PageShell>
@@ -195,83 +202,26 @@ function DocumentChooser({ projectUid, onChooseVersion }: DocumentChooserProps) 
   );
 }
 
-interface BlockMarkupProps {
-  readonly versionUid: VersionUid;
+export interface VersionBlockViewsProps {
+  readonly version: DocumentVersion;
+  readonly tab: BlockTab;
+  readonly onTab: (tab: BlockTab) => void;
 }
 
-function BlockMarkup({ versionUid }: BlockMarkupProps) {
-  const blocks = useVersionBlocks(versionUid);
-
-  if (blocks.isPending) return <LoadingState what="разметку блоков" />;
-  if (blocks.isError) {
-    return (
-      <ErrorState
-        title="Разметку блоков не удалось прочитать."
-        onRetry={() => void blocks.refetch()}
-      />
-    );
-  }
-
-  const index = blocks.data;
-
-  if (index.status === 'not_produced') {
-    return (
-      <NotApplicableState
-        title="Разметка блоков для этой версии ещё не построена."
-        detail="Ни один прогон этой версии ещё не дошёл до вычисления геометрии страниц. Это не то же самое, что «блоков нет» — как только прогон её вычислит, здесь появится разметка."
-      />
-    );
-  }
-
-  if (index.blocks.length === 0) {
-    return (
-      <EmptyState
-        title="Блоков не обнаружено."
-        detail="Геометрия для этой версии вычислена, и в документе не нашлось ни одного блока."
-      />
-    );
-  }
-
-  const byPage = new Map<number, BlockGeometry[]>();
-  for (const block of index.blocks) {
-    const page = byPage.get(block.page_number) ?? [];
-    page.push(block);
-    byPage.set(block.page_number, page);
-  }
-  const pageNumbers = [...byPage.keys()].sort((a, b) => a - b);
-
+/**
+ * The chosen version's two tabs. Exported so the instruments that render one static pass
+ * (the language guard, the contrast census) render the tabs and each tab's states exactly as
+ * this page does: one pass cannot click a project, a document and a tab.
+ */
+export function VersionBlockViews({ version, tab, onTab }: VersionBlockViewsProps) {
   return (
-    <div>
-      {pageNumbers.map((pageNumber) => {
-        const pageBlocks = (byPage.get(pageNumber) ?? []).slice().sort(
-          (a, b) => a.block_ordinal - b.block_ordinal,
-        );
-        return (
-          <section key={pageNumber} style={{ marginBottom: '1rem' }}>
-            <h3>
-              Страница {pageNumber} · блоков {pageBlocks.length}
-            </h3>
-            <ul>
-              {pageBlocks.map((block) => (
-                <li key={block.block_id} className="am-state" style={{ marginBottom: '0.25rem' }}>
-                  <div className="am-state__detail">
-                    <p>
-                      <code>{block.block_id}</code>
-                    </p>
-                    <p>
-                      x0 {block.bbox.x0} · y0 {block.bbox.y0} · x1 {block.bbox.x1} · y1{' '}
-                      {block.bbox.y1} {block.bbox_unit} · начало координат {block.bbox_origin}
-                    </p>
-                    <p>
-                      символы {block.char_start}–{block.char_end}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-        );
-      })}
-    </div>
+    <BlocksTabs
+      active={tab}
+      onSelect={onTab}
+      panels={{
+        portal: <PortalBlocks version={version} />,
+        lines: <TextLines versionUid={version.version_uid} />,
+      }}
+    />
   );
 }

@@ -1,4 +1,7 @@
 import { ApiError, ApiFailure, catalogMessage } from '@/shared/api';
+// `W55B-WEB-BLOCKS` (`R-118`): a re-audit refused for its input budget prints the refusal's
+// two figures, worded once in the run entity for the start-run control and this command alike.
+import { inputBudgetSentence } from '@/entities/audit-run';
 
 export type ExecutionFailureKind =
   | 'authentication'
@@ -30,7 +33,7 @@ export function executionFailure(error: unknown, write: boolean): ExecutionFailu
       kind,
       detail: kind === 'unknown_outcome'
         ? 'Исход команды неизвестен. Проверьте состояние и повторяйте только с тем же ключом.'
-        : catalogMessage(error.errorCode),
+        : catalogMessage(error.errorCode) + budgetFigures(error),
       correlationId: error.correlationId,
     };
   }
@@ -50,4 +53,11 @@ export function executionFailure(error: unknown, write: boolean): ExecutionFailu
       : 'Не удалось прочитать данные выполнения.',
     correlationId: null,
   };
+}
+
+/** The input-budget refusal's figures after its catalog sentence; nothing for any other code. */
+function budgetFigures(error: ApiError): string {
+  if (error.errorCode !== 'analysis_input_budget_exceeded') return '';
+  const figures = inputBudgetSentence(error.details);
+  return figures === null ? '' : ` ${figures}`;
 }

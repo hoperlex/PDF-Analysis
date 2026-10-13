@@ -52,6 +52,9 @@ export { looksLikeRunId } from './model/address';
 export type { RunFailure, RunFailureKind } from './model/run-failure';
 export { classifyRunFailure } from './model/run-failure';
 
+export type { InputBudgetFigures } from './model/input-budget';
+export { DIGIT_GROUP_SEPARATOR, groupDigits, inputBudgetFigures, inputBudgetSentence } from './model/input-budget';
+
 export { RUN_PAGE_LIMIT, runListQueryOptions, useRunList } from './api/use-run-list';
 
 export { runStatusQueryOptions } from './api/run-status-query';

@@ -24,9 +24,12 @@ import {
   catalogMessage,
 } from '@/shared/api';
 
+import { inputBudgetSentence } from './input-budget';
+
 export type RunFailureKind =
   | 'request_invalid'
   | 'analysis_input_invalid'
+  | 'input_budget_exceeded'
   | 'provider_unavailable'
   | 'not_found'
   | 'not_authenticated'
@@ -94,6 +97,22 @@ function fromApiError(error: ApiError): RunFailure {
         title: 'Объявленные входные данные анализа неприемлемы.',
         detail: catalogMessage(error.errorCode) + classifiers(error.details, ['stage_id', 'reason']),
       };
+    case 'analysis_input_budget_exceeded': {
+      // `R-118`: refused before a run exists, and not retryable — the same text is refused
+      // again. `unsupported`, the tone that says no retry will help, with the two figures the
+      // envelope carries beside the catalog sentence (`./input-budget.ts`).
+      const figures = inputBudgetSentence(error.details);
+      return {
+        ...base,
+        kind: 'input_budget_exceeded',
+        presentation: 'unsupported',
+        title: 'Текст версии больше бюджета входа анализа.',
+        detail:
+          catalogMessage(error.errorCode) +
+          (figures === null ? '' : ` ${figures}`) +
+          ' Повтор с тем же текстом получит тот же отказ.',
+      };
+    }
     case 'validation_failed':
       return {
         ...base,

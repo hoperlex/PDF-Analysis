@@ -1,0 +1,57 @@
+/*
+ * The two tabs of «Блоки» (`W55B-WEB-BLOCKS`). Token reads only, no token declared here, no
+ * `:not()` (the contrast census cannot read it); every rule is reached by a screen in
+ * `tests/unit/styles/screens.ts`, the open tab by its `aria-selected` value — the attribute
+ * the tab really emits, so the selector and the markup cannot disagree the way `W31-UI`'s
+ * `aria-current` once did.
+ */
+
+.tabs {
+  margin-top: var(--am-gap-sm);
+  min-width: 0;
+}
+
+.tablist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+  border-bottom: 1px solid var(--am-line);
+}
+
+.tab {
+  margin: 0 0 -1px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-bottom-width: 3px;
+  border-radius: var(--am-radius-sm) var(--am-radius-sm) 0 0;
+  background: transparent;
+  color: var(--am-ink-muted);
+  font: inherit;
+  font-size: var(--am-text-md);
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--am-ink);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+.tab[aria-selected='true'] {
+  border-bottom-color: var(--am-accent);
+  color: var(--am-ink);
+  font-weight: 600;
+}
+
+.panel {
+  padding-top: var(--am-gap);
+  min-width: 0;
+}
+
+.panel:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}

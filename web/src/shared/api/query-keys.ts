@@ -178,6 +178,18 @@ export const queryKeys = {
      * output is deterministic and identical across every run that reaches it.
      */
     blocks: (versionUid: VersionUid) => ['versions', 'blocks', versionUid] as const,
+    /**
+     * Every loaded page of `listVersionPortalBlocks` for one version, held as ONE infinite
+     * query (`W55B-WEB-BLOCKS`): the pages are fetched one cursor at a time by the reader's
+     * «Показать ещё», and the page size is part of the key so a second reader asking for a
+     * different size never shares the first one's pages.
+     *
+     * Beside `blocks` and for the same reason: the portal blocks are a property of the
+     * version, read from the most recent run whose geometry stage produced them, not of any
+     * one run. A distinct third segment, so this key and the text-line index never meet.
+     */
+    portalBlocks: (versionUid: VersionUid, limit: number) =>
+      ['versions', 'portal-blocks', versionUid, { limit }] as const,
   },
   runs: {
     all: () => ['runs'] as const,
