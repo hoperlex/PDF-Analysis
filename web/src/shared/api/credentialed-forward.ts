@@ -34,6 +34,24 @@
  * `accept-ranges` come back with the API's `206`, so the reader can page through it rather
  * than download it whole.
  *
+ * **A body that can be large is streamed, never held** (`W55B-STREAM-01`, plan §B3.2). An upload
+ * is a portal bundle of up to 250 MiB, and `await request.arrayBuffer()` would put all of it in
+ * this process's heap, twice. A `multipart/form-data` body, and any body its request declares
+ * larger than `STREAM_FROM_BYTES`, is handed to `fetch` as the request's own stream with
+ * `duplex: 'half'`: bytes reach the API as they arrive from the browser and nothing here reads
+ * them. Every other body is a small JSON or form document and is read whole, as it always was.
+ * No `undici` `Agent` is configured: that would be a second transport to keep correct, and the
+ * deadline below can only *shorten* undici's own 300 s wait.
+ *
+ * **A request that sends a body carries a deadline of 290 s** (`UPSTREAM_DEADLINE_MS`), because
+ * the chain of timeouts is meant to be strictly nested, outermost first: the proxy waits 300 s
+ * for this server (`proxy_read_timeout` in `infra/deploy/proxy/nginx.conf`), this server gives up
+ * on the API at 290 s, and the API answers an accepted 250 MiB upload within about 240 s
+ * (measured, `docs/program/W55B-STREAM-01.md`). The deadline is not put on a read: a document
+ * download may legitimately run for as long as the reader takes to fetch it. Whatever aborts the
+ * browser's own request aborts the upstream one too, so an upload the user cancelled stops
+ * holding one of the API's two upload slots.
+ *
  * **The path is rebuilt from segments, never concatenated from a string.** An open
  * forwarder's characteristic defect is that `/bff/v1/../../admin` or an absolute URL in
  * the tail reaches something the caller was not offered. Each segment is checked and
@@ -85,6 +103,29 @@ export const FORWARDED_RESPONSE_HEADERS = [
 const BODYLESS_STATUSES: ReadonlySet<number> = new Set([204, 205, 304]);
 
 const METHODS_WITH_BODY: ReadonlySet<string> = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/**
+ * How long a request that streams a body may take before this server stops waiting for the
+ * API: 290 s, ten seconds inside nginx's `proxy_read_timeout 300s` so the answer a caller
+ * reads is this server's envelope and not the proxy's HTML 504.
+ */
+export const UPSTREAM_DEADLINE_MS = 290_000;
+
+/**
+ * A body larger than this, as its request declares it, is streamed rather than read whole; so
+ * is every `multipart/form-data` body, whatever it declares. The sign-in, the profile and the
+ * other JSON writes are far below it.
+ */
+export const STREAM_FROM_BYTES = 1024 * 1024;
+
+/** `RequestInit` has no `duplex` in the DOM typings; Node's fetch requires it for a stream. */
+type StreamingRequestInit = RequestInit & { duplex?: 'half' };
+
+function mustStream(request: Request): boolean {
+  const type = (request.headers.get('content-type') ?? '').trim().toLowerCase();
+  if (type.startsWith('multipart/form-data')) return true;
+  return Number(request.headers.get('content-length') ?? 0) > STREAM_FROM_BYTES;
+}
 
 export interface ForwardTarget {
   /** Absolute origin and optional base path, no trailing slash. */
@@ -238,25 +279,50 @@ export async function forwardWithCredential(
   const search = new URL(request.url).search;
   const headers = selectRequestHeaders(request.headers, target.token);
 
-  const init: RequestInit = { method: request.method, headers };
-  if (METHODS_WITH_BODY.has(request.method)) {
-    const body = await request.arrayBuffer();
-    // Buffered rather than streamed: a Node stream body needs `duplex: 'half'`, and the
-    // largest thing on this surface is a 25 MiB PDF the proxy already caps at 32m.
-    if (body.byteLength > 0) init.body = body;
+  const init: StreamingRequestInit = { method: request.method, headers };
+  if (METHODS_WITH_BODY.has(request.method) && request.body !== null) {
+    if (mustStream(request)) {
+      // Streamed: the request's own stream goes to `fetch` untouched.
+      init.body = request.body;
+      init.duplex = 'half';
+    } else {
+      const body = await request.arrayBuffer();
+      if (body.byteLength > 0) init.body = body;
+    }
+  }
+  // The deadline belongs to a request that sends a body; a read has none (see the header note).
+  const sendsBody = init.body !== undefined;
+  if (sendsBody) {
+    init.signal = AbortSignal.any([request.signal, AbortSignal.timeout(UPSTREAM_DEADLINE_MS)]);
   }
 
   let upstream: Response;
   try {
     upstream = await resolveFetch(options)(`${target.upstream}${path}${search}`, init);
-  } catch {
+  } catch (cause) {
+    const correlationId = request.headers.get('x-correlation-id') ?? mintForwardCorrelationId();
+    if (sendsBody && cause instanceof Error && cause.name === 'TimeoutError') {
+      // The deadline passed with the API still working. Unlike an unreachable API this does
+      // NOT mean nothing was applied: the write may yet land. Sending the same request again
+      // with the same `Idempotency-Key` is safe either way -- it replays or it applies once --
+      // and the message says so rather than claiming otherwise.
+      return envelopeResponse(
+        503,
+        synthesizedEnvelope(
+          'dependency_unavailable',
+          'API не ответил за отведённое время. Запрос мог быть выполнен: отправьте его ещё раз с тем же ключом идемпотентности.',
+          true,
+          correlationId,
+        ),
+      );
+    }
     return envelopeResponse(
       503,
       synthesizedEnvelope(
         'dependency_unavailable',
         'Веб-сервер не смог связаться с API. Ничего не применено, запрос можно повторить.',
         true,
-        request.headers.get('x-correlation-id') ?? mintForwardCorrelationId(),
+        correlationId,
       ),
     );
   }

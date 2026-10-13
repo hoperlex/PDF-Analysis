@@ -7,12 +7,17 @@
  * assumption with the module under test and would stay green if that list were emptied.
  */
 
-import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { FetchLike } from '@/shared/api';
 import {
   BFF_BASE_PATH,
   ForwardPathError,
+  STREAM_FROM_BYTES,
+  UPSTREAM_DEADLINE_MS,
   buildUpstreamPath,
   forwardWithCredential,
   mintForwardCorrelationId,
@@ -320,6 +325,288 @@ describe('the browser calls this app, and this app calls the API with the creden
     );
     expect(response.status).toBe(204);
     expect(response.body).toBeNull();
+  });
+});
+
+// `W55B-STREAM-01` (plan §B3.2). An upload is a portal bundle of up to 250 MiB: the forward
+// hands the request's own stream to `fetch` and reads none of it, under a deadline that is
+// ten seconds inside the proxy's. Every expected value is a literal.
+
+/** A request body whose chunks are produced only when something reads them. */
+function pulledOnDemand(chunks: number, size: number): { stream: ReadableStream<Uint8Array>; pulled: () => number } {
+  let pulled = 0;
+  const stream = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        if (pulled === chunks) {
+          controller.close();
+          return;
+        }
+        pulled += 1;
+        controller.enqueue(new Uint8Array(size).fill(7));
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  return { stream, pulled: () => pulled };
+}
+
+const UPLOAD_URL = 'http://localhost/bff/v1/projects/prj_01/documents';
+const UPLOAD_SEGMENTS = ['projects', 'prj_01', 'documents'] as const;
+
+function uploadRequest(
+  body: ReadableStream<Uint8Array>,
+  extra: { signal?: AbortSignal; headers?: Record<string, string> } = {},
+): Request {
+  return new Request(UPLOAD_URL, {
+    method: 'POST',
+    body,
+    duplex: 'half',
+    headers: { 'content-type': 'multipart/form-data; boundary=x', ...extra.headers },
+    ...(extra.signal === undefined ? {} : { signal: extra.signal }),
+  } as RequestInit & { duplex: 'half' });
+}
+
+async function drain(stream: ReadableStream<Uint8Array>): Promise<number> {
+  const reader = stream.getReader();
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return total;
+    total += value.byteLength;
+  }
+}
+
+describe('a request body is streamed to the API under a deadline', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('hands fetch the request’s own stream, unread, with duplex half', async () => {
+    const { stream, pulled } = pulledOnDemand(8, 1024);
+    const request = uploadRequest(stream);
+    let pulledAtCall = -1;
+    let received = 0;
+    const calls: Seen[] = [];
+    const fetch: FetchLike = async (url, init) => {
+      pulledAtCall = pulled();
+      calls.push({ url, init });
+      received = await drain(init.body as ReadableStream<Uint8Array>);
+      return okJson();
+    };
+
+    const response = await forwardWithCredential(request, UPLOAD_SEGMENTS, TARGET, { fetch });
+
+    expect(response.status).toBe(200);
+    expect(calls[0]!.url).toBe('http://api:8000/projects/prj_01/documents');
+    expect(calls[0]!.init.body).toBe(request.body);
+    expect((calls[0]!.init as RequestInit & { duplex?: string }).duplex).toBe('half');
+    // Nothing had read the body when the API was called: it was not buffered first.
+    expect(pulledAtCall).toBe(0);
+    // And every byte then arrived, through the stream and only through it.
+    expect(received).toBe(8 * 1024);
+    expect(headersOf(calls[0]!.init).get('content-type')).toBe('multipart/form-data; boundary=x');
+  });
+
+  it('never asks the request for its bytes whole', async () => {
+    const { stream } = pulledOnDemand(2, 16);
+    const request = uploadRequest(stream);
+    const arrayBuffer = vi.spyOn(request, 'arrayBuffer');
+    const blob = vi.spyOn(request, 'blob');
+    const text = vi.spyOn(request, 'text');
+    const { fetch } = recordingFetch(okJson);
+
+    await forwardWithCredential(request, UPLOAD_SEGMENTS, TARGET, { fetch });
+
+    expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(blob).not.toHaveBeenCalled();
+    expect(text).not.toHaveBeenCalled();
+    expect(request.bodyUsed).toBe(false);
+  });
+
+  it('streams a body that declares itself large, whatever its type', async () => {
+    expect(STREAM_FROM_BYTES).toBe(1_048_576);
+    const large = recordingFetch(okJson);
+    const request = new Request('http://localhost/bff/v1/projects/prj_01/documents', {
+      method: 'POST',
+      body: pulledOnDemand(1, 8).stream,
+      duplex: 'half',
+      headers: { 'content-type': 'application/zip', 'content-length': '1048577' },
+    } as RequestInit & { duplex: 'half' });
+    await forwardWithCredential(request, UPLOAD_SEGMENTS, TARGET, { fetch: large.fetch });
+    expect(large.calls[0]!.init.body).toBe(request.body);
+
+    const small = recordingFetch(okJson);
+    await forwardWithCredential(
+      new Request('http://localhost/bff/v1/projects/prj_01/documents', {
+        method: 'POST',
+        body: '{"k":1}',
+        headers: { 'content-type': 'application/json', 'content-length': '1048576' },
+      }),
+      UPLOAD_SEGMENTS,
+      TARGET,
+      { fetch: small.fetch },
+    );
+    expect(small.calls[0]!.init.body).toBeInstanceOf(ArrayBuffer);
+  });
+
+  it('still reads a small JSON write whole and sends nothing for a body that is empty', async () => {
+    const json = recordingFetch(okJson);
+    await forwardWithCredential(
+      new Request('http://localhost/bff/v1/projects', { method: 'POST', body: '{"name":"x"}' }),
+      ['projects'],
+      TARGET,
+      { fetch: json.fetch },
+    );
+    const sent = json.calls[0]!.init.body as ArrayBuffer;
+    expect(sent).toBeInstanceOf(ArrayBuffer);
+    expect(new TextDecoder().decode(sent)).toBe('{"name":"x"}');
+    expect((json.calls[0]!.init as RequestInit & { duplex?: string }).duplex).toBeUndefined();
+
+    const empty = recordingFetch(okJson);
+    await forwardWithCredential(
+      new Request('http://localhost/bff/v1/runs/run_01/cancel', { method: 'POST', body: '' }),
+      ['runs', 'run_01', 'cancel'],
+      TARGET,
+      { fetch: empty.fetch },
+    );
+    expect(empty.calls[0]!.init.body).toBeUndefined();
+    expect(empty.calls[0]!.init.signal).toBeUndefined();
+  });
+
+  it('carries a 290 second deadline on a write and aborts the upstream request when it passes', async () => {
+    const deadline = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+    const { fetch, calls } = recordingFetch(okJson);
+
+    await forwardWithCredential(uploadRequest(pulledOnDemand(1, 1).stream), UPLOAD_SEGMENTS, TARGET, {
+      fetch,
+    });
+
+    expect(UPSTREAM_DEADLINE_MS).toBe(290_000);
+    expect(timeout).toHaveBeenCalledTimes(1);
+    expect(timeout).toHaveBeenCalledWith(290_000);
+    const signal = calls[0]!.init.signal as AbortSignal;
+    expect(signal.aborted).toBe(false);
+    deadline.abort(new DOMException('timeout', 'TimeoutError'));
+    expect(signal.aborted).toBe(true);
+    expect((signal.reason as DOMException).name).toBe('TimeoutError');
+  });
+
+  it('puts the deadline on a small write as well, and on nothing that sends no body', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const write = recordingFetch(okJson);
+    await forwardWithCredential(
+      new Request('http://localhost/bff/v1/projects', { method: 'POST', body: '{"name":"x"}' }),
+      ['projects'],
+      TARGET,
+      { fetch: write.fetch },
+    );
+    expect(timeout).toHaveBeenCalledWith(290_000);
+    expect(write.calls[0]!.init.signal).toBeDefined();
+
+    const remove = recordingFetch(() => new Response(null, { status: 204 }));
+    await forwardWithCredential(
+      new Request('http://localhost/bff/v1/projects/p_1', { method: 'DELETE' }),
+      ['projects', 'p_1'],
+      TARGET,
+      { fetch: remove.fetch },
+    );
+    expect(remove.calls[0]!.init.signal).toBeUndefined();
+  });
+
+  it('puts no deadline on a read, so a long download is not cut off', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const { fetch, calls } = recordingFetch(okJson);
+
+    await forwardWithCredential(
+      new Request('http://localhost/bff/v1/versions/ver_01/content'),
+      ['versions', 'ver_01', 'content'],
+      TARGET,
+      { fetch },
+    );
+
+    expect(timeout).not.toHaveBeenCalled();
+    expect(calls[0]!.init.signal).toBeUndefined();
+  });
+
+  it('stops the upstream upload when the browser goes away, so the API’s slot is freed', async () => {
+    const browser = new AbortController();
+    const request = uploadRequest(pulledOnDemand(1, 1).stream, { signal: browser.signal });
+    const { fetch, calls } = recordingFetch(okJson);
+
+    await forwardWithCredential(request, UPLOAD_SEGMENTS, TARGET, { fetch });
+
+    const signal = calls[0]!.init.signal as AbortSignal;
+    expect(signal.aborted).toBe(false);
+    browser.abort();
+    expect(signal.aborted).toBe(true);
+  });
+
+  it('answers a deadline that passed as a retryable 503 that does not claim nothing was applied', async () => {
+    const fetch: FetchLike = () =>
+      Promise.reject(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+
+    const response = await forwardWithCredential(
+      uploadRequest(pulledOnDemand(1, 1).stream, { headers: { 'x-correlation-id': 'cid-slow' } }),
+      UPLOAD_SEGMENTS,
+      TARGET,
+      { fetch },
+    );
+
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as {
+      error_code: string;
+      retryable: boolean;
+      message: string;
+      correlation_id: string;
+    };
+    expect(body.error_code).toBe('dependency_unavailable');
+    expect(body.retryable).toBe(true);
+    expect(body.correlation_id).toBe('cid-slow');
+    expect(body.message).toContain('мог быть выполнен');
+    expect(body.message).not.toContain('Ничего не применено');
+    expect(JSON.stringify(body)).not.toContain(TOKEN);
+  });
+
+  it('still says nothing was applied when an upload never reached the API', async () => {
+    const fetch: FetchLike = () => Promise.reject(new Error('ECONNREFUSED'));
+    const response = await forwardWithCredential(
+      uploadRequest(pulledOnDemand(1, 1).stream),
+      UPLOAD_SEGMENTS,
+      TARGET,
+      { fetch },
+    );
+    const body = (await response.json()) as { message: string };
+    expect(response.status).toBe(503);
+    expect(body.message).toContain('Ничего не применено');
+  });
+
+  it('reports a read that timed out as the unreachable API it always was', async () => {
+    const fetch: FetchLike = () => Promise.reject(new DOMException('timeout', 'TimeoutError'));
+    const response = await forwardWithCredential(
+      new Request('http://localhost/bff/v1/projects'),
+      ['projects'],
+      TARGET,
+      { fetch },
+    );
+    const body = (await response.json()) as { message: string };
+    expect(body.message).toContain('Ничего не применено');
+  });
+
+  it('adds no undici agent or dispatcher: the transport stays the runtime’s own', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('../../../src/shared/api/credentialed-forward.ts', import.meta.url)),
+      'utf8',
+    );
+    const code = source
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('*') && !line.trim().startsWith('//') && !line.trim().startsWith('/*'))
+      .join('\n');
+    expect(code).not.toMatch(/undici/i);
+    expect(code).not.toMatch(/dispatcher/);
+    expect(code).not.toMatch(/new\s+Agent/);
+    expect(code).not.toMatch(/headersTimeout|bodyTimeout/);
   });
 });
 
