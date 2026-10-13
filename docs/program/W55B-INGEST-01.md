@@ -30,6 +30,28 @@ The first writer died after twelve commits. The second writer re-ran, on the lan
 `tests/integration/ingest` 540 passed; `tests/integration/api` 568 passed; `tests/integration/p02_journey` 59 passed;
 `tests/characterization` 61 passed. `git diff --check` and `compileall` of the changed modules are clean.
 
+## The owner's real export as an acceptance test (counts only, F-7)
+
+Run read-only over `.local/portal-exports/<the owner's export>.zip` (9 035 796 bytes; never copied, extracted into the repository,
+committed, or quoted; the file's SHA-256 prefix and mtime were identical before and after). Method: `python -I` with `src/` on
+`sys.path`; `extract_bundle` then `admit_bundle` (the product's reader and envelope), no parameter changed.
+
+| Measure | Result |
+| --- | --- |
+| accepted | **yes** (no rule weakened) |
+| archive members | 4 (`pdf`, `blocks`, `results_md`, `results_html`; no stamp audit) |
+| pages / blocks | 30 / 129 (56 text, 47 image, 26 stamp) |
+| `text_character_count` | 93 690 |
+| `textless_pages` | none (empty) |
+| `recognised_character_count` | 0 (no page is text-less) |
+| reader + envelope time | 0.02 s extraction, 0.43 s admission, 0.45 s together |
+| through the API on the lane stack (`measure_bundle.py file:<path>`, `serve.py` child on 57531/57532) | `201` in 0.7 s; the child's VmHWM grew 32.2 MiB over the idle process (165 648 KiB to 198 644 KiB) |
+
+Structural facts of its `_blocks.json` (types and null counts only): every block carries the same eleven keys (`block_id`, `block_type`,
+`coords_norm`, `crop_url`, `export_status`, `ordinal`, `page_index`, `page_label`, `polygon_points`, `shape_type`, `status`); `ordinal` and
+`crop_url` are `null` on the 26 stamps and set on every other block; `polygon_points` is `null` on all 117 rectangles and a list of three
+or more points on the 12 polygons; `status` and `export_status` are `recognized` on all 129.
+
 ## Design decisions (made while writing; each is open to the integrator's veto)
 
 1. **The reader is hand-written, `zipfile` is the second opinion.** `bundle_archive.py` reads the end record, the ZIP64
