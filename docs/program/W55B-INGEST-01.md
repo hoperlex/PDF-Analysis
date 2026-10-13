@@ -52,6 +52,25 @@ Structural facts of its `_blocks.json` (types and null counts only): every block
 `crop_url` are `null` on the 26 stamps and set on every other block; `polygon_points` is `null` on all 117 rectangles and a list of three
 or more points on the 12 polygons; `status` and `export_status` are `recognized` on all 129.
 
+## The sealed `_blocks.json` schema against Amendment 1 of the freeze (for the integrator; the schema is not edited here)
+
+`contracts/analysis/v1/portal-blocks.schema.json` (SEAL) and `bundle_envelope.py` agree with each other (a test compares them keyword by
+keyword). Against `W55B-FREEZE-01` Amendment 1 they differ in these places:
+
+1. **`polygon_points` on a rectangle.** Amendment 1 writes "empty on rectangles" and adopts "a list of 3..64 normalised points, required
+   non-empty only when `shape_type` is `polygon`". The schema allows `null` or a list of 3..64 points: **`[]` is refused**. The owner's real
+   export has `null` on every rectangle, so it passes; a portal build that wrote `[]` would be refused by the schema and by the product.
+2. **No conditional rule.** Amendment 1 requires a non-empty `polygon_points` when `shape_type` is `polygon`. The schema has no such rule
+   (a `polygon` block with `null` or no `polygon_points` is accepted), and neither has the product.
+3. **`shape_type` is any string** in the schema and in the product; Amendment 1 names the set {`rectangle`, `polygon`}.
+4. `status`: the schema takes any lower-case token (`^[a-z][a-z0-9_]{0,39}$`, `failed` tolerated); Amendment 1 "keeps the planned set".
+   Not a conflict in effect (every value of the real export is `recognized`), recorded for completeness.
+
+The rest of Amendment 1 holds in both: `schema_version` 1 and `coordinate_space` the literal, otherwise refused; `ordinal` and `crop_url`
+nullable; `export_status` tolerated; unknown top-level and block keys ignored; the stamp audit optional; `block_id` / `block_type`
+(lower case, three values) read as named. "`shape_type` stored" has no ingest-side effect: the block list is stored whole as
+`source.structured_companion` and `page_geometry_extraction` (GEOMETRY) normalises it.
+
 ## Design decisions (made while writing; each is open to the integrator's veto)
 
 1. **The reader is hand-written, `zipfile` is the second opinion.** `bundle_archive.py` reads the end record, the ZIP64
