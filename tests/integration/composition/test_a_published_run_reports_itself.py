@@ -78,6 +78,8 @@ def static_token() -> str:
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 BASELINE_PDF = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar" / "ar_baseline.pdf"
+#: `W55B-INGEST-01`: an upload is a portal bundle; this is the one around the baseline PDF.
+BASELINE_BUNDLE = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar" / "bundles" / "ar_baseline.zip"
 
 #: The four PC-01 stages, written out rather than imported from `runs.PC01_STAGES`: an
 #: expectation read from the module it checks cannot report that the module moved.
@@ -134,7 +136,7 @@ def published_run() -> dict[str, Any]:
     boundary = "w17viewboundary"
     head = (
         f'--{boundary}\r\nContent-Disposition: form-data; name="file"; '
-        f'filename="ar_baseline.pdf"\r\nContent-Type: application/pdf\r\n\r\n'
+        f'filename="ar_baseline.zip"\r\nContent-Type: application/zip\r\n\r\n'
     ).encode("utf-8")
     tail = (
         f"\r\n--{boundary}\r\nContent-Disposition: form-data; "
@@ -147,7 +149,7 @@ def published_run() -> dict[str, Any]:
             IDEMPOTENCY_HEADER: f"w17view-{tag}-doc",
             "Content-Type": f"multipart/form-data; boundary={boundary}",
         },
-        content=head + BASELINE_PDF.read_bytes() + tail,
+        content=head + BASELINE_BUNDLE.read_bytes() + tail,
     )
     assert answer.status_code == 201, answer.content
     version_uid = answer.json()["version_uid"]

@@ -28,7 +28,9 @@ def upload_body(content: bytes, *, filename: str, title: str | None = None) -> b
         (
             f"--{BOUNDARY}\r\n"
             f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
-            "Content-Type: application/pdf\r\n\r\n"
+            # `W55B-INGEST-01`: an upload is a portal bundle (a ZIP); what is not one is sent
+            # as the bare PDF it still may be until that lane's last step.
+            f"Content-Type: {'application/zip' if content[:2] == b'PK' else 'application/pdf'}\r\n\r\n"
         ).encode("utf-8"),
         content,
     ]
@@ -81,7 +83,7 @@ def project(router: Surface) -> dict[str, Any]:
 
 
 def test_the_ingest_path_publishes_an_immutable_version(
-    router: Surface, project: dict[str, Any], corpus_pdf: bytes
+    router: Surface, project: dict[str, Any], corpus_pdf: bytes, corpus_bundle: bytes
 ) -> None:
     response = dispatch(
         router,
@@ -89,7 +91,7 @@ def test_the_ingest_path_publishes_an_immutable_version(
             "POST",
             f"/projects/{project['project_uid']}/documents",
             headers=multipart_headers("journey-upload"),
-            body=upload_body(corpus_pdf, filename="ar_baseline.pdf", title="Годовой"),
+            body=upload_body(corpus_bundle, filename="ar_baseline.zip", title="Годовой"),
         ),
     )
     assert response.status == 201
@@ -101,8 +103,12 @@ def test_the_ingest_path_publishes_an_immutable_version(
     assert version["version_ordinal"] == 1
     assert version["byte_size"] == len(corpus_pdf)
     assert version["input_manifest"], "a published version carries its input manifest"
+    # One entry per stored member of the bundle (`W55B-INGEST-01`); the HTML is not stored.
     assert {entry["role"] for entry in version["input_manifest"]} == {
-        MANIFEST_ROLE_SOURCE_DOCUMENT
+        MANIFEST_ROLE_SOURCE_DOCUMENT,
+        "source.markdown",
+        "source.stamp_audit",
+        "source.structured_companion",
     }
 
     fetched = ok(dispatch(router, Request.build("GET", f"/versions/{version['version_uid']}")))
@@ -110,10 +116,10 @@ def test_the_ingest_path_publishes_an_immutable_version(
 
 
 def test_the_same_key_and_payload_replays_and_creates_nothing(
-    router: Surface, project: dict[str, Any], corpus_pdf: bytes, session: Session
+    router: Surface, project: dict[str, Any], corpus_bundle: bytes, session: Session
 ) -> None:
     """A replay returns the original resource. It does not publish a second version."""
-    body = upload_body(corpus_pdf, filename="ar_baseline.pdf")
+    body = upload_body(corpus_bundle, filename="ar_baseline.zip")
     first = ok(
         dispatch(
             router,
@@ -146,7 +152,7 @@ def test_the_same_key_and_payload_replays_and_creates_nothing(
 
 
 def test_the_same_key_with_a_different_payload_is_refused(
-    router: Surface, project: dict[str, Any], corpus_pdf: bytes
+    router: Surface, project: dict[str, Any], corpus_bundle: bytes
 ) -> None:
     """``idempotency_key_reuse``, and nothing is created."""
     dispatch(
@@ -155,7 +161,7 @@ def test_the_same_key_with_a_different_payload_is_refused(
             "POST",
             f"/projects/{project['project_uid']}/documents",
             headers=multipart_headers("journey-reuse"),
-            body=upload_body(corpus_pdf, filename="first.pdf"),
+            body=upload_body(corpus_bundle, filename="first.zip"),
         ),
     )
     conflicting = dispatch(
@@ -164,7 +170,7 @@ def test_the_same_key_with_a_different_payload_is_refused(
             "POST",
             f"/projects/{project['project_uid']}/documents",
             headers=multipart_headers("journey-reuse"),
-            body=upload_body(corpus_pdf, filename="second.pdf"),
+            body=upload_body(corpus_bundle, filename="second.zip"),
         ),
     )
     assert conflicting.status == 409
@@ -174,7 +180,7 @@ def test_the_same_key_with_a_different_payload_is_refused(
 
 
 def test_a_write_without_the_header_is_refused_before_anything_happens(
-    router: Surface, project: dict[str, Any], corpus_pdf: bytes, session: Session
+    router: Surface, project: dict[str, Any], corpus_bundle: bytes, session: Session
 ) -> None:
     before = session.execute(text("SELECT count(*) FROM document_version")).scalar_one()
     response = dispatch(
@@ -183,7 +189,7 @@ def test_a_write_without_the_header_is_refused_before_anything_happens(
             "POST",
             f"/projects/{project['project_uid']}/documents",
             headers={"Content-Type": f"multipart/form-data; boundary={BOUNDARY}"},
-            body=upload_body(corpus_pdf, filename="ar_baseline.pdf"),
+            body=upload_body(corpus_bundle, filename="ar_baseline.zip"),
         ),
     )
     assert response.status == 422
@@ -195,7 +201,7 @@ def test_a_write_without_the_header_is_refused_before_anything_happens(
 def test_an_upload_outside_the_envelope_is_refused(
     router: Surface, project: dict[str, Any]
 ) -> None:
-    """A non-PDF is ``validation_failed``. OCR is never silently substituted."""
+    """A non-bundle is ``validation_failed``. OCR is never silently substituted."""
     response = dispatch(
         router,
         Request.build(
@@ -216,7 +222,7 @@ def test_an_upload_outside_the_envelope_is_refused(
 
 @pytest.fixture
 def published_version(
-    router: Surface, project: dict[str, Any], corpus_pdf: bytes
+    router: Surface, project: dict[str, Any], corpus_bundle: bytes
 ) -> dict[str, Any]:
     return ok(
         dispatch(
@@ -225,7 +231,7 @@ def published_version(
                 "POST",
                 f"/projects/{project['project_uid']}/documents",
                 headers=multipart_headers("journey-stream"),
-                body=upload_body(corpus_pdf, filename="ar_baseline.pdf"),
+                body=upload_body(corpus_bundle, filename="ar_baseline.zip"),
             ),
         )
     )

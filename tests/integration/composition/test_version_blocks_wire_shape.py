@@ -36,6 +36,8 @@ from auditmanager.api.security import API_TOKEN_VARIABLE
 DEPLOYMENT_SECRET = "version-blocks-wire-shape-token"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 BASELINE_PDF = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar" / "ar_baseline.pdf"
+#: `W55B-INGEST-01`: an upload is a portal bundle; this is the one around the baseline PDF.
+BASELINE_BUNDLE = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar" / "bundles" / "ar_baseline.zip"
 ABSENT_VERSION = "ver_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 
 _STATIC_TOKEN_CACHE: str | None = None
@@ -82,7 +84,7 @@ def _publish_a_version(app: TestClient, tag: str) -> str:
     boundary = "w45blockswireboundary"
     head = (
         f'--{boundary}\r\nContent-Disposition: form-data; name="file"; '
-        f'filename="ar_baseline.pdf"\r\nContent-Type: application/pdf\r\n\r\n'
+        f'filename="ar_baseline.zip"\r\nContent-Type: application/zip\r\n\r\n'
     ).encode("utf-8")
     tail = (
         f"\r\n--{boundary}\r\nContent-Disposition: form-data; "
@@ -95,7 +97,7 @@ def _publish_a_version(app: TestClient, tag: str) -> str:
             IDEMPOTENCY_HEADER: f"{tag}-doc",
             "Content-Type": f"multipart/form-data; boundary={boundary}",
         },
-        content=head + BASELINE_PDF.read_bytes() + tail,
+        content=head + BASELINE_BUNDLE.read_bytes() + tail,
     )
     assert answer.status_code == 201, answer.content
     return answer.json()["version_uid"]

@@ -168,7 +168,7 @@ def test_a_real_project_and_page_validate(
 
 def test_a_real_document_version_validates(
     router: Surface,
-    corpus_pdf: bytes,
+    corpus_bundle: bytes,
     openapi_document: dict[str, Any],
     validate_against_schema,
 ) -> None:
@@ -183,9 +183,9 @@ def test_a_real_document_version_validates(
     boundary = "----b6"
     body = (
         f"--{boundary}\r\n"
-        'Content-Disposition: form-data; name="file"; filename="ar_baseline.pdf"\r\n'
-        "Content-Type: application/pdf\r\n\r\n"
-    ).encode("utf-8") + corpus_pdf + (
+        'Content-Disposition: form-data; name="file"; filename="ar_baseline.zip"\r\n'
+        "Content-Type: application/zip\r\n\r\n"
+    ).encode("utf-8") + corpus_bundle + (
         f"\r\n--{boundary}\r\n"
         'Content-Disposition: form-data; name="display_title"\r\n\r\n'
         "Годовой отчёт\r\n"
