@@ -2,15 +2,16 @@
 
 Two guards refuse an oversized upload and they are independently breakable:
 
-* the transport's multipart body limit, ``MAX_BODY`` = 26 MiB
-  (``api/routers/multipart.py``), which reads the request and is outermost;
+* the transport's multipart body limit for the upload route, ``UPLOAD_MAX_BODY`` = 251 MiB
+  (``api/routers/multipart.py``; it was ``MAX_BODY`` = 26 MiB, which is still every other
+  route's limit), which reads the request and is outermost;
 * the envelope's ``ENV-SIZE``, ``MAX_BYTES`` = 25 MiB (``ingest/envelope.py``), which
   judges the document.
 
-Every oversize fixture in the repository is over **both**: the AR corpus's
+Every oversize fixture in the repository used to be over **both**: the AR corpus's
 ``oversize.pdf`` is 27 303 204 bytes and PC-02's ``PC02-N03`` is 27 303 351, against a
-transport limit of 27 262 976. So the transport always answers first, and no test drives
-a request that reaches ``ENV-SIZE`` through HTTP. The existing coverage sits underneath
+transport limit of 27 262 976. So the transport always answered first, and no test drove
+a request that reached ``ENV-SIZE`` through HTTP. The existing coverage sits underneath
 the transport - ``test_negative_envelope.py`` imports ``auditmanager.ingest`` directly,
 and ``fixtures_ar/test_negative_fixtures.py`` calls ``envelope.check`` on a byte string -
 so ``ENV-SIZE`` could stop being applied on the HTTP path with every suite still green.
@@ -24,7 +25,12 @@ corpus - which is the right tool, because changing corpus bytes would invalidate
 measurement that has already been taken.
 
 The body here is sized into the window between the two limits, so the transport passes it
-through and the envelope is the guard that speaks.
+through and the envelope is the guard that speaks. **`W55B-STREAM-01`** moved the upper end
+of that window from 26 MiB to the upload route's 251 MiB; the body stays the size it was
+(the middle of the *old* window, 25.5 MiB), because a test that built a 138 MiB body to sit
+in the middle of the new one would pay for nothing the smaller body does not show -- the
+window's two ends are asserted below, and the large end is exercised by
+``test_multipart_rules.py`` and the lane's memory measurement.
 """
 
 from __future__ import annotations
@@ -37,7 +43,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from auditmanager.api.app import create_app, create_asgi_app
-from auditmanager.api.routers.multipart import MAX_BODY
+from auditmanager.api.routers.multipart import MAX_BODY, UPLOAD_MAX_BODY
 from auditmanager.api.security import API_TOKEN_VARIABLE
 from auditmanager.ingest import MAX_BYTES
 
@@ -72,7 +78,9 @@ def static_token() -> str:
 #: Between the two limits, with room for the multipart framing on either side. Asserted
 #: below rather than trusted: if either limit moves, the window may close or this value
 #: may fall outside it, and a test that quietly stopped exercising the guard it names
-#: would be worse than no test.
+#: would be worse than no test. The midpoint of the window that held until `W55B-STREAM-01`
+#: (the envelope's 25 MiB and the 26 MiB every other route still takes), which is inside
+#: the upload route's window too.
 BODY_TARGET = (MAX_BYTES + MAX_BODY) // 2
 
 
@@ -85,9 +93,9 @@ def _upload(app, project_uid: str, payload: bytes):
     ).encode() + payload + (
         f"\r\n--{boundary}--\r\n"
     ).encode()
-    assert len(body) <= MAX_BODY, (
-        f"the framed body is {len(body)}, over the transport limit {MAX_BODY}; this test "
-        "would measure the transport guard instead of ENV-SIZE"
+    assert len(body) <= UPLOAD_MAX_BODY, (
+        f"the framed body is {len(body)}, over the transport limit {UPLOAD_MAX_BODY}; this "
+        "test would measure the transport guard instead of ENV-SIZE"
     )
     return app.client.post(
         f"/projects/{project_uid}/documents",
@@ -150,12 +158,18 @@ def test_the_window_between_the_two_guards_is_open() -> None:
     would be a real finding about the guards, so it fails here loudly rather than leaving
     a test that passes without exercising anything.
     """
-    assert MAX_BYTES < MAX_BODY, (
+    assert MAX_BYTES < UPLOAD_MAX_BODY, (
         f"no body can reach ENV-SIZE through the transport: envelope {MAX_BYTES}, "
-        f"transport {MAX_BODY}"
+        f"transport {UPLOAD_MAX_BODY}"
     )
-    assert MAX_BYTES < BODY_TARGET < MAX_BODY, (
-        f"the chosen body size {BODY_TARGET} is not between {MAX_BYTES} and {MAX_BODY}"
+    assert MAX_BYTES < BODY_TARGET < UPLOAD_MAX_BODY, (
+        f"the chosen body size {BODY_TARGET} is not between {MAX_BYTES} and "
+        f"{UPLOAD_MAX_BODY}"
+    )
+    # The target also stays under the limit every *other* route keeps, so the body here is
+    # the same one that was inside the window before the upload route's cap moved.
+    assert BODY_TARGET < MAX_BODY, (
+        f"the chosen body size {BODY_TARGET} is not under the {MAX_BODY} of an ordinary route"
     )
 
 
@@ -187,4 +201,47 @@ def test_a_body_inside_the_window_is_refused_by_the_envelope(app, project_uid) -
         f"details.constraint={constraint!r}, body={body!r}. `max_bytes` means the "
         "transport guard answered first, which is the condition this test exists to "
         "detect."
+    )
+
+
+def test_a_body_past_the_limit_every_other_route_keeps_still_reaches_the_envelope(
+    app, project_uid
+) -> None:
+    """`W55B-STREAM-01`: the upload route's cap moved, and this is the body that shows it.
+
+    ``MAX_BODY`` (26 MiB) is still the cap of every route that is not an upload; for
+    ``uploadDocument`` it was the transport's limit until this lane, and a body one byte
+    over it was refused as ``max_bytes`` (``records/22``). It now passes the transport and
+    ``ENV-SIZE`` is the guard that speaks -- for the very body that used to be refused one
+    layer earlier.
+    """
+    import json
+
+    payload = b"%PDF-1.7\n" + b"x" * (MAX_BODY + 1 - 9)
+    response = _upload_without_the_framing_check(app, project_uid, payload)
+    body = json.loads(response.content)
+
+    assert response.status_code == 422, response.content[:300]
+    assert (body.get("details") or {}).get("constraint") == f"byte_size <= {MAX_BYTES}", body
+    assert len(payload) > MAX_BODY, "the payload does not pass the limit of an ordinary route"
+
+
+def _upload_without_the_framing_check(app, project_uid: str, payload: bytes):
+    """The same request as :func:`_upload`, minus its assertion that the framed body fits
+    the ordinary routes' limit -- which is the thing this test steps past on purpose."""
+    boundary = "----pc02sizeboundary"
+    body = (
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="file"; filename="past.pdf"\r\n'
+        "Content-Type: application/pdf\r\n\r\n"
+    ).encode() + payload + f"\r\n--{boundary}--\r\n".encode()
+    assert MAX_BODY < len(body) <= UPLOAD_MAX_BODY
+    return app.client.post(
+        f"/projects/{project_uid}/documents",
+        headers={
+            "Authorization": f"Bearer {static_token()}",
+            "Idempotency-Key": f"size-{uuid.uuid4().hex[:12]}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+        content=body,
     )

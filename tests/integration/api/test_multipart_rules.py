@@ -43,6 +43,13 @@ causes and this contract does not map refusals on another library's message text
 with an **empty** name still answers ``part_name``. No response-baseline record covers
 either path. See ``docs/program/reviews/W13-API.md``.
 
+**`W55B-STREAM-01` added the transport's other half**, in the two classes at the end of this
+file: the body cap is per route (``uploadDocument`` takes 251 MiB, every other route keeps
+26 MiB) and at most two uploads are in flight in one API process, the third refused before
+its body is read. Those classes need no database -- they drive ``BodyCapMiddleware`` and the
+documentation application directly -- and say what each of the guard's three exits (finish,
+failure, cancellation, disconnect) does to the gate.
+
 Bodies are built here, byte by byte. Nothing is read from ``fixtures/synthetic/ar/**`` or
 ``fixtures/validation/PC-02/**``: both are frozen evidence and adding to either would
 invalidate a measurement already taken.
@@ -50,20 +57,30 @@ invalidate a measurement already taken.
 
 from __future__ import annotations
 
+import asyncio
 import json
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Awaitable, Callable
 
 import pytest
+from fastapi import FastAPI, File, UploadFile
+from starlette.requests import ClientDisconnect
+from starlette.testclient import TestClient
 
 from w13_api_driver import Request, Surface, dispatch
 
 BOUNDARY = "----w10apiboundary"
 CONTENT_TYPE = f"multipart/form-data; boundary={BOUNDARY}"
 
-#: ``api/routers/multipart.py`` declares ``MAX_BODY = 26 * 1024 * 1024``. Written out
-#: rather than imported: a test that reads the bound from the module it is checking cannot
-#: tell you the bound moved. ``OPERATING_CONSTRAINTS.md`` section 12.
+#: ``api/routers/multipart.py`` declares ``MAX_BODY = 26 * 1024 * 1024``, the cap of every
+#: route that is not an upload. Written out rather than imported: a test that reads the
+#: bound from the module it is checking cannot tell you the bound moved.
+#: ``OPERATING_CONSTRAINTS.md`` section 12.
 TRANSPORT_LIMIT = 27262976
+
+#: ``UPLOAD_MAX_BODY = 251 * 1024 * 1024``, the cap of ``uploadDocument`` alone
+#: (`W55B-STREAM-01`): a 250 MiB bundle and the multipart framing around it.
+UPLOAD_LIMIT = 263192576
 
 #: Enough of a PDF that the refusals below are the transport's and not the envelope's. The
 #: baseline document is not used: this file adds no bytes to any frozen corpus and needs
@@ -368,29 +385,74 @@ class TestATitleTheCallerTypedArrivesAsTheCallerTypedIt:
         )
 
 
-class TestTheTransportBodyLimit:
-    """``MAX_BODY`` written as a literal, asserted at the boundary.
+def _framed(total: int) -> bytes:
+    """A multipart body of exactly ``total`` bytes whose file part is a PDF header and padding.
 
-    26 MiB is the transport's own limit and no external authority declares it: the frozen
-    OpenAPI document declares the *document* maximum, which is the envelope's 25 MiB
-    ``ENV-SIZE``, not this one. So the number is pinned here, which is what makes a drift
-    in it a red test.
+    The same construction ``characterization/w13_baseline/journey.sized_multipart`` uses for
+    records 18 and 22: the padding is the point, so a body can reach any size without a
+    fixture being added to a frozen corpus.
+    """
+    frame = len(_body((FILE_PART, b"")))
+    payload = PDF + b"0" * (total - frame - len(PDF))
+    body = _body((FILE_PART, payload))
+    assert len(body) == total, (len(body), total)
+    return body
+
+
+class TestTheTransportBodyLimit:
+    """The two caps written as literals, asserted at their boundaries.
+
+    26 MiB is the limit of every route that is not an upload and 251 MiB the upload route's;
+    no external authority declares either: the frozen OpenAPI document declares the
+    *document* maximum, which is the envelope's 25 MiB ``ENV-SIZE``, not these. So the
+    numbers are pinned here, which is what makes a drift in them a red test.
     """
 
-    def test_the_limit_is_twenty_six_mebibytes(self) -> None:
+    def test_the_limit_of_every_other_route_is_twenty_six_mebibytes(self) -> None:
         assert TRANSPORT_LIMIT == 26 * 1024 * 1024
 
-    def test_a_body_one_byte_over_the_limit_is_refused_as_max_bytes(
-        self, router: Surface, project_uid: str
+    def test_the_limit_of_the_upload_route_is_two_hundred_and_fifty_one_mebibytes(self) -> None:
+        """A 250 MiB bundle and a mebibyte for the framing around it."""
+        assert UPLOAD_LIMIT == 251 * 1024 * 1024
+
+    def test_the_module_declares_the_numbers_this_file_writes_out(self) -> None:
+        from auditmanager.api.routers.multipart import MAX_BODY, UPLOAD_MAX_BODY
+
+        assert (MAX_BODY, UPLOAD_MAX_BODY) == (TRANSPORT_LIMIT, UPLOAD_LIMIT)
+
+    def test_a_body_one_byte_over_the_limit_of_an_ordinary_route_is_refused_as_max_bytes(
+        self, router: Surface
     ) -> None:
-        """``records/22-uploadDocument.refusal.max_bytes.json`` pins these bytes."""
-        body = _refusal(router, project_uid, b"x" * (TRANSPORT_LIMIT + 1))
+        """The bytes ``records/22-uploadDocument.refusal.max_bytes.json`` pins, on the routes
+        that still have this limit: the answer is the one an upload used to get at 26 MiB."""
+        answer = dispatch(
+            router,
+            Request.build(
+                "POST",
+                "/projects",
+                headers={"Content-Type": CONTENT_TYPE, "Idempotency-Key": "mp-ordinary"},
+                body=b"x" * (TRANSPORT_LIMIT + 1),
+            ),
+        )
+        body = json.loads(answer.body)
+        assert answer.status == 422, body
         assert body["details"] == {"field": "file", "constraint": "max_bytes"}
         assert body["message"] == "The upload exceeds the maximum accepted size."
 
-    def test_the_limit_is_checked_before_the_body_is_parsed(
+    def test_the_body_that_used_to_be_refused_at_the_upload_route_now_reaches_the_envelope(
         self, router: Surface, project_uid: str
     ) -> None:
+        """The same 26 MiB-and-one-byte body, framed, sent to ``uploadDocument``.
+
+        Until `W55B-STREAM-01` this was ``max_bytes`` (record 22). The upload route's cap is
+        251 MiB, so the transport lets it through and the envelope is the guard that speaks:
+        ``byte_size <= 26214400``, record 18's answer.
+        """
+        body = _refusal(router, project_uid, _framed(TRANSPORT_LIMIT + 1))
+        assert body["details"] == {"field": "content", "constraint": "byte_size <= 26214400"}
+        assert body["message"] == "The upload payload is larger than the accepted envelope allows."
+
+    def test_the_limit_is_checked_before_the_body_is_parsed(self, router: Surface) -> None:
         """An oversize body that is *also* unparseable answers ``max_bytes``.
 
         The order is the point: materialising an unbounded body to discover it has no
@@ -398,9 +460,17 @@ class TestTheTransportBodyLimit:
         the limit is a middleware and not a dependency -- FastAPI parses a form before it
         resolves dependencies.
         """
-        body = _refusal(
-            router, project_uid, b"x" * (TRANSPORT_LIMIT + 1), "multipart/form-data"
+        answer = dispatch(
+            router,
+            Request.build(
+                "POST",
+                "/projects",
+                headers={"Content-Type": "multipart/form-data", "Idempotency-Key": "mp-order"},
+                body=b"x" * (TRANSPORT_LIMIT + 1),
+            ),
         )
+        body = json.loads(answer.body)
+        assert answer.status == 422, body
         assert body["details"] == {"field": "file", "constraint": "max_bytes"}
 
 
@@ -440,3 +510,480 @@ class TestARefusalNeverEchoesWhatTheCallerSent:
         assert secret not in json.dumps(body), (
             f"{label}: the refusal reflected {secret!r} back to the caller"
         )
+
+
+# ---------------------------------------------------------------------------------------
+# `W55B-STREAM-01`: the upload gate and the per-route caps. No database, no object store.
+# ---------------------------------------------------------------------------------------
+
+UPLOAD_PATH = "/projects/prj_01ARZ3NDEKTSV4RRFFQ69G5FAV/documents"
+OTHER_PATH = "/projects"
+MULTIPART = f"multipart/form-data; boundary={BOUNDARY}".encode()
+JSON_TYPE = b"application/json"
+
+
+@dataclass
+class Exchange:
+    """What one request through the middleware looked like from both ends."""
+
+    status: int | None = None
+    headers: list[tuple[str, str]] = field(default_factory=list)
+    body: bytes = b""
+    receives: int = 0
+    delivered: int = 0
+
+    @property
+    def envelope(self) -> dict[str, Any]:
+        return json.loads(self.body)
+
+
+async def drive(
+    app: Any,
+    *,
+    path: str = UPLOAD_PATH,
+    method: str = "POST",
+    content_type: bytes | None = MULTIPART,
+    declared: int | None = None,
+    chunks: tuple[bytes, ...] = (b"x",),
+    until_disconnect: asyncio.Event | None = None,
+) -> Exchange:
+    """Send one request into an ASGI app and keep both sides of the conversation.
+
+    With ``until_disconnect`` the body never ends: once the chunks are delivered ``receive``
+    waits for the event and then reports the client gone, which is a client that stops
+    sending in the middle of an upload.
+    """
+    exchange = Exchange()
+    pending = list(chunks)
+    headers: list[tuple[bytes, bytes]] = []
+    if content_type is not None:
+        headers.append((b"content-type", content_type))
+    if declared is not None:
+        headers.append((b"content-length", str(declared).encode()))
+
+    async def receive() -> dict[str, Any]:
+        exchange.receives += 1
+        if pending:
+            chunk = pending.pop(0)
+            exchange.delivered += len(chunk)
+            return {"type": "http.request", "body": chunk, "more_body": True}
+        if until_disconnect is not None:
+            await until_disconnect.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict[str, Any]) -> None:
+        if message["type"] == "http.response.start":
+            exchange.status = message["status"]
+            exchange.headers = [(k.decode("latin-1"), v.decode("latin-1")) for k, v in message["headers"]]
+        elif message["type"] == "http.response.body":
+            exchange.body += message.get("body", b"")
+
+    scope = {
+        "type": "http",
+        "method": method,
+        "path": path,
+        "root_path": "",
+        "headers": headers,
+        "query_string": b"",
+    }
+    await app(scope, receive, send)
+    return exchange
+
+
+class HoldingApp:
+    """An application that takes its time: it waits to be released and then answers ``204``.
+
+    ``mode`` chooses how a request leaves it -- the four ways a slot has to be given back.
+    """
+
+    def __init__(self) -> None:
+        self.entered = 0
+        self.left = 0
+        self.release = asyncio.Event()
+        self.mode = "finish"
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        self.entered += 1
+        try:
+            if self.mode == "disconnect":
+                # Reads the body as a form parser does, and stops when the client goes.
+                while True:
+                    message = await receive()
+                    if message["type"] == "http.disconnect":
+                        raise ClientDisconnect()
+            await self.release.wait()
+            if self.mode == "fail":
+                raise RuntimeError("the handler failed")
+            await send({"type": "http.response.start", "status": 204, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+        finally:
+            self.left += 1
+
+
+def stack(inner: Any, **options: Any) -> Any:
+    """The two outer layers the application puts around the gate, and nothing else."""
+    from auditmanager.api.routers.correlation import CorrelationMiddleware
+    from auditmanager.api.routers.multipart import BodyCapMiddleware
+
+    gate = BodyCapMiddleware(inner, **options)
+    return CorrelationMiddleware(gate), gate
+
+
+async def until(condition: Callable[[], bool], what: str) -> None:
+    for _ in range(2000):
+        if condition():
+            return
+        await asyncio.sleep(0.001)
+    raise AssertionError(f"timed out waiting for {what}")
+
+
+class TestTheUploadGate:
+    """At most two uploads in flight; the third is refused before its body is read."""
+
+    def test_the_third_upload_is_refused_before_its_body_is_read(self) -> None:
+        async def scenario() -> None:
+            inner = HoldingApp()
+            app, gate = stack(inner)
+            first = asyncio.create_task(drive(app))
+            second = asyncio.create_task(drive(app))
+            await until(lambda: inner.entered == 2, "two uploads inside the application")
+
+            third = await drive(app, chunks=(b"y" * 1000,))
+
+            assert third.status == 503
+            assert third.envelope["error_code"] == "dependency_unavailable"
+            assert third.envelope["details"] == {"dependency": "upload_capacity"}
+            assert third.envelope["retryable"] is True
+            assert third.receives == 0, "the refused upload's body was touched"
+            assert third.delivered == 0
+            assert inner.entered == 2, "the refused upload reached the application"
+            assert gate.gate.in_flight == 2
+
+            inner.release.set()
+            assert [(await first).status, (await second).status] == [204, 204]
+            assert gate.gate.in_flight == 0
+
+        asyncio.run(scenario())
+
+    def test_the_refusal_carries_retry_after_between_the_length_and_the_correlation_id(
+        self,
+    ) -> None:
+        async def scenario() -> None:
+            inner = HoldingApp()
+            app, _ = stack(inner)
+            held = [asyncio.create_task(drive(app)) for _ in range(2)]
+            await until(lambda: inner.entered == 2, "two uploads inside the application")
+
+            refused = await drive(app)
+
+            assert [name for name, _ in refused.headers] == [
+                "Content-Type",
+                "Content-Length",
+                "Retry-After",
+                "X-Correlation-Id",
+            ], refused.headers
+            values = dict(refused.headers)
+            assert values["Content-Type"] == "application/json"
+            assert values["Retry-After"] == "5"
+            assert values["Content-Length"] == str(len(refused.body))
+            inner.release.set()
+            await asyncio.gather(*held)
+
+        asyncio.run(scenario())
+
+    @pytest.mark.parametrize("mode", ["finish", "fail", "cancel", "disconnect"])
+    def test_a_slot_comes_back_however_the_request_ends(self, mode: str) -> None:
+        """Finished, failed, cancelled, disconnected: each leaves the gate whole.
+
+        After the request ends the gate must hold nothing, and must still admit exactly two
+        -- a slot lost to a leak would show as a second, smaller capacity.
+        """
+
+        async def scenario() -> None:
+            inner = HoldingApp()
+            app, gate = stack(inner)
+            inner.mode = "fail" if mode == "fail" else ("disconnect" if mode == "disconnect" else "finish")
+
+            pull_the_plug = asyncio.Event()
+            doomed = asyncio.create_task(
+                drive(app, chunks=(b"x",), until_disconnect=pull_the_plug)
+            )
+            await until(lambda: inner.entered == 1, "the request inside the application")
+            assert gate.gate.in_flight == 1
+            if mode == "cancel":
+                doomed.cancel()
+            elif mode == "disconnect":
+                pull_the_plug.set()
+            else:
+                inner.release.set()
+            try:
+                await doomed
+            except (asyncio.CancelledError, RuntimeError, ClientDisconnect):
+                pass
+            await until(lambda: inner.left == 1, "the request to leave the application")
+
+            assert gate.gate.in_flight == 0, f"a request that {mode} kept its slot"
+
+            # Whole capacity again: two in, the third out.
+            inner.mode = "finish"
+            inner.release = asyncio.Event()
+            held = [asyncio.create_task(drive(app)) for _ in range(2)]
+            await until(lambda: inner.entered == 3, "two more uploads inside the application")
+            assert (await drive(app)).status == 503
+            inner.release.set()
+            await asyncio.gather(*held)
+            assert gate.gate.in_flight == 0
+
+        asyncio.run(scenario())
+
+    def test_only_an_upload_takes_a_slot(self) -> None:
+        """The gate counts ``POST`` of the upload route. Nothing else waits behind it."""
+
+        async def scenario() -> None:
+            inner = HoldingApp()
+            app, _ = stack(inner)
+            held = [asyncio.create_task(drive(app)) for _ in range(2)]
+            await until(lambda: inner.entered == 2, "two uploads inside the application")
+            inner.release.set()  # everything else answers at once
+
+            for label, kwargs in {
+                "another route": {"path": OTHER_PATH},
+                "listing the same collection": {"method": "GET", "path": UPLOAD_PATH, "content_type": None},
+                "a longer path": {"path": UPLOAD_PATH + "/extra"},
+                "another method": {"method": "PUT"},
+            }.items():
+                answer = await drive(app, **kwargs)
+                assert answer.status == 204, f"{label} was refused as busy: {answer.status}"
+            await asyncio.gather(*held)
+
+        asyncio.run(scenario())
+
+    @pytest.mark.parametrize(
+        ("label", "kwargs", "constraint"),
+        [
+            ("declared over the cap", {"declared": UPLOAD_LIMIT + 1}, "max_bytes"),
+            ("multipart with no boundary", {"content_type": b"multipart/form-data"}, "boundary"),
+        ],
+    )
+    def test_a_refusal_no_retry_could_cure_is_not_reported_as_busy(
+        self, label: str, kwargs: dict[str, Any], constraint: str
+    ) -> None:
+        async def scenario() -> None:
+            inner = HoldingApp()
+            app, _ = stack(inner)
+            held = [asyncio.create_task(drive(app)) for _ in range(2)]
+            await until(lambda: inner.entered == 2, "two uploads inside the application")
+
+            answer = await drive(app, **kwargs)
+
+            assert answer.status == 422, f"{label}: {answer.status}"
+            assert answer.envelope["details"]["constraint"] == constraint
+            assert answer.receives == 0
+            assert "Retry-After" not in dict(answer.headers)
+            inner.release.set()
+            await asyncio.gather(*held)
+
+        asyncio.run(scenario())
+
+    def test_the_capacity_is_the_gates_and_not_a_constant_of_two(self) -> None:
+        async def scenario() -> None:
+            inner = HoldingApp()
+            app, gate = stack(inner, max_concurrent_uploads=1)
+            held = asyncio.create_task(drive(app))
+            await until(lambda: inner.entered == 1, "one upload inside the application")
+            assert (await drive(app)).status == 503
+            inner.release.set()
+            await held
+            assert gate.gate.in_flight == 0
+
+        asyncio.run(scenario())
+
+    def test_the_assembled_application_admits_two_and_caps_each_route(self) -> None:
+        """The numbers the application is wired with, read off its middleware stack."""
+        from auditmanager.api.app import create_documentation_app
+        from auditmanager.api.routers.multipart import BodyCapMiddleware
+
+        wired = [m for m in create_documentation_app().user_middleware if m.cls is BodyCapMiddleware]
+        assert len(wired) == 1
+        assert wired[0].kwargs == {
+            "limit": TRANSPORT_LIMIT,
+            "upload_limit": UPLOAD_LIMIT,
+            "max_concurrent_uploads": 2,
+        }
+
+
+class ConsumingApp:
+    """An application that reads its whole body and answers ``204``."""
+
+    def __init__(self) -> None:
+        self.read = 0
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        while True:
+            message = await receive()
+            if message["type"] != "http.request":
+                break
+            self.read += len(message["body"])
+            if not message.get("more_body"):
+                break
+        await send({"type": "http.response.start", "status": 204, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+
+class TestEveryRouteHasItsOwnCap:
+    """The upload route takes 251 MiB; every other route keeps 26 MiB, exactly as before."""
+
+    @pytest.mark.parametrize(
+        ("path", "declared", "admitted"),
+        [
+            (UPLOAD_PATH, UPLOAD_LIMIT, True),
+            (UPLOAD_PATH, UPLOAD_LIMIT + 1, False),
+            (UPLOAD_PATH, TRANSPORT_LIMIT + 1, True),
+            (OTHER_PATH, TRANSPORT_LIMIT, True),
+            (OTHER_PATH, TRANSPORT_LIMIT + 1, False),
+            (OTHER_PATH, UPLOAD_LIMIT, False),
+            ("/runs", TRANSPORT_LIMIT + 1, False),
+            (UPLOAD_PATH + "/", TRANSPORT_LIMIT + 1, False),
+        ],
+    )
+    def test_the_declared_length_is_judged_against_the_cap_of_the_route(
+        self, path: str, declared: int, admitted: bool
+    ) -> None:
+        async def scenario() -> Exchange:
+            app, _ = stack(ConsumingApp())
+            return await drive(app, path=path, declared=declared)
+
+        answer = asyncio.run(scenario())
+        if admitted:
+            assert answer.status == 204, answer.body
+        else:
+            assert answer.status == 422
+            assert answer.envelope["details"] == {"field": "file", "constraint": "max_bytes"}
+            assert answer.receives == 0, "an oversize body was read to discover it was oversize"
+
+    def test_a_json_body_to_an_ordinary_route_is_refused_with_the_body_wording(self) -> None:
+        async def scenario() -> Exchange:
+            app, _ = stack(ConsumingApp())
+            return await drive(
+                app, path=OTHER_PATH, content_type=JSON_TYPE, declared=TRANSPORT_LIMIT + 1
+            )
+
+        answer = asyncio.run(scenario())
+        assert answer.status == 422
+        assert answer.envelope["details"] == {"field": "body", "constraint": "max_bytes"}
+        assert answer.envelope["message"] == "The request body exceeds the maximum accepted size."
+
+    @pytest.mark.parametrize(
+        ("path", "limit", "upload_limit", "refused"),
+        [(OTHER_PATH, 1000, 5000, True), (UPLOAD_PATH, 1000, 5000, False)],
+    )
+    def test_a_body_with_no_declared_length_is_counted_against_the_same_cap(
+        self, path: str, limit: int, upload_limit: int, refused: bool
+    ) -> None:
+        """Every body the web tier streams has no ``Content-Length``: the count is the guard."""
+
+        async def scenario() -> tuple[Exchange, ConsumingApp]:
+            inner = ConsumingApp()
+            app, _ = stack(inner, limit=limit, upload_limit=upload_limit)
+            return await drive(app, path=path, chunks=(b"y" * 400,) * 3), inner  # 1200 bytes
+
+        answer, inner = asyncio.run(scenario())
+        if refused:
+            assert answer.status == 422
+            assert answer.envelope["details"] == {"field": "file", "constraint": "max_bytes"}
+            assert inner.read <= 800, "the body kept being read after it passed the cap"
+        else:
+            assert answer.status == 204
+
+    def test_the_count_stops_a_body_past_the_upload_cap_too(self) -> None:
+        async def scenario() -> tuple[Exchange, ConsumingApp]:
+            inner = ConsumingApp()
+            app, _ = stack(inner, limit=1000, upload_limit=5000)
+            return await drive(app, chunks=(b"y" * 1000,) * 8), inner
+
+        answer, inner = asyncio.run(scenario())
+        assert answer.status == 422
+        assert answer.envelope["details"] == {"field": "file", "constraint": "max_bytes"}
+        assert inner.read <= 5000
+
+    def test_the_cap_wins_over_the_framework_when_it_turns_the_failure_into_its_own(self) -> None:
+        """FastAPI answers an exception raised while it reads a form with its own 400, which
+        the application renders as ``readable_multipart``. A body passed the cap, so the cap
+        speaks -- the same ``max_bytes`` a declared length gets."""
+        from auditmanager.api.routers import install_exception_handlers
+        from auditmanager.api.routers.correlation import CorrelationMiddleware
+        from auditmanager.api.routers.multipart import BodyCapMiddleware
+
+        app = FastAPI()
+
+        @app.post("/projects/{project_uid}/documents")
+        def upload(project_uid: str, file: UploadFile = File(...)) -> dict[str, int]:
+            return {"bytes": len(file.file.read())}
+
+        install_exception_handlers(app)
+        app.add_middleware(BodyCapMiddleware, limit=1000, upload_limit=5000)
+        app.add_middleware(CorrelationMiddleware)
+
+        def chunked(size: int) -> Any:
+            yield f'--{BOUNDARY}\r\nContent-Disposition: {FILE_PART}\r\n\r\n'.encode()
+            for _ in range(size // 500):
+                yield b"y" * 500
+            yield f"\r\n--{BOUNDARY}--\r\n".encode()
+
+        client = TestClient(app, raise_server_exceptions=False)
+        headers = {"Content-Type": CONTENT_TYPE}
+        within = client.post(UPLOAD_PATH, headers=headers, content=chunked(4000))
+        over = client.post(UPLOAD_PATH, headers=headers, content=chunked(6000))
+
+        assert within.status_code == 200, within.text
+        assert over.status_code == 422, over.text
+        assert json.loads(over.content)["details"] == {"field": "file", "constraint": "max_bytes"}
+
+
+class TestTheRealApplicationKeepsEachCap:
+    """The assembled application, without a database: nothing is behind its ports, which is
+    enough, because every case here is answered by the transport or the seam."""
+
+    @staticmethod
+    def client() -> Any:
+        from auditmanager.api.app import create_documentation_app
+
+        return TestClient(create_documentation_app(), raise_server_exceptions=False)
+
+    def test_a_twenty_seven_mebibyte_json_body_to_another_route_is_refused_as_max_bytes(self) -> None:
+        response = self.client().post(
+            "/projects",
+            headers={"Content-Type": "application/json", "Idempotency-Key": "mp-json-0001"},
+            content=b'{"name": "' + b"x" * TRANSPORT_LIMIT + b'"}',
+        )
+        assert response.status_code == 422
+        body = json.loads(response.content)
+        assert body["details"] == {"field": "body", "constraint": "max_bytes"}
+        assert body["message"] == "The request body exceeds the maximum accepted size."
+
+    def test_the_same_size_of_multipart_to_another_route_gets_record_22s_words(self) -> None:
+        response = self.client().post(
+            "/projects",
+            headers={"Content-Type": CONTENT_TYPE, "Idempotency-Key": "mp-multipart-0001"},
+            content=_framed(TRANSPORT_LIMIT + 1),
+        )
+        assert response.status_code == 422
+        body = json.loads(response.content)
+        assert body["details"] == {"field": "file", "constraint": "max_bytes"}
+        assert body["message"] == "The upload exceeds the maximum accepted size."
+
+    def test_the_upload_route_lets_that_size_through_to_the_seam(self) -> None:
+        """Past the old cap, under the new: the transport admits it, and the next layer --
+        here the seam, which has no credential port -- is the one that answers."""
+        response = self.client().post(
+            UPLOAD_PATH,
+            headers={
+                "Content-Type": CONTENT_TYPE,
+                "Idempotency-Key": "mp-upload-0001",
+                "Authorization": "Bearer anything",
+            },
+            content=_framed(TRANSPORT_LIMIT + 1),
+        )
+        body = json.loads(response.content)
+        assert body.get("details", {}).get("constraint") != "max_bytes", body
+        assert response.status_code == 401, body

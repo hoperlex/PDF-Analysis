@@ -37,6 +37,9 @@ from auditmanager.api.composition import Application, ConfigurationError, build_
 from auditmanager.api.routers import (
     BASE_PATH,
     CONTRACT_VERSION,
+    MAX_BODY,
+    MAX_CONCURRENT_UPLOADS,
+    UPLOAD_MAX_BODY,
     BodyCapMiddleware,
     CorrelationMiddleware,
     FailureEnvelopeMiddleware,
@@ -461,7 +464,18 @@ def _assemble(
     # The correlation id is resolved before anything can fail, so every envelope the two
     # inner layers build can carry it; and the body cap runs before any parser
     # materialises a body.
-    app.add_middleware(BodyCapMiddleware)
+    #
+    # `W55B-STREAM-01`: the cap is per route, and the numbers are written out here where the
+    # application is assembled. `uploadDocument` takes a body of up to `UPLOAD_MAX_BODY`
+    # and at most `MAX_CONCURRENT_UPLOADS` of them are in flight in this process (one
+    # process serves a stand); a third is refused before its body is read. Every other
+    # route keeps `MAX_BODY`.
+    app.add_middleware(
+        BodyCapMiddleware,
+        limit=MAX_BODY,
+        upload_limit=UPLOAD_MAX_BODY,
+        max_concurrent_uploads=MAX_CONCURRENT_UPLOADS,
+    )
     app.add_middleware(FailureEnvelopeMiddleware)
     app.add_middleware(CorrelationMiddleware)
     return app

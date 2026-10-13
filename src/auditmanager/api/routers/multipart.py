@@ -26,6 +26,7 @@ and FastAPI has no equivalent. So the limit stays here, in front of the parser, 
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Final
 
@@ -35,18 +36,52 @@ from starlette.formparsers import MultiPartException
 
 from auditmanager.api.routers.correlation import current_correlation_id
 from auditmanager.api.routers.errors import envelope_response
+from auditmanager.api.routers.wire import (
+    JSON_MEDIA_TYPE,
+    WireResponse,
+    encode_json,
+)
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
     "MAX_BODY",
+    "MAX_CONCURRENT_UPLOADS",
+    "UPLOAD_CAPACITY_DEPENDENCY",
+    "UPLOAD_MAX_BODY",
+    "UPLOAD_RETRY_AFTER_SECONDS",
     "BodyCapMiddleware",
     "CheckedUpload",
+    "UploadGate",
     "require_a_strict_multipart_body",
 ]
 
-#: The upload envelope refuses anything larger long before this, but see the module note.
-#: 25 MiB is the declared maximum; the slack covers part headers and the boundary.
+#: The body cap of every route that is not an upload, as it has always been. The upload
+#: envelope refuses anything larger long before this, but see the module note. 25 MiB is the
+#: declared maximum; the slack covers part headers and the boundary.
 MAX_BODY: Final[int] = 26 * 1024 * 1024
+
+#: The body cap of ``uploadDocument`` alone: a 250 MiB portal bundle and the multipart
+#: framing around it. It sits below nginx's 260m for that location and above the browser's
+#: pre-check (`D-44`, ``tests/e2e/test_upload_limit_headroom.py``), so that the typed refusal
+#: is the one a caller sees.
+UPLOAD_MAX_BODY: Final[int] = 251 * 1024 * 1024
+
+#: Uploads in flight in one API process. The freeze states one uvicorn process per stand.
+MAX_CONCURRENT_UPLOADS: Final[int] = 2
+
+#: ``details.dependency`` of the busy refusal -- registered in ``error-codes.json`` under
+#: ``dependency_unavailable``, a stable class name and never a count.
+UPLOAD_CAPACITY_DEPENDENCY: Final[str] = "upload_capacity"
+
+#: The ``Retry-After`` of the busy refusal, in seconds. A hint and not a promise: an upload
+#: that fits the envelope today takes seconds, and a retry costs nothing -- the refusal is
+#: answered before the body is read.
+UPLOAD_RETRY_AFTER_SECONDS: Final[int] = 5
+
+#: ``POST /projects/{project_uid}/documents`` as the application serves it -- the proxy has
+#: already removed ``/api/v1``. Matched whole, never as a prefix, so no other route (and not
+#: ``GET`` of the same collection) gets the upload cap or takes an upload slot.
+_UPLOAD_ROUTE: Final[re.Pattern[str]] = re.compile(r"^/projects/[^/]+/documents$")
 
 #: ``records/22-uploadDocument.refusal.max_bytes.json``, byte for byte.
 _UPLOAD_TOO_LARGE: Final[str] = "The upload exceeds the maximum accepted size."
@@ -73,31 +108,110 @@ def _refusal(is_upload: bool) -> DomainError:
     )
 
 
-class BodyCapMiddleware:
-    """Refuse a body over :data:`MAX_BODY`, or a multipart body with no boundary.
+class UploadGate:
+    """A counter of uploads in flight that never waits: it admits or it refuses.
 
-    Two rules, both here for the same reason: they must be settled **before any parser
+    One instance per application, touched only from the event loop and never across an
+    ``await`` between the check and the increment, so it needs no lock. A request that
+    takes a slot must give it back with :meth:`release`; :class:`BodyCapMiddleware` does so
+    in a ``finally``.
+    """
+
+    __slots__ = ("capacity", "_in_flight")
+
+    def __init__(self, capacity: int = MAX_CONCURRENT_UPLOADS) -> None:
+        self.capacity = capacity
+        self._in_flight = 0
+
+    @property
+    def in_flight(self) -> int:
+        return self._in_flight
+
+    def try_acquire(self) -> bool:
+        if self._in_flight >= self.capacity:
+            return False
+        self._in_flight += 1
+        return True
+
+    def release(self) -> None:
+        assert self._in_flight > 0, "an upload slot was released that was never taken"
+        self._in_flight -= 1
+
+
+def _busy_response() -> WireResponse:
+    """``503 dependency_unavailable`` for ``upload_capacity``, with ``Retry-After``.
+
+    Built from the same two wire helpers :func:`~auditmanager.api.routers.errors.envelope_response`
+    uses, with the one extra header between ``Content-Length`` and the correlation id the
+    outer middleware appends. Every other response is still made by ``envelope_response``.
+    """
+    envelope = DomainError(
+        ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=UPLOAD_CAPACITY_DEPENDENCY
+    ).envelope(current_correlation_id())
+    payload = encode_json(envelope.as_dict())
+    return WireResponse(
+        envelope.http_status,
+        (
+            ("Content-Type", JSON_MEDIA_TYPE),
+            ("Content-Length", str(len(payload))),
+            ("Retry-After", str(UPLOAD_RETRY_AFTER_SECONDS)),
+        ),
+        payload,
+    )
+
+
+def _route_path(scope: Any) -> str:
+    """The path below any ``root_path``, which is how the routes are declared."""
+    path: str = scope.get("path", "")
+    root: str = scope.get("root_path", "")
+    return path[len(root):] if root and path.startswith(root) else path
+
+
+class BodyCapMiddleware:
+    """Refuse a body over its route's cap, or a multipart body with no boundary, and hold
+    the upload gate.
+
+    Three rules, all here for the same reason: they must be settled **before any parser
     reads the body**. The size one because materialising an unbounded body to discover it
     is unbounded is the denial-of-service surface the limit exists to close; the boundary
     one because FastAPI parses a form before it resolves dependencies, so an application
-    handler cannot get in front of it.
+    handler cannot get in front of it; the gate because a third upload must not have its
+    body read into a third temporary file to be told the server is busy.
 
     The size rule has two checks, and both are needed. ``Content-Length`` is refused up front so an oversized
     body is never read at all -- but a client may omit it, or lie, so the stream is counted
     as well and the request is refused the moment the running total passes the limit. A
     guard that trusted the declared length would be a guard a client can switch off.
+
+    **The limit is per route.** ``POST /projects/{project_uid}/documents`` has
+    ``upload_limit``; every other route keeps ``limit``, so a large body to a JSON route is
+    refused exactly as before even though the upload route now takes hundreds of MiB.
     """
 
-    __slots__ = ("app", "limit")
+    __slots__ = ("app", "limit", "upload_limit", "gate")
 
-    def __init__(self, app: Any, limit: int = MAX_BODY) -> None:
+    def __init__(
+        self,
+        app: Any,
+        limit: int = MAX_BODY,
+        *,
+        upload_limit: int = UPLOAD_MAX_BODY,
+        max_concurrent_uploads: int = MAX_CONCURRENT_UPLOADS,
+    ) -> None:
         self.app = app
         self.limit = limit
+        self.upload_limit = upload_limit
+        self.gate = UploadGate(max_concurrent_uploads)
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+
+        is_upload_route = scope.get("method") == "POST" and bool(
+            _UPLOAD_ROUTE.match(_route_path(scope))
+        )
+        limit = self.upload_limit if is_upload_route else self.limit
 
         is_upload = False
         has_boundary = False
@@ -113,7 +227,7 @@ class BodyCapMiddleware:
                 except ValueError:
                     declared = None
 
-        if declared is not None and declared > self.limit:
+        if declared is not None and declared > limit:
             response = envelope_response(_refusal(is_upload), current_correlation_id())
             await response(scope, receive, send)
             return
@@ -138,21 +252,56 @@ class BodyCapMiddleware:
             await response(scope, receive, send)
             return
 
+        if not is_upload_route:
+            await self._serve(scope, receive, send, limit, is_upload)
+            return
+
+        # The gate. After the two cheap refusals above, which a retry could never turn into
+        # a success, and before `receive` is touched.
+        if not self.gate.try_acquire():
+            await _busy_response()(scope, receive, send)
+            return
+        try:
+            await self._serve(scope, receive, send, limit, is_upload)
+        finally:
+            # Finished, failed, cancelled or disconnected: all of them leave this block.
+            self.gate.release()
+
+    async def _serve(
+        self, scope: Any, receive: Any, send: Any, limit: int, is_upload: bool
+    ) -> None:
         read = 0
-        limit = self.limit
+        exceeded = False
+        started = False
 
         async def counted() -> Any:
-            nonlocal read
+            nonlocal read, exceeded
             message = await receive()
             if message["type"] == "http.request":
                 read += len(message.get("body", b""))
                 if read > limit:
+                    exceeded = True
                     raise _BodyTooLarge
             return message
 
+        async def guarded_send(message: Any) -> None:
+            # Once the cap has been passed the only answer is ours. FastAPI turns whatever
+            # `receive` raised while it read the form into its own 400, and that would
+            # reach the client as `readable_multipart` -- a different refusal for a body
+            # that sent no `Content-Length` (every request the BFF streams) than for one
+            # that declared its size.
+            nonlocal started
+            if exceeded:
+                return
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
         try:
-            await self.app(scope, counted, send)
+            await self.app(scope, counted, guarded_send)
         except _BodyTooLarge:
+            pass
+        if exceeded and not started:
             response = envelope_response(_refusal(is_upload), current_correlation_id())
             await response(scope, receive, send)
 
