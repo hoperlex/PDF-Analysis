@@ -17,6 +17,7 @@ paths read-only and never add a second one (task `P2-BHV-01`, integration contra
 | `expected_issues.json` | The expected-issues manifest — the acceptance oracle |
 | `SHA256SUMS` | Digest of every file here, verifiable with `sha256sum -c` from this directory |
 | `negative/` | One fixture per envelope rule, each violating that rule and no other |
+| `bundles/` | One portal bundle (a ZIP) per synthetic PDF, and `bundle_manifest.json`, the oracle for them |
 
 ## The oracle
 
@@ -98,6 +99,55 @@ Each violates **exactly one** rule, so a rejection is attributable to the rule t
 padding is a repeating uncompressed ASCII line, which Git's own zlib crushes. It really is
 over the limit on disk, which is what the fixture has to prove, without permanently
 costing the repository 26 MiB.
+
+## Portal bundles
+
+An upload is now one ZIP, the *portal bundle* (`W55-PLAN.md` B3.1): the PDF, the portal's block
+list (`<stem>_blocks.json`), the recognised text (`<stem>_results.md`) and, optionally, the
+portal's HTML (`<stem>_results.html`, kept as a digest only) and a stamp audit
+(`<stem>_stamp_audit.json`). `bundles/` holds one bundle for every synthetic PDF in this
+directory; the PDF inside each is the committed PDF, byte for byte. **They are synthetic**: every
+byte was written by `tools/fixtures/build_portal_bundles.py` from the corpus above. The formats
+mirror what the portal writes (measured on one real export, which stays outside the repository),
+but nothing in them comes from it, and the crop URLs sit under the reserved `.invalid` domain
+and are never to be fetched.
+
+| Bundle | Source PDF | Members | Expected |
+| --- | --- | --- | --- |
+| `bundles/ar_baseline.zip` | `ar_baseline.pdf` | all five: 8 TEXT blocks, 2 IMAGE blocks (one a polygon), 2 STAMP blocks, HTML, stamp audit | accepted |
+| `bundles/ar_baseline_minimal.zip` | `ar_baseline.pdf` | the three required, TEXT blocks only | accepted |
+| `bundles/ar_baseline_ocr_defects.zip` | `ar_baseline.pdf` | the three required; the recognised text of pages 2-6 carries seeded flaws (Latin homoglyphs, a CJK character, doubled list markers, a mixed-script word) and engineering designations (`1.A`, `B25`, `A500C`, `REI 150`) that must not be flagged | accepted |
+| `bundles/image_only.zip` | `negative/image_only.pdf` | the three required; the block list holds no block | refused: `every_page_has_extractable_text` |
+| `bundles/image_only_with_block.zip` | `negative/image_only.pdf` | the three required; one TEXT block on each scanned page | accepted |
+| `bundles/encrypted.zip` | `negative/encrypted.pdf` | the three required | refused: `not_encrypted` |
+| `bundles/pages_31.zip` | `negative/too_many_pages.pdf` | the three required, 31 TEXT blocks | accepted (over the old 30-page limit, inside the 500-page one) |
+
+`bundles/bundle_manifest.json` (schema `ar-portal-bundles/1`) records, for every bundle, the file's
+size and SHA-256, each member's name, role, size and SHA-256, the block counts by type, whether it
+is `accepted` or `refused` and, for a refusal, the registered `constraint` and its `field`. It is
+the oracle INGEST and the judges read. The scanned and encrypted bundles are *well-formed
+archives*: they are refused for the PDF inside them. `negative/oversize.pdf` has no bundle, because
+a PDF over 25 MiB is no longer over any limit; its replacement (a sparse file past 250 MiB) is
+generated when a test runs, together with 501 pages, a page with neither a text layer nor a block,
+and one archive per bundle rule (`tools/fixtures/portal_bundle/`). None of those is committed.
+
+The committed negatives above keep their old meaning (30 pages, 25 MiB, a bare PDF) until
+`W55B-INGEST-01` switches their consumers.
+
+To package a real portal export for a local run (never to commit it), see
+`tools/fixtures/assemble_portal_bundle.py <input_dir> <out.zip> [--stamp-audit FILE]`.
+
+```
+python3 tools/fixtures/build_portal_bundles.py            # rewrite bundles/ and its SHA256SUMS lines
+python3 tools/fixtures/build_portal_bundles.py --check    # verify against what is committed
+```
+
+The bundle builder is byte-deterministic like the corpus builder: fixed timestamps, identifiers that
+are digests of the stem, no clock and no PRNG. Members are stored or framed as deflate *stored
+blocks*, written by hand, so the bytes do not depend on which zlib the machine has. Run
+`build_ar_corpus.py` first if the PDFs change: a bundle is only built around the committed PDF.
+`build_ar_corpus.py` leaves the `bundles/` lines of `SHA256SUMS` as they are, and
+`build_portal_bundles.py` leaves the others.
 
 ## Regenerating
 
