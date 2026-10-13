@@ -3,20 +3,27 @@
     python tests/e2e/prove_the_headroom_guard_can_fail.py
 
 `tests/e2e/pc01/journey/prove_the_guard_can_fail.py` mutates `manifest.json` in place and
-restores it, which is fine: that file belongs to the journey. The two files `D-44`'s guard
-reads do not. `web/src/entities/document-version/model/upload-envelope.ts` is the
-application and `infra/deploy/proxy/nginx.conf` is the deployment, **and this session was
-told to read the second and never edit it** -- with another lane deploying from the same
-checkout while this runs.
+restores it, which is fine: that file belongs to the journey. The files `D-44`'s guard reads
+do not. `web/src/entities/document-version/model/upload-envelope.ts` is the application,
+`src/auditmanager/api/routers/multipart.py` is the transport and
+`infra/deploy/proxy/{nginx,tls-server}.conf` are the deployment, **and this session was told
+to read them and never edit them** -- with another lane deploying from the same checkout
+while this runs.
 
 So this builds a throwaway tree instead: a temporary directory holding a copy of
-`tests/e2e/test_upload_limit_headroom.py` at the same depth, the two real files it reads
-with ONE number changed, and a sparse stand-in for `oversize.pdf` of the true size. The
-guard resolves its repository root from its own `__file__`, so it reads the copy and
-nothing else. Then `pytest` is run there and the exit status is the verdict.
+`tests/e2e/test_upload_limit_headroom.py` at the same depth, the real files it reads with
+ONE thing changed, and a copy of `tools/fixtures` (the guard generates its sparse oversize
+stand-in with it). The guard resolves its repository root from its own `__file__`, so it reads
+the copy and nothing else. Then `pytest` is run there and the exit status is the verdict.
 
 That makes these real mutations of the real test, not assertions about what it would do,
 and the repository is byte-identical before and after -- `git status` is the proof.
+
+`W55B-STREAM-01` moved the chain from two numbers to three (the pre-check, the application's
+upload cap and nginx's cap in the two upload locations, with nginx's server-wide default
+beside them), so the mutations below move each of them, and each of the two nginx files, in
+both directions. The old first mutation -- the pre-check to 32 MiB with nginx untouched -- is
+gone because it is no longer a violation: the application takes 251 MiB.
 """
 
 from __future__ import annotations
@@ -31,24 +38,37 @@ ROOT = Path(__file__).resolve().parents[2]
 PYTHON = ROOT / ".venv" / "bin" / "python"
 GUARD = Path("tests/e2e/test_upload_limit_headroom.py")
 ENVELOPE = Path("web/src/entities/document-version/model/upload-envelope.ts")
+MULTIPART = Path("src/auditmanager/api/routers/multipart.py")
 NGINX = Path("infra/deploy/proxy/nginx.conf")
-OVERSIZE = Path("fixtures/synthetic/ar/negative/oversize.pdf")
+TLS = Path("infra/deploy/proxy/tls-server.conf")
+FIXTURE_TOOLS = Path("tools/fixtures")
+GENERATED = FIXTURE_TOOLS / "portal_bundle" / "generated.py"
 
 REAL_PRECHECK = "maxBytes: 25 * 1024 * 1024"
-REAL_NGINX = "client_max_body_size 32m;"
+REAL_API_UPLOAD = "UPLOAD_MAX_BODY: Final[int] = 251 * 1024 * 1024"
+REAL_API_OTHER = "MAX_BODY: Final[int] = 26 * 1024 * 1024"
+REAL_UPLOAD_CAP = "client_max_body_size 260m;"
+REAL_DEFAULT_CAP = "client_max_body_size 32m;"
+REAL_TRUNCATE = "handle.truncate(size)"
+
+FILES = (ENVELOPE, MULTIPART, NGINX, TLS, GENERATED)
 
 
-def build(envelope: str, nginx: str, oversize_bytes: int) -> Path:
+def build(overrides: dict[Path, str]) -> Path:
     """A tree the guard will resolve as its repository root, holding only what it reads."""
-    tree = Path(tempfile.mkdtemp(prefix="w28-headroom-"))
+    tree = Path(tempfile.mkdtemp(prefix="w55b-headroom-"))
     (tree / GUARD.parent).mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT / GUARD, tree / GUARD)
-    for relative, text in ((ENVELOPE, envelope), (NGINX, nginx)):
-        (tree / relative).parent.mkdir(parents=True, exist_ok=True)
-        (tree / relative).write_text(text, encoding="utf-8")
-    (tree / OVERSIZE).parent.mkdir(parents=True, exist_ok=True)
-    with (tree / OVERSIZE).open("wb") as handle:  # sparse: no bytes are actually written
-        handle.truncate(oversize_bytes)
+    shutil.copytree(
+        ROOT / FIXTURE_TOOLS, tree / FIXTURE_TOOLS, ignore=shutil.ignore_patterns("__pycache__")
+    )
+    for relative in (ENVELOPE, MULTIPART, NGINX, TLS):
+        target = tree / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(overrides.get(relative, (ROOT / relative).read_text(encoding="utf-8")),
+                          encoding="utf-8")
+    if GENERATED in overrides:
+        (tree / GENERATED).write_text(overrides[GENERATED], encoding="utf-8")
     return tree
 
 
@@ -63,67 +83,112 @@ def run(tree: Path) -> tuple[int, str]:
     return result.returncode, (tail[-1] if tail else "(no output)")
 
 
-def main() -> int:
-    envelope = (ROOT / ENVELOPE).read_text(encoding="utf-8")
-    nginx = (ROOT / NGINX).read_text(encoding="utf-8")
-    size = (ROOT / OVERSIZE).stat().st_size
-    assert REAL_PRECHECK in envelope, f"{ENVELOPE} no longer reads {REAL_PRECHECK!r}"
-    assert REAL_NGINX in nginx, f"{NGINX} no longer reads {REAL_NGINX!r}"
+def first_only(text: str, old: str, new: str) -> str:
+    """Change the first occurrence, so one of two upload locations moves and not the other."""
+    assert old in text, f"{old!r} is no longer in the file this prover mutates"
+    return text.replace(old, new, 1)
 
-    mutations = [
+
+def last_only(text: str, old: str, new: str) -> str:
+    """Change the last occurrence: the second upload location, the /bff one."""
+    assert old in text, f"{old!r} is no longer in the file this prover mutates"
+    head, _, tail = text.rpartition(old)
+    return head + new + tail
+
+
+def main() -> int:
+    texts = {path: (ROOT / path).read_text(encoding="utf-8") for path in FILES}
+    assert REAL_PRECHECK in texts[ENVELOPE], f"{ENVELOPE} no longer reads {REAL_PRECHECK!r}"
+    assert REAL_API_UPLOAD in texts[MULTIPART], f"{MULTIPART} no longer reads {REAL_API_UPLOAD!r}"
+    assert REAL_API_OTHER in texts[MULTIPART], f"{MULTIPART} no longer reads {REAL_API_OTHER!r}"
+    assert REAL_TRUNCATE in texts[GENERATED], f"{GENERATED} no longer reads {REAL_TRUNCATE!r}"
+    for path in (NGINX, TLS):
+        assert texts[path].count(REAL_UPLOAD_CAP) == 2, f"{path} no longer has two upload caps"
+        assert REAL_DEFAULT_CAP in texts[path], f"{path} no longer reads {REAL_DEFAULT_CAP!r}"
+
+    def mutated(path: Path, text: str) -> dict[Path, str]:
+        return {path: text}
+
+    mutations: list[tuple[str, dict[Path, str]]] = [
         (
-            "raise the pre-check to 32 MiB, nginx untouched  <- D-44's own sentence",
-            envelope.replace(REAL_PRECHECK, "maxBytes: 32 * 1024 * 1024"),
-            nginx,
-            size,
+            "raise the pre-check to the application's cap (251 MiB)",
+            mutated(ENVELOPE, texts[ENVELOPE].replace(REAL_PRECHECK, "maxBytes: 251 * 1024 * 1024")),
         ),
         (
-            "raise the pre-check to 64 MiB",
-            envelope.replace(REAL_PRECHECK, "maxBytes: 64 * 1024 * 1024"),
-            nginx,
-            size,
+            "raise the pre-check past the application's cap",
+            mutated(ENVELOPE, texts[ENVELOPE].replace(REAL_PRECHECK, "maxBytes: 300 * 1024 * 1024")),
         ),
         (
-            "lower nginx to 16m and leave the pre-check alone",
-            envelope,
-            nginx.replace(REAL_NGINX, "client_max_body_size 16m;"),
-            size,
+            "raise the application's upload cap to nginx's 260 MiB",
+            mutated(MULTIPART, texts[MULTIPART].replace(REAL_API_UPLOAD, "UPLOAD_MAX_BODY: Final[int] = 260 * 1024 * 1024")),
         ),
         (
-            "make nginx exactly equal to the pre-check",
-            envelope,
-            nginx.replace(REAL_NGINX, "client_max_body_size 26214400;"),
-            size,
+            "raise the application's upload cap past nginx's",
+            mutated(MULTIPART, texts[MULTIPART].replace(REAL_API_UPLOAD, "UPLOAD_MAX_BODY: Final[int] = 512 * 1024 * 1024")),
         ),
         (
-            "comment out client_max_body_size entirely",
-            envelope,
-            nginx.replace(REAL_NGINX, f"# {REAL_NGINX}"),
-            size,
+            "lower the application's upload cap under the pre-check",
+            mutated(MULTIPART, texts[MULTIPART].replace(REAL_API_UPLOAD, "UPLOAD_MAX_BODY: Final[int] = 20 * 1024 * 1024")),
+        ),
+        (
+            "raise every other route's cap above nginx's server default",
+            mutated(MULTIPART, texts[MULTIPART].replace(REAL_API_OTHER, "MAX_BODY: Final[int] = 40 * 1024 * 1024")),
+        ),
+        (
+            "lower nginx.conf's /api upload location to 200m",
+            mutated(NGINX, first_only(texts[NGINX], REAL_UPLOAD_CAP, "client_max_body_size 200m;")),
+        ),
+        (
+            "lower tls-server.conf's /api upload location to 251m (equal to the application)",
+            mutated(TLS, first_only(texts[TLS], REAL_UPLOAD_CAP, "client_max_body_size 251m;")),
+        ),
+        (
+            "lower only the /bff upload location of nginx.conf",
+            mutated(NGINX, last_only(texts[NGINX], REAL_UPLOAD_CAP, "client_max_body_size 100m;")),
+        ),
+        (
+            "delete the cap of nginx.conf's /bff upload location (it takes the 32m default)",
+            mutated(NGINX, last_only(texts[NGINX], f"        {REAL_UPLOAD_CAP}\n", "")),
+        ),
+        (
+            "raise nginx's server-wide default instead of the two locations",
+            mutated(NGINX, texts[NGINX].replace(REAL_DEFAULT_CAP, "client_max_body_size 260m;")),
+        ),
+        (
+            "comment out tls-server.conf's server-wide default",
+            mutated(TLS, texts[TLS].replace(REAL_DEFAULT_CAP, f"# {REAL_DEFAULT_CAP}")),
+        ),
+        (
+            "a stray cap in another location of tls-server.conf",
+            mutated(
+                TLS,
+                texts[TLS].replace(
+                    "    location / {\n        proxy_pass http://web:3000;",
+                    "    location / {\n        client_max_body_size 1m;\n        proxy_pass http://web:3000;",
+                ),
+            ),
         ),
         (
             "move the pre-check limit behind a name the guard cannot read",
-            envelope.replace(REAL_PRECHECK, "maxBytes: MAX_UPLOAD_BYTES"),
-            nginx,
-            size,
+            mutated(ENVELOPE, texts[ENVELOPE].replace(REAL_PRECHECK, "maxBytes: MAX_UPLOAD_BYTES")),
+        ),
+        (
+            "move the application's cap behind a name the guard cannot read",
+            mutated(MULTIPART, texts[MULTIPART].replace(REAL_API_UPLOAD, "UPLOAD_MAX_BODY: Final[int] = UPLOAD_MIB * 1024 * 1024")),
         ),
         (
             "leave the label at 25 MiB while the limit moves to 30",
-            envelope.replace(REAL_PRECHECK, "maxBytes: 30 * 1024 * 1024"),
-            nginx,
-            size,
+            mutated(ENVELOPE, texts[ENVELOPE].replace(REAL_PRECHECK, "maxBytes: 30 * 1024 * 1024")),
         ),
         (
-            "shrink oversize.pdf under the pre-check limit",
-            envelope,
-            nginx,
-            1024,
+            "the stand-in generator returns a file shorter than it was asked for",
+            mutated(GENERATED, texts[GENERATED].replace(REAL_TRUNCATE, "handle.truncate(size // 2)")),
         ),
     ]
 
     ok = True
-    for label, envelope_text, nginx_text, oversize_bytes in mutations:
-        tree = build(envelope_text, nginx_text, oversize_bytes)
+    for label, overrides in mutations:
+        tree = build(overrides)
         try:
             code, summary = run(tree)
         finally:
@@ -134,7 +199,7 @@ def main() -> int:
         else:
             print(f"{'RED (control works)':34} {label}  [{summary}]")
 
-    tree = build(envelope, nginx, size)
+    tree = build({})
     try:
         code, summary = run(tree)
     finally:
