@@ -455,4 +455,3 @@ Forbidden hotspots: `contracts/**`, migrations, root dependency and lock files, 
     `actual > ratio * consumed` (`consumed` is what the inflater took from the file before the stream ended; a stored member
     uses all it declares). Test: `test_a_header_that_claims_more_compressed_bytes_than_the_stream_holds_cannot_hide_the_ratio`
     (shown to fail with the check removed; it also proves the declared stage alone accepts the archive).
-
