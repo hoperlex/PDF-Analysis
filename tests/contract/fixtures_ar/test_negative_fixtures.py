@@ -101,12 +101,12 @@ class NegativeFixtureTest(unittest.TestCase):
                 )
                 self.assertFalse(report.accepted)
 
-    def test_the_four_briefed_negatives_are_present(self) -> None:
+    def test_the_briefed_negatives_that_are_still_committed_are_present(self) -> None:
+        """The other two (size, page count) are generated when a test runs: the limits are
+        250 MiB and 500 pages, and nothing that size is committed (`W55B-INGEST-01`)."""
         wanted = {
             "encrypted.pdf": envelope.RULE_NOT_ENCRYPTED,
             "image_only.pdf": envelope.RULE_TEXT_LAYER,
-            "oversize.pdf": envelope.RULE_MAX_BYTES,
-            "too_many_pages.pdf": envelope.RULE_MAX_PAGES,
         }
         for filename, rule in wanted.items():
             with self.subTest(fixture=filename):
@@ -145,15 +145,30 @@ class NegativeFixtureTest(unittest.TestCase):
                 self.assertEqual(pdfextract.page_runs(doc, page), [])
                 self.assertEqual(pdfextract.page_text(doc, page), "")
 
-    def test_oversize_fixture_is_genuinely_over_the_limit(self) -> None:
-        size = (NEGATIVE_DIR / "oversize.pdf").stat().st_size
-        self.assertGreater(size, envelope.MAX_BYTES)
+    def test_the_envelope_is_250_mebibytes_and_500_pages(self) -> None:
+        self.assertEqual(envelope.MAX_BYTES, 250 * 1024 * 1024)
+        self.assertEqual(envelope.MAX_PAGES, 500)
 
-    def test_too_many_pages_fixture_is_one_page_over(self) -> None:
+    def test_the_generated_oversize_stand_in_is_genuinely_over_the_limit(self) -> None:
+        """A sparse file one byte past the size bound, made here and removed here."""
+        import tempfile
+
+        from portal_bundle import generated
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = generated.oversize_sparse_file(Path(tmp) / "over.bin", envelope.MAX_BYTES + 1)
+            self.assertEqual(path.stat().st_size, envelope.MAX_BYTES + 1)
+            self.assertGreater(path.stat().st_size, envelope.MAX_BYTES)
+
+    def test_the_generated_501_page_pdf_violates_the_page_rule_and_nothing_else(self) -> None:
         from ar_corpus import pdfextract
+        from portal_bundle import generated
 
-        data = (NEGATIVE_DIR / "too_many_pages.pdf").read_bytes()
+        data = generated.pdf_with_n_pages(envelope.MAX_PAGES + 1)
         self.assertEqual(pdfextract.page_count(data), envelope.MAX_PAGES + 1)
+        report = envelope.check(data)
+        self.assertEqual(list(report.violations), [envelope.RULE_MAX_PAGES])
+        self.assertTrue(envelope.check(generated.pdf_with_n_pages(envelope.MAX_PAGES)).accepted)
 
 
 class EnvelopeCheckerCanFailTest(unittest.TestCase):
@@ -164,8 +179,16 @@ class EnvelopeCheckerCanFailTest(unittest.TestCase):
         self.assertEqual(list(report.violations), [envelope.RULE_IS_PDF])
 
     def test_an_oversize_input_violates_the_size_rule(self) -> None:
-        report = envelope.check(b"%PDF-1.7\n" + b"x" * envelope.MAX_BYTES)
-        self.assertIn(envelope.RULE_MAX_BYTES, report.violations)
+        """The rule reads ``MAX_BYTES``; the bound is lowered here so the input is a kilobyte
+        and not 250 MiB (the bound's own value is asserted above)."""
+        from unittest import mock
+
+        with mock.patch.object(envelope, "MAX_BYTES", 1000):
+            report = envelope.check(b"%PDF-1.7\n" + b"x" * 1000)
+            self.assertIn(envelope.RULE_MAX_BYTES, report.violations)
+            self.assertNotIn(
+                envelope.RULE_MAX_BYTES, envelope.check(BASELINE.read_bytes()[:900]).violations
+            )
 
     def test_a_truncated_pdf_is_not_silently_accepted(self) -> None:
         truncated = BASELINE.read_bytes()[:2048]

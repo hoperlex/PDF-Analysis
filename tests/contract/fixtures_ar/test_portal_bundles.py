@@ -52,7 +52,7 @@ if str(TOOLS_DIR) not in sys.path:
 
 import build_ar_corpus  # noqa: E402
 import build_portal_bundles  # noqa: E402
-from ar_corpus import pdfextract  # noqa: E402
+from ar_corpus import negatives, pdfextract  # noqa: E402
 from portal_bundle import (  # noqa: E402
     archive_negatives, blocklist, bundle, committed, generated, pdffacts, positives,
     results, schemacheck, stampaudit, validate, zipscan, zipwrite,
@@ -64,21 +64,24 @@ MiB = 1024 * 1024
 # not have to write hundreds of MiB to cross them.
 SMALL = validate.Limits(member_bytes=2 * MiB, stamp_audit_bytes=64 * 1024)
 
-# The corpus generator's lines in SHA256SUMS, as they were before the bundles were added.
-# They must not change: INGEST consumes the negatives until it switches them.
+# The corpus generator's lines in SHA256SUMS. `negative/oversize.pdf` and
+# `negative/too_many_pages.pdf` left them with `W55B-INGEST-01` (the limits are 250 MiB and 500
+# pages now; both stand-ins are generated when a test runs); the rest must not move.
+# (`expected_issues.json` lost the two entries and took the new envelope numbers, so its digest
+# moved with them; the PDFs did not.)
 ORIGINAL_SUMS = (
     ("6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f", "ar_baseline.pdf"),
-    ("8ed158305cc8d16114b435c60479b51601b435d25c359e605a5a84b185899276", "expected_issues.json"),
+    ("763b8c9adfcbe5b248565fde0fda5ec2dd1d51b97c70ee1ed43971099349b229", "expected_issues.json"),
     ("9513362c5d85dec1438406ffd4e77fef6d08bb18f104a5b107afc610dde8faba", "negative/encrypted.pdf"),
     ("8917d48af68cffac071fdf75040d181a548d27d952baa05defbca48a2ca94325", "negative/image_only.pdf"),
-    ("623bf92bbbf989c1d350f9c8038f9dd6379ee1538100374fd230a81812a665ef", "negative/oversize.pdf"),
-    ("acb3c347dbfe4b38efbc7e56f4389e97725b529966defa2a39c21e34f74da12a", "negative/too_many_pages.pdf"),
     ("ef968094226cd1559df9e2169eac549a8160ded5787fac492900fa899da5187d", "negative/not_a_pdf.txt"),
     ("05a5bb6305d56ed44a3f64769fecaa339529adaa28fa51b693147b76d60139cb", "negative/companion_archive.zip"),
 )
 
 # The oracle, written out independently of `committed.py` so a wrong `expect` there is
 # caught here: file -> (source PDF, refusal constraint or None).
+PAGES_31_SOURCE = "tools/fixtures/ar_corpus/negatives.py:build_pages_31"
+
 EXPECTED = {
     "ar_baseline.zip": ("ar_baseline.pdf", None),
     "ar_baseline_minimal.zip": ("ar_baseline.pdf", None),
@@ -86,12 +89,24 @@ EXPECTED = {
     "image_only.zip": ("negative/image_only.pdf", "every_page_has_extractable_text"),
     "image_only_with_block.zip": ("negative/image_only.pdf", None),
     "encrypted.zip": ("negative/encrypted.pdf", "not_encrypted"),
-    "pages_31.zip": ("negative/too_many_pages.pdf", None),
+    "pages_31.zip": (PAGES_31_SOURCE, None),
 }
 
-# The one committed PDF that has no bundle, and why: its meaning (a PDF over 25 MiB) is
-# gone under the bundle rules, and `generated.oversize_sparse_file` replaces it.
-UNBUNDLED_PDFS = {"negative/oversize.pdf"}
+# The 31-page PDF is no longer a committed file (it was `negative/too_many_pages.pdf`): it is
+# built by the corpus generator, and its digest -- the deleted file's -- is the pin.
+PAGES_31_SHA256 = "acb3c347dbfe4b38efbc7e56f4389e97725b529966defa2a39c21e34f74da12a"
+
+# No committed PDF is left without a bundle: the one that was (`negative/oversize.pdf`, whose
+# meaning -- a PDF over 25 MiB -- is gone under the bundle rules) is deleted, and
+# `generated.oversize_sparse_file` replaces it.
+UNBUNDLED_PDFS: set[str] = set()
+
+
+def source_bytes(source_pdf: str) -> bytes:
+    """The bytes a bundle's PDF member must carry: the committed file, or the 31-page PDF."""
+    if source_pdf == PAGES_31_SOURCE:
+        return negatives.build_pages_31(build_ar_corpus.load_font())
+    return (REPO_ROOT / source_pdf).read_bytes()
 
 SECTION = re.compile(
     r"^### BLOCK #(\d+) \[(TEXT|IMAGE)\]: (blk_[0-9a-f]{32})\n\n((?:> [^\n]*\n)+)\n"
@@ -242,9 +257,9 @@ class CommittedBundlesTest(unittest.TestCase):
                 if BUNDLE_DIR not in p.parents}
         bundled = {e["source_pdf"].removeprefix("fixtures/synthetic/ar/") for e in self.entries.values()}
         self.assertEqual(pdfs - bundled, UNBUNDLED_PDFS)
-        self.assertLessEqual(bundled, pdfs)
+        self.assertLessEqual(bundled - {PAGES_31_SOURCE}, pdfs)
         for name, entry in self.entries.items():
-            source = (REPO_ROOT / entry["source_pdf"]).read_bytes()
+            source = source_bytes(entry["source_pdf"])
             pdf_members = [d for n, d in read_zip((BUNDLE_DIR / name).read_bytes()).items()
                            if n.endswith(".pdf")]
             with self.subTest(bundle=name):
@@ -289,7 +304,7 @@ class CommittedBundlesTest(unittest.TestCase):
                           for k in fmt.KINDS}
                 self.assertEqual(entry["blocks"], counts)
                 self.assertEqual(entry["page_count"], len(document["pages"]))
-                source = (REPO_ROOT / entry["source_pdf"]).read_bytes()
+                source = source_bytes(entry["source_pdf"])
                 if entry["refusal"] is None or entry["refusal"]["constraint"] != "not_encrypted":
                     self.assertEqual(entry["page_count"], pdfextract.page_count(source))
                 self.assertEqual(entry["stem"] + ".pdf", entry["members"][0]["name"])
@@ -298,7 +313,10 @@ class CommittedBundlesTest(unittest.TestCase):
         for name, (source, constraint) in EXPECTED.items():
             entry = self.entries[name]
             with self.subTest(bundle=name):
-                self.assertEqual(entry["source_pdf"], f"fixtures/synthetic/ar/{source}")
+                self.assertEqual(
+                    entry["source_pdf"],
+                    source if source == PAGES_31_SOURCE else f"fixtures/synthetic/ar/{source}",
+                )
                 if constraint is None:
                     self.assertEqual((entry["expected"], entry["refusal"]), ("accepted", None))
                 else:
@@ -576,8 +594,6 @@ class ValidatorTest(unittest.TestCase):
             "not_a_pdf.txt": "portal_bundle_required",
             "encrypted.pdf": "portal_bundle_required",
             "image_only.pdf": "portal_bundle_required",
-            "too_many_pages.pdf": "portal_bundle_required",
-            "oversize.pdf": "portal_bundle_required",
             "companion_archive.zip": "bundle_member_set",
         }
         for name, constraint in expected.items():
@@ -813,9 +829,21 @@ class GeneratedFixturesTest(unittest.TestCase):
         self.assertIn("получен только из блока портала", recognised[second.block_id][2])
 
     def test_the_committed_negatives_are_still_what_they_were(self) -> None:
-        # INGEST switches their consumers later; until then they are not to move.
         for digest, name in ORIGINAL_SUMS:
             self.assertEqual(sha256((CORPUS_DIR / name).read_bytes()), digest, name)
+
+    def test_the_two_big_negatives_are_gone_and_the_31_page_pdf_is_the_same_bytes(self) -> None:
+        """`W55B-INGEST-01` deleted `oversize.pdf` and `too_many_pages.pdf`: nothing names
+        them in the corpus any more, and the PDF of `pages_31.zip` is byte for byte the one the
+        deleted negative was."""
+        for name in ("oversize.pdf", "too_many_pages.pdf"):
+            self.assertFalse((CORPUS_DIR / "negative" / name).exists(), name)
+            self.assertNotIn(name, CHECKSUMS.read_text(encoding="utf-8"))
+            self.assertNotIn(name, (CORPUS_DIR / "expected_issues.json").read_text(encoding="utf-8"))
+        pdf = negatives.build_pages_31(build_ar_corpus.load_font())
+        self.assertEqual(sha256(pdf), PAGES_31_SHA256)
+        self.assertEqual(committed.PAGES_31_PDF_SHA256, PAGES_31_SHA256)
+        self.assertEqual(pdfextract.page_count(pdf), 31)
 
 
 class SizeDrivenTest(unittest.TestCase):

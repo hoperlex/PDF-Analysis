@@ -25,7 +25,11 @@ from .pdffacts import PageFacts, read_pages
 BASELINE_PDF = "fixtures/synthetic/ar/ar_baseline.pdf"
 IMAGE_ONLY_PDF = "fixtures/synthetic/ar/negative/image_only.pdf"
 ENCRYPTED_PDF = "fixtures/synthetic/ar/negative/encrypted.pdf"
-TOO_MANY_PAGES_PDF = "fixtures/synthetic/ar/negative/too_many_pages.pdf"
+# The 31-page PDF is not a committed file any more: it was `negative/too_many_pages.pdf` while 31
+# pages were over the limit. The corpus generator still builds it (`negatives.build_pages_31`),
+# and this digest -- the deleted file's -- pins that it builds the very same bytes.
+PAGES_31_PDF = "tools/fixtures/ar_corpus/negatives.py:build_pages_31"
+PAGES_31_PDF_SHA256 = "acb3c347dbfe4b38efbc7e56f4389e97725b529966defa2a39c21e34f74da12a"
 
 # The encrypted PDF's text layer cannot be read without its password, so the recognised
 # text of its bundle is authored here instead of extracted.
@@ -162,7 +166,7 @@ COMMITTED = (
         "The password-protected PDF in a well-formed bundle: refused for the PDF.",
         encrypted, expect="not_encrypted"),
     CommittedBundle(
-        "pages_31.zip", TOO_MANY_PAGES_PDF,
+        "pages_31.zip", PAGES_31_PDF,
         "Thirty-one pages with a TEXT block each: over the old 30-page limit, inside the "
         "500-page one.",
         pages_31),

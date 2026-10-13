@@ -68,6 +68,8 @@ Client = driver.Client
 build_client = driver.build_client
 key = driver.key
 BASELINE_PDF = driver.BASELINE_PDF
+BASELINE_BUNDLE = driver.BASELINE_BUNDLE
+BUNDLES = driver.BUNDLES
 NEGATIVE = driver.NEGATIVE
 OPENAPI = driver.OPENAPI
 
@@ -150,7 +152,7 @@ def journey(client: Client) -> Journey:
 
     answer = client.upload_document(
         project_uid=project["project_uid"],
-        content=BASELINE_PDF.read_bytes(),
+        content=BASELINE_BUNDLE.read_bytes(),
         key=key("upload"),
     )
     assert answer.status == 201, _blocked(
@@ -425,10 +427,19 @@ def test_c3_no_response_ever_discloses_a_bucket_a_key_or_a_storage_url(
 def test_c3_the_manifest_records_the_source_document_under_its_contract_role(
     journey: Journey,
 ) -> None:
+    """`W55B-INGEST-01`: the upload is the baseline bundle, so the manifest lists one entry per
+    stored member -- the document first among them under its contract role, and the version's
+    own digest and size are the PDF member's."""
     entries = journey.version["input_manifest"]
-    assert [e["role"] for e in entries] == ["source.document"]
+    assert [e["role"] for e in entries] == [
+        "source.document",
+        "source.markdown",
+        "source.stamp_audit",
+        "source.structured_companion",
+    ]
     assert entries[0]["sha256"] == EXPECTED_SHA256
     assert entries[0]["size_bytes"] == EXPECTED_BYTE_SIZE
+    assert journey.version["sha256"] == EXPECTED_SHA256
 
 
 def test_c3_the_surface_declares_no_operation_that_can_mutate_a_version(
@@ -496,7 +507,7 @@ def test_c3_a_second_upload_publishes_a_new_identity_and_leaves_the_first_untouc
     """
     answer = client.upload_document(
         project_uid=journey.project_uid,
-        content=BASELINE_PDF.read_bytes(),
+        content=BASELINE_BUNDLE.read_bytes(),
         key=key("upload-second"),
     )
     assert answer.status == 201, answer.body
@@ -986,7 +997,7 @@ def test_c9_replaying_the_upload_command_publishes_no_second_version(
     """
     answer = client.upload_document(
         project_uid=journey.project_uid,
-        content=BASELINE_PDF.read_bytes(),
+        content=BASELINE_BUNDLE.read_bytes(),
         key=key("upload"),
     )
     assert answer.status in (200, 201), answer.body
@@ -1046,13 +1057,38 @@ def test_c9_a_reused_key_carrying_a_different_payload_is_refused(
 # ======================================================================================
 
 
+def _fixture_tools() -> None:
+    """Put ``tools/fixtures`` on the path, as the other tests that use its builders do: it is
+    on no import path and this directory's ``conftest.py`` is not this lane's to edit."""
+    tools = str(driver.REPOSITORY_ROOT / "tools" / "fixtures")
+    if tools not in sys.path:
+        sys.path.insert(0, tools)
+
+
+def _refused_input(name: str) -> bytes:
+    """The upload for one refused case. Bundles for the PDF rules, whose refusals are the PDF
+    member's; what is not a bundle at all (a text file, a bare ZIP of other files) as it is.
+
+    `W55B-INGEST-01`: ``too_many_pages.pdf`` and ``oversize.pdf`` are not committed any more;
+    the 501-page bundle is generated here and the oversize body in its own test.
+    """
+    if name == "too_many_pages":
+        _fixture_tools()
+        from portal_bundle import generated
+
+        return generated.bundle_with_pages(501)
+    if name in {"encrypted", "image_only"}:
+        return (BUNDLES / f"{name}.zip").read_bytes()
+    return (NEGATIVE / name).read_bytes()
+
+
 @pytest.mark.parametrize(
     ("fixture_name", "filename"),
     [
         ("not_a_pdf.txt", "notes.txt"),
-        ("encrypted.pdf", "encrypted.pdf"),
-        ("image_only.pdf", "image_only.pdf"),
-        ("too_many_pages.pdf", "too_many_pages.pdf"),
+        ("encrypted", "encrypted.zip"),
+        ("image_only", "image_only.zip"),
+        ("too_many_pages", "too_many_pages.zip"),
         ("companion_archive.zip", "companion.zip"),
     ],
 )
@@ -1067,7 +1103,7 @@ def test_c10_unsupported_input_is_refused_with_a_typed_code(
     before = client.request("GET", f"/versions/{journey.version_uid}")
     answer = client.upload_document(
         project_uid=journey.project_uid,
-        content=(NEGATIVE / fixture_name).read_bytes(),
+        content=_refused_input(fixture_name),
         key=key(f"neg-{fixture_name}", unique=True),
         filename=filename,
     )
@@ -1089,18 +1125,26 @@ def test_c10_unsupported_input_is_refused_with_a_typed_code(
 
 
 def test_c10_an_oversize_upload_is_refused_rather_than_truncated(
-    journey: Journey, client: Client
+    journey: Journey, client: Client, tmp_path: Path
 ) -> None:
     """Separated from the parametrised cases because the refusal is a size rule.
 
     A server that accepted and truncated would publish a version, which is why the
-    assertion is on the absence of a new identity and not only on the status.
+    assertion is on the absence of a new identity and not only on the status. The upload is
+    a ZIP header and a hole one byte past 250 MiB, made here (`W55B-INGEST-01`: nothing that
+    size is committed); the driver sends it in one piece, so the test holds it once.
     """
+    _fixture_tools()
+    from portal_bundle import generated
+
+    from auditmanager.ingest import MAX_BYTES
+
+    stand_in = generated.oversize_sparse_file(tmp_path / "oversize.zip", MAX_BYTES + 1)
     answer = client.upload_document(
         project_uid=journey.project_uid,
-        content=(NEGATIVE / "oversize.pdf").read_bytes(),
+        content=stand_in.read_bytes(),
         key=key("neg-oversize", unique=True),
-        filename="oversize.pdf",
+        filename="oversize.zip",
     )
     assert answer.status >= 400, answer.body
     assert answer.status != 500, answer.body

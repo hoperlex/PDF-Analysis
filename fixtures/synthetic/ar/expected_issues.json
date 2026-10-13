@@ -7,13 +7,13 @@
   "verify": "python3 tools/fixtures/build_ar_corpus.py --check",
   "text_extraction": "Quotation offsets are into the text of a single page as produced by tools/fixtures/ar_corpus/pdfextract.py: runs grouped into lines by baseline, lines top to bottom, joined by a single newline. Every quotation lies wholly within one line, so any extractor that preserves line content resolves it identically.",
   "envelope": {
-    "max_bytes": 26214400,
-    "max_pages": 30,
+    "max_bytes": 262144000,
+    "max_pages": 500,
     "rules": {
       "ENV-PDF": "the input is a PDF file",
       "ENV-ENCRYPTED": "the PDF is not encrypted or password-protected",
-      "ENV-SIZE": "the file is at most 26214400 bytes (25 MiB)",
-      "ENV-PAGES": "the document has at most 30 pages",
+      "ENV-SIZE": "the file is at most 262144000 bytes (250 MiB)",
+      "ENV-PAGES": "the document has at most 500 pages",
       "ENV-TEXT": "every page carries extractable embedded text"
     }
   },
@@ -248,24 +248,6 @@
       "sha256": "8917d48af68cffac071fdf75040d181a548d27d952baa05defbca48a2ca94325",
       "bytes": 246242,
       "description": "Scanned-looking PDF: two pages, each a single 1-bit image XObject and no text operator anywhere. OCR must not be silently substituted."
-    },
-    {
-      "name": "oversize",
-      "path": "fixtures/synthetic/ar/negative/oversize.pdf",
-      "violates_rule": "ENV-SIZE",
-      "rule_description": "the file is at most 26214400 bytes (25 MiB)",
-      "sha256": "623bf92bbbf989c1d350f9c8038f9dd6379ee1538100374fd230a81812a665ef",
-      "bytes": 27303204,
-      "description": "Valid two-page PDF with a real text layer, carried past 25 MiB by one unreferenced uncompressed padding stream."
-    },
-    {
-      "name": "too_many_pages",
-      "path": "fixtures/synthetic/ar/negative/too_many_pages.pdf",
-      "violates_rule": "ENV-PAGES",
-      "rule_description": "the document has at most 30 pages",
-      "sha256": "acb3c347dbfe4b38efbc7e56f4389e97725b529966defa2a39c21e34f74da12a",
-      "bytes": 66487,
-      "description": "31-page PDF, one page over the limit. Every page carries real extractable text."
     },
     {
       "name": "not_a_pdf",

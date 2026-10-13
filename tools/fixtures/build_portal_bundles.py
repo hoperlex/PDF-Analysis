@@ -69,7 +69,7 @@ def source_pdfs() -> dict[str, bytes]:
         committed.BASELINE_PDF: document.build_baseline(font),
         committed.IMAGE_ONLY_PDF: negatives.build_image_only(font),
         committed.ENCRYPTED_PDF: negatives.build_encrypted(font),
-        committed.TOO_MANY_PAGES_PDF: negatives.build_too_many_pages(font),
+        committed.PAGES_31_PDF: negatives.build_pages_31(font),
     }
     for relative, data in built.items():
         path = REPO_ROOT / relative
@@ -78,6 +78,13 @@ def source_pdfs() -> dict[str, bytes]:
                 f"{relative} differs from what the corpus generator builds; run "
                 "tools/fixtures/build_ar_corpus.py first"
             )
+    # The 31-page PDF has no file to compare with: its digest, recorded when it was a
+    # committed negative, is the pin.
+    if sha256(built[committed.PAGES_31_PDF]) != committed.PAGES_31_PDF_SHA256:
+        raise BuildError(
+            "the 31-page PDF the corpus generator builds is not the one bundles/pages_31.zip "
+            "was recorded with"
+        )
     return built
 
 
@@ -203,12 +210,17 @@ def judge_committed() -> list[str]:
         if verdict.constraints != wanted:
             problems.append(f"{entry['path']}: the validator says {verdict.constraints or 'accepted'},"
                             f" the manifest says {wanted or 'accepted'}")
-        pdf = (REPO_ROOT / entry["source_pdf"]).read_bytes()
         with zipscan.Archive.from_bytes(data) as archive:
             for member in archive.load_entries():
                 if member.name.endswith(b".pdf"):
                     stored = b"".join(archive.read_chunks(member))
-                    if stored != pdf:
+                    if entry["source_pdf"] == committed.PAGES_31_PDF:
+                        # No file to compare with (it was a committed negative): the digest
+                        # recorded when it was is the pin.
+                        same = sha256(stored) == committed.PAGES_31_PDF_SHA256
+                    else:
+                        same = stored == (REPO_ROOT / entry["source_pdf"]).read_bytes()
+                    if not same:
                         problems.append(f"{entry['path']}: the PDF member is not {entry['source_pdf']}")
     return problems
 

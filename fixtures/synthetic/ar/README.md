@@ -90,15 +90,14 @@ Each violates **exactly one** rule, so a rejection is attributable to the rule t
 | --- | --- | --- |
 | `negative/encrypted.pdf` | `ENV-ENCRYPTED` | User password `synthetic-user-pw`, owner password `synthetic-owner-pw` (standard security handler, revision 2). Two pages, well inside every other limit |
 | `negative/image_only.pdf` | `ENV-TEXT` | Two pages, each one 1-bit image XObject; no text operator anywhere |
-| `negative/oversize.pdf` | `ENV-SIZE` | Valid two-page text PDF carried past 25 MiB by one unreferenced padding stream |
-| `negative/too_many_pages.pdf` | `ENV-PAGES` | 31 pages, one over the limit, every page with real text |
 | `negative/not_a_pdf.txt` | `ENV-PDF` | A UTF-8 text file presented as the source document |
 | `negative/companion_archive.zip` | `ENV-PDF` | A ZIP holding a PDF plus companion files |
 
-`oversize.pdf` is 26 MiB in the working tree but roughly 128 KiB as a Git object: the
-padding is a repeating uncompressed ASCII line, which Git's own zlib crushes. It really is
-over the limit on disk, which is what the fixture has to prove, without permanently
-costing the repository 26 MiB.
+**`ENV-SIZE` and `ENV-PAGES` have no committed fixture.** The limits are 250 MiB and 500 pages
+(`W55B-INGEST-01`), and a file that size is never committed. `negative/oversize.pdf` (26 MiB) and
+`negative/too_many_pages.pdf` (31 pages) were deleted: the over-size stand-in is a sparse file and
+the over-page one a 501-page PDF, both made when a test runs by
+`tools/fixtures/portal_bundle/generated.py` (`oversize_sparse_file`, `pdf_with_n_pages`).
 
 ## Portal bundles
 
@@ -120,19 +119,20 @@ and are never to be fetched.
 | `bundles/image_only.zip` | `negative/image_only.pdf` | the three required; the block list holds no block | refused: `every_page_has_extractable_text` |
 | `bundles/image_only_with_block.zip` | `negative/image_only.pdf` | the three required; one TEXT block on each scanned page | accepted |
 | `bundles/encrypted.zip` | `negative/encrypted.pdf` | the three required | refused: `not_encrypted` |
-| `bundles/pages_31.zip` | `negative/too_many_pages.pdf` | the three required, 31 TEXT blocks | accepted (over the old 30-page limit, inside the 500-page one) |
+| `bundles/pages_31.zip` | `ar_corpus/negatives.py:build_pages_31` | the three required, 31 TEXT blocks | accepted (over the old 30-page limit, inside the 500-page one) |
 
 `bundles/bundle_manifest.json` (schema `ar-portal-bundles/1`) records, for every bundle, the file's
 size and SHA-256, each member's name, role, size and SHA-256, the block counts by type, whether it
 is `accepted` or `refused` and, for a refusal, the registered `constraint` and its `field`. It is
 the oracle INGEST and the judges read. The scanned and encrypted bundles are *well-formed
-archives*: they are refused for the PDF inside them. `negative/oversize.pdf` has no bundle, because
-a PDF over 25 MiB is no longer over any limit; its replacement (a sparse file past 250 MiB) is
-generated when a test runs, together with 501 pages, a page with neither a text layer nor a block,
-and one archive per bundle rule (`tools/fixtures/portal_bundle/`). None of those is committed.
+archives*: they are refused for the PDF inside them. The 31-page PDF of `pages_31.zip` is built by
+the corpus generator (`build_pages_31`) and its digest is pinned in `portal_bundle/committed.py`;
+it is the deleted `too_many_pages.pdf`, byte for byte. The generated stand-ins (a sparse file past
+250 MiB, 501 pages, a page with neither a text layer nor a block, and one archive per bundle rule,
+`tools/fixtures/portal_bundle/`) are made when a test runs and are not committed.
 
-The committed negatives above keep their old meaning (30 pages, 25 MiB, a bare PDF) until
-`W55B-INGEST-01` switches their consumers.
+`negative/not_a_pdf.txt` and `negative/companion_archive.zip` keep their meaning for the bare-PDF
+path until the last step of `W55B-INGEST-01` refuses a bare PDF.
 
 To package a real portal export for a local run (never to commit it), see
 `tools/fixtures/assemble_portal_bundle.py <input_dir> <out.zip> [--stamp-audit FILE]`.

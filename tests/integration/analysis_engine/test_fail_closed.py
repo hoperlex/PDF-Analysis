@@ -35,6 +35,19 @@ VERSION_UID = "ver_01M2545JSD15ETSNNV904X991J"
 NEGATIVE = Path(__file__).resolve().parents[3] / "fixtures" / "synthetic" / "ar" / "negative"
 
 
+def _thirty_one_page_pdf() -> bytes:
+    """A valid 31-page document with a longer text layer than the baseline's.
+
+    It was ``negative/too_many_pages.pdf``; that file is deleted (`W55B-INGEST-01`: 31 pages are
+    valid under the 500-page ceiling), and these are the very bytes, as the PDF member of the
+    committed ``bundles/pages_31.zip``.
+    """
+    import zipfile
+
+    with zipfile.ZipFile(NEGATIVE.parent / "bundles" / "pages_31.zip") as archive:
+        return archive.read("pages_31.pdf")
+
+
 def _publish(store: Any, payload: bytes, media_type: str = "application/pdf") -> Any:
     return store.put_blob(
         payload,
@@ -345,7 +358,7 @@ def test_a_block_index_bound_to_a_different_text_layer_is_refused(
         blob_store=store,
     )
 
-    other = _publish(store, (NEGATIVE / "too_many_pages.pdf").read_bytes())
+    other = _publish(store, _thirty_one_page_pdf())
     other_prepared = run_stage(
         "source_preparation",
         version_uid=VERSION_UID,
@@ -390,7 +403,7 @@ def test_a_geometry_stage_given_a_text_layer_from_another_document_is_refused(
         inputs={ROLE_SOURCE_DOCUMENT: source_blob},
         blob_store=store,
     )
-    other = _publish(store, (NEGATIVE / "too_many_pages.pdf").read_bytes())
+    other = _publish(store, _thirty_one_page_pdf())
     other_prepared = run_stage(
         "source_preparation",
         version_uid=VERSION_UID,

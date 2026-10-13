@@ -21,12 +21,24 @@ in the tree recorded that dependency. This file is what records it:
 and, for every other route, ``MAX_BODY`` below nginx's server-wide default (which is not
 raised for the upload: a large body is accepted on the two upload paths and on no other).
 
+**What `W55B-INGEST-01` added: the envelope's own bound is the fourth term.** The admission
+envelope (``MAX_BYTES`` in ``src/auditmanager/ingest/envelope.py``) judges the upload and
+answers an oversized one with ``byte_size <= N``. It belongs between the pre-check and the
+application's cap, because the browser must never *allow* a file the envelope refuses and the
+transport must never refuse, with ``max_bytes``, a file the envelope would have judged:
+
+    pre-check  <=  MAX_BYTES  <  UPLOAD_MAX_BODY  <  nginx's cap in each upload location
+
+The pre-check may equal ``MAX_BYTES`` (both say 250 MiB once the browser's constant is raised)
+and may not exceed it.
+
 **What changed under `W55B-STREAM-01`.** There used to be one number on each side:
 ``maxBytes`` against the one ``client_max_body_size``. The upload route's cap moved to
 251 MiB and nginx's to 260m in two locations, so the application's cap is now the middle term
 and nginx has a default and two upload locations to read. The pre-check itself is still
 25 MiB: `W55B-INGEST-01` raises it, and this file then holds it below the cap without being
-edited. The oversize stand-in is no longer a committed file -- it is a **sparse file
+edited. (`W55B-INGEST-01` raised the envelope to 250 MiB; the browser constant is the next
+lane's.) The oversize stand-in is no longer a committed file -- it is a **sparse file
 generated here, at test time** (``tools/fixtures/portal_bundle/generated.py``) and never
 committed.
 
@@ -65,6 +77,7 @@ UPLOAD_ENVELOPE = (
     / "upload-envelope.ts"
 )
 MULTIPART = REPOSITORY_ROOT / "src" / "auditmanager" / "api" / "routers" / "multipart.py"
+ENVELOPE_PY = REPOSITORY_ROOT / "src" / "auditmanager" / "ingest" / "envelope.py"
 PROXY = REPOSITORY_ROOT / "infra" / "deploy" / "proxy"
 NGINX_CONFS = (PROXY / "nginx.conf", PROXY / "tls-server.conf")
 FIXTURE_TOOLS = REPOSITORY_ROOT / "tools" / "fixtures"
@@ -147,6 +160,23 @@ def bytes_of_label(label: str) -> int:
             f"quantity this guard can compare, one of {sorted(_BINARY_UNITS)}."
         )
     return round(float(match.group(1)) * _BINARY_UNITS[match.group(2)])
+
+
+#: ``MAX_BYTES: Final[int] = 250 * 1024 * 1024`` -- the name at the start of the line, as above.
+_ENVELOPE_LIMIT = re.compile(
+    r"^MAX_BYTES\s*:\s*Final\[int\]\s*=\s*([0-9_ *]+?)\s*(?:#.*)?$", re.MULTILINE
+)
+
+
+def envelope_max_bytes(source: str) -> int:
+    """The admission envelope's size bound, read out of the module that enforces it."""
+    found = _ENVELOPE_LIMIT.findall(source)
+    if len(found) != 1:
+        raise AssertionError(
+            f"expected exactly one definition of `MAX_BYTES` in envelope.py, found {len(found)}. "
+            "The envelope's bound is what the pre-check and the transport are held around."
+        )
+    return _product(found[0], "`MAX_BYTES`")
 
 
 def api_body_limits(source: str) -> dict[str, int]:
@@ -292,6 +322,24 @@ def headroom_problems(
     return problems
 
 
+def envelope_problems(precheck: int, envelope: int, api: dict[str, int]) -> list[str]:
+    """The envelope's place in the chain: ``precheck <= MAX_BYTES < UPLOAD_MAX_BODY``."""
+    problems: list[str] = []
+    if not precheck <= envelope:
+        problems.append(
+            f"the pre-check lets a file of up to {precheck} bytes through and the envelope "
+            f"refuses anything over {envelope}: the browser would send what the server then "
+            "refuses, and the refusal half of the journey would be about the wrong rule"
+        )
+    if not envelope < api["UPLOAD_MAX_BODY"]:
+        problems.append(
+            f"the envelope judges uploads of up to {envelope} bytes and the transport accepts a "
+            f"body of up to {api['UPLOAD_MAX_BODY']}: a file over the envelope's bound could "
+            "never reach it, and would be refused by the transport with `max_bytes` instead"
+        )
+    return problems
+
+
 # --------------------------------------------------------------------------------------
 # Against the real tree.
 # --------------------------------------------------------------------------------------
@@ -316,6 +364,15 @@ def test_the_browser_refuses_an_oversize_upload_before_the_server_ever_could() -
             "Either move the pre-check, `UPLOAD_MAX_BODY` or `client_max_body_size`; do not "
             "edit this test."
         )
+
+
+def test_the_envelope_sits_between_the_precheck_and_the_transport() -> None:
+    """`W55B-INGEST-01`: the fourth term of the chain, read from `ingest/envelope.py`."""
+    precheck = precheck_max_bytes(_read(UPLOAD_ENVELOPE))
+    api = api_body_limits(_read(MULTIPART))
+    envelope = envelope_max_bytes(_read(ENVELOPE_PY))
+    problems = envelope_problems(precheck, envelope, api)
+    assert not problems, "; ".join(problems) + ". D-44. Move one end; do not edit this test."
 
 
 def test_both_nginx_files_say_the_same_about_size() -> None:
@@ -455,6 +512,30 @@ def test_control_a_raised_precheck_is_detected() -> None:
     for raised in ("251 * 1024 * 1024", "300 * 1024 * 1024"):
         envelope = _ENVELOPE_LIKE.replace("25 * 1024 * 1024", raised)
         assert headroom_problems(*_chain(envelope=envelope)), raised
+
+
+_ENVELOPE_PY_LIKE = '''
+"""MAX_BYTES: Final[int] = 1 in a docstring is not a definition."""
+
+MAX_BYTES: Final[int] = 250 * 1024 * 1024
+'''
+
+
+def test_control_the_envelope_bound_is_read_and_the_chain_around_it_can_fail() -> None:
+    assert envelope_max_bytes(_ENVELOPE_PY_LIKE) == 262144000
+    api = api_body_limits(_API_LIKE)
+    assert envelope_problems(26214400, 262144000, api) == []
+    assert envelope_problems(262144000, 262144000, api) == []            # equal is allowed
+    assert envelope_problems(262144001, 262144000, api), "a pre-check above the envelope"
+    assert envelope_problems(26214400, 263192576, api), "an envelope at the transport's cap"
+    assert envelope_problems(26214400, 300 * 1024 * 1024, api), "an envelope past it"
+    for unreadable in (
+        _ENVELOPE_PY_LIKE.replace("250 * 1024 * 1024", "ENVELOPE_MIB * 1024 * 1024"),
+        _ENVELOPE_PY_LIKE.replace("MAX_BYTES: Final[int] = 250 * 1024 * 1024", ""),
+        _ENVELOPE_PY_LIKE + "MAX_BYTES: Final[int] = 5 * 1024 * 1024\n",
+    ):
+        with pytest.raises(AssertionError):
+            envelope_max_bytes(unreadable)
 
 
 def test_control_a_raised_application_cap_is_detected() -> None:

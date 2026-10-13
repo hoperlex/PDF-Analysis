@@ -345,7 +345,7 @@
       "path": "fixtures/synthetic/ar/bundles/pages_31.zip",
       "size": 98175,
       "sha256": "f9aaf3cd83e33aa493f713765d2acf4d1415ece9e4c0c12918fbc30a8832f513",
-      "source_pdf": "fixtures/synthetic/ar/negative/too_many_pages.pdf",
+      "source_pdf": "tools/fixtures/ar_corpus/negatives.py:build_pages_31",
       "stem": "pages_31",
       "description": "Thirty-one pages with a TEXT block each: over the old 30-page limit, inside the 500-page one.",
       "page_count": 31,

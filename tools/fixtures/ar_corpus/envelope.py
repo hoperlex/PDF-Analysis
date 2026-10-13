@@ -1,9 +1,9 @@
 """The PC-01 input envelope, as an executable reference check.
 
 `PROTOTYPE_PROFILE.md` section 7.1 states the envelope in prose: one unencrypted PDF, at
-most 25 MiB and 30 pages, every page carrying extractable embedded text; scanned,
-password-protected, mixed-file and companion-archive inputs fail explicitly and OCR is
-never silently substituted. This module turns that prose into rules with stable ids, so
+most 250 MiB and 500 pages (`W55B-INGEST-01`, owner ruling R-116; it was 25 MiB and 30 pages),
+every page carrying extractable embedded text; scanned, password-protected, mixed-file and
+companion-archive inputs fail explicitly and OCR is never silently substituted. This module turns that prose into rules with stable ids, so
 a negative fixture can be shown to violate *the specific rule it is named for* rather
 than merely "failing".
 
@@ -24,8 +24,8 @@ from enum import Enum
 
 from . import pdfextract
 
-MAX_BYTES = 25 * 1024 * 1024
-MAX_PAGES = 30
+MAX_BYTES = 250 * 1024 * 1024
+MAX_PAGES = 500
 
 RULE_IS_PDF = "ENV-PDF"
 RULE_NOT_ENCRYPTED = "ENV-ENCRYPTED"
@@ -38,7 +38,7 @@ RULES = (RULE_IS_PDF, RULE_NOT_ENCRYPTED, RULE_MAX_BYTES, RULE_MAX_PAGES, RULE_T
 RULE_DESCRIPTIONS = {
     RULE_IS_PDF: "the input is a PDF file",
     RULE_NOT_ENCRYPTED: "the PDF is not encrypted or password-protected",
-    RULE_MAX_BYTES: f"the file is at most {MAX_BYTES} bytes (25 MiB)",
+    RULE_MAX_BYTES: f"the file is at most {MAX_BYTES} bytes (250 MiB)",
     RULE_MAX_PAGES: f"the document has at most {MAX_PAGES} pages",
     RULE_TEXT_LAYER: "every page carries extractable embedded text",
 }

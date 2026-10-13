@@ -29,6 +29,11 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CORPUS = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar"
 BASELINE_PDF = CORPUS / "ar_baseline.pdf"
 NEGATIVE = CORPUS / "negative"
+#: `W55B-INGEST-01`: an upload is a portal bundle. The committed bundle around the baseline
+#: PDF is what the suite uploads; the baseline PDF stays the reference for what the stored
+#: document must read back as (the version's own bytes are the PDF member's).
+BUNDLES = CORPUS / "bundles"
+BASELINE_BUNDLE = BUNDLES / "ar_baseline.zip"
 EXPECTED_ISSUES = CORPUS / "expected_issues.json"
 OPENAPI = REPOSITORY_ROOT / "contracts" / "api" / "v1" / "openapi.json"
 
@@ -195,14 +200,24 @@ class Client:
         project_uid: str,
         content: bytes,
         key: str,
-        filename: str = "ar_baseline.pdf",
+        filename: str | None = None,
         title: str = "AR baseline",
         content_type: str | None = None,
     ) -> Answer:
+        """Upload ``content`` as the ``file`` part.
+
+        A ZIP (a portal bundle -- the upload since `W55B-INGEST-01`) is labelled
+        ``application/zip`` and named ``ar_baseline.zip``; anything else keeps the old PDF
+        label and name, which is how the refusals of a bare PDF are still reached.
+        """
+        is_zip = content[:2] == b"PK"
+        if filename is None:
+            filename = "ar_baseline.zip" if is_zip else "ar_baseline.pdf"
+        part_type = "application/zip" if is_zip else "application/pdf"
         boundary = "c2pc01boundary"
         head = (
             f'--{boundary}\r\nContent-Disposition: form-data; name="file"; '
-            f'filename="{filename}"\r\nContent-Type: application/pdf\r\n\r\n'
+            f'filename="{filename}"\r\nContent-Type: {part_type}\r\n\r\n'
         ).encode("utf-8")
         tail = (
             f"\r\n--{boundary}\r\nContent-Disposition: form-data; "

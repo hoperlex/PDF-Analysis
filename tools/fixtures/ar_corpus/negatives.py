@@ -8,6 +8,12 @@ against `envelope.check` before writing anything.
 
 Every fixture is deterministic for the same reasons the baseline is: no clock, no PRNG
 seeded from the environment, no compression.
+
+**Two rules have no committed fixture any more** (`W55B-INGEST-01`). `ENV-SIZE` is 250 MiB and
+`ENV-PAGES` is 500 pages, and a file that size is never committed: the over-size stand-in is a
+sparse file and the over-page one a 501-page PDF, both made when a test runs
+(``portal_bundle/generated.py``). The 31-page document survives as the PDF of
+``bundles/pages_31.zip`` (:func:`build_pages_31`), where it shows that 31 pages are valid.
 """
 
 from __future__ import annotations
@@ -144,50 +150,17 @@ def build_image_only(font: pdfwrite.EmbeddedFont) -> bytes:
     return pdf.serialize(catalog_ref, document.info_dictionary(), document.DOC_ID)
 
 
-_PADDING_LINE = (
-    b"%% synthetic padding: this object exists only to carry the file past the "
-    b"25 MiB envelope limit. It is unreferenced and holds no document content.\n"
-)
+def build_pages_31(font: pdfwrite.EmbeddedFont) -> bytes:
+    """A 31-page text PDF: the PDF of ``bundles/pages_31.zip``.
 
-
-def build_oversize(font: pdfwrite.EmbeddedFont) -> bytes:
-    """A valid two-page text PDF carried past 25 MiB. Violates ENV-SIZE and nothing else.
-
-    The bulk is one unreferenced, uncompressed stream of a repeating ASCII line. That
-    keeps the fixture honest - it really is over the limit on disk - while staying cheap
-    in Git, because the repository's own zlib compresses a repeating pattern to almost
-    nothing.
+    It was ``negative/too_many_pages.pdf`` while the envelope stopped at 30 pages
+    (`ENV-PAGES`), and is a valid document under the 500-page limit of `W55B-INGEST-01`. Its
+    bytes are the ones the deleted negative had, on purpose: the bundle built around it, its
+    digest in ``bundle_manifest.json`` and the tests that pin them stay exactly as they were
+    (``PAGES_31_PDF_SHA256`` in ``portal_bundle/committed.py`` is the pin). The sentences on
+    its pages still describe the old limit; they are fixture content and are not read by anyone.
     """
-    target = document.MAX_OVERSIZE_TARGET_BYTES
-    repeats = target // len(_PADDING_LINE) + 1
-    padding = _PADDING_LINE * repeats
-
-    def add_padding(pdf: pdfwrite.Pdf) -> None:
-        pdf.add_stream({"Type": Name("SyntheticPadding")}, padding)
-
-    return document.simple_text_pdf(
-        font,
-        [
-            _lines(
-                "Синтетическая негативная фикстура: превышение размера файла.",
-                "Документ корректен во всём, кроме объёма: он больше 25 МиБ.",
-            ),
-            _lines(
-                "Страница 2. Текстовый слой присутствует на каждой странице.",
-                "Нарушено единственное правило: ENV-SIZE.",
-            ),
-        ],
-        extra_objects=add_padding,
-    )
-
-
-def build_too_many_pages(font: pdfwrite.EmbeddedFont) -> bytes:
-    """A 31-page text PDF. Violates ENV-PAGES and nothing else.
-
-    Every page carries real text, so ENV-TEXT genuinely passes rather than being skipped:
-    the fixture is one page over the limit and correct in every other respect.
-    """
-    page_count = document.MAX_PAGES_LIMIT + 1
+    page_count = document.PAGES_31
     pages = [
         _lines(
             f"Синтетическая негативная фикстура: страница {n} из {page_count}.",
@@ -287,26 +260,6 @@ def build_all(font: pdfwrite.EmbeddedFont) -> list[NegativeFixture]:
                 "no text operator anywhere. OCR must not be silently substituted."
             ),
             data=build_image_only(font),
-        ),
-        NegativeFixture(
-            name="oversize",
-            filename="oversize.pdf",
-            violates=envelope.RULE_MAX_BYTES,
-            description=(
-                "Valid two-page PDF with a real text layer, carried past 25 MiB by one "
-                "unreferenced uncompressed padding stream."
-            ),
-            data=build_oversize(font),
-        ),
-        NegativeFixture(
-            name="too_many_pages",
-            filename="too_many_pages.pdf",
-            violates=envelope.RULE_MAX_PAGES,
-            description=(
-                f"{document.MAX_PAGES_LIMIT + 1}-page PDF, one page over the limit. "
-                "Every page carries real extractable text."
-            ),
-            data=build_too_many_pages(font),
         ),
         NegativeFixture(
             name="not_a_pdf",

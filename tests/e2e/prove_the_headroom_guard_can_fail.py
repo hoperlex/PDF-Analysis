@@ -19,6 +19,11 @@ the copy and nothing else. Then `pytest` is run there and the exit status is the
 That makes these real mutations of the real test, not assertions about what it would do,
 and the repository is byte-identical before and after -- `git status` is the proof.
 
+`W55B-INGEST-01` added the envelope's own bound (``MAX_BYTES`` in
+``src/auditmanager/ingest/envelope.py``) as the fourth term -- ``pre-check <= MAX_BYTES <
+UPLOAD_MAX_BODY`` -- so two mutations move it, and the tree the guard reads holds a copy of that
+file as well.
+
 `W55B-STREAM-01` moved the chain from two numbers to three (the pre-check, the application's
 upload cap and nginx's cap in the two upload locations, with nginx's server-wide default
 beside them), so the mutations below move each of them, and each of the two nginx files, in
@@ -39,6 +44,7 @@ PYTHON = ROOT / ".venv" / "bin" / "python"
 GUARD = Path("tests/e2e/test_upload_limit_headroom.py")
 ENVELOPE = Path("web/src/entities/document-version/model/upload-envelope.ts")
 MULTIPART = Path("src/auditmanager/api/routers/multipart.py")
+ENVELOPE_PY = Path("src/auditmanager/ingest/envelope.py")
 NGINX = Path("infra/deploy/proxy/nginx.conf")
 TLS = Path("infra/deploy/proxy/tls-server.conf")
 FIXTURE_TOOLS = Path("tools/fixtures")
@@ -47,11 +53,12 @@ GENERATED = FIXTURE_TOOLS / "portal_bundle" / "generated.py"
 REAL_PRECHECK = "maxBytes: 25 * 1024 * 1024"
 REAL_API_UPLOAD = "UPLOAD_MAX_BODY: Final[int] = 251 * 1024 * 1024"
 REAL_API_OTHER = "MAX_BODY: Final[int] = 26 * 1024 * 1024"
+REAL_ENVELOPE = "MAX_BYTES: Final[int] = 250 * 1024 * 1024"
 REAL_UPLOAD_CAP = "client_max_body_size 260m;"
 REAL_DEFAULT_CAP = "client_max_body_size 32m;"
 REAL_TRUNCATE = "handle.truncate(size)"
 
-FILES = (ENVELOPE, MULTIPART, NGINX, TLS, GENERATED)
+FILES = (ENVELOPE, MULTIPART, ENVELOPE_PY, NGINX, TLS, GENERATED)
 
 
 def build(overrides: dict[Path, str]) -> Path:
@@ -62,7 +69,7 @@ def build(overrides: dict[Path, str]) -> Path:
     shutil.copytree(
         ROOT / FIXTURE_TOOLS, tree / FIXTURE_TOOLS, ignore=shutil.ignore_patterns("__pycache__")
     )
-    for relative in (ENVELOPE, MULTIPART, NGINX, TLS):
+    for relative in (ENVELOPE, MULTIPART, ENVELOPE_PY, NGINX, TLS):
         target = tree / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(overrides.get(relative, (ROOT / relative).read_text(encoding="utf-8")),
@@ -101,6 +108,7 @@ def main() -> int:
     assert REAL_PRECHECK in texts[ENVELOPE], f"{ENVELOPE} no longer reads {REAL_PRECHECK!r}"
     assert REAL_API_UPLOAD in texts[MULTIPART], f"{MULTIPART} no longer reads {REAL_API_UPLOAD!r}"
     assert REAL_API_OTHER in texts[MULTIPART], f"{MULTIPART} no longer reads {REAL_API_OTHER!r}"
+    assert REAL_ENVELOPE in texts[ENVELOPE_PY], f"{ENVELOPE_PY} no longer reads {REAL_ENVELOPE!r}"
     assert REAL_TRUNCATE in texts[GENERATED], f"{GENERATED} no longer reads {REAL_TRUNCATE!r}"
     for path in (NGINX, TLS):
         assert texts[path].count(REAL_UPLOAD_CAP) == 2, f"{path} no longer has two upload caps"
@@ -133,6 +141,18 @@ def main() -> int:
         (
             "raise every other route's cap above nginx's server default",
             mutated(MULTIPART, texts[MULTIPART].replace(REAL_API_OTHER, "MAX_BODY: Final[int] = 40 * 1024 * 1024")),
+        ),
+        (
+            "raise the envelope's bound to the application's cap (251 MiB)",
+            mutated(ENVELOPE_PY, texts[ENVELOPE_PY].replace(REAL_ENVELOPE, "MAX_BYTES: Final[int] = 251 * 1024 * 1024")),
+        ),
+        (
+            "lower the envelope's bound under the pre-check (20 MiB)",
+            mutated(ENVELOPE_PY, texts[ENVELOPE_PY].replace(REAL_ENVELOPE, "MAX_BYTES: Final[int] = 20 * 1024 * 1024")),
+        ),
+        (
+            "move the envelope's bound behind a name the guard cannot read",
+            mutated(ENVELOPE_PY, texts[ENVELOPE_PY].replace(REAL_ENVELOPE, "MAX_BYTES: Final[int] = ENVELOPE_MIB * 1024 * 1024")),
         ),
         (
             "lower nginx.conf's /api upload location to 200m",

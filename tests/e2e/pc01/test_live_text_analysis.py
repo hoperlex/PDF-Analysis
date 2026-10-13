@@ -192,7 +192,7 @@ def live_run(page_texts: tuple[str, ...]) -> dict[str, Any]:
 
     answer = client.upload_document(
         project_uid=project["project_uid"],
-        content=driver.BASELINE_PDF.read_bytes(),
+        content=driver.BASELINE_BUNDLE.read_bytes(),
         key=f"{tag}-upload",
     )
     assert answer.status == 201, answer.body
