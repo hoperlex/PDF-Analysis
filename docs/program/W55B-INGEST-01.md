@@ -17,9 +17,18 @@ Updated in each commit. `[x]` done and committed, `[~]` in progress, `[ ]` not s
 - [x] 5. `DocumentAdapter` routes by magic bytes (`looks_like_zip`; the bare-PDF branch is marked `W55B-LEGACY-BARE-PDF`).
 - [x] 6. Limits: `envelope.py` and `ingest/__init__.py` 500 / 250 MiB; headroom chain gains `pre-check <= MAX_BYTES < UPLOAD_MAX_BODY < nginx` (`test_upload_limit_headroom.py` + 3 prover mutations); `ar_corpus` `MAX_PAGES` 500.
 - [x] 7. Negatives: `oversize.pdf`, `too_many_pages.pdf` deleted; generators replace them; `SHA256SUMS`, `expected_issues.json`, `bundle_manifest.json`, `tests/contract/fixtures_ar/**` follow; both generators' `--check` and `sha256sum -c` are green.
-- [~] 8. The suite: moved so far: characterization journey and records, `tests/e2e/pc01/{driver,test_acceptance,test_live_text_analysis}.py`, `tests/integration/ingest/*`, `tests/integration/p02_journey/*`, `tests/integration/api/conftest.py` (now delegates to the shipped adapter). Still to do: the probe over every directory, `tests/integration/api/*` tests that upload over HTTP, and the report's list of files left for part B.
-- [ ] 9. 250 MiB bundle: memory and time measured (`.local/w55b-tools/measure_upload.py`, lane ports 57531/57532).
+- [~] 8. The suite: moved so far: characterization journey and records, `tests/e2e/pc01/{driver,test_acceptance,test_live_text_analysis}.py`,
+  `tests/integration/ingest/*`, `tests/integration/p02_journey/*`, `tests/integration/api/*` (the conftest double delegates to the shipped
+  adapter; the tests that upload over HTTP send bundles). Still to do: the probe over every directory (item C of the successor's brief)
+  and the report's list of files left for part B.
+- [ ] 9. 250 MiB bundle: memory and time measured (`.local/w55b-tools/measure_bundle.py`, lane ports 57531/57532).
 - [ ] 10. Mutation proofs, final checks, containment, hand-back.
+
+### Successor writer: verification of the predecessor's tree (2026-10-13, lane stack 57430/61030)
+
+The first writer died after twelve commits. The second writer re-ran, on the lane stack and one invocation at a time:
+`tests/integration/ingest` 540 passed; `tests/integration/api` 568 passed; `tests/integration/p02_journey` 59 passed;
+`tests/characterization` 61 passed. `git diff --check` and `compileall` of the changed modules are clean.
 
 ## Design decisions (made while writing; each is open to the integrator's veto)
 
