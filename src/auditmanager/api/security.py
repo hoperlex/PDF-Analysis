@@ -317,6 +317,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "getDocumentVersion": _ANY_ROLE,
         "streamDocumentVersionContent": _ANY_ROLE,
         "getVersionBlocks": _ANY_ROLE,
+        "listVersionPortalBlocks": _ANY_ROLE,
+        "streamVersionPortalBlockCrop": _ANY_ROLE,
         "listVersions": _ANY_ROLE,
         "listRuns": _ANY_ROLE,
         "listExecutionQueue": _ANY_ROLE,

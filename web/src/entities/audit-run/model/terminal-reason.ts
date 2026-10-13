@@ -132,6 +132,13 @@ const CATALOG_SENTENCES: Readonly<Record<ErrorCode, string>> = {
   cost_budget_exceeded:
     'Объявленный бюджет стоимости или токенов для этого прогона исчерпан. Исполнение ' +
     'остановилось явно, а не стало молча ухудшать результат.',
+  // `W55B-SEAL-01`. Answered by `startRun` and `reauditRun` before any run exists, so no run
+  // can end with this code. The sentence still restates the catalog summary, for the reason
+  // `rate_limited` below gives: a reading that carried it should be named, not undescribed.
+  analysis_input_budget_exceeded:
+    'Текст версии оказался больше бюджета входа анализа, выведенного из настроенной модели ' +
+    'и потолка стоимости прогона. Такой прогон не создаётся и в модель ничего не уходит, ' +
+    'поэтому завершиться этим кодом прогон не может.',
   stale_attempt:
     'Попытка, отправившая эту работу, больше не является для неё публикующей инстанцией. ' +
     'Переданное сохраняется как неизменяемое свидетельство и никогда не применяется к ' +

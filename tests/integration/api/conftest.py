@@ -387,15 +387,17 @@ class IngestDocumentAdapter:
         self,
         *,
         project_uid: str,
-        content: bytes,
+        content: Any,
         source_filename: str,
         display_title: str | None,
         idempotency_key: str,
         section: str | None = None,
     ) -> _Uploaded:
+        # `W55B-SEAL-01`: the port takes the part's file handle; this fixture, like the shipped
+        # adapter until `W55B-INGEST-01`, hands the service the whole body.
         outcome = self._ingest.upload_single_pdf(
             project_uid=ProjectUid(project_uid),
-            content=content,
+            content=content.read(),
             source_filename=source_filename,
             display_title=display_title or source_filename,
             idempotency_key=idempotency_key,

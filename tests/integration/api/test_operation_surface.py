@@ -62,7 +62,8 @@ def test_the_document_and_router_match_the_expected_operation_count(
     account-management operations under `R-55` ... `R-61`; then `W52-SEAL-01`'s three
     release operations, `W53-SEAL-01`'s six execution operations and **forty-five since
     `W54-SEAL-01`**, which added the worker registry's two; **fifty-two since `W55A-SEAL-01`**,
-    which added the norms operations under `R-112` and `R-113`. The number moved because an
+    which added the norms operations under `R-112` and `R-113`; **fifty-four since
+    `W55B-SEAL-01`**, which added the two portal-block reads under `R-116`. The number moved because an
     owner ruling or a reseal moved it; nothing else may move it.
     """
     assert len(declared_operations(openapi_document)) == FACTS.operation_count
@@ -93,6 +94,8 @@ def test_every_declared_operation_is_reachable(
         "worker_id": "wrk_01M2545JSD15ETSNNV904X991T",
         # `W55A-SEAL-01`.
         "norm_document_id": "ndoc_01M2545JSD15ETSNNV904X991V",
+        # `W55B-SEAL-01`: an external identifier, not a prefix-ULID.
+        "portal_block_id": "blk_0123456789abcdef0123456789abcdef",
     }
     for operation_id, method, template in sorted(declared_operations(openapi_document)):
         path = template

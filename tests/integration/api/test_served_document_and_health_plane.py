@@ -142,6 +142,9 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "listNormSnapshots",
             "listNormSnapshotEvents",
             "setCurrentNormSnapshot",
+            # `W55B-SEAL-01`: the portal-block listing takes a cursor and a limit. The crop read
+            # takes only path identities and declares none.
+            "listVersionPortalBlocks",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

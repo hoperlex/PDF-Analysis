@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 45,
+    "path_count": 47,
     "operations": [
       [
         "POST",
@@ -97,6 +97,16 @@
         "GET",
         "/versions/{version_uid}/blocks",
         "getVersionBlocks"
+      ],
+      [
+        "GET",
+        "/versions/{version_uid}/portal-blocks",
+        "listVersionPortalBlocks"
+      ],
+      [
+        "GET",
+        "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop",
+        "streamVersionPortalBlockCrop"
       ],
       [
         "GET",
@@ -380,13 +390,20 @@
       "NormSnapshotEvent",
       "NormSnapshotEventPage",
       "SetCurrentNormSnapshotRequest",
-      "NormCurrentSnapshot"
+      "NormCurrentSnapshot",
+      "PortalBlockId",
+      "PortalBlockType",
+      "PortalGeometryState",
+      "PortalCrop",
+      "PortalRecognisedText",
+      "PortalBlock",
+      "PortalBlockPage"
     ]
   },
   "error_catalog": {
-    "api_codes": 23,
+    "api_codes": 24,
     "stored_vocabulary": 22
   },
-  "migration_head": "0020_norms_search",
+  "migration_head": "0021_portal_bundles",
   "contract_version": "1.0.0-draft.1"
 }

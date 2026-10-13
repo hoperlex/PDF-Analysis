@@ -116,7 +116,9 @@ describe('the seam operations', () => {
       'listExecutionQueue', 'listExecutionJournal', 'listWorkers',
       // `W55A-SEAL-01`: the norms search and the three norms listings.
       'searchNorms', 'listNormParagraphs', 'listNormSnapshots',
-      'listNormSnapshotEvents'] as const) {
+      'listNormSnapshotEvents',
+      // `W55B-SEAL-01`: the portal blocks of one version.
+      'listVersionPortalBlocks'] as const) {
       expect(OPERATIONS[id].queryParams).toContain('cursor');
       expect(OPERATIONS[id].queryParams).toContain('limit');
     }
@@ -210,15 +212,18 @@ describe('the run vocabulary', () => {
 });
 
 describe('the error catalog', () => {
-  it('is the closed twenty-three-code set', () => {
-    // Twenty-three since `W49-SEAL-01` added `rate_limited`, the code the edge answers
-    // when it throttles the registration operations. Twenty-two since round 7: owner
+  it('is the closed twenty-four-code set', () => {
+    // Twenty-four since `W55B-SEAL-01` added `analysis_input_budget_exceeded`, the up-front
+    // refusal of a version above the analysis input budget. Twenty-three since `W49-SEAL-01`
+    // added `rate_limited`, the code the edge answers when it throttles the registration
+    // operations. Twenty-two since round 7: owner
     // ruling `R-8`, reinstated by `R-13`, added `staged_upload_lost` so one 409 stopped
     // meaning two opposite things (`D-18`). Twenty-one before it, since the wave-13
     // reseal, where `R-3` added `dependency_credential_refused` so one 403 stopped
     // meaning two things (`D-7`).
     expect(ERROR_CODE_VALUES).toHaveLength(expectedFacts.error_catalog.api_codes);
     expect(ERROR_CODE_VALUES).toContain('rate_limited');
+    expect(ERROR_CODE_VALUES).toContain('analysis_input_budget_exceeded');
     expect(ERROR_CODE_VALUES).toContain('idempotency_key_in_progress');
     expect(ERROR_CODE_VALUES).toContain('state_transition_not_allowed');
     expect(ERROR_CODE_VALUES).toContain('dependency_credential_refused');

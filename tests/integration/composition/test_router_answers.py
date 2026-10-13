@@ -44,7 +44,14 @@ RELEASE_GETS = frozenset({"/system/version", "/releases"})
 #: they meet the sweep's ordinary rule: an absent `ndoc_` is `404`, the snapshot list a page,
 #: `/norms/search` without `q` a `422`, and the administrator's history the seam's `403` for
 #: this suite's `expert` -- never a `5xx`.
-SEALED_STUB_GETS: frozenset[str] = frozenset()
+#: `W55B-SEAL-01` names the two portal-block reads its port serves as sealed stubs: each must
+#: answer exactly `503 dependency_unavailable` until `W55B-GEOMETRY-01`, which empties this set.
+SEALED_STUB_GETS: frozenset[str] = frozenset(
+    {
+        "/versions/ver_01ARZ3NDEKTSV4RRFFQ69G5FAV/portal-blocks",
+        "/versions/ver_01ARZ3NDEKTSV4RRFFQ69G5FAV/portal-blocks/blk_00000000000000000000000000000000/crop",
+    }
+)
 WORKER_GETS = frozenset({"/execution/workers"})
 
 _STATIC_TOKEN_CACHE: str | None = None
@@ -231,6 +238,10 @@ class TestNoOperationAnswersWithAServerFault:
 
 
 def _absent_identity(parameter: str) -> str:
+    if parameter == "portal_block_id":
+        # `W55B-SEAL-01`: an external identifier (`blk_` and 32 hexadecimal digits), so the
+        # path reaches its handler and not the pattern's 422.
+        return "blk_" + "0" * 32
     prefixes = {
         "project_uid": "prj",
         "version_uid": "ver",

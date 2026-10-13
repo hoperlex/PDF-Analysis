@@ -68,6 +68,11 @@ REQUIRED_OPERATIONS = {
     # run_id because page_geometry_extraction carries no model and no provider reference,
     # so its output is deterministic across every run of a version that reaches it.
     "getVersionBlocks",
+    # `W55B-SEAL-01`, `R-116`, `R-119`. What a portal bundle brought, keyed by version for the
+    # same reason: the blocks, the recognised text and descriptions, and the crops this
+    # product cut. Sealed as stubs until `W55B-GEOMETRY-01`.
+    "listVersionPortalBlocks",
+    "streamVersionPortalBlockCrop",
     # `W46-SEAL`, `R-44`. One aggregate read serving all four dashboard panels, chosen
     # over three client-side walks because `R-24` was ruled for a listing operation and
     # against a walk.
@@ -163,6 +168,8 @@ PAGINATED_OPERATIONS = {
     "listNormParagraphs",
     "listNormSnapshots",
     "listNormSnapshotEvents",
+    # `W55B-SEAL-01`. Portal blocks page over an opaque cursor (page, ordinal, id).
+    "listVersionPortalBlocks",
 }
 
 #: Page-level properties a paginated response may carry beside `items` and `page`, by
@@ -175,6 +182,9 @@ PAGE_AGGREGATES: dict[str, set[str]] = {
     # `W55A-SEAL-01`, `NORM-Q04`. A document's paragraphs carry its attribution once, on
     # the page, since every item on it shares one document.
     "listNormParagraphs": {"source_attribution"},
+    # `W55B-SEAL-01`. The status that tells a produced geometry with no blocks from one never
+    # produced, the run it came from, and the whole version's block count.
+    "listVersionPortalBlocks": {"version_uid", "status", "produced_by_run_id", "block_count"},
 }
 
 

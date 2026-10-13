@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "1a17359f0dcee3d37b685fcd6d724ad48f462ebc6c56803b5a66731d8b5797af",
-    "content_commit": "2122cee",
-    "content_commit_subject": "W55A-SEAL-01 dispatch base; atomic reseal has no self-commit",
-    "dispatch_named_commit": "2122cee",
-    "commit_note": "W55A-SEAL-01 adds the seven norms operations (searchNorms, getNormDocument, listNormParagraphs, streamNormDocumentContent, listNormSnapshots, listNormSnapshotEvents, setCurrentNormSnapshot; sealed stubs answering dependency_unavailable until W55A-SEARCH-01), twenty schemas, the NormDocumentId path parameter and the optional RunStatus.norms_snapshot_id; the domain error catalog keeps its twenty-three codes and contract_version is unchanged.",
+    "sha256": "8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482",
+    "content_commit": "7216d8b",
+    "content_commit_subject": "W55B-FREEZE-01 dispatch base; atomic reseal has no self-commit",
+    "dispatch_named_commit": "7216d8b",
+    "commit_note": "W55B-SEAL-01 adds listVersionPortalBlocks and streamVersionPortalBlockCrop (sealed stubs answering dependency_unavailable until W55B-GEOMETRY-01), seven schemas, the PortalBlockId path parameter, the portal-bundle upload description and encoding (a ZIP, 500 pages, 250 MiB) and the page_count ceiling of 500; the domain error catalog gains analysis_input_budget_exceeded (twenty-four codes) and contract_version is unchanged.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 45,
-    "operations": 52,
-    "component_schemas": 116,
+    "paths": 47,
+    "operations": 54,
+    "component_schemas": 123,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "1a17359f0dcee3d37b685fcd6d724ad48f462ebc6c56803b5a66731d8b5797af",
+    "snapshot_sha256": "8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "c419634918a292d903469c658366f44ccdc8fbc6d2f510c825fa6505f18c3a63",
-      "index.ts": "8fa7db1a44255de9c8b4cda28159762068ed2b17912420df321add5bddb30983",
-      "operations.gen.ts": "8c9f46c775d9d8dd647a62c7c1a0b9915b8f1e958ba66ae45f468bd6c163b631",
-      "types.gen.ts": "110109c62c522525c8054a64f1fd3383ff439f1538241ac5e2e0be393517a49b"
+      "client.gen.ts": "1df9d742d7b28ffbb8848d97216b265c7f50c21a8df32fead53f6ea92c85c522",
+      "index.ts": "27dd7beaf6e40843015b53bcd3e86ebea160433aafdab8339c775640dbd7a571",
+      "operations.gen.ts": "e12dd8910a08eba44d8c927cdcd310d6eb9188b58140a94ee2adced447a08708",
+      "types.gen.ts": "2682def53f7f080474197617ee47270b1ce7f0dd02f55d4b14a564b1f6eb5f88"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

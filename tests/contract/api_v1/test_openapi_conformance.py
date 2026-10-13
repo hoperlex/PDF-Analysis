@@ -531,7 +531,8 @@ class TestN1ComponentReferenceResolution:
         # `W54-SEAL-01` adds `setWorkerIntake`, which addresses a worker by identity.
         # `W55A-SEAL-01` adds four more 404s: the three norm-document reads address a
         # document by identity and `setCurrentNormSnapshot` names a snapshot that may not exist.
-        assert len(report) == 30, report
+        # `W55B-SEAL-01` adds two more: both portal-block reads address a version by identity.
+        assert len(report) == 32, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]
@@ -1167,8 +1168,8 @@ class TestThePlantedDifferences:
         assert_reported_at(report, "paths./runs/{run_id}/export.csv.get.tags[0]")
 
     def test_a_widened_numeric_bound_is_caught(self, contract: dict[str, Any]) -> None:
-        """`page_count` maximum 30 is `PROTOTYPE_PROFILE.md`'s ingest limit expressed in the
-        contract; a generated document that lost it would accept a document the pipeline
+        """`page_count` maximum 500 is the portal-bundle ingest limit expressed in the
+        contract (`W55B-SEAL-01`, R-116; it was 30 until then); a generated document that lost it would accept a document the pipeline
         refuses."""
         report = report_for(
             contract,
@@ -1225,7 +1226,7 @@ class TestN8JsonNumbers:
             contract,
             lambda document: document["components"]["schemas"]["DocumentVersion"]["properties"][
                 "page_count"
-            ].update({"maximum": 30.0, "minimum": 1.0}),
+            ].update({"maximum": 500.0, "minimum": 1.0}),
         )
         assert_silent(report)
 
@@ -1235,7 +1236,7 @@ class TestN8JsonNumbers:
             contract,
             lambda document: document["components"]["schemas"]["DocumentVersion"]["properties"][
                 "page_count"
-            ].__setitem__("maximum", 30.5),
+            ].__setitem__("maximum", 500.5),
         )
         assert_reported_at(report, "schemas.DocumentVersion.properties.page_count.maximum")
 

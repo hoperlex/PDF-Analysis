@@ -99,7 +99,8 @@ class TestWhatItActuallyWires:
             "`getVersionBlocks`, twenty once `W46-SEAL` added `getDashboardSummary` "
             "under `R-44`, thirty-four once `W49-SEAL-01` added the account and "
             "registration operations, forty-five once `W54-SEAL-01` added the worker registry, "
-            "fifty-two once `W55A-SEAL-01` added the norms operations"
+            "fifty-two once `W55A-SEAL-01` added the norms operations, "
+            "fifty-four once `W55B-SEAL-01` added the portal-block reads"
         )
 
     def test_the_wired_mode_is_the_configured_one(self) -> None:

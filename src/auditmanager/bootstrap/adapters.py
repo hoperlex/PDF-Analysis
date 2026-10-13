@@ -17,12 +17,16 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, BinaryIO
 
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
-from auditmanager.api.schemas.blocks import VersionBlockIndexView
+from auditmanager.api.schemas.blocks import (
+    PortalBlockIndexView,
+    PortalCropContent,
+    VersionBlockIndexView,
+)
 from auditmanager.api.schemas.content import (
     CONTENT_CHUNK_BYTES,
     PDF_MEDIA_TYPE,
@@ -466,7 +470,7 @@ class DocumentAdapter:
         self,
         *,
         project_uid: str,
-        content: bytes,
+        content: BinaryIO,
         source_filename: str | None = None,
         display_title: str | None = None,
         idempotency_key: str = "",
@@ -482,9 +486,14 @@ class DocumentAdapter:
         from auditmanager.shared.identity import IdempotencyKey, ProjectUid
 
         name = source_filename or "upload.pdf"
+        # `W55B-SEAL-01`: the port now takes the part's file handle. Until
+        # `W55B-STREAM-01` reads it through the envelope and `W55B-INGEST-01` reads the
+        # archive member by member, this adapter keeps today's behaviour exactly -- the
+        # whole body, in memory, handed to the service -- and says so here, in the one
+        # place that pays for it.
         outcome = self._service.upload_single_pdf(
             project_uid=ProjectUid.parse(project_uid),
-            content=content,
+            content=content.read(),
             source_filename=name,
             display_title=display_title or name,
             idempotency_key=IdempotencyKey(idempotency_key),
@@ -968,6 +977,24 @@ class BlockAdapter(_SessionHolder):
             )
 
         return self._read(work)
+
+    # `W55B-SEAL-01`. The two portal-block reads are sealed as stubs: the stage that
+    # produces ``geometry.portal_blocks`` and the crops is `W55B-GEOMETRY-01`'s, and it
+    # replaces both bodies. Until then each refuses explicitly with
+    # ``503 dependency_unavailable`` -- never ``not_produced``, which would be a true
+    # statement about a version whose run did not produce portal geometry, and a false one
+    # about a deployment that cannot yet.
+    @staticmethod
+    def _portal_blocks_unavailable() -> Any:
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="portal_blocks")
+
+    def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
+        return self._portal_blocks_unavailable()
+
+    def read_portal_block_crop(
+        self, *, version_uid: str, portal_block_id: str
+    ) -> PortalCropContent:
+        return self._portal_blocks_unavailable()
 
     def _read_artifact(self, artifact: Mapping[str, Any]) -> dict[str, Any]:
         import json

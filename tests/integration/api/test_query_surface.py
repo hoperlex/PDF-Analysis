@@ -827,7 +827,9 @@ def _resolve(document: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[st
 #: drive below cannot show a parameter changing the answer (`CONTRACT_PIN_REGISTRY.md`'s
 #: sealed-stub rule). `W55A-SEAL-01` listed the four norms operations here;
 #: `W55A-SEARCH-01` gave them bodies and `W55A-PIN-01` emptied it and drives them below.
-SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset()
+#: `W55B-SEAL-01` lists ``listVersionPortalBlocks`` (``cursor`` and ``limit``) until
+#: `W55B-GEOMETRY-01` gives it a body, empties this set and drives it below.
+SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset({"listVersionPortalBlocks"})
 
 #: The four norms listings, driven over the shipped ``NormsSearchAdapter`` on this suite's
 #: rollback-joined session (`W55A-PIN-01`).

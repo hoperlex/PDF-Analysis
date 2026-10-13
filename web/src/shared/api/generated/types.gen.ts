@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 1a17359f0dcee3d37b685fcd6d724ad48f462ebc6c56803b5a66731d8b5797af
+ *   sha256 8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '1a17359f0dcee3d37b685fcd6d724ad48f462ebc6c56803b5a66731d8b5797af';
+export const CONTRACT_DIGEST = '8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -89,6 +89,13 @@ export const SCHEMA_NAMES = [
   'ObservationProvenance',
   'PageInfo',
   'PersonNames',
+  'PortalBlock',
+  'PortalBlockId',
+  'PortalBlockPage',
+  'PortalBlockType',
+  'PortalCrop',
+  'PortalGeometryState',
+  'PortalRecognisedText',
   'ProductVersion',
   'Project',
   'ProjectDocumentCount',
@@ -361,6 +368,7 @@ export const ERROR_CODE_VALUES = [
   'analysis_failed',
   'partial_result_not_publishable',
   'cost_budget_exceeded',
+  'analysis_input_budget_exceeded',
   'stale_attempt',
   'execution_token_invalid',
   'rate_limited',
@@ -754,6 +762,72 @@ export type PersonNames = {
   middle_name?: string;
 };
 
+/** One block of the portal's block list. The pair `(version_uid, portal_block_id)` addresses it. `page_number` is the true 1-based PDF page; `page_label` is the portal's own integer label, kept. `ordinal` is the portal's order on the page: not unique, and null for a stamp. `bbox_norm` is `[x0, y0, x1, y1]` in the page's normalised top-left space, each in [0, 1]; `polygon_points`, when the portal gave a polygon, are its `[x, y]` vertices. `crop` exists only for an IMAGE block on a page whose `geometry` is `ok`. `recognised_text` exists for TEXT blocks the markdown holds; `portal_description` is the portal's text for an IMAGE block, shown marked and never used in analysis (R-117). An absent optional member is omitted, never null. */
+export type PortalBlock = {
+  bbox_norm: Array<number>;
+  block_type: PortalBlockType;
+  crop?: PortalCrop;
+  geometry: PortalGeometryState;
+  ordinal: number | null;
+  page_label: number;
+  page_number: number;
+  polygon_points?: Array<Array<number>>;
+  portal_block_id: PortalBlockId;
+  portal_description?: string;
+  recognised_text?: PortalRecognisedText;
+  status: string;
+};
+
+/** An external identifier: minted by the portal that produced the bundle and carried verbatim from its block list (`blk_` and 32 lowercase hexadecimal digits). It is not an identity this product generates, and it addresses a block only together with a `version_uid`. */
+export type PortalBlockId = string;
+
+/** The contract pattern for `PortalBlockId`. Anchored; use with `new RegExp()`. */
+export const PORTAL_BLOCK_ID_PATTERN = "^blk_[0-9a-f]{32}$";
+
+/** One page of a version's portal blocks, ordered by `page_number`, `ordinal` (null last) and `portal_block_id`; the continuation token carries that key and nothing else. `status` is the distinction `VersionBlockIndex.status` carries: `not_produced` is a version no run of which has produced portal geometry yet; `produced` is one whose geometry stage succeeded and which may genuinely hold no blocks. `block_count` is the whole version's, not the page's. A caller reads `status`, never the length of `items`. */
+export type PortalBlockPage = {
+  block_count: number;
+  items: Array<PortalBlock>;
+  page: PageInfo;
+  produced_by_run_id: RunId | null;
+  status: "produced" | "not_produced";
+  version_uid: VersionUid;
+};
+
+/** The portal's own block types, lower-cased. A `stamp` block exists only in the block list: the recognised-text markdown never carries one. */
+export const PORTAL_BLOCK_TYPE_VALUES = [
+  'text',
+  'image',
+  'stamp',
+] as const;
+
+/** PortalBlockType - the closed value set above. */
+export type PortalBlockType = (typeof PORTAL_BLOCK_TYPE_VALUES)[number];
+
+/** A crop this product cut itself from the PDF with a clip render. It is never the portal's `crop_url`, which is a capability URL and is neither fetched, stored nor served. The bytes are `streamVersionPortalBlockCrop`; `sha256` is theirs. */
+export type PortalCrop = {
+  height_px: number;
+  media_type: "image/png";
+  sha256: Sha256;
+  width_px: number;
+};
+
+/** The page-box check. `geometry_mismatch` means the portal's page size and the PDF's page box disagree beyond the frozen tolerance: no crop was cut for that page, and its blocks are shown without one rather than with a wrong one. The stage still reports success. */
+export const PORTAL_GEOMETRY_STATE_VALUES = [
+  'ok',
+  'geometry_mismatch',
+] as const;
+
+/** PortalGeometryState - the closed value set above. */
+export type PortalGeometryState = (typeof PORTAL_GEOMETRY_STATE_VALUES)[number];
+
+/** The portal's OCR text of a TEXT block. It is always marked `recognised` (R-116): never merged into the PDF text layer. `flags` are the quality signals found in it, a lowercase snake_case vocabulary: mixed-script words, Latin/Cyrillic homoglyphs, CJK characters, doubled list markers and the norms degeneracy signals. Engineering designations (`1.A`, `B25`, `A500C`, `REI 150`) are exempt. `text` is markdown and is rendered as text, never as HTML. */
+export type PortalRecognisedText = {
+  flags: Array<string>;
+  quote_source: "recognised";
+  text: string;
+};
+
 /** The running product version from VERSION, its content-derived build identifier, and the unchanged API contract version. */
 export type ProductVersion = {
   build_id: string;
@@ -1113,7 +1187,7 @@ export type UpdateUserRequest = {
 export type UploadDocumentRequest = {
   /** Optional display label. When absent the server derives one for presentation. Neither this nor the uploaded file name is ever an identity. */
   display_title?: string;
-  /** One unencrypted PDF, at most 25 MiB and at most 30 pages, every page carrying extractable embedded text. */
+  /** One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. At most 250 MiB; the PDF at most 500 pages. */
   file: Blob;
   /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;

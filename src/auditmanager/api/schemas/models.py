@@ -1,4 +1,4 @@
-"""The 116 ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
+"""The 123 ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
 
 `T-1` makes FastAPI generate the served document, and `W13-CONF`'s conformance gate compares
 that document against the frozen contract. **The contract stays the authority**: every class
@@ -135,6 +135,13 @@ __all__ = [
     "NormSnapshotEventPage",
     "SetCurrentNormSnapshotRequest",
     "NormCurrentSnapshot",
+    "PortalBlockId",
+    "PortalBlockType",
+    "PortalGeometryState",
+    "PortalCrop",
+    "PortalRecognisedText",
+    "PortalBlock",
+    "PortalBlockPage",
     "Sha256",
     "StageId",
     "StageState",
@@ -265,6 +272,13 @@ NormDocumentId = TypeAliasType(
 NormParagraphId = TypeAliasType(
     "NormParagraphId", Annotated[str, Field(pattern=rf"^npar_{_ULID}$")]
 )
+#: `W55B-SEAL-01`. An **external** identifier: minted by the portal that produced a bundle and
+#: carried verbatim from its block list, 32 lowercase hexadecimal digits after ``blk_``. Not a
+#: ULID identity of this product, never generated here, and addressed only under a version
+#: (``contracts/domain/v1/identifiers.json``, ``external_identifiers``).
+PortalBlockId = TypeAliasType(
+    "PortalBlockId", Annotated[str, Field(pattern=r"^blk_[0-9a-f]{32}$")]
+)
 FindingUid = TypeAliasType(
     "FindingUid", Annotated[str, Field(pattern=rf"^fnd_{_ULID}$")]
 )
@@ -314,8 +328,9 @@ Cursor = TypeAliasType("Cursor", Annotated[str, Field(min_length=1, max_length=5
 class ErrorCode(str, enum.Enum):
     """Exactly the key set of ``contracts/domain/v1/error-codes.json``.
 
-    Twenty-three codes since `W49-SEAL-01` added ``rate_limited``, which only the edge in
-    front of ``/api/v1`` answers; the twenty-second was ``staged_upload_lost``, added by
+    Twenty-four codes since `W55B-SEAL-01` added ``analysis_input_budget_exceeded``; the
+    twenty-third, ``rate_limited``, came with `W49-SEAL-01` and only the edge in
+    front of ``/api/v1`` answers it; the twenty-second was ``staged_upload_lost``, added by
     `W20-CODE` under owner ruling `R-8`, settling `D-18`, and the twenty-first
     ``dependency_credential_refused``, added at `e6d0a6a` under `R-3`. The catalog is the
     authority;
@@ -341,6 +356,7 @@ class ErrorCode(str, enum.Enum):
     ANALYSIS_FAILED = "analysis_failed"
     PARTIAL_RESULT_NOT_PUBLISHABLE = "partial_result_not_publishable"
     COST_BUDGET_EXCEEDED = "cost_budget_exceeded"
+    ANALYSIS_INPUT_BUDGET_EXCEEDED = "analysis_input_budget_exceeded"
     STALE_ATTEMPT = "stale_attempt"
     EXECUTION_TOKEN_INVALID = "execution_token_invalid"
     RATE_LIMITED = "rate_limited"
@@ -545,7 +561,7 @@ class DocumentVersion(_Object):
     media_type: Literal["application/pdf"]
     byte_size: Annotated[int, Field(ge=0)]
     sha256: Sha256
-    page_count: Annotated[int, Field(ge=1, le=30)]
+    page_count: Annotated[int, Field(ge=1, le=500)]
     published_at: datetime
     input_manifest: list[InputManifestEntry]
 
@@ -577,6 +593,90 @@ class VersionBlockIndex(_Object):
     text_layer_sha256: Sha256 | None
     block_count: Annotated[int, Field(ge=0)]
     blocks: list[BlockGeometry]
+
+
+# --- portal blocks (`W55B-SEAL-01`) --------------------------------------------------------
+
+
+class PortalBlockType(str, enum.Enum):
+    """The portal's own three block types, lower-cased. A stamp block exists only in the
+    block list; the recognised-text markdown never carries one."""
+
+    TEXT = "text"
+    IMAGE = "image"
+    STAMP = "stamp"
+
+
+class PortalGeometryState(str, enum.Enum):
+    """The page-box check (`W55-PLAN.md` section B3.7). ``geometry_mismatch`` means the
+    portal's page size and the PDF's page box disagree beyond the frozen tolerance: no crop
+    was cut for the page, and the block is shown without one rather than with a wrong one."""
+
+    OK = "ok"
+    GEOMETRY_MISMATCH = "geometry_mismatch"
+
+
+class PortalCrop(_Object):
+    """A crop this product cut itself from the PDF -- never the portal's ``crop_url``, which is
+    a capability URL and is neither fetched, stored nor served. The bytes are
+    ``streamVersionPortalBlockCrop``."""
+
+    media_type: Literal["image/png"]
+    width_px: Annotated[int, Field(ge=1)]
+    height_px: Annotated[int, Field(ge=1)]
+    sha256: Sha256
+
+
+class PortalRecognisedText(_Object):
+    """The portal's OCR text of a TEXT block, always marked ``recognised`` (R-116): it is never
+    merged into the PDF text layer, and ``flags`` are the quality signals found in it
+    (mixed-script words, Latin/Cyrillic homoglyphs, CJK, doubled list markers, degeneracy).
+    ``text`` is markdown and is rendered as text, never as HTML."""
+
+    quote_source: Literal["recognised"]
+    text: Annotated[str, Field(min_length=1)]
+    flags: list[Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")]]
+
+
+class PortalBlock(_Object):
+    """One block of the portal's block list. The pair ``(version_uid, portal_block_id)``
+    addresses it; ``ordinal`` is the portal's own order, not unique and null for a stamp."""
+
+    portal_block_id: PortalBlockId
+    page_number: Annotated[int, Field(ge=1)]
+    page_label: Annotated[int, Field(ge=1)]
+    ordinal: Annotated[int, Field(ge=0)] | None
+    block_type: PortalBlockType
+    status: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,39}$")]
+    bbox_norm: Annotated[list[float], Field(min_length=4, max_length=4)]
+    polygon_points: Annotated[
+        list[Annotated[list[float], Field(min_length=2, max_length=2)]],
+        Field(min_length=3, max_length=64),
+    ] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    geometry: PortalGeometryState
+    crop: PortalCrop = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    recognised_text: PortalRecognisedText = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    portal_description: Annotated[str, Field(min_length=1)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+
+
+class PortalBlockPage(_Object):
+    """One page of a version's portal blocks, ordered by page, ordinal (null last) and id.
+
+    ``status`` carries the distinction ``VersionBlockIndex.status`` carries: ``not_produced``
+    is a version no run of which has produced portal geometry yet, ``produced`` one whose
+    geometry stage succeeded and which may genuinely have no blocks. Both answer ``items=[]``
+    and ``block_count=0`` only when they have none; a caller reads ``status``."""
+
+    version_uid: VersionUid
+    status: Literal["produced", "not_produced"]
+    produced_by_run_id: RunId | None
+    block_count: Annotated[int, Field(ge=0)]
+    items: list[PortalBlock]
+    page: PageInfo
 
 
 # --- runs --------------------------------------------------------------------------

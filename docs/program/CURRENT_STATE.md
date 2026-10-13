@@ -124,7 +124,7 @@
 **2026-10-13 — W54 + W55a released as `v0.5.0`.** After `R-111`'s consolidated validation
 (`W55A-INT-GATE-01`: literal `GATE OK` on `23fd729`), the owner instructed publication of that
 exact SHA, tagged `v0.5.0`; the publication record is `W54-INT-MAIN-01.md`. What the stand runs
-now is answered by `infra/deploy/verify-deployed.sh`, not by this file. Migration head `0020_norms_search`; a separate `worker` service runs
+now is answered by `infra/deploy/verify-deployed.sh`, not by this file. Migration head `0021_portal_bundles` in this tree (`v0.5.0` itself shipped `0020_norms_search`); a separate `worker` service runs
 jobs. «Нормы» awaits the corpus import (P4). The corpus operations — repairs, embedding build,
 bundle — are not yet run.
 
@@ -210,9 +210,9 @@ with no promotion. W49 now means identity, W50 the shell and W51 the screens:
 `docs/program/dispatch/IDENTITY-WAVES.md` is the controlling plan, with `W49-PLAN.md`,
 `W50-PLAN.md` and `W51-PLAN.md` beside it.
 
-The frozen API surface is **45 paths / 52 operations / 116 schemas** since `W55A-SEAL-01`, the
-error catalog **23**, domain candidate revision 11 with **32** opaque identities, and the
-migration head is **`0020_norms_search`** (`0019_execution_workers` beneath it). The last tagged release is `alpha-w48.1`.
+The frozen API surface is **47 paths / 54 operations / 123 schemas** since `W55B-SEAL-01`, the
+error catalog **24**, domain candidate revision 12 with **32** opaque identities, and the
+migration head is **`0021_portal_bundles`** (`0020_norms_search` beneath it). The last tagged release is `alpha-w48.1`.
 This section makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is
 deployed.
 

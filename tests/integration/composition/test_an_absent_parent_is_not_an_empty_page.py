@@ -75,7 +75,9 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # `W55A-SEAL-01` added three addressed GETs (``getNormDocument``, ``listNormParagraphs``,
 # ``streamNormDocumentContent``, all on ``norm_document_id``) and three unaddressed ones
 # (``searchNorms``, ``listNormSnapshots``, ``listNormSnapshotEvents``).
-EXPECTED_ADDRESSED = 15
+# `W55B-SEAL-01` added two addressed GETs on `version_uid` (``listVersionPortalBlocks`` and
+# ``streamVersionPortalBlockCrop``), both sealed stubs until `W55B-GEOMETRY-01`.
+EXPECTED_ADDRESSED = 17
 EXPECTED_UNADDRESSED = 14
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
@@ -124,7 +126,11 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 #: (:func:`test_a_sealed_stub_get_with_a_parent_answers_unavailable`). `W55A-SEARCH-01`
 #: emptied it and the three joined the sweep: an absent ``ndoc_`` is ``404 not_found`` --
 #: the document, its paragraphs and its PDF alike.
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
+#: `W55B-SEAL-01` filled it again with the two portal-block reads; `W55B-GEOMETRY-01` serves
+#: them and empties it, and an absent `ver_` is then `404 not_found` for both.
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset(
+    {"listVersionPortalBlocks", "streamVersionPortalBlockCrop"}
+)
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a
@@ -139,6 +145,11 @@ def _prefixes() -> dict[str, str]:
 
 
 def _absent_identity(parameter: str) -> str:
+    external = json.loads(_CATALOG.read_text(encoding="utf-8")).get("external_identifiers", {})
+    if parameter in external:
+        # `W55B-SEAL-01`: an external identifier is not a prefix-ULID, so it is filled with the
+        # catalog's own pattern's shape (`blk_` and 32 hexadecimal digits), never a ULID.
+        return f"{external[parameter]['prefix']}_" + "0" * 32
     prefixes = _prefixes()
     if parameter not in prefixes:
         raise AssertionError(

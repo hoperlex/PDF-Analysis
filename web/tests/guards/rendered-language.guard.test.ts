@@ -1930,7 +1930,13 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     expect(unexplainedLatin('internal_contradiction', VOCABULARY)).toEqual(['internal', 'contradiction']);
     // `D-62`: the stage table's whole first column. `analysis` alone is already an offence
     // below, so this also shows the compound is not teaching the guard a bare word.
-    expect(unexplainedLatin('text_analysis', VOCABULARY)).toEqual(['text', 'analysis']);
+    //
+    // `W55B-SEAL-01`: `PortalBlockType` publishes a bare `text`, so the compound no longer
+    // reddens that half; `analysis` still does. The bare `text` becomes an offence again, and
+    // the new schemas get their markers, in `W55B-WEB-BLOCKS`, which is the lane that renders
+    // them: adding `PortalBlockType` and `PortalGeometryState` to `TRANSLATED_SCHEMAS` here
+    // would demand a marker for a screen that does not exist yet.
+    expect(unexplainedLatin('text_analysis', VOCABULARY)).toEqual(['analysis']);
     expect(unexplainedLatin('source_preparation', VOCABULARY)).toEqual(['source', 'preparation']);
     // And the machine value keeps its home: `visibleText` reads text nodes and four
     // attributes and never `data-*`, so a badge carrying its contract value is untouched.

@@ -1,6 +1,10 @@
 """``uploadDocument``, ``getDocumentVersion``, ``streamDocumentVersionContent``,
 ``listDocuments`` and ``listVersions``.
 
+``uploadDocument`` takes a portal bundle (`W55B-SEAL-01`, R-116): one ZIP holding the PDF
+and the portal's own files. The route hands the part's file handle to the port and reads
+nothing itself.
+
 The streaming operation is the one with a rule worth restating: **the server streams the
 bytes itself**. There is no redirect and no presigned link. A URL into object storage is the
 internal address the contract forbids in a response, and it would outlive the request that
@@ -43,13 +47,18 @@ from auditmanager.shared.errors import DomainError
 __all__ = ["build_document_routes"]
 
 _PDF: Final[str] = "application/pdf"
+#: `W55B-SEAL-01` (R-116). The upload is a portal bundle: one ZIP. The server decides by the
+#: archive's magic bytes, not by this label -- browsers send ``application/zip``,
+#: ``application/x-zip-compressed`` or nothing -- so the label is the contract's declaration,
+#: not a gate.
+_ZIP: Final[str] = "application/zip"
 
 #: The contract declares this body as ``multipart/form-data`` and only that. FastAPI would
 #: otherwise declare ``application/x-www-form-urlencoded`` for a Pydantic form model -- a
 #: second media type the contract does not accept, and one that cannot carry a PDF.
 _MULTIPART: Final[str] = "multipart/form-data"
 
-#: The contract declares the ``file`` part as ``application/pdf``, in
+#: The contract declares the ``file`` part as ``application/zip``, in
 #: ``requestBody.content.multipart/form-data.encoding.file.contentType``. **FastAPI does not
 #: emit it** -- `W13-CONF` measured that on a real generated document -- and it is a declared
 #: constraint on the part, so it is restored with ``openapi_extra``.
@@ -57,7 +66,7 @@ _MULTIPART: Final[str] = "multipart/form-data"
 _MULTIPART_ENCODING: Final[dict[str, Any]] = {
     "requestBody": {
         "content": {
-            "multipart/form-data": {"encoding": {"file": {"contentType": _PDF}}}
+            "multipart/form-data": {"encoding": {"file": {"contentType": _ZIP}}}
         }
     }
 }
@@ -101,11 +110,13 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
         # by here the body is a readable multipart of uniquely named parts, the file part
         # has a filename, and `checked.display_title` is the text the caller actually
         # encoded rather than Starlette's latin-1 reading of it.
+        # `W55B-SEAL-01`: the part's own file handle goes to the port unread. It is positioned
+        # at the start and readable once; what reads it, and how much of it at a time, is the
+        # port's to say (`DocumentPort.upload_document`).
         filename = body.file.filename or ""
-        content = body.file.file.read()
         outcome = documents.upload_document(
             project_uid=project_uid,
-            content=content,
+            content=body.file.file,
             source_filename=filename,
             display_title=checked.display_title,
             section=body.section.value if body.section is not None else None,

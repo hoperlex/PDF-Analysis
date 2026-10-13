@@ -173,6 +173,14 @@ GUARDED = (
     ("listNormSnapshots", "GET", "/norms/snapshots"),
     ("listNormSnapshotEvents", "GET", "/norms/snapshots/events"),
     ("setCurrentNormSnapshot", "PUT", "/norms/snapshots/current"),
+    # `W55B-SEAL-01`. The two portal-block reads: behind the seam before their sealed stubs
+    # can answer 503, and before the crop's path pattern can refuse an identity.
+    ("listVersionPortalBlocks", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/portal-blocks"),
+    (
+        "streamVersionPortalBlockCrop", "GET",
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/portal-blocks/"
+        "blk_0123456789abcdef0123456789abcdef/crop",
+    ),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -246,7 +254,7 @@ def _envelope(answer) -> dict:
 
 
 def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) -> None:
-    """One request per guarded operation, with no credential. Forty-nine of fifty-two.
+    """One request per guarded operation, with no credential. Fifty-one of fifty-four.
 
     The set comparison is what makes this a sweep rather than a list: a twentieth
     operation is either written into ``GUARDED`` and swept, or named in
@@ -254,7 +262,7 @@ def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) ->
     ``test_the_open_surface_is_exactly_the_register`` -- there is no third place for it to
     be, and an operation that is in neither fails here.
     """
-    assert len(GUARDED) == 49
+    assert len(GUARDED) == 51
     assert UNAUTHENTICATED_OPERATIONS == {
         "issueToken",
         "submitRegistration",

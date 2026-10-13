@@ -36,8 +36,10 @@ describe('the envelope the user is shown is the envelope the contract declares',
   it('takes those numbers from the contract document, not from this file', () => {
     // The generator emits identifier patterns but not prose limits, so the envelope text
     // is the only place these two numbers can be checked against their source.
-    expect(contract).toContain('at most 25 MiB and at most 30 pages');
-    expect(contract).toContain('every page carrying extractable embedded text');
+    // `W55B-SEAL-01`: the contract now declares the bundle's limits. The constants this file
+    // pins above move with `W55B-INGEST-01`, which owns the browser upload.
+    expect(contract).toContain('at most 500 pages, and the whole upload at most 250 MiB');
+    expect(contract).toContain('every page must carry an embedded text layer or at least one portal block');
   });
 
   it('names every refusal reason before a file is chosen', () => {

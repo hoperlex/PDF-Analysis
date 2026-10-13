@@ -105,7 +105,9 @@ describe('the media type the browser declares is compared case-insensitively', (
 
 describe('the stated envelope names the one-file rule the contract enforces', () => {
   it('is a rule the contract actually has', () => {
-    expect(contract).toContain('a companion or archive upload are each refused');
+    // `W55B-SEAL-01`: the contract's rule is now the bundle's member set. The screen still states
+    // the one-PDF rule until `W55B-INGEST-01` replaces the envelope it shows.
+    expect(contract).toContain('Anything else in the archive is refused');
   });
 
   it('is on screen before a file is chosen', () => {

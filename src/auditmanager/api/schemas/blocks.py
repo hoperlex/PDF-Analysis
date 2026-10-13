@@ -21,14 +21,21 @@ always empty and unexplained.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 __all__ = [
     "STATUS_NOT_PRODUCED",
     "STATUS_PRODUCED",
     "BlockGeometryView",
+    "PortalBlockIndexView",
+    "PortalBlockView",
+    "PortalCropContent",
+    "PortalCropView",
+    "PortalRecognisedTextView",
     "VersionBlockIndexView",
     "block_geometry_body",
+    "portal_block_body",
+    "portal_block_page_body",
     "version_block_index_body",
 ]
 
@@ -89,4 +96,122 @@ def version_block_index_body(view: VersionBlockIndexView) -> dict[str, Any]:
         "text_layer_sha256": view.text_layer_sha256,
         "block_count": view.block_count,
         "blocks": [block_geometry_body(b) for b in view.blocks],
+    }
+
+
+# ---------------------------------------------------------------------------------------
+# portal blocks (`W55B-SEAL-01`, `W55-PLAN.md` sections B3.6 and B3.7)
+# ---------------------------------------------------------------------------------------
+#
+# A bundle's block list, normalised by ``page_geometry_extraction`` into
+# ``geometry.portal_blocks``, with the recognised text and the portal's descriptions joined
+# on by ``portal_block_id``. Keyed by the version for the reason ``getVersionBlocks`` is: it
+# is a property of the version's bundle, identical across every run that reaches the stage.
+# The ``not_produced`` / ``produced`` distinction is the same one, for the same reason.
+
+
+@dataclass(frozen=True, slots=True)
+class PortalCropView:
+    """A crop this product cut itself. Never the portal's ``crop_url``."""
+
+    media_type: str
+    width_px: int
+    height_px: int
+    sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class PortalRecognisedTextView:
+    """The portal's OCR text of a TEXT block, marked ``recognised`` on the wire."""
+
+    text: str
+    flags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PortalBlockView:
+    """Exactly the frozen ``PortalBlock``."""
+
+    portal_block_id: str
+    page_number: int
+    page_label: int
+    ordinal: int | None
+    block_type: str
+    status: str
+    bbox_norm: tuple[float, float, float, float]
+    geometry: str
+    polygon_points: tuple[tuple[float, float], ...] | None = None
+    crop: PortalCropView | None = None
+    recognised_text: PortalRecognisedTextView | None = None
+    portal_description: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PortalBlockIndexView:
+    """A version's portal blocks, **already in order**: page, ordinal (null last), id.
+
+    ``produced_by_run_id`` is ``None`` exactly when ``status`` is
+    :data:`STATUS_NOT_PRODUCED` -- never independently. The router pages ``blocks`` and never
+    re-sorts them, for the reason ``list_documents`` gives.
+    """
+
+    version_uid: str
+    status: str
+    produced_by_run_id: str | None
+    blocks: tuple[PortalBlockView, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PortalCropContent:
+    """One crop's PNG bytes, as ``streamVersionPortalBlockCrop`` answers them."""
+
+    media_type: str
+    sha256: str
+    content: bytes
+
+
+def portal_block_body(view: PortalBlockView) -> dict[str, Any]:
+    """The block's wire shape. An absent optional member is left out, never ``null``."""
+    body: dict[str, Any] = {
+        "portal_block_id": view.portal_block_id,
+        "page_number": view.page_number,
+        "page_label": view.page_label,
+        "ordinal": view.ordinal,
+        "block_type": view.block_type,
+        "status": view.status,
+        "bbox_norm": list(view.bbox_norm),
+    }
+    if view.polygon_points is not None:
+        body["polygon_points"] = [list(point) for point in view.polygon_points]
+    body["geometry"] = view.geometry
+    if view.crop is not None:
+        body["crop"] = {
+            "media_type": view.crop.media_type,
+            "width_px": view.crop.width_px,
+            "height_px": view.crop.height_px,
+            "sha256": view.crop.sha256,
+        }
+    if view.recognised_text is not None:
+        body["recognised_text"] = {
+            "quote_source": "recognised",
+            "text": view.recognised_text.text,
+            "flags": list(view.recognised_text.flags),
+        }
+    if view.portal_description is not None:
+        body["portal_description"] = view.portal_description
+    return body
+
+
+def portal_block_page_body(
+    index: PortalBlockIndexView,
+    items: Sequence[PortalBlockView],
+    next_cursor: str | None,
+) -> dict[str, Any]:
+    return {
+        "version_uid": index.version_uid,
+        "status": index.status,
+        "produced_by_run_id": index.produced_by_run_id,
+        "block_count": len(index.blocks),
+        "items": [portal_block_body(view) for view in items],
+        "page": {"next_cursor": next_cursor},
     }

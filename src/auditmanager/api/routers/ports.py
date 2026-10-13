@@ -29,10 +29,14 @@ one would have taken that decision away from it.
 
 from __future__ import annotations
 
-from typing import Protocol, Sequence, runtime_checkable
+from typing import BinaryIO, Protocol, Sequence, runtime_checkable
 
 from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
-from auditmanager.api.schemas.blocks import VersionBlockIndexView
+from auditmanager.api.schemas.blocks import (
+    PortalBlockIndexView,
+    PortalCropContent,
+    VersionBlockIndexView,
+)
 from auditmanager.api.schemas.content import ByteRange, StreamedContent
 from auditmanager.api.schemas.dashboard import DashboardSummaryView
 from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
@@ -153,13 +157,21 @@ class DocumentPort(Protocol):
         self,
         *,
         project_uid: str,
-        content: bytes,
+        content: BinaryIO,
         source_filename: str,
         display_title: str | None,
         idempotency_key: str,
         section: str | None = None,
     ) -> UploadedDocument:
-        """Publish one PDF as one immutable version, or explain why not.
+        """Publish one portal bundle as one immutable version, or explain why not.
+
+        ``content`` is the uploaded ZIP as a **file handle**, positioned at its start and
+        readable once: the router hands over the parsed part's own handle and does not read
+        it (`W55B-SEAL-01`, plan section B3.2). An implementation that needs the bytes whole
+        says so by reading them itself -- `DocumentAdapter` still does until
+        `W55B-STREAM-01` and `W55B-INGEST-01` read the archive member by member -- so that
+        the cost is visible in the one place that pays it, not hidden in the signature. It
+        neither closes the handle nor keeps it after returning.
 
         ``section`` is one of `R-40`'s fourteen project-section codes, or ``None`` when
         the caller does not supply one -- optional here for the same reason
@@ -258,6 +270,31 @@ class BlockPort(Protocol):
         (``status="produced"``, ``blocks=()``). An implementation that returned the empty
         tuple for both without varying ``status`` would have destroyed exactly the
         distinction this method exists to carry.
+        """
+
+    def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
+        """Every portal block of one version's bundle, or its not-yet-produced status.
+        `W55B-SEAL-01`; the behaviour is `W55B-GEOMETRY-01`'s.
+
+        Read from the most recent run of the version whose ``page_geometry_extraction``
+        succeeded, for the reason :meth:`get_block_index` gives. ``blocks`` arrive **already
+        ordered** by page, ordinal (a null one last) and ``portal_block_id``; the router
+        pages them and never re-sorts. An unknown version is ``not_found``; a version no run
+        of which produced portal geometry is ``status="not_produced"`` with no blocks --
+        never the same answer as a produced geometry that holds none.
+        """
+
+    def read_portal_block_crop(
+        self, *, version_uid: str, portal_block_id: str
+    ) -> PortalCropContent:
+        """The PNG this product cut for one IMAGE block. `W55B-SEAL-01`; behaviour
+        `W55B-GEOMETRY-01`'s.
+
+        ``not_found`` for an unknown version, for a ``portal_block_id`` the version does
+        not hold, and for a block that has no crop (not an IMAGE block, or its page is
+        ``geometry_mismatch``): every one is the same fact for the caller -- there is no
+        such image. The bytes are verified against the recorded SHA-256 before they are
+        returned; a mismatch is ``storage_integrity_error``, never a shorter image.
         """
 
 

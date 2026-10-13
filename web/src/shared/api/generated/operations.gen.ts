@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 1a17359f0dcee3d37b685fcd6d724ad48f462ebc6c56803b5a66731d8b5797af
+ *   sha256 8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -53,6 +53,8 @@ import type {
   NormSnapshotEventPage,
   NormSnapshotPage,
   NormsSnapshotId,
+  PortalBlockId,
+  PortalBlockPage,
   ProductVersion,
   Project,
   ProjectPage,
@@ -117,6 +119,7 @@ export const OPERATION_IDS = [
   'listRunFindings',
   'listRuns',
   'listUsers',
+  'listVersionPortalBlocks',
   'listVersions',
   'listWorkers',
   'markReleaseNotesRead',
@@ -134,6 +137,7 @@ export const OPERATION_IDS = [
   'startRun',
   'streamDocumentVersionContent',
   'streamNormDocumentContent',
+  'streamVersionPortalBlockCrop',
   'submitRegistration',
   'updateMyProfile',
   'updateUser',
@@ -507,7 +511,7 @@ export type GetUserResult = Account;
  *
  * An unknown `version_uid` is `404`. A version that exists but whose most recent successful run never reached `page_geometry_extraction` -- or has no run at all -- answers `200` with `status: "not_produced"` and `blocks: []`; that is a different fact from a version whose geometry was produced and genuinely has no blocks, which answers `200` with `status: "produced"` and `blocks: []`. The two are the same bytes for `blocks` and different bytes for `status`, and a caller reads `status` to tell them apart -- never the length of `blocks`.
  *
- * This operation does not carry crops. `page_geometry_extraction` also publishes a page-crop manifest, but this pipeline renders no visual detection and that manifest is unconditionally empty (`crop_policy: "none"`, `crops: []`); it is a separate artifact and is not exposed on this operation at all, rather than being shipped here as a field that is always `[]`.
+ * This operation does not carry crops. `page_geometry_extraction` also publishes a page-crop manifest (`geometry.page_crops`); since `W55B-SEAL-01` it lists the crops this product cuts for the IMAGE blocks of a portal bundle under a non-empty `crop_policy`. That manifest and the portal blocks it describes are served by `listVersionPortalBlocks` and `streamVersionPortalBlockCrop`, not by this operation, which stays the text-line block index.
  */
 export type GetVersionBlocksInput = {
   /** Path parameters, substituted into `/versions/{version_uid}/blocks`. */
@@ -941,6 +945,40 @@ export type ListUsersInput = {
 export type ListUsersResult = AccountPage;
 
 // ------------------------------------------------------------------------------------
+// listVersionPortalBlocks - GET /versions/{version_uid}/portal-blocks
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the portal blocks of one published version.
+ *
+ * What the version's portal bundle brought, page by page: its blocks by type, the text the portal recognised in each TEXT block (marked `recognised`, with quality flags), the portal's description of each IMAGE block (marked, never used in analysis), and for each IMAGE block the crop this product cut itself. Keyed by `version_uid`, not by `run_id`, for the reason `getVersionBlocks` is: the geometry is a deterministic property of the version, read from the most recent run whose `page_geometry_extraction` succeeded.
+ *
+ * An unknown `version_uid` is `404`. A version that exists but no run of which has produced portal geometry answers `200` with `status: "not_produced"` and no items; that is a different fact from a produced geometry that holds no blocks (`status: "produced"`).
+ *
+ * Nothing here fetches, stores or serves a portal URL. Roles: any one role (`R-80`).
+ */
+export type ListVersionPortalBlocksInput = {
+  /** Path parameters, substituted into `/versions/{version_uid}/portal-blocks`. */
+  path: {
+    version_uid: VersionUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listVersionPortalBlocks` (`application/json`, HTTP 200). */
+export type ListVersionPortalBlocksResult = PortalBlockPage;
+
+// ------------------------------------------------------------------------------------
 // listVersions - GET /documents/{document_uid}/versions
 // ------------------------------------------------------------------------------------
 
@@ -1063,7 +1101,11 @@ export type ReadRegistrationStatusResult = RegistrationStatusResponse;
 // reauditRun - POST /runs/{run_id}/reaudit
 // ------------------------------------------------------------------------------------
 
-/** Reaudit Run */
+/**
+ * Reaudit Run
+ *
+ * A re-audit runs the same version on the current configuration (R-82), so it faces today's analysis input budget, not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118).
+ */
 export type ReauditRunInput = {
   /** Path parameters, substituted into `/runs/{run_id}/reaudit`. */
   path: {
@@ -1288,6 +1330,8 @@ export type SetWorkerIntakeResult = ExecutionWorker;
  * Start a text-consistency run over one published version.
  *
  * PD-03, in the subset PC-01 exercises. A new idempotency key creates a run. The same key with the same payload returns the existing run and creates nothing, whatever state that run is in, terminal included. The same key with a different payload returns `idempotency_key_reuse` and creates nothing. A new key over a terminal run creates a new run and leaves the terminal one exactly as it was: a terminal run is never reopened.
+ *
+ * A version whose recorded text is larger than the analysis input budget is refused up front with `422 analysis_input_budget_exceeded` and no run exists (R-118). A version published before the portal-bundle upload has no recorded count and is not refused by this rule.
  */
 export type StartRunInput = {
   /** Request body, sent as `application/json`. */
@@ -1363,6 +1407,30 @@ export type StreamNormDocumentContentInput = {
 export type StreamNormDocumentContentResult = Blob;
 
 // ------------------------------------------------------------------------------------
+// streamVersionPortalBlockCrop - GET /versions/{version_uid}/portal-blocks/{portal_block_id}/crop
+// ------------------------------------------------------------------------------------
+
+/**
+ * Stream the PNG this product cut for one IMAGE block.
+ *
+ * The server streams the bytes itself, with no redirect and no link. The image is the clip of the PDF page that the portal's block describes, rendered by this product and verified against its recorded SHA-256 before it is returned; it is never fetched from the portal. A version, a block or a crop that does not exist, a block that is not an IMAGE block, and a block on a page marked `geometry_mismatch` are all `404`: the caller's question is the same, there is no such image. Roles: any one role (`R-80`).
+ */
+export type StreamVersionPortalBlockCropInput = {
+  /** Path parameters, substituted into `/versions/{version_uid}/portal-blocks/{portal_block_id}/crop`. */
+  path: {
+    portal_block_id: PortalBlockId;
+    version_uid: VersionUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `streamVersionPortalBlockCrop` (`image/png`, HTTP 200). */
+export type StreamVersionPortalBlockCropResult = Blob;
+
+// ------------------------------------------------------------------------------------
 // submitRegistration - POST /registrations
 // ------------------------------------------------------------------------------------
 
@@ -1434,11 +1502,17 @@ export type UpdateUserResult = Account;
 // ------------------------------------------------------------------------------------
 
 /**
- * Upload one PDF and publish an immutable document version.
+ * Upload one portal bundle and publish an immutable document version.
  *
- * The whole PC-01 ingest path. The accepted envelope is one unencrypted PDF, at most 25 MiB and at most 30 pages, every page carrying extractable embedded text. A scanned or image-only file, a password-protected file, a non-PDF, an oversize file, an over-page-count file and a companion or archive upload are each refused with `validation_failed` and a `constraint` detail. OCR is never silently substituted.
+ * The whole ingest path. The body is one portal bundle: a ZIP, recognised by its magic bytes whatever label the browser sends, holding exactly one `<stem>.pdf`, one `<stem>_blocks.json` and one `<stem>_results.md`, and optionally one `<stem>_results.html` (kept as a digest only: never stored, served or rendered) and one `<stem>_stamp_audit.json` (stored, and not used in analysis). All members share one stem. Anything else in the archive is refused, and so is any archive that is not what it claims to be (names that escape, links, encrypted members, a compression ratio above the bound, sizes beyond the bounds).
  *
- * On success the version and its input manifest are immutable: there is no update or delete endpoint for either, and the database refuses both.
+ * A bare PDF is refused with `validation_failed` and the constraint `portal_bundle_required`; the message says how to obtain the bundle. The PDF must be unencrypted and at most 500 pages, and the whole upload at most 250 MiB; every page must carry an embedded text layer or at least one portal block. Every refusal is `validation_failed` (or `storage_integrity_error`) with a `constraint` detail, and the registered values are in the domain error catalog (`error-codes.json`, `validation_failed`).
+ *
+ * OCR is always marked: the portal's recognised text is kept as its own artifact with quality flags and is never merged into the PDF's text layer (R-116). The portal's descriptions of images are shown, marked, and never used in analysis (R-117). The analysis is built for AR (architectural solutions) text and is applied to any uploaded document; a stated `section` is stored and counted but neither selects nor refuses the analysis (D-110).
+ *
+ * A third upload in flight in one API process is refused before its body is read: `503 dependency_unavailable` with `details.dependency: upload_capacity` and a `Retry-After` header. Nothing was created; the caller sends the same upload again later.
+ *
+ * On success the version and its input manifest are immutable: there is no update or delete endpoint for either, and the database refuses both. The manifest holds one entry per stored member: `source.document`, `source.structured_companion`, `source.markdown` and, when the bundle had one, `source.stamp_audit`.
  */
 export type UploadDocumentInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents`. */
@@ -1904,6 +1978,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['users'],
   },
+  listVersionPortalBlocks: {
+    operationId: 'listVersionPortalBlocks',
+    method: 'GET',
+    path: '/versions/{version_uid}/portal-blocks',
+    pathParams: ['version_uid'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['documents'],
+  },
   listVersions: {
     operationId: 'listVersions',
     method: 'GET',
@@ -2141,6 +2229,20 @@ export const OPERATIONS = {
     successStatuses: [200, 206],
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['norms'],
+  },
+  streamVersionPortalBlockCrop: {
+    operationId: 'streamVersionPortalBlockCrop',
+    method: 'GET',
+    path: '/versions/{version_uid}/portal-blocks/{portal_block_id}/crop',
+    pathParams: ['portal_block_id', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'image/png',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['documents'],
   },
   submitRegistration: {
     operationId: 'submitRegistration',

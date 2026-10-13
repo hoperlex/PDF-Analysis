@@ -70,6 +70,12 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "listNormSnapshots": ("GET", "/norms/snapshots"),
     "listNormSnapshotEvents": ("GET", "/norms/snapshots/events"),
     "setCurrentNormSnapshot": ("PUT", "/norms/snapshots/current"),
+    # `W55B-SEAL-01`. The portal-block reads (R-80 any-role reads).
+    "listVersionPortalBlocks": ("GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/portal-blocks"),
+    "streamVersionPortalBlockCrop": (
+        "GET",
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/portal-blocks/blk_00000000000000000000000000000000/crop",
+    ),
     "listRunFindings": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     "exportRunCsv": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),
     "getFinding": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
@@ -124,6 +130,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "listNormParagraphs": _ANY_ROLE,
     "streamNormDocumentContent": _ANY_ROLE,
     "listNormSnapshots": _ANY_ROLE,
+    "listVersionPortalBlocks": _ANY_ROLE,
+    "streamVersionPortalBlockCrop": _ANY_ROLE,
     "listRunFindings": _ANY_ROLE,
     "getFinding": _ANY_ROLE,
     "listDecisionHistory": _ANY_ROLE,
