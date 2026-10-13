@@ -950,6 +950,11 @@ class AssembleToolTest(unittest.TestCase):
             (source / "synthetic_results.md").write_bytes(files.results_md)
             (source / "second.pdf").write_bytes(files.pdf)
             self.assertEqual(self.run_tool(str(source), str(Path(tmp) / "b.zip")).returncode, 2)
+            (source / "second.pdf").unlink()
+            (source / "synthetic.pdf").unlink()
+            done = self.run_tool(str(source), str(Path(tmp) / "c.zip"))
+            self.assertEqual(done.returncode, 2, done.stderr)
+            self.assertIn("exactly one .pdf", done.stderr)
 
 
 class GeneratorGuardTest(unittest.TestCase):
