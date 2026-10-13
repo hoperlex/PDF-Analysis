@@ -76,6 +76,7 @@ from auditmanager.norms.current_snapshot import (  # W55A-SEARCH-01
     qualification,
     set_current_snapshot,
 )
+from auditmanager.norms.degeneracy import DegeneracySignal, inspect as inspect_degeneracy  # W55B-RECOGNISED-01
 from auditmanager.norms.embedding import (  # W54-EMBED-01
     EMBEDDING_PROFILE,
     EMBEDDING_SET_DIGEST_VERSION,
@@ -174,6 +175,7 @@ __all__ = [
     "CustodySlot",
     "CustodySource",
     "DeclaredContent",
+    "DegeneracySignal",
     "Designation",
     "DispatchReport",
     "DispatchResult",
@@ -216,6 +218,7 @@ __all__ = [
     "has_been_current",
     "import_bundle",
     "import_snapshot",
+    "inspect_degeneracy",
     "list_norm_paragraphs",
     "list_norm_snapshots",
     "list_snapshot_events",

@@ -33,7 +33,10 @@ from auditmanager.analysis.ports.artifacts import (
     ROLE_DOCUMENT_GRAPH,
     ROLE_PAGE_CROPS,
     ROLE_PAGE_INVENTORY,
+    ROLE_RECOGNISED_TEXT,
     ROLE_SOURCE_DOCUMENT,
+    ROLE_SOURCE_MARKDOWN,
+    ROLE_SOURCE_STRUCTURED_COMPANION,
     ROLE_TEXT_LAYER,
     publish_artifact,
     read_artifact,
@@ -62,6 +65,7 @@ from auditmanager.analysis.text import (
     run_text_analysis,
 )
 from auditmanager.analysis.text.budget import REFERENCE_DOCUMENT_CHARACTERS, input_budget_characters
+from auditmanager.analysis.recognised import KIND_PORTAL_DESCRIPTION, KIND_RECOGNISED_TEXT, QUOTE_SOURCE_RECOGNISED  # W55B-RECOGNISED-01
 from auditmanager.analysis.text.proxy import ProxyDispatchError
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
 
@@ -70,14 +74,20 @@ __all__ = [
     "ARTIFACT_ROLE",
     "AR_TEXT_PROFILE",
     "CONTRACT_VERSION",
+    "KIND_PORTAL_DESCRIPTION",
+    "KIND_RECOGNISED_TEXT",
     "NORMALIZATION_DESCRIPTION",
     "NORMALIZATION_ID",
+    "QUOTE_SOURCE_RECOGNISED",
     "REFERENCE_DOCUMENT_CHARACTERS",
     "ROLE_BLOCK_INDEX",
     "ROLE_DOCUMENT_GRAPH",
     "ROLE_PAGE_CROPS",
     "ROLE_PAGE_INVENTORY",
+    "ROLE_RECOGNISED_TEXT",
     "ROLE_SOURCE_DOCUMENT",
+    "ROLE_SOURCE_MARKDOWN",
+    "ROLE_SOURCE_STRUCTURED_COMPANION",
     "ROLE_TEXT_LAYER",
     "ArtifactRef",
     "CostMeter",

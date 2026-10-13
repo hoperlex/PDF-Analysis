@@ -31,11 +31,16 @@ from auditmanager.storage.public import BlobId
 # --- roles -------------------------------------------------------------------
 
 ROLE_SOURCE_DOCUMENT: Final[str] = "source.document"
+#: The two members of a portal bundle ``source_preparation`` reads (`W55B-RECOGNISED-01`).
+ROLE_SOURCE_MARKDOWN: Final[str] = "source.markdown"
+ROLE_SOURCE_STRUCTURED_COMPANION: Final[str] = "source.structured_companion"
 ROLE_PAGE_INVENTORY: Final[str] = "prepared.page_inventory"
 ROLE_TEXT_LAYER: Final[str] = "prepared.text_layer"
 ROLE_BLOCK_INDEX: Final[str] = "geometry.block_index"
 ROLE_PAGE_CROPS: Final[str] = "geometry.page_crops"
 ROLE_DOCUMENT_GRAPH: Final[str] = "context.document_graph"
+#: The portal's recognised text, ``P02_SEAMS`` section 4.8 (`W55B-RECOGNISED-01`).
+ROLE_RECOGNISED_TEXT: Final[str] = "prepared.recognised_text"
 
 #: Every artifact document shape in ``P02_SEAMS`` section 4 is at 1.0.0.
 ARTIFACT_VERSION: Final[str] = "1.0.0"
@@ -143,7 +148,10 @@ __all__ = [
     "ROLE_DOCUMENT_GRAPH",
     "ROLE_PAGE_CROPS",
     "ROLE_PAGE_INVENTORY",
+    "ROLE_RECOGNISED_TEXT",
     "ROLE_SOURCE_DOCUMENT",
+    "ROLE_SOURCE_MARKDOWN",
+    "ROLE_SOURCE_STRUCTURED_COMPANION",
     "ROLE_TEXT_LAYER",
     "blob_role_for",
     "envelope",
