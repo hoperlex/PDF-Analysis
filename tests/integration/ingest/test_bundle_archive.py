@@ -29,9 +29,11 @@ two autouse fixtures this directory's ``conftest.py`` would otherwise start.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import io
 import json
+import signal
 import struct
 import tempfile
 import tracemalloc
@@ -221,6 +223,79 @@ def test_the_ratio_rule_is_above_the_bound_and_not_at_it() -> None:
     assert ba._ratio_exceeded(100 * 7, 7, ba.MAX_RATIO) is False
     assert ba._ratio_exceeded(100 * 7 + 1, 7, ba.MAX_RATIO) is True
     assert ba._ratio_exceeded(0, 0, ba.MAX_RATIO) is False
+
+
+def _padded_deflate_archive(path: Path, *, output_bytes: int) -> Path:
+    """A deflated PDF member of ``output_bytes`` zeros whose header claims 20 000 compressed bytes.
+
+    The stream itself is about a kilobyte; the bytes behind it, up to the claimed length, are
+    carried by the next member's local header, so the claim fits inside the file."""
+    items = an.members()
+    items[0] = Member(
+        f"{an.STEM}.pdf".encode(), zipwrite.Fill(output_bytes, 0, b"%PDF-1.7\n"),
+        method=zipwrite.DEFLATED, deflate="zlib", declared_compressed_size=20_000,
+    )
+    items[1].local_extra = b"\0" * 19_500
+    zipwrite.write_zip(path, items)
+    return path
+
+
+class _TookTooLong(Exception):
+    pass
+
+
+@contextlib.contextmanager
+def _within(seconds: int):
+    """Turn a hang into a failure: the body must finish inside ``seconds`` (main thread, POSIX)."""
+
+    def expired(_signal: int, _frame: object) -> None:
+        raise _TookTooLong(f"did not finish within {seconds} s")
+
+    previous = signal.signal(signal.SIGALRM, expired)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+def test_a_stream_that_ends_exactly_at_the_output_piece_with_bytes_behind_it_still_ends(
+    tmp_path: Path,
+) -> None:
+    """The header counts padding as data and the output is a whole number of 64 KiB pieces.
+
+    zlib then reports the end of the stream and keeps the bytes behind it as unconsumed input
+    too; a reader that feeds that tail back never sees another byte and never stops. The reader
+    must stop at the end of the stream and take the stream's own length as what it used."""
+    path = _padded_deflate_archive(tmp_path / "padded-exact.zip", output_bytes=MiB)
+    assert MiB % ba._PIECE == 0
+    with path.open("rb") as handle:
+        archive = ba._Archive(handle)
+        entry = archive.load_entries()[0]
+        with _within(5):
+            produced = sum(len(chunk) for chunk in archive.read_chunks(entry))
+        assert produced == MiB
+        assert 0 < archive.consumed < 5_000, "the stream's own length, not the 20 000 the header claims"
+        assert entry.compressed_size == 20_000
+
+
+def test_a_header_that_claims_more_compressed_bytes_than_the_stream_holds_cannot_hide_the_ratio(
+    tmp_path: Path,
+) -> None:
+    """Padding behind a short deflate stream, and a header that counts the padding as data.
+
+    One MiB of zeros deflates to about a kilobyte, a ratio near 1000 : 1. The header says the
+    member is 20 000 compressed bytes long and the bytes behind the stream are there to make it
+    true, so every figure the headers give -- the member's and the archive's -- is inside the
+    bound. Only the ratio of what came out to what the stream really used can refuse it."""
+    path = _padded_deflate_archive(tmp_path / "padded-ratio.zip", output_bytes=MiB)
+    with path.open("rb") as handle:                      # the headers alone do not refuse it
+        archive = ba._Archive(handle)
+        chosen = ba._judge_entries(archive.load_entries())
+        ba._judge_declared(chosen, archive.size, LOW)
+    with _within(5):
+        assert judge(path, LOW)[:2] == ("file", "bundle_compression_ratio")
 
 
 def test_a_header_that_declares_less_than_the_member_holds_is_caught_by_counting(

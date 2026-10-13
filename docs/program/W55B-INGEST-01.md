@@ -148,3 +148,17 @@ nullable; `export_status` tolerated; unknown top-level and block keys ignored; t
 12. **Stricter than the reference in one place**: a `block_id` with a trailing newline is refused (JSON Schema's `$` does not
     match before a final newline, Python's `re.search` does; the product uses `fullmatch`). A CRLF markdown is accepted
     (the reference would refuse its headers).
+13. **A defect in the first writer's reader, found and fixed by the second** (`bundle_archive.read_chunks`). When a deflate stream
+    ended exactly where one of the 64 KiB output pieces ended and the member's declared compressed length ran past the stream
+    (padding behind it, which a header may claim), zlib reported the end of the stream but kept the bytes behind it as unconsumed
+    input as well; the reader fed that tail back, got nothing, never stopped, and grew `unused_data` by the tail on every turn --
+    a hang with unbounded memory, reachable by a crafted archive whose member unpacks to a multiple of 64 KiB. The reader now
+    stops as soon as the stream ends. Test: `test_a_stream_that_ends_exactly_at_the_output_piece_with_bytes_behind_it_still_ends`
+    (runs under a 5 s alarm so a regression fails instead of hanging; shown to fail with the check removed).
+14. **The ratio is also judged on what the stream really used.** The declared ratio (`_judge_declared`) reads a header; a header can
+    claim more compressed bytes than the stream holds, with padding behind it (the next member's header carries it), and so lower
+    both the member's and the archive's declared ratio under 100 : 1 for a stream that is 1000 : 1. `_unpack` now also refuses
+    `actual > ratio * consumed` (`consumed` is what the inflater took from the file before the stream ended; a stored member
+    uses all it declares). Test: `test_a_header_that_claims_more_compressed_bytes_than_the_stream_holds_cannot_hide_the_ratio`
+    (shown to fail with the check removed; it also proves the declared stage alone accepts the archive).
+

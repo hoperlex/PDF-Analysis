@@ -37,8 +37,8 @@ Order of the rules, cheapest first (each refusal answers a registered
    that repeat (after case folding and NFC), the member set, one stem;
 2. the declared sizes (per member, then in total), then the declared compression ratios;
 3. each member unpacked and counted: its actual bytes against the bounds and against its
-   declaration, and its CRC-32. (The ratio needs no second look: once the bytes counted
-   equal the declared size, the declared ratio is the ratio of these bytes.)
+   declaration, its CRC-32, and the ratio of those bytes to the compressed bytes the stream
+   really used (a header may claim more than the stream holds).
 """
 
 from __future__ import annotations
@@ -391,6 +391,9 @@ class _Archive:
     def __init__(self, handle: BinaryIO) -> None:
         self._handle = handle
         self.size = handle.seek(0, io.SEEK_END)
+        #: The compressed bytes the last :meth:`read_chunks` really consumed (a deflate stream
+        #: ends where it ends, whatever the header says), valid once that generator is spent.
+        self.consumed = 0
         self.declared_count, self._directory_size, self._directory_offset = self._locate()
 
     def _read(self, offset: int, length: int) -> bytes:
@@ -497,24 +500,34 @@ class _Archive:
         start = self.data_offset(entry)
         remaining = entry.compressed_size
         position = start
+        self.consumed = 0
         if entry.method == _STORED:
             while remaining > 0:
                 data = self._read(position, min(_PIECE, remaining))
                 position += len(data)
                 remaining -= len(data)
+                self.consumed += len(data)
                 yield data
             return
         inflater = zlib.decompressobj(-15)
+        fed = 0
         try:
             while remaining > 0 and not inflater.eof:
                 data = self._read(position, min(_PIECE, remaining))
                 position += len(data)
                 remaining -= len(data)
+                fed += len(data)
                 pending = data
                 while pending:
                     out = inflater.decompress(pending, _PIECE)
                     if out:
                         yield out
+                    if inflater.eof:
+                        # The stream is over. When it ends exactly where the output limit does,
+                        # zlib keeps the bytes behind it as ``unconsumed_tail`` as well as in
+                        # ``unused_data``; feeding that tail back would never produce a byte and
+                        # never end -- and would grow ``unused_data`` by the tail each time.
+                        break
                     pending = inflater.unconsumed_tail
                     if not out and not pending:
                         break
@@ -527,6 +540,9 @@ class _Archive:
             raise _ArchiveError(f"entry {entry.index}: the deflate data is corrupt") from None
         if not inflater.eof:
             raise _ArchiveError(f"entry {entry.index}: the deflate stream does not end")
+        # Bytes the header claimed for the member but the stream did not use are not compressed
+        # data: they must not lower the ratio.
+        self.consumed = fed - len(inflater.unused_data)
 
 
 def _zip64_values(
@@ -697,8 +713,11 @@ def _unpack(
                 sink.close()
         if actual != entry.size or crc & 0xFFFFFFFF != entry.crc:
             raise refuse("bundle_unreadable")
-        # No ratio check here: the bytes counted equal the declared size by now, so the
-        # ratio the declared sizes gave (``_judge_declared``) is already the ratio of these.
+        # The ratio of what really came out to what the stream really used. The declared
+        # ratio (``_judge_declared``) cannot see a header that claims more compressed bytes
+        # than the stream holds, with padding behind it, to hide a bomb's ratio.
+        if _ratio_exceeded(actual, archive.consumed, limits.ratio):
+            raise refuse("bundle_compression_ratio")
         members[role] = ExtractedMember(
             role=role,
             display_name=_display_stem_name(entry),
