@@ -7,15 +7,16 @@
  *   what it is checked against here; the sibling contract suite already pins the BOM, the
  *   delimiter, the line ending and the null projection, and `charset` was the one fact of
  *   the five that nothing read.
- * - `hasPdfExtension` — `endsWith('.pdf')` became `includes('.pdf')` with the suite green,
- *   so `annual-report.pdf.exe` announced by a browser that declares no media type would
- *   have passed the pre-check.
+ * - `hasZipExtension` — `endsWith('.zip')` became `includes('.zip')` with the suite green,
+ *   so `bundle.zip.exe` announced by a browser that declares no media type would have
+ *   passed the pre-check. (Until `W55B-INGEST-01` the check was the PDF's, and the same.)
  * - the declared media type is lower-cased before comparison — dropping `.toLowerCase()`
- *   reddened nothing, and a browser that reports `APPLICATION/PDF` would have been told
- *   its PDF is not a PDF.
- * - `UPLOAD_ENVELOPE_RULES` names the one-file rule — dropping the line reddened nothing,
- *   although the contract refuses "a companion or archive upload" with `validation_failed`
- *   and the panel exists to state each refusal before the file is chosen.
+ *   reddened nothing, and a browser that reports `APPLICATION/ZIP` would have been told
+ *   its archive is not an archive.
+ * - `UPLOAD_ENVELOPE_RULES` names the one-archive rule — dropping the line reddened
+ *   nothing, although the contract refuses a bare PDF and any file outside the bundle's
+ *   member set with `validation_failed` and the panel exists to state each refusal before
+ *   the file is chosen.
  * - `deliverDownload` revokes **after** saving — swapping the two reddened nothing, and a
  *   URL revoked before the anchor is clicked downloads nothing at all.
  *
@@ -66,60 +67,60 @@ describe('the charset the panel states is the charset the seam document fixes', 
   });
 });
 
-describe('the PDF extension fallback matches the end of the name, not the middle', () => {
+describe('the ZIP extension fallback matches the end of the name, not the middle', () => {
   it('refuses a double extension when the browser declares nothing', () => {
-    expect(precheckUploadFile({ name: 'annual-report.pdf.exe', size: 4096, type: '' })).toBe(
-      'not_pdf',
+    expect(precheckUploadFile({ name: 'annual-report.zip.exe', size: 4096, type: '' })).toBe(
+      'not_zip',
     );
-    expect(precheckUploadFile({ name: 'report.pdf.zip', size: 4096, type: '' })).toBe('not_pdf');
+    expect(precheckUploadFile({ name: 'report.zip.pdf', size: 4096, type: '' })).toBe('not_zip');
   });
 
   it('refuses a name that merely mentions the extension', () => {
-    expect(precheckUploadFile({ name: 'about.pdf.txt', size: 4096, type: '' })).toBe('not_pdf');
-    expect(precheckUploadFile({ name: '.pdf-notes', size: 4096, type: '' })).toBe('not_pdf');
+    expect(precheckUploadFile({ name: 'about.zip.txt', size: 4096, type: '' })).toBe('not_zip');
+    expect(precheckUploadFile({ name: '.zip-notes', size: 4096, type: '' })).toBe('not_zip');
   });
 
   it('still accepts a name that genuinely ends in the extension', () => {
-    expect(precheckUploadFile({ name: 'annual-report.pdf', size: 4096, type: '' })).toBeNull();
+    expect(precheckUploadFile({ name: 'annual-report.zip', size: 4096, type: '' })).toBeNull();
   });
 });
 
 describe('the media type the browser declares is compared case-insensitively', () => {
   it('accepts an upper-case declaration', () => {
     // Nothing in the platform guarantees the case of `File.type`; a pre-check that refused
-    // `APPLICATION/PDF` would refuse a legal file on a browser nobody tested on.
-    expect(precheckUploadFile({ name: 'ar.pdf', size: 4096, type: 'APPLICATION/PDF' })).toBeNull();
-    expect(precheckUploadFile({ name: 'ar.pdf', size: 4096, type: 'Application/Pdf' })).toBeNull();
+    // `APPLICATION/ZIP` would refuse a legal file on a browser nobody tested on.
+    expect(precheckUploadFile({ name: 'ar.zip', size: 4096, type: 'APPLICATION/ZIP' })).toBeNull();
+    expect(precheckUploadFile({ name: 'ar.zip', size: 4096, type: 'Application/X-Zip-Compressed' })).toBeNull();
   });
 
   it('accepts a declaration with surrounding whitespace', () => {
-    expect(precheckUploadFile({ name: 'ar.pdf', size: 4096, type: '  application/pdf  ' })).toBeNull();
+    expect(precheckUploadFile({ name: 'ar.zip', size: 4096, type: '  application/zip  ' })).toBeNull();
   });
 
   it('still refuses a different media type whatever its case', () => {
-    expect(precheckUploadFile({ name: 'ar.pdf', size: 4096, type: 'APPLICATION/ZIP' })).toBe(
-      'not_pdf',
+    expect(precheckUploadFile({ name: 'ar.zip', size: 4096, type: 'APPLICATION/PDF' })).toBe(
+      'not_zip',
     );
   });
 });
 
-describe('the stated envelope names the one-file rule the contract enforces', () => {
+describe('the stated envelope names the one-archive rule the contract enforces', () => {
   it('is a rule the contract actually has', () => {
-    // `W55B-SEAL-01`: the contract's rule is now the bundle's member set. The screen still states
-    // the one-PDF rule until `W55B-INGEST-01` replaces the envelope it shows.
+    // `W55B-SEAL-01`: the contract's rule is the bundle's member set.
     expect(contract).toContain('Anything else in the archive is refused');
+    expect(contract).toContain('portal_bundle_required');
   });
 
   it('is on screen before a file is chosen', () => {
     const text = UPLOAD_ENVELOPE_RULES.join(' ');
-    expect(text).toContain('Один PDF за загрузку');
-    expect(text.toLowerCase()).toContain('архива');
-    expect(text.toLowerCase()).toContain('второго документа');
+    expect(text).toContain('Один ZIP-архив за загрузку');
+    expect(text).toContain('Отдельный PDF не принимается');
+    expect(text.toLowerCase()).toContain('любой другой файл отклоняется');
   });
 
-  it('leaves the other four rules in place beside it', () => {
+  it('leaves the other rules in place beside it', () => {
     // So that dropping this one line cannot be repaired by dropping the check instead.
-    expect(UPLOAD_ENVELOPE_RULES).toHaveLength(5);
+    expect(UPLOAD_ENVELOPE_RULES).toHaveLength(6);
   });
 });
 

@@ -10,7 +10,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { ErrorCode, ErrorEnvelope } from '@/shared/api';
 import { ApiError, TransportError, UnrecognizedApiError } from '@/shared/api';
-import { classifyUploadFailure } from '@/entities/document-version';
+import {
+  UPLOAD_CONSTRAINTS_STATED,
+  classifyUploadFailure,
+  uploadConstraintSentence,
+} from '@/entities/document-version';
 
 function envelope(
   code: ErrorCode,
@@ -63,7 +67,8 @@ describe('the three named criteria are three different states', () => {
    * prose — it is `details.constraint`, which is what `tests/e2e/pc01/journey/manifest.json`
    * checks under `expects_rendered_from_envelope` (`not_encrypted`,
    * `every_page_has_extractable_text`, `page_count`). So: the constraint is still rendered,
-   * and two different codes still read differently.
+   * and two different codes still read differently. (`page_count_at_most_30` is a spelling
+   * nobody registered: it is shown by name, with no sentence guessed for it.)
    */
   it('renders the specific reason, not a sentence every code would get', () => {
     expect(unsupported.detail).toContain('page_count_at_most_30');
@@ -178,5 +183,58 @@ describe('only the safe classifiers the catalog declares are rendered', () => {
     );
     expect(failure.detail).toContain('encrypted_pdf');
     expect(failure.detail).not.toContain('must-not-be-rendered');
+  });
+});
+
+describe('a refused bundle states the rule it broke, in Russian, beside the constraint', () => {
+  const refuse = (constraint: string) =>
+    classifyUploadFailure(apiError(422, 'validation_failed', false, { constraint, field: 'file' }));
+
+  it('adds the constraint sentence to the generic one and keeps the constraint name', () => {
+    for (const constraint of UPLOAD_CONSTRAINTS_STATED) {
+      const failure = refuse(constraint);
+      const sentence = uploadConstraintSentence(constraint);
+      expect(failure.kind, constraint).toBe('unsupported_input');
+      expect(failure.presentation, constraint).toBe('unsupported');
+      expect(failure.retryable, constraint).toBe(false);
+      expect(failure.detail, constraint).toContain(sentence ?? 'no sentence');
+      expect(failure.detail, constraint).toContain(`constraint: ${constraint}`);
+      expect(failure.detail, constraint).toContain('field: file');
+    }
+  });
+
+  it('tells a bare PDF it is not a bundle and what to upload instead', () => {
+    const failure = refuse('portal_bundle_required');
+    expect(failure.detail).toContain('Загружается комплект портала распознавания');
+    expect(failure.detail).toContain('Отдельный PDF');
+    expect(failure.detail).toContain('constraint: portal_bundle_required');
+  });
+
+  it('states the 500-page and 250 MiB bounds in the page and size refusals', () => {
+    expect(refuse('1 <= page_count <= 500').detail).toContain('от 1 до 500');
+    expect(refuse('byte_size <= 262144000').detail).toContain('не более 250 MiB');
+  });
+
+  it('puts the rule of the member set in terms of the files a reviewer holds', () => {
+    const detail = refuse('bundle_member_set').detail;
+    for (const suffix of ['_blocks.json', '_results.md', '_results.html', '_stamp_audit.json']) {
+      expect(detail).toContain(suffix);
+    }
+  });
+
+  it('adds no sentence for a constraint nobody registered, and still shows its name', () => {
+    const failure = refuse('a_constraint_nobody_registered');
+    expect(failure.detail).toContain('constraint: a_constraint_nobody_registered');
+    expect(failure.detail).toBe(
+      classifyUploadFailure(apiError(422, 'validation_failed', false, {})).detail.replace(
+        /$/,
+        ' (constraint: a_constraint_nobody_registered, field: file)',
+      ),
+    );
+  });
+
+  it('adds no sentence when the refusal names no constraint', () => {
+    const bare = classifyUploadFailure(apiError(422, 'validation_failed', false, {}));
+    expect(bare.detail).not.toContain('(');
   });
 });

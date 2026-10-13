@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * Upload one AR PDF into a project.
+ * Upload one portal bundle (a ZIP archive holding an AR PDF with its block list and
+ * recognised text) into a project.
  *
  * The accepted envelope is on screen **before** the file picker, not only in the
  * rejection that follows a bad choice. Every line of it names a refusal the server can
@@ -44,10 +45,12 @@ export function UploadPanel({ projectUid, onUploaded }: UploadPanelProps) {
             ))}
           </ul>
           <p>
-            Файл за пределами этих ограничений отклоняется с указанием причины на экране.
-            Текст не восстанавливается оптическим распознаванием, а частично читаемый
-            документ никогда не принимается молча. Ограничения:{' '}
-            {PC01_UPLOAD_ENVELOPE.maxBytesLabel} и {PC01_UPLOAD_ENVELOPE.maxPages} страниц.
+            Комплект получают из портала распознавания: он выгружает PDF вместе с файлами
+            блоков и распознанного текста одним ZIP-архивом. Файл за пределами этих
+            ограничений отклоняется с указанием причины на экране. Текст не
+            восстанавливается оптическим распознаванием, а частично читаемый документ
+            никогда не принимается молча. Ограничения: {PC01_UPLOAD_ENVELOPE.maxBytesLabel}{' '}
+            и {PC01_UPLOAD_ENVELOPE.maxPages} страниц.
           </p>
           <p>
             Опубликованная версия неизменяема: здесь ничто её не редактирует и не заменяет.

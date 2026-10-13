@@ -39,17 +39,33 @@ function panel(): string {
 describe('the upload panel states the envelope before the file picker (U-09)', () => {
   it('renders every rule of the accepted envelope', () => {
     const markup = panel();
-    expect(markup).toContain('Один PDF за загрузку.');
-    expect(markup).toContain('Без пароля и без шифрования.');
+    expect(markup).toContain('Один ZIP-архив за загрузку');
+    expect(markup).toContain('Отдельный PDF не принимается.');
+    expect(markup).toContain('_blocks.json');
+    expect(markup).toContain('Без пароля и без шифрования');
     expect(markup).toContain('извлекаемый встроенный текст');
     expect(markup).toContain('оптическим распознаванием');
+  });
+
+  it('prints the two limits of the bundle and none of the old ones', () => {
+    const markup = panel();
+    expect(markup).toContain('Не более 250 MiB на архив.');
+    expect(markup).toContain('Не более 500 страниц.');
+    expect(markup).toContain('Ограничения: 250 MiB');
+    expect(markup).toContain('и 500 страниц.');
+    expect(markup).not.toContain('25 MiB');
+    expect(markup).not.toContain('30 страниц');
+  });
+
+  it('says where a bundle comes from', () => {
+    expect(panel()).toContain('Комплект получают из портала распознавания');
   });
 
   it('renders a non-empty list of them, so an emptied source is red', () => {
     // The mutation replaces the mapped array with `[]`. Counting the items is what makes
     // that red: every other assertion here would still pass on a panel that listed one.
     const items = panel().match(/<li>/g) ?? [];
-    expect(items.length).toBeGreaterThanOrEqual(5);
+    expect(items.length).toBeGreaterThanOrEqual(6);
   });
 
   it('states the envelope above the picker, not only after a refusal', () => {
@@ -63,8 +79,8 @@ describe('the upload panel states the envelope before the file picker (U-09)', (
 
   it('names both numeric limits, which is what a later validation_failed refers back to', () => {
     const markup = panel();
-    expect(markup).toMatch(/25\s*MiB|25\s*MB/);
-    expect(markup).toMatch(/\d+\s*страниц/);
+    expect(markup).toMatch(/\b250\s*MiB/);
+    expect(markup).toMatch(/\b500\s*страниц/);
   });
 
   it('offers no run control at all: the run is started from the version address (D-16)', () => {

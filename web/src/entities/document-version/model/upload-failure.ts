@@ -29,6 +29,8 @@ import {
   catalogMessage,
 } from '@/shared/api';
 
+import { uploadConstraintSentence } from './upload-envelope';
+
 /** The distinguishable outcomes of a failed upload. */
 export type UploadFailureKind =
   | 'unsupported_input'
@@ -87,15 +89,21 @@ function fromApiError(error: ApiError): UploadFailure {
   };
 
   switch (error.errorCode) {
-    case 'validation_failed':
+    case 'validation_failed': {
+      // The rule the server named, in a sentence a reviewer reads. A constraint this
+      // client has no sentence for is shown by name only, never by a guessed cause.
+      const rule = uploadConstraintSentence(error.details['constraint']);
       return {
         ...base,
         kind: 'unsupported_input',
         presentation: 'unsupported',
         title: 'Файл выходит за допустимые ограничения.',
         detail:
-          catalogMessage(error.errorCode) + classifiers(error.details, ['constraint', 'field', 'aggregate_type']),
+          catalogMessage(error.errorCode) +
+          (rule === null ? '' : ` ${rule}`) +
+          classifiers(error.details, ['constraint', 'field', 'aggregate_type']),
       };
+    }
     case 'storage_integrity_error':
       return {
         ...base,

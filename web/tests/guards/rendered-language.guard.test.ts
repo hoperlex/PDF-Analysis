@@ -77,7 +77,10 @@ import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { USER_PAGE_LIMIT } from '@/entities/user';
 import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
-import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
+import {
+  DOCUMENT_PAGE_LIMIT, UPLOAD_CONSTRAINTS_STATED, UPLOAD_ENVELOPE_RULES, VERSION_PAGE_LIMIT, classifyUploadFailure,
+  precheckProblemMessage,
+} from '@/entities/document-version';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
 import { AppFrame } from '@/_app';
 import { accountMenuProps } from '@/_app/account-menu';
@@ -258,6 +261,7 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
   // ------------------------------------------------------------------------------------
   { word: 'PDF', why: 'The document format, and the only one this application accepts. A proper noun in Russian too ("PDF-документ"). `application/pdf` is matched separately as a media type.' },
   { word: 'CSV', why: 'The export format. RFC 4180 names it, no contract here does, and Russian technical writing does not translate it.' },
+  { word: 'ZIP', why: 'The archive format of the portal bundle, the only upload this application accepts (`W55B-INGEST-01`). A proper noun in Russian technical writing ("ZIP-архив"); the container format is fixed by PKWARE\'s APPNOTE, and no contract here defines the word. `application/zip` is matched separately as a media type, and a member\'s name such as `_blocks.json` as a filename.' },
   { word: 'API', why: 'The name of the seam the screens talk to. Universal in Russian technical writing; nothing in `contracts/` defines the word itself.' },
   { word: 'RFC', why: 'The IETF document series, cited by number beside the CSV escaping rule. A citation, not a label.' },
   { word: 'SHA', why: 'The digest algorithm family, shown as SHA-256 beside a version. FIPS 180-4 fixes the spelling; no contract here does.' },
@@ -300,8 +304,10 @@ const MACHINE_SHAPES: readonly { readonly name: string; readonly pattern: RegExp
   { name: 'media types', pattern: /\b[a-z]+\/[a-z0-9.+-]+\b/g },
   { name: 'URLs and object urls', pattern: /\b(?:https?|blob|data):[^\s"'<>]+/g },
   // A filename is the server's or the user's, never this application's prose. The
-  // extension is matched with it, so `.pdf` and `.csv` need no entry of their own.
-  { name: 'filenames', pattern: /\S*[^\s.]\.(?:pdf|csv|json|png|txt|zip)\b/gi },
+  // extension is matched with it, so `.pdf` and `.csv` need no entry of their own. `.md` and
+  // `.html` are the suffixes of a portal bundle's members (`_results.md`, `_results.html`),
+  // which the upload panel names so a reviewer can tell the files apart (`W55B-INGEST-01`).
+  { name: 'filenames', pattern: /\S*[^\s.]\.(?:pdf|csv|json|png|txt|zip|md|html)\b/gi },
   { name: 'absolute paths', pattern: /(?:^|[\s(])\/[A-Za-z0-9._~\-/[\]]*/g },
   // ISO 8601, which is how every timestamp in the contract is written.
   // ISO 8601, and the `UTC` designator the screens print after the local rendering of it.
@@ -1916,7 +1922,54 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     expect(unexplainedLatin('PC-01', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('2026-09-10T08:00:00.000Z', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('Один PDF за загрузку.', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('Один ZIP-архив за загрузку.', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('окончаниями _blocks.json и _results.md', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('файл с окончанием _results.html', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('0f0e9d8c-7b6a-4948-b726-150413021100', VOCABULARY)).toEqual([]);
+  });
+
+  it('reads every upload rule and every upload refusal as Russian prose (W55B-INGEST-01)', () => {
+    // A refused upload is held in a mutation's state, which no seed reaches, so the screens
+    // above cannot render it. Its sentences are judged here as the form prints them: the
+    // classifier's detail for each constraint the client states, the pre-check messages and
+    // the rules shown before a file is chosen. The 2.5-line failure of this case is a word
+    // like `HTML` or `Markdown` put in a sentence, which the vocabulary does not permit.
+    const rendered: string[] = [...UPLOAD_ENVELOPE_RULES];
+    for (const problem of ['not_zip', 'too_large', 'empty_file'] as const) {
+      rendered.push(precheckProblemMessage(problem));
+    }
+    for (const constraint of [...UPLOAD_CONSTRAINTS_STATED, '1 <= page_count <= 500', 'byte_size <= 262144000']) {
+      const failure = classifyUploadFailure(
+        new ApiError(
+          422,
+          {
+            contract_version: '1.0.0-draft.1',
+            error_code: 'validation_failed',
+            message: 'A caller-safe sentence.',
+            correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+            retryable: false,
+            details: { constraint, field: 'file' },
+          },
+          '0f0e9d8c-7b6a-4948-b726-150413021100',
+        ),
+      );
+      // The trailing `(constraint: ..., field: file)` is the classifiers' own rendering of
+      // the contract's machine values (`classifiers()` in `upload-failure.ts`), printed by
+      // every classifier of this application and pinned by the journey's
+      // `expects_rendered_from_envelope`. It is not prose, so the prose is judged without it.
+      rendered.push(failure.title, failure.detail.replace(/ \(constraint: [^)]*\)$/, ''));
+    }
+    const offences = rendered
+      .map((text) => ({ text, words: unexplainedLatin(text, VOCABULARY) }))
+      .filter((entry) => entry.words.length > 0)
+      .map((entry) => `${JSON.stringify(entry.text.slice(0, 60))}: ${entry.words.join(', ')}`);
+    expect(offences).toEqual([]);
+  });
+
+  it('still reddens a file format the vocabulary does not name', () => {
+    expect(unexplainedLatin('Файл распознанного текста в формате Markdown', VOCABULARY)).toEqual(['Markdown']);
+    expect(unexplainedLatin('Версия в виде HTML', VOCABULARY)).toEqual(['HTML']);
+    expect(unexplainedLatin('архив в формате ZIP', VOCABULARY)).toEqual([]);
   });
 
   it('now reddens the contract words the owner ruled translated', () => {

@@ -1,16 +1,18 @@
 /**
- * Public API of the `document-version` entity: the PC-01 input envelope, the pre-check a
- * browser can honestly make, the classification of every upload failure, and the
+ * Public API of the `document-version` entity: the PC-01 input envelope (a portal bundle),
+ * the pre-check a browser can honestly make, the classification of every upload failure, and the
  * read-only panel for a published version.
  */
 
 export type { ChosenFile, UploadPrecheckProblem } from './model/upload-envelope';
 export {
   PC01_UPLOAD_ENVELOPE,
+  UPLOAD_CONSTRAINTS_STATED,
   UPLOAD_ENVELOPE_RULES,
   formatBytes,
   precheckProblemMessage,
   precheckUploadFile,
+  uploadConstraintSentence,
 } from './model/upload-envelope';
 
 export type { UploadFailure, UploadFailureKind } from './model/upload-failure';

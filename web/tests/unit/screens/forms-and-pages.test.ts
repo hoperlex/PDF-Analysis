@@ -59,10 +59,15 @@ describe('the upload form', () => {
   const form = () =>
     renderWith(newClient(), createElement(UploadDocumentForm, { projectUid: PROJECT_UID }));
 
-  it('accepts one PDF and says so to the file picker itself', () => {
+  it('accepts one ZIP archive and says so to the file picker itself', () => {
     const markup = form();
     expect(markup).toContain('type="file"');
-    expect(markup).toContain('accept="application/pdf"');
+    expect(markup).toContain('accept=".zip,application/zip,application/x-zip-compressed"');
+    expect(markup).not.toContain('application/pdf');
+  });
+
+  it('labels the picker as a portal bundle, not as a PDF', () => {
+    expect(form()).toContain('Комплект портала (ZIP)');
   });
 
   it('cannot be submitted before a file is chosen', () => {

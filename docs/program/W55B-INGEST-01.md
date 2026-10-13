@@ -14,7 +14,7 @@
 Written by a third writer from `1f9daab4`. Section 5 ("For part B") is the work order; this list is the living state, one line per step, updated in
 each commit. A successor continues from `git log` and this list alone.
 
-- B1 the browser upload (envelope, form, panel, failure classifier, the web tests): **in progress**
+- B1 the browser upload (envelope, form, panel, failure classifier, the web tests): code and tests committed, lint, typecheck and the touched Vitest files green; mutation proofs and the full Vitest run still to record
 - B2 the journey inputs and the runbook (`manifest.json`, `refusals.mjs`, `journey.mjs`, `cdp.mjs`, generated inputs, `manual-alpha-check.sh`): next
 - B3 the live journey on the lane stand (command, exit code, sentinel, envelope path): next
 - B4 the final switch (the bare-PDF branch deleted, seven tests rewritten, the probe in reverse, the HTTP refusal test): next

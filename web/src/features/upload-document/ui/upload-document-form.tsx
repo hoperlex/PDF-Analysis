@@ -1,18 +1,18 @@
 'use client';
 
 /**
- * Choose one PDF and upload it.
+ * Choose one portal bundle (a ZIP archive) and upload it.
  *
  * Two refusals live on this screen and they are deliberately different states:
  *
- *   the pre-check refusal   the browser can see the file is not a PDF, is empty, or is
- *                           over 25 MiB. No request is sent, and `UnsupportedState` says
+ *   the pre-check refusal   the browser can see the file is not a ZIP, is empty, or is
+ *                           over 250 MiB. No request is sent, and `UnsupportedState` says
  *                           which rule was broken with no retry offered, because no
  *                           retry of the same file can help.
- *   the server refusal      everything the browser cannot see — encryption, page count,
- *                           a missing text layer — comes back as `validation_failed`
- *                           with the server's own reason, and is rendered as that reason
- *                           rather than as "upload failed".
+ *   the server refusal      everything the browser cannot see — the archive's members,
+ *                           encryption, page count, a missing text layer — comes back
+ *                           as `validation_failed` with the server's own reason, and is
+ *                           rendered as that reason rather than as "upload failed".
  *
  * A checksum failure (`storage_integrity_error`) is a third, separate state, and a
  * dependency outage a fourth. None of them is a spinner, and none is a success.
@@ -81,13 +81,13 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
     >
       <div className="am-form">
         <label htmlFor="upload-file">
-          <strong>PDF</strong>
+          <strong>Комплект портала (ZIP)</strong>
         </label>
         <input
           id="upload-file"
           name="file"
           type="file"
-          accept={PC01_UPLOAD_ENVELOPE.mediaType}
+          accept={PC01_UPLOAD_ENVELOPE.accept}
           onChange={(event) => choose(event.target.files?.[0] ?? null)}
         />
 

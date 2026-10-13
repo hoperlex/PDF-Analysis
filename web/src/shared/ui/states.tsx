@@ -107,8 +107,8 @@ export interface UnsupportedStateProps {
 }
 
 /**
- * The input is outside the PC-01 envelope — encrypted, image-only, over 25 MiB, over 30
- * pages. No retry is offered because no retry will help.
+ * The input is outside the PC-01 envelope — not a portal bundle, encrypted, image-only, over
+ * 250 MiB, over 500 pages. No retry is offered because no retry will help.
  */
 export function UnsupportedState({ title, detail }: UnsupportedStateProps) {
   return <StateBlock tone="warning" title={title} detail={detail} />;
