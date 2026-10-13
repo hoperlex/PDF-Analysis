@@ -249,7 +249,7 @@ def test_a_page_whose_box_disagrees_cuts_no_crop_and_the_stage_still_succeeds(st
     blocks.append(BlockSpec("text", 2, [0.1, 0.05, 0.5, 0.1], ordinal=0))
     width_px, height_px = round(595 * 300 / 72), round(842 * 300 / 72)
     rasters = {
-        2: (round(width_px * 1.01), height_px, 0),     # 1 % wider than the page: a mismatch
+        2: (round(width_px * 1.006), height_px, 0),    # 0.6 % wider than the page: a mismatch
         3: (width_px, height_px, 90),                  # the portal says /Rotate 90; the PDF, 0
         4: (round(width_px * 1.004), height_px, 0),    # 0.4 %: within the tolerance
     }
