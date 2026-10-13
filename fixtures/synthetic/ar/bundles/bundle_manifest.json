@@ -1,0 +1,381 @@
+{
+  "schema": "ar-portal-bundles/1",
+  "synthetic": true,
+  "notice": "Synthetic bundles. Every byte was written by tools/fixtures/build_portal_bundles.py from the synthetic AR corpus; no customer, production or portal-export bytes, and no real organisation, address or person. The crop URLs sit under the reserved .invalid domain and are never to be fetched.",
+  "generated_by": "tools/fixtures/build_portal_bundles.py",
+  "regenerate": "python3 tools/fixtures/build_portal_bundles.py",
+  "verify": "python3 tools/fixtures/build_portal_bundles.py --check",
+  "rules": {
+    "max_entries": 8,
+    "max_total_uncompressed_bytes": 314572800,
+    "max_compression_ratio": 100,
+    "max_upload_bytes": 262144000,
+    "pages": [
+      1,
+      500
+    ]
+  },
+  "refusal_fields": "A refusal of the archive or of a member other than the PDF is answered under field `file`. A refusal of the PDF member keeps the existing envelope's field: `not_encrypted` under `content`, `every_page_has_extractable_text` under `page_text`. If INGEST moves them, this oracle moves with them.",
+  "text_layer_rule": "A page needs a text layer or at least one portal block (of any type). Where a page has no text layer, its text is recognised text and nothing else.",
+  "bundles": [
+    {
+      "file": "ar_baseline.zip",
+      "path": "fixtures/synthetic/ar/bundles/ar_baseline.zip",
+      "size": 92161,
+      "sha256": "14df5af5ef45cbb6a4846cba45cb6cab12c1dda9869137d5da2557c42d12db92",
+      "source_pdf": "fixtures/synthetic/ar/ar_baseline.pdf",
+      "stem": "ar_baseline",
+      "description": "The baseline, complete: 8 TEXT blocks (the text layer), 2 IMAGE blocks (one a polygon), 2 STAMP blocks, the portal HTML and a stamp audit.",
+      "page_count": 8,
+      "members": [
+        {
+          "name": "ar_baseline.pdf",
+          "role": "pdf",
+          "size": 58978,
+          "sha256": "6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f"
+        },
+        {
+          "name": "ar_baseline_blocks.json",
+          "role": "blocks",
+          "size": 6974,
+          "sha256": "33188e53dd3fbe12186b6f1903e79d57af6421f92be8766c9994c09a8e68a9e0"
+        },
+        {
+          "name": "ar_baseline_results.md",
+          "role": "results_md",
+          "size": 12774,
+          "sha256": "f6d16038d371cb3130a1b0df0a096fcfadb1e547c9ee73e6df4eb425166eb0cf"
+        },
+        {
+          "name": "ar_baseline_results.html",
+          "role": "results_html",
+          "size": 8983,
+          "sha256": "9db9c9cf88c23c27a0c141ad19696d7341d237ee7c5698a23e892ff368facea0"
+        },
+        {
+          "name": "ar_baseline_stamp_audit.json",
+          "role": "stamp_audit",
+          "size": 3806,
+          "sha256": "04f207e8b5d622d45589dc1eb5b86aed0aafc8fbb0fa317e85b0e838c6c70373"
+        }
+      ],
+      "blocks": {
+        "text": 8,
+        "image": 2,
+        "stamp": 2
+      },
+      "expected": "accepted",
+      "refusal": null
+    },
+    {
+      "file": "ar_baseline_minimal.zip",
+      "path": "fixtures/synthetic/ar/bundles/ar_baseline_minimal.zip",
+      "size": 72705,
+      "sha256": "312795e3ebf2a48c76f6d5b2e11849127a02c356dedfdad5acf746f2d32ca85b",
+      "source_pdf": "fixtures/synthetic/ar/ar_baseline.pdf",
+      "stem": "ar_baseline_minimal",
+      "description": "The baseline with the three required members only and TEXT blocks only.",
+      "page_count": 8,
+      "members": [
+        {
+          "name": "ar_baseline_minimal.pdf",
+          "role": "pdf",
+          "size": 58978,
+          "sha256": "6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f"
+        },
+        {
+          "name": "ar_baseline_minimal_blocks.json",
+          "role": "blocks",
+          "size": 4947,
+          "sha256": "55fd0275c72f7fd75594024c34a4f9602a3a123f7071be8ca2f80e480e1aa3ff"
+        },
+        {
+          "name": "ar_baseline_minimal_results.md",
+          "role": "results_md",
+          "size": 8352,
+          "sha256": "f754426eba26da4d2f06228b17120051fa7dd5c07c7423b938ef779f11a00af3"
+        }
+      ],
+      "blocks": {
+        "text": 8,
+        "image": 0,
+        "stamp": 0
+      },
+      "expected": "accepted",
+      "refusal": null
+    },
+    {
+      "file": "ar_baseline_ocr_defects.zip",
+      "path": "fixtures/synthetic/ar/bundles/ar_baseline_ocr_defects.zip",
+      "size": 72831,
+      "sha256": "8becc8d1a793110749f060efee5aed50aaefae08014764309085498cfd535c4a",
+      "source_pdf": "fixtures/synthetic/ar/ar_baseline.pdf",
+      "stem": "ar_baseline_ocr_defects",
+      "description": "The baseline's three required members; the recognised text of six pages carries seeded flaws (Latin homoglyphs, a CJK character, doubled list markers, a mixed-script word) and engineering designations that must not be flagged.",
+      "page_count": 8,
+      "members": [
+        {
+          "name": "ar_baseline_ocr_defects.pdf",
+          "role": "pdf",
+          "size": 58978,
+          "sha256": "6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f"
+        },
+        {
+          "name": "ar_baseline_ocr_defects_blocks.json",
+          "role": "blocks",
+          "size": 4955,
+          "sha256": "548887f43b8919083a3c5ca67897afe640f595dc99d5aff2a01e05397b42bd55"
+        },
+        {
+          "name": "ar_baseline_ocr_defects_results.md",
+          "role": "results_md",
+          "size": 8446,
+          "sha256": "1998a31edeb1be3f2323ec910bc61d51483a13a4093a352f298e2ea28f3d32b5"
+        }
+      ],
+      "blocks": {
+        "text": 8,
+        "image": 0,
+        "stamp": 0
+      },
+      "expected": "accepted",
+      "refusal": null,
+      "seeded_text_defects": [
+        {
+          "page": 2,
+          "block_id": "blk_9566f6af40adb018b37296a9ec2d4a01",
+          "kind": "latin_homoglyph",
+          "flaggable": true,
+          "original": "Уровень",
+          "recognised": "Уровeнь"
+        },
+        {
+          "page": 2,
+          "block_id": "blk_9566f6af40adb018b37296a9ec2d4a01",
+          "kind": "latin_homoglyph",
+          "flaggable": true,
+          "original": "ответственности здания",
+          "recognised": "ответственности здaния"
+        },
+        {
+          "page": 3,
+          "block_id": "blk_676702e762c6316f0397b16c5509d3fe",
+          "kind": "cjk_character",
+          "flaggable": true,
+          "original": "каждый",
+          "recognised": "кажд梯й"
+        },
+        {
+          "page": 4,
+          "block_id": "blk_959d744cf4c4e5a99d7313f4ace1fab2",
+          "kind": "doubled_list_marker",
+          "flaggable": true,
+          "original": "3.2. Внутренние",
+          "recognised": "- - 3.2. Внутренние"
+        },
+        {
+          "page": 4,
+          "block_id": "blk_959d744cf4c4e5a99d7313f4ace1fab2",
+          "kind": "doubled_list_marker",
+          "flaggable": true,
+          "original": "3.3. Перегородки",
+          "recognised": "- - 3.3. Перегородки"
+        },
+        {
+          "page": 5,
+          "block_id": "blk_7e246b4bb706b4548f8855baac33a698",
+          "kind": "mixed_script_word",
+          "flaggable": true,
+          "original": "мелкоштучных",
+          "recognised": "мелкоshтучных"
+        },
+        {
+          "page": 6,
+          "block_id": "blk_e1a1c7dbaae2a1115b125ec6243dbbbe",
+          "kind": "engineering_designation",
+          "flaggable": false,
+          "original": "B25",
+          "recognised": "B25"
+        },
+        {
+          "page": 6,
+          "block_id": "blk_e1a1c7dbaae2a1115b125ec6243dbbbe",
+          "kind": "engineering_designation",
+          "flaggable": false,
+          "original": "A500C",
+          "recognised": "A500C"
+        },
+        {
+          "page": 6,
+          "block_id": "blk_e1a1c7dbaae2a1115b125ec6243dbbbe",
+          "kind": "engineering_designation",
+          "flaggable": false,
+          "original": "1.A",
+          "recognised": "1.A"
+        },
+        {
+          "page": 6,
+          "block_id": "blk_e1a1c7dbaae2a1115b125ec6243dbbbe",
+          "kind": "engineering_designation",
+          "flaggable": false,
+          "original": "REI 150",
+          "recognised": "REI 150"
+        }
+      ]
+    },
+    {
+      "file": "image_only.zip",
+      "path": "fixtures/synthetic/ar/bundles/image_only.zip",
+      "size": 247400,
+      "sha256": "bc0c611469d7b168bebf63139896a7d2acd80f8bd92cd8526abfa71540557b4a",
+      "source_pdf": "fixtures/synthetic/ar/negative/image_only.pdf",
+      "stem": "image_only",
+      "description": "The scanned PDF with a block list holding no block: neither page has a text layer or a portal block, so it is refused.",
+      "page_count": 2,
+      "members": [
+        {
+          "name": "image_only.pdf",
+          "role": "pdf",
+          "size": 246242,
+          "sha256": "8917d48af68cffac071fdf75040d181a548d27d952baa05defbca48a2ca94325"
+        },
+        {
+          "name": "image_only_blocks.json",
+          "role": "blocks",
+          "size": 585,
+          "sha256": "36270efb0907c4c4c89a221b5250a635cf846e1dcd9715bbed133a38ac98d691"
+        },
+        {
+          "name": "image_only_results.md",
+          "role": "results_md",
+          "size": 199,
+          "sha256": "6c989a523d97b821ec157ffa7f8df73915872eadd71ee4b83d7827a03b9951fd"
+        }
+      ],
+      "blocks": {
+        "text": 0,
+        "image": 0,
+        "stamp": 0
+      },
+      "expected": "refused",
+      "refusal": {
+        "constraint": "every_page_has_extractable_text",
+        "field": "page_text"
+      }
+    },
+    {
+      "file": "image_only_with_block.zip",
+      "path": "fixtures/synthetic/ar/bundles/image_only_with_block.zip",
+      "size": 249224,
+      "sha256": "6f4568de2ccf34e03cec4078f2bd8ed21144fc68027f9c30cce9b72b01bdad3b",
+      "source_pdf": "fixtures/synthetic/ar/negative/image_only.pdf",
+      "stem": "image_only_with_block",
+      "description": "The scanned PDF with one TEXT block on each of its two pages: the text-layer rule holds and the text is recognised text only.",
+      "page_count": 2,
+      "members": [
+        {
+          "name": "image_only_with_block.pdf",
+          "role": "pdf",
+          "size": 246242,
+          "sha256": "8917d48af68cffac071fdf75040d181a548d27d952baa05defbca48a2ca94325"
+        },
+        {
+          "name": "image_only_with_block_blocks.json",
+          "role": "blocks",
+          "size": 1537,
+          "sha256": "993734585cd5606f232621cdf6ebdf87eb6a2e56a241890e7830ec97f6d44f70"
+        },
+        {
+          "name": "image_only_with_block_results.md",
+          "role": "results_md",
+          "size": 1005,
+          "sha256": "20f3e10a6b6a428d754ae54473c54c3b065a9114bbf89b91e1481635888515a4"
+        }
+      ],
+      "blocks": {
+        "text": 2,
+        "image": 0,
+        "stamp": 0
+      },
+      "expected": "accepted",
+      "refusal": null
+    },
+    {
+      "file": "encrypted.zip",
+      "path": "fixtures/synthetic/ar/bundles/encrypted.zip",
+      "size": 43352,
+      "sha256": "a55a46b111ee7b78de1c7e8751bce02d6696aa2c29400097e16bcafb53567947",
+      "source_pdf": "fixtures/synthetic/ar/negative/encrypted.pdf",
+      "stem": "encrypted",
+      "description": "The password-protected PDF in a well-formed bundle: refused for the PDF.",
+      "page_count": 2,
+      "members": [
+        {
+          "name": "encrypted.pdf",
+          "role": "pdf",
+          "size": 40514,
+          "sha256": "9513362c5d85dec1438406ffd4e77fef6d08bb18f104a5b107afc610dde8faba"
+        },
+        {
+          "name": "encrypted_blocks.json",
+          "role": "blocks",
+          "size": 1513,
+          "sha256": "fa451b2f477883956d28cad6bf6a92e97f1c69216a8e0ae280dabbd74cd12b79"
+        },
+        {
+          "name": "encrypted_results.md",
+          "role": "results_md",
+          "size": 957,
+          "sha256": "5865db943d85ccbbdc9b8b3f43e9bec31c98a60023e85286a97db91ca5fbfa55"
+        }
+      ],
+      "blocks": {
+        "text": 2,
+        "image": 0,
+        "stamp": 0
+      },
+      "expected": "refused",
+      "refusal": {
+        "constraint": "not_encrypted",
+        "field": "content"
+      }
+    },
+    {
+      "file": "pages_31.zip",
+      "path": "fixtures/synthetic/ar/bundles/pages_31.zip",
+      "size": 98175,
+      "sha256": "f9aaf3cd83e33aa493f713765d2acf4d1415ece9e4c0c12918fbc30a8832f513",
+      "source_pdf": "fixtures/synthetic/ar/negative/too_many_pages.pdf",
+      "stem": "pages_31",
+      "description": "Thirty-one pages with a TEXT block each: over the old 30-page limit, inside the 500-page one.",
+      "page_count": 31,
+      "members": [
+        {
+          "name": "pages_31.pdf",
+          "role": "pdf",
+          "size": 66487,
+          "sha256": "acb3c347dbfe4b38efbc7e56f4389e97725b529966defa2a39c21e34f74da12a"
+        },
+        {
+          "name": "pages_31_blocks.json",
+          "role": "blocks",
+          "size": 18098,
+          "sha256": "4f2f1cd4704399c98e55ed3124cae55fbec4a68f3014fe5d348801bd15d74b6e"
+        },
+        {
+          "name": "pages_31_results.md",
+          "role": "results_md",
+          "size": 13228,
+          "sha256": "afd7707b08632192c68d74ff645e1b5d477d78676cf98f2f3e9e3d714aeced61"
+        }
+      ],
+      "blocks": {
+        "text": 31,
+        "image": 0,
+        "stamp": 0
+      },
+      "expected": "accepted",
+      "refusal": null
+    }
+  ]
+}
