@@ -16,7 +16,7 @@ each commit. A successor continues from `git log` and this list alone.
 
 - B1 the browser upload (envelope, form, panel, failure classifier, the web tests): **done** (`0333d58e`, then a wording fix for the gender guard): lint and typecheck exit 0, the full Vitest run (130 files, the query-key guard run alone) green, 18 mutations of the committed files all killed and restored (SHA-256 compared)
 - B2 the journey inputs and the runbook: committed; the manifest uploads `bundles/ar_baseline.zip`, the six refusal cases are bundle-based, `tools/fixtures/build_journey_inputs.py` makes the two generated files (`oversize_bundle.zip` sparse, `bundle_501_pages.zip`), `manual-alpha-check.sh` checks the new files, the conformance test and the guard prover follow (`prove_the_guard_can_fail.py`: 39 mutations, 39 reds). `cdp.mjs` and `write.mjs` needed no change. Still owed: the live drive of the refusals (B3)
-- B3 the live journey on the lane stand (command, exit code, sentinel, envelope path): next
+- B3 the live journey on the lane stand: **in progress**. Lane stack up (PostgreSQL 57430, S3 61030/61031, migrated to `0021_portal_bundles`), API `infra/deploy/serve.py` PID 3474508 (57530/57531, recorded mode), `next start` PID 3482568 (31630, built with `NEXT_PUBLIC_API_BASE_URL=/bff/v1`), `.env` in the worktree (git-ignored). Tear down at the end: stop those two PIDs, `make down`, `docker volume rm auditmanager-w55b-ingest-postgres-data auditmanager-w55b-ingest-s3-data`, `rm -f .env`
 - B4 the final switch (the bare-PDF branch deleted, seven tests rewritten, the probe in reverse, the HTTP refusal test): next
 - B5 the whole-lane hand-back (this file rewritten as the six items), the lane stack and every process torn down: next
 
