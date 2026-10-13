@@ -165,9 +165,10 @@ def test_the_shipped_block_adapter_refuses_both_reads_until_geometry_serves_them
         assert dict(refused.value.detail_fields) == {"dependency": "portal_blocks"}
 
 
-def test_the_document_adapter_reads_the_handle_it_is_given_and_hands_the_service_bytes() -> None:
-    """Today's behaviour under the new signature: the port takes a file handle, the service
-    still takes bytes, and the one place that reads the handle whole is this adapter."""
+def test_the_document_adapter_hands_the_service_the_handle_it_was_given_unread() -> None:
+    """`W55B-STREAM-01` retired the whole-body read `W55B-SEAL-01` left in this adapter: the
+    port takes a file handle and the service takes the same handle, positioned where it was
+    given -- nothing between the router and the envelope reads the upload."""
     seen: dict[str, Any] = {}
 
     class Service:
@@ -176,10 +177,10 @@ def test_the_document_adapter_reads_the_handle_it_is_given_and_hands_the_service
             raise RuntimeError("stop after the call; the outcome is not under test")
 
     adapter = DocumentAdapter(Service())
-    payload = b"PK\x03\x04 a bundle"
+    handle = io.BytesIO(b"PK\x03\x04 a bundle")
     with pytest.raises(RuntimeError):
         adapter.upload_document(
-            project_uid="prj_01ARZ3NDEKTSV4RRFFQ69G5FAV", content=io.BytesIO(payload),
+            project_uid="prj_01ARZ3NDEKTSV4RRFFQ69G5FAV", content=handle,
             source_filename="bundle.zip", display_title=None, idempotency_key="k" * 8,
         )
-    assert seen["content"] == payload and isinstance(seen["content"], bytes)
+    assert seen["content"] is handle and handle.tell() == 0
