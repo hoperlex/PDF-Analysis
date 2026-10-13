@@ -136,6 +136,14 @@ delegates the choice to a session that cannot see the other lanes.**
 | `57160`, `60760/60761` | `gate-w54-embed` — `W54-EMBED-01`, window tests | 2026-10-12 | after EMBED handback |
 | `57170`, `60770/60771` | `gate-w54-bundle` — `W54-BUNDLE-01`, window tests | 2026-10-12 | after BUNDLE handback |
 | `57190` | `promotion` — the persistent local promotion database (`infra/promotion/compose.yml`, `PROMOTION_POSTGRES_PORT`) | 2026-10-12 | kept until W55a's import is verified |
+| `57400`, `61000/61001` | `gate-w55b-int` — W55b integrator, light acceptance and the final gate | 2026-10-13 | after W55B-INT-CLOSE |
+| `57410`, `61010/61011` | `gate-w55b-seal` — `W55B-SEAL-01` | 2026-10-13 | after SEAL handback |
+| `57420`, `61020/61021` | `gate-w55b-stream` — `W55B-STREAM-01` | 2026-10-13 | after STREAM handback |
+| `57430`, `61030/61031`; API `57530`, Next `31630` | `gate-w55b-ingest` — `W55B-INGEST-01` with the journey | 2026-10-13 | after INGEST handback |
+| `57440`, `61040/61041` | `gate-w55b-budget` — `W55B-BUDGET-01` | 2026-10-13 | after BUDGET handback |
+| `57450`, `61050/61051` | `gate-w55b-recognised` — `W55B-RECOGNISED-01` | 2026-10-13 | after RECOGNISED handback |
+| `57460`, `61060/61061` | `gate-w55b-geometry` — `W55B-GEOMETRY-01` | 2026-10-13 | after GEOMETRY handback |
+| API `57570`, Next `31670` | `gate-w55b-web` — `W55B-WEB-BLOCKS` journey | 2026-10-13 | after WEB-BLOCKS handback |
 
 **Reserved by convention, so a brief can allocate without asking:** `55470–55490` and
 `59100–59120` are wave 34's until it merges. New lanes should take `561xx` with S3 at `597xx`,

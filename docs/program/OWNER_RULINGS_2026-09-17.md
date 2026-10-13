@@ -1520,3 +1520,15 @@ apply while the stand holds only generated test data (`R-109`), which is the cas
 **A-7** is settled by the adopted W56 plan: «Настройки анализа» lands in W56b, not W55. The
 D-4.1 audience proof is due before P4. The stand holds test data only (`R-109`), so it is
 recorded at `W55A-STAND-IMPORT-01`.
+
+## 3.32 — `R-116` to `R-119`, W55b (`W55B-RULE-01`)
+
+Recorded under the chain approval (`R-100`, K-13) from `W55-PLAN.md` §B4, with G-2, G-4, G-7,
+G-10 and G-11 of `ROADMAP-TO-BETA.md` §10.13 and K-7 of §10.16.
+
+| Ruling | Plan label | Substance |
+| --- | --- | --- |
+| `R-116` | `R-Y5` | Uploads are portal bundles only. The member set is fixed; the stamp audit is stored; the portal HTML is kept as a digest only. Limits are 500 pages and 250 MiB. OCR is always marked (G-2, G-4, G-10, with `R-103`). |
+| `R-117` | `R-Y6` | Portal descriptions are shown, marked, and never used in analysis (G-7). |
+| `R-118` | `R-Y7` | Until chunked analysis lands, a start or re-audit over a version above the analysis input budget is refused up front (G-11). |
+| `R-119` | `R-Y8` | OD-04 is flipped as `W55-PLAN.md` §B4 describes. Real client portal bundles may be uploaded before the beta backup wave without conditions; the owner accepts the risk (K-7, `R-94`). From the first real upload, `R-110`'s copy rule applies in full. |
