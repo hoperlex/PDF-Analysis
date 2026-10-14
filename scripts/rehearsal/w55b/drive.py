@@ -477,6 +477,23 @@ def _run_rows(run_id: str) -> dict:
             "stage_results": {stage: status for stage, status in stages}}
 
 
+def _alive(pid: int | None) -> bool:
+    """A process that exists and is not a zombie; a child of ours is reaped once it has died."""
+    if pid is None:
+        return False
+    try:
+        if os.waitpid(pid, os.WNOHANG) != (0, 0):
+            return False
+    except ChildProcessError:
+        pass
+    try:
+        state = next(line for line in Path(f"/proc/{pid}/status").read_text().splitlines()
+                     if line.startswith("State:"))
+    except (OSError, StopIteration):
+        return False
+    return "Z" not in state.split()[1]
+
+
 def recovery(phase: str, run_id: str, restarts: int, window: int) -> int:
     """Restart the API whenever the cap has killed it, up to ``restarts`` times, and record what the
     product's own recovery does with the run it left behind. Nothing is reconciled by hand."""
@@ -488,7 +505,7 @@ def recovery(phase: str, run_id: str, restarts: int, window: int) -> int:
     pid = None
     last = None
     while time.time() - started < window:
-        alive = pid is not None and Path(f"/proc/{pid}").exists()
+        alive = _alive(pid)
         if not alive:
             if pid is not None:
                 events.append({"t": round(time.time() - started, 1), "event": "api killed", "pid": pid,
@@ -505,7 +522,7 @@ def recovery(phase: str, run_id: str, restarts: int, window: int) -> int:
         snapshot = json.dumps(rows, sort_keys=True)
         if snapshot != last:
             events.append({"t": round(time.time() - started, 1), "event": "rows", **rows,
-                           "rss_kib": common.vm_kib(pid, "VmRSS") if Path(f"/proc/{pid}").exists() else None})
+                           "rss_kib": common.vm_kib(pid, "VmRSS") if _alive(pid) else None})
             last = snapshot
         if rows["run"] in TERMINAL:
             break
