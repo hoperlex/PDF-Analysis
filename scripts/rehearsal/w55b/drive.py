@@ -419,12 +419,21 @@ def run(phase: str, version_uid: str, timeout: int, redact: bool) -> int:
 # ------------------------------------------------------------------ the portal blocks over the API
 
 
+def _spread(values: list[int]) -> dict:
+    if not values:
+        return {}
+    ordered = sorted(values)
+    return {"n": len(ordered), "min": ordered[0], "p25": ordered[len(ordered) // 4],
+            "median": ordered[len(ordered) // 2], "p75": ordered[(3 * len(ordered)) // 4], "max": ordered[-1]}
+
+
 def blocks(phase: str, version_uid: str, redact: bool, limit: int) -> int:
     client = api()
     cursor, pages, seen, times = None, 0, [], []
     by_type: dict[str, int] = {}
     crops = geometry_ok = 0
     block_count = None
+    pixels: list[int] = []
     while True:
         path = f"/versions/{version_uid}/portal-blocks?limit={limit}" + (f"&cursor={cursor}" if cursor else "")
         started = time.monotonic()
@@ -438,6 +447,8 @@ def blocks(phase: str, version_uid: str, redact: bool, limit: int) -> int:
             seen.append(item["portal_block_id"])
             by_type[item["block_type"]] = by_type.get(item["block_type"], 0) + 1
             crops += "crop" in item
+            if "crop" in item:
+                pixels.append(item["crop"]["width_px"] * item["crop"]["height_px"])
             geometry_ok += item.get("geometry") == "ok"
         cursor = body["page"]["next_cursor"]
         if cursor is None:
@@ -448,6 +459,8 @@ def blocks(phase: str, version_uid: str, redact: bool, limit: int) -> int:
         "status": body["status"], "block_count": block_count, "listed": len(seen), "unique": unique,
         "repeated": len(seen) - unique, "pages": pages, "by_type": by_type, "with_crop": crops,
         "geometry_ok": geometry_ok, "page_seconds": times,
+        "crop_pixels": _spread(pixels),
+        "crops_at_the_pixel_cap": sum(1 for n in pixels if n > 3_960_000),
     })
     print(f"{phase}: {len(seen)} listed of {block_count}, {unique} unique, {pages} pages, by type {by_type}, "
           f"crops {crops}, page times {min(times)}..{max(times)} s")
