@@ -605,9 +605,9 @@ def cmd_battery_first(_args: argparse.Namespace) -> int:
     if diff.returncode:
         print(f"GATE NOT STARTED: cannot diff {base}..HEAD: {diff.stderr.strip()}", file=sys.stderr)
         return 2
-    paths = [path for path in diff.stdout.split("\0") if path]
-    suites = first_suites(paths, ROOT, load_context_suites())
-    print(f"GATE: {len(paths)} path(s) changed since {base[:12]}; first suites: {' '.join(suites) or 'none'}",
+    changed = [path for path in diff.stdout.split("\0") if path]
+    suites = first_suites(changed, ROOT, load_context_suites())
+    print(f"GATE: {len(changed)} path(s) changed since {base[:12]}; first suites: {' '.join(suites) or 'none'}",
           file=sys.stderr)
     for suite in suites:
         print(suite)
