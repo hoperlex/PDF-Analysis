@@ -31,16 +31,19 @@ next-wave work while W55b acceptance runs authorises this earlier document-only 
 
 ## Enumerator ownership
 
-- enumerated_set_changed: yes (owner ruling numbers)
+- enumerated_set_changed: yes
 - enumerator_path: `docs/program/OWNER_RULINGS_2026-09-17.md`
 - enumerator_owner: `W56A-RULE-01`
 - totality_query: `rg -o 'R-[0-9]+' docs/program/OWNER_RULINGS_2026-09-17.md | sort -Vu | tail -12`, plus a scan for the selected numbers in the plan.
 
 ## Captured premise evidence
 
+- premise: R-128 is the last owner ruling on the W55b candidate, making R-129
+  the next free number on that frozen base.
+
 ### P-01 — the base and last ruling
 - captured_at: 2026-10-14
-- command: `git rev-parse HEAD` and `git show 8c5a109bd98302b64fb47b364d4c639ff63c0eda:docs/program/OWNER_RULINGS_2026-09-17.md | rg -n '^## 3\.3[0-9]|^### .*R-128' | tail -3`
+- command: `git rev-parse HEAD; git show 8c5a109bd98302b64fb47b364d4c639ff63c0eda:docs/program/OWNER_RULINGS_2026-09-17.md | rg -n '^## 3\.3[0-9]|^### .*R-128' | tail -3`
 - captured_output:
   ```text
   8c5a109bd98302b64fb47b364d4c639ff63c0eda
