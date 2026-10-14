@@ -7,6 +7,7 @@
     python scripts/rehearsal/w55b/drive.py run --phase NAME --version-uid V [--timeout S]
     python scripts/rehearsal/w55b/drive.py blocks --phase NAME --version-uid V [--redact]
     python scripts/rehearsal/w55b/drive.py fetch --version-uid V --into DIR      # the PDF and every crop
+    python scripts/rehearsal/w55b/drive.py scope --phase NAME     # the API scope's memory.peak so far
 
 Secrets come from the environment only: ``REHEARSAL_LOGIN`` and ``REHEARSAL_PASSWORD`` (the account
 ``account`` provisions through the API itself, starting from the migration's seeded ``admin``),
@@ -519,6 +520,8 @@ def main(argv: list[str] | None = None) -> int:
     listing.add_argument("--version-uid", required=True)
     listing.add_argument("--limit", type=int, default=100)
     listing.add_argument("--redact", action="store_true")
+    scope = sub.add_parser("scope")
+    scope.add_argument("--phase", required=True)
     get = sub.add_parser("fetch")
     get.add_argument("--version-uid", required=True)
     get.add_argument("--into", type=Path, required=True)
@@ -536,6 +539,12 @@ def main(argv: list[str] | None = None) -> int:
         return blocks(args.phase, args.version_uid, args.redact, args.limit)
     if args.command == "fetch":
         return fetch(args.version_uid, args.into)
+    if args.command == "scope":
+        pid = common.own_api_pid()
+        common.write_figures(args.phase, {"api_pid": pid, "vmrss_kib": common.vm_kib(pid, "VmRSS"),
+                                          "vmhwm_kib": common.vm_kib(pid, "VmHWM"),
+                                          "scope": common.cgroup_memory(pid)})
+        return 0
     return 2
 
 
