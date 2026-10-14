@@ -630,60 +630,53 @@ def test_an_oversize_upload_is_refused_after_reading_its_header_and_nothing_else
     assert handle.bytes_read == 5, f"{handle.bytes_read} bytes were read before the size refusal"
 
 
-def test_pdfium_is_only_ever_called_with_its_lock_held(tmp_path: Path) -> None:
-    """PDFium is not thread-safe and the route runs in a thread pool.
+def test_the_envelope_never_takes_the_pdfium_lock(tmp_path: Path) -> None:
+    """PDFium is not thread-safe, and this process's one lock serialises every call into it.
 
-    Only PDFium calls ``readinto`` on the handle (the envelope's own reads are ``read``), so
-    the lock state at each ``readinto`` is the lock state of a call into PDFium: it must be
-    held every time, and PDFium must have asked at least once or the test proves nothing.
-    """
+    Since `W55B-FIX` (X-1) the envelope makes none: the PDF is read by a child process
+    (``auditmanager.ingest.pdf_reader``), so an upload never holds the lock a run's page
+    renderer needs -- before, it held it for the whole document. Shown by holding the lock
+    here, for the whole probe: a probe that took it would wait for ever, and this one answers
+    with the report it gives when nothing holds it."""
     path = _file_of(NAMED["ar_baseline.pdf"], tmp_path)
-    seen: list[tuple[str, bool]] = []
-    with path.open("rb") as inner:
-        handle = RecordingHandle(
-            inner, on_read=lambda kind: seen.append((kind, new_envelope.PDFIUM_LOCK.locked()))
-        )
-        new_probe(handle, source_filename="a.pdf")  # type: ignore[arg-type]
-    pdfium = [locked for kind, locked in seen if kind == "readinto"]
-    assert pdfium, "PDFium never read through the handle"
-    assert all(pdfium), f"PDFium read a block without holding the lock: {seen}"
-    assert not any(locked for kind, locked in seen if kind == "read"), (
-        "the magic-byte and digest reads took the PDFium lock, which only PDFium needs"
-    )
-
-
-def test_two_probes_in_two_threads_do_not_overlap_in_pdfium(tmp_path: Path) -> None:
-    """The lock serialises: while one thread's blocks are being read for PDFium, no other
-    thread's are -- judged from the reads themselves, not from the lock's state, so a probe
-    that stopped taking the lock would be seen."""
-    path = _file_of(NAMED["ar_baseline.pdf"], tmp_path)
-    active = 0
-    overlapped = threading.Event()
-    guard = threading.Lock()
-
-    def on_read(kind: str) -> None:
-        nonlocal active
-        if kind != "readinto":  # only PDFium reads with readinto
-            return
-        with guard:
-            active += 1
-            if active > 1:
-                overlapped.set()
-        threading.Event().wait(0.002)
-        with guard:
-            active -= 1
+    with path.open("rb") as handle:
+        expected = new_probe(handle, source_filename="a.pdf")
+    answered: list[AdmissionReport] = []
 
     def work() -> None:
-        for _ in range(8):
+        with path.open("rb") as handle:
+            answered.append(new_probe(handle, source_filename="a.pdf"))
+
+    with new_envelope.PDFIUM_LOCK:
+        thread = threading.Thread(target=work)
+        thread.start()
+        thread.join(timeout=120)
+        assert not thread.is_alive(), "the probe waited for the PDFium lock"
+    assert answered == [expected]
+
+
+def test_probes_in_four_threads_answer_as_one_does(tmp_path: Path) -> None:
+    """Two uploads may be admitted at once, so probes run side by side; each reads its PDF in a
+    process of its own and must give the report a probe alone gives."""
+    path = _file_of(NAMED["ar_baseline.pdf"], tmp_path)
+    with path.open("rb") as handle:
+        expected = new_probe(handle, source_filename="a.pdf")
+    reports: list[AdmissionReport] = []
+    guard = threading.Lock()
+
+    def work() -> None:
+        for _ in range(4):
             with path.open("rb") as inner:
-                new_probe(RecordingHandle(inner, on_read=on_read), source_filename="a.pdf")  # type: ignore[arg-type]
+                report = new_probe(RecordingHandle(inner), source_filename="a.pdf")  # type: ignore[arg-type]
+            with guard:
+                reports.append(report)
 
     threads = [threading.Thread(target=work) for _ in range(4)]
     for thread in threads:
         thread.start()
     for thread in threads:
         thread.join(timeout=120)
-    assert not overlapped.is_set(), "two threads were inside PDFium at once"
+    assert reports == [expected] * 16
 
 
 def test_a_failed_load_never_borrows_the_last_error_of_an_earlier_one() -> None:

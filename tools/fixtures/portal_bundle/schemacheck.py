@@ -61,11 +61,26 @@ def _is_type(value: object, name: str) -> bool:
     if name == "boolean":
         return isinstance(value, bool)
     if name == "integer":
-        return (isinstance(value, int) and not isinstance(value, bool)) or (
-            isinstance(value, float) and value.is_integer())
+        # A JSON integer as written: `3`, never `3.0` (`W55B-FIX`, X-7). JSON Schema's
+        # `integer` also admits a number with a zero fraction; the product's ingest and both
+        # run stages do not, and this reference judges as the product does. No JSON Schema
+        # keyword can say this, so it is a rule of the reader, stated here and in
+        # `auditmanager.ingest.bundle_envelope._is_integer`.
+        return isinstance(value, int) and not isinstance(value, bool)
     if name == "number":
         return isinstance(value, (int, float)) and not isinstance(value, bool)
     raise SchemaSubsetError(f"unknown type name {name!r}")
+
+
+def _equal(value: object, option: object) -> bool:
+    """`const`/`enum` equality as the product reads it: a boolean is never a number, and an
+    integer option is met by a JSON integer only (`W55B-FIX`, X-7: `rotation: 0.0` and
+    `schema_version: 1.0` are refused like `page_index: 0.0`)."""
+    if isinstance(value, bool) != isinstance(option, bool):
+        return False
+    if isinstance(option, int) and not isinstance(option, bool) and isinstance(value, float):
+        return False
+    return value == option
 
 
 def check(value: object, schema: dict, path: str = "$") -> list[str]:
@@ -75,13 +90,9 @@ def check(value: object, schema: dict, path: str = "$") -> list[str]:
         names = schema["type"] if isinstance(schema["type"], list) else [schema["type"]]
         if not any(_is_type(value, n) for n in names):
             return [f"{path}: expected {'|'.join(names)}, found {type(value).__name__}"]
-    if "const" in schema and (value != schema["const"] or isinstance(value, bool)
-                              != isinstance(schema["const"], bool)):
+    if "const" in schema and not _equal(value, schema["const"]):
         errors.append(f"{path}: must equal {schema['const']!r}")
-    if "enum" in schema and not any(
-        value == option and isinstance(value, bool) == isinstance(option, bool)
-        for option in schema["enum"]
-    ):
+    if "enum" in schema and not any(_equal(value, option) for option in schema["enum"]):
         errors.append(f"{path}: not one of {schema['enum']!r}")
     if isinstance(value, str) and "pattern" in schema:
         if re.search(schema["pattern"], value) is None:

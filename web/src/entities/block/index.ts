@@ -5,7 +5,6 @@
  */
 
 export { PORTAL_BLOCK_PAGE_LIMIT, portalBlocksQueryOptions, usePortalBlocks } from './api/use-portal-blocks';
-export { portalBlockCropUrl } from './api/crop-url';
 export { PORTAL_BLOCK_LIST_ROLE, versionHasPortalBundle } from './model/bundle';
 export { loadedPortalBlocks, nextPortalCursor, sectionsByPage } from './model/pages';
 export type { PortalPageSection } from './model/pages';

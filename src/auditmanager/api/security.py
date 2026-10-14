@@ -171,7 +171,7 @@ import json
 import time
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Annotated, Any, Final, Mapping, Protocol, runtime_checkable
+from typing import Annotated, Any, Callable, Final, Mapping, Protocol, runtime_checkable
 
 from fastapi import Depends, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -793,6 +793,27 @@ def build_signer(environ: Mapping[str, str]) -> TokenSigner | None:
         return TokenSigner(derive_signing_key(secret))
     except ValueError:
         return None
+
+
+def build_credential_precheck(environ: Mapping[str, str]) -> Callable[[str], bool]:
+    """The seam's cheap half, for the transport in front of the seam (`W55B-FIX`, X-3).
+
+    True for a credential this environment's key signed, in this module's format, that has
+    not expired -- :meth:`TokenSigner.verify`, which reads no database. It says nothing about
+    the account: the standing, the roles and the credential generation are the seam's, and
+    the seam still decides every request this lets through. With no deployment secret it is
+    false for everything, as the seam is.
+
+    ``BodyCapMiddleware`` uses it to refuse an upload before its body is read: FastAPI parses
+    a form before it solves the seam, so without it a caller with no credential had 251 MiB
+    read and an upload slot held before the ``401`` (`W55B-QA-01` QA-1).
+    """
+    signer = build_signer(environ)
+
+    def signed_and_unexpired(presented: str) -> bool:
+        return signer is not None and signer.verify(presented) is not None
+
+    return signed_and_unexpired
 
 
 def _operation_of(request: Request) -> str | None:

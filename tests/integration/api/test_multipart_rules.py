@@ -543,6 +543,13 @@ UPLOAD_PATH = "/projects/prj_01ARZ3NDEKTSV4RRFFQ69G5FAV/documents"
 OTHER_PATH = "/projects"
 MULTIPART = f"multipart/form-data; boundary={BOUNDARY}".encode()
 JSON_TYPE = b"application/json"
+#: The credential the stand-in check of these middleware tests accepts (`W55B-FIX`, X-3: the
+#: upload route needs one before its slot). The real check is ``build_credential_precheck``.
+GOOD_TOKEN = "good-credential"
+
+
+def _accepts_good(token: str) -> bool:
+    return token == GOOD_TOKEN
 
 
 @dataclass
@@ -569,6 +576,7 @@ async def drive(
     declared: int | None = None,
     chunks: tuple[bytes, ...] = (b"x",),
     until_disconnect: asyncio.Event | None = None,
+    authorization: bytes | None = b"Bearer " + GOOD_TOKEN.encode(),
 ) -> Exchange:
     """Send one request into an ASGI app and keep both sides of the conversation.
 
@@ -583,6 +591,8 @@ async def drive(
         headers.append((b"content-type", content_type))
     if declared is not None:
         headers.append((b"content-length", str(declared).encode()))
+    if authorization is not None:
+        headers.append((b"authorization", authorization))
 
     async def receive() -> dict[str, Any]:
         exchange.receives += 1
@@ -648,6 +658,7 @@ def stack(inner: Any, **options: Any) -> Any:
     from auditmanager.api.routers.correlation import CorrelationMiddleware
     from auditmanager.api.routers.multipart import BodyCapMiddleware
 
+    options.setdefault("verify_credential", _accepts_good)
     gate = BodyCapMiddleware(inner, **options)
     return CorrelationMiddleware(gate), gate
 
@@ -838,11 +849,16 @@ class TestTheUploadGate:
 
         wired = [m for m in create_documentation_app().user_middleware if m.cls is BodyCapMiddleware]
         assert len(wired) == 1
-        assert wired[0].kwargs == {
+        kwargs = dict(wired[0].kwargs)
+        verify = kwargs.pop("verify_credential")
+        assert kwargs == {
             "limit": TRANSPORT_LIMIT,
             "upload_limit": UPLOAD_LIMIT,
             "max_concurrent_uploads": 2,
         }
+        # `W55B-FIX` (X-3): the documentation application has no deployment secret, so its
+        # front door admits nobody -- the seam's own rule.
+        assert callable(verify) and verify("am2.anything.at-all") is False
 
 
 class ConsumingApp:
@@ -954,7 +970,9 @@ class TestEveryRouteHasItsOwnCap:
             return {"bytes": len(file.file.read())}
 
         install_exception_handlers(app)
-        app.add_middleware(BodyCapMiddleware, limit=1000, upload_limit=5000)
+        app.add_middleware(
+            BodyCapMiddleware, limit=1000, upload_limit=5000, verify_credential=_accepts_good
+        )
         app.add_middleware(CorrelationMiddleware)
 
         def chunked(size: int) -> Any:
@@ -964,7 +982,7 @@ class TestEveryRouteHasItsOwnCap:
             yield f"\r\n--{BOUNDARY}--\r\n".encode()
 
         client = TestClient(app, raise_server_exceptions=False)
-        headers = {"Content-Type": CONTENT_TYPE}
+        headers = {"Content-Type": CONTENT_TYPE, "Authorization": f"Bearer {GOOD_TOKEN}"}
         within = client.post(UPLOAD_PATH, headers=headers, content=chunked(4000))
         over = client.post(UPLOAD_PATH, headers=headers, content=chunked(6000))
 
@@ -1020,3 +1038,184 @@ class TestTheRealApplicationKeepsEachCap:
         body = json.loads(response.content)
         assert body.get("details", {}).get("constraint") != "max_bytes", body
         assert response.status_code == 401, body
+
+
+class TestTheUploadRouteHasAFrontDoor:
+    """`W55B-FIX` (X-3; `W55B-QA-01` QA-1). FastAPI parses a form before it solves the seam, so
+    a caller with no credential had its body read and spooled, holding an upload slot, before
+    the ``401``; two such callers kept every upload busy. The upload route now needs a bearer
+    credential the deployment signed (the seam's cheap half) and a multipart body, both judged
+    before the slot and before ``receive`` is touched."""
+
+    @pytest.mark.parametrize(
+        ("label", "authorization"),
+        [
+            ("no credential", None),
+            ("a credential the check refuses", b"Bearer forged"),
+            ("another scheme", b"Basic " + GOOD_TOKEN.encode()),
+            ("a bearer with nothing after it", b"Bearer "),
+        ],
+    )
+    def test_an_upload_without_a_signed_credential_is_refused_before_its_slot_and_its_body(
+        self, label: str, authorization: bytes | None
+    ) -> None:
+        async def scenario() -> None:
+            inner = HoldingApp()
+            app, gate = stack(inner)
+            answer = await drive(app, authorization=authorization, chunks=(b"y" * 1000,))
+            assert answer.status == 401, (label, answer.status)
+            assert answer.envelope["error_code"] == "authentication_required"
+            assert answer.receives == 0, f"{label}: the body was touched"
+            assert inner.entered == 0 and gate.gate.in_flight == 0
+
+        run(scenario())
+
+    def test_strangers_cannot_hold_the_two_slots(self) -> None:
+        async def scenario() -> None:
+            inner = HoldingApp()
+            app, gate = stack(inner)
+            strangers = [await drive(app, authorization=None) for _ in range(4)]
+            assert [s.status for s in strangers] == [401] * 4
+            held = [asyncio.create_task(drive(app)) for _ in range(2)]
+            await until(lambda: inner.entered == 2, "two signed uploads inside the application")
+            assert gate.gate.in_flight == 2
+            inner.release.set()
+            assert [(await h).status for h in held] == [204, 204]
+
+        run(scenario())
+
+    @pytest.mark.parametrize(
+        "content_type",
+        [
+            JSON_TYPE,
+            b"application/x-www-form-urlencoded",
+            b"text/plain; boundary=x",
+            b"text/plain; x=multipart/form-data; boundary=y",
+        ],
+    )
+    def test_a_signed_upload_that_is_not_multipart_takes_no_slot_and_none_of_its_body_is_read(
+        self, content_type: bytes
+    ) -> None:
+        """The application answers it from its headers -- the seam by the registers
+        (`test_role_register`), then the strict pass's ``media_type`` -- over an empty body;
+        the caller's bytes are never pulled and no slot is taken."""
+
+        async def scenario() -> None:
+            inner = ConsumingApp()
+            app, gate = stack(inner)
+            held = HoldingApp()
+            holders, holding_gate = stack(held)
+            answer = await drive(app, content_type=content_type, chunks=(b"y" * 1000,))
+            assert answer.status == 204
+            assert answer.receives == 0 and inner.read == 0 and gate.gate.in_flight == 0
+            # And with both slots held, it still reaches the application rather than being
+            # refused as busy, and it takes no third slot.
+            waiting = [asyncio.create_task(drive(holders)) for _ in range(2)]
+            await until(lambda: held.entered == 2, "two signed uploads holding the slots")
+            other = asyncio.create_task(drive(holders, content_type=content_type))
+            await until(lambda: held.entered == 3, "the non-multipart upload inside the application")
+            assert holding_gate.gate.in_flight == 2
+            held.release.set()
+            assert (await other).status == 204
+            await asyncio.gather(*waiting)
+
+        run(scenario())
+
+    def test_the_real_application_answers_a_signed_json_upload_with_its_own_rules(self) -> None:
+        """Through the documentation application: an unsigned JSON upload is the door's
+        ``401``; a JSON upload with no credential at all likewise; the strict pass's
+        ``media_type`` and the registers' answers are covered on the served application by
+        `test_multipart_rules` (driver) and `test_role_register`."""
+        from auditmanager.api.app import create_documentation_app
+
+        client = TestClient(create_documentation_app(), raise_server_exceptions=False)
+        answer = client.post(UPLOAD_PATH, headers={"Content-Type": "application/json"}, content=b"{}")
+        assert answer.status_code == 401
+
+    def test_no_check_admits_nobody(self) -> None:
+        async def scenario() -> None:
+            inner = HoldingApp()
+            app, _ = stack(inner, verify_credential=None)
+            assert (await drive(app)).status == 401
+            assert inner.entered == 0
+
+        run(scenario())
+
+    def test_every_other_route_is_left_to_the_seam(self) -> None:
+        async def scenario() -> None:
+            app, _ = stack(ConsumingApp())
+            for kwargs in ({"path": OTHER_PATH}, {"method": "GET", "content_type": None}):
+                answer = await drive(app, authorization=None, **kwargs)
+                assert answer.status == 204, kwargs
+
+        run(scenario())
+
+    def test_the_real_check_is_the_seams_signature_and_expiry(self) -> None:
+        from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_credential_precheck, build_signer
+
+        environ = {API_TOKEN_VARIABLE: "w55b-fix-deployment-secret"}
+        check = build_credential_precheck(environ)
+        subject = Subject(user_uid="usr_01M2545JSD15ETSNNV904X991S", login="a@b.invalid", token_epoch=1, display_label="A")
+        signer = build_signer(environ)
+        other = build_signer({API_TOKEN_VARIABLE: "another-deployment"})
+        assert signer is not None and other is not None
+        assert check(signer.issue(subject, is_default_credential=False).token) is True
+        assert check(other.issue(subject, is_default_credential=False).token) is False
+        assert check(signer.issue(subject, is_default_credential=False, now=0).token) is False  # expired
+        assert check("am2.not.signed") is False
+        assert build_credential_precheck({})("anything") is False
+
+
+class TestTheUploadFormIsParsedUnderSmallBounds:
+    """`W55B-FIX` (X-3): Starlette's defaults are a thousand files and a thousand text fields of
+    a MiB each. ``uploadDocument``'s route reads two files, four text parts and 16 KiB a text
+    part; past them the parser's refusal is ``readable_multipart``."""
+
+    @staticmethod
+    def client() -> Any:
+        from fastapi import APIRouter, Form
+
+        from auditmanager.api.routers import install_exception_handlers
+        from auditmanager.api.routers.correlation import CorrelationMiddleware
+        from auditmanager.api.routers.multipart import (
+            UPLOAD_FORM_MAX_FIELDS,
+            UPLOAD_FORM_MAX_FILES,
+            UPLOAD_FORM_MAX_PART_BYTES,
+            UploadRoute,
+        )
+
+        assert (UPLOAD_FORM_MAX_FILES, UPLOAD_FORM_MAX_FIELDS, UPLOAD_FORM_MAX_PART_BYTES) == (2, 4, 16384)
+        app = FastAPI()
+        router = APIRouter()
+
+        async def endpoint(
+            project_uid: str, file: UploadFile = File(...), title: str = Form(None)
+        ) -> dict[str, int]:
+            return {"ok": 1}
+
+        router.add_api_route(UPLOAD_PATH.replace("prj_01ARZ3NDEKTSV4RRFFQ69G5FAV", "{project_uid}"),
+                             endpoint, methods=["POST"], route_class_override=UploadRoute)
+        app.include_router(router)
+        install_exception_handlers(app)
+        app.add_middleware(CorrelationMiddleware)
+        return TestClient(app, raise_server_exceptions=False)
+
+    @pytest.mark.parametrize(
+        ("label", "parts", "status"),
+        [
+            ("a file and a title", ((FILE_PART, PDF), ('form-data; name="title"', b"T")), 200),
+            ("two files", ((FILE_PART, PDF), ('form-data; name="other"; filename="b.pdf"', PDF)), 200),
+            ("three files", tuple((f'form-data; name="f{i}"; filename="b.pdf"', PDF) for i in range(3)), 422),
+            ("four text parts", ((FILE_PART, PDF), *((f'form-data; name="t{i}"', b"x") for i in range(4))), 200),
+            ("five text parts", ((FILE_PART, PDF), *((f'form-data; name="t{i}"', b"x") for i in range(5))), 422),
+            ("a 16 KiB text part", ((FILE_PART, PDF), ('form-data; name="title"', b"x" * 16384)), 200),
+            ("a text part a byte over", ((FILE_PART, PDF), ('form-data; name="title"', b"x" * 16385)), 422),
+        ],
+    )
+    def test_the_bounds_hold_at_their_value_and_refuse_one_more(
+        self, label: str, parts: tuple[tuple[str, bytes], ...], status: int
+    ) -> None:
+        response = self.client().post(UPLOAD_PATH, headers={"Content-Type": CONTENT_TYPE}, content=_body(*parts))
+        assert response.status_code == status, (label, response.text)
+        if status == 422:
+            assert json.loads(response.content)["details"] == {"field": "body", "constraint": "readable_multipart"}

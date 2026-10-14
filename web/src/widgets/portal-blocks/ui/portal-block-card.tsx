@@ -25,7 +25,8 @@
 
 import { useState } from 'react';
 
-import type { PortalBlock, PortalRecognisedText } from '@/shared/api';
+import type { PortalBlock, PortalBlockId, PortalRecognisedText, VersionUid } from '@/shared/api';
+import { portalBlockCropUrl } from '@/shared/api';
 import {
   DESCRIPTION_MARKER,
   RECOGNISED_MARKER,
@@ -37,9 +38,13 @@ import {
 
 import styles from './portal-blocks.module.css';
 
-/** The crop's `<img>`, or the sentence that stands where it failed to load. Pure. */
+/**
+ * The crop's `<img>`, or the sentence that stands where it failed to load. Pure. Takes the
+ * block's identities, never an address: the seam builds it (`W55B-FIX`, Y-2).
+ */
 export interface CropFigureViewProps {
-  readonly src: string;
+  readonly versionUid: VersionUid;
+  readonly portalBlockId: PortalBlockId;
   readonly widthPx: number;
   readonly heightPx: number;
   readonly alt: string;
@@ -47,7 +52,16 @@ export interface CropFigureViewProps {
   readonly onError: () => void;
 }
 
-export function CropFigureView({ src, widthPx, heightPx, alt, failed, onError }: CropFigureViewProps) {
+export function CropFigureView({
+  versionUid,
+  portalBlockId,
+  widthPx,
+  heightPx,
+  alt,
+  failed,
+  onError,
+}: CropFigureViewProps) {
+  const src = portalBlockCropUrl(versionUid, portalBlockId);
   return (
     <figure className={styles.figure} data-portal-crop={failed ? 'failed' : 'shown'}>
       {failed ? (
@@ -118,11 +132,11 @@ function PortalDescription({ text }: { readonly text: string }) {
 
 export interface PortalBlockCardProps {
   readonly block: PortalBlock;
-  /** The crop's address, asked only for a block that has a crop. */
-  readonly cropSrc: (block: PortalBlock) => string;
+  /** The version the block belongs to, from which the seam builds the crop's address. */
+  readonly versionUid: VersionUid;
 }
 
-export function PortalBlockCard({ block, cropSrc }: PortalBlockCardProps) {
+export function PortalBlockCard({ block, versionUid }: PortalBlockCardProps) {
   const status = portalStatusPresentation(block.status);
   const mismatch = geometryLabel(block.geometry);
   const vertices = block.polygon_points?.length ?? 0;
@@ -169,7 +183,8 @@ export function PortalBlockCard({ block, cropSrc }: PortalBlockCardProps) {
         ) : null
       ) : (
         <CropFigure
-          src={cropSrc(block)}
+          versionUid={versionUid}
+          portalBlockId={block.portal_block_id}
           widthPx={block.crop.width_px}
           heightPx={block.crop.height_px}
           alt={`${typeLabel}: фрагмент страницы ${block.page_number} PDF`}

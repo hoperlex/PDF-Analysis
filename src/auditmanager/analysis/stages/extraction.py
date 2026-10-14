@@ -33,6 +33,7 @@ index whose spans quietly point at the wrong characters.
 
 from __future__ import annotations
 
+import gc
 import io
 import os
 import unicodedata
@@ -205,6 +206,13 @@ def extract_document(source: PdfSource) -> ExtractedDocument:
     pages: list[ExtractedPage] = []
     try:
         with pdfplumber.open(opened) as pdf:
+            # `W55B-FIX` (X-2): pdfminer keeps every object it resolves -- a page's decoded
+            # content streams included -- for the life of the document unless told not to,
+            # so a document of large per-page streams would hold all of them at once.
+            # ``caching`` is the document's own switch (pdfminer's ``--disable-caching``);
+            # fonts are still cached by the resource manager. See :func:`_release` for
+            # what this and the per-page release cost and save.
+            pdf.doc.caching = False
             if len(pdf.pages) != declared_pages:
                 raise DomainError(
                     ErrorCode.ANALYSIS_INPUT_INVALID,
@@ -215,7 +223,10 @@ def extract_document(source: PdfSource) -> ExtractedDocument:
                     reason="page_count_disagreement",
                 )
             for ordinal, page in enumerate(pdf.pages, start=1):
-                pages.append(_extract_page(page, ordinal))
+                try:
+                    pages.append(_extract_page(page, ordinal))
+                finally:
+                    _release(page)
     except DomainError:
         raise
     except (PDFSyntaxError, ValueError, OSError, KeyError, TypeError) as exc:
@@ -226,6 +237,39 @@ def extract_document(source: PdfSource) -> ExtractedDocument:
         ) from exc
 
     return ExtractedDocument(pages=tuple(pages))
+
+
+def _release(page: Any) -> None:
+    """Free what reading one page built, before the next page is read (`W55B-FIX`, X-2).
+
+    Without this the stage held every page it had read until the document closed: pdfplumber
+    keeps a page's layout objects and pdfminer's page keeps its content streams decoded, so a
+    low-text page of tens of thousands of paths cost about 120 MiB *per page* and a version of
+    five hundred such pages was the worker's memory times five hundred. Three steps, each
+    needed on its own, and with pdfminer's document cache off (see :func:`extract_document`)
+    (``tests/integration/analysis/test_extraction_releases_each_page.py``):
+
+    * ``page.close()`` -- pdfplumber's own flush of the page's layout, objects and text map;
+    * ``page_obj.contents`` -- pdfminer resolves a page's content streams when the page is
+      created and decodes them in place when it is read; the list is the page's public
+      attribute and nothing reads it after this page, so it is emptied and the decoded bytes
+      go with it;
+    * ``gc.collect()`` -- pdfminer's content parser holds a bound method of itself, so each
+      page leaves one reference cycle that owns the decoded stream; a collection per page
+      frees it now rather than whenever the collector next runs.
+
+    Measured on the owner's export (30 pages, read by this function in a process of its own,
+    on a loaded host): the peak resident set fell from 794 MiB to 220 MiB, and the time rose
+    from about 14 s to about 18 s -- about 2 s for the uncached document and 1 s for the
+    collections. The text and the lines are the same. On `W55B-REHEARSAL-01`'s 500-sheet vector
+    drawing set, under a 3 GiB cap: before, 172 / 379 / 1 301 / 2 453 MiB after page 1 / 10 /
+    50 / 100 and killed by the cap at page 127; after, 172 MiB after every page of the first
+    stage's pass and 217 MiB of the second's, both stages succeeding (0.45 s a page before,
+    0.51 s after).
+    """
+    page.close()
+    page.page_obj.contents = []
+    gc.collect()
 
 
 def _extract_page(page: Any, page_number: int) -> ExtractedPage:

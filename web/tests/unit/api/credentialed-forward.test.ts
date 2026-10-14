@@ -189,7 +189,7 @@ describe('the browser calls this app, and this app calls the API with the creden
             'x-correlation-id': 'cid-csv',
             'set-cookie': 'upstream=leak',
             server: 'uvicorn',
-            etag: '"v1"',
+            vary: 'Accept',
           },
         }),
     );
@@ -204,12 +204,53 @@ describe('the browser calls this app, and this app calls the API with the creden
     expect(response.headers.get('x-correlation-id')).toBe('cid-csv');
     expect(response.headers.get('set-cookie')).toBeNull();
     expect(response.headers.get('server')).toBeNull();
-    expect(response.headers.get('etag')).toBeNull();
+    expect(response.headers.get('vary')).toBeNull();
     expect([...response.headers.keys()].sort()).toEqual([
       'content-disposition',
       'content-type',
       'x-correlation-id',
     ]);
+  });
+
+  // `W55B-FIX`: a crop is an image the browser keeps (X-4), and the upload gate's busy refusal
+  // says when to try again (`W55B-QA-01` O-1); both answers reach the browser whole.
+  it('carries a crop’s ETag and Cache-Control, and a busy refusal’s Retry-After, to the browser', async () => {
+    const crop = recordingFetch(
+      () =>
+        new Response(new Uint8Array([137, 80, 78, 71]), {
+          status: 200,
+          headers: {
+            'content-type': 'image/png',
+            etag: '"6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f"',
+            'cache-control': 'private, max-age=3600',
+            'x-correlation-id': 'cid-crop',
+          },
+        }),
+    );
+    const cropped = await forwardWithCredential(
+      new Request('http://localhost/bff/v1/versions/ver_01/portal-blocks/blk_01/crop'),
+      ['versions', 'ver_01', 'portal-blocks', 'blk_01', 'crop'],
+      TARGET,
+      { fetch: crop.fetch },
+    );
+    expect(cropped.headers.get('etag')).toBe('"6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f"');
+    expect(cropped.headers.get('cache-control')).toBe('private, max-age=3600');
+
+    const busy = recordingFetch(
+      () =>
+        new Response('{"error_code":"dependency_unavailable"}', {
+          status: 503,
+          headers: { 'content-type': 'application/json', 'retry-after': '5', 'x-correlation-id': 'cid-busy' },
+        }),
+    );
+    const refused = await forwardWithCredential(
+      new Request('http://localhost/bff/v1/projects', { method: 'POST', body: '{"name":"x"}' }),
+      ['projects'],
+      TARGET,
+      { fetch: busy.fetch },
+    );
+    expect(refused.status).toBe(503);
+    expect(refused.headers.get('retry-after')).toBe('5');
   });
 
   // `W55A-CONTENT-01` (plan §A3.5). The viewer's PDF reader pages a large document by
@@ -406,6 +447,61 @@ describe('a request body is streamed to the API under a deadline', () => {
     // And every byte then arrived, through the stream and only through it.
     expect(received).toBe(8 * 1024);
     expect(headersOf(calls[0]!.init).get('content-type')).toBe('multipart/form-data; boundary=x');
+  });
+
+  it('refuses redirects and names no window, so fetch neither clones the request nor tees its body', async () => {
+    const { stream } = pulledOnDemand(2, 16);
+    const { fetch, calls } = recordingFetch(okJson);
+    await forwardWithCredential(uploadRequest(stream), UPLOAD_SEGMENTS, TARGET, { fetch });
+    expect(calls[0]!.init.redirect).toBe('error');
+    expect(calls[0]!.init.window).toBeNull();
+
+    // A small JSON write is read whole and keeps fetch's defaults: nothing to tee.
+    const json = recordingFetch(okJson);
+    await forwardWithCredential(
+      new Request('http://localhost/bff/v1/projects', { method: 'POST', body: '{"name":"x"}' }),
+      ['projects'],
+      TARGET,
+      { fetch: json.fetch },
+    );
+    expect(json.calls[0]!.init.redirect).toBeUndefined();
+    expect('window' in json.calls[0]!.init).toBe(false);
+  });
+
+  it('through the real fetch, the upload stream is read once and never teed', async () => {
+    // `W55B-REHEARSAL-01` measured the BFF's resident set growing by about the upload's size:
+    // undici's fetch cloned the request and teed the body, and the branch kept for a redirect
+    // held every byte. Here the runtime's own fetch carries a 4 MiB stream to a real local
+    // server; `tee` is watched on the stream class undici uses, and the server receives
+    // every byte.
+    const { createServer } = await import('node:http');
+    let received = 0;
+    const server = createServer((req, res) => {
+      req.on('data', (chunk: Buffer) => {
+        received += chunk.length;
+      });
+      req.on('end', () => {
+        res.writeHead(201, { 'content-type': 'application/json' });
+        res.end('{"ok":true}');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    const port = typeof address === 'object' && address !== null ? address.port : 0;
+    const tee = vi.spyOn(ReadableStream.prototype, 'tee');
+    try {
+      const { stream } = pulledOnDemand(64, 64 * 1024);
+      const response = await forwardWithCredential(uploadRequest(stream), UPLOAD_SEGMENTS, {
+        upstream: `http://127.0.0.1:${port}`,
+        token: TOKEN,
+      });
+      expect(response.status).toBe(201);
+      expect(received).toBe(64 * 64 * 1024);
+      expect(tee).not.toHaveBeenCalled();
+    } finally {
+      tee.mockRestore();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   it('never asks the request for its bytes whole', async () => {

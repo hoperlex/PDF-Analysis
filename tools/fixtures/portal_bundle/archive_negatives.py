@@ -430,6 +430,21 @@ def blocks_more_pages() -> bytes:
     return _bundle_with_pages(pages + pages[:1])
 
 
+# ------------------------------------------------------------------- blocks_count
+
+
+def _with_stamps(count: int, *, page_index: int = 0) -> bytes:
+    """The base bundle with ``count`` STAMP blocks added on one page. A stamp has no header in
+    the markdown, so the list and the markdown still agree and only the ceiling is broken."""
+    stamps = [Block(fmt.KIND_STAMP, page_index, (0.5, 0.86, 0.9, 0.95)) for _ in range(count)]
+    return _build(pack(make_files(base_files().pdf, STEM, extra_blocks=stamps)))
+
+
+def blocks_over_the_page_ceiling() -> bytes:
+    """One page holds one block more than ``MAX_BLOCKS_PER_PAGE`` (`W55B-FIX`, X-4)."""
+    return _with_stamps(fmt.MAX_BLOCKS_PER_PAGE)
+
+
 # ----------------------------------------------------- results_blocks_mismatch
 
 _SECTION = re.compile(r"(?=^### BLOCK #)", re.MULTILINE)
@@ -647,6 +662,7 @@ def small_negatives() -> list[Negative]:
     found += _keyed("blocks_page_count", {
         "fewer_pages": blocks_fewer_pages, "more_pages": blocks_more_pages,
     })
+    found += _keyed("blocks_count", {"over_the_page_ceiling": blocks_over_the_page_ceiling})
     found += _keyed("results_blocks_mismatch", MARKDOWN_MISMATCH)
     found += _keyed("stamp_audit_invalid", {"not_json": stamp_audit_not_json})
     return found

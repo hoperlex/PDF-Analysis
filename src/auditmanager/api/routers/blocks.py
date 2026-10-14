@@ -36,6 +36,12 @@ __all__ = ["build_block_routes"]
 
 _PNG: Final[str] = "image/png"
 
+#: How long a browser may keep a crop without asking again (`W55B-FIX`, X-4). ``private``: it
+#: is behind the seam and no shared cache may hold it. An hour is the credential's own lifetime
+#: (``security.TOKEN_LIFETIME_SECONDS``): a crop is the deterministic render of an immutable
+#: version's block, content-addressed, and changes only when a later run renders it otherwise.
+CROP_MAX_AGE_SECONDS: Final[int] = 3600
+
 #: ``page, ordinal, id`` made comparable as text. The cursor carries a tuple of strings and
 #: never a row number (``schemas.common.encode_cursor``), so the integers are zero-padded
 #: and a null ordinal -- a stamp -- takes the widest value, which sorts it last on its page.
@@ -116,11 +122,19 @@ def build_block_routes(router: APIRouter, blocks: BlockPort) -> None:
         crop = blocks.read_portal_block_crop(
             version_uid=version_uid, portal_block_id=portal_block_id
         )
+        # `W55B-FIX` (X-4): the PNG's own digest as its entity tag, and a private lifetime, so
+        # the browser keeps the crops a reader scrolls back to instead of asking the API --
+        # which re-reads and re-verifies the version's artifacts for every crop -- again. The
+        # BFF forwards both (``credentialed-forward.ts``). No conditional ``304`` is answered:
+        # the port reads the PNG to verify it before the digest could be compared, so it would
+        # save the transfer and none of the work, and the contract declares no ``304``.
         return WireResponse(
             200,
             (
                 ("Content-Type", crop.media_type),
                 ("Content-Length", str(len(crop.content))),
+                ("ETag", f'"{crop.sha256}"'),
+                ("Cache-Control", f"private, max-age={CROP_MAX_AGE_SECONDS}"),
             ),
             crop.content,
         )

@@ -41,7 +41,10 @@
  * `duplex: 'half'`: bytes reach the API as they arrive from the browser and nothing here reads
  * them. Every other body is a small JSON or form document and is read whole, as it always was.
  * No `undici` `Agent` is configured: that would be a second transport to keep correct, and the
- * deadline below can only *shorten* undici's own 300 s wait.
+ * deadline below can only *shorten* undici's own 300 s wait. **Streaming needs one more thing
+ * than the stream** (`W55B-FIX`): `redirect: 'error'` and `window: null`, without which `fetch`
+ * clones the request and tees the body, and the clone's branch keeps every byte (see
+ * `forwardWithCredential`).
  *
  * **A request that sends a body carries a deadline of 290 s** (`UPSTREAM_DEADLINE_MS`), because
  * the chain of timeouts is meant to be strictly nested, outermost first: the proxy waits 300 s
@@ -84,6 +87,11 @@ export const FORWARDED_REQUEST_HEADERS = [
  * the filename is on that header; `content-range` and `accept-ranges` because a PDF reader
  * pages a document by them (`W55A-CONTENT-01`).
  *
+ * `etag` and `cache-control` because a portal block's crop is an image the browser keeps in its
+ * own HTTP cache (`W55B-FIX`, X-4: the API sends them only on that answer); `retry-after`
+ * because the upload gate's busy refusal says when to send the same upload again
+ * (`upload-failure.ts` reads it, `W55B-QA-01` O-1).
+ *
  * `content-length` is forwarded too, so a reader knows the size before the body ends and a
  * stream the API stops short (the R-115 integrity rule) arrives short of what it declared
  * rather than looking complete. It is the one header with a condition: the fetch runtime
@@ -96,6 +104,9 @@ export const FORWARDED_RESPONSE_HEADERS = [
   'content-length',
   'content-range',
   'accept-ranges',
+  'etag',
+  'cache-control',
+  'retry-after',
   'x-correlation-id',
 ] as const;
 
@@ -285,6 +296,14 @@ export async function forwardWithCredential(
       // Streamed: the request's own stream goes to `fetch` untouched.
       init.body = request.body;
       init.duplex = 'half';
+      // `W55B-FIX`: and it must not be teed. The fetch standard clones the request -- and so
+      // tees its body, keeping one branch for a redirect it might have to follow -- unless the
+      // request has no window and refuses redirects; undici does exactly that, and the branch
+      // nobody reads held the whole upload (`W55B-REHEARSAL-01`: +231 to +242 MiB of the
+      // BFF's resident set for a 210 MiB bundle). The API never redirects an upload, so a
+      // redirect is refused here rather than followed with a body that is already gone.
+      init.redirect = 'error';
+      init.window = null;
     } else {
       const body = await request.arrayBuffer();
       if (body.byteLength > 0) init.body = body;

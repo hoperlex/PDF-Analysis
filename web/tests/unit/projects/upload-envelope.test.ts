@@ -21,6 +21,7 @@ import {
   precheckUploadFile,
   uploadConstraintSentence,
 } from '@/entities/document-version';
+import { UPLOAD_CONSTRAINTS_ADDED, uploadRuleSentence } from '@/entities/document-version/model/upload-failure';
 import { CONTRACT_PATH, REPO_ROOT, readJson, readText } from '../../guards/lib/repo';
 import { join } from 'node:path';
 
@@ -44,6 +45,8 @@ const BUNDLE_CONSTRAINTS = [
   'bundle_compression_ratio',
   'blocks_json_invalid',
   'blocks_page_count',
+  // `W55B-FIX` (X-4): the block ceilings.
+  'blocks_count',
   'results_blocks_mismatch',
   'stamp_audit_invalid',
 ] as const;
@@ -55,6 +58,13 @@ const PDF_MEMBER_CONSTRAINTS = [
   'not_encrypted',
   'every_page_has_extractable_text',
   'max_bytes',
+  // `W55B-FIX`: the two the envelope always raised and the note did not name (Y-4), and the
+  // reader's three bounds (X-1).
+  'non_empty',
+  'plain_base_name',
+  'pdf_page_content',
+  'pdf_document_content',
+  'pdf_reader_limits',
 ] as const;
 
 /** The registered values, read out of the contract note rather than copied from it. */
@@ -195,22 +205,45 @@ describe('byte sizes read in the contract unit', () => {
 });
 
 describe('every constraint a refused upload can carry has its own Russian sentence', () => {
-  it('registers exactly the eighteen the contract registers', () => {
+  it('registers exactly the nineteen the contract registers', () => {
     expect(registeredBundleConstraints()).toEqual([...BUNDLE_CONSTRAINTS]);
   });
 
-  it('has a sentence for each of them and for the PDF member constraints it keeps', () => {
+  it('names every PDF member and upload-name constraint in the catalogue note (W55B-FIX, Y-4)', () => {
+    const catalog = readJson<{ codes: { validation_failed: { notes: string[] } } }>(
+      join(REPO_ROOT, 'contracts', 'domain', 'v1', 'error-codes.json'),
+    );
+    const notes = catalog.codes.validation_failed.notes.join(' ');
+    for (const constraint of PDF_MEMBER_CONSTRAINTS) {
+      expect(new RegExp(`\\b${constraint}\\b`).test(notes), constraint).toBe(true);
+    }
+  });
+
+  it('has a sentence for each of them and for the PDF member constraints, as the panel shows it', () => {
+    // `uploadRuleSentence` is what the upload panel prints: the envelope's own table first
+    // (`uploadConstraintSentence`), then the constraints `W55B-FIX` registered beside it.
     for (const constraint of [...BUNDLE_CONSTRAINTS, ...PDF_MEMBER_CONSTRAINTS]) {
-      expect(UPLOAD_CONSTRAINTS_STATED, constraint).toContain(constraint);
-      const sentence = uploadConstraintSentence(constraint);
+      expect([...UPLOAD_CONSTRAINTS_STATED, ...UPLOAD_CONSTRAINTS_ADDED], constraint).toContain(constraint);
+      const sentence = uploadRuleSentence(constraint);
       expect(sentence, constraint).not.toBeNull();
       expect(/[а-яА-ЯёЁ]/u.test(sentence ?? ''), constraint).toBe(true);
     }
   });
 
   it('gives no two constraints the same sentence', () => {
-    const sentences = UPLOAD_CONSTRAINTS_STATED.map((constraint) => uploadConstraintSentence(constraint));
+    const sentences = [...UPLOAD_CONSTRAINTS_STATED, ...UPLOAD_CONSTRAINTS_ADDED].map((constraint) =>
+      uploadRuleSentence(constraint),
+    );
     expect(new Set(sentences).size).toBe(sentences.length);
+  });
+
+  it('adds nothing the envelope already states, and says nothing for an unknown name', () => {
+    for (const constraint of UPLOAD_CONSTRAINTS_ADDED) {
+      expect(uploadConstraintSentence(constraint), constraint).toBeNull();
+    }
+    expect(uploadRuleSentence('a_constraint_nobody_registered')).toBeNull();
+    expect(uploadRuleSentence('__proto__')).toBeNull();
+    expect(uploadRuleSentence(undefined)).toBeNull();
   });
 
   it('states the page and size rules in the envelope numbers, not in numbers typed twice', () => {

@@ -48,7 +48,7 @@ from auditmanager.api.routers import (
     declare_correlation_id,
     install_exception_handlers,
 )
-from auditmanager.api.security import build_authorization_dependency
+from auditmanager.api.security import build_authorization_dependency, build_credential_precheck
 
 _log = logging.getLogger(__name__)
 
@@ -469,12 +469,16 @@ def _assemble(
     # application is assembled. `uploadDocument` takes a body of up to `UPLOAD_MAX_BODY`
     # and at most `MAX_CONCURRENT_UPLOADS` of them are in flight in this process (one
     # process serves a stand); a third is refused before its body is read. Every other
-    # route keeps `MAX_BODY`.
+    # route keeps `MAX_BODY`. `W55B-FIX` (X-3): the upload route is refused here, before
+    # its slot and its body, unless it carries a credential this environment signed and
+    # that has not expired -- the seam's cheap half, built from the same environment; the
+    # seam itself still runs after.
     app.add_middleware(
         BodyCapMiddleware,
         limit=MAX_BODY,
         upload_limit=UPLOAD_MAX_BODY,
         max_concurrent_uploads=MAX_CONCURRENT_UPLOADS,
+        verify_credential=build_credential_precheck(environ),
     )
     app.add_middleware(FailureEnvelopeMiddleware)
     app.add_middleware(CorrelationMiddleware)

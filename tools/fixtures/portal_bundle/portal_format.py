@@ -36,6 +36,13 @@ MAX_UPLOAD_BYTES = 250 * MiB
 MIN_PAGES = 1
 MAX_PAGES = 500
 
+# The block ceilings INGEST refuses with `blocks_count` (`W55B-FIX`, X-4), restated here so the
+# generator cannot write a bundle over one by accident; `tests/integration/ingest` compares the
+# two copies.
+MAX_BLOCKS_PER_PAGE = 100
+MAX_BLOCKS = 3_000
+MAX_IMAGE_BLOCKS = 1_000
+
 # Member roles by the suffix of the raw name. Matching is on bytes, never on a decoded
 # name, because the stem is compared on the raw bytes too.
 ROLE_PDF = "pdf"

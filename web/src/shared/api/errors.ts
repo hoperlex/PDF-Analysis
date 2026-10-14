@@ -119,14 +119,26 @@ export class ApiError extends ApiFailure {
   readonly errorCode: ErrorCode;
   readonly envelope: ErrorEnvelope;
   readonly retryable: boolean;
+  /**
+   * The answer's `Retry-After`, in whole seconds, when it carried one as a number of seconds
+   * (`W55B-FIX`, `W55B-QA-01` O-1: the upload gate's busy refusal does); `null` otherwise. A
+   * hint for the sentence a screen shows, never a timer this client runs.
+   */
+  readonly retryAfterSeconds: number | null;
 
-  constructor(status: number, envelope: ErrorEnvelope, correlationId: string | null) {
+  constructor(
+    status: number,
+    envelope: ErrorEnvelope,
+    correlationId: string | null,
+    retryAfterSeconds: number | null = null,
+  ) {
     super(`${envelope.error_code}: ${envelope.message}`, correlationId ?? envelope.correlation_id);
     this.name = 'ApiError';
     this.status = status;
     this.errorCode = envelope.error_code;
     this.envelope = envelope;
     this.retryable = envelope.retryable;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 
   /** Safe scalar classifiers the catalog allows for this code. Never contains a key or path. */

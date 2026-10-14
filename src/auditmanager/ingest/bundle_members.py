@@ -20,7 +20,7 @@ that differs only by its HTML is a different upload.
 
 from __future__ import annotations
 
-import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Final
 
@@ -71,22 +71,34 @@ STORED_MEMBERS: Final[tuple[StoredMember, ...]] = (
                  parse_blob_role(ROLE_SOURCE_STAMP_AUDIT), "application/json"),
 )
 
-_CONTROL: Final[re.Pattern[str]] = re.compile(r"[\x00-\x1f\x7f]")
+#: The Unicode categories a display name may not carry (`W55B-FIX`, X-10): ``Cc``, the C0 and
+#: C1 controls and DEL, and ``Cf``, the format characters -- the bidirectional overrides,
+#: embeddings and isolates (U+202A-U+202E, U+2066-U+2069) among them, which reorder what a
+#: screen shows: ``U+202E`` before ``fdp.exe`` displays it as ``exe.pdf``.
+_UNSHOWABLE: Final[frozenset[str]] = frozenset({"Cc", "Cf"})
 _MAX_NAME: Final[int] = 255
+
+
+def _showable(text: str) -> str:
+    """``text`` with every ``Cc`` and ``Cf`` code point replaced by ``_``."""
+    return "".join("_" if unicodedata.category(ch) in _UNSHOWABLE else ch for ch in text)
 
 
 def source_filename_of(bundle: ExtractedBundle) -> str:
     """The PDF member's name, decoded, as a plain base name for display.
 
     The decoded name may carry a directory part (``dir/a.pdf`` is not refused by the archive
-    rules), control characters or more than 255 characters; the version's ``source_filename``
-    is a plain base name of at most 255 characters (``validate_source_filename``), so the last
-    path component is taken, control characters become ``_`` and the length is cut. It is a
-    display value: nothing resolves, compares or opens it.
+    rules), control or format characters or more than 255 characters; the version's
+    ``source_filename`` is a plain base name of at most 255 characters
+    (``validate_source_filename``), so the last path component is taken, every control and
+    format character becomes ``_`` (:data:`_UNSHOWABLE`) and the length is cut. The name may
+    come from the Info-ZIP Unicode Path field, which an archive can set to anything, so the
+    scrub is applied to whatever was decoded. It is a display value: nothing resolves,
+    compares or opens it.
     """
     shown = bundle.members[ROLE_PDF].display_name
     base = shown.rsplit("/", 1)[-1]
-    cleaned = _CONTROL.sub("_", base).strip()
+    cleaned = _showable(base).strip()
     return cleaned[:_MAX_NAME] or "document.pdf"
 
 

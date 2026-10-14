@@ -304,16 +304,29 @@ def plan_crop(
     ``scale = min(max(base, floor), cap)``: the base raised to the floor, then lowered to
     the cap, which wins (module docstring). Both bounds are computed with the integer clip's
     worst rounding included, so the plan meets them by construction, not by a search.
+
+    **Every arithmetic failure is a degenerate box** (`W55B-FIX`, X-8). Ingest admits any
+    ``x0 < x1`` in [0, 1], so a box a few subnormals wide reaches this function: its clip
+    side underflows, and the floor's division overflows (``OverflowError`` from ``ceil`` of
+    infinity) or the cap's divides by zero. Either is the same fact as a box below
+    :data:`MAX_CANVAS_SIDE`'s bound -- too small to position on a page canvas -- and is raised
+    as :class:`DegenerateCrop`, which the stage refuses as ``portal_block_degenerate``
+    (`R-121`), never as an untyped crash.
     """
     bbox = _validated_bbox(bbox_norm)
     if not (page_width_pt > 0 and page_height_pt > 0):
         raise DegenerateCrop("a page has a positive width and height")
-    clip_width = (bbox[2] - bbox[0]) * page_width_pt
-    clip_height = (bbox[3] - bbox[1]) * page_height_pt
-    scale = round(base, SCALE_DIGITS) if math.isfinite(base) and base > 0 else 0.0
-    scale = max(scale, _floor_scale(max(clip_width, clip_height)))  # the floor
-    scale = min(scale, _cap_scale(clip_width, clip_height))  # the cap, which wins
-    plan = _layout(bbox, page_width_pt, page_height_pt, scale)
+    try:
+        clip_width = (bbox[2] - bbox[0]) * page_width_pt
+        clip_height = (bbox[3] - bbox[1]) * page_height_pt
+        scale = round(base, SCALE_DIGITS) if math.isfinite(base) and base > 0 else 0.0
+        scale = max(scale, _floor_scale(max(clip_width, clip_height)))  # the floor
+        scale = min(scale, _cap_scale(clip_width, clip_height))  # the cap, which wins
+        plan = _layout(bbox, page_width_pt, page_height_pt, scale)
+    except ArithmeticError as failure:
+        raise DegenerateCrop(
+            "the block is too small to be positioned on a page canvas"
+        ) from failure
     if plan.pixels > MAX_PIXELS:  # pragma: no cover - excluded by _cap_scale's bound
         raise DegenerateCrop("the crop exceeds the pixel budget")
     return plan

@@ -69,6 +69,7 @@ __all__ = [
     "ROLE_RESULTS_HTML",
     "ROLE_RESULTS_MD",
     "ROLE_STAMP_AUDIT",
+    "BLOCKS_MEMBER_BYTES",
     "STAMP_AUDIT_BYTES",
     "TEXT_MEMBER_BYTES",
     "ZIP_MAGICS",
@@ -98,6 +99,16 @@ MEMBER_BYTES: Final[int] = MAX_BYTES
 #: ``json.loads`` of a block list holds roughly ten times its size in Python objects.
 TEXT_MEMBER_BYTES: Final[int] = 16 * MiB
 
+#: ``_blocks.json`` on its own (`W55B-FIX`, X-6): parsing JSON costs a multiple of its size
+#: before a single block is judged, up to about 25 times for a list of empty objects
+#: (measured: 16 MiB, 404 MiB at the peak; 4 MiB, 100 MiB). Measured on real block lists:
+#: the corpus' largest is 283 408 bytes (500 pages), the owner's export 77 152 bytes (30
+#: pages, 129 blocks, 598 bytes a block); the largest real block serialises to 869 bytes.
+#: 4 MiB is fourteen times the largest real list, and holds the bundle's block ceiling
+#: (``bundle_envelope.MAX_BLOCKS``, 3 000) at 1.1 KB a block, the corpus' pretty-printed
+#: density, with room to spare.
+BLOCKS_MEMBER_BYTES: Final[int] = 4 * MiB
+
 #: ``_stamp_audit.json`` is stored and parsed as JSON, never analysed. The corpus' largest is
 #: 62 KB (547 bytes per page, 274 KB for 500 pages): 4 MiB is fifteen times that.
 STAMP_AUDIT_BYTES: Final[int] = 4 * MiB
@@ -119,6 +130,7 @@ class BundleLimits:
 
     member_bytes: int = MEMBER_BYTES
     text_member_bytes: int = TEXT_MEMBER_BYTES
+    blocks_member_bytes: int = BLOCKS_MEMBER_BYTES
     stamp_audit_bytes: int = STAMP_AUDIT_BYTES
     total_bytes: int = TOTAL_BYTES
     ratio: int = MAX_RATIO
@@ -208,6 +220,7 @@ _MESSAGES: Final[dict[str, str]] = {
     "bundle_compression_ratio": "The archive is compressed more than a portal bundle allows.",
     "blocks_json_invalid": "The portal block list is not valid.",
     "blocks_page_count": "The portal block list does not describe the PDF's pages.",
+    "blocks_count": "The portal block list holds more blocks than a portal bundle may.",
     "results_blocks_mismatch": (
         "The recognised-text file and the portal block list disagree about the blocks."
     ),
@@ -391,8 +404,9 @@ class _Archive:
     def __init__(self, handle: BinaryIO) -> None:
         self._handle = handle
         self.size = handle.seek(0, io.SEEK_END)
-        #: The compressed bytes the last :meth:`read_chunks` really consumed (a deflate stream
-        #: ends where it ends, whatever the header says), valid once that generator is spent.
+        #: The compressed bytes the current :meth:`read_chunks` has really consumed: up to
+        #: date at every piece it yields, and final -- a deflate stream ends where it ends,
+        #: whatever the header says -- once that generator is spent.
         self.consumed = 0
         self.declared_count, self._directory_size, self._directory_offset = self._locate()
 
@@ -520,6 +534,10 @@ class _Archive:
                 pending = data
                 while pending:
                     out = inflater.decompress(pending, _PIECE)
+                    # What the stream has used so far: what was fed, less what zlib holds
+                    # back because of the output limit (`W55B-FIX`, X-5: the caller judges the
+                    # ratio piece by piece against this, not only once the member is out).
+                    self.consumed = fed - len(inflater.unconsumed_tail)
                     if out:
                         yield out
                     if inflater.eof:
@@ -535,6 +553,7 @@ class _Archive:
                 out = inflater.flush(_PIECE)
                 if not out:
                     break
+                self.consumed = fed
                 yield out
         except zlib.error:
             raise _ArchiveError(f"entry {entry.index}: the deflate data is corrupt") from None
@@ -659,6 +678,8 @@ def _judge_declared(
             raise refuse("bundle_member_size")
         if role in _TEXT_ROLES and entry.size > limits.text_member_bytes:
             raise refuse("bundle_member_size")
+        if role == ROLE_BLOCKS and entry.size > limits.blocks_member_bytes:
+            raise refuse("bundle_member_size")
         if role == ROLE_STAMP_AUDIT and entry.size > limits.stamp_audit_bytes:
             raise refuse("stamp_audit_invalid")
     declared_total = sum(entry.size for entry in chosen.values())
@@ -681,7 +702,25 @@ def _unpack(
     directory: Path,
     limits: BundleLimits,
 ) -> dict[str, ExtractedMember]:
-    """Gate 3: every member unpacked, with the bytes that actually come out counted."""
+    """Gate 3: every member unpacked, with the bytes that actually come out counted.
+
+    **Two rules are held piece by piece, not only at the end** (`W55B-FIX`, X-5). Before
+    this, a 245 KB archive whose header declared a 4 000-byte PDF inflated 240 MiB to disk
+    and was refused only then.
+
+    * **The member's own declaration is a size bound.** A member that has produced more
+      bytes than its header declared is refused at once, with the constraint of the size
+      rule for its role (``bundle_member_size``; ``stamp_audit_invalid`` for the stamp
+      audit) -- the answer such a disguise always got once its count crossed the role's
+      bound, now given at the declared size plus one piece. Every declaration has already
+      been held to the bounds (:func:`_judge_declared`), so the counted member, text, stamp
+      and total bounds below can no longer be the first to speak; they stay as a second line.
+      A member that produces *fewer* bytes than declared is still ``bundle_unreadable``.
+    * **The ratio is judged against the compressed bytes consumed so far**, with one piece
+      (:data:`_PIECE`) of slack for the output limit's granularity. The bound therefore holds
+      for every prefix of a member's stream, not only for the whole; the whole is still
+      judged at the end, with the bytes behind the stream's end excluded.
+    """
     members: dict[str, ExtractedMember] = {}
     total = 0
     for role, entry in chosen.items():
@@ -698,10 +737,18 @@ def _unpack(
                     raise refuse("bundle_member_size")
                 if role in _TEXT_ROLES and actual > limits.text_member_bytes:
                     raise refuse("bundle_member_size")
+                if role == ROLE_BLOCKS and actual > limits.blocks_member_bytes:
+                    raise refuse("bundle_member_size")
                 if role == ROLE_STAMP_AUDIT and actual > limits.stamp_audit_bytes:
                     raise refuse("stamp_audit_invalid")
                 if total > limits.total_bytes:
                     raise refuse("bundle_total_size")
+                if actual > entry.size:
+                    raise refuse(
+                        "stamp_audit_invalid" if role == ROLE_STAMP_AUDIT else "bundle_member_size"
+                    )
+                if actual > limits.ratio * archive.consumed + _PIECE:
+                    raise refuse("bundle_compression_ratio")
                 crc = zlib.crc32(chunk, crc)
                 digest.update(chunk)
                 if sink is not None:
