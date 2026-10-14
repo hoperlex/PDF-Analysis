@@ -27,10 +27,12 @@ and FastAPI has no equivalent. So the limit stays here, in front of the parser, 
 from __future__ import annotations
 
 import re
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from typing import Any, Final
 
-from fastapi import Request
+from fastapi import Request, Response
+from fastapi.routing import APIRoute
 from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartException
 
@@ -47,11 +49,15 @@ __all__ = [
     "MAX_BODY",
     "MAX_CONCURRENT_UPLOADS",
     "UPLOAD_CAPACITY_DEPENDENCY",
+    "UPLOAD_FORM_MAX_FIELDS",
+    "UPLOAD_FORM_MAX_FILES",
+    "UPLOAD_FORM_MAX_PART_BYTES",
     "UPLOAD_MAX_BODY",
     "UPLOAD_RETRY_AFTER_SECONDS",
     "BodyCapMiddleware",
     "CheckedUpload",
     "UploadGate",
+    "UploadRoute",
     "require_a_strict_multipart_body",
 ]
 
@@ -78,6 +84,17 @@ UPLOAD_CAPACITY_DEPENDENCY: Final[str] = "upload_capacity"
 #: answered before the body is read.
 UPLOAD_RETRY_AFTER_SECONDS: Final[int] = 5
 
+#: The parts ``uploadDocument``'s form parser reads (`W55B-FIX`, X-3), where Starlette's own
+#: defaults are a thousand files and a thousand text fields of a MiB each, held in memory. The
+#: operation declares one file part (``file``) and two text parts (``display_title``, at most
+#: 400 characters, and ``section``, a name of fourteen). Two files and four text parts let a
+#: repeated or undeclared part reach the strict pass below, which names it (``unique_part``,
+#: ``additionalProperties``); one more is the parser's ``readable_multipart``. A text part of
+#: 16 KiB is ten times the longest title in UTF-8.
+UPLOAD_FORM_MAX_FILES: Final[int] = 2
+UPLOAD_FORM_MAX_FIELDS: Final[int] = 4
+UPLOAD_FORM_MAX_PART_BYTES: Final[int] = 16 * 1024
+
 #: ``POST /projects/{project_uid}/documents`` as the application serves it -- the proxy has
 #: already removed ``/api/v1``. Matched whole, never as a prefix, so no other route (and not
 #: ``GET`` of the same collection) gets the upload cap or takes an upload slot.
@@ -93,6 +110,9 @@ _BODY_TOO_LARGE: Final[str] = "The request body exceeds the maximum accepted siz
 _NO_BOUNDARY: Final[str] = (
     "The multipart body could not be read; the boundary may be missing."
 )
+#: :func:`require_a_strict_multipart_body`'s sentence, which the transport now says first for
+#: the upload route.
+_NOT_MULTIPART: Final[str] = "This operation expects a multipart/form-data body."
 
 
 class _BodyTooLarge(Exception):
@@ -160,6 +180,22 @@ def _busy_response() -> WireResponse:
     )
 
 
+def _bearer_token(value: bytes) -> str | None:
+    """The credential of an ``Authorization: Bearer <token>`` header, as the seam reads one."""
+    try:
+        text = value.decode("latin-1")
+    except UnicodeDecodeError:  # pragma: no cover - latin-1 decodes every byte
+        return None
+    scheme, _, token = text.partition(" ")
+    token = token.strip()
+    return token if scheme.lower() == "bearer" and token else None
+
+
+def _media_type(value: bytes) -> bytes:
+    """The media type of a ``Content-Type`` header, without its parameters."""
+    return value.split(b";", 1)[0].strip().lower()
+
+
 def _route_path(scope: Any) -> str:
     """The path below any ``root_path``, which is how the routes are declared."""
     path: str = scope.get("path", "")
@@ -186,9 +222,22 @@ class BodyCapMiddleware:
     **The limit is per route.** ``POST /projects/{project_uid}/documents`` has
     ``upload_limit``; every other route keeps ``limit``, so a large body to a JSON route is
     refused exactly as before even though the upload route now takes hundreds of MiB.
+
+    **The upload route has a front door** (`W55B-FIX`, X-3; `W55B-QA-01` QA-1). FastAPI
+    reads and parses a form before it solves the authorization seam, so a caller with no
+    credential had its body of up to 251 MiB read, spooled and parsed, holding one of the
+    two upload slots, before the seam answered ``401``. Two of them kept every upload
+    refused as busy. Now, before the slot and before any byte of the body, the upload route
+    requires the seam's cheap half -- a bearer credential this deployment signed and that
+    has not expired, checked by ``verify_credential`` with no database read -- and a
+    ``multipart/form-data`` body. Anything else is answered here: ``401
+    authentication_required``, or ``422`` ``media_type``. The full seam (the account's
+    standing, roles and generation) still runs after, as it always has: this is only a door
+    in front of it. ``verify_credential`` absent is a door that admits nobody, the seam's
+    own rule for a deployment with no secret.
     """
 
-    __slots__ = ("app", "limit", "upload_limit", "gate")
+    __slots__ = ("app", "limit", "upload_limit", "gate", "verify_credential")
 
     def __init__(
         self,
@@ -197,11 +246,13 @@ class BodyCapMiddleware:
         *,
         upload_limit: int = UPLOAD_MAX_BODY,
         max_concurrent_uploads: int = MAX_CONCURRENT_UPLOADS,
+        verify_credential: Callable[[str], bool] | None = None,
     ) -> None:
         self.app = app
         self.limit = limit
         self.upload_limit = upload_limit
         self.gate = UploadGate(max_concurrent_uploads)
+        self.verify_credential = verify_credential
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
         if scope["type"] != "http":
@@ -215,17 +266,22 @@ class BodyCapMiddleware:
 
         is_upload = False
         has_boundary = False
+        media_type = b""
+        token: str | None = None
         declared: int | None = None
         for name, value in scope.get("headers", ()):
             lowered = name.lower()
             if lowered == b"content-type":
                 is_upload = b"multipart/form-data" in value.lower()
                 has_boundary = b"boundary=" in value.lower()
+                media_type = _media_type(value)
             elif lowered == b"content-length":
                 try:
                     declared = int(value)
                 except ValueError:
                     declared = None
+            elif lowered == b"authorization":
+                token = _bearer_token(value)
 
         if declared is not None and declared > limit:
             response = envelope_response(_refusal(is_upload), current_correlation_id())
@@ -256,7 +312,14 @@ class BodyCapMiddleware:
             await self._serve(scope, receive, send, limit, is_upload)
             return
 
-        # The gate. After the two cheap refusals above, which a retry could never turn into
+        # The front door, before the gate and before `receive` is touched: a credential this
+        # deployment signed and that has not expired, then a multipart body.
+        refusal = self._front_door(token, media_type)
+        if refusal is not None:
+            await envelope_response(refusal, current_correlation_id())(scope, receive, send)
+            return
+
+        # The gate. After the cheap refusals above, which a retry could never turn into
         # a success, and before `receive` is touched.
         if not self.gate.try_acquire():
             await _busy_response()(scope, receive, send)
@@ -266,6 +329,20 @@ class BodyCapMiddleware:
         finally:
             # Finished, failed, cancelled or disconnected: all of them leave this block.
             self.gate.release()
+
+    def _front_door(self, token: str | None, media_type: bytes) -> DomainError | None:
+        """The upload route's refusal before its body, or ``None`` to go on to the gate."""
+        verify = self.verify_credential
+        if token is None or verify is None or not verify(token):
+            return DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+        if media_type != b"multipart/form-data":
+            return DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                message=_NOT_MULTIPART,
+                field="Content-Type",
+                constraint="media_type",
+            )
+        return None
 
     async def _serve(
         self, scope: Any, receive: Any, send: Any, limit: int, is_upload: bool
@@ -304,6 +381,49 @@ class BodyCapMiddleware:
         if exceeded and not started:
             response = envelope_response(_refusal(is_upload), current_correlation_id())
             await response(scope, receive, send)
+
+
+# ---------------------------------------------------------------------------------------
+# the upload's form parser, bounded (`W55B-FIX`, X-3)
+# ---------------------------------------------------------------------------------------
+
+
+class _BoundedFormRequest(Request):
+    """A request whose form is parsed under the upload's part bounds, whoever asks for it.
+
+    FastAPI calls ``request.form()`` with Starlette's defaults; the strict pass below calls it
+    again and gets the parsed form back. Both reach this method, so the bounds hold for every
+    reader of the form, and an explicit argument can only lower them.
+    """
+
+    def form(
+        self,
+        *,
+        max_files: int | float = UPLOAD_FORM_MAX_FILES,
+        max_fields: int | float = UPLOAD_FORM_MAX_FIELDS,
+        max_part_size: int = UPLOAD_FORM_MAX_PART_BYTES,
+    ) -> Any:
+        return super().form(
+            max_files=min(max_files, UPLOAD_FORM_MAX_FILES),
+            max_fields=min(max_fields, UPLOAD_FORM_MAX_FIELDS),
+            max_part_size=min(max_part_size, UPLOAD_FORM_MAX_PART_BYTES),
+        )
+
+
+class UploadRoute(APIRoute):
+    """``uploadDocument``'s route: the operation's handler, given a :class:`_BoundedFormRequest`.
+
+    FastAPI's own way to give one route another request class; the route is declared with it
+    (``documents.py``), so no other operation's parsing changes.
+    """
+
+    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
+        handler = super().get_route_handler()
+
+        async def bounded(request: Request) -> Response:
+            return await handler(_BoundedFormRequest(request.scope, request.receive))
+
+        return bounded
 
 
 # ---------------------------------------------------------------------------------------

@@ -28,6 +28,7 @@ from auditmanager.api.routers.declarations import (
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.multipart import (
     CheckedUpload,
+    UploadRoute,
     require_a_strict_multipart_body,
 )
 from auditmanager.api.routers.ports import DocumentPort
@@ -85,18 +86,10 @@ RangeParam = Annotated[
 
 def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
 
-    @router.post(
-        "/projects/{project_uid}/documents",
-        operation_id="uploadDocument",
-        tags=["documents"],
-        status_code=201,
-        response_model=models.DocumentVersion,
-        openapi_extra=_MULTIPART_ENCODING,
-        responses={
-            **success(201, "The version was published, or an identical upload replayed."),
-            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
-        },
-    )
+    # `W55B-FIX` (X-3): declared through ``add_api_route`` for its ``route_class_override``,
+    # the one argument the decorator does not take. ``UploadRoute`` parses this operation's
+    # form under small part bounds; every argument of the declaration is the decorator's,
+    # so the generated document does not move.
     def upload_document(
         project_uid: Annotated[models.ProjectUid, Path()],
         body: Annotated[models.UploadDocumentRequest, Form(media_type=_MULTIPART)],
@@ -125,6 +118,22 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
             idempotency_key=idempotency_key,
         )
         return json_response(201, encode_json(document_version_body(outcome.version)))
+
+    router.add_api_route(
+        "/projects/{project_uid}/documents",
+        upload_document,
+        methods=["POST"],
+        operation_id="uploadDocument",
+        tags=["documents"],
+        status_code=201,
+        response_model=models.DocumentVersion,
+        openapi_extra=_MULTIPART_ENCODING,
+        responses={
+            **success(201, "The version was published, or an identical upload replayed."),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
+        },
+        route_class_override=UploadRoute,
+    )
 
     @router.get(
         "/projects/{project_uid}/documents",
