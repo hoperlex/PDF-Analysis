@@ -66,6 +66,7 @@ CONSTRAINT_FIELDS = {
     "bundle_compression_ratio": FIELD_FILE,
     "blocks_json_invalid": FIELD_FILE,
     "blocks_page_count": FIELD_FILE,
+    "blocks_count": FIELD_FILE,
     "results_blocks_mismatch": FIELD_FILE,
     "stamp_audit_invalid": FIELD_FILE,
     "pdf_magic_bytes": "content",
@@ -347,6 +348,23 @@ def _check_blocks(raw: bytes) -> tuple[list[Violation], dict | None]:
     return [], document
 
 
+def _check_block_ceilings(document: dict) -> list[Violation]:
+    """The block ceilings (`W55B-FIX`, X-4): per page, per bundle, and IMAGE blocks per bundle."""
+    blocks = document["blocks"]
+    per_page: dict[int, int] = {}
+    for block in blocks:
+        per_page[block["page_index"]] = per_page.get(block["page_index"], 0) + 1
+    images = sum(1 for block in blocks if block["block_type"] == fmt.KIND_IMAGE)
+    if len(blocks) > fmt.MAX_BLOCKS:
+        return [_violation("blocks_count", f"{len(blocks)} blocks, at most {fmt.MAX_BLOCKS}")]
+    if images > fmt.MAX_IMAGE_BLOCKS:
+        return [_violation("blocks_count", f"{images} IMAGE blocks, at most {fmt.MAX_IMAGE_BLOCKS}")]
+    if max(per_page.values(), default=0) > fmt.MAX_BLOCKS_PER_PAGE:
+        return [_violation("blocks_count",
+                           f"a page holds more than {fmt.MAX_BLOCKS_PER_PAGE} blocks")]
+    return []
+
+
 def _check_markdown(raw: bytes, document: dict) -> list[Violation]:
     """TEXT and IMAGE blocks and markdown headers agree both ways; a stamp has no header."""
     def mismatch(detail: str) -> list[Violation]:
@@ -390,6 +408,8 @@ def _check_contents(unpacked: _Unpacked, limits: Limits) -> Verdict:
     found += pdf_problems
     block_problems, document = _check_blocks(contents[fmt.ROLE_BLOCKS])
     found += block_problems
+    if document is not None:
+        found += _check_block_ceilings(document)
 
     if document is not None:
         found += _check_markdown(contents[fmt.ROLE_RESULTS_MD], document)

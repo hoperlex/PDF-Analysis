@@ -93,7 +93,7 @@ REGISTERED_BUNDLE_CONSTRAINTS = frozenset({
     "bundle_directory_entry", "bundle_member_name", "bundle_symlink",
     "bundle_encrypted_member", "bundle_compression_method", "bundle_duplicate_member",
     "bundle_stem_mismatch", "bundle_member_set", "bundle_member_size", "bundle_total_size",
-    "bundle_compression_ratio", "blocks_json_invalid", "blocks_page_count",
+    "bundle_compression_ratio", "blocks_json_invalid", "blocks_page_count", "blocks_count",
     "results_blocks_mismatch", "stamp_audit_invalid",
 })
 
@@ -132,7 +132,7 @@ def test_the_product_and_the_reference_validator_refuse_for_the_same_rule(
 
 
 def test_every_registered_bundle_constraint_has_a_test() -> None:
-    """The 18 values of the contract, each answered by at least one archive in this file."""
+    """The 19 values of the contract, each answered by at least one archive in this file."""
     notes = json.loads(
         (REPOSITORY_ROOT / "contracts" / "domain" / "v1" / "error-codes.json").read_text(
             encoding="utf-8"
@@ -701,6 +701,7 @@ def test_the_production_bounds_are_the_ruled_ones() -> None:
     assert ba.TOTAL_BYTES == 300 * MiB
     assert ba.MAX_RATIO == 100 and ba.MAX_ENTRIES == 8
     assert ba.TEXT_MEMBER_BYTES == 16 * MiB
+    assert ba.BLOCKS_MEMBER_BYTES == 4 * MiB
     assert ba.STAMP_AUDIT_BYTES == 4 * MiB
     # The two bounds FIXTURES left to this lane keep its committed oracle true.
     assert ba.TEXT_MEMBER_BYTES >= 250_000 and ba.STAMP_AUDIT_BYTES >= 4_000

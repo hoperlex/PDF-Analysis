@@ -8,7 +8,8 @@ the order that keeps a refusal attributable to one rule:
    a PDF header, at most 250 MiB, not encrypted, parseable, one to five hundred pages;
    its refusals keep their ``field``, ``constraint`` and message;
 2. ``_blocks.json`` against the pinned schema ``contracts/analysis/v1/portal-blocks.schema.json``
-   and its ``x-envelope-rules`` (``blocks_json_invalid``);
+   and its ``x-envelope-rules`` (``blocks_json_invalid``), then against the block ceilings
+   (``blocks_count``: :data:`MAX_BLOCKS_PER_PAGE`, :data:`MAX_BLOCKS`, :data:`MAX_IMAGE_BLOCKS`);
 3. ``_results.md`` against the block list, **both ways**: every TEXT and IMAGE block has exactly
    one header of the same type, and the markdown has no header for any other block -- a STAMP
    block has none (``results_blocks_mismatch``);
@@ -48,6 +49,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Final
 
@@ -63,9 +65,35 @@ from .envelope import TEXTLESS_PAGE_CHARACTERS, inspect_pdf, page_text_refusal
 
 __all__ = [
     "BundleAdmission",
+    "MAX_BLOCKS",
+    "MAX_BLOCKS_PER_PAGE",
+    "MAX_IMAGE_BLOCKS",
     "admit_bundle",
     "recognised_characters",
 ]
+
+# -- the block ceilings (`W55B-FIX`, X-4) -------------------------------------------------
+#
+# Nothing bounded the number of blocks but the size of the member, which held about 120 000
+# IMAGE blocks -- and every IMAGE block on a page that passes the box check is rendered,
+# encoded and published as a crop of up to 4 000 000 pixels, so the crops of one version
+# were unbounded in time and storage. The ceilings below are refused at ingest with
+# ``blocks_count``. Measured on the real block lists (the 674 corpus bundles and the owner's
+# export): at most 9 blocks on a page (the export; the corpus has one a page), at most 500 in
+# a document (the corpus' 500-page bundle; the export has 129 over 30 pages), at most 5 IMAGE
+# blocks on a page and 47 in a document (the export; the corpus has none). The export's
+# density over the 500-page ceiling would be about 2 150 blocks and 783 IMAGE blocks.
+
+#: Blocks of any type on one page: eleven times the densest real page (9).
+MAX_BLOCKS_PER_PAGE: Final[int] = 100
+#: Blocks of any type in one bundle: six times the largest real list (500), and above the
+#: export's density carried to 500 pages (about 2 150).
+MAX_BLOCKS: Final[int] = 3_000
+#: IMAGE blocks -- the crops a run cuts -- in one bundle: twenty-one times the real maximum
+#: (47), above the export's density carried to 500 pages (about 783). At the measured cost of
+#: a worst-case crop (0.42 s and 11.4 MiB of PNG at the pixel cap, `W55B-JUDGE-X` p7) this
+#: keeps a run's crops inside the stage watchdog's 900 s.
+MAX_IMAGE_BLOCKS: Final[int] = 1_000
 
 # -- the pinned schema, in code ---------------------------------------------------------
 #
@@ -251,6 +279,16 @@ def _block_problem(block: Any) -> str | None:
     return None
 
 
+def _over_a_ceiling(blocks: list[dict[str, Any]]) -> bool:
+    """Whether a block list that passed the schema holds more blocks than a bundle may."""
+    if len(blocks) > MAX_BLOCKS:
+        return True
+    if sum(1 for block in blocks if block["block_type"] == "image") > MAX_IMAGE_BLOCKS:
+        return True
+    per_page = Counter(block["page_index"] for block in blocks)
+    return max(per_page.values(), default=0) > MAX_BLOCKS_PER_PAGE
+
+
 # -- the markdown -----------------------------------------------------------------------
 
 
@@ -351,6 +389,8 @@ def admit_bundle(bundle: ExtractedBundle) -> BundleAdmission:
         problem = "not JSON"
     if problem is not None:
         raise refuse("blocks_json_invalid")
+    if _over_a_ceiling(document["blocks"]):
+        raise refuse("blocks_count")
 
     problem, markdown = _markdown_problem(bundle.read_bytes(ROLE_RESULTS_MD), document)
     if problem is not None:

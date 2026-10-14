@@ -69,6 +69,7 @@ __all__ = [
     "ROLE_RESULTS_HTML",
     "ROLE_RESULTS_MD",
     "ROLE_STAMP_AUDIT",
+    "BLOCKS_MEMBER_BYTES",
     "STAMP_AUDIT_BYTES",
     "TEXT_MEMBER_BYTES",
     "ZIP_MAGICS",
@@ -98,6 +99,16 @@ MEMBER_BYTES: Final[int] = MAX_BYTES
 #: ``json.loads`` of a block list holds roughly ten times its size in Python objects.
 TEXT_MEMBER_BYTES: Final[int] = 16 * MiB
 
+#: ``_blocks.json`` on its own (`W55B-FIX`, X-6): parsing JSON costs a multiple of its size
+#: before a single block is judged, up to about 25 times for a list of empty objects
+#: (measured: 16 MiB, 404 MiB at the peak; 4 MiB, 100 MiB). Measured on real block lists:
+#: the corpus' largest is 283 408 bytes (500 pages), the owner's export 77 152 bytes (30
+#: pages, 129 blocks, 598 bytes a block); the largest real block serialises to 869 bytes.
+#: 4 MiB is fourteen times the largest real list, and holds the bundle's block ceiling
+#: (``bundle_envelope.MAX_BLOCKS``, 3 000) at 1.1 KB a block, the corpus' pretty-printed
+#: density, with room to spare.
+BLOCKS_MEMBER_BYTES: Final[int] = 4 * MiB
+
 #: ``_stamp_audit.json`` is stored and parsed as JSON, never analysed. The corpus' largest is
 #: 62 KB (547 bytes per page, 274 KB for 500 pages): 4 MiB is fifteen times that.
 STAMP_AUDIT_BYTES: Final[int] = 4 * MiB
@@ -119,6 +130,7 @@ class BundleLimits:
 
     member_bytes: int = MEMBER_BYTES
     text_member_bytes: int = TEXT_MEMBER_BYTES
+    blocks_member_bytes: int = BLOCKS_MEMBER_BYTES
     stamp_audit_bytes: int = STAMP_AUDIT_BYTES
     total_bytes: int = TOTAL_BYTES
     ratio: int = MAX_RATIO
@@ -208,6 +220,7 @@ _MESSAGES: Final[dict[str, str]] = {
     "bundle_compression_ratio": "The archive is compressed more than a portal bundle allows.",
     "blocks_json_invalid": "The portal block list is not valid.",
     "blocks_page_count": "The portal block list does not describe the PDF's pages.",
+    "blocks_count": "The portal block list holds more blocks than a portal bundle may.",
     "results_blocks_mismatch": (
         "The recognised-text file and the portal block list disagree about the blocks."
     ),
@@ -665,6 +678,8 @@ def _judge_declared(
             raise refuse("bundle_member_size")
         if role in _TEXT_ROLES and entry.size > limits.text_member_bytes:
             raise refuse("bundle_member_size")
+        if role == ROLE_BLOCKS and entry.size > limits.blocks_member_bytes:
+            raise refuse("bundle_member_size")
         if role == ROLE_STAMP_AUDIT and entry.size > limits.stamp_audit_bytes:
             raise refuse("stamp_audit_invalid")
     declared_total = sum(entry.size for entry in chosen.values())
@@ -721,6 +736,8 @@ def _unpack(
                 if actual > limits.member_bytes:
                     raise refuse("bundle_member_size")
                 if role in _TEXT_ROLES and actual > limits.text_member_bytes:
+                    raise refuse("bundle_member_size")
+                if role == ROLE_BLOCKS and actual > limits.blocks_member_bytes:
                     raise refuse("bundle_member_size")
                 if role == ROLE_STAMP_AUDIT and actual > limits.stamp_audit_bytes:
                     raise refuse("stamp_audit_invalid")
