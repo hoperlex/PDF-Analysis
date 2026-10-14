@@ -149,6 +149,16 @@ def test_the_crop_is_streamed_as_a_png_with_the_wire_header_order(client) -> Non
     assert list(answer.headers)[:2] == ["content-type", "content-length"]
 
 
+def test_the_crop_carries_its_digest_as_its_tag_and_a_private_hour(client) -> None:
+    """`W55B-FIX` (X-4): `crop-url.ts` said the browser keeps the crops in its own HTTP cache;
+    with no validator and no lifetime it could not. The tag is the PNG's SHA-256, quoted."""
+    http, _fake = client
+    answer = http.get(f"/versions/{VERSION}/portal-blocks/blk_{3:032x}/crop")
+    assert answer.headers["etag"] == '"' + "c" * 64 + '"'
+    assert answer.headers["cache-control"] == "private, max-age=3600"
+    assert list(answer.headers)[:4] == ["content-type", "content-length", "etag", "cache-control"]
+
+
 # --- the shipped adapters until their lanes -----------------------------------------------
 
 
