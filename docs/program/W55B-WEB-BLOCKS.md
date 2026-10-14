@@ -341,3 +341,23 @@ radius); the synthetic bundle numbers ordinals across the whole document, so «�
     (`VersionBlockViews`, `PortalBlockListView`, `CropFigureView`) so the instruments render the markup the page renders rather
     than a copy; the language guard renders them with a test crop address (`TEST_CROP_SRC`) and the census sets the API base for
     its one render and restores it, the way it already does for the instance label.
+
+## 7. Verification by the wave executor (after the writer's hand-back)
+
+Run by the wave executor on tip `e6cbfed2`, host load under 1, one invocation at a time; exit codes read directly. The live journey was **not** re-driven
+by the wave executor (it needs a stack, a build and a browser): its summary in section 2 is the writer's; the wave executor read the writer's
+screenshots instead.
+
+| Check | Result |
+| --- | --- |
+| `git diff --check f94283d2..HEAD`; `git status --porcelain -uall`; stack, volumes, `.env`, the lane's API and Next ports | exit 0; empty; none left |
+| `npm run lint`, `npm run typecheck` | exit 0 both |
+| Vitest in two parts | 135 files / 2 013 tests, and 16 tests (the writer's counts) |
+| `tests/contract` (the three files excluded) | 752 passed, 18 927 subtests |
+| `tests/e2e/test_pc01_journey_conformance.py` | 87 passed |
+| nine spot mutations (restored byte for byte, SHA-256 compared): recognised text rendered as raw HTML; the «распознано» marker removed; the description marker removed; `loading="lazy"` removed; the mismatch notice removed; an unknown flag printing its raw token; the budget figures losing their digit grouping; a non-integer figure accepted; the re-audit classifier printing no figures | all nine red |
+| the writer's screenshots (desktop and phone, light and dark; the flags view, the start refusal, the re-audit refusal), read by the wave executor | the flags with their Russian explanations, no horizontal overflow on a phone, both figures on both refusals and no repeat button |
+
+What the screenshots do not show, and the writer says so (section 4): the synthetic bundles' IMAGE blocks lie over blank regions of their PDFs, so every crop is white;
+the browser proves the crops load and are sized, not that they depict what the block marks. The real drawings are REHEARSAL's.
+
