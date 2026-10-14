@@ -12,11 +12,11 @@
 
 | Step | State |
 | --- | --- |
-| living report, plan | this commit |
-| tools: generators, sampler, driver, figures writer, browser drive | pending |
-| stack up (PostgreSQL 57480, S3 61080/61081, API 57580/57581, Next 31680) | pending |
-| (a) 500-page text-rich bundle: upload, budget refusal | pending |
-| (b) 500-page low-text bundle: upload, run, stages, «Блоки» paging | pending |
+| living report, plan | done (`a35645fe`) |
+| tools: generators, sampler, driver, figures, browser drive, crop fidelity, the hard memory cap | done (`58ddb5cf` to `ae85ab20` and after) |
+| stack up (PostgreSQL 57480, S3 61080/61081, API 57580/57581, Next 31680), every heavy process in a capped systemd scope | up |
+| (a) 500-page text-rich bundle: upload x3, budget refusal x2 | done: 201 in 0.82 to 1.05 s, `VmHWM` +28.8 MiB (first in a fresh process) then +3 to +6 MiB; 422 `analysis_input_budget_exceeded` (1 786 430 > 152 361), no row created |
+| (b) 500-page low-text bundle: upload, run x2, «Блоки» x2 | done: upload 201 in 1.79 s, `VmHWM` +342 MiB; run `failed` at `text_analysis` (`recording_missing`, expected) after both deterministic stages succeeded; `source_preparation` 1.36/1.45 s, `page_geometry_extraction` 111.2/107.6 s; API peak RSS 600 MiB, scope `memory.peak` 806/814 MB under a 3 GiB cap; 500 crops, 415.9 MB of PNG; «Блоки» 1 500/1 500 blocks after 14 presses, 150 to 290 ms a press |
 | (c) the owner's export: upload, run, «Блоки», crop fidelity (counts only) | pending |
 | teardown, final report sections 1 to 6 | pending |
 
@@ -38,3 +38,9 @@
    and envelope (`extract_bundle`, `admit_bundle`) before it is used, so it is admitted for the right reasons.
 5. **Outputs are build products** under `.local/rehearsal-w55b/` (git-ignored); they and the stack's volumes are deleted at the end.
 6. **The live input-token count of the real set** (`W55B-BUDGET-01` §6 item 4) is **owed**: no live model call is made here.
+7. **A hard memory cap on every heavy process** (the integrator's addendum, from JUDGE-X X-1/X-2): the API, Next, the
+   bundle builds, the browser drive and the fidelity check each run in a transient systemd scope
+   (`systemd-run --scope -p MemoryMax=<N> -p MemorySwapMax=0`), `N` at most 3 GiB and never above `MemAvailable` minus 1 GiB at
+   its start; `N` and that `MemAvailable` are recorded per start. The API is restarted (a fresh scope) before each heavy phase,
+   so the scope's `memory.peak` is that phase's. The API runs through `instrumented_serve.py`, which runs `serve.py` unchanged
+   and records the resident set after every page of each stage's passes (no product file edited).
