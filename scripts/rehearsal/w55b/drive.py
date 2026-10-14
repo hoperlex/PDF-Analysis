@@ -174,7 +174,7 @@ def _stream_upload(client: common.Api, project: str, archive: Path, filename: st
 
 
 def upload(bundle: Path, phase: str, project_name: str, redact: bool, project_uid: str | None) -> int:
-    common.capacity_gate(f"upload {phase}")
+    at_start = common.capacity_gate(f"upload {phase}")
     client = api()
     if project_uid is None:
         status, body = client.json("POST", "/projects", {"name": project_name}, headers=key("project"))
@@ -205,6 +205,7 @@ def upload(bundle: Path, phase: str, project_name: str, redact: bool, project_ui
         response.update({"error_code": _code(body), "details": body.get("details")})
     common.write_figures(phase, {
         "what": "upload of one portal bundle, streamed with a Content-Length, loopback API (no BFF, no nginx)",
+        "context_at_start": at_start,
         "archive_bytes": bundle.stat().st_size,
         "response": response,
         "wall_seconds": round(seconds, 2),
@@ -311,7 +312,7 @@ def store_bytes() -> dict:
 
 
 def run(phase: str, version_uid: str, timeout: int, redact: bool) -> int:
-    common.capacity_gate(f"run {phase}")
+    at_start = common.capacity_gate(f"run {phase}")
     client = api()
     pid = common.own_api_pid()
     rss_before = common.vm_kib(pid, "VmRSS")
@@ -378,6 +379,7 @@ def run(phase: str, version_uid: str, timeout: int, redact: bool) -> int:
     terminal = (status_body or {})
     common.write_figures(phase, {
         "what": "startRun then getRunStatus every 2 s until terminal; stages from stage_result",
+        "context_at_start": at_start,
         "run_state": terminal.get("state"),
         "terminal_reason": terminal.get("terminal_reason"),
         "terminal_detail": terminal.get("terminal_detail"),
