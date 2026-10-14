@@ -463,7 +463,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"--pages must be 1..{fmt.MAX_PAGES}")
     common.capacity_gate(f"build {args.variant}")
     summary = build(args.variant, args.pages, args.seed, args.out)
-    common.write_figures(f"bundle-{args.variant}-{args.pages}", {"bundle": summary})
+    common.write_figures(f"bundle-{args.variant}-{args.pages}-seed{args.seed}", {"bundle": summary})
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0
 
