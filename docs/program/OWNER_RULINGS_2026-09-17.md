@@ -1567,3 +1567,10 @@ the amendment of the publication policy. W55b finishes as it began.
 | `R-125` | A full `make gate` voided by infrastructure (exit `137`, `StorageUnavailableError`, a MinIO restart) may be **completed**, not restarted. Every test directory that failed is rerun whole, on the same SHA, the same clean tree and the same stand, and the gate counts as `GATE OK` when they are green. The gate record names the voided run, its failure lines, the rerun directories and their results. This amends `AGENTS.md` §6 and `MAIN_AUTODEPLOY_POLICY.md` step 4, both amended in this commit. A failure that is not infrastructural is never completed this way. |
 | `R-126` | Backend lanes do not run their contexts' database suites. Database suites run only in the wave's final gate. From W56a this supersedes the per-lane database checks of `R-70`'s light acceptance. W56a's rule task amends `AGENTS.md` §8. |
 | `R-127` | The gate package is a separate task before W56a, `GATE-PKG-01`: a host preflight, cheap static steps first, and a repository-wide gate slot that waits for headroom. The owner told `pdf-analysis-4a` at 08:24 UTC to build it now, in parallel with W55b's close. It touches the `Makefile`, so it owes one full gate (`R-70` case 3). That gate runs after W55b's gate, on top of W55b's `origin/dev`. |
+
+### `R-128` — the gate package rides W55b's one full gate (owner, 2026-10-14)
+
+At 08:53 UTC the owner told `pdf-analysis-4a` to have `GATE-PKG-01` merged "after 55b without the mandatory gate". The integrator
+offered an alternative by direct poll, and the owner chose it. `agent/gate-pkg-01` (`ea5a28a6`) is merged into the W55b candidate
+**before** W55b's single full gate. That gate is the package's first real run and satisfies its `R-70` case-3 gate, so nothing is
+waived. If the package's own machinery breaks the run, the integrator reverts that merge and gates W55b with the previous target.

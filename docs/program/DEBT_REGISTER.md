@@ -17,7 +17,7 @@ separately planned validation wave. Each candidate must be named by exact SHA th
 **`W53-CLOSE-INT` (2026-10-12) opened `D-141` … `D-152`:** the findings of the 2026-10-12
 W48–W53 review that need a contract, a migration, a dependency, production access or a later
 wave's design; every other confirmed finding was closed by the W53-CLOSE lanes.
-**`W55B-INT-CLOSE` (2026-10-14) opened `D-159` … `D-170`** from `R-121`, the W55b judges, the rehearsal and the lane reports;
+**`W55B-INT-CLOSE` (2026-10-14) opened `D-159` … `D-174`** from `R-121`, the W55b judges, the rehearsal, `W55B-FIX` and the lane reports;
 the findings `W55B-FIX` repairs are recorded in its report, not here.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
@@ -83,6 +83,10 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-168** | PC-02's corpus check is red: `PC02-N03`/`N04` now fall inside the 500-page / 250 MiB limits (`W55B-INGEST-01` §4) | new negatives for PC-02, or retire the two cases |
 | **D-169** | a run whose worker is killed for memory is resumed twice, then fails as `analysis_failed` with no stage and no detail (`W55B-REHEARSAL-01` §4.2.2) | the lease recovery classifies a repeated kill; the run carries a reason |
 | **D-170** | a killed stage leaves its temporary PDF (up to 250 MiB) in the worker's `/tmp`, never reclaimed (§4.2.9; X-1 for the API's spool) | a sweep of stale `am-source-*`/`am-geometry-*`/bundle temporaries at process start |
+| **D-171** | a 500-page drawing set takes 307 s + 415 s in the two deterministic stages on a loaded host, against the 900 s attempt watchdog (`W55B-FIX` §4) | measure on the stand's worker; split or raise the watchdog per stage |
+| **D-172** | contract follow-ups of `W55B-FIX`: a `304` for crops needs a digest-only read on the port; the integer rule is not in the block-list schema's `x-envelope-rules` | the next contract revision, with `D-161` |
+| **D-173** | the upload's Russian rule sentences live in two tables (`upload-envelope.ts` and `upload-failure.ts`); the journey manifest quotes the old «Блоки» empty-state sentence in unchecked prose | one table, owned by the upload slice; the manifest sentence corrected |
+| **D-174** | the BFF upload's memory was measured on the forward function alone, not under `next start` behind nginx with a 250 MiB body (`W55B-FIX` addendum 1.2) | a stand measurement |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
@@ -162,6 +166,18 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-171 … D-174 — `W55B-FIX`'s own follow-ups
+
+**Opened 2026-10-14 from `docs/program/W55B-FIX.md` §4.** D-171: the 500-page drawing set now passes both stages with a flat ~217 MiB
+resident set, but in 307 s + 415 s on a loaded host, close to the 900 s attempt watchdog. D-172: no `304` for crops (the port reads the
+PNG before the digest can be compared; the contract declares none), and the one-integer rule is enforced in code but not stated in the
+schema's `x-envelope-rules`. D-173: `uploadConstraintSentence` (`upload-envelope.ts`) and `uploadRuleSentence` (`upload-failure.ts`)
+both word upload rules; `tests/e2e/pc01/journey/manifest.json` still quotes the old «Блоки» sentence in prose no checker reads.
+D-174: Next's resident set under a real 250 MiB upload through nginx is unmeasured after the `fetch` fix.
+
+**Check:** `rg -n "watchdog|900" src/auditmanager/jobs/lease.py`; `rg -n "uploadConstraintSentence|uploadRuleSentence" web/src`;
+`rg -n "появятся после первого" tests/e2e/pc01/journey/manifest.json`.
 
 ### D-170 — a killed stage leaves its temporary PDF behind
 
