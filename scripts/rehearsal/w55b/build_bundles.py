@@ -414,7 +414,7 @@ def describe(path: Path, built: dict, seed: int) -> dict:
 
 def build(variant: str, pages: int, seed: int, out: Path | None) -> dict:
     common.ensure_out()
-    target = out or (common.OUT / "bundles" / f"{variant}-{pages}.zip")
+    target = (out or (common.OUT / "bundles" / f"{variant}-{pages}.zip")).resolve()
     started = time.monotonic()
     built = (text_rich if variant == "text-rich" else low_text)(pages, seed, target)
     seconds = round(time.monotonic() - started, 1)

@@ -72,6 +72,13 @@ def progress_summary(start: float, end: float) -> dict:
     return out
 
 
+def _code(body) -> str | None:
+    """The catalog code of an error envelope (``error_code``)."""
+    if not isinstance(body, dict):
+        return None
+    return body.get("error_code") or body.get("code")
+
+
 def _env(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
@@ -87,7 +94,7 @@ def sign_in(login: str, password: str) -> tuple[int, dict]:
 def api() -> common.Api:
     status, body = sign_in(_env(LOGIN_ENV), _env(PASSWORD_ENV))
     if status != 200:
-        raise SystemExit(f"sign-in refused: {status} {body.get('code')}")
+        raise SystemExit(f"sign-in refused: {status} {_code(body)}")
     return common.Api(ORIGIN, body["token"])
 
 
@@ -113,7 +120,7 @@ def account() -> int:
         return 0
     status, body = sign_in(SEED_LOGIN, SEED_PASSWORD)
     if status != 200:
-        raise SystemExit(f"the seeded account does not sign in: {status} {body.get('code')}")
+        raise SystemExit(f"the seeded account does not sign in: {status} {_code(body)}")
     seeded = common.Api(ORIGIN, body["token"])
     status, body = seeded.json("POST", "/auth/password",
                                {"current_password": SEED_PASSWORD, "new_password": password})
@@ -194,7 +201,7 @@ def upload(bundle: Path, phase: str, project_name: str, redact: bool, project_ui
                              "source_filename": body.get("source_filename")})
         remember(phase, project_uid=project_uid, version_uid=body.get("version_uid"))
     else:
-        response.update({k: body.get(k) for k in ("code", "message", "details") if k in body})
+        response.update({"error_code": _code(body), "details": body.get("details")})
     common.write_figures(phase, {
         "what": "upload of one portal bundle, streamed with a Content-Length, loopback API (no BFF, no nginx)",
         "archive_bytes": bundle.stat().st_size,
@@ -258,7 +265,7 @@ def start_refused(phase: str, version_uid: str) -> int:
     created = {table: after[table] - before[table] for table in _COUNTED if after[table] != before[table]}
     common.write_figures(phase, {
         "what": "startRun over a version above the analysis input budget",
-        "response": {"status": status, "code": (body or {}).get("code"),
+        "response": {"status": status, "code": _code(body),
                      "retryable": (body or {}).get("retryable"), "details": (body or {}).get("details")},
         "wall_seconds": round(seconds, 3),
         "runs_listed_before": len((runs_before or {}).get("items", [])) if runs_status == 200 else None,
@@ -267,8 +274,8 @@ def start_refused(phase: str, version_uid: str) -> int:
         "rows_after": after,
         "rows_created": created,
     })
-    print(f"{phase}: {status} {(body or {}).get('code')} {(body or {}).get('details')}; rows created: {created or 'none'}")
-    ok = status == 422 and (body or {}).get("code") == "analysis_input_budget_exceeded" and not created
+    print(f"{phase}: {status} {_code(body)} {(body or {}).get('details')}; rows created: {created or 'none'}")
+    ok = status == 422 and _code(body) == "analysis_input_budget_exceeded" and not created
     return 0 if ok else 1
 
 
@@ -315,9 +322,9 @@ def run(phase: str, version_uid: str, timeout: int, redact: bool) -> int:
     status, body = client.json("POST", "/runs", {"version_uid": version_uid}, headers=key("run"))
     if status != 202:
         sampler.stop()
-        common.write_figures(phase, {"response": {"status": status, "code": (body or {}).get("code"),
+        common.write_figures(phase, {"response": {"status": status, "code": _code(body),
                                                   "details": (body or {}).get("details")}})
-        print(f"{phase}: startRun answered {status} {(body or {}).get('code')}")
+        print(f"{phase}: startRun answered {status} {_code(body)}")
         return 1
     run_id = body["run_id"]
     remember(phase, run_id=run_id, version_uid=version_uid)
@@ -423,7 +430,7 @@ def blocks(phase: str, version_uid: str, redact: bool, limit: int) -> int:
         status, body = client.json("GET", path)
         times.append(round(time.monotonic() - started, 3))
         if status != 200:
-            raise SystemExit(f"listVersionPortalBlocks: {status} {(body or {}).get('code')}")
+            raise SystemExit(f"listVersionPortalBlocks: {status} {_code(body)}")
         pages += 1
         block_count = body["block_count"]
         for item in body["items"]:

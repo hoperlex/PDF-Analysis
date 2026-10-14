@@ -119,11 +119,11 @@ def api_start() -> int:
         cwd=common.ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
     )
     API_PID.write_text(f"{child.pid}\n")
-    common.write_figures(f"api-start-{int(time.time())}", {"pid": child.pid, "cap": cap,
-                                                         "scope": common.cgroup_memory(child.pid)})
     if not wait_http(common.HEALTH_PORT, "/readyz", 180):
         raise SystemExit(f"the API (pid {child.pid}) never became ready; see {API_LOG}")
     pid = common.own_api_pid()
+    common.write_figures(f"api-start-{int(time.time())}", {"pid": pid, "cap": cap,
+                                                         "scope": common.cgroup_memory(pid)})
     print(f"api: pid {pid} ready on 127.0.0.1:{common.API_PORT} (health {common.HEALTH_PORT}); "
           f"VmRSS {common.vm_kib(pid, 'VmRSS')} KiB")
     return 0
@@ -208,7 +208,8 @@ def capped(unit: str, ceiling_gib: float, command: list[str]) -> int:
     peak = -1
     while child.poll() is None:
         memory = common.cgroup_memory(child.pid)
-        peak = max(peak, memory.get("memory_peak", -1))
+        if memory.get("scope", "").startswith("w55b-rehearsal-"):   # not before the move
+            peak = max(peak, memory.get("memory_peak", -1))
         time.sleep(0.5)
     common.write_figures(f"capped-{unit}-{int(time.time())}", {
         "command": command[:3], "cap": cap, "exit": child.returncode,
@@ -235,10 +236,13 @@ def main(argv: list[str] | None = None) -> int:
                                              "capped"))
     parser.add_argument("--unit", default="step")
     parser.add_argument("--ceiling-gib", type=float, default=3.0)
-    parser.add_argument("rest", nargs=argparse.REMAINDER)
+    argv = list(sys.argv[1:] if argv is None else argv)
+    rest: list[str] = []
+    if "--" in argv:
+        rest = argv[argv.index("--") + 1:]
+        argv = argv[:argv.index("--")]
     args = parser.parse_args(argv)
     if args.command == "capped":
-        rest = args.rest[1:] if args.rest[:1] == ["--"] else args.rest
         return capped(args.unit, min(args.ceiling_gib, 3.0), rest)
     return {"api-start": api_start, "api-stop": api_stop, "web-start": web_start,
             "web-stop": web_stop, "status": status}[args.command]()
