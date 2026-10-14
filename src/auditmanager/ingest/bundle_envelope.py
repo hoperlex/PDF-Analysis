@@ -118,9 +118,18 @@ def _loads(raw: bytes) -> Any:
 
 
 def _is_integer(value: object) -> bool:
-    return (isinstance(value, int) and not isinstance(value, bool)) or (
-        isinstance(value, float) and value.is_integer()
-    )
+    """A JSON integer as written: ``3``, never ``3.0`` and never ``true``.
+
+    `W55B-FIX` (X-7, Y-1(a)). JSON Schema's ``integer`` admits a number with a zero
+    fraction, and so did this check; both run stages (``analysis.recognised.portal`` and
+    ``analysis.geometry.portal``) read a page index, a raster size, a rotation, a page label
+    and an ordinal as a Python ``int`` and refuse ``3.0`` as ``portal_blocks_invalid``. An
+    accepted version is immutable, so a block list one side admits and the other refuses
+    was a version every run failed. One rule now holds on both sides: the integer the
+    portal writes. The fixtures' reference checker (``tools/fixtures/portal_bundle``) reads
+    ``integer`` the same way.
+    """
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _is_number(value: object) -> bool:
@@ -150,8 +159,7 @@ def _blocks_problem(document: Any) -> str | None:
     for name in SCHEMA_REQUIRED_TOP:
         if name not in document:
             return f"missing {name}"
-    if not (_is_integer(document["schema_version"]) and document["schema_version"] == SCHEMA_VERSION
-            and not isinstance(document["schema_version"], bool)):
+    if not (_is_integer(document["schema_version"]) and document["schema_version"] == SCHEMA_VERSION):
         return "schema_version"
     if document["coordinate_space"] != COORDINATE_SPACE:
         return "coordinate_space"
@@ -170,7 +178,7 @@ def _blocks_problem(document: Any) -> str | None:
         if not _int_at_least(page["width_px"], 1) or not _int_at_least(page["height_px"], 1):
             return "page size"
         rotation = page["rotation"]
-        if isinstance(rotation, bool) or rotation not in ROTATIONS:
+        if not _is_integer(rotation) or rotation not in ROTATIONS:
             return "rotation"
 
     blocks = document["blocks"]
