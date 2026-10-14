@@ -1,6 +1,11 @@
 # Current state
 
-> **Updated 2026-10-08 by the W52 integrator.** W49 and W50 of the identity programme
+**Updated 2026-10-14.** W55b development closure is recorded below and in
+`W55B-INT-CLOSE.md`; `origin/main` remains the separately published `v0.5.0` tree.
+The older programme notes below are retained as historical context.
+
+> **Historical update, 2026-10-08 by the W52 integrator.** W49 and W50 of the identity
+> programme
 > (`docs/program/dispatch/IDENTITY-WAVES.md`) are closed on `origin/dev`. W51 Stage A and
 > all three Stage B implementation lanes and Stage C code are merged there through
 > `4400e81`. `W51-INT-CLOSE` closes implementation on the development line under
@@ -89,7 +94,8 @@
 > line. `W52-INT-CLOSE` records development implementation completion
 > after the release-note test's governance-interpreter correction. D-137–D-140
 > remain open; no `GATE OK`, live or release verdict follows.
-> `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`) is the last tagged release.
+> At that historical update, `alpha-w48.1` (the model-proxy hotfix of `alpha-w48`)
+> was the last tagged release.
 > Development candidates publish to
 > `origin/dev`; `origin/main` requires a separate direct owner instruction because it triggers
 > external deployment.
@@ -119,7 +125,25 @@
 > window was oriented by its brief instead, which worked and is not the arrangement this file
 > describes. The history below is kept; this block is what is true now."
 
-## Active development, 2026-10-08 — W52 Stage C backend integration
+## Active development, 2026-10-14 — W55b development closure
+
+**2026-10-14 — W55b closed on `origin/dev` as unreleased 0.6.0.** The clean
+development candidate `8c5a109bd98302b64fb47b364d4c639ff63c0eda` completed
+its full `make gate` under owner ruling `R-125` after infrastructure
+failures: the failed directories and unrun remainder were executed on the same
+clean SHA and stand. The command did not print the literal `GATE OK`; counts,
+rerun results and log digests are recorded in `W55B-INT-CLOSE.md`. The wave
+admits a portal bundle of up to 500
+pages and a 250 MiB PDF member, stores the bundle's declared members, shows
+recognised text and product-made IMAGE crops under «Блоки», and refuses a run
+above the configured input budget before creating one. `GATE-PKG-01` is part of
+this candidate. FIX-2 restored the frozen whole-member archive ratio without
+removing the early declared-size stop. The sealed API surface is 47 paths / 54
+operations / 123 schemas, the error catalogue has 24 codes, and migration head
+is `0021_portal_bundles`. D-159–D-177 record the remaining findings and
+measurements. The 0.6.0 notes exist but no release tag or `origin/main`
+publication is made by this development close; the owner's separate exact-SHA
+instruction is required for that release step.
 
 **2026-10-13 — W54 + W55a released as `v0.5.0`.** After `R-111`'s consolidated validation
 (`W55A-INT-GATE-01`: literal `GATE OK` on `23fd729`), the owner instructed publication of that
@@ -212,7 +236,7 @@ with no promotion. W49 now means identity, W50 the shell and W51 the screens:
 
 The frozen API surface is **47 paths / 54 operations / 123 schemas** since `W55B-SEAL-01`, the
 error catalog **24**, domain candidate revision 12 with **32** opaque identities, and the
-migration head is **`0021_portal_bundles`** (`0020_norms_search` beneath it). The last tagged release is `alpha-w48.1`.
+migration head is **`0021_portal_bundles`** (`0020_norms_search` beneath it). The last tagged release is `v0.5.0`.
 This section makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is
 deployed.
 
