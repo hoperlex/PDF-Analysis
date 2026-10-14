@@ -1093,18 +1093,44 @@ class TestTheUploadRouteHasAFrontDoor:
             b"text/plain; x=multipart/form-data; boundary=y",
         ],
     )
-    def test_a_signed_upload_that_is_not_multipart_is_refused_before_its_body(
+    def test_a_signed_upload_that_is_not_multipart_takes_no_slot_and_none_of_its_body_is_read(
         self, content_type: bytes
     ) -> None:
+        """The application answers it from its headers -- the seam by the registers
+        (`test_role_register`), then the strict pass's ``media_type`` -- over an empty body;
+        the caller's bytes are never pulled and no slot is taken."""
+
         async def scenario() -> None:
-            inner = HoldingApp()
+            inner = ConsumingApp()
             app, gate = stack(inner)
+            held = HoldingApp()
+            holders, holding_gate = stack(held)
             answer = await drive(app, content_type=content_type, chunks=(b"y" * 1000,))
-            assert answer.status == 422
-            assert answer.envelope["details"] == {"field": "Content-Type", "constraint": "media_type"}
-            assert answer.receives == 0 and inner.entered == 0 and gate.gate.in_flight == 0
+            assert answer.status == 204
+            assert answer.receives == 0 and inner.read == 0 and gate.gate.in_flight == 0
+            # And with both slots held, it still reaches the application rather than being
+            # refused as busy, and it takes no third slot.
+            waiting = [asyncio.create_task(drive(holders)) for _ in range(2)]
+            await until(lambda: held.entered == 2, "two signed uploads holding the slots")
+            other = asyncio.create_task(drive(holders, content_type=content_type))
+            await until(lambda: held.entered == 3, "the non-multipart upload inside the application")
+            assert holding_gate.gate.in_flight == 2
+            held.release.set()
+            assert (await other).status == 204
+            await asyncio.gather(*waiting)
 
         run(scenario())
+
+    def test_the_real_application_answers_a_signed_json_upload_with_its_own_rules(self) -> None:
+        """Through the documentation application: an unsigned JSON upload is the door's
+        ``401``; a JSON upload with no credential at all likewise; the strict pass's
+        ``media_type`` and the registers' answers are covered on the served application by
+        `test_multipart_rules` (driver) and `test_role_register`."""
+        from auditmanager.api.app import create_documentation_app
+
+        client = TestClient(create_documentation_app(), raise_server_exceptions=False)
+        answer = client.post(UPLOAD_PATH, headers={"Content-Type": "application/json"}, content=b"{}")
+        assert answer.status_code == 401
 
     def test_no_check_admits_nobody(self) -> None:
         async def scenario() -> None:

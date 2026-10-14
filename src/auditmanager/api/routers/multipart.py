@@ -110,9 +110,6 @@ _BODY_TOO_LARGE: Final[str] = "The request body exceeds the maximum accepted siz
 _NO_BOUNDARY: Final[str] = (
     "The multipart body could not be read; the boundary may be missing."
 )
-#: :func:`require_a_strict_multipart_body`'s sentence, which the transport now says first for
-#: the upload route.
-_NOT_MULTIPART: Final[str] = "This operation expects a multipart/form-data body."
 
 
 class _BodyTooLarge(Exception):
@@ -196,6 +193,25 @@ def _media_type(value: bytes) -> bytes:
     return value.split(b";", 1)[0].strip().lower()
 
 
+def _no_body() -> Callable[[], Coroutine[Any, Any, dict[str, Any]]]:
+    """A ``receive`` that delivers an empty body and then reports the client gone.
+
+    For an upload-route request whose body is not multipart: the application answers it from
+    its headers alone (the seam, then ``media_type``), so it is given nothing to read and the
+    caller's bytes are never pulled off the connection.
+    """
+    delivered = False
+
+    async def receive() -> dict[str, Any]:
+        nonlocal delivered
+        if not delivered:
+            delivered = True
+            return {"type": "http.request", "body": b"", "more_body": False}
+        return {"type": "http.disconnect"}
+
+    return receive
+
+
 def _route_path(scope: Any) -> str:
     """The path below any ``root_path``, which is how the routes are declared."""
     path: str = scope.get("path", "")
@@ -227,14 +243,20 @@ class BodyCapMiddleware:
     reads and parses a form before it solves the authorization seam, so a caller with no
     credential had its body of up to 251 MiB read, spooled and parsed, holding one of the
     two upload slots, before the seam answered ``401``. Two of them kept every upload
-    refused as busy. Now, before the slot and before any byte of the body, the upload route
-    requires the seam's cheap half -- a bearer credential this deployment signed and that
-    has not expired, checked by ``verify_credential`` with no database read -- and a
-    ``multipart/form-data`` body. Anything else is answered here: ``401
-    authentication_required``, or ``422`` ``media_type``. The full seam (the account's
-    standing, roles and generation) still runs after, as it always has: this is only a door
-    in front of it. ``verify_credential`` absent is a door that admits nobody, the seam's
-    own rule for a deployment with no secret.
+    refused as busy. Now, before the slot and before any byte of the body:
+
+    * a request with no bearer credential this deployment signed and that has not expired --
+      the seam's cheap half, checked by ``verify_credential`` with no database read -- is
+      answered here, ``401 authentication_required``;
+    * a signed request whose body is not ``multipart/form-data`` takes no slot and has none
+      of its body read: the application is handed an empty body, so the seam (the account's
+      standing, roles and generation, `test_role_register`) and then the strict pass
+      (``media_type``) answer it exactly as they always did, without a byte of the caller's;
+    * only a signed multipart request goes on to the gate and the parser.
+
+    The full seam still runs for every request this lets through: this is only a door in
+    front of it. ``verify_credential`` absent is a door that admits nobody, the seam's own
+    rule for a deployment with no secret.
     """
 
     __slots__ = ("app", "limit", "upload_limit", "gate", "verify_credential")
@@ -313,10 +335,14 @@ class BodyCapMiddleware:
             return
 
         # The front door, before the gate and before `receive` is touched: a credential this
-        # deployment signed and that has not expired, then a multipart body.
-        refusal = self._front_door(token, media_type)
+        # deployment signed and that has not expired; then a body that is not multipart is
+        # never read and takes no slot -- the seam and the strict pass answer it.
+        refusal = self._front_door(token)
         if refusal is not None:
             await envelope_response(refusal, current_correlation_id())(scope, receive, send)
+            return
+        if media_type != b"multipart/form-data":
+            await self.app(scope, _no_body(), send)
             return
 
         # The gate. After the cheap refusals above, which a retry could never turn into
@@ -330,18 +356,11 @@ class BodyCapMiddleware:
             # Finished, failed, cancelled or disconnected: all of them leave this block.
             self.gate.release()
 
-    def _front_door(self, token: str | None, media_type: bytes) -> DomainError | None:
-        """The upload route's refusal before its body, or ``None`` to go on to the gate."""
+    def _front_door(self, token: str | None) -> DomainError | None:
+        """The upload route's refusal before its body, or ``None`` to go on."""
         verify = self.verify_credential
         if token is None or verify is None or not verify(token):
             return DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
-        if media_type != b"multipart/form-data":
-            return DomainError(
-                ErrorCode.VALIDATION_FAILED,
-                message=_NOT_MULTIPART,
-                field="Content-Type",
-                constraint="media_type",
-            )
         return None
 
     async def _serve(
