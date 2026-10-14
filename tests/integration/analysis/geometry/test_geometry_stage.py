@@ -492,10 +492,19 @@ def test_a_block_list_the_stage_cannot_use_is_portal_blocks_invalid(store) -> No
     assert _geometry_files() == before
 
 
-def test_a_degenerate_image_block_is_refused_and_leaves_no_file(store) -> None:
+@pytest.mark.parametrize(
+    "box",
+    [
+        [0.5, 0.5, 0.5 + 1e-9, 0.5 + 1e-9],
+        # `W55B-FIX` (X-8): boxes whose arithmetic overflowed or divided by zero ended the run
+        # `crashed` instead of refusing it.
+        [0.0, 0.0, 5e-324, 5e-324],
+        [0.0, 0.0, 1e-300, 1e-300],
+    ],
+)
+def test_a_degenerate_image_block_is_refused_and_leaves_no_file(store, box) -> None:
     page = _square_page()
-    tiny = 1e-9
-    members_ = bundle_members([page], [BlockSpec("image", 1, [0.5, 0.5, 0.5 + tiny, 0.5 + tiny], ordinal=1)])
+    members_ = bundle_members([page], [BlockSpec("image", 1, box, ordinal=1)])
     prepared = prepare(store, members_)
     before = _geometry_files()
     assert _refusal(run_geometry(store, prepared)) == "portal_block_degenerate"

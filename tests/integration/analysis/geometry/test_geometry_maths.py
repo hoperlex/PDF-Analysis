@@ -250,6 +250,30 @@ def test_a_degenerate_box_is_refused(box) -> None:
         plan_crop(box, *A4, 4.0)  # type: ignore[arg-type]
 
 
+@pytest.mark.parametrize(
+    "box",
+    [
+        (0.0, 0.0, 5e-324, 5e-324),     # subnormal sides: the floor's ceil(inf) overflowed
+        (0.0, 0.0, 5e-324, 0.5),        # one subnormal side
+        (0.0, 0.0, 1e-300, 1e-300),     # the cap's quadratic divided by zero
+        (0.0, 0.0, 1e-160, 1e-160),     # the clip's area underflows to zero
+    ],
+)
+def test_a_box_ingest_admits_whose_arithmetic_fails_is_degenerate_never_an_untyped_error(box) -> None:
+    """`W55B-JUDGE-X` X-8. Each box is what ingest admits -- four numbers in [0, 1] with
+    ``x0 < x1`` and ``y0 < y1``, unchanged by a JSON round trip -- and each made
+    ``plan_crop`` raise ``OverflowError`` or ``ZeroDivisionError``, which the stage did not
+    catch and the run ended ``crashed``. It is a box too small to position on a canvas: the
+    typed refusal, and nothing else."""
+    import json
+
+    admitted = tuple(json.loads(json.dumps(list(box))))
+    assert admitted == box and box[0] < box[2] and box[1] < box[3]
+    with pytest.raises(DegenerateCrop) as refused:
+        plan_crop(admitted, *A4, 4.0)
+    assert type(refused.value) is DegenerateCrop
+
+
 def test_a_block_of_one_portal_pixel_is_still_cut_and_the_degenerate_bound_is_far_below_it() -> None:
     """Degenerate means a long side under ``800 / 2**24`` of the page's longer side: about a
     sixth of a pixel of a 300 dpi A4 raster. One pixel of that raster is still cut."""
