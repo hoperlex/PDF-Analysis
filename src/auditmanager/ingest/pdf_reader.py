@@ -30,7 +30,8 @@ The protocol
 
 The rules are the envelope's, in its order (:mod:`auditmanager.ingest.envelope`): the
 document loads, it is not encrypted, its page count is within bounds, and then per page --
-its drawing objects, counted into form XObjects, within the page ceiling and the document's;
+its drawing elements (path segments and other objects, counted into form XObjects) within the
+page ceiling and the document's;
 its characters within the page ceiling, read only after the count says so; the document's
 characters within their ceiling; and, for a bare PDF, a text layer. ``refused`` names the
 rule; the envelope owns every message.
@@ -104,48 +105,55 @@ def _open(descriptor: int, size: int, raw: Any) -> tuple[Any, Any] | dict[str, A
     return {"refused": "unparseable"}
 
 
-def _objects(raw: Any, page: Any, ceiling: int) -> int:
-    """The page's drawing objects, those inside form XObjects included, up to ``ceiling`` + 1.
+def _elements(raw: Any, page: Any, ceiling: int) -> int:
+    """The page's drawing elements, those inside form XObjects included, up to ``ceiling`` + 1.
 
-    PDFium counts a form XObject as one object of the page, but parses everything inside it,
-    and so does every later reader of the page; a page that wraps a million paths in one form
-    is a page of a million objects.
+    An element is a segment of a path, or any other page object (text, image, shading, form).
+    A path is counted by its segments because that is what every later reader of the page
+    pays for: pdfplumber builds a point for each, and a single path object may hold a million
+    of them. PDFium counts a form XObject as one object of the page but parses everything
+    inside it, and so does every later reader; a page that wraps a million paths in one form
+    is a page of a million elements.
     """
     total = 0
     pending: list[tuple[Any, bool]] = [(page, False)]
     while pending:
         container, is_form = pending.pop()
         count = (raw.FPDFFormObj_CountObjects if is_form else raw.FPDFPage_CountObjects)(container)
-        total += max(count, 0)
-        if total > ceiling:
-            return total
         get = raw.FPDFFormObj_GetObject if is_form else raw.FPDFPage_GetObject
         for index in range(max(count, 0)):
             child = get(container, index)
-            if child and raw.FPDFPageObj_GetType(child) == raw.FPDF_PAGEOBJ_FORM:
-                pending.append((child, True))
+            kind = raw.FPDFPageObj_GetType(child) if child else None
+            if kind == raw.FPDF_PAGEOBJ_PATH:
+                total += max(raw.FPDFPath_CountSegments(child), 1)
+            else:
+                total += 1
+                if kind == raw.FPDF_PAGEOBJ_FORM:
+                    pending.append((child, True))
+            if total > ceiling:
+                return total
     return total
 
 
 def _pages(document: Any, raw: Any, page_count: int, settings: dict[str, Any]) -> dict[str, Any]:
     """Every page's characters and layer, or the first rule a page breaks."""
     require_text = bool(settings["require_text"])
-    page_objects = int(settings["page_objects"])
+    page_elements = int(settings["page_elements"])
     page_characters = int(settings["page_characters"])
-    document_objects = int(settings["document_objects"])
+    document_elements = int(settings["document_elements"])
     document_characters = int(settings["document_characters"])
     pages: list[list[Any]] = []
-    objects_in_all = 0
+    elements_in_all = 0
     characters_in_all = 0
     try:
         for index in range(page_count):
             page = document[index]
             try:
-                objects = _objects(raw, page.raw, page_objects)
-                if objects > page_objects:
+                elements = _elements(raw, page.raw, page_elements)
+                if elements > page_elements:
                     return {"refused": "page_content"}
-                objects_in_all += objects
-                if objects_in_all > document_objects:
+                elements_in_all += elements
+                if elements_in_all > document_elements:
                     return {"refused": "document_content"}
                 text_page = page.get_textpage()
                 try:

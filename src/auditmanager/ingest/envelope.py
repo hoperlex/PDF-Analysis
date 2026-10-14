@@ -50,7 +50,7 @@ reader runs under an address-space ceiling and a CPU-time ceiling the kernel enf
 (:data:`READER_ADDRESS_SPACE`, :data:`READER_SECONDS`), and this module waits for it with a
 wall clock of the same length and kills it when that runs out. Four ceilings give a typed
 refusal for the documents that stay inside those limits but are no real document's shape
-(:data:`PAGE_OBJECTS_MAX`, :data:`PAGE_CHARACTERS_MAX`, :data:`DOCUMENT_OBJECTS_MAX`,
+(:data:`PAGE_ELEMENTS_MAX`, :data:`PAGE_CHARACTERS_MAX`, :data:`DOCUMENT_ELEMENTS_MAX`,
 :data:`DOCUMENT_CHARACTERS_MAX`), and they bound what the run stages meet in a version the
 envelope accepted: the same pages, read by pdfplumber and rendered by PDFium.
 
@@ -72,8 +72,8 @@ so a rejection is attributable to a rule rather than to a coincidence of two:
 5. the document is not encrypted -- the security handler is read straight after the
    document opens, before any page is touched;
 6. the page count is within bounds;
-7. per page, in page order: its drawing objects within :data:`PAGE_OBJECTS_MAX` and the
-   document's within :data:`DOCUMENT_OBJECTS_MAX`, then its characters within
+7. per page, in page order: its drawing elements within :data:`PAGE_ELEMENTS_MAX` and the
+   document's within :data:`DOCUMENT_ELEMENTS_MAX`, then its characters within
    :data:`PAGE_CHARACTERS_MAX` and the document's within :data:`DOCUMENT_CHARACTERS_MAX`
    (`W55B-FIX`, X-1); reading the document within the reader's limits
    (``pdf_reader_limits``);
@@ -111,13 +111,13 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 __all__ = [
     "ACCEPTED_MEDIA_TYPE",
     "DOCUMENT_CHARACTERS_MAX",
-    "DOCUMENT_OBJECTS_MAX",
+    "DOCUMENT_ELEMENTS_MAX",
     "MAX_BYTES",
     "MAX_PAGES",
     "MAX_SOURCE_FILENAME",
     "MIN_PAGES",
     "PAGE_CHARACTERS_MAX",
-    "PAGE_OBJECTS_MAX",
+    "PAGE_ELEMENTS_MAX",
     "PDFIUM_LOCK",
     "PDF_MAGIC",
     "READER_ADDRESS_SPACE",
@@ -155,25 +155,31 @@ PDFIUM_LOCK: Final[threading.Lock] = threading.Lock()
 
 # -- the reader's bounds (`W55B-FIX`, X-1) -----------------------------------------------
 #
+# A drawing element is a segment of a path or any other page object, counted into form
+# XObjects (``pdf_reader._elements``): what pdfplumber pays for when a run reads the page --
+# about 1.6 to 2 KiB and 31 to 41 us an element, measured on the owner's export (24 MiB and
+# 0.51 s a page) and on `W55B-REHEARSAL-01`'s vector drawing set (23 MiB and 0.46 s a page).
+#
 # Measured with PDFium, counted as the reader counts, on the 674 PDFs of the norms corpus
-# (28 251 pages) and on the owner's portal export (30 pages): at most 5 450 drawing objects
-# on a page (the export, nearly all inside form XObjects) and 384 399 in a document (the
-# corpus), at most 19 132 characters on a page (the export) and 1 892 768 in a document (the
-# corpus), at most 0.05 s for a page and 2.9 s for a document; every one of those documents
-# is read inside 64 MiB of address space. Each ceiling below keeps a margin of at least five
-# over the largest of those figures.
+# (28 251 pages) and on the owner's portal export (30 pages): at most 75 486 drawing
+# elements on a page (the export) and 1 300 705 in a document (the corpus), at most 19 132
+# characters on a page (the export) and 1 892 768 in a document (the corpus), at most 0.05 s
+# for a page and 2.9 s for a document; every one of those documents is read inside 64 MiB of
+# address space. Each ceiling below keeps a margin of at least five over the largest of those
+# figures.
 
-#: A page's drawing objects, those inside form XObjects included: nine times the real
-#: maximum (5 450). Each costs PDFium memory when the page loads, and pdfplumber about 3 KiB
-#: and 50 us when a run reads the page (a page of 40 000 paths, 120 MiB and 2.1 s).
-PAGE_OBJECTS_MAX: Final[int] = 50_000
+#: A page's drawing elements: five times the real maximum (75 486). pdfplumber holds one page
+#: at a time (``analysis.stages.extraction``), so this bounds a run's page at about 800 MiB.
+PAGE_ELEMENTS_MAX: Final[int] = 400_000
 #: A page's characters: ten times the real maximum (19 132). PDFium's text page holds about
 #: 220 bytes a character (`W55B-JUDGE-X` p5).
 PAGE_CHARACTERS_MAX: Final[int] = 200_000
-#: A document's drawing objects: five times the real maximum (384 399), so a page of the most
-#: complex drawing a ceiling admits cannot be repeated on every one of five hundred pages
-#: (one shared content stream did exactly that in `W55B-JUDGE-X` p9).
-DOCUMENT_OBJECTS_MAX: Final[int] = 2_000_000
+#: A document's drawing elements: six times the real maximum (1 300 705), above the owner's
+#: export carried to 500 pages (about 6.2 M) and `W55B-REHEARSAL-01`'s 500-sheet vector set
+#: (7.5 M), so a page of the most complex drawing a ceiling admits cannot be repeated on
+#: every one of five hundred pages (one shared content stream did exactly that in
+#: `W55B-JUDGE-X` p9). Two pdfplumber passes over it take about 500 to 660 s.
+DOCUMENT_ELEMENTS_MAX: Final[int] = 8_000_000
 #: A document's characters: ten times the real maximum (1 892 768), and a hundred times under
 #: the ``integer`` ``text_character_count`` is stored in (2**31 - 1).
 DOCUMENT_CHARACTERS_MAX: Final[int] = 20_000_000
@@ -394,9 +400,9 @@ def _read_in_a_child(descriptor: int, size: int, *, require_text: bool) -> dict[
         "require_text": require_text,
         "min_pages": MIN_PAGES,
         "max_pages": MAX_PAGES,
-        "page_objects": PAGE_OBJECTS_MAX,
+        "page_elements": PAGE_ELEMENTS_MAX,
         "page_characters": PAGE_CHARACTERS_MAX,
-        "document_objects": DOCUMENT_OBJECTS_MAX,
+        "document_elements": DOCUMENT_ELEMENTS_MAX,
         "document_characters": DOCUMENT_CHARACTERS_MAX,
         "address_space": READER_ADDRESS_SPACE,
         "cpu_seconds": READER_SECONDS,

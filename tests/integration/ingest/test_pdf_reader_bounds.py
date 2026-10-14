@@ -9,8 +9,9 @@ Now the PDF is read by a child process (``auditmanager.ingest.pdf_reader``) unde
 address-space and a CPU-time ceiling, with a wall clock in the API, and four ceilings give a
 typed refusal before the work grows:
 
-* a page's drawing objects (into form XObjects) or characters -- ``pdf_page_content``;
-* the document's drawing objects or characters -- ``pdf_document_content``;
+* a page's drawing elements (path segments and other objects, into form XObjects) or
+  characters -- ``pdf_page_content``;
+* the document's drawing elements or characters -- ``pdf_document_content``;
 * the reader's memory or time -- ``pdf_reader_limits``.
 
 Each bomb below is refused **by the rule named, within a few seconds, and without the API
@@ -94,8 +95,11 @@ def _pdf(pages: int, content: bytes, *, form: bool = False) -> bytes:
 
 
 _TEXT = b"BT /F1 9 Tf 10 10 Td (a line of text for the layer, well over fifty characters) Tj ET\n"
-#: The judge's text bomb: 125 000 strings of sixteen characters, about 2 M characters a page.
-TEXT_BOMB = b"BT /F1 1 Tf 0 0 Td " + b"(AAAAAAAAAAAAAAAA) Tj " * 125_000 + b"ET"
+#: The judge's text bomb: 500 000 strings of sixteen characters, about 8 M characters a page
+#: (the judge's p5 at 8 M: 1.8 GB and 4.7 s a page in the API process).
+TEXT_BOMB = b"BT /F1 1 Tf 0 0 Td " + b"(AAAAAAAAAAAAAAAA) Tj " * 500_000 + b"ET"
+#: 15 000 strings of sixteen characters: few elements, 240 000 characters on the page.
+DENSE_TEXT = b"BT /F1 1 Tf 0 0 Td " + b"(AAAAAAAAAAAAAAAA) Tj " * 15_000 + b"ET"
 #: The judge's low-text page: a text line and 40 000 path operators.
 PATHS = _TEXT + b"0 0 m 1 1 l S " * 40_000
 #: 2 000 strings of PDFium's longest (32 767 characters), each on a line of its own: 65 M
@@ -127,10 +131,11 @@ def _refused(pdf: bytes, *, within: float) -> tuple[str, float]:
     [
         ("30 pages of the judge's text bomb", lambda: _pdf(30, TEXT_BOMB), "pdf_page_content"),
         ("the text bomb inside a form XObject", lambda: _pdf(30, TEXT_BOMB, form=True), "pdf_page_content"),
+        ("a page of 240 000 characters", lambda: _pdf(30, DENSE_TEXT), "pdf_page_content"),
         ("500 pages of the judge's low-text page", lambda: _pdf(500, PATHS), "pdf_document_content"),
         ("a page no address space can hold", lambda: _pdf(1, LONG_STRINGS), "pdf_reader_limits"),
     ],
-    ids=["text-bomb", "text-bomb-in-a-form", "paths-on-500-pages", "long-strings"],
+    ids=["text-bomb", "text-bomb-in-a-form", "dense-text", "paths-on-500-pages", "long-strings"],
 )
 def test_a_small_pdf_that_would_cost_gigabytes_is_refused_by_its_rule_in_seconds(
     label: str, build: Any, constraint: str
@@ -212,9 +217,9 @@ def test_a_real_page_is_read_as_before() -> None:
 
 def test_the_ceilings_are_the_recorded_figures() -> None:
     """Written out: the real maxima they were sized from are in the report, not in the code."""
-    assert envelope.PAGE_OBJECTS_MAX == 50_000            # 9 x 5 450, the export's page
+    assert envelope.PAGE_ELEMENTS_MAX == 400_000          # 5 x 75 486, the export's page
     assert envelope.PAGE_CHARACTERS_MAX == 200_000        # 10 x 19 132, the export's page
-    assert envelope.DOCUMENT_OBJECTS_MAX == 2_000_000     # 5 x 384 399, a corpus document
+    assert envelope.DOCUMENT_ELEMENTS_MAX == 8_000_000    # 6 x 1 300 705, a corpus document
     assert envelope.DOCUMENT_CHARACTERS_MAX == 20_000_000  # 10 x 1 892 768, a corpus document
     assert envelope.DOCUMENT_CHARACTERS_MAX * 100 < 2**31  # text_character_count is an integer
     assert envelope.READER_ADDRESS_SPACE == 512 * MiB     # 8 x the 64 MiB every real PDF needs
