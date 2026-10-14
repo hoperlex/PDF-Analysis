@@ -408,6 +408,61 @@ describe('a request body is streamed to the API under a deadline', () => {
     expect(headersOf(calls[0]!.init).get('content-type')).toBe('multipart/form-data; boundary=x');
   });
 
+  it('refuses redirects and names no window, so fetch neither clones the request nor tees its body', async () => {
+    const { stream } = pulledOnDemand(2, 16);
+    const { fetch, calls } = recordingFetch(okJson);
+    await forwardWithCredential(uploadRequest(stream), UPLOAD_SEGMENTS, TARGET, { fetch });
+    expect(calls[0]!.init.redirect).toBe('error');
+    expect(calls[0]!.init.window).toBeNull();
+
+    // A small JSON write is read whole and keeps fetch's defaults: nothing to tee.
+    const json = recordingFetch(okJson);
+    await forwardWithCredential(
+      new Request('http://localhost/bff/v1/projects', { method: 'POST', body: '{"name":"x"}' }),
+      ['projects'],
+      TARGET,
+      { fetch: json.fetch },
+    );
+    expect(json.calls[0]!.init.redirect).toBeUndefined();
+    expect('window' in json.calls[0]!.init).toBe(false);
+  });
+
+  it('through the real fetch, the upload stream is read once and never teed', async () => {
+    // `W55B-REHEARSAL-01` measured the BFF's resident set growing by about the upload's size:
+    // undici's fetch cloned the request and teed the body, and the branch kept for a redirect
+    // held every byte. Here the runtime's own fetch carries a 4 MiB stream to a real local
+    // server; `tee` is watched on the stream class undici uses, and the server receives
+    // every byte.
+    const { createServer } = await import('node:http');
+    let received = 0;
+    const server = createServer((req, res) => {
+      req.on('data', (chunk: Buffer) => {
+        received += chunk.length;
+      });
+      req.on('end', () => {
+        res.writeHead(201, { 'content-type': 'application/json' });
+        res.end('{"ok":true}');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    const port = typeof address === 'object' && address !== null ? address.port : 0;
+    const tee = vi.spyOn(ReadableStream.prototype, 'tee');
+    try {
+      const { stream } = pulledOnDemand(64, 64 * 1024);
+      const response = await forwardWithCredential(uploadRequest(stream), UPLOAD_SEGMENTS, {
+        upstream: `http://127.0.0.1:${port}`,
+        token: TOKEN,
+      });
+      expect(response.status).toBe(201);
+      expect(received).toBe(64 * 64 * 1024);
+      expect(tee).not.toHaveBeenCalled();
+    } finally {
+      tee.mockRestore();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it('never asks the request for its bytes whole', async () => {
     const { stream } = pulledOnDemand(2, 16);
     const request = uploadRequest(stream);
