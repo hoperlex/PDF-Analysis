@@ -1553,3 +1553,17 @@ Asked by the W55b integrator after the executor's hand-back of lane 8 (`agent/w5
 
 Not a ruling: the stand's `AUDITMANAGER_RUN_COST_CEILING_USD`. From W55b on, the application refuses to start below about
 `$0.80` (`W55B-BUDGET-01` §3.4). The owner checks the stand's value personally, and it is a stop item of `W55B-INT-MAIN-01`.
+
+## 3.34 — `R-124` to `R-127`, review and gate economy (owner's direct polls, 2026-10-14)
+
+`pdf-analysis-4a` put these questions to the owner in a poll at 08:10 UTC, after the owner asked at 06:23 UTC whether two independent
+judges, QA and the quality gate at the end of every wave earn their cost. That session relayed the answers to the W55b integrator. The
+integrator checked them against its transcript, and the owner then confirmed them to the integrator directly, in a poll, together with
+the amendment of the publication policy. W55b finishes as it began.
+
+| Ruling | Substance |
+| --- | --- |
+| `R-124` | From W56a, a regular wave closes with **one judge** over the whole wave's diff after its last lane, then a FIX lane. There is no QA lane, no cross-examination and no recheck round. The owner's framing of the question keeps the full set (two independent judges, QA and the full gate) for the periodic debt-and-quality waves. A full gate before every `origin/main` publication is unchanged (`R-70`). |
+| `R-125` | A full `make gate` voided by infrastructure (exit `137`, `StorageUnavailableError`, a MinIO restart) may be **completed**, not restarted. Every test directory that failed is rerun whole, on the same SHA, the same clean tree and the same stand, and the gate counts as `GATE OK` when they are green. The gate record names the voided run, its failure lines, the rerun directories and their results. This amends `AGENTS.md` §6 and `MAIN_AUTODEPLOY_POLICY.md` step 4, both amended in this commit. A failure that is not infrastructural is never completed this way. |
+| `R-126` | Backend lanes do not run their contexts' database suites. Database suites run only in the wave's final gate. From W56a this supersedes the per-lane database checks of `R-70`'s light acceptance. W56a's rule task amends `AGENTS.md` §8. |
+| `R-127` | The gate package is a separate task before W56a, `GATE-PKG-01`: a host preflight, cheap static steps first, and a repository-wide gate slot that waits for headroom. The owner told `pdf-analysis-4a` at 08:24 UTC to build it now, in parallel with W55b's close. It touches the `Makefile`, so it owes one full gate (`R-70` case 3). That gate runs after W55b's gate, on top of W55b's `origin/dev`. |

@@ -70,8 +70,8 @@ follow `docs/program/MAIN_AUTODEPLOY_POLICY.md`.
 
 - The right to push to `origin/main` belongs only to an explicitly assigned integration task
   whose integration contract names this ref.
-- Required: a clean tree, a complete `make gate` with the literal `GATE OK`, a re-check of the
-  remote ref and a proven fast-forward of the exact verified SHA.
+- Required: a clean tree, a complete `make gate` with the literal `GATE OK` (or its completion
+  under `R-125`), a re-check of the remote ref and a proven fast-forward of the exact verified SHA.
 - Forbidden: force-push, an unverified “small fix” after the gate, and parallel publications.
 - After the push the task is not complete until the workflow has finished successfully and the
   deployment host has passed `infra/deploy/verify-deployed.sh` for the same tree.
