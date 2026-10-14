@@ -35,6 +35,8 @@ class Sample:
     t: float          # time.time(), seconds since the epoch
     rss_kib: int
     hwm_kib: int
+    cg_current: int = -1   # the process's cgroup (its capped scope): memory.current, bytes
+    cg_peak: int = -1      # and memory.peak, the scope's lifetime peak, bytes
 
 
 @dataclass
@@ -42,8 +44,18 @@ class RssSampler:
     pid: int
     interval: float = 0.25
     samples: list[Sample] = field(default_factory=list)
+    vanished_at: float | None = None
     _stop: threading.Event = field(default_factory=threading.Event)
     _thread: threading.Thread | None = None
+    _cgroup: Path | None = None
+
+    def _cg(self, name: str) -> int:
+        if self._cgroup is None:
+            return -1
+        try:
+            return int((self._cgroup / name).read_text().strip())
+        except (OSError, ValueError):
+            return -1
 
     def _read(self) -> Sample | None:
         try:
@@ -56,19 +68,23 @@ class RssSampler:
                 rss = int(line.split()[1])
             elif line.startswith("VmHWM:"):
                 hwm = int(line.split()[1])
-        return Sample(time.time(), rss, hwm)
+        return Sample(time.time(), rss, hwm, self._cg("memory.current"), self._cg("memory.peak"))
 
     def _loop(self) -> None:
         next_at = time.monotonic()
         while not self._stop.is_set():
             sample = self._read()
             if sample is None:
+                self.vanished_at = time.time()
                 return
             self.samples.append(sample)
             next_at += self.interval
             self._stop.wait(max(0.0, next_at - time.monotonic()))
 
     def start(self) -> "RssSampler":
+        self._cgroup = common.cgroup_dir(self.pid)
+        if self._cgroup is not None and not (self._cgroup / "memory.peak").is_file():
+            self._cgroup = None
         self._thread = threading.Thread(target=self._loop, name="rss-sampler", daemon=True)
         self._thread.start()
         return self
@@ -101,7 +117,12 @@ class RssSampler:
         }
 
     def series(self) -> list[list[float | int]]:
-        return [[round(s.t, 3), s.rss_kib, s.hwm_kib] for s in self.samples]
+        """[t, VmRSS KiB, VmHWM KiB, cgroup memory.current B, cgroup memory.peak B] per sample."""
+        return [[round(s.t, 3), s.rss_kib, s.hwm_kib, s.cg_current, s.cg_peak] for s in self.samples]
+
+    def last_cgroup_peak(self) -> int:
+        peaks = [s.cg_peak for s in self.samples if s.cg_peak >= 0]
+        return max(peaks) if peaks else -1
 
 
 _CHILD = """
@@ -116,7 +137,9 @@ time.sleep(1.5)
 
 def control(mib: int) -> int:
     common.ensure_out()
-    child = subprocess.Popen([sys.executable, "-c", _CHILD.format(mib=mib)])
+    cap = common.memory_cap(ceiling=2 * mib * common.MiB)
+    child = subprocess.Popen(common.scoped([sys.executable, "-c", _CHILD.format(mib=mib)],
+                                           "w55b-rehearsal-control", cap["memory_max_bytes"]))
     try:
         time.sleep(0.3)
         common.reset_peak(child.pid)
@@ -136,6 +159,9 @@ def control(mib: int) -> int:
     after = rss[-1]
     within = abs(rise_mib - mib) <= 0.05 * mib and abs(hwm_rise_mib - mib) <= 0.05 * mib
     freed = (after - baseline) / 1024 < 0.25 * mib
+    cg_peak = sampler.last_cgroup_peak()
+    cg_rise_mib = (cg_peak - baseline * 1024) / common.MiB if cg_peak >= 0 else None
+    cgroup_within = cg_rise_mib is not None and abs(cg_rise_mib - mib) <= 0.10 * mib
     common.write_figures("sampler-control", {
         "method": "a child allocates and touches a known size, holds 2 s, frees; RSS sampled every 0.25 s",
         "allocated_mib": mib,
@@ -147,10 +173,15 @@ def control(mib: int) -> int:
         "rss_after_free_kib": after,
         "rise_within_5_percent": within,
         "memory_returned_after_free": freed,
+        "scope_cap": cap,
+        "scope_memory_peak_bytes": cg_peak,
+        "scope_peak_over_baseline_rss_mib": None if cg_rise_mib is None else round(cg_rise_mib, 1),
+        "scope_peak_within_10_percent": cgroup_within,
     })
     print(f"control: allocated {mib} MiB; sampled rise {rise_mib:.1f} MiB; kernel mark rise "
-          f"{hwm_rise_mib:.1f} MiB; after free {(after - baseline) / 1024:.1f} MiB over baseline")
-    if not (within and freed):
+          f"{hwm_rise_mib:.1f} MiB; after free {(after - baseline) / 1024:.1f} MiB over baseline; "
+          f"scope memory.peak {cg_peak} B ({cg_rise_mib} MiB over the baseline RSS)")
+    if not (within and freed and cgroup_within):
         print("control: FAILED - the sampler does not see the allocation", file=sys.stderr)
         return 1
     return 0

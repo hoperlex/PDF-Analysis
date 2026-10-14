@@ -179,11 +179,66 @@ def own_api_pid() -> int:
         cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode()
     except OSError:
         raise SystemExit(f"the API process {pid} is gone") from None
-    if cwd != ROOT or "infra/deploy/serve.py" not in cmdline:
+    if cwd != ROOT or not ("infra/deploy/serve.py" in cmdline or "instrumented_serve.py" in cmdline):
         raise SystemExit(f"PID {pid} is not this worktree's serve.py (cwd {cwd})")
     if listening_pid(API_PORT) != pid:
         raise SystemExit(f"PID {pid} does not hold the lane's API port {API_PORT}")
     return pid
+
+
+# ------------------------------------------------------------------ the hard memory cap
+
+
+#: The integrator's addendum: every process of this lane that can grow runs in a systemd scope
+#: with ``MemoryMax`` at most this, and never above ``MemAvailable`` minus 1 GiB at its start,
+#: and with ``MemorySwapMax=0``, so the host's OOM killer never picks another project's process.
+CAP_CEILING_BYTES = 3 * GiB
+CAP_HEADROOM_BYTES = 1 * GiB
+
+
+def memory_cap(ceiling: int = CAP_CEILING_BYTES) -> dict[str, int]:
+    """The cap for a process started now, and the ``MemAvailable`` it was derived from."""
+    available = meminfo_kib("MemAvailable") * 1024
+    cap = min(ceiling, available - CAP_HEADROOM_BYTES)
+    if cap < 512 * MiB:
+        raise SystemExit(f"MemAvailable {available // MiB} MiB leaves no room for a capped process")
+    cap -= cap % MiB
+    return {"memory_max_bytes": cap, "mem_available_bytes_at_start": available}
+
+
+def scoped(command: list[str], unit: str, cap: int) -> list[str]:
+    """``command`` inside a transient systemd scope with a hard memory cap and no swap."""
+    return ["systemd-run", "--scope", "--quiet", f"--unit={unit}-{int(time.time())}",
+            "-p", f"MemoryMax={cap}", "-p", "MemorySwapMax=0", *command]
+
+
+def cgroup_dir(pid: int) -> Path | None:
+    try:
+        line = Path(f"/proc/{pid}/cgroup").read_text().strip().splitlines()[0]
+    except OSError:
+        return None
+    return Path("/sys/fs/cgroup") / line.split("::", 1)[1].lstrip("/")
+
+
+def cgroup_memory(pid: int) -> dict[str, Any]:
+    """The scope's own accounting: cap, current, lifetime peak, OOM events, anon and file."""
+    directory = cgroup_dir(pid)
+    if directory is None or not (directory / "memory.max").is_file():
+        return {}
+
+    def read(name: str) -> str:
+        try:
+            return (directory / name).read_text().strip()
+        except OSError:
+            return ""
+
+    stat = dict(line.split() for line in read("memory.stat").splitlines() if line)
+    events = dict(line.split() for line in read("memory.events").splitlines() if line)
+    return {"scope": directory.name, "memory_max": read("memory.max"),
+            "memory_current": int(read("memory.current") or 0),
+            "memory_peak": int(read("memory.peak") or 0),
+            "anon": int(stat.get("anon", 0)), "file": int(stat.get("file", 0)),
+            "oom_kill": int(events.get("oom_kill", 0)), "max_events": int(events.get("max", 0))}
 
 
 # ------------------------------------------------------------------ HTTP
