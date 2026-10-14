@@ -261,7 +261,11 @@ def _release(page: Any) -> None:
     Measured on the owner's export (30 pages, read by this function in a process of its own,
     on a loaded host): the peak resident set fell from 794 MiB to 220 MiB, and the time rose
     from about 14 s to about 18 s -- about 2 s for the uncached document and 1 s for the
-    collections. The text and the lines are the same.
+    collections. The text and the lines are the same. On `W55B-REHEARSAL-01`'s 500-sheet vector
+    drawing set, under a 3 GiB cap: before, 172 / 379 / 1 301 / 2 453 MiB after page 1 / 10 /
+    50 / 100 and killed by the cap at page 127; after, 172 MiB after every page of the first
+    stage's pass and 217 MiB of the second's, both stages succeeding (0.45 s a page before,
+    0.51 s after).
     """
     page.close()
     page.page_obj.contents = []

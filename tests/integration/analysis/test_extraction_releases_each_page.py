@@ -13,8 +13,8 @@ set (``VmHWM``) after one page and after five. The peak must not grow with the p
 The figures are the kernel's, of a process that did nothing else; the bound on the growth
 (24 MiB) is far under one heavy page and far over the measured noise (0-2 MiB).
 
-Measured with these two cases (one page against five) on the code before the repair: +239 MiB
-for the paths, +78 MiB for the padded streams. After it: within 2 MiB. Leaving out any one
+Measured with these cases (one page against five) on the code before the repair: +239 MiB for
+the paths, +78 MiB for the padded streams. After it: within 2 MiB. Leaving out any one
 of the three steps of ``extraction._release`` -- the page's own flush, emptying its content
 list, the per-page collection -- or turning pdfminer's document cache back on, keeps the
 padded case growing (+64 MiB each).
@@ -97,6 +97,13 @@ _TEXT = b"BT /F1 9 Tf 10 10 Td (a line of text for the layer, well over fifty ch
 PATHS = _TEXT + b"0 0 m 1 1 l S " * 20_000
 #: A text line and 16 MiB of whitespace after it, in a stream of each page's own.
 PADDED = _TEXT + b" " * (16 << 20)
+#: A drawing sheet, as `W55B-REHEARSAL-01`'s vector set draws one (each stroke its own path
+#: object), in a stream of each page's own: about 23 MiB a page kept before the repair, the
+#: owner's export's mean (24 MiB).
+DRAWING = _TEXT + b"".join(
+    b"%d %d m %d %d l S\n" % (10 + i % 500, 10 + i // 500 * 50, 40 + i % 500, 10 + i // 500 * 50)
+    for i in range(7_500)
+)
 
 
 def _peak_kib(tmp_path: Path, pages: int, content: bytes, *, shared: bool) -> int:
@@ -117,8 +124,12 @@ def _peak_kib(tmp_path: Path, pages: int, content: bytes, *, shared: bool) -> in
 
 @pytest.mark.parametrize(
     ("label", "content", "shared"),
-    [("paths on one shared stream", PATHS, True), ("large streams of their own", PADDED, False)],
-    ids=["shared-paths", "padded-streams"],
+    [
+        ("paths on one shared stream", PATHS, True),
+        ("large streams of their own", PADDED, False),
+        ("drawing sheets of their own", DRAWING, False),
+    ],
+    ids=["shared-paths", "padded-streams", "drawing-sheets"],
 )
 def test_the_peak_over_five_heavy_pages_is_the_peak_over_one(tmp_path, label, content, shared) -> None:
     one = _peak_kib(tmp_path, 1, content, shared=shared)
