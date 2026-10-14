@@ -1540,3 +1540,16 @@ owner's subscription. It applies to that single task: eight crops of the owner's
 sent to Codex's model, with no proxy key. It sets no precedent for product paths or other
 probes. The owner also authorised the integrator to read `.local/probes/w54/vision/` and write
 its report. Report: `reviews/W54-VISION-PROBE.md`.
+
+## 3.33 — `R-121` to `R-123`, closing W55b (owner's direct poll, 2026-10-14)
+
+Asked by the W55b integrator after the executor's hand-back of lane 8 (`agent/w55b` `e1233e7a`).
+
+| Ruling | Substance |
+| --- | --- |
+| `R-121` | An IMAGE block too small to crop keeps failing the run with `analysis_input_invalid`, `reason: portal_block_degenerate`. The bound is a long side under `800 / 2**24` of the page's longer side, about a sixth of a pixel of a 300 dpi raster, and the owner's export has none of its 47. There is no upload-time check and no crop-less block in W55b. A debt is registered to move the refusal to the upload if such a block is ever met. |
+| `R-122` | `W55B-REHEARSAL-01` runs at once, in parallel with the static judges and QA, on a disposable stack of this host, not in a night window. It covers the synthetic 500-page text-rich and low-text bundles and the owner's portal export (`R-119`; F-7: counts only, nothing derived committed, volumes removed). The owner accepts figures measured on a loaded host and on the tree before `W55B-FIX`. Each figure records its tree, load and available memory. |
+| `R-123` | W55b is released as **`0.6.0`** without waiting for P4. P4's notes take a later number of their own. This supersedes `W55-PLAN.md`'s `v0.6.1` target and the condition that `W55B-RELNOTES-01` waits for `v0.6.0` (`W55B-FREEZE-01`). `W55B-INT-MAIN-01` still needs the owner's separate instruction naming the exact SHA (`AGENTS.md` §6). |
+
+Not a ruling: the stand's `AUDITMANAGER_RUN_COST_CEILING_USD`. From W55b on, the application refuses to start below about
+`$0.80` (`W55B-BUDGET-01` §3.4). The owner checks the stand's value personally, and it is a stop item of `W55B-INT-MAIN-01`.
