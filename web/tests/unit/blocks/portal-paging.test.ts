@@ -13,12 +13,11 @@ import { InfiniteQueryObserver, QueryClient } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PortalBlock, PortalBlockPage } from '@/shared/api';
-import { ClientUsageError } from '@/shared/api';
+import { ClientUsageError, portalBlockCropUrl } from '@/shared/api';
 import { MissingConfigurationError } from '@/shared/config';
 import {
   PORTAL_BLOCK_PAGE_LIMIT,
   loadedPortalBlocks,
-  portalBlockCropUrl,
   portalBlocksQueryOptions,
   sectionsByPage,
 } from '@/entities/block';

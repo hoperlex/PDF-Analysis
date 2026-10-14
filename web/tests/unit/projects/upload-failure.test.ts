@@ -15,6 +15,7 @@ import {
   classifyUploadFailure,
   uploadConstraintSentence,
 } from '@/entities/document-version';
+import { uploadRuleSentence } from '@/entities/document-version/model/upload-failure';
 
 function envelope(
   code: ErrorCode,
@@ -237,4 +238,52 @@ describe('a refused bundle states the rule it broke, in Russian, beside the cons
     const bare = classifyUploadFailure(apiError(422, 'validation_failed', false, {}));
     expect(bare.detail).not.toContain('(');
   });
+});
+
+
+describe('the upload gate’s busy refusal says what it is and when to send again (W55B-FIX, O-1)', () => {
+  function busy(retryAfter: number | null): ApiError {
+    return new ApiError(
+      503,
+      envelope('dependency_unavailable', true, { dependency: 'upload_capacity' }),
+      'corr-upload-1',
+      retryAfter,
+    );
+  }
+
+  it('is not shown as a dependency that is down, and names the wait the answer gave', () => {
+    const failure = classifyUploadFailure(busy(5));
+    expect(failure.kind).toBe('dependency_unavailable');
+    expect(failure.retryable).toBe(true);
+    expect(failure.title).toBe('Сервер сейчас принимает другие загрузки.');
+    expect(failure.detail).toBe(
+      'Одновременно принимаются не больше двух загрузок, и обе заняты. Повторите загрузку через 5 с. ' +
+        'Ничего не создано; повтор использует тот же ключ идемпотентности.',
+    );
+    expect(failure.detail).not.toContain('Зависимость');
+  });
+
+  it('asks for a little patience when the answer named no wait', () => {
+    expect(classifyUploadFailure(busy(null)).detail).toContain('Повторите загрузку немного позже.');
+  });
+
+  it('leaves every other unavailable dependency as it was', () => {
+    const other = classifyUploadFailure(
+      new ApiError(503, envelope('dependency_unavailable', true, { dependency: 'object_store' }), 'c', 5),
+    );
+    expect(other.title).toBe('Зависимость, нужная этой загрузке, недоступна.');
+  });
+});
+
+describe('every constraint the panel can be shown has a sentence (W55B-FIX, Y-4)', () => {
+  it.each(['non_empty', 'plain_base_name', 'blocks_count', 'pdf_page_content', 'pdf_document_content', 'pdf_reader_limits'])(
+    '%s is a Russian sentence on the panel, not a bare token',
+    (constraint) => {
+      const sentence = uploadRuleSentence(constraint);
+      expect(sentence).not.toBeNull();
+      expect(sentence).toMatch(/^[А-ЯЁ].*[а-яё]\.$/u);
+      const failure = classifyUploadFailure(apiError(422, 'validation_failed', false, { constraint, field: 'content' }));
+      expect(failure.detail).toContain(sentence ?? '');
+    },
+  );
 });

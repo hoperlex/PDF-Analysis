@@ -81,6 +81,7 @@ import {
   DOCUMENT_PAGE_LIMIT, UPLOAD_CONSTRAINTS_STATED, UPLOAD_ENVELOPE_RULES, VERSION_PAGE_LIMIT, classifyUploadFailure,
   precheckProblemMessage,
 } from '@/entities/document-version';
+import { UPLOAD_CONSTRAINTS_ADDED } from '@/entities/document-version/model/upload-failure';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
 import { AppFrame } from '@/_app';
 import { accountMenuProps } from '@/_app/account-menu';
@@ -121,7 +122,7 @@ import { VersionBlockViews } from '@/_pages/blocks';
 import { portalBlocksQueryOptions } from '@/entities/block';
 import { CropFigureView, PortalBlockListView } from '@/widgets/portal-blocks';
 import {
-  BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, TEST_CROP_SRC, blocksVersion, everyKindOfBlock, notProducedPage, portalPage,
+  BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, notProducedPage, portalPage,
 } from '../unit/blocks/fixtures';
 import {
   NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_QUERY, NORM_SNAPSHOTS, normDocument,
@@ -1243,8 +1244,8 @@ function queueLanguageShape(request: RegistrationRequest): Pick<ScreenCase, 'mak
  * the tabs are rendered here through `VersionBlockViews` -- the component the page itself
  * renders -- over a cache seeded with every answer each tab distinguishes, one version per
  * answer. The loaded portal list is rendered through `PortalBlockListView`, the view the
- * widget renders, because a crop's address is read from configuration this harness does
- * not set; `TEST_CROP_SRC` spells the same address. Every `PortalBlockType` and
+ * widget renders; a crop's address is built by the seam from the configured base, which
+ * `renderedScreens` sets for its pass (`W55B-FIX`, Y-2). Every `PortalBlockType` and
  * `PortalGeometryState` member, every flag the backend emits and one it does not, and a
  * portal status the screen does not know are on screen in the second shape.
  */
@@ -1315,17 +1316,17 @@ const BLOCKS_SHAPES: readonly ScreenCase[] = [
         null,
         createElement(PortalBlockListView, {
           projectUid: BLOCKS_PROJECT_UID, blockCount: 129, producedByRunId: BLOCKS_RUN_ID,
-          blocks: everyKindOfBlock(), cropSrc: TEST_CROP_SRC, hasMore: true, loadingMore: false,
+          blocks: everyKindOfBlock(), versionUid: BLOCKS_VERSION_UID, hasMore: true, loadingMore: false,
           moreFailure: null, onMore: () => {},
         }),
         createElement(PortalBlockListView, {
           projectUid: BLOCKS_PROJECT_UID, blockCount: 129, producedByRunId: null,
-          blocks: everyKindOfBlock().slice(0, 1), cropSrc: TEST_CROP_SRC, hasMore: true, loadingMore: true,
+          blocks: everyKindOfBlock().slice(0, 1), versionUid: BLOCKS_VERSION_UID, hasMore: true, loadingMore: true,
           moreFailure: null, onMore: () => {},
         }),
         createElement(PortalBlockListView, {
           projectUid: BLOCKS_PROJECT_UID, blockCount: 129, producedByRunId: BLOCKS_RUN_ID,
-          blocks: everyKindOfBlock().slice(0, 1), cropSrc: TEST_CROP_SRC, hasMore: true, loadingMore: false,
+          blocks: everyKindOfBlock().slice(0, 1), versionUid: BLOCKS_VERSION_UID, hasMore: true, loadingMore: false,
           moreFailure: {
             kind: 'dependency_unavailable', title: 'Зависимость, нужная чтобы прочитать следующие блоки портала, недоступна.',
             detail: 'Повторите позже.', correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: true,
@@ -1334,7 +1335,8 @@ const BLOCKS_SHAPES: readonly ScreenCase[] = [
           onMore: () => {},
         }),
         createElement(CropFigureView, {
-          src: TEST_CROP_SRC(everyKindOfBlock()[1] as never), widthPx: 1177, heightPx: 593,
+          versionUid: BLOCKS_VERSION_UID, portalBlockId: everyKindOfBlock()[1]!.portal_block_id,
+          widthPx: 1177, heightPx: 593,
           alt: 'Изображение: фрагмент страницы 1 PDF', failed: true, onError: () => {},
         }),
       ),
@@ -1805,6 +1807,19 @@ export const CACHE_STATES: readonly {
 ];
 
 export function renderedScreens(): readonly { readonly where: string; readonly markup: string }[] {
+  // `W55B-FIX` (Y-2): a portal crop's address is built in the transport seam from the
+  // configured base, as the deployed build has it; set for this pass only and restored.
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL;
+  process.env.NEXT_PUBLIC_API_BASE_URL = '/bff/v1';
+  try {
+    return renderEveryScreen();
+  } finally {
+    if (base === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL;
+    else process.env.NEXT_PUBLIC_API_BASE_URL = base;
+  }
+}
+
+function renderEveryScreen(): readonly { readonly where: string; readonly markup: string }[] {
   const out: { where: string; markup: string }[] = [];
   const states = CACHE_STATES;
   for (const screen of SCREENS) {
@@ -2059,7 +2074,13 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     for (const problem of ['not_zip', 'too_large', 'empty_file'] as const) {
       rendered.push(precheckProblemMessage(problem));
     }
-    for (const constraint of [...UPLOAD_CONSTRAINTS_STATED, '1 <= page_count <= 500', 'byte_size <= 262144000']) {
+    // `W55B-FIX`: the constraints the classifier states beyond the envelope's table.
+    for (const constraint of [
+      ...UPLOAD_CONSTRAINTS_STATED,
+      ...UPLOAD_CONSTRAINTS_ADDED,
+      '1 <= page_count <= 500',
+      'byte_size <= 262144000',
+    ]) {
       const failure = classifyUploadFailure(
         new ApiError(
           422,
@@ -2079,6 +2100,25 @@ describe('the guard can tell an English label from a legitimate Latin string', (
       // every classifier of this application and pinned by the journey's
       // `expects_rendered_from_envelope`. It is not prose, so the prose is judged without it.
       rendered.push(failure.title, failure.detail.replace(/ \(constraint: [^)]*\)$/, ''));
+    }
+    // `W55B-FIX` (`W55B-QA-01` O-1): the upload gate's busy refusal, with and without a wait.
+    for (const wait of [5, null]) {
+      const busy = classifyUploadFailure(
+        new ApiError(
+          503,
+          {
+            contract_version: '1.0.0-draft.1',
+            error_code: 'dependency_unavailable',
+            message: 'A caller-safe sentence.',
+            correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+            retryable: true,
+            details: { dependency: 'upload_capacity' },
+          },
+          '0f0e9d8c-7b6a-4948-b726-150413021100',
+          wait,
+        ),
+      );
+      rendered.push(busy.title, busy.detail);
     }
     const offences = rendered
       .map((text) => ({ text, words: unexplainedLatin(text, VOCABULARY) }))

@@ -26,7 +26,7 @@
 
 import Link from 'next/link';
 
-import type { DocumentVersion, PortalBlock, ProjectUid, RunId } from '@/shared/api';
+import type { DocumentVersion, PortalBlock, ProjectUid, RunId, VersionUid } from '@/shared/api';
 import { classifyListingFailure, routes } from '@/shared/lib';
 import type { ListingFailure } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState, NotApplicableState } from '@/shared/ui';
@@ -34,7 +34,6 @@ import {
   DESCRIPTION_MARKER,
   RECOGNISED_MARKER,
   loadedPortalBlocks,
-  portalBlockCropUrl,
   sectionsByPage,
   usePortalBlocks,
   versionHasPortalBundle,
@@ -50,7 +49,8 @@ export interface PortalBlockListViewProps {
   readonly producedByRunId: RunId | null;
   /** Every block loaded so far, in the order the pages were loaded. */
   readonly blocks: readonly PortalBlock[];
-  readonly cropSrc: (block: PortalBlock) => string;
+  /** The version the blocks belong to: each crop's address is the seam's to build from it. */
+  readonly versionUid: VersionUid;
   /** Whether the API reported another page after the last one loaded. */
   readonly hasMore: boolean;
   readonly loadingMore: boolean;
@@ -64,7 +64,7 @@ export function PortalBlockListView({
   blockCount,
   producedByRunId,
   blocks,
-  cropSrc,
+  versionUid,
   hasMore,
   loadingMore,
   moreFailure,
@@ -107,7 +107,7 @@ export function PortalBlockListView({
               // cursor) from colliding, so the repetition is shown rather than swallowed.
               return (
                 <li key={`${position}:${block.portal_block_id}`}>
-                  <PortalBlockCard block={block} cropSrc={cropSrc} />
+                  <PortalBlockCard block={block} versionUid={versionUid} />
                 </li>
               );
             })}
@@ -192,7 +192,7 @@ export function PortalBlocks({ version }: PortalBlocksProps) {
       blockCount={first.block_count}
       producedByRunId={first.produced_by_run_id}
       blocks={blocks}
-      cropSrc={(block) => portalBlockCropUrl(version.version_uid, block.portal_block_id)}
+      versionUid={version.version_uid}
       hasMore={query.hasNextPage}
       loadingMore={query.isFetchingNextPage}
       moreFailure={

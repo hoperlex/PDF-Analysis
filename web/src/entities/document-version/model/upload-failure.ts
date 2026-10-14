@@ -31,6 +31,46 @@ import {
 
 import { uploadConstraintSentence } from './upload-envelope';
 
+/**
+ * The constraints an upload can be refused with that `uploadConstraintSentence` does not state
+ * (`W55B-FIX`): the three the PDF member and the upload's name always had (`W55B-JUDGE-Y` Y-4)
+ * and the four `W55B-FIX` added (the block ceilings, X-4; the PDF reader's bounds, X-1). Each
+ * is registered in `contracts/domain/v1/error-codes.json`'s catalogue note. Kept beside the
+ * classifier because `upload-envelope.ts`, where `uploadConstraintSentence` keeps the others,
+ * was outside the repairing lane's grant; moving these into that table is a one-table edit.
+ */
+const UPLOAD_CONSTRAINT_SENTENCES_ADDED: Readonly<Record<string, string>> = {
+  non_empty: 'Пустое значение там, где оно обязательно: PDF в комплекте пуст или у загружаемого файла нет имени.',
+  plain_base_name:
+    'Имя загружаемого файла должно быть простым именем файла — без каталогов, без «..» и без управляющих символов.',
+  blocks_count:
+    'В файле блоков портала больше блоков, чем принимается: не больше 100 на странице, 3000 во всём комплекте и 1000 блоков изображений.',
+  pdf_page_content:
+    'На одной из страниц PDF больше графических элементов или символов текста, чем принимается при загрузке.',
+  pdf_document_content:
+    'В PDF в целом больше графических элементов или символов текста, чем принимается при загрузке.',
+  pdf_reader_limits: 'Чтение PDF потребовало больше памяти или времени, чем допускается при загрузке.',
+};
+
+/** The constraint names {@link uploadRuleSentence} states beyond `uploadConstraintSentence`. */
+export const UPLOAD_CONSTRAINTS_ADDED: readonly string[] = Object.keys(UPLOAD_CONSTRAINT_SENTENCES_ADDED);
+
+/**
+ * The sentence the upload panel shows for a `details.constraint`: the envelope's own, or one
+ * of {@link UPLOAD_CONSTRAINTS_ADDED}, or `null` -- in which case the constraint's name alone
+ * is shown, never a guessed cause.
+ */
+export function uploadRuleSentence(constraint: unknown): string | null {
+  const stated = uploadConstraintSentence(constraint);
+  if (stated !== null || typeof constraint !== 'string') return stated;
+  return Object.hasOwn(UPLOAD_CONSTRAINT_SENTENCES_ADDED, constraint)
+    ? (UPLOAD_CONSTRAINT_SENTENCES_ADDED[constraint] ?? null)
+    : null;
+}
+
+/** `details.dependency` of the upload gate's busy refusal (`error-codes.json`). */
+const UPLOAD_CAPACITY = 'upload_capacity';
+
 /** The distinguishable outcomes of a failed upload. */
 export type UploadFailureKind =
   | 'unsupported_input'
@@ -92,7 +132,7 @@ function fromApiError(error: ApiError): UploadFailure {
     case 'validation_failed': {
       // The rule the server named, in a sentence a reviewer reads. A constraint this
       // client has no sentence for is shown by name only, never by a guessed cause.
-      const rule = uploadConstraintSentence(error.details['constraint']);
+      const rule = uploadRuleSentence(error.details['constraint']);
       return {
         ...base,
         kind: 'unsupported_input',
@@ -116,6 +156,23 @@ function fromApiError(error: ApiError): UploadFailure {
           ' Ничего не опубликовано: ни версии, ни манифеста, ни читаемого объекта.',
       };
     case 'dependency_unavailable':
+      if (error.details['dependency'] === UPLOAD_CAPACITY) {
+        // `W55B-QA-01` O-1: not a dependency that is down, but the API's two upload slots in
+        // use. The answer says when to send the same upload again (`Retry-After`).
+        const wait = error.retryAfterSeconds;
+        return {
+          ...base,
+          kind: 'dependency_unavailable',
+          presentation: 'error',
+          title: 'Сервер сейчас принимает другие загрузки.',
+          detail:
+            'Одновременно принимаются не больше двух загрузок, и обе заняты. ' +
+            (wait === null
+              ? 'Повторите загрузку немного позже.'
+              : `Повторите загрузку через ${wait} с.`) +
+            ' Ничего не создано; повтор использует тот же ключ идемпотентности.',
+        };
+      }
       return {
         ...base,
         kind: 'dependency_unavailable',

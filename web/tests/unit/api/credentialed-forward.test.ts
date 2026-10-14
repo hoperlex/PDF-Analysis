@@ -189,7 +189,7 @@ describe('the browser calls this app, and this app calls the API with the creden
             'x-correlation-id': 'cid-csv',
             'set-cookie': 'upstream=leak',
             server: 'uvicorn',
-            etag: '"v1"',
+            vary: 'Accept',
           },
         }),
     );
@@ -204,12 +204,53 @@ describe('the browser calls this app, and this app calls the API with the creden
     expect(response.headers.get('x-correlation-id')).toBe('cid-csv');
     expect(response.headers.get('set-cookie')).toBeNull();
     expect(response.headers.get('server')).toBeNull();
-    expect(response.headers.get('etag')).toBeNull();
+    expect(response.headers.get('vary')).toBeNull();
     expect([...response.headers.keys()].sort()).toEqual([
       'content-disposition',
       'content-type',
       'x-correlation-id',
     ]);
+  });
+
+  // `W55B-FIX`: a crop is an image the browser keeps (X-4), and the upload gate's busy refusal
+  // says when to try again (`W55B-QA-01` O-1); both answers reach the browser whole.
+  it('carries a crop’s ETag and Cache-Control, and a busy refusal’s Retry-After, to the browser', async () => {
+    const crop = recordingFetch(
+      () =>
+        new Response(new Uint8Array([137, 80, 78, 71]), {
+          status: 200,
+          headers: {
+            'content-type': 'image/png',
+            etag: '"6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f"',
+            'cache-control': 'private, max-age=3600',
+            'x-correlation-id': 'cid-crop',
+          },
+        }),
+    );
+    const cropped = await forwardWithCredential(
+      new Request('http://localhost/bff/v1/versions/ver_01/portal-blocks/blk_01/crop'),
+      ['versions', 'ver_01', 'portal-blocks', 'blk_01', 'crop'],
+      TARGET,
+      { fetch: crop.fetch },
+    );
+    expect(cropped.headers.get('etag')).toBe('"6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f"');
+    expect(cropped.headers.get('cache-control')).toBe('private, max-age=3600');
+
+    const busy = recordingFetch(
+      () =>
+        new Response('{"error_code":"dependency_unavailable"}', {
+          status: 503,
+          headers: { 'content-type': 'application/json', 'retry-after': '5', 'x-correlation-id': 'cid-busy' },
+        }),
+    );
+    const refused = await forwardWithCredential(
+      new Request('http://localhost/bff/v1/projects', { method: 'POST', body: '{"name":"x"}' }),
+      ['projects'],
+      TARGET,
+      { fetch: busy.fetch },
+    );
+    expect(refused.status).toBe(503);
+    expect(refused.headers.get('retry-after')).toBe('5');
   });
 
   // `W55A-CONTENT-01` (plan §A3.5). The viewer's PDF reader pages a large document by

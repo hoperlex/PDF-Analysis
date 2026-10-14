@@ -200,6 +200,44 @@ describe('a failure body becomes exactly one of the three failure kinds', () => 
     ).rejects.toBeInstanceOf(ApiError);
   });
 
+  // `W55B-FIX` (`W55B-QA-01` O-1): the upload gate's busy refusal says when to come back.
+  it('keeps a Retry-After of whole seconds on the ApiError, and nothing it cannot read', async () => {
+    const answers: Array<[string | null, number | null]> = [
+      ['5', 5],
+      [' 30 ', 30],
+      [null, null],
+      ['Wed, 21 Oct 2026 07:28:00 GMT', null],
+      ['-1', null],
+      ['soon', null],
+    ];
+    for (const [header, expected] of answers) {
+      const fetch: FetchLike = () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error_code: 'dependency_unavailable',
+              message: 'Busy.',
+              correlation_id: 'corr-503',
+              retryable: true,
+              details: { dependency: 'upload_capacity' },
+            }),
+            {
+              status: 503,
+              headers: {
+                'Content-Type': 'application/json',
+                ...(header === null ? {} : { 'Retry-After': header }),
+              },
+            },
+          ),
+        );
+      const failure = await getRunStatus({ path: { run_id: RUN_ID } }, { baseUrl: BASE_URL, fetch }).catch(
+        (error: unknown) => error,
+      );
+      expect(failure, String(header)).toBeInstanceOf(ApiError);
+      expect((failure as ApiError).retryAfterSeconds, String(header)).toBe(expected);
+    }
+  });
+
   it('becomes an UnrecognizedApiError when the code is outside the catalog', async () => {
     // The server is ahead of the client. Treating it as an ApiError would let a slice
     // branch on a code it has never seen and retry something nobody classified.

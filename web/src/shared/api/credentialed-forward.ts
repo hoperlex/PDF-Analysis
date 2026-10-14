@@ -87,6 +87,11 @@ export const FORWARDED_REQUEST_HEADERS = [
  * the filename is on that header; `content-range` and `accept-ranges` because a PDF reader
  * pages a document by them (`W55A-CONTENT-01`).
  *
+ * `etag` and `cache-control` because a portal block's crop is an image the browser keeps in its
+ * own HTTP cache (`W55B-FIX`, X-4: the API sends them only on that answer); `retry-after`
+ * because the upload gate's busy refusal says when to send the same upload again
+ * (`upload-failure.ts` reads it, `W55B-QA-01` O-1).
+ *
  * `content-length` is forwarded too, so a reader knows the size before the body ends and a
  * stream the API stops short (the R-115 integrity rule) arrives short of what it declared
  * rather than looking complete. It is the one header with a condition: the fetch runtime
@@ -99,6 +104,9 @@ export const FORWARDED_RESPONSE_HEADERS = [
   'content-length',
   'content-range',
   'accept-ranges',
+  'etag',
+  'cache-control',
+  'retry-after',
   'x-correlation-id',
 ] as const;
 

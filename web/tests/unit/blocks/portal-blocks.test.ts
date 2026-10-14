@@ -9,7 +9,7 @@
  */
 
 import { createElement } from 'react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PortalBlock } from '@/shared/api';
 import {
@@ -27,6 +27,7 @@ import {
   BLOCKS_PROJECT_UID,
   BLOCKS_RUN_ID,
   KNOWN_FLAGS,
+  BLOCKS_VERSION_UID,
   TEST_CROP_SRC,
   UNKNOWN_FLAG_TOKEN,
   UNKNOWN_STATUS_TOKEN,
@@ -37,8 +38,17 @@ import {
   textBlock,
 } from './fixtures';
 
+// `W55B-FIX` (Y-2): the card takes the version's identity and the seam builds each crop's
+// address from the configured base; `TEST_CROP_SRC` spells it independently.
+beforeEach(() => {
+  vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', '/bff/v1');
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 function card(block: PortalBlock): string {
-  return renderScreen(newClient(), createElement(PortalBlockCard, { block, cropSrc: TEST_CROP_SRC }));
+  return renderScreen(newClient(), createElement(PortalBlockCard, { block, versionUid: BLOCKS_VERSION_UID }));
 }
 
 function list(blocks: readonly PortalBlock[], over: Partial<Parameters<typeof PortalBlockListView>[0]> = {}): string {
@@ -49,7 +59,7 @@ function list(blocks: readonly PortalBlock[], over: Partial<Parameters<typeof Po
       blockCount: blocks.length,
       producedByRunId: BLOCKS_RUN_ID,
       blocks,
-      cropSrc: TEST_CROP_SRC,
+      versionUid: BLOCKS_VERSION_UID,
       hasMore: false,
       loadingMore: false,
       moreFailure: null,
@@ -190,7 +200,8 @@ describe('an IMAGE block shows the crop this product cut, and the portal descrip
     const markup = renderScreen(
       newClient(),
       createElement(CropFigureView, {
-        src: '/bff/v1/x', widthPx: 10, heightPx: 20, alt: 'фрагмент', failed: true, onError: () => {},
+        versionUid: BLOCKS_VERSION_UID, portalBlockId: imageBlock().portal_block_id,
+        widthPx: 10, heightPx: 20, alt: 'фрагмент', failed: true, onError: () => {},
       }),
     );
     expect(markup).not.toContain('<img');

@@ -199,7 +199,17 @@ async function decodeFailure(response: Response, correlationId: string | null): 
     throw new UnrecognizedApiError(response.status, rawCode, payload.message, correlationId);
   }
 
-  throw new ApiError(response.status, payload, correlationId);
+  throw new ApiError(response.status, payload, correlationId, retryAfterSeconds(response.headers));
+}
+
+/**
+ * `Retry-After` as a number of seconds, or `null`. Only the delta-seconds form is read (the
+ * API sends no other); an HTTP-date or anything malformed is not guessed at.
+ */
+function retryAfterSeconds(headers: Headers): number | null {
+  const raw = headers.get('retry-after');
+  if (raw === null || !/^\d{1,6}$/.test(raw.trim())) return null;
+  return Number(raw.trim());
 }
 
 /**

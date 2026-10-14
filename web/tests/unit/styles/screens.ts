@@ -548,9 +548,19 @@ export function screens(): Screen[] {
       if (before === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL;
       else process.env.NEXT_PUBLIC_API_BASE_URL = before;
     }
-    add('CropFigureView, the image failed to load', withRouter(createElement(CropFigureView, {
-      src: '/bff/v1/x', widthPx: 1177, heightPx: 593, alt: 'фрагмент', failed: true, onError: noop,
-    })));
+    // `W55B-FIX` (Y-2): the view takes the block's identities and the seam builds the address
+    // from the configured base, set for this render only.
+    const crop = process.env.NEXT_PUBLIC_API_BASE_URL;
+    process.env.NEXT_PUBLIC_API_BASE_URL = '/bff/v1';
+    try {
+      add('CropFigureView, the image failed to load', withRouter(createElement(CropFigureView, {
+        versionUid: BLOCKS_VERSION_UID, portalBlockId: everyKindOfBlock()[1]!.portal_block_id,
+        widthPx: 1177, heightPx: 593, alt: 'фрагмент', failed: true, onError: noop,
+      })));
+    } finally {
+      if (crop === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL;
+      else process.env.NEXT_PUBLIC_API_BASE_URL = crop;
+    }
   }
 
   // `W55A-WEB-NORMS`: the norms widgets with rows in them — a search hit with its matched
