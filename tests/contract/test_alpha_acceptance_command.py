@@ -123,8 +123,9 @@ def test_alpha_acceptance_is_named_beside_but_not_inside_gate() -> None:
     assert '"$${ALPHA_ORIGIN:-}"' in text
     assert '"$${ALPHA_CANDIDATE_SHA:-}"' in text
     assert '"$${ALPHA_DEPLOYED_SHA:-}"' in text
-    assert "gate: foundation\n" in text
-    assert "gate: foundation alpha-acceptance" not in text
+    gate_line = next(line for line in text.splitlines() if line.startswith("gate:"))
+    assert gate_line == "gate: gate-preflight gate-slot gate-static foundation"
+    assert "alpha-acceptance" not in gate_line
 
 
 def test_missing_origin_sha_and_credential_never_print_pass() -> None:

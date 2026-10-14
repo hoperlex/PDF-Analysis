@@ -44,7 +44,11 @@ The integration owner must keep one evidence chain for one exact candidate SHA:
    `git merge-base --is-ancestor origin/main <candidate>`.
 4. Run the complete canonical `make gate` on that exact candidate and require the literal
    `GATE OK` sentinel. A partial rerun, an inherited earlier log or a gate from another SHA is
-   not evidence.
+   not evidence. The one exception is `R-125`: a run voided by infrastructure (exit `137`,
+   `StorageUnavailableError`, a MinIO restart) on this exact SHA, clean tree and stand is
+   completed by rerunning, whole, every test directory that failed. The gate record names the
+   voided run, its failure lines, the rerun directories and their results. A failure that is
+   not infrastructural is never completed this way.
 5. Re-read the frozen contract counts, error catalog, migration head and deployment inputs. Any
    owned change must be recorded by the integration task; an unowned change stops publication.
 6. Re-read `origin/main` immediately before the push. Push the intended SHA as a fast-forward;

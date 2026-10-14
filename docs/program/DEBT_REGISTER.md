@@ -17,6 +17,8 @@ separately planned validation wave. Each candidate must be named by exact SHA th
 **`W53-CLOSE-INT` (2026-10-12) opened `D-141` … `D-152`:** the findings of the 2026-10-12
 W48–W53 review that need a contract, a migration, a dependency, production access or a later
 wave's design; every other confirmed finding was closed by the W53-CLOSE lanes.
+**`W55B-INT-CLOSE` (2026-10-14) opened `D-159` … `D-177`** from `R-121`, the W55b judges, the rehearsal, `W55B-FIX` and the lane reports;
+the findings `W55B-FIX` repairs are recorded in its report, not here.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
 register that had been entirely obsolete while still reading as the list of what was open, and this
@@ -69,6 +71,25 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-156** | the stand's generated test data must be purged at the transition to beta, keeping the corpus (`R-109`) | a purge task in the beta wave |
 | ~~D-157~~ | W54's DB-backed validation deferred after W55a (`R-111`) | **closed 2026-10-13** by `W55A-INT-GATE-01`: DB suites, BGE build/windows/MRR, literal `GATE OK` on `23fd729` |
 | **D-158** | norms search shares the API's 10-connection pool; ten broad searches can hold every connection for the search timeout (`W55A-JUDGE-X` M6) | measure under the rehearsal timeout, then a per-operation cap or accepted risk |
+| **D-159** | an IMAGE block too small to crop fails the whole run (`portal_block_degenerate`); it is not refused at upload (`R-121`) | move the refusal to the upload if such a block is ever met |
+| **D-160** | ingest reads the PDF with pypdfium2, the run stages with pdfplumber; an accepted version can fail every run (`W55B-JUDGE-Y` Y-1 c/d) | one reader, or ingest probing what the stages need |
+| **D-161** | OpenAPI rule 1 says every identifier is `<prefix>_<ULID>`; `{portal_block_id}` is the portal's `blk_<32hex>` (Y-3) | the next contract reseal, with `D-151` |
+| **D-162** | the input budget models cost, not the model's context window, and the token constant was never measured on a live run of the real set (Y-5, `W55B-BUDGET-01` §5) | a live run with a key; `ModelPin` gains the context |
+| **D-163** | the portal HTML's digest survives only inside the opaque command fingerprint (Y-6, `R-116`) | a member-digest field at the next version-contract reseal |
+| **D-164** | the portal read model lives in the composition root, and every block-list page and crop GET re-reads whole artefacts (Y-7, X-4) | an indexed read model in `analysis` before W56's region evidence |
+| **D-165** | nginx buffers a whole upload body (up to 260 MiB) from any caller before the API decides; no `limit_conn` (X-9, X-3) | with `D-144`: trusted client address, then a per-client limit or unbuffered upload locations |
+| **D-166** | the API and worker containers have no memory limit, so a runaway request is contained by the host, not by the service (X-1, X-2) | the A13 sizing decision (G-12) |
+| **D-167** | the recognised-text flag precision 1.000 is in-sample: two rules were tuned on the export it was measured on (`W55B-RECOGNISED-01` §4.1) | a second export, measured untuned |
+| **D-168** | PC-02's corpus check is red: `PC02-N03`/`N04` now fall inside the 500-page / 250 MiB limits (`W55B-INGEST-01` §4) | new negatives for PC-02, or retire the two cases |
+| **D-169** | a run whose worker is killed for memory is resumed twice, then fails as `analysis_failed` with no stage and no detail (`W55B-REHEARSAL-01` §4.2.2) | the lease recovery classifies a repeated kill; the run carries a reason |
+| **D-170** | a killed stage leaves its temporary PDF (up to 250 MiB) in the worker's `/tmp`, never reclaimed (§4.2.9; X-1 for the API's spool) | a sweep of stale `am-source-*`/`am-geometry-*`/bundle temporaries at process start |
+| **D-171** | a 500-page drawing set takes 307 s + 415 s in the two deterministic stages on a loaded host, against the 900 s attempt watchdog (`W55B-FIX` §4) | measure on the stand's worker; split or raise the watchdog per stage |
+| **D-172** | contract follow-ups of `W55B-FIX`: a `304` for crops needs a digest-only read on the port; the integer rule is not in the block-list schema's `x-envelope-rules` | the next contract revision, with `D-161` |
+| **D-173** | the upload's Russian rule sentences live in two tables (`upload-envelope.ts` and `upload-failure.ts`); the journey manifest quotes the old «Блоки» empty-state sentence in unchecked prose | one table, owned by the upload slice; the manifest sentence corrected |
+| **D-174** | the BFF upload's memory was measured on the forward function alone, not under `next start` behind nginx with a 250 MiB body (`W55B-FIX` addendum 1.2) | a stand measurement |
+| **D-175** | an adversarial PDF with no drawing elements (`q Q` operators) passes the upload reader cheaply and costs the worker's pdfplumber about 3.8 s a page, past the 900 s watchdog; and the document ceilings leave ×1.3–1.4 at 500 pages of the export's density (`W55B-JUDGE-X` recheck, X-2 residual, X-12) | with `D-171`: bound the stage's time, then derive the ceilings per page × pages |
+| **D-176** | the upload front door admits any signed, unexpired credential, a revoked or archived account's included, for up to its 1 h life; it reads the last `Authorization`/`Content-Type` header where Starlette reads the first (X-3 residual) | a revocation check that stays database-free, or a shorter token life |
+| **D-177** | a version may still hold up to about 11 GiB of crops (1 000 high-entropy IMAGE crops at 4 MP); the display name keeps U+2028/2029 and Hangul fillers (X-4, X-10 residuals) | a per-version crop byte budget; widen the name scrub |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
@@ -148,6 +169,124 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-175 … D-177 — residuals of `W55B-JUDGE-X`'s recheck of `W55B-FIX`
+
+**Opened 2026-10-14 from `docs/program/reviews/W55B-JUDGE-X.md`, section "Recheck of W55B-FIX" (verdict ACCEPT).**
+
+- D-175: X-2's memory is fixed (flat at 208–210 MiB). Its time is not. A 3 KiB PDF made of `q Q` operators passes the reader at 0.17 s a page and costs pdfplumber 3.8 s a page, two passes per run. X-12: at 500 pages of the owner's export's density, the document ceilings leave ×1.4 (blocks), ×1.28 (IMAGE blocks) and ×1.3 (drawing elements).
+- D-176: the front door checks the signature and the expiry only.
+- D-177: the crop byte volume is bounded only by the IMAGE-block count, and the cosmetic leftovers of the name scrub.
+
+**Check:** the judge's probes `p10`–`p12` (kept in `.local/worktrees/w55b-judge-x/.local/judge/` until cleanup); `rg -n "MAX_BLOCKS|MAX_IMAGE_BLOCKS" src/auditmanager/ingest/bundle_envelope.py`.
+
+### D-171 … D-174 — `W55B-FIX`'s own follow-ups
+
+**Opened 2026-10-14 from `docs/program/W55B-FIX.md` §4.** D-171: the 500-page drawing set now passes both stages with a flat ~217 MiB
+resident set, but in 307 s + 415 s on a loaded host, close to the 900 s attempt watchdog. D-172: no `304` for crops (the port reads the
+PNG before the digest can be compared; the contract declares none), and the one-integer rule is enforced in code but not stated in the
+schema's `x-envelope-rules`. D-173: `uploadConstraintSentence` (`upload-envelope.ts`) and `uploadRuleSentence` (`upload-failure.ts`)
+both word upload rules; `tests/e2e/pc01/journey/manifest.json` still quotes the old «Блоки» sentence in prose no checker reads.
+D-174: Next's resident set under a real 250 MiB upload through nginx is unmeasured after the `fetch` fix.
+
+**Check:** `rg -n "watchdog|900" src/auditmanager/jobs/lease.py`; `rg -n "uploadConstraintSentence|uploadRuleSentence" web/src`;
+`rg -n "появятся после первого" tests/e2e/pc01/journey/manifest.json`.
+
+### D-170 — a killed stage leaves its temporary PDF behind
+
+**Opened 2026-10-14 from `W55B-REHEARSAL-01` §4.2.9 and `W55B-JUDGE-X` X-1.** The stages' temporary PDF, and the API's upload spool
+and `auditmanager-bundle-*` directories, are removed by context managers, which a SIGKILL never reaches. Each of the rehearsal's three
+memory kills left a 45 MB `am-source-*.pdf` in `/tmp`. On the stand that is up to 250 MiB per kill, in the container's writable layer.
+
+**Check:** `ls /tmp/am-source-* /tmp/am-geometry-* /tmp/auditmanager-bundle-* 2>/dev/null` inside the worker and API containers after a restart.
+
+### D-169 — a run killed for memory is retried twice, then fails mute
+
+**Opened 2026-10-14 from `W55B-REHEARSAL-01` §4.2.2.** The lease recovery resumes a run that has no provider effect. The same pages
+therefore kill the worker three times before `attempt_budget_exhausted` dead-letters the job. The run then shows `analysis_failed`
+with no stage and no detail. `W55B-FIX` removes the realistic cause (X-2), but not the behaviour.
+
+**Check:** the rehearsal's `drive.py run` under a cap below the stage's need; read the run's terminal reason and the job's attempts.
+
+### D-168 — PC-02's corpus check lost two negatives to the new limits
+
+**Opened 2026-10-14 by `W55B-INT-CLOSE` from `W55B-INGEST-01` §4.** `PC02-N03` (26 MiB, declared to break `ENV-SIZE`) and
+`PC02-N04` (31 pages, `ENV-PAGES`) are inside the 500-page / 250 MiB envelope since `7b713b32`. Nothing in the gate runs the check.
+
+**Check:** `.venv/bin/python tools/validation/corpus_check.py fixtures/validation/PC-02/corpus_manifest.json --quiet` exits 1 with
+`CHK-NEGATIVE-RULE` for both ids.
+
+### D-167 — recognised-text flag precision is measured in-sample
+
+**Opened 2026-10-14 from `W55B-RECOGNISED-01` §4.1.** The 175/175 precision on the owner's export was measured after two rules
+(decisions 7 and 8) were changed because of what that export showed. It is not an estimate for an unseen document. There is no recall
+figure on real text, and `cjk`, the degeneracy flags and `empty_text` never fired on real text.
+
+**Check:** the method of `W55B-RECOGNISED-01` §4.1 run, without retuning, on a second real export; record precision per flag.
+
+### D-166 — the API and worker containers have no memory limit
+
+**Opened 2026-10-14 from `W55B-JUDGE-X` X-1/X-2.** `W55B-FIX` bounds the work per page in code. A defect that escapes those bounds
+is still contained only by the host's OOM killer, which may choose another process on the shared stand.
+
+**Check:** `rg -n "mem_limit|memory:" infra/deploy/compose*.yml`; size the limits from the A13 measurements (`W55-PLAN.md` §C5).
+
+### D-165 — nginx stores whole upload bodies from any caller
+
+**Opened 2026-10-14 from `W55B-JUDGE-X` X-3/X-9.** The two upload locations allow 260 MiB with request buffering on and no `limit_conn`.
+nginx therefore writes a stranger's whole body to `client_body_temp` before the API refuses it. "The third upload is refused before
+its body is read" holds at the API, not end to end. A per-client limit needs the trusted client address of `D-144` first.
+
+**Check:** `rg -n -A4 "location ~ \^/(api|bff)/v1/projects" infra/deploy/proxy/nginx.conf infra/deploy/proxy/tls-server.conf`.
+
+### D-164 — the portal read model sits in the composition root and re-reads whole artefacts
+
+**Opened 2026-10-14 from `W55B-JUDGE-Y` Y-7 and `W55B-JUDGE-X` X-4.** `BlockAdapter` joins `geometry.portal_blocks`,
+`geometry.page_crops` and `prepared.recognised_text`. Every `listVersionPortalBlocks` page and every crop GET re-reads, re-verifies
+and re-parses them whole. W56's region evidence needs the same join. Move it into an `analysis` read model, indexed by `portal_block_id`.
+
+**Check:** `rg -n "class BlockAdapter" -A5 src/auditmanager/bootstrap/adapters.py`; time a crop GET on a version with thousands of blocks.
+
+### D-163 — a version cannot name the portal HTML that came with it
+
+**Opened 2026-10-14 from `W55B-JUDGE-Y` Y-6.** `R-116` keeps the HTML "as a digest". Its SHA-256 enters only the command fingerprint,
+which is opaque, so no reader can say which HTML a version was published with.
+
+**Check:** `rg -n "_results.html|html_sha256|results_html" src/auditmanager/ingest src/auditmanager/documents`.
+
+### D-162 — the input budget is cost-only and its token constant is unmeasured on the real set
+
+**Opened 2026-10-14 from `W55B-JUDGE-Y` Y-5 and `W55B-BUDGET-01` §5.** Above a ceiling of about $5.40, the budget admits requests the
+model's context cannot hold, because `ModelPin` carries no context. `CHARACTERS_PER_TOKEN` 7/5 rests on fifteen short documents. The real
+30-page АР set has not been tokenised by a live call, because no key was available. The settings default `claude-opus-5` is also a
+literal that repeats the lock's primary model.
+
+**Check:** `rg -n "CHARACTERS_PER_TOKEN|claude-opus-5\"" src/auditmanager/analysis/text/budget.py src/auditmanager/bootstrap/settings.py`;
+a live run of the АР set recording its input tokens.
+
+### D-161 — the portal block id breaks OpenAPI rule 1
+
+**Opened 2026-10-14 from `W55B-JUDGE-Y` Y-3.** Rule 1 says every identifier and path parameter is `<prefix>_<ULID>`.
+`{portal_block_id}` is the portal's external `blk_<32hex>`. Amend the rule for external identifiers at the next reseal.
+
+**Check:** `rg -n "portal_block_id" contracts/openapi* contracts/**/identifiers.json`.
+
+### D-160 — ingest and the run stages read the PDF with different libraries
+
+**Opened 2026-10-14 from `W55B-JUDGE-Y` Y-1 (c, d).** The envelope (pypdfium2) accepts some PDFs that pdfplumber, in
+`source_preparation`, cannot read. The two can also disagree on whether a page has a text layer. Such a version is accepted and immutable,
+then every run fails with `analysis_input_invalid`. `test_envelope_differential.py` records PDFium's leniency as accepted by design.
+
+**Check:** `rg -n "lenien" tests/integration/ingest/test_envelope_differential.py`; `rg -n "pdfplumber" src/auditmanager/analysis/stages/extraction.py`.
+
+### D-159 — a sub-pixel IMAGE block fails the whole run (`R-121`)
+
+**Opened 2026-10-14 under `R-121`.** An IMAGE block whose long side is under `800 / 2**24` of the page's longer side fails the run with
+`portal_block_degenerate`. Such a side is about a sixth of a pixel of a 300 dpi raster. A page-box mismatch only marks the page, so the
+two answers differ. The owner's export has none, and the owner kept this behaviour. Move the refusal to the upload if such a block is
+ever met.
+
+**Check:** `rg -n "portal_block_degenerate|REASON_BLOCK_DEGENERATE" src/auditmanager/analysis`.
 
 ### D-158 — norms search shares the API connection pool
 
