@@ -193,3 +193,36 @@ Not touched:
 
 Nothing was pushed, merged, tagged or stashed, and no external network call was made. After this commit,
 `git status --porcelain -uall` is empty.
+
+## 7. Revision 2 (W55B-NOTES-JUDGE)
+
+`W55B-NOTES-JUDGE` (`docs/program/reviews/W55B-NOTES-JUDGE.md`, committed on `integration/w55b` at `2ffbbf21`) judged
+revision 1 against candidate `03042093`, which includes `W55B-FIX`. The verdict was ACCEPT-WITH-EDITS. Items 1 and 3
+stand. Items 2, 4, 5 and 6 are replaced verbatim by the judge's texts E2, E4, E5 and E6. A script extracted each text
+from the judge's file and compared it with the integrator's quote before writing: they were identical.
+
+- **E2:** blocks appear when the run reaches page layout, matching the empty state `W55B-FIX` rewrote. The tabs are
+  shown once a version is chosen.
+- **E4:** the refusal applies to a version uploaded as a bundle, since a version with no recorded count is admitted.
+  A document of hundreds of pages may not fit.
+- **E5:** adds `W55B-FIX`'s block ceilings (100 per page, 3000 per bundle, 1000 images), the page and document content
+  limits, and the two-upload gate with its retry request. «Те же правила» becomes «Основные правила», because the new
+  limits are not listed before a file is chosen. This closes risk 4.
+- **E6:** a block of any type admits a page, and that page's recognised text does not reach analysis.
+
+`revision` is now **2**, as `RELEASE_PROCESS.md:15` requires. The date stays `2026-10-15`. The pin
+`"0.6.0": 1` → `2` moved in `test_release_notes_form.py`, with its comment. `test_release_loader.py` pins only the
+version set, so it is unchanged. The evidence for E4 and E5's `W55B-FIX` claims is the judge's file:line table at
+`03042093`. That code is not on this branch's base `1debd1b7`.
+
+Checks ran container-free, on the edited tree before this commit. Each ran only when `free -g` read at least 3 GiB
+immediately before it. A first pass gave the same results while memory had fallen back to 1 GiB, so it was repeated
+behind the gate. Host load was 22 to 32.
+
+| Command | rc | Result |
+|---|---|---|
+| `git diff --check` | 0 | clean |
+| `.venv/bin/python -m pytest -q -p no:cacheprovider tests/contract/release_notes` | 0 | 23 passed |
+| `cd web && npm exec -- vitest run tests/unit/release-notes` | 0 | 1 file, 3 tests passed |
+
+No stack was run.
