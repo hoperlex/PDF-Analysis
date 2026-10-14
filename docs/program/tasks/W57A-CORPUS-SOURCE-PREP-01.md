@@ -45,6 +45,9 @@ source inventory.
 
 ## Captured premise evidence
 
+- premise: the pinned local bootstrap manifest contains 674 source documents,
+  but its metadata alone cannot identify a reviewed W57a snapshot or legal status.
+
 ### P-01 — local manifest identity and scope
 
 - captured_at: 2026-10-14
