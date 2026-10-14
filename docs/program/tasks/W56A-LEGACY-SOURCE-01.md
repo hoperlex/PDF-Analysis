@@ -34,6 +34,9 @@ source-line review map. It identifies the norm-dependent statements that the tex
 
 ## Captured premise evidence
 
+- premise: the downloaded legacy checkout contains all six АР files unchanged
+  from the historical source commit.
+
 ### P-01 — the six files are present and unchanged from the historical source commit
 
 - captured_at: 2026-10-14

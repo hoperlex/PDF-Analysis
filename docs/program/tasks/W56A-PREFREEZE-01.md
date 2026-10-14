@@ -35,6 +35,9 @@ the owner's 2026-10-14 instruction to start available next-wave work during W55b
 
 ## Captured premise evidence
 
+- premise: the W55b candidate is not closed, so W56a freeze inputs must be
+  remeasured after acceptance.
+
 ### P-01 — the candidate has not closed
 - captured_at: 2026-10-14
 - command: `git rev-parse integration/w55b; rg --files docs/program | rg 'W55B-INT-CLOSE|W56A-FREEZE-01'`
