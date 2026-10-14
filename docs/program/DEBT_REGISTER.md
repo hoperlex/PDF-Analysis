@@ -17,7 +17,7 @@ separately planned validation wave. Each candidate must be named by exact SHA th
 **`W53-CLOSE-INT` (2026-10-12) opened `D-141` … `D-152`:** the findings of the 2026-10-12
 W48–W53 review that need a contract, a migration, a dependency, production access or a later
 wave's design; every other confirmed finding was closed by the W53-CLOSE lanes.
-**`W55B-INT-CLOSE` (2026-10-14) opened `D-159` … `D-168`** from `R-121`, the W55b judges and the lane reports;
+**`W55B-INT-CLOSE` (2026-10-14) opened `D-159` … `D-170`** from `R-121`, the W55b judges, the rehearsal and the lane reports;
 the findings `W55B-FIX` repairs are recorded in its report, not here.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
@@ -81,6 +81,8 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-166** | the API and worker containers have no memory limit, so a runaway request is contained by the host, not by the service (X-1, X-2) | the A13 sizing decision (G-12) |
 | **D-167** | the recognised-text flag precision 1.000 is in-sample: two rules were tuned on the export it was measured on (`W55B-RECOGNISED-01` §4.1) | a second export, measured untuned |
 | **D-168** | PC-02's corpus check is red: `PC02-N03`/`N04` now fall inside the 500-page / 250 MiB limits (`W55B-INGEST-01` §4) | new negatives for PC-02, or retire the two cases |
+| **D-169** | a run whose worker is killed for memory is resumed twice, then fails as `analysis_failed` with no stage and no detail (`W55B-REHEARSAL-01` §4.2.2) | the lease recovery classifies a repeated kill; the run carries a reason |
+| **D-170** | a killed stage leaves its temporary PDF (up to 250 MiB) in the worker's `/tmp`, never reclaimed (§4.2.9; X-1 for the API's spool) | a sweep of stale `am-source-*`/`am-geometry-*`/bundle temporaries at process start |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |
@@ -160,6 +162,22 @@ D-16, D-17, D-19, D-21, D-22, and D-14, which opened and closed in the same pass
 Every row names how to check it. A row nobody can re-measure is a row that will rot.
 
 ## 1. Open, and mine to schedule
+
+### D-170 — a killed stage leaves its temporary PDF behind
+
+**Opened 2026-10-14 from `W55B-REHEARSAL-01` §4.2.9 and `W55B-JUDGE-X` X-1.** The stages' temporary PDF, and the API's upload spool
+and `auditmanager-bundle-*` directories, are removed by context managers, which a SIGKILL never reaches. Each of the rehearsal's three
+memory kills left a 45 MB `am-source-*.pdf` in `/tmp`. On the stand that is up to 250 MiB per kill, in the container's writable layer.
+
+**Check:** `ls /tmp/am-source-* /tmp/am-geometry-* /tmp/auditmanager-bundle-* 2>/dev/null` inside the worker and API containers after a restart.
+
+### D-169 — a run killed for memory is retried twice, then fails mute
+
+**Opened 2026-10-14 from `W55B-REHEARSAL-01` §4.2.2.** The lease recovery resumes a run that has no provider effect. The same pages
+therefore kill the worker three times before `attempt_budget_exhausted` dead-letters the job. The run then shows `analysis_failed`
+with no stage and no detail. `W55B-FIX` removes the realistic cause (X-2), but not the behaviour.
+
+**Check:** the rehearsal's `drive.py run` under a cap below the stage's need; read the run's terminal reason and the job's attempts.
 
 ### D-168 — PC-02's corpus check lost two negatives to the new limits
 
