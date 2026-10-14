@@ -138,7 +138,7 @@ override DB_CHECK := src/auditmanager/shared/db/check.py
 override STO_CHECK := src/auditmanager/storage/check.py
 override QA_SUITE := tests/integration/foundation
 
-.PHONY: bootstrap up down check-services migrate check-db check-storage test-foundation gate light-acceptance mutation-copy foundation alpha-acceptance
+.PHONY: bootstrap up down check-services migrate check-db check-storage test-foundation gate gate-preflight gate-slot gate-static light-acceptance mutation-copy foundation alpha-acceptance
 
 # --- shared guards -----------------------------------------------------------------
 # Expanded verbatim into each recipe that needs them. No guard has a success path that
@@ -480,15 +480,44 @@ run_battery() {
   # section 6.3 actually means. So the ignore now names those files, not the directory.
   # `gate: foundation` has already executed the cross-provider suite through
   # `test-foundation`; exclude only that exact directory from the later battery.
-  local status
+  #
+  # GATE-PKG-01 splits the same set in time, not in content. `tests/contract` already ran
+  # in `gate-static`, before any container, under `run_contract` with the three CP-00
+  # ignores above, so it is ignored here as a whole. Then the integration suites of the
+  # contexts changed since the last published tree run FIRST (`gate_host.py
+  # battery-first`), and a red there stops the gate before the rest of the battery: the
+  # W55a candidate's 17 database failures sat in exactly those suites and were found only
+  # after the whole battery. The rest runs with those suites ignored, so no test runs
+  # twice and none is dropped.
+  local status first_out suite
+  local -a first=() skip=()
+  first_out="$$(scrubbed_run PYTHONUNBUFFERED=1 -- "$$RUNTIME_PY" scripts/gate_host.py battery-first)" || fail \
+    "GATE: scripts/gate_host.py battery-first failed; the battery order could not be derived."
+  if [ -n "$$first_out" ]; then mapfile -t first <<< "$$first_out"; fi
+  if [ "$${#first[@]}" -gt 0 ]; then
+    printf '%s\n' "GATE: the changed contexts' suites run first: $${first[*]}"
+    set +e
+    scrubbed_run PYTHONUNBUFFERED=1 -- \
+      "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. -q \
+      "$${first[@]/#/tests/integration/}"
+    status=$$?
+    set -e
+    if [ "$$status" -eq 5 ]; then
+      fail "GATE: pytest collected no tests from the changed contexts' suites: $${first[*]}." \
+        "Exit status 5 means nothing ran. An empty or fully deselected run is not a pass."
+    fi
+    [ "$$status" -eq 0 ] || fail \
+      "GATE: the changed contexts' suites failed with pytest exit status $$status: $${first[*]}." \
+      "The rest of the battery was not run; repair these first."
+    for suite in "$${first[@]}"; do skip+=("--ignore=tests/integration/$$suite"); done
+  fi
   set +e
   scrubbed_run PYTHONUNBUFFERED=1 -- \
     "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. -q \
     tests --ignore=tests/checkpoint \
     --ignore=tests/integration/foundation \
-    --ignore=tests/contract/test_cp00_candidate.py \
-    --ignore=tests/contract/test_cp00_final_state.py \
-    --ignore=tests/contract/test_validate_bootstrap.py
+    --ignore=tests/contract \
+    "$${skip[@]}"
   status=$$?
   set -e
   if [ "$$status" -eq 5 ]; then
@@ -497,6 +526,33 @@ run_battery() {
   fi
   [ "$$status" -eq 0 ] || fail \
     "GATE: the canonical battery failed with pytest exit status $$status."
+}
+
+run_contract() {
+  # The container-free half of the canonical battery, run in `gate-static` so a red pin,
+  # prose guard or governance rule shows in about a minute instead of after the battery
+  # (W53's first gate: four of its six failure classes were such reds). The ignores are
+  # the battery's own CP-00 ignores, verbatim; `run_battery` then ignores tests/contract.
+  local status
+  set +e
+  scrubbed_run PYTHONUNBUFFERED=1 -- \
+    "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. -q \
+    tests/contract \
+    --ignore=tests/contract/test_cp00_candidate.py \
+    --ignore=tests/contract/test_cp00_final_state.py \
+    --ignore=tests/contract/test_validate_bootstrap.py
+  status=$$?
+  set -e
+  if [ "$$status" -eq 5 ]; then
+    fail "GATE: pytest collected no tests from tests/contract." \
+      "Exit status 5 means nothing ran. An empty or fully deselected run is not a pass."
+  fi
+  [ "$$status" -eq 0 ] || fail \
+    "GATE: tests/contract failed with pytest exit status $$status."
+}
+
+gate_memory_report() {
+  scrubbed_run PYTHONUNBUFFERED=1 -- "$$RUNTIME_PY" scripts/gate_host.py report --owner-pid "$$PPID"
 }
 
 run_frontend() {
@@ -1040,16 +1096,56 @@ mutation-copy:
 	  "  src-only mutation   : .venv/bin/pytest <suite> -o pythonpath=$(MUT)/src" \
 	  "A red from a copy you never baselined is not evidence."
 
-gate: foundation
+#
+# GATE-PKG-01: the order is cheapest-refusal first, because about two thirds of the failed
+# or voided complete gates of W48-W55a failed on the host, not on the code, and each
+# spent 15-40 minutes before saying so. `.NOTPARALLEL` runs the prerequisites left to
+# right:
+#   gate-preflight  seconds, no containers: toolchain, corpus link, .env, a clean tree,
+#                   free disk on the worktree and Docker data filesystems;
+#   gate-slot       this repository's one gate slot, then WAIT (with a heartbeat) for
+#                   memory headroom and for any other `make gate` on the host to end;
+#                   the slot is held for exactly as long as this make lives;
+#   gate-static     no containers: whitespace, frontend lint/typecheck/tests and
+#                   tests/contract -- the reds that cost a minute to find;
+#   foundation      the containers and the cross-provider suite;
+# and then the battery, changed contexts first. A refusal says `GATE NOT STARTED` and is
+# never a test result. Thresholds: GATE_MIN_AVAILABLE_MIB (3072), GATE_MIN_FREE_DISK_MIB
+# (6144), GATE_MAX_LOAD (off), GATE_WAIT_MAX_S (14400), GATE_HEARTBEAT_S (300); GATE_BASE
+# overrides the merge base with origin/main for the battery order.
+gate: gate-preflight gate-slot gate-static foundation
 	@$(GUARDS)
 	freeze_paths
 	require_runtime_env
 	load_env
 	require_env_coherence
 	run_battery
-	run_frontend
-	check_whitespace
+	gate_memory_report
 	printf '%s\n' "GATE OK: battery, foundation, frontend lint/typecheck/tests and whitespace all pass"
+
+gate-preflight:
+	@$(GUARDS)
+	freeze_paths
+	require_runtime_env
+	scrubbed_run PYTHONUNBUFFERED=1 -- "$$RUNTIME_PY" scripts/gate_host.py preflight
+
+# `$$PPID` is this make: the holder keeps the slot until that process is gone.
+gate-slot:
+	@$(GUARDS)
+	freeze_paths
+	require_runtime_env
+	scrubbed_run PYTHONUNBUFFERED=1 -- "$$RUNTIME_PY" scripts/gate_host.py slot --owner-pid "$$PPID"
+
+gate-static:
+	@$(GUARDS)
+	freeze_paths
+	require_runtime_env
+	check_whitespace
+	run_frontend
+	load_env
+	require_env_coherence
+	run_contract
+	printf '%s\n' "GATE STATIC: whitespace, frontend lint/typecheck/tests and tests/contract pass"
 
 # R-70: BASE is the full SHA of the last tree accepted by a complete gate.
 # Pass it through the environment so a malformed value never becomes shell source.

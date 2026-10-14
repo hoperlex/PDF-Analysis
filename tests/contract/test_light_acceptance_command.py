@@ -110,8 +110,11 @@ def test_risk_diff_requires_full_gate_and_cannot_substitute_light(repo: Path) ->
     with pytest.raises(light.SelectionError, match=r"complete make gate required.*Makefile"):
         light.classify(light.changed_paths(base))
     makefile = (ROOT / "Makefile").read_text()
-    assert "gate: foundation" in makefile
-    assert "run_battery\n\trun_frontend\n\tcheck_whitespace" in makefile
+    # GATE-PKG-01: the complete gate keeps every component; only their order moved, so the
+    # cheap refusals and the container-free reds come before the containers and the battery.
+    assert "gate: gate-preflight gate-slot gate-static foundation\n" in makefile
+    assert "check_whitespace\n\trun_frontend\n\tload_env\n\trequire_env_coherence\n\trun_contract" in makefile
+    assert "run_battery\n\tgate_memory_report\n" in makefile
     assert '"GATE OK: battery, foundation, frontend lint/typecheck/tests and whitespace all pass"' in makefile
 
 
