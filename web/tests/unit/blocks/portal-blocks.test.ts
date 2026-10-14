@@ -228,7 +228,7 @@ describe('a STAMP block shows its type and nothing the wire does not carry', () 
     const markup = card(stampBlock());
     expect(markup).toContain('>Штамп<');
     expect(markup).toContain('data-portal-block-type="stamp"');
-    expect(markup).not.toContain('порядок на странице');
+    expect(markup).not.toContain('порядок у портала');
     expect(markup).not.toContain('<pre');
     expect(markup).not.toContain('<img');
     expect(markup).not.toContain(DESCRIPTION_MARKER);
@@ -247,7 +247,7 @@ describe('the portal status, the ordinal and the polygon are said as the respons
 
   it('prints the ordinal and the number of vertices, and computes nothing else', () => {
     const markup = card(imageBlock({ ordinal: 7, polygon_points: [[0, 0], [1, 0], [1, 1]] }));
-    expect(visibleText(markup)).toContain('порядок на странице: 7');
+    expect(visibleText(markup)).toContain('порядок у портала: 7');
     expect(visibleText(markup)).toContain('вершин в контуре: 3');
     expect(markup).not.toContain('<svg');
     expect(markup).not.toContain('<polygon');

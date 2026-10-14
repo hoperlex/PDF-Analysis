@@ -101,13 +101,16 @@
   line-height: 1.7;
 }
 
-/* «описание портала — в анализе не используется» (`R-117`). */
+/*
+ * «описание портала — в анализе не используется» (`R-117`). A sentence long enough to wrap on a
+ * phone, so a small radius rather than a pill: a pill around two lines reads as a lozenge.
+ */
 .descriptionMarker {
   display: inline-block;
   margin: 0 0 var(--am-gap-xs);
   padding: 0 9px;
   border: 1px solid var(--am-inert);
-  border-radius: var(--am-radius-pill);
+  border-radius: var(--am-radius-sm);
   background: var(--am-inert-light);
   color: var(--am-inert);
   font-size: var(--am-text-xs);
@@ -143,6 +146,21 @@
   gap: var(--am-gap-xs) var(--am-gap-sm);
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
+}
+
+/*
+ * A flag's name. Not the global badge, which never wraps: «латинская буква вместо кириллической»
+ * is wider than a block on a phone, and a chip that cannot wrap widens the page.
+ */
+.flagLabel {
+  display: inline-block;
+  padding: 0 9px;
+  border: 1px solid var(--am-degraded);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-degraded-light);
+  color: var(--am-degraded);
+  font-size: var(--am-text-xs);
+  line-height: 1.7;
 }
 
 .figure {

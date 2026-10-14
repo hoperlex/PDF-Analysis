@@ -46,6 +46,16 @@
   font-weight: 600;
 }
 
+/* On a phone the two tabs share the row rather than wrapping one under the other. */
+@media (max-width: 520px) {
+  .tab {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 8px;
+    text-align: center;
+  }
+}
+
 .panel {
   padding-top: var(--am-gap);
   min-width: 0;

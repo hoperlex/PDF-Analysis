@@ -96,7 +96,7 @@ function RecognisedText({ recognised }: { readonly recognised: PortalRecognisedT
             const presentation = flagPresentation(flag);
             return (
               <li key={`${index}:${flag}`} className={styles.flag} data-recognised-flag={flag}>
-                <span className="am-badge am-badge--degraded">{presentation.label}</span>
+                <span className={styles.flagLabel}>{presentation.label}</span>
                 <span>{presentation.explanation}</span>
               </li>
             );
@@ -138,7 +138,7 @@ export function PortalBlockCard({ block, cropSrc }: PortalBlockCardProps) {
       <header className={styles.head}>
         <h4 className={styles.type}>{typeLabel}</h4>
         {block.ordinal === null ? null : (
-          <span className={styles.meta}>порядок на странице: {block.ordinal}</span>
+          <span className={styles.meta}>порядок у портала: {block.ordinal}</span>
         )}
         <span className={`am-badge am-badge--${status.tone}`}>{status.label}</span>
         {vertices === 0 ? null : <span className={styles.meta}>вершин в контуре: {vertices}</span>}
