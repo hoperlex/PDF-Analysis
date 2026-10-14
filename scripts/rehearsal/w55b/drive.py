@@ -140,7 +140,28 @@ def account() -> int:
 # ------------------------------------------------------------------ upload
 
 
-def _stream_upload(client: common.Api, project: str, archive: Path, filename: str) -> tuple[int, dict, float]:
+def bff_cookie() -> str:
+    """A session cookie of the lane's Next BFF, from its own sign-in form (``POST /bff/v1/session``)."""
+    import http.client
+    from urllib.parse import urlencode
+
+    origin = f"http://127.0.0.1:{common.WEB_PORT}"
+    body = urlencode({"login": _env(LOGIN_ENV), "password": _env(PASSWORD_ENV)}).encode()
+    conn = http.client.HTTPConnection("127.0.0.1", common.WEB_PORT, timeout=60)
+    conn.request("POST", "/bff/v1/session", body=body, headers={
+        "Content-Type": "application/x-www-form-urlencoded", "Origin": origin, "Sec-Fetch-Site": "same-origin"})
+    response = conn.getresponse()
+    response.read()
+    cookies = [value for name, value in response.getheaders() if name.lower() == "set-cookie"]
+    conn.close()
+    for cookie in cookies:
+        if cookie.startswith("am_session="):
+            return cookie.split(";", 1)[0]
+    raise SystemExit(f"the BFF sign-in answered {response.status} with no session cookie")
+
+
+def _stream_upload(client: common.Api, project: str, archive: Path, filename: str,
+                   via_bff: str | None = None) -> tuple[int, dict, float]:
     import http.client
 
     boundary = "----w55brehearsal" + uuid.uuid4().hex
@@ -148,10 +169,17 @@ def _stream_upload(client: common.Api, project: str, archive: Path, filename: st
            "Content-Type: application/zip\r\n\r\n").encode()
     post = f"\r\n--{boundary}--\r\n".encode()
     size = archive.stat().st_size
-    conn = http.client.HTTPConnection(client.host, client.port, timeout=1800)
+    port = common.WEB_PORT if via_bff else client.port
+    conn = http.client.HTTPConnection(client.host, port, timeout=1800)
     started = time.monotonic()
-    conn.putrequest("POST", f"/projects/{project}/documents")
-    conn.putheader("Authorization", f"Bearer {client.token}")
+    if via_bff:
+        conn.putrequest("POST", f"/bff/v1/projects/{project}/documents")
+        conn.putheader("Cookie", via_bff)
+        conn.putheader("Origin", f"http://127.0.0.1:{common.WEB_PORT}")
+        conn.putheader("Sec-Fetch-Site", "same-origin")
+    else:
+        conn.putrequest("POST", f"/projects/{project}/documents")
+        conn.putheader("Authorization", f"Bearer {client.token}")
     for name, value in key("upload").items():
         conn.putheader(name, value)
     conn.putheader("Content-Type", f"multipart/form-data; boundary={boundary}")
@@ -173,7 +201,8 @@ def _stream_upload(client: common.Api, project: str, archive: Path, filename: st
     return response.status, body, elapsed
 
 
-def upload(bundle: Path, phase: str, project_name: str, redact: bool, project_uid: str | None) -> int:
+def upload(bundle: Path, phase: str, project_name: str, redact: bool, project_uid: str | None,
+           via_bff: bool = False) -> int:
     at_start = common.capacity_gate(f"upload {phase}")
     client = api()
     if project_uid is None:
@@ -182,14 +211,27 @@ def upload(bundle: Path, phase: str, project_name: str, redact: bool, project_ui
             raise SystemExit(f"createProject: {status} {body}")
         project_uid = body["project_uid"]
     pid = common.own_api_pid()
+    cookie = bff_cookie() if via_bff else None
+    web_pid = common.listening_pid(common.WEB_PORT) if via_bff else None
+    web = {}
+    if web_pid is not None:
+        web = {"pid": web_pid, "rss_before_kib": common.vm_kib(web_pid, "VmRSS"),
+               "vmhwm_after_reset_kib": common.reset_peak(web_pid),
+               "scope_before": common.cgroup_memory(web_pid)}
+        web_sampler = RssSampler(web_pid).start()
     idle_rss = common.vm_kib(pid, "VmRSS")
     hwm_reset = common.reset_peak(pid)
     sampler = RssSampler(pid).start()
     t0 = time.time()
     scope_before = common.cgroup_memory(pid)
-    status, body, seconds = _stream_upload(client, project_uid, bundle, "bundle.zip")
+    status, body, seconds = _stream_upload(client, project_uid, bundle, "bundle.zip", cookie)
     t1 = time.time()
     sampler.stop()
+    if web_pid is not None:
+        web_sampler.stop()
+        web.update({"vmhwm_after_kib": common.vm_kib(web_pid, "VmHWM"),
+                    "sampled": web_sampler.peak_between(t0, t1),
+                    "scope_after": common.cgroup_memory(web_pid)})
     hwm_after = common.vm_kib(pid, "VmHWM")
     scope_after = common.cgroup_memory(pid)
     peak = sampler.peak_between(t0, t1)
@@ -204,7 +246,10 @@ def upload(bundle: Path, phase: str, project_name: str, redact: bool, project_ui
     else:
         response.update({"error_code": _code(body), "details": body.get("details")})
     common.write_figures(phase, {
-        "what": "upload of one portal bundle, streamed with a Content-Length, loopback API (no BFF, no nginx)",
+        "what": ("upload of one portal bundle, streamed with a Content-Length, through the lane's Next BFF "
+                 "(no nginx)" if via_bff else
+                 "upload of one portal bundle, streamed with a Content-Length, loopback API (no BFF, no nginx)"),
+        "web_process": web,
         "context_at_start": at_start,
         "archive_bytes": bundle.stat().st_size,
         "response": response,
@@ -522,6 +567,7 @@ def main(argv: list[str] | None = None) -> int:
     up.add_argument("--project-name", default="W55B rehearsal")
     up.add_argument("--project-uid")
     up.add_argument("--redact", action="store_true")
+    up.add_argument("--via-bff", action="store_true")
     refused = sub.add_parser("start-refused")
     refused.add_argument("--phase", required=True)
     refused.add_argument("--version-uid", required=True)
@@ -545,7 +591,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "account":
         return account()
     if args.command == "upload":
-        return upload(args.bundle, args.phase, args.project_name, args.redact, args.project_uid)
+        return upload(args.bundle, args.phase, args.project_name, args.redact, args.project_uid, args.via_bff)
     if args.command == "start-refused":
         return start_refused(args.phase, args.version_uid)
     if args.command == "run":
