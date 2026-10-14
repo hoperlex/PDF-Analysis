@@ -463,6 +463,60 @@ def run(phase: str, version_uid: str, timeout: int, redact: bool) -> int:
     return 0 if vanished is None else 3
 
 
+# ------------------------------------------------------------------ what the product does after a kill
+
+
+def _run_rows(run_id: str) -> dict:
+    run = db_rows("SELECT state FROM audit_run WHERE run_id = %s", (run_id,))
+    jobs = db_rows("SELECT job_id, state FROM job WHERE run_id = %s", (run_id,))
+    attempts = db_rows("SELECT a.state, count(*) FROM attempt a JOIN job j ON j.job_id = a.job_id "
+                       "WHERE j.run_id = %s GROUP BY a.state ORDER BY a.state", (run_id,))
+    stages = db_rows("SELECT stage_id, status FROM stage_result WHERE run_id = %s", (run_id,))
+    return {"run": run[0][0] if run else None, "jobs": [state for _, state in jobs],
+            "attempts": {state: count for state, count in attempts},
+            "stage_results": {stage: status for stage, status in stages}}
+
+
+def recovery(phase: str, run_id: str, restarts: int, window: int) -> int:
+    """Restart the API whenever the cap has killed it, up to ``restarts`` times, and record what the
+    product's own recovery does with the run it left behind. Nothing is reconciled by hand."""
+    import stack
+
+    started = time.time()
+    events: list[dict] = [{"t": 0.0, "event": "observed", **_run_rows(run_id)}]
+    done = 0
+    pid = None
+    last = None
+    while time.time() - started < window:
+        alive = pid is not None and Path(f"/proc/{pid}").exists()
+        if not alive:
+            if pid is not None:
+                events.append({"t": round(time.time() - started, 1), "event": "api killed", "pid": pid,
+                               **_run_rows(run_id)})
+            if done >= restarts:
+                break
+            if common.listening_pid(common.API_PORT) is None:
+                stack.api_start()
+                done += 1
+            pid = common.own_api_pid()
+            events.append({"t": round(time.time() - started, 1), "event": f"api started ({done})",
+                           "pid": pid, **_run_rows(run_id)})
+        rows = _run_rows(run_id)
+        snapshot = json.dumps(rows, sort_keys=True)
+        if snapshot != last:
+            events.append({"t": round(time.time() - started, 1), "event": "rows", **rows,
+                           "rss_kib": common.vm_kib(pid, "VmRSS") if Path(f"/proc/{pid}").exists() else None})
+            last = snapshot
+        if rows["run"] in TERMINAL:
+            break
+        time.sleep(3)
+    common.write_figures(phase, {"what": "the API restarted after each kill by the cap; the run's rows as the product leaves them",
+                                 "run_id": run_id, "restarts": done, "events": events,
+                                 "final": _run_rows(run_id)})
+    print(json.dumps(events[-3:], indent=1))
+    return 0
+
+
 # ------------------------------------------------------------------ the portal blocks over the API
 
 
@@ -581,6 +635,11 @@ def main(argv: list[str] | None = None) -> int:
     listing.add_argument("--version-uid", required=True)
     listing.add_argument("--limit", type=int, default=100)
     listing.add_argument("--redact", action="store_true")
+    watch = sub.add_parser("recovery")
+    watch.add_argument("--phase", required=True)
+    watch.add_argument("--run-id", required=True)
+    watch.add_argument("--restarts", type=int, default=3)
+    watch.add_argument("--window", type=int, default=900)
     scope = sub.add_parser("scope")
     scope.add_argument("--phase", required=True)
     get = sub.add_parser("fetch")
@@ -600,6 +659,8 @@ def main(argv: list[str] | None = None) -> int:
         return blocks(args.phase, args.version_uid, args.redact, args.limit)
     if args.command == "fetch":
         return fetch(args.version_uid, args.into)
+    if args.command == "recovery":
+        return recovery(args.phase, args.run_id, args.restarts, args.window)
     if args.command == "scope":
         pid = common.own_api_pid()
         common.write_figures(args.phase, {"api_pid": pid, "vmrss_kib": common.vm_kib(pid, "VmRSS"),
