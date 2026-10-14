@@ -399,3 +399,30 @@ Final checks on the report's commit `0b117872` (stack already down): `git diff -
 `compileall` clean (rc 0); the contract suite with the three exclusions **767 passed, 19 278 subtests** (rc 0). One
 disclosure: `free -g` showed 2 GiB available when that last, container-free suite started (the host's other work); it
 passed in 93 s and nothing else ran beside it.
+
+## 7. FIX-2 — the member ratio applies to the whole stream
+
+`W55B-JUDGE-X` X-11 found that X-5's added per-prefix compression-ratio check refused a
+legitimate member: an unfiltered raster at the start of a PDF compresses far above 100 : 1,
+while later content brings the whole member below the frozen 100 : 1 bound. FIX-2 removes
+only that prefix check and restores `_Archive.consumed` to the bytes of the completed deflate
+stream. `_unpack` still checks `actual > entry.size` on every piece (the lying-size bomb stops
+within the declared 4,000 bytes plus one 64 KiB piece), and still judges the whole member
+against the compressed bytes its stream actually consumed after extraction. A padded header
+cannot hide a whole-member ratio above the bound.
+
+`test_bundle_archive.py` now admits 1, 2 and 20 MiB white prefixes followed by 1 MiB of
+incompressible data; it asserts that each prefix alone exceeds 100 : 1, the complete member
+stays under 100 : 1, and the extracted PDF digest matches its input. The padded-header case
+asserts the final ratio refusal after exactly its declared 4 MiB; the lying-size case still
+asserts a stop at the declaration plus one piece. The reference fixture validator had no
+prefix rule, so it needed no edit. FIX-2 changes only the archive reader, its integration
+test and this report; no contract, migration, dependency, composition or shared fixture
+hotspot is touched. No feature flag or rollback is needed: revert this FIX-2 commit to
+restore the previous prefix rule if the whole-member bound is changed by a later freeze.
+
+Checks before this report's commit: `git diff --check` and `compileall` passed; the archive
+and envelope suites passed **368 tests** with local socket access. A contract-suite attempt
+on the dirty lane passed **805 tests** and failed one release-command test solely because
+that command requires a clean Git checkout. The contract suite must be repeated on this
+committed tree; its final result belongs in `W55B-INT-CLOSE`.

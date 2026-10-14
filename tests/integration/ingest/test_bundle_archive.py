@@ -235,13 +235,14 @@ def test_a_small_archive_that_declares_a_small_pdf_is_refused_before_it_inflates
     assert [record["bytes"] for record in produced] and produced[0]["bytes"] <= 4000 + ba._PIECE
 
 
-def test_the_ratio_is_judged_while_the_member_is_inflated_not_after(
+def test_a_padded_header_is_refused_for_its_whole_ratio_having_produced_no_more_than_its_declaration(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The padded header of the test above it, at 4 MiB of zeros and a claim of 60 000 compressed
     bytes: every figure the headers give is inside the bound (70 : 1), and the stream itself is
-    about 4 KB. The ratio against the compressed bytes consumed so far stops it after about a
-    hundred times those bytes and one piece -- not after 4 MiB."""
+    about 4 KB. The whole member's ratio refuses it once it is out (`W55B-FIX` FIX-2: there is no
+    prefix rule), and the work it cost is its declaration -- 4 MiB, under a hundred times the
+    compressed bytes it claims, which must lie inside the archive -- never more."""
     produced = _spy_on_inflation(monkeypatch)
     path = _padded_deflate_archive(
         tmp_path / "padded-early.zip", output_bytes=4 * MiB, claimed=60_000
@@ -249,7 +250,39 @@ def test_the_ratio_is_judged_while_the_member_is_inflated_not_after(
     limits = dataclasses.replace(LOW, member_bytes=8 * MiB, total_bytes=16 * MiB)
     with _within(5):
         assert judge(path, limits)[:2] == ("file", "bundle_compression_ratio")
-    assert produced and produced[0]["bytes"] < MiB, produced
+    assert produced and produced[0]["bytes"] == 4 * MiB <= limits.ratio * 60_000, produced
+
+
+@pytest.mark.parametrize(
+    ("white_mib", "noise_mib"),
+    [(1, 1), (2, 1), (20, 1)],
+    ids=["1-MiB-white-1-MiB-noise", "2-MiB-white-1-MiB-noise", "20-MiB-white-1-MiB-noise"],
+)
+def test_a_member_whose_prefix_is_very_compressible_but_whose_whole_is_under_the_bound_is_admitted(
+    white_mib: int, noise_mib: int
+) -> None:
+    """`W55B-JUDGE-X` X-11 (``p12``). A PDF that opens with an unfiltered white raster: its first
+    megabytes deflate a thousand to one, its whole member a few to one (20 : 1 at most here).
+    The frozen bound is the member's as a whole; FIX's first form also held it for every prefix
+    and refused all three. The archive rules admit each, unpacked to its last byte."""
+    import random
+
+    white_prefix = b"%PDF-1.4\n" + b"\xff" * (white_mib * MiB)
+    assert len(white_prefix) > ba.MAX_RATIO * len(zlib.compress(white_prefix))
+    noise = random.Random(white_mib).randbytes(noise_mib * MiB)
+    pdf = white_prefix + noise + b"\n%%EOF\n"
+    items = an.members()
+    target = next(i for i in items if i.name.endswith(b".pdf"))
+    target.payload = pdf
+    target.method = zipwrite.DEFLATED
+    target.deflate = "zlib"
+    data = zipwrite.build_zip(items)
+    entry = next(e for e in zipfile.ZipFile(io.BytesIO(data)).infolist() if e.filename.endswith(".pdf"))
+    assert entry.file_size / entry.compress_size <= ba.MAX_RATIO, "the whole member is under the bound"
+    assert entry.file_size / entry.compress_size > 1
+    with _within(10), extract_bundle(io.BytesIO(data)) as bundle:
+        assert bundle.members[ba.ROLE_PDF].size == len(pdf)
+        assert bundle.members[ba.ROLE_PDF].sha256 == hashlib.sha256(pdf).hexdigest()
 
 
 def test_a_ratio_above_the_bound_is_refused(tmp_path: Path) -> None:
