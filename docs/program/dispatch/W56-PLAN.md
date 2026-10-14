@@ -4,13 +4,18 @@
 both judges ACCEPT-WITH-FIXES, no third round) and the owner's answer H-10 (the critic moves to W56b). Written by the planning session on local branch
 `plan/roadmap-to-beta`. Two rounds at most (`R-V4`).
 **Controlling answers:** `ROADMAP-TO-BETA.md` §10.1 (A-6…A-8), §10.13 (G-3, G-7, G-8, G-11) and §10.14
-(H-1…H-10). Research: `reviews/W56-RESEARCH.md`. `R-Z1`…`R-Z6` are placeholders; `W56A-RULE-01` takes
-the next free numbers.
+(H-1…H-10). Research: `reviews/W56-RESEARCH.md`. `W56A-RULE-01` records those answers as
+`R-129`…`R-134` on its W55b candidate base; the integrator checks numbering again before merge.
 **The wave is two waves (H-1).** Part A (W56a) is planned here in full and is dispatchable after
 `W55B-INT-CLOSE`. Part B's original scope is retained below for history; `W56B-PLAN.md` (from the unadopted
 2026-10-08 layer, `ROADMAP-TO-BETA.md` §10.16 K-4: preserved, not reviewed or adopted) is a draft of its
 pre-freeze planning graph. It becomes dispatchable only after the W54/W55 vision probe,
 W57b close and its own owner rulings/freeze.
+**2026-10-14 owner amendment:** `W56A-RULE-01` may record the already-given decisions during
+W55b acceptance. Freeze and implementation remain behind `W55B-INT-CLOSE`. `R-124` replaces
+W56a's QA/two-judge/notes-judge sequence with one whole-wave judge and FIX; `R-126` defers
+backend database suites to the final gate. `R-102` continues to put one full gate on the final
+candidate, not on individual lanes. The task requirements below are read under these rulings.
 **Releases:** W56a `v0.7.0`, W56b `v0.9.0`. *Amended 2026-10-07 (owner's answer I-12, `ROADMAP-TO-BETA.md`
 §10.15):* W57a (`v0.8.0`) and W57b (`v0.8.1`) follow W56a, and W56b follows W57b; W56b's own plan bases on
 W57b's close.
@@ -201,11 +206,13 @@ severity choice on accepting, empty by default. Run page: the profile; a stage's
 
 ### A4. Tasks
 
-**`W56A-RULE-01`** (integrator): `R-Z1` v2 categories without norm compliance (H-2); `R-Z2` severity proposed
-by the model, decided by the expert, and the CSV's two appended columns (H-3, OD-11); `R-Z3` the
-deterministic merge rule (H-4); `R-Z4` the no-regression gate on recorded responses, beta thresholds at W58
-(H-5); `R-Z5` a model identity mismatch refuses (H-6); `R-Z6` recognised text as marked context for
-text-less pages only; the split, the critic in W56b and the live budget within `R-29` (H-1, H-7, H-9, H-10).
+**`W56A-RULE-01`** (integrator): `R-129` v2 categories without norm compliance (H-2);
+`R-130` severity proposed by the model, decided by the expert, and the CSV's two appended
+columns (H-3, OD-11); `R-131` the deterministic merge rule (H-4); `R-132` the no-regression
+gate on recorded responses, beta thresholds later (H-5); `R-133` a model identity mismatch
+refuses (H-6); `R-134` recognised text as marked context for text-less pages only, the split,
+the critic in W56b, the owner's in-product review and the live budget within `R-29`
+(H-1, H-7…H-10). It also applies `R-124` and `R-126` to this plan and `AGENTS.md` §8.
 
 **`W56A-FREEZE-01`** (integrator): standard form, plus — the per-gateway identity probe (§A3.5; a stop
 per gateway); `W48-PROXY-01` merged forward; `D-133`'s state; migration `0022_findings_v2` (the number
@@ -241,7 +248,9 @@ tolerance; the spend ledger opened; `git grep -n` for the predecessor version re
   (its producer cell in the register's designator form, `test_seam_register.py:17,130`),
   `docs/program/W56A-SEAL-01.md` and every path `pin_sweep.py` prints. Required: fresh upgrade; upgrade from W55b's head with rows (canonical
   backfill checked); refused downgrade; v1 responses byte-identical (records 03–11 unchanged, new
-  properties absent); `make gate`.
+  properties absent). Under `R-102`/`R-126`, this lane authors the upgrade and backfill
+  tests but does not run a database suite or a per-lane `make gate`; the final merged-candidate
+  gate runs them.
 - **`W56A-GENERATOR-01`** (§A3.6, after SEAL) — `tools/fixtures/seeded/**` (new), `fixtures/evaluation/ar_v2/**`
   (new; corpus and manifests), `tests/contract/fixtures_seeded/**` (new), `docs/program/W56A-GENERATOR-01.md`.
   Required: byte-stable regeneration; a mutation self-test per seeded issue and control.
@@ -315,10 +324,15 @@ Allowed: `scripts/rehearsal/w56a/**` (no surface-count phrases), `docs/program/W
 **`W56A-RELNOTES-01`:** `release-notes/0.7.0.json`, `release-notes/dictionary.json`, `VERSION`, the
 freeze's predecessor-version hits (`R-86`), `docs/program/W56A-RELNOTES-01.md`.
 
-**Stage D:** `W56A-QA-01`; `W56A-JUDGE-X` (prompt injection from document and recognised text; severity by a
-non-expert and with a non-accept event; a decision on a non-canonical observation; the setting; a doctored
-recording); `W56A-JUDGE-Y` (lineage observation → group → finding → decision; ALR-05 for `analysis.profiles`
-and `tools.evaluation`; v1 byte-identity; the gate's vacuity); `W56A-NOTES-JUDGE`; `W56A-FIX`.
+**Stage D (`R-124`):** one `W56A-JUDGE-01` reads the merged whole-wave diff after the last
+lane and challenges prompt injection from document and recognised text; severity by a non-expert
+or with a non-accept event; a decision on a non-canonical observation; the profile setting; a
+doctored recording; lineage observation → group → finding → decision; ALR-05 for
+`analysis.profiles` and `tools.evaluation`; v1 byte-identity; and the gate's vacuity.
+`W56A-FIX` addresses that judge's findings. There is no W56a QA lane, second judge,
+cross-examination, notes judge or recheck round. Release notes still receive the required
+contract and product checks in their own lane; the periodic debt-and-quality wave retains the
+independent review set of `R-124`.
 
 **`W56A-INT-CLOSE`** — register: norm checklist items for W57 (consumer `W57A-MAP-01`; insolation items marked after beta, K-2); consolidation of the corpus builders; merged
 members in the export (W57); the memory-peak summary (G-12). **`W56A-INT-MAIN-01`** on the owner's
@@ -357,7 +371,8 @@ release rule (`R-86`, §8.4), its predecessor read from the actual `VERSION`, no
 
 ### A6. Estimate (W56a)
 
-Freeze 2.5 (two-gateway probe); SEAL 5.5; GENERATOR 5.0; PROVIDER 3.5; PROFILES 6.5; MERGE 5.5; DECIDE 4.0;
+This is the pre-`R-124` estimate; `W56A-FREEZE-01` re-estimates the revised review and check
+sequence instead of silently carrying this figure forward. Freeze 2.5 (two-gateway probe); SEAL 5.5; GENERATOR 5.0; PROVIDER 3.5; PROFILES 6.5; MERGE 5.5; DECIDE 4.0;
 HARNESS with recording 5.0; WEB 4.5; merges 5.0; rehearsal 1.5; release notes 0.5; judging 2.5; FIX 4.0;
 gate 0.5; close with the memory summary 1.5 — 57.5 h, plus **a contingency of 4.5 h** shown on its own (W55
 grew from 51 to 87 h through judging) — **≈ 62 h**, P50 ≈ 11.75 working days; **plan on P80 ≈ 15.75**.
