@@ -84,7 +84,9 @@ describe('the tabs carry the WAI-ARIA tabs pattern', () => {
 
   it('mounts only the open tab’s content', () => {
     const portal = tabs('portal');
-    expect(portal).toContain('Блоки портала появятся после первого запуска анализа этой версии.');
+    expect(portal).toContain(
+      'Блоки портала появятся после первого запуска анализа этой версии, который дойдёт до разметки страниц.',
+    );
     expect(portal).not.toContain('Разметка блоков для этой версии ещё не построена.');
 
     const lines = tabs('lines');

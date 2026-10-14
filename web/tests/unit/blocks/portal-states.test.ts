@@ -44,7 +44,10 @@ function apiError(status: number, code: ErrorEnvelope['error_code'], retryable: 
   );
 }
 
-const NOT_YET = 'Блоки портала появятся после первого запуска анализа этой версии.';
+const NOT_YET =
+  'Блоки портала появятся после первого запуска анализа этой версии, который дойдёт до разметки страниц.';
+/** `W55B-FIX` (integrator addendum 2): a version whose run is refused gets no blocks, and the screen says so. */
+const REFUSED_RUN = 'Если запуск отклонён — например, текст версии больше допустимого объёма, — блоков не будет.';
 const NO_BUNDLE = 'У этой версии нет комплекта портала.';
 const EMPTY = 'В комплекте портала нет ни одного блока.';
 
@@ -56,6 +59,7 @@ describe('absent is not empty', () => {
   it('says the blocks come after the first run, for a bundle no run has reached', () => {
     const markup = widget(seeded([notProducedPage()]), true);
     expect(markup).toContain(NOT_YET);
+    expect(markup).toContain(REFUSED_RUN);
     expect(markup).not.toContain(NO_BUNDLE);
     expect(markup).not.toContain(EMPTY);
     expect(markup).not.toContain('data-portal-block-type');
@@ -66,6 +70,7 @@ describe('absent is not empty', () => {
     const markup = widget(seeded([notProducedPage()]), false);
     expect(markup).toContain(NO_BUNDLE);
     expect(markup).not.toContain(NOT_YET);
+    expect(markup).not.toContain(REFUSED_RUN);
   });
 
   it('says a produced block list is empty, in different words from both absences', () => {
