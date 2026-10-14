@@ -272,6 +272,13 @@ def _unpack(archive: zipscan.Archive, entries: tuple[zipscan.Entry, ...],
                     return _refused("bundle_member_size", f"entry {e.index}: more than the bound")
                 if total > limits.total_bytes:
                     return _refused("bundle_total_size", "the unpacked members pass the bound")
+                if actual > e.size:
+                    # `W55B-FIX` (X-5), as the product: a member's own declaration bounds its
+                    # count, so a header that lies small stops here, a piece past its word.
+                    return _refused(
+                        "stamp_audit_invalid" if role == fmt.ROLE_STAMP_AUDIT
+                        else "bundle_member_size",
+                        f"entry {e.index}: unpacks past the {e.size} bytes it declares")
                 crc = zlib.crc32(chunk, crc)
                 digest.update(chunk)
                 if role != fmt.ROLE_RESULTS_HTML:

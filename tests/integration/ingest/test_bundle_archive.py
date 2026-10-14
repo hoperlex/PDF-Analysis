@@ -30,6 +30,7 @@ two autouse fixtures this directory's ``conftest.py`` would otherwise start.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import hashlib
 import io
 import json
@@ -40,6 +41,7 @@ import tracemalloc
 import zipfile
 import zlib
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -179,12 +181,16 @@ def test_two_members_inside_the_member_bound_that_pass_the_total_are_refused(
     assert judge(path, LOW)[:2] == ("file", "bundle_total_size")
 
 
-def test_the_counted_total_is_held_to_the_bound_when_a_header_says_less(tmp_path: Path) -> None:
-    """The total, by the bytes that come out. The PDF member is honest and sits at the member
-    bound; the HTML's header declares 1 000 bytes (so the declared total passes) and it unpacks
-    to 1.2 MiB, which carries the running total past 3 MiB -- inside its own member bound. Only
-    counting as the bytes arrive can refuse it, and it does so before the header is compared
-    with the bytes (a mismatch would have answered `bundle_unreadable`)."""
+def test_a_header_that_says_less_is_refused_at_its_word_before_the_counted_total_is_reached(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The archive that used to reach the counted total. The PDF member is honest and sits at
+    the member bound; the HTML's header declares 1 000 bytes (so the declared total passes) and
+    it unpacks to 1.2 MiB, which carried the running total past 3 MiB. Since `W55B-FIX` (X-5) a
+    member's own declaration is a bound of its count: the HTML is refused as a member over its
+    size once it passes 1 000 bytes, a piece later and long before the total. (Every declaration
+    is held to the bounds first, so the counted total can no longer be the first to speak.)"""
+    produced = _spy_on_inflation(monkeypatch)
     items = an.members()
     items[0] = Member(b"bundle.pdf", zipwrite.Fill(LOW.member_bytes, 0, b"%PDF-1.7\n"), method=0)
     items.append(
@@ -192,7 +198,58 @@ def test_the_counted_total_is_held_to_the_bound_when_a_header_says_less(tmp_path
     )
     path = tmp_path / "counted-total.zip"
     zipwrite.write_zip(path, items)
-    assert judge(path, LOW)[:2] == ("file", "bundle_total_size")
+    assert judge(path, LOW)[:2] == ("file", "bundle_member_size")
+    html = next(i for i, e in enumerate(produced) if e["name"].endswith(b"_results.html"))
+    assert produced[html]["bytes"] <= 1000 + ba._PIECE
+
+
+def _spy_on_inflation(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    """Record, per member read, how many bytes the reader produced before it was stopped."""
+    produced: list[dict[str, Any]] = []
+    real = ba._Archive.read_chunks
+
+    def spy(self: Any, entry: Any) -> Any:
+        record = {"name": entry.name, "bytes": 0}
+        produced.append(record)
+        for chunk in real(self, entry):
+            record["bytes"] += len(chunk)
+            yield chunk
+
+    monkeypatch.setattr(ba._Archive, "read_chunks", spy)
+    return produced
+
+
+def test_a_small_archive_that_declares_a_small_pdf_is_refused_before_it_inflates_its_bomb(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`W55B-JUDGE-X` X-5: a 245 KB archive declared a 4 000-byte PDF and inflated 240 MiB to disk
+    before it was refused. The same disguise at 64 MiB, with the production bounds: refused as a
+    member over its size, having produced its declaration and at most one piece more."""
+    produced = _spy_on_inflation(monkeypatch)
+    path = an.size_lie_declared_small(
+        tmp_path / "bomb.zip", actual_bytes=64 * MiB, declared_bytes=4000, compress="deflate"
+    )
+    assert path.stat().st_size < MiB
+    with _within(5):
+        assert judge(path)[:2] == ("file", "bundle_member_size")
+    assert [record["bytes"] for record in produced] and produced[0]["bytes"] <= 4000 + ba._PIECE
+
+
+def test_the_ratio_is_judged_while_the_member_is_inflated_not_after(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The padded header of the test above it, at 4 MiB of zeros and a claim of 60 000 compressed
+    bytes: every figure the headers give is inside the bound (70 : 1), and the stream itself is
+    about 4 KB. The ratio against the compressed bytes consumed so far stops it after about a
+    hundred times those bytes and one piece -- not after 4 MiB."""
+    produced = _spy_on_inflation(monkeypatch)
+    path = _padded_deflate_archive(
+        tmp_path / "padded-early.zip", output_bytes=4 * MiB, claimed=60_000
+    )
+    limits = dataclasses.replace(LOW, member_bytes=8 * MiB, total_bytes=16 * MiB)
+    with _within(5):
+        assert judge(path, limits)[:2] == ("file", "bundle_compression_ratio")
+    assert produced and produced[0]["bytes"] < MiB, produced
 
 
 def test_a_ratio_above_the_bound_is_refused(tmp_path: Path) -> None:
@@ -225,17 +282,18 @@ def test_the_ratio_rule_is_above_the_bound_and_not_at_it() -> None:
     assert ba._ratio_exceeded(0, 0, ba.MAX_RATIO) is False
 
 
-def _padded_deflate_archive(path: Path, *, output_bytes: int) -> Path:
-    """A deflated PDF member of ``output_bytes`` zeros whose header claims 20 000 compressed bytes.
+def _padded_deflate_archive(path: Path, *, output_bytes: int, claimed: int = 20_000) -> Path:
+    """A deflated PDF member of ``output_bytes`` zeros whose header claims ``claimed`` compressed
+    bytes.
 
     The stream itself is about a kilobyte; the bytes behind it, up to the claimed length, are
     carried by the next member's local header, so the claim fits inside the file."""
     items = an.members()
     items[0] = Member(
         f"{an.STEM}.pdf".encode(), zipwrite.Fill(output_bytes, 0, b"%PDF-1.7\n"),
-        method=zipwrite.DEFLATED, deflate="zlib", declared_compressed_size=20_000,
+        method=zipwrite.DEFLATED, deflate="zlib", declared_compressed_size=claimed,
     )
-    items[1].local_extra = b"\0" * 19_500
+    items[1].local_extra = b"\0" * (claimed - 500)
     zipwrite.write_zip(path, items)
     return path
 
