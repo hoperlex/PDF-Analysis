@@ -61,3 +61,32 @@ Probes are under `.local/judge/` (`p1`–`p9`, `python -I`, container-free). Eac
 - Whether Next propagates a browser abort to `request.signal` on the upload route.
 - X-2 at 500 pages on the worker container. X-4 with a few thousand IMAGE blocks, including the 900 s fence while the stage thread runs on.
 - The plan's figure of about 240 s for an accepted 250 MiB bundle, end to end.
+
+## Recheck of W55B-FIX (2026-10-14, 03042093)
+
+Probes were re-run under `systemd-run --user --scope -p MemoryMax=2G -p MemorySwapMax=0`, with new ones `p4b`, `p6b`, `p10`, `p11` and `p12` in `.local/judge/`. Disclosure: the host rarely reached 3 GiB available during this round. Only `p4b` and `p1` started with 3 GiB available; the other probes ran at 1–2 GiB available, inside the 2 GiB scope. Each used under 300 MiB, and the PDF reader child is capped at 512 MiB. The signed-credential paths of X-3 were judged from the code only: no credential was minted.
+
+| Finding | Verdict | Evidence |
+| --- | --- | --- |
+| X-1 | **closed** | `p5`: 20 pages × 50 k `Tj`, 2 pages × 500 k, and 500 pages × 50 k are each refused `pdf_page_content` in 1.3–2.0 s, process start included. Before the fix: 4.7 s and 1.8 GB per page. The API process imports no `pypdfium2`; `render.py` keeps the lock. |
+| X-2 | **narrowed** | Memory is closed: `p9` at 1, 4 and 12 pages shows a flat RSS of 210, 209 and 208 MiB; it was +120 MiB per page before. Time remains: `p11` is a 3 KiB PDF of `q Q` operators, which produce no drawing element. The reader passes it at 0.17 s a page; the worker's pdfplumber pays 3.8 s a page, about 22× more. Inside the reader's 60 s that is about 20 min per pdfplumber pass, and there are two passes, so the 900 s watchdog fences the attempt and the thread runs on. This is FIX §4.2's registered time debt, reached by an adversarial bundle. |
+| X-3 | **closed** for callers without a valid credential; **narrowed** otherwise | `p4b`: with no credential, an unsigned bearer, or a urlencoded body, the answer is `401` with 0 of 8 MiB read and no slot at the answer or after. Remaining: the door admits any signed credential that has not expired, including a revoked or archived account's, for its 1 h `TOKEN_LIFETIME_SECONDS`. Such a caller still gets a slot and a bounded form parse before the seam's `401`/`403`. |
+| X-4 | **narrowed** | Ingest refuses `blocks_count` over 100 per page, 3 000 per bundle or 1 000 IMAGE; the stages read the same stored bytes. Crop serving is now bounded by those ceilings, and `ETag` and `Cache-Control: private, max-age=3600` are forwarded by the BFF. Remaining: up to 1 000 crops of up to 4 MP each; at `p7`'s 11.4 MiB for a high-entropy crop that is about 11 GiB per version. |
+| X-5 | **closed** | `p1`: the same 245 KB archive is now refused `bundle_member_size` after **64 KiB** inflated; it was 240 MiB. |
+| X-6 | **closed** | `p6b`: at the new 4 MiB bound the worst case is a 101 MiB peak. The bound is enforced on the declared and on the counted size (`bundle_archive.py:681, 740`). |
+| X-7 | **closed** | `p3`: ingest now refuses all six float forms (`schema_version 1.0` included), as the stages do. |
+| X-8 | **closed** | `p2`: all four boxes raise `DegenerateCrop`. |
+| X-10 | **closed** | `p10`: bidi controls, zero-width characters, C1 and tag characters become `_`. Cosmetic: U+2028/2029 (`Zl`/`Zp`) and Hangul fillers pass. |
+
+**The deviation in X-3 is acceptable.** A signed request whose body is not multipart reaches the application with an empty body (`multipart.py` `_no_body`). It takes no slot, nothing of its body is read, and the seam still answers before `media_type`. Note: the door reads the **last** `Authorization` and `Content-Type` headers, while Starlette and `HTTPBearer` read the **first**. With a valid signed credential this gains nothing over the residual in the X-3 row, and it does not bypass the bounded parser (`_BoundedFormRequest` bounds every content type).
+
+**The X-1 reader process holds up.** Every exit path reaps the child: `communicate`, `kill` then `communicate`, or `kill` then `wait`. A child that dies after `ready` gets the typed `pdf_reader_limits`. A child that dies before `ready` is a `500` by design, since the document is not read before `ready`. A PDFium segfault is also answered `pdf_reader_limits`, with a sentence about memory or time. Strangers cannot spawn readers, which pass through the door and the gate (at most two per API process; `inspect_pdf`'s only caller is `bundle_envelope.py:383`). A byte-string input is copied to an anonymous `TemporaryFile`. The child gets `PATH` only and `RLIMIT_CORE 0`, writes nothing, and inherits only the PDF's descriptor.
+
+### New findings
+
+| # | Severity | Finding | Where | Fix |
+| --- | --- | --- | --- | --- |
+| X-11 | Minor, confirmed | **X-5's prefix rule refuses members the frozen bound admits.** The rule `actual > 100 * consumed + 64 KiB` applies to every prefix of a member, while the freeze bounds the member as a whole. In `p12`, a PDF member that begins with an unfiltered white raster has a whole ratio of 20.6 : 1 (21 MiB) or 6.9 : 1 (7 MiB). Both are refused `bundle_compression_ratio`. About 70 KiB of zeros at a member's start is enough. `actual > entry.size`, checked in the loop, already holds the work to 100× the upload, so the prefix rule mainly adds false refusals. FIX measured prefix ratios on the export only, not on the corpus. | `ingest/bundle_archive.py:750-751` | Drop the prefix rule and keep the whole-member ratio at the end, or give it a slack proportional to the member, such as 1 % of the declared size. Measure the corpus's prefix ratios. |
+| X-12 | Minor, plausible | **The document-level ceilings leave little headroom at 500 pages.** FIX §4.1 states its margins against the export's 30-page totals. Scaled to the 500-page ceiling at the export's own density, the margins are ×1.4 for blocks (≈ 2 150 against 3 000), ×1.28 for IMAGE blocks (≈ 783 against 1 000) and ×1.3 for drawing elements (≈ 6.2 M against 8 M). A 500-page drawing set about 30 % denser than the owner's own export is refused `blocks_count` or `pdf_document_content`. | `ingest/bundle_envelope.py` (`MAX_BLOCKS`, `MAX_IMAGE_BLOCKS`); `ingest/envelope.py:182` | Register the margins in density terms. Raise the document ceilings, or derive them per page multiplied by the page count. |
+
+Verdict line: **ACCEPT.** No blocker or major remains open. X-2's time residual and the X-3 revoked-credential window should be registered with X-11 and X-12.
