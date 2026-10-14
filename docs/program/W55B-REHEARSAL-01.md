@@ -288,7 +288,7 @@ description's summary read beside its crop.
 | the browser drive's bookkeeping | the counter, the card count, the page sections and the crop addresses all equal to `block_count` in every drive |
 | `python -m compileall -q scripts/rehearsal/w55b`; `node --check` of the drive | exit 0; exit 0 |
 | `git diff --check e1233e7a..HEAD` | exit 0 |
-| `tests/contract` without `test_cp00_candidate.py`, `test_cp00_final_state.py`, `test_validate_bootstrap.py`, clean committed tree (section 6) | see section 6 |
+| `.venv/bin/python -m pytest -q -p no:cacheprovider tests/contract --ignore=tests/contract/test_cp00_candidate.py --ignore=tests/contract/test_cp00_final_state.py --ignore=tests/contract/test_validate_bootstrap.py`, clean committed tree `ac485de0` (the scripts are tracked, so the surface-count guard read them) | exit 0, **752 passed, 18 927 subtests** in 49 s |
 
 Two defects of the tools themselves were found while running and are fixed in their commits: the first recovery watch took
 a killed child (a zombie) for a live API and waited out its window (`ffa3e75e`); the first `start-refused` read `code`
