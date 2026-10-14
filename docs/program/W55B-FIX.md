@@ -390,5 +390,12 @@ the seam (4.3 item 3). `5ea70112` repaired it; the api directory then passed who
 `tests/support/**`, any `conftest.py`, `tests/integration/qa_w55b/**`, `infra/**`, `bootstrap/**`, the three program
 documents, the generated client, `web/openapi/**`, `FRONTEND_LOCK.json`, `web/src/_pages/**`.
 
-`git status --porcelain -uall` after the report's commit: empty. The stack: `make down`; the two volumes of project
-`auditmanager-w55b-fix` removed; `.env` deleted; every process started for a probe stopped by its own PID.
+`git status --porcelain -uall` after the report's commit: empty. The stack: `make down` (rc 0); the two volumes of
+project `auditmanager-w55b-fix` (`-postgres-data`, `-s3-data`) removed, `docker volume ls` and `docker ps -a` show none
+of the project's; `.env` deleted; every process started for a probe stopped by its own PID; ports 57400, 61000/61001,
+57500/57501 free.
+
+Final checks on the report's commit `0b117872` (stack already down): `git diff --check 9bfa1da3..HEAD` clean (rc 0);
+`compileall` clean (rc 0); the contract suite with the three exclusions **767 passed, 19 278 subtests** (rc 0). One
+disclosure: `free -g` showed 2 GiB available when that last, container-free suite started (the host's other work); it
+passed in 93 s and nothing else ran beside it.
