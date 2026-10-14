@@ -64,7 +64,7 @@ def test_shape_schema_matches_the_served_item_and_kind() -> None:
     assert set(schema["$defs"]["item"]["required"]) == set(
         served["ReleaseNoteItem"]["required"]
     )
-    assert set(_notes()) == {"0.2.0", "0.3.0", "0.4.0", "0.5.0", "0.5.1"}
+    assert set(_notes()) == {"0.2.0", "0.3.0", "0.4.0", "0.5.0", "0.5.1", "0.6.0"}
 
 
 @pytest.mark.parametrize(
