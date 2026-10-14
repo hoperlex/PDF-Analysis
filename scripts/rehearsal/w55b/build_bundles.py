@@ -18,7 +18,12 @@ IMAGE block over the drawing (so every page is admitted "for its portal block"),
 the notes with recognised text, and a STAMP block over the title block; every tenth IMAGE block is
 a polygon. The drawing's size varies, so some crops reach the 4 000 000-pixel cap and some do not.
 
-Both reuse ``tools/fixtures`` (the AR corpus PDF writer, the font, the portal-bundle builders and
+``vector`` (added for the integrator's memory addendum) is a drawing set: A3 landscape vector
+sheets, each drawing ``--segments`` path objects (CAD output's unit), a sheet label as the thin text
+layer, and an IMAGE and a STAMP block per page; it is the shape of the owner's export, whose
+pdfplumber pass costs the most memory per page.
+
+All reuse ``tools/fixtures`` (the AR corpus PDF writer, the font, the portal-bundle builders and
 the reference validator) and are then read by the product's own bundle reader and envelope
 (``extract_bundle``, ``admit_bundle``), which must accept them; the summary records the product's
 counts and the input budget the configured model and ceiling give. Same seed, same bytes: ``check``
@@ -355,6 +360,81 @@ def low_text(pages: int, seed: int, out: Path) -> dict:
             "raster_seconds": round(raster_seconds, 1)}
 
 
+# ------------------------------------------------------------------ (b') vector drawings
+
+
+A3_LANDSCAPE = (1190.55, 841.89)
+
+
+def _vector_stream(rng: random.Random, width: float, height: float, segments: int,
+                   region: tuple[float, float, float, float]) -> bytes:
+    """A drawing as PDF path operators: walls, axes, hatching and short strokes, as CAD writes them.
+
+    Each segment is its own ``m``/``l``/``S`` so the page carries ``segments`` path objects, the
+    unit the text extractor allocates per object.
+    """
+    x0, y0, x1, y1 = region
+    left, right = x0 * width, x1 * width
+    top, bottom = (1 - y0) * height, (1 - y1) * height
+    out = ["q 0.6 w 0 0 0 RG\n"]
+    for _ in range(segments):
+        x = rng.uniform(left, right)
+        y = rng.uniform(bottom, top)
+        if rng.random() < 0.5:
+            x2, y2 = min(right, x + rng.uniform(2, 60)), y
+        else:
+            x2, y2 = x, max(bottom, y - rng.uniform(2, 60))
+        out.append(f"{x:.2f} {y:.2f} m {x2:.2f} {y2:.2f} l S\n")
+    out.append("Q\n")
+    return "".join(out).encode("ascii")
+
+
+def vector(pages: int, seed: int, out: Path, segments: int) -> dict:
+    """A drawing set: A3 landscape vector sheets, a sheet label as the thin text layer, an IMAGE
+    block over the drawing and a STAMP block over the title block on every page."""
+    import zlib
+
+    font = build_ar_corpus.load_font()
+    words = vocabulary()
+    pdf = pdfwrite.Pdf()
+    catalog_ref, pages_ref = pdf.reserve(), pdf.reserve()
+    font_ref = pdfwrite.add_font(pdf, font)
+    width_pt, height_pt = A3_LANDSCAPE
+    kids, facts, blocks = [], [], []
+    for number in range(1, pages + 1):
+        rng = random.Random(f"w55b-vector:{seed}:{number}")
+        drawing = (round(rng.uniform(0.03, 0.06), 4), round(rng.uniform(0.03, 0.06), 4),
+                   round(rng.uniform(0.70, 0.78), 4), round(rng.uniform(0.80, 0.92), 4))
+        stamp = (0.80, 0.84, 0.97, 0.97)
+        stream = _vector_stream(rng, width_pt, height_pt, segments, drawing)
+        thin = number % 3 != 0
+        label = f"Лист {number}"
+        resources: dict = {}
+        if thin:
+            stream += pdfwrite.show_text(font, document.FONT_RESOURCE, label, 8.0,
+                                         stamp[0] * width_pt + 12, (1 - stamp[3]) * height_pt + 8).encode("ascii")
+            resources["Font"] = {document.FONT_RESOURCE: font_ref}
+        content_ref = pdf.add_stream({"Filter": Name("FlateDecode")}, zlib.compress(stream, 6))
+        kids.append(pdf.add({"Type": Name("Page"), "Parent": pages_ref,
+                             "MediaBox": [0, 0, width_pt, height_pt],
+                             "Resources": resources, "Contents": content_ref}))
+        facts.append(PageFacts(width_pt, height_pt, 0, label if thin else ""))
+        index = number - 1
+        blocks.append(Block(fmt.KIND_IMAGE, index, drawing, image=_image_note(rng, words, number)))
+        blocks.append(Block(fmt.KIND_STAMP, index, stamp, fields=(("sheet", str(number)),)))
+    pdf.put(pages_ref, {"Type": Name("Pages"), "Kids": kids, "Count": len(kids)})
+    pdf.put(catalog_ref, {"Type": Name("Catalog"), "Pages": pages_ref})
+    data = pdf.serialize(catalog_ref, document.info_dictionary(), document.DOC_ID)
+    stem = f"w55b_rehearsal_vector_{pages}"
+    files = make_files(data, stem, pages=facts, blocks=blocks)
+    built = build_bundle(files)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(built.data)
+    return {"variant": "vector", "stem": stem, "pdf_bytes": len(data), "segments_per_page": segments,
+            "blocks_json_bytes": len(files.blocks_json), "results_md_bytes": len(files.results_md),
+            "blocks_by_kind": _kinds(files.blocks)}
+
+
 # ------------------------------------------------------------------ the product's verdict
 
 
@@ -412,11 +492,14 @@ def describe(path: Path, built: dict, seed: int) -> dict:
     return summary
 
 
-def build(variant: str, pages: int, seed: int, out: Path | None) -> dict:
+def build(variant: str, pages: int, seed: int, out: Path | None, segments: int = 10_000) -> dict:
     common.ensure_out()
     target = (out or (common.OUT / "bundles" / f"{variant}-{pages}.zip")).resolve()
     started = time.monotonic()
-    built = (text_rich if variant == "text-rich" else low_text)(pages, seed, target)
+    if variant == "vector":
+        built = vector(pages, seed, target, segments)
+    else:
+        built = (text_rich if variant == "text-rich" else low_text)(pages, seed, target)
     seconds = round(time.monotonic() - started, 1)
     summary = describe(target, built, seed)
     summary["path"] = str(target.relative_to(common.ROOT))
@@ -452,7 +535,8 @@ def check() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("variant", choices=("text-rich", "low-text", "check"))
+    parser.add_argument("variant", choices=("text-rich", "low-text", "vector", "check"))
+    parser.add_argument("--segments", type=int, default=10_000, help="vector: path segments per page")
     parser.add_argument("--pages", type=int, default=500)
     parser.add_argument("--seed", type=int, default=55)
     parser.add_argument("--out", type=Path)
@@ -462,7 +546,7 @@ def main(argv: list[str] | None = None) -> int:
     if not 1 <= args.pages <= fmt.MAX_PAGES:
         raise SystemExit(f"--pages must be 1..{fmt.MAX_PAGES}")
     common.capacity_gate(f"build {args.variant}")
-    summary = build(args.variant, args.pages, args.seed, args.out)
+    summary = build(args.variant, args.pages, args.seed, args.out, args.segments)
     common.write_figures(f"bundle-{args.variant}-{args.pages}-seed{args.seed}", {"bundle": summary})
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0
