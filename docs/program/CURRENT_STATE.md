@@ -1,5 +1,11 @@
 # Current state
 
+**W57a target resolution preparation, 2026-10-15.**
+`W57A-INT-TARGET-RESOLUTION-PREP-01` adds pure clause, table and explicit
+range resolution over canonical paragraphs, splitting around unreliable text.
+Fourteen combined resolver/ranking tests pass. Edition selection, promotion
+DB access and owner map review remain ahead.
+
 **W57a retrieval ranking preparation, 2026-10-15.**
 `W57A-INT-RETRIEVAL-RANK-PREP-01` adds pure float32 window ranking, reliable
 paragraph resolution and deterministic prompt-part reduction to 22,000
