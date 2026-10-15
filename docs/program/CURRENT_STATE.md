@@ -1,5 +1,12 @@
 # Current state
 
+**W59 section-suggestion preparation, 2026-10-15.**
+`W59-INT-SECTION-SUGGESTION-PREP-01` adds a pure 15-section suggestion
+registry from the local legacy source plus owner-retained `PB`; `PS` is
+«Пояснительная записка». Thirteen focused tests pass. No section is
+auto-confirmed, no API/DB/route changes are active, and the W59 framework
+reseal remains ahead. No full local gate or acceptance was run.
+
 **AR v2 proposal grounding preparation, 2026-10-15.**
 `W56A-INT-PROPOSAL-GROUNDING-PREP-01` joins parsed proposals to PDF-only
 quotation grounding in a pure module. Any failed item rejects the whole
