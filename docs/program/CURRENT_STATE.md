@@ -1,5 +1,14 @@
 # Current state
 
+**W54 source integrity, 2026-10-15.** `W54-CORPUS-OPERATE-01` produced a
+complete checksum file for the 31,619-file normative source drop. All 31,619
+files passed `sha256sum -c`; the sums file SHA-256 is
+`eb5fae5cdd8d47873b23a125ebd68d5b507fda301088d2cc8651b06fd81897e5`.
+The verified file is under `.local/norms/corpus-sums/2026-10-15/` outside
+Git. The promotion base load remains stopped: the latest reading had only
+4,382,003,200 bytes free on `/` and 5,163,773,952 bytes available RAM,
+below its 6 GiB disk and RAM floors. No DB/S3 import or bundle exists.
+
 **Corpus and module code preparations, 2026-10-15.**
 `CFB-INT-CORPUS-MODULES-08` adds a metadata-only W54 source/capacity
 preflight and an offline W58 S3 object-mirror seal, plus pure W59 expert
