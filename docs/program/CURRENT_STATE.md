@@ -1,5 +1,17 @@
 # Current state
 
+**Further code-first source and recovery preparations, 2026-10-15.**
+`W56A-INT-RECORDED-SOURCE-READ-01` reads a saved run's version and published
+source artifacts, verifies their Blob bytes and builds a bound recorded AR v2
+request; 35 focused tests pass. `W57A-INT-SNAPSHOT-EVIDENCE-READ-01` reads the
+canonical snapshot catalogue and mapped paragraphs under a caller-owned
+consistent transaction; 9 focused tests pass. `W58-INT-BLOB-REFERENCE-AUDIT-PREP-01`
+checks restored-DB Blob rows and known reference tables at migration head
+`0022_findings_v2`; 52 recovery tests pass. These readers do not activate AR v2,
+qualify a retrieval set, verify mirrored S3 payloads or perform a restore.
+The W54 dump still lacks a restore-verification marker. See
+`CFB-INT-STATE-10.md` and the three task reports.
+
 **Code-first source and recovery preparations, 2026-10-15.**
 `W56A-INT-AR-V2-RECORDED-INPUT-01` binds a recorded AR v2 request to verified
 versioned PDF/OCR artifacts and retains a separate source-binding digest;
