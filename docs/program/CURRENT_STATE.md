@@ -2,7 +2,8 @@
 
 **W56a probe-tool development integration, 2026-10-15.**
 `W56A-PROBE-TOOL-PREP-01` adds a one-call, sanitized model identity and
-rate verifier with 14 focused offline tests. No paid call was made; the
+rate verifier with 16 focused offline tests after a degenerate-evidence
+refusal correction. No paid call was made; the
 stand and recording gateway identities remain unproven, `P02_LOCK.json`
 is unchanged, and PROVIDER remains blocked. Full local gate, acceptance and
 `origin/main` publication were not run.

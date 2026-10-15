@@ -43,13 +43,13 @@ def test_selected_model_requires_identity_and_locked_rate() -> None:
     assert "private answer" not in str(failed_rate.value.evidence)
 
 
-@pytest.mark.parametrize("cost", [None, "NaN", "Infinity", -1])
+@pytest.mark.parametrize("cost", [None, "NaN", "Infinity", -1, 0])
 def test_missing_or_nonfinite_cost_refuses(cost: object) -> None:
     with pytest.raises(ProbeFailure, match="invalid_usage_cost"):
         assess_response(_answer(cost=cost), selection="explicit", expected_name=SELECTED, pin=PIN)
 
 
-@pytest.mark.parametrize("count", [None, -1, True, 1.5])
+@pytest.mark.parametrize("count", [None, -1, 0, True, 1.5])
 def test_invalid_token_counts_refuse(count: object) -> None:
     answer = _answer()
     answer["usage"]["prompt_tokens"] = count  # type: ignore[index]
@@ -65,6 +65,8 @@ def test_default_must_be_concrete_and_distinct() -> None:
         assess_response(_answer(), selection="default", expected_name=SELECTED, pin=PIN)
     with pytest.raises(ProbeFailure, match="stub_model_response"):
         assess_response(_answer("proxy"), selection="default", expected_name=SELECTED, pin=PIN)
+    with pytest.raises(ProbeFailure, match="stub_model_response"):
+        assess_response(_answer("unknown"), selection="default", expected_name=SELECTED, pin=PIN)
 
 
 def test_one_choice_without_an_answer_refuses() -> None:

@@ -24,6 +24,7 @@ from auditmanager.analysis.text.lock import ModelPin, provider_lock
 
 MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{1,99}\Z")
 STUBS = frozenset({"proxy", "default", "auto"})
+NON_IDENTITIES = STUBS | frozenset({"unknown", "none", "null", "stub", "model"})
 PROMPT = "Ответь одним словом: да."
 MAX_OUTPUT_TOKENS = 16
 MAX_RESPONSE_BYTES = 65_536
@@ -40,7 +41,7 @@ class ProbeFailure(ValueError):
 def _name(raw: object) -> str:
     if not isinstance(raw, str) or MODEL_NAME.fullmatch(raw) is None:
         raise ProbeFailure("invalid_model_name")
-    if raw in STUBS:
+    if raw.lower() in NON_IDENTITIES:
         raise ProbeFailure("stub_model_response")
     return raw
 
@@ -51,14 +52,14 @@ def _usage(raw: object) -> tuple[int, int, Decimal]:
     counts: list[int] = []
     for field in ("prompt_tokens", "completion_tokens"):
         value = raw.get(field)
-        if type(value) is not int or value < 0:
+        if type(value) is not int or value <= 0:
             raise ProbeFailure("invalid_usage_count")
         counts.append(value)
     try:
         cost = Decimal(str(raw.get("cost")))
     except (InvalidOperation, ValueError):
         raise ProbeFailure("invalid_usage_cost") from None
-    if not cost.is_finite() or cost < 0:
+    if not cost.is_finite() or cost <= 0:
         raise ProbeFailure("invalid_usage_cost")
     return counts[0], counts[1], cost
 

@@ -13,14 +13,15 @@ unavailable signal leaves the lock unchanged and PROVIDER blocked.
 - `W56A-INT-GENERATOR-01` — complete on `origin/dev`;
 - `W56A-INT-MATCHER-CORE-01` — complete at `6de331c1`;
 - `W56A-INT-PROBE-TOOL-01` — complete at `1a825fea`.
+- `W56A-INT-PROBE-TOOL-CORR-01` — complete on the correction's published dev tip.
 
 `W56A-PROBE-01` and `W56A-FREEZE-01` are stopped historical evidence, not
 completed prerequisites. This task replaces neither report.
 
 ## Frozen inputs
 
-- base: `origin/dev=1a825fea25f1ea5413c213f4cedfb53e88c12e3e`;
-  resolve the documentation-only grant tip before paid calls and recheck
+- base: `origin/dev=7fd152c0f1b2445cd1a5381cb9c3b579aa94f9e9`;
+  resolve the correction tip before paid calls and recheck
   all frozen contract/lock bytes;
 - API: 47 paths / 54 operations / 124 schemas, SHA-256
   `fad81bc0355e4a5e6e4fdabf320fda2948a3c22b1254133862e0891bac1d1227`;
@@ -54,8 +55,8 @@ completed prerequisites. This task replaces neither report.
 - command: `git rev-parse HEAD origin/dev && sha256sum docs/program/P02_LOCK.json`
 - captured_output:
   ```text
-  1a825fea25f1ea5413c213f4cedfb53e88c12e3e
-  1a825fea25f1ea5413c213f4cedfb53e88c12e3e
+  7fd152c0f1b2445cd1a5381cb9c3b579aa94f9e9
+  7fd152c0f1b2445cd1a5381cb9c3b579aa94f9e9
   2d99142445f5c3ee969b85de8ad0c8625a7a378dd4abfcc7fee4b5142d3a8cbd  docs/program/P02_LOCK.json
   ```
 - interpretation: the development tree matches the published ref and the
@@ -117,8 +118,9 @@ at the locked rate. It remains failed; this task measures a corrected route.
    uses synthetic text, at most 16 output tokens, fresh request/idempotency
    IDs, and the same chat-completions route the product adapter uses.
 2. On each gateway, call the explicit locked primary. Require HTTP success,
-   one answer, concrete response `model`, nonnegative finite usage counts and
-   `usage.cost`. The response model must match the configured gateway name.
+   one answer, concrete response `model`, positive finite usage counts and
+   `usage.cost`. Placeholder names such as `unknown` are not concrete. The
+   response model must match the configured gateway name.
    Compare reported cost with
    `(input_tokens*5 + output_tokens*25)/1_000_000`; tolerance is the larger
    of 20% relative and $0.00002 absolute. Reject an unconfigured name, missing
