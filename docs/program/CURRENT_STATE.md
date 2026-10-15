@@ -1,5 +1,12 @@
 # Current state
 
+**W56a AR v2 response parser preparation, 2026-10-15.**
+`W56A-INT-RESPONSE-PARSER-PREP-01` adds a pure parser for complete
+seven-category, five-severity proposals, with explicit-truncation salvage
+of complete elements only. Twenty-one focused AR v2 content/schema/parser
+tests pass. No runtime stage uses it yet; MODEL-PIN remains blocked. Full
+local gate and acceptance were not run.
+
 **W56a AR v2 response schema preparation, 2026-10-15.**
 `W56A-INT-RESPONSE-SCHEMA-PREP-01` adds a pure, copy-on-read response schema
 for the sealed seven categories and five severity proposals. Six focused
