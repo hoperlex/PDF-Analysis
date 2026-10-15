@@ -1,5 +1,12 @@
 # Current state
 
+**Normative corpus readiness, 2026-10-15.**
+`W54-INT-CORPUS-READINESS-01` pins the local 674-document source and the
+W54/W55 operation order. Source sums, promotion snapshot, repairs, complete
+embedding build and verified bundle are still absent. Current disk and
+available memory fail W54's heavy-step floor; production import awaits the
+bundle, capacity, P3 compatibility and the owner's downtime window.
+
 **AR v2 merge-input preparation, 2026-10-15.**
 `W56A-INT-MERGE-INPUT-PREP-01` connects fully grounded proposals to the
 deterministic merge rule with dense artifact ordinals and an explicit source
