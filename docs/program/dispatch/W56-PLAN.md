@@ -7,6 +7,17 @@
 > passing model pin; use the recorded-only split described in the amendment
 > before issuing code grants.
 
+> **`R-135`/`R-136` dispatch amendment:** `W56A-FREEZE-01` remains a stopped
+> historical preflight. `W56A-DEV-FREEZE-01` may grant only recorded-only
+> `W56A-SEAL-01` and `W56A-GENERATOR-PREP-01` on a fresh exact dev base.
+> SEAL's grant excludes `docs/program/P02_LOCK.json`, including any inherited
+> W55b seal grant; GENERATOR owns only new synthetic corpus paths and no
+> `baseline.json` or recordings. `W56A-MODEL-PIN-01` is the sole lock owner
+> after the two-gateway pass. PROVIDER, live recordings and activation wait
+> for that pin. W56a code-only closure uses `R-135` checks; its full gate and
+> stand/main acts are deferred. This amendment takes precedence over older
+> A4 task text below where the timing or path grant differs.
+
 **Status:** revision 3 (final), 2026-10-06 — after the second judging round (`reviews/W56-PLAN-JUDGING.md`;
 both judges ACCEPT-WITH-FIXES, no third round) and the owner's answer H-10 (the critic moves to W56b). Written by the planning session on local branch
 `plan/roadmap-to-beta`. Two rounds at most (`R-V4`).

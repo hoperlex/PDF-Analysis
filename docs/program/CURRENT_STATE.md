@@ -1,5 +1,14 @@
 # Current state
 
+**Planning integration, 2026-10-15.** `dispatch/CODE-FIRST-TO-BETA.md` is the
+code-first work order from W56a through the planned pre-beta code blocks. R-135
+moves complete gates after that code series and excludes a full local gate,
+manual acceptance and `origin/main` publication from development work. R-136
+allows a recorded-only W56a SEAL and synthetic generator before the still
+failed gateway identity probe; `R-133` remains in force. This is a planning
+and dispatch change, not implementation or a beta verdict. The W55b product
+state below remains the code baseline.
+
 **Updated 2026-10-14.** W55b development closure is recorded below and in
 `W55B-INT-CLOSE.md`; `origin/main` remains the separately published `v0.5.0` tree.
 The older programme notes below are retained as historical context.

@@ -195,3 +195,16 @@ remains mandatory. From W56a, `R-126` also replaces item 2 for backend lanes: a 
 database tests for its changed context but does not run a database suite on its private lane.
 The wave's final `make gate` runs those suites on the merged candidate. Container-free checks
 and required mutation probes still run in the lane.
+
+**Code-first beta override (`R-135`, 2026-10-15).** For development-only W56a through W63,
+the owner moved the complete gate after all planned beta code and explicitly forbade a
+full local gate during this code series. This supersedes the per-lane and per-wave full-gate
+timing above, including `R-102`/`R-126`'s final-wave gate, for `origin/dev` candidates only.
+Each code task still runs its named, bounded tests for the changed behavior, contract guards,
+lint/typecheck where relevant and migration upgrade checks on an isolated database; it records
+what was deferred. Do not run the full frontend suite, whole contract battery, live journey,
+manual acceptance or paid provider call merely to close an intermediate code lane. After the
+last code block, a separate integration task runs the complete gate on one exact clean tree
+in a sufficiently resourced environment. No development close or `origin/dev` publication
+from this series claims `GATE OK` or beta acceptance. The `origin/main` requirements in §6
+and `MAIN_AUTODEPLOY_POLICY.md` remain unchanged.

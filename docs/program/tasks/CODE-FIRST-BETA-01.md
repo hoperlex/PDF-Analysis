@@ -34,6 +34,8 @@
 
 ## Captured premise evidence
 
+- premise: W55b base and the preserved W58–W63 draft status
+
 ### P-01 — база планирования
 
 - captured_at: 2026-10-15

@@ -1591,3 +1591,16 @@ review amendments are the already-numbered `R-124` and `R-126` above.
 | `R-132` | H-5 | W56a's recorded-response quality gate refuses aggregate recall below its measured baseline or control false-positive rate above it. Category figures are reported. The owner sets absolute beta thresholds in the later beta validation wave; this ruling does not invent them. |
 | `R-133` | H-6 | A live response that reports a model other than the configured and pinned one is a typed stage failure; no finding is published from it and no silent substitution is allowed. Live recordings follow a successful identity probe. |
 | `R-134` | H-1, H-7…H-10 | W56a does text first, with recognised text marked as context only on pages without a usable text layer; citations remain from the text layer. Drawing analysis, region evidence, OCR citations, chunking and the critic are W56b. The owner reviews v2 findings in the product on the portal export after release; that precision figure is reported, not gated. All W56a live calls stay within the $5 wave ceiling of `R-29`; a projected excess stops for an owner decision. |
+
+## 3.36 — `R-135` and `R-136`, code-first beta order (owner, 2026-10-15)
+
+The owner instructed that the remaining code planned before beta be completed now,
+that acceptance testing and `origin/main` publication be left out of the present work,
+and that complete gates follow the entire code series. The owner explicitly rejected
+a full local gate, then directed the integrator to accept the updated plan in `dev`
+and prepare exact code tasks. The plan is `dispatch/CODE-FIRST-TO-BETA.md`.
+
+| Ruling | Substance |
+| --- | --- |
+| `R-135` | W56a–W63 development candidates use bounded checks of changed code and migration upgrades. No intermediate full local `make gate`, broad acceptance run, paid live test, deployment, release tag or `origin/main` publication is part of this code series. A separate task runs full gates after all planned beta code on an exact clean candidate in an adequately resourced environment. This supersedes earlier per-lane/per-wave gate timing for `origin/dev` only; `MAIN_AUTODEPLOY_POLICY.md` still governs any later `origin/main` act. B1–B12 remain open acceptance criteria. |
+| `R-136` | To start W56a code while the two-gateway identity probe is blocked, split the freeze as proposed by `reviews/W56A-MODEL-REQUIREMENT-REVIEW-01.md`: a recorded-only development freeze may grant SEAL without `P02_LOCK.json` and disjoint GENERATOR preparation. `W56A-MODEL-PIN-01` alone may later write the lock after both distinct gateways pass the selected/default model and rate probes under `R-29`; PROVIDER and live activation wait for that pin. `R-133` is unchanged: a mismatched or missing reported model fails closed and publishes no finding. The failed `W56A-PROBE-01` stays failed. |
