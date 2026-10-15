@@ -49,9 +49,8 @@ def blob_store_from_environment() -> BlobStore:
     """The stand's S3/MinIO store, configured like the api service's.
 
     The adapter lives in the storage context; ALR-05 lets this context reach it only
-    through ``auditmanager.storage.public``. Until that module exports ``S3BlobStore`` and
-    ``S3StorageSettings`` (one line, the integrator's; `W54-BUNDLE-01` report §5), ``import``
-    refuses here, loudly, rather than reaching past the boundary.
+    through ``auditmanager.storage.public``. Both adapter and settings are exported there;
+    if either disappears, ``import`` refuses loudly instead of reaching past the boundary.
     """
     try:
         from auditmanager.storage.public import (  # type: ignore[attr-defined]

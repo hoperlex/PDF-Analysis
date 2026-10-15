@@ -1,5 +1,15 @@
 # Current state
 
+**Corpus and module code preparations, 2026-10-15.**
+`CFB-INT-CORPUS-MODULES-08` adds a metadata-only W54 source/capacity
+preflight and an offline W58 S3 object-mirror seal, plus pure W59 expert
+section-confirmation and approved-pair raw version-text components. The
+focused combined suite passes. The 674-document manifest and 31,619 file
+paths match the pinned source, but full source sums, promotion dump, repair,
+embedding build and verified bundle are absent; current W54 resource floors
+fail. No DB/S3 import, recovery drill, W59 runtime seal, complete gate or beta
+verdict is claimed.
+
 **Recorded AR v2 request and replay integrity, 2026-10-15.**
 `CFB-INT-RECORDED-REQUEST-07` builds stable offline requests from the pinned
 AR v2 profile, PDF text and marked OCR, then replays an exact-key fixture
