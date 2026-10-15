@@ -77,9 +77,10 @@ completed prerequisites. This task replaces neither report.
   is still unchanged. The client guide supplied by the owner explains that
   `/agent/v1/chat/completions` uses per-client `allowedModels`: with the
   default policy an explicit `model` is ignored. Its `/models` response is
-  not a reliable model-selection proof. Neither this guide nor the stand's
-  `provider.env` identifies the distinct recording route or proves the
-  stand client's model-selection policy. No paid call follows from P-02.
+  not a reliable model-selection proof. The guide also names a portal
+  `/api/v1` route, but does not designate it as the recording gateway or
+  supply its configuration. The stand's `provider.env` does not prove its
+  client's model-selection policy. No paid call follows from P-02.
 
 ## Historical evidence
 

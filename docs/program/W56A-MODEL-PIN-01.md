@@ -15,10 +15,16 @@ inference is withdrawn. The failed paid response remains failed evidence.
 
 The known stand configuration selects the `proxy` placeholder. It cannot
 satisfy the selected-model call until it names the locked concrete model and
-the client policy permits explicit selection. A separate recording route
-and its configuration have not been identified in the inspected deployment
-locations. The client guide gives one agent endpoint and does not establish
-the second route required by `W56-PLAN.md` §A3.5 and `R-136`.
+the client policy permits explicit selection. The guide also identifies a
+portal `/api/v1/chat/completions` route. A no-token, no-body reachability
+check from this environment returned 200 for `/healthz` and 401 for both
+the portal and agent completion paths. Authentication therefore answered
+on both paths without an LLM call. The portal route is a candidate for the
+recording role, but no working recording credential/model configuration or
+operator designation for that role was found. The local `provider.env` has
+no URL host and selects a namespaced stub; it is not usable for a paid pin.
+Reachability alone does not establish the distinct configured gateway
+required by `W56-PLAN.md` §A3.5 and `R-136`.
 
 The exact preflight needed for each role is: a route distinct from the other
 role, a credential present in its own protected configuration, a concrete
@@ -32,7 +38,7 @@ allowlist containing the locked slug and restart its service; this report
 does not authorise or perform that change. A default that is the selected
 model would also fail the task's distinct-default check.
 
-No new request, charge, recording or configuration change was made. The
+No authenticated LLM request, charge, recording or configuration change was made. The
 spend ledger remains at $0.0000046 actual and $4.9999954 remaining by its
 existing record. No contract, migration, provider lock, product code,
 credential, deployment file, `CURRENT_STATE.md`, tag or `origin/main` ref
