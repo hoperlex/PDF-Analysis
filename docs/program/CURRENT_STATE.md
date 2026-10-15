@@ -1,5 +1,17 @@
 # Current state
 
+**Connected code-first preparations, 2026-10-15.** W56a now binds a saved,
+verified source request to one offline recorded response and builds deterministic
+AR v2 observation bytes with PDF-only evidence and separate diagnostics; the
+active executor, call journal and StageResult are unchanged. W57a projects
+canonical snapshot rows through a digest-exact reviewed map input and reads
+complete stored embedding-window metadata plus checked mapped float32 vectors;
+map approval, build qualification and verified-set custody remain ahead. W58
+binds audited available DB Blobs to a sealed offline object inventory using
+the storage-owned canonical key resolver; no real DB/S3 restore has run. The
+W54 promotion dump still awaits the 6 GiB disk/RAM and quiet-CPU window for
+restore verification. See `CFB-INT-STATE-11.md` and its seven source tasks.
+
 **Further code-first source and recovery preparations, 2026-10-15.**
 `W56A-INT-RECORDED-SOURCE-READ-01` reads a saved run's version and published
 source artifacts, verifies their Blob bytes and builds a bound recorded AR v2
