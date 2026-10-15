@@ -7,12 +7,17 @@ itself. That is a real cross-check of two surfaces and it is not what this file 
 
 This file asserts the **absolute** figures the programme has been quoting, so that a
 wave-2 change which moved one of them fails here rather than being re-derived and quietly
-re-quoted. The numbers come from ``GATE_B2_CLOSURE.md`` §1, ``artifacts/checkpoints/PC-01/
-report.json`` item 7 and ``docs/manual-tests/PC-01_prototype.md``, which agree with each
-other:
+re-quoted. The historical seventeen-column numbers come from
+``GATE_B2_CLOSURE.md`` §1, ``artifacts/checkpoints/PC-01/report.json`` item 7
+and the earlier PC-01 manual record, which agree with each other:
 
     published, empty degradation set, four stages succeeded, 3 findings,
     0 diagnostics, 5 CSV data rows, 17 columns, 4251 bytes, two exports identical.
+
+W56a appends two empty severity cells to every v1 row. The ASCII header suffix
+``,severity,severity_proposed`` is 27 bytes; five rows each gain two delimiter
+bytes, for 4251 + 27 + 10 = 4288 bytes and nineteen columns. The old records
+remain historical; this derived pin needs confirmation on PostgreSQL.
 
 One figure in the tree disagrees with those three and is wrong: the evidence comment at
 the foot of ``tests/integration/p02_journey/journey.py`` records ``CSV 4497 bytes`` at
@@ -23,14 +28,14 @@ is unchanged at this session's base. The comment is annotated rather than rewrit
 The byte count is the sharpest of these. Rows and columns are structural and survive a
 change to what a column *contains*; the byte count does not. A recommendation text that
 grew, an evidence quote that was re-anchored, a verdict column that started emitting a
-default -- each keeps five rows of seventeen columns and moves this number.
+default -- each keeps five rows of nineteen columns and moves this number.
 Mutation evidence
 -----------------
 ==== ============================================================ ==========================
  id   mutation                                                     guards it reddened
 ==== ============================================================ ==========================
  M17  a CSV column's content grows by two characters per row --    figures-have-not-moved
-      five rows of seventeen columns, different byte count
+      five rows of nineteen columns, different byte count
  M18  ``RetryPolicy.retries`` returns ``True`` for ``None``, so    one-first-try-call
       a stage that did not fail is retried
 ==== ============================================================ ==========================
@@ -47,16 +52,15 @@ import io
 import pytest
 from sqlalchemy import text
 
-#: The figures three independent records in this repository agree on. Named here, once,
-#: rather than spelled into each assertion, so that a deliberate future change to the
-#: corpus has exactly one place to move and one reason to be argued for.
+#: The historical seventeen-column figures agree across three records. W56a's
+#: derived column/byte pins are named here once; confirm them on PostgreSQL.
 PINNED = {
     "state": "published",
     "findings": 3,
     "diagnostics": 0,
     "csv_rows": 5,
-    "csv_columns": 17,
-    "csv_bytes": 4251,
+    "csv_columns": 19,
+    "csv_bytes": 4288,
     "stages": 4,
 }
 
@@ -133,9 +137,8 @@ def test_the_journey_figures_have_not_moved(corpus_journey, session):
     }
     assert measured == PINNED, (
         f"a journey figure moved.\n  measured {measured}\n  pinned   {PINNED}\n"
-        "These are recorded in GATE_B2_CLOSURE.md, artifacts/checkpoints/PC-01/report.json "
-        "and docs/manual-tests/PC-01_prototype.md. If a change moved one deliberately, "
-        "all four records move together."
+        "The 19-column byte figure is derived from the older 17-column records; "
+        "confirm this pin on PostgreSQL before treating it as measured."
     )
     assert not row["degradation_set"], row["degradation_set"]
     assert set(stages) == set(PC01_STAGES)

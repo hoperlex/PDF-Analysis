@@ -213,8 +213,10 @@ def test_the_csv_column_contract_is_frozen_in_order(
         "latest_comment",
         "latest_decision_id",
         "decision_recorded_at",
+        "severity",
+        "severity_proposed",
     ]
-    assert [row["#"] for row in rows] == [str(index) for index in range(1, 18)]
+    assert [row["#"] for row in rows] == [str(index) for index in range(1, 20)]
 
 
 def test_every_csv_column_names_its_source(seam_register_text: str, markdown_table) -> None:

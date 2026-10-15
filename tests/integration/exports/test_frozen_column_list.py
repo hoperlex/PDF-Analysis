@@ -81,7 +81,7 @@ FROZEN_SORT_KEY = ("finding_uid", "finding_observation_id", "evidence_ordinal")
 
 
 def _seam_columns() -> tuple[str, ...]:
-    """Columns 1-17 of the table in `P02_SEAMS.md` §6, in the order it lists them."""
+    """Columns 1-19 of the table in `P02_SEAMS.md` §6, in the order it lists them."""
     section = _SEAMS.read_text(encoding="utf-8").split("## 6. The CSV column contract")[1]
     found = re.findall(r"^\|\s*(\d+)\s*\|\s*`([a-z_]+)`\s*\|", section, re.M)
     return tuple(name for _, name in sorted(found, key=lambda pair: int(pair[0])))
@@ -95,8 +95,8 @@ def _web_columns() -> tuple[str, ...]:
 
 
 class TestTheColumnListIsPinnedToSomethingOutsideTheModule:
-    def test_the_seam_document_lists_these_seventeen_in_this_order(self) -> None:
-        assert _seam_columns() == FROZEN_COLUMNS
+    def test_the_seam_document_lists_od11_then_w56a_in_this_order(self) -> None:
+        assert _seam_columns() == FROZEN_COLUMNS + APPENDED_COLUMNS
         assert len(FROZEN_COLUMNS) == 17
 
     def test_the_module_constant_matches_the_frozen_list_in_order(self) -> None:

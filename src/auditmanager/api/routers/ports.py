@@ -513,7 +513,7 @@ class CsvExportPort(Protocol):
     """``exportRunCsv``. Produced by ``B5``.
 
     The router adds nothing to what this returns: no rendering, no column list, no
-    policy. ``P02_SEAMS.md`` section 6 freezes the seventeen columns, the byte
+    policy. ``P02_SEAMS.md`` section 6 declares the nineteen columns, the byte
     conventions and the export policy, and the discriminator is the frozen
     ``terminal_semantics.publishes_result`` flag rather than a hand-written state list.
     """

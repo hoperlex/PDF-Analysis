@@ -164,7 +164,7 @@ export function contractEnums(): ReadonlySet<string> {
 }
 
 /**
- * The seventeen CSV column names, parsed out of the seam document that freezes them.
+ * The nineteen CSV column names, parsed out of the seam document that freezes them.
  *
  * `OD-11` freezes them in `docs/program/P02_SEAMS.md` §6, and
  * `web/tests/contract/csv-columns.contract.test.ts` already ties that table,
@@ -2013,7 +2013,7 @@ describe('the guard reads a contract rather than a list of words', () => {
     }
     // The two derivations that are not openapi enums, asserted as relationships so a
     // parser that silently returned nothing is red rather than merely permissive.
-    expect(csvColumnNames().size, 'OD-11 freezes seventeen CSV columns').toBe(17);
+    expect(csvColumnNames().size, 'OD-11 and W56a declare nineteen CSV columns').toBe(19);
     expect(csvColumnNames().has('finding_uid')).toBe(true);
     expect(manifestRoles().has('source.document'), 'the stage registry declares it').toBe(true);
 

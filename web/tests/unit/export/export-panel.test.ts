@@ -8,7 +8,7 @@
  * is to display what the server will send, so it reads that constant — and this suite
  * asserts the rendered list *is* that constant, in order. A renamed column then changes
  * what the panel shows and this test with it; a panel carrying its own copy of the
- * seventeen names would keep promising the old one.
+ * nineteen names would keep promising the old one.
  *
  * **The browser never builds a CSV.** There is no row assembly, no encoding and no
  * serialization anywhere in this session's tree. The panel states the encoding facts and

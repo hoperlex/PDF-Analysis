@@ -759,8 +759,9 @@ expert appended a new event.
 
 ## 6. The CSV column contract — `OD-11`
 
-Seventeen columns, in this order. This is the frozen list; `B5` produces it and `B8`
-downloads it.
+Nineteen columns, in this order. The first seventeen retain the frozen OD-11
+order; W56a appends the two severity columns under §A3.2. `B5` produces this
+list and `B8` downloads it.
 
 | # | Column | Source |
 |---|---|---|
@@ -781,13 +782,17 @@ downloads it.
 | 15 | `latest_comment` | `finding_current_verdict.latest_comment` |
 | 16 | `latest_decision_id` | `finding_current_verdict.latest_decision_id` |
 | 17 | `decision_recorded_at` | `finding_current_verdict.decision_recorded_at` |
+| 18 | `severity` | `finding_current_verdict.decided_severity` — latest accepted expert decision, otherwise empty |
+| 19 | `severity_proposed` | canonical `finding_observation.proposed_severity` — model proposal, not an expert decision |
 
 **Bytes.** UTF-8 with a byte-order mark; comma delimiter; CRLF line ending; RFC 4180
 quoting. The BOM is there because the intended reader opens the file in Excel, which
 otherwise mis-decodes Cyrillic.
 
 **Granularity.** One row per evidence item. A finding with three quotations produces
-three rows sharing columns 1–11 and 14–17.
+three rows sharing columns 1–11 and 14–19. When the finding has a canonical
+observation, only its evidence items are exported; the legacy null-canonical
+path retains the pre-merge single-observation behavior.
 
 **Sort key.** `(finding_uid, finding_observation_id, evidence_ordinal)`, ascending, on
 the opaque identifiers. `evidence_ordinal` is not itself a column; it orders the rows

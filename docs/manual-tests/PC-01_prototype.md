@@ -165,12 +165,15 @@ guarantee itself is held by `tests/integration/decisions/**`, which the gate run
 `DELETE FROM expert_decision_event` are each refused with **SQLSTATE `AM002`**, and the row
 count is unchanged before and after.
 
-**Observe the CSV:** 17 columns, one row per evidence item, UTF-8 with a byte-order mark,
-CRLF. For this corpus: **5 rows**, and **4251 bytes on a run carrying no decisions**
-— the byte count moves with the verdicts recorded, and is 4525 once an accept and a reject
-are in the ledger, so compare the row and column counts first and the byte count only
-against a run in the same decision state. Export twice and compare bytes — they must be
-identical.
+**Observe the CSV:** 19 columns (the original 17 followed by `severity` and
+`severity_proposed`), one row per evidence item, UTF-8 with a byte-order mark,
+CRLF. For this v1 corpus: **5 rows**, and **4288 bytes on a run carrying no
+decisions** — the former 4251-byte export gains 27 header bytes and two empty
+cells across each of five rows. The byte count moves with recorded verdicts;
+the former 4525-byte accept/reject figure derives to **4562 bytes** when the
+new severity cells are empty. Confirm both derived counts on PostgreSQL;
+compare row and column counts first and bytes only in the same decision state.
+Export twice and compare bytes — they must be identical.
 
 ## 7. Restart
 

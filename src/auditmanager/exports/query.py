@@ -27,7 +27,8 @@ reviewer should not read the ``finding`` join as the single point of enforcement
 
 Why this module contains SQL at all
 -----------------------------------
-Seven of the seventeen frozen columns are not projected by any existing public query.
+Seven of OD-11's first seventeen frozen columns are not projected by any
+existing public query; W56a appends two severity columns after them.
 ``findings.queries.published_findings`` returns neither ``finding.project_uid``,
 ``finding.version_uid``, ``finding.allocated_by_run_id`` nor ``finding.category``, and
 nothing anywhere projects ``document_version.document_uid``, ``audit_run.state`` or

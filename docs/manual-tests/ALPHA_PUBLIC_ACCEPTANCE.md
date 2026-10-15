@@ -220,7 +220,7 @@ knowledge base displays the current verdicts.
 On the review screen click «Скачать <run_id>-findings.csv» (Download).
 
 **PASS:** the file downloads; UTF-8 includes a BOM; the first row has exactly
-17 columns; each row represents one evidence item; `run_id`,
+19 columns; each row represents one evidence item; `run_id`,
 `provider_mode`, pages, quotations, and current verdicts agree with the
 screen. Downloading again without new decisions produces byte-identical
 content.

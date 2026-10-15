@@ -1,5 +1,15 @@
 # Current state
 
+**Code-first CSV and publication planning, 2026-10-15.**
+`CFB-INT-PINS-AND-PLANS-02` synchronizes the current CSV seam and guards with
+the 19-column W56a exporter, and adds pure AR v2 merge-publication and W57b
+newer-edition observation plans. The plans allocate no IDs and write no DB
+rows. The derived PC-01 CSV byte counts still need PostgreSQL confirmation;
+historical characterization record 12 remains unchanged and its current
+compatibility must be resolved in a separate owned task. The web suite cannot
+run without this worktree's Node dependencies. No runtime v2/W57b activation,
+qualified corpus, complete gate or beta acceptance is claimed.
+
 **W57b local designation coverage, 2026-10-15.**
 `W57B-INT-CATALOGUE-SLUG-AUDIT-01` parses ГОСТ IEC/ISO and ГОСТ Р ИСО/МЭК
 subseries. Against the unchanged 674-document source manifest, 617 slugs

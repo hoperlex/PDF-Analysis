@@ -370,7 +370,7 @@ head:
    `e6eae1e` certification explicitly did not establish;
 5. a finding opens at its exact quotation beside the page it came from;
 6. an accept, a reject and a later comment are recorded, and the history shows all three;
-7. the CSV downloads through the browser with its seventeen columns, its BOM and its CRLF
+7. the CSV downloads through the browser with its nineteen columns, its BOM and its CRLF
    intact, and resolves back to the same version and run;
 8. the server is rebooted and every canonical row, object and decision survives;
 9. each of the five refusals answers with its own typed code **through HTTP**, and a provider

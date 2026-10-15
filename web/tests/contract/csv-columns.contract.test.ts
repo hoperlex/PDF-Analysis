@@ -1,7 +1,8 @@
 /**
  * Contract guard: the frontend's idea of the CSV column list is the seam document's.
  *
- * `OD-11` freezes seventeen columns in one order in `docs/program/P02_SEAMS.md` section 6.
+ * `OD-11` freezes seventeen columns and W56a appends two severity columns in
+ * `docs/program/P02_SEAMS.md` section 6.
  * `B5` produces them and `B8` downloads them, and the two never meet in code — so the
  * only thing that keeps them agreeing is a check that reads the frozen table and compares.
  *
@@ -38,17 +39,19 @@ function columnsFromSeamDocument(): string[] {
 describe('the CSV column contract', () => {
   const fromDocument = columnsFromSeamDocument();
 
-  it('parses seventeen columns out of the seam document', () => {
-    expect(fromDocument).toHaveLength(17);
+  it('parses nineteen columns out of the seam document', () => {
+    expect(fromDocument).toHaveLength(19);
   });
 
   it('matches the frontend constant exactly, in order', () => {
     expect([...CSV_COLUMNS]).toEqual(fromDocument);
   });
 
-  it('starts with the identity columns and ends with the decision projection', () => {
+  it('starts with identity and ends with expert and proposed severity', () => {
     expect(CSV_COLUMNS[0]).toBe('project_uid');
     expect(CSV_COLUMNS[16]).toBe('decision_recorded_at');
+    expect(CSV_COLUMNS[17]).toBe('severity');
+    expect(CSV_COLUMNS[18]).toBe('severity_proposed');
   });
 
   it('carries the run state explicitly, so a partial export is not silently empty', () => {

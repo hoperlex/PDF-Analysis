@@ -7,7 +7,7 @@
  *
  * The column list is **consumed**, never restated: `CSV_COLUMNS` and `CSV_ENCODING` come
  * from `@/shared/api`, where `A5` froze them against `P02_SEAMS.md` §6 with a contract test.
- * A second copy of the seventeen columns in this file is how a UI ends up promising the
+ * A second copy of the nineteen columns in this file is how a UI ends up promising the
  * user a column the server stopped sending, so there is no literal column name anywhere
  * here — a renamed column changes what this panel displays, and the unit test beside it
  * goes red.
@@ -91,7 +91,7 @@ export function ExportPanel({
             {isPending === true ? 'Готовлю…' : `Скачать ${csvFileName(runId)}`}
           </button>
           {/*
-            `R-18` names the seventeen column names printed as a list — "documentation
+            `R-18` names the column names printed as a list — "documentation
             standing where an interface should be". They are still here, still taken from
             `CSV_COLUMNS` and still carrying `data-csv-column`, but behind the sentence
             that describes them. The summary is the sentence this panel already had; no
