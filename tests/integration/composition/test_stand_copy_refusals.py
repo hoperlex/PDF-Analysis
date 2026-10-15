@@ -874,7 +874,10 @@ GUARD_CASES: dict[tuple[str, str], Case] = {
         _restore_case(prepare=_pulled_then(lambda c: (c / "inventory.tsv").write_text("x\t1\te\n")))),
     ("restore-test.sh", "image-present"): Case(_restore_case(state={"image_exists": False})),
     ("restore-test.sh", "host-has-room"): Case(_restore_case(env={"STAND_COPY_RESTORE_NEED_DISK": str(10**18)})),
-    ("restore-test.sh", "database-ready"): Case(_restore_case(state={"ready": False})),
+    # One failed readiness probe proves this guard and its deletion. Retrying for
+    # the normal stub timeout only adds sleeps to both variants of this test.
+    ("restore-test.sh", "database-ready"): Case(_restore_case(
+        env={"STAND_COPY_RESTORE_READY_SECONDS": "0"}, state={"ready": False})),
     ("restore-test.sh", "dump-restored"): Case(_restore_case(state={"restore_exit": 1})),
     ("restore-test.sh", "fingerprint-read"): Case(_restore_case(state={"restored_fingerprint": "garbage\n"})),
     ("restore-test.sh", "fingerprint-reproduced"): Case(_restore_case(state={"restored_fingerprint": OTHER_FINGERPRINT})),
@@ -895,6 +898,8 @@ def test_each_guard_refuses_and_its_deletion_stops_the_refusal(tmp_path: Path, k
     ran = case.run(stand)
     assert ran.refused(guard), (key, ran.code, ran.out, ran.err)
     assert f"{script}: REFUSED [{guard}]" in ran.err, ran.err
+    if key == ("restore-test.sh", "database-ready"):
+        assert stand.state()["ready_calls"] == 1
     if case.before_docker:
         assert stand.docker_calls() == [], f"{guard} refused only after calling docker: {stand.docker_calls()}"
 
@@ -903,6 +908,8 @@ def test_each_guard_refuses_and_its_deletion_stops_the_refusal(tmp_path: Path, k
     assert f"{script}: REFUSED [{guard}]" not in unguarded.err, (
         f"deleting the {guard} block did not stop the refusal; something else produces it"
     )
+    if key == ("restore-test.sh", "database-ready"):
+        assert mutant.state()["ready_calls"] == 1
 
 
 def test_every_guard_has_a_case_here() -> None:
