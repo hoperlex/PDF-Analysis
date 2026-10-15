@@ -26,6 +26,8 @@ safe optimisation candidates with the evidence still required before changing te
 
 - `docs/program/tasks/GATE-SUITE-AUDIT-01.md`
 - `docs/program/GATE-SUITE-AUDIT-01.md`
+- `.local/tasks.md` and `.local/handoff/gate-optimization-2026-10-15.md`
+  in the shared root checkout (ignored local stage handoff required by `AGENTS.md` §7)
 
 ## Forbidden hotspots
 
