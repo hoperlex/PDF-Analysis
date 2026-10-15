@@ -1,5 +1,11 @@
 # Current state
 
+**W56a offline matcher development integration, 2026-10-15.**
+`W56A-MATCHER-CORE-PREP-01` adds a pure evidence matcher for the synthetic
+AR v2 manifest; 15 focused tests pass. It reports counts and over-merge,
+but no measured baseline, threshold or recorded run exists. The gateway
+identity block and later HARNESS work remain open.
+
 **W56a merge core development integration, 2026-10-15.**
 `W56A-MERGE-CORE-PREP-01` adds the pure deterministic grouping rule for
 already grounded v2 observations; 17 focused tests pass. It is not wired to
