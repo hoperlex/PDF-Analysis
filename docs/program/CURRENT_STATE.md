@@ -1,5 +1,11 @@
 # Current state
 
+**W57a retrieval ranking preparation, 2026-10-15.**
+`W57A-INT-RETRIEVAL-RANK-PREP-01` adds pure float32 window ranking, reliable
+paragraph resolution and deterministic prompt-part reduction to 22,000
+characters. Seven focused tests pass. No reviewed map, verified set, custody
+publication, active v3 profile or runtime switch exists yet.
+
 **W57a pure citation preparation, 2026-10-15.**
 `W57A-INT-CITATION-PREP-01` adds `norm-quote-v1` raw-offset grounding,
 `norm-value-v1` tokenization and an all-or-nothing citation/value guard.
