@@ -22,12 +22,46 @@ safe optimisation candidates with the evidence still required before changing te
 - analysis/comparison/event contracts unchanged; migration head `0022_findings_v2`
 - product version `0.6.0`; complete development gate deferred by `R-135`
 
+## Enumerator ownership
+
+- enumerated_set_changed: no
+- enumerator_path: not_applicable
+- enumerator_owner: not_applicable
+- totality_query: not_applicable
+
+## Captured premise evidence
+
+- premise: the audit follows the completed local gate optimization commit
+
+### P-01 — source commit
+
+- captured_at: 2026-10-15
+- command: `git rev-parse 5842d01ce9a1a38fe2097dae080f9792c213ff37`
+- captured_output:
+  ```text
+  5842d01ce9a1a38fe2097dae080f9792c213ff37
+  ```
+- interpretation: this identifies the implementation tree audited, without claiming a full gate.
+
+## Historical evidence
+
+- correction_mode: none
+- source_record: not_applicable
+- addendum_path: not_applicable
+
+## Publication authority
+
+- development_target: none
+- origin_main_authority: none
+
 ## Allowed paths
 
 - `docs/program/tasks/GATE-SUITE-AUDIT-01.md`
 - `docs/program/GATE-SUITE-AUDIT-01.md`
-- `.local/tasks.md` and `.local/handoff/gate-optimization-2026-10-15.md`
-  in the shared root checkout (ignored local stage handoff required by `AGENTS.md` §7)
+- `.local/tasks.md`
+- `.local/handoff/gate-optimization-2026-10-15.md`
+
+The last two paths are ignored local coordination files in the shared root checkout.
 
 ## Forbidden hotspots
 

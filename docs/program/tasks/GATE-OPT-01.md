@@ -25,6 +25,38 @@ against evidence.
 - migration head: `0022_findings_v2`; product version: `0.6.0`
 - owner instruction: implement the reviewed gate optimisation brief in this session
 
+## Enumerator ownership
+
+- enumerated_set_changed: no
+- enumerator_path: not_applicable
+- enumerator_owner: not_applicable
+- totality_query: not_applicable
+
+## Captured premise evidence
+
+- premise: the source branch was based on the exact development ref
+
+### P-01 — development ref at dispatch
+
+- captured_at: 2026-10-15
+- command: `git ls-remote --heads origin dev`
+- captured_output:
+  ```text
+  8069220909e40c39e2329d5f5cb9585a5a5714ec refs/heads/dev
+  ```
+- interpretation: the ref matched the frozen base at dispatch; it was checked again at integration.
+
+## Historical evidence
+
+- correction_mode: none
+- source_record: not_applicable
+- addendum_path: not_applicable
+
+## Publication authority
+
+- development_target: none
+- origin_main_authority: none
+
 ## Ownership and publication authority
 
 - This task exclusively owns the root `Makefile` command surface for this change. The
