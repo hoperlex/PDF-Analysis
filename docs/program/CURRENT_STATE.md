@@ -1,5 +1,11 @@
 # Current state
 
+**AR v2 proposal grounding preparation, 2026-10-15.**
+`W56A-INT-PROPOSAL-GROUNDING-PREP-01` joins parsed proposals to PDF-only
+quotation grounding in a pure module. Any failed item rejects the whole
+proposal while retaining every diagnostic; runtime wiring remains blocked by
+MODEL-PIN and PROVIDER. Focused tests pass; no full local gate was run.
+
 **Reconciled 2026-10-15 on the W56a development line.** This file is the short entry point for
 coding agents. The exact task base, frozen inputs and permitted paths come from the assigned task
 file and freeze; verify them against Git. The complete earlier state is preserved verbatim in
