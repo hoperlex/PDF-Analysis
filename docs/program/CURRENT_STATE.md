@@ -1,5 +1,11 @@
 # Current state
 
+**AR v2 response pipeline preparation, 2026-10-15.**
+`W56A-INT-RESPONSE-PIPELINE-PREP-01` joins typed model response parsing,
+PDF-only proposal grounding and dense merge preparation in one pure step.
+Ten focused tests pass. No recorded runtime stage, provider call or finding
+publication is active.
+
 **W57a target resolution preparation, 2026-10-15.**
 `W57A-INT-TARGET-RESOLUTION-PREP-01` adds pure clause, table and explicit
 range resolution over canonical paragraphs, splitting around unreliable text.
