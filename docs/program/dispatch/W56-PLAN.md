@@ -1,5 +1,12 @@
 # Wave 56 — split: W56a AR-2 on text; W56b drawings, long documents and the critic
 
+> **Development order, 2026-10-15:** `CODE-FIRST-TO-BETA.md` governs checks
+> and publication for code-first work. W56a/W56b retain their functional scope
+> and ownership boundaries; per-lane full gates, stand acceptance and `main`
+> release tasks below are deferred. The stopped W56a gateway probe is not a
+> passing model pin; use the recorded-only split described in the amendment
+> before issuing code grants.
+
 **Status:** revision 3 (final), 2026-10-06 — after the second judging round (`reviews/W56-PLAN-JUDGING.md`;
 both judges ACCEPT-WITH-FIXES, no third round) and the owner's answer H-10 (the critic moves to W56b). Written by the planning session on local branch
 `plan/roadmap-to-beta`. Two rounds at most (`R-V4`).
