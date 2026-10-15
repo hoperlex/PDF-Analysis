@@ -9,14 +9,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from auditmanager.analysis.profiles.ar_v2.merge_input import MergePreparation, prepare_merge
-from auditmanager.analysis.profiles.ar_v2.proposal_grounding import (
+from auditmanager.analysis.public import (
+    MERGE_ARTIFACT_ROLE,
+    MERGE_ARTIFACT_VERSION,
+    MERGE_RULE_VERSION,
+    MergePreparation,
     ProposalGroundingResult,
+    ProposedObservation,
     RejectedProposal,
+    ResolvedAnchor,
+    prepare_merge,
 )
-from auditmanager.analysis.profiles.ar_v2.response import ProposedObservation
-from auditmanager.analysis.stages.finding_merge import ARTIFACT_ROLE, ARTIFACT_VERSION, MERGE_RULE_VERSION
-from auditmanager.analysis.text.anchors import ResolvedAnchor
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +89,7 @@ def plan_v2_merge_publication(
     artifact = merge.artifact
     if not isinstance(artifact, dict) or set(artifact) != {"artifact_role", "artifact_version", "groups"}:
         raise ValueError("merge_artifact_shape_invalid")
-    if artifact["artifact_role"] != ARTIFACT_ROLE or artifact["artifact_version"] != ARTIFACT_VERSION:
+    if artifact["artifact_role"] != MERGE_ARTIFACT_ROLE or artifact["artifact_version"] != MERGE_ARTIFACT_VERSION:
         raise ValueError("merge_artifact_version_mismatch")
     raw_groups = artifact["groups"]
     if not isinstance(raw_groups, list):

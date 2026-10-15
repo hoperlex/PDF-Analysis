@@ -42,6 +42,19 @@ from auditmanager.analysis.ports.artifacts import (
     read_artifact,
 )
 from auditmanager.analysis.ports.stage import StageContext, StageHandler, StageProduction
+from auditmanager.analysis.profiles.ar_v2.merge_input import MergePreparation, prepare_merge
+from auditmanager.analysis.profiles.ar_v2.proposal_grounding import (
+    ProposalGroundingResult,
+    RejectedProposal,
+)
+from auditmanager.analysis.profiles.ar_v2.response import ProposedObservation
+from auditmanager.analysis.profiles.ar_v2.response_schema import CATEGORIES as AR_V2_CATEGORIES
+from auditmanager.analysis.profiles.ar_v2.response_schema import SEVERITIES as AR_V2_SEVERITIES
+from auditmanager.analysis.stages.finding_merge import (
+    ARTIFACT_ROLE as MERGE_ARTIFACT_ROLE,
+    ARTIFACT_VERSION as MERGE_ARTIFACT_VERSION,
+    MERGE_RULE_VERSION,
+)
 from auditmanager.analysis.stages.extraction import (
     NORMALIZATION_DESCRIPTION,
     NORMALIZATION_ID,
@@ -69,11 +82,14 @@ from auditmanager.analysis.recognised import KIND_PORTAL_DESCRIPTION, KIND_RECOG
 from auditmanager.analysis.ports.artifacts import ROLE_CROP_IMAGE, ROLE_PORTAL_BLOCKS  # W55B-GEOMETRY-01
 from auditmanager.analysis.text.proxy import ProxyDispatchError
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
+from auditmanager.analysis.text.anchors import ResolvedAnchor
 
 __all__ = [
     "ARTIFACT_VERSION",
     "ARTIFACT_ROLE",
     "AR_TEXT_PROFILE",
+    "AR_V2_CATEGORIES",
+    "AR_V2_SEVERITIES",
     "CONTRACT_VERSION",
     "KIND_PORTAL_DESCRIPTION",
     "KIND_RECOGNISED_TEXT",
@@ -99,11 +115,19 @@ __all__ = [
     "ModelCallRecord",
     "ModelRequest",
     "ModelResponse",
+    "MergePreparation",
+    "MERGE_ARTIFACT_ROLE",
+    "MERGE_ARTIFACT_VERSION",
+    "MERGE_RULE_VERSION",
+    "ProposalGroundingResult",
+    "ProposedObservation",
     "ProviderConfig",
     "ProviderMode",
     "ProxyAdapter",
     "ProxyDispatchError",
     "ProxySettings",
+    "RejectedProposal",
+    "ResolvedAnchor",
     "TEXT_STAGE_VERSION",
     "StageContext",
     "StageDefinition",
@@ -119,6 +143,7 @@ __all__ = [
     "input_budget_characters",
     "load_provider_config",
     "publish_artifact",
+    "prepare_merge",
     "read_artifact",
     "run_stage",
     "run_text_analysis",

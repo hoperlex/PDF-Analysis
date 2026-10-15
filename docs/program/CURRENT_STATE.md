@@ -1,5 +1,15 @@
 # Current state
 
+**Code-first publication and XLSX preparation, 2026-10-15.**
+`CFB-INT-PUBLICATION-AND-XLSX-03` adds an unconnected AR v2 transactional
+publisher for validated merge plans, routes its analysis imports through the
+public boundary, and projects complete canonical finding reads into the W57b
+XLSX writer input. Wave-13 CSV record 12 stays unchanged; its test compares a
+digest-pinned in-memory 19-column expectation. Focused pure and fake-session
+checks pass. PostgreSQL characterization, real publisher transactions,
+spreadsheet application opening, runtime/HTTP wiring and full beta gates are
+still pending. No qualified normative corpus or beta verdict is claimed.
+
 **Code-first CSV and publication planning, 2026-10-15.**
 `CFB-INT-PINS-AND-PLANS-02` synchronizes the current CSV seam and guards with
 the 19-column W56a exporter, and adds pure AR v2 merge-publication and W57b

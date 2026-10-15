@@ -19,11 +19,19 @@ compared instead is the sorted list of the sequence's byte slices -- a permutati
 nothing else, is erased -- plus the ordering *rule* the system does promise, asserted
 against the live response by :func:`test_the_published_findings_come_back_ascending_by_
 finding_uid` and its CSV twin.
+
+W56a added two CSV severity columns after the historical seventeen. Record 12
+remains unchanged; a digest-checked in-memory projection adds two empty v1
+cells per data row before applying the original O1 byte comparison.
 """
 
 from __future__ import annotations
 
+import base64
+import csv
+import hashlib
 import importlib.util
+import io
 import json
 import sys
 from pathlib import Path
@@ -56,6 +64,60 @@ journey = _load()
 STATIC_TOKEN = "w13-baseline-static-token"
 
 RECORD_FILES = sorted(journey.RECORDS.glob("*.json"))
+
+# Record 12 is immutable wave-13 evidence. W56a appended two CSV columns; the
+# comparison below projects only those empty v1 cells in memory. These literals
+# are deliberately independent of the current serializer and seam document.
+_HISTORICAL_CSV_HEADER = (
+    b"project_uid,document_uid,version_uid,run_id,run_state,provider_mode,"
+    b"finding_uid,finding_observation_id,category,finding_text,"
+    b"recommendation_text,evidence_page,evidence_quote,current_verdict,"
+    b"latest_comment,latest_decision_id,decision_recorded_at"
+)
+_HISTORICAL_CSV_SHA256 = (
+    "b5c11af33e6e1886ebbdb9ffe2bd58e0149b1b6206beba3d05704ab371ba9422"
+)
+_APPENDED_CSV_HEADER = b",severity,severity_proposed"
+
+
+def _csv_compat_expected(expected: dict[str, Any]) -> dict[str, Any]:
+    """Project record 12's old bytes to the current, empty-severity v1 CSV.
+
+    The pinned source body remains untouched. A fixed digest and shape checks
+    keep this narrow exception from masking a changed legacy CSV cell.
+    """
+    if expected.get("case") != "12-exportRunCsv.success":
+        raise ValueError("CSV compatibility applies only to record 12")
+    body = expected["response"]["body"]
+    if body.get("kind") != "base64":
+        raise ValueError("record 12 must contain base64 CSV bytes")
+    if body.get("length") != 4409:
+        raise ValueError("record 12 pre-token CSV length changed")
+    raw = base64.b64decode(body["base64"], validate=True)
+    if hashlib.sha256(raw).hexdigest() != _HISTORICAL_CSV_SHA256:
+        raise ValueError("record 12 historical CSV bytes changed")
+    if not raw.startswith(b"\xef\xbb\xbf") or not raw.endswith(b"\r\n"):
+        raise ValueError("record 12 lost its BOM or final CRLF")
+    lines = raw[3:].split(b"\r\n")
+    if len(lines) != 7 or lines[-1] != b"" or lines[0] != _HISTORICAL_CSV_HEADER:
+        raise ValueError("record 12 is not its pinned header and five data rows")
+    parsed = list(csv.reader(io.StringIO(raw[3:].decode("utf-8"), newline="")))
+    if len(parsed) != 6 or any(len(row) != 17 for row in parsed):
+        raise ValueError("record 12 is not a 17-column, five-row CSV")
+
+    projected = (
+        b"\xef\xbb\xbf"
+        + lines[0]
+        + _APPENDED_CSV_HEADER
+        + b"\r\n"
+        + b"\r\n".join(line + b",," for line in lines[1:-1])
+        + b"\r\n"
+    )
+    out = json.loads(json.dumps(expected))
+    out["response"]["body"]["base64"] = base64.b64encode(projected).decode("ascii")
+    # The record's length describes the original body before token substitution.
+    out["response"]["body"]["length"] += len(projected) - len(raw)
+    return out
 
 #: The frozen document's fifteen operationIds, written out rather than read from the
 #: contract: this suite's job is to notice a surface that changed, and an expectation
@@ -482,6 +544,8 @@ def test_the_authorization_era_check_can_fail() -> None:
 @pytest.mark.parametrize("path", RECORD_FILES, ids=lambda p: p.stem)
 def test_the_response_reproduces_the_record(path: Path, exchanges: dict[str, Any]) -> None:
     expected = json.loads(path.read_text(encoding="utf-8"))
+    if expected["case"] == "12-exportRunCsv.success":
+        expected = _csv_compat_expected(expected)
     exchange = exchanges[expected["case"]]
     found = journey.differences(exchange, expected)
     assert not found, (
@@ -545,7 +609,7 @@ def test_the_comparison_reddens_on_a_planted_difference(exchanges: dict[str, Any
     )
 
     csv_path = journey.RECORDS / "12-exportRunCsv.success.json"
-    csv_expected = json.loads(csv_path.read_text(encoding="utf-8"))
+    csv_expected = _csv_compat_expected(json.loads(csv_path.read_text(encoding="utf-8")))
     csv_exchange = exchanges[csv_expected["case"]]
     assert not journey.differences(csv_exchange, csv_expected)
     import base64
@@ -663,7 +727,69 @@ def _rebuilt(
 
 
 def _load(case: str) -> dict[str, Any]:
-    return json.loads(journey.record_path(case).read_text(encoding="utf-8"))
+    expected = json.loads(journey.record_path(case).read_text(encoding="utf-8"))
+    if case == "12-exportRunCsv.success":
+        return _csv_compat_expected(expected)
+    return expected
+
+
+def test_csv_compat_projection_preserves_legacy_bytes_and_reddens_on_mutations() -> None:
+    historical = json.loads(
+        journey.record_path("12-exportRunCsv.success").read_text(encoding="utf-8")
+    )
+    original = json.loads(json.dumps(historical))
+    current = _csv_compat_expected(historical)
+    old = _body_bytes(historical)
+    new = _body_bytes(current)
+    old_lines = old.split(b"\r\n")
+    new_lines = new.split(b"\r\n")
+
+    assert historical == original, "the historical record was mutated in memory"
+    assert current["response"]["body"]["length"] == 4446
+    assert len(new) - len(old) == 37
+    assert new_lines[0] == old_lines[0] + _APPENDED_CSV_HEADER
+    assert len(old_lines) == len(new_lines) == 7
+    assert new_lines[1:-1] == [line + b",," for line in old_lines[1:-1]]
+    assert new_lines[-1] == old_lines[-1] == b""
+    parsed = list(csv.reader(io.StringIO(new.decode("utf-8-sig"), newline="")))
+    assert [len(row) for row in parsed] == [19] * 6
+    assert all(row[-2:] == ["", ""] for row in parsed[1:])
+
+    declaration = current["unordered"]
+    assert not journey._unordered_differences(new, new, declaration)
+    assert b"accepted" in new
+    assert b",,\r\n" in new
+    for changed in (
+        new[3:],  # missing BOM
+        new.replace(b"\r\n", b"\n"),
+        new.replace(b"accepted", b"rejected", 1),
+        new.replace(b",,\r\n", b",critical,\r\n", 1),
+        new.replace(b",,\r\n", b",,critical\r\n", 1),
+        new.replace(b",,\r\n", b",,,\r\n", 1),
+        old,  # silently omitting both new columns
+    ):
+        assert journey._unordered_differences(new, changed, declaration), (
+            "CSV compatibility comparison hid a changed byte"
+        )
+
+
+def test_csv_compat_refuses_a_changed_historical_record() -> None:
+    historical = json.loads(
+        journey.record_path("12-exportRunCsv.success").read_text(encoding="utf-8")
+    )
+    old = _body_bytes(historical)
+    with pytest.raises(ValueError, match="only to record 12"):
+        _csv_compat_expected({**historical, "case": "08-listRunFindings.success"})
+    with pytest.raises(ValueError, match="historical CSV bytes changed"):
+        _csv_compat_expected(
+            _with_body(historical, old.replace(b"accepted", b"rejected", 1))
+        )
+    with pytest.raises(ValueError, match="historical CSV bytes changed"):
+        _csv_compat_expected(
+            _with_body(historical, old.replace(b"\r\n", b"\n", 1))
+        )
+    with pytest.raises(ValueError, match="pre-token CSV length changed"):
+        _csv_compat_expected(_csv_compat_expected(historical))
 
 
 def _marked(element: bytes, sequence: str) -> bytes:
