@@ -91,6 +91,7 @@ from auditmanager.analysis.public import (
 from auditmanager.analysis.public import publish_artifact
 from auditmanager.analysis.public import (
     AR_TEXT_PROFILE,
+    RecordedProfileError,
     ARTIFACT_ROLE as ROLE_TEXT_OBSERVATIONS,
     CostMeter,
     ModelAdapter,
@@ -102,6 +103,7 @@ from auditmanager.analysis.public import (
     TextAnalysisOutcome,
     load_provider_config,
     run_text_analysis,
+    resolve_recorded_profile,
 )
 from auditmanager.analysis.public import TEXT_STAGE_VERSION
 from auditmanager.documents.public import DocumentRepository
@@ -240,17 +242,18 @@ def plan_recorded_v2_execution(
     try:
         AnalysisProfileId.parse(registered_profile_id)
         PromptBundleId.parse(registered_bundle_id)
-    except (TypeError, ValueError, DomainError):
+        registered = resolve_recorded_profile(registered_profile_id, registered_bundle_id)
+    except (TypeError, ValueError, DomainError, RecordedProfileError):
         raise DomainError(
             ErrorCode.ANALYSIS_INPUT_INVALID,
-            message="a recorded AR v2 profile and prompt bundle must be pinned",
+            message="a recorded AR v2 profile and prompt bundle must be registered and unchanged",
         ) from None
 
     v1_profile_id = str(AR_TEXT_PROFILE.analysis_profile_id)
     if (
         registered_profile_id == v1_profile_id
-        or run.analysis_profile_id != registered_profile_id
-        or run.prompt_bundle_id != registered_bundle_id
+        or run.analysis_profile_id != str(registered.analysis_profile_id)
+        or run.prompt_bundle_id != str(registered.prompt_bundle_id)
         or run.provider_mode != ProviderMode.RECORDED.value
         or provider_config.mode is not ProviderMode.RECORDED
         or adapter.provider_mode is not ProviderMode.RECORDED
@@ -262,8 +265,8 @@ def plan_recorded_v2_execution(
         )
     return RecordedV2ExecutionIntent(
         run_id=run.run_id,
-        analysis_profile_id=registered_profile_id,
-        prompt_bundle_id=registered_bundle_id,
+        analysis_profile_id=str(registered.analysis_profile_id),
+        prompt_bundle_id=str(registered.prompt_bundle_id),
     )
 
 

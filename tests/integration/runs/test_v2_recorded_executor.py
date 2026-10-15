@@ -7,14 +7,20 @@ from datetime import datetime, timezone
 
 import pytest
 
-from auditmanager.analysis.public import AR_TEXT_PROFILE, ProviderConfig, ProviderMode
+from auditmanager.analysis.public import (
+    AR_TEXT_PROFILE,
+    AR_V2_RECORDED_BUNDLE_ID,
+    AR_V2_RECORDED_PROFILE_ID,
+    ProviderConfig,
+    ProviderMode,
+)
 from auditmanager.runs.executor import plan_recorded_v2_execution
 from auditmanager.runs.repository import RunRow
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 
-V2_PROFILE = "ap_01M25P3TH08VVTTGJRXYBZZ7RQ"
-V2_BUNDLE = "pb_01M25P3TH0PDQYVKTRQFEM0CYT"
+V2_PROFILE = str(AR_V2_RECORDED_PROFILE_ID)
+V2_BUNDLE = str(AR_V2_RECORDED_BUNDLE_ID)
 
 
 class NoCallAdapter:
@@ -111,4 +117,24 @@ def test_malformed_registration_refuses_even_for_matching_row() -> None:
     with pytest.raises(DomainError):
         _plan(_run(analysis_profile_id="unregistered"), adapter, _config(),
               profile="unregistered")
+    assert adapter.calls == 0
+
+
+def test_well_formed_but_unregistered_identity_is_refused() -> None:
+    adapter = NoCallAdapter(ProviderMode.RECORDED)
+    unknown = "ap_01M25P3TH08VVTTGJRXYBZZ7RQ"
+    with pytest.raises(DomainError) as failure:
+        _plan(_run(analysis_profile_id=unknown), adapter, _config(), profile=unknown)
+    assert failure.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert adapter.calls == 0
+
+
+def test_reviewed_content_drift_is_refused_before_effects(monkeypatch: pytest.MonkeyPatch) -> None:
+    from auditmanager.analysis.profiles.ar_v2 import registered
+
+    adapter = NoCallAdapter(ProviderMode.RECORDED)
+    monkeypatch.setattr(registered, "material_sha256", lambda: "0" * 64)
+    with pytest.raises(DomainError) as failure:
+        _plan(_run(), adapter, _config())
+    assert failure.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
     assert adapter.calls == 0

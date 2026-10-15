@@ -49,6 +49,12 @@ from auditmanager.analysis.profiles.ar_v2.proposal_grounding import (
 )
 from auditmanager.analysis.profiles.ar_v2.response import ProposedObservation
 from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_v2.registered import (
+    PROFILE_ID as AR_V2_RECORDED_PROFILE_ID,
+    PROMPT_BUNDLE_ID as AR_V2_RECORDED_BUNDLE_ID,
+    RecordedProfileError,
+    resolve_recorded_profile,
+)
 from auditmanager.analysis.profiles.ar_v2.response_pipeline import FinishedV2Response, finish_response
 from auditmanager.analysis.profiles.ar_v2.response_schema import CATEGORIES as AR_V2_CATEGORIES
 from auditmanager.analysis.profiles.ar_v2.response_schema import SEVERITIES as AR_V2_SEVERITIES
@@ -92,6 +98,8 @@ __all__ = [
     "ARTIFACT_ROLE",
     "AR_TEXT_PROFILE",
     "AR_V2_CATEGORIES",
+    "AR_V2_RECORDED_BUNDLE_ID",
+    "AR_V2_RECORDED_PROFILE_ID",
     "AR_V2_SEVERITIES",
     "BlockIndex",
     "CONTRACT_VERSION",
@@ -133,6 +141,7 @@ __all__ = [
     "ProxySettings",
     "RejectedProposal",
     "RecognisedContext",
+    "RecordedProfileError",
     "ResolvedAnchor",
     "TextLayer",
     "TEXT_STAGE_VERSION",
@@ -153,6 +162,7 @@ __all__ = [
     "publish_artifact",
     "prepare_merge",
     "read_artifact",
+    "resolve_recorded_profile",
     "run_stage",
     "run_text_analysis",
 ]

@@ -1,5 +1,13 @@
 # Current state
 
+**Recorded AR v2 profile registration, 2026-10-15.**
+`CFB-INT-AR-V2-PROFILE-06` pins a recorded-only AR v2 profile/bundle to the
+reviewed prompt material and response schema, then binds the inert executor
+preflight to that registration. Unknown identity or changed content fails
+closed. The active executor still runs v1; v2 recorded request/artifact/stage
+wiring, verified live model/price, DB acceptance and the complete beta gates
+remain ahead.
+
 **Code-first bounded pipelines and preflight, 2026-10-15.**
 `CFB-INT-PIPELINES-AND-PREFLIGHT-05` adds an inert recorded AR v2 executor
 preflight, one-source W57b reference pipeline and caller-authorized XLSX
