@@ -8,7 +8,12 @@ from dataclasses import replace
 
 import pytest
 
-from auditmanager.storage.public import derive_blob_id
+from auditmanager.storage.public import (
+    BlobId,
+    StorageError,
+    canonical_object_key_for_recovery,
+    derive_blob_id,
+)
 from scripts.recovery.blob_object_binding import (
     BlobObjectBindingRefused,
     BoundBlobObject,
@@ -94,6 +99,20 @@ def test_binds_every_available_blob_to_exact_sealed_key_and_facts() -> None:
         key=lambda item: item.blob_id,
     ))
     assert _bind(audit, record, inventory, seal, keys) == result
+
+
+def test_storage_public_resolver_binds_using_the_s3_adapter_layout() -> None:
+    audit, record, inventory, seal, keys = _fixture()
+    assert {
+        fact.blob_id: canonical_object_key_for_recovery(BlobId(fact.blob_id))
+        for fact in audit.available_blobs
+    } == keys
+    assert bind_available_blob_objects(
+        audit, record, inventory, seal,
+        canonical_key_for=canonical_object_key_for_recovery,
+    ) == _bind(audit, record, inventory, seal, keys)
+    with pytest.raises(StorageError):
+        canonical_object_key_for_recovery(BlobId("blob_not-a-valid-id"))
 
 
 def test_empty_available_set_needs_no_object_binding() -> None:

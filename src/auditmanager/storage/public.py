@@ -28,6 +28,18 @@ from auditmanager.storage.port import STREAM_CHUNK_BYTES, BlobChunks, BlobSource
 from auditmanager.storage.s3 import S3BlobStore, sha256_of
 from auditmanager.storage.settings import S3StorageSettings
 
+from . import _object_layout as layout
+
+
+def canonical_object_key_for_recovery(blob_id: BlobId) -> str:
+    """Resolve a validated Blob ID using the S3 adapter's canonical layout.
+
+    This transport locator is for isolated recovery verification only. Product
+    consumers continue to retain and pass the opaque Blob ID.
+    """
+    return layout.canonical_key(parse_blob_id(blob_id))
+
+
 __all__ = [
     "STREAM_CHUNK_BYTES",
     "BlobAttributeConflictError",
@@ -50,6 +62,7 @@ __all__ = [
     "TemporaryBlob",
     "TemporaryBlobLostError",
     "VerifiedBlob",
+    "canonical_object_key_for_recovery",
     "declare_blob",
     "derive_blob_id",
     "parse_blob_id",
