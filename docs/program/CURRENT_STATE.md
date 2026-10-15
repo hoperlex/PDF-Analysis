@@ -1,5 +1,13 @@
 # Current state
 
+**W56a AR v2 content preparation, 2026-10-15.**
+`W56A-INT-PROFILE-CONTENT-01` adds six provenance-bound, reviewed legacy AR
+source resources and a fail-closed offline loader. Three focused tests pass;
+the seven category names match the sealed API. No runtime profile is
+activated, no normative rule or provider lock is added, and MODEL-PIN still
+awaits a corrected stand route plus a distinct recording gateway. Full local
+gate and service-backed acceptance were not run.
+
 **W56a probe-tool development integration, 2026-10-15.**
 `W56A-PROBE-TOOL-PREP-01` adds a one-call, sanitized model identity and
 rate verifier with 16 focused offline tests after a degenerate-evidence
