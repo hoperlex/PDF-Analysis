@@ -1,5 +1,11 @@
 # Current state
 
+**W56a merge core development integration, 2026-10-15.**
+`W56A-MERGE-CORE-PREP-01` adds the pure deterministic grouping rule for
+already grounded v2 observations; 17 focused tests pass. It is not wired to
+the executor and cannot publish findings. Provider identity, later profile
+and publication work remain open.
+
 **W56a synthetic corpus development integration, 2026-10-15.**
 `W56A-GENERATOR-PREP-01` adds ten deterministic two-page PDF portal bundles,
 21 seeded AR v2 issues and seven near-miss controls after the SEAL commit.
