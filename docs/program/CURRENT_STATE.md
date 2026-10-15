@@ -1,5 +1,14 @@
 # Current state
 
+**Code-first recorded and normative adapters, 2026-10-15.**
+`CFB-INT-RECORDED-AND-NORM-04` combines a recorded-only AR v2
+response-to-publication chain, an offline seeded scoring bridge, a fail-closed
+W57b catalogue-byte adapter and a SELECT-only XLSX finding reader. Focused
+no-DB tests pass. Run executor, provider, W57a `0023` verified set/custody,
+XLSX API and source labels/citations remain unconnected; no real recorded
+baseline, qualified normative corpus, complete gate or beta verdict is
+claimed.
+
 **Code-first publication and XLSX preparation, 2026-10-15.**
 `CFB-INT-PUBLICATION-AND-XLSX-03` adds an unconnected AR v2 transactional
 publisher for validated merge plans, routes its analysis imports through the

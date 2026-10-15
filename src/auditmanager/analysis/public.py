@@ -48,6 +48,8 @@ from auditmanager.analysis.profiles.ar_v2.proposal_grounding import (
     RejectedProposal,
 )
 from auditmanager.analysis.profiles.ar_v2.response import ProposedObservation
+from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_v2.response_pipeline import FinishedV2Response, finish_response
 from auditmanager.analysis.profiles.ar_v2.response_schema import CATEGORIES as AR_V2_CATEGORIES
 from auditmanager.analysis.profiles.ar_v2.response_schema import SEVERITIES as AR_V2_SEVERITIES
 from auditmanager.analysis.stages.finding_merge import (
@@ -82,7 +84,8 @@ from auditmanager.analysis.recognised import KIND_PORTAL_DESCRIPTION, KIND_RECOG
 from auditmanager.analysis.ports.artifacts import ROLE_CROP_IMAGE, ROLE_PORTAL_BLOCKS  # W55B-GEOMETRY-01
 from auditmanager.analysis.text.proxy import ProxyDispatchError
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
-from auditmanager.analysis.text.anchors import ResolvedAnchor
+from auditmanager.analysis.text.anchors import BlockIndex, ResolvedAnchor
+from auditmanager.analysis.text.textlayer import TextLayer
 
 __all__ = [
     "ARTIFACT_VERSION",
@@ -90,6 +93,7 @@ __all__ = [
     "AR_TEXT_PROFILE",
     "AR_V2_CATEGORIES",
     "AR_V2_SEVERITIES",
+    "BlockIndex",
     "CONTRACT_VERSION",
     "KIND_PORTAL_DESCRIPTION",
     "KIND_RECOGNISED_TEXT",
@@ -110,6 +114,7 @@ __all__ = [
     "ROLE_TEXT_LAYER",
     "ArtifactRef",
     "CostMeter",
+    "FinishedV2Response",
     "ModelAdapter",
     "ModelCallJournal",
     "ModelCallRecord",
@@ -127,7 +132,9 @@ __all__ = [
     "ProxyDispatchError",
     "ProxySettings",
     "RejectedProposal",
+    "RecognisedContext",
     "ResolvedAnchor",
+    "TextLayer",
     "TEXT_STAGE_VERSION",
     "StageContext",
     "StageDefinition",
@@ -140,6 +147,7 @@ __all__ = [
     "TextAnalysisOutcome",
     "default_registry",
     "document_text",
+    "finish_response",
     "input_budget_characters",
     "load_provider_config",
     "publish_artifact",
