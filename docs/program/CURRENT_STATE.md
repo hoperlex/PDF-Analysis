@@ -1,5 +1,13 @@
 # Current state
 
+**W56a AR v2 prompt material preparation, 2026-10-15.**
+`W56A-INT-PROMPT-MATERIAL-PREP-01` assembles six reviewed sources, the
+sealed response schema, JSON-quoted PDF pages and marked uncitable OCR
+context into deterministic offline request material. Thirty-eight focused
+AR v2 tests pass; v1's profile hash is unchanged. No active profile or
+provider request is created, MODEL-PIN remains blocked, and no full local
+gate or acceptance was run.
+
 **W56a marked OCR context preparation, 2026-10-15.**
 `W56A-INT-RECOGNISED-CONTEXT-PREP-01` adds a pure selector that takes
 recognised TEXT only on the version's stored textless pages, preserves
