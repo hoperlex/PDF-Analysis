@@ -49,6 +49,11 @@ from auditmanager.analysis.profiles.ar_v2.proposal_grounding import (
 )
 from auditmanager.analysis.profiles.ar_v2.response import ProposedObservation
 from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_v2.recorded_input import (
+    RecordedV2Input,
+    prepare_recorded_v2_input,
+)
+from auditmanager.analysis.profiles.ar_v2.recorded_request import RecordedGenerationSettings
 from auditmanager.analysis.profiles.ar_v2.registered import (
     PROFILE_ID as AR_V2_RECORDED_PROFILE_ID,
     PROMPT_BUNDLE_ID as AR_V2_RECORDED_BUNDLE_ID,
@@ -141,6 +146,8 @@ __all__ = [
     "ProxySettings",
     "RejectedProposal",
     "RecognisedContext",
+    "RecordedGenerationSettings",
+    "RecordedV2Input",
     "RecordedProfileError",
     "ResolvedAnchor",
     "TextLayer",
@@ -161,6 +168,7 @@ __all__ = [
     "load_provider_config",
     "publish_artifact",
     "prepare_merge",
+    "prepare_recorded_v2_input",
     "read_artifact",
     "resolve_recorded_profile",
     "run_stage",
