@@ -1,5 +1,11 @@
 # Current state
 
+**W59 section-route preparation, 2026-10-15.**
+`W59-INT-SECTION-ROUTE-PREP-01` adds a pure guard for a version-bound
+confirmed section and an available section-specific profile. It refuses
+missing or mismatched confirmation and has no AR fallback. Persistence,
+expert authorization, W59 API/DB reseal and runtime wiring remain ahead.
+
 **Normative corpus readiness, 2026-10-15.**
 `W54-INT-CORPUS-READINESS-01` pins the local 674-document source and the
 W54/W55 operation order. Source sums, promotion snapshot, repairs, complete
