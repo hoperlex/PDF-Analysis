@@ -1,5 +1,13 @@
 # Current state
 
+**Recorded AR v2 request and replay integrity, 2026-10-15.**
+`CFB-INT-RECORDED-REQUEST-07` builds stable offline requests from the pinned
+AR v2 profile, PDF text and marked OCR, then replays an exact-key fixture
+through grounding/merge. The shared `RecordedAdapter` now also checks the
+recording's declared model ID, refusing a mismatch without retry or live
+fallback. The `fixture/` identity is offline only. Durable v2 execution,
+measured baseline, verified live model/price and full beta gates remain ahead.
+
 **Recorded AR v2 profile registration, 2026-10-15.**
 `CFB-INT-AR-V2-PROFILE-06` pins a recorded-only AR v2 profile/bundle to the
 reviewed prompt material and response schema, then binds the inert executor

@@ -12,10 +12,10 @@ runs against and it must be deterministic and offline. Two properties carry that
   is not something a future edit can accidentally switch on - it would have to be
   written from scratch.
 
-Four ways a corpus fails to answer, one code
+Five ways a corpus fails to answer, one code
 --------------------------------------------
 A recording can be absent, filed under a key it does not declare, written at an
-unsupported version, or malformed. All four are the same fact about the same local
+unsupported version, declare a different model, or be malformed. All five are the same fact about the same local
 directory: **the corpus this adapter was given does not answer this request**, and no
 second attempt at the same request can change that. All four therefore report
 ``analysis_input_invalid`` with a ``recording_*`` reason.
@@ -122,10 +122,12 @@ class RecordedAdapter:
                 stage_id=STAGE_ID,
                 reason="recording_missing",
             ) from None
-        return self._response_from(json.loads(raw), expected_key=key)
+        return self._response_from(
+            json.loads(raw), expected_key=key, expected_model_id=request.model_id
+        )
 
     def _response_from(
-        self, document: Mapping[str, Any], *, expected_key: str
+        self, document: Mapping[str, Any], *, expected_key: str, expected_model_id: str
     ) -> ModelResponse:
         if document.get("recording_version") != RECORDING_VERSION:
             raise self._corrupt("recording_version_unsupported")
@@ -134,6 +136,8 @@ class RecordedAdapter:
             # outage; it is a corrupt fixture, and replaying it would answer the
             # wrong question with a straight face.
             raise self._corrupt("recording_key_mismatch")
+        if document.get("model_id") != expected_model_id:
+            raise self._corrupt("recording_model_mismatch")
         usage = document.get("usage") or {}
         try:
             return ModelResponse(

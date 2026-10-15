@@ -229,12 +229,12 @@ def test_missing_recording_is_not_a_transport_failure_and_never_a_live_call(
 def test_every_way_the_corpus_fails_to_answer_takes_the_same_non_retryable_code(
     empty_recording_dir, tmp_path
 ):
-    """Absent, misfiled, unsupported version, malformed: one class, one code.
+    """Absent, misfiled, unsupported version, wrong model, malformed: one code.
 
-    All four are the same fact about the same local directory -- the corpus it holds
+    All five are the same fact about the same local directory -- the corpus it holds
     does not answer this request -- and no second attempt at the same request changes
     any of them. The test enumerates the adapter's own `recording_*` reason vocabulary
-    so that a fifth member added on a retryable code fails here.
+    so that a new member added on a retryable code fails here.
     """
     from auditmanager.analysis.text import AR_TEXT_PROFILE, build_request, load_text_layer
 
@@ -275,6 +275,7 @@ def test_every_way_the_corpus_fails_to_answer_takes_the_same_non_retryable_code(
         "recording_missing": RecordedAdapter(empty_recording_dir),
         "recording_key_mismatch": _written(request_sha256="0" * 64),
         "recording_version_unsupported": _written(recording_version="0.0.1"),
+        "recording_model_mismatch": _written(model_id="fixture/other-model"),
         "recording_malformed": _written(latency_ms="not a number"),
     }
 
@@ -290,6 +291,11 @@ def test_every_way_the_corpus_fails_to_answer_takes_the_same_non_retryable_code(
         )
 
     assert set(seen.values()) == {ErrorCode.ANALYSIS_INPUT_INVALID}
+    for missing_or_wrong_type in (None, 7):
+        with pytest.raises(DomainError) as raised:
+            _written(model_id=missing_or_wrong_type).complete(request)
+        assert raised.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+        assert raised.value.detail_fields.get("reason") == "recording_model_mismatch"
 
 
 def test_missing_recording_envelope_leaks_no_path_or_payload(empty_recording_dir):
