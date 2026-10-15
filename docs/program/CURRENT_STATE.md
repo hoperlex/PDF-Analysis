@@ -1,5 +1,11 @@
 # Current state
 
+**AR v2 merge-input preparation, 2026-10-15.**
+`W56A-INT-MERGE-INPUT-PREP-01` connects fully grounded proposals to the
+deterministic merge rule with dense artifact ordinals and an explicit source
+ordinal map. Rejected proposals contribute no merge member. This is pure
+preparation; runtime wiring and live calls remain blocked by their grants.
+
 **W59–W62 profile vocabulary preparation, 2026-10-15.**
 `W59-INT-PROFILE-METADATA-PREP-01` captures the 14 legacy sections' 162
 category codes and 201 sheet types as digest-pinned, read-only candidates.
