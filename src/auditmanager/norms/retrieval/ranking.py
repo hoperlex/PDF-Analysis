@@ -188,6 +188,9 @@ def select_prompt_part(
         {p.paragraph_id for p in paragraphs}
     ) != len(paragraphs):
         raise RankingRefused("duplicate paragraph identity")
+    paragraph_counts: dict[str, int] = {}
+    for paragraph in paragraphs:
+        paragraph_counts[paragraph.document_id] = paragraph_counts.get(paragraph.document_id, 0) + 1
     mapped_documents: set[str] = set()
     for item in items:
         _require_vector(item.query_vector)
@@ -196,6 +199,13 @@ def select_prompt_part(
         for span in item.targets:
             if span.ordinal_first < 0 or span.ordinal_last < span.ordinal_first:
                 raise RankingRefused("invalid target span")
+            if (
+                span.ordinal_last - span.ordinal_first + 1
+                > paragraph_counts.get(span.document_id, 0)
+                or (span.document_id, span.ordinal_first) not in by_key
+                or (span.document_id, span.ordinal_last) not in by_key
+            ):
+                raise RankingRefused("target span lies outside supplied paragraphs")
             mapped_documents.add(span.document_id)
     mapped_windows = tuple(window for window in windows if window.document_id in mapped_documents)
     if len(mapped_windows) > MAX_CANDIDATE_WINDOWS:
@@ -212,6 +222,13 @@ def select_prompt_part(
             or window.paragraph_ordinal_last < window.paragraph_ordinal_first
         ):
             raise RankingRefused("invalid window span or ordinal")
+        if (
+            window.paragraph_ordinal_last - window.paragraph_ordinal_first + 1
+            > paragraph_counts.get(window.document_id, 0)
+            or (window.document_id, window.paragraph_ordinal_first) not in by_key
+            or (window.document_id, window.paragraph_ordinal_last) not in by_key
+        ):
+            raise RankingRefused("window span lies outside supplied paragraphs")
 
     ranked: dict[str, tuple[RetrievalWindow, ...]] = {}
     for item in items:

@@ -120,7 +120,7 @@ def test_only_reliable_and_nfc_paragraphs_may_be_resolved() -> None:
         select_prompt_part((_item(),), (_paragraph(0, reliable=False),), ())
     with pytest.raises(RankingRefused, match="non-NFC"):
         select_prompt_part((_item(),), (_paragraph(0, text="A\u0301"),), ())
-    with pytest.raises(RankingRefused, match="missing"):
+    with pytest.raises(RankingRefused, match="outside supplied paragraphs"):
         select_prompt_part((_item(),), (_paragraph(0),), (_window(1),))
 
 
@@ -148,3 +148,14 @@ def test_unmapped_document_windows_cannot_enter_the_prompt_part() -> None:
     unrelated = RetrievalWindow("ndoc_other", 0, 0, 0, 0, _basis())
     result = select_prompt_part((_item(),), (_paragraph(0),), (unrelated,))
     assert [row.document_id for row in result.rows] == ["ndoc_1"]
+
+
+def test_impossible_huge_spans_are_refused_before_ordinal_expansion() -> None:
+    huge = 10**12
+    paragraph = _paragraph(0)
+    item = RetrievalItem("item-1", _basis(), (TargetSpan("ndoc_1", 0, huge),))
+    with pytest.raises(RankingRefused, match="target span lies outside"):
+        select_prompt_part((item,), (paragraph,), ())
+    window = RetrievalWindow("ndoc_1", 0, 0, 0, huge, _basis())
+    with pytest.raises(RankingRefused, match="window span lies outside"):
+        select_prompt_part((_item(),), (paragraph,), (window,))

@@ -1,5 +1,10 @@
 # Current state
 
+**W57a bounded-range correction, 2026-10-15.**
+`W57A-INT-RETRIEVAL-RANGE-BOUND-FIX-01` rejects impossible target/window
+ordinal spans before expansion. Fifteen focused selector/resolver tests pass.
+No runtime or corpus activation changes.
+
 **AR v2 response pipeline preparation, 2026-10-15.**
 `W56A-INT-RESPONSE-PIPELINE-PREP-01` joins typed model response parsing,
 PDF-only proposal grounding and dense merge preparation in one pure step.
