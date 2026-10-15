@@ -1,8 +1,8 @@
-# W54-CORPUS-PROMOTION-01 — base snapshot in progress
+# W54-CORPUS-PROMOTION-01 — base dump awaiting restore verification
 
 **Date:** 2026-10-15. **Task:** `tasks/W54-CORPUS-PROMOTION-01.md`.
-This record is interim: the promotion base exists in an isolated named volume,
-but no dump has yet passed restore verification.
+This record is interim: the promotion base exists in an isolated named volume
+and a dump has been written, but no dump has yet passed restore verification.
 
 ## Prepared inputs and isolated state
 
@@ -37,16 +37,26 @@ returned:
 - 674 documents, 348,777 paragraphs, 55,702 chunks.
 
 The promotion container was then stopped without removing its volume because
-available RAM fell below 6 GiB before the dump step. `dump.sh` and
-`verify-dump.sh` have not run. The base snapshot is therefore **not** a
-restore-verified promotion artifact. The next action is to start only this
-promotion stack in a fresh resource window, run `dump.sh`, stop the stack,
-then run `verify-dump.sh` with its own 6 GiB disk/RAM preflight. Never proceed
-to paid repair or bundle export until the dump is marked `.verified`.
+available RAM fell below 6 GiB. A later independent preflight at
+2026-10-15 13:44:48 UTC recorded 6,769,041,408 bytes free on `/`,
+8,010,805,248 bytes available RAM and load average 1 of 7.63 on 8 CPUs.
+`scripts/promotion/dump.sh` then wrote
+`promotion-20261015T134454Z.dump` (57,445,702 bytes) with SHA-256
+`e1280373ffd7fa3deaa0716429def1844d7e858e79bae7fbad5ade6d516ff74d`
+and a fingerprint file. The promotion container was stopped again, retaining
+its volume. The dump is ignored by Git under `.local/norms/promotion-dumps/`.
+
+`verify-dump.sh` has **not** run: disk and RAM have remained below its fresh
+6 GiB floors or CPU load has exceeded the user-requested quiet window. The
+dump has no `.verified` marker. The base snapshot is therefore **not** a
+restore-verified promotion artifact. The next action is to run
+`verify-dump.sh` in a new resource window and compare its restored fingerprint.
+Never proceed to paid repair or bundle export until the dump is marked
+`.verified`.
 
 ## Boundaries
 
 No source byte, contract, migration, root lockfile, application runtime,
 production DB/S3 or `origin/main` was changed. The local promotion env,
-runtime, cache and DB volume remain outside Git. This task is incomplete
-until the dump is restore-verified and the report updated with its digest.
+runtime, cache, dump and DB volume remain outside Git. This task is incomplete
+until the dump is restore-verified.

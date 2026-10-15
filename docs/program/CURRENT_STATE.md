@@ -1,10 +1,12 @@
 # Current state
 
-**W54 base corpus load, 2026-10-15.** The verified drop was loaded into the
+**W54 base corpus dump, 2026-10-15.** The verified drop was loaded into the
 isolated promotion PostgreSQL as `ns_01M4ZW72BS7QHAMDJ993VHNJ7K` with 674
 documents, 348,777 paragraphs and 55,702 chunks. The DB is stopped with its
-named volume retained. RAM fell below the W54 floor before `dump.sh`; no
-restore-verified dump exists, so repair, embedding and bundle remain stopped.
+named volume retained. A 57,445,702-byte dump was written with SHA-256
+`e1280373ffd7fa3deaa0716429def1844d7e858e79bae7fbad5ade6d516ff74d`.
+It has no restore-verification marker yet, so repair, embedding and bundle
+remain stopped.
 See `W54-CORPUS-PROMOTION-01.md`. This interim result is not a qualified
 snapshot or production publication.
 
