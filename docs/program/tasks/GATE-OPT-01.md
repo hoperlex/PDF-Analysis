@@ -16,7 +16,8 @@ against evidence.
 
 ## Frozen inputs
 
-- base commit and verified remote `origin/dev`: `8069220909e40c39e2329d5f5cb9585a5a5714ec`
+- base commit: `8069220909e40c39e2329d5f5cb9585a5a5714ec`
+- verified remote: `origin/dev` at the base commit
 - domain contract: candidate revision 13, 32 opaque identities
 - API contract: 47 paths / 54 operations / 124 schemas; OpenAPI SHA-256
   `fad81bc0355e4a5e6e4fdabf320fda2948a3c22b1254133862e0891bac1d1227`
@@ -65,10 +66,10 @@ against evidence.
 
 ## Allowed paths
 
-- `Makefile` — tier targets, timing and pytest duration arguments only
-- `tests/contract/test_gate_tiers.py` — tier and timer failure tests
+- `Makefile`
+- `tests/contract/test_gate_tiers.py`
 - `docs/program/tasks/GATE-OPT-01.md`
-- `docs/program/GATE-OPT-01.md` — measurements and handoff
+- `docs/program/GATE-OPT-01.md`
 
 ## Forbidden hotspots
 
@@ -87,6 +88,8 @@ against evidence.
 
 ## Deliverables
 
+- The `Makefile` change is limited to tier targets, timing and pytest duration
+  arguments; `test_gate_tiers.py` exercises tier and timer failures.
 - `gate-fast`: frontend lint and typecheck, the unit suite, basic contract prose/surface
   guards, whitespace; prints `GATE FAST OK` only after every command succeeds.
 - `gate-affected`: the existing R-70 `light-acceptance` selection, including its full-gate

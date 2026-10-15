@@ -15,7 +15,8 @@ safe optimisation candidates with the evidence still required before changing te
 
 ## Frozen inputs
 
-- code base: `5842d01ce9a1a38fe2097dae080f9792c213ff37` from verified
+- base commit: `5842d01ce9a1a38fe2097dae080f9792c213ff37`
+- code base: the base commit from verified
   `origin/dev=8069220909e40c39e2329d5f5cb9585a5a5714ec`
 - domain candidate revision 13, 32 opaque identities
 - API 47 paths / 54 operations / 124 schemas; error catalog 25
@@ -61,8 +62,6 @@ safe optimisation candidates with the evidence still required before changing te
 - `.local/tasks.md`
 - `.local/handoff/gate-optimization-2026-10-15.md`
 
-The last two paths are ignored local coordination files in the shared root checkout.
-
 ## Forbidden hotspots
 
 - `Makefile`, test source and fixtures, `contracts/**`, migrations and root dependencies
@@ -91,6 +90,7 @@ The last two paths are ignored local coordination files in the shared root check
 This is evidence and recommendations only. A later task owns each test or fixture it
 changes, proves anti-vacuity and isolation, and compares a complete gate on an exact SHA
 under the project's beta-gate schedule. Neither this report nor `gate-fast` is `GATE OK`.
+The `.local` paths above are ignored coordination files in the shared root checkout.
 
 ## Failure / idempotency / security
 

@@ -16,7 +16,8 @@ required bounded checks green on that integrated tree. No remote ref changes.
 
 ## Frozen inputs
 
-- remote `origin/dev`: `8069220909e40c39e2329d5f5cb9585a5a5714ec`,
+- base commit: `8069220909e40c39e2329d5f5cb9585a5a5714ec`
+- remote `origin/dev`: the base commit,
   rechecked with `git ls-remote --heads origin dev` before integration;
 - source branch `task/gate-opt-01`: `8db6201139ef431f4e1479a20517f5e4b5100d72`;
 - API 47 paths / 54 operations / 124 schemas, OpenAPI SHA-256
@@ -75,9 +76,6 @@ tag, run a deployment or claim `GATE OK`.
 - `.local/tasks.md`
 - `.local/handoff/gate-optimization-2026-10-15.md`
 
-The first six paths are the exact source diff. The last two are ignored local
-coordination files.
-
 ## Forbidden hotspots
 
 `contracts/**`, migrations, root dependencies and locks, composition roots,
@@ -112,6 +110,8 @@ The integrated branch retains the complete gate graph and literal `GATE OK`.
 `gate-fast` and `gate-affected` have distinct success markers and remain local
 feedback. A later authorized task may publish a freshly verified development
 candidate. The final beta task must run the complete gate on its exact clean SHA.
+The first six allowed paths are the exact source diff; the last two are ignored
+local coordination files.
 
 ## Failure, idempotency and security
 
