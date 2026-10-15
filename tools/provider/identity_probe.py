@@ -41,7 +41,7 @@ class ProbeFailure(ValueError):
 def _name(raw: object) -> str:
     if not isinstance(raw, str) or MODEL_NAME.fullmatch(raw) is None:
         raise ProbeFailure("invalid_model_name")
-    if raw.lower() in NON_IDENTITIES:
+    if raw.lower() in NON_IDENTITIES or raw.lower().startswith("stub/"):
         raise ProbeFailure("stub_model_response")
     return raw
 

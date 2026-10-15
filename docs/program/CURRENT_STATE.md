@@ -1,5 +1,12 @@
 # Current state
 
+**W56a namespaced-stub probe refusal, 2026-10-15.**
+`W56A-INT-PROBE-STUB-CORR-01` closes the `stub/...` identity gap in the
+offline probe tool; 17 focused tests pass. No gateway call or lock pin was
+made. The corrected stand route and distinct recording gateway remain
+unidentified, so MODEL-PIN and live v2 activation remain blocked. No full
+local gate or acceptance was run.
+
 **W56a AR v2 content preparation, 2026-10-15.**
 `W56A-INT-PROFILE-CONTENT-01` adds six provenance-bound, reviewed legacy AR
 source resources and a fail-closed offline loader. Three focused tests pass;

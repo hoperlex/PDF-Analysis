@@ -67,6 +67,9 @@ def test_default_must_be_concrete_and_distinct() -> None:
         assess_response(_answer("proxy"), selection="default", expected_name=SELECTED, pin=PIN)
     with pytest.raises(ProbeFailure, match="stub_model_response"):
         assess_response(_answer("unknown"), selection="default", expected_name=SELECTED, pin=PIN)
+    with pytest.raises(ProbeFailure, match="stub_model_response"):
+        assess_response(_answer("stub/w37cert4"),
+                        selection="default", expected_name=SELECTED, pin=PIN)
 
 
 def test_one_choice_without_an_answer_refuses() -> None:
@@ -116,11 +119,12 @@ def test_one_request_uses_host_config_and_prints_no_answer(tmp_path: Path) -> No
     assert "private answer" not in str(result)
 
 
-def test_stub_configuration_refuses_before_request(tmp_path: Path) -> None:
+@pytest.mark.parametrize("model", ["proxy", "stub/w37cert4"])
+def test_stub_configuration_refuses_before_request(tmp_path: Path, model: str) -> None:
     env = tmp_path / "provider.env"
     env.write_text(
         "PROXY_LLM_BASE_URL=https://gateway.invalid/agent/v1\n"
-        "PROXY_LLM_TOKEN=test-secret\nPROXY_LLM_MODEL=proxy\n",
+        f"PROXY_LLM_TOKEN=test-secret\nPROXY_LLM_MODEL={model}\n",
         encoding="utf-8",
     )
 

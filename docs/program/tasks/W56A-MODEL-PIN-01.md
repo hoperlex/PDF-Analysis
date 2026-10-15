@@ -14,14 +14,15 @@ unavailable signal leaves the lock unchanged and PROVIDER blocked.
 - `W56A-INT-MATCHER-CORE-01` — complete at `6de331c1`;
 - `W56A-INT-PROBE-TOOL-01` — complete at `1a825fea`.
 - `W56A-INT-PROBE-TOOL-CORR-01` — complete on the correction's published dev tip.
+- `W56A-INT-PROBE-STUB-CORR-01` — complete on the namespaced-stub correction's published dev tip.
 
 `W56A-PROBE-01` and `W56A-FREEZE-01` are stopped historical evidence, not
 completed prerequisites. This task replaces neither report.
 
 ## Frozen inputs
 
-- base: `origin/dev=7fd152c0f1b2445cd1a5381cb9c3b579aa94f9e9`;
-  resolve the correction tip before paid calls and recheck
+- base: `origin/dev=d6d37e44061cbcc0fa96907e59bb4319c4a72a5c`;
+  resolve the namespaced-stub correction tip before paid calls and recheck
   all frozen contract/lock bytes;
 - API: 47 paths / 54 operations / 124 schemas, SHA-256
   `fad81bc0355e4a5e6e4fdabf320fda2948a3c22b1254133862e0891bac1d1227`;
