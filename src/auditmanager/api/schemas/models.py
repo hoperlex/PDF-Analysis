@@ -39,7 +39,7 @@ from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import UploadFile
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, WithJsonSchema
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, WithJsonSchema, model_validator
 from typing_extensions import TypeAliasType
 
 __all__ = [
@@ -103,6 +103,7 @@ __all__ = [
     "RunState",
     "RunStatus",
     "RunStatusPage",
+    "Severity",
     "ExecutionQueueItem",
     "ExecutionQueuePage",
     "ExecutionJournalEntry",
@@ -328,7 +329,7 @@ Cursor = TypeAliasType("Cursor", Annotated[str, Field(min_length=1, max_length=5
 class ErrorCode(str, enum.Enum):
     """Exactly the key set of ``contracts/domain/v1/error-codes.json``.
 
-    Twenty-four codes since `W55B-SEAL-01` added ``analysis_input_budget_exceeded``; the
+    Twenty-five codes since `W56A-SEAL-01` added ``model_identity_mismatch``; the
     twenty-third, ``rate_limited``, came with `W49-SEAL-01` and only the edge in
     front of ``/api/v1`` answers it; the twenty-second was ``staged_upload_lost``, added by
     `W20-CODE` under owner ruling `R-8`, settling `D-18`, and the twenty-first
@@ -357,6 +358,7 @@ class ErrorCode(str, enum.Enum):
     PARTIAL_RESULT_NOT_PUBLISHABLE = "partial_result_not_publishable"
     COST_BUDGET_EXCEEDED = "cost_budget_exceeded"
     ANALYSIS_INPUT_BUDGET_EXCEEDED = "analysis_input_budget_exceeded"
+    MODEL_IDENTITY_MISMATCH = "model_identity_mismatch"
     STALE_ATTEMPT = "stale_attempt"
     EXECUTION_TOKEN_INVALID = "execution_token_invalid"
     RATE_LIMITED = "rate_limited"
@@ -416,6 +418,19 @@ class CostBasis(str, enum.Enum):
 class FindingCategory(str, enum.Enum):
     INTERNAL_CONTRADICTION = "internal_contradiction"
     EXPLICIT_PLACEHOLDER = "explicit_placeholder"
+    DIMENSIONS = "dimensions"
+    LAYOUT = "layout"
+    FACADE = "facade"
+    ROOF = "roof"
+    DOCUMENTATION = "documentation"
+
+
+class Severity(str, enum.Enum):
+    CRITICAL = "critical"
+    ECONOMIC = "economic"
+    OPERATIONAL = "operational"
+    RECOMMENDATION = "recommendation"
+    CHECK_ADJACENT = "check_adjacent"
 
 
 class Verdict(str, enum.Enum):
@@ -728,6 +743,9 @@ class RunStatus(_Object):
         dict[str, str | float | int | bool | None] | None,
         WithJsonSchema(_DETAILS_SCHEMA),
     ] = Field(default=None, json_schema_extra=optional_property)
+    terminal_message: Annotated[str, Field(min_length=1, max_length=512)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
     interrupted_reason: str | None = Field(default=None, json_schema_extra=optional_property)
     published_finding_count: Annotated[int, Field(ge=0)] = Field(
         default=None, json_schema_extra=optional_property
@@ -1009,6 +1027,7 @@ class FindingObservation(_Object):
     category: FindingCategory
     finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
     recommendation_text: Annotated[str, Field(min_length=1, max_length=4000)]
+    proposed_severity: Severity = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     evidence: Annotated[list[Evidence], Field(min_length=1)]
     provenance: ObservationProvenance
 
@@ -1020,6 +1039,10 @@ class Finding(_Object):
     run_id: RunId
     category: FindingCategory
     observation: FindingObservation
+    merged_observations: list[FindingObservation] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    decided_severity: Severity = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     current_verdict: Verdict
     latest_decision_id: DecisionId | None = Field(default=None, json_schema_extra=optional_property)
     decision_recorded_at: datetime | None = Field(default=None, json_schema_extra=optional_property)
@@ -1040,6 +1063,10 @@ class FindingDetail(_Object):
     run_id: RunId
     category: FindingCategory
     observation: FindingObservation
+    merged_observations: list[FindingObservation] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    decided_severity: Severity = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     current_verdict: Verdict
     latest_decision_id: DecisionId | None = Field(default=None, json_schema_extra=optional_property)
     decision_recorded_at: datetime | None = Field(default=None, json_schema_extra=optional_property)
@@ -1060,9 +1087,16 @@ class FindingPage(_Object):
 class AppendDecisionRequest(_Object):
     event_type: DecisionEventType
     finding_observation_id: FindingObservationId
+    severity: Severity = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     comment: Annotated[str, Field(min_length=1, max_length=4000)] | None = Field(
         default=None, json_schema_extra=optional_property
     )
+
+    @model_validator(mode="after")
+    def severity_requires_accept(self) -> AppendDecisionRequest:
+        if self.severity is not None and self.event_type is not DecisionEventType.ACCEPT:
+            raise ValueError("severity_requires_accept")
+        return self
 
 
 class DecisionEvent(_Object):
@@ -1071,6 +1105,7 @@ class DecisionEvent(_Object):
     finding_observation_id: FindingObservationId
     event_type: DecisionEventType
     verdict: Verdict | None = Field(default=None, json_schema_extra=optional_property)
+    severity: Severity = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     comment: str | None = Field(default=None, json_schema_extra=optional_property)
     author_label: Annotated[str, Field(min_length=1, max_length=128)]
     recorded_at: datetime
@@ -1104,6 +1139,7 @@ class DecisionRecord(_Object):
     finding_observation_id: FindingObservationId
     event_type: DecisionEventType
     verdict: Verdict | None = Field(default=None, json_schema_extra=optional_property)
+    severity: Severity = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     comment: str | None = Field(default=None, json_schema_extra=optional_property)
     author_label: Annotated[str, Field(min_length=1, max_length=128)]
     recorded_at: datetime

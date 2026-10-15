@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482
+ *   sha256 fad81bc0355e4a5e6e4fdabf320fda2948a3c22b1254133862e0891bac1d1227
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482';
+export const CONTRACT_DIGEST = 'fad81bc0355e4a5e6e4fdabf320fda2948a3c22b1254133862e0891bac1d1227';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -128,6 +128,7 @@ export const SCHEMA_NAMES = [
   'SetExecutionPausedRequest',
   'SetJobPriorityRequest',
   'SetWorkerIntakeRequest',
+  'Severity',
   'Sha256',
   'StageId',
   'StageState',
@@ -185,6 +186,7 @@ export type AppendDecisionRequest = {
   event_type: DecisionEventType;
   /** The observation the expert actually reviewed. A verdict is recorded against the evidence in front of the reviewer, not against whatever the newest run later produced. */
   finding_observation_id: FindingObservationId;
+  severity?: Severity;
 };
 
 export type AppendDecisionResponse = {
@@ -265,6 +267,7 @@ export type DecisionEvent = {
   finding_observation_id: FindingObservationId;
   finding_uid: FindingUid;
   recorded_at: string;
+  severity?: Severity;
   /** The verdict this event carries, or null for a comment. */
   verdict?: Verdict | null;
 };
@@ -308,6 +311,7 @@ export type DecisionRecord = {
   project_uid: ProjectUid;
   recorded_at: string;
   run_id: RunId;
+  severity?: Severity;
   /** The verdict this event carries, or null for a comment. */
   verdict?: Verdict | null;
 };
@@ -369,6 +373,7 @@ export const ERROR_CODE_VALUES = [
   'partial_result_not_publishable',
   'cost_budget_exceeded',
   'analysis_input_budget_exceeded',
+  'model_identity_mismatch',
   'stale_attempt',
   'execution_token_invalid',
   'rate_limited',
@@ -461,9 +466,11 @@ export type ExecutionWorkerPage = {
 export type Finding = {
   category: FindingCategory;
   current_verdict: Verdict;
+  decided_severity?: Severity;
   decision_recorded_at?: string | null;
   finding_uid: FindingUid;
   latest_decision_id?: DecisionId | null;
+  merged_observations?: Array<FindingObservation>;
   observation: FindingObservation;
   project_uid: ProjectUid;
   run_id: RunId;
@@ -474,6 +481,11 @@ export type Finding = {
 export const FINDING_CATEGORY_VALUES = [
   'internal_contradiction',
   'explicit_placeholder',
+  'dimensions',
+  'layout',
+  'facade',
+  'roof',
+  'documentation',
 ] as const;
 
 /** FindingCategory - the closed value set above. */
@@ -483,12 +495,14 @@ export type FindingCategory = (typeof FINDING_CATEGORY_VALUES)[number];
 export type FindingDetail = {
   category: FindingCategory;
   current_verdict: Verdict;
+  decided_severity?: Severity;
   decision_event_count?: number;
   decision_recorded_at?: string | null;
   finding_uid: FindingUid;
   /** The comment of the most recent event carrying one, whatever its type. */
   latest_comment?: string | null;
   latest_decision_id?: DecisionId | null;
+  merged_observations?: Array<FindingObservation>;
   observation: FindingObservation;
   project_uid: ProjectUid;
   run_id: RunId;
@@ -500,6 +514,7 @@ export type FindingObservation = {
   evidence: Array<Evidence>;
   finding_observation_id: FindingObservationId;
   finding_text: string;
+  proposed_severity?: Severity;
   provenance: ObservationProvenance;
   recommendation_text: string;
   run_id: RunId;
@@ -1068,6 +1083,8 @@ export type RunStatus = {
   terminal_detail?: {
     [key: string]: string | number | boolean | null;
   };
+  /** Caller-safe typed stage failure message; absent on v1 and on runs without a typed failure. Never contains a proxy body, URL, credential, prompt or model payload. */
+  terminal_message?: string;
   /** The catalog code a `failed` run terminated with. Null otherwise. */
   terminal_reason?: ErrorCode | null;
   version_uid: VersionUid;
@@ -1105,6 +1122,18 @@ export type SetJobPriorityRequest = {
 export type SetWorkerIntakeRequest = {
   enabled: boolean;
 };
+
+/** Severity. */
+export const SEVERITY_VALUES = [
+  'critical',
+  'economic',
+  'operational',
+  'recommendation',
+  'check_adjacent',
+] as const;
+
+/** Severity - the closed value set above. */
+export type Severity = (typeof SEVERITY_VALUES)[number];
 
 /** A verification value, never an identity. */
 export type Sha256 = string;

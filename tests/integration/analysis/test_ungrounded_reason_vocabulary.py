@@ -40,6 +40,7 @@ from auditmanager.analysis.text.textlayer import load_text_layer
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MIGRATION = REPO_ROOT / "db" / "migrations" / "versions" / "20260911_0003_open_items.py"
+CURRENT_MIGRATION = REPO_ROOT / "db" / "migrations" / "versions" / "20261015_0022_findings_v2.py"
 SEAMS = REPO_ROOT / "docs" / "program" / "P02_SEAMS.md"
 
 #: The five-value vocabulary, pinned as literals.
@@ -96,6 +97,11 @@ def test_the_vocabulary_matches_the_migrations_check_constraint() -> None:
         if part.strip().strip("'").strip()
     )
     assert from_db == UNGROUNDED_REASONS
+
+
+def test_current_migration_adds_only_the_recognised_text_reason() -> None:
+    sql = CURRENT_MIGRATION.read_text(encoding="utf-8")
+    assert '_NEW_REASONS = (*_OLD_REASONS, "quote_in_recognised_text")' in sql
 
 
 def test_the_seams_document_states_the_same_five_values() -> None:

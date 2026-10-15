@@ -69,6 +69,7 @@ class ObservationView:
     recommendation_text: str
     evidence: tuple[EvidenceView, ...]
     provenance: ProvenanceView
+    proposed_severity: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +85,8 @@ class FindingView:
     current_verdict: str
     latest_decision_id: str | None = None
     decision_recorded_at: datetime | None = None
+    merged_observations: tuple[ObservationView, ...] | None = None
+    decided_severity: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,7 +127,7 @@ def provenance_body(view: ProvenanceView) -> dict[str, Any]:
 
 
 def observation_body(view: ObservationView) -> dict[str, Any]:
-    return {
+    body = {
         "finding_observation_id": view.finding_observation_id,
         "run_id": view.run_id,
         "category": view.category,
@@ -133,10 +136,13 @@ def observation_body(view: ObservationView) -> dict[str, Any]:
         "evidence": [evidence_body(item) for item in view.evidence],
         "provenance": provenance_body(view.provenance),
     }
+    if view.proposed_severity is not None:
+        body["proposed_severity"] = view.proposed_severity
+    return body
 
 
 def finding_body(view: FindingView) -> dict[str, Any]:
-    return {
+    body = {
         "finding_uid": view.finding_uid,
         "project_uid": view.project_uid,
         "version_uid": view.version_uid,
@@ -151,6 +157,11 @@ def finding_body(view: FindingView) -> dict[str, Any]:
             else timestamp(view.decision_recorded_at)
         ),
     }
+    if view.merged_observations is not None:
+        body["merged_observations"] = [observation_body(item) for item in view.merged_observations]
+    if view.decided_severity is not None:
+        body["decided_severity"] = view.decided_severity
+    return body
 
 
 def finding_detail_body(view: FindingDetailView) -> dict[str, Any]:

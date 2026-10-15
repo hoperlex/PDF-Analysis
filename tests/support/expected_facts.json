@@ -397,13 +397,14 @@
       "PortalCrop",
       "PortalRecognisedText",
       "PortalBlock",
-      "PortalBlockPage"
+      "PortalBlockPage",
+      "Severity"
     ]
   },
   "error_catalog": {
-    "api_codes": 24,
-    "stored_vocabulary": 22
+    "api_codes": 25,
+    "stored_vocabulary": 23
   },
-  "migration_head": "0021_portal_bundles",
+  "migration_head": "0022_findings_v2",
   "contract_version": "1.0.0-draft.1"
 }

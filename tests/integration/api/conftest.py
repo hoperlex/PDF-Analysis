@@ -671,11 +671,14 @@ class LedgerDecisionAdapter:
         finding_uid: str,
         finding_observation_id: str,
         event_type: str,
+        severity: str | None = None,
         comment: str | None,
         idempotency_key: str,
         author_label: str,
         author_user_uid: str,
     ) -> _Appended:
+        if severity is not None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="v2_decision_ledger")
         # `D-78`. The author is part of the fingerprint, as it is in the shipped
         # `append_decision_under_key`: two reviewers presenting one idempotency key are two
         # different payloads, and answering the second with the first one's event would

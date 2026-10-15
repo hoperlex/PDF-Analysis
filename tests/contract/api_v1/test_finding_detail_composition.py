@@ -32,11 +32,73 @@ run rather than trusted to have failed once.
 from __future__ import annotations
 
 from typing import Any
+from datetime import datetime, timezone
 
 import pytest
 
+from auditmanager.api.schemas.findings import (
+    EvidenceView, FindingView, ObservationView, ProvenanceView, finding_body,
+)
+from auditmanager.api.schemas.decisions import DecisionEventView, decision_event_body
+from auditmanager.api.schemas.models import AppendDecisionRequest
+
 DETAIL_SCHEMA = "FindingDetail"
 BASE_SCHEMA = "Finding"
+
+
+def test_v1_finding_bytes_omit_every_v2_property(finding_payload: dict[str, Any]) -> None:
+    assert "proposed_severity" not in finding_payload["observation"]
+    assert "decided_severity" not in finding_payload
+    assert "merged_observations" not in finding_payload
+
+
+def test_v1_serializers_leave_v2_fields_absent() -> None:
+    observation = ObservationView(
+        finding_observation_id="fobs_original", run_id="run_original",
+        category="internal_contradiction", finding_text="Conflict",
+        recommendation_text="Review", evidence=(EvidenceView(1, 1, "quote", 0, 5),),
+        provenance=ProvenanceView("text_analysis", "ap_original", "pb_original", "recorded"),
+    )
+    finding = FindingView(
+        finding_uid="fnd_original", project_uid="prj_original",
+        version_uid="ver_original", run_id="run_original",
+        category="internal_contradiction", observation=observation,
+        current_verdict="pending",
+    )
+    body = finding_body(finding)
+    assert "proposed_severity" not in body["observation"]
+    assert "decided_severity" not in body
+    assert "merged_observations" not in body
+
+    event = DecisionEventView(
+        decision_id="dec_original", finding_uid="fnd_original",
+        finding_observation_id="fobs_original", event_type="accept",
+        author_label="reviewer", recorded_at=datetime(2026, 10, 15, tzinfo=timezone.utc),
+    )
+    assert "severity" not in decision_event_body(event)
+
+
+def test_v2_finding_vocabulary_is_closed(openapi_document: dict[str, Any]) -> None:
+    schemas = openapi_document["components"]["schemas"]
+    assert schemas["FindingCategory"]["enum"] == [
+        "internal_contradiction", "explicit_placeholder", "dimensions", "layout",
+        "facade", "roof", "documentation",
+    ]
+    assert schemas["Severity"]["enum"] == [
+        "critical", "economic", "operational", "recommendation", "check_adjacent",
+    ]
+
+
+def test_non_accept_decision_cannot_claim_a_severity(finding_payload: dict[str, Any]) -> None:
+    observation_id = finding_payload["observation"]["finding_observation_id"]
+    accepted = AppendDecisionRequest(
+        event_type="accept", finding_observation_id=observation_id, severity="economic"
+    )
+    assert accepted.severity.value == "economic"
+    with pytest.raises(ValueError, match="severity_requires_accept"):
+        AppendDecisionRequest(
+            event_type="reject", finding_observation_id=observation_id, severity="economic"
+        )
 
 
 # --------------------------------------------------------------------------------

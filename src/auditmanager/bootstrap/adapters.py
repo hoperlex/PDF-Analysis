@@ -1351,6 +1351,7 @@ class DecisionAdapter(_SessionHolder):
         finding_uid: str,
         finding_observation_id: str,
         event_type: str,
+        severity: str | None = None,
         idempotency_key: str,
         author_label: str,
         author_user_uid: str,
@@ -1365,6 +1366,11 @@ class DecisionAdapter(_SessionHolder):
         have been worse -- the row would still be written, attributed to whatever the ledger
         defaulted to -- so the argument is named and nothing here supplies a fallback.
         """
+        if severity is not None:
+            raise DomainError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE,
+                dependency="v2_decision_ledger",
+            )
         from auditmanager.decisions import append_decision_under_key, current_verdict
 
         def work(session: Session) -> Any:

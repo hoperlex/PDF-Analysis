@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.state-machines",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 12,
-  "revision_note": "Candidate revision 12 of the unreleased 1.0.0-draft.1 candidate, written by W55B-SEAL-01. No machine, state, transition or guard is added, removed or renamed; the revision moves with the family (see error-codes.json and identifiers.json).",
+  "candidate_revision": 13,
+  "revision_note": "Candidate revision 13 by W56A-SEAL-01. No machine or transition changes; the family moves together for the additive AR v2 error and finding vocabulary.",
   "status": "draft_candidate",
   "frozen": false,
   "rules": [

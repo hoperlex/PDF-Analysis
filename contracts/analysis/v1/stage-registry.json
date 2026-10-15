@@ -421,6 +421,12 @@
           "media_type": "application/json",
           "required": true,
           "description": "Shared document context."
+        },
+        {
+          "role": "prepared.recognised_text",
+          "media_type": "application/json",
+          "required": false,
+          "description": "AR v2 only: marked context from text-less pages; never an evidence quotation source. The stage plan and version textless_pages govern admission."
         }
       ],
       "produced_outputs": [
@@ -524,7 +530,7 @@
       "stage_id": "finding_merge",
       "title": "Finding merge and deduplication",
       "stage_version": "1.0.0",
-      "purpose": "Merge text and block observations into canonical findings with stable finding identity and preserved observation links. When an upstream observation leg was skipped or reported partial, the merge result is partial with a typed error; it is never succeeded.",
+      "purpose": "Group grounded observations deterministically by same-category overlapping evidence spans or equal normalised quotes of at least 20 characters on one page. The canonical member is chosen by earliest page/span then ordinal. A missing block leg makes this stage partial only when block_analysis belongs to the run stage plan; the recorded-only text plan may succeed without that leg.",
       "depends_on": [
         "text_analysis",
         "block_analysis"
@@ -540,7 +546,7 @@
           "role": "analysis.block_observations",
           "media_type": "application/json",
           "required": false,
-          "description": "Block observations. Optional because block_analysis is skippable; a merge without them is reported partial, never succeeded."
+          "description": "Block observations. Optional: a missing block leg is partial only when the run plan contains block_analysis; text-only AR v2 plans do not require it."
         }
       ],
       "produced_outputs": [
@@ -548,7 +554,7 @@
           "role": "findings.merged",
           "media_type": "application/json",
           "required": true,
-          "description": "Merged findings referencing every contributing observation; deduplication never deletes an observation link."
+          "description": "Groups of contributing observation ordinals, canonical ordinal and merge-rule version. Every member remains linked to the canonical finding; no evidence is deleted."
         }
       ],
       "execution": {

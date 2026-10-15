@@ -50,6 +50,8 @@ class RunStatusView:
     prompt_bundle_id: str | None = None
     degradation_set: tuple[str, ...] | None = None
     terminal_reason: str | None = None
+    # Caller-safe stage failure text, supplied only by a typed producer.
+    terminal_message: str | None = None
     #: `D-46`. Safe scalar classifiers saying **which** dependency a failed run terminated
     #: on, restricted to the ``safe_detail_keys`` the frozen catalog declares for
     #: :attr:`terminal_reason`. ``None`` when there is none; never an empty object.
@@ -116,6 +118,8 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
         body["degradation_set"] = list(view.degradation_set)
     if view.terminal_reason is not None:
         body["terminal_reason"] = view.terminal_reason
+        if view.terminal_message is not None:
+            body["terminal_message"] = view.terminal_message
         # `D-46`, and the third of the three screens. The first is
         # `TerminalSelection.__post_init__`, when the run terminates; the second is the
         # UPDATE that writes the row. **This one is the only one that covers a row this

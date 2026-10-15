@@ -11,6 +11,8 @@ from __future__ import annotations
 from tests.support.expected_facts import FACTS
 
 from types import ModuleType
+from pathlib import Path
+import importlib.util
 
 import pytest
 
@@ -47,11 +49,23 @@ def test_error_code_domain_equals_the_frozen_catalog(
     the migration stores, so a code cannot be both edge-only and stored.
     """
     catalog = set(error_codes_contract["codes"])
-    stored = set(migration_module.ERROR_CODES)
+    # 0002 is immutable history. The forward 0022 migration owns the current
+    # CHECKs; comparing the old module to the new catalog would demand an edit
+    # to historical migration source instead of proving the current schema.
+    path = (
+        Path(__file__).resolve().parents[3]
+        / "db/migrations/versions/20261015_0022_findings_v2.py"
+    )
+    spec = importlib.util.spec_from_file_location("findings_v2_head", path)
+    assert spec is not None and spec.loader is not None
+    head = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(head)
+    stored = set(head._NEW_ERROR_CODES)
     assert EDGE_ONLY_CODES <= catalog, sorted(EDGE_ONLY_CODES - catalog)
     assert EDGE_ONLY_CODES.isdisjoint(stored), sorted(EDGE_ONLY_CODES & stored)
     assert stored == catalog - EDGE_ONLY_CODES
-    assert len(migration_module.ERROR_CODES) == FACTS.stored_error_codes
+    assert len(head._NEW_ERROR_CODES) == FACTS.stored_error_codes
+    assert set(migration_module.ERROR_CODES) == stored - {"model_identity_mismatch"}
 
 
 def test_stage_ids_equal_the_analysis_registry(
@@ -171,6 +185,21 @@ def test_finding_categories_are_the_two_pc01_questions(migration_module: ModuleT
         "internal_contradiction",
         "explicit_placeholder",
     }
+
+
+def test_v2_forward_migration_adds_exactly_five_categories() -> None:
+    path = (
+        Path(__file__).resolve().parents[3]
+        / "db/migrations/versions/20261015_0022_findings_v2.py"
+    )
+    spec = importlib.util.spec_from_file_location("findings_v2_categories", path)
+    assert spec is not None and spec.loader is not None
+    head = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(head)
+    assert head._NEW_CATEGORIES == (
+        "internal_contradiction", "explicit_placeholder", "dimensions", "layout",
+        "facade", "roof", "documentation",
+    )
 
 
 def test_the_verdict_enum_is_closed_at_four_values(migration_module: ModuleType) -> None:

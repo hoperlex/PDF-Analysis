@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482",
-    "content_commit": "7216d8b",
-    "content_commit_subject": "W55B-FREEZE-01 dispatch base; atomic reseal has no self-commit",
-    "dispatch_named_commit": "7216d8b",
-    "commit_note": "W55B-SEAL-01 adds listVersionPortalBlocks and streamVersionPortalBlockCrop (sealed stubs answering dependency_unavailable until W55B-GEOMETRY-01), seven schemas, the PortalBlockId path parameter, the portal-bundle upload description and encoding (a ZIP, 500 pages, 250 MiB) and the page_count ceiling of 500; the domain error catalog gains analysis_input_budget_exceeded (twenty-four codes) and contract_version is unchanged.",
+    "sha256": "fad81bc0355e4a5e6e4fdabf320fda2948a3c22b1254133862e0891bac1d1227",
+    "content_commit": "56978669",
+    "content_commit_subject": "W56A-SEAL-01 dispatch base; atomic reseal has no self-commit",
+    "dispatch_named_commit": "56978669",
+    "commit_note": "W56A-SEAL-01 adds five AR v2 categories, Severity and optional finding/decision fields; the domain catalog adds model_identity_mismatch (25 codes). Existing 47 paths and 54 operations remain; the schema count becomes 124. No live provider is activated.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
     "paths": 47,
     "operations": 54,
-    "component_schemas": 123,
+    "component_schemas": 124,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482",
+    "snapshot_sha256": "fad81bc0355e4a5e6e4fdabf320fda2948a3c22b1254133862e0891bac1d1227",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "1df9d742d7b28ffbb8848d97216b265c7f50c21a8df32fead53f6ea92c85c522",
-      "index.ts": "27dd7beaf6e40843015b53bcd3e86ebea160433aafdab8339c775640dbd7a571",
-      "operations.gen.ts": "e12dd8910a08eba44d8c927cdcd310d6eb9188b58140a94ee2adced447a08708",
-      "types.gen.ts": "2682def53f7f080474197617ee47270b1ce7f0dd02f55d4b14a564b1f6eb5f88"
+      "client.gen.ts": "1dd3b9c5d19fc08fd7d1bd2295e5d259d3d3be471632703564adcd4ad0c67d9f",
+      "index.ts": "62fe3766c2603113a549c5ac8e2a8a14c3ce3bcf7869cb748a60f07caf18fef6",
+      "operations.gen.ts": "a5de54b529941f40196a6b2b09603a3f4d85b040d9863f98321f6de00735b139",
+      "types.gen.ts": "71f484ac10326fd1b57a997d42adfd9d047ee2519b8ee4adccedd44afa940e80"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

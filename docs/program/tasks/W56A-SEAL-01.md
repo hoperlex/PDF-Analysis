@@ -102,6 +102,21 @@ Do not edit `W56A-FREEZE-01.md` or the failed `W56A-PROBE-01.md`.
   `web/src/entities/finding/model/severity-labels.ts` (new),
   `web/src/widgets/finding-list/ui/finding-list.tsx` (label only),
   `web/tests/guards/rendered-language.guard.test.ts` (new seed only);
+- `web/tests/unit/screens/run-terminal-reason.test.ts` (integrator amendment
+  2026-10-15: its exhaustive `Record<ErrorCode, string>` requires one literal
+  expectation for the new `model_identity_mismatch`; `npm --prefix web run
+  typecheck` showed TS2741 on line 55 before this grant); this task file,
+  for the recorded path amendments in this list only;
+- `web/src/shared/api/errors.ts` (integrator amendment: its literal
+  twenty-four-code catalog prose is stale after the reseal);
+- `src/auditmanager/api/routers/declarations.py` (integrator amendment:
+  its literal 123-schema prose is stale; no router behavior change);
+- `tests/integration/db/test_findings_v2_migration.py` (new; integrator
+  amendment: isolated 0021-with-rows upgrade, corrupt-backfill refusal,
+  clean 0022 schema and retained-data downgrade checks);
+- `tests/integration/api/conftest.py` (integrator amendment: its explicit
+  `DecisionPort` stand-in must accept the newly required severity argument and
+  refuse a non-null value until DECIDE, as the shipped adapter does);
 - `tests/support/expected_facts.{json,py}`;
 - `tests/contract/api_v1/**`, `tests/contract/domain_p02/**`,
   `tests/contract/analysis/**`, `tests/contract/fixtures_ar/**`,

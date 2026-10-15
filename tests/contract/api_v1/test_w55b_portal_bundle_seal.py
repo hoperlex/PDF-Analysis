@@ -196,7 +196,7 @@ def test_the_budget_refusal_is_a_422_that_is_never_retried_and_names_two_integer
     assert entry["safe_detail_keys"] == ["character_count", "budget_characters"]
     assert ErrorCode("analysis_input_budget_exceeded").http_status == 422
     assert "analysis_input_budget_exceeded" in CONTRACT["components"]["schemas"]["ErrorCode"]["enum"]
-    assert len(ERRORS["codes"]) == 24 == len(CONTRACT["components"]["schemas"]["ErrorCode"]["enum"])
+    assert len(ERRORS["codes"]) == 25 == len(CONTRACT["components"]["schemas"]["ErrorCode"]["enum"])
 
 
 @pytest.mark.parametrize("constraint", BUNDLE_CONSTRAINTS)

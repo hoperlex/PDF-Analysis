@@ -89,6 +89,7 @@ def build_decision_routes(
             finding_uid=finding_uid,
             finding_observation_id=body.finding_observation_id,
             event_type=body.event_type.value,
+            severity=None if body.severity is None else body.severity.value,
             comment=body.comment,
             idempotency_key=idempotency_key,
             author_label=subject.display_label,

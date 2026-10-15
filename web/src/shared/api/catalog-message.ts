@@ -13,7 +13,7 @@
  *
  * **1. It is keyed on the whole catalog, and the reason is what constrains the field.**
  * `transport.ts`'s `decodeFailure` constructs an `ApiError` exactly when `isErrorCode()`
- * passes, and `isErrorCode` tests membership of `ERROR_CODE_VALUES` — the whole 24-code
+ * passes, and `isErrorCode` tests membership of `ERROR_CODE_VALUES` — the whole 25-code
  * catalog. It does **not** test `PC01_ERROR_CODES`. Every classifier that consumes this
  * map has a `default:` arm that fires for any code it has no branch for, and seven catalog
  * codes are outside `PC01_ERROR_CODES` — `unsupported_contract_version`,
@@ -147,6 +147,9 @@ const CATALOG_MESSAGES: Readonly<Record<ErrorCode, string>> = {
     'Текст версии документа больше бюджета входа анализа, который выводится из настроенной ' +
     'модели и потолка стоимости одного прогона. Прогон не создан, ничего не отправлено в ' +
     'модель.',
+  model_identity_mismatch:
+    'Модель, указанная в ответе провайдера, не совпала с настроенной и подтверждённой ' +
+    'моделью. Этап остановлен, находки не опубликованы.',
   stale_attempt:
     'Отправившая попытка больше не является публикующей инстанцией для своей задачи: ' +
     'она замещена, потеряна, отменена или провалена. Переданный результат сохраняется ' +

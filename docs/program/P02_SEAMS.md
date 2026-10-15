@@ -118,6 +118,9 @@ current norms snapshot and its append-only history, `norm_paragraph.text_tsv` an
 `norm_document.designation_tokens`). `W55B-SEAL-01` owns `0021_portal_bundles` (the
 portal-bundle page ceiling of 500 and three nullable text-count columns on
 `document_version`).
+`W56A-SEAL-01` adds `0022_findings_v2`: seven categories, optional severity,
+canonical observation identity and the fail-closed model identity code. The
+default v1 profile remains unchanged.
 
 ### 3.1 Tables
 
@@ -251,8 +254,9 @@ guess.
 | `geometry.block_index` | `B2` `page_geometry_extraction` | `B2` `document_context_build`, `B4` grounding gate | 4.4 |
 | `geometry.page_crops` | `B2` `page_geometry_extraction` | `B6` `listVersionPortalBlocks`; `block_analysis` is W56 (`OD-04` flipped by `W55B-SEAL-01`) | 4.5 |
 | `context.document_graph` | `B2` `document_context_build` | `B3` `text_analysis` | 4.6 |
-| `analysis.text_observations` | `B3` `text_analysis` | `B4` grounding gate | 4.7 |
-| `prepared.recognised_text` | `B2` `source_preparation` | `B6` `listVersionPortalBlocks`; no analysis stage (`R-117`) | 4.8 |
+| `analysis.text_observations` | `B3` `text_analysis` | `B4` grounding gate; W56a merge after grounding | 4.7 |
+| `prepared.recognised_text` | `B2` `source_preparation` | `B6` `listVersionPortalBlocks`; optional marked context for W56a text analysis on text-less pages only | 4.8 |
+| `findings.merged` | `B4` v2 deterministic `finding_merge` (implementation follows SEAL) | `B4` v2 finding publication | 4.11 |
 | `geometry.portal_blocks` | `B2` `page_geometry_extraction` | `B6` `listVersionPortalBlocks`; `block_analysis` is W56 | 4.9 |
 | `geometry.crop_image` | `B2` `page_geometry_extraction` | `B6` `streamVersionPortalBlockCrop` | 4.10 |
 
@@ -578,7 +582,9 @@ a version without a portal bundle, and `source_preparation` succeeds without it.
 * One entry per TEXT or IMAGE block the markdown holds (a STAMP block is only in the block
   list). A TEXT body is `kind: recognised_text` with `quote_source: recognised`; an IMAGE body
   is `kind: portal_description`, shown as «описание портала — в анализе не используется» and
-  never an input of any analysis stage (`R-117`).
+  never an input of any analysis stage (`R-117`). For the future W56a v2 profile,
+  recognised TEXT entries alone may enter `text_analysis` as marked context on
+  pages in `document_version.textless_pages`; they remain non-citable (`R-134`).
 * `flags` is a lowercase snake_case list of quality signals: mixed-script words, Latin/Cyrillic
   homoglyphs, CJK characters, doubled list markers and the norms degeneracy signals. Engineering
   designations (`1.A`, `B25`, `A500C`, `REI 150`) are exempt by a pinned pattern.
@@ -645,6 +651,31 @@ per run**, one for each crop in §4.5, content-addressed (an equal crop is the s
 referenced only from the manifest. It carries no `artifact_role` root field because there is no
 root; the registry declares it so that the blob role is a known one.
 
+### 4.11 `findings.merged` (sealed for W56a)
+
+The future deterministic merge stage emits a versioned JSON artifact: each
+group names every contributing grounded observation ordinal, its canonical
+ordinal, and the merge-rule version. Two observations link only in the same
+category, by overlapping evidence spans on one page or equal NFC/case-folded,
+whitespace-collapsed quotes of at least 20 characters on one page. Groups are
+connected components; the canonical member has the earliest page/span, then
+the lowest ordinal. No member or raw evidence is deleted. The SEAL declares
+this role; `W56A-MERGE-01` implements it later.
+
+```json
+{
+  "artifact_role": "findings.merged",
+  "artifact_version": "1.0.0",
+  "groups": [
+    {
+      "observation_ordinals": [1, 2],
+      "canonical_ordinal": 1,
+      "merge_rule_version": "1.0.0"
+    }
+  ]
+}
+```
+
 ## 5. Finding, observation, evidence and decision shapes
 
 ### 5.1 The grounding rule
@@ -665,16 +696,24 @@ finding anywhere, and it appears in no finding query and in no CSV row. The data
 enforces the pairing, so this is not something a query has to remember.
 
 `ungrounded_reason` is one of: `quotation_absent`, `quotation_on_different_page`,
-`span_outside_page`, `span_outside_block`, `span_length_mismatch`.
+`span_outside_page`, `span_outside_block`, `span_length_mismatch`,
+`quote_in_recognised_text`. The last means the candidate quote exists only
+in marked recognised context, never in the PDF text layer; it cannot ground
+a published finding.
 
 ### 5.2 Identity allocation
 
-* `finding_uid` — a fresh one per published observation, per run. PC-01 does **no**
+* `finding_uid` — a fresh one per published observation in v1, or per merged
+  group in v2, per run. PC-01 does **no**
   cross-run matching and **no** decision carryover. Two runs over the same document
   produce two disjoint sets of `finding_uid`.
 * `finding_observation_id` — immutable, bound to exactly one `run_id`. A rerun
   creates new observations and never rewrites or removes earlier ones. The database
   refuses UPDATE and DELETE.
+* `finding.canonical_observation_id` — nullable until v2 publication wires the
+  merge stage. Migration 0022 backfills the one legacy observation per finding;
+  its composite foreign key requires the chosen observation to belong to the
+  same finding. A decision on a non-canonical member is refused.
 
 ### 5.3 The decision ledger
 
@@ -687,6 +726,7 @@ Append-only. Every event is a new `decision_id`. Nothing is ever updated.
 | `finding_observation_id` | the observation the expert actually reviewed |
 | `event_type` | `accept`, `reject`, `comment`; `revoke` declared, no PC-01 producer |
 | `verdict` | `accepted` for accept, `rejected` for reject, `pending` for revoke, `null` for comment |
+| `severity` | optional v2 decided value from the five-level enum, only on `accept`; the database refuses it on every other event |
 | `comment` | required for `comment`, optional on any other type |
 | `author_label` | **Since wave 42 (`R-37`): the reviewer's display name**, derived server-side from the authenticated credential and never from a request body; an account that has chosen no name falls back to its login, and the fallback is queryable rather than silent. Authorizes nothing. `OD-12`'s single configured label is gone — `P04` cannot measure whose judgement was whose when every judgement carries one name. **The sealed contract now says this too** (`D-86`, closed in wave 42), so this row is a restatement and not a second authority |
 | `command_id` | at most one event per command record, enforced by a unique index |
@@ -704,6 +744,7 @@ it; none recomputes it.
 | Column | Rule |
 |---|---|
 | `current_verdict` | the `verdict` of the most recent verdict-bearing event; `pending` when there is none |
+| `decided_severity` | severity of the latest verdict-bearing event only when that event is `accept`; null after reject or revoke |
 | `latest_verdict_decision_id` | that event's identity, or null |
 | `latest_comment` | the `comment` of the most recent event carrying one, whatever its `event_type` |
 | `latest_decision_id` | the most recent event of **any** type |

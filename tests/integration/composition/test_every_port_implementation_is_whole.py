@@ -33,8 +33,22 @@ from typing import Any
 import pytest
 
 from auditmanager.api.routers import ports as port_module
+from auditmanager.bootstrap.adapters import DecisionAdapter
+from auditmanager.shared.errors import DomainError, ErrorCode
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[3]
+
+
+def test_pre_decide_adapter_refuses_a_severity_instead_of_dropping_it() -> None:
+    adapter = DecisionAdapter(None)  # type: ignore[arg-type]  # refusal precedes session use
+    with pytest.raises(DomainError) as caught:
+        adapter.append_decision(
+            finding_uid="unused", finding_observation_id="unused", event_type="accept",
+            severity="economic", idempotency_key="unused", author_label="reviewer",
+            author_user_uid="unused",
+        )
+    assert caught.value.code is ErrorCode.DEPENDENCY_UNAVAILABLE
+    assert caught.value.detail_fields == {"dependency": "v2_decision_ledger"}
 
 #: The keyword each port is passed under, and the protocol it must satisfy. Read off
 #: ``build_router``'s own signature below, so a seventh port cannot be missed here.

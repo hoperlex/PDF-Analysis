@@ -440,6 +440,7 @@ class DecisionPort(Protocol):
         finding_uid: str,
         finding_observation_id: str,
         event_type: str,
+        severity: str | None,
         comment: str | None,
         idempotency_key: str,
         author_label: str,
@@ -467,6 +468,10 @@ class DecisionPort(Protocol):
         the ledger persists beside the label (`expert_decision_event.author_user_uid`) so
         "no decisions by this account" is a query and not a guess from a display string.
         It has no default either, here or in the ledger.
+
+        ``severity`` is optional in the wire contract and must be passed explicitly.
+        Until W56A-DECIDE-01 owns the ledger write, the adapter refuses a non-null
+        value instead of silently dropping the expert's decision.
         """
 
     def decision_history(self, *, finding_uid: str) -> Sequence[DecisionEventView]:

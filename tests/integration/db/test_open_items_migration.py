@@ -73,7 +73,7 @@ class TestTheProvenanceVocabularyFits:
 
 
 class TestTheUngroundedVocabularyIsEnforced:
-    def test_the_five_declared_reasons_are_the_only_ones(
+    def test_the_six_current_reasons_are_enforced(
         self, migrated_engine: Engine
     ) -> None:
         with Session(migrated_engine) as session:
@@ -85,6 +85,7 @@ class TestTheUngroundedVocabularyIsEnforced:
             "span_outside_page",
             "span_outside_block",
             "span_length_mismatch",
+            "quote_in_recognised_text",
         ):
             assert reason in definition, f"{reason} is not enforced by the constraint"
 

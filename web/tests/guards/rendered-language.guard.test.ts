@@ -630,6 +630,11 @@ const FINDINGS: readonly Finding[] = [
     latest_decision_id: `dec_${ULID}`,
     decision_recorded_at: '2026-09-10T09:00:00.000Z',
   }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}F`, category: 'dimensions' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}G`, category: 'layout' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}H`, category: 'facade' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}J`, category: 'roof' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}K`, category: 'documentation' }),
 ];
 
 /** One decision event per `Verdict`, for the same reason the findings are four. */
