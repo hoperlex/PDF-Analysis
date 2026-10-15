@@ -8,6 +8,8 @@ The verified file is under `.local/norms/corpus-sums/2026-10-15/` outside
 Git. The promotion base load remains stopped: the latest reading had only
 4,382,003,200 bytes free on `/` and 5,163,773,952 bytes available RAM,
 below its 6 GiB disk and RAM floors. No DB/S3 import or bundle exists.
+The code-first checkout also lacks the promotion env and a matching local
+Python runtime; those must be prepared before the base load.
 
 **Corpus and module code preparations, 2026-10-15.**
 `CFB-INT-CORPUS-MODULES-08` adds a metadata-only W54 source/capacity

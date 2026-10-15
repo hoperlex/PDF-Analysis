@@ -37,6 +37,12 @@ at this reading, so no promotion stack, DB load or S3 write was started.
 The host's free disk and RAM have varied rapidly under other workload; this
 record cannot be reused as a later launch preflight.
 
+The current code-first checkout also has no `.local/promotion/promotion.env`
+and no `.venv/bin/python`, both required by `scripts/promotion/stack.sh`.
+The root checkout's `uv.lock` differs from this checkout's lock, so its
+existing Python environment is not an assumed replacement. A later operator
+task must prepare the promotion env and a matching runtime before step 1.
+
 ## Checks and boundaries
 
 - `sha256sum -c` on the complete source drop: exit 0, 31,619 `OK` lines.
@@ -46,8 +52,9 @@ record cannot be reused as a later launch preflight.
   migration, root lockfile, composition root, global style or source byte
   changed. The local cleanup ledger and checksum artifacts are ignored.
 
-The next operator step is the W54 promotion base load in a fresh actual
-resource window. Recheck the sums digest and all resource floors immediately
-before it, then follow `W54-INT-CORPUS-READINESS-01.md` §Operator sequence.
+The next operator step is preparation for the W54 promotion base load,
+followed by a fresh actual resource window. Recheck the sums digest and all
+resource floors immediately before the load, then follow
+`W54-INT-CORPUS-READINESS-01.md` §Operator sequence.
 This step does not claim a qualified DB snapshot, repair, embedding build,
 verified bundle, S3 publication or production designation.
