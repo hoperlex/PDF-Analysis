@@ -60,7 +60,7 @@ class CsvExport:
 
 
 def export_run_csv(session: Session, run_id: RunId | str) -> CsvExport:
-    """Render one run's findings as the frozen seventeen-column CSV.
+    """Render one run's findings as the OD-11 CSV with W56a severity columns.
 
     Refuses with ``state_transition_not_allowed`` when the run's terminal does not
     declare ``publishes_result: true`` — a non-terminal run, and the terminal ``failed``.

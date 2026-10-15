@@ -38,7 +38,8 @@ _CURRENT_VERDICT = text(
            latest_comment_decision_id,
            latest_decision_id,
            decision_recorded_at,
-           decision_event_count
+           decision_event_count,
+           decided_severity
     FROM finding_current_verdict
     WHERE finding_uid = :finding_uid
     """
@@ -46,7 +47,7 @@ _CURRENT_VERDICT = text(
 
 _RAW_STREAM = text(
     """
-    SELECT decision_id, event_type, verdict, comment, recorded_at
+    SELECT decision_id, event_type, verdict, severity, comment, recorded_at
     FROM expert_decision_event
     WHERE finding_uid = :finding_uid
     ORDER BY sequence_no
@@ -68,6 +69,7 @@ class CurrentVerdict:
     latest_decision_id: str | None
     decision_recorded_at: datetime | None
     decision_event_count: int
+    decided_severity: str | None = None
 
     def comparable(self) -> tuple:
         """The fields a rebuild can be compared on, without the timestamps that only
@@ -80,6 +82,7 @@ class CurrentVerdict:
             self.latest_comment_decision_id,
             self.latest_decision_id,
             self.decision_event_count,
+            self.decided_severity,
         )
 
 
@@ -102,6 +105,7 @@ def current_verdict(session: Session, finding_uid: str) -> CurrentVerdict | None
         latest_decision_id=row["latest_decision_id"],
         decision_recorded_at=row["decision_recorded_at"],
         decision_event_count=row["decision_event_count"],
+        decided_severity=row["decided_severity"],
     )
 
 
@@ -123,6 +127,7 @@ def rebuild_current_verdict(session: Session, finding_uid: str) -> CurrentVerdic
         return None
 
     verdict = "pending"
+    decided_severity: str | None = None
     latest_verdict_decision_id: str | None = None
     latest_comment: str | None = None
     latest_comment_decision_id: str | None = None
@@ -137,6 +142,7 @@ def rebuild_current_verdict(session: Session, finding_uid: str) -> CurrentVerdic
         if row["verdict"] is not None:
             verdict = row["verdict"]
             latest_verdict_decision_id = row["decision_id"]
+            decided_severity = row["severity"] if row["event_type"] == "accept" else None
         if row["comment"] is not None:
             latest_comment = row["comment"]
             latest_comment_decision_id = row["decision_id"]
@@ -150,4 +156,5 @@ def rebuild_current_verdict(session: Session, finding_uid: str) -> CurrentVerdic
         latest_decision_id=latest_decision_id,
         decision_recorded_at=decision_recorded_at,
         decision_event_count=count,
+        decided_severity=decided_severity,
     )

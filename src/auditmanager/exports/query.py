@@ -1,4 +1,4 @@
-"""The one read the CSV is built from: one row per evidence item, in the frozen order.
+"""The one read the CSV is built from: one row per canonical evidence item.
 
 The grounding rule, preserved exactly
 -------------------------------------
@@ -83,6 +83,8 @@ _EXPORT_ROWS = text(
         cv.latest_comment            AS latest_comment,
         cv.latest_decision_id        AS latest_decision_id,
         cv.decision_recorded_at      AS decision_recorded_at,
+        cv.decided_severity          AS severity,
+        o.proposed_severity          AS severity_proposed,
         e.evidence_ordinal           AS evidence_ordinal
     FROM finding_observation o
     JOIN finding f
@@ -96,6 +98,8 @@ _EXPORT_ROWS = text(
     LEFT JOIN finding_current_verdict cv
       ON cv.finding_uid = f.finding_uid
     WHERE o.run_id = :run_id
+      AND (f.canonical_observation_id IS NULL
+           OR o.finding_observation_id = f.canonical_observation_id)
     ORDER BY
         f.finding_uid COLLATE "C" ASC,
         o.finding_observation_id COLLATE "C" ASC,
@@ -114,7 +118,7 @@ class RunHeader:
 
 @dataclass(frozen=True, slots=True)
 class ExportRow:
-    """One evidence item, with everything the seventeen columns need.
+    """One canonical evidence item, with everything the CSV columns need.
 
     ``evidence_ordinal`` is carried but is **not** a column: P02 §6 uses it to order the
     rows of one observation and nothing else.
@@ -138,6 +142,8 @@ class ExportRow:
     latest_decision_id: str | None
     decision_recorded_at: datetime | None
     evidence_ordinal: int
+    severity: str | None = None
+    severity_proposed: str | None = None
 
 
 def run_header(session: Session, run_id: str) -> RunHeader | None:
@@ -171,6 +177,8 @@ def export_rows(session: Session, run_id: str) -> tuple[ExportRow, ...]:
             latest_decision_id=row["latest_decision_id"],
             decision_recorded_at=row["decision_recorded_at"],
             evidence_ordinal=int(row["evidence_ordinal"]),
+            severity=row["severity"],
+            severity_proposed=row["severity_proposed"],
         )
         for row in rows
     )

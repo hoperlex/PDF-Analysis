@@ -890,6 +890,7 @@ def _finding_view(row: Any, evidence: Sequence[Any], verdict: Any) -> FindingVie
         run_id=row.run_id,
         category=row.category,
         current_verdict=getattr(verdict, "current_verdict", "pending"),
+        decided_severity=getattr(verdict, "decided_severity", None),
         latest_decision_id=getattr(verdict, "latest_decision_id", None),
         decision_recorded_at=getattr(verdict, "decision_recorded_at", None),
         observation=ObservationView(
@@ -1366,11 +1367,6 @@ class DecisionAdapter(_SessionHolder):
         have been worse -- the row would still be written, attributed to whatever the ledger
         defaulted to -- so the argument is named and nothing here supplies a fallback.
         """
-        if severity is not None:
-            raise DomainError(
-                ErrorCode.DEPENDENCY_UNAVAILABLE,
-                dependency="v2_decision_ledger",
-            )
         from auditmanager.decisions import append_decision_under_key, current_verdict
 
         def work(session: Session) -> Any:
@@ -1379,6 +1375,7 @@ class DecisionAdapter(_SessionHolder):
                 finding_uid=finding_uid,
                 finding_observation_id=finding_observation_id,
                 event_type=event_type,
+                severity=severity,
                 idempotency_key=idempotency_key,
                 comment=comment,
                 author_label=author_label,
@@ -1436,6 +1433,7 @@ def _record_view(entry: Any) -> DecisionRecordView:
         current_verdict=entry.current_verdict,
         decision_event_count=entry.decision_event_count,
         verdict=entry.verdict,
+        severity=entry.severity,
         comment=entry.comment,
     )
 
@@ -1449,6 +1447,7 @@ def _event_view(event: Any) -> DecisionEventView:
         author_label=event.author_label,
         recorded_at=event.recorded_at,
         verdict=event.verdict,
+        severity=event.severity,
         comment=event.comment,
     )
 

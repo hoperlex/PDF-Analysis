@@ -1,4 +1,4 @@
-"""The seventeen-column CSV, byte for byte — ``OD-11`` / P02 §6.
+"""The OD-11 CSV with two W56a severity columns appended.
 
 The bytes are the contract here, so each decision is written down next to the code that
 makes it:
@@ -15,8 +15,8 @@ makes it:
   ``NULL``. A reader opening this in a spreadsheet must see an empty cell, not the
   four-letter word a naive ``str(None)`` would produce.
 
-One row per evidence item. A finding with three quotations produces three rows sharing
-columns 1–11 and 14–17, because the reader's unit of work is a quotation.
+One row per evidence item of the canonical observation. A finding with three
+quotations produces three rows sharing the finding-level columns.
 
 Determinism is the property everything else hangs off: two exports of an unchanged run
 are byte-identical. Nothing here reads a clock, a locale, a random source or an
@@ -33,7 +33,7 @@ from typing import Any, Final, Sequence
 
 from auditmanager.exports.query import ExportRow
 
-#: The frozen column list, in the frozen order. P02 §6. `B8` downloads what this names.
+#: P02 §6's first seventeen frozen columns, then W56a's two severity columns.
 COLUMNS: Final[tuple[str, ...]] = (
     "project_uid",
     "document_uid",
@@ -52,6 +52,8 @@ COLUMNS: Final[tuple[str, ...]] = (
     "latest_comment",
     "latest_decision_id",
     "decision_recorded_at",
+    "severity",
+    "severity_proposed",
 )
 
 #: The sort key P02 §6 fixes. ``evidence_ordinal`` orders the rows of one observation
@@ -88,7 +90,7 @@ def _cell(value: Any) -> str:
 
 
 def row_values(row: ExportRow) -> tuple[str, ...]:
-    """The seventeen cells of one evidence item, in the frozen column order."""
+    """The nineteen cells of one evidence item, in the declared column order."""
     return tuple(_cell(getattr(row, column)) for column in COLUMNS)
 
 

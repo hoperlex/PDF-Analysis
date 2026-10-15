@@ -1,4 +1,4 @@
-"""The frozen seventeen-column CSV, asserted against a real run's real rows.
+"""The OD-11 CSV with W56a severity columns, against a real run's rows.
 
 Every assertion here is about bytes or about resolution:
 
@@ -80,7 +80,7 @@ def test_the_header_is_the_frozen_column_list_in_order(
     )
     header, _ = _parse(export.content)
     assert header == list(COLUMNS)
-    assert len(header) == 17
+    assert len(header) == 19
 
 
 def test_the_bytes_are_utf8_with_a_bom_and_crlf_endings(

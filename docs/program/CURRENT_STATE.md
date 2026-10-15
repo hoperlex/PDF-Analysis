@@ -1,5 +1,15 @@
 # Current state
 
+**Code-first parallel preparation, 2026-10-15.**
+`CFB-INT-PARALLEL-01` integrates five bounded slices: W56a ledger/finding
+decided severity and two appended CSV columns; W57a deterministic retrieval
+set/catalogue bytes; W57b pure normative-reference resolution and a
+deterministic two-sheet XLSX writer. The focused no-DB suite passes. The DB
+severity/CSV tests could not run without `DATABASE_URL`; the contract suite
+needs this worktree's missing bootstrap interpreter, and the local `soffice`
+probe exited before conversion. These are development preparations, not
+runtime activation, corpus qualification, a complete gate or beta acceptance.
+
 **W57a bounded-range correction, 2026-10-15.**
 `W57A-INT-RETRIEVAL-RANGE-BOUND-FIX-01` rejects impossible target/window
 ordinal spans before expansion. Fifteen focused selector/resolver tests pass.

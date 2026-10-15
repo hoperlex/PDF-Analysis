@@ -106,14 +106,64 @@ VERDICT_FOR_EVENT: Final[dict[str, str | None]] = {
     "revoke": "pending",
 }
 
+
+def _check_severity_event(*, event_type: str, severity: str | None) -> None:
+    """Refuse an invalid pairing before a command claim or ledger write."""
+    if severity is not None and event_type != "accept":
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED,
+            message="severity is allowed only on an accept event",
+        )
+
+
+_SEVERITY_TARGET = text(
+    """
+    SELECT COALESCE(
+        o.proposed_severity IS NOT NULL
+        AND f.canonical_observation_id = o.finding_observation_id,
+        false
+    ) AS eligible
+    FROM finding f
+    JOIN finding_observation o ON o.finding_uid = f.finding_uid
+    WHERE f.finding_uid = :finding_uid
+      AND o.finding_observation_id = :finding_observation_id
+    """
+)
+
+
+def _check_severity_target(
+    session: Session, *, finding_uid: str, finding_observation_id: str,
+    severity: str | None,
+) -> None:
+    """Allow the optional severity only on a canonical proposed observation.
+
+    A non-null proposal is the safe current discriminator against legacy v1
+    observations. It is not proof of an activated v2 analysis profile; runtime
+    profile authorization remains a separate gate.
+    """
+    if severity is None:
+        return
+    eligible = session.execute(
+        _SEVERITY_TARGET,
+        {"finding_uid": finding_uid, "finding_observation_id": finding_observation_id},
+    ).scalar_one_or_none()
+    if eligible is None:
+        raise DomainError(ErrorCode.NOT_FOUND, message="no published finding carries that observation")
+    if not eligible:
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED,
+            message="decision severity requires a canonical observation with proposed severity",
+            field="severity",
+        )
+
 _INSERT_EVENT = text(
     """
     INSERT INTO expert_decision_event (
         decision_id, finding_uid, finding_observation_id, event_type,
-        verdict, comment, author_label, author_user_uid, command_id, correlation_id
+        verdict, severity, comment, author_label, author_user_uid, command_id, correlation_id
     ) VALUES (
         :decision_id, :finding_uid, :finding_observation_id, :event_type,
-        :verdict, :comment, :author_label, :author_user_uid, :command_id, :correlation_id
+        :verdict, :severity, :comment, :author_label, :author_user_uid, :command_id, :correlation_id
     )
     RETURNING decision_id, recorded_at
     """
@@ -122,7 +172,7 @@ _INSERT_EVENT = text(
 _EVENT_BY_COMMAND = text(
     """
     SELECT decision_id, finding_uid, finding_observation_id, event_type,
-           verdict, comment, author_label, author_user_uid, command_id, recorded_at
+           verdict, severity, comment, author_label, author_user_uid, command_id, recorded_at
     FROM expert_decision_event
     WHERE command_id = :command_id
     """
@@ -131,7 +181,7 @@ _EVENT_BY_COMMAND = text(
 _EVENTS_FOR_FINDING = text(
     """
     SELECT decision_id, finding_uid, finding_observation_id, event_type,
-           verdict, comment, author_label, author_user_uid, command_id, recorded_at
+           verdict, severity, comment, author_label, author_user_uid, command_id, recorded_at
     FROM expert_decision_event
     WHERE finding_uid = :finding_uid
     ORDER BY sequence_no
@@ -164,6 +214,7 @@ class DecisionEvent:
     author_user_uid: str | None
     command_id: str | None
     recorded_at: object | None = None
+    severity: str | None = None
 
 
 def _translate(exc: DBAPIError) -> DomainError:
@@ -177,6 +228,20 @@ def _translate(exc: DBAPIError) -> DomainError:
             ErrorCode(mapped), message=f"the ledger refused the write ({sqlstate})"
         )
     return DomainError(ErrorCode.INTERNAL_ERROR, message="the ledger refused the write")
+
+
+def _severity_check_failure(exc: IntegrityError) -> bool:
+    """Identify the sealed CHECK by structured PostgreSQL diagnostics."""
+    original = getattr(exc, "orig", None)
+    diagnostic = getattr(original, "diag", None)
+    return (
+        getattr(original, "sqlstate", None) == "23514"
+        and getattr(diagnostic, "constraint_name", None)
+        in {
+            "ck_expert_decision_event_severity",
+            "ck_expert_decision_event_severity_accept_only",
+        }
+    )
 
 
 def _existing_event(session: Session, command_id: str) -> "DecisionEvent | None":
@@ -198,6 +263,7 @@ def _row_to_event(row) -> DecisionEvent:  # noqa: ANN001 - a SQLAlchemy RowMappi
         finding_observation_id=row["finding_observation_id"],
         event_type=row["event_type"],
         verdict=row["verdict"],
+        severity=row["severity"],
         comment=row["comment"],
         author_label=row["author_label"],
         author_user_uid=row["author_user_uid"],
@@ -212,6 +278,7 @@ def record_decision(
     finding_uid: str,
     finding_observation_id: str,
     event_type: str,
+    severity: str | None = None,
     comment: str | None = None,
     command_id: str | None = None,
     correlation_id: str | None = None,
@@ -249,6 +316,7 @@ def record_decision(
             ErrorCode.VALIDATION_FAILED,
             message=f"{event_type!r} is not one of the decision events PC-01 produces",
         )
+    _check_severity_event(event_type=event_type, severity=severity)
     if event_type == "comment" and not (comment and comment.strip()):
         raise DomainError(
             ErrorCode.VALIDATION_FAILED,
@@ -259,8 +327,13 @@ def record_decision(
             ErrorCode.VALIDATION_FAILED, message="author_label must not be empty"
         )
 
-    # An idempotent replay is answered from the ledger before anything is validated
-    # again: the first attempt already decided, and re-deciding could disagree.
+    _check_severity_target(
+        session, finding_uid=finding_uid,
+        finding_observation_id=finding_observation_id, severity=severity,
+    )
+
+    # Once the canonical severity guard passes, an idempotent replay is answered
+    # from the ledger before finding membership is checked again.
     if command_id is not None:
         existing = _existing_event(session, command_id)
         if existing is not None:
@@ -287,6 +360,7 @@ def record_decision(
         "finding_observation_id": finding_observation_id,
         "event_type": event_type,
         "verdict": VERDICT_FOR_EVENT[event_type],
+        "severity": severity,
         "comment": comment,
         "author_label": author_label,
         "author_user_uid": author_user_uid,
@@ -299,14 +373,19 @@ def record_decision(
         # caller's whole unit of work: the other writer's event is the answer.
         with nested_transaction(session):
             row = session.execute(_INSERT_EVENT, parameters).mappings().one()
-    except IntegrityError:
-        # Lost the race on the command_id index: the other writer's event is the answer,
-        # not a conflict the caller has to interpret. Exactly one event exists either
-        # way, which is what the idempotency guarantee actually says.
+    except IntegrityError as exc:
+        # A lost command-id race replays the other writer's event. A severity
+        # CHECK refusal is returned as typed validation using the constraint name.
         if command_id is not None:
             existing = _existing_event(session, command_id)
             if existing is not None:
                 return existing
+        if _severity_check_failure(exc):
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                message="the ledger refused the decision severity",
+                field="severity",
+            ) from None
         raise DomainError(
             ErrorCode.CONFLICT, message="the ledger refused the appended event"
         ) from None
@@ -319,6 +398,7 @@ def record_decision(
         finding_observation_id=finding_observation_id,
         event_type=event_type,
         verdict=VERDICT_FOR_EVENT[event_type],
+        severity=severity,
         comment=comment,
         author_label=author_label,
         author_user_uid=author_user_uid,
@@ -348,6 +428,7 @@ def append_decision_under_key(
     finding_observation_id: str,
     event_type: str,
     idempotency_key: str,
+    severity: str | None = None,
     comment: str | None = None,
     correlation_id: str | None = None,
     author_label: str,
@@ -377,6 +458,12 @@ def append_decision_under_key(
     """
     from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
 
+    _check_severity_event(event_type=event_type, severity=severity)
+    _check_severity_target(
+        session, finding_uid=finding_uid,
+        finding_observation_id=finding_observation_id, severity=severity,
+    )
+
     # The canonical primitive, the one `B1` and `B5` already claim with, so all three
     # write paths compare payloads the same way rather than three ways.
     payload: dict[str, str | None] = {
@@ -392,6 +479,10 @@ def append_decision_under_key(
     # instead of reading as reused.
     if author_user_uid is not None:
         payload["author_user_uid"] = author_user_uid
+    # Optional severity changes the command's meaning only when supplied. The
+    # absent case must retain the pre-0022 payload fingerprint byte for byte.
+    if severity is not None:
+        payload["severity"] = severity
     fingerprint = payload_fingerprint(payload)
 
     claimed = CommandRepository().begin(
@@ -423,6 +514,7 @@ def append_decision_under_key(
         finding_uid=finding_uid,
         finding_observation_id=finding_observation_id,
         event_type=event_type,
+        severity=severity,
         comment=comment,
         command_id=command_id,
         correlation_id=correlation_id,

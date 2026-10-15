@@ -1,4 +1,4 @@
-"""The seventeen columns, and the constants nothing was checking.
+"""The first seventeen OD-11 columns and W56a's two appended severity columns.
 
 The `W10-FND` mutation sweep swapped columns 7 and 8 of
 ``auditmanager.exports.serializer.COLUMNS`` and **all 302 tests stayed green**. The reason
@@ -65,13 +65,15 @@ FROZEN_COLUMNS = (
     "decision_recorded_at",
 )
 
+APPENDED_COLUMNS = ("severity", "severity_proposed")
+
 #: The exact first line of the file, after the BOM and before the first CRLF. No column
 #: name needs RFC 4180 quoting, so the header is the names joined by commas.
 FROZEN_HEADER_LINE = (
     "project_uid,document_uid,version_uid,run_id,run_state,provider_mode,"
     "finding_uid,finding_observation_id,category,finding_text,recommendation_text,"
     "evidence_page,evidence_quote,current_verdict,latest_comment,latest_decision_id,"
-    "decision_recorded_at"
+    "decision_recorded_at,severity,severity_proposed"
 )
 
 #: `P02_SEAMS.md` §6, "Sort key".
@@ -98,12 +100,12 @@ class TestTheColumnListIsPinnedToSomethingOutsideTheModule:
         assert len(FROZEN_COLUMNS) == 17
 
     def test_the_module_constant_matches_the_frozen_list_in_order(self) -> None:
-        assert tuple(COLUMNS) == FROZEN_COLUMNS, (
-            "COLUMNS no longer matches OD-11 / P02_SEAMS.md §6, in order"
+        assert tuple(COLUMNS) == FROZEN_COLUMNS + APPENDED_COLUMNS, (
+            "COLUMNS no longer preserves OD-11 then appends W56a severity, in order"
         )
 
     def test_the_frontend_and_the_backend_declare_the_same_list(self) -> None:
-        assert _web_columns() == FROZEN_COLUMNS
+        assert _web_columns() == FROZEN_COLUMNS + APPENDED_COLUMNS
         assert _web_columns() == tuple(COLUMNS)
 
     def test_the_exported_header_line_is_the_frozen_one_byte_for_byte(
