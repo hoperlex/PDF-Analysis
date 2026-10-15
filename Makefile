@@ -138,13 +138,43 @@ override DB_CHECK := src/auditmanager/shared/db/check.py
 override STO_CHECK := src/auditmanager/storage/check.py
 override QA_SUITE := tests/integration/foundation
 
-.PHONY: bootstrap up down check-services migrate check-db check-storage test-foundation gate gate-preflight gate-slot gate-static light-acceptance mutation-copy foundation alpha-acceptance
+.PHONY: bootstrap up down check-services migrate check-db check-storage test-foundation gate gate-preflight gate-slot gate-static gate-fast gate-affected light-acceptance mutation-copy foundation alpha-acceptance
 
 # --- shared guards -----------------------------------------------------------------
 # Expanded verbatim into each recipe that needs them. No guard has a success path that
 # substitutes a missing implementation or invents an unset value.
 define GUARDS
 fail() { printf '%s\n' "$$@" >&2; exit 1; }
+
+# GATE-OPT-01: a Bash wall-clock timer for one Make recipe. The EXIT trap reports a
+# failed step as well as a successful one and keeps its original exit status. Successful
+# gate recipes end the timer explicitly, so the complete gate's GATE OK stays last.
+gate_stage_begin() {
+  GATE_STAGE_NAME="$$1"
+  GATE_STAGE_START=$$SECONDS
+  trap 'gate_stage_abort "$$?"' EXIT
+}
+gate_stage_abort() {
+  local status="$$1"
+  trap - EXIT
+  printf 'GATE TIMING %s %ss exit=%s\n' "$$GATE_STAGE_NAME" \
+    "$$((SECONDS - GATE_STAGE_START))" "$$status" >&2
+  exit "$$status"
+}
+gate_stage_end() {
+  trap - EXIT
+  printf 'GATE TIMING %s %ss exit=0\n' "$$GATE_STAGE_NAME" \
+    "$$((SECONDS - GATE_STAGE_START))" >&2
+}
+gate_timed_command() {
+  local name="$$1" start status=0
+  shift
+  start=$$SECONDS
+  "$$@" || status=$$?
+  printf 'GATE TIMING %s %ss exit=%s\n' "$$name" \
+    "$$((SECONDS - start))" "$$status" >&2
+  return "$$status"
+}
 
 # The single de-shadowing primitive. It reads a value out of THIS FILE'S BYTES rather
 # than taking a make expansion, because every make-level channel that can redirect a
@@ -431,7 +461,7 @@ run_suite() {
   # silently discard the root `pythonpath = ["src"]` and `--import-mode=importlib` - while
   # being free to add `addopts = --collect-only`.
   scrubbed_run PYTHONPATH=src PYTHONUNBUFFERED=1 -- \
-    "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. "$$suite"
+    "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. --durations=20 "$$suite"
   status=$$?
   set -e
   # pytest's own exit codes: 0 all passed, 1 failures, 2 interrupted, 3 internal error,
@@ -497,8 +527,8 @@ run_battery() {
   if [ "$${#first[@]}" -gt 0 ]; then
     printf '%s\n' "GATE: the changed contexts' suites run first: $${first[*]}"
     set +e
-    scrubbed_run PYTHONUNBUFFERED=1 -- \
-      "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. -q \
+    gate_timed_command battery-changed scrubbed_run PYTHONUNBUFFERED=1 -- \
+      "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. -q --durations=20 \
       "$${first[@]/#/tests/integration/}"
     status=$$?
     set -e
@@ -512,8 +542,8 @@ run_battery() {
     for suite in "$${first[@]}"; do skip+=("--ignore=tests/integration/$$suite"); done
   fi
   set +e
-  scrubbed_run PYTHONUNBUFFERED=1 -- \
-    "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. -q \
+  gate_timed_command battery-rest scrubbed_run PYTHONUNBUFFERED=1 -- \
+    "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. -q --durations=20 \
     tests --ignore=tests/checkpoint \
     --ignore=tests/integration/foundation \
     --ignore=tests/contract \
@@ -535,8 +565,8 @@ run_contract() {
   # the battery's own CP-00 ignores, verbatim; `run_battery` then ignores tests/contract.
   local status
   set +e
-  scrubbed_run PYTHONUNBUFFERED=1 -- \
-    "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. -q \
+  gate_timed_command contract scrubbed_run PYTHONUNBUFFERED=1 -- \
+    "$$RUNTIME_PY" -m pytest -c pyproject.toml --rootdir=. -q --durations=20 \
     tests/contract \
     --ignore=tests/contract/test_cp00_candidate.py \
     --ignore=tests/contract/test_cp00_final_state.py \
@@ -577,7 +607,7 @@ run_frontend() {
   # LINT AND TYPES ARE PART OF THE GATE. A declared check that the canonical gate does
   # not run is advisory, not a release control. Run lint first so a malformed source
   # tree fails before the more expensive compiler and test suite.
-  npm --prefix web run lint || fail \
+  gate_timed_command frontend-lint npm --prefix web run lint || fail \
     "GATE: web/ lint failed. Run: npm --prefix web run lint"
 
   # TYPES ARE PART OF THE GATE, AND FOR FOUR WAVES THEY WERE NOT.
@@ -598,11 +628,11 @@ run_frontend() {
   # cannot be checked by anyone reading". `web/tests/guards/query-key-shape.guard.test.ts`
   # keeps its own case, which now asserts THIS LINE exists, so the obligation cannot quietly
   # leave the gate.
-  npm --prefix web run typecheck || fail \
+  gate_timed_command frontend-typecheck npm --prefix web run typecheck || fail \
     "GATE: web/ does not typecheck." \
     "vitest transforms TypeScript with esbuild and esbuild does not typecheck, so the" \
     "suite below can be green while the tree is not buildable. Run: npm --prefix web run typecheck"
-  npm --prefix web test || fail "GATE: the frontend suite failed."
+  gate_timed_command frontend-tests npm --prefix web test || fail "GATE: the frontend suite failed."
 }
 
 # --- the mutation copy -------------------------------------------------------------
@@ -951,6 +981,7 @@ bootstrap:
 # --- 2/9 ---------------------------------------------------------------------------
 up:
 	@$(GUARDS)
+	gate_stage_begin foundation-up
 	freeze_paths
 	require_runtime_env
 	require_provider "$$INF_COMPOSE" "P1-INF-01" \
@@ -958,6 +989,7 @@ up:
 	load_env
 	require_env_coherence
 	compose up --detach --wait
+	gate_stage_end
 
 # --- 3/9 ---------------------------------------------------------------------------
 down:
@@ -971,6 +1003,7 @@ down:
 # --- 4/9 ---------------------------------------------------------------------------
 check-services:
 	@$(GUARDS)
+	gate_stage_begin foundation-check-services
 	freeze_paths
 	require_runtime_env
 	require_provider "$$INF_CHECK" "P1-INF-01" \
@@ -978,10 +1011,12 @@ check-services:
 	load_env
 	require_env_coherence
 	run_checked check-services PYTHONPATH=src -- "$$RUNTIME_PY" "$$INF_CHECK"
+	gate_stage_end
 
 # --- 5/9 ---------------------------------------------------------------------------
 migrate:
 	@$(GUARDS)
+	gate_stage_begin foundation-migrate
 	freeze_paths
 	require_runtime_env
 	require_provider "$$DB_ALEMBIC_INI" "P1-DB-01" \
@@ -989,10 +1024,12 @@ migrate:
 	load_env
 	require_env_coherence
 	PYTHONPATH=src "$$RUNTIME_PY" -m alembic --config "$$DB_ALEMBIC_INI" upgrade head
+	gate_stage_end
 
 # --- 6/9 ---------------------------------------------------------------------------
 check-db:
 	@$(GUARDS)
+	gate_stage_begin foundation-check-db
 	freeze_paths
 	require_runtime_env
 	require_provider "$$DB_CHECK" "P1-DB-01" \
@@ -1000,10 +1037,12 @@ check-db:
 	load_env
 	require_env_coherence
 	run_checked check-db PYTHONPATH=src -- "$$RUNTIME_PY" -m auditmanager.shared.db.check
+	gate_stage_end
 
 # --- 7/9 ---------------------------------------------------------------------------
 check-storage:
 	@$(GUARDS)
+	gate_stage_begin foundation-check-storage
 	freeze_paths
 	require_runtime_env
 	require_provider "$$STO_CHECK" "P1-STO-01" \
@@ -1011,10 +1050,12 @@ check-storage:
 	load_env
 	require_env_coherence
 	run_checked check-storage PYTHONPATH=src -- "$$RUNTIME_PY" -m auditmanager.storage.check
+	gate_stage_end
 
 # --- 8/9 ---------------------------------------------------------------------------
 test-foundation:
 	@$(GUARDS)
+	gate_stage_begin foundation-tests
 	freeze_paths
 	require_runtime_env
 	require_provider "$$QA_SUITE" "P1-QA-00" \
@@ -1026,6 +1067,7 @@ test-foundation:
 	load_env
 	require_env_coherence
 	run_suite "$$QA_SUITE"
+	gate_stage_end
 
 # --- 9/9 ---------------------------------------------------------------------------
 # The accepted foundation sequence, serial by .NOTPARALLEL.
@@ -1115,29 +1157,36 @@ mutation-copy:
 # overrides the merge base with origin/main for the battery order.
 gate: gate-preflight gate-slot gate-static foundation
 	@$(GUARDS)
+	gate_stage_begin battery
 	freeze_paths
 	require_runtime_env
 	load_env
 	require_env_coherence
 	run_battery
 	gate_memory_report
+	gate_stage_end
 	printf '%s\n' "GATE OK: battery, foundation, frontend lint/typecheck/tests and whitespace all pass"
 
 gate-preflight:
 	@$(GUARDS)
+	gate_stage_begin preflight
 	freeze_paths
 	require_runtime_env
 	scrubbed_run PYTHONUNBUFFERED=1 -- "$$RUNTIME_PY" scripts/gate_host.py preflight
+	gate_stage_end
 
 # `$$PPID` is this make: the holder keeps the slot until that process is gone.
 gate-slot:
 	@$(GUARDS)
+	gate_stage_begin slot
 	freeze_paths
 	require_runtime_env
 	scrubbed_run PYTHONUNBUFFERED=1 -- "$$RUNTIME_PY" scripts/gate_host.py slot --owner-pid "$$PPID"
+	gate_stage_end
 
 gate-static:
 	@$(GUARDS)
+	gate_stage_begin static
 	freeze_paths
 	require_runtime_env
 	check_whitespace
@@ -1145,6 +1194,7 @@ gate-static:
 	load_env
 	require_env_coherence
 	run_contract
+	gate_stage_end
 	printf '%s\n' "GATE STATIC: whitespace, frontend lint/typecheck/tests and tests/contract pass"
 
 # R-70: BASE is the full SHA of the last tree accepted by a complete gate.
@@ -1152,3 +1202,31 @@ gate-static:
 light-acceptance: export LIGHT_ACCEPTANCE_BASE := $(BASE)
 light-acceptance:
 	@.venv/bin/python scripts/light_acceptance.py
+
+# GATE-OPT-01: fast is a fixed local feedback set; affected reuses the already
+# fail-closed R-70 selector. Neither target has the complete gate's success marker.
+gate-fast:
+	@$(GUARDS)
+	freeze_paths
+	require_runtime_env
+	command -v npm >/dev/null 2>&1 || fail "GATE FAST: npm is unavailable."
+	[ -d web/node_modules ] || fail "GATE FAST: web/node_modules is missing; run npm --prefix web ci."
+	[ -d tests/unit ] && [ "$$(find tests/unit -name 'test_*.py' | wc -l)" -gt 0 ] || fail \
+	  "GATE FAST: tests/unit is missing or empty."
+	check_whitespace
+	npm --prefix web run lint || fail "GATE FAST: frontend lint failed."
+	npm --prefix web run typecheck || fail "GATE FAST: frontend typecheck failed."
+	set +e
+	scrubbed_run PYTHONUNBUFFERED=1 -- "$$RUNTIME_PY" -m pytest -c pyproject.toml \
+	  --rootdir=. -q --durations=20 tests/unit \
+	  tests/contract/api_v1/test_doc_prose_facts.py \
+	  tests/contract/api_v1/test_surface_counts_in_prose.py
+	status=$$?
+	set -e
+	[ "$$status" -eq 0 ] || fail "GATE FAST: Python checks failed with pytest exit status $$status."
+	printf '%s\n' "GATE FAST OK: lint, typecheck, unit and basic contract checks pass"
+
+# BASE is inherited by light-acceptance, which requires a full ancestor SHA and a
+# clean tree. Full-gate-risk and unknown paths are refused there before any suite runs.
+gate-affected: light-acceptance
+	@printf '%s\n' "GATE AFFECTED OK: R-70 light acceptance passed"
