@@ -1,5 +1,13 @@
 # Current state
 
+**W56a OCR-only grounding preparation, 2026-10-15.**
+`W56A-INT-GROUNDING-PREP-01` adds a pure resolver that keeps PDF text as the
+only source of publishable offsets and classifies a same-page OCR-only
+quotation with the already sealed reason. Thirty-three focused tests pass.
+It is not wired to the stage or
+database; MODEL-PIN, PROVIDER and live activation remain blocked. No full
+local gate or acceptance was run.
+
 **W56a AR v2 prompt material preparation, 2026-10-15.**
 `W56A-INT-PROMPT-MATERIAL-PREP-01` assembles six reviewed sources, the
 sealed response schema, JSON-quoted PDF pages and marked uncitable OCR
