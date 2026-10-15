@@ -1,5 +1,11 @@
 # Wave 57 — split: W57a norms in the analysis with verified citations; W57b the project's own references and Excel
 
+> **Development order, 2026-10-15:** `CODE-FIRST-TO-BETA.md` governs checks
+> and publication for code-first work. W57a/W57b retain their functional scope,
+> corpus integrity rules and ownership boundaries; per-lane full gates,
+> stand import/acceptance and `main` release tasks below are deferred. The
+> final full gates follow all code planned before beta.
+
 **Status:** revision 3 with the fix round, 2026-10-12, on `plan/corpus-chain`. Round 2 (the last) was judged
 on `33fe3f7`; its findings and this revision's dispositions are recorded in
 `reviews/W54-W57-CHAIN-JUDGING.md`, and the history of every earlier finding is in
