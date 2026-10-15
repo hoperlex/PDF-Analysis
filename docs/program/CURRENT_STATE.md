@@ -1,5 +1,12 @@
 # Current state
 
+**W56a synthetic corpus development integration, 2026-10-15.**
+`W56A-GENERATOR-PREP-01` adds ten deterministic two-page PDF portal bundles,
+21 seeded AR v2 issues and seven near-miss controls after the SEAL commit.
+Its byte check and 41 focused contract tests pass. These are fixture
+expectations, not measured recall or a beta quality verdict. The two-gateway
+model identity block remains in force, and v2 execution is not activated.
+
 **W56a SEAL development integration, 2026-10-15.** `W56A-SEAL-01` is merged
 locally from `bcd5ad26`: the recorded-only v2 contract and migration
 `0022_findings_v2` are present, with 47 paths / 54 operations / 124 schemas
