@@ -1574,3 +1574,20 @@ At 08:53 UTC the owner told `pdf-analysis-4a` to have `GATE-PKG-01` merged "afte
 offered an alternative by direct poll, and the owner chose it. `agent/gate-pkg-01` (`ea5a28a6`) is merged into the W55b candidate
 **before** W55b's single full gate. That gate is the package's first real run and satisfies its `R-70` case-3 gate, so nothing is
 waived. If the package's own machinery breaks the run, the integrator reverts that merge and gates W55b with the previous target.
+
+## 3.35 — `R-129` to `R-134`, W56a (`W56A-RULE-01`)
+
+These record the owner's H-1…H-10 answers in `dispatch/ROADMAP-TO-BETA.md` §10.14, already
+given on 2026-10-06. The owner instructed on 2026-10-14 that available next-wave work start
+while W55b acceptance is in progress. Recording the answers may therefore precede
+`W55B-INT-CLOSE`; `W56A-FREEZE-01` and implementation still follow that close. The check and
+review amendments are the already-numbered `R-124` and `R-126` above.
+
+| Ruling | Source | Substance |
+| --- | --- | --- |
+| `R-129` | H-2 | W56a's АР v2 profile adds dimensions, layout, facade, roof and documentation to v1's two categories. Its questions cover consistency and completeness of the project text, not compliance with norms. Norm categories and verification belong to W57. |
+| `R-130` | H-3 | The model proposes one of the five legacy severity levels; the expert decides severity when accepting a finding. The decision panel starts without a selected severity. Exports show the expert's decided value beside the proposal; a later non-accept verdict has no decided severity. |
+| `R-131` | H-4 | `finding_merge` groups grounded observations deterministically under `dispatch/W56-PLAN.md` §A3.3. A model cannot hide, merge or edit a finding through this stage. The critic only assesses findings, appears beside them and cannot change them; it is deferred to W56b under H-10. |
+| `R-132` | H-5 | W56a's recorded-response quality gate refuses aggregate recall below its measured baseline or control false-positive rate above it. Category figures are reported. The owner sets absolute beta thresholds in the later beta validation wave; this ruling does not invent them. |
+| `R-133` | H-6 | A live response that reports a model other than the configured and pinned one is a typed stage failure; no finding is published from it and no silent substitution is allowed. Live recordings follow a successful identity probe. |
+| `R-134` | H-1, H-7…H-10 | W56a does text first, with recognised text marked as context only on pages without a usable text layer; citations remain from the text layer. Drawing analysis, region evidence, OCR citations, chunking and the critic are W56b. The owner reviews v2 findings in the product on the portal export after release; that precision figure is reported, not gated. All W56a live calls stay within the $5 wave ceiling of `R-29`; a projected excess stops for an owner decision. |

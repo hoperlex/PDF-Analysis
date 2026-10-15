@@ -188,3 +188,10 @@ not trigger a blind repeat of the full gate. See `docs/program/dispatch/OPERATIN
   rerun merely to accept a change that light acceptance covers.
 - A task file whose required checks name `make gate` for a change outside the three cases above
   reads as light acceptance.
+
+**Wave overrides.** For W54–W57, `R-102` replaces the per-lane full gate in case 3 above with
+one full gate on the wave's final candidate; the full gate before each `origin/main` publication
+remains mandatory. From W56a, `R-126` also replaces item 2 for backend lanes: a lane writes the
+database tests for its changed context but does not run a database suite on its private lane.
+The wave's final `make gate` runs those suites on the merged candidate. Container-free checks
+and required mutation probes still run in the lane.
