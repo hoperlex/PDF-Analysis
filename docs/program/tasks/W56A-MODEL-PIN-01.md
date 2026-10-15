@@ -63,6 +63,24 @@ completed prerequisites. This task replaces neither report.
 - interpretation: the development tree matches the published ref and the
   lock is unchanged; this does not establish gateway identity.
 
+### P-02 — client-policy and route preflight after the proxy guide
+
+- captured_at: 2026-10-15
+- command: `git rev-parse HEAD origin/dev && sha256sum docs/program/P02_LOCK.json`
+- captured_output:
+  ```text
+  a1b0e81f1a3a1d172797f80158a4c2cd7d2bc910
+  a1b0e81f1a3a1d172797f80158a4c2cd7d2bc910
+  2d99142445f5c3ee969b85de8ad0c8625a7a378dd4abfcc7fee4b5142d3a8cbd  docs/program/P02_LOCK.json
+  ```
+- interpretation: the later offline preparations are on `dev` and the lock
+  is still unchanged. The client guide supplied by the owner explains that
+  `/agent/v1/chat/completions` uses per-client `allowedModels`: with the
+  default policy an explicit `model` is ignored. Its `/models` response is
+  not a reliable model-selection proof. Neither this guide nor the stand's
+  `provider.env` identifies the distinct recording route or proves the
+  stand client's model-selection policy. No paid call follows from P-02.
+
 ## Historical evidence
 
 - correction_mode: none
@@ -114,7 +132,15 @@ at the locked rate. It remains failed; this task measures a corrected route.
 
 1. Before calls, verify the frozen hashes and migration head, ledger balance,
    distinct gateway roles/routes, selected model setting and credential
-   presence without printing their values. Use the checked
+   presence without printing their values. For each role, require an
+   independently identified configuration and a concrete requested model,
+   not `proxy`, `default` or `auto`. The proxy's per-client default policy
+   ignores an explicit model; obtain operator configuration evidence that
+   the client permits the locked slug before spending again. The live
+   identity/rate result remains the final proof of actual behaviour. Do
+   not use `/models` or an invalid-slug paid request as a policy shortcut.
+   The known `/agent/v1` stand route alone is not the recording gateway.
+   Use the checked
    `tools.provider.identity_probe` from the published dev SHA. Each invocation
    uses synthetic text, at most 16 output tokens, fresh request/idempotency
    IDs, and the same chat-completions route the product adapter uses.
@@ -141,6 +167,11 @@ at the locked rate. It remains failed; this task measures a corrected route.
 The two gateway roles must be demonstrably distinct yet report the same
 selected gateway name. If names differ, the single-name lock schema is
 insufficient and this task stops for a separately owned contract change.
+The separate route may share the central proxy origin, but route identity
+and both roles' client model-selection policy must be established before
+charging the first call on that role. A policy change or new route belongs
+to a separately authorised operator/configuration task; this task only
+verifies their observed behaviour.
 `analysis/text/lock.py` remains the only runtime lock reader. A pin proves
 only the selected primary; PROVIDER must refuse the cheaper tier until its
 own budgeted identity/rate proof. A passing pin grants drafting and execution
