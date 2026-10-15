@@ -45,16 +45,24 @@ access is resolved.
 2. `W56A-DEV-FREEZE-01` rechecks the non-live pins on the current tree and
    grants only `W56A-SEAL-01` and `W56A-GENERATOR-PREP-01`. SEAL owns its
    existing contract, schema and migration surfaces **except** `P02_LOCK.json`.
-   The generator owns only new seeded fixture and corpus paths, based on
-   W55b's sealed portal bundle and the seven `R-129` categories. The two
-   lanes can work in separate worktrees; its corpus joins the integration
-   line after SEAL. No v2 proxy mode is activated by these lanes.
+   The exclusion must also apply to the inherited `W55B-SEAL-01` path grant.
+   The generator owns only new `tools/fixtures/seeded/**`,
+   `fixtures/evaluation/ar_v2/**` except `baseline.json`, and
+   `tests/contract/fixtures_seeded/**`, based on W55b's sealed portal bundle
+   and the seven `R-129` categories. The two lanes can work in separate
+   worktrees; the generator's corpus joins the integration line after SEAL.
+   It can prove byte stability, member integrity and quote/page grounding,
+   but not model recall or control nonfinding before HARNESS. No v2 proxy
+   mode is activated by these lanes.
 3. `W56A-MODEL-PIN-01` is the sole W56a owner of `P02_LOCK.json`. It may
    write a concrete gateway name only after the corrected stand and distinct
    recording gateways each pass the selected-model identity/rate call and
    default-model call, within the precommitted tolerance and spend ledger.
    A gateway failure remains a stop; no name is inferred from `model_id`, a
-   stub, or the failed response. PROVIDER starts after this task's merge.
+   stub, or the failed response. The four planned calls verify only the
+   selected tier, even though the lock also lists `cheaper_tier`. Proxy mode
+   must refuse the unverified tier until separately budgeted probes pass for
+   it. PROVIDER starts after this task's merge.
 4. PROVIDER must refuse proxy startup when the selected gateway name is
    missing, stub or inconsistent with the lock. A successful HTTP 200 with a
    missing or different reported model yields typed
