@@ -1,5 +1,13 @@
 # Current state
 
+**W54 base corpus load, 2026-10-15.** The verified drop was loaded into the
+isolated promotion PostgreSQL as `ns_01M4ZW72BS7QHAMDJ993VHNJ7K` with 674
+documents, 348,777 paragraphs and 55,702 chunks. The DB is stopped with its
+named volume retained. RAM fell below the W54 floor before `dump.sh`; no
+restore-verified dump exists, so repair, embedding and bundle remain stopped.
+See `W54-CORPUS-PROMOTION-01.md`. This interim result is not a qualified
+snapshot or production publication.
+
 **W54 source integrity, 2026-10-15.** `W54-CORPUS-OPERATE-01` produced a
 complete checksum file for the 31,619-file normative source drop. All 31,619
 files passed `sha256sum -c`; the sums file SHA-256 is
