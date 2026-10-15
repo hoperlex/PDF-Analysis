@@ -6,7 +6,12 @@ import re
 from dataclasses import dataclass
 
 from auditmanager.norms.embedding.profile import require_snapshot_id
-from auditmanager.norms.references.families import Designation, detection_shadow, parse_designation
+from auditmanager.norms.references.families import (
+    STANDARD_FAMILY_PATTERN,
+    Designation,
+    detection_shadow,
+    parse_designation,
+)
 from auditmanager.norms.references.tokens import sql_designation_tokens
 
 
@@ -19,7 +24,7 @@ ABSENT = "нет в корпусе"
 UNPARSED = "не сопоставлено"
 MAX_EVIDENCE_OCCURRENCES = 10
 
-_STANDARD = r"(?:гост(?:[ _]+р)?|сп|снип|санпин|всн)[ _]+\d+(?:[._-]\d+)*"
+_STANDARD = rf"{STANDARD_FAMILY_PATTERN}[ _]+\d+(?:[._-]\d+)*"
 _AMENDMENT = rf"изменени[ея][ _]*(?:n|№)[ _]*\d+[ _]*к[ _]*{_STANDARD}"
 _LAW_FULL = r"федеральный[ _]+закон[ _]*(?:№|n)[ _]*\d+[ _-]*фз"
 _LAW_SHORT = r"(?:\d+[ _-]*фз|фз[ _-]*\d+)"

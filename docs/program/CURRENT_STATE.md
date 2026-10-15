@@ -1,5 +1,12 @@
 # Current state
 
+**W57b local designation coverage, 2026-10-15.**
+`W57B-INT-CATALOGUE-SLUG-AUDIT-01` parses ГОСТ IEC/ISO and ГОСТ Р ИСО/МЭК
+subseries. Against the unchanged 674-document source manifest, 617 slugs
+parse and 57 remain in a digest-pinned, unreviewed local candidate. The
+candidate is not a promoted catalogue or a runtime allowlist; W54 capacity,
+snapshot and owner review remain ahead.
+
 **Code-first parallel preparation, 2026-10-15.**
 `CFB-INT-PARALLEL-01` integrates five bounded slices: W56a ledger/finding
 decided severity and two appended CSV columns; W57a deterministic retrieval

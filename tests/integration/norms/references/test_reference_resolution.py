@@ -24,6 +24,7 @@ from auditmanager.norms.references.resolution import (
 from auditmanager.norms.references.tokens import (
     FOLD_FROM,
     FOLD_TO,
+    fold,
     sql_designation_tokens,
     text_designation_tokens,
 )
@@ -54,6 +55,10 @@ def _resolve(text: str, catalogue: PinnedCatalogue):
         ("СП 54.13330.2022", "сп", ("54", "13330"), 2022, None),
         ("ГОСТ 21.101-2020", "гост", ("21", "101"), 2020, None),
         ("ГОСТ Р 57795-2017", "гост р", ("57795",), 2017, None),
+        ("ГОСТ IEC 60331-1-2021", fold("ГОСТ IEC"), ("60331", "1"), 2021, None),
+        ("ГОСТ ISO 3506-1-2014", fold("ГОСТ ISO"), ("3506", "1"), 2014, None),
+        ("ГОСТ Р ИСО 17637-2024", "гост р исо", ("17637",), 2024, None),
+        ("ГОСТ Р МЭК 60204-1-2007", "гост р мэк", ("60204", "1"), 2007, None),
         ("СНиП 31-01-2003", "снип", ("31", "01"), 2003, None),
         ("СанПиН 1.2.3685-21", "санпин", ("1", "2", "3685"), 2021, None),
         ("ВСН 01-89", "всн", ("01",), 1989, None),
@@ -91,11 +96,19 @@ def test_python_fold_tables_are_exact_migration_0020_tables() -> None:
 
 
 def test_extract_keeps_raw_offsets_and_unread_page_status() -> None:
-    text = "Согласно CП\u00a054.13330.2022 и ГОСТ\u00a021.101—2020."
+    text = "Согласно CП\u00a054.13330.2022, ГОСТ\u00a021.101—2020 и ГОСТ IEC 60331-1-2021."
     extracted = extract_references((TextPage("A", text), TextPage("B", None)))
     assert extracted.unread_pages == ("B",)
-    assert len(extracted.occurrences) == 2
+    assert len(extracted.occurrences) == 3
     assert all(text[item.start:item.end] == item.raw_text for item in extracted.occurrences)
+
+
+def test_gost_subseries_stays_distinct_from_numeric_gost() -> None:
+    catalogue = _catalogue("ГОСТ_IEC_60331-1-2021", "ГОСТ_60331-1-2024")
+    report = _resolve("ГОСТ IEC 60331-1-2021", catalogue)
+    assert len(report.references) == 1
+    assert report.references[0].outcome == PRESENT
+    assert report.references[0].matched_document_id == "ndoc_1"
 
 
 def test_newest_edition_wins_same_and_amendment_is_not_an_edition() -> None:

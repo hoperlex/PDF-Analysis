@@ -14,7 +14,12 @@ from auditmanager.norms.references.tokens import fold, normalize_text_separators
 
 
 _AMENDMENT = re.compile(r"^изменени[ея][ _]*(?:n|№)[ _]*(\d+)[ _]*к[ _]*(.+)$")
-_STANDARD = re.compile(r"^(гост(?:[ _]+р)?|сп|снип|санпин|всн)[ _]+(\d+(?:[._-]\d+)*)")
+# Migration 0020 folds visually similar Latin characters into Cyrillic. For
+# example IEC becomes ``iес`` (Latin i, Cyrillic е/с). Construct the literal
+# spellings through the same fold so catalogue slugs and project text agree.
+_GOST_SUBSERIES = "|".join(re.escape(fold(label)) for label in ("IEC", "ISO", "ИСО", "МЭК"))
+STANDARD_FAMILY_PATTERN = rf"(?:гост(?:[ _]+р)?(?:[ _]+(?:{_GOST_SUBSERIES}))?|сп|снип|санпин|всн)"
+_STANDARD = re.compile(rf"^({STANDARD_FAMILY_PATTERN})[ _]+(\d+(?:[._-]\d+)*)")
 _LAW_NUMBER = re.compile(r"(?<![а-яёa-z0-9])(\d+)[ _-]*фз(?![а-яёa-z0-9])")
 _LAW_REVERSE = re.compile(r"(?<![а-яёa-z0-9])фз[ _-]*(\d+)(?![а-яёa-z0-9])")
 _ACT_SHORT = re.compile(r"^пп[ _]+рф[ _]*(?:№|n)[ _]*(\d+)(?!\d)")
