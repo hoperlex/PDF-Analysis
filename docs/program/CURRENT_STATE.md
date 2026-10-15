@@ -1,5 +1,17 @@
 # Current state
 
+**Code-first source and recovery preparations, 2026-10-15.**
+`W56A-INT-AR-V2-RECORDED-INPUT-01` binds a recorded AR v2 request to verified
+versioned PDF/OCR artifacts and retains a separate source-binding digest;
+10 focused tests pass. `W57B-INT-XLSX-SOURCE-LABELS-01` resolves XLSX page labels
+from the version's verified portal companion; 33 focused tests pass, but
+persisted per-finding normative citations and export policy remain absent.
+`W58-INT-OFFLINE-RESTORE-PREFLIGHT-PREP-01` checks the local dump, copy record,
+inventory, seal and mirrored object bytes together; 36 recovery tests pass.
+These are unactivated preparations: no AR v2 runtime call, XLSX API, real
+restore, S3 readback, full gate or beta acceptance is claimed. See
+`CFB-INT-STATE-09.md`.
+
 **W54 base corpus dump, 2026-10-15.** The verified drop was loaded into the
 isolated promotion PostgreSQL as `ns_01M4ZW72BS7QHAMDJ993VHNJ7K` with 674
 documents, 348,777 paragraphs and 55,702 chunks. The DB is stopped with its
