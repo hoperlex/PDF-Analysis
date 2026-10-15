@@ -1,0 +1,561 @@
+{
+  "schema": "ar-v2-seeded/1",
+  "profile": "ar_v2",
+  "source": "synthetic",
+  "bundles": [
+    {
+      "id": "ar_v2_01",
+      "pdf": "bundles/ar_v2_01.pdf",
+      "portal_bundle": "bundles/ar_v2_01.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "44543219474c19870ec2ec0efe55f14a0fd109782a82e27f0ebf757204a01b17",
+      "portal_bundle_sha256": "8348527aca92c1bc1cd5d8d07aceabe37c9ae6cbe8f9c1c138d411614900de86"
+    },
+    {
+      "id": "ar_v2_02",
+      "pdf": "bundles/ar_v2_02.pdf",
+      "portal_bundle": "bundles/ar_v2_02.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "e20dc71f3a0bc959d2f884f0379822c126d058813c0609d7bdad50c5d992edf1",
+      "portal_bundle_sha256": "3b17ec18d435c33e0b6110d8af7f8a433925251724931ec2a7a532b4e48b8fd0"
+    },
+    {
+      "id": "ar_v2_03",
+      "pdf": "bundles/ar_v2_03.pdf",
+      "portal_bundle": "bundles/ar_v2_03.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "b71eaf3f37d65ff2f48e2035278d3901792e663ea1185cf4042b0568ceedbb73",
+      "portal_bundle_sha256": "1830fc43dbfc8854886f88f2065bbc038f7f0906ed86c7f830cbb5a8abf6bbc5"
+    },
+    {
+      "id": "ar_v2_04",
+      "pdf": "bundles/ar_v2_04.pdf",
+      "portal_bundle": "bundles/ar_v2_04.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "9602093fb5f707eab06c726a3b573d4127861f3a94ac0b69b9209e4124840059",
+      "portal_bundle_sha256": "d110fd987adebdfdd45285c8075f5d469a3e171b4a4b2f9284038adf0880afd7"
+    },
+    {
+      "id": "ar_v2_05",
+      "pdf": "bundles/ar_v2_05.pdf",
+      "portal_bundle": "bundles/ar_v2_05.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "b97ddb3e3dc53df643c384aa5155b3a223b573f7896a02461094662137a5f528",
+      "portal_bundle_sha256": "50138df47d49d9da19757e16e1a831db80783b541b7ef984d59d759d10ab3a2a"
+    },
+    {
+      "id": "ar_v2_06",
+      "pdf": "bundles/ar_v2_06.pdf",
+      "portal_bundle": "bundles/ar_v2_06.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "cc4c7b76e187e96199160b35df10831df1a29478fa6649dfdecc851837e4864a",
+      "portal_bundle_sha256": "2b7ca5a2225ded543aa0c89e0f544b0bae7d5f6c368ae6a3242eb1212624e2c5"
+    },
+    {
+      "id": "ar_v2_07",
+      "pdf": "bundles/ar_v2_07.pdf",
+      "portal_bundle": "bundles/ar_v2_07.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "40a1e36c8f1a7b214eb53dc77e76fd22d1d19ea9563cd215d5a1f143911222ae",
+      "portal_bundle_sha256": "4feed0f300fdec2687caf61f769aff7edb3b55e6bf6c9aeb092203f1f6f4df00"
+    },
+    {
+      "id": "ar_v2_08",
+      "pdf": "bundles/ar_v2_08.pdf",
+      "portal_bundle": "bundles/ar_v2_08.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "df46ce4de28c09d5e7bf810334aa2804e66ea1a77a85f3478c0d199212247394",
+      "portal_bundle_sha256": "36df6758ec9dde91590f0bc554a3785e0957ae291161a4fd2aa1e798687dcebb"
+    },
+    {
+      "id": "ar_v2_09",
+      "pdf": "bundles/ar_v2_09.pdf",
+      "portal_bundle": "bundles/ar_v2_09.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "c8a0ca8b0b6cd58010a66213ba436343c462abca41eb4e7bf72c09ee14b13e52",
+      "portal_bundle_sha256": "3cc07d390d909a5526e14af624de376a2b6ed726e6f4da33f9310b5bee240e7b"
+    },
+    {
+      "id": "ar_v2_10",
+      "pdf": "bundles/ar_v2_10.pdf",
+      "portal_bundle": "bundles/ar_v2_10.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "80d4148cf381d3a7fc64ba62cb1dfe6fd4377184ce23703388ad7fca273dc963",
+      "portal_bundle_sha256": "fa2bc6fd05eb8a135936c326fed85820ed5bb15e268b5b136d04f7e1cf3cdc34"
+    }
+  ],
+  "issues": [
+    {
+      "id": "ic_area",
+      "bundle_id": "ar_v2_01",
+      "category": "internal_contradiction",
+      "archetype": "room_area",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План: помещение 101, площадь 18,0 м2."
+        },
+        {
+          "page": 2,
+          "quote": "Экспликация: помещение 101, площадь 21,0 м2."
+        }
+      ]
+    },
+    {
+      "id": "la_entrance",
+      "bundle_id": "ar_v2_01",
+      "category": "layout",
+      "archetype": "entrance_side",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Подпись плана: главный вход с востока."
+        },
+        {
+          "page": 2,
+          "quote": "Текст проекта: главный вход с запада."
+        }
+      ]
+    },
+    {
+      "id": "do_title",
+      "bundle_id": "ar_v2_01",
+      "category": "documentation",
+      "archetype": "sheet_title_mismatch",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Реестр: лист АР-02 План фасадов."
+        },
+        {
+          "page": 2,
+          "quote": "Заголовок листа АР-02: План помещений."
+        }
+      ]
+    },
+    {
+      "id": "ic_date",
+      "bundle_id": "ar_v2_02",
+      "category": "internal_contradiction",
+      "archetype": "revision_date",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Лист АР-01: дата изменения 12.05.2026."
+        },
+        {
+          "page": 2,
+          "quote": "Лист АР-01: дата изменения 14.05.2026."
+        }
+      ]
+    },
+    {
+      "id": "la_placement",
+      "bundle_id": "ar_v2_02",
+      "category": "layout",
+      "archetype": "room_placement",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость 1 этажа: помещение 302 у северной стены."
+        },
+        {
+          "page": 2,
+          "quote": "Ведомость 1 этажа: помещение 302 у южной стены."
+        }
+      ]
+    },
+    {
+      "id": "ic_use",
+      "bundle_id": "ar_v2_03",
+      "category": "internal_contradiction",
+      "archetype": "room_use",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Таблица помещений: номер 102, кухня."
+        },
+        {
+          "page": 2,
+          "quote": "Экспликация: номер 102, спальня."
+        }
+      ]
+    },
+    {
+      "id": "fa_material",
+      "bundle_id": "ar_v2_03",
+      "category": "facade",
+      "archetype": "facade_material",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Фасад северный: облицовка кирпич."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к северному фасаду: облицовка штукатурка."
+        }
+      ]
+    },
+    {
+      "id": "ph_note",
+      "bundle_id": "ar_v2_04",
+      "category": "explicit_placeholder",
+      "archetype": "active_note",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Действующее примечание: отделку лестницы уточнить."
+        }
+      ]
+    },
+    {
+      "id": "fa_windows",
+      "bundle_id": "ar_v2_04",
+      "category": "facade",
+      "archetype": "window_count",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость северного фасада: 8 окон."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к северному фасаду: 10 окон."
+        }
+      ]
+    },
+    {
+      "id": "ph_cell",
+      "bundle_id": "ar_v2_05",
+      "category": "explicit_placeholder",
+      "archetype": "active_table_cell",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Действующая ведомость дверей: материал TBD."
+        }
+      ]
+    },
+    {
+      "id": "fa_colour",
+      "bundle_id": "ar_v2_05",
+      "category": "facade",
+      "archetype": "colour_code",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Фасад южный: цвет RAL 9010."
+        },
+        {
+          "page": 2,
+          "quote": "Ведомость отделки южного фасада: цвет RAL 7016."
+        }
+      ]
+    },
+    {
+      "id": "ph_callout",
+      "bundle_id": "ar_v2_06",
+      "category": "explicit_placeholder",
+      "archetype": "active_callout",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Действующая выноска: узел примыкания не определено."
+        }
+      ]
+    },
+    {
+      "id": "ro_slope",
+      "bundle_id": "ar_v2_06",
+      "category": "roof",
+      "archetype": "roof_slope",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План кровли: уклон зоны А равен 2 процента."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к кровле: уклон зоны А равен 5 процентов."
+        }
+      ]
+    },
+    {
+      "id": "di_room",
+      "bundle_id": "ar_v2_07",
+      "category": "dimensions",
+      "archetype": "room_length",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План: длина помещения 201 равна 4,20 м."
+        },
+        {
+          "page": 2,
+          "quote": "Ведомость: длина помещения 201 равна 4,80 м."
+        }
+      ]
+    },
+    {
+      "id": "ro_drains",
+      "bundle_id": "ar_v2_07",
+      "category": "roof",
+      "archetype": "drain_count",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План кровли: воронок 4 штуки."
+        },
+        {
+          "page": 2,
+          "quote": "Ведомость кровли: воронок 6 штук."
+        }
+      ]
+    },
+    {
+      "id": "di_floor",
+      "bundle_id": "ar_v2_08",
+      "category": "dimensions",
+      "archetype": "floor_height",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Разрез: высота этажа 2 равна 3,30 м."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание: высота этажа 2 равна 3,60 м."
+        }
+      ]
+    },
+    {
+      "id": "ro_parapet",
+      "bundle_id": "ar_v2_08",
+      "category": "roof",
+      "archetype": "parapet_height",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Деталь кровли: парапет 600 мм."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к кровле: парапет 800 мм."
+        }
+      ]
+    },
+    {
+      "id": "di_door",
+      "bundle_id": "ar_v2_09",
+      "category": "dimensions",
+      "archetype": "door_width",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость: ширина двери Д-01 равна 900 мм."
+        },
+        {
+          "page": 2,
+          "quote": "Выноска: ширина двери Д-01 равна 800 мм."
+        }
+      ]
+    },
+    {
+      "id": "do_sheet",
+      "bundle_id": "ar_v2_09",
+      "category": "documentation",
+      "archetype": "promised_sheet_missing",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Реестр комплекта: лист АР-99 План кровли включен."
+        }
+      ],
+      "missing_content": "лист АР-99 План кровли"
+    },
+    {
+      "id": "la_adjacent",
+      "bundle_id": "ar_v2_10",
+      "category": "layout",
+      "archetype": "room_adjacency",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Легенда плана: помещение 301 граничит с коридором."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к плану: помещение 301 граничит с кладовой."
+        }
+      ]
+    },
+    {
+      "id": "do_section",
+      "bundle_id": "ar_v2_10",
+      "category": "documentation",
+      "archetype": "promised_section_missing",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Оглавление: раздел 4 Ведомость отделки включен."
+        }
+      ],
+      "missing_content": "раздел 4 Ведомость отделки"
+    }
+  ],
+  "controls": [
+    {
+      "id": "control_area",
+      "bundle_id": "ar_v2_01",
+      "category": "internal_contradiction",
+      "archetype": "different_rooms",
+      "control_archetype": "near_miss",
+      "scope": "разные помещения",
+      "why_not_issue": "Площади относятся к разным помещениям.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Помещение 401 имеет 18,0 м2, помещение 402 имеет 21,0 м2."
+        }
+      ]
+    },
+    {
+      "id": "control_resolved",
+      "bundle_id": "ar_v2_02",
+      "category": "explicit_placeholder",
+      "archetype": "resolved_note",
+      "control_archetype": "near_miss",
+      "scope": "завершенное примечание",
+      "why_not_issue": "Фраза сообщает о выполненном уточнении.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Уточнение выполнено: отделка лестницы назначена."
+        }
+      ]
+    },
+    {
+      "id": "control_units",
+      "bundle_id": "ar_v2_03",
+      "category": "dimensions",
+      "archetype": "equivalent_units",
+      "control_archetype": "near_miss",
+      "scope": "одна стена",
+      "why_not_issue": "Записи задают одну и ту же длину.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Длина стены 3,00 м равна 3000 мм."
+        }
+      ]
+    },
+    {
+      "id": "control_floors",
+      "bundle_id": "ar_v2_04",
+      "category": "layout",
+      "archetype": "different_floors",
+      "control_archetype": "near_miss",
+      "scope": "разные этажи",
+      "why_not_issue": "Два явно названных этажа могут различаться.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План 1 этажа: кухня слева; план 2 этажа: кухня справа."
+        }
+      ]
+    },
+    {
+      "id": "control_facades",
+      "bundle_id": "ar_v2_05",
+      "category": "facade",
+      "archetype": "different_facades",
+      "control_archetype": "near_miss",
+      "scope": "разные фасады",
+      "why_not_issue": "Материалы относятся к разным фасадам.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Северный фасад кирпич; южный фасад штукатурка."
+        }
+      ]
+    },
+    {
+      "id": "control_zones",
+      "bundle_id": "ar_v2_06",
+      "category": "roof",
+      "archetype": "different_roof_zones",
+      "control_archetype": "near_miss",
+      "scope": "разные зоны",
+      "why_not_issue": "Уклоны относятся к разным названным зонам.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Кровля, зона А: уклон 2 процента; зона Б: 5 процентов."
+        }
+      ]
+    },
+    {
+      "id": "control_unpromised",
+      "bundle_id": "ar_v2_07",
+      "category": "documentation",
+      "archetype": "unpromised_sheet",
+      "control_archetype": "near_miss",
+      "scope": "комплект без обещания АР-99",
+      "why_not_issue": "Реестр не обещает отсутствующий лист АР-99.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Реестр содержит листы АР-01 и АР-02."
+        }
+      ]
+    }
+  ]
+}
