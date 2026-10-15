@@ -6,6 +6,17 @@ ancestor is `origin/dev` `6d63802ab465a0317839c9b57abd5e90f3d91769`.
 `W56A-RULE-01` is complete on the local integration line and assigns
 `R-129`…`R-134`. This report does not dispatch SEAL, GENERATOR or Stage B.
 
+**Later same-day addendum on `fd71cc32`:** `W56A-PLAN-PATH-FIX-01` corrected the
+category-label grant in the plan. `W56A-PROBE-01` then sent one bounded explicit
+model request through the stand's configured agent gateway. It returned a
+different model and a cost inconsistent with the locked requested model, so
+the stand probe failed and the remaining calls were stopped. The probe report
+and spend ledger are `W56A-PROBE-01.md` and `reviews/W56A-SPEND.md`. This
+supersedes only the earlier preflight statement that no network call had been
+made; all preflight measurements keep their original base and meaning. The
+distinct recording gateway still lacks an accessible configuration. **No
+implementation grant follows.**
+
 ## 1. Freeze input status
 
 | Input | Measured fact | Disposition |
@@ -17,7 +28,7 @@ ancestor is `origin/dev` `6d63802ab465a0317839c9b57abd5e90f3d91769`.
 | Legacy АР source | Clean `/root/projects/PDF-proverka` checkout `16ba8e5d23e4782550e79355002fde1365f682b7`; six files match `W56A-LEGACY-SOURCE-01` (§2) | Provenance available; profile author still reviews every item and excludes normative claims. |
 | Advisory pin sweep | Exact integration base returned 98 lines, SHA-256 `dd6d025853316a6764b8c66856b6952408f1e43e72c01b664f01c30cd250c11b`; complete stdout in §4 | Every listed path enters SEAL's grant inventory, but only changed facts should be edited. Re-sweep if the base changes. |
 | Category-label grant | The plan names `web/src/widgets/knowledge-base/ui/knowledge-base.tsx` as the SEAL label record, but that file imports `CATEGORY_LABELS` from `web/src/entities/expert-decision/model/category-labels.ts`, where the exhaustive `Record<FindingCategory, string>` lives. `web/src/_pages/knowledge-base/ui/knowledge-base-page.tsx` separately hard-codes `CATEGORY_CHOICES` | **Grant correction required before SEAL:** SEAL exclusively owns the label record's actual file. WEB owns the page's explicit choices after SEAL. Do not treat the consumer widget as the label definition. |
-| Model identities | `P02_LOCK.json` has model IDs and $5/$25, $2/$10 per MTok rates but no `gateway_name` | **STOP.** The plan requires two distinct gateway probes, two calls each, before naming the gateway models in the lock. |
+| Model identities | `P02_LOCK.json` has model IDs and $5/$25, $2/$10 per MTok rates but no `gateway_name`; the later `W56A-PROBE-01` stand call failed identity and rate checks | **STOP.** The plan requires passing probes on two distinct gateways before naming gateway models in the lock. |
 
 ## 2. Source and provider preflight
 

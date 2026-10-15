@@ -1,8 +1,10 @@
 # Task W56A-FREEZE-01 — freeze the W56a implementation grants
 
 **Status: DRAFT / STOPPED.** This definition records the accepted W55b base and the
-remaining entry checks. It grants no implementation lane until the integrator records
-both gateway probes and publishes a completed freeze report.
+remaining entry checks. One bounded stand probe was attempted under
+`W56A-PROBE-01` and failed its model identity and price checks; the distinct
+recording gateway remains unavailable. It grants no implementation lane until
+both gateways pass and the integrator publishes a completed freeze report.
 
 ## Outcome
 
@@ -122,7 +124,7 @@ part of its post-freeze task grant.
 - command: `.venv/bin/python -m pytest -q -p no:cacheprovider tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py tests/contract/program/test_wave_governance.py`; expected: exit 0 on a completed candidate.
 - command: re-run `tools/plan/pin_sweep.py reseal-surface migration table error-code` on the final accepted base; expected: exit 0, complete path list captured.
 - command: re-run six-file SHA-256 and `git grep -n '0\.6\.0' -- tests web/tests`; expected: source identity and predecessor hits captured.
-- command: per-gateway identity probes of plan §A3.5; expected: two independent passes within the $5 ledger, or a named stop. No probe has been run in this draft.
+- command: per-gateway identity probes of plan §A3.5; expected: two independent passes within the $5 ledger, or a named stop. `W56A-PROBE-01` records the stand's failed first call and the stop; no second call was made.
 
 ## Integration contract
 
