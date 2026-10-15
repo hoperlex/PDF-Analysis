@@ -1,5 +1,11 @@
 # Current state
 
+**W59–W62 profile vocabulary preparation, 2026-10-15.**
+`W59-INT-PROFILE-METADATA-PREP-01` captures the 14 legacy sections' 162
+category codes and 201 sheet types as digest-pinned, read-only candidates.
+Four focused tests pass. No prompt, normative claim or section profile is
+active; `PB` remains to be authored. No full local gate or acceptance ran.
+
 **W59 section-suggestion preparation, 2026-10-15.**
 `W59-INT-SECTION-SUGGESTION-PREP-01` adds a pure 15-section suggestion
 registry from the local legacy source plus owner-retained `PB`; `PS` is

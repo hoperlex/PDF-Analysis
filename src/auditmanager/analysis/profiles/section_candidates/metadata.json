@@ -1,0 +1,1237 @@
+{
+  "format_version": "legacy-section-profile-metadata/1",
+  "legacy_registry_sha256": "0263e34ed60dd025a191230217832580bddefcdf10b7841f326784f8f8b08970",
+  "sections": [
+    {
+      "code": "AI",
+      "name": "Архитектурные решения (интерьер)",
+      "categories": [
+        "finishes",
+        "flooring",
+        "ceiling",
+        "walls",
+        "bathroom",
+        "kitchen",
+        "doors",
+        "furniture",
+        "lighting",
+        "accessibility",
+        "documentation",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "floor_finish_plan",
+          "label": "План полов"
+        },
+        {
+          "code": "ceiling_plan",
+          "label": "План потолков"
+        },
+        {
+          "code": "wall_elevation",
+          "label": "Развёртка стен"
+        },
+        {
+          "code": "bathroom_plan",
+          "label": "План санузла"
+        },
+        {
+          "code": "kitchen_plan",
+          "label": "План кухни"
+        },
+        {
+          "code": "door_schedule",
+          "label": "Ведомость дверей"
+        },
+        {
+          "code": "furniture_layout",
+          "label": "Расстановка мебели"
+        },
+        {
+          "code": "lighting_plan",
+          "label": "План освещения"
+        },
+        {
+          "code": "finish_schedule",
+          "label": "Ведомость отделки"
+        },
+        {
+          "code": "detail",
+          "label": "Деталь/узел"
+        },
+        {
+          "code": "specification",
+          "label": "Спецификация"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "general_notes",
+          "label": "Общие указания"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "3834f9d05d42d67b000fa97e9acaaed7fe312487bca74ef346f22f568a9db743",
+        "compact_strategy.md": "5f2a12ad3f27494642a2c2f27a3bf83b5fbc7810a4fe00ffbada2e8b9950f056",
+        "config.json": "8485b59a96a3a51ac05b5751c633bb2e8571097e9ccce458bc82e349d93d1a8d",
+        "drawing_types.md": "222a05aafc2a3f5eb6ec95afed033715daf12ca9dd760e6f8807a26b19b897de",
+        "finding_categories.md": "70d3e0e5c4556583141dd41b9220a4c4917d8c12c541e810a802ac03f1f02946",
+        "norms_reference.md": "ebcfdd8e0406c40575e344476e814d79c12b0b3bb2522dd0487386be5d4be735",
+        "project_params.md": "4e793ef3c1ea30f97387d91ed584447542c9d2aeaa3411f11588bc6ffce2961e",
+        "role.md": "189b4d80aa2669e073b564323c77670b6116255ac9ca8741d5e885725f449f0d",
+        "triage_table.md": "dab2af143eed545c943425ddda175cdf91da0ee15d7013dae16c0ce16806e97b"
+      }
+    },
+    {
+      "code": "AR",
+      "name": "Архитектурные решения",
+      "categories": [
+        "dimensions",
+        "layout",
+        "evacuation",
+        "fire_safety",
+        "accessibility",
+        "facade",
+        "roof",
+        "insulation",
+        "insolation",
+        "sound",
+        "documentation",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "floor_plan",
+          "label": "План этажа"
+        },
+        {
+          "code": "typical_floor_plan",
+          "label": "План типового этажа"
+        },
+        {
+          "code": "first_floor_plan",
+          "label": "План 1-го этажа"
+        },
+        {
+          "code": "basement_plan",
+          "label": "План подвала/цоколя"
+        },
+        {
+          "code": "roof_plan",
+          "label": "План кровли"
+        },
+        {
+          "code": "parking_plan",
+          "label": "План паркинга"
+        },
+        {
+          "code": "section",
+          "label": "Разрез"
+        },
+        {
+          "code": "facade",
+          "label": "Фасад"
+        },
+        {
+          "code": "apartment_plan",
+          "label": "Планировка квартиры"
+        },
+        {
+          "code": "staircase_plan",
+          "label": "Лестнично-лифтовой узел"
+        },
+        {
+          "code": "entrance_group",
+          "label": "Входная группа"
+        },
+        {
+          "code": "node_detail",
+          "label": "Узел/деталь"
+        },
+        {
+          "code": "wall_section",
+          "label": "Сечение стены"
+        },
+        {
+          "code": "window_detail",
+          "label": "Узел окна/витража"
+        },
+        {
+          "code": "specification",
+          "label": "Спецификация"
+        },
+        {
+          "code": "room_schedule",
+          "label": "Экспликация помещений"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "general_notes",
+          "label": "Общие указания"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "eccb7879023a126427fd61a0ed36237eb42bbebd4bec63c4009004247d7f3179",
+        "compact_strategy.md": "5004efa53188a2423dedc3605ca261f628ff449e01dfbe18cf81cf3ef00ddea9",
+        "config.json": "ece283a76e7975a79c92b998eaf6e4babc129ca2c862dbd610633cccfc2d36b5",
+        "drawing_types.md": "38ef910c11c71d03819a37c258933bcf4c851ac2cce31bace2681d8fde8fa45e",
+        "finding_categories.md": "e0591c94b2f385a837872f37f5ef32eb057131265c32283e5f732b2c1fa236ce",
+        "norms_reference.md": "15362a671e97f9ac97cb9b0b161acc0f047befaa9207a4185f1805d4ade55bad",
+        "project_params.md": "5d827feac80cf85760af4a1d3f8509e15defb0df771c09ea83e475e172a80f35",
+        "role.md": "fda944f74c4a0bd7cd77339f2c2f8519f55d59e899be03da212f93d2ad432203",
+        "triage_table.md": "837ab2bbfdc0dbb1c0c62754326869fe2f94e4e09f0b510d9b6ed643de64385a"
+      }
+    },
+    {
+      "code": "EOM",
+      "name": "Электроснабжение и электрооборудование",
+      "categories": [
+        "protection",
+        "cable",
+        "grounding",
+        "documentation",
+        "calculation",
+        "current_transformer",
+        "phase_balance",
+        "fire_safety",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "single_line_diagram",
+          "label": "Однолинейная схема"
+        },
+        {
+          "code": "panel_schedule",
+          "label": "Схема щита"
+        },
+        {
+          "code": "floor_plan",
+          "label": "План этажа"
+        },
+        {
+          "code": "parking_plan",
+          "label": "План паркинга"
+        },
+        {
+          "code": "cable_routing",
+          "label": "Кабельная трасса"
+        },
+        {
+          "code": "grounding",
+          "label": "Заземление"
+        },
+        {
+          "code": "entry_node",
+          "label": "Узел ввода"
+        },
+        {
+          "code": "specification",
+          "label": "Спецификация"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "general_notes",
+          "label": "Общие указания"
+        },
+        {
+          "code": "detail",
+          "label": "Деталь/узел"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "2835479eeb630d894349903ad601d3b6ce2cac1c05386f1a5601b58390d8664e",
+        "config.json": "d6bdeb5bf43177880184fc25f94fedccbcfbe7c80ad0910f31cf27b6bb895d3c",
+        "drawing_types.md": "4ccdc7c558465433e0f250114594fcb6b9b0a12dab0dc6f4a29fcf317a7574ed",
+        "finding_categories.md": "902fce3a4a4854dbb94bd86b042860d5ea2b0f8ad6d8ae8b85905498cf00475d",
+        "norms_reference.md": "83043fbd2ff89ef61efd37577b80b597529d4801fb63a5568027068d5ad2dedd",
+        "project_params.md": "28506c8d3f9fc26addc6034f9529a5202229d49e0ec557f00c9832ca65a45c0b",
+        "role.md": "949c503f0eca15b1fd99e29e3abcdaa801cbfd7481ed698e492f1cbcbaef53f0",
+        "triage_table.md": "5bcc50b4b352f6287c6b6d167f39da1863c92eb02c0752abf5eaf345546a61db"
+      }
+    },
+    {
+      "code": "GP",
+      "name": "Генеральный план",
+      "categories": [
+        "roads_access",
+        "parking",
+        "playgrounds",
+        "landscaping",
+        "utilities",
+        "grading",
+        "drainage",
+        "accessibility",
+        "fire_access",
+        "documentation",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "site_plan",
+          "label": "Разбивочный план"
+        },
+        {
+          "code": "landscaping_plan",
+          "label": "План благоустройства"
+        },
+        {
+          "code": "grading_plan",
+          "label": "План вертикальной планировки"
+        },
+        {
+          "code": "utility_plan",
+          "label": "План инженерных сетей"
+        },
+        {
+          "code": "road_profile",
+          "label": "Профили дорог"
+        },
+        {
+          "code": "playground_plan",
+          "label": "План площадок"
+        },
+        {
+          "code": "planting_plan",
+          "label": "План озеленения"
+        },
+        {
+          "code": "drainage_plan",
+          "label": "План водоотведения"
+        },
+        {
+          "code": "cross_section",
+          "label": "Поперечный профиль"
+        },
+        {
+          "code": "specification",
+          "label": "Спецификация"
+        },
+        {
+          "code": "detail",
+          "label": "Узел/деталь"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "general_notes",
+          "label": "Общие указания"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "c6d42f648e73bde0e434efe54e6c544d3eaf181c594b27d76eb6041b7e1fc247",
+        "compact_strategy.md": "b2c15301a4a4e68acbedc7678ce89acb93a674f98cd7cf44cc13c9bb82b9c984",
+        "config.json": "73b679f7067d095ff94134339cc0f9b9d140210f96d8bf5188b0398949624367",
+        "drawing_types.md": "e382963ebbe0ce8b14e27e51fa9b914b8a6aa07ed643f1404f82c88ec08bf799",
+        "finding_categories.md": "0568f133ba2cc85e85078f6f2c949b1839dc0a015b674ce26a0d988704d2107d",
+        "norms_reference.md": "560bc4ad59700e9ad073c7bfb054edb73811fa4e8176dcf3e0f6cead1bdafb63",
+        "project_params.md": "fe02d212adddc7dba97962328862428051951b1e2e32fc2d0b4ecf6d3e6caa93",
+        "role.md": "3a5fdbafcca2b0ada0ad50d53145599b45c771bd3bfa95d1c157469d1b44bd0a",
+        "triage_table.md": "5e17ae57da9bd13ff52be867e1a65c2a6625dc6662d42d8b120e89edfa1eb4eb"
+      }
+    },
+    {
+      "code": "ITP",
+      "name": "Индивидуальный тепловой пункт",
+      "categories": [
+        "heat_exchangers",
+        "pumps",
+        "valves",
+        "automation",
+        "metering",
+        "piping",
+        "electrical",
+        "layout",
+        "documentation",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "principal_scheme",
+          "label": "Принципиальная схема ИТП"
+        },
+        {
+          "code": "itp_layout",
+          "label": "План помещения ИТП"
+        },
+        {
+          "code": "axonometric",
+          "label": "Аксонометрическая схема"
+        },
+        {
+          "code": "automation_scheme",
+          "label": "Функциональная схема автоматизации"
+        },
+        {
+          "code": "metering_scheme",
+          "label": "Схема узла учёта (УУТЭ)"
+        },
+        {
+          "code": "hydraulic_scheme",
+          "label": "Гидравлическая схема"
+        },
+        {
+          "code": "specification",
+          "label": "Спецификация оборудования"
+        },
+        {
+          "code": "electrical_scheme",
+          "label": "Схема электроснабжения ИТП"
+        },
+        {
+          "code": "section",
+          "label": "Разрез помещения ИТП"
+        },
+        {
+          "code": "piping_detail",
+          "label": "Узлы и детали обвязки"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "general_notes",
+          "label": "Общие указания"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "22aa3697b2557feb65e2e25f1478e81ec2d48ba815818f62eef40a8059f0dbb1",
+        "compact_strategy.md": "1d0adfd9a5e9ee13a7c92951d65c7136b6bcd7599e528029856eaed53d7134f3",
+        "config.json": "265041b46246dbb226579e1d86d0d11658a27d66e2180a882e8e4d22233bc2c6",
+        "drawing_types.md": "5ba8823dd2d2a8291dd9c17dc4a9d9a480af8dc3ade9b8a48efa652d0858b1ee",
+        "finding_categories.md": "113fe584e10e12b5c28ec4bb4342b58bd8277e1724cbfb8a712ac53fbdbe7e13",
+        "norms_reference.md": "6f2006a9f1af5b1585ac84ed1a920c670be82c634d02acc79fb9354213a05b79",
+        "project_params.md": "0fbb238e3fe676e744610e4af63caed85014e30a4b3eb9b0652bc1f4fba19796",
+        "role.md": "18cb5f3e4f321b3f9eb526e0702d3f7bc49e972c4555bd0ab02b0f86d1bc2ca1",
+        "triage_table.md": "a22cb4330d06008dd6fa49530ceadea9ecc60d59760a0aeb3b6cd475d7fd996a"
+      }
+    },
+    {
+      "code": "KJ",
+      "name": "Конструкции железобетонные",
+      "categories": [
+        "concrete_class",
+        "rebar_class",
+        "cover_thickness",
+        "anchorage",
+        "lap_length",
+        "rebar_geometry",
+        "stirrups",
+        "column_detail",
+        "slab_detail",
+        "foundation_detail",
+        "stairs_detail",
+        "opening_reinforcement",
+        "progressive_collapse",
+        "seismic_detail",
+        "fire_rating",
+        "corrosion_protection",
+        "km_kj_coordination",
+        "ar_kj_coordination",
+        "mep_coordination",
+        "construction_sequence",
+        "spec_mismatch",
+        "documentation",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "general_notes",
+          "label": "Общие данные"
+        },
+        {
+          "code": "deviations_register",
+          "label": "Реестр отклонений РД от ПД"
+        },
+        {
+          "code": "formwork_vertical",
+          "label": "Опалубка вертикальных конструкций"
+        },
+        {
+          "code": "formwork_slab",
+          "label": "Опалубка плиты"
+        },
+        {
+          "code": "marking_scheme",
+          "label": "Маркировочная схема"
+        },
+        {
+          "code": "column_reinforcement",
+          "label": "Армирование колонн"
+        },
+        {
+          "code": "wall_reinforcement",
+          "label": "Армирование стен"
+        },
+        {
+          "code": "wall_sections",
+          "label": "Сечения армирования стен"
+        },
+        {
+          "code": "slab_reinforcement_bottom",
+          "label": "Схема нижнего армирования плиты"
+        },
+        {
+          "code": "slab_reinforcement_top",
+          "label": "Схема верхнего армирования плиты"
+        },
+        {
+          "code": "slab_bent_bars",
+          "label": "Схема гнутых деталей и усилений"
+        },
+        {
+          "code": "opening_reinforcement",
+          "label": "Усиление отверстий"
+        },
+        {
+          "code": "sections_cuts",
+          "label": "Разрезы, сечения узлов"
+        },
+        {
+          "code": "stairs",
+          "label": "Лестницы, марши, площадки"
+        },
+        {
+          "code": "foundation_formwork",
+          "label": "Опалубка фундамента/ростверка"
+        },
+        {
+          "code": "foundation_reinforcement",
+          "label": "Армирование фундамента/ростверка"
+        },
+        {
+          "code": "specification",
+          "label": "Спецификация и ведомость деталей"
+        },
+        {
+          "code": "general_view",
+          "label": "Общий вид, 3D-компоновка"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "07ecdfce7696f16d004877117a58479edafca6f2fa8d81d530c6b20201b12801",
+        "compact_strategy.md": "8b7b39a41b7e5796d95d61682f0eb1b0a764ee6e748ed6c05fba66badea9c429",
+        "config.json": "6baf50a6affe2639d60609f1db94238b67827937f98eba02556e55a46d13c013",
+        "drawing_types.md": "a50d6c11bcdd38e4678dbd380fda27869c27bfd718070600b15eed57b2761db8",
+        "finding_categories.md": "9efdf059b322a51cbb5109e06190948cd30f6ea50e901c9d47d8a79ffbce48ee",
+        "norms_reference.md": "3a0072cb6e560f3b1ecb832c5bfa8d6f37f3bf3358cf4cbdcbb7dca166ae922e",
+        "project_params.md": "0a32c5a0eede3b3b69af0676a087220b30ad724a3dcfdee9b877e41fc7cdbafb",
+        "role.md": "29004c6454798d53b5eb518b25990f39b223ce1b7b0b86c85aa723e85fe0f2af",
+        "triage_table.md": "e0a3d1dbb330d087a3b599787382a2db15e5b01050a51fb2d778700676bed30d"
+      }
+    },
+    {
+      "code": "KM",
+      "name": "Конструкции металлические",
+      "categories": [
+        "steel_grades",
+        "sections",
+        "connections",
+        "welding",
+        "bolts",
+        "stability",
+        "fire_protection",
+        "corrosion_protection",
+        "assembly",
+        "documentation",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "framing_plan",
+          "label": "Схема расположения элементов"
+        },
+        {
+          "code": "assembly_plan",
+          "label": "Монтажная схема"
+        },
+        {
+          "code": "connection_detail",
+          "label": "Узел соединения"
+        },
+        {
+          "code": "cross_section",
+          "label": "Сечение элемента"
+        },
+        {
+          "code": "general_view",
+          "label": "Общий вид конструкции"
+        },
+        {
+          "code": "truss_drawing",
+          "label": "Чертёж фермы"
+        },
+        {
+          "code": "column_drawing",
+          "label": "Чертёж колонны"
+        },
+        {
+          "code": "beam_drawing",
+          "label": "Чертёж балки"
+        },
+        {
+          "code": "bracing_scheme",
+          "label": "Схема связей"
+        },
+        {
+          "code": "specification",
+          "label": "Спецификация"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "general_notes",
+          "label": "Общие указания"
+        },
+        {
+          "code": "detail",
+          "label": "Деталь/узел"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "544487191d8d819081298ed15ef532be9c5db6196942b4e959eb79de4d7bf993",
+        "compact_strategy.md": "b1e9f6f9606d2d64cf4eff1bf4d1bd6352dfd7aeb8e878fc55e25bffa67dd574",
+        "config.json": "a0de4025b1f51e10f9a430bcd00022da8cb9ce64de4a4ce6af4ce09787ad8e0d",
+        "drawing_types.md": "63e89356ed9e993d1872af34c92e96d974e5920cd08e5d5307f7615582509bb3",
+        "finding_categories.md": "c6002c08dfbf69b88a38b5127e25a8d016a57947dceff04a7a6deb0f179c29af",
+        "norms_reference.md": "8fe088d2eb7b0557b682a84c05011bbac3c9c7555972780d235a665707647c58",
+        "project_params.md": "8ddfed0a615de7c59cc6d1c38f1de402a0a79ff859474ee65d8dbbe8bdb4e6af",
+        "role.md": "e07abb3b3a69300b01bf2e974ed1fa35c93c41068d96cabe83775291de071920",
+        "triage_table.md": "36398f51b22e2ee47ce9d4a99342751016c1bdb2285ab7810a945c89c074d4d0"
+      }
+    },
+    {
+      "code": "OV",
+      "name": "Отопление, вентиляция и кондиционирование",
+      "categories": [
+        "airflow",
+        "duct_sizing",
+        "heating",
+        "piping",
+        "fire_dampers",
+        "smoke_exhaust",
+        "equipment",
+        "insulation",
+        "noise",
+        "documentation",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "ventilation_plan",
+          "label": "План вентиляции"
+        },
+        {
+          "code": "heating_plan",
+          "label": "План отопления"
+        },
+        {
+          "code": "duct_layout",
+          "label": "Схема воздуховодов"
+        },
+        {
+          "code": "piping_diagram",
+          "label": "Схема трубопроводов"
+        },
+        {
+          "code": "equipment_schedule",
+          "label": "Схема оборудования"
+        },
+        {
+          "code": "smoke_exhaust_plan",
+          "label": "План дымоудаления"
+        },
+        {
+          "code": "air_handling_unit",
+          "label": "Приточная/вытяжная установка"
+        },
+        {
+          "code": "conditioning_plan",
+          "label": "План кондиционирования"
+        },
+        {
+          "code": "specification",
+          "label": "Спецификация"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "general_notes",
+          "label": "Общие указания"
+        },
+        {
+          "code": "detail",
+          "label": "Деталь/узел"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "bf246ffd2bea9f32f64105f4fc5425b54517554222483f635787d27cace09c2d",
+        "compact_strategy.md": "30321d1c5d92edfffcf914fe78932ccd5304038e24a409fe413fdbd3f19a88b9",
+        "config.json": "6667ef5443f31bee2fbecb52e7f16ff37e03cfe3b556e82616cd6ee271f61b79",
+        "drawing_types.md": "2d51c69768a68ba1da1f590358512a56b9404478fb9aa870967dc7b527c97eee",
+        "finding_categories.md": "87c0747badf050cf95ecc58e5f37307f5746e9c034a4d1dc11790ab795ca99b0",
+        "norms_reference.md": "dbfabbdcce1116ffe7dbc9766f33a44a10b57a3e8aa1d26800246a6e86c0ea5d",
+        "project_params.md": "f62c496f6e7a301424284ded3735bad8d0067479c71ecdbeae0b35594c14bc88",
+        "role.md": "7de3df5fd806e2e114e67993e2e9b8683a8a2d5a15fac46df185f3f780732858",
+        "triage_table.md": "fed7305041dc635fcb5646764f6c52e78bac63bf3682f4aae83c64f92f533bdf"
+      }
+    },
+    {
+      "code": "POS",
+      "name": "Проект организации строительства",
+      "categories": [
+        "site_plan",
+        "schedule",
+        "crane_zones",
+        "safety",
+        "temporary_facilities",
+        "materials_logistics",
+        "environmental",
+        "demolition",
+        "documentation",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "site_plan",
+          "label": "Стройгенплан"
+        },
+        {
+          "code": "schedule",
+          "label": "Календарный план-график"
+        },
+        {
+          "code": "site_organization",
+          "label": "Схема организации площадки"
+        },
+        {
+          "code": "crane_scheme",
+          "label": "Схема монтажа"
+        },
+        {
+          "code": "situation_plan",
+          "label": "Ситуационный план"
+        },
+        {
+          "code": "excavation_section",
+          "label": "Разрез котлована"
+        },
+        {
+          "code": "temporary_networks",
+          "label": "Временные сети"
+        },
+        {
+          "code": "workforce_chart",
+          "label": "График потребности в кадрах"
+        },
+        {
+          "code": "machinery_chart",
+          "label": "График потребности в механизмах"
+        },
+        {
+          "code": "demolition_plan",
+          "label": "План демонтажа"
+        },
+        {
+          "code": "specification",
+          "label": "Спецификация"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "general_notes",
+          "label": "Общие указания"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "a4c5bba5d83e46841e1182f714adb4b459ce646f49b511b3f05ebac215d6a722",
+        "compact_strategy.md": "3dad9cc87813ca44ad70e2859109e3c23c6b9a9a89979dde0e7a53d59ee3ba4b",
+        "config.json": "830b66ccd177c73f439707c2508d07ec365e80b21c56aaea0d7f327724aeb282",
+        "drawing_types.md": "cf608107fe49ba9fb0de02cd8522381e638e66563ce07f0b33fefd11bcb1ebb5",
+        "finding_categories.md": "6c10f378c333711e58a00cabd2853ff1e4097723cb4550a079a4b8ddc920c816",
+        "norms_reference.md": "1bde97a86ecaed8861a6b3087883b669ac9edb87f7473b43e93e93d13e4f5d43",
+        "project_params.md": "42f8346450816b49b00082f91a3b798e4714fe2264e0be6a1ecc499537939032",
+        "role.md": "19e2951c15fe0cb0ae328eb8fdcb60861265df8a2749296b49c811116b89e8cb",
+        "triage_table.md": "9f783f4ff55d86a4c58b76660ef3e8d46dbe32d5b33b8fb75c8119bbc537cae1"
+      }
+    },
+    {
+      "code": "PS",
+      "name": "Пояснительная записка",
+      "categories": [
+        "completeness",
+        "tep_consistency",
+        "structural_description",
+        "engineering_systems",
+        "fire_safety",
+        "accessibility",
+        "energy_efficiency",
+        "ecology",
+        "documentation",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "text_section",
+          "label": "Текстовая часть"
+        },
+        {
+          "code": "tep_table",
+          "label": "Таблица ТЭП"
+        },
+        {
+          "code": "site_plan",
+          "label": "Ситуационный план"
+        },
+        {
+          "code": "summary_table",
+          "label": "Сводная таблица"
+        },
+        {
+          "code": "energy_passport",
+          "label": "Энергетический паспорт"
+        },
+        {
+          "code": "tep_comparison",
+          "label": "Сравнительная таблица ТЭП"
+        },
+        {
+          "code": "normative_list",
+          "label": "Перечень нормативных документов"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "general_notes",
+          "label": "Общие указания"
+        },
+        {
+          "code": "appendix",
+          "label": "Приложение"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "c3dd8f7b7f84ecd23de8e353071b0f400ef9be4863de1c6b3691083ffeee9a93",
+        "compact_strategy.md": "9a8eab48c86069ca5044bf811e61a746e0042f25d66610dd392c2bf0538ab991",
+        "config.json": "523c94a444dc7d6a1fccfb71a4e777286bddf16da907a6a791658a0191682e64",
+        "drawing_types.md": "bfbf147ce3449ee293f194430d1aafa91898036f09f3cf9fe250c3c41cbee7d4",
+        "finding_categories.md": "60dfdf036131121a97477e7cd0630f89fdf36a56d7c3e93dbb6123bfe204d907",
+        "norms_reference.md": "a214ab8323559c3caf83fdf9508b05cc7e7749d539cb9d622ea4a1534a483c67",
+        "project_params.md": "eb8dcb54b22371673195d0985d8bca6ca4a01d152d590567abdddb7313376a51",
+        "role.md": "9999c2e3398db818d1b85941473db785b8b132558c95661c016ad845a437b7fa",
+        "triage_table.md": "ddd2bb7796e41d15b54c56eeba9c94227f9b1bdc7a020261f4c555562c73796a"
+      }
+    },
+    {
+      "code": "PT",
+      "name": "Противопожарный водопровод",
+      "categories": [
+        "fire_hydrants",
+        "sprinkler",
+        "drencher",
+        "fire_pumps",
+        "reservoir",
+        "pipe_network",
+        "hydraulic",
+        "automation",
+        "documentation",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "fire_water_plan",
+          "label": "План ВПВ"
+        },
+        {
+          "code": "sprinkler_plan",
+          "label": "План спринклеров"
+        },
+        {
+          "code": "drench_plan",
+          "label": "План дренчеров"
+        },
+        {
+          "code": "fire_pump_station",
+          "label": "Пожарная насосная"
+        },
+        {
+          "code": "riser_diagram",
+          "label": "Стояковая схема"
+        },
+        {
+          "code": "control_node",
+          "label": "Узел управления"
+        },
+        {
+          "code": "axonometric_scheme",
+          "label": "Аксонометрическая схема"
+        },
+        {
+          "code": "hydraulic_calc",
+          "label": "Гидравлический расчёт"
+        },
+        {
+          "code": "specification",
+          "label": "Спецификация"
+        },
+        {
+          "code": "detail",
+          "label": "Деталь/узел"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "general_notes",
+          "label": "Общие указания"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "64e1b131ba76fc6c86d0844728c8ed3ce21c02e69a325c244eb93b0155c39bc7",
+        "compact_strategy.md": "8afdd8f2f8644bdace43aa1a55ebc8fa953afdc80f99f2a0d1da059610a7df5c",
+        "config.json": "f791f51d1fb82e305356fbacd1169d2efe0cedfa952b8da18ad840f4f4b07e89",
+        "drawing_types.md": "ddb28b04a734d033de15b72bfea23662b9362abe142f7b550abb80cf1588e9cc",
+        "finding_categories.md": "03e4ca176804c587c489939913747b97fd51d8b36b9f1c12b73170ab018f913e",
+        "norms_reference.md": "ae886c3b5bc3314a939f894598b6e286d8618f43789c54c27ce71b722fc0350f",
+        "project_params.md": "97d008af80e8d984715ccadca0a0fc1bb0c228f584851ae1155c519e462e230a",
+        "role.md": "8d9136f0d6bcc1434ed0569106c4c9cd65e7658e72e13ba8fbe97964322bbbb3",
+        "triage_table.md": "6bfa50de31dbf0ce0f92b4f27ea914f4c7190ff94f283e565b1e36c5e19ef6cd"
+      }
+    },
+    {
+      "code": "SS",
+      "name": "Слаботочные системы",
+      "categories": [
+        "scs",
+        "cctv",
+        "access_control",
+        "intercom",
+        "fire_alarm",
+        "pa_system",
+        "tv_radio",
+        "dispatch",
+        "cable_routing",
+        "documentation",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "scs_plan",
+          "label": "План СКС"
+        },
+        {
+          "code": "cctv_plan",
+          "label": "План видеонаблюдения"
+        },
+        {
+          "code": "access_control_plan",
+          "label": "План СКУД"
+        },
+        {
+          "code": "intercom_plan",
+          "label": "План домофона"
+        },
+        {
+          "code": "fire_alarm_plan",
+          "label": "План ОПС"
+        },
+        {
+          "code": "pa_system_plan",
+          "label": "План СОУЭ"
+        },
+        {
+          "code": "tv_plan",
+          "label": "План ТВ/радио"
+        },
+        {
+          "code": "dispatch_plan",
+          "label": "План диспетчеризации"
+        },
+        {
+          "code": "riser_diagram",
+          "label": "Стояковая схема"
+        },
+        {
+          "code": "server_room",
+          "label": "Серверная/кроссовая"
+        },
+        {
+          "code": "specification",
+          "label": "Спецификация"
+        },
+        {
+          "code": "structural_diagram",
+          "label": "Структурная схема"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "general_notes",
+          "label": "Общие указания"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "4efe2296d18124aae441a05d01f8ea70ddace7ec4cd6608362796a0003b020f6",
+        "compact_strategy.md": "a250d799d740c7f3573fc38bc7e684df32e7a413046230f44c4b3a76944e7a35",
+        "config.json": "8db02b7818f2d8a52a1830641aabfd8b2094c9d9b8967985451d2df0b44a8ca2",
+        "drawing_types.md": "8a2e1c23105da4aca67eadf9e811e38508607c4b8e865b3844af0a1bbf6366e2",
+        "finding_categories.md": "ff8193946f57ecfbc0e9c10f4be0f41f74c3decfe67257f16d9ebb398b0719c9",
+        "norms_reference.md": "a3f7dcf0b5b9e5f4dc7718563294ab500d7a7b28f462e0a6d2b101feb8c14780",
+        "project_params.md": "d36990b5b154eb3351939f5f1a6d4457db17c6da9caf475e7c84bbdc2ca03637",
+        "role.md": "bce9846d362a4994e82dd6fbc9c026c96de91c8eb27a4c654bb2b403cf48fc7f",
+        "triage_table.md": "9a5faba0e7f6d17395321af983fc10ca3dd0d9490d12b08e3554bdbc0d72f36a"
+      }
+    },
+    {
+      "code": "TX",
+      "name": "Технологические решения",
+      "categories": [
+        "equipment_layout",
+        "process_flow",
+        "utility_connections",
+        "parking",
+        "food_technology",
+        "sanitary",
+        "waste",
+        "loading",
+        "capacity",
+        "documentation",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "equipment_layout",
+          "label": "План расстановки оборудования"
+        },
+        {
+          "code": "floor_plan_tech",
+          "label": "Технологический план этажа"
+        },
+        {
+          "code": "parking_layout",
+          "label": "План паркинга"
+        },
+        {
+          "code": "loading_zone",
+          "label": "Загрузочная зона"
+        },
+        {
+          "code": "waste_room",
+          "label": "Мусорокамера"
+        },
+        {
+          "code": "food_service_plan",
+          "label": "План предприятия питания"
+        },
+        {
+          "code": "medical_plan",
+          "label": "План медицинского помещения"
+        },
+        {
+          "code": "process_flow",
+          "label": "Технологическая схема"
+        },
+        {
+          "code": "utility_connections",
+          "label": "Схема подключений"
+        },
+        {
+          "code": "specification",
+          "label": "Спецификация"
+        },
+        {
+          "code": "section",
+          "label": "Разрез"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "general_notes",
+          "label": "Общие указания"
+        },
+        {
+          "code": "detail",
+          "label": "Деталь/узел"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "1ac7f1cc6b994952f2fa74b56b72db010e4c7c6e0a05d54801940408d76f1bbf",
+        "compact_strategy.md": "72be8238f5f428b2c269081130213cc59dbaadb16ee51ae5713962c79e120817",
+        "config.json": "8024ac7040825c4a1e5b0addca38cc41b0e19196590a0bc4da8767edd2aead5d",
+        "drawing_types.md": "25adf17e19e877514a047342bb4b40b79389a8b0f2f5fe974f7ccf896780dbb4",
+        "finding_categories.md": "345de86c9456996ea95858548929cfc09dd60c4e51cc3c95c7f7fc71589fbe55",
+        "norms_reference.md": "7bd06ae66756148e30f006f13aa9193f9633b4bcbe14f544efdb5b17fd0bc937",
+        "project_params.md": "213459e8dd3bfd9b8a1c03969ef42b5d0edb1bb417f66637582289595262de02",
+        "role.md": "c7613a8b11f2cfef40eac29b68343d62dbfec3d8811c82445e0be49162bbc30d",
+        "triage_table.md": "9eaa3b1fac4079925a8685e6bb3c7ee9f44f72925334e36a92e2b083bc063a5a"
+      }
+    },
+    {
+      "code": "VK",
+      "name": "Водоснабжение и канализация",
+      "categories": [
+        "cold_water",
+        "hot_water",
+        "sewerage",
+        "storm_drain",
+        "water_meter",
+        "pumps",
+        "pipe_sizing",
+        "insulation",
+        "materials",
+        "documentation",
+        "normative_refs"
+      ],
+      "sheet_types": [
+        {
+          "code": "cold_water_plan",
+          "label": "План ХВС"
+        },
+        {
+          "code": "hot_water_plan",
+          "label": "План ГВС"
+        },
+        {
+          "code": "sewerage_plan",
+          "label": "План канализации"
+        },
+        {
+          "code": "storm_drain_plan",
+          "label": "План ливнёвки"
+        },
+        {
+          "code": "water_meter_unit",
+          "label": "Водомерный узел"
+        },
+        {
+          "code": "pump_station",
+          "label": "Насосная станция"
+        },
+        {
+          "code": "riser_diagram",
+          "label": "Стояковая схема"
+        },
+        {
+          "code": "axonometric_scheme",
+          "label": "Аксонометрическая схема"
+        },
+        {
+          "code": "specification",
+          "label": "Спецификация"
+        },
+        {
+          "code": "section",
+          "label": "Разрез"
+        },
+        {
+          "code": "detail",
+          "label": "Деталь/узел"
+        },
+        {
+          "code": "title_block",
+          "label": "Титульный лист"
+        },
+        {
+          "code": "general_notes",
+          "label": "Общие указания"
+        },
+        {
+          "code": "other",
+          "label": "Прочее"
+        }
+      ],
+      "source_sha256": {
+        "checklist.md": "5bcccef4fbe706983b1f125dbdcded15d97ba697677eb8b07998da72147eabd1",
+        "compact_strategy.md": "b7f11c94097b6a0b1def5c02c8a30bd8a79ab8a646947cf2ca6fb40ba12925d7",
+        "config.json": "9996f9c156013d8fa80242eb96549d3eba8617e8e12be2875657e1086212fe6a",
+        "drawing_types.md": "b6e1ed44f153d0e3e61f25c17da7aff5bd5bdd917356e48b6a0336302e802a20",
+        "finding_categories.md": "84f8c7bb03f58c603ae42c8e9286872142922e5bbeef84a27e1f47b6feff5977",
+        "norms_reference.md": "1537cf81e0dfb35902acbd78e7bf24530c66b6ff58b3f63155c1acb885d71a1a",
+        "project_params.md": "45c73d4b95b95da870598020fc4f747d8201adab0dde1d5d9e13cfb1b6905724",
+        "role.md": "5140872cd9a8be7e6ca091fcc95a11e54c665b5a93ae5004f93e1377b5927781",
+        "triage_table.md": "78b404fdea10851a5752722b0f871549306e032c2d0682fd3d6f4df9da1df9aa"
+      }
+    }
+  ]
+}
