@@ -1,5 +1,13 @@
 # Current state
 
+**W56a marked OCR context preparation, 2026-10-15.**
+`W56A-INT-RECOGNISED-CONTEXT-PREP-01` adds a pure selector that takes
+recognised TEXT only on the version's stored textless pages, preserves
+quality flags, excludes portal descriptions and renders explicitly
+uncitable context. Thirty-four focused AR v2 tests pass. Runtime prompt
+wiring and grounding remain open, as does MODEL-PIN. No full local gate
+or acceptance was run.
+
 **W56a AR v2 response parser preparation, 2026-10-15.**
 `W56A-INT-RESPONSE-PARSER-PREP-01` adds a pure parser for complete
 seven-category, five-severity proposals, with explicit-truncation salvage
