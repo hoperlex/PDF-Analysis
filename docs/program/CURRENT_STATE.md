@@ -1,5 +1,12 @@
 # Current state
 
+**W56a AR v2 response schema preparation, 2026-10-15.**
+`W56A-INT-RESPONSE-SCHEMA-PREP-01` adds a pure, copy-on-read response schema
+for the sealed seven categories and five severity proposals. Six focused
+content/schema tests pass. It is not bound to an active prompt or stage;
+MODEL-PIN and provider-dependent work remain blocked. No full local gate or
+acceptance was run.
+
 **W56a namespaced-stub probe refusal, 2026-10-15.**
 `W56A-INT-PROBE-STUB-CORR-01` closes the `stub/...` identity gap in the
 offline probe tool; 17 focused tests pass. No gateway call or lock pin was
