@@ -54,7 +54,26 @@ a target only with `origin_main_authority: separate direct owner instruction <re
 exact candidate; an integration or closeout task is not authority by implication.
 
 ## Allowed paths
-- ...
+- `path/to/exact-file`
+- `path/to/owned-directory/**`
+
+For machine-checked handoff, use one exact repository-relative path or one directory
+prefix ending in `/**` per bullet, with no inline commentary. Put explanations in
+`Deliverables` or `Integration contract`. `scripts/task_handoff.py` refuses an
+ambiguous allowlist instead of guessing what it permits.
+
+## Lane resources
+
+For a task that starts PostgreSQL/S3, the integrator assigns these six values before
+dispatch. Omit this section for a task that needs no isolated services. Never reuse
+another lane's instance, database, bucket or TCP port.
+
+- foundation_instance: `auditmanager-<task-lane>`
+- postgres_port: `<assigned-port>`
+- s3_api_port: `<assigned-port>`
+- s3_console_port: `<assigned-port>`
+- postgres_db: `auditmanager_<task_lane>`
+- s3_bucket: `auditmanager-<task-lane>`
 
 ## Forbidden hotspots
 - contracts not owned by this task

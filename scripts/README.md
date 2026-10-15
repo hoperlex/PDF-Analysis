@@ -2,6 +2,49 @@
 
 Repository-local operational/developer scripts only. Each script must have a stable purpose, safe defaults and a documented caller. Business rules must not live only in a one-off script.
 
+## Lane preparation and technical handoff
+
+The integrator assigns a full base SHA and, if services are needed, the six lane
+resources in `docs/program/tasks/<TASK_ID>.md`. `Allowed paths` uses one exact path
+or one `directory/**` prefix per bullet. Commit the task file before running the
+preparation command. Before creating a worktree, inspect the
+task's dependencies and frozen contract set as `AGENTS.md` requires.
+
+```bash
+python3 scripts/lane_prepare.py --task docs/program/tasks/<TASK_ID>.md --dry-run
+python3 scripts/lane_prepare.py --task docs/program/tasks/<TASK_ID>.md
+```
+
+`lane_prepare.py` creates `.local/worktrees/<TASK_ID>` at the exact base on
+`agent/<TASK_ID>`, writes only disposable `.env.example` values with the assigned
+instance and ports, then runs `make bootstrap` and `npm --prefix web ci` in that
+worktree. Use `--foundation-python /absolute/path/to/python3.12` when it is not
+on `PATH`. `--no-install` prepares the worktree and `.env` without installing
+dependencies. A repeat on the same untouched worktree is safe; a conflicting
+base, branch, environment or resource reservation is refused. The integrator
+continues to own port assignment. Finished lanes are inspected and removed only
+through `scripts/worktree_cleanup.py` under its existing safety checks.
+
+After the lane is committed and clean, run the handoff tool from the checkout
+holding the committed task file. The task's frozen base may precede the
+dispatch commit, so the lane worktree need not contain the task file:
+
+```bash
+python3 scripts/task_handoff.py --task docs/program/tasks/<TASK_ID>.md \
+  --worktree .local/worktrees/<TASK_ID> \
+  --check-json '["git","diff","--check"]'
+```
+
+Each `--check-json` is one argv array, executed without a shell. The tool checks
+the task's exact base, every changed path (including both sides of a rename),
+`git diff --check`, clean status and an unchanged HEAD around each check. It
+writes a technical Markdown report and full check logs under ignored `.local/`.
+The report labels absent or red checks as incomplete and leaves contract changes,
+risks, integration notes and required test coverage for a reviewer. It does not
+replace the six-item task handoff, authorise a merge or publish a ref.
+Do not put credentials in check arguments or run checks that print credentials:
+arguments and output are retained in the local evidence files.
+
 ## Bootstrap validator
 
 From a clean checkout, create the repository-local validation environment and
