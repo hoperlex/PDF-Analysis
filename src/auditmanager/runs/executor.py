@@ -134,7 +134,13 @@ from auditmanager.runs.retry import (
     not_attempted,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import ModelCallId, RunId, VersionUid
+from auditmanager.shared.identity import (
+    AnalysisProfileId,
+    ModelCallId,
+    PromptBundleId,
+    RunId,
+    VersionUid,
+)
 from auditmanager.storage.public import BlobStore, DurablePublicationStore
 from auditmanager.storage.public import BlobMetadataRepository
 from auditmanager.storage.public import BlobDeclaration, VerifiedBlob, parse_blob_id
@@ -201,6 +207,64 @@ class ExecutionResult:
     def is_publishable(self) -> bool:
         """Delegated to the gate's own definition; this module has no opinion."""
         return self.selection.is_publishable
+
+
+@dataclass(frozen=True, slots=True)
+class RecordedV2ExecutionIntent:
+    """A persisted run's identity after recorded-only preflight, without effects.
+
+    This is not an activated stage plan. The v2 profile/bundle must come from a
+    separately registered, immutable profile before a caller can use this seam.
+    """
+
+    run_id: str
+    analysis_profile_id: str
+    prompt_bundle_id: str
+
+
+def plan_recorded_v2_execution(
+    *,
+    run: RunRow,
+    adapter: ModelAdapter,
+    provider_config: ProviderConfig,
+    registered_profile_id: str,
+    registered_bundle_id: str,
+) -> RecordedV2ExecutionIntent:
+    """Check recorded v2 authority before any DB, blob or provider effect.
+
+    The caller must supply the profile and bundle from an independently pinned
+    registry. This helper cannot register a profile or prove a recording's
+    request checksum. In particular it is not called by the current v1
+    ``execute_run`` path.
+    """
+    try:
+        AnalysisProfileId.parse(registered_profile_id)
+        PromptBundleId.parse(registered_bundle_id)
+    except (TypeError, ValueError, DomainError):
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="a recorded AR v2 profile and prompt bundle must be pinned",
+        ) from None
+
+    v1_profile_id = str(AR_TEXT_PROFILE.analysis_profile_id)
+    if (
+        registered_profile_id == v1_profile_id
+        or run.analysis_profile_id != registered_profile_id
+        or run.prompt_bundle_id != registered_bundle_id
+        or run.provider_mode != ProviderMode.RECORDED.value
+        or provider_config.mode is not ProviderMode.RECORDED
+        or adapter.provider_mode is not ProviderMode.RECORDED
+        or run.state not in {INITIAL_STATE, "queued", "running"}
+    ):
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="recorded AR v2 execution requires a matching pinned run and adapter",
+        )
+    return RecordedV2ExecutionIntent(
+        run_id=run.run_id,
+        analysis_profile_id=registered_profile_id,
+        prompt_bundle_id=registered_bundle_id,
+    )
 
 
 @dataclass
@@ -990,6 +1054,8 @@ __all__ = [
     "Clock",
     "EffectCheckpoint",
     "ExecutionResult",
+    "RecordedV2ExecutionIntent",
     "Sleep",
     "execute_run",
+    "plan_recorded_v2_execution",
 ]

@@ -1,5 +1,13 @@
 # Current state
 
+**Code-first bounded pipelines and preflight, 2026-10-15.**
+`CFB-INT-PIPELINES-AND-PREFLIGHT-05` adds an inert recorded AR v2 executor
+preflight, one-source W57b reference pipeline and caller-authorized XLSX
+read-to-byte package service. Focused no-DB tests pass. The current executor
+remains v1: registered AR v2 profile/bundle, recorded request/artifact path,
+W57a/W57b seals, verified corpus/custody, citation/page source verification
+and XLSX API policy remain ahead. No complete gate or beta verdict is claimed.
+
 **Code-first recorded and normative adapters, 2026-10-15.**
 `CFB-INT-RECORDED-AND-NORM-04` combines a recorded-only AR v2
 response-to-publication chain, an offline seeded scoring bridge, a fail-closed
