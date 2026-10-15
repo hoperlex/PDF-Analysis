@@ -1,5 +1,11 @@
 # Current state
 
+**W57a pure citation preparation, 2026-10-15.**
+`W57A-INT-CITATION-PREP-01` adds `norm-quote-v1` raw-offset grounding,
+`norm-value-v1` tokenization and an all-or-nothing citation/value guard.
+Seventeen focused tests pass. No active v3 stage, promoted set, runtime wiring
+or normative decision is claimed; those remain with W57a's later tasks.
+
 **W59 section-route preparation, 2026-10-15.**
 `W59-INT-SECTION-ROUTE-PREP-01` adds a pure guard for a version-bound
 confirmed section and an available section-specific profile. It refuses
