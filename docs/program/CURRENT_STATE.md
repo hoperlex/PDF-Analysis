@@ -1,13 +1,19 @@
 # Current state
 
-**Planning integration, 2026-10-15.** `dispatch/CODE-FIRST-TO-BETA.md` is the
+**W56a SEAL development integration, 2026-10-15.** `W56A-SEAL-01` is merged
+locally from `bcd5ad26`: the recorded-only v2 contract and migration
+`0022_findings_v2` are present, with 47 paths / 54 operations / 124 schemas
+and 25 API error codes. The model identity is still unproven; v2 execution is
+not activated. Addressed contract, frontend and isolated migration checks are
+recorded in `W56A-SEAL-01.md`; full local gate and service-backed acceptance
+were not run. `dispatch/CODE-FIRST-TO-BETA.md` is the
 code-first work order from W56a through the planned pre-beta code blocks. R-135
 moves complete gates after that code series and excludes a full local gate,
 manual acceptance and `origin/main` publication from development work. R-136
 allows a recorded-only W56a SEAL and synthetic generator before the still
 failed gateway identity probe; `R-133` remains in force. This is a planning
-and dispatch change, not implementation or a beta verdict. The W55b product
-state below remains the code baseline.
+and dispatch change, not a beta verdict. The W55b product state below is the
+historical baseline for this additive seal.
 
 **Updated 2026-10-14.** W55b development closure is recorded below and in
 `W55B-INT-CLOSE.md`; `origin/main` remains the separately published `v0.5.0` tree.
@@ -147,9 +153,9 @@ pages and a 250 MiB PDF member, stores the bundle's declared members, shows
 recognised text and product-made IMAGE crops under «Блоки», and refuses a run
 above the configured input budget before creating one. `GATE-PKG-01` is part of
 this candidate. FIX-2 restored the frozen whole-member archive ratio without
-removing the early declared-size stop. The sealed API surface is 47 paths / 54
-operations / 123 schemas, the error catalogue has 24 codes, and migration head
-is `0021_portal_bundles`. D-159–D-177 record the remaining findings and
+removing the early declared-size stop. At that W55b candidate, the sealed API
+surface counted 47 paths, 54 operations and 123 schemas, its error catalogue
+had 24 codes, and it ran migration `0021_portal_bundles`. D-159–D-177 record the remaining findings and
 measurements. The 0.6.0 notes exist but no release tag or `origin/main`
 publication is made by this development close; the owner's separate exact-SHA
 instruction is required for that release step.
@@ -157,7 +163,7 @@ instruction is required for that release step.
 **2026-10-13 — W54 + W55a released as `v0.5.0`.** After `R-111`'s consolidated validation
 (`W55A-INT-GATE-01`: literal `GATE OK` on `23fd729`), the owner instructed publication of that
 exact SHA, tagged `v0.5.0`; the publication record is `W54-INT-MAIN-01.md`. What the stand runs
-now is answered by `infra/deploy/verify-deployed.sh`, not by this file. Migration head `0021_portal_bundles` in this tree (`v0.5.0` itself shipped `0020_norms_search`); a separate `worker` service runs
+now is answered by `infra/deploy/verify-deployed.sh`, not by this file. Migration head `0022_findings_v2` in this tree (`v0.5.0` itself shipped `0020_norms_search`); a separate `worker` service runs
 jobs. «Нормы» awaits the corpus import (P4). The corpus operations — repairs, embedding build,
 bundle — are not yet run.
 
@@ -243,9 +249,9 @@ with no promotion. W49 now means identity, W50 the shell and W51 the screens:
 `docs/program/dispatch/IDENTITY-WAVES.md` is the controlling plan, with `W49-PLAN.md`,
 `W50-PLAN.md` and `W51-PLAN.md` beside it.
 
-The frozen API surface is **47 paths / 54 operations / 123 schemas** since `W55B-SEAL-01`, the
-error catalog **24**, domain candidate revision 12 with **32** opaque identities, and the
-migration head is **`0021_portal_bundles`** (`0020_norms_search` beneath it). The last tagged release is `v0.5.0`.
+The development API surface is **47 paths / 54 operations / 124 schemas** since `W56A-SEAL-01`, the
+error catalog **25**, domain candidate revision 13 with **32** opaque identities, and the
+migration head is **`0022_findings_v2`** (`0021_portal_bundles` beneath it). The last tagged release is `v0.5.0`.
 This section makes no deployment claim: `infra/deploy/verify-deployed.sh` answers what is
 deployed.
 
