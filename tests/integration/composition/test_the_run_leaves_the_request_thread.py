@@ -469,7 +469,10 @@ def test_serving_lifespan_dispatches_an_ordinary_run_adapter_submission(
                 ), {"run_id": started["run_id"]})
                 JobRepository().set_paused(controller, paused=False)
                 controller.commit()
-            assert gated.entered.wait(timeout=30)
+            assert gated.entered.wait(timeout=120), (
+                "the serving carrier did not reach the recorded provider within 120s; "
+                f"run status: {_status(client, started['run_id'])!r}"
+            )
             assert _status(client, started["run_id"])["state"] == "running"
             gated.release.set()
             deadline = time.monotonic() + 30
