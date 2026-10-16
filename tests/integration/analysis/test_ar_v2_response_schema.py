@@ -1,4 +1,4 @@
-"""The offline v2 reply schema follows the already sealed public enum."""
+"""The offline v2 reply keeps its seven categories after the additive API seal."""
 
 from __future__ import annotations
 
@@ -15,7 +15,8 @@ from auditmanager.analysis.profiles.ar_v2.response_schema import (
 def test_v2_response_enums_match_the_sealed_api() -> None:
     api = json.loads(Path("contracts/api/v1/openapi.json").read_text())
     schemas = api["components"]["schemas"]
-    assert list(CATEGORIES) == schemas["FindingCategory"]["enum"]
+    assert len(CATEGORIES) == 7
+    assert list(CATEGORIES) == schemas["FindingCategory"]["enum"][:len(CATEGORIES)]
     assert list(SEVERITIES) == schemas["Severity"]["enum"]
 
 
