@@ -175,3 +175,23 @@ def test_multi_quote_match_requires_every_source_page_to_be_linked() -> None:
     assert len(_suggest(source_findings=(old,), target_findings=(new,))) == 1
     assert _suggest(source_findings=(replace(old, evidence=old.evidence +
         (FindingQuote(3, "Другой лист"),)),), target_findings=(new,)) == ()
+
+
+def test_page_500_approved_link_supports_finding_match_but_501_refuses() -> None:
+    pair = _version_pair()
+    large_pair = replace(
+        pair,
+        source=replace(pair.source, page_count=500),
+        target=replace(pair.target, page_count=500),
+    )
+    link = ApprovedSheetPair(CMP, _id("sln", 3), 4, SOURCE, TARGET, 500, 500)
+    result = _suggest(
+        version_pair=large_pair, approved_pairs=(link,),
+        source_findings=(_finding(1, source=True, page=500),),
+        target_findings=(_finding(2, source=False, page=500),),
+    )
+    assert len(result) == 1 and result[0].matched_sheet_link_ids == (link.sheet_link_id,)
+    with pytest.raises(FindingMatchSuggestionRefused, match="^version_pair_invalid$"):
+        _suggest(version_pair=replace(
+            large_pair, target=replace(large_pair.target, page_count=501),
+        ))

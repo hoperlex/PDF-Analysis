@@ -7,6 +7,7 @@ from copy import deepcopy
 import pytest
 
 from auditmanager.comparison.version_reader import (
+    MAX_VERSION_PAGES,
     VersionPairRefused,
     read_ordered_version_pair,
 )
@@ -87,6 +88,17 @@ def test_exact_membership_and_order_from_one_select() -> None:
     assert "JOIN document d ON d.document_uid = v.document_uid" in sql
     assert "source_filename" not in sql and "display_title" not in sql
     assert parameters == {"source_version_uid": SOURCE, "target_version_uid": TARGET}
+
+
+def test_w55b_maximum_500_page_versions_are_read_but_501_refuses() -> None:
+    rows = deepcopy(_rows())
+    rows[0]["page_count"] = MAX_VERSION_PAGES
+    rows[1]["page_count"] = MAX_VERSION_PAGES
+    pair = _read(_Session(rows))
+    assert pair.source.page_count == pair.target.page_count == 500
+    rows[1]["page_count"] = 501
+    with pytest.raises(VersionPairRefused, match="^version_page_count_invalid$"):
+        _read(_Session(rows))
 
 
 @pytest.mark.parametrize("rows,reason", [

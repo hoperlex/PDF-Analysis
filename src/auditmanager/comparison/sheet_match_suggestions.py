@@ -13,7 +13,11 @@ import re
 from dataclasses import dataclass
 from typing import Mapping
 
-from auditmanager.comparison.version_reader import OrderedVersionPair, VersionFacts
+from auditmanager.comparison.version_reader import (
+    MAX_VERSION_PAGES,
+    OrderedVersionPair,
+    VersionFacts,
+)
 from auditmanager.shared.identity import (
     ComparisonId,
     DocumentUid,
@@ -23,8 +27,11 @@ from auditmanager.shared.identity import (
 )
 
 ALGORITHM = "exact-complete-page-text-suggestion-v1"
-MAX_PAGE_BYTES = 200_000
-MAX_TOTAL_BYTES = 2_000_000
+# A complete text snapshot follows W55b's PDF envelope: 200k characters per
+# page and 20M per version. Only one page is UTF-8 encoded at a time, so the
+# hashing scratch buffer is at most 800k bytes. The caller retains the maps.
+MAX_SNAPSHOT_PAGE_CHARACTERS = 200_000
+MAX_SNAPSHOT_CHARACTERS = 20_000_000
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -59,7 +66,7 @@ def _version(facts: VersionFacts, pair: OrderedVersionPair, label: str) -> None:
         raise SheetMatchSuggestionRefused("version_pair_mismatch")
     if (
         type(facts.version_ordinal) is not int or facts.version_ordinal < 1
-        or type(facts.page_count) is not int or not 1 <= facts.page_count <= 30
+        or type(facts.page_count) is not int or not 1 <= facts.page_count <= MAX_VERSION_PAGES
         or type(facts.byte_size) is not int or facts.byte_size < 0
         or not isinstance(facts.sha256, str) or _SHA256.fullmatch(facts.sha256) is None
         or facts.media_type != "application/pdf"
@@ -76,7 +83,7 @@ def _page_digests(pages: Mapping[int, str], page_count: int, label: str) -> dict
     ):
         raise SheetMatchSuggestionRefused(f"{label}_pages_incomplete")
     by_digest: dict[str, list[int]] = {}
-    total_bytes = 0
+    total_characters = 0
     for number in range(1, page_count + 1):
         value = pages[number]
         if not isinstance(value, str):
@@ -85,10 +92,10 @@ def _page_digests(pages: Mapping[int, str], page_count: int, label: str) -> dict
             encoded = value.encode("utf-8")
         except UnicodeEncodeError:
             raise SheetMatchSuggestionRefused(f"{label}_page_text_invalid") from None
-        if len(encoded) > MAX_PAGE_BYTES:
+        if len(value) > MAX_SNAPSHOT_PAGE_CHARACTERS:
             raise SheetMatchSuggestionRefused(f"{label}_page_too_large")
-        total_bytes += len(encoded)
-        if total_bytes > MAX_TOTAL_BYTES:
+        total_characters += len(value)
+        if total_characters > MAX_SNAPSHOT_CHARACTERS:
             raise SheetMatchSuggestionRefused(f"{label}_pages_too_large")
         if value.strip():
             by_digest.setdefault(hashlib.sha256(encoded).hexdigest(), []).append(number)

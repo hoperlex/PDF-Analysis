@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass
 from typing import Sequence
 
 from auditmanager.comparison.raw_text import ApprovedSheetPair, MAX_PAIRS
-from auditmanager.comparison.version_reader import OrderedVersionPair
+from auditmanager.comparison.version_reader import MAX_VERSION_PAGES, OrderedVersionPair
 from auditmanager.shared.identity import (
     ComparisonId,
     FindingObservationId,
@@ -218,8 +218,8 @@ def suggest_exact_finding_matches(
         or source.version_ordinal >= target.version_ordinal
         or type(source.page_count) is not int
         or type(target.page_count) is not int
-        or not 1 <= source.page_count <= 30
-        or not 1 <= target.page_count <= 30
+        or not 1 <= source.page_count <= MAX_VERSION_PAGES
+        or not 1 <= target.page_count <= MAX_VERSION_PAGES
     ):
         raise FindingMatchSuggestionRefused("version_pair_invalid")
     _id(comparison_id, ComparisonId, "comparison_id")

@@ -22,7 +22,7 @@ from auditmanager.comparison.raw_text import (
     RawTextDiffRefused,
     diff_approved_pairs,
 )
-from auditmanager.comparison.version_reader import OrderedVersionPair
+from auditmanager.comparison.version_reader import MAX_VERSION_PAGES, OrderedVersionPair
 from auditmanager.shared.identity import ComparisonId, IdentityError
 
 ALGORITHM = "approved-sheet-raw-evidence-seal-v1"
@@ -104,8 +104,8 @@ def seal_raw_version_evidence(
         or source.version_ordinal >= target.version_ordinal
         or type(source.page_count) is not int
         or type(target.page_count) is not int
-        or not 1 <= source.page_count <= 30
-        or not 1 <= target.page_count <= 30
+        or not 1 <= source.page_count <= MAX_VERSION_PAGES
+        or not 1 <= target.page_count <= MAX_VERSION_PAGES
         or source.version_uid == target.version_uid
         or not isinstance(source.sha256, str)
         or _SHA256.fullmatch(source.sha256) is None

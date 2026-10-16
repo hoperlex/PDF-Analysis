@@ -7,10 +7,12 @@ from dataclasses import FrozenInstanceError, replace
 import pytest
 
 from auditmanager.comparison.sheet_match_suggestions import (
-    MAX_PAGE_BYTES,
+    MAX_SNAPSHOT_CHARACTERS,
+    MAX_SNAPSHOT_PAGE_CHARACTERS,
     SheetMatchSuggestionRefused,
     suggest_exact_sheet_matches,
 )
+from auditmanager.comparison.version_reader import MAX_VERSION_PAGES
 from auditmanager.comparison.version_reader import OrderedVersionPair, VersionFacts
 
 PROJECT = "prj_01M2545JSD15ETSNNV904X991J"
@@ -61,6 +63,35 @@ def test_reordered_maps_are_stable_and_changed_text_has_no_match() -> None:
     assert _suggest(comparison_id="cmp_00000000000000000000000002")[0].suggestion_sha256 != first[0].suggestion_sha256
 
 
+def test_complete_500_page_text_rich_snapshot_can_suggest_moved_sheets() -> None:
+    source = {number: f"Лист {number}\n" + "А" * 3_570
+              for number in range(1, MAX_VERSION_PAGES + 1)}
+    target = {number: source[MAX_VERSION_PAGES + 1 - number]
+              for number in range(1, MAX_VERSION_PAGES + 1)}
+    assert sum(len(page.encode("utf-8")) for page in source.values()) > 2_000_000
+    result = _suggest(version_pair=_pair(500, 500), source_pages=source, target_pages=target)
+    assert len(result) == 500
+    assert (result[0].source_page_number, result[0].target_page_number) == (1, 500)
+    assert (result[-1].source_page_number, result[-1].target_page_number) == (500, 1)
+
+
+def test_full_snapshot_abstains_on_duplicate_at_page_500() -> None:
+    source = {number: f"Лист {number}\n" for number in range(1, 501)}
+    target = dict(source)
+    target[500] = source[1]
+    result = _suggest(version_pair=_pair(500, 500), source_pages=source, target_pages=target)
+    assert len(result) == 498
+    assert all(item.source_page_number != 1 for item in result)
+
+
+def test_snapshot_above_document_character_budget_refuses() -> None:
+    full_page = "x" * MAX_SNAPSHOT_PAGE_CHARACTERS
+    source = {number: full_page for number in range(1, 101)} | {101: "x"}
+    assert sum(map(len, source.values())) == MAX_SNAPSHOT_CHARACTERS + 1
+    with pytest.raises(SheetMatchSuggestionRefused, match="^source_pages_too_large$"):
+        _suggest(version_pair=_pair(101, 3), source_pages=source)
+
+
 def test_duplicate_text_on_either_side_is_ambiguous_and_does_not_match() -> None:
     assert _suggest(source_pages={1: "План этажа\nОсь А-Б\n", 2: "План этажа\nОсь А-Б\n", 3: "\n"}) == ()
     assert _suggest(target_pages={1: "План этажа\nОсь А-Б\n", 2: "План этажа\nОсь А-Б\n", 3: "\n"}) == ()
@@ -72,10 +103,11 @@ def test_duplicate_text_on_either_side_is_ambiguous_and_does_not_match() -> None
         ({"source_pages": {1: "x", 2: "y"}}, "source_pages_incomplete"),
         ({"target_pages": {True: "x", 2: "y", 3: "z"}}, "target_pages_incomplete"),
         ({"source_pages": {1: "x", 2: "y", 3: "\ud800"}}, "source_page_text_invalid"),
-        ({"target_pages": {1: "x" * (MAX_PAGE_BYTES + 1), 2: "y", 3: "z"}}, "target_page_too_large"),
+        ({"target_pages": {1: "x" * (MAX_SNAPSHOT_PAGE_CHARACTERS + 1), 2: "y", 3: "z"}}, "target_page_too_large"),
         ({"version_pair": replace(_pair(), target=replace(_pair().target, version_ordinal=1))}, "version_order_invalid"),
         ({"version_pair": replace(_pair(), source=replace(_pair().source, page_count=2))}, "source_pages_incomplete"),
         ({"version_pair": replace(_pair(), target=replace(_pair().target, document_uid="doc_01M2545JSD15ETSNNV904X991K"))}, "version_pair_mismatch"),
+        ({"version_pair": _pair(501, 3)}, "version_facts_invalid"),
         ({"comparison_id": "cmp_bad"}, "comparison_id_invalid"),
     ],
 )

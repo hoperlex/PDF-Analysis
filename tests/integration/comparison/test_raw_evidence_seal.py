@@ -133,3 +133,27 @@ def test_empty_page_text_is_a_valid_exact_raw_diff() -> None:
     )
     assert empty[0].changes == ()
     assert _seal(raw_diffs=empty).sheet_evidence_sha256s == (empty[0].evidence_sha256,)
+
+
+def test_approved_page_500_can_be_sealed_but_501_cannot() -> None:
+    pair = _version_pair()
+    large_pair = replace(
+        pair,
+        source=replace(pair.source, page_count=500),
+        target=replace(pair.target, page_count=500),
+    )
+    link = ApprovedSheetPair(CMP, LINK_A, 3, SOURCE, TARGET, 500, 500)
+    raw = diff_approved_pairs(
+        comparison_id=CMP,
+        source_version_uid=SOURCE,
+        target_version_uid=TARGET,
+        link_revision=3,
+        approved_pairs=(link,),
+        source_pages={500: "Лист 500\n"},
+        target_pages={500: "Лист 500, изменение\n"},
+    )
+    assert _seal(version_pair=large_pair, raw_diffs=raw).sheet_evidence_sha256s == (
+        raw[0].evidence_sha256,
+    )
+    with pytest.raises(RawEvidenceSealRefused, match="^version_pair_invalid$"):
+        _seal(version_pair=replace(large_pair, target=replace(large_pair.target, page_count=501)), raw_diffs=raw)

@@ -24,6 +24,8 @@ from auditmanager.shared.identity import (
 
 
 _SHA256: Final[re.Pattern[str]] = re.compile(r"[0-9a-f]{64}\Z")
+# W55B-SEAL-01 and migration 0021 admit 1..500 pages per published version.
+MAX_VERSION_PAGES: Final[int] = 500
 _VERSIONS = text("""
     SELECT v.version_uid, v.document_uid AS version_document_uid,
            d.document_uid AS set_document_uid, d.project_uid,
@@ -94,7 +96,7 @@ def _version_facts(row: object, *, project_uid: str, document_uid: str) -> Versi
         raise VersionPairRefused("version_digest_invalid")
     if type(byte_size) is not int or byte_size < 0:
         raise VersionPairRefused("version_byte_size_invalid")
-    if type(page_count) is not int or not 1 <= page_count <= 30:
+    if type(page_count) is not int or not 1 <= page_count <= MAX_VERSION_PAGES:
         raise VersionPairRefused("version_page_count_invalid")
     if media_type != "application/pdf":
         raise VersionPairRefused("version_media_type_invalid")
@@ -145,4 +147,7 @@ def read_ordered_version_pair(
     return OrderedVersionPair(project, document, source, target)
 
 
-__all__ = ["OrderedVersionPair", "VersionFacts", "VersionPairRefused", "read_ordered_version_pair"]
+__all__ = [
+    "MAX_VERSION_PAGES", "OrderedVersionPair", "VersionFacts", "VersionPairRefused",
+    "read_ordered_version_pair",
+]
