@@ -1,4 +1,8 @@
+import os
 import re
+import subprocess
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -77,6 +81,21 @@ def workflow_shape_findings(text: str) -> set[str]:
     return findings
 
 
+def _remote_script(text: str) -> str:
+    """Extract the script sent to the host, including its real command ordering."""
+    match = re.search(
+        r"(?ms)^            bash -s -- \"\$DEPLOY_SHA\" <<'REMOTE'\n"
+        r"(?P<script>.*?)^          REMOTE$",
+        text,
+    )
+    if match is None:
+        raise AssertionError("expected exactly one remote Bash heredoc")
+    script = match.group("script")
+    if not all(line.startswith("          ") for line in script.splitlines() if line):
+        raise AssertionError("remote Bash heredoc indentation changed")
+    return textwrap.dedent(script)
+
+
 class DeployAutoWorkflowContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -137,6 +156,68 @@ class DeployAutoWorkflowContract(unittest.TestCase):
             self.text.count('test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"'), 2
         )
         self.assertNotIn("git pull", self.text)
+
+    def test_stdin_draining_deploy_cannot_skip_host_verification(self) -> None:
+        """A child reading stdin must not swallow later remote shell commands."""
+        sha = "a" * 40
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repository = root / "repo"
+            deployment = repository / "infra" / "deploy"
+            deployment.mkdir(parents=True)
+            binaries = root / "bin"
+            binaries.mkdir()
+
+            git_stub = binaries / "git"
+            git_stub.write_text(
+                '#!/bin/sh\n'
+                'if [ "$1" = rev-parse ]; then printf "%s\\n" "$TEST_SHA"; fi\n',
+                encoding="utf-8",
+            )
+            git_stub.chmod(0o755)
+            deploy_stub = deployment / "deploy.sh"
+            deploy_stub.write_text(
+                '#!/bin/sh\nprintf "DEPLOY STUB CALLED\\n"\ncat >/dev/null\n',
+                encoding="utf-8",
+            )
+            deploy_stub.chmod(0o755)
+            verify_stub = deployment / "verify-deployed.sh"
+            verify_stub.write_text(
+                '#!/bin/sh\nprintf "VERIFY STUB CALLED\\n"\ncat >/dev/null\n'
+                'exit "${VERIFY_EXIT:-0}"\n',
+                encoding="utf-8",
+            )
+            verify_stub.chmod(0o755)
+
+            remote = _remote_script(self.text).replace(
+                "readonly REPOSITORY=/srv/auditmanager",
+                f"readonly REPOSITORY={repository}",
+                1,
+            )
+            environment = os.environ | {
+                "PATH": f"{binaries}:{os.environ['PATH']}",
+                "TEST_SHA": sha,
+            }
+            for verify_exit in ("0", "7"):
+                with self.subTest(verify_exit=verify_exit):
+                    completed = subprocess.run(
+                        ["bash", "-s", "--", sha],
+                        input=remote,
+                        text=True,
+                        capture_output=True,
+                        env=environment | {"VERIFY_EXIT": verify_exit},
+                        timeout=10,
+                        check=False,
+                    )
+                    self.assertIn("DEPLOY STUB CALLED", completed.stdout)
+                    self.assertIn("=== verify deployed tree ===", completed.stdout)
+                    self.assertIn("VERIFY STUB CALLED", completed.stdout)
+                    if verify_exit == "0":
+                        self.assertEqual(completed.returncode, 0, completed.stderr)
+                        self.assertIn(f"DEPLOY OK: {sha}", completed.stdout)
+                    else:
+                        self.assertEqual(completed.returncode, 7)
+                        self.assertNotIn("DEPLOY OK:", completed.stdout)
 
     def test_semantic_mutations_are_rejected(self) -> None:
         extra_trigger = self.text.replace(
