@@ -1,5 +1,12 @@
 # Current state
 
+**Code-first development candidate 26, 2026-10-16.** W57a API/stage seal
+publishes the 0023 citation vocabulary and a role-guarded, typed 503 report
+route until a verified reader exists. The API has 48 paths / 55 operations /
+131 schemas; `text_analysis` stage identity is 1.1.0 for v1 and recorded v2.
+No qualified retrieval set or served v3 writer/reader is active. See
+`CFB-INT-DEV-PUBLISH-26.md` and `W57A-SEAL-01B.md`.
+
 **Code-first development candidate 25, 2026-10-16.** W58 now has an
 unactivated offline coordinator for an isolated PostgreSQL-plus-Blob restore
 drill. Its closed DB audit includes both retrieval-set Blob references from
@@ -34,20 +41,11 @@ before external Blob read closes the D-141 lease-ordering defect. Normal
 served composition still chooses v1. See `CFB-INT-DEV-PUBLISH-22.md` and
 `W56A-INT-RECORDED-BRIDGE-DB-ACCEPT-01.md`.
 
-**Code-first development candidate 21, 2026-10-16.** W59 now has an unserved
-review packet for one VersionUid that lists all 15 section choices and
-suggestion evidence without selecting or confirming a section. The focused
-section tests passed. W55b `d3acd511` failed its separate complete gate in a
-D-142 test helper that assumed Run/Blob uniqueness across Attempts; its
-isolated DB evidence showed valid Attempt-scoped rows. A corrected candidate
-and a new complete gate are required. See `CFB-INT-DEV-PUBLISH-21.md` and
-`W59-INT-SECTION-REVIEW-PREP-01.md`.
-
 ## Current development boundary
 
 The checked predecessor of this candidate is
-`origin/dev=7d522a598c173bb4090c8f9f3e1e548c6c89a738`.
-The development API surface is 47 paths / 54 operations / 124 schemas; the
+`origin/dev=3d131d2966e0efeea7b53d9662785f253165a9a4`.
+The development API surface is 48 paths / 55 operations / 131 schemas; the
 error catalogue has 25 codes and the migration head is `0023_norm_citations`.
 `VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
 The code-first order and prerequisites are in
@@ -65,8 +63,9 @@ activation and complete beta gate remain open.
 
 W57a has pure retrieval, map, qualification and citation preparations. The
 0023 storage seal supplies verified-set constraints, confirmed custody
-bindings, a frozen Run pin and a certified citation-count relation. No
-qualified retrieval-set row or active CITE stage exists. W57b has XLSX
+bindings, a frozen Run pin and a certified citation-count relation. The
+API/stage seal adds vocabulary and a refusing report read. No qualified
+retrieval-set row, verified reader or active CITE stage exists. W57b has XLSX
 preparation, but its citation reader and route wait for the serial W57a
 API/stage and 0024 seals. See
 `W57-INT-SEAL-FREEZE-PROPOSAL-01.md`. W58 has read-only source-object mirror,
