@@ -244,6 +244,11 @@ def suggest_exact_finding_matches(
     )
     if {item.finding_uid for item in older} & {item.finding_uid for item in newer}:
         raise FindingMatchSuggestionRefused("finding_identity_crosses_versions")
+    if (
+        {item.finding_observation_id for item in older}
+        & {item.finding_observation_id for item in newer}
+    ):
+        raise FindingMatchSuggestionRefused("finding_observation_identity_crosses_versions")
 
     source_by_key: dict[tuple, list[FindingForMatch]] = {}
     target_by_key: dict[tuple, list[FindingForMatch]] = {}

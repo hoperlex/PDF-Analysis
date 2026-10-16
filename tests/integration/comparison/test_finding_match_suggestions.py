@@ -165,6 +165,31 @@ def test_duplicate_or_cross_version_identity_and_malformed_quote_refuse() -> Non
         _suggest(source_findings=(replace(older, evidence=(FindingQuote(1, " \n "),)),))
 
 
+def test_observation_identity_cannot_belong_to_both_versions() -> None:
+    older = _finding(1, source=True, page=1)
+    newer = replace(
+        _finding(2, source=False, page=3),
+        finding_observation_id=older.finding_observation_id,
+    )
+    assert older.finding_uid != newer.finding_uid
+    with pytest.raises(
+        FindingMatchSuggestionRefused,
+        match="^finding_observation_identity_crosses_versions$",
+    ):
+        _suggest(source_findings=(older,), target_findings=(newer,))
+
+
+def test_distinct_observation_identities_preserve_exact_match() -> None:
+    older = _finding(1, source=True, page=1)
+    newer = _finding(2, source=False, page=3)
+    first = _suggest(source_findings=(older,), target_findings=(newer,))
+    assert len(first) == 1
+    assert first[0].source_observation_id == older.finding_observation_id
+    assert first[0].target_observation_id == newer.finding_observation_id
+    assert first[0].source_observation_id != first[0].target_observation_id
+    assert first == _suggest(source_findings=(older,), target_findings=(newer,))
+
+
 def test_multi_quote_match_requires_every_source_page_to_be_linked() -> None:
     old = replace(_finding(1, source=True, page=1), evidence=(
         FindingQuote(1, "Проём отсутствует"), FindingQuote(2, "Ось А"),
