@@ -32,17 +32,16 @@ form the durable publication marker.
 
 - focused saved-plan/v2 writer/merge suite: **34 passed**;
 - container-free gate order/failure selection: **2 passed**;
+- isolated real PostgreSQL 17.11/MinIO gate suite at `0022_findings_v2`:
+  **15 passed in 2.65s**; `make up`, `make migrate`, `make check-services`
+  passed, and `make down` stopped only the W56 lane;
 - program governance suite: **16 passed**; direct task governance: `[]`;
 - all six frozen SHA-256 inputs match the task; Python compilation and
   `git diff --check`: passed;
-- real PostgreSQL/MinIO: pending an isolated test lane. The preexisting root
-  `.env` points at an unavailable database; W55b's separate gate lane is
-  running and must not be reused. The service suite now covers failed-stage
-  finalization, observation-only prior rows, three saved-call/source provenance
-  mutations, and a second transaction changing a StageResult during Blob read.
-  A concurrent zero-finding contender must lose the terminal CAS after the
-  first transaction commits.
-  No service-backed acceptance is claimed yet.
+- the real-service suite covers failed-stage finalization, observation-only
+  prior rows, three saved-call/source provenance mutations, a second transaction
+  changing StageResult during Blob read, and a concurrent zero-finding contender
+  losing the terminal CAS after the first commit.
 
 ## Contracts and limitations
 
@@ -62,8 +61,8 @@ lock. This writer atomicity is an activation prerequisite.
 
 ## Integrator handoff
 
-Integrate only after the saved-plan bridge on the exact dev candidate. Prove
-the focused real PostgreSQL/MinIO tests at head `0022_findings_v2` before
-claiming this task complete; then grant executor activation separately. The
-gate branch touches only the six task-owned paths above. The earlier
+Integrate this branch only after the saved-plan bridge on the exact dev
+candidate. The focused real PostgreSQL/MinIO tests passed at head
+`0022_findings_v2`; executor activation still needs a separate task and full
+gate. The gate branch touches only the six task-owned paths above. The earlier
 cherry-pick contributes the seven bridge-owned paths without editing them.
