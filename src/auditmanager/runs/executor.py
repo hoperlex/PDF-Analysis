@@ -1,4 +1,4 @@
-"""The sequential in-process executor: one run, four stages, one terminal.
+"""The sequential executor: four v1 stages or five explicit recorded v2 stages.
 
 This is the composition point of the whole prototype. Every module it drives already
 exists and is merged; nothing here reimplements any of them:
@@ -65,6 +65,7 @@ outbox delivery remain out of scope.
 
 from __future__ import annotations
 
+import re
 import time
 from functools import wraps
 from dataclasses import dataclass, field
@@ -91,6 +92,10 @@ from auditmanager.analysis.public import (
 from auditmanager.analysis.public import publish_artifact
 from auditmanager.analysis.public import (
     AR_TEXT_PROFILE,
+    AR_V2_RECORDED_BUNDLE_ID,
+    AR_V2_RECORDED_PROFILE_ID,
+    RecordedAdapter,
+    RecordedGenerationSettings,
     RecordedProfileError,
     ARTIFACT_ROLE as ROLE_TEXT_OBSERVATIONS,
     CostMeter,
@@ -182,9 +187,9 @@ class ExecutionResult:
     published_finding_count: int
     diagnostic_count: int
     gate_ran: bool
-    #: How many attempts the model stage took, and why a second one happened. The same
-    #: facts are persisted on the stage row, so a caller that keeps this object and a
-    #: reader who has only the database agree without either re-deriving the other.
+    #: How many attempts the model stage took, and why a second one happened.
+    #: v1 facts are persisted on the stage row; recorded v2 seals one model-call
+    #: count on its text stage and does not use the v1 retry ladder.
     model_attempts: AttemptSummary
 
     @property
@@ -215,8 +220,8 @@ class ExecutionResult:
 class RecordedV2ExecutionIntent:
     """A persisted run's identity after recorded-only preflight, without effects.
 
-    This is not an activated stage plan. The v2 profile/bundle must come from a
-    separately registered, immutable profile before a caller can use this seam.
+    The explicit executor bridge uses the immutable recorded registration; normal
+    serving composition does not select or configure this profile yet.
     """
 
     run_id: str
@@ -236,8 +241,7 @@ def plan_recorded_v2_execution(
 
     The caller must supply the profile and bundle from an independently pinned
     registry. This helper cannot register a profile or prove a recording's
-    request checksum. In particular it is not called by the current v1
-    ``execute_run`` path.
+    request checksum. The v1 ``execute_run`` path never calls it.
     """
     try:
         AnalysisProfileId.parse(registered_profile_id)
@@ -730,6 +734,8 @@ def _execute_run_body(
     effect_checkpoint: EffectCheckpoint | None = None,
     jobs: JobRepository | None = None,
     blob_metadata: BlobMetadataRepository | None = None,
+    recorded_fixture_model_id: str | None = None,
+    recorded_generation_settings: RecordedGenerationSettings | None = None,
 ) -> ExecutionResult:
     """Drive one run from ``created`` to a terminal state.
 
@@ -765,6 +771,43 @@ def _execute_run_body(
         meter.unpriced_contributions = max(meter.unpriced_contributions, 1)
 
     run = run_repo.get(session, run_id)
+    recorded_v2 = (
+        run.analysis_profile_id == str(AR_V2_RECORDED_PROFILE_ID)
+        or run.prompt_bundle_id == str(AR_V2_RECORDED_BUNDLE_ID)
+    )
+    if recorded_v2:
+        # A fixture is not a verified live model pin. Require the caller to name
+        # the offline replay and its exact request settings before any effect.
+        if (type(adapter) is not RecordedAdapter
+                or config.api_key is not None
+                or not isinstance(recorded_fixture_model_id, str)
+                or re.fullmatch(r"fixture/[a-z0-9][a-z0-9._-]{0,127}", recorded_fixture_model_id) is None
+                or not isinstance(recorded_generation_settings, RecordedGenerationSettings)):
+            raise DomainError(
+                ErrorCode.ANALYSIS_INPUT_INVALID,
+                message="recorded AR v2 requires explicit offline fixture inputs",
+            )
+        try:
+            RecordedGenerationSettings(
+                recorded_generation_settings.max_output_tokens,
+                recorded_generation_settings.effort,
+                recorded_generation_settings.thinking,
+            )
+        except ValueError:
+            raise DomainError(
+                ErrorCode.ANALYSIS_INPUT_INVALID,
+                message="recorded AR v2 generation settings are invalid",
+            ) from None
+        plan_recorded_v2_execution(
+            run=run, adapter=adapter, provider_config=config,
+            registered_profile_id=str(AR_V2_RECORDED_PROFILE_ID),
+            registered_bundle_id=str(AR_V2_RECORDED_BUNDLE_ID),
+        )
+    elif recorded_fixture_model_id is not None or recorded_generation_settings is not None:
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="recorded AR v2 fixture inputs require the persisted v2 profile",
+        )
 
     # The run declares a provider mode; the adapter *is* one. Nothing compared them, so a
     # run started with provider_mode="live" and executed entirely by the recorded adapter
@@ -920,6 +963,49 @@ def _execute_run_body(
             # ``missing_required_input`` failures that say nothing extra.
             halted = True
             break
+
+    if recorded_v2:
+        # These ports import the executor's publication helpers. Import only on
+        # the selected path, after the persisted profile has passed preflight.
+        from auditmanager.runs.recorded_v2_stage import run_recorded_v2_stage
+        from auditmanager.runs.recorded_v2_merge import run_recorded_v2_merge_stage
+        from auditmanager.runs.recorded_v2_publication import publish_recorded_v2_run
+
+        attempts = not_attempted(policy)
+        if not halted:
+            assert recorded_fixture_model_id is not None
+            assert recorded_generation_settings is not None
+            text_result = run_recorded_v2_stage(
+                session, authority=authority, blob_store=blob_store,
+                adapter=adapter, provider_config=config,
+                fixture_model_id=recorded_fixture_model_id,
+                settings=recorded_generation_settings,
+                runs=run_repo, jobs=job_repo, documents=document_repo,
+                blobs=blob_repo, clock=clock,
+            )
+            if text_result.status is not StageStatus.SUCCEEDED:
+                raise DomainError(
+                    ErrorCode.ANALYSIS_FAILED,
+                    message="recorded AR v2 text stage did not complete",
+                )
+            ledger = AttemptLedger(attempt_budget=1)
+            ledger.record(status="succeeded", error=None, waited_seconds=0.0)
+            attempts = ledger.close()
+            run_recorded_v2_merge_stage(
+                session, authority=authority, blob_store=blob_store,
+                runs=run_repo, jobs=job_repo, blobs=blob_repo, clock=clock,
+            )
+        gate = publish_recorded_v2_run(
+            session, authority=authority, blob_store=blob_store,
+            runs=run_repo, jobs=job_repo, documents=document_repo,
+        )
+        return ExecutionResult(
+            run_id=run_id, selection=gate.selection,
+            stage_statuses=dict(run_repo.stage_statuses(session, run_id)),
+            published_finding_count=gate.finding_count,
+            diagnostic_count=gate.rejected_count,
+            gate_ran=not halted, model_attempts=attempts,
+        )
 
     # -- the AI stage ---------------------------------------------------------
     # A halted chain never reaches the provider, so it has no attempts rather than one
