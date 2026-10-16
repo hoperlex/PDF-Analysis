@@ -1,5 +1,15 @@
 # Current state
 
+**Recorded AR v2 durable stage preparation, 2026-10-16.** A new unactivated
+run-side port journals one exact recorded response under current Attempt
+authority, retains its unknown cost as NULL, publishes and reads back the
+observation Blob, and commits a source-bound StageResult with its Blob binding.
+The integrated focused suite passed 50 tests. The active executor still uses
+the earlier path; real PostgreSQL/S3 acceptance, recovery, terminal policy and
+the beta gate remain open. W55b's separate `6d63802a` main candidate remains
+under its complete gate. See `CFB-INT-DEV-PUBLISH-14.md` and
+`W56A-INT-DURABLE-RECORDED-STAGE-01.md`.
+
 **Checked code-first development candidate, 2026-10-16.** The next dev
 integration adds W56a recorded call facts and a complete source-bound
 StageResult value, W57a build-fact reading and digest comparison, W58 target
