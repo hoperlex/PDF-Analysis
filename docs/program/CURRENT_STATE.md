@@ -1,5 +1,15 @@
 # Current state
 
+**Development candidate through W59 preparations, 2026-10-16.** The clean
+code-first candidate adds the W57a pure retrieval-set/catalogue assembler,
+the W58 offline restore evidence coordinator, and the W59 exact ordered
+version-pair reader. Their combined focused check passed 42 tests. They do
+not qualify a corpus, restore a real DB, authenticate approved sheet links,
+or activate runtime analysis. W55b remains the last closed development
+baseline; its separate main release candidate is `6d63802a`. The complete
+gate for W56–W59 remains deferred under R-135. See
+`CFB-INT-DEV-PUBLISH-12.md` and the three source task reports.
+
 **Connected code-first preparations, 2026-10-15.** W56a now binds a saved,
 verified source request to one offline recorded response and builds deterministic
 AR v2 observation bytes with PDF-only evidence and separate diagnostics; the
