@@ -16,7 +16,7 @@ Run/Attempt-fenced recognised-region evidence service. Read back the exact
 
 ## Frozen inputs
 
-- base commit: `394a728f8a6f64ecb849f98fccdad687b79f282a`;
+- base commit: `394a728f8a6f64ecb849f98fccdad687b79f282a`
 - W56b source parent: `95de4f6b4e10a8b60f57ae84ab66156917c7b96c`;
 - API SHA-256: `7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388`;
 - development API 48 paths / 55 operations / 131 schemas, errors 25,
