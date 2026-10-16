@@ -1,5 +1,16 @@
 # Current state
 
+**Code-first development candidate 18, 2026-10-16.** W54's metadata-only
+preflight now accepts separate absolute source and promotion roots, so it sees
+the checked source sums and restored base dump without treating them as a
+qualified bundle. W56a has an explicit offline recorded executor bridge for a
+persisted v2 Run with caller-supplied `fixture/<id>` and generation settings;
+normal API/worker composition still selects v1. W57a has a docs-only 0023
+citation/custody freeze with a certified zero-citation rule, not a migration.
+The integrated focused suite passed 79 tests. The repaired W55b main candidate
+`d3acd511` is still under its own complete gate. See
+`CFB-INT-DEV-PUBLISH-18.md` and the three source task reports.
+
 **Code-first development candidate 17, 2026-10-16.** The W56a recorded
 publication gate and the W55b serving-carrier test deadline correction are
 integrated for `origin/dev`. The W56a gate passed 15 focused tests on
@@ -23,11 +34,11 @@ The code-first order and prerequisites are in
 
 W56a has a recorded-only AR v2 profile, source-bound saved request and call,
 verified observation/merge artifacts, a deterministic finding plan and now an
-unactivated transaction gate. The gate rechecks stage and call provenance,
-publishes findings and terminalizes Run/Job/Attempt atomically when invoked by
-a future owned executor slot. It does not make a live provider call. Its
+transaction gate reached only through the explicit offline executor bridge.
+The gate rechecks stage and call provenance, publishes findings and
+terminalizes Run/Job/Attempt atomically. It does not make a live provider call. Its
 caller must commit once or roll back the whole transaction. The measured
-baseline, real model/price verification, executor activation and complete beta
+baseline, real model/price verification, served executor activation and complete beta
 gate remain open.
 
 W57a has pure retrieval, map, qualification and citation preparations, but no
