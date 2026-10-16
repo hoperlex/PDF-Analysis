@@ -136,6 +136,10 @@ from auditmanager.analysis.text.saved_window_custody import (
     check_run_text_window_input,
     select_run_text_layer_ref,
 )
+from auditmanager.analysis.text.source_bytes import (
+    SuppliedTextSourceRefused,
+    check_supplied_text_layer_bytes,
+)
 from auditmanager.analysis.text.chunk_preflight import ChunkPreflightError
 from auditmanager.analysis.text.proxy import ProxyDispatchError
 from auditmanager.analysis.text.recorded import RecordedAdapter
@@ -213,6 +217,7 @@ __all__ = [
     "RunScopedTextStage",
     "SavedCropCustodyRefused",
     "SavedTextCustodyRefused",
+    "SuppliedTextSourceRefused",
     "TextLayer",
     "TEXT_STAGE_VERSION",
     "StageContext",
@@ -235,6 +240,7 @@ __all__ = [
     "build_recorded_observation_artifact",
     "check_saved_crop_bytes",
     "check_run_text_window_input",
+    "check_supplied_text_layer_bytes",
     "bind_recognised_region_candidate",
     "blob_role_for",
     "canonical_bytes",

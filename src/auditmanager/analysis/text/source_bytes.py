@@ -88,19 +88,14 @@ def _document_shape(document: Mapping[str, Any], *, version_uid: str) -> None:
             raise SuppliedTextSourceRefused("text_layer_page_shape_invalid")
 
 
-def check_supplied_text_window_bytes(
+def check_supplied_text_layer_bytes(
     *,
     version_uid: str,
     expected_page_count: int,
     text_layer_ref: ArtifactRef,
     supplied_bytes: bytes,
-    max_chunk_characters: int,
-) -> CheckedTextWindowSource:
-    """Verify one supplied canonical Blob payload and partition every page.
-
-    ``max_chunk_characters`` is an externally approved *document-text* ceiling.
-    This function does not calculate a model's context, spend or output budget.
-    """
+) -> TextLayer:
+    """Verify exact Blob bytes and canonical text-layer content without chunking."""
     try:
         VersionUid.parse(version_uid)
     except IdentityError:
@@ -129,9 +124,35 @@ def check_supplied_text_window_bytes(
         layer = load_text_layer(document)
     except (DomainError, AttributeError, IndexError, KeyError, TypeError, ValueError):
         raise SuppliedTextSourceRefused("text_layer_invalid") from None
-    if layer.version_uid != version_uid or len(layer.pages) != expected_page_count:
+    if (
+        layer.version_uid != version_uid
+        or len(layer.pages) != expected_page_count
+        or layer.page_numbers != tuple(range(1, expected_page_count + 1))
+    ):
         raise SuppliedTextSourceRefused("text_layer_page_count_or_version_mismatch")
     if layer.total_char_count != document["total_char_count"]:
         raise SuppliedTextSourceRefused("text_layer_char_count_mismatch")
+    return layer
+
+
+def check_supplied_text_window_bytes(
+    *,
+    version_uid: str,
+    expected_page_count: int,
+    text_layer_ref: ArtifactRef,
+    supplied_bytes: bytes,
+    max_chunk_characters: int,
+) -> CheckedTextWindowSource:
+    """Verify one supplied canonical Blob payload and partition every page.
+
+    ``max_chunk_characters`` is an externally approved *document-text* ceiling.
+    This function does not calculate a model's context, spend or output budget.
+    """
+    layer = check_supplied_text_layer_bytes(
+        version_uid=version_uid,
+        expected_page_count=expected_page_count,
+        text_layer_ref=text_layer_ref,
+        supplied_bytes=supplied_bytes,
+    )
     windows = partition_text_layer(layer, max_chunk_characters=max_chunk_characters)
     return CheckedTextWindowSource(version_uid, text_layer_ref, layer, windows)
