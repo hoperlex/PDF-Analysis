@@ -38,6 +38,7 @@ from auditmanager.analysis.ports.artifacts import (
     ROLE_SOURCE_MARKDOWN,
     ROLE_SOURCE_STRUCTURED_COMPANION,
     ROLE_TEXT_LAYER,
+    blob_role_for,
     publish_artifact,
     read_artifact,
 )
@@ -54,6 +55,21 @@ from auditmanager.analysis.profiles.ar_v2.recorded_input import (
     prepare_recorded_v2_input,
 )
 from auditmanager.analysis.profiles.ar_v2.recorded_request import RecordedGenerationSettings
+from auditmanager.analysis.profiles.ar_v2.recorded_artifact import (
+    BuiltRecordedArtifact,
+    build_recorded_observation_artifact,
+)
+from auditmanager.analysis.profiles.ar_v2.recorded_call import (
+    RecordedCallFacts,
+    build_recorded_call_facts,
+)
+from auditmanager.analysis.profiles.ar_v2.recorded_response import (
+    RecordedReplayResult,
+    replay_recorded_response,
+)
+from auditmanager.analysis.profiles.ar_v2.recorded_stage_result import (
+    seal_recorded_v2_stage_result,
+)
 from auditmanager.analysis.profiles.ar_v2.registered import (
     PROFILE_ID as AR_V2_RECORDED_PROFILE_ID,
     PROMPT_BUNDLE_ID as AR_V2_RECORDED_BUNDLE_ID,
@@ -94,6 +110,7 @@ from auditmanager.analysis.text.budget import REFERENCE_DOCUMENT_CHARACTERS, inp
 from auditmanager.analysis.recognised import KIND_PORTAL_DESCRIPTION, KIND_RECOGNISED_TEXT, QUOTE_SOURCE_RECOGNISED  # W55B-RECOGNISED-01
 from auditmanager.analysis.ports.artifacts import ROLE_CROP_IMAGE, ROLE_PORTAL_BLOCKS  # W55B-GEOMETRY-01
 from auditmanager.analysis.text.proxy import ProxyDispatchError
+from auditmanager.analysis.text.recorded import RecordedAdapter
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
 from auditmanager.analysis.text.anchors import BlockIndex, ResolvedAnchor
 from auditmanager.analysis.text.textlayer import TextLayer
@@ -107,6 +124,7 @@ __all__ = [
     "AR_V2_RECORDED_PROFILE_ID",
     "AR_V2_SEVERITIES",
     "BlockIndex",
+    "BuiltRecordedArtifact",
     "CONTRACT_VERSION",
     "KIND_PORTAL_DESCRIPTION",
     "KIND_RECOGNISED_TEXT",
@@ -147,6 +165,9 @@ __all__ = [
     "RejectedProposal",
     "RecognisedContext",
     "RecordedGenerationSettings",
+    "RecordedAdapter",
+    "RecordedCallFacts",
+    "RecordedReplayResult",
     "RecordedV2Input",
     "RecordedProfileError",
     "ResolvedAnchor",
@@ -168,9 +189,14 @@ __all__ = [
     "load_provider_config",
     "publish_artifact",
     "prepare_merge",
+    "build_recorded_call_facts",
+    "build_recorded_observation_artifact",
+    "blob_role_for",
     "prepare_recorded_v2_input",
     "read_artifact",
+    "replay_recorded_response",
     "resolve_recorded_profile",
     "run_stage",
     "run_text_analysis",
+    "seal_recorded_v2_stage_result",
 ]

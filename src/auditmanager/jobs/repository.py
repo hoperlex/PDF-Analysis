@@ -178,6 +178,14 @@ _PROVIDER_FOR_COMPLETION = text(
      FOR UPDATE
     """
 )
+_EXISTING_RECORDED_STAGE_CALL = text(
+    "SELECT EXISTS ("
+    "SELECT 1 FROM provider_call_effect WHERE run_id = :run_id "
+    "AND stage_id = 'text_analysis' AND state NOT IN ('not_processed', 'abandoned') "
+    "UNION ALL SELECT 1 FROM model_call WHERE run_id = :run_id "
+    "AND stage_id = 'text_analysis'"
+    ")"
+)
 _INSERT_MODEL_CALL = text(
     """
     INSERT INTO model_call (
@@ -771,6 +779,26 @@ class JobRepository:
         )
         return model_call_id
 
+    def require_recorded_stage_call_available(
+        self, session: Session, authority: AttemptAuthority
+    ) -> None:
+        """Fence a second recorded text call before its intent can be committed.
+
+        A completed call, a response awaiting completion, or an uncertain effect
+        blocks another replay for the same run. A proven ``not_processed`` or
+        reconciled ``abandoned`` effect does not fabricate a canonical call.
+        The current Attempt lock serialises this read with another claimant.
+        """
+        self.require_current(session, authority)
+        if session.execute(
+            _EXISTING_RECORDED_STAGE_CALL, {"run_id": authority.run_id}
+        ).scalar_one():
+            raise DomainError(
+                ErrorCode.CONFLICT,
+                message="a text analysis call already has durable evidence for this run",
+                aggregate_type="AuditRun",
+            )
+
     def record_provider_response(
         self,
         session: Session,
@@ -898,7 +926,10 @@ class JobRepository:
                 "input_tokens": call["input_tokens"],
                 "output_tokens": call["output_tokens"],
                 "latency_ms": call["latency_ms"],
-                "cost_micros": int(round(float(call["cost_usd"]) * 1_000_000)),
+                "cost_micros": (
+                    None if call["cost_usd"] is None
+                    else int(round(float(call["cost_usd"]) * 1_000_000))
+                ),
                 "cost_basis": call.get("cost_basis", "estimated"),
                 "status": call["status"],
                 "error_code": (
