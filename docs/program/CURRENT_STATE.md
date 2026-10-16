@@ -1,8 +1,45 @@
 # Current state
 
+**Updated 2026-10-16, after code-first development candidate 43.** W55b is
+published on `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as
+`GATE OK` under R-125; the deploy workflow selected that tree and the owner
+subsequently ran `infra/deploy/verify-deployed.sh` on the host with a passing
+image/tree comparison. The workflow's own verify command was skipped because
+a child consumed its stdin. Its tested repair is on `origin/dev`, with a
+separate complete gate and exact-SHA main publication still required. The
+owner explicitly waived five credentialed live W55b product checks for this
+release; those journeys remain unverified. See `W55B-INT-TAG-01.md`,
+`W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
+
+The development API surface is **48 paths / 55 operations / 131 schemas**,
+the error catalogue has **25** codes, the migration head is
+**`0023_norm_citations`**, and `VERSION` is **`0.6.0`**. These are checkout
+facts; the release tree has its own frozen 47/54/123 surface and
+`0021_portal_bundles` head. For the current deployment, run
+`infra/deploy/verify-deployed.sh`; this document is no substitute for that
+probe.
+
+W54's 674-document, 31,619-file source has complete file checksums and a
+restore-verified base dump with 348,777 paragraphs and 55,702 chunks.
+The 121-page `claude-opus-5` repair still lacks a proxy credential. There is
+no repaired qualified snapshot, complete embedding checkpoint or DB/S3
+corpus publication. The latest W54 preflight improvements pin the source
+checksum listing and require a canonical embedding plan; neither proves
+the later payloads. W56b now has unserved text-window cohort and supplied
+byte checks; W57a has an unserved draft v3 prompt renderer. Their callers,
+provider/effect provenance, qualified corpus, approved W56b policy and
+W57a CAP-01 remain open. See `CFB-INT-DEV-PUBLISH-41.md` and
+`CFB-INT-DEV-PUBLISH-42.md`. R-135 defers the complete beta gate to the
+final code candidate. No beta acceptance is claimed.
+
+**The following detailed snapshot is the state at dev39, before W55b's
+main publication and later development candidates.** It is retained for
+the decisions and evidence links from that point in time.
+
 **Code-first dev39 / W55b candidate, 2026-10-16.** W58 synthetic DB/Blob
-restore passed after a driver fix; W56/W57 add unserved evidence readers. W55b
-`37393a97` counts `GATE OK` under R-125; main is unchanged. See `CFB-INT-DEV-PUBLISH-39.md`.
+restore passed after a driver fix; W56/W57 added unserved evidence readers.
+W55b `37393a97` counted `GATE OK` under R-125; main had not yet moved. See
+`CFB-INT-DEV-PUBLISH-39.md`.
 
 **Code-first development candidate 31, 2026-10-16.** W57a grounds v3 PDF
 and normative proposals with separate N-labels for one paragraph; W56b
@@ -35,7 +72,7 @@ a TEXT portal block and checked region on an explicitly textless page. It
 does not publish a finding or assert a PDF text-layer citation. See
 `CFB-INT-DEV-PUBLISH-27.md` and `W56B-INT-RECOGNISED-REGION-PREP-01.md`.
 
-## Current development boundary
+## Development boundary at dev39
 
 The checked predecessor of this candidate is
 `origin/dev=f6f19220fa5ae019daae07a3771846e2523ce55a`.
@@ -75,7 +112,7 @@ recovery. W59 has version-pair,
 section-identity and unserved 15-choice review preparations; its section
 seal waits for the required recovery-code close.
 
-## Corpus and release boundaries
+## Corpus and release boundaries at dev39
 
 W54's 674-document, 31,619-file source passed complete file checksums. Its
 57,445,702-byte base dump passed a disposable PostgreSQL restore and all 12
@@ -91,19 +128,19 @@ its successor `d3acd511` passed the earlier brittle test position but failed
 the fourth full gate at D-142 after 4,168 passes. Read-only gate DB evidence
 showed two valid Attempt-scoped publication rows; the test helper's
 Run/Blob `.one()` query was too broad. Test-only successor `37393a97`
-passed focused D-142 real-service checks; its new complete gate is running
-after a host memory/load window. None of these candidates has been
-published to `origin/main`. The remote main predecessor at the preparation
-read was `23fd729dbb06c642be0588017f6b195305e2e53e`. The owner confirmed
-alpha still contains only generated test data on 2026-10-16; that condition
-must be rechecked before applying the R-110 copy waiver. Main publication
-requires a direct exact-SHA owner instruction and
+passed focused D-142 real-service checks; its new complete gate was running
+after a host memory/load window. None of these candidates had yet been
+published to `origin/main` at dev39. The remote main predecessor at the
+preparation read was `23fd729dbb06c642be0588017f6b195305e2e53e`.
+The owner confirmed alpha contained only generated test data on 2026-10-16;
+that condition was rechecked before applying the R-110 copy waiver. Main
+publication required a direct exact-SHA owner instruction and
 `docs/program/MAIN_AUTODEPLOY_POLICY.md`. Deployment identity must be checked
 with `infra/deploy/verify-deployed.sh`; it cannot be inferred from this file.
 
 `R-135` defers the complete W56–W63 beta gate to the final code candidate;
-intermediate dev tasks carry their focused evidence. No current W54 corpus,
-W56–W59 runtime, W55b deployment or beta acceptance is claimed.
+intermediate dev tasks carry their focused evidence. At dev39 no W54 corpus,
+W56–W59 runtime, W55b deployment or beta acceptance was claimed.
 
 ## Pointers and history
 
