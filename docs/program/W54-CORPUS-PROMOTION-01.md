@@ -1,8 +1,9 @@
-# W54-CORPUS-PROMOTION-01 — base dump awaiting restore verification
+# W54-CORPUS-PROMOTION-01 — base dump restore verified
 
 **Date:** 2026-10-15. **Task:** `tasks/W54-CORPUS-PROMOTION-01.md`.
-This record is interim: the promotion base exists in an isolated named volume
-and a dump has been written, but no dump has yet passed restore verification.
+The promotion base exists in an isolated named volume. Its dump has passed
+restore verification on 2026-10-16; the original 2026-10-15 load and dump
+evidence below remains unchanged.
 
 ## Prepared inputs and isolated state
 
@@ -46,17 +47,35 @@ available RAM fell below 6 GiB. A later independent preflight at
 and a fingerprint file. The promotion container was stopped again, retaining
 its volume. The dump is ignored by Git under `.local/norms/promotion-dumps/`.
 
-`verify-dump.sh` has **not** run: disk and RAM have remained below its fresh
-6 GiB floors or CPU load has exceeded the user-requested quiet window. The
-dump has no `.verified` marker. The base snapshot is therefore **not** a
-restore-verified promotion artifact. The next action is to run
-`verify-dump.sh` in a new resource window and compare its restored fingerprint.
-Never proceed to paid repair or bundle export until the dump is marked
-`.verified`.
+On 2026-10-16 at 07:23:50 UTC, a fresh preflight recorded 11,647,422,464
+bytes free on `/`, 8,168,689,664 bytes available RAM excluding swap, and
+load average 1 of 4.63 on 8 CPUs. Two preceding 15-second samples also passed
+the 6 GiB disk/RAM and load-under-8 window. The exact
+`scripts/promotion/verify-dump.sh
+.local/norms/promotion-dumps/promotion-20261015T134454Z.dump` command exited 0
+and printed `verified: .local/norms/promotion-dumps/promotion-20261015T134454Z.dump`.
+The dump SHA-256 remained
+`e1280373ffd7fa3deaa0716429def1844d7e858e79bae7fbad5ade6d516ff74d`.
+The fingerprint file SHA-256 is
+`b39d1baa293ee82c955958361b6e2611ac1de7eb076daaceaa65ad18a25c3023`;
+the disposable restore reproduced all twelve recorded table counts and MD5
+aggregates, including 674 `norm_document`, 348,777 `norm_paragraph`, 55,702
+`norm_chunk`, and zero repair/embedding-build/custody rows. The empty
+`.verified` marker exists beside the dump. The ignored operation log is
+`.local/promotion/verify-dump-20261016.log`, SHA-256
+`c15197b72ec16c474232f2455460678d4cf9d331813ee215193d76ba35593df5`.
+No disposable verify container remains; the original
+`auditmanager-promotion-postgres-1` container remains stopped with its named
+volume retained.
+
+The verified base dump can now feed the offline repair plan. The owner chose
+`claude-opus-5` for the later priced three-page sample; the proxy credential
+file is absent on this host, so no paid sample or full repair has run. No
+repaired snapshot, embeddings, verified bundle or DB/S3 publication exists.
 
 ## Boundaries
 
 No source byte, contract, migration, root lockfile, application runtime,
 production DB/S3 or `origin/main` was changed. The local promotion env,
-runtime, cache, dump and DB volume remain outside Git. This task is incomplete
-until the dump is restore-verified.
+runtime, cache, dump and DB volume remain outside Git. The task's base-dump
+restore-verification outcome is complete; step 2 repair is a separate task.

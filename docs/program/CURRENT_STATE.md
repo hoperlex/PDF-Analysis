@@ -1,5 +1,14 @@
 # Current state
 
+**W54 base corpus restore verified, 2026-10-16.** The 57,445,702-byte base
+promotion dump for `ns_01M4ZW72BS7QHAMDJ993VHNJ7K` passed SHA-256 and a
+disposable PostgreSQL restore reproduced the recorded fingerprints for all
+twelve tracked tables (674 documents, 348,777 paragraphs, 55,702 chunks).
+The `.verified` marker exists; the isolated source volume is stopped and
+retained. Paid repair, repaired snapshot, embeddings and DB/S3 publication
+remain ahead. The owner chose `claude-opus-5` for the planned priced sample,
+but no proxy credential file is present. See `W54-CORPUS-PROMOTION-01.md`.
+
 **Recorded AR v2 durable stage preparation, 2026-10-16.** A new unactivated
 run-side port journals one exact recorded response under current Attempt
 authority, retains its unknown cost as NULL, publishes and reads back the
