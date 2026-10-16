@@ -124,6 +124,14 @@ from auditmanager.analysis.geometry.saved_crop_custody import (
     SavedCropCustodyRefused,
     check_saved_crop_bytes,
 )
+from auditmanager.analysis.text.saved_window_custody import (
+    CheckedRunTextWindowInput,
+    RunScopedTextStage,
+    SavedTextCustodyRefused,
+    check_run_text_window_input,
+    select_run_text_layer_ref,
+)
+from auditmanager.analysis.text.chunk_preflight import ChunkPreflightError
 from auditmanager.analysis.text.proxy import ProxyDispatchError
 from auditmanager.analysis.text.recorded import RecordedAdapter
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
@@ -142,6 +150,8 @@ __all__ = [
     "BlockIndex",
     "BuiltRecordedArtifact",
     "CheckedCropBytes",
+    "CheckedRunTextWindowInput",
+    "ChunkPreflightError",
     "CONTRACT_VERSION",
     "KIND_PORTAL_DESCRIPTION",
     "KIND_RECOGNISED_TEXT",
@@ -193,7 +203,9 @@ __all__ = [
     "RecordedProfileError",
     "ResolvedAnchor",
     "RunScopedGeometryStage",
+    "RunScopedTextStage",
     "SavedCropCustodyRefused",
+    "SavedTextCustodyRefused",
     "TextLayer",
     "TEXT_STAGE_VERSION",
     "StageContext",
@@ -215,6 +227,7 @@ __all__ = [
     "build_recorded_call_facts",
     "build_recorded_observation_artifact",
     "check_saved_crop_bytes",
+    "check_run_text_window_input",
     "blob_role_for",
     "canonical_bytes",
     "prepare_recorded_v2_input",
@@ -225,6 +238,7 @@ __all__ = [
     "run_stage",
     "run_text_analysis",
     "seal_recorded_v2_stage_result",
+    "select_run_text_layer_ref",
     "sha256_hex",
     "merge_grounded",
 ]
