@@ -302,6 +302,45 @@ def test_cyclic_target_listing_refuses_before_upload(tmp_path: Path) -> None:
     assert client.puts == []
 
 
+def test_unique_empty_target_pages_refuse_with_seal_bound(tmp_path: Path) -> None:
+    root, inventory, seal = _inputs(tmp_path)
+
+    class EmptyPagesClient(FakeClient):
+        def list_objects_v2(self, **kwargs: object) -> dict[str, object]:
+            self.list_calls += 1
+            return {
+                "IsTruncated": True, "Contents": [],
+                "NextContinuationToken": str(self.list_calls),
+            }
+
+    client = EmptyPagesClient()
+    with pytest.raises(TargetObjectRestoreRefused, match="listing exceeds seal bound"):
+        _restore(root, inventory, seal, client)
+    assert client.list_calls == 3
+    assert client.puts == []
+
+
+def test_target_page_larger_than_seal_refuses_before_upload(tmp_path: Path) -> None:
+    root, inventory, seal = _inputs(tmp_path)
+
+    class OversizedPageClient(FakeClient):
+        def list_objects_v2(self, **kwargs: object) -> dict[str, object]:
+            self.list_calls += 1
+            return {
+                "IsTruncated": False,
+                "Contents": [
+                    {"Key": f"foreign/{number}", "Size": 1}
+                    for number in range(3)
+                ],
+            }
+
+    client = OversizedPageClient()
+    with pytest.raises(TargetObjectRestoreRefused, match="target contains extra objects"):
+        _restore(root, inventory, seal, client)
+    assert client.list_calls == 1
+    assert client.puts == []
+
+
 def test_concurrent_key_creation_is_not_overwritten(tmp_path: Path) -> None:
     root, inventory, seal = _inputs(tmp_path)
 
@@ -326,5 +365,5 @@ def test_foreign_key_appearing_during_copy_refuses_final_inventory(tmp_path: Pat
             return super().list_objects_v2(**kwargs)
 
     client = RacingClient()
-    with pytest.raises(TargetObjectRestoreRefused, match="target key set or sizes changed"):
+    with pytest.raises(TargetObjectRestoreRefused, match="target (contains extra objects|key set or sizes changed)"):
         _restore(root, inventory, seal, client)

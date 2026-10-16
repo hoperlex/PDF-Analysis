@@ -94,11 +94,18 @@ def _hash_file(fd: int, size: int, sha256: str) -> None:
         raise TargetObjectRestoreRefused("local mirror object changed or differs from seal")
 
 
-def _target_listing(client: TargetObjectClient, bucket: str) -> dict[str, int]:
+def _target_listing(client: TargetObjectClient, bucket: str, *, max_objects: int) -> dict[str, int]:
     result: dict[str, int] = {}
     tokens: set[str] = set()
     token: str | None = None
+    pages = 0
     while True:
+        # If each truncated page advances by one saved object, count+1
+        # requests include the final page. Extra empty continuations cannot
+        # keep an operator waiting forever on a broken target endpoint.
+        if pages > max_objects:
+            raise TargetObjectRestoreRefused("target listing exceeds seal bound")
+        pages += 1
         arguments: dict[str, object] = {"Bucket": bucket}
         if token is not None:
             arguments["ContinuationToken"] = token
@@ -111,6 +118,8 @@ def _target_listing(client: TargetObjectClient, bucket: str) -> dict[str, int]:
         rows = page.get("Contents", [])
         if type(rows) is not list:
             raise TargetObjectRestoreRefused("target bucket listing is malformed")
+        if len(rows) > max_objects - len(result):
+            raise TargetObjectRestoreRefused("target contains extra objects")
         for row in rows:
             if not isinstance(row, Mapping):
                 raise TargetObjectRestoreRefused("target object listing is malformed")
@@ -196,7 +205,7 @@ def restore_sealed_objects(
         raise TargetObjectRestoreRefused("local mirror root cannot be opened safely") from exc
     try:
         _private(os.fstat(root_fd), directory=True)
-        before = _target_listing(client, target_bucket)
+        before = _target_listing(client, target_bucket, max_objects=len(expected))
         if set(before) - set(expected) or any(before[key] != expected[key][0] for key in before):
             raise TargetObjectRestoreRefused("target contains an extra or differently sized object")
         for key, _, _ in inventory:
@@ -225,13 +234,13 @@ def restore_sealed_objects(
             _read_target(client, target_bucket, key, size, sha256)
     finally:
         os.close(root_fd)
-    after = _target_listing(client, target_bucket)
+    after = _target_listing(client, target_bucket, max_objects=len(expected))
     if after != {key: value[0] for key, value in expected.items()}:
         raise TargetObjectRestoreRefused("target key set or sizes changed after upload")
     for key, _, _ in inventory:
         size, sha256 = expected[key]
         _read_target(client, target_bucket, key, size, sha256)
-    if _target_listing(client, target_bucket) != after:
+    if _target_listing(client, target_bucket, max_objects=len(expected)) != after:
         raise TargetObjectRestoreRefused("target key set changed during final readback")
     try:
         verify_manifest(inventory_data, objects_root, sealed_data)
