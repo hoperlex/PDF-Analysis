@@ -1,5 +1,15 @@
 # Current state
 
+**Code-first development candidate 23, 2026-10-16.** W57a storage seal
+`0023_norm_citations` now defines `nrs_` retrieval-set identity, two
+confirmed custody roles, a frozen Run pin and a commit-checked 0..5 citation
+partition. The source passed 49 focused real-PostgreSQL and 176
+contract/offline tests. Domain contracts are candidate revision 14; API and
+stage registry are unchanged. W57a API/stage seal and served CITE remain
+serial next work. The separate W55b candidate `37393a97` is waiting for a
+memory/load window before its full gate. See `CFB-INT-DEV-PUBLISH-23.md` and
+`W57A-SEAL-01A.md`.
+
 **Code-first development candidate 22, 2026-10-16.** The explicit offline
 W56a recorded v2 executor bridge now has real PostgreSQL 17.11/MinIO
 acceptance: 18 tests passed, including five saved stages, recorded call,
@@ -34,23 +44,12 @@ readback and a PostgreSQL-plus-Blob restore drill remain open. The separate
 W55b `d3acd511` complete gate is still running. See
 `CFB-INT-DEV-PUBLISH-19.md` and `W58-INT-ISOLATED-TARGET-OBJECT-RESTORE-01.md`.
 
-**Code-first development candidate 18, 2026-10-16.** W54's metadata-only
-preflight now accepts separate absolute source and promotion roots, so it sees
-the checked source sums and restored base dump without treating them as a
-qualified bundle. W56a has an explicit offline recorded executor bridge for a
-persisted v2 Run with caller-supplied `fixture/<id>` and generation settings;
-normal API/worker composition still selects v1. W57a has a docs-only 0023
-citation/custody freeze with a certified zero-citation rule, not a migration.
-The integrated focused suite passed 79 tests. The repaired W55b main candidate
-`d3acd511` is still under its own complete gate. See
-`CFB-INT-DEV-PUBLISH-18.md` and the three source task reports.
-
 ## Current development boundary
 
 The checked predecessor of this candidate is
-`origin/dev=a292bd1ab614eec9f3e5356529c83d01578c7513`.
+`origin/dev=c3527fd969c4512441971d9a1f6e2c68a52b9a13`.
 The development API surface is 47 paths / 54 operations / 124 schemas; the
-error catalogue has 25 codes and the migration head is `0022_findings_v2`.
+error catalogue has 25 codes and the migration head is `0023_norm_citations`.
 `VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
 The code-first order and prerequisites are in
 [`CODE-FIRST-TO-BETA.md`](dispatch/CODE-FIRST-TO-BETA.md).
@@ -65,10 +64,12 @@ executor path passed real persisted-run and Blob acceptance on an isolated
 lane. The measured baseline, real model/price verification, served executor
 activation and complete beta gate remain open.
 
-W57a has pure retrieval, map, qualification and citation preparations, but no
-verified retrieval set, citation custody relation or active CITE stage. W57b
-has XLSX preparation, but its citation reader and route wait for serial
-`0023`/`0024` contract and migration seals. See
+W57a has pure retrieval, map, qualification and citation preparations. The
+0023 storage seal supplies verified-set constraints, confirmed custody
+bindings, a frozen Run pin and a certified citation-count relation. No
+qualified retrieval-set row or active CITE stage exists. W57b has XLSX
+preparation, but its citation reader and route wait for the serial W57a
+API/stage and 0024 seals. See
 `W57-INT-SEAL-FREEZE-PROPOSAL-01.md`. W58 has read-only source-object mirror,
 isolated target-copy and offline restore preparations; it has not transferred
 a stand or proved DB-plus-Blob recovery. W59 has version-pair,
@@ -89,7 +90,9 @@ The old W55b `6d63802a` main candidate failed three complete-gate attempts;
 its successor `d3acd511` passed the earlier brittle test position but failed
 the fourth full gate at D-142 after 4,168 passes. Read-only gate DB evidence
 showed two valid Attempt-scoped publication rows; the test helper's
-Run/Blob `.one()` query was too broad. Neither candidate has been
+Run/Blob `.one()` query was too broad. Test-only successor `37393a97`
+passed focused D-142 real-service checks; its new complete gate is waiting
+for a host memory/load window. None of these candidates has been
 published to `origin/main`. The remote main predecessor at the preparation
 read was `23fd729dbb06c642be0588017f6b195305e2e53e`. The owner confirmed
 alpha still contains only generated test data on 2026-10-16; that condition
