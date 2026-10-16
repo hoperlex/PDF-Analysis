@@ -1,8 +1,8 @@
 # Current state
 
-**Updated 2026-10-16 from published code-first development candidate 61
-(`8c0dc0e708332e73bd3dc5defdae9fa97665f4ac`), with dev62 W57b evidence
-integrated in this tree.** W55b is
+**Updated 2026-10-16 from published code-first development candidate 62
+(`7b56cb451946d250b1030f61150a4979dbcfc157`), with dev63 offline
+corrections integrated in this tree.** W55b is
 published on `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as
 `GATE OK` under R-125; the deploy workflow selected that tree and the owner
 subsequently ran `infra/deploy/verify-deployed.sh` on the host with a passing
@@ -52,10 +52,15 @@ binding and confirmed that two OCR-only pages remain unread PDF text; a
 forged token refused before Blob access. The independent synthetic
 LibreOffice import and 54-cell
 probe passed outside sandbox after three earlier constrained failures.
-The complete B3.5 live export remains unverified. Served callers,
+The dev63 candidate also rejects globally reused finding/observation IDs
+across W56a recorded evaluation runs, verifies W58 target Blob
+`content-sha256` metadata on retry and final readback, and checks W59 sheet
+snapshot character limits before UTF-8 allocation. Its combined focused
+offline suites pass; these changes do not activate a served route or prove a
+real recovery drill. The complete B3.5 live export remains unverified. Served callers,
 provider/effect provenance, qualified corpus, reviewed catalogue slugs,
 approved W56b policy, W57a CAP-01 and W57b 0024 seal remain open. See
-`CFB-INT-DEV-PUBLISH-45.md` through `CFB-INT-DEV-PUBLISH-62.md`. R-135
+`CFB-INT-DEV-PUBLISH-45.md` through `CFB-INT-DEV-PUBLISH-63.md`. R-135
 defers the complete beta gate to
 the final code candidate. No beta acceptance is claimed.
 
