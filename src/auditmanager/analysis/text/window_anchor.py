@@ -34,13 +34,23 @@ def resolve_window_anchor(
     The existing page/quote resolver retains its exact-match and normalization
     rules; this function adds only the window boundary.
     """
-    pages = _checked_pages(layer)
-    if not isinstance(windows, tuple) or not windows:
-        raise WindowAnchorError("invalid_window_plan")
+    validate_window_plan(layer, windows)
     if type(window_index) is not int or not 0 <= window_index < len(windows):
         raise WindowAnchorError("invalid_window_index")
     if type(page_number) is not int or not isinstance(quote, str) or not quote:
         raise WindowAnchorError("invalid_quote_claim")
+
+    selected = windows[window_index]
+    if not selected.first_page <= page_number <= selected.last_page:
+        raise WindowAnchorError("page_outside_window")
+    return resolve_anchor(layer, page_number=page_number, quote=quote)
+
+
+def validate_window_plan(layer: TextLayer, windows: tuple[TextChunk, ...]) -> None:
+    """Check complete saved-source coverage, including windows with no claims."""
+    pages = _checked_pages(layer)
+    if not isinstance(windows, tuple) or not windows:
+        raise WindowAnchorError("invalid_window_plan")
 
     next_page = 0
     for index, window in enumerate(windows):
@@ -71,8 +81,3 @@ def resolve_window_anchor(
         next_page = window.last_page
     if next_page != len(pages):
         raise WindowAnchorError("invalid_window_plan")
-
-    selected = windows[window_index]
-    if not selected.first_page <= page_number <= selected.last_page:
-        raise WindowAnchorError("page_outside_window")
-    return resolve_anchor(layer, page_number=page_number, quote=quote)
