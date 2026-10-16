@@ -9,6 +9,7 @@ snapshot) are in ``test_bundle_postgres.py``.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 from pathlib import Path
@@ -26,12 +27,14 @@ from auditmanager.norms.bundle.layout import (
     parse_sums,
     render_sums,
 )
+from auditmanager.norms.bundle.manifest import parse_manifest, validate_manifest
 from auditmanager.norms.bundle.stand import (
     Stand,
     import_bundle,
     report_bundle,
     requeue_bundle,
 )
+from auditmanager.norms.custody import binding_digest
 from tests.integration.norms.bundle.support import (
     record_fields,
     record_text,
@@ -133,6 +136,49 @@ def test_rows_re_signed_after_the_export_do_not_digest_as_the_manifest_says(tmp_
     forged = _resign(bundle, PARAGRAPHS_FILE, data)
     refused = _refused(forged, _record(tmp_path))
     assert refused.reason == "bundle_rows_invalid" and "digest" in refused.message
+
+
+def _resign_pdf_slot_damage(directory: Path, damage: str) -> Path:
+    manifest = parse_manifest((directory / MANIFEST_NAME).read_bytes())
+    pdf = next(
+        entry for entry in manifest.files_of("object")
+        if len(entry.slots) == 1 and entry.slots[0].anchor_kind == "pdf"
+    )
+    if damage == "missing":
+        files = tuple(entry for entry in manifest.files if entry != pdf)
+        counts = dataclasses.replace(manifest.counts, objects=manifest.counts.objects - 1,
+                                     slots=manifest.counts.slots - 1)
+        changed = dataclasses.replace(manifest, files=files, counts=counts,
+                                      object_bytes=manifest.object_bytes - pdf.size,
+                                      binding_count=manifest.binding_count - 1)
+        (directory / pdf.path).unlink()
+    else:
+        bad_slot = dataclasses.replace(pdf.slots[0], anchor="doc_" + "f" * 32)
+        slots = (bad_slot,) if damage == "wrong_anchor" else (*pdf.slots, bad_slot)
+        changed_file = dataclasses.replace(pdf, slots=slots)
+        files = tuple(changed_file if entry == pdf else entry for entry in manifest.files)
+        extra = int(damage == "extra")
+        counts = dataclasses.replace(manifest.counts, slots=manifest.counts.slots + extra)
+        changed = dataclasses.replace(manifest, files=files, counts=counts,
+                                      binding_count=manifest.binding_count + extra)
+    changed = dataclasses.replace(changed, binding_digest=binding_digest(changed.binding_entries()))
+    validate_manifest(changed)  # the existing internal checks accept this self-consistent forgery
+    (directory / MANIFEST_NAME).write_bytes(changed.render())
+    sums = parse_sums((directory / SUMS_NAME).read_bytes())
+    if damage == "missing":
+        del sums[pdf.path]
+    sums[MANIFEST_NAME] = hashlib.sha256((directory / MANIFEST_NAME).read_bytes()).hexdigest()
+    rendered = render_sums(sums)
+    (directory / SUMS_NAME).write_bytes(rendered)
+    return directory.rename(directory.with_name(bundle_name(changed.content_key, rendered)))
+
+
+@pytest.mark.parametrize("damage", ["missing", "wrong_anchor", "extra"])
+def test_import_refuses_pdf_slots_that_do_not_match_document_rows_before_database(
+    tmp_path: Path, bundle: Path, damage: str
+) -> None:
+    forged = _resign_pdf_slot_damage(bundle, damage)
+    assert _refused(forged, _record(tmp_path)).reason == "bundle_source_slots_invalid"
 
 
 def test_the_cli_prints_the_refusal_and_exits_2(tmp_path: Path, bundle: Path, capsys) -> None:

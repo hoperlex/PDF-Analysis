@@ -73,7 +73,7 @@ from ..repository import (
     SnapshotImportConflict,
     SnapshotRowsInvalid,
 )
-from ..snapshot import SnapshotRow
+from ..snapshot import SnapshotRow, SnapshotRows
 from .contents import iter_build, read_rows
 from .copy_record import (
     CopyRecord,
@@ -172,6 +172,25 @@ def snapshot_facts(snapshot: SnapshotRow) -> SnapshotFacts:
     )
 
 
+def _require_source_pdf_slots(rows: SnapshotRows, manifest: Manifest) -> None:
+    """Every document row has exactly its own source-PDF custody anchor."""
+    expected = {(row.norm_document_id, row.source_document_ref) for row in rows.documents}
+    actual = {
+        (slot.target_id, slot.anchor)
+        for entry in manifest.files_of("object")
+        for slot in entry.slots
+        if slot.anchor_kind == "pdf"
+    }
+    if actual != expected:
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        raise BundleRefused(
+            "bundle_source_slots_invalid",
+            f"PDF custody slots differ from document rows ({len(missing)} missing, {len(extra)} extra; "
+            f"first missing {missing[:1]!r}, first extra {extra[:1]!r})",
+        )
+
+
 def _custody(session: Session, manifest: Manifest) -> CustodyReport:
     return report(session, role=NORM_SOURCE, targets=manifest.targets)
 
@@ -219,6 +238,7 @@ def import_bundle(
             "manifest_snapshot_differs",
             f"the manifest's snapshot facts {manifest.snapshot!r} are not the rows' {row_facts!r}",
         )
+    _require_source_pdf_slots(rows, manifest)
     say(f"bundle: {manifest.content_key} verified ({len(manifest.files)} files"
         f"{', objects already discarded' if discarded else ''})")
 
