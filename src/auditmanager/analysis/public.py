@@ -124,6 +124,11 @@ from auditmanager.analysis.geometry.saved_crop_custody import (
     SavedCropCustodyRefused,
     check_saved_crop_bytes,
 )
+from auditmanager.analysis.recognised.region_candidate import (
+    RecognisedRegionCandidate,
+    RecognisedRegionRefused,
+    bind_recognised_region_candidate,
+)
 from auditmanager.analysis.text.saved_window_custody import (
     CheckedRunTextWindowInput,
     RunScopedTextStage,
@@ -201,6 +206,8 @@ __all__ = [
     "RecordedReplayResult",
     "RecordedV2Input",
     "RecordedProfileError",
+    "RecognisedRegionCandidate",
+    "RecognisedRegionRefused",
     "ResolvedAnchor",
     "RunScopedGeometryStage",
     "RunScopedTextStage",
@@ -228,6 +235,7 @@ __all__ = [
     "build_recorded_observation_artifact",
     "check_saved_crop_bytes",
     "check_run_text_window_input",
+    "bind_recognised_region_candidate",
     "blob_role_for",
     "canonical_bytes",
     "prepare_recorded_v2_input",
