@@ -6,6 +6,7 @@ import pytest
 
 from auditmanager.norms.citation_prep import (
     NormCitation,
+    NormLabelBinding,
     NormParagraph,
     ground_norm_observation,
     normalize_paragraph,
@@ -173,3 +174,37 @@ def test_duplicate_paragraph_and_label_identities_are_refused() -> None:
         _ground((_paragraph("a"), _paragraph("b")), "anything long enough 1,4")
     with pytest.raises(ValueError, match="duplicate_norm_label"):
         _ground((_paragraph("a"), _paragraph("b", paragraph_id="p2")), "anything long enough 1,4")
+
+
+def test_two_map_item_labels_can_address_one_canonical_paragraph() -> None:
+    quote = "Минимальная ширина прохода составляет 1,4 м"
+    result = ground_norm_observation(
+        (_paragraph(quote, label=None),),
+        (NormCitation("N2", quote),),
+        "1,4 м", "1,2 м", ("Ширина прохода 1,2 м",),
+        label_bindings=(NormLabelBinding("N1", "p1"), NormLabelBinding("N2", "p1")),
+    )
+    assert result.accepted
+    assert [(item.label, item.paragraph_id, item.state) for item in result.citations] == [
+        ("N2", "p1", "verified"),
+    ]
+
+
+def test_separate_label_bindings_refuse_duplicate_foreign_or_mixed_sources() -> None:
+    quote = "Минимальная ширина прохода составляет 1,4 м"
+    no_inline = (_paragraph(quote, label=None),)
+    arguments = ((NormCitation("N1", quote),), "1,4", "1,2", ("1,2",))
+    with pytest.raises(ValueError, match="duplicate_norm_label"):
+        ground_norm_observation(
+            no_inline, *arguments,
+            label_bindings=(NormLabelBinding("N1", "p1"), NormLabelBinding("N1", "p1")),
+        )
+    with pytest.raises(ValueError, match="invalid_norm_label_binding"):
+        ground_norm_observation(
+            no_inline, *arguments, label_bindings=(NormLabelBinding("N1", "foreign"),),
+        )
+    with pytest.raises(ValueError, match="mixed_or_invalid_norm_label_sources"):
+        ground_norm_observation(
+            (_paragraph(quote),), *arguments,
+            label_bindings=(NormLabelBinding("N1", "p1"),),
+        )

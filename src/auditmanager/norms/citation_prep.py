@@ -46,6 +46,18 @@ class NormCitation:
 
 
 @dataclass(frozen=True, slots=True)
+class NormLabelBinding:
+    """One prompt label pointing at a unique canonical paragraph.
+
+    Distinct map items may select the same paragraph under different labels.
+    The binding is only local input; a caller must prove its set/custody pin.
+    """
+
+    label: str
+    paragraph_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class GroundedNormCitation:
     label: str
     document_id: str
@@ -179,6 +191,8 @@ def ground_norm_observation(
     required_value: str,
     stated_value: str,
     evidence_quotes: tuple[str, ...],
+    *,
+    label_bindings: tuple[NormLabelBinding, ...] | None = None,
 ) -> NormGrounding:
     """Ground all citations and values, withholding the whole item on failure.
 
@@ -187,11 +201,30 @@ def ground_norm_observation(
     rebinding. A caller persists citations only when `accepted` is true.
     """
     paragraph_ids = [item.paragraph_id for item in paragraphs]
-    if len(set(paragraph_ids)) != len(paragraph_ids):
+    paragraph_id_set = set(paragraph_ids)
+    if len(paragraph_id_set) != len(paragraph_ids):
         raise ValueError("duplicate_norm_paragraph_id")
-    labels = [item.label for item in paragraphs if item.label is not None]
+    if label_bindings is None:
+        bindings = tuple(
+            NormLabelBinding(item.label, item.paragraph_id)
+            for item in paragraphs if item.label is not None
+        )
+    else:
+        if (not isinstance(label_bindings, tuple)
+                or any(not isinstance(item, NormLabelBinding) for item in label_bindings)
+                or any(item.label is not None for item in paragraphs)):
+            raise ValueError("mixed_or_invalid_norm_label_sources")
+        bindings = label_bindings
+    labels = [item.label for item in bindings]
     if len(set(labels)) != len(labels):
         raise ValueError("duplicate_norm_label")
+    if any(
+        not isinstance(item.label, str)
+        or re.fullmatch(r"N[1-9][0-9]*", item.label) is None
+        or item.paragraph_id not in paragraph_id_set
+        for item in bindings
+    ):
+        raise ValueError("invalid_norm_label_binding")
     skipped = tuple(
         item.paragraph_id
         for item in paragraphs
@@ -200,7 +233,11 @@ def ground_norm_observation(
     reliable = tuple(
         item for item in paragraphs if item.reliable and item.paragraph_id not in skipped
     )
-    by_label = {item.label: item for item in reliable if item.label is not None}
+    by_id = {item.paragraph_id: item for item in reliable}
+    by_label = {
+        binding.label: by_id[binding.paragraph_id]
+        for binding in bindings if binding.paragraph_id in by_id
+    }
     prepared = {item.paragraph_id: normalize_paragraph(item.text) for item in reliable}
 
     def withheld(reason: str) -> NormGrounding:

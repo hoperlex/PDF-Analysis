@@ -7,6 +7,13 @@ here in plan §6's order (REPAIR, SNAPSHOT, EMBED, BUNDLE); nothing outside
 
 from __future__ import annotations
 
+from auditmanager.norms.citation_prep import (
+    GroundedNormCitation,
+    NormCitation,
+    NormLabelBinding,
+    NormParagraph,
+    ground_norm_observation,
+)
 from auditmanager.norms.bundle import (  # W54-BUNDLE-01
     FINGERPRINT_ALGORITHM,
     MANIFEST_FORMAT,
@@ -146,6 +153,7 @@ __all__ = [
     "EMBED_TEXTS_REQUEST_FORMAT",
     "EMBED_TEXTS_RESPONSE_FORMAT",
     "FINGERPRINT_ALGORITHM",
+    "GroundedNormCitation",
     "LEDGER_VERSION",
     "MANIFEST_FORMAT",
     "MAX_ATTEMPTS",
@@ -194,6 +202,9 @@ __all__ = [
     "NormEmbeddingConflict",
     "NormEmbeddingRepository",
     "NormEmbeddingScanShort",
+    "NormCitation",
+    "NormLabelBinding",
+    "NormParagraph",
     "NormsProjectionConflict",
     "ParagraphRow",
     "Qualification",
@@ -219,6 +230,7 @@ __all__ = [
     "encode_event_cursor",
     "export_bundle",
     "get_norm_document",
+    "ground_norm_observation",
     "has_been_current",
     "import_bundle",
     "import_snapshot",
