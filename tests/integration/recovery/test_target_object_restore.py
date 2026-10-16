@@ -181,6 +181,54 @@ def test_interrupted_upload_resumes_only_after_existing_bytes_match(tmp_path: Pa
     assert client.objects == {ONE: b"first", TWO: b""}
 
 
+@pytest.mark.parametrize("metadata", ({}, {"content-sha256": "0" * 64}))
+def test_existing_exact_bytes_require_sealed_digest_metadata_before_write(
+    tmp_path: Path, metadata: dict[str, str],
+) -> None:
+    root, inventory, seal = _inputs(tmp_path)
+    client = FakeClient()
+    client.objects[ONE] = b"first"
+    client.metadata[ONE] = metadata
+
+    with pytest.raises(TargetObjectRestoreRefused, match="metadata"):
+        _restore(root, inventory, seal, client)
+
+    assert client.puts == []
+    assert client.objects == {ONE: b"first"}
+    assert client.closed == [ONE]
+
+
+def test_existing_exact_bytes_and_digest_metadata_resume_without_overwrite(tmp_path: Path) -> None:
+    root, inventory, seal = _inputs(tmp_path)
+    client = FakeClient()
+    client.objects[ONE] = b"first"
+    client.metadata[ONE] = {"content-sha256": hashlib.sha256(b"first").hexdigest()}
+
+    result = _restore(root, inventory, seal, client)
+
+    assert result.count == 2
+    assert client.puts == [TWO]
+    assert client.metadata[TWO] == {"content-sha256": hashlib.sha256(b"").hexdigest()}
+
+
+def test_metadata_change_during_final_readback_refuses(tmp_path: Path) -> None:
+    root, inventory, seal = _inputs(tmp_path)
+
+    class ChangingMetadataClient(FakeClient):
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            response = super().get_object(Bucket=Bucket, Key=Key)
+            if Key == ONE and self.gets.count(ONE) == 2:
+                response["Metadata"] = {}
+            return response
+
+    client = ChangingMetadataClient()
+    with pytest.raises(TargetObjectRestoreRefused, match="metadata"):
+        _restore(root, inventory, seal, client)
+
+    assert client.puts == [ONE, TWO]
+    assert client.closed.count(ONE) == 2
+
+
 @pytest.mark.parametrize("objects", (
     {"foreign/key": b"x"}, {ONE: b"wrong"}, {ONE: b"longer"},
 ))
@@ -190,6 +238,8 @@ def test_foreign_or_changed_existing_target_refuses_before_write(
     root, inventory, seal = _inputs(tmp_path)
     client = FakeClient()
     client.objects.update(objects)
+    if ONE in objects:
+        client.metadata[ONE] = {"content-sha256": hashlib.sha256(b"first").hexdigest()}
     with pytest.raises(TargetObjectRestoreRefused):
         _restore(root, inventory, seal, client)
     assert client.puts == []
@@ -200,6 +250,10 @@ def test_target_readback_failure_never_returns_success(tmp_path: Path, fault: st
     root, inventory, seal = _inputs(tmp_path)
     client = FakeClient()
     client.objects = {ONE: b"first", TWO: b""}
+    client.metadata = {
+        ONE: {"content-sha256": hashlib.sha256(b"first").hexdigest()},
+        TWO: {"content-sha256": hashlib.sha256(b"").hexdigest()},
+    }
     if fault == "corrupt":
         client.corrupt_get.add(ONE)
     elif fault == "header":

@@ -139,6 +139,11 @@ def _read_target(client: TargetObjectClient, bucket: str, key: str, size: int, s
     try:
         if type(response.get("ContentLength")) is not int or response["ContentLength"] != size:
             raise TargetObjectRestoreRefused("target ContentLength differs from seal")
+        metadata = response.get("Metadata")
+        if not isinstance(metadata, Mapping) \
+                or type(metadata.get("content-sha256")) is not str \
+                or metadata["content-sha256"] != sha256:
+            raise TargetObjectRestoreRefused("target content-sha256 metadata differs from seal")
         digest = hashlib.sha256()
         read = 0
         while True:

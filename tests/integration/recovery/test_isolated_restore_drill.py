@@ -84,6 +84,7 @@ class _Objects:
     def __init__(self, events: list[str]) -> None:
         self.events = events
         self.objects: dict[str, bytes] = {}
+        self.metadata: dict[str, dict[str, str]] = {}
         self.puts = 0
 
     def list_objects_v2(self, **kwargs: object) -> dict[str, object]:
@@ -102,6 +103,7 @@ class _Objects:
         assert len(value) == ContentLength
         assert Metadata == {"content-sha256": _sha(value)}
         self.objects[Key] = value
+        self.metadata[Key] = dict(Metadata)
         self.puts += 1
         return {}
 
@@ -109,7 +111,8 @@ class _Objects:
         self.events.append("get")
         assert Bucket == "isolated-bucket"
         value = self.objects[Key]
-        return {"ContentLength": len(value), "Body": io.BytesIO(value)}
+        return {"ContentLength": len(value), "Body": io.BytesIO(value),
+                "Metadata": dict(self.metadata[Key])}
 
 
 class _Blobs:
