@@ -1,12 +1,14 @@
 # Current state
 
-**Updated 2026-10-16, after code-first development candidate 43.** W55b is
+**Updated 2026-10-16, after code-first development candidate 48
+(`origin/dev=3a7c558a862d975f5305f6c54b15c6dfa5e9dca6`).** W55b is
 published on `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as
 `GATE OK` under R-125; the deploy workflow selected that tree and the owner
 subsequently ran `infra/deploy/verify-deployed.sh` on the host with a passing
 image/tree comparison. The workflow's own verify command was skipped because
-a child consumed its stdin. Its tested repair is on `origin/dev`, with a
-separate complete gate and exact-SHA main publication still required. The
+a child consumed its stdin. Its tested repair is on `origin/dev`; moving that
+repair to main requires a separate complete gate and direct exact-SHA owner
+publication instruction. The
 owner explicitly waived five credentialed live W55b product checks for this
 release; those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
@@ -23,14 +25,16 @@ W54's 674-document, 31,619-file source has complete file checksums and a
 restore-verified base dump with 348,777 paragraphs and 55,702 chunks.
 The 121-page `claude-opus-5` repair still lacks a proxy credential. There is
 no repaired qualified snapshot, complete embedding checkpoint or DB/S3
-corpus publication. The latest W54 preflight improvements pin the source
-checksum listing and require a canonical embedding plan; neither proves
-the later payloads. W56b now has unserved text-window cohort and supplied
-byte checks; W57a has an unserved draft v3 prompt renderer. Their callers,
-provider/effect provenance, qualified corpus, approved W56b policy and
-W57a CAP-01 remain open. See `CFB-INT-DEV-PUBLISH-41.md` and
-`CFB-INT-DEV-PUBLISH-42.md`. R-135 defers the complete beta gate to the
-final code candidate. No beta acceptance is claimed.
+corpus publication. The W54 bundle exporter now checks the crop index and
+all 28,246 listed crop paths before staging; this is source custody code,
+not a published bundle. W56b has unserved Run/Attempt-fenced readers for
+saved text windows, geometry crops and recognised-text regions. W57a has an
+unserved v3 request candidate and local response evaluator; W57b can carry
+certified citation partitions into XLSX package input. Their served callers,
+provider/effect provenance, qualified corpus, approved W56b policy, W57a
+CAP-01 and W57b 0024 seal remain open. See `CFB-INT-DEV-PUBLISH-45.md`
+through `CFB-INT-DEV-PUBLISH-48.md`. R-135 defers the complete beta gate to
+the final code candidate. No beta acceptance is claimed.
 
 **The following detailed snapshot is the state at dev39, before W55b's
 main publication and later development candidates.** It is retained for
