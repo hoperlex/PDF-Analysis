@@ -1,5 +1,15 @@
 # Current state
 
+**Checked code-first candidate with W54 plan, 2026-10-16.** The next dev
+integration adds an unactivated durable W56a finding-merge stage over saved
+observation Blobs, an XLSX run/source preflight and a bounded W59 raw-evidence
+summary input. The combined focused suite passed 122 tests. W54's verified
+base now has a zero-call `claude-opus-5` plan for 121 pages and all 31,619
+source files passed a fresh checksum check. The proxy credential is absent,
+so no paid repair or DB/S3 corpus publication has occurred. A separate W55b
+main candidate remains unapproved while its complete gate is retried. See
+`CFB-INT-DEV-PUBLISH-15.md` and the source task reports.
+
 **W54 base corpus restore verified, 2026-10-16.** The 57,445,702-byte base
 promotion dump for `ns_01M4ZW72BS7QHAMDJ993VHNJ7K` passed SHA-256 and a
 disposable PostgreSQL restore reproduced the recorded fingerprints for all
