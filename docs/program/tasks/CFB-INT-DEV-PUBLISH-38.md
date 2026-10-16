@@ -65,13 +65,13 @@ publication only and does not deploy W55b or alter the release candidate.
 
 ## Allowed paths
 
-- `docs/program/tasks/CFB-INT-DEV-PUBLISH-38.md`;
-- `docs/program/CFB-INT-DEV-PUBLISH-38.md`;
-- `docs/program/CURRENT_STATE.md`;
-- `docs/program/tasks/W55B-INT-MAIN-PREP-02.md`;
-- `docs/program/W55B-INT-MAIN-PREP-02.md`;
-- `docs/program/tasks/W55B-INT-MAIN-PREP-03.md`;
-- `docs/program/W55B-INT-MAIN-PREP-03.md`.
+- `docs/program/tasks/CFB-INT-DEV-PUBLISH-38.md`
+- `docs/program/CFB-INT-DEV-PUBLISH-38.md`
+- `docs/program/CURRENT_STATE.md`
+- `docs/program/tasks/W55B-INT-MAIN-PREP-02.md`
+- `docs/program/W55B-INT-MAIN-PREP-02.md`
+- `docs/program/tasks/W55B-INT-MAIN-PREP-03.md`
+- `docs/program/W55B-INT-MAIN-PREP-03.md`
 
 ## Forbidden hotspots
 
