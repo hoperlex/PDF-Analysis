@@ -124,6 +124,29 @@ def test_copy_objects_copies_instead(tmp_path: Path, drop) -> None:
     assert os.stat(corpus / document.slug / "document.pdf").st_ino != os.stat(linked).st_ino
 
 
+def test_duplicate_digest_source_path_must_match_sums_before_a_second_slot(
+    tmp_path: Path, drop
+) -> None:
+    corpus, sums = drop
+    first, second = default_documents()
+    shared_block = "blk_" + "b" * 32
+    assert first.crops[shared_block] == second.pdf
+    rows = synthetic_rows()
+    earlier = min(rows.documents, key=lambda document: document.norm_document_id)
+    later_source = (
+        corpus / second.slug / "document.pdf"
+        if earlier.slug == first.slug
+        else corpus / first.slug / "crops" / f"{shared_block}.pdf"
+    )
+    later_source.write_bytes(b"%PDF-1.7 changed after sums\n")
+
+    with pytest.raises(BundleRefused) as refused:
+        write_bundle(_source(rows), corpus=corpus, drop_sums=sums,
+                     ledger=None, out=tmp_path / "out")
+    assert refused.value.reason == "drop_file_differs"
+    assert list((tmp_path / "out").iterdir()) == [], "a refused export left a directory"
+
+
 def test_an_equal_export_is_the_same_bundle(tmp_path: Path, drop) -> None:
     corpus, sums = drop
     source = _source(synthetic_rows())

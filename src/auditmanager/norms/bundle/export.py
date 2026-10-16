@@ -509,6 +509,18 @@ class _ObjectPlacer:
         if expected is None:
             raise BundleRefused("drop_file_unsummed", f"the drop's SHA256SUMS does not name {relative}")
         if expected in self.objects:
+            # Equal listed digests may share a bundle object, but each source path must
+            # still prove its own bytes before it gets a custody slot.
+            try:
+                sha, _size = sha256_file(source)
+            except OSError as exc:
+                raise BundleRefused(
+                    "drop_file_differs", f"{relative} cannot be read: {exc.strerror or exc}"
+                ) from None
+            if sha != expected:
+                raise BundleRefused(
+                    "drop_file_differs", f"{relative} hashes to {sha}; the drop's SHA256SUMS says {expected}"
+                )
             self.objects[expected][1].append(slot)
             return expected
         target = self._staging / object_path(expected)
