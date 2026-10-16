@@ -1,8 +1,8 @@
 # Current state
 
-**Code-first development candidate 32, 2026-10-16.** W59 adds an unserved
-stage/section/profile pin; W58 copies sealed Blob digest metadata. Persisted
-facts, authority and real recovery remain open. See `CFB-INT-DEV-PUBLISH-32.md`.
+**Code-first candidate 33, 2026-10-16.** W56b adds a current Run/Attempt
+crop reader, W57a adds an unserved CITE writer, and W58 an opt-in synthetic
+restore CLI. Real DB/S3 proof remains open. See `CFB-INT-DEV-PUBLISH-33.md`.
 
 **Code-first development candidate 31, 2026-10-16.** W57a grounds v3 PDF
 and normative proposals with separate N-labels for one paragraph; W56b
