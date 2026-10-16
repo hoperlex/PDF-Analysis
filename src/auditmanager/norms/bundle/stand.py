@@ -65,6 +65,8 @@ from ..custody import (
     report,
     requeue,
 )
+from ..embedding import vectors
+from ..embedding.digest import EmbeddingSetDigest
 from ..embedding_repository import NormEmbeddingConflict, NormEmbeddingRepository
 from ..loader import import_snapshot
 from ..repository import (
@@ -192,6 +194,43 @@ def _require_source_pdf_slots(rows: SnapshotRows, manifest: Manifest) -> None:
         )
 
 
+def _require_complete_build(directory: Path, rows: SnapshotRows, manifest: Manifest) -> None:
+    """Stream the verified build's portable facts before any custody side effect."""
+    assert manifest.build is not None
+    digest = EmbeddingSetDigest(
+        content_key=manifest.content_key,
+        chunking_profile=manifest.chunking_profile,
+        embedding_profile=manifest.build.embedding_profile,
+    )
+    document_refs = {document.source_document_ref for document in rows.documents}
+    previous: tuple[str, int] | None = None
+    chunks = 0
+    for chunk in iter_build(directory, [entry.path for entry in manifest.files_of("build")]):
+        if chunk.document_ref not in document_refs:
+            raise BundleRefused("bundle_build_invalid", f"chunk {chunk.key!r} names no document row")
+        if previous is not None and not chunk.key > previous:
+            raise BundleRefused(
+                "bundle_build_invalid",
+                f"chunk {chunk.key!r} is repeated or out of canonical order after {previous!r}",
+            )
+        previous = chunk.key
+        chunks += 1
+        for window in chunk.windows:
+            try:
+                vectors.require_unit(window.vector)
+                digest.add(chunk.document_ref, chunk.chunk_ordinal, window)
+            except (vectors.VectorRefused, ValueError) as exc:
+                raise BundleRefused("bundle_build_invalid", f"chunk {chunk.key!r}: {exc}") from exc
+    actual = (chunks, digest.windows, digest.hexdigest())
+    expected = (
+        manifest.build.chunk_count,
+        manifest.build.window_count,
+        manifest.build.embedding_set_sha256,
+    )
+    if actual != expected:
+        raise BundleRefused("bundle_build_invalid", f"build count/digest {actual!r} differs from {expected!r}")
+
+
 def _custody(session: Session, manifest: Manifest) -> CustodyReport:
     return report(session, role=NORM_SOURCE, targets=manifest.targets)
 
@@ -244,6 +283,7 @@ def import_bundle(
     except SnapshotRowsInvalid as exc:
         raise BundleRefused("bundle_rows_invalid", str(exc)) from exc
     _require_source_pdf_slots(rows, manifest)
+    _require_complete_build(directory, rows, manifest)
     say(f"bundle: {manifest.content_key} verified ({len(manifest.files)} files"
         f"{', objects already discarded' if discarded else ''})")
 

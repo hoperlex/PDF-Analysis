@@ -162,6 +162,30 @@ def test_synthetic_fixture_rows_are_semantically_valid() -> None:
     validate_snapshot_rows(synthetic_rows())
 
 
+@pytest.mark.parametrize("damage", ["invalid_vector", "divergent_digest"])
+def test_checksum_consistent_build_damage_refuses_before_database_or_custody(
+    tmp_path: Path, bundle: Path, damage: str
+) -> None:
+    manifest = parse_manifest((bundle / MANIFEST_NAME).read_bytes())
+    build_path = manifest.files_of("build")[0].path
+    lines = (bundle / build_path).read_text().splitlines()
+    chunk = json.loads(lines[0])
+    if damage == "invalid_vector":
+        chunk["windows"][0]["vector"] = "invalid base64"
+    else:
+        chunk["windows"][0]["input_sha256"] = "f" * 64
+    lines[0] = json.dumps(chunk, sort_keys=True, separators=(",", ":"))
+    forged = _resign(bundle, build_path, ("\n".join(lines) + "\n").encode())
+    refused = _refused(forged, _record(tmp_path))
+    assert refused.reason == "bundle_build_invalid"
+    assert ("vector" if damage == "invalid_vector" else "digest") in refused.message
+
+
+def test_valid_build_passes_ingress_to_database_boundary(tmp_path: Path, bundle: Path) -> None:
+    with pytest.raises(AssertionError, match="database was reached"):
+        import_bundle(bundle, copy_record=_record(tmp_path), stand=STAND, say=lambda _line: None)
+
+
 def _resign_pdf_slot_damage(directory: Path, damage: str) -> Path:
     manifest = parse_manifest((directory / MANIFEST_NAME).read_bytes())
     pdf = next(
