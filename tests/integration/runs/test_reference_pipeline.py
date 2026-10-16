@@ -141,11 +141,11 @@ def _install_readers(monkeypatch, *, saved=None, catalogue=None):
     return calls
 
 
-def _read(session, jobs, *, pins=PINS, listed=()):
+def _read(session, jobs, *, pins=PINS, listed=(), max_catalogue_bytes=20_000):
     return read_run_references(
         session, authority=AUTHORITY, blob_store=object(), pins=pins,
         listed_unparsed_slugs=listed, max_text_bytes=50_000,
-        max_catalogue_bytes=20_000, jobs=jobs,
+        max_catalogue_bytes=max_catalogue_bytes, jobs=jobs,
     )
 
 
@@ -218,3 +218,46 @@ def test_explicit_unparsed_slug_tuple_is_required(monkeypatch):
     with pytest.raises(DomainError):
         _read(_Session(), _Jobs(), listed=None)
     assert calls == []
+
+
+@pytest.mark.parametrize("listing", [
+    ("",),
+    ("e\u0301",),
+    ("same", "same"),
+    ("\ud800",),
+    ("x" * 20_001,),
+    ("а" * 6_000, "б" * 5_000),
+])
+def test_invalid_or_oversized_listing_refuses_before_blob_reads(monkeypatch, listing):
+    calls = _install_readers(monkeypatch)
+    session, jobs = _Session(), _Jobs()
+
+    with pytest.raises(DomainError) as caught:
+        _read(session, jobs, listed=listing)
+
+    assert caught.value.code == ErrorCode.ANALYSIS_INPUT_INVALID
+    assert calls == []
+    assert (session.calls, jobs.calls) == (0, 0)
+
+
+@pytest.mark.parametrize("ceiling", [True, 0, 10_000_001])
+def test_invalid_catalogue_ceiling_refuses_before_blob_reads(monkeypatch, ceiling):
+    calls = _install_readers(monkeypatch)
+    with pytest.raises(DomainError) as caught:
+        _read(_Session(), _Jobs(), max_catalogue_bytes=ceiling)
+    assert caught.value.code == ErrorCode.ANALYSIS_INPUT_INVALID
+    assert calls == []
+
+
+def test_listing_longer_than_verified_snapshot_refuses_before_extraction(monkeypatch):
+    calls = _install_readers(monkeypatch)
+
+    def unexpected_extraction(**kwargs):
+        pytest.fail("reference extraction must not start for an impossible listing")
+
+    monkeypatch.setattr(chain, "reference_pages_from_text_layer", unexpected_extraction)
+    with pytest.raises(DomainError) as caught:
+        _read(_Session(), _Jobs(), listed=("a", "b", "c"))
+
+    assert caught.value.code == ErrorCode.ANALYSIS_INPUT_INVALID
+    assert calls == ["saved", "catalogue"]

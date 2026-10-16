@@ -7,6 +7,7 @@ read combines exact saved sources; it grants no authority to publish a result.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import unicodedata
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -29,6 +30,7 @@ _RUN_PIN = text("""
     SELECT run_id, version_uid, norm_retrieval_set_id, norms_snapshot_id, state
       FROM audit_run WHERE run_id = :run_id
 """)
+_MAX_CATALOGUE_BYTES = 10_000_000  # The verified reader and canonical parser cap.
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +73,32 @@ def _read_run_pin(session: Session, *, pins: ReferenceRunPins) -> dict[str, str]
     return row
 
 
+def _check_explicit_listing(
+    listed_unparsed_slugs: tuple[str, ...], *, max_catalogue_bytes: int,
+) -> None:
+    if type(max_catalogue_bytes) is not int or not 1 <= max_catalogue_bytes <= _MAX_CATALOGUE_BYTES:
+        raise _refuse("invalid_catalogue_byte_ceiling")
+    if not isinstance(listed_unparsed_slugs, tuple):
+        raise _refuse("explicit_unparsed_slug_tuple_required")
+    # Each valid slug occurs at least once in the canonical catalogue JSON.
+    # These are necessary size bounds, not authority to accept a listed slug.
+    if len(listed_unparsed_slugs) > max_catalogue_bytes:
+        raise _refuse("explicit_unparsed_slug_listing_too_large")
+    seen: set[str] = set()
+    encoded_bytes = 0
+    for slug in listed_unparsed_slugs:
+        if (not isinstance(slug, str) or not slug or len(slug) > max_catalogue_bytes
+                or unicodedata.normalize("NFC", slug) != slug or slug in seen):
+            raise _refuse("explicit_unparsed_slug_listing_invalid")
+        try:
+            encoded_bytes += len(slug.encode("utf-8"))
+        except UnicodeError as exc:
+            raise _refuse("explicit_unparsed_slug_listing_invalid") from exc
+        if encoded_bytes > max_catalogue_bytes:
+            raise _refuse("explicit_unparsed_slug_listing_too_large")
+        seen.add(slug)
+
+
 def read_run_references(
     session: Session,
     *,
@@ -97,8 +125,9 @@ def read_run_references(
         )
     ) or pins.run_id != authority.run_id:
         raise _refuse("invalid_explicit_run_pins")
-    if not isinstance(listed_unparsed_slugs, tuple):
-        raise _refuse("explicit_unparsed_slug_tuple_required")
+    _check_explicit_listing(
+        listed_unparsed_slugs, max_catalogue_bytes=max_catalogue_bytes,
+    )
 
     job_repo = jobs or JobRepository()
     job_repo.require_current(session, authority)
@@ -122,6 +151,8 @@ def read_run_references(
         or catalogue.expectation.snapshot_id != pins.norms_snapshot_id
     ):
         raise _refuse("verified_catalogue_pin_mismatch")
+    if len(listed_unparsed_slugs) > catalogue.expectation.document_count:
+        raise _refuse("explicit_unparsed_slug_listing_exceeds_snapshot")
 
     pages = reference_pages_from_text_layer(
         text_layer=saved.text_layer,
