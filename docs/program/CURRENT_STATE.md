@@ -1,5 +1,11 @@
 # Current state
 
+**Code-first development candidate 27, 2026-10-16.** W56b has a pure,
+unserved OCR-region candidate that binds an exact recognised-text quote to
+a TEXT portal block and checked region on an explicitly textless page. It
+does not publish a finding or assert a PDF text-layer citation. See
+`CFB-INT-DEV-PUBLISH-27.md` and `W56B-INT-RECOGNISED-REGION-PREP-01.md`.
+
 **Code-first development candidate 26, 2026-10-16.** W57a API/stage seal
 publishes the 0023 citation vocabulary and a role-guarded, typed 503 report
 route until a verified reader exists. The API has 48 paths / 55 operations /
@@ -33,18 +39,10 @@ serial next work. The separate W55b candidate `37393a97` is waiting for a
 memory/load window before its full gate. See `CFB-INT-DEV-PUBLISH-23.md` and
 `W57A-SEAL-01A.md`.
 
-**Code-first development candidate 22, 2026-10-16.** The explicit offline
-W56a recorded v2 executor bridge now has real PostgreSQL 17.11/MinIO
-acceptance: 18 tests passed, including five saved stages, recorded call,
-Blob readback, terminal Run/Job/Attempt and refused retry. A v2-only commit
-before external Blob read closes the D-141 lease-ordering defect. Normal
-served composition still chooses v1. See `CFB-INT-DEV-PUBLISH-22.md` and
-`W56A-INT-RECORDED-BRIDGE-DB-ACCEPT-01.md`.
-
 ## Current development boundary
 
 The checked predecessor of this candidate is
-`origin/dev=3d131d2966e0efeea7b53d9662785f253165a9a4`.
+`origin/dev=4efd756c67b5160aeca3dbc58903f72df6c93636`.
 The development API surface is 48 paths / 55 operations / 131 schemas; the
 error catalogue has 25 codes and the migration head is `0023_norm_citations`.
 `VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
@@ -66,8 +64,9 @@ W57a has pure retrieval, map, qualification and citation preparations. The
 bindings, a frozen Run pin and a certified citation-count relation. The
 API/stage seal adds vocabulary and a refusing report read. No qualified
 retrieval-set row, verified reader or active CITE stage exists. W57b has XLSX
-preparation, but its citation reader and route wait for the serial W57a
-API/stage and 0024 seals. See
+preparation, but its citation reader and route wait for verified W57a reader
+and 0024 seal. W56b has only an unserved OCR-region candidate; saved-artifact
+custody and an approved OCR citation policy are still required. See
 `W57-INT-SEAL-FREEZE-PROPOSAL-01.md`. W58 has read-only source-object mirror,
 isolated target-copy and offline DB-plus-Blob drill code; it has not
 transferred a stand or proved recovery. W59 has version-pair,
