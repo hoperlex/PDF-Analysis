@@ -1,5 +1,16 @@
 # Current state
 
+**Checked code-first development candidate, 2026-10-16.** The next dev
+integration adds W56a recorded call facts and a complete source-bound
+StageResult value, W57a build-fact reading and digest comparison, W58 target
+Blob byte readback, W59 raw version evidence sealing and conservative finding
+match suggestions. The combined focused suite passed 241 tests, including the
+now-green program task governance. These are unactivated preparations: W54's
+dump lacks restore verification; no qualified corpus, live AR v2, real W58
+drill, approved comparison or beta verdict is claimed. The separate W55b
+`origin/main` candidate remains `6d63802a` under its own complete gate. See
+`CFB-INT-DEV-PUBLISH-13.md` and the source task reports.
+
 **Development candidate through W59 preparations, 2026-10-16.** The clean
 code-first candidate adds the W57a pure retrieval-set/catalogue assembler,
 the W58 offline restore evidence coordinator, and the W59 exact ordered
