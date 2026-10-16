@@ -1,10 +1,13 @@
 # Current state
 
+**Code-first development candidate 32, 2026-10-16.** W59 adds an unserved
+stage/section/profile pin; W58 copies sealed Blob digest metadata. Persisted
+facts, authority and real recovery remain open. See `CFB-INT-DEV-PUBLISH-32.md`.
+
 **Code-first development candidate 31, 2026-10-16.** W57a grounds v3 PDF
-and normative proposals with separate N-label bindings for one canonical
-paragraph. W56b verifies supplied saved crop references and PNG bytes.
-Neither pure check proves real DB/S3 custody or activates served analysis.
-See `CFB-INT-DEV-PUBLISH-31.md`.
+and normative proposals with separate N-labels for one paragraph; W56b
+verifies supplied saved crop references and PNG bytes. Neither proves real
+DB/S3 custody or activates served analysis. See `CFB-INT-DEV-PUBLISH-31.md`.
 
 **Code-first development candidate 30, 2026-10-16.** W57a now has a pure,
 unserved AR v3 response schema/parser. Five normative categories require
