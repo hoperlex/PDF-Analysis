@@ -9,6 +9,9 @@ from pathlib import Path
 import pytest
 
 from scripts.norms import corpus_preflight as preflight
+from auditmanager.norms.embedding.checkpoint import BuildIdentity, prepare_plan
+from auditmanager.norms.embedding.model import ChunkInput
+from auditmanager.norms.embedding.profile import EMBEDDING_PROFILE
 
 
 def _source(root: Path) -> str:
@@ -71,6 +74,27 @@ def _bundle(root: Path, sums_sha: str) -> None:
     }))
 
 
+def _build_checkpoint(root: Path, *, complete: bool = True,
+                      embedding_profile: str = EMBEDDING_PROFILE) -> Path:
+    (root / "builds").mkdir()
+    directory = root / "builds" / "content-key"
+    identity = BuildIdentity(norms_snapshot_id="ns_" + "0" * 26,
+                             content_key=directory.name,
+                             chunking_profile="characters-v2:1000",
+                             embedding_profile=embedding_profile)
+    plan, created = prepare_plan(
+        directory, identity,
+        [ChunkInput("source", 0, "text", 0, 0, (4,))],
+    )
+    assert created and len(plan.batches) == 1
+    if complete:
+        vectors = directory / "vectors"
+        vectors.mkdir()
+        (vectors / plan.batches[0].name).write_text("unverified checkpoint\n")
+        (vectors / f"{plan.batches[0].name}.sha256").write_text("unverified sidecar\n")
+    return directory
+
+
 def _measure(_root: Path, step: str, *, disk: int = 20 * preflight.GIB,
              memory: int = 8 * preflight.GIB, load: float = 0.0) -> preflight.Capacity:
     return preflight.Capacity(disk, preflight.DISK_RESERVE + preflight.INCREMENTS[step], memory, load)
@@ -95,15 +119,7 @@ def test_preflight_passes_metadata_and_capacity_without_reading_a_document(
     manifest_sha = _source(tmp_path)
     sums_sha = _sums(tmp_path)
     _dump(tmp_path)
-    (tmp_path / "builds" / "some-content-key").mkdir(parents=True)
-    (tmp_path / "builds" / "some-content-key" / "plan.json").write_text('{"batches": [{"index": 0}]}')
-    inputs = tmp_path / "builds" / "some-content-key" / "inputs"
-    inputs.mkdir()
-    (inputs / "batch-00000.jsonl").write_text("{}\n")
-    vectors = tmp_path / "builds" / "some-content-key" / "vectors"
-    vectors.mkdir()
-    (vectors / "batch-00000.jsonl").write_text("{}\n")
-    (vectors / "batch-00000.jsonl.sha256").write_text("a" * 64)
+    _build_checkpoint(tmp_path)
     _bundle(tmp_path, sums_sha)
     read_bytes = Path.read_bytes
 
@@ -145,8 +161,7 @@ def test_plan_alone_is_not_a_build_checkpoint_and_verify_dump_is_not_circular(tm
     manifest_sha = _source(tmp_path)
     _sums(tmp_path)
     _dump(tmp_path)
-    (tmp_path / "builds" / "key").mkdir(parents=True)
-    (tmp_path / "builds" / "key" / "plan.json").write_text('{"batches": [{"index": 0}]}')
+    _build_checkpoint(tmp_path, complete=False)
     result = _inspect(tmp_path, manifest_sha, measure=_measure)
     assert result.build_checkpoint == "plan_only_or_partial"
     assert "build_checkpoint_unavailable" in result.refusals
@@ -154,6 +169,28 @@ def test_plan_alone_is_not_a_build_checkpoint_and_verify_dump_is_not_circular(tm
     result = _inspect(tmp_path, manifest_sha, "restore-verify", measure=_measure)
     assert result.ok
     assert result.restore_verified_dump == "dump_metadata_present_unverified"
+
+
+@pytest.mark.parametrize("change", ["fabricated", "wrong_directory", "wrong_profile", "oversize"])
+def test_bundle_preflight_refuses_batch_files_from_an_invalid_or_misbound_plan(
+    tmp_path: Path, change: str
+) -> None:
+    manifest_sha = _source(tmp_path)
+    _sums(tmp_path)
+    _dump(tmp_path)
+    directory = _build_checkpoint(tmp_path, embedding_profile=(
+        "another-profile" if change == "wrong_profile" else EMBEDDING_PROFILE
+    ))
+    if change == "fabricated":
+        (directory / "plan.json").write_text('{"batches": [{"index": 0}]}')
+    elif change == "wrong_directory":
+        directory.rename(directory.with_name("another-content-key"))
+    elif change == "oversize":
+        (directory / "plan.json").write_bytes(b"x" * (preflight.MAX_BUILD_PLAN_BYTES + 1))
+
+    result = _inspect(tmp_path, manifest_sha, measure=_measure)
+    assert result.build_checkpoint == "plan_only_or_partial"
+    assert "build_checkpoint_unavailable" in result.refusals
 
 
 def test_preflight_refuses_both_current_host_floor_failures(tmp_path: Path) -> None:

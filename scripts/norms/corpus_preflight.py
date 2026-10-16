@@ -36,6 +36,11 @@ from typing import Callable
 # Standalone operator invocation from a checkout, like other repository scripts.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from auditmanager.norms.corpus_source import DropSumsInvalid, read_drop_sums  # noqa: E402
+from auditmanager.norms.embedding.checkpoint import (  # noqa: E402
+    CheckpointRefused,
+    read_plan,
+    require_identity,
+)
 
 MANIFEST_SHA256 = "160fdc7ea261b44298757b3a066982fd167b389fde614fb119c4c1d0d72fbb3b"
 SOURCE_SUMS_SHA256 = "eb5fae5cdd8d47873b23a125ebd68d5b507fda301088d2cc8651b06fd81897e5"
@@ -53,6 +58,7 @@ DISK_RESERVE = 3 * GIB
 # eight-CPU host (W54-CORPUS-PROMOTION-01.md). This is an operator-window
 # criterion in addition to W54-PLAN.md §3.9's disk and memory stop rule.
 LOAD_LIMIT = 8.0
+MAX_BUILD_PLAN_BYTES = 1 << 20  # metadata-only preflight, not a checkpoint payload reader
 # W54 §3.9: source-sums has no stated increment, so check the 3 GiB reserve only.
 # Base load and restore-verify each have a 3 GiB increment; use that conservative
 # increment for the repair sample until its output size is measured. Bundle adds 0.6 GiB.
@@ -240,23 +246,25 @@ def _build(root: Path) -> str:
         return "absent"
     for plan in candidates:
         try:
-            batches = json.loads(plan.read_bytes())["batches"]
-        except (OSError, ValueError, KeyError, TypeError):
+            if plan.stat().st_size > MAX_BUILD_PLAN_BYTES:
+                continue
+            parsed = read_plan(plan.parent)
+            require_identity(parsed, norms_snapshot_id=parsed.identity.norms_snapshot_id,
+                             chunking_profile=parsed.identity.chunking_profile)
+        except (CheckpointRefused, OSError, ValueError, TypeError, KeyError, IndexError,
+                AttributeError, OverflowError, RecursionError):
             continue
-        if not isinstance(batches, list) or not batches:
-            continue
-        indices = [row.get("index") for row in batches if isinstance(row, dict)]
-        if indices != list(range(len(batches))):
+        if parsed.identity.content_key != plan.parent.name:
             continue
         vectors = plan.parent / "vectors"
         inputs = plan.parent / "inputs"
         if vectors.is_symlink() or inputs.is_symlink():
             continue
         if all(
-            _is_regular(inputs / f"batch-{index:05d}.jsonl")
-            and _is_regular(vectors / f"batch-{index:05d}.jsonl")
-            and _is_regular(vectors / f"batch-{index:05d}.jsonl.sha256")
-            for index in indices
+            _is_regular(inputs / batch.name)
+            and _is_regular(vectors / batch.name)
+            and _is_regular(vectors / f"{batch.name}.sha256")
+            for batch in parsed.batches
         ):
             return "batch_files_present_unverified"
     return "plan_only_or_partial"
