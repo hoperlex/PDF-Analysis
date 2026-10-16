@@ -1,7 +1,8 @@
 # Current state
 
-**Updated 2026-10-16, after code-first development candidate 58
-(`origin/dev=85d9936a8faacc00df3687b32ba51797439f2736`).** W55b is
+**Updated 2026-10-16 from published code-first development candidate 59
+(`2b0a8a04a7ef2ce050e3ec3df9dd5414c68651be`), with dev60 W57b evidence
+integrated in this tree.** W55b is
 published on `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as
 `GATE OK` under R-125; the deploy workflow selected that tree and the owner
 subsequently ran `infra/deploy/verify-deployed.sh` on the host with a passing
@@ -39,12 +40,16 @@ Version manifest. A targeted acceptance test of that reader passed on an
 isolated real PostgreSQL/S3 instance; it stopped before provider dispatch.
 W57a has an unserved v3 request candidate and local response evaluator.
 W57b has an unserved certified XLSX composition chain, a read-only verified
-catalogue custody reader checked with fake ports, and an independent
-LibreOffice probe, but that probe failed three bounded host attempts; B3.5
-remains unverified. Real catalogue DB/S3 custody and served callers,
-provider/effect provenance, qualified corpus, approved W56b policy, W57a
-CAP-01 and W57b 0024 seal remain open. See `CFB-INT-DEV-PUBLISH-45.md`
-through `CFB-INT-DEV-PUBLISH-58.md`. R-135 defers the complete beta gate to
+catalogue custody reader and an exact text-layer-to-reference-page bridge.
+The reader passed one targeted test on isolated real 0023 PostgreSQL/S3 with
+synthetic catalogue bytes, both confirmed bindings and current Attempt
+fencing. The page bridge preserves Unicode offsets and marks empty pages as
+unread in a pure pipeline test. Its independent LibreOffice probe failed
+three bounded host attempts; B3.5 remains unverified. Served callers,
+provider/effect provenance, qualified corpus, reviewed catalogue slugs,
+approved W56b policy, W57a CAP-01 and W57b 0024 seal remain open. See
+`CFB-INT-DEV-PUBLISH-45.md` through `CFB-INT-DEV-PUBLISH-60.md`. R-135
+defers the complete beta gate to
 the final code candidate. No beta acceptance is claimed.
 
 **The following detailed snapshot is the state at dev39, before W55b's
