@@ -118,6 +118,12 @@ from auditmanager.analysis.text import (
 from auditmanager.analysis.text.budget import REFERENCE_DOCUMENT_CHARACTERS, input_budget_characters
 from auditmanager.analysis.recognised import KIND_PORTAL_DESCRIPTION, KIND_RECOGNISED_TEXT, QUOTE_SOURCE_RECOGNISED  # W55B-RECOGNISED-01
 from auditmanager.analysis.ports.artifacts import ROLE_CROP_IMAGE, ROLE_PORTAL_BLOCKS  # W55B-GEOMETRY-01
+from auditmanager.analysis.geometry.saved_crop_custody import (
+    CheckedCropBytes,
+    RunScopedGeometryStage,
+    SavedCropCustodyRefused,
+    check_saved_crop_bytes,
+)
 from auditmanager.analysis.text.proxy import ProxyDispatchError
 from auditmanager.analysis.text.recorded import RecordedAdapter
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
@@ -135,6 +141,7 @@ __all__ = [
     "AR_V2_SEVERITIES",
     "BlockIndex",
     "BuiltRecordedArtifact",
+    "CheckedCropBytes",
     "CONTRACT_VERSION",
     "KIND_PORTAL_DESCRIPTION",
     "KIND_RECOGNISED_TEXT",
@@ -185,6 +192,8 @@ __all__ = [
     "RecordedV2Input",
     "RecordedProfileError",
     "ResolvedAnchor",
+    "RunScopedGeometryStage",
+    "SavedCropCustodyRefused",
     "TextLayer",
     "TEXT_STAGE_VERSION",
     "StageContext",
@@ -205,6 +214,7 @@ __all__ = [
     "prepare_merge",
     "build_recorded_call_facts",
     "build_recorded_observation_artifact",
+    "check_saved_crop_bytes",
     "blob_role_for",
     "canonical_bytes",
     "prepare_recorded_v2_input",
