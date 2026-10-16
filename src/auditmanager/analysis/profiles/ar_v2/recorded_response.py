@@ -15,6 +15,7 @@ from auditmanager.analysis.profiles.ar_v2.response_pipeline import (
     FinishedV2Response,
     finish_response,
 )
+from auditmanager.analysis.text.adapter import ModelResponse
 from auditmanager.analysis.text.config import ProviderMode
 from auditmanager.analysis.text.recorded import RecordedAdapter
 
@@ -31,6 +32,7 @@ class RecordedReplayResult:
     source_binding_sha256: str
     response_sha256: str
     finished: FinishedV2Response
+    response: ModelResponse
 
 
 def replay_recorded_response(
@@ -92,6 +94,7 @@ def replay_recorded_response(
         source_binding_sha256=source_binding_sha256,
         response_sha256=response.response_sha256,
         finished=finished,
+        response=response,
     )
 
 
