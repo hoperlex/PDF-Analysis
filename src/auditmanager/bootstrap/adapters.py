@@ -766,6 +766,17 @@ class RunAdapter(_SessionHolder):
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._read(lambda session: _run_status_view(session, run_id))
 
+    def get_norm_verification(self, *, run_id: str) -> models.NormVerificationReport:
+        """Refuse until a reader proves the 0023 partition and the pinned set.
+
+        An empty citation SELECT is not a certificate of zero. CITE will replace this
+        seam after it checks stage success and every canonical/member partition.
+        """
+        raise DomainError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            dependency="norm_verification_reader",
+        )
+
     def run_exists(self, *, run_id: str) -> bool:
         """`D-74`. One row of ``audit_run``, and nothing else.
 

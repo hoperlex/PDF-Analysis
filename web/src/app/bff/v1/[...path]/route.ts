@@ -19,9 +19,8 @@
  * knows how many operations there are. Swapping the credential later is an edit to the
  * credential selection below, not a sweep through a handler per operation.
  *
- * Those figures are **fifty-four operations across forty-seven paths**, which is what the
- * frozen document declares after the `W55A-SEAL-01` reseal that added the seven norms
- * operations.
+ * Those figures are **fifty-five operations across forty-eight paths**, which is what the
+ * frozen document declares after `W57A-SEAL-01B` adds the refusing normative report.
  * This file said fifteen and twelve once, sixteen and thirteen after that, and nineteen and
  * sixteen after `W45-BLOCKS`, each true until the next reseal, and it is the fifth stale count in this programme, so it is no
  * longer corrected by hand:

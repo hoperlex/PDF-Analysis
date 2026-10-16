@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 fad81bc0355e4a5e6e4fdabf320fda2948a3c22b1254133862e0891bac1d1227
+ *   sha256 7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'fad81bc0355e4a5e6e4fdabf320fda2948a3c22b1254133862e0891bac1d1227';
+export const CONTRACT_DIGEST = '7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -68,15 +68,20 @@ export const SCHEMA_NAMES = [
   'MarkReleaseNotesReadRequest',
   'ModelCallId',
   'NormBuildState',
+  'NormCitation',
+  'NormCitationState',
   'NormCurrentSnapshot',
   'NormDocument',
   'NormDocumentId',
+  'NormFindingVerification',
   'NormFragment',
   'NormHighlight',
+  'NormObservationCitationPartition',
   'NormParagraph',
   'NormParagraphId',
   'NormParagraphKind',
   'NormParagraphPage',
+  'NormRetrievalSetId',
   'NormSearchHit',
   'NormSearchPage',
   'NormSnapshot',
@@ -85,6 +90,7 @@ export const SCHEMA_NAMES = [
   'NormSnapshotPage',
   'NormSourceAttribution',
   'NormTextReliability',
+  'NormVerificationReport',
   'NormsSnapshotId',
   'ObservationProvenance',
   'PageInfo',
@@ -135,6 +141,7 @@ export const SCHEMA_NAMES = [
   'StageStatus',
   'StartRunRequest',
   'SubmitRegistrationRequest',
+  'UngroundedReason',
   'UpdateMyProfileRequest',
   'UpdateUserRequest',
   'UploadDocumentRequest',
@@ -471,13 +478,19 @@ export type Finding = {
   finding_uid: FindingUid;
   latest_decision_id?: DecisionId | null;
   merged_observations?: Array<FindingObservation>;
+  /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. On Finding and FindingDetail this mirrors the canonical observation. */
+  norm_citations?: Array<NormCitation>;
   observation: FindingObservation;
   project_uid: ProjectUid;
+  /** Deterministically grounded normative requirement; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
+  required_value?: string;
   run_id: RunId;
+  /** Document value grounded in the project evidence; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
+  stated_value?: string;
   version_uid: VersionUid;
 };
 
-/** The only two questions PC-01 answers. */
+/** Closed finding categories: seven prior categories and five v3 normative categories. */
 export const FINDING_CATEGORY_VALUES = [
   'internal_contradiction',
   'explicit_placeholder',
@@ -486,6 +499,11 @@ export const FINDING_CATEGORY_VALUES = [
   'facade',
   'roof',
   'documentation',
+  'evacuation',
+  'fire_safety',
+  'accessibility',
+  'insulation',
+  'sound',
 ] as const;
 
 /** FindingCategory - the closed value set above. */
@@ -503,9 +521,15 @@ export type FindingDetail = {
   latest_comment?: string | null;
   latest_decision_id?: DecisionId | null;
   merged_observations?: Array<FindingObservation>;
+  /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. On Finding and FindingDetail this mirrors the canonical observation. */
+  norm_citations?: Array<NormCitation>;
   observation: FindingObservation;
   project_uid: ProjectUid;
+  /** Deterministically grounded normative requirement; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
+  required_value?: string;
   run_id: RunId;
+  /** Document value grounded in the project evidence; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
+  stated_value?: string;
   version_uid: VersionUid;
 };
 
@@ -514,10 +538,16 @@ export type FindingObservation = {
   evidence: Array<Evidence>;
   finding_observation_id: FindingObservationId;
   finding_text: string;
+  /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. */
+  norm_citations?: Array<NormCitation>;
   proposed_severity?: Severity;
   provenance: ObservationProvenance;
   recommendation_text: string;
+  /** Deterministically grounded normative requirement; absent for legacy and nonnormative observations. */
+  required_value?: string;
   run_id: RunId;
+  /** Document value grounded in the project evidence; absent for legacy and nonnormative observations. */
+  stated_value?: string;
 };
 
 /** Immutable evidence emitted by exactly one run. */
@@ -592,6 +622,29 @@ export const NORM_BUILD_STATE_VALUES = [
 /** NormBuildState - the closed value set above. */
 export type NormBuildState = (typeof NORM_BUILD_STATE_VALUES)[number];
 
+/** One persisted, verified citation to a labelled paragraph in the run-pinned snapshot and retrieval set. A rebound preserves the cited label and identifies the one matching paragraph. Never inferred from a display designation. */
+export type NormCitation = {
+  clause_number: string | null;
+  designation: string;
+  norm_document_id: NormDocumentId;
+  norm_paragraph_id: NormParagraphId;
+  norms_snapshot_id: NormsSnapshotId;
+  page_label: number;
+  quote: string;
+  source_attribution: NormSourceAttribution;
+  state: NormCitationState;
+  title: string;
+};
+
+/** NormCitationState. */
+export const NORM_CITATION_STATE_VALUES = [
+  'verified',
+  'rebound',
+] as const;
+
+/** NormCitationState - the closed value set above. */
+export type NormCitationState = (typeof NORM_CITATION_STATE_VALUES)[number];
+
 export type NormCurrentSnapshot = {
   designated_at: string;
   designated_by: UserUid;
@@ -621,6 +674,13 @@ export type NormDocumentId = string;
 /** The contract pattern for `NormDocumentId`. Anchored; use with `new RegExp()`. */
 export const NORM_DOCUMENT_ID_PATTERN = "^ndoc_[0-9A-HJKMNP-TV-Z]{26}$";
 
+/** Citation partitions of one published finding; canonical and member observations are proved separately. */
+export type NormFindingVerification = {
+  canonical: NormObservationCitationPartition;
+  finding_uid: FindingUid;
+  merged_observations: Array<NormObservationCitationPartition>;
+};
+
 /**
  * `NORM-Q01`. A plain-text excerpt of the canonical paragraph text, with the matched
  * spans as offsets rather than markup.
@@ -634,6 +694,15 @@ export type NormFragment = {
 export type NormHighlight = {
   char_end: number;
   char_start: number;
+};
+
+/** One canonical or merged observation with its independently certified citation partition. A zero partition is explicit, never inferred from an empty SQL result. */
+export type NormObservationCitationPartition = {
+  finding_observation_id: FindingObservationId;
+  /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. */
+  norm_citations: Array<NormCitation>;
+  required_value?: string;
+  stated_value?: string;
 };
 
 export type NormParagraph = {
@@ -668,6 +737,12 @@ export type NormParagraphPage = {
   page: PageInfo;
   source_attribution: NormSourceAttribution;
 };
+
+/** Verified immutable retrieval-set identity; never a display label or corpus filename. */
+export type NormRetrievalSetId = string;
+
+/** The contract pattern for `NormRetrievalSetId`. Anchored; use with `new RegExp()`. */
+export const NORM_RETRIEVAL_SET_ID_PATTERN = "^nrs_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /** One reliable canonical paragraph of the searched snapshot. */
 export type NormSearchHit = {
@@ -748,6 +823,20 @@ export const NORM_TEXT_RELIABILITY_VALUES = [
 
 /** NormTextReliability - the closed value set above. */
 export type NormTextReliability = (typeof NORM_TEXT_RELIABILITY_VALUES)[number];
+
+/** Read-time report for a v3 run only. A v1/v2 run is not found. A partial v3 run still reports its typed stage error; no unverified or uncertified partition is exposed. textless_pages is context only and never citation evidence. */
+export type NormVerificationReport = {
+  error_code?: ErrorCode;
+  findings: Array<NormFindingVerification>;
+  norm_retrieval_set_id: NormRetrievalSetId;
+  norms_snapshot_id: NormsSnapshotId;
+  run_id: RunId;
+  status: "complete" | "partial";
+  textless_pages: Array<number>;
+  withheld_by_reason: {
+    [key: string]: number;
+  };
+};
 
 export type NormsSnapshotId = string;
 
@@ -1068,6 +1157,8 @@ export type RunStatus = {
   interrupted_reason?: string | null;
   /** How many provider calls `cost_micros` sums. Published rather than left to be inferred: a reader who cannot see it cannot tell a run answered first time from one that was retried, and the two spent differently. Present exactly when `cost_micros` is. */
   model_call_count?: number;
+  /** The verified retrieval set frozen for this v3 run; absent for v1/v2. It must belong to norms_snapshot_id. */
+  norm_retrieval_set_id?: NormRetrievalSetId;
   /** W55A-SEAL-01 (R-113, CD-6): the norms snapshot this run pinned when it was created -- the current snapshot at that moment. Absent while no snapshot is current, which until W57 is the expected state of every run. */
   norms_snapshot_id?: NormsSnapshotId;
   project_uid: ProjectUid;
@@ -1195,6 +1286,25 @@ export type SubmitRegistrationRequest = {
   /** The account's future password, held to the deployment's password policy with the applicant's names and e-mail local part added to its blocklist. Stored hashed until the decision, which removes it; it appears in no response body, no error detail and no diagnostic record. */
   password: string;
 };
+
+/** Closed deterministic observation-withholding reasons; a withheld item is never a published finding. */
+export const UNGROUNDED_REASON_VALUES = [
+  'quotation_absent',
+  'quotation_on_different_page',
+  'span_outside_page',
+  'span_outside_block',
+  'span_length_mismatch',
+  'quote_in_recognised_text',
+  'norm_label_unknown',
+  'norm_quote_too_short',
+  'norm_quote_ambiguous',
+  'norm_quote_absent',
+  'norm_value_not_in_quote',
+  'stated_value_not_in_evidence',
+] as const;
+
+/** UngroundedReason - the closed value set above. */
+export type UngroundedReason = (typeof UNGROUNDED_REASON_VALUES)[number];
 
 /** The signed-in account's own names, and -- while its profile is incomplete -- the e-mail address that becomes its login. 1-60 characters of letters, separated by single spaces, hyphens or apostrophes, with no word mixing Cyrillic and Latin letters. Surrounding whitespace and invisible characters are removed before the rule is applied. */
 export type UpdateMyProfileRequest = {

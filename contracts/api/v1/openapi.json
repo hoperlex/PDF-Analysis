@@ -2583,7 +2583,7 @@
             "$ref": "#/components/responses/DependencyUnavailable"
           }
         },
-        "description": "A re-audit runs the same version on the current configuration (R-82), so it faces today's analysis input budget, not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118)."
+        "description": "A re-audit runs the same version on the current configuration (R-82), so it faces today's analysis input budget, not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set."
       }
     },
     "/execution/queue/{job_id}/priority": {
@@ -3313,7 +3313,7 @@
           "norms"
         ],
         "summary": "Set Current Norm Snapshot",
-        "description": "Designate a qualifying snapshot as the current one (R-113, G-6), which every new run and re-audit then pins. `expected_current` is the snapshot the caller believes is current (`null` for none); a stale belief is `409 conflict` with `conflict_reason: stale_current_snapshot`. An already-current target answers the current designation as a replay and writes no history row; any other change writes exactly one. A target that does not qualify is `422 required_norm_unavailable` with `reference_kind` `norm_embedding_build` (no complete build) or `norm_source` (a document's PDF has no confirmed binding); an unknown snapshot is `404`. There is no unset. No `Idempotency-Key`: the request is a compare-and-set on durable state. Roles: `admin` (`role:admin`). Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.",
+        "description": "Designate a qualifying snapshot as the current one (R-113, G-6), which every new run and re-audit then pins. `expected_current` is the snapshot the caller believes is current (`null` for none); a stale belief is `409 conflict` with `conflict_reason: stale_current_snapshot`. An already-current target answers the current designation as a replay and writes no history row; any other change writes exactly one. A target that does not qualify is `422 required_norm_unavailable` with `reference_kind` `norm_embedding_build` (no complete build) or `norm_source` (a document's PDF has no confirmed binding); an unknown snapshot is `404`. There is no unset. No `Idempotency-Key`: the request is a compare-and-set on durable state. Roles: `admin` (`role:admin`). Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01. W57a may refuse a missing verified retrieval set as 422 required_norm_unavailable with reference_kind norm_retrieval_set; no substitute is selected.",
         "operationId": "setCurrentNormSnapshot",
         "security": [
           {
@@ -3378,6 +3378,58 @@
           }
         }
       }
+    },
+    "/runs/{run_id}/norm-verification": {
+      "get": {
+        "operationId": "getRunNormVerification",
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Run Norm Verification",
+        "description": "Read a verified v3 normative report for a run. R-80: any one active expert or admin role; an empty role set is refused. A v1/v2 run answers not_found. Until the CITE verified reader is implemented, this endpoint answers typed 503 dependency_unavailable and exposes no unverified citation data (D-151).",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The verified v3 report, including certified citation partitions and deterministic withholding counts.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NormVerificationReport"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RunId"
+        }
+      ]
     }
   },
   "components": {
@@ -4008,7 +4060,7 @@
       },
       "FindingCategory": {
         "type": "string",
-        "description": "The only two questions PC-01 answers.",
+        "description": "Closed finding categories: seven prior categories and five v3 normative categories.",
         "enum": [
           "internal_contradiction",
           "explicit_placeholder",
@@ -4016,7 +4068,12 @@
           "layout",
           "facade",
           "roof",
-          "documentation"
+          "documentation",
+          "evacuation",
+          "fire_safety",
+          "accessibility",
+          "insulation",
+          "sound"
         ]
       },
       "Severity": {
@@ -4612,6 +4669,10 @@
           },
           "reaudit_of_run_id": {
             "$ref": "#/components/schemas/RunId"
+          },
+          "norm_retrieval_set_id": {
+            "$ref": "#/components/schemas/NormRetrievalSetId",
+            "description": "The verified retrieval set frozen for this v3 run; absent for v1/v2. It must belong to norms_snapshot_id."
           }
         }
       },
@@ -4770,6 +4831,26 @@
           },
           "provenance": {
             "$ref": "#/components/schemas/ObservationProvenance"
+          },
+          "norm_citations": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/NormCitation"
+            },
+            "description": "A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero."
+          },
+          "required_value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Deterministically grounded normative requirement; absent for legacy and nonnormative observations."
+          },
+          "stated_value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Document value grounded in the project evidence; absent for legacy and nonnormative observations."
           }
         }
       },
@@ -4837,6 +4918,26 @@
                 "type": "null"
               }
             ]
+          },
+          "norm_citations": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/NormCitation"
+            },
+            "description": "A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. On Finding and FindingDetail this mirrors the canonical observation."
+          },
+          "required_value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Deterministically grounded normative requirement; absent for legacy and nonnormative observations. Mirrors the canonical observation."
+          },
+          "stated_value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Document value grounded in the project evidence; absent for legacy and nonnormative observations. Mirrors the canonical observation."
           }
         }
       },
@@ -4919,6 +5020,26 @@
           "decision_event_count": {
             "type": "integer",
             "minimum": 0
+          },
+          "norm_citations": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/NormCitation"
+            },
+            "description": "A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. On Finding and FindingDetail this mirrors the canonical observation."
+          },
+          "required_value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Deterministically grounded normative requirement; absent for legacy and nonnormative observations. Mirrors the canonical observation."
+          },
+          "stated_value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Document value grounded in the project evidence; absent for legacy and nonnormative observations. Mirrors the canonical observation."
           }
         }
       },
@@ -7074,6 +7195,215 @@
           "page"
         ],
         "description": "One page of a version's portal blocks, ordered by `page_number`, `ordinal` (null last) and `portal_block_id`; the continuation token carries that key and nothing else. `status` is the distinction `VersionBlockIndex.status` carries: `not_produced` is a version no run of which has produced portal geometry yet; `produced` is one whose geometry stage succeeded and which may genuinely hold no blocks. `block_count` is the whole version's, not the page's. A caller reads `status`, never the length of `items`."
+      },
+      "NormRetrievalSetId": {
+        "type": "string",
+        "pattern": "^nrs_[0-9A-HJKMNP-TV-Z]{26}$",
+        "description": "Verified immutable retrieval-set identity; never a display label or corpus filename."
+      },
+      "UngroundedReason": {
+        "type": "string",
+        "description": "Closed deterministic observation-withholding reasons; a withheld item is never a published finding.",
+        "enum": [
+          "quotation_absent",
+          "quotation_on_different_page",
+          "span_outside_page",
+          "span_outside_block",
+          "span_length_mismatch",
+          "quote_in_recognised_text",
+          "norm_label_unknown",
+          "norm_quote_too_short",
+          "norm_quote_ambiguous",
+          "norm_quote_absent",
+          "norm_value_not_in_quote",
+          "stated_value_not_in_evidence"
+        ]
+      },
+      "NormCitationState": {
+        "type": "string",
+        "enum": [
+          "verified",
+          "rebound"
+        ]
+      },
+      "NormCitation": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One persisted, verified citation to a labelled paragraph in the run-pinned snapshot and retrieval set. A rebound preserves the cited label and identifies the one matching paragraph. Never inferred from a display designation.",
+        "required": [
+          "norms_snapshot_id",
+          "norm_document_id",
+          "norm_paragraph_id",
+          "designation",
+          "title",
+          "clause_number",
+          "page_label",
+          "quote",
+          "state",
+          "source_attribution"
+        ],
+        "properties": {
+          "norms_snapshot_id": {
+            "$ref": "#/components/schemas/NormsSnapshotId"
+          },
+          "norm_document_id": {
+            "$ref": "#/components/schemas/NormDocumentId"
+          },
+          "norm_paragraph_id": {
+            "$ref": "#/components/schemas/NormParagraphId"
+          },
+          "designation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "clause_number": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "page_label": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 4000
+          },
+          "state": {
+            "$ref": "#/components/schemas/NormCitationState"
+          },
+          "source_attribution": {
+            "$ref": "#/components/schemas/NormSourceAttribution"
+          }
+        }
+      },
+      "NormObservationCitationPartition": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One canonical or merged observation with its independently certified citation partition. A zero partition is explicit, never inferred from an empty SQL result.",
+        "required": [
+          "finding_observation_id",
+          "norm_citations"
+        ],
+        "properties": {
+          "finding_observation_id": {
+            "$ref": "#/components/schemas/FindingObservationId"
+          },
+          "norm_citations": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/NormCitation"
+            },
+            "description": "A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero."
+          },
+          "required_value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "stated_value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
+      "NormFindingVerification": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Citation partitions of one published finding; canonical and member observations are proved separately.",
+        "required": [
+          "finding_uid",
+          "canonical",
+          "merged_observations"
+        ],
+        "properties": {
+          "finding_uid": {
+            "$ref": "#/components/schemas/FindingUid"
+          },
+          "canonical": {
+            "$ref": "#/components/schemas/NormObservationCitationPartition"
+          },
+          "merged_observations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NormObservationCitationPartition"
+            }
+          }
+        }
+      },
+      "NormVerificationReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Read-time report for a v3 run only. A v1/v2 run is not found. A partial v3 run still reports its typed stage error; no unverified or uncertified partition is exposed. textless_pages is context only and never citation evidence.",
+        "required": [
+          "run_id",
+          "norms_snapshot_id",
+          "norm_retrieval_set_id",
+          "status",
+          "findings",
+          "withheld_by_reason",
+          "textless_pages"
+        ],
+        "properties": {
+          "run_id": {
+            "$ref": "#/components/schemas/RunId"
+          },
+          "norms_snapshot_id": {
+            "$ref": "#/components/schemas/NormsSnapshotId"
+          },
+          "norm_retrieval_set_id": {
+            "$ref": "#/components/schemas/NormRetrievalSetId"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial"
+            ]
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NormFindingVerification"
+            }
+          },
+          "withheld_by_reason": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/UngroundedReason"
+            },
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "textless_pages": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "error_code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          }
+        }
       }
     }
   }

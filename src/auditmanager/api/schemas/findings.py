@@ -26,6 +26,7 @@ __all__ = [
     "FindingDetailView",
     "FindingView",
     "ObservationView",
+    "NormCitationView",
     "ProvenanceView",
     "finding_body",
     "finding_detail_body",
@@ -59,6 +60,20 @@ class ProvenanceView:
 
 
 @dataclass(frozen=True, slots=True)
+class NormCitationView:
+    norms_snapshot_id: str
+    norm_document_id: str
+    norm_paragraph_id: str
+    designation: str
+    title: str
+    clause_number: str | None
+    page_label: int
+    quote: str
+    state: str
+    source_attribution: str
+
+
+@dataclass(frozen=True, slots=True)
 class ObservationView:
     """Exactly the frozen ``FindingObservation``."""
 
@@ -70,6 +85,11 @@ class ObservationView:
     evidence: tuple[EvidenceView, ...]
     provenance: ProvenanceView
     proposed_severity: str | None = None
+    # None means a legacy observation without a certified partition. An empty tuple is
+    # the explicit v3 proof that CITE completed with zero citations.
+    norm_citations: tuple[NormCitationView, ...] | None = None
+    required_value: str | None = None
+    stated_value: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +146,21 @@ def provenance_body(view: ProvenanceView) -> dict[str, Any]:
     return body
 
 
+def norm_citation_body(view: NormCitationView) -> dict[str, Any]:
+    return {
+        "norms_snapshot_id": view.norms_snapshot_id,
+        "norm_document_id": view.norm_document_id,
+        "norm_paragraph_id": view.norm_paragraph_id,
+        "designation": view.designation,
+        "title": view.title,
+        "clause_number": view.clause_number,
+        "page_label": view.page_label,
+        "quote": view.quote,
+        "state": view.state,
+        "source_attribution": view.source_attribution,
+    }
+
+
 def observation_body(view: ObservationView) -> dict[str, Any]:
     body = {
         "finding_observation_id": view.finding_observation_id,
@@ -138,6 +173,12 @@ def observation_body(view: ObservationView) -> dict[str, Any]:
     }
     if view.proposed_severity is not None:
         body["proposed_severity"] = view.proposed_severity
+    if view.norm_citations is not None:
+        body["norm_citations"] = [norm_citation_body(item) for item in view.norm_citations]
+    if view.required_value is not None:
+        body["required_value"] = view.required_value
+    if view.stated_value is not None:
+        body["stated_value"] = view.stated_value
     return body
 
 
@@ -161,6 +202,9 @@ def finding_body(view: FindingView) -> dict[str, Any]:
         body["merged_observations"] = [observation_body(item) for item in view.merged_observations]
     if view.decided_severity is not None:
         body["decided_severity"] = view.decided_severity
+    for name in ("norm_citations", "required_value", "stated_value"):
+        if name in body["observation"]:
+            body[name] = body["observation"][name]
     return body
 
 

@@ -64,7 +64,7 @@ STATUS_SUCCEEDED = "succeeded"
 STATUS_PARTIAL = "partial"
 STATUS_FAILED = "failed"
 
-STAGE_VERSION = "1.0.0"
+STAGE_VERSION = "1.1.0"
 
 
 @dataclass(frozen=True, slots=True)

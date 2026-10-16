@@ -25,4 +25,9 @@ export const CATEGORY_LABELS: Readonly<Record<FindingCategory, string>> = {
   facade: 'Фасадные решения',
   roof: 'Кровля',
   documentation: 'Документация',
+  evacuation: 'Эвакуация',
+  fire_safety: 'Пожарная безопасность',
+  accessibility: 'Доступность',
+  insulation: 'Теплоизоляция',
+  sound: 'Звукоизоляция',
 };

@@ -217,7 +217,11 @@ def test_role_and_media_type_match_frozen_text_analysis_output() -> None:
     stages = registry["stages"]
     stage = next(item for item in stages if item["stage_id"] == "text_analysis")
     output = next(item for item in stage["produced_outputs"] if item["role"] == ARTIFACT_ROLE)
-    assert stage["stage_version"] == "1.0.0"
+    assert stage["stage_version"] == "1.1.0"
+    assert any(
+        item["role"] == "norms.snapshot" and item["required"] is False
+        for item in stage["required_inputs"]
+    )
     assert output["media_type"] == "application/json"
     assert output["required"] is True
 

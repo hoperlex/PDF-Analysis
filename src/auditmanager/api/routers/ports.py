@@ -325,7 +325,7 @@ class DashboardPort(Protocol):
 
 @runtime_checkable
 class RunPort(Protocol):
-    """``startRun``, ``getRunStatus`` and ``listRuns``. Produced by ``B5``.
+    """Run status and the W57a refusing normative report seam. Produced by ``B5``.
 
     The success terminal is ``published``; an implementation that reported
     ``succeeded`` would be reporting a ``StageResult`` status on the wrong aggregate.
@@ -347,6 +347,9 @@ class RunPort(Protocol):
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         """Current run state and per-stage state."""
+
+    def get_norm_verification(self, *, run_id: str) -> models.NormVerificationReport:
+        """Verified v3 report only. Until CITE supplies its reader, typed refusal."""
 
     def run_exists(self, *, run_id: str) -> bool:
         """Is there such a run? `D-74`.

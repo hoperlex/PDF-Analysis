@@ -815,6 +815,11 @@ class SeamRunAdapter:
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._view(run_id)
 
+    def get_norm_verification(self, *, run_id: str) -> Any:
+        raise DomainError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_verification_reader"
+        )
+
     def run_exists(self, *, run_id: str) -> bool:
         """`D-74`. One row, no stages, no cost -- the stand-in's own narrow read.
 

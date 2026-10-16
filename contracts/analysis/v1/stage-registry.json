@@ -404,7 +404,7 @@
     {
       "stage_id": "text_analysis",
       "title": "Text analysis",
-      "stage_version": "1.0.0",
+      "stage_version": "1.1.0",
       "purpose": "Produce text-derived finding observations from the extracted text layer and the shared document context.",
       "depends_on": [
         "document_context_build"
@@ -427,6 +427,12 @@
           "media_type": "application/json",
           "required": false,
           "description": "AR v2 only: marked context from text-less pages; never an evidence quotation source. The stage plan and version textless_pages govern admission."
+        },
+        {
+          "role": "norms.snapshot",
+          "media_type": "application/json",
+          "required": false,
+          "description": "Optional pinned qualified norms snapshot and verified retrieval set for AR v3; v1/v2 stages do not consume it. An absent verified set never silently falls back."
         }
       ],
       "produced_outputs": [

@@ -81,6 +81,28 @@ def build_run_routes(router: APIRouter, runs: RunPort) -> None:
         return json_response(200, encode_json(run_status_body(view)))
 
     @router.get(
+        "/runs/{run_id}/norm-verification",
+        operation_id="getRunNormVerification",
+        tags=["runs"],
+        status_code=200,
+        response_model=models.NormVerificationReport,
+        responses={
+            **success(200, "The verified v3 report, including certified citation partitions and deterministic withholding counts."),
+            **envelope_responses(401, 403, 404, 500, 503),
+        },
+        description=(
+            "Read a verified v3 normative report for a run. R-80: any one active "
+            "expert or admin role; an empty role set is refused. A v1/v2 run answers "
+            "not_found. Until the CITE verified reader is implemented, this endpoint "
+            "answers typed 503 dependency_unavailable and exposes no unverified "
+            "citation data (D-151)."
+        ),
+    )
+    def get_run_norm_verification(run_id: Annotated[models.RunId, Path()]) -> WireResponse:
+        report = runs.get_norm_verification(run_id=run_id)
+        return json_response(200, encode_json(report.model_dump(mode="json")))
+
+    @router.get(
         "/versions/{version_uid}/runs",
         operation_id="listRuns",
         tags=["runs"],

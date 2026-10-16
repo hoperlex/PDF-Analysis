@@ -77,6 +77,8 @@ class RunStatusView:
     #: `W55A-SEAL-01` (R-113, CD-6). The norms snapshot the run pinned at creation, or
     #: ``None`` while no snapshot is current; rendered only when present.
     norms_snapshot_id: str | None = None
+    #: 0023's frozen verified retrieval set; absent on v1/v2 runs.
+    norm_retrieval_set_id: str | None = None
 
 
 def stage_state_body(view: StageStateView) -> dict[str, Any]:
@@ -114,6 +116,8 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
         body["prompt_bundle_id"] = view.prompt_bundle_id
     if view.norms_snapshot_id is not None:
         body["norms_snapshot_id"] = view.norms_snapshot_id
+    if view.norm_retrieval_set_id is not None:
+        body["norm_retrieval_set_id"] = view.norm_retrieval_set_id
     if view.degradation_set is not None:
         body["degradation_set"] = list(view.degradation_set)
     if view.terminal_reason is not None:

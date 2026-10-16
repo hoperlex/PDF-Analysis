@@ -1,13 +1,11 @@
-"""Does anything notice a value leaving the five-reason vocabulary?
+"""Does anything notice a value leaving the historical five-reason vocabulary?
 
-``UNGROUNDED_REASONS`` is pinned to five literals by
-``TestTheUngroundedVocabularyIsClosed.test_the_enum_is_exactly_the_five_declared_reasons``,
-and mutating the enum reddens that. What nothing checked is the **other** half:
+Migration 0003's five literals remain historical. The active enum and 0023 head
+carry twelve; changing either side must redden a direct test. What this tests is:
 
-1. that the gate's vocabulary and the database's own CHECK still say the same five things,
-   so a constant drifting away from the constraint is a red test rather than a quiet
-   disagreement between a module and a migration;
-2. that the constraint is actually installed and actually refuses a sixth value.
+1. that the historical 0003 CHECK still says the original five things, while the
+   current closed enum says twelve;
+2. that the current constraint refuses an undeclared value.
 
 The second matters because the docstring on ``TestTheUngroundedVocabularyIsClosed`` is
 **stale**. It says that "at the P02 migration head, ``finding_observation.ungrounded_reason``
@@ -55,6 +53,11 @@ DECLARED = frozenset(
         "span_length_mismatch",
     }
 )
+CURRENT_DECLARED = DECLARED | frozenset({
+    "quote_in_recognised_text", "norm_label_unknown", "norm_quote_too_short",
+    "norm_quote_ambiguous", "norm_quote_absent", "norm_value_not_in_quote",
+    "stated_value_not_in_evidence",
+})
 
 #: A value that is not one of them, and is exactly the one the stale docstring says the
 #: database accepts.
@@ -78,10 +81,9 @@ class TestTheGateAndTheMigrationAgree:
         assert _vocabulary_in_the_migration() == DECLARED
 
     def test_the_gates_vocabulary_is_the_migrations_vocabulary(self) -> None:
-        """Neither side is derived from the other: both are compared with ``DECLARED``
-        first, so a change to either is attributable."""
-        assert UNGROUNDED_REASONS == DECLARED
-        assert set(UNGROUNDED_REASONS) == set(_vocabulary_in_the_migration())
+        """0003 stays historical while 0023 expands the current closed vocabulary."""
+        assert UNGROUNDED_REASONS == CURRENT_DECLARED
+        assert set(_vocabulary_in_the_migration()) == DECLARED
 
 
 class TestTheDatabaseRefusesAValueOutsideTheVocabulary:

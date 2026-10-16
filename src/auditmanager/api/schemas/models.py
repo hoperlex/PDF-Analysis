@@ -117,9 +117,16 @@ __all__ = [
     "ExecutionWorkerPage",
     "SetWorkerIntakeRequest",
     "NormsSnapshotId",
+    "NormRetrievalSetId",
     "NormDocumentId",
     "NormParagraphId",
     "NormSourceAttribution",
+    "NormCitationState",
+    "NormCitation",
+    "UngroundedReason",
+    "NormObservationCitationPartition",
+    "NormFindingVerification",
+    "NormVerificationReport",
     "NormParagraphKind",
     "NormTextReliability",
     "NormBuildState",
@@ -266,6 +273,9 @@ WorkerId = TypeAliasType("WorkerId", Annotated[str, Field(pattern=rf"^wrk_{_ULID
 #: ``contracts/domain/v1/identifiers.json`` since `0012_norms_corpus`, cross the wire.
 NormsSnapshotId = TypeAliasType(
     "NormsSnapshotId", Annotated[str, Field(pattern=rf"^ns_{_ULID}$")]
+)
+NormRetrievalSetId = TypeAliasType(
+    "NormRetrievalSetId", Annotated[str, Field(pattern=rf"^nrs_{_ULID}$")]
 )
 NormDocumentId = TypeAliasType(
     "NormDocumentId", Annotated[str, Field(pattern=rf"^ndoc_{_ULID}$")]
@@ -423,6 +433,11 @@ class FindingCategory(str, enum.Enum):
     FACADE = "facade"
     ROOF = "roof"
     DOCUMENTATION = "documentation"
+    EVACUATION = "evacuation"
+    FIRE_SAFETY = "fire_safety"
+    ACCESSIBILITY = "accessibility"
+    INSULATION = "insulation"
+    SOUND = "sound"
 
 
 class Severity(str, enum.Enum):
@@ -731,6 +746,9 @@ class RunStatus(_Object):
     norms_snapshot_id: NormsSnapshotId = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+    norm_retrieval_set_id: NormRetrievalSetId = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
     stages: list[StageState]
     degradation_set: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     terminal_reason: ErrorCode | None = Field(default=None, json_schema_extra=optional_property)
@@ -1021,6 +1039,39 @@ class ObservationProvenance(_Object):
     model_identity: str | None = Field(default=None, json_schema_extra=optional_property)
 
 
+class NormCitationState(str, enum.Enum):
+    VERIFIED = "verified"
+    REBOUND = "rebound"
+
+
+class UngroundedReason(str, enum.Enum):
+    QUOTATION_ABSENT = "quotation_absent"
+    QUOTATION_ON_DIFFERENT_PAGE = "quotation_on_different_page"
+    SPAN_OUTSIDE_PAGE = "span_outside_page"
+    SPAN_OUTSIDE_BLOCK = "span_outside_block"
+    SPAN_LENGTH_MISMATCH = "span_length_mismatch"
+    QUOTE_IN_RECOGNISED_TEXT = "quote_in_recognised_text"
+    NORM_LABEL_UNKNOWN = "norm_label_unknown"
+    NORM_QUOTE_TOO_SHORT = "norm_quote_too_short"
+    NORM_QUOTE_AMBIGUOUS = "norm_quote_ambiguous"
+    NORM_QUOTE_ABSENT = "norm_quote_absent"
+    NORM_VALUE_NOT_IN_QUOTE = "norm_value_not_in_quote"
+    STATED_VALUE_NOT_IN_EVIDENCE = "stated_value_not_in_evidence"
+
+
+class NormCitation(_Object):
+    norms_snapshot_id: NormsSnapshotId
+    norm_document_id: NormDocumentId
+    norm_paragraph_id: NormParagraphId
+    designation: Annotated[str, Field(min_length=1, max_length=500)]
+    title: Annotated[str, Field(min_length=1, max_length=1000)]
+    clause_number: Annotated[str, Field(min_length=1, max_length=100)] | None
+    page_label: Annotated[int, Field(ge=1)]
+    quote: Annotated[str, Field(min_length=20, max_length=4000)]
+    state: NormCitationState
+    source_attribution: NormSourceAttribution
+
+
 class FindingObservation(_Object):
     finding_observation_id: FindingObservationId
     run_id: RunId
@@ -1030,6 +1081,15 @@ class FindingObservation(_Object):
     proposed_severity: Severity = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     evidence: Annotated[list[Evidence], Field(min_length=1)]
     provenance: ObservationProvenance
+    norm_citations: Annotated[list[NormCitation], Field(max_length=5)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    required_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    stated_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
 
 
 class Finding(_Object):
@@ -1039,6 +1099,15 @@ class Finding(_Object):
     run_id: RunId
     category: FindingCategory
     observation: FindingObservation
+    norm_citations: Annotated[list[NormCitation], Field(max_length=5)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    required_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    stated_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
     merged_observations: list[FindingObservation] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
@@ -1063,6 +1132,15 @@ class FindingDetail(_Object):
     run_id: RunId
     category: FindingCategory
     observation: FindingObservation
+    norm_citations: Annotated[list[NormCitation], Field(max_length=5)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    required_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    stated_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
     merged_observations: list[FindingObservation] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
@@ -1074,6 +1152,41 @@ class FindingDetail(_Object):
     decision_event_count: Annotated[int, Field(ge=0)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+
+
+class NormObservationCitationPartition(_Object):
+    finding_observation_id: FindingObservationId
+    norm_citations: Annotated[list[NormCitation], Field(max_length=5)]
+    required_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    stated_value: Annotated[str, Field(min_length=1, max_length=200)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+
+
+class NormFindingVerification(_Object):
+    finding_uid: FindingUid
+    canonical: NormObservationCitationPartition
+    merged_observations: list[NormObservationCitationPartition]
+
+
+class NormVerificationReport(_Object):
+    run_id: RunId
+    norms_snapshot_id: NormsSnapshotId
+    norm_retrieval_set_id: NormRetrievalSetId
+    status: Literal["complete", "partial"]
+    findings: list[NormFindingVerification]
+    withheld_by_reason: Annotated[
+        dict[UngroundedReason, Annotated[int, Field(ge=0)]],
+        WithJsonSchema({
+            "type": "object",
+            "propertyNames": {"$ref": "#/components/schemas/UngroundedReason"},
+            "additionalProperties": {"type": "integer", "minimum": 0},
+        }),
+    ]
+    textless_pages: list[Annotated[int, Field(ge=1)]]
+    error_code: ErrorCode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class FindingPage(_Object):

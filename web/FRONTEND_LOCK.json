@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "fad81bc0355e4a5e6e4fdabf320fda2948a3c22b1254133862e0891bac1d1227",
-    "content_commit": "56978669",
-    "content_commit_subject": "W56A-SEAL-01 dispatch base; atomic reseal has no self-commit",
-    "dispatch_named_commit": "56978669",
-    "commit_note": "W56A-SEAL-01 adds five AR v2 categories, Severity and optional finding/decision fields; the domain catalog adds model_identity_mismatch (25 codes). Existing 47 paths and 54 operations remain; the schema count becomes 124. No live provider is activated.",
+    "sha256": "7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388",
+    "content_commit": "c71048f",
+    "content_commit_subject": "W57A-SEAL-01B serial API reseal on committed 01A",
+    "dispatch_named_commit": "c71048f",
+    "commit_note": "W57a adds one refusing normative report operation, seven citation/report schemas, twelve categories and reasons, and the optional verified retrieval-set pin. The route does not expose unverified data.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 47,
-    "operations": 54,
-    "component_schemas": 124,
+    "paths": 48,
+    "operations": 55,
+    "component_schemas": 131,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "fad81bc0355e4a5e6e4fdabf320fda2948a3c22b1254133862e0891bac1d1227",
+    "snapshot_sha256": "7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "1dd3b9c5d19fc08fd7d1bd2295e5d259d3d3be471632703564adcd4ad0c67d9f",
-      "index.ts": "62fe3766c2603113a549c5ac8e2a8a14c3ce3bcf7869cb748a60f07caf18fef6",
-      "operations.gen.ts": "a5de54b529941f40196a6b2b09603a3f4d85b040d9863f98321f6de00735b139",
-      "types.gen.ts": "71f484ac10326fd1b57a997d42adfd9d047ee2519b8ee4adccedd44afa940e80"
+      "client.gen.ts": "c08a3b76a0a9bf402b82dee8104540d4951657dbdda7cdc3c9a613c56ea7277a",
+      "index.ts": "55d3053726cf670fda240636841b48557d712d77e8773a6f1380ebed4eb813cb",
+      "operations.gen.ts": "c5c44bc84334fe92766a1a891f13d97b2c508fb3767945b6661e68fe0d56b6f9",
+      "types.gen.ts": "d9606eef824e1d3a9eb8c35a19bd7c504133ed5b938c6a8440d2aeb220d6685a"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

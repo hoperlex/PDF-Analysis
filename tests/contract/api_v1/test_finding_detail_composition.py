@@ -78,11 +78,12 @@ def test_v1_serializers_leave_v2_fields_absent() -> None:
     assert "severity" not in decision_event_body(event)
 
 
-def test_v2_finding_vocabulary_is_closed(openapi_document: dict[str, Any]) -> None:
+def test_finding_vocabulary_is_closed_through_v3(openapi_document: dict[str, Any]) -> None:
     schemas = openapi_document["components"]["schemas"]
     assert schemas["FindingCategory"]["enum"] == [
         "internal_contradiction", "explicit_placeholder", "dimensions", "layout",
         "facade", "roof", "documentation",
+        "evacuation", "fire_safety", "accessibility", "insulation", "sound",
     ]
     assert schemas["Severity"]["enum"] == [
         "critical", "economic", "operational", "recommendation", "check_adjacent",

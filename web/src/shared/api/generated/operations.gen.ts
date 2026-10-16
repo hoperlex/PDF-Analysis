@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 fad81bc0355e4a5e6e4fdabf320fda2948a3c22b1254133862e0891bac1d1227
+ *   sha256 7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -52,6 +52,7 @@ import type {
   NormSearchPage,
   NormSnapshotEventPage,
   NormSnapshotPage,
+  NormVerificationReport,
   NormsSnapshotId,
   PortalBlockId,
   PortalBlockPage,
@@ -101,6 +102,7 @@ export const OPERATION_IDS = [
   'getMe',
   'getNormDocument',
   'getProductVersion',
+  'getRunNormVerification',
   'getRunStatus',
   'getUser',
   'getVersionBlocks',
@@ -453,6 +455,29 @@ export type GetProductVersionInput = {
 
 /** Success body of `getProductVersion` (`application/json`, HTTP 200). */
 export type GetProductVersionResult = ProductVersion;
+
+// ------------------------------------------------------------------------------------
+// getRunNormVerification - GET /runs/{run_id}/norm-verification
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Run Norm Verification
+ *
+ * Read a verified v3 normative report for a run. R-80: any one active expert or admin role; an empty role set is refused. A v1/v2 run answers not_found. Until the CITE verified reader is implemented, this endpoint answers typed 503 dependency_unavailable and exposes no unverified citation data (D-151).
+ */
+export type GetRunNormVerificationInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/norm-verification`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getRunNormVerification` (`application/json`, HTTP 200). */
+export type GetRunNormVerificationResult = NormVerificationReport;
 
 // ------------------------------------------------------------------------------------
 // getRunStatus - GET /runs/{run_id}
@@ -1104,7 +1129,7 @@ export type ReadRegistrationStatusResult = RegistrationStatusResponse;
 /**
  * Reaudit Run
  *
- * A re-audit runs the same version on the current configuration (R-82), so it faces today's analysis input budget, not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118).
+ * A re-audit runs the same version on the current configuration (R-82), so it faces today's analysis input budget, not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set.
  */
 export type ReauditRunInput = {
   /** Path parameters, substituted into `/runs/{run_id}/reaudit`. */
@@ -1234,7 +1259,7 @@ export type SearchNormsResult = NormSearchPage;
 /**
  * Set Current Norm Snapshot
  *
- * Designate a qualifying snapshot as the current one (R-113, G-6), which every new run and re-audit then pins. `expected_current` is the snapshot the caller believes is current (`null` for none); a stale belief is `409 conflict` with `conflict_reason: stale_current_snapshot`. An already-current target answers the current designation as a replay and writes no history row; any other change writes exactly one. A target that does not qualify is `422 required_norm_unavailable` with `reference_kind` `norm_embedding_build` (no complete build) or `norm_source` (a document's PDF has no confirmed binding); an unknown snapshot is `404`. There is no unset. No `Idempotency-Key`: the request is a compare-and-set on durable state. Roles: `admin` (`role:admin`). Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ * Designate a qualifying snapshot as the current one (R-113, G-6), which every new run and re-audit then pins. `expected_current` is the snapshot the caller believes is current (`null` for none); a stale belief is `409 conflict` with `conflict_reason: stale_current_snapshot`. An already-current target answers the current designation as a replay and writes no history row; any other change writes exactly one. A target that does not qualify is `422 required_norm_unavailable` with `reference_kind` `norm_embedding_build` (no complete build) or `norm_source` (a document's PDF has no confirmed binding); an unknown snapshot is `404`. There is no unset. No `Idempotency-Key`: the request is a compare-and-set on durable state. Roles: `admin` (`role:admin`). Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01. W57a may refuse a missing verified retrieval set as 422 required_norm_unavailable with reference_kind norm_retrieval_set; no substitute is selected.
  */
 export type SetCurrentNormSnapshotInput = {
   /** Request body, sent as `application/json`. */
@@ -1725,6 +1750,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 500, 503],
     tags: ['releases'],
+  },
+  getRunNormVerification: {
+    operationId: 'getRunNormVerification',
+    method: 'GET',
+    path: '/runs/{run_id}/norm-verification',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['runs'],
   },
   getRunStatus: {
     operationId: 'getRunStatus',

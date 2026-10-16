@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 47,
+    "path_count": 48,
     "operations": [
       [
         "POST",
@@ -272,6 +272,11 @@
         "PUT",
         "/norms/snapshots/current",
         "setCurrentNormSnapshot"
+      ],
+      [
+        "GET",
+        "/runs/{run_id}/norm-verification",
+        "getRunNormVerification"
       ]
     ],
     "schema_names": [
@@ -398,7 +403,14 @@
       "PortalRecognisedText",
       "PortalBlock",
       "PortalBlockPage",
-      "Severity"
+      "Severity",
+      "NormRetrievalSetId",
+      "NormCitationState",
+      "NormCitation",
+      "UngroundedReason",
+      "NormObservationCitationPartition",
+      "NormFindingVerification",
+      "NormVerificationReport"
     ]
   },
   "error_catalog": {

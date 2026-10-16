@@ -58,7 +58,7 @@ def test_complete_replay_seals_exact_ref_call_and_registry_contract(tmp_path: Pa
     result = seal_recorded_v2_stage_result(**inputs)
     document = result.to_document()
     assert result.status is StageStatus.SUCCEEDED
-    assert result.stage_id == "text_analysis" and result.stage_version == "1.0.0"
+    assert result.stage_id == "text_analysis" and result.stage_version == "1.1.0"
     assert result.artifacts == (inputs["published_ref"],)
     assert document["metrics"] == {
         "provider_mode": "recorded", "model_call_count": 1,

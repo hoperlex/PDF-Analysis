@@ -325,6 +325,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listExecutionJournal": _ANY_ROLE,
         "listWorkers": _ANY_ROLE,
         "getRunStatus": _ANY_ROLE,
+        "getRunNormVerification": _ANY_ROLE,
         "listRunFindings": _ANY_ROLE,
         "getFinding": _ANY_ROLE,
         "listDecisionHistory": _ANY_ROLE,

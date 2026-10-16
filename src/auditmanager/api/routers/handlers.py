@@ -155,7 +155,7 @@ _ANALYSIS_INPUTS: Final[Mapping[tuple[str, str], str]] = {
 #: The enum vocabularies, written out, so a refusal names the values the contract declares
 #: rather than the ones a Python enum happens to carry today.
 _ENUM_VALUES: Final[Mapping[str, str]] = {
-    "category": "explicit_placeholder, internal_contradiction",
+    "category": "accessibility, dimensions, documentation, evacuation, explicit_placeholder, facade, fire_safety, insulation, internal_contradiction, layout, roof, sound",
     "verdict": "accepted, needs_manual_review, pending, rejected",
     "event_type": "accept, comment, reject, revoke",
     "provider_mode": "live, recorded",

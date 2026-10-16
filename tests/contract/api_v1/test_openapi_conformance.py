@@ -532,7 +532,8 @@ class TestN1ComponentReferenceResolution:
         # `W55A-SEAL-01` adds four more 404s: the three norm-document reads address a
         # document by identity and `setCurrentNormSnapshot` names a snapshot that may not exist.
         # `W55B-SEAL-01` adds two more: both portal-block reads address a version by identity.
-        assert len(report) == 32, report
+        # W57a adds a run-scoped v3 report with its own 404 response.
+        assert len(report) == 33, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

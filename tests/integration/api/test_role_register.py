@@ -52,6 +52,9 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "listVersions": ("GET", "/documents/doc_01M2545JSD15ETSNNV904X991H/versions"),
     "startRun": ("POST", "/runs"),
     "getRunStatus": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K"),
+    "getRunNormVerification": (
+        "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/norm-verification"
+    ),
     "listExecutionQueue": ("GET", "/execution/queue"),
     "listExecutionJournal": ("GET", "/execution/journal"),
     "cancelRun": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/cancel"),
@@ -122,6 +125,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "listVersions": _ANY_ROLE,
     "listRuns": _ANY_ROLE,
     "getRunStatus": _ANY_ROLE,
+    "getRunNormVerification": _ANY_ROLE,
     "listExecutionQueue": _ANY_ROLE,
     "listExecutionJournal": _ANY_ROLE,
     "listWorkers": _ANY_ROLE,
