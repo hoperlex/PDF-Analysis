@@ -1,7 +1,7 @@
 # Current state
 
-**Updated 2026-10-16 from published code-first development candidate 59
-(`2b0a8a04a7ef2ce050e3ec3df9dd5414c68651be`), with dev60 W57b evidence
+**Updated 2026-10-16 from published code-first development candidate 60
+(`2fe82f40f4ac2bf82f9778c28b2fd2a2b8e8deab`), with dev61 W57b code and evidence
 integrated in this tree.** W55b is
 published on `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as
 `GATE OK` under R-125; the deploy workflow selected that tree and the owner
@@ -40,15 +40,19 @@ Version manifest. A targeted acceptance test of that reader passed on an
 isolated real PostgreSQL/S3 instance; it stopped before provider dispatch.
 W57a has an unserved v3 request candidate and local response evaluator.
 W57b has an unserved certified XLSX composition chain, a read-only verified
-catalogue custody reader and an exact text-layer-to-reference-page bridge.
+catalogue custody reader, a current-Attempt saved PDF text-layer reader and
+an exact text-layer-to-reference-page bridge.
 The reader passed one targeted test on isolated real 0023 PostgreSQL/S3 with
 synthetic catalogue bytes, both confirmed bindings and current Attempt
 fencing. The page bridge preserves Unicode offsets and marks empty pages as
-unread in a pure pipeline test. Its independent LibreOffice probe failed
-three bounded host attempts; B3.5 remains unverified. Served callers,
+unread in a pure pipeline test. The saved text reader verifies bounded Blob
+bytes and repeats Run, Version, stage and Attempt checks; its focused tests
+use fake ports. The independent synthetic LibreOffice import and 54-cell
+probe passed outside sandbox after three earlier constrained failures.
+The complete B3.5 live export remains unverified. Served callers,
 provider/effect provenance, qualified corpus, reviewed catalogue slugs,
 approved W56b policy, W57a CAP-01 and W57b 0024 seal remain open. See
-`CFB-INT-DEV-PUBLISH-45.md` through `CFB-INT-DEV-PUBLISH-60.md`. R-135
+`CFB-INT-DEV-PUBLISH-45.md` through `CFB-INT-DEV-PUBLISH-61.md`. R-135
 defers the complete beta gate to
 the final code candidate. No beta acceptance is claimed.
 
