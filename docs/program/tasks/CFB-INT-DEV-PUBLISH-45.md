@@ -38,9 +38,23 @@ assembly. Read back the exact `origin/dev` SHA after a fast-forward push.
 ### P-01 — source task paths and dependency boundary
 
 - captured_at: 2026-10-16
-- command: `git show --format= --name-only cf4a9a967c68d7c7ee892a934ef8ed8f7d3d5b3a 9978ded43b3ac42aa5327dcf552f11097e15ddd2; git -C /root/projects/PDF-Analysis/.local/worktrees/w54-build-target-preflight-01 show --format= --name-only e8b8f32dcbd466908c49f2390cc329ce90152300`
-- captured_output: each source commit changes exactly its own task, report,
-  source module/script and focused test; the twelve paths do not overlap.
+- command: `git diff 4c16ccd7ae975d5a32829e9bcdf975f8b12f66e1..0dc578c5 --name-only`
+- captured_output:
+  ```text
+  docs/program/W54-CORPUS-BUILD-TARGET-PREFLIGHT-01.md
+  docs/program/W56B-INT-SAVED-TEXT-REF-PREP-01.md
+  docs/program/W57A-INT-V3-REQUEST-CANDIDATE-PREP-01.md
+  docs/program/tasks/CFB-INT-DEV-PUBLISH-45.md
+  docs/program/tasks/W54-CORPUS-BUILD-TARGET-PREFLIGHT-01.md
+  docs/program/tasks/W56B-INT-SAVED-TEXT-REF-PREP-01.md
+  docs/program/tasks/W57A-INT-V3-REQUEST-CANDIDATE-PREP-01.md
+  scripts/norms/corpus_preflight.py
+  src/auditmanager/analysis/profiles/ar_v3/request_candidate.py
+  src/auditmanager/analysis/text/saved_window_custody.py
+  tests/integration/analysis/test_ar_v3_request_candidate.py
+  tests/integration/analysis_text/test_saved_window_custody.py
+  tests/integration/norms/test_corpus_preflight.py
+  ```
 - interpretation: integration can cherry-pick those source commits without
   assigning two writers to a shared hotspot. No served runtime or product
   contract is changed by these source tasks.
