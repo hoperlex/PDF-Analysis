@@ -157,11 +157,11 @@ def test_persisted_recorded_executor_saves_five_stages_one_call_and_one_terminal
         assert len(rows) == 5 and set(stages) == set(FIVE_STAGES)
         assert all(row["status"] == "succeeded" for row in rows)
         call = observer.execute(text(
-            "SELECT status, provider_mode, model_id, request_sha256, "
+            "SELECT status, provider_mode, model_identity, request_sha256, "
             "response_sha256, cost_micros FROM model_call WHERE run_id = :run_id"
         ), {"run_id": run_id}).mappings().one()
         assert call["status"] == "succeeded"
-        assert (call["provider_mode"], call["model_id"]) == ("recorded", MODEL_ID)
+        assert (call["provider_mode"], call["model_identity"]) == ("recorded", MODEL_ID)
         assert call["request_sha256"] == request_sha256
         assert call["response_sha256"] != request_sha256
         assert call["cost_micros"] is None
