@@ -33,12 +33,14 @@ _TABLE_LINE = re.compile(r"([a-z_][a-z0-9_]*)\|(0|[1-9][0-9]*)\|([0-9a-f]{64})\Z
 _DATABASE = re.compile(r"auditmanager_w58_[a-z0-9_]{1,43}\Z")
 _USER = re.compile(r"[a-z_][a-z0-9_]{0,62}\Z")
 _FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+# exec_driver_sql passes this text through psycopg's percent-placeholder parser.
+# Double literal percent signs here; psycopg sends one percent to PostgreSQL.
 _RELATIONS = """
     SELECT count(*) FROM pg_catalog.pg_class c
     JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-      AND n.nspname NOT LIKE 'pg_toast%'
-      AND n.nspname NOT LIKE 'pg_temp_%'
+      AND n.nspname NOT LIKE 'pg_toast%%'
+      AND n.nspname NOT LIKE 'pg_temp_%%'
       AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
 """
 
