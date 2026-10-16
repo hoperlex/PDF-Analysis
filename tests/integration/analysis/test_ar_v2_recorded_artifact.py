@@ -17,6 +17,7 @@ from auditmanager.analysis.profiles.ar_v2.recorded_artifact import (
     ARTIFACT_VERSION,
     RecordedArtifactError,
     build_recorded_observation_artifact,
+    read_recorded_merge_input,
 )
 from auditmanager.analysis.profiles.ar_v2.recorded_input import prepare_recorded_v2_input
 from auditmanager.analysis.profiles.ar_v2.recorded_request import RecordedGenerationSettings
@@ -26,6 +27,7 @@ from auditmanager.analysis.text.anchors import ResolvedAnchor
 from auditmanager.analysis.text.recorded import RecordedAdapter, recording_document
 from auditmanager.findings.artifacts import ObservationSet
 from auditmanager.shared.identity import ModelCallId, RunId
+from auditmanager.storage.public import derive_blob_id
 
 
 VERSION = "ver_01M2545JSD15ETSNNV904X991J"
@@ -129,6 +131,50 @@ def _build(prepared, replay, **changes):
     }
     arguments.update(changes)
     return build_recorded_observation_artifact(**arguments)
+
+
+def _read_saved(payload: bytes):
+    digest = sha256_hex(payload)
+    reference = ArtifactRef(
+        ARTIFACT_ROLE, str(derive_blob_id(sha256=digest, size=len(payload))),
+        digest, len(payload), "application/json",
+    )
+
+    class Store:
+        def read(self, _blob_id, *, verify: bool = True):
+            assert verify
+            return payload
+
+    return read_recorded_merge_input(
+        Store(), reference, run_id=RUN, version_uid=VERSION,
+        analysis_profile_id=str(PROFILE_ID), prompt_bundle_id=str(PROMPT_BUNDLE_ID),
+    )
+
+
+def test_saved_reader_retains_typed_proposals_diagnostics_and_call_facts(tmp_path: Path) -> None:
+    prepared = _prepared()
+    replay = _replay(tmp_path, prepared)
+    saved = _read_saved(_build(prepared, replay).payload)
+    assert saved.model_id == MODEL
+    assert saved.model_call_id == CALL
+    assert saved.request_sha256 == replay.request_sha256
+    assert saved.response_sha256 == replay.response_sha256
+    assert saved.source_binding_sha256 == prepared.source_binding_sha256
+    assert saved.grounding.accepted[0].proposal.finding_text == "Размер стены"
+    assert saved.grounding.accepted[0].proposal.proposed_severity == "operational"
+    assert saved.grounding.accepted[0].evidence[0].block_id is None
+    assert saved.grounding.rejected[0].failures[0].reason == "quotation_absent"
+    assert saved.grounding.malformed_count == 1
+
+
+@pytest.mark.parametrize("field", ["evidence_ordinal", "page_number", "quote"])
+def test_nullable_rejected_diagnostic_fails_closed(tmp_path: Path, field: str) -> None:
+    prepared = _prepared()
+    replay = _replay(tmp_path, prepared)
+    document = json.loads(_build(prepared, replay).payload)
+    document["diagnostics"]["rejected"][0]["failures"][0][field] = None
+    with pytest.raises(RecordedArtifactError, match="recorded_diagnostics_invalid"):
+        _read_saved(canonical_bytes(document))
 
 
 def test_canonical_bytes_are_gate_readable_and_keep_all_diagnostics(tmp_path: Path) -> None:

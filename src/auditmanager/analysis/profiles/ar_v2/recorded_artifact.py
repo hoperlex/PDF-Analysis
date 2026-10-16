@@ -20,7 +20,12 @@ from auditmanager.analysis.engine.serialization import (
     sha256_hex,
 )
 from auditmanager.analysis.profiles.ar_v2 import prompt_material, registered
+from auditmanager.analysis.profiles.ar_v2.grounding import REASON_RECOGNISED_ONLY
 from auditmanager.analysis.profiles.ar_v2.merge_input import prepare_merge
+from auditmanager.analysis.profiles.ar_v2.proposal_grounding import (
+    GroundedProposal, ProposalGroundingResult, RejectedProposal, UnresolvedEvidence,
+)
+from auditmanager.analysis.profiles.ar_v2.response import ProposedEvidence, ProposedObservation
 from auditmanager.analysis.profiles.ar_v2.recorded_input import (
     PdfPageSource,
     RecordedV2Input,
@@ -28,6 +33,10 @@ from auditmanager.analysis.profiles.ar_v2.recorded_input import (
 from auditmanager.analysis.profiles.ar_v2.recorded_response import RecordedReplayResult
 from auditmanager.analysis.profiles.ar_v2.response_schema import CATEGORIES, SEVERITIES
 from auditmanager.analysis.stages.finding_merge import MergeEvidence, MergeObservation
+from auditmanager.analysis.text.anchors import (
+    REASON_ABSENT, REASON_DIFFERENT_PAGE, REASON_LENGTH_MISMATCH,
+    REASON_SPAN_OUTSIDE_PAGE, ResolvedAnchor,
+)
 from auditmanager.analysis.text.config import ProviderMode
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId, RunId, VersionUid
@@ -67,9 +76,17 @@ class RecordedMergeInput:
     text_artifact_sha256: str
     text_layer_ref: ArtifactRef
     recognised_ref: ArtifactRef | None
+    grounding: ProposalGroundingResult
+    model_id: str
+    model_call_id: str
+    request_sha256: str
+    response_sha256: str
+    source_binding_sha256: str
 
 
-def _complete_observations(document: dict[str, object]) -> tuple[tuple[MergeObservation, ...], tuple[int, ...]]:
+def _complete_observations(document: dict[str, object]) -> tuple[
+    tuple[MergeObservation, ...], tuple[int, ...], tuple[GroundedProposal, ...],
+]:
     pages = document.get("page_sources")
     analysed = document.get("pages_analysed")
     if not isinstance(pages, list) or not pages or not isinstance(analysed, list):
@@ -94,6 +111,7 @@ def _complete_observations(document: dict[str, object]) -> tuple[tuple[MergeObse
         raise RecordedArtifactError("recorded_observations_invalid")
     observations: list[MergeObservation] = []
     source_ordinals: list[int] = []
+    accepted: list[GroundedProposal] = []
     for ordinal, item in enumerate(raw):
         if not isinstance(item, dict) or set(item) != {
             "observation_ordinal", "source_proposal_ordinal", "category",
@@ -106,16 +124,23 @@ def _complete_observations(document: dict[str, object]) -> tuple[tuple[MergeObse
                 or item["observation_ordinal"] != ordinal
                 or type(source) is not int or source < 0
                 or source in source_ordinals
-                or item["category"] not in CATEGORIES
+                or not isinstance(item["category"], str) or item["category"] not in CATEGORIES
+                or not isinstance(item["proposed_severity"], str)
                 or item["proposed_severity"] not in SEVERITIES
-                or not isinstance(item["finding_text"], str) or not item["finding_text"]
+                or not isinstance(item["finding_text"], str)
+                or not 1 <= len(item["finding_text"]) <= 4000
+                or not item["finding_text"].strip()
                 or not isinstance(item["recommendation_text"], str)
+                or not 1 <= len(item["recommendation_text"]) <= 4000
+                or not item["recommendation_text"].strip()
                 or item["model_call_id"] != document["model_call_id"]):
             raise RecordedArtifactError("recorded_observations_invalid")
         raw_evidence = item["evidence"]
         if not isinstance(raw_evidence, list) or not raw_evidence:
             raise RecordedArtifactError("recorded_evidence_invalid")
         evidence: list[MergeEvidence] = []
+        proposed_evidence: list[ProposedEvidence] = []
+        anchors: list[ResolvedAnchor] = []
         for evidence_ordinal, value in enumerate(raw_evidence):
             if not isinstance(value, dict) or set(value) != {
                 "evidence_ordinal", "page_number", "quote", "char_start", "char_end",
@@ -129,15 +154,27 @@ def _complete_observations(document: dict[str, object]) -> tuple[tuple[MergeObse
                     or type(page) is not int or page not in page_ranges
                     or type(start) is not int or type(end) is not int
                     or not isinstance(quote, str) or not 1 <= len(quote) <= 2000
+                    or not quote.strip()
                     or not page_ranges[page][0] <= start < end <= page_ranges[page][1]
                     or end - start != len(quote)):
                 raise RecordedArtifactError("recorded_evidence_invalid")
             evidence.append(MergeEvidence(page, start, end, quote))
+            proposed_evidence.append(ProposedEvidence(page, quote))
+            anchors.append(ResolvedAnchor(page, quote, start, end))
         source_ordinals.append(source)
         observations.append(MergeObservation(ordinal, str(item["category"]), tuple(evidence)))
+        accepted.append(GroundedProposal(
+            source,
+            ProposedObservation(
+                item["category"], item["finding_text"],
+                item["recommendation_text"], item["proposed_severity"],
+                tuple(proposed_evidence),
+            ),
+            tuple(anchors),
+        ))
     if source_ordinals != sorted(source_ordinals):
         raise RecordedArtifactError("recorded_source_ordinals_invalid")
-    return tuple(observations), tuple(source_ordinals)
+    return tuple(observations), tuple(source_ordinals), tuple(accepted)
 
 
 def read_recorded_merge_input(
@@ -242,34 +279,57 @@ def read_recorded_merge_input(
             or diagnostics["malformed_count"] < 0
             or not isinstance(diagnostics["rejected"], list)):
         raise RecordedArtifactError("recorded_coverage_incomplete")
-    observations, source_ordinals = _complete_observations(document)
+    observations, source_ordinals, accepted = _complete_observations(document)
     if textless is not None and not set(textless).issubset(document["pages_analysed"]):
         raise RecordedArtifactError("recorded_textless_pages_invalid")
     rejected_ordinals: list[int] = []
+    rejected_proposals: list[RejectedProposal] = []
     for rejected in diagnostics["rejected"]:
         if (not isinstance(rejected, dict) or set(rejected) != {"source_proposal_ordinal", "failures"}
                 or type(rejected["source_proposal_ordinal"]) is not int
                 or rejected["source_proposal_ordinal"] < 0
                 or not isinstance(rejected["failures"], list) or not rejected["failures"]):
             raise RecordedArtifactError("recorded_diagnostics_invalid")
+        failures: list[UnresolvedEvidence] = []
         for failure in rejected["failures"]:
             if (not isinstance(failure, dict)
                     or set(failure) != {"evidence_ordinal", "page_number", "quote", "reason"}
-                    or (failure["evidence_ordinal"] is not None
-                        and (type(failure["evidence_ordinal"]) is not int
-                             or failure["evidence_ordinal"] < 0))
-                    or (failure["page_number"] is not None
-                        and (type(failure["page_number"]) is not int
-                             or failure["page_number"] < 1))
-                    or (failure["quote"] is not None and not isinstance(failure["quote"], str))
-                    or not isinstance(failure["reason"], str) or not failure["reason"]):
+                    or type(failure["evidence_ordinal"]) is not int
+                    or failure["evidence_ordinal"] < 0
+                    or type(failure["page_number"]) is not int
+                    or failure["page_number"] < 1
+                    or not isinstance(failure["quote"], str)
+                    or not 1 <= len(failure["quote"]) <= 2000
+                    or not failure["quote"].strip()
+                    or not isinstance(failure["reason"], str)
+                    or failure["reason"] not in {
+                        REASON_ABSENT, REASON_DIFFERENT_PAGE,
+                        REASON_SPAN_OUTSIDE_PAGE, REASON_LENGTH_MISMATCH,
+                        REASON_RECOGNISED_ONLY,
+                    }):
                 raise RecordedArtifactError("recorded_diagnostics_invalid")
+            failures.append(UnresolvedEvidence(
+                failure["evidence_ordinal"], failure["page_number"],
+                failure["quote"], failure["reason"],
+            ))
+        if [item.evidence_ordinal for item in failures] != sorted({
+            item.evidence_ordinal for item in failures
+        }):
+            raise RecordedArtifactError("recorded_diagnostics_invalid")
         rejected_ordinals.append(rejected["source_proposal_ordinal"])
+        rejected_proposals.append(RejectedProposal(
+            rejected["source_proposal_ordinal"], tuple(failures),
+        ))
     all_ordinals = (*source_ordinals, *rejected_ordinals)
     if sorted(all_ordinals) != list(range(len(all_ordinals))):
         raise RecordedArtifactError("recorded_partition_invalid")
     return RecordedMergeInput(
         observations, source_ordinals, reference.sha256, text_ref, recognised_ref,
+        ProposalGroundingResult(
+            tuple(accepted), tuple(rejected_proposals), diagnostics["malformed_count"], False,
+        ),
+        document["model_id"], document["model_call_id"], document["request_sha256"],
+        document["response_sha256"], document["source_binding_sha256"],
     )
 
 

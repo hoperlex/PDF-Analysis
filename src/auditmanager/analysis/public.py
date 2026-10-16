@@ -27,6 +27,9 @@ from auditmanager.analysis.engine.result import (
     StageStatus,
 )
 from auditmanager.analysis.engine.runner import run_stage
+from auditmanager.analysis.engine.serialization import (
+    ARTIFACT_MEDIA_TYPE, canonical_bytes, sha256_hex,
+)
 from auditmanager.analysis.ports.artifacts import (
     ARTIFACT_VERSION,
     ROLE_BLOCK_INDEX,
@@ -56,6 +59,8 @@ from auditmanager.analysis.profiles.ar_v2.recorded_input import (
 )
 from auditmanager.analysis.profiles.ar_v2.recorded_request import RecordedGenerationSettings
 from auditmanager.analysis.profiles.ar_v2.recorded_artifact import (
+    ARTIFACT_ROLE as RECORDED_OBSERVATION_ARTIFACT_ROLE,
+    ARTIFACT_VERSION as RECORDED_OBSERVATION_ARTIFACT_VERSION,
     BuiltRecordedArtifact,
     RecordedArtifactError,
     RecordedMergeInput,
@@ -120,6 +125,7 @@ from auditmanager.analysis.text.anchors import BlockIndex, ResolvedAnchor
 from auditmanager.analysis.text.textlayer import TextLayer
 
 __all__ = [
+    "ARTIFACT_MEDIA_TYPE",
     "ARTIFACT_VERSION",
     "ARTIFACT_ROLE",
     "AR_TEXT_PROFILE",
@@ -135,6 +141,8 @@ __all__ = [
     "NORMALIZATION_DESCRIPTION",
     "NORMALIZATION_ID",
     "QUOTE_SOURCE_RECOGNISED",
+    "RECORDED_OBSERVATION_ARTIFACT_ROLE",
+    "RECORDED_OBSERVATION_ARTIFACT_VERSION",
     "REFERENCE_DOCUMENT_CHARACTERS",
     "ROLE_BLOCK_INDEX",
     "ROLE_CROP_IMAGE",
@@ -198,6 +206,7 @@ __all__ = [
     "build_recorded_call_facts",
     "build_recorded_observation_artifact",
     "blob_role_for",
+    "canonical_bytes",
     "prepare_recorded_v2_input",
     "read_artifact",
     "read_recorded_merge_input",
@@ -206,5 +215,6 @@ __all__ = [
     "run_stage",
     "run_text_analysis",
     "seal_recorded_v2_stage_result",
+    "sha256_hex",
     "merge_grounded",
 ]
