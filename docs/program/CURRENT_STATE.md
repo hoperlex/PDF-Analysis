@@ -1,5 +1,16 @@
 # Current state
 
+**Checked code-first dev candidate 16, 2026-10-16.** Four completed source
+tasks add an unactivated W56a bridge from saved, verified recorded AR v2
+artifacts to a deterministic finding-publication plan; a private W58 helper
+that mirrors every key in a frozen S3 inventory and checks received bytes; and
+W57/W59 decisions for later citation/XLSX seals and version-bound section
+identity. The integrated focused suite passed 122 tests. Neither helper is
+connected to a production executor or stand transfer. The migration head and
+frozen contracts remain at `0022_findings_v2`; W54 still lacks a proxy
+credential for its 121-page paid repair, and W55b's separate exact main
+candidate is under a fresh complete gate. See `CFB-INT-DEV-PUBLISH-16.md`.
+
 **Checked code-first candidate with W54 plan, 2026-10-16.** The next dev
 integration adds an unactivated durable W56a finding-merge stage over saved
 observation Blobs, an XLSX run/source preflight and a bounded W59 raw-evidence
