@@ -1,8 +1,8 @@
 # Current state
 
-**Code-first candidate 35, 2026-10-16.** W56b adds unserved TEXT preflight
-after W57a's citation reader/CITE writer and W56b crop/W58 restore seams.
-Real DB/S3 and served stages remain open; see `CFB-INT-DEV-PUBLISH-35.md`.
+**Code-first candidate 36, 2026-10-16.** W57a adds an unserved verified-set
+Blob reader after dev35's W56b TEXT preflight and prior CITE/crop/recovery
+seams. Real DB/S3 and served stages remain open; see `CFB-INT-DEV-PUBLISH-36.md`.
 
 **Code-first development candidate 31, 2026-10-16.** W57a grounds v3 PDF
 and normative proposals with separate N-labels for one paragraph; W56b
