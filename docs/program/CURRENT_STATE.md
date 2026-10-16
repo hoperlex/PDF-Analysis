@@ -1,5 +1,13 @@
 # Current state
 
+**Code-first development candidate 22, 2026-10-16.** The explicit offline
+W56a recorded v2 executor bridge now has real PostgreSQL 17.11/MinIO
+acceptance: 18 tests passed, including five saved stages, recorded call,
+Blob readback, terminal Run/Job/Attempt and refused retry. A v2-only commit
+before external Blob read closes the D-141 lease-ordering defect. Normal
+served composition still chooses v1. See `CFB-INT-DEV-PUBLISH-22.md` and
+`W56A-INT-RECORDED-BRIDGE-DB-ACCEPT-01.md`.
+
 **Code-first development candidate 21, 2026-10-16.** W59 now has an unserved
 review packet for one VersionUid that lists all 15 section choices and
 suggestion evidence without selecting or confirming a section. The focused
@@ -37,21 +45,10 @@ The integrated focused suite passed 79 tests. The repaired W55b main candidate
 `d3acd511` is still under its own complete gate. See
 `CFB-INT-DEV-PUBLISH-18.md` and the three source task reports.
 
-**Code-first development candidate 17, 2026-10-16.** The W56a recorded
-publication gate and the W55b serving-carrier test deadline correction are
-integrated for `origin/dev`. The W56a gate passed 15 focused tests on
-an isolated PostgreSQL 17.11/MinIO lane at migration head `0022_findings_v2`;
-its active executor call remains a separate task. The W55b test correction
-addresses a measured 37.9-second pre-provider path that exceeded the former
-30-second test wait. It changes no production code; the separate repaired
-W55b candidate `d3acd511` still needs a complete `make gate`. See
-`CFB-INT-DEV-PUBLISH-17.md`, `W56A-INT-RECORDED-PUBLICATION-GATE-01.md` and
-`W55B-INT-GATE-TIMEOUT-01.md`.
-
 ## Current development boundary
 
 The checked predecessor of this candidate is
-`origin/dev=d416e185d3b42da55ba2e8bfdd02d7126da7f41e`.
+`origin/dev=a292bd1ab614eec9f3e5356529c83d01578c7513`.
 The development API surface is 47 paths / 54 operations / 124 schemas; the
 error catalogue has 25 codes and the migration head is `0022_findings_v2`.
 `VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
@@ -59,13 +56,14 @@ The code-first order and prerequisites are in
 [`CODE-FIRST-TO-BETA.md`](dispatch/CODE-FIRST-TO-BETA.md).
 
 W56a has a recorded-only AR v2 profile, source-bound saved request and call,
-verified observation/merge artifacts, a deterministic finding plan and now an
+verified observation/merge artifacts, a deterministic finding plan and a
 transaction gate reached only through the explicit offline executor bridge.
 The gate rechecks stage and call provenance, publishes findings and
 terminalizes Run/Job/Attempt atomically. It does not make a live provider call. Its
-caller must commit once or roll back the whole transaction. The measured
-baseline, real model/price verification, served executor activation and complete beta
-gate remain open.
+caller must commit once or roll back the whole transaction. The explicit
+executor path passed real persisted-run and Blob acceptance on an isolated
+lane. The measured baseline, real model/price verification, served executor
+activation and complete beta gate remain open.
 
 W57a has pure retrieval, map, qualification and citation preparations, but no
 verified retrieval set, citation custody relation or active CITE stage. W57b
