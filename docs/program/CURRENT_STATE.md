@@ -1,5 +1,11 @@
 # Current state
 
+**Code-first development candidate 29, 2026-10-16.** W56b has a pure
+complete IMAGE-crop cohort preflight: every checked IMAGE block needs one
+matching crop, while geometry-mismatch blocks are explicit skips. It does
+not read Blob bytes or call a model. See `CFB-INT-DEV-PUBLISH-29.md` and
+`W56B-INT-CROP-COHORT-PREP-01.md`.
+
 **Code-first development candidate 28, 2026-10-16.** W58 has an unactivated
 guarded PostgreSQL restore callback for its offline DB-plus-Blob coordinator;
 the operator still must prove an empty isolated target and matching bucket.
@@ -28,18 +34,10 @@ readback. The source passed 140 recovery/governance checks; no real drill
 has run. Separate W55b `37393a97` is under its complete gate. See
 `CFB-INT-DEV-PUBLISH-25.md` and `W58-INT-ISOLATED-DB-BLOB-DRILL-CODE-01.md`.
 
-**Code-first development candidate 24, 2026-10-16.** The W55b D-142 test
-now selects the crashed Attempt and its separately reclaimed Attempt. Two
-valid publication rows no longer make its assertion ambiguous. The exact
-repair commit is in development ancestry, and its focused real-DB check
-passed 2/2. Separate W55b candidate `37393a97` still needs a complete gate
-and direct exact-SHA main authority. See `CFB-INT-DEV-PUBLISH-24.md` and
-`W55B-INT-D142-GATE-REPAIR-01.md`.
-
 ## Current development boundary
 
 The checked predecessor of this candidate is
-`origin/dev=746311c9ac5760b1658b6862f629471fa0cf15b4`.
+`origin/dev=f468d20eaf46dba82908615b04f20090541b21df`.
 The development API surface is 48 paths / 55 operations / 131 schemas; the
 error catalogue has 25 codes and the migration head is `0023_norm_citations`.
 `VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
@@ -62,8 +60,9 @@ bindings, a frozen Run pin and a certified citation-count relation. The
 API/stage seal adds vocabulary and a refusing report read. No qualified
 retrieval-set row, verified reader or active CITE stage exists. W57b has XLSX
 preparation, but its citation reader and route wait for verified W57a reader
-and 0024 seal. W56b has only an unserved OCR-region candidate; saved-artifact
-custody and an approved OCR citation policy are still required. See
+and 0024 seal. W56b has unserved OCR-region and IMAGE crop-cohort candidates;
+saved-artifact custody, Blob readback and an approved OCR citation policy
+are still required. See
 `W57-INT-SEAL-FREEZE-PROPOSAL-01.md`. W58 has read-only source-object mirror,
 isolated target-copy and offline DB-plus-Blob drill code, including a guarded
 PostgreSQL restore callback; it has not transferred a stand or proved
