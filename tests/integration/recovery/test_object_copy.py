@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -57,6 +60,31 @@ def test_copy_cannot_be_sealed_if_object_set_or_bytes_are_wrong(tmp_path: Path, 
         (root / "blobs/00/one").symlink_to(tmp_path / "outside")
     with pytest.raises(object_copy.ObjectCopyRefused):
         object_copy.build_manifest(inventory, root)
+
+
+def test_fifo_at_listed_object_refuses_without_waiting_for_a_writer(tmp_path: Path) -> None:
+    inventory, root = _fixture(tmp_path)
+    object_path = root / "blobs/00/one"
+    object_path.unlink()
+    os.mkfifo(object_path, 0o600)
+    code = """
+import sys
+from pathlib import Path
+from scripts.recovery.object_copy import ObjectCopyRefused, build_manifest
+
+try:
+    build_manifest(b"blobs/00/one\\t13\\tfirst-etag\\nblobs/00/two\\t0\\tsecond-etag\\n", Path(sys.argv[1]))
+except ObjectCopyRefused:
+    print("REFUSED")
+else:
+    raise AssertionError("FIFO object was accepted")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code, str(root)], capture_output=True, text=True,
+        timeout=3, check=False, cwd=Path(__file__).resolve().parents[3],
+    )
+    assert result.returncode == 0 and result.stdout == "REFUSED\n"
+    assert object_path.is_fifo()
 
 
 @pytest.mark.parametrize(

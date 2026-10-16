@@ -27,7 +27,7 @@ from scripts.recovery.object_copy import (
 
 _CHUNK = 1024 * 1024
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-_READ_FLAGS = os.O_RDONLY | os.O_NOFOLLOW
+_READ_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
 _WRITE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
 _ETAG = re.compile(r"[A-Za-z0-9._~-]+\Z")
 

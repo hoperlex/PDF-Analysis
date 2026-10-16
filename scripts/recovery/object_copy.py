@@ -25,7 +25,7 @@ _SEGMENT = re.compile(r"[A-Za-z0-9._-]+\Z")
 _SIZE = re.compile(r"(?:0|[1-9][0-9]*)\Z")
 _ETAG = re.compile(r"[\x21-\x7e]*\Z")
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-_FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW
+_FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
 
 
 class ObjectCopyRefused(ValueError):

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -181,6 +183,43 @@ def test_interrupted_transfer_retries_without_overwriting_verified_prior_object(
     with pytest.raises(SourceObjectMirrorRefused, match="existing mirror object differs"):
         _mirror(root, reader)
     assert (root / ONE).read_bytes() == original
+    assert list(root.rglob(".source-object-*")) == []
+
+
+def test_retry_with_fifo_at_existing_key_refuses_without_waiting_for_writer(
+    tmp_path: Path,
+) -> None:
+    root = _root(tmp_path)
+    target = root / ONE
+    target.parent.mkdir(parents=True, mode=0o700)
+    (root / "blobs").chmod(0o700)
+    os.mkfifo(target, 0o600)
+    code = """
+import io
+import sys
+from pathlib import Path
+from scripts.recovery.source_object_mirror import SourceObjectMirrorRefused, mirror_source_objects
+
+class Reader:
+    def get_object(self, *, Bucket, Key, IfMatch):
+        return {"Body": io.BytesIO(b"first payload"), "ETag": '"first-etag"', "ContentLength": 13}
+
+try:
+    mirror_source_objects(
+        inventory_data=b"blobs/00/one\\t13\\tfirst-etag\\n",
+        objects_root=Path(sys.argv[1]), bucket="private-bucket", reader=Reader(),
+    )
+except SourceObjectMirrorRefused:
+    print("REFUSED")
+else:
+    raise AssertionError("FIFO retry was accepted")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code, str(root)], capture_output=True, text=True,
+        timeout=3, check=False, cwd=Path(__file__).resolve().parents[3],
+    )
+    assert result.returncode == 0 and result.stdout == "REFUSED\n"
+    assert target.is_fifo()
     assert list(root.rglob(".source-object-*")) == []
 
 
