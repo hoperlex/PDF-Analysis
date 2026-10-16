@@ -1,5 +1,12 @@
 # Current state
 
+**Code-first development candidate 30, 2026-10-16.** W57a now has a pure,
+unserved AR v3 response schema/parser. Five normative categories require
+1–5 labelled citation proposals and two values; seven legacy categories
+forbid those fields. The served verification reader remains typed 503 until
+a registered v3 profile and CITE publisher exist. See
+`CFB-INT-DEV-PUBLISH-30.md` and `W57A-INT-V3-RESPONSE-PREP-01.md`.
+
 **Code-first development candidate 29, 2026-10-16.** W56b has a pure
 complete IMAGE-crop cohort preflight: every checked IMAGE block needs one
 matching crop, while geometry-mismatch blocks are explicit skips. It does
@@ -26,18 +33,10 @@ route until a verified reader exists. The API has 48 paths / 55 operations /
 No qualified retrieval set or served v3 writer/reader is active. See
 `CFB-INT-DEV-PUBLISH-26.md` and `W57A-SEAL-01B.md`.
 
-**Code-first development candidate 25, 2026-10-16.** W58 now has an
-unactivated offline coordinator for an isolated PostgreSQL-plus-Blob restore
-drill. Its closed DB audit includes both retrieval-set Blob references from
-0023; it orders preflight, restored DB proof, target copy and full Blob
-readback. The source passed 140 recovery/governance checks; no real drill
-has run. Separate W55b `37393a97` is under its complete gate. See
-`CFB-INT-DEV-PUBLISH-25.md` and `W58-INT-ISOLATED-DB-BLOB-DRILL-CODE-01.md`.
-
 ## Current development boundary
 
 The checked predecessor of this candidate is
-`origin/dev=f468d20eaf46dba82908615b04f20090541b21df`.
+`origin/dev=55977fd93414e70ef0deb210f2b7e0511abc7375`.
 The development API surface is 48 paths / 55 operations / 131 schemas; the
 error catalogue has 25 codes and the migration head is `0023_norm_citations`.
 `VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
@@ -57,7 +56,8 @@ activation and complete beta gate remain open.
 W57a has pure retrieval, map, qualification and citation preparations. The
 0023 storage seal supplies verified-set constraints, confirmed custody
 bindings, a frozen Run pin and a certified citation-count relation. The
-API/stage seal adds vocabulary and a refusing report read. No qualified
+API/stage seal adds vocabulary and a refusing report read. The pure v3
+proposal parser adds no runtime profile or canonical result. No qualified
 retrieval-set row, verified reader or active CITE stage exists. W57b has XLSX
 preparation, but its citation reader and route wait for verified W57a reader
 and 0024 seal. W56b has unserved OCR-region and IMAGE crop-cohort candidates;
