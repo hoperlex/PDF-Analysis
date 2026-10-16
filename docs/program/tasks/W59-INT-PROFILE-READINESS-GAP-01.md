@@ -35,6 +35,9 @@ executable profile from the legacy vocabulary.
 
 ## Captured premise evidence
 
+- premise: candidate metadata and the plan were insufficient to grant
+  executable AI/PS/POS/TX profiles at this task's freeze.
+
 ### P-01 — candidate metadata is the only non-AR section profile package
 
 - captured_at: 2026-10-15
@@ -49,11 +52,43 @@ executable profile from the legacy vocabulary.
 - captured_output: W59 SECTION-SEAL follows W58 code close; PROFILES-A follows SECTION-SEAL and requires recorded cases, citation provenance and foreign-profile refusal. Section evidence requires source hashes/licence, named reviewer, independent positive/negative field set, denominators, norms availability and approved private storage. Early candidates need a measured public schema and do not count as accepted routes.
 - interpretation: legacy metadata alone is insufficient to define a runnable profile.
 
+### P-03 — retrospective file-list verification at the frozen base
+
+- captured_at: 2026-10-16
+- command: `git ls-tree -r --name-only a3d5c3aefba567d09a93ed2742d38fed7013c284 src/auditmanager/analysis/profiles`
+- captured_output:
+  ```text
+  src/auditmanager/analysis/profiles/__init__.py
+  src/auditmanager/analysis/profiles/ar_v2/__init__.py
+  src/auditmanager/analysis/profiles/ar_v2/ar_checklist.md
+  src/auditmanager/analysis/profiles/ar_v2/checklist.md
+  src/auditmanager/analysis/profiles/ar_v2/content.py
+  src/auditmanager/analysis/profiles/ar_v2/drawing_types.md
+  src/auditmanager/analysis/profiles/ar_v2/finding_categories.md
+  src/auditmanager/analysis/profiles/ar_v2/grounding.py
+  src/auditmanager/analysis/profiles/ar_v2/merge_input.py
+  src/auditmanager/analysis/profiles/ar_v2/project_params.md
+  src/auditmanager/analysis/profiles/ar_v2/prompt_material.py
+  src/auditmanager/analysis/profiles/ar_v2/proposal_grounding.py
+  src/auditmanager/analysis/profiles/ar_v2/recognised_context.py
+  src/auditmanager/analysis/profiles/ar_v2/recorded_request.py
+  src/auditmanager/analysis/profiles/ar_v2/registered.py
+  src/auditmanager/analysis/profiles/ar_v2/response.py
+  src/auditmanager/analysis/profiles/ar_v2/response_pipeline.py
+  src/auditmanager/analysis/profiles/ar_v2/response_schema.py
+  src/auditmanager/analysis/profiles/ar_v2/role.md
+  src/auditmanager/analysis/profiles/section_candidates/__init__.py
+  src/auditmanager/analysis/profiles/section_candidates/metadata.json
+  src/auditmanager/analysis/profiles/section_candidates/metadata.py
+  ```
+- interpretation: the historical frozen tree had AR v2 and candidate
+  metadata only; this is no grant for non-AR executable profiles.
+
 ## Historical evidence
 
-- correction_mode: none
-- source_record: not_applicable
-- addendum_path: not_applicable
+- correction_mode: addendum
+- source_record: docs/program/tasks/W59-INT-PROFILE-READINESS-GAP-01.md at `e61fc457`
+- addendum_path: docs/program/PROGRAM-GOVERNANCE-REPAIR-01.md
 
 ## Publication authority
 

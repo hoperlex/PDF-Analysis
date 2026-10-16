@@ -32,12 +32,35 @@ This is the source-integrity gate for a later promotion load.
 - premise: the source was inventoried, but its bytes were not verified; the
   W54 resource floor must be measured again immediately before hashing.
 - source_record: `W54-INT-CORPUS-READINESS-01.md` §Source and current stop.
+- captured_at: 2026-10-16
+- command: `sed -n '10,25p' docs/program/W54-INT-CORPUS-READINESS-01.md`
+- captured_output:
+  ```text
+  contains **674 document directories**, **31,619 files** and occupies about
+  **5.1 GiB**. `MANIFEST.json` has SHA-256
+  `160fdc7ea261b44298757b3a066982fd167b389fde614fb119c4c1d0d72fbb3b`.
+  Only the `corpus` child exists under `.local/norms/`: no `corpus-sums`,
+  `repairs`, `builds`, `bundles` or `promotion-dumps` was present. A manifest
+  hash and file count do not verify the drop's file contents.
+
+  At the latest preflight, `/` had **6,066,712,576 bytes** available and
+  `free -b` showed **1,641,869,312 bytes** available RAM. W54 §3.9 requires
+  the running step's disk increment **plus 3 GiB** and at least **6 GiB
+  available RAM**, excluding swap, immediately before each heavy step in a
+  night window. Neither a base load, dump/restore verification, repair run,
+  image/build, bundle export nor local rehearsal may start on this reading.
+  W55 §C6 estimates about **19 GiB free** for the local copy/restore rehearsal;
+  capacity must be provisioned and measured again, with the artifacts already
+  resident accounted for. No source byte, database, model or stand was changed.
+  ```
+- interpretation: this is a retrospective capture of the original readiness
+  record, not a current resource measurement or a new source-byte verdict.
 
 ## Historical evidence
 
-- correction_mode: none
-- source_record: not_applicable
-- addendum_path: not_applicable
+- correction_mode: addendum
+- source_record: docs/program/tasks/W54-CORPUS-OPERATE-01.md at `e61fc457`
+- addendum_path: docs/program/PROGRAM-GOVERNANCE-REPAIR-01.md
 
 ## Publication authority
 

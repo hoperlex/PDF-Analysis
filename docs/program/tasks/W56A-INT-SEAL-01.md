@@ -22,10 +22,27 @@ state entry. It remains a development candidate, with no v2 activation.
 
 ## Enumerator ownership
 
-- enumerated_set_changed: no; the SEAL commit owns the enumerators;
+- enumerated_set_changed: no
 - enumerator_path: not_applicable;
 - enumerator_owner: `W56A-SEAL-01`;
 - totality_query: `git diff --name-only bcd5ad26...HEAD`.
+
+The source SEAL commit owns the enumerators; this integration changes none.
+
+## Captured premise evidence
+
+- premise: none
+
+## Historical evidence
+
+- correction_mode: addendum
+- source_record: docs/program/tasks/W56A-INT-SEAL-01.md at `e61fc457`
+- addendum_path: docs/program/PROGRAM-GOVERNANCE-REPAIR-01.md
+
+## Publication authority
+
+- development_target: origin/dev
+- origin_main_authority: none
 
 ## Allowed paths and publication authority
 

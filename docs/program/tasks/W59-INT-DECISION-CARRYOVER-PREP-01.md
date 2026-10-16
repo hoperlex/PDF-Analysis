@@ -36,6 +36,9 @@ targets; it appends no decision event.
 
 ## Captured premise evidence
 
+- premise: roadmap C-4 requires expert confirmation, while the completed
+  comparison package had no persisted carryover path at this task's freeze.
+
 ### P-01 — approved rule and missing implementation
 
 - captured_at: 2026-10-15
@@ -53,9 +56,9 @@ targets; it appends no decision event.
 
 ## Historical evidence
 
-- correction_mode: none
-- source_record: not_applicable
-- addendum_path: not_applicable
+- correction_mode: addendum
+- source_record: docs/program/tasks/W59-INT-DECISION-CARRYOVER-PREP-01.md at `e61fc457`
+- addendum_path: docs/program/PROGRAM-GOVERNANCE-REPAIR-01.md
 
 ## Publication authority
 

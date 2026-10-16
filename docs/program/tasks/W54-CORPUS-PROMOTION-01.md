@@ -32,12 +32,25 @@ snapshot ID, content key, counts and verified dump digest.
 - premise: source bytes are verified; local promotion env and matching runtime
   are absent; disk and RAM must be measured again for each heavy step.
 - source_record: `W54-CORPUS-OPERATE-01.md`.
+- captured_at: 2026-10-16
+- command: `rg -n 'complete W54 step-0|4,382,003,200|5,163,773,952|promotion.env|\.venv/bin/python' docs/program/W54-CORPUS-OPERATE-01.md`
+- captured_output:
+  ```text
+  10:the complete W54 step-0 checksum run. The absolute sums path is
+  32:At 17:56:50 +05, after verification, `/` had 4,382,003,200 bytes free and
+  33:available RAM was 5,163,773,952 bytes. W54's next promotion base step needs
+  40:The current code-first checkout also has no `.local/promotion/promotion.env`
+  41:and no `.venv/bin/python`, both required by `scripts/promotion/stack.sh`.
+  44:task must prepare the promotion env and a matching runtime before step 1.
+  ```
+- interpretation: this retrospectively verifies the original stop and missing
+  environment; the old host reading cannot authorize a later heavy step.
 
 ## Historical evidence
 
-- correction_mode: none
-- source_record: not_applicable
-- addendum_path: not_applicable
+- correction_mode: addendum
+- source_record: docs/program/tasks/W54-CORPUS-PROMOTION-01.md at `e61fc457`
+- addendum_path: docs/program/PROGRAM-GOVERNANCE-REPAIR-01.md
 
 ## Publication authority
 

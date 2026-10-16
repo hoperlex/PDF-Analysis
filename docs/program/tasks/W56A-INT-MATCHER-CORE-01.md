@@ -20,10 +20,25 @@ core, without a baseline or provider activation.
 
 ## Enumerator ownership
 
-- enumerated_set_changed: no;
+- enumerated_set_changed: no
 - enumerator_path: `fixtures/evaluation/ar_v2/expected_issues.json` (read-only);
 - enumerator_owner: `W56A-GENERATOR-PREP-01`;
 - totality_query: `tests/contract/evaluation/test_matcher_core.py`.
+
+## Captured premise evidence
+
+- premise: none
+
+## Historical evidence
+
+- correction_mode: addendum
+- source_record: docs/program/tasks/W56A-INT-MATCHER-CORE-01.md at `e61fc457`
+- addendum_path: docs/program/PROGRAM-GOVERNANCE-REPAIR-01.md
+
+## Publication authority
+
+- development_target: origin/dev
+- origin_main_authority: none
 
 ## Allowed paths and publication authority
 
