@@ -1,5 +1,13 @@
 # Current state
 
+**Code-first development candidate 25, 2026-10-16.** W58 now has an
+unactivated offline coordinator for an isolated PostgreSQL-plus-Blob restore
+drill. Its closed DB audit includes both retrieval-set Blob references from
+0023; it orders preflight, restored DB proof, target copy and full Blob
+readback. The source passed 140 recovery/governance checks; no real drill
+has run. Separate W55b `37393a97` is under its complete gate. See
+`CFB-INT-DEV-PUBLISH-25.md` and `W58-INT-ISOLATED-DB-BLOB-DRILL-CODE-01.md`.
+
 **Code-first development candidate 24, 2026-10-16.** The W55b D-142 test
 now selects the crashed Attempt and its separately reclaimed Attempt. Two
 valid publication rows no longer make its assertion ambiguous. The exact
@@ -35,19 +43,10 @@ isolated DB evidence showed valid Attempt-scoped rows. A corrected candidate
 and a new complete gate are required. See `CFB-INT-DEV-PUBLISH-21.md` and
 `W59-INT-SECTION-REVIEW-PREP-01.md`.
 
-**Code-first development candidate 20, 2026-10-16.** W54's metadata-only
-preflight now has a pinned `repair-sample` check for the 121-page
-`claude-opus-5` zero-call plan, source sums and restored base-dump marker. Its
-actual read-only run matched the frozen metadata and refused only because
-available RAM was 4.70 GiB below the 6 GiB floor. No proxy credential exists,
-so no paid repair, embedding build or corpus DB/S3 publication has occurred.
-See `CFB-INT-DEV-PUBLISH-20.md` and
-`W54-CORPUS-REPAIR-SAMPLE-PREFLIGHT-01.md`.
-
 ## Current development boundary
 
 The checked predecessor of this candidate is
-`origin/dev=e70c91ef7064c8e36f377bd3995960a0e93acf35`.
+`origin/dev=7d522a598c173bb4090c8f9f3e1e548c6c89a738`.
 The development API surface is 47 paths / 54 operations / 124 schemas; the
 error catalogue has 25 codes and the migration head is `0023_norm_citations`.
 `VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
@@ -71,8 +70,8 @@ qualified retrieval-set row or active CITE stage exists. W57b has XLSX
 preparation, but its citation reader and route wait for the serial W57a
 API/stage and 0024 seals. See
 `W57-INT-SEAL-FREEZE-PROPOSAL-01.md`. W58 has read-only source-object mirror,
-isolated target-copy and offline restore preparations; it has not transferred
-a stand or proved DB-plus-Blob recovery. W59 has version-pair,
+isolated target-copy and offline DB-plus-Blob drill code; it has not
+transferred a stand or proved recovery. W59 has version-pair,
 section-identity and unserved 15-choice review preparations; its section
 seal waits for the required recovery-code close.
 
@@ -91,8 +90,8 @@ its successor `d3acd511` passed the earlier brittle test position but failed
 the fourth full gate at D-142 after 4,168 passes. Read-only gate DB evidence
 showed two valid Attempt-scoped publication rows; the test helper's
 Run/Blob `.one()` query was too broad. Test-only successor `37393a97`
-passed focused D-142 real-service checks; its new complete gate is waiting
-for a host memory/load window. None of these candidates has been
+passed focused D-142 real-service checks; its new complete gate is running
+after a host memory/load window. None of these candidates has been
 published to `origin/main`. The remote main predecessor at the preparation
 read was `23fd729dbb06c642be0588017f6b195305e2e53e`. The owner confirmed
 alpha still contains only generated test data on 2026-10-16; that condition
