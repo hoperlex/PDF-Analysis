@@ -189,7 +189,8 @@ _EXISTING_RECORDED_STAGE_CALL = text(
 _RECORDED_COMPLETED_CALLS = text(
     "SELECT m.model_call_id, m.model_identity, m.request_sha256, m.response_sha256, "
     "m.provider, m.provider_mode, m.status, "
-    "e.job_id, e.state AS effect_state, e.final_model_call_id, "
+    "e.job_id, e.stage_id AS effect_stage, e.state AS effect_state, "
+    "e.final_model_call_id, "
     "e.provider AS effect_provider, e.provider_mode AS effect_mode, "
     "e.model_identity AS effect_model, e.request_sha256 AS effect_request, "
     "e.response_sha256 AS effect_response "
@@ -836,6 +837,7 @@ class JobRepository:
         row = rows[0]
         if (
             row["job_id"] != job_id
+            or row["effect_stage"] != "text_analysis"
             or row["effect_state"] != "completed"
             or row["final_model_call_id"] != row["model_call_id"]
             or row["provider"] != "anthropic"
