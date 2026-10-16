@@ -1,7 +1,7 @@
 # Current state
 
-**Updated 2026-10-16 from published code-first development candidate 60
-(`2fe82f40f4ac2bf82f9778c28b2fd2a2b8e8deab`), with dev61 W57b code and evidence
+**Updated 2026-10-16 from published code-first development candidate 61
+(`8c0dc0e708332e73bd3dc5defdae9fa97665f4ac`), with dev62 W57b evidence
 integrated in this tree.** W55b is
 published on `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as
 `GATE OK` under R-125; the deploy workflow selected that tree and the owner
@@ -46,13 +46,16 @@ The reader passed one targeted test on isolated real 0023 PostgreSQL/S3 with
 synthetic catalogue bytes, both confirmed bindings and current Attempt
 fencing. The page bridge preserves Unicode offsets and marks empty pages as
 unread in a pure pipeline test. The saved text reader verifies bounded Blob
-bytes and repeats Run, Version, stage and Attempt checks; its focused tests
-use fake ports. The independent synthetic LibreOffice import and 54-cell
+bytes and repeats Run, Version, stage and Attempt checks. A targeted real
+0023 PostgreSQL/S3 test proved the production executor's saved text-layer
+binding and confirmed that two OCR-only pages remain unread PDF text; a
+forged token refused before Blob access. The independent synthetic
+LibreOffice import and 54-cell
 probe passed outside sandbox after three earlier constrained failures.
 The complete B3.5 live export remains unverified. Served callers,
 provider/effect provenance, qualified corpus, reviewed catalogue slugs,
 approved W56b policy, W57a CAP-01 and W57b 0024 seal remain open. See
-`CFB-INT-DEV-PUBLISH-45.md` through `CFB-INT-DEV-PUBLISH-61.md`. R-135
+`CFB-INT-DEV-PUBLISH-45.md` through `CFB-INT-DEV-PUBLISH-62.md`. R-135
 defers the complete beta gate to
 the final code candidate. No beta acceptance is claimed.
 
