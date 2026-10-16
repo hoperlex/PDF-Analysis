@@ -11,6 +11,11 @@ from auditmanager.runs.carrier import (
     run_to_terminal,
 )
 from auditmanager.runs.reconciliation import reconcile_at_startup
+from auditmanager.runs.reference_pipeline import (
+    ReferenceRunPins,
+    RunReferenceReport,
+    read_run_references,
+)
 from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import ErrorCode
 
@@ -49,8 +54,11 @@ def fail_reclaimed_run(
 __all__ = [
     "DurableCarrier",
     "ReclaimingCarrier",
+    "ReferenceRunPins",
+    "RunReferenceReport",
     "fail_reclaimed_run",
     "reconcile_at_startup",
+    "read_run_references",
     "run_to_terminal",
     "start_serving_carrier",
 ]

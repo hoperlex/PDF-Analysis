@@ -7,6 +7,12 @@ here in plan §6's order (REPAIR, SNAPSHOT, EMBED, BUNDLE); nothing outside
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from auditmanager.analysis.public import TextLayer
+    from auditmanager.norms.references.observation_plan import ReferencePage
+
 from auditmanager.norms.citation_prep import (
     GroundedNormCitation,
     NormCitation,
@@ -111,6 +117,15 @@ from auditmanager.norms.loader import (  # W54-SNAPSHOT-01
     load_corpus,
 )
 from auditmanager.norms.model import TextReliability  # W54-SNAPSHOT-01
+from auditmanager.norms.references.catalogue_input import (
+    CatalogueInputRefused,
+    VerifiedCatalogueInput,
+    load_verified_catalogue,
+)
+from auditmanager.norms.references.pipeline import (
+    ReferencePipelineResult,
+    run_reference_pipeline,
+)
 from auditmanager.norms.repair import (  # W54-REPAIR-01
     LEDGER_VERSION,
     RepairLedger,
@@ -144,6 +159,20 @@ from auditmanager.norms.snapshot import (  # W54-SNAPSHOT-01
     row_digest,
 )
 
+
+def reference_pages_from_text_layer(
+    *, text_layer: TextLayer, version_uid: str, page_count: int
+) -> tuple[ReferencePage, ...]:
+    """Expose the pure bridge without a public-facade import cycle."""
+    from auditmanager.norms.references.text_pages import (
+        reference_pages_from_text_layer as bridge,
+    )
+
+    return bridge(
+        text_layer=text_layer, version_uid=version_uid, page_count=page_count,
+    )
+
+
 __all__ = [
     "ADMIT_COMMAND_TYPE",
     "D143_MESSAGE",
@@ -176,6 +205,7 @@ __all__ = [
     "Checkpoint",
     "ChunkingRefused",
     "CorpusLoadResult",
+    "CatalogueInputRefused",
     "CurrentSnapshot",
     "CustodyDispatcher",
     "CustodyIncident",
@@ -211,6 +241,7 @@ __all__ = [
     "RejectedBlob",
     "RepairLedger",
     "RepairOutcome",
+    "ReferencePipelineResult",
     "RoleShape",
     "SnapshotEvent",
     "SnapshotImportConflict",
@@ -221,6 +252,7 @@ __all__ = [
     "Stand",
     "StoredEmbeddingBuild",
     "TextReliability",
+    "VerifiedCatalogueInput",
     "admit",
     "binding_digest",
     "blob_id_for",
@@ -238,17 +270,20 @@ __all__ = [
     "list_norm_paragraphs",
     "list_norm_snapshots",
     "list_snapshot_events",
+    "load_verified_catalogue",
     "load_corpus",
     "norm_pdf_binding",
     "parse_manifest",
     "publish_bindings",
     "qualification",
+    "reference_pages_from_text_layer",
     "repaired_snapshot",
     "report",
     "report_bundle",
     "requeue",
     "requeue_bundle",
     "row_digest",
+    "run_reference_pipeline",
     "search_norms",
     "set_current_snapshot",
     "verify_bundle",
