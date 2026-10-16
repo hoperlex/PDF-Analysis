@@ -18,6 +18,7 @@ publication only and does not deploy W55b or alter the release candidate.
 
 ## Frozen inputs
 
+- base commit: `f0580e089867ba6a9380a48dfca19a23e47f6788`
 - direct remote read, 2026-10-16: `origin/dev=f0580e089867ba6a9380a48dfca19a23e47f6788`;
 - direct remote read, 2026-10-16: `origin/main=23fd729dbb06c642be0588017f6b195305e2e53e`;
 - W55b release candidate: `37393a979a430e490843d7f410e9eca9491a4ea1`;
@@ -59,8 +60,8 @@ publication only and does not deploy W55b or alter the release candidate.
 
 ## Publication authority
 
-- development_target: `origin/dev` only;
-- origin_main_authority: none.
+- development_target: origin/dev
+- origin_main_authority: none
 
 ## Allowed paths
 

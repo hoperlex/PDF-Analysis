@@ -1,8 +1,8 @@
 # Current state
 
-**Code-first candidate 37, 2026-10-16.** W54 preflight now refuses saturated
-CPU windows after dev36's W57a set reader and prior W56b/CITE/recovery seams.
-Real DB/S3 and served stages remain open; see `CFB-INT-DEV-PUBLISH-37.md`.
+**Code-first dev37 / W55b candidate, 2026-10-16.** Dev has W54 CPU preflight
+and unserved W56/W57 slices. W55b `37393a97` counts `GATE OK` under R-125
+on a separate clean tree; `origin/main` is unchanged. See `W55B-INT-MAIN-PREP-03.md`.
 
 **Code-first development candidate 31, 2026-10-16.** W57a grounds v3 PDF
 and normative proposals with separate N-labels for one paragraph; W56b
