@@ -1,8 +1,8 @@
 # Current state
 
-**Code-first dev37 / W55b candidate, 2026-10-16.** Dev has W54 CPU preflight
-and unserved W56/W57 slices. W55b `37393a97` counts `GATE OK` under R-125
-on a separate clean tree; `origin/main` is unchanged. See `W55B-INT-MAIN-PREP-03.md`.
+**Code-first dev39 / W55b candidate, 2026-10-16.** W58 synthetic DB/Blob
+restore passed after a driver fix; W56/W57 add unserved evidence readers. W55b
+`37393a97` counts `GATE OK` under R-125; main is unchanged. See `CFB-INT-DEV-PUBLISH-39.md`.
 
 **Code-first development candidate 31, 2026-10-16.** W57a grounds v3 PDF
 and normative proposals with separate N-labels for one paragraph; W56b

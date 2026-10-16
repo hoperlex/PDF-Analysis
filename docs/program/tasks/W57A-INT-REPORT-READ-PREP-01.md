@@ -32,6 +32,9 @@ One read-only call combines certified W57a citation partitions with the same Run
 
 ## Captured premise evidence
 
+- premise: the exact dev37 base has a certified citation reader but no
+  report reader, and its served verification route still refuses.
+
 ### P-01 — reader exists, served route refuses
 
 - captured_at: 2026-10-16
