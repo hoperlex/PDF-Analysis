@@ -1,5 +1,14 @@
 # Current state
 
+**Code-first development candidate 20, 2026-10-16.** W54's metadata-only
+preflight now has a pinned `repair-sample` check for the 121-page
+`claude-opus-5` zero-call plan, source sums and restored base-dump marker. Its
+actual read-only run matched the frozen metadata and refused only because
+available RAM was 4.70 GiB below the 6 GiB floor. No proxy credential exists,
+so no paid repair, embedding build or corpus DB/S3 publication has occurred.
+See `CFB-INT-DEV-PUBLISH-20.md` and
+`W54-CORPUS-REPAIR-SAMPLE-PREFLIGHT-01.md`.
+
 **Code-first development candidate 19, 2026-10-16.** W58 now has an
 unactivated helper that copies a sealed private object mirror to an isolated
 S3 target, verifies complete target bytes and exact keys, and supports safe
@@ -33,7 +42,7 @@ W55b candidate `d3acd511` still needs a complete `make gate`. See
 ## Current development boundary
 
 The checked predecessor of this candidate is
-`origin/dev=c157ee0d4601f2bf81c68708ebf556b95b87acd5`.
+`origin/dev=de3d81085f30301ddc2965f7f4bf927ea738c8b3`.
 The development API surface is 47 paths / 54 operations / 124 schemas; the
 error catalogue has 25 codes and the migration head is `0022_findings_v2`.
 `VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
