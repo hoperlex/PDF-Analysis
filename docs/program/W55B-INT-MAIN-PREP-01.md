@@ -65,5 +65,7 @@ No shared contract, migration, root lock, composition, global style,
 application/test source or deployment input is edited by this task. The
 tracked changes are this report and
 `tasks/W55B-INT-MAIN-PREP-01.md`; isolated ignored environments and gate
-evidence stay outside Git. Integrate these two documents on `origin/dev` if
-the task checks pass. `origin/main` is outside this preparation task.
+evidence stay outside Git. A separate development integration may publish
+this **interim failed-gate record** for visibility, provided it preserves the
+incomplete status. This is not completion of the preparation task and grants
+no `origin/main` authority.
