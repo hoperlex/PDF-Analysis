@@ -1,8 +1,8 @@
 # Current state
 
-**Updated 2026-10-16 from published code-first development candidate 63
-(`417123c729599cfa075d3461038c8dd15b86d4a3`), with dev64 unserved
-source and comparison checks integrated in this tree.** W55b is
+**Updated 2026-10-16 from published code-first development candidate 64
+(`a09721a5895a0aff93d08f203fe1bedbbffffb8a`), with dev65 unserved
+source, comparison and recovery checks integrated in this tree.** W55b is
 published on `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as
 `GATE OK` under R-125; the deploy workflow selected that tree and the owner
 subsequently ran `infra/deploy/verify-deployed.sh` on the host with a passing
@@ -62,10 +62,18 @@ combines the current Attempt's saved PDF text and verified catalogue, binds
 W56b crop source digest to the Version manifest, and refuses W59 observation
 IDs shared across versions. Its combined focused suite passes; the reference
 chain is unserved and requires an explicit reviewed slug tuple from a future
-caller. The complete B3.5 live export remains unverified. Served callers,
+caller. The dev65 candidate adds a bounded, read-only W56a Run-to-Version-to-PDF
+Blob attestation for seeded evaluation, a W56b current-Attempt reader that
+checks the complete saved crop cohort metadata but opens only one selected
+PNG, a 200-item bound on W59 decision carryover, and prompt refusal of FIFO
+paths in two W58 mirror readers. Its 438 combined focused tests pass. The
+W56a attestation does not prove original portal ZIP custody, a measured
+baseline or a recorded provider result; the W56b selective read does not
+certify unread sibling PNG bytes. The complete B3.5 live export remains
+unverified. Served callers,
 provider/effect provenance, qualified corpus, reviewed catalogue slugs,
 approved W56b policy, W57a CAP-01 and W57b 0024 seal remain open. See
-`CFB-INT-DEV-PUBLISH-45.md` through `CFB-INT-DEV-PUBLISH-64.md`. R-135
+`CFB-INT-DEV-PUBLISH-45.md` through `CFB-INT-DEV-PUBLISH-65.md`. R-135
 defers the complete beta gate to
 the final code candidate. No beta acceptance is claimed.
 
