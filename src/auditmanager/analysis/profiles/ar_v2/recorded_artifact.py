@@ -8,9 +8,12 @@ its own StageResult and call journal in one durable workflow.
 
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass
 from typing import Final
 
+from auditmanager.analysis.engine.result import ArtifactRef
 from auditmanager.analysis.engine.serialization import (
     ARTIFACT_MEDIA_TYPE,
     canonical_bytes,
@@ -24,8 +27,11 @@ from auditmanager.analysis.profiles.ar_v2.recorded_input import (
 )
 from auditmanager.analysis.profiles.ar_v2.recorded_response import RecordedReplayResult
 from auditmanager.analysis.profiles.ar_v2.response_schema import CATEGORIES, SEVERITIES
+from auditmanager.analysis.stages.finding_merge import MergeEvidence, MergeObservation
 from auditmanager.analysis.text.config import ProviderMode
+from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId, RunId, VersionUid
+from auditmanager.storage.public import BlobStore, derive_blob_id, parse_blob_id
 
 
 ARTIFACT_ROLE: Final[str] = "analysis.text_observations"
@@ -50,6 +56,221 @@ class BuiltRecordedArtifact:
     @property
     def size_bytes(self) -> int:
         return len(self.payload)
+
+
+@dataclass(frozen=True, slots=True)
+class RecordedMergeInput:
+    """The complete grounded projection read from one sealed observation Blob."""
+
+    observations: tuple[MergeObservation, ...]
+    source_proposal_ordinals: tuple[int, ...]
+    text_artifact_sha256: str
+    text_layer_ref: ArtifactRef
+    recognised_ref: ArtifactRef | None
+
+
+def _complete_observations(document: dict[str, object]) -> tuple[tuple[MergeObservation, ...], tuple[int, ...]]:
+    pages = document.get("page_sources")
+    analysed = document.get("pages_analysed")
+    if not isinstance(pages, list) or not pages or not isinstance(analysed, list):
+        raise RecordedArtifactError("recorded_page_sources_invalid")
+    page_ranges: dict[int, tuple[int, int]] = {}
+    next_start = 0
+    for page in pages:
+        if not isinstance(page, dict) or set(page) != {"page_number", "char_start", "char_end"}:
+            raise RecordedArtifactError("recorded_page_sources_invalid")
+        number, start, end = page["page_number"], page["char_start"], page["char_end"]
+        if (type(number) is not int or type(start) is not int or type(end) is not int
+                or number < 1 or number in page_ranges or start != next_start or end < start
+                or (page_ranges and number <= max(page_ranges))):
+            raise RecordedArtifactError("recorded_page_sources_invalid")
+        page_ranges[number] = (start, end)
+        next_start = end
+    if analysed != list(page_ranges):
+        raise RecordedArtifactError("recorded_page_coverage_invalid")
+
+    raw = document.get("observations")
+    if not isinstance(raw, list):
+        raise RecordedArtifactError("recorded_observations_invalid")
+    observations: list[MergeObservation] = []
+    source_ordinals: list[int] = []
+    for ordinal, item in enumerate(raw):
+        if not isinstance(item, dict) or set(item) != {
+            "observation_ordinal", "source_proposal_ordinal", "category",
+            "finding_text", "recommendation_text", "proposed_severity",
+            "model_call_id", "evidence",
+        }:
+            raise RecordedArtifactError("recorded_observations_invalid")
+        source = item["source_proposal_ordinal"]
+        if (type(item["observation_ordinal"]) is not int
+                or item["observation_ordinal"] != ordinal
+                or type(source) is not int or source < 0
+                or source in source_ordinals
+                or item["category"] not in CATEGORIES
+                or item["proposed_severity"] not in SEVERITIES
+                or not isinstance(item["finding_text"], str) or not item["finding_text"]
+                or not isinstance(item["recommendation_text"], str)
+                or item["model_call_id"] != document["model_call_id"]):
+            raise RecordedArtifactError("recorded_observations_invalid")
+        raw_evidence = item["evidence"]
+        if not isinstance(raw_evidence, list) or not raw_evidence:
+            raise RecordedArtifactError("recorded_evidence_invalid")
+        evidence: list[MergeEvidence] = []
+        for evidence_ordinal, value in enumerate(raw_evidence):
+            if not isinstance(value, dict) or set(value) != {
+                "evidence_ordinal", "page_number", "quote", "char_start", "char_end",
+            }:
+                raise RecordedArtifactError("recorded_evidence_invalid")
+            page, start, end, quote = (
+                value["page_number"], value["char_start"], value["char_end"], value["quote"]
+            )
+            if (type(value["evidence_ordinal"]) is not int
+                    or value["evidence_ordinal"] != evidence_ordinal
+                    or type(page) is not int or page not in page_ranges
+                    or type(start) is not int or type(end) is not int
+                    or not isinstance(quote, str) or not 1 <= len(quote) <= 2000
+                    or not page_ranges[page][0] <= start < end <= page_ranges[page][1]
+                    or end - start != len(quote)):
+                raise RecordedArtifactError("recorded_evidence_invalid")
+            evidence.append(MergeEvidence(page, start, end, quote))
+        source_ordinals.append(source)
+        observations.append(MergeObservation(ordinal, str(item["category"]), tuple(evidence)))
+    if source_ordinals != sorted(source_ordinals):
+        raise RecordedArtifactError("recorded_source_ordinals_invalid")
+    return tuple(observations), tuple(source_ordinals)
+
+
+def read_recorded_merge_input(
+    blob_store: BlobStore,
+    reference: ArtifactRef,
+    *,
+    run_id: str,
+    version_uid: str,
+    analysis_profile_id: str,
+    prompt_bundle_id: str,
+) -> RecordedMergeInput:
+    """Read exact v2 bytes for merge; never consult a fixture or provider."""
+    if (not isinstance(reference, ArtifactRef) or reference.role != ARTIFACT_ROLE
+            or reference.media_type != ARTIFACT_MEDIA_TYPE
+            or reference.blob_id != str(derive_blob_id(
+                sha256=reference.sha256, size=reference.size_bytes,
+            ))):
+        raise RecordedArtifactError("recorded_reference_invalid")
+    run = _require_identity(run_id, RunId, "invalid_run_id")
+    version = _require_identity(version_uid, VersionUid, "invalid_version_uid")
+    profile = registered.resolve_recorded_profile(analysis_profile_id, prompt_bundle_id)
+    try:
+        payload = blob_store.read(parse_blob_id(reference.blob_id), verify=True)
+    except DomainError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - typed boundary for the declared Blob
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="the saved recorded observation Blob could not be read",
+            stage_id="finding_merge", reason="input_unreadable",
+        ) from exc
+    if len(payload) != reference.size_bytes or sha256_hex(payload) != reference.sha256:
+        raise RecordedArtifactError("recorded_artifact_digest_mismatch")
+    try:
+        document = json.loads(payload)
+        if not isinstance(document, dict) or canonical_bytes(document) != payload:
+            raise ValueError
+    except (UnicodeDecodeError, TypeError, ValueError):
+        raise RecordedArtifactError("recorded_artifact_not_canonical") from None
+    if set(document) != {
+        "artifact_role", "artifact_version", "run_id", "stage_id", "version_uid",
+        "analysis_profile_id", "prompt_bundle_id", "profile_content_sha256",
+        "provider_mode", "model_id", "model_call_id", "request_sha256",
+        "source_binding_sha256", "response_sha256", "source_artifacts",
+        "textless_pages", "page_sources", "pages_analysed", "observations",
+        "diagnostics",
+    }:
+        raise RecordedArtifactError("recorded_artifact_shape_invalid")
+    if (document.get("artifact_role") != ARTIFACT_ROLE
+            or document.get("artifact_version") != ARTIFACT_VERSION
+            or document.get("stage_id") != STAGE_ID
+            or document.get("run_id") != run
+            or document.get("version_uid") != version
+            or document.get("analysis_profile_id") != str(profile.analysis_profile_id)
+            or document.get("prompt_bundle_id") != str(profile.prompt_bundle_id)
+            or document.get("profile_content_sha256") != profile.content_sha256
+            or document.get("provider_mode") != ProviderMode.RECORDED.value):
+        raise RecordedArtifactError("recorded_artifact_provenance_mismatch")
+    _require_identity(document.get("model_call_id"), ModelCallId, "invalid_model_call_id")
+    if not isinstance(document.get("model_id"), str) or not re.fullmatch(
+        r"fixture/[a-z0-9][a-z0-9._-]{0,127}", document["model_id"]
+    ):
+        raise RecordedArtifactError("recorded_model_invalid")
+    for key in ("request_sha256", "response_sha256", "source_binding_sha256"):
+        value = document.get(key)
+        if not isinstance(value, str) or len(value) != 64 or any(char not in "0123456789abcdef" for char in value):
+            raise RecordedArtifactError("recorded_checksum_invalid")
+    sources = document.get("source_artifacts")
+    if not isinstance(sources, dict) or set(sources) != {"text_layer", "recognised_text"}:
+        raise RecordedArtifactError("recorded_sources_invalid")
+    try:
+        text_ref = ArtifactRef(**sources["text_layer"])
+        recognised_ref = (None if sources["recognised_text"] is None
+                          else ArtifactRef(**sources["recognised_text"]))
+    except (TypeError, ValueError):
+        raise RecordedArtifactError("recorded_sources_invalid") from None
+    if (text_ref.role != "prepared.text_layer"
+            or (recognised_ref is not None and recognised_ref.role != "prepared.recognised_text")):
+        raise RecordedArtifactError("recorded_sources_invalid")
+    textless = document.get("textless_pages")
+    if textless is not None and (
+        not isinstance(textless, list) or any(type(item) is not int or item < 1 for item in textless)
+        or textless != sorted(set(textless))
+    ):
+        raise RecordedArtifactError("recorded_textless_pages_invalid")
+    if (textless is None) != (recognised_ref is None):
+        raise RecordedArtifactError("recorded_sources_invalid")
+    binding = sha256_hex(canonical_bytes({
+        "version_uid": version,
+        "text_layer_ref": text_ref.to_document(),
+        "recognised_ref": None if recognised_ref is None else recognised_ref.to_document(),
+        "textless_pages": textless,
+        "request_sha256": document["request_sha256"],
+    }))
+    if document["source_binding_sha256"] != binding:
+        raise RecordedArtifactError("recorded_source_binding_mismatch")
+    diagnostics = document.get("diagnostics")
+    if (not isinstance(diagnostics, dict) or set(diagnostics) != {
+        "rejected", "malformed_count", "salvaged", "truncated",
+    } or diagnostics["truncated"] is not False or diagnostics["salvaged"] is not False
+            or type(diagnostics["malformed_count"]) is not int
+            or diagnostics["malformed_count"] < 0
+            or not isinstance(diagnostics["rejected"], list)):
+        raise RecordedArtifactError("recorded_coverage_incomplete")
+    observations, source_ordinals = _complete_observations(document)
+    if textless is not None and not set(textless).issubset(document["pages_analysed"]):
+        raise RecordedArtifactError("recorded_textless_pages_invalid")
+    rejected_ordinals: list[int] = []
+    for rejected in diagnostics["rejected"]:
+        if (not isinstance(rejected, dict) or set(rejected) != {"source_proposal_ordinal", "failures"}
+                or type(rejected["source_proposal_ordinal"]) is not int
+                or rejected["source_proposal_ordinal"] < 0
+                or not isinstance(rejected["failures"], list) or not rejected["failures"]):
+            raise RecordedArtifactError("recorded_diagnostics_invalid")
+        for failure in rejected["failures"]:
+            if (not isinstance(failure, dict)
+                    or set(failure) != {"evidence_ordinal", "page_number", "quote", "reason"}
+                    or (failure["evidence_ordinal"] is not None
+                        and (type(failure["evidence_ordinal"]) is not int
+                             or failure["evidence_ordinal"] < 0))
+                    or (failure["page_number"] is not None
+                        and (type(failure["page_number"]) is not int
+                             or failure["page_number"] < 1))
+                    or (failure["quote"] is not None and not isinstance(failure["quote"], str))
+                    or not isinstance(failure["reason"], str) or not failure["reason"]):
+                raise RecordedArtifactError("recorded_diagnostics_invalid")
+        rejected_ordinals.append(rejected["source_proposal_ordinal"])
+    all_ordinals = (*source_ordinals, *rejected_ordinals)
+    if sorted(all_ordinals) != list(range(len(all_ordinals))):
+        raise RecordedArtifactError("recorded_partition_invalid")
+    return RecordedMergeInput(
+        observations, source_ordinals, reference.sha256, text_ref, recognised_ref,
+    )
 
 
 def _require_identity(value: str, identity_type: type, reason: str) -> str:
@@ -212,5 +433,6 @@ def build_recorded_observation_artifact(
 
 __all__ = [
     "ARTIFACT_ROLE", "ARTIFACT_VERSION", "BuiltRecordedArtifact",
-    "RecordedArtifactError", "build_recorded_observation_artifact",
+    "RecordedArtifactError", "RecordedMergeInput", "build_recorded_observation_artifact",
+    "read_recorded_merge_input",
 ]

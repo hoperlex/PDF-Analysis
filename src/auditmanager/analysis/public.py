@@ -57,7 +57,10 @@ from auditmanager.analysis.profiles.ar_v2.recorded_input import (
 from auditmanager.analysis.profiles.ar_v2.recorded_request import RecordedGenerationSettings
 from auditmanager.analysis.profiles.ar_v2.recorded_artifact import (
     BuiltRecordedArtifact,
+    RecordedArtifactError,
+    RecordedMergeInput,
     build_recorded_observation_artifact,
+    read_recorded_merge_input,
 )
 from auditmanager.analysis.profiles.ar_v2.recorded_call import (
     RecordedCallFacts,
@@ -83,6 +86,7 @@ from auditmanager.analysis.stages.finding_merge import (
     ARTIFACT_ROLE as MERGE_ARTIFACT_ROLE,
     ARTIFACT_VERSION as MERGE_ARTIFACT_VERSION,
     MERGE_RULE_VERSION,
+    merge_grounded,
 )
 from auditmanager.analysis.stages.extraction import (
     NORMALIZATION_DESCRIPTION,
@@ -165,7 +169,9 @@ __all__ = [
     "RejectedProposal",
     "RecognisedContext",
     "RecordedGenerationSettings",
+    "RecordedMergeInput",
     "RecordedAdapter",
+    "RecordedArtifactError",
     "RecordedCallFacts",
     "RecordedReplayResult",
     "RecordedV2Input",
@@ -194,9 +200,11 @@ __all__ = [
     "blob_role_for",
     "prepare_recorded_v2_input",
     "read_artifact",
+    "read_recorded_merge_input",
     "replay_recorded_response",
     "resolve_recorded_profile",
     "run_stage",
     "run_text_analysis",
     "seal_recorded_v2_stage_result",
+    "merge_grounded",
 ]
