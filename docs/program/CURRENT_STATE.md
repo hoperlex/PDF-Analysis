@@ -1,5 +1,13 @@
 # Current state
 
+**Code-first development candidate 24, 2026-10-16.** The W55b D-142 test
+now selects the crashed Attempt and its separately reclaimed Attempt. Two
+valid publication rows no longer make its assertion ambiguous. The exact
+repair commit is in development ancestry, and its focused real-DB check
+passed 2/2. Separate W55b candidate `37393a97` still needs a complete gate
+and direct exact-SHA main authority. See `CFB-INT-DEV-PUBLISH-24.md` and
+`W55B-INT-D142-GATE-REPAIR-01.md`.
+
 **Code-first development candidate 23, 2026-10-16.** W57a storage seal
 `0023_norm_citations` now defines `nrs_` retrieval-set identity, two
 confirmed custody roles, a frozen Run pin and a commit-checked 0..5 citation
@@ -36,18 +44,10 @@ so no paid repair, embedding build or corpus DB/S3 publication has occurred.
 See `CFB-INT-DEV-PUBLISH-20.md` and
 `W54-CORPUS-REPAIR-SAMPLE-PREFLIGHT-01.md`.
 
-**Code-first development candidate 19, 2026-10-16.** W58 now has an
-unactivated helper that copies a sealed private object mirror to an isolated
-S3 target, verifies complete target bytes and exact keys, and supports safe
-partial retry. Its 107 recovery tests passed with a fake client; real MinIO
-readback and a PostgreSQL-plus-Blob restore drill remain open. The separate
-W55b `d3acd511` complete gate is still running. See
-`CFB-INT-DEV-PUBLISH-19.md` and `W58-INT-ISOLATED-TARGET-OBJECT-RESTORE-01.md`.
-
 ## Current development boundary
 
 The checked predecessor of this candidate is
-`origin/dev=c3527fd969c4512441971d9a1f6e2c68a52b9a13`.
+`origin/dev=e70c91ef7064c8e36f377bd3995960a0e93acf35`.
 The development API surface is 47 paths / 54 operations / 124 schemas; the
 error catalogue has 25 codes and the migration head is `0023_norm_citations`.
 `VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
