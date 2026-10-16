@@ -12,11 +12,15 @@ deployment decision. This task does not update a remote ref.
 
 ## Interim result
 
-The first complete-gate attempt on the exact candidate exited without
-`GATE OK`: three composition worker-adapter waits timed out before a manual
-interrupt at 92%. The result is recorded in the accompanying report. This
-task remains incomplete until a new complete run passes on the unchanged
-candidate. No `origin/main` instruction or publication is inferred.
+Three complete-gate attempts on the exact candidate exited without `GATE OK`.
+The first and third hit composition worker-adapter waits; the second found a
+persisted test project from the first attempt and a separate API 500 response.
+Fresh disposable gate volumes removed the carried project, and targeted API
+tests passed, but the worker-adapter wait recurred. Exact logs and digests are
+recorded in the accompanying report. This task remains incomplete until a
+complete run passes on the unchanged candidate or an explicitly owned repair
+candidate passes its own complete gate. No `origin/main` instruction or
+publication is inferred.
 
 ## Depends on
 
