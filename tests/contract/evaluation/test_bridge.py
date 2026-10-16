@@ -73,14 +73,14 @@ def _published(run: SeededPlan) -> V2PublicationResult:
     for group_index, group in enumerate(run.plan.groups):
         members = tuple(
             PublishedV2Observation(
-                f"observation-{group_index}-{index}", member.observation_ordinal,
+                f"observation-{run.bundle_id}-{group_index}-{index}", member.observation_ordinal,
                 member.source_proposal_ordinal, len(member.evidence),
             )
             for index, member in enumerate(group.members)
         )
         canonical_index = group.members.index(group.canonical)
         findings.append(PublishedV2Finding(
-            f"finding-{group_index}", group.category,
+            f"finding-{run.bundle_id}-{group_index}", group.category,
             members[canonical_index].finding_observation_id, members,
         ))
     return V2PublicationResult(
@@ -147,6 +147,53 @@ def test_published_group_member_loss_cannot_score_its_plan() -> None:
     broken = replace(publication, findings=(broken_finding, *publication.findings[1:]))
     with pytest.raises(ValueError, match="publication_members_mismatch"):
         score_seeded_plans(MANIFEST, (replace(first, publication=broken), *runs[1:]))
+
+
+def test_all_published_runs_with_distinct_ids_keep_the_same_score() -> None:
+    runs = tuple(replace(run, publication=_published(run)) for run in _runs())
+    scored = score_seeded_plans(MANIFEST, runs)
+    assert scored.match.recall == 1.0
+    assert scored.match.finding_group_count == 21
+    assert scored.match.control_false_positive_rate == 0.0
+
+
+def test_published_finding_id_cannot_repeat_across_runs() -> None:
+    runs = tuple(replace(run, publication=_published(run)) for run in _runs())
+    first_id = runs[0].publication.findings[0].finding_uid
+    second = runs[1]
+    second_finding = second.publication.findings[0]
+    duplicate = replace(second_finding, finding_uid=first_id)
+    changed_publication = replace(
+        second.publication, findings=(duplicate, *second.publication.findings[1:]),
+    )
+    with pytest.raises(ValueError, match="publication_identity_invalid"):
+        score_seeded_plans(MANIFEST, (
+            runs[0], replace(second, publication=changed_publication), *runs[2:],
+        ))
+
+
+def test_published_observation_id_cannot_repeat_across_runs() -> None:
+    runs = tuple(replace(run, publication=_published(run)) for run in _runs())
+    first_id = runs[0].publication.findings[0].members[0].finding_observation_id
+    second = runs[1]
+    second_finding = second.publication.findings[0]
+    old_id = second_finding.members[0].finding_observation_id
+    duplicate = replace(second_finding.members[0], finding_observation_id=first_id)
+    changed_finding = replace(
+        second_finding,
+        members=(duplicate, *second_finding.members[1:]),
+        canonical_observation_id=(
+            first_id if second_finding.canonical_observation_id == old_id
+            else second_finding.canonical_observation_id
+        ),
+    )
+    changed_publication = replace(
+        second.publication, findings=(changed_finding, *second.publication.findings[1:]),
+    )
+    with pytest.raises(ValueError, match="publication_identity_invalid"):
+        score_seeded_plans(MANIFEST, (
+            runs[0], replace(second, publication=changed_publication), *runs[2:],
+        ))
 
 
 def test_rejected_proposal_cannot_reenter_predicted_members() -> None:

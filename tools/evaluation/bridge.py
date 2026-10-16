@@ -157,7 +157,13 @@ def _check_source_partition(plan: object, diagnostics: BundleDiagnostics) -> Non
         raise ValueError("plan_sources_not_partitioned")
 
 
-def _check_publication(plan: object, publication: object, run_id: str) -> None:
+def _check_publication(
+    plan: object,
+    publication: object,
+    run_id: str,
+    finding_ids: set[str],
+    observation_ids: set[str],
+) -> None:
     if _required(publication, "run_id") != run_id:
         raise ValueError("publication_run_mismatch")
     groups = _required(plan, "groups")
@@ -168,8 +174,6 @@ def _check_publication(plan: object, publication: object, run_id: str) -> None:
             or _required(publication, "malformed_count") != _required(plan, "malformed_count")
             or _required(publication, "salvaged") != _required(plan, "salvaged")):
         raise ValueError("publication_diagnostics_mismatch")
-    finding_ids: set[str] = set()
-    observation_ids: set[str] = set()
     for planned, published in zip(groups, findings, strict=True):
         finding_id = _required(published, "finding_uid")
         if not isinstance(finding_id, str) or not finding_id or finding_id in finding_ids:
@@ -208,6 +212,8 @@ def score_seeded_plans(
     bundles = _manifest_bundles(manifest)
     seen_bundles: set[str] = set()
     seen_runs: set[str] = set()
+    finding_ids: set[str] = set()
+    observation_ids: set[str] = set()
     groups: list[PredictedGroup] = []
     diagnostics: list[BundleDiagnostics] = []
     for run in runs:
@@ -224,7 +230,9 @@ def score_seeded_plans(
         _check_source_partition(run.plan, bundle_diagnostics)
         diagnostics.append(bundle_diagnostics)
         if run.publication is not None:
-            _check_publication(run.plan, run.publication, run.run_id)
+            _check_publication(
+                run.plan, run.publication, run.run_id, finding_ids, observation_ids,
+            )
     # A partial harness run cannot masquerade as a full seeded evaluation.
     if seen_bundles != set(bundles):
         raise ValueError("seeded_bundle_coverage_incomplete")
