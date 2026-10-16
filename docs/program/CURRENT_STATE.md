@@ -1,5 +1,11 @@
 # Current state
 
+**Code-first development candidate 31, 2026-10-16.** W57a grounds v3 PDF
+and normative proposals with separate N-label bindings for one canonical
+paragraph. W56b verifies supplied saved crop references and PNG bytes.
+Neither pure check proves real DB/S3 custody or activates served analysis.
+See `CFB-INT-DEV-PUBLISH-31.md`.
+
 **Code-first development candidate 30, 2026-10-16.** W57a now has a pure,
 unserved AR v3 response schema/parser. Five normative categories require
 1–5 labelled citation proposals and two values; seven legacy categories
@@ -26,17 +32,10 @@ a TEXT portal block and checked region on an explicitly textless page. It
 does not publish a finding or assert a PDF text-layer citation. See
 `CFB-INT-DEV-PUBLISH-27.md` and `W56B-INT-RECOGNISED-REGION-PREP-01.md`.
 
-**Code-first development candidate 26, 2026-10-16.** W57a API/stage seal
-publishes the 0023 citation vocabulary and a role-guarded, typed 503 report
-route until a verified reader exists. The API has 48 paths / 55 operations /
-131 schemas; `text_analysis` stage identity is 1.1.0 for v1 and recorded v2.
-No qualified retrieval set or served v3 writer/reader is active. See
-`CFB-INT-DEV-PUBLISH-26.md` and `W57A-SEAL-01B.md`.
-
 ## Current development boundary
 
 The checked predecessor of this candidate is
-`origin/dev=55977fd93414e70ef0deb210f2b7e0511abc7375`.
+`origin/dev=f6f19220fa5ae019daae07a3771846e2523ce55a`.
 The development API surface is 48 paths / 55 operations / 131 schemas; the
 error catalogue has 25 codes and the migration head is `0023_norm_citations`.
 `VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
@@ -57,12 +56,15 @@ W57a has pure retrieval, map, qualification and citation preparations. The
 0023 storage seal supplies verified-set constraints, confirmed custody
 bindings, a frozen Run pin and a certified citation-count relation. The
 API/stage seal adds vocabulary and a refusing report read. The pure v3
-proposal parser adds no runtime profile or canonical result. No qualified
+proposal parser and grounding bridge add no runtime profile or canonical
+result; prompt labels can name one paragraph through multiple map items.
+No qualified
 retrieval-set row, verified reader or active CITE stage exists. W57b has XLSX
 preparation, but its citation reader and route wait for verified W57a reader
 and 0024 seal. W56b has unserved OCR-region and IMAGE crop-cohort candidates;
-saved-artifact custody, Blob readback and an approved OCR citation policy
-are still required. See
+the byte verifier checks only supplied in-memory data. Real run-scoped
+DB/S3 custody, Attempt fencing and an approved OCR citation policy remain
+required. See
 `W57-INT-SEAL-FREEZE-PROPOSAL-01.md`. W58 has read-only source-object mirror,
 isolated target-copy and offline DB-plus-Blob drill code, including a guarded
 PostgreSQL restore callback; it has not transferred a stand or proved
