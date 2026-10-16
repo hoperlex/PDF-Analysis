@@ -1,5 +1,13 @@
 # Current state
 
+**Code-first development candidate 19, 2026-10-16.** W58 now has an
+unactivated helper that copies a sealed private object mirror to an isolated
+S3 target, verifies complete target bytes and exact keys, and supports safe
+partial retry. Its 107 recovery tests passed with a fake client; real MinIO
+readback and a PostgreSQL-plus-Blob restore drill remain open. The separate
+W55b `d3acd511` complete gate is still running. See
+`CFB-INT-DEV-PUBLISH-19.md` and `W58-INT-ISOLATED-TARGET-OBJECT-RESTORE-01.md`.
+
 **Code-first development candidate 18, 2026-10-16.** W54's metadata-only
 preflight now accepts separate absolute source and promotion roots, so it sees
 the checked source sums and restored base dump without treating them as a
@@ -25,7 +33,7 @@ W55b candidate `d3acd511` still needs a complete `make gate`. See
 ## Current development boundary
 
 The checked predecessor of this candidate is
-`origin/dev=da6dff620140d1c74b5cead1f4c4c7e222d822d7`.
+`origin/dev=c157ee0d4601f2bf81c68708ebf556b95b87acd5`.
 The development API surface is 47 paths / 54 operations / 124 schemas; the
 error catalogue has 25 codes and the migration head is `0022_findings_v2`.
 `VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
@@ -45,9 +53,10 @@ W57a has pure retrieval, map, qualification and citation preparations, but no
 verified retrieval set, citation custody relation or active CITE stage. W57b
 has XLSX preparation, but its citation reader and route wait for serial
 `0023`/`0024` contract and migration seals. See
-`W57-INT-SEAL-FREEZE-PROPOSAL-01.md`. W58 has read-only source-object mirror
-and offline restore preparations; it has not transferred a stand or proved
-DB-plus-Blob recovery. W59 has version-pair and section-identity preparations;
+`W57-INT-SEAL-FREEZE-PROPOSAL-01.md`. W58 has read-only source-object mirror,
+isolated target-copy and offline restore preparations; it has not transferred
+a stand or proved DB-plus-Blob recovery. W59 has version-pair and
+section-identity preparations;
 its section seal waits for the required recovery-code close.
 
 ## Corpus and release boundaries
