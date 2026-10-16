@@ -21,6 +21,7 @@ from auditmanager.analysis.engine.result import ArtifactRef
 from auditmanager.analysis.engine.serialization import ARTIFACT_MEDIA_TYPE, canonical_bytes
 from auditmanager.analysis.geometry.crop_cohort import (
     CropCohortRefused,
+    ImageCropCandidate,
     ImageCropCohort,
     prepare_image_crop_cohort,
 )
@@ -67,6 +68,23 @@ class CheckedCropBytes:
     run_id: str
     cohort: ImageCropCohort
     checked_blob_sha256: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedCropItem:
+    """Complete checked metadata and one eligible IMAGE crop, without PNG bytes."""
+
+    run_id: str
+    cohort: ImageCropCohort
+    crop: ImageCropCandidate
+
+
+@dataclass(frozen=True, slots=True)
+class CheckedCropItem:
+    """One decoded PNG whose bytes agree with its saved cohort reference."""
+
+    prepared: PreparedCropItem
+    checked_blob_sha256: tuple[str, str]
 
 
 def _stage_refs(stage: RunScopedGeometryStage, run_id: str) -> dict[str, ArtifactRef]:
@@ -200,3 +218,70 @@ def check_saved_crop_bytes(
             (ref.blob_id, ref.sha256) for ref in crop_refs.values()
         ),
     )
+
+
+def prepare_saved_crop_item(
+    *,
+    run_id: str,
+    version_uid: str,
+    stage: RunScopedGeometryStage,
+    supplied_metadata_bytes: Mapping[str, bytes],
+    portal_block_id: str,
+) -> PreparedCropItem:
+    """Check the *whole* saved IMAGE cohort using only its two JSON Blobs.
+
+    All distinct saved crop references must match the complete manifest. This
+    phase does not claim that any sibling PNG has been read or validated.
+    """
+    try:
+        RunId.parse(run_id)
+        VersionUid.parse(version_uid)
+    except IdentityError:
+        raise SavedCropCustodyRefused("run_or_version_identity_invalid") from None
+    if not isinstance(supplied_metadata_bytes, Mapping):
+        raise SavedCropCustodyRefused("supplied_blob_set_invalid")
+    refs = _stage_refs(stage, run_id)
+    portal_ref = refs[ROLE_PORTAL_BLOCKS]
+    manifest_ref = refs[ROLE_PAGE_CROPS]
+    if set(supplied_metadata_bytes) != {portal_ref.blob_id, manifest_ref.blob_id}:
+        raise SavedCropCustodyRefused("supplied_blob_set_invalid")
+    portal = _document(portal_ref, supplied_metadata_bytes)
+    manifest = _document(manifest_ref, supplied_metadata_bytes)
+    try:
+        cohort = prepare_image_crop_cohort(
+            version_uid=version_uid,
+            portal_blocks_document=portal,
+            crop_manifest_document=manifest,
+        )
+    except CropCohortRefused as exc:
+        raise SavedCropCustodyRefused(f"crop_cohort_invalid:{exc}") from None
+    crop_refs = {key: ref for key, ref in refs.items() if ref.role == ROLE_CROP_IMAGE}
+    expected_crop_ids = {candidate.blob.blob_id for candidate in cohort.crops}
+    if set(crop_refs) != expected_crop_ids or any(
+        crop_refs[candidate.blob.blob_id] != candidate.blob
+        for candidate in cohort.crops
+    ):
+        raise SavedCropCustodyRefused("saved_crop_reference_mismatch")
+    if type(portal_block_id) is not str:
+        raise SavedCropCustodyRefused("selected_crop_unavailable")
+    selected = tuple(
+        crop for crop in cohort.crops if crop.portal_block_id == portal_block_id
+    )
+    if len(selected) != 1:
+        raise SavedCropCustodyRefused("selected_crop_unavailable")
+    return PreparedCropItem(run_id, cohort, selected[0])
+
+
+def check_saved_crop_item_bytes(
+    *, prepared: PreparedCropItem, supplied_png_bytes: bytes
+) -> CheckedCropItem:
+    """Check SHA-256, size and decoded shape for one selected PNG only."""
+    if (
+        not isinstance(prepared, PreparedCropItem)
+        or prepared.crop not in prepared.cohort.crops
+    ):
+        raise SavedCropCustodyRefused("selected_crop_unavailable")
+    crop = prepared.crop
+    payload = _bytes(crop.blob, {crop.blob.blob_id: supplied_png_bytes})
+    _verify_png(payload, width=crop.width_px, height=crop.height_px)
+    return CheckedCropItem(prepared, (crop.blob.blob_id, crop.blob.sha256))

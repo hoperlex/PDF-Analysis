@@ -120,9 +120,13 @@ from auditmanager.analysis.recognised import KIND_PORTAL_DESCRIPTION, KIND_RECOG
 from auditmanager.analysis.ports.artifacts import ROLE_CROP_IMAGE, ROLE_PORTAL_BLOCKS  # W55B-GEOMETRY-01
 from auditmanager.analysis.geometry.saved_crop_custody import (
     CheckedCropBytes,
+    CheckedCropItem,
+    PreparedCropItem,
     RunScopedGeometryStage,
     SavedCropCustodyRefused,
     check_saved_crop_bytes,
+    check_saved_crop_item_bytes,
+    prepare_saved_crop_item,
 )
 from auditmanager.analysis.recognised.region_candidate import (
     RecognisedRegionCandidate,
@@ -159,6 +163,7 @@ __all__ = [
     "BlockIndex",
     "BuiltRecordedArtifact",
     "CheckedCropBytes",
+    "CheckedCropItem",
     "CheckedRunTextWindowInput",
     "ChunkPreflightError",
     "CONTRACT_VERSION",
@@ -194,6 +199,7 @@ __all__ = [
     "MERGE_ARTIFACT_VERSION",
     "MERGE_RULE_VERSION",
     "ProposalGroundingResult",
+    "PreparedCropItem",
     "ProposedObservation",
     "ProviderConfig",
     "ProviderMode",
@@ -239,6 +245,7 @@ __all__ = [
     "build_recorded_call_facts",
     "build_recorded_observation_artifact",
     "check_saved_crop_bytes",
+    "check_saved_crop_item_bytes",
     "check_run_text_window_input",
     "check_supplied_text_layer_bytes",
     "bind_recognised_region_candidate",
@@ -255,4 +262,5 @@ __all__ = [
     "select_run_text_layer_ref",
     "sha256_hex",
     "merge_grounded",
+    "prepare_saved_crop_item",
 ]

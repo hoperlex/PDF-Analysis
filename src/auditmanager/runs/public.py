@@ -16,6 +16,10 @@ from auditmanager.runs.reference_pipeline import (
     RunReferenceReport,
     read_run_references,
 )
+from auditmanager.runs.geometry_crop_item_input import (
+    SavedImageCropItemInput,
+    load_saved_image_crop_item,
+)
 from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import ErrorCode
 
@@ -56,9 +60,11 @@ __all__ = [
     "ReclaimingCarrier",
     "ReferenceRunPins",
     "RunReferenceReport",
+    "SavedImageCropItemInput",
     "fail_reclaimed_run",
     "reconcile_at_startup",
     "read_run_references",
+    "load_saved_image_crop_item",
     "run_to_terminal",
     "start_serving_carrier",
 ]
