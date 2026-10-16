@@ -6,6 +6,7 @@ effect separately; returning these bytes does not reserve future authority.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
@@ -25,9 +26,16 @@ from auditmanager.analysis.public import (
     check_saved_crop_bytes,
     default_registry,
 )
+from auditmanager.documents.public import (
+    MANIFEST_ROLE_STRUCTURED_COMPANION,
+    DocumentRepository,
+    DocumentVersionRecord,
+    ManifestEntry,
+)
 from auditmanager.jobs.public import AttemptAuthority, JobRepository
 from auditmanager.runs.repository import RunRepository, StageResultRow
 from auditmanager.shared.errors import DomainError, ErrorCode
+from auditmanager.shared.identity import IdentityError, VersionUid
 from auditmanager.storage.public import BlobStore, StorageError, parse_blob_id
 
 
@@ -38,6 +46,7 @@ _REQUIRED: Final[frozenset[str]] = frozenset({
 _READ: Final[frozenset[str]] = frozenset({
     ROLE_PORTAL_BLOCKS, ROLE_PAGE_CROPS, ROLE_CROP_IMAGE,
 })
+_SHA256: Final[re.Pattern[str]] = re.compile(r"[0-9a-f]{64}\Z")
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +78,32 @@ def _one_stage(rows: tuple[StageResultRow, ...]) -> StageResultRow:
     if row.status != "succeeded" or row.stage_version != version:
         raise _refuse("geometry_stage_not_succeeded")
     return row
+
+
+def _source_digest(version: DocumentVersionRecord) -> str:
+    if not isinstance(version.manifest, tuple) or any(
+        not isinstance(entry, ManifestEntry) for entry in version.manifest
+    ):
+        raise _refuse("portal_source_manifest_invalid")
+    matches = tuple(
+        entry for entry in version.manifest
+        if entry.role == MANIFEST_ROLE_STRUCTURED_COMPANION
+    )
+    if len(matches) != 1:
+        raise _refuse("portal_source_manifest_missing_or_duplicate")
+    entry = matches[0]
+    if (
+        entry.media_type != ARTIFACT_MEDIA_TYPE
+        or type(entry.size_bytes) is not int or entry.size_bytes < 1
+        or not isinstance(entry.sha256, str)
+        or _SHA256.fullmatch(entry.sha256) is None
+    ):
+        raise _refuse("portal_source_manifest_invalid")
+    try:
+        parse_blob_id(str(entry.blob_id))
+    except StorageError:
+        raise _refuse("portal_source_manifest_invalid") from None
+    return entry.sha256
 
 
 def _read_refs(row: StageResultRow, *, max_input_bytes: int) -> tuple[ArtifactRef, ...]:
@@ -137,6 +172,7 @@ def load_saved_image_crops(
     max_input_bytes: int,
     runs: RunRepository | None = None,
     jobs: JobRepository | None = None,
+    documents: DocumentRepository | None = None,
 ) -> SavedImageCropInput:
     """Bind saved StageResult/Blob reads to the current Attempt in one transaction.
 
@@ -146,10 +182,21 @@ def load_saved_image_crops(
     """
     run_repo = runs or RunRepository()
     job_repo = jobs or JobRepository()
+    document_repo = documents or DocumentRepository()
     job_repo.require_current(session, authority)
     run = run_repo.get(session, authority.run_id)
     if run.state != "running" or run.run_id != authority.run_id:
         raise _refuse("running_run_required")
+    try:
+        version = document_repo.get_version(session, VersionUid.parse(run.version_uid))
+    except IdentityError:
+        raise _refuse("run_version_identity_invalid") from None
+    if (
+        str(version.version_uid) != run.version_uid
+        or str(version.project_uid) != run.project_uid
+    ):
+        raise _refuse("run_version_mismatch")
+    blocks_sha256 = _source_digest(version)
     stage = _one_stage(run_repo.stage_results(session, authority.run_id))
     refs = _read_refs(stage, max_input_bytes=max_input_bytes)
     payloads = {ref.blob_id: _read_exact(blob_store, ref) for ref in refs}
@@ -168,9 +215,13 @@ def load_saved_image_crops(
         )
     except SavedCropCustodyRefused as exc:
         raise _refuse("saved_crop_integrity_invalid") from exc
+    if checked.cohort.blocks_sha256 != blocks_sha256:
+        raise _refuse("portal_source_digest_mismatch")
     job_repo.require_current(session, authority)
     if run_repo.get(session, authority.run_id) != run:
         raise _refuse("run_changed_during_crop_read")
+    if document_repo.get_version(session, VersionUid.parse(run.version_uid)) != version:
+        raise _refuse("version_changed_during_crop_read")
     if _one_stage(run_repo.stage_results(session, authority.run_id)) != stage:
         raise _refuse("geometry_stage_changed_during_crop_read")
     return SavedImageCropInput(

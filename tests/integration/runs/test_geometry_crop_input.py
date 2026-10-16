@@ -2,19 +2,26 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 
+from auditmanager.analysis.engine.serialization import canonical_bytes
+from auditmanager.documents.public import MANIFEST_ROLE_STRUCTURED_COMPANION, ManifestEntry
 from auditmanager.jobs.public import AttemptAuthority
 from auditmanager.runs.geometry_crop_input import load_saved_image_crops
 from auditmanager.runs.repository import StageResultRow
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.storage.public import BlobIntegrityError
+from auditmanager.storage.public import BlobIntegrityError, parse_blob_id
 from tests.integration.analysis.geometry.test_saved_crop_custody import RUN, VERSION, _fixture
+from tests.integration.analysis.recognised.recognised_support import members
 
 
+PROJECT = "prj_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+BLOCK_LIST = members("ar_baseline.zip").block_list
 AUTHORITY = AttemptAuthority(
     run_id=RUN,
     job_id="job_01ARZ3NDEKTSV4RRFFQ69G5FAV",
@@ -26,7 +33,9 @@ AUTHORITY = AttemptAuthority(
 
 class FakeRuns:
     def __init__(self, stage: StageResultRow):
-        self.run = SimpleNamespace(run_id=RUN, version_uid=VERSION, state="running")
+        self.run = SimpleNamespace(
+            run_id=RUN, project_uid=PROJECT, version_uid=VERSION, state="running",
+        )
         self.stage = stage
         self.get_calls: list[str] = []
         self.stage_calls: list[str] = []
@@ -61,6 +70,31 @@ class FakeJobs:
             raise DomainError(ErrorCode.STALE_ATTEMPT, aggregate_type="Attempt")
 
 
+class FakeDocuments:
+    def __init__(self):
+        self.entry = ManifestEntry(
+            role=MANIFEST_ROLE_STRUCTURED_COMPANION,
+            blob_id=parse_blob_id("blob_" + "9" * 26),
+            sha256=hashlib.sha256(BLOCK_LIST).hexdigest(),
+            size_bytes=len(BLOCK_LIST),
+            media_type="application/json",
+        )
+        self.version = SimpleNamespace(
+            version_uid=VERSION, project_uid=PROJECT, manifest=(self.entry,),
+        )
+        self.calls = 0
+        self.change_manifest_after_first_read = False
+
+    def get_version(self, session: object, version_uid: object):
+        self.calls += 1
+        if self.change_manifest_after_first_read and self.calls > 1:
+            return SimpleNamespace(
+                version_uid=VERSION, project_uid=PROJECT,
+                manifest=(replace(self.entry, sha256="f" * 64),),
+            )
+        return self.version
+
+
 class FakeStore:
     def __init__(self, payloads: dict[str, bytes]):
         self.payloads = payloads
@@ -93,17 +127,23 @@ def _inputs():
     return FakeRuns(row), FakeJobs(), FakeStore(payloads)
 
 
-def _load(runs: FakeRuns, jobs: FakeJobs, store: FakeStore, *, ceiling: int = 5_000_000):
+def _load(
+    runs: FakeRuns, jobs: FakeJobs, store: FakeStore, *,
+    ceiling: int = 5_000_000, documents: FakeDocuments | None = None,
+):
     return load_saved_image_crops(
         object(), authority=AUTHORITY, blob_store=store,
         max_input_bytes=ceiling, runs=runs, jobs=jobs,
+        documents=documents or FakeDocuments(),
     )
 
 
 def test_reads_exact_saved_refs_and_returns_checked_crop_bytes() -> None:
     runs, jobs, store = _inputs()
-    result = _load(runs, jobs, store)
+    documents = FakeDocuments()
+    result = _load(runs, jobs, store, documents=documents)
     assert jobs.calls == 2
+    assert documents.calls == 2
     assert runs.get_calls == [RUN, RUN]
     assert runs.stage_calls == [RUN, RUN]
     assert len(store.read_ids) == 4  # two JSON artifacts and two PNG crops
@@ -180,6 +220,63 @@ def test_corrupt_blob_refuses_whole_cohort() -> None:
         _load(runs, jobs, store)
     assert error.value.code == ErrorCode.ANALYSIS_INPUT_INVALID
     assert jobs.calls == 1
+
+
+def test_changed_saved_portal_digest_must_match_immutable_version_source() -> None:
+    runs, jobs, store = _inputs()
+    portal_ref = next(
+        raw for raw in runs.stage.artifacts if raw["role"] == "geometry.portal_blocks"
+    )
+    portal = json.loads(store.payloads[portal_ref["blob_id"]])
+    portal["blocks_sha256"] = "f" * 64
+    payload = canonical_bytes(portal)
+    portal_ref["sha256"] = hashlib.sha256(payload).hexdigest()
+    portal_ref["size_bytes"] = len(payload)
+    store.payloads[portal_ref["blob_id"]] = payload
+    with pytest.raises(DomainError) as error:
+        _load(runs, jobs, store)
+    assert error.value.code == ErrorCode.ANALYSIS_INPUT_INVALID
+
+
+@pytest.mark.parametrize("change", [
+    "missing", "duplicate", "wrong_role", "wrong_media", "wrong_sha",
+    "zero_size", "bool_size", "wrong_blob_id",
+])
+def test_invalid_version_source_manifest_refuses_before_blob_read(change: str) -> None:
+    runs, jobs, store = _inputs()
+    documents = FakeDocuments()
+    entry = documents.entry
+    if change == "missing":
+        manifest = ()
+    elif change == "duplicate":
+        manifest = (entry, entry)
+    else:
+        changes = {
+            "wrong_role": {"role": "source.other"},
+            "wrong_media": {"media_type": "text/plain"},
+            "wrong_sha": {"sha256": "G" * 64},
+            "zero_size": {"size_bytes": 0},
+            "bool_size": {"size_bytes": True},
+            "wrong_blob_id": {"blob_id": "not-a-blob-id"},
+        }
+        manifest = (replace(entry, **changes[change]),)
+    documents.version.manifest = manifest
+    with pytest.raises(DomainError) as error:
+        _load(runs, jobs, store, documents=documents)
+    assert error.value.code == ErrorCode.ANALYSIS_INPUT_INVALID
+    assert documents.calls == 1
+    assert store.read_ids == []
+
+
+def test_changed_version_manifest_refuses_at_second_fence() -> None:
+    runs, jobs, store = _inputs()
+    documents = FakeDocuments()
+    documents.change_manifest_after_first_read = True
+    with pytest.raises(DomainError) as error:
+        _load(runs, jobs, store, documents=documents)
+    assert error.value.code == ErrorCode.ANALYSIS_INPUT_INVALID
+    assert documents.calls == 2
+    assert len(store.read_ids) == 4
 
 
 def test_missing_or_duplicate_stage_refuses_before_blob_read() -> None:
