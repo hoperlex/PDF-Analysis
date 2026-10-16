@@ -1,5 +1,14 @@
 # Current state
 
+**Code-first development candidate 21, 2026-10-16.** W59 now has an unserved
+review packet for one VersionUid that lists all 15 section choices and
+suggestion evidence without selecting or confirming a section. The focused
+section tests passed. W55b `d3acd511` failed its separate complete gate in a
+D-142 test helper that assumed Run/Blob uniqueness across Attempts; its
+isolated DB evidence showed valid Attempt-scoped rows. A corrected candidate
+and a new complete gate are required. See `CFB-INT-DEV-PUBLISH-21.md` and
+`W59-INT-SECTION-REVIEW-PREP-01.md`.
+
 **Code-first development candidate 20, 2026-10-16.** W54's metadata-only
 preflight now has a pinned `repair-sample` check for the 121-page
 `claude-opus-5` zero-call plan, source sums and restored base-dump marker. Its
@@ -42,7 +51,7 @@ W55b candidate `d3acd511` still needs a complete `make gate`. See
 ## Current development boundary
 
 The checked predecessor of this candidate is
-`origin/dev=de3d81085f30301ddc2965f7f4bf927ea738c8b3`.
+`origin/dev=d416e185d3b42da55ba2e8bfdd02d7126da7f41e`.
 The development API surface is 47 paths / 54 operations / 124 schemas; the
 error catalogue has 25 codes and the migration head is `0022_findings_v2`.
 `VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
@@ -64,9 +73,9 @@ has XLSX preparation, but its citation reader and route wait for serial
 `0023`/`0024` contract and migration seals. See
 `W57-INT-SEAL-FREEZE-PROPOSAL-01.md`. W58 has read-only source-object mirror,
 isolated target-copy and offline restore preparations; it has not transferred
-a stand or proved DB-plus-Blob recovery. W59 has version-pair and
-section-identity preparations;
-its section seal waits for the required recovery-code close.
+a stand or proved DB-plus-Blob recovery. W59 has version-pair,
+section-identity and unserved 15-choice review preparations; its section
+seal waits for the required recovery-code close.
 
 ## Corpus and release boundaries
 
@@ -79,8 +88,10 @@ DB/S3 corpus publication remain pending. See `W54-CORPUS-PROMOTION-01.md` and
 `W54-CORPUS-REPAIR-PLAN-01.md`.
 
 The old W55b `6d63802a` main candidate failed three complete-gate attempts;
-read-only gate DB timing identified a brittle test deadline, and its successor
-`d3acd511` is under a separate complete gate. Neither candidate has been
+its successor `d3acd511` passed the earlier brittle test position but failed
+the fourth full gate at D-142 after 4,168 passes. Read-only gate DB evidence
+showed two valid Attempt-scoped publication rows; the test helper's
+Run/Blob `.one()` query was too broad. Neither candidate has been
 published to `origin/main`. The remote main predecessor at the preparation
 read was `23fd729dbb06c642be0588017f6b195305e2e53e`. The owner confirmed
 alpha still contains only generated test data on 2026-10-16; that condition
