@@ -40,6 +40,21 @@ def _dump(root: Path) -> None:
     (directory / (dump.name + ".verified")).touch()
 
 
+def _repair_plan(root: Path) -> tuple[Path, str]:
+    directory = root / "repairs"
+    directory.mkdir()
+    path = directory / "plan-20261016.json"
+    raw = json.dumps({
+        "dry_run": True, "model": preflight.REPAIR_MODEL,
+        "pages": preflight.REPAIR_PAGES, "base_snapshot": preflight.BASE_SNAPSHOT,
+        "ceiling_usd": "10", "max_call_bound_usd": "0.224515",
+        "sample_blocks": [f"blk_{character * 32}" for character in "abc"],
+        "spent_usd": "0",
+    }).encode()
+    path.write_bytes(raw)
+    return path, hashlib.sha256(raw).hexdigest()
+
+
 def _bundle(root: Path, sums_sha: str) -> None:
     directory = root / "bundles"
     raw = f"{'a' * 64}  manifest.json\n".encode()
@@ -224,3 +239,74 @@ def test_relative_or_symlink_roots_and_child_directories_fail_closed(tmp_path: P
     promotion_alias.symlink_to(promotion, target_is_directory=True)
     result = _inspect(source, manifest_sha, promotion_root=promotion_alias, measure=_measure)
     assert result.refusals == ("promotion_root_unsafe",)
+
+
+def test_repair_sample_binds_pinned_plan_sums_and_restore_marker_without_payload_reads(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source = tmp_path / "source"
+    promotion = tmp_path / "promotion"
+    source.mkdir()
+    promotion.mkdir()
+    manifest_sha = _source(source)
+    sums_sha = _sums(source)
+    _dump(promotion)
+    plan, plan_sha = _repair_plan(promotion)
+    monkeypatch.setattr(preflight, "SOURCE_SUMS_SHA256", sums_sha)
+    monkeypatch.setattr(preflight, "BASE_DUMP_SHA256", "a" * 64)
+    read_bytes = Path.read_bytes
+
+    def refuse_payload(self: Path) -> bytes:
+        if self.suffix in {".pdf", ".dump"}:
+            raise AssertionError("repair preflight read a corpus or dump payload")
+        return read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", refuse_payload)
+    result = _inspect(source, manifest_sha, "repair-sample", promotion_root=promotion,
+                      repair_plan=plan, expected_repair_plan_sha256=plan_sha, measure=_measure)
+    assert result.ok
+    assert result.repair_plan == "frozen_plan_present_unverified"
+    assert result.restore_verified_dump == "restore_marker_present_unrehashed"
+    assert result.capacity is not None and result.capacity.disk_required_bytes == 6 * preflight.GIB
+    assert "not authorization" in result.qualification
+
+
+def test_repair_sample_refuses_missing_changed_or_wrong_model_plan(tmp_path: Path, monkeypatch) -> None:
+    manifest_sha = _source(tmp_path)
+    sums_sha = _sums(tmp_path)
+    _dump(tmp_path)
+    plan, plan_sha = _repair_plan(tmp_path)
+    monkeypatch.setattr(preflight, "SOURCE_SUMS_SHA256", sums_sha)
+    monkeypatch.setattr(preflight, "BASE_DUMP_SHA256", "a" * 64)
+
+    def inspect_plan(*, expected: str = plan_sha, path: Path | None = plan):
+        return _inspect(tmp_path, manifest_sha, "repair-sample", repair_plan=path,
+                        expected_repair_plan_sha256=expected, measure=_measure)
+
+    assert inspect_plan(path=None).refusals == ("repair_plan_unavailable",)
+    raw = json.loads(plan.read_text())
+    raw["model"] = "claude-sonnet-5"
+    plan.write_text(json.dumps(raw))
+    assert inspect_plan().repair_plan == "digest_mismatch"
+    changed_sha = hashlib.sha256(plan.read_bytes()).hexdigest()
+    result = inspect_plan(expected=changed_sha)
+    assert result.repair_plan == "frozen_plan_mismatch"
+    assert "repair_plan_unavailable" in result.refusals
+    plan.unlink()
+    plan.symlink_to(tmp_path / "outside.json")
+    assert inspect_plan().repair_plan == "unsafe_path"
+
+
+def test_repair_sample_refuses_wrong_sums_and_dump_digest(tmp_path: Path) -> None:
+    manifest_sha = _source(tmp_path)
+    _sums(tmp_path)
+    _dump(tmp_path)
+    plan, plan_sha = _repair_plan(tmp_path)
+    result = _inspect(tmp_path, manifest_sha, "repair-sample", repair_plan=plan,
+                      expected_repair_plan_sha256=plan_sha, measure=_measure)
+    assert "source_sums_digest_mismatch" in result.refusals
+    assert "frozen_base_dump_unavailable" in result.refusals
+    (tmp_path / "promotion-dumps" / "promotion-20261015T000000Z.dump.verified").unlink()
+    result = _inspect(tmp_path, manifest_sha, "repair-sample", repair_plan=plan,
+                      expected_repair_plan_sha256=plan_sha, measure=_measure)
+    assert "frozen_base_dump_unavailable" in result.refusals

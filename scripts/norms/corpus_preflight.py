@@ -7,6 +7,10 @@ Name the source drop and the promotion workspace separately::
         --promotion-root /path/to/promotion/.local/norms \
         --next-step bundle-export
 
+For the first paid repair operation, use ``--next-step repair-sample`` and
+``--repair-plan`` with the zero-call plan under the promotion root. This only
+checks the frozen plan and host metadata; it never requests a credential.
+
 This checks metadata and current host headroom without opening source PDFs, a database,
 S3, or a provider. ``METADATA_READY`` is not permission to start a heavy operation:
 source sums, dump and build bytes still need their owning verifiers, and the operator
@@ -24,6 +28,7 @@ import re
 import stat
 import sys
 from dataclasses import asdict, dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Callable
 
@@ -32,16 +37,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from auditmanager.norms.corpus_source import DropSumsInvalid, read_drop_sums  # noqa: E402
 
 MANIFEST_SHA256 = "160fdc7ea261b44298757b3a066982fd167b389fde614fb119c4c1d0d72fbb3b"
+SOURCE_SUMS_SHA256 = "eb5fae5cdd8d47873b23a125ebd68d5b507fda301088d2cc8651b06fd81897e5"
+BASE_DUMP_SHA256 = "e1280373ffd7fa3deaa0716429def1844d7e858e79bae7fbad5ade6d516ff74d"
+REPAIR_PLAN_SHA256 = "045f8b636ccae1aa2503015c305575e0a9beb3349055c0aaa365b4474e573365"
+BASE_SNAPSHOT = "2026-07-23..2026-08-20+17d.4b74348debf7"
+REPAIR_MODEL = "claude-opus-5"
 DOCUMENTS = 674
 FILES = 31_619
+REPAIR_PAGES = 121
 GIB = 1024**3
 MEMORY_FLOOR = 6 * GIB
 DISK_RESERVE = 3 * GIB
 # W54 §3.9: source-sums has no stated increment, so check the 3 GiB reserve only.
-# Base load and restore-verify each have a 3 GiB increment; bundle adds 0.6 GiB.
+# Base load and restore-verify each have a 3 GiB increment; use that conservative
+# increment for the repair sample until its output size is measured. Bundle adds 0.6 GiB.
 INCREMENTS = {"source-sums": 0, "base-load": 3 * GIB, "restore-verify": 3 * GIB,
+              "repair-sample": 3 * GIB,
               "bundle-export": (6 * GIB + 9) // 10}
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
+BLOCK_ID = re.compile(r"blk_[0-9a-f]{32}\Z")
 
 
 @dataclass(frozen=True)
@@ -64,10 +78,12 @@ class Result:
     bundle_candidate: str
     capacity: Capacity | None
     refusals: tuple[str, ...]
+    repair_plan: str = "not_checked"
     qualification: str = (
         "metadata-only, not authorization to operate: run sha256sum -c for the source, "
         "restore-verify for the dump, embedding status/load for the build, and full "
-        "bundle verify; capacity covers the promotion-root filesystem only; "
+        "bundle verify; repair-sample also needs a credential and durable journal; "
+        "capacity covers the promotion-root filesystem only; "
         "Docker data, stand capacity and P3 compatibility were not checked"
     )
 
@@ -138,31 +154,74 @@ def _sums(root: Path, source_paths: set[str] | None) -> tuple[str, str | None]:
     return "listed_unverified", parsed.sha256
 
 
-def _dump(root: Path) -> str:
+def _dump(root: Path) -> tuple[str, str | None]:
     directory = root / "promotion-dumps"
     if directory.is_symlink():
-        return "unsafe_directory"
+        return "unsafe_directory", None
     candidates = sorted(directory.glob("promotion-*.dump"))
     if not candidates:
-        return "absent"
+        return "absent", None
     latest = candidates[-1]
     if not _is_regular(latest):
-        return "not_regular"
+        return "not_regular", None
     marker = Path(str(latest) + ".verified")
     sha = Path(str(latest) + ".sha256")
     fingerprint = Path(str(latest) + ".fingerprint")
     if not all(_is_regular(path) for path in (sha, fingerprint)):
-        return "missing_dump_metadata"
+        return "missing_dump_metadata", None
     if not fingerprint.stat().st_size:
-        return "malformed_dump_metadata"
+        return "malformed_dump_metadata", None
     parts = sha.read_text(encoding="ascii", errors="replace").strip().split()
     if len(parts) != 2 or not HEX64.fullmatch(parts[0]) or parts[1] != latest.name:
-        return "malformed_dump_metadata"
+        return "malformed_dump_metadata", None
     if not _is_regular(marker):
-        return "dump_metadata_present_unverified"
+        return "dump_metadata_present_unverified", parts[0]
     if marker.stat().st_size != 0:
-        return "malformed_restore_proof"
-    return "restore_marker_present_unrehashed"
+        return "malformed_restore_proof", None
+    return "restore_marker_present_unrehashed", parts[0]
+
+
+def _repair_plan(root: Path, path: Path | None, expected_sha256: str) -> str:
+    """Check only the small saved zero-call plan, never a corpus or dump payload."""
+    if path is None:
+        return "absent"
+    directory = root / "repairs"
+    if not path.is_absolute() or directory.is_symlink() or path.parent != directory:
+        return "unsafe_path"
+    try:
+        if path.is_symlink():
+            return "unsafe_path"
+        if path.resolve(strict=True) != path or not _is_regular(path):
+            return "unsafe_path"
+        if path.stat().st_size > 4096:
+            return "malformed"
+        raw = path.read_bytes()
+    except (OSError, RuntimeError):
+        return "absent"
+    if not HEX64.fullmatch(expected_sha256) or hashlib.sha256(raw).hexdigest() != expected_sha256:
+        return "digest_mismatch"
+    try:
+        plan = json.loads(raw)
+        bound = Decimal(plan["max_call_bound_usd"])
+    except (ValueError, TypeError, KeyError, InvalidOperation):
+        return "malformed"
+    if not isinstance(plan, dict):
+        return "malformed"
+    blocks = plan.get("sample_blocks")
+    if (
+        plan.get("dry_run") is not True
+        or plan.get("model") != REPAIR_MODEL
+        or plan.get("base_snapshot") != BASE_SNAPSHOT
+        or type(plan.get("pages")) is not int or plan["pages"] != REPAIR_PAGES
+        or plan.get("ceiling_usd") != "10"
+        or plan.get("spent_usd") != "0"
+        or not bound.is_finite() or not 0 < bound < Decimal("10")
+        or not isinstance(blocks, list) or len(blocks) != 3
+        or any(not isinstance(item, str) or not BLOCK_ID.fullmatch(item) for item in blocks)
+        or len(set(blocks)) != 3
+    ):
+        return "frozen_plan_mismatch"
+    return "frozen_plan_present_unverified"
 
 
 def _build(root: Path) -> str:
@@ -251,6 +310,8 @@ def inspect(
     next_step: str,
     *,
     promotion_root: Path,
+    repair_plan: Path | None = None,
+    expected_repair_plan_sha256: str = REPAIR_PLAN_SHA256,
     expected_manifest_sha256: str = MANIFEST_SHA256,
     expected_documents: int = DOCUMENTS,
     expected_files: int = FILES,
@@ -291,9 +352,11 @@ def inspect(
         if docs != expected_documents or files != expected_files:
             refusals.append("source_tree_count")
     source_sums, sums_sha = _sums(source_root, source_paths)
-    dump = _dump(promotion_root)
+    dump, dump_sha = _dump(promotion_root)
     build = _build(promotion_root)
     bundle = _bundle(promotion_root, sums_sha)
+    plan = (_repair_plan(promotion_root, repair_plan, expected_repair_plan_sha256)
+            if next_step == "repair-sample" else "not_checked")
     if next_step != "source-sums" and source_sums != "listed_unverified":
         refusals.append("source_sums_unavailable")
     if next_step == "restore-verify" and dump not in {
@@ -304,6 +367,13 @@ def inspect(
         refusals.append("restore_verified_dump_unavailable")
     if next_step == "bundle-export" and build != "batch_files_present_unverified":
         refusals.append("build_checkpoint_unavailable")
+    if next_step == "repair-sample":
+        if sums_sha != SOURCE_SUMS_SHA256:
+            refusals.append("source_sums_digest_mismatch")
+        if dump != "restore_marker_present_unrehashed" or dump_sha != BASE_DUMP_SHA256:
+            refusals.append("frozen_base_dump_unavailable")
+        if plan != "frozen_plan_present_unverified":
+            refusals.append("repair_plan_unavailable")
     try:
         capacity = measure(promotion_root, next_step)
     except (OSError, ValueError):
@@ -315,7 +385,7 @@ def inspect(
         if capacity.memory_available_bytes < capacity.memory_required_bytes:
             refusals.append("memory_floor")
     return Result(next_step, manifest_sha, docs, files, source_sums, dump, build, bundle,
-                  capacity, tuple(refusals))
+                  capacity, tuple(refusals), repair_plan=plan)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -323,8 +393,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-root", required=True, type=Path)
     parser.add_argument("--promotion-root", required=True, type=Path)
     parser.add_argument("--next-step", required=True, choices=sorted(INCREMENTS))
+    parser.add_argument("--repair-plan", type=Path,
+                        help="absolute saved zero-call plan under promotion-root/repairs")
     args = parser.parse_args(argv)
-    result = inspect(args.source_root, args.next_step, promotion_root=args.promotion_root)
+    result = inspect(args.source_root, args.next_step, promotion_root=args.promotion_root,
+                     repair_plan=args.repair_plan)
     print(json.dumps({"status": "METADATA_READY" if result.ok else "REFUSED",
                       "source_root": str(args.source_root), "promotion_root": str(args.promotion_root),
                       **asdict(result)},
