@@ -841,14 +841,28 @@ def test_a_stale_terminal_analysis_publication_is_refused_and_a_rerun_publishes_
     assert _blob_state(factory, verified.blob_id) == "available"
 
 
-def _publication_state(factory, run_id: str, blob_id) -> tuple[str, bool]:
+def _current_attempt_id(factory, run_id: str) -> str:
+    with factory() as observer:
+        attempt_id = observer.execute(
+            text("SELECT current_attempt_id FROM job WHERE run_id = :run_id"),
+            {"run_id": run_id},
+        ).scalar_one()
+    assert attempt_id is not None, f"Run {run_id} has no current Attempt"
+    return str(attempt_id)
+
+
+def _inventory_publication_state(
+    factory, run_id: str, attempt_id: str, blob_id
+) -> tuple[str, bool]:
     with factory() as observer:
         state, abandoned_at = observer.execute(
             text(
                 "SELECT state, abandoned_at FROM analysis_artifact_publication "
-                "WHERE run_id = :run_id AND blob_id = :blob_id"
+                "WHERE run_id = :run_id AND attempt_id = :attempt_id "
+                "AND stage_id = 'source_preparation' "
+                "AND blob_id = :blob_id AND blob_role = 'prepared_page_inventory'"
             ),
-            {"run_id": run_id, "blob_id": str(blob_id)},
+            {"run_id": run_id, "attempt_id": attempt_id, "blob_id": str(blob_id)},
         ).one()
     return str(state), abandoned_at is not None
 
@@ -885,6 +899,7 @@ def test_d142_a_crashed_publication_is_settled_and_the_report_is_clean_after_a_r
     seeded, started, verified = _interrupted_publication(
         factory, helpers, blob_store, recorded_adapter, provider_config
     )
+    crashed_attempt_id = _current_attempt_id(factory, started.run_id)
     _expire_and_reclaim(factory, started.run_id)
     with factory() as session:
         rerun = start_audit_run(
@@ -904,6 +919,7 @@ def test_d142_a_crashed_publication_is_settled_and_the_report_is_clean_after_a_r
         )
         session.commit()
     assert result.terminal_state == "published"
+    rerun_attempt_id = _current_attempt_id(factory, rerun.run_id)
 
     reconciler = Reconciler(blob_store, session_factory=factory)
     ours = {started.run_id, rerun.run_id}
@@ -915,8 +931,12 @@ def test_d142_a_crashed_publication_is_settled_and_the_report_is_clean_after_a_r
             controller, older_than="0 seconds", batch_size=1000
         )
         controller.commit()
-    assert _publication_state(factory, started.run_id, verified.blob_id) == ("abandoned", True)
-    assert _publication_state(factory, rerun.run_id, verified.blob_id) == ("bound", False)
+    assert _inventory_publication_state(
+        factory, started.run_id, crashed_attempt_id, verified.blob_id
+    ) == ("abandoned", True)
+    assert _inventory_publication_state(
+        factory, rerun.run_id, rerun_attempt_id, verified.blob_id
+    ) == ("bound", False)
     assert _artifact_abandoned_events(factory, started.run_id) == 1
     assert _blob_state(factory, verified.blob_id) == "available"
 
@@ -946,12 +966,15 @@ def test_d142_settlement_leaves_a_live_attempts_intent_prepared(
     _seeded, started, verified = _interrupted_publication(
         factory, helpers, blob_store, recorded_adapter, provider_config
     )
+    live_attempt_id = _current_attempt_id(factory, started.run_id)
     with factory() as controller:
         JobRepository().settle_terminal_provider_effects(
             controller, older_than="0 seconds", batch_size=1000
         )
         controller.commit()
-    assert _publication_state(factory, started.run_id, verified.blob_id) == ("prepared", False)
+    assert _inventory_publication_state(
+        factory, started.run_id, live_attempt_id, verified.blob_id
+    ) == ("prepared", False)
     assert _artifact_abandoned_events(factory, started.run_id) == 0
 
 
