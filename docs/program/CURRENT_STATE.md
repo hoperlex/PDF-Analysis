@@ -1,8 +1,8 @@
 # Current state
 
-**Code-first candidate 34, 2026-10-16.** W57a adds an unserved citation reader
-after dev33's CITE writer, W56b crop reader and W58 synthetic restore CLI.
-Real DB/S3, v3 profile and report assembly remain open; see `CFB-INT-DEV-PUBLISH-34.md`.
+**Code-first candidate 35, 2026-10-16.** W56b adds unserved TEXT preflight
+after W57a's citation reader/CITE writer and W56b crop/W58 restore seams.
+Real DB/S3 and served stages remain open; see `CFB-INT-DEV-PUBLISH-35.md`.
 
 **Code-first development candidate 31, 2026-10-16.** W57a grounds v3 PDF
 and normative proposals with separate N-labels for one paragraph; W56b
