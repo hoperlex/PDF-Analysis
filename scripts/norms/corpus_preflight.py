@@ -5,7 +5,8 @@ Name the source drop and the promotion workspace separately::
     python scripts/norms/corpus_preflight.py \
         --source-root /path/to/source/.local/norms \
         --promotion-root /path/to/promotion/.local/norms \
-        --next-step bundle-export
+        --next-step bundle-export --snapshot <ns_id> \
+        --chunking-profile characters-v2:1200
 
 For the first paid repair operation, use ``--next-step repair-sample`` and
 ``--repair-plan`` with the zero-call plan under the promotion root. This only
@@ -36,11 +37,16 @@ from typing import Callable
 # Standalone operator invocation from a checkout, like other repository scripts.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from auditmanager.norms.corpus_source import DropSumsInvalid, read_drop_sums  # noqa: E402
+from auditmanager.norms.chunking import (  # noqa: E402
+    RELIABLE_CHUNKING_PROFILE_VERSION,
+    parse_chunking_profile,
+)
 from auditmanager.norms.embedding.checkpoint import (  # noqa: E402
     CheckpointRefused,
     read_plan,
     require_identity,
 )
+from auditmanager.norms.embedding.profile import require_snapshot_id  # noqa: E402
 
 MANIFEST_SHA256 = "160fdc7ea261b44298757b3a066982fd167b389fde614fb119c4c1d0d72fbb3b"
 SOURCE_SUMS_SHA256 = "eb5fae5cdd8d47873b23a125ebd68d5b507fda301088d2cc8651b06fd81897e5"
@@ -92,10 +98,13 @@ class Result:
     capacity: Capacity | None
     refusals: tuple[str, ...]
     repair_plan: str = "not_checked"
+    build_snapshot_id: str | None = None
+    build_chunking_profile: str | None = None
     qualification: str = (
         "metadata-only, not authorization to operate: run sha256sum -c for the source, "
         "restore-verify for the dump, embedding status/load for the build, and full "
-        "bundle verify; repair-sample also needs a credential and durable journal; "
+        "bundle verify; bundle-export requires the same snapshot/profile as export; "
+        "repair-sample also needs a credential and durable journal; "
         "capacity covers the promotion-root filesystem only; "
         "Docker data, stand capacity and P3 compatibility were not checked"
     )
@@ -237,13 +246,14 @@ def _repair_plan(root: Path, path: Path | None, expected_sha256: str) -> str:
     return "frozen_plan_present_unverified"
 
 
-def _build(root: Path) -> str:
+def _build(root: Path, target: tuple[str, str] | None = None) -> str:
     builds = root / "builds"
     if builds.is_symlink():
         return "unsafe_directory"
     candidates = [path for path in builds.glob("*/plan.json") if not path.parent.is_symlink() and _is_regular(path)]
     if not candidates:
         return "absent"
+    matched_target = False
     for plan in candidates:
         try:
             if plan.stat().st_size > MAX_BUILD_PLAN_BYTES:
@@ -256,6 +266,10 @@ def _build(root: Path) -> str:
             continue
         if parsed.identity.content_key != plan.parent.name:
             continue
+        if target is not None:
+            if (parsed.identity.norms_snapshot_id, parsed.identity.chunking_profile) != target:
+                continue
+            matched_target = True
         vectors = plan.parent / "vectors"
         inputs = plan.parent / "inputs"
         if vectors.is_symlink() or inputs.is_symlink():
@@ -267,7 +281,7 @@ def _build(root: Path) -> str:
             for batch in parsed.batches
         ):
             return "batch_files_present_unverified"
-    return "plan_only_or_partial"
+    return "plan_only_or_partial" if target is None or matched_target else "absent"
 
 
 def _bundle(root: Path, drop_sums_sha: str | None) -> str:
@@ -327,6 +341,8 @@ def inspect(
     *,
     promotion_root: Path,
     repair_plan: Path | None = None,
+    build_snapshot_id: str | None = None,
+    build_chunking_profile: str | None = None,
     expected_repair_plan_sha256: str = REPAIR_PLAN_SHA256,
     expected_source_sums_sha256: str = SOURCE_SUMS_SHA256,
     expected_manifest_sha256: str = MANIFEST_SHA256,
@@ -346,7 +362,24 @@ def inspect(
         if issue is not None:
             refusals.append(issue)
     if refusals:
-        return Result(next_step, None, None, None, "absent", "absent", "absent", "absent", None, tuple(refusals))
+        return Result(next_step, None, None, None, "absent", "absent", "absent", "absent", None,
+                      tuple(refusals), build_snapshot_id=build_snapshot_id,
+                      build_chunking_profile=build_chunking_profile)
+    build_target: tuple[str, str] | None = None
+    if next_step == "bundle-export":
+        if build_snapshot_id is None or build_chunking_profile is None:
+            refusals.append("build_target_required")
+        else:
+            try:
+                require_snapshot_id(build_snapshot_id)
+                version, _ = parse_chunking_profile(build_chunking_profile)
+            except (TypeError, ValueError):
+                refusals.append("build_target_invalid")
+            else:
+                if version != RELIABLE_CHUNKING_PROFILE_VERSION:
+                    refusals.append("build_target_invalid")
+                else:
+                    build_target = (build_snapshot_id, build_chunking_profile)
     corpus = source_root / "corpus"
     manifest = corpus / "MANIFEST.json"
     if not corpus.is_dir() or corpus.is_symlink() or not _is_regular(manifest):
@@ -370,7 +403,8 @@ def inspect(
             refusals.append("source_tree_count")
     source_sums, sums_sha = _sums(source_root, source_paths)
     dump, dump_sha = _dump(promotion_root)
-    build = _build(promotion_root)
+    build = (_build(promotion_root, build_target)
+             if next_step != "bundle-export" or build_target is not None else "target_unbound")
     bundle = _bundle(promotion_root, sums_sha)
     plan = (_repair_plan(promotion_root, repair_plan, expected_repair_plan_sha256)
             if next_step == "repair-sample" else "not_checked")
@@ -414,7 +448,9 @@ def inspect(
             if capacity.load_average_1 >= capacity.load_limit_exclusive:
                 refusals.append("load_floor")
     return Result(next_step, manifest_sha, docs, files, source_sums, dump, build, bundle,
-                  capacity, tuple(refusals), repair_plan=plan)
+                  capacity, tuple(refusals), repair_plan=plan,
+                  build_snapshot_id=build_snapshot_id,
+                  build_chunking_profile=build_chunking_profile)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -422,11 +458,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-root", required=True, type=Path)
     parser.add_argument("--promotion-root", required=True, type=Path)
     parser.add_argument("--next-step", required=True, choices=sorted(INCREMENTS))
+    parser.add_argument("--snapshot", help="snapshot ID for bundle-export, matching bundle export")
+    parser.add_argument("--chunking-profile", help="reliability-aware profile for bundle-export")
     parser.add_argument("--repair-plan", type=Path,
                         help="absolute saved zero-call plan under promotion-root/repairs")
     args = parser.parse_args(argv)
     result = inspect(args.source_root, args.next_step, promotion_root=args.promotion_root,
-                     repair_plan=args.repair_plan)
+                     repair_plan=args.repair_plan, build_snapshot_id=args.snapshot,
+                     build_chunking_profile=args.chunking_profile)
     print(json.dumps({"status": "METADATA_READY" if result.ok else "REFUSED",
                       "source_root": str(args.source_root), "promotion_root": str(args.promotion_root),
                       **asdict(result)},

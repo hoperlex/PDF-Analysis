@@ -13,6 +13,9 @@ from auditmanager.norms.embedding.checkpoint import BuildIdentity, prepare_plan
 from auditmanager.norms.embedding.model import ChunkInput
 from auditmanager.norms.embedding.profile import EMBEDDING_PROFILE
 
+SYNTHETIC_SNAPSHOT_ID = "ns_" + "0" * 26
+SYNTHETIC_CHUNKING_PROFILE = "characters-v2:1000"
+
 
 def _source(root: Path) -> str:
     corpus = root / "corpus"
@@ -77,10 +80,10 @@ def _bundle(root: Path, sums_sha: str) -> None:
 def _build_checkpoint(root: Path, *, complete: bool = True,
                       embedding_profile: str = EMBEDDING_PROFILE) -> Path:
     (root / "builds").mkdir()
-    directory = root / "builds" / "content-key"
-    identity = BuildIdentity(norms_snapshot_id="ns_" + "0" * 26,
+    directory = root / "builds" / "undated+2d.abcdefabcdef"
+    identity = BuildIdentity(norms_snapshot_id=SYNTHETIC_SNAPSHOT_ID,
                              content_key=directory.name,
-                             chunking_profile="characters-v2:1000",
+                             chunking_profile=SYNTHETIC_CHUNKING_PROFILE,
                              embedding_profile=embedding_profile)
     plan, created = prepare_plan(
         directory, identity,
@@ -102,6 +105,9 @@ def _measure(_root: Path, step: str, *, disk: int = 20 * preflight.GIB,
 
 def _inspect(root: Path, manifest_sha: str, step: str = "bundle-export", **kwargs) -> preflight.Result:
     promotion_root = kwargs.pop("promotion_root", root)
+    if step == "bundle-export":
+        kwargs.setdefault("build_snapshot_id", SYNTHETIC_SNAPSHOT_ID)
+        kwargs.setdefault("build_chunking_profile", SYNTHETIC_CHUNKING_PROFILE)
     expected_sums = kwargs.pop("expected_source_sums_sha256", None)
     if expected_sums is None:
         listings = list((root / "corpus-sums").glob("*/SHA256SUMS"))
@@ -171,6 +177,76 @@ def test_plan_alone_is_not_a_build_checkpoint_and_verify_dump_is_not_circular(tm
     assert result.restore_verified_dump == "dump_metadata_present_unverified"
 
 
+def test_bundle_preflight_requires_an_explicit_snapshot_and_profile(tmp_path: Path) -> None:
+    manifest_sha = _source(tmp_path)
+    _sums(tmp_path)
+    _dump(tmp_path)
+    _build_checkpoint(tmp_path)
+    result = _inspect(tmp_path, manifest_sha, build_snapshot_id=None,
+                      build_chunking_profile=None, measure=_measure)
+    assert result.build_checkpoint == "target_unbound"
+    assert "build_target_required" in result.refusals
+    assert "build_checkpoint_unavailable" in result.refusals
+    assert not result.ok
+
+
+@pytest.mark.parametrize("snapshot, profile", [
+    ("ns_" + "1" * 26, SYNTHETIC_CHUNKING_PROFILE),
+    (SYNTHETIC_SNAPSHOT_ID, "characters-v2:1200"),
+])
+def test_bundle_preflight_does_not_use_another_snapshots_or_profiles_checkpoint(
+    tmp_path: Path, snapshot: str, profile: str
+) -> None:
+    manifest_sha = _source(tmp_path)
+    _sums(tmp_path)
+    _dump(tmp_path)
+    _build_checkpoint(tmp_path)
+    result = _inspect(tmp_path, manifest_sha, build_snapshot_id=snapshot,
+                      build_chunking_profile=profile, measure=_measure)
+    assert result.build_checkpoint == "absent"
+    assert result.refusals == ("build_checkpoint_unavailable",)
+    assert result.build_snapshot_id == snapshot
+    assert result.build_chunking_profile == profile
+
+
+@pytest.mark.parametrize("snapshot, profile", [
+    ("ns_invalid", SYNTHETIC_CHUNKING_PROFILE),
+    (SYNTHETIC_SNAPSHOT_ID, "characters-v1:1000"),
+])
+def test_bundle_preflight_refuses_an_invalid_or_undesignatable_target(
+    tmp_path: Path, snapshot: str, profile: str
+) -> None:
+    manifest_sha = _source(tmp_path)
+    _sums(tmp_path)
+    _dump(tmp_path)
+    _build_checkpoint(tmp_path)
+    result = _inspect(tmp_path, manifest_sha, build_snapshot_id=snapshot,
+                      build_chunking_profile=profile, measure=_measure)
+    assert result.build_checkpoint == "target_unbound"
+    assert "build_target_invalid" in result.refusals
+    assert "build_checkpoint_unavailable" in result.refusals
+
+
+def test_cli_passes_the_selected_build_target_to_the_read_only_preflight(
+    tmp_path: Path, capsys
+) -> None:
+    _source(tmp_path)
+    _sums(tmp_path)
+    _dump(tmp_path)
+    _build_checkpoint(tmp_path)
+    code = preflight.main([
+        "--source-root", str(tmp_path), "--promotion-root", str(tmp_path),
+        "--next-step", "bundle-export", "--snapshot", SYNTHETIC_SNAPSHOT_ID,
+        "--chunking-profile", SYNTHETIC_CHUNKING_PROFILE,
+    ])
+    output = json.loads(capsys.readouterr().out)
+    assert code == 2  # synthetic source differs from the frozen real manifest/sums
+    assert output["build_snapshot_id"] == SYNTHETIC_SNAPSHOT_ID
+    assert output["build_chunking_profile"] == SYNTHETIC_CHUNKING_PROFILE
+    assert output["build_checkpoint"] == "batch_files_present_unverified"
+    assert "build_target_required" not in output["refusals"]
+
+
 @pytest.mark.parametrize("change", ["fabricated", "wrong_directory", "wrong_profile", "oversize"])
 def test_bundle_preflight_refuses_batch_files_from_an_invalid_or_misbound_plan(
     tmp_path: Path, change: str
@@ -189,7 +265,7 @@ def test_bundle_preflight_refuses_batch_files_from_an_invalid_or_misbound_plan(
         (directory / "plan.json").write_bytes(b"x" * (preflight.MAX_BUILD_PLAN_BYTES + 1))
 
     result = _inspect(tmp_path, manifest_sha, measure=_measure)
-    assert result.build_checkpoint == "plan_only_or_partial"
+    assert result.build_checkpoint == "absent"
     assert "build_checkpoint_unavailable" in result.refusals
 
 
