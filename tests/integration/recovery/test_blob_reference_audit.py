@@ -20,6 +20,10 @@ _CATALOG = [
         "norm_custody_admission", "norm_custody_binding",
     )
 ]
+_CATALOG.extend([
+    {"schema_name": "public", "table_name": "norm_retrieval_set", "column_name": column}
+    for column in ("set_blob_id", "catalogue_blob_id")
+])
 
 
 class _Rows:
@@ -53,6 +57,8 @@ class _Session:
             key = "admissions"
         elif "FROM public.norm_custody_binding" in sql:
             key = "bindings"
+        elif "FROM public.norm_retrieval_set" in sql:
+            key = "retrieval_sets"
         else:
             raise AssertionError(f"unexpected SQL: {sql}")
         return _Rows(self.data[key])
@@ -62,7 +68,7 @@ def _data() -> dict[str, list[dict[str, object]]]:
     sha = "a" * 64
     blob_id = str(derive_blob_id(sha256=sha, size=13))
     return {
-        "version": [{"version_num": "0022_findings_v2"}],
+        "version": [{"version_num": "0023_norm_citations"}],
         "catalog": deepcopy(_CATALOG),
         "blob": [{
             "blob_id": blob_id, "state": "available", "sha256": sha,
@@ -82,7 +88,29 @@ def _data() -> dict[str, list[dict[str, object]]]:
             "media_type": "application/pdf",
         }],
         "bindings": [{"owner_id": "nbd_one", "admission_id": "nad_one", "blob_id": blob_id}],
+        "retrieval_sets": [],
     }
+
+
+def _data_with_verified_set() -> dict[str, list[dict[str, object]]]:
+    data = _data()
+    set_sha, catalogue_sha = "b" * 64, "c" * 64
+    set_id = str(derive_blob_id(sha256=set_sha, size=7))
+    catalogue_id = str(derive_blob_id(sha256=catalogue_sha, size=9))
+    data["blob"].extend([
+        {"blob_id": set_id, "state": "available", "sha256": set_sha,
+         "size_bytes": 7, "media_type": "application/json"},
+        {"blob_id": catalogue_id, "state": "available", "sha256": catalogue_sha,
+         "size_bytes": 9, "media_type": "application/json"},
+    ])
+    data["retrieval_sets"] = [{
+        "owner_id": "nrs_one", "state": "verified",
+        "set_blob_id": set_id, "set_size_bytes": 7,
+        "observed_set_sha256": set_sha,
+        "catalogue_blob_id": catalogue_id, "catalogue_size_bytes": 9,
+        "observed_catalogue_sha256": catalogue_sha,
+    }]
+    return data
 
 
 def test_healthy_database_returns_all_available_blob_facts_and_reads_only() -> None:
@@ -95,10 +123,60 @@ def test_healthy_database_returns_all_available_blob_facts_and_reads_only() -> N
     assert result.source_counts == (
         ("input_manifest_entry", 1), ("analysis_artifact_publication", 1),
         ("norm_custody_admission", 1), ("norm_custody_binding", 1),
+        ("norm_retrieval_set", 0),
     )
     assert audit_blob_references(session) == result  # type: ignore[arg-type]
     assert data == session.data
-    assert len(session.statements) == 14
+    assert len(session.statements) == 16
+
+
+def test_verified_retrieval_set_reads_both_0023_blob_columns() -> None:
+    data = _data_with_verified_set()
+    result = audit_blob_references(_Session(data))  # type: ignore[arg-type]
+    assert result.source_counts[-1] == ("norm_retrieval_set", 1)
+    assert {fact.blob_id for fact in result.available_blobs} == {
+        row["blob_id"] for row in data["blob"]
+    }
+
+
+@pytest.mark.parametrize("role,change,reason", (
+    ("set", "missing", "names an unavailable"),
+    ("catalogue", "missing", "names an unavailable"),
+    ("set", "unavailable", "names an unavailable"),
+    ("catalogue", "unavailable", "names an unavailable"),
+    ("set", "wrong_digest", "set Blob facts differ"),
+    ("catalogue", "wrong_digest", "catalogue Blob facts differ"),
+    ("set", "wrong_size", "set Blob facts differ"),
+    ("catalogue", "wrong_size", "catalogue Blob facts differ"),
+))
+def test_verified_retrieval_set_requires_both_exact_available_blobs(
+    role: str, change: str, reason: str,
+) -> None:
+    data = _data_with_verified_set()
+    row = data["retrieval_sets"][0]
+    if change == "missing":
+        row[f"{role}_blob_id"] = "blob_" + "0" * 26
+    elif change == "unavailable":
+        next(blob for blob in data["blob"] if blob["blob_id"] == row[f"{role}_blob_id"])["state"] = "verifying"
+    elif change == "wrong_digest":
+        row[f"observed_{role}_sha256"] = "0" * 64
+    else:
+        row[f"{role}_size_bytes"] = 99
+    with pytest.raises(BlobReferenceAuditRefused, match=reason):
+        audit_blob_references(_Session(data))  # type: ignore[arg-type]
+
+
+def test_rejected_set_has_no_blob_references() -> None:
+    data = _data_with_verified_set()
+    row = data["retrieval_sets"][0]
+    row.update(state="rejected", set_blob_id=None, set_size_bytes=None,
+               catalogue_blob_id=None, catalogue_size_bytes=None)
+    assert audit_blob_references(_Session(data)).source_counts[-1] == (  # type: ignore[arg-type]
+        "norm_retrieval_set", 1,
+    )
+    row["catalogue_blob_id"] = data["blob"][2]["blob_id"]
+    with pytest.raises(BlobReferenceAuditRefused, match="rejected retrieval set"):
+        audit_blob_references(_Session(data))  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("catalog_change", ("new_column", "new_fk", "missing_source"))

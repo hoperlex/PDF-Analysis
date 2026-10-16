@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from auditmanager.storage.public import derive_blob_id
 
-_HEAD = "0022_findings_v2"
+_HEAD = "0023_norm_citations"
 _BLOB_ID = re.compile(r"blob_[0-9A-HJKMNP-TV-Z]{26}\Z")
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -26,6 +26,8 @@ _SOURCES = frozenset({
     ("public", "analysis_artifact_publication", "blob_id"),
     ("public", "norm_custody_admission", "blob_id"),
     ("public", "norm_custody_binding", "blob_id"),
+    ("public", "norm_retrieval_set", "set_blob_id"),
+    ("public", "norm_retrieval_set", "catalogue_blob_id"),
 })
 _CATALOG_EXPECTED = _SOURCES | {("public", "blob", "blob_id")}
 
@@ -72,6 +74,13 @@ _BINDINGS = text("""
            norm_custody_admission_id AS admission_id, blob_id
       FROM public.norm_custody_binding
      ORDER BY norm_custody_binding_id COLLATE "C"
+""")
+_RETRIEVAL_SETS = text("""
+    SELECT norm_retrieval_set_id AS owner_id, state,
+           set_blob_id, set_size_bytes, observed_set_sha256,
+           catalogue_blob_id, catalogue_size_bytes, observed_catalogue_sha256
+      FROM public.norm_retrieval_set
+     ORDER BY norm_retrieval_set_id COLLATE "C"
 """)
 
 
@@ -212,6 +221,27 @@ def audit_blob_references(session: Session) -> BlobReferenceAudit:
             raise BlobReferenceAuditRefused("custody binding lacks matching confirmed admission")
         _require_available(blobs, row["blob_id"], "norm_custody_binding")
     counts.append(("norm_custody_binding", len(bindings)))
+
+    retrieval_sets = _rows(session, _RETRIEVAL_SETS)
+    for row in retrieval_sets:
+        if row["state"] == "rejected":
+            if any(row[name] is not None for name in (
+                "set_blob_id", "set_size_bytes", "catalogue_blob_id", "catalogue_size_bytes"
+            )):
+                raise BlobReferenceAuditRefused("rejected retrieval set has a Blob reference")
+            continue
+        if row["state"] != "verified":
+            raise BlobReferenceAuditRefused("retrieval set state is unknown")
+        for role in ("set", "catalogue"):
+            blob_id = row[f"{role}_blob_id"]
+            if not isinstance(blob_id, str):
+                raise BlobReferenceAuditRefused(f"verified retrieval set lacks {role} Blob")
+            actual = _require_available(blobs, blob_id, "norm_retrieval_set")
+            if (row[f"observed_{role}_sha256"], row[f"{role}_size_bytes"]) != (
+                actual.sha256, actual.size_bytes
+            ):
+                raise BlobReferenceAuditRefused(f"verified retrieval set {role} Blob facts differ")
+    counts.append(("norm_retrieval_set", len(retrieval_sets)))
 
     return BlobReferenceAudit(tuple(counts), tuple(sorted(available, key=lambda fact: fact.blob_id)))
 
