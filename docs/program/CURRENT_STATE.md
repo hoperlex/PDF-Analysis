@@ -1,5 +1,12 @@
 # Current state
 
+**Code-first development candidate 28, 2026-10-16.** W58 has an unactivated
+guarded PostgreSQL restore callback for its offline DB-plus-Blob coordinator;
+the operator still must prove an empty isolated target and matching bucket.
+W54 embedding-build replay now re-reads stored window metadata before
+certifying a completed build. No real recovery drill or corpus publication
+has run. See `CFB-INT-DEV-PUBLISH-28.md`.
+
 **Code-first development candidate 27, 2026-10-16.** W56b has a pure,
 unserved OCR-region candidate that binds an exact recognised-text quote to
 a TEXT portal block and checked region on an explicitly textless page. It
@@ -29,20 +36,10 @@ passed 2/2. Separate W55b candidate `37393a97` still needs a complete gate
 and direct exact-SHA main authority. See `CFB-INT-DEV-PUBLISH-24.md` and
 `W55B-INT-D142-GATE-REPAIR-01.md`.
 
-**Code-first development candidate 23, 2026-10-16.** W57a storage seal
-`0023_norm_citations` now defines `nrs_` retrieval-set identity, two
-confirmed custody roles, a frozen Run pin and a commit-checked 0..5 citation
-partition. The source passed 49 focused real-PostgreSQL and 176
-contract/offline tests. Domain contracts are candidate revision 14; API and
-stage registry are unchanged. W57a API/stage seal and served CITE remain
-serial next work. The separate W55b candidate `37393a97` is waiting for a
-memory/load window before its full gate. See `CFB-INT-DEV-PUBLISH-23.md` and
-`W57A-SEAL-01A.md`.
-
 ## Current development boundary
 
 The checked predecessor of this candidate is
-`origin/dev=4efd756c67b5160aeca3dbc58903f72df6c93636`.
+`origin/dev=746311c9ac5760b1658b6862f629471fa0cf15b4`.
 The development API surface is 48 paths / 55 operations / 131 schemas; the
 error catalogue has 25 codes and the migration head is `0023_norm_citations`.
 `VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
@@ -68,8 +65,9 @@ preparation, but its citation reader and route wait for verified W57a reader
 and 0024 seal. W56b has only an unserved OCR-region candidate; saved-artifact
 custody and an approved OCR citation policy are still required. See
 `W57-INT-SEAL-FREEZE-PROPOSAL-01.md`. W58 has read-only source-object mirror,
-isolated target-copy and offline DB-plus-Blob drill code; it has not
-transferred a stand or proved recovery. W59 has version-pair,
+isolated target-copy and offline DB-plus-Blob drill code, including a guarded
+PostgreSQL restore callback; it has not transferred a stand or proved
+recovery. W59 has version-pair,
 section-identity and unserved 15-choice review preparations; its section
 seal waits for the required recovery-code close.
 
@@ -81,7 +79,8 @@ tracked table fingerprints: 348,777 paragraphs and 55,702 chunks are present.
 The 121-page `claude-opus-5` repair has a zero-call priced plan, but no proxy
 credential file exists. Repaired snapshot, embeddings, qualified bundle and
 DB/S3 corpus publication remain pending. See `W54-CORPUS-PROMOTION-01.md` and
-`W54-CORPUS-REPAIR-PLAN-01.md`.
+`W54-CORPUS-REPAIR-PLAN-01.md`. Embedding-build replay now checks persisted
+window metadata, but a real build and qualified bundle remain absent.
 
 The old W55b `6d63802a` main candidate failed three complete-gate attempts;
 its successor `d3acd511` passed the earlier brittle test position but failed
