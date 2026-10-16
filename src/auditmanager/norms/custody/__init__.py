@@ -34,7 +34,7 @@ from .model import (
     RejectedBlob,
     binding_digest,
 )
-from .roles import NORM_SOURCE, ROLE_SHAPES, RoleShape
+from .roles import NORM_CATALOGUE, NORM_RETRIEVAL_SET, NORM_SOURCE, ROLE_SHAPES, RoleShape
 from .service import (
     ADMIT_COMMAND_TYPE,
     Checkpoint,
@@ -53,6 +53,8 @@ __all__ = [
     "D143_REASON",
     "MAX_ATTEMPTS",
     "NORM_SOURCE",
+    "NORM_RETRIEVAL_SET",
+    "NORM_CATALOGUE",
     "RETRY_DELAYS_SECONDS",
     "ROLE_SHAPES",
     "Admission",

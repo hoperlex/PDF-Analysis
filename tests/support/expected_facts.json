@@ -405,6 +405,6 @@
     "api_codes": 25,
     "stored_vocabulary": 23
   },
-  "migration_head": "0022_findings_v2",
+  "migration_head": "0023_norm_citations",
   "contract_version": "1.0.0-draft.1"
 }

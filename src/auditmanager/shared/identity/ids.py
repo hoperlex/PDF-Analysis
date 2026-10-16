@@ -1,7 +1,7 @@
 """Opaque, prefixed identifier value types.
 
-Source of truth: ``contracts/domain/v1/identifiers.json`` (read-only for this
-session). Every entity declared there gets exactly one type here, carrying exactly
+Source of truth: ``contracts/domain/v1/identifiers.json``. Every entity
+declared there gets exactly one type here, carrying exactly
 the contract prefix. ``tests/contract/domain_p02/test_identifier_catalog.py``
 asserts the two sets are equal in both directions, so a catalog entry that gains a
 type here without a contract entry, or the reverse, is a test failure rather than a
@@ -239,6 +239,10 @@ class NormDocumentId(OpaqueId, prefix="ndoc", entity="NormDocument"):
 
 class NormParagraphId(OpaqueId, prefix="npar", entity="NormParagraph"):
     """Identity of one immutable canonical normative paragraph."""
+
+
+class NormRetrievalSetId(OpaqueId, prefix="nrs", entity="NormRetrievalSet"):
+    """Identity of one snapshot-bound normative retrieval set and catalogue."""
 
 
 class NormCustodyAdmissionId(OpaqueId, prefix="nad", entity="NormCustodyAdmission"):

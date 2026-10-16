@@ -120,7 +120,11 @@ portal-bundle page ceiling of 500 and three nullable text-count columns on
 `document_version`).
 `W56A-SEAL-01` adds `0022_findings_v2`: seven categories, optional severity,
 canonical observation identity and the fail-closed model identity code. The
-default v1 profile remains unchanged.
+default v1 profile remains unchanged. `W57A-SEAL-01A` adds
+`0023_norm_citations`: an `nrs_` retrieval set, two R-76 artifact custody
+roles, a frozen optional Run pin and a transaction-checked citation partition.
+The v3 API and executor are separate serial work; this migration changes no
+served profile.
 
 ### 3.1 Tables
 
@@ -143,11 +147,13 @@ default v1 profile remains unchanged.
 | `worker` | `worker_id` | registry row; only `heartbeat_at` and `intake_enabled` change |
 | `norm_custody_admission` | `norm_custody_admission_id` | custody intent and outbox; inserted `pending`; `pending → confirmed \| poisoned \| rejected`, `poisoned → pending \| rejected`; never deleted |
 | `norm_custody_binding` | `norm_custody_binding_id`; one per confirmed admission | **immutable after insert**; insert needs a confirmed admission, its verified Blob and the target |
+| `norm_retrieval_set` | `norm_retrieval_set_id` (`nrs_`) | **immutable after insert**; `verified` needs exact expected/observed digests and two confirmed artifact bindings |
 | `norm_repair_call` | `norm_repair_call_id` (its own idempotency scope) | inserted `prepared`; `prepared → response_received → completed`, `prepared → not_processed \| outcome_unknown`; never deleted |
 | `norm_current_snapshot` | one row (`singleton`) | the current norms snapshot; every insert or change names its own history event; never deleted (no unset) |
 | `norm_current_snapshot_event` | `event_id` (`evt`) | **immutable after insert**: the append-only history of the current snapshot (actor, from, to, time) |
 | `finding` | `finding_uid` | mutable |
 | `finding_observation` | `finding_observation_id` | **immutable after insert** |
+| `finding_observation_norm_citation` | `(finding_observation_id, citation_ordinal)` | **immutable after insert**; deferred count and CITE-stage proof bind each partition to the Run's verified set |
 | `finding_evidence` | `(finding_observation_id, evidence_ordinal)` | **immutable after insert** |
 | `expert_decision_event` | `decision_id` | **append-only: no UPDATE, no DELETE** |
 | `audit_event` | `audit_event_id` | **append-only: no UPDATE, no DELETE** |

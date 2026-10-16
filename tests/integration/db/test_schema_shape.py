@@ -58,6 +58,8 @@ IMMUTABLE_TABLES = {
     # `0020_norms_search`: the current snapshot's history is append-only (R-113). The
     # current row itself moves, so its own guard refuses DELETE and an unrecorded change.
     "norm_current_snapshot_event",
+    "norm_retrieval_set",
+    "finding_observation_norm_citation",
 }
 
 
@@ -241,9 +243,13 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "norms_snapshot_id": "ns",
         "norm_document_id": "ndoc",
         "norm_paragraph_id": "npar",
+        "norm_retrieval_set_id": "nrs",
+        "set_blob_id": "blob",
+        "catalogue_blob_id": "blob",
         "model_call_id": "mc",
         "finding_uid": "fnd",
         "finding_observation_id": "fobs",
+        "canonical_observation_id": "fobs",
         "decision_id": "dec",
         "audit_event_id": "evt",
         "job_id": "job",

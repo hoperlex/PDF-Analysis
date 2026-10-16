@@ -173,7 +173,7 @@ def _case(sessions, blob_store, helpers, tmp_path: Path, *, finding: bool,
           tamper: str | None = None):
     with sessions() as session:
         assert session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0022_findings_v2"
+            "0023_norm_citations"
         )
         seeded = helpers.seed_version(session, blob_store)
         run_id = str(RunId.new())

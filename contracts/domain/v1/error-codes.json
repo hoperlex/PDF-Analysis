@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.errors",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 13,
-  "revision_note": "Candidate revision 13 by W56A-SEAL-01 under R-129 to R-136. Adds model_identity_mismatch as a fail-closed provider response identity refusal; severity and canonical-observation validation use validation_failed. Contract version remains an unreleased draft candidate.",
+  "candidate_revision": 14,
+  "revision_note": "Candidate revision 14 by W57A-SEAL-01A. No error-code change; domain family moves with the new nrs_ identity.",
   "status": "draft_candidate",
   "frozen": false,
   "envelope": {

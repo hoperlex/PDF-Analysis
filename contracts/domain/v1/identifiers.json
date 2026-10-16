@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.identifiers",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 13,
-  "revision_note": "Candidate revision 13 by W56A-SEAL-01. No identity, prefix or binding changes; the family moves together for the additive AR v2 error and finding vocabulary.",
+  "candidate_revision": 14,
+  "revision_note": "Candidate revision 14 by W57A-SEAL-01A. Adds opaque NormRetrievalSet identity nrs_ for a verified, snapshot-bound normative retrieval set; no other identity changes.",
   "status": "draft_candidate",
   "frozen": false,
   "format": "<prefix>_<ULID>",
@@ -60,7 +60,8 @@
     "audit_event_id": "evt",
     "erasure_request_id": "era",
     "user_uid": "usr",
-    "request_id": "reg"
+    "request_id": "reg",
+    "norm_retrieval_set_id": "nrs"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -108,7 +109,8 @@
     "AuditEvent": "audit_event_id",
     "ErasureRequest": "erasure_request_id",
     "User": "user_uid",
-    "RegistrationRequest": "request_id"
+    "RegistrationRequest": "request_id",
+    "NormRetrievalSet": "norm_retrieval_set_id"
   },
   "distinct_identities": [
     {
@@ -173,9 +175,10 @@
       "identifiers": [
         "norms_snapshot_id",
         "norm_document_id",
-        "norm_paragraph_id"
+        "norm_paragraph_id",
+        "norm_retrieval_set_id"
       ],
-      "rule": "NormsSnapshot identifies one immutable corpus state, NormDocument one immutable member document and NormParagraph one immutable canonical paragraph. Each is allocated independently and never derived from content or from another identity. Retrieval chunks are rebuildable projections over canonical paragraphs and have no public entity identity.",
+      "rule": "NormsSnapshot identifies one immutable corpus state, NormDocument one immutable member document and NormParagraph one immutable canonical paragraph. Each is allocated independently and never derived from content or from another identity. Retrieval chunks are rebuildable projections over canonical paragraphs and have no public entity identity. NormRetrievalSet identifies a verified, snapshot-bound set and catalogue; its map digest, content key and artifact checksums are attributes, never substitutes for nrs_ identity.",
       "authority": "NORM-ID-01 owner ruling 2026-09-30",
       "evidence": [
         "NORM-Q01",

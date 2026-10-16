@@ -20,7 +20,7 @@ from auditmanager.shared.identity import (
     VersionUid,
 )
 
-HEAD = "0022_findings_v2"
+HEAD = "0023_norm_citations"
 PREVIOUS = "0021_portal_bundles"
 
 

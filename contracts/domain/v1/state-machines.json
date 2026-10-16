@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.state-machines",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 13,
-  "revision_note": "Candidate revision 13 by W56A-SEAL-01. No machine or transition changes; the family moves together for the additive AR v2 error and finding vocabulary.",
+  "candidate_revision": 14,
+  "revision_note": "Candidate revision 14 by W57A-SEAL-01A. No machine or transition change; domain family moves with the new nrs_ identity.",
   "status": "draft_candidate",
   "frozen": false,
   "rules": [

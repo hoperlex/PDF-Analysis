@@ -1,4 +1,4 @@
-# Normative corpus source/crop custody
+# Normative corpus and retrieval artifact custody
 
 R-76 (2026-10-09) supersedes the 2026-09-30 one-object-per-admission wording:
 `blob_id` is derived from verified bytes and size. Equal corpus and project bytes are
@@ -27,7 +27,7 @@ from their binding, so a project document and corpus source can share the same b
 
 The drop's opaque `doc_…` and `blk_…` references and `page_index` stay text anchors;
 they are never parsed as `document_uid`. Custody mints its own `nad`/`nbd` identities
-(`contracts/domain/v1/identifiers.json`, candidate revision 10).
+(`contracts/domain/v1/identifiers.json`).
 The canonical paragraph retains its source `page_label` and `block_ref`. A crop binds to the
 document/page/block source anchor, not to a retrieval chunk. Rebuilding chunks therefore never
 changes custody, and a paragraph/crop link remains resolvable through the canonical anchor.
@@ -41,11 +41,15 @@ its target kind and anchor kinds:
 | Role | Target kind | `target_id` | Anchor kinds | Added by |
 |---|---|---|---|---|
 | `norm_source` | `norm_document` | `ndoc_<ULID>` | `pdf`, `crop` | `0018_norm_custody` |
+| `norm_retrieval_set` | `norm_retrieval_set` | `nrs_<ULID>` | `artifact` | `0023_norm_citations` |
+| `norm_catalogue` | `norm_retrieval_set` | `nrs_<ULID>` | `artifact` | `0023_norm_citations` |
 
 An unknown role, target kind or anchor kind is refused by that CHECK, and the binding's insert
-guard refuses an unknown target kind a second time. W57a adds `norm_retrieval_set` and
-`norm_catalogue`, whose targets are not norm documents, by replacing the CHECK (and the guard's
-target arm) in its own migration; it holds `norms/custody/roles.py` and this section from then on.
+guard refuses an unknown target kind a second time. The 0023 guard accepts an `nrs_`
+target only after a verified set row exists. A deferred constraint trigger then requires
+exactly one confirmed binding for each artifact role, with the row's expected and observed
+digest, size and Blob identity. A rejected set cannot receive a published binding or be
+pinned by a Run. `norms/custody/roles.py` mirrors these exact role shapes.
 
 ## Publication invariant
 
