@@ -32,6 +32,9 @@ One pure function validates supplied canonical retrieval-set bytes and returns t
 
 ## Captured premise evidence
 
+- premise: published code can build and custody-check set bytes and ground
+  supplied paragraphs, but has no v3 parser joining these boundaries.
+
 ### P-01 — set builder, custody reader and grounding already exist
 
 - captured_at: 2026-10-16
@@ -47,9 +50,9 @@ One pure function validates supplied canonical retrieval-set bytes and returns t
 
 ## Historical evidence
 
-- correction_mode: none
-- source_record: not_applicable
-- addendum_path: not_applicable
+- correction_mode: addendum
+- source_record: docs/program/tasks/W57A-INT-SET-PROMPT-INPUT-PREP-01.md at 735ef8083dd7b4236e34449c611f72c78922208f
+- addendum_path: docs/program/W57A-INT-SET-PROMPT-INPUT-PREP-01.md
 
 ## Publication authority
 
