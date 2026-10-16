@@ -8,6 +8,7 @@ reserves authority for a later provider effect or publication.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Final
@@ -32,7 +33,13 @@ from auditmanager.analysis.public import (
     default_registry,
     sha256_hex,
 )
-from auditmanager.documents.public import DocumentRepository
+from auditmanager.documents.public import (
+    MANIFEST_ROLE_MARKDOWN,
+    MANIFEST_ROLE_STRUCTURED_COMPANION,
+    DocumentRepository,
+    DocumentVersionRecord,
+    ManifestEntry,
+)
 from auditmanager.jobs.public import AttemptAuthority, JobRepository
 from auditmanager.runs.repository import RunRepository, StageResultRow
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -48,6 +55,7 @@ _SOURCE_REQUIRED: Final[frozenset[str]] = frozenset({
 _GEOMETRY_REQUIRED: Final[frozenset[str]] = frozenset({
     ROLE_BLOCK_INDEX, ROLE_PAGE_CROPS, ROLE_PORTAL_BLOCKS,
 })
+_SHA256: Final[re.Pattern[str]] = re.compile(r"[0-9a-f]{64}\Z")
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +118,36 @@ def _stage_refs(
     if not required <= refs.keys():
         raise _refuse("saved_artifact_reference_missing")
     return refs
+
+
+def _manifest_source_digests(version: DocumentVersionRecord) -> tuple[str, str]:
+    """The one immutable markdown and block-list source entry each producer read."""
+    if not isinstance(version.manifest, tuple) or any(
+        not isinstance(entry, ManifestEntry) for entry in version.manifest
+    ):
+        raise _refuse("portal_source_manifest_invalid")
+    markdown = tuple(
+        entry for entry in version.manifest if entry.role == MANIFEST_ROLE_MARKDOWN
+    )
+    blocks = tuple(
+        entry for entry in version.manifest
+        if entry.role == MANIFEST_ROLE_STRUCTURED_COMPANION
+    )
+    if len(markdown) != 1 or len(blocks) != 1:
+        raise _refuse("portal_source_manifest_missing_or_duplicate")
+    for entry, media_type in ((markdown[0], "text/markdown"), (blocks[0], ARTIFACT_MEDIA_TYPE)):
+        if (
+            entry.media_type != media_type
+            or type(entry.size_bytes) is not int or entry.size_bytes < 1
+            or not isinstance(entry.sha256, str)
+            or _SHA256.fullmatch(entry.sha256) is None
+        ):
+            raise _refuse("portal_source_manifest_invalid")
+        try:
+            parse_blob_id(str(entry.blob_id))
+        except StorageError:
+            raise _refuse("portal_source_manifest_invalid") from None
+    return markdown[0].sha256, blocks[0].sha256
 
 
 def _read_document(store: BlobStore, ref: ArtifactRef, *, version_uid: str) -> dict[str, Any]:
@@ -187,6 +225,7 @@ def load_saved_recognised_region(
         or tuple(sorted(set(version.textless_pages))) != version.textless_pages
     ):
         raise _refuse("portal_version_required")
+    markdown_sha256, blocks_sha256 = _manifest_source_digests(version)
 
     rows = run_repo.stage_results(session, authority.run_id)
     source_row = _one_stage(rows, _SOURCE)
@@ -205,6 +244,11 @@ def load_saved_recognised_region(
 
     recognised = _read_document(blob_store, recognised_ref, version_uid=run.version_uid)
     portal = _read_document(blob_store, portal_ref, version_uid=run.version_uid)
+    if (
+        recognised.get("results_sha256") != markdown_sha256
+        or portal.get("blocks_sha256") != blocks_sha256
+    ):
+        raise _refuse("portal_source_digest_mismatch")
     if not isinstance(portal.get("pages"), list) or len(portal["pages"]) != version.page_count:
         raise _refuse("portal_page_count_mismatch")
     try:

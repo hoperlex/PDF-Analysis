@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 
 from auditmanager.analysis.public import ArtifactRef, canonical_bytes, sha256_hex
+from auditmanager.documents.public import (
+    MANIFEST_ROLE_MARKDOWN,
+    MANIFEST_ROLE_STRUCTURED_COMPANION,
+    ManifestEntry,
+)
 from auditmanager.jobs.public import AttemptAuthority
 from auditmanager.runs.recognised_region_input import load_saved_recognised_region
 from auditmanager.runs.repository import StageResultRow
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import VersionUid
-from auditmanager.storage.public import BlobIntegrityError
+from auditmanager.storage.public import BlobIntegrityError, parse_blob_id
 
 
 RUN = "run_01M2545JSD15ETSNNV904X991J"
@@ -21,6 +27,10 @@ PROJECT = "prj_01M2545JSD15ETSNNV904X991J"
 VERSION = "ver_01M2545JSD15ETSNNV904X991J"
 BLOCK = "blk_" + "1" * 32
 QUOTE = "плоская кровля"
+MARKDOWN = b"saved portal markdown"
+BLOCK_LIST = b'{"source":"saved portal blocks"}'
+MARKDOWN_SHA256 = sha256_hex(MARKDOWN)
+BLOCK_LIST_SHA256 = sha256_hex(BLOCK_LIST)
 AUTHORITY = AttemptAuthority(
     run_id=RUN,
     job_id="job_01M2545JSD15ETSNNV904X991J",
@@ -45,7 +55,7 @@ def _documents() -> tuple[dict, dict]:
         "artifact_role": "prepared.recognised_text",
         "artifact_version": "1.0.0",
         "version_uid": VERSION,
-        "results_sha256": "a" * 64,
+        "results_sha256": MARKDOWN_SHA256,
         "entries": [{
             "portal_block_id": BLOCK,
             "page_number": 1,
@@ -59,7 +69,7 @@ def _documents() -> tuple[dict, dict]:
         "artifact_role": "geometry.portal_blocks",
         "artifact_version": "1.0.0",
         "version_uid": VERSION,
-        "blocks_sha256": "b" * 64,
+        "blocks_sha256": BLOCK_LIST_SHA256,
         "pages": [{
             "page_number": 1, "width_px": 2000, "height_px": 1000,
             "rotation_deg": 0, "geometry": "ok",
@@ -108,19 +118,39 @@ class FakeRuns:
 
 class FakeDocuments:
     def __init__(self):
+        self.markdown_entry = ManifestEntry(
+            role=MANIFEST_ROLE_MARKDOWN,
+            blob_id=parse_blob_id("blob_01M2545JSD15ETSNNV904X991R"),
+            sha256=MARKDOWN_SHA256, size_bytes=len(MARKDOWN),
+            media_type="text/markdown",
+        )
+        self.blocks_entry = ManifestEntry(
+            role=MANIFEST_ROLE_STRUCTURED_COMPANION,
+            blob_id=parse_blob_id("blob_01M2545JSD15ETSNNV904X991S"),
+            sha256=BLOCK_LIST_SHA256, size_bytes=len(BLOCK_LIST),
+            media_type="application/json",
+        )
         self.version = SimpleNamespace(
             version_uid=VersionUid.parse(VERSION), project_uid=PROJECT,
             page_count=1, textless_pages=(1,),
+            manifest=(self.markdown_entry, self.blocks_entry),
         )
         self.calls: list[str] = []
         self.change_version = False
+        self.change_manifest = False
 
     def get_version(self, session: object, version_uid: VersionUid):
         self.calls.append(str(version_uid))
         if self.change_version and len(self.calls) > 1:
             return SimpleNamespace(
                 version_uid=VersionUid.parse(VERSION), project_uid=PROJECT,
-                page_count=1, textless_pages=(),
+                page_count=1, textless_pages=(), manifest=self.version.manifest,
+            )
+        if self.change_manifest and len(self.calls) > 1:
+            return SimpleNamespace(
+                version_uid=VersionUid.parse(VERSION), project_uid=PROJECT,
+                page_count=1, textless_pages=(1,),
+                manifest=(replace(self.markdown_entry, sha256="c" * 64), self.blocks_entry),
             )
         return self.version
 
@@ -213,6 +243,8 @@ def test_exact_two_saved_artifacts_bind_one_textless_region_under_two_fences() -
     assert result.candidate.quote_source == "recognised"
     assert result.candidate.ocr_char_start == 4
     assert result.candidate.bbox_norm == (0.1, 0.2, 0.8, 0.7)
+    assert result.candidate.results_sha256 == MARKDOWN_SHA256
+    assert result.candidate.blocks_sha256 == BLOCK_LIST_SHA256
     assert store.calls == [
         (recognised_ref.blob_id, recognised_ref.sha256, recognised_ref.size_bytes),
         (portal_ref.blob_id, portal_ref.sha256, portal_ref.size_bytes),
@@ -233,13 +265,15 @@ def test_stale_second_attempt_refuses_after_both_reads() -> None:
     assert store.closed == 2
 
 
-@pytest.mark.parametrize("change", ["run", "version", "source", "geometry"])
+@pytest.mark.parametrize("change", ["run", "version", "manifest", "source", "geometry"])
 def test_any_changed_saved_input_refuses_after_read(change: str) -> None:
     runs, jobs, documents, store, _, _ = _inputs()
     if change == "run":
         runs.change_run = True
     elif change == "version":
         documents.change_version = True
+    elif change == "manifest":
+        documents.change_manifest = True
     elif change == "source":
         runs.change_source = True
     else:
@@ -248,6 +282,58 @@ def test_any_changed_saved_input_refuses_after_read(change: str) -> None:
         _load(runs, jobs, documents, store)
     assert caught.value.code == ErrorCode.ANALYSIS_INPUT_INVALID
     assert jobs.calls == 2
+
+
+@pytest.mark.parametrize("change", [
+    "missing_markdown", "duplicate_blocks", "wrong_media", "bad_digest", "zero_size",
+    "invalid_blob_id", "not_a_tuple",
+])
+def test_invalid_portal_source_manifest_refuses_before_blob_open(change: str) -> None:
+    runs, jobs, documents, store, _, _ = _inputs()
+    markdown, blocks = documents.version.manifest
+    if change == "missing_markdown":
+        documents.version.manifest = (blocks,)
+    elif change == "duplicate_blocks":
+        documents.version.manifest = (markdown, blocks, blocks)
+    elif change == "wrong_media":
+        documents.version.manifest = (replace(markdown, media_type="application/pdf"), blocks)
+    elif change == "bad_digest":
+        documents.version.manifest = (replace(markdown, sha256="z" * 64), blocks)
+    elif change == "zero_size":
+        documents.version.manifest = (markdown, replace(blocks, size_bytes=0))
+    elif change == "invalid_blob_id":
+        documents.version.manifest = (markdown, replace(blocks, blob_id="bad"))
+    else:
+        documents.version.manifest = [markdown, blocks]
+    with pytest.raises(DomainError) as caught:
+        _load(runs, jobs, documents, store)
+    assert caught.value.code == ErrorCode.ANALYSIS_INPUT_INVALID
+    assert jobs.calls == 1
+    assert store.calls == []
+
+
+@pytest.mark.parametrize("which", ["recognised", "portal"])
+def test_valid_derived_blob_with_a_different_inner_source_digest_refuses(which: str) -> None:
+    runs, jobs, documents, store, recognised_ref, portal_ref = _inputs()
+    ref = recognised_ref if which == "recognised" else portal_ref
+    document = json.loads(store.payloads[ref.blob_id])
+    document["results_sha256" if which == "recognised" else "blocks_sha256"] = "c" * 64
+    payload = canonical_bytes(document)
+    updated = replace(ref, sha256=sha256_hex(payload), size_bytes=len(payload))
+    store.payloads[ref.blob_id] = payload
+    row = runs.source if which == "recognised" else runs.geometry
+    artifacts = list(row.artifacts)
+    artifacts[-1] = updated.to_document()
+    if which == "recognised":
+        runs.source = replace(row, artifacts=tuple(artifacts))
+    else:
+        runs.geometry = replace(row, artifacts=tuple(artifacts))
+
+    with pytest.raises(DomainError) as caught:
+        _load(runs, jobs, documents, store)
+    assert caught.value.detail_fields["reason"] == "portal_source_digest_mismatch"
+    assert jobs.calls == 1
+    assert store.closed == 2
 
 
 def test_invalid_stage_and_ref_refuse_before_open() -> None:
