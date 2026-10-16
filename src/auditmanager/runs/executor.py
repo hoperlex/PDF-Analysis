@@ -965,6 +965,12 @@ def _execute_run_body(
             break
 
     if recorded_v2:
+        # The last deterministic _persist_and_bind holds the Lease lock until
+        # commit. The recorded text port reads source Blobs before its own
+        # stage_started commit; release that lock before the S3 read so the
+        # independent heartbeat is never blocked by source loading (D-141).
+        # The StageResult UPSERT and its artifact binding stay atomic here.
+        session.commit()
         # These ports import the executor's publication helpers. Import only on
         # the selected path, after the persisted profile has passed preflight.
         from auditmanager.runs.recorded_v2_stage import run_recorded_v2_stage
