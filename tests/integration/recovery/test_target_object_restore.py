@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import io
+import hashlib
 from pathlib import Path
 
 import pytest
 
+from auditmanager.storage.public import (
+    BlobId, BlobMetadataInvalidError, BlobIntegrityError, S3BlobStore, S3StorageSettings,
+    canonical_object_key_for_recovery, derive_blob_id,
+)
 from scripts.recovery.object_copy import build_manifest, manifest_bytes
 from scripts.recovery.target_object_restore import (
     TargetObjectRestoreRefused,
@@ -21,6 +26,7 @@ INVENTORY = b"blobs/00/one\t5\tfirst-etag\nblobs/00/two\t0\tsecond-etag\n"
 class FakeClient:
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
+        self.metadata: dict[str, dict[str, str]] = {}
         self.puts: list[str] = []
         self.gets: list[str] = []
         self.list_calls = 0
@@ -46,7 +52,8 @@ class FakeClient:
         return page
 
     def put_object(self, *, Bucket: str, Key: str, Body: io.BufferedIOBase,
-                   ContentLength: int, IfNoneMatch: str) -> dict[str, object]:
+                   ContentLength: int, IfNoneMatch: str,
+                   Metadata: dict[str, str] | None = None) -> dict[str, object]:
         assert Bucket == "isolated-bucket" and IfNoneMatch == "*"
         self.puts.append(Key)
         if Key in self.fail_put:
@@ -56,6 +63,7 @@ class FakeClient:
         payload = Body.read()
         assert len(payload) == ContentLength
         self.objects[Key] = payload
+        self.metadata[Key] = dict(Metadata or {})
         return {"ETag": '"opaque-not-a-checksum"'}
 
     def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
@@ -66,7 +74,8 @@ class FakeClient:
             payload = b"X" + payload[1:]
         body = _Body(payload, self.closed, Key, nonbytes=Key in self.nonbytes_get)
         declared = len(payload) - 1 if Key in self.short_get else len(payload)
-        return {"Body": body, "ContentLength": declared}
+        return {"Body": body, "ContentLength": declared,
+                "Metadata": self.metadata.get(Key, {})}
 
 
 class _Body(io.BytesIO):
@@ -119,6 +128,44 @@ def test_uploads_every_object_and_rereads_exact_target_bytes(tmp_path: Path) -> 
     assert client.list_calls >= 3
     assert _restore(root, inventory, seal, client) == result
     assert client.puts == [ONE, TWO]  # complete retry only reads
+
+
+def test_restored_canonical_object_is_streamable_through_real_blobstore(tmp_path: Path) -> None:
+    payload = b"W58 synthetic positive Blob"
+    digest = hashlib.sha256(payload).hexdigest()
+    blob_id = derive_blob_id(sha256=digest, size=len(payload))
+    key = canonical_object_key_for_recovery(BlobId(str(blob_id)))
+    root = tmp_path / "objects"
+    root.mkdir(mode=0o700)
+    object_path = root / key
+    object_path.parent.mkdir(parents=True, mode=0o700)
+    for parent in object_path.parents:
+        if parent == root:
+            break
+        parent.chmod(0o700)
+    object_path.write_bytes(payload)
+    object_path.chmod(0o600)
+    inventory = f"{key}\t{len(payload)}\tsynthetic-etag\n".encode("ascii")
+    seal = manifest_bytes(build_manifest(inventory, root))
+    client = FakeClient()
+
+    _restore(root, inventory, seal, client)
+    settings = S3StorageSettings(
+        endpoint_url="http://127.0.0.1:61999", region="us-east-1",
+        access_key_id="synthetic", secret_access_key="synthetic", bucket="isolated-bucket",
+    )
+    store = S3BlobStore(settings, client=client)
+    assert b"".join(store.open_stream(
+        blob_id, expected_sha256=digest, expected_size=len(payload),
+    )) == payload
+    assert client.metadata[key] == {"content-sha256": digest}
+
+    client.metadata[key].clear()
+    with pytest.raises(BlobMetadataInvalidError):
+        store.open_stream(blob_id, expected_sha256=digest, expected_size=len(payload))
+    client.metadata[key]["content-sha256"] = "0" * 64
+    with pytest.raises(BlobIntegrityError):
+        store.open_stream(blob_id, expected_sha256=digest, expected_size=len(payload))
 
 
 def test_interrupted_upload_resumes_only_after_existing_bytes_match(tmp_path: Path) -> None:

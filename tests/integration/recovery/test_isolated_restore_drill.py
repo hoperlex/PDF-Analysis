@@ -94,11 +94,13 @@ class _Objects:
         ]}
 
     def put_object(self, *, Bucket: str, Key: str, Body: io.BufferedIOBase,
-                   ContentLength: int, IfNoneMatch: str) -> dict[str, object]:
+                   ContentLength: int, IfNoneMatch: str,
+                   Metadata: dict[str, str]) -> dict[str, object]:
         self.events.append("put")
         assert Bucket == "isolated-bucket" and IfNoneMatch == "*" and Key not in self.objects
         value = Body.read()
         assert len(value) == ContentLength
+        assert Metadata == {"content-sha256": _sha(value)}
         self.objects[Key] = value
         self.puts += 1
         return {}

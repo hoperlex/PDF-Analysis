@@ -33,7 +33,7 @@ class TargetObjectClient(Protocol):
 
     def put_object(
         self, *, Bucket: str, Key: str, Body: BinaryIO, ContentLength: int,
-        IfNoneMatch: str,
+        IfNoneMatch: str, Metadata: Mapping[str, str],
     ) -> Mapping[str, object]: ...
 
 
@@ -208,6 +208,7 @@ def restore_sealed_objects(
                         client.put_object(
                             Bucket=target_bucket, Key=key, Body=stream,
                             ContentLength=size, IfNoneMatch="*",
+                            Metadata={"content-sha256": sha256},
                         )
                     except Exception:
                         raise TargetObjectRestoreRefused("conditional target PutObject failed") from None
