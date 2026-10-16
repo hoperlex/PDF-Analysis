@@ -72,6 +72,7 @@ from ..repository import (
     NormsRepository,
     SnapshotImportConflict,
     SnapshotRowsInvalid,
+    validate_snapshot_rows,
 )
 from ..snapshot import SnapshotRow, SnapshotRows
 from .contents import iter_build, read_rows
@@ -238,6 +239,10 @@ def import_bundle(
             "manifest_snapshot_differs",
             f"the manifest's snapshot facts {manifest.snapshot!r} are not the rows' {row_facts!r}",
         )
+    try:
+        validate_snapshot_rows(rows)
+    except SnapshotRowsInvalid as exc:
+        raise BundleRefused("bundle_rows_invalid", str(exc)) from exc
     _require_source_pdf_slots(rows, manifest)
     say(f"bundle: {manifest.content_key} verified ({len(manifest.files)} files"
         f"{', objects already discarded' if discarded else ''})")
