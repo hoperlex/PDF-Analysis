@@ -1,8 +1,8 @@
 # Current state
 
-**Code-first candidate 33, 2026-10-16.** W56b adds a current Run/Attempt
-crop reader, W57a adds an unserved CITE writer, and W58 an opt-in synthetic
-restore CLI. Real DB/S3 proof remains open. See `CFB-INT-DEV-PUBLISH-33.md`.
+**Code-first candidate 34, 2026-10-16.** W57a adds an unserved citation reader
+after dev33's CITE writer, W56b crop reader and W58 synthetic restore CLI.
+Real DB/S3, v3 profile and report assembly remain open; see `CFB-INT-DEV-PUBLISH-34.md`.
 
 **Code-first development candidate 31, 2026-10-16.** W57a grounds v3 PDF
 and normative proposals with separate N-labels for one paragraph; W56b
@@ -62,7 +62,7 @@ API/stage seal adds vocabulary and a refusing report read. The pure v3
 proposal parser and grounding bridge add no runtime profile or canonical
 result; prompt labels can name one paragraph through multiple map items.
 No qualified
-retrieval-set row, verified reader or active CITE stage exists. W57b has XLSX
+retrieval-set row or active CITE stage exists; the verified reader is unserved. W57b has XLSX
 preparation, but its citation reader and route wait for verified W57a reader
 and 0024 seal. W56b has unserved OCR-region and IMAGE crop-cohort candidates;
 the byte verifier checks only supplied in-memory data. Real run-scoped
