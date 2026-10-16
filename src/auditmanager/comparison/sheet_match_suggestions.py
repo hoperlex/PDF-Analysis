@@ -88,15 +88,15 @@ def _page_digests(pages: Mapping[int, str], page_count: int, label: str) -> dict
         value = pages[number]
         if not isinstance(value, str):
             raise SheetMatchSuggestionRefused(f"{label}_page_text_invalid")
-        try:
-            encoded = value.encode("utf-8")
-        except UnicodeEncodeError:
-            raise SheetMatchSuggestionRefused(f"{label}_page_text_invalid") from None
         if len(value) > MAX_SNAPSHOT_PAGE_CHARACTERS:
             raise SheetMatchSuggestionRefused(f"{label}_page_too_large")
         total_characters += len(value)
         if total_characters > MAX_SNAPSHOT_CHARACTERS:
             raise SheetMatchSuggestionRefused(f"{label}_pages_too_large")
+        try:
+            encoded = value.encode("utf-8")
+        except UnicodeEncodeError:
+            raise SheetMatchSuggestionRefused(f"{label}_page_text_invalid") from None
         if value.strip():
             by_digest.setdefault(hashlib.sha256(encoded).hexdigest(), []).append(number)
     return by_digest

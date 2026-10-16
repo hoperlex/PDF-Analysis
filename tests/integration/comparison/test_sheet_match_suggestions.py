@@ -92,6 +92,39 @@ def test_snapshot_above_document_character_budget_refuses() -> None:
         _suggest(version_pair=_pair(101, 3), source_pages=source)
 
 
+class _EncodeForbidden(str):
+    def encode(self, *args: object, **kwargs: object) -> bytes:
+        raise AssertionError("oversized page was encoded before refusal")
+
+
+@pytest.mark.parametrize("side", ("source", "target"))
+def test_page_limit_refuses_before_encoding_oversized_text(side: str) -> None:
+    pages = {1: _EncodeForbidden("А" * (MAX_SNAPSHOT_PAGE_CHARACTERS + 1)),
+             2: "План", 3: "Разрез"}
+    with pytest.raises(SheetMatchSuggestionRefused, match=f"^{side}_page_too_large$"):
+        _suggest(**{f"{side}_pages": pages})
+
+
+def test_document_limit_refuses_before_encoding_crossing_page() -> None:
+    full_page = "x" * MAX_SNAPSHOT_PAGE_CHARACTERS
+    source = {number: full_page for number in range(1, 101)}
+    source[101] = _EncodeForbidden("x")
+    with pytest.raises(SheetMatchSuggestionRefused, match="^source_pages_too_large$"):
+        _suggest(version_pair=_pair(101, 3), source_pages=source)
+
+
+def test_exact_page_and_document_boundaries_keep_frozen_digests() -> None:
+    blank_page = " " * MAX_SNAPSHOT_PAGE_CHARACTERS
+    unicode_page = "А" * MAX_SNAPSHOT_PAGE_CHARACTERS
+    pages = {number: blank_page for number in range(1, 100)} | {100: unicode_page}
+    assert sum(map(len, pages.values())) == MAX_SNAPSHOT_CHARACTERS
+    suggestion, = _suggest(version_pair=_pair(100, 100),
+                           source_pages=pages, target_pages=pages)
+    assert (suggestion.source_page_number, suggestion.target_page_number) == (100, 100)
+    assert suggestion.page_text_sha256 == "e125e459ef1f20607b55f5e1430a143b7a3d7ada463cb6c56b7ec9953a4c44d7"
+    assert suggestion.suggestion_sha256 == "dd38eb7c61170ad2fa8ef3c8e3b2d7ef1917d63b0d2c224ec726935950cb9d00"
+
+
 def test_duplicate_text_on_either_side_is_ambiguous_and_does_not_match() -> None:
     assert _suggest(source_pages={1: "План этажа\nОсь А-Б\n", 2: "План этажа\nОсь А-Б\n", 3: "\n"}) == ()
     assert _suggest(target_pages={1: "План этажа\nОсь А-Б\n", 2: "План этажа\nОсь А-Б\n", 3: "\n"}) == ()
