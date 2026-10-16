@@ -1,8 +1,10 @@
 """Read-only W54 corpus inventory and capacity preflight.
 
-Run with the *shared* norms root, not a worktree-relative ``.local``::
+Name the source drop and the promotion workspace separately::
 
-    python scripts/norms/corpus_preflight.py --norms-root /path/to/.local/norms \
+    python scripts/norms/corpus_preflight.py \
+        --source-root /path/to/source/.local/norms \
+        --promotion-root /path/to/promotion/.local/norms \
         --next-step bundle-export
 
 This checks metadata and current host headroom without opening source PDFs, a database,
@@ -65,7 +67,8 @@ class Result:
     qualification: str = (
         "metadata-only, not authorization to operate: run sha256sum -c for the source, "
         "restore-verify for the dump, embedding status/load for the build, and full "
-        "bundle verify; stand capacity and P3 compatibility were not checked"
+        "bundle verify; capacity covers the promotion-root filesystem only; "
+        "Docker data, stand capacity and P3 compatibility were not checked"
     )
 
     @property
@@ -78,6 +81,19 @@ def _is_regular(path: Path) -> bool:
         return stat.S_ISREG(path.lstat().st_mode)
     except OSError:
         return False
+
+
+def _root_refusal(path: Path, kind: str) -> str | None:
+    """Refuse an implicit cwd, missing root, or lexical/symlink escape."""
+    if not path.is_absolute():
+        return f"{kind}_root_unsafe"
+    try:
+        resolved = path.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return f"{kind}_root_absent"
+    if resolved != path or path.is_symlink() or not path.is_dir():
+        return f"{kind}_root_unsafe"
+    return None
 
 
 def _inventory(corpus: Path) -> tuple[int, set[str], bool]:
@@ -101,12 +117,16 @@ def _inventory(corpus: Path) -> tuple[int, set[str], bool]:
 
 
 def _sums(root: Path, source_paths: set[str] | None) -> tuple[str, str | None]:
+    if (root / "corpus-sums").is_symlink():
+        return "unsafe_directory", None
     candidates = sorted((root / "corpus-sums").glob("*/SHA256SUMS"))
     if not candidates:
         return "absent", None
     if len(candidates) != 1:
         return "ambiguous", None
     path = candidates[0]
+    if path.parent.is_symlink():
+        return "unsafe_directory", None
     if not _is_regular(path):
         return "not_regular", None
     try:
@@ -120,6 +140,8 @@ def _sums(root: Path, source_paths: set[str] | None) -> tuple[str, str | None]:
 
 def _dump(root: Path) -> str:
     directory = root / "promotion-dumps"
+    if directory.is_symlink():
+        return "unsafe_directory"
     candidates = sorted(directory.glob("promotion-*.dump"))
     if not candidates:
         return "absent"
@@ -145,7 +167,9 @@ def _dump(root: Path) -> str:
 
 def _build(root: Path) -> str:
     builds = root / "builds"
-    candidates = [path for path in builds.glob("*/plan.json") if _is_regular(path)]
+    if builds.is_symlink():
+        return "unsafe_directory"
+    candidates = [path for path in builds.glob("*/plan.json") if not path.parent.is_symlink() and _is_regular(path)]
     if not candidates:
         return "absent"
     for plan in candidates:
@@ -160,6 +184,8 @@ def _build(root: Path) -> str:
             continue
         vectors = plan.parent / "vectors"
         inputs = plan.parent / "inputs"
+        if vectors.is_symlink() or inputs.is_symlink():
+            continue
         if all(
             _is_regular(inputs / f"batch-{index:05d}.jsonl")
             and _is_regular(vectors / f"batch-{index:05d}.jsonl")
@@ -172,6 +198,8 @@ def _build(root: Path) -> str:
 
 def _bundle(root: Path, drop_sums_sha: str | None) -> str:
     bundles = root / "bundles"
+    if bundles.is_symlink():
+        return "unsafe_directory"
     candidates = [path for path in bundles.iterdir()] if bundles.is_dir() else []
     if not candidates:
         return "absent"
@@ -196,6 +224,7 @@ def _bundle(root: Path, drop_sums_sha: str | None) -> str:
             or not isinstance(metadata.get("drop"), dict)
             or metadata["drop"].get("sums_sha256") != drop_sums_sha
             or metadata.get("content_key") != path.name.rsplit("+", 1)[0]
+            or (path / "build").is_symlink()
             or not (path / "build").is_dir()
             or not any(_is_regular(item) for item in (path / "build").glob("chunks-*.jsonl"))
         ):
@@ -206,8 +235,8 @@ def _bundle(root: Path, drop_sums_sha: str | None) -> str:
     return "build_declared_payload_present_unverified"
 
 
-def _capacity(root: Path, next_step: str) -> Capacity:
-    disk = os.statvfs(root)
+def _capacity(promotion_root: Path, next_step: str) -> Capacity:
+    disk = os.statvfs(promotion_root)
     disk_available = disk.f_bavail * disk.f_frsize  # df -B1 Avail semantics
     meminfo = Path("/proc/meminfo").read_text(encoding="ascii")
     match = re.search(r"^MemAvailable:\s+(\d+) kB$", meminfo, re.MULTILINE)
@@ -218,9 +247,10 @@ def _capacity(root: Path, next_step: str) -> Capacity:
 
 
 def inspect(
-    root: Path,
+    source_root: Path,
     next_step: str,
     *,
+    promotion_root: Path,
     expected_manifest_sha256: str = MANIFEST_SHA256,
     expected_documents: int = DOCUMENTS,
     expected_files: int = FILES,
@@ -233,10 +263,13 @@ def inspect(
     docs: int | None = None
     files: int | None = None
     source_paths: set[str] | None = None
-    if not root.is_dir() or root.is_symlink():
-        refusals.append("norms_root_absent")
+    for kind, path in (("source", source_root), ("promotion", promotion_root)):
+        issue = _root_refusal(path, kind)
+        if issue is not None:
+            refusals.append(issue)
+    if refusals:
         return Result(next_step, None, None, None, "absent", "absent", "absent", "absent", None, tuple(refusals))
-    corpus = root / "corpus"
+    corpus = source_root / "corpus"
     manifest = corpus / "MANIFEST.json"
     if not corpus.is_dir() or corpus.is_symlink() or not _is_regular(manifest):
         refusals.append("source_manifest_absent")
@@ -257,10 +290,10 @@ def inspect(
             refusals.append("source_nonregular_entry")
         if docs != expected_documents or files != expected_files:
             refusals.append("source_tree_count")
-    source_sums, sums_sha = _sums(root, source_paths)
-    dump = _dump(root)
-    build = _build(root)
-    bundle = _bundle(root, sums_sha)
+    source_sums, sums_sha = _sums(source_root, source_paths)
+    dump = _dump(promotion_root)
+    build = _build(promotion_root)
+    bundle = _bundle(promotion_root, sums_sha)
     if next_step != "source-sums" and source_sums != "listed_unverified":
         refusals.append("source_sums_unavailable")
     if next_step == "restore-verify" and dump not in {
@@ -272,7 +305,7 @@ def inspect(
     if next_step == "bundle-export" and build != "batch_files_present_unverified":
         refusals.append("build_checkpoint_unavailable")
     try:
-        capacity = measure(root, next_step)
+        capacity = measure(promotion_root, next_step)
     except (OSError, ValueError):
         capacity = None
         refusals.append("capacity_unavailable")
@@ -287,11 +320,14 @@ def inspect(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--norms-root", required=True, type=Path)
+    parser.add_argument("--source-root", required=True, type=Path)
+    parser.add_argument("--promotion-root", required=True, type=Path)
     parser.add_argument("--next-step", required=True, choices=sorted(INCREMENTS))
     args = parser.parse_args(argv)
-    result = inspect(args.norms_root, args.next_step)
-    print(json.dumps({"status": "METADATA_READY" if result.ok else "REFUSED", **asdict(result)},
+    result = inspect(args.source_root, args.next_step, promotion_root=args.promotion_root)
+    print(json.dumps({"status": "METADATA_READY" if result.ok else "REFUSED",
+                      "source_root": str(args.source_root), "promotion_root": str(args.promotion_root),
+                      **asdict(result)},
                      ensure_ascii=False, indent=2))
     return 0 if result.ok else 2
 

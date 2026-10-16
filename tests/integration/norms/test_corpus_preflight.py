@@ -60,8 +60,10 @@ def _measure(_root: Path, step: str, *, disk: int = 20 * preflight.GIB,
 
 
 def _inspect(root: Path, manifest_sha: str, step: str = "bundle-export", **kwargs) -> preflight.Result:
+    promotion_root = kwargs.pop("promotion_root", root)
     return preflight.inspect(root, step, expected_manifest_sha256=manifest_sha,
-                             expected_documents=2, expected_files=3, **kwargs)
+                             expected_documents=2, expected_files=3,
+                             promotion_root=promotion_root, **kwargs)
 
 
 def test_preflight_passes_metadata_and_capacity_without_reading_a_document(
@@ -160,8 +162,65 @@ def test_preflight_refuses_incomplete_or_ambiguous_sums(tmp_path: Path) -> None:
 
 
 def test_cli_returns_explicit_json_refusal_for_absent_root(tmp_path: Path, capsys) -> None:
-    code = preflight.main(["--norms-root", str(tmp_path / "missing"), "--next-step", "base-load"])
+    code = preflight.main(["--source-root", str(tmp_path / "missing"),
+                           "--promotion-root", str(tmp_path), "--next-step", "base-load"])
     output = json.loads(capsys.readouterr().out)
     assert code == 2
     assert output["status"] == "REFUSED"
-    assert output["refusals"] == ["norms_root_absent"]
+    assert output["refusals"] == ["source_root_absent"]
+
+
+def test_split_roots_read_the_base_dump_without_copying_payload(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "source"
+    promotion = tmp_path / "promotion"
+    source.mkdir()
+    promotion.mkdir()
+    manifest_sha = _source(source)
+    _sums(source)
+    _dump(promotion)
+    read_bytes = Path.read_bytes
+
+    def refuse_payload(self: Path) -> bytes:
+        if self.suffix in {".pdf", ".dump"}:
+            raise AssertionError("preflight read corpus or dump payload")
+        return read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", refuse_payload)
+    measured: list[Path] = []
+
+    def measure(root: Path, step: str) -> preflight.Capacity:
+        measured.append(root)
+        return _measure(root, step)
+
+    result = _inspect(source, manifest_sha, "bundle-export", promotion_root=promotion, measure=measure)
+    assert result.restore_verified_dump == "restore_marker_present_unrehashed"
+    assert result.source_sums == "listed_unverified"
+    assert result.refusals == ("build_checkpoint_unavailable",)
+    assert measured == [promotion]
+
+
+def test_relative_or_symlink_roots_and_child_directories_fail_closed(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    promotion = tmp_path / "promotion"
+    source.mkdir()
+    promotion.mkdir()
+    manifest_sha = _source(source)
+    _sums(source)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "promotion-dumps").mkdir()
+    (promotion / "promotion-dumps").symlink_to(outside / "promotion-dumps", target_is_directory=True)
+    result = _inspect(source, manifest_sha, promotion_root=promotion, measure=_measure)
+    assert result.restore_verified_dump == "unsafe_directory"
+    assert "restore_verified_dump_unavailable" in result.refusals
+
+    alias = tmp_path / "alias"
+    alias.symlink_to(source, target_is_directory=True)
+    result = _inspect(alias, manifest_sha, promotion_root=promotion, measure=_measure)
+    assert result.refusals == ("source_root_unsafe",)
+    result = _inspect(Path("relative/source"), manifest_sha, promotion_root=promotion, measure=_measure)
+    assert result.refusals == ("source_root_unsafe",)
+    promotion_alias = tmp_path / "promotion-alias"
+    promotion_alias.symlink_to(promotion, target_is_directory=True)
+    result = _inspect(source, manifest_sha, promotion_root=promotion_alias, measure=_measure)
+    assert result.refusals == ("promotion_root_unsafe",)
