@@ -324,13 +324,29 @@ def read_drop_sums(path: Path) -> tuple[str, dict[str, str]]:
     return parsed.sha256, dict(parsed.entries)
 
 
-def read_crops_index(corpus: Path) -> dict[str, tuple[str, ...]]:
-    """``slug -> block ids`` from the drop's root ``crops_index.json``."""
+def read_crops_index(
+    corpus: Path, *, sums: Mapping[str, str] | None = None
+) -> dict[str, tuple[str, ...]]:
+    """``slug -> block ids`` from the drop's root ``crops_index.json``.
+
+    With source sums, bind the index's bytes and complete crop inventory to that listing
+    before export creates a staging directory. The exporter later checks each object byte.
+    """
     path = corpus / CROPS_INDEX
     try:
-        entries = json.loads(path.read_text(encoding="utf-8"))
+        data = path.read_bytes()
+        entries = json.loads(data.decode("utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise BundleRefused("drop_crops_index", f"{CROPS_INDEX} is unreadable: {exc}") from None
+    if sums is not None:
+        expected = sums.get(CROPS_INDEX)
+        if expected is None:
+            raise BundleRefused("drop_file_unsummed", f"the drop's SHA256SUMS does not name {CROPS_INDEX}")
+        actual = hashlib.sha256(data).hexdigest()
+        if actual != expected:
+            raise BundleRefused(
+                "drop_file_differs", f"{CROPS_INDEX} hashes to {actual}; the drop's SHA256SUMS says {expected}"
+            )
     if not isinstance(entries, list):
         raise BundleRefused("drop_crops_index", f"{CROPS_INDEX} is not a list")
     by_slug: dict[str, set[str]] = {}
@@ -343,6 +359,18 @@ def read_crops_index(corpus: Path) -> dict[str, tuple[str, ...]]:
         if entry["block_id"] in blocks:
             raise BundleRefused("drop_crops_index", f"{CROPS_INDEX} names {entry['slug']}/{entry['block_id']} twice")
         blocks.add(entry["block_id"])
+    if sums is not None:
+        indexed = {f"{slug}/crops/{block_id}.pdf" for slug, blocks in by_slug.items() for block_id in blocks}
+        listed = {relative for relative in sums if "/crops/" in relative and relative.endswith(".pdf")}
+        if indexed != listed:
+            omitted = sorted(listed - indexed)
+            unsummed = sorted(indexed - listed)
+            raise BundleRefused(
+                "drop_crops_differ",
+                f"{CROPS_INDEX} and SHA256SUMS disagree on crop PDFs "
+                f"({len(omitted)} omitted, {len(unsummed)} unlisted; first omitted {omitted[:1]!r}, "
+                f"first unlisted {unsummed[:1]!r})",
+            )
     return {slug: tuple(sorted(blocks)) for slug, blocks in by_slug.items()}
 
 
@@ -532,7 +560,7 @@ def write_bundle(
     sums_sha256, sums = read_drop_sums(drop_sums)
     read_ledger = _read_ledger(ledger, rows, sums_sha256)
     ledger_facts = _ledger_facts(read_ledger)
-    crops = read_crops_index(corpus)
+    crops = read_crops_index(corpus, sums=sums)
     out.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix="incomplete-", dir=out))
     try:
