@@ -78,8 +78,14 @@ def _measure(_root: Path, step: str, *, disk: int = 20 * preflight.GIB,
 
 def _inspect(root: Path, manifest_sha: str, step: str = "bundle-export", **kwargs) -> preflight.Result:
     promotion_root = kwargs.pop("promotion_root", root)
+    expected_sums = kwargs.pop("expected_source_sums_sha256", None)
+    if expected_sums is None:
+        listings = list((root / "corpus-sums").glob("*/SHA256SUMS"))
+        expected_sums = (hashlib.sha256(listings[0].read_bytes()).hexdigest()
+                         if len(listings) == 1 else preflight.SOURCE_SUMS_SHA256)
     return preflight.inspect(root, step, expected_manifest_sha256=manifest_sha,
                              expected_documents=2, expected_files=3,
+                             expected_source_sums_sha256=expected_sums,
                              promotion_root=promotion_root, **kwargs)
 
 
@@ -228,6 +234,28 @@ def test_preflight_refuses_incomplete_or_ambiguous_sums(tmp_path: Path) -> None:
     assert _inspect(tmp_path, manifest_sha, "base-load", measure=_measure).source_sums == "ambiguous"
 
 
+@pytest.mark.parametrize("step", ["base-load", "restore-verify", "repair-sample", "bundle-export"])
+def test_post_checksum_steps_refuse_a_changed_listing_with_the_same_paths(
+    tmp_path: Path, step: str
+) -> None:
+    manifest_sha = _source(tmp_path)
+    pinned_sums = _sums(tmp_path)
+    _dump(tmp_path)
+    sums = tmp_path / "corpus-sums" / "2026-10-15" / "SHA256SUMS"
+    sums.write_text(sums.read_text().replace("a" * 64, "c" * 64))
+    assert hashlib.sha256(sums.read_bytes()).hexdigest() != pinned_sums
+
+    result = _inspect(tmp_path, manifest_sha, step,
+                      expected_source_sums_sha256=pinned_sums, measure=_measure)
+    assert result.source_sums == "listed_unverified"
+    assert "source_sums_digest_mismatch" in result.refusals
+    assert not result.ok
+
+    preparatory = _inspect(tmp_path, manifest_sha, "source-sums",
+                           expected_source_sums_sha256=pinned_sums, measure=_measure)
+    assert "source_sums_digest_mismatch" not in preparatory.refusals
+
+
 def test_cli_returns_explicit_json_refusal_for_absent_root(tmp_path: Path, capsys) -> None:
     code = preflight.main(["--source-root", str(tmp_path / "missing"),
                            "--promotion-root", str(tmp_path), "--next-step", "base-load"])
@@ -355,7 +383,9 @@ def test_repair_sample_refuses_wrong_sums_and_dump_digest(tmp_path: Path) -> Non
     _dump(tmp_path)
     plan, plan_sha = _repair_plan(tmp_path)
     result = _inspect(tmp_path, manifest_sha, "repair-sample", repair_plan=plan,
-                      expected_repair_plan_sha256=plan_sha, measure=_measure)
+                      expected_repair_plan_sha256=plan_sha,
+                      expected_source_sums_sha256=preflight.SOURCE_SUMS_SHA256,
+                      measure=_measure)
     assert "source_sums_digest_mismatch" in result.refusals
     assert "frozen_base_dump_unavailable" in result.refusals
     (tmp_path / "promotion-dumps" / "promotion-20261015T000000Z.dump.verified").unlink()

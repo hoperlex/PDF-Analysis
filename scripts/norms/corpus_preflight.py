@@ -320,6 +320,7 @@ def inspect(
     promotion_root: Path,
     repair_plan: Path | None = None,
     expected_repair_plan_sha256: str = REPAIR_PLAN_SHA256,
+    expected_source_sums_sha256: str = SOURCE_SUMS_SHA256,
     expected_manifest_sha256: str = MANIFEST_SHA256,
     expected_documents: int = DOCUMENTS,
     expected_files: int = FILES,
@@ -365,8 +366,11 @@ def inspect(
     bundle = _bundle(promotion_root, sums_sha)
     plan = (_repair_plan(promotion_root, repair_plan, expected_repair_plan_sha256)
             if next_step == "repair-sample" else "not_checked")
-    if next_step != "source-sums" and source_sums != "listed_unverified":
-        refusals.append("source_sums_unavailable")
+    if next_step != "source-sums":
+        if source_sums != "listed_unverified":
+            refusals.append("source_sums_unavailable")
+        elif sums_sha != expected_source_sums_sha256:
+            refusals.append("source_sums_digest_mismatch")
     if next_step == "restore-verify" and dump not in {
         "dump_metadata_present_unverified", "restore_marker_present_unrehashed"
     }:
@@ -376,8 +380,6 @@ def inspect(
     if next_step == "bundle-export" and build != "batch_files_present_unverified":
         refusals.append("build_checkpoint_unavailable")
     if next_step == "repair-sample":
-        if sums_sha != SOURCE_SUMS_SHA256:
-            refusals.append("source_sums_digest_mismatch")
         if dump != "restore_marker_present_unrehashed" or dump_sha != BASE_DUMP_SHA256:
             refusals.append("frozen_base_dump_unavailable")
         if plan != "frozen_plan_present_unverified":
