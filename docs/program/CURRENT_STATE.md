@@ -1,8 +1,8 @@
 # Current state
 
-**Updated 2026-10-16 from published code-first development candidate 62
-(`7b56cb451946d250b1030f61150a4979dbcfc157`), with dev63 offline
-corrections integrated in this tree.** W55b is
+**Updated 2026-10-16 from published code-first development candidate 63
+(`417123c729599cfa075d3461038c8dd15b86d4a3`), with dev64 unserved
+source and comparison checks integrated in this tree.** W55b is
 published on `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as
 `GATE OK` under R-125; the deploy workflow selected that tree and the owner
 subsequently ran `infra/deploy/verify-deployed.sh` on the host with a passing
@@ -57,10 +57,15 @@ across W56a recorded evaluation runs, verifies W58 target Blob
 `content-sha256` metadata on retry and final readback, and checks W59 sheet
 snapshot character limits before UTF-8 allocation. Its combined focused
 offline suites pass; these changes do not activate a served route or prove a
-real recovery drill. The complete B3.5 live export remains unverified. Served callers,
+real recovery drill. The dev64 candidate adds a read-only W57b chain that
+combines the current Attempt's saved PDF text and verified catalogue, binds
+W56b crop source digest to the Version manifest, and refuses W59 observation
+IDs shared across versions. Its combined focused suite passes; the reference
+chain is unserved and requires an explicit reviewed slug tuple from a future
+caller. The complete B3.5 live export remains unverified. Served callers,
 provider/effect provenance, qualified corpus, reviewed catalogue slugs,
 approved W56b policy, W57a CAP-01 and W57b 0024 seal remain open. See
-`CFB-INT-DEV-PUBLISH-45.md` through `CFB-INT-DEV-PUBLISH-63.md`. R-135
+`CFB-INT-DEV-PUBLISH-45.md` through `CFB-INT-DEV-PUBLISH-64.md`. R-135
 defers the complete beta gate to
 the final code candidate. No beta acceptance is claimed.
 
