@@ -6,6 +6,8 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from scripts.norms import corpus_preflight as preflight
 
 
@@ -70,8 +72,8 @@ def _bundle(root: Path, sums_sha: str) -> None:
 
 
 def _measure(_root: Path, step: str, *, disk: int = 20 * preflight.GIB,
-             memory: int = 8 * preflight.GIB) -> preflight.Capacity:
-    return preflight.Capacity(disk, preflight.DISK_RESERVE + preflight.INCREMENTS[step], memory)
+             memory: int = 8 * preflight.GIB, load: float = 0.0) -> preflight.Capacity:
+    return preflight.Capacity(disk, preflight.DISK_RESERVE + preflight.INCREMENTS[step], memory, load)
 
 
 def _inspect(root: Path, manifest_sha: str, step: str = "bundle-export", **kwargs) -> preflight.Result:
@@ -157,6 +159,56 @@ def test_preflight_refuses_both_current_host_floor_failures(tmp_path: Path) -> N
     assert result.capacity is not None
     assert result.capacity.disk_required_bytes == 3 * preflight.GIB
     assert result.capacity.memory_required_bytes == 6 * preflight.GIB
+
+
+@pytest.mark.parametrize("load, refused", [(7.999, False), (8.0, True), (8.001, True)])
+def test_preflight_requires_the_recorded_w54_cpu_window(
+    tmp_path: Path, load: float, refused: bool
+) -> None:
+    manifest_sha = _source(tmp_path)
+    result = _inspect(tmp_path, manifest_sha, "source-sums",
+                      measure=lambda root, step: _measure(root, step, load=load))
+    assert ("load_floor" in result.refusals) is refused
+    assert result.capacity is not None
+    assert result.capacity.load_average_1 == load
+    assert result.capacity.load_limit_exclusive == 8.0
+    assert result.ok is not refused
+
+
+@pytest.mark.parametrize("load", [float("nan"), float("inf"), float("-inf"), -0.01])
+def test_preflight_refuses_an_invalid_cpu_measurement(tmp_path: Path, load: float) -> None:
+    manifest_sha = _source(tmp_path)
+    result = _inspect(tmp_path, manifest_sha, "source-sums",
+                      measure=lambda root, step: _measure(root, step, load=load))
+    assert result.refusals == ("capacity_unavailable",)
+    assert result.capacity is None
+    assert not result.ok
+
+
+def test_host_capacity_samples_one_minute_load_and_refuses_unavailable_load(
+    tmp_path: Path, monkeypatch
+) -> None:
+    manifest_sha = _source(tmp_path)
+    original_read_text = Path.read_text
+
+    def stable_memory(path: Path, *args, **kwargs) -> str:
+        if path == Path("/proc/meminfo"):
+            return "MemAvailable: 8388608 kB\n"
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", stable_memory)
+    monkeypatch.setattr(preflight.os, "getloadavg", lambda: (8.25, 0.0, 0.0))
+    result = _inspect(tmp_path, manifest_sha, "source-sums")
+    assert result.capacity is not None and result.capacity.load_average_1 == 8.25
+    assert result.refusals == ("load_floor",)
+
+    def unavailable() -> tuple[float, float, float]:
+        raise OSError("load average unavailable")
+
+    monkeypatch.setattr(preflight.os, "getloadavg", unavailable)
+    result = _inspect(tmp_path, manifest_sha, "source-sums")
+    assert result.refusals == ("capacity_unavailable",)
+    assert result.capacity is None
 
 
 def test_preflight_refuses_incomplete_or_ambiguous_sums(tmp_path: Path) -> None:

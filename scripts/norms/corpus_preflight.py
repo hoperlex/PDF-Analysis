@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import stat
@@ -48,6 +49,10 @@ REPAIR_PAGES = 121
 GIB = 1024**3
 MEMORY_FLOOR = 6 * GIB
 DISK_RESERVE = 3 * GIB
+# The verified W54 promotion operation used a load-under-8 window on this
+# eight-CPU host (W54-CORPUS-PROMOTION-01.md). This is an operator-window
+# criterion in addition to W54-PLAN.md §3.9's disk and memory stop rule.
+LOAD_LIMIT = 8.0
 # W54 §3.9: source-sums has no stated increment, so check the 3 GiB reserve only.
 # Base load and restore-verify each have a 3 GiB increment; use that conservative
 # increment for the repair sample until its output size is measured. Bundle adds 0.6 GiB.
@@ -63,7 +68,9 @@ class Capacity:
     disk_available_bytes: int
     disk_required_bytes: int
     memory_available_bytes: int
+    load_average_1: float
     memory_required_bytes: int = MEMORY_FLOOR
+    load_limit_exclusive: float = LOAD_LIMIT
 
 
 @dataclass(frozen=True)
@@ -302,7 +309,8 @@ def _capacity(promotion_root: Path, next_step: str) -> Capacity:
     if match is None:
         raise ValueError("MemAvailable is unavailable")
     memory_available = int(match.group(1)) * 1024  # free -b available, no swap
-    return Capacity(disk_available, DISK_RESERVE + INCREMENTS[next_step], memory_available)
+    return Capacity(disk_available, DISK_RESERVE + INCREMENTS[next_step],
+                    memory_available, os.getloadavg()[0])
 
 
 def inspect(
@@ -380,10 +388,21 @@ def inspect(
         capacity = None
         refusals.append("capacity_unavailable")
     else:
-        if capacity.disk_available_bytes < capacity.disk_required_bytes:
-            refusals.append("disk_floor")
-        if capacity.memory_available_bytes < capacity.memory_required_bytes:
-            refusals.append("memory_floor")
+        if (
+            not math.isfinite(capacity.load_average_1)
+            or capacity.load_average_1 < 0
+            or not math.isfinite(capacity.load_limit_exclusive)
+            or capacity.load_limit_exclusive != LOAD_LIMIT
+        ):
+            capacity = None
+            refusals.append("capacity_unavailable")
+        else:
+            if capacity.disk_available_bytes < capacity.disk_required_bytes:
+                refusals.append("disk_floor")
+            if capacity.memory_available_bytes < capacity.memory_required_bytes:
+                refusals.append("memory_floor")
+            if capacity.load_average_1 >= capacity.load_limit_exclusive:
+                refusals.append("load_floor")
     return Result(next_step, manifest_sha, docs, files, source_sums, dump, build, bundle,
                   capacity, tuple(refusals), repair_plan=plan)
 
