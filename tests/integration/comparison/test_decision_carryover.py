@@ -9,10 +9,12 @@ import pytest
 from auditmanager.comparison.decision_carryover import (
     ConfirmedCarryoverPlan,
     DecisionCarryoverRefused,
+    MAX_CARRYOVER_MATCHES,
     MatchedDecision,
     confirm_decision_carryover,
     offer_decision_carryover,
 )
+from auditmanager.comparison.finding_match_suggestions import MAX_FINDINGS_PER_RUN
 
 
 def _id(prefix: str, suffix: str) -> str:
@@ -20,6 +22,11 @@ def _id(prefix: str, suffix: str) -> str:
 
 
 EXPERT = _id("usr", "P")
+_ULID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def _numbered_id(prefix: str, number: int) -> str:
+    return _id(prefix, "P")[:-2] + _ULID_ALPHABET[number // 32] + _ULID_ALPHABET[number % 32]
 
 
 def _match(suffix: str = "P", **changes: object) -> MatchedDecision:
@@ -134,3 +141,31 @@ def test_only_an_explicit_expert_selection_produces_a_plan() -> None:
         _confirm((match,), (shown,), expert_user_uid=_id("fnd", "P"))
     with pytest.raises(DecisionCarryoverRefused, match="^selection_empty_or_invalid$"):
         _confirm((match,), ())
+
+
+def test_carryover_batches_are_bounded_before_item_work() -> None:
+    assert MAX_CARRYOVER_MATCHES == MAX_FINDINGS_PER_RUN == 200
+    with pytest.raises(DecisionCarryoverRefused, match="^matches_too_large$"):
+        offer_decision_carryover([object()] * 201)  # type: ignore[list-item]
+    match = _match()
+    shown = offer_decision_carryover((match,))[0].offer_sha256
+    with pytest.raises(DecisionCarryoverRefused, match="^selection_too_large$"):
+        _confirm((match,), (shown,) * 201)
+
+
+def test_exact_200_match_and_selection_boundary_is_repeatable() -> None:
+    matches = tuple(
+        replace(
+            _match(),
+            source_finding_uid=_numbered_id("fnd", number),
+            target_finding_uid=_numbered_id("fnd", number + 200),
+            source_decision_id=_numbered_id("dec", number),
+        )
+        for number in range(200)
+    )
+    offers = offer_decision_carryover(matches)
+    assert len(offers) == 200
+    selected = tuple(offer.offer_sha256 for offer in offers)
+    plans = _confirm(matches, selected)
+    assert len(plans) == 200
+    assert plans == _confirm(tuple(reversed(matches)), tuple(reversed(selected)))

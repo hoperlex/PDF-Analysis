@@ -25,6 +25,8 @@ from auditmanager.shared.identity import (
 )
 
 ALGORITHM = "confirmed-decision-carryover-offer-v1"
+# One-to-one matches originate from at most 200 findings per Run in W59.
+MAX_CARRYOVER_MATCHES = 200
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -132,6 +134,8 @@ def offer_decision_carryover(
     """
     if not isinstance(matches, (tuple, list)):
         raise DecisionCarryoverRefused("matches_invalid")
+    if len(matches) > MAX_CARRYOVER_MATCHES:
+        raise DecisionCarryoverRefused("matches_too_large")
     if not matches:
         return ()
     seen_source: set[str] = set()
@@ -184,6 +188,8 @@ def confirm_decision_carryover(
         raise DecisionCarryoverRefused("expert_role_required")
     if not isinstance(selected_offer_sha256s, (tuple, list)) or not selected_offer_sha256s:
         raise DecisionCarryoverRefused("selection_empty_or_invalid")
+    if len(selected_offer_sha256s) > MAX_CARRYOVER_MATCHES:
+        raise DecisionCarryoverRefused("selection_too_large")
     if any(
         not isinstance(value, str) or _SHA256.fullmatch(value) is None
         for value in selected_offer_sha256s
