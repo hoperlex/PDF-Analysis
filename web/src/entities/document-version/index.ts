@@ -46,6 +46,20 @@ export {
 export { sectionReviewQueryOptions, useSectionReview } from './api/use-section-review';
 
 export { useDocumentVersion } from './api/use-document-version';
+export type { ComparisonMode, VersionComparisonRequest } from './api/use-version-comparison';
+export { COMPARISON_DIFF_LIMIT, useVersionComparison } from './api/use-version-comparison';
+export {
+  COMPARISON_SIDE_LABELS,
+  PROPOSAL_BASIS_TEXT,
+  PROPOSAL_KIND_LABELS,
+  SHEET_STATUS_LABELS,
+  TOO_LARGE_TEXT,
+  orderedPair,
+  pairingBasisText,
+  refusalText,
+  stageModeOffered,
+  versionLabel,
+} from './model/comparison';
 export {
   DOCUMENT_PAGE_LIMIT,
   documentListQueryOptions,
