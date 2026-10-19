@@ -34,9 +34,8 @@ ignored ledger holds 121 applied repairs, 0 unreliable blocks and no charge,
 and the real drop's ledger validation accepted it. The repaired key is
 `2026-07-23..2026-08-20+17d+121r.0a1bafe103ff`. A 16-page spot check found
 two single-word deviations from print (a map label and a silently corrected
-printed typo) and two table-layout notes. Whether all 121 pages are verified
-and how a correction would be recorded is open for the owner. See
-`W54-SESSION-REPAIR-01.md`.
+printed typo) and two table-layout notes; under `R-138` the owner accepted
+the ledger as it is. See `W54-SESSION-REPAIR-01.md`.
 
 The repaired snapshot load, the BGE-M3 embedding build, the verified bundle
 and any DB/S3 or stand publication have not run. They wait for host

@@ -1615,3 +1615,13 @@ waited for a credential. The task is `tasks/W54-SESSION-REPAIR-01.md`.
 | Ruling | Substance |
 | --- | --- |
 | `R-137` | The repair keeps the page set, crop custody against the verified `SHA256SUMS`, the fixed `RECOGNITION_SYSTEM_PROMPT`, the two-read rule and the version-2 ledger; only the source of the text changes. Session answers go through `repair session-prepare` and `repair session-ledger`, not the durable proxy journal: no proxy call, charge or journal row is made or recorded. Each attempt names the session model, `stop_reason` `session_transcript`, zero tokens and an unpriced cost. This supersedes the 2026-10-16 `claude-opus-5` proxy selection and its `$10` sample/full procedure for this repair only; `R-106` still governs any later paid repair. |
+
+## 3.38 — `R-138`, the session repair ledger is accepted (owner, 2026-10-19)
+
+After the 16-page spot check in `W54-SESSION-REPAIR-01.md`, the owner was asked by
+direct poll whether to accept the 121-repair ledger, verify all 121 pages, or verify
+and add a correction path. The owner chose to accept it as it is.
+
+| Ruling | Substance |
+| --- | --- |
+| `R-138` | The `R-137` session ledger (121 applied, 0 unreliable) feeds the W54 repaired-snapshot load unchanged. The two confirmed single-word deviations from print (`blk_4da232ee…` map label, `blk_786d7fb9…` corrected printed typo) stay as recorded in the report; no full re-verification or correction path is added for this repair. |

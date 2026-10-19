@@ -77,9 +77,9 @@ The printed "оневым" was confirmed as printed. Formula notation varies by
 reader (LaTeX or plain text with `_`); Latin/Cyrillic look-alikes could not
 always be told apart. The rule has no outcome for an inaccurate but
 non-degenerate answer, so both content findings stand as `REPAIRED`. Each
-replaces the page text that was entirely the model's narration. Whether to
-verify all 121 pages, and how a confirmed correction would be recorded, is
-an owner decision; this task does not invent a correction path.
+replaces the page text that was entirely the model's narration. Asked by
+direct poll, the owner accepted the ledger as it is (`R-138`); no full
+re-verification or correction path is added for this repair.
 
 ## Checks
 

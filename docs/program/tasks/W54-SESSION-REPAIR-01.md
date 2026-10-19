@@ -69,7 +69,7 @@ page images.
 
 - `docs/program/tasks/W54-SESSION-REPAIR-01.md`;
 - `docs/program/W54-SESSION-REPAIR-01.md`;
-- `docs/program/OWNER_RULINGS_2026-09-17.md` (the `R-137` entry only);
+- `docs/program/OWNER_RULINGS_2026-09-17.md` (the `R-137` and `R-138` entries only);
 - `src/auditmanager/norms/session_repair.py` (new);
 - `src/auditmanager/norms/__main__.py` (the two `repair session-*` commands
   and their docstring lines only);

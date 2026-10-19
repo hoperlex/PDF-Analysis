@@ -30,5 +30,4 @@ No contract, migration, root dependency, composition root, global style,
 served API/UI, provider, production corpus, DB/S3, deployment workflow,
 `origin/main` or tag changed. The repaired snapshot, embeddings, bundle and
 any stand import have not run: host disk and RAM are below the W54 floors,
-and the owner has still to decide how to treat the two single-word deviations the
-spot check found. No beta or live service acceptance is claimed.
+and the owner later accepted the spot-checked ledger as it is (`R-138`). No beta or live service acceptance is claimed.
