@@ -17,7 +17,7 @@ locally; the stand import stays an owner-window operation.
 
 ## Frozen inputs
 
-- base commit: the `integration/night-1020` commit that adds this file;
+- base commit: `9cf21cc0c111c819570927510ef40dec495df5e9` (`origin/dev`; the lane branches from the `integration/night-1020` commit that adds this file on top of it);
 - bundle: `/root/projects/PDF-Analysis/.local/norms/bundles/2026-07-23..2026-08-20+17d+121r.0a1bafe103ff+7792e307e39b2c1c92a852d64033b9840b48b118160768e3f02e925428815245`
   (manifest SHA-256 `cc0f5ee8…21cf`, `min_migration_head` `0018_norm_custody`);
 - migration head: `0023_norm_citations`;

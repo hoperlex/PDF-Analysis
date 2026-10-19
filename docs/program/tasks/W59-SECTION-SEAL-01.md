@@ -19,7 +19,7 @@ section without an executable profile is refused; there is no AR fallback.
 
 ## Frozen inputs
 
-- base commit: the `integration/night-1020` commit that adds this file (descendant of `origin/dev` `9cf21cc0`);
+- base commit: `9cf21cc0c111c819570927510ef40dec495df5e9` (`origin/dev`; the lane branches from the `integration/night-1020` commit that adds this file on top of it);
 - API contract: `contracts/api/v1/openapi.json` 48 paths / 55 operations / 131 schemas;
 - error catalogue: 25 API codes, 23 stored;
 - migration head: `0023_norm_citations`; this task alone takes `0024`;

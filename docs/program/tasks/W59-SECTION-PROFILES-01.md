@@ -16,7 +16,7 @@ runs with its own section-specific system prompt instead of being refused. ПБ
 
 ## Frozen inputs
 
-- base commit: the `integration/night-1020` commit that adds this file;
+- base commit: `9cf21cc0c111c819570927510ef40dec495df5e9` (`origin/dev`; the lane branches from the `integration/night-1020` commit that adds this file on top of it);
 - legacy source: `/root/projects/PDF-proverka` at `16ba8e5d`, `prompts/disciplines/<CODE>/**`
   and `prompts/disciplines/_registry.json`;
 - v1 prompt contract: `src/auditmanager/analysis/text/prompt.py` (two categories,
