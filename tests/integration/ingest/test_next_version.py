@@ -55,8 +55,15 @@ def _first(service: IngestService, project, baseline_pdf: bytes, key, track, **o
 
 
 def _revision(baseline_pdf: bytes, label: str) -> bytes:
-    """A bundle whose PDF differs from the baseline, so its blob identity differs too."""
-    return bundle_around(baseline_pdf + f"\n% revision {label}\n".encode(), stem="revision")
+    """A bundle whose every stored member differs from the baseline's and from another label's.
+
+    The PDF differs by a trailing comment; the block list and the markdown embed the stem, so
+    a stem per label gives them distinct bytes and distinct blob identities as well. That
+    matters for the concurrency test: two bundles sharing a member blob would queue on that
+    blob's row in the publishing transaction and never reach the ordinal at the same time.
+    """
+    stem = "revision_" + label.replace("-", "_")
+    return bundle_around(baseline_pdf + f"\n% revision {label}\n".encode(), stem=stem)
 
 
 def _next(service: IngestService, project_uid, document_uid, content: bytes, idempotency_key, track):
