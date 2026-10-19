@@ -1,0 +1,35 @@
+{
+  "format": "text-profile/1",
+  "section_code": "OV",
+  "analysis_profile_id": "ap_01M5AXG1KDVXRHH20N7KGBKPZ4",
+  "prompt_bundle_id": "pb_01M5AXG1KDEVEZ88HR6KYX2YP9",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "title_ru": "Отопление, вентиляция и кондиционирование",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "16ba8e5d23e4782550e79355002fde1365f682b7",
+    "files": [
+      {
+        "path": "prompts/disciplines/OV/role.md",
+        "sha256": "7de3df5fd806e2e114e67993e2e9b8683a8a2d5a15fac46df185f3f780732858"
+      },
+      {
+        "path": "prompts/disciplines/OV/checklist.md",
+        "sha256": "bf246ffd2bea9f32f64105f4fc5425b54517554222483f635787d27cace09c2d"
+      },
+      {
+        "path": "prompts/disciplines/OV/drawing_types.md",
+        "sha256": "2d51c69768a68ba1da1f590358512a56b9404478fb9aa870967dc7b527c97eee"
+      },
+      {
+        "path": "prompts/disciplines/OV/project_params.md",
+        "sha256": "f62c496f6e7a301424284ded3735bad8d0067479c71ecdbeae0b35594c14bc88"
+      },
+      {
+        "path": "prompts/disciplines/OV/finding_categories.md",
+        "sha256": "87c0747badf050cf95ecc58e5f37307f5746e9c034a4d1dc11790ab795ca99b0"
+      }
+    ]
+  }
+}
