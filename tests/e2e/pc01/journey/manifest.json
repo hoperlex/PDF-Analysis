@@ -248,17 +248,33 @@
         "",
         "`expects_api` names one operation and that is a claim, not a floor. The screen calls",
         "`listRuns` on mount in EVERY state it has -- two runs, one run, and none -- so the",
-        "assertion holds whatever the stand contains, which is what makes it worth asserting."
+        "assertion holds whatever the stand contains, which is what makes it worth asserting.",
+        "",
+        "W59-VERSION-COMPARE-01 put the version comparison above the run comparison. It reads",
+        "the version (`getDocumentVersion`) and its set's versions (`listVersions`) on mount in",
+        "every state; `compareDocumentVersions` is asked only when the set has another version,",
+        "so it is optional here: the journey's set has one version."
       ],
       "expects_api": [
         {
           "method": "GET",
           "path": "/versions/{version_uid}/runs",
           "operationId": "listRuns"
+        },
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}",
+          "operationId": "getDocumentVersion"
+        },
+        {
+          "method": "GET",
+          "path": "/documents/{document_uid}/versions",
+          "operationId": "listVersions"
         }
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison", "operationId": "compareDocumentVersions", "$why_optional": "asked only when the set has another published version; the journey's set has one"}
       ],
       "follow": null
     },

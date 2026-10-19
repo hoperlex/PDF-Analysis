@@ -92,6 +92,14 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
         "/versions/ver_01M2545JSD15ETSNNV904X991J/section-review",
     ),
+    # `W59-VERSION-COMPARE-01`. Two versions of one set compared (any role), addressed the
+    # same way; the required ``target_version_uid`` is given so only the role decides.
+    "compareDocumentVersions": (
+        "GET",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
+        "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
+    ),
     "listRunFindings": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     "exportRunCsv": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),
     "getFinding": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
@@ -151,6 +159,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "streamVersionPortalBlockCrop": _ANY_ROLE,
     # `W59-SECTION-SEAL-01`: the section review is a product read.
     "getVersionSectionReview": _ANY_ROLE,
+    # `W59-VERSION-COMPARE-01`: the version comparison is a product read.
+    "compareDocumentVersions": _ANY_ROLE,
     "listRunFindings": _ANY_ROLE,
     "getFinding": _ANY_ROLE,
     "listDecisionHistory": _ANY_ROLE,

@@ -376,6 +376,33 @@ def create_project(token: str, name: str = "W55B QA project") -> str:
     return str(answer.json()["project_uid"])
 
 
+#: `W59-SECTION-SEAL-01`: ``startRun`` and ``reauditRun`` refuse a version no expert has
+#: classified (``422 required_norm_unavailable``, ``details.reference_kind:
+#: version_classification``) and there is no AR fallback. Every probe here runs the AR
+#: corpus, so each version it runs is classified first as a design-stage AR version
+#: (`W59-SEAL-FOLLOWUP-01`), by the expert that uploaded it. Written out, not imported.
+CLASSIFICATION = {"project_stage": "P", "section_code": "AR"}
+
+
+def classify(uploaded: Mapping[str, Any], token: str) -> dict[str, Any]:
+    """Classify the version an ``uploadDocument`` answer describes, as ``token``'s expert.
+
+    ``classifyDocumentVersion`` addresses the version through its project and document, so
+    it takes the upload's whole answer. The stored classification must be the one asked
+    for: a probe that ran on some other section would not be testing what it says.
+    """
+    path = (
+        f"/projects/{uploaded['project_uid']}/documents/{uploaded['document_uid']}"
+        f"/versions/{uploaded['version_uid']}/classification"
+    )
+    answer = call("PUT", path, token=token, json_body=CLASSIFICATION)
+    assert answer.status == 200, answer
+    stored = answer.json()
+    assert stored["version_uid"] == uploaded["version_uid"], stored
+    assert {name: stored[name] for name in CLASSIFICATION} == CLASSIFICATION, stored
+    return dict(stored)
+
+
 def start_run(version_uid: str, token: str, *, key: str | None = None) -> Answer:
     return call("POST", "/runs", token=token, json_body={"version_uid": version_uid}, key=key or new_key("run"))
 

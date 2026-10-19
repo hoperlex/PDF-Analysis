@@ -99,6 +99,12 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
             }}
             roles={roles}
           />
+          <p className="am-note">
+            <Link href={routes.comparison(ownerProjectUid, versionUid)}>
+              Сравнить с другой версией комплекта
+            </Link>{' '}
+            — пары листов, построчные различия и соответствие замечаний.
+          </p>
         </>
       )}
 

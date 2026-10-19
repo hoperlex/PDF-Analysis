@@ -63,3 +63,68 @@ window, appended per publication, as `CODE-FIRST-TO-BETA.md` §2.1 item 4 allows
 | `W59-SECTION-SEAL-01` | `agent/w59-section-seal-01`, stack 57480/61080 | contract, migration 0024, composition root |
 | `W59-SECTION-PROFILES-01` | `agent/w59-section-profiles-01`, no services | none |
 | `W54-LOCAL-IMPORT-01` | `agent/w54-local-import-01`, stack 57490/61090 | none |
+
+## 5. Slice W59 sections — published as development candidate `c4cbc026`
+
+Merged in order: `W59-SECTION-PROFILES-01` (`e027b0d9`), `W54-LOCAL-IMPORT-01`
+(`b8ed5068`), `W59-SECTION-SEAL-01` (`28c23819`), `W59-SECTION-UI-01` (`e2b0b58c`).
+
+- **User-visible result.** An expert confirms a version's stage П/Р and one of 15
+  sections on the version screen; versions, documents and the project screen show it,
+  the project screen groups documents by confirmed section; run start and re-audit
+  route through the text-profile registry (AR from the v1 constants plus 13 draft
+  legacy-ported profiles; none for ПБ) and refuse an unclassified version or a
+  section without a profile, with a Russian explanation on the run control.
+- **Contract.** 48/55/131 → **50/57/137**; error catalogue unchanged at 25 (23
+  stored); migration head **`0024_version_classification`**; contract SHA-256
+  `3e1f070a…`, web mirror byte-identical (`cmp`).
+- **Checks on the merged tree.** `tests/contract` + `tests/unit`: 942 passed, 3
+  failed — two reproduce on the base (`test_error_kernel::test_there_are_twenty_four`,
+  `test_ar_v2_seeded::test_seeded_categories_equal_the_sealed_api_enum`), the third
+  (`test_alpha_acceptance_command`) only refuses an uncommitted checkout and passes on
+  the committed tree (120 passed with the journey conformance test). Web `npm ci`,
+  `typecheck` and `lint --quiet` clean. Lane-level evidence (migration upgrade,
+  routed execution, refusals, mutations, vitest) is in each lane's report.
+- **Integrator edits.** `CURRENT_STATE.md` surface/head/W59 paragraph; two DB tests
+  read the head from `tests/support/expected_facts.json` instead of the literal
+  `0023_norm_citations`.
+- **Deferred.** Complete gate, live journey, DB suites on the merged tree (`R-126`),
+  field evidence of the profiles. Debts `D-178` … `D-182`.
+
+## 6. Round 2 dispatch
+
+| Task | Phase A base | Contract slot |
+| --- | --- | --- |
+| `W59-VERSION-COMPARE-01` | `890deb80` | holds it from `c4cbc026` |
+| `W57B-NORMS-CATALOGUE-XLSX-01` | `849dddd4` | next |
+| `W59-ANALYSIS-SETTINGS-01` | `121ef2ce` | after it |
+
+## 7. Slice W59 comparison (+ W62 П→Р) — published as development candidate `1af17a48`
+
+Merged `W59-VERSION-COMPARE-01` (`367ea390`).
+
+- **User-visible result.** «Сравнение версий» on the version screen: pick another
+  version of the same set; with the same stage and section the deterministic
+  comparison shows sheet pairing, paged line diffs with page anchors and finding-match
+  proposals (labelled as proposals); `mode=stage` compares an earlier П version with a
+  later Р version of the same section — the code half of W62 STAGE-COMPARE. Any other
+  pair is refused with one closed reason; no AI layer, nothing persisted.
+- **Contract.** 50/57/137 → **51/58/147** (`compareDocumentVersions`, 10 schemas); head
+  and error catalogue unchanged; mirror byte-identical.
+- **Checks on the merged tree.** `tests/contract` + `tests/unit` + journey conformance:
+  1094 passed, 2 failed (both reproduce on the base: `test_error_kernel`,
+  `test_ar_v2_seeded`); web `typecheck` clean. Lane: 187 comparison tests (two 500-page
+  versions), 9 HTTP composition cases, 835 vitest, lint clean.
+- **Found gap.** A further version cannot be uploaded into an existing set through the
+  product (`uploadDocument` always creates a new document) — dispatched as
+  `W59-VERSION-UPLOAD-01`.
+
+## 8. Round 3 dispatch and slot queue
+
+| Task | Phase A base | Slot |
+| --- | --- | --- |
+| `W57B-NORMS-CATALOGUE-XLSX-01` | `849dddd4` | holds it from `1af17a48` |
+| `W59-ANALYSIS-SETTINGS-01` | `121ef2ce` | queued |
+| `W59-VERSION-UPLOAD-01` | `641f2b9e` | queued |
+| `W61-DISPATCHER-01` (migration 0025 in phase A) | `979632af` | queued |
+| `W59-SEAL-FOLLOWUP-01` (suites only) | `77aa55bd` | none needed |

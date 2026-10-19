@@ -3,18 +3,28 @@
 Only identical issue text and quoted evidence on explicitly linked sheets can
 form a suggestion. A suggestion is never an approved match or a carryover
 command; the comparison owner must persist expert approval separately.
+
+:func:`suggest_finding_matches_on_sheet_suggestions` applies the same exact rule
+across *suggested* sheet pairs for the served, read-only comparison. Its result
+names the sheet suggestions it relied on, never a SheetLink, so a proposal over
+an unapproved pairing cannot be mistaken for one over approved links.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import unicodedata
 from dataclasses import asdict, dataclass
 from typing import Sequence
 
 from auditmanager.comparison.raw_text import ApprovedSheetPair, MAX_PAIRS
-from auditmanager.comparison.version_reader import MAX_VERSION_PAGES, OrderedVersionPair
+from auditmanager.comparison.version_reader import (
+    MAX_VERSION_PAGES,
+    OrderedVersionPair,
+    VersionFacts,
+)
 from auditmanager.shared.identity import (
     ComparisonId,
     FindingObservationId,
@@ -26,8 +36,10 @@ from auditmanager.shared.identity import (
 )
 
 ALGORITHM = "exact-linked-finding-suggestion-v1"
+SUGGESTED_SHEETS_ALGORITHM = "exact-suggested-sheet-finding-proposal-v1"
 MAX_FINDINGS_PER_RUN = 200
 MAX_EVIDENCE_PER_FINDING = 8
+_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
 class FindingMatchSuggestionRefused(ValueError):
@@ -64,6 +76,30 @@ class FindingMatchSuggestion:
     target_observation_id: str
     matched_sheet_link_ids: tuple[str, ...]
     suggestion_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class SuggestedSheetPair:
+    """One rebuildable sheet suggestion: page coordinates and its own digest."""
+
+    source_page_number: int
+    target_page_number: int
+    suggestion_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class SuggestedSheetFindingMatch:
+    algorithm: str
+    source_version_uid: str
+    target_version_uid: str
+    source_run_id: str
+    target_run_id: str
+    source_finding_uid: str
+    target_finding_uid: str
+    source_observation_id: str
+    target_observation_id: str
+    sheet_suggestion_sha256s: tuple[str, ...]
+    proposal_sha256: str
 
 
 def _id(value: str, kind: type, label: str) -> None:
@@ -188,22 +224,30 @@ def _key(
     )
 
 
-def suggest_exact_finding_matches(
-    *,
-    version_pair: OrderedVersionPair,
-    comparison_id: str,
-    link_revision: int,
-    approved_pairs: Sequence[ApprovedSheetPair],
-    source_run_id: str,
-    target_run_id: str,
-    source_findings: Sequence[FindingForMatch],
-    target_findings: Sequence[FindingForMatch],
-) -> tuple[FindingMatchSuggestion, ...]:
-    """Suggest unique exact issue+quote matches across approved page links.
+def _unique_exact_pairs(
+    older: tuple[FindingForMatch, ...],
+    newer: tuple[FindingForMatch, ...],
+    links: dict[int, tuple[int, str]],
+) -> list[tuple[FindingForMatch, FindingForMatch]]:
+    """Pairs whose mapped issue+quote key is unique on both versions."""
+    source_by_key: dict[tuple, list[FindingForMatch]] = {}
+    target_by_key: dict[tuple, list[FindingForMatch]] = {}
+    for finding in older:
+        key = _key(finding, page_links=links)
+        if key is not None:
+            source_by_key.setdefault(key, []).append(finding)
+    for finding in newer:
+        key = _key(finding, page_links=None)
+        if key is not None:
+            target_by_key.setdefault(key, []).append(finding)
+    return [
+        (source_by_key[key][0], target_by_key[key][0])
+        for key in source_by_key.keys() & target_by_key.keys()
+        if len(source_by_key[key]) == 1 and len(target_by_key[key]) == 1
+    ]
 
-    Ambiguous or unlinked findings produce no suggestion. No absent finding is
-    marked fixed, no decision is carried, and no link is approved here.
-    """
+
+def _check_versions(version_pair: OrderedVersionPair) -> tuple[VersionFacts, VersionFacts]:
     if not isinstance(version_pair, OrderedVersionPair):
         raise FindingMatchSuggestionRefused("version_pair_invalid")
     source, target = version_pair.source, version_pair.target
@@ -222,6 +266,26 @@ def suggest_exact_finding_matches(
         or not 1 <= target.page_count <= MAX_VERSION_PAGES
     ):
         raise FindingMatchSuggestionRefused("version_pair_invalid")
+    return source, target
+
+
+def suggest_exact_finding_matches(
+    *,
+    version_pair: OrderedVersionPair,
+    comparison_id: str,
+    link_revision: int,
+    approved_pairs: Sequence[ApprovedSheetPair],
+    source_run_id: str,
+    target_run_id: str,
+    source_findings: Sequence[FindingForMatch],
+    target_findings: Sequence[FindingForMatch],
+) -> tuple[FindingMatchSuggestion, ...]:
+    """Suggest unique exact issue+quote matches across approved page links.
+
+    Ambiguous or unlinked findings produce no suggestion. No absent finding is
+    marked fixed, no decision is carried, and no link is approved here.
+    """
+    source, target = _check_versions(version_pair)
     _id(comparison_id, ComparisonId, "comparison_id")
     _id(source_run_id, RunId, "source_run_id")
     _id(target_run_id, RunId, "target_run_id")
@@ -250,21 +314,8 @@ def suggest_exact_finding_matches(
     ):
         raise FindingMatchSuggestionRefused("finding_observation_identity_crosses_versions")
 
-    source_by_key: dict[tuple, list[FindingForMatch]] = {}
-    target_by_key: dict[tuple, list[FindingForMatch]] = {}
-    for finding in older:
-        key = _key(finding, page_links=links)
-        if key is not None:
-            source_by_key.setdefault(key, []).append(finding)
-    for finding in newer:
-        key = _key(finding, page_links=None)
-        if key is not None:
-            target_by_key.setdefault(key, []).append(finding)
     suggestions: list[FindingMatchSuggestion] = []
-    for key in source_by_key.keys() & target_by_key.keys():
-        if len(source_by_key[key]) != 1 or len(target_by_key[key]) != 1:
-            continue
-        old, new = source_by_key[key][0], target_by_key[key][0]
+    for old, new in _unique_exact_pairs(older, newer, links):
         link_ids = tuple(sorted({links[item.page_number][1] for item in old.evidence}))
         body = {
             "algorithm": ALGORITHM,
@@ -290,7 +341,100 @@ def suggest_exact_finding_matches(
     return tuple(sorted(suggestions, key=lambda item: item.target_finding_uid))
 
 
+def _suggested_links(
+    pairs: Sequence[SuggestedSheetPair], *, source_pages: int, target_pages: int,
+) -> dict[int, tuple[int, str]]:
+    if not isinstance(pairs, (tuple, list)) or len(pairs) > MAX_VERSION_PAGES:
+        raise FindingMatchSuggestionRefused("sheet_suggestions_invalid")
+    mapped: dict[int, tuple[int, str]] = {}
+    target_seen: set[int] = set()
+    for pair in pairs:
+        if not isinstance(pair, SuggestedSheetPair):
+            raise FindingMatchSuggestionRefused("sheet_suggestion_invalid")
+        if (
+            type(pair.source_page_number) is not int
+            or type(pair.target_page_number) is not int
+            or not 1 <= pair.source_page_number <= source_pages
+            or not 1 <= pair.target_page_number <= target_pages
+        ):
+            raise FindingMatchSuggestionRefused("sheet_suggestion_page_invalid")
+        if not isinstance(pair.suggestion_sha256, str) or _SHA256.fullmatch(pair.suggestion_sha256) is None:
+            raise FindingMatchSuggestionRefused("sheet_suggestion_digest_invalid")
+        if pair.source_page_number in mapped or pair.target_page_number in target_seen:
+            raise FindingMatchSuggestionRefused("sheet_suggestions_not_one_to_one")
+        target_seen.add(pair.target_page_number)
+        mapped[pair.source_page_number] = (pair.target_page_number, pair.suggestion_sha256)
+    return mapped
+
+
+def suggest_finding_matches_on_sheet_suggestions(
+    *,
+    version_pair: OrderedVersionPair,
+    sheet_suggestions: Sequence[SuggestedSheetPair],
+    source_run_id: str,
+    target_run_id: str,
+    source_findings: Sequence[FindingForMatch],
+    target_findings: Sequence[FindingForMatch],
+) -> tuple[SuggestedSheetFindingMatch, ...]:
+    """The exact issue+quote rule across rebuildable sheet suggestions.
+
+    The same uniqueness and normalization as :func:`suggest_exact_finding_matches`;
+    an empty suggestion set is allowed and simply links no page. The result is a
+    proposal for display: it approves no sheet pair, matches no finding and
+    carries no decision.
+    """
+    source, target = _check_versions(version_pair)
+    _id(source_run_id, RunId, "source_run_id")
+    _id(target_run_id, RunId, "target_run_id")
+    if source_run_id == target_run_id:
+        raise FindingMatchSuggestionRefused("same_run")
+    links = _suggested_links(
+        sheet_suggestions, source_pages=source.page_count, target_pages=target.page_count,
+    )
+    older = _findings(
+        source_findings, version_uid=source.version_uid,
+        run_id=source_run_id, page_count=source.page_count,
+    )
+    newer = _findings(
+        target_findings, version_uid=target.version_uid,
+        run_id=target_run_id, page_count=target.page_count,
+    )
+    if {item.finding_uid for item in older} & {item.finding_uid for item in newer}:
+        raise FindingMatchSuggestionRefused("finding_identity_crosses_versions")
+    if (
+        {item.finding_observation_id for item in older}
+        & {item.finding_observation_id for item in newer}
+    ):
+        raise FindingMatchSuggestionRefused("finding_observation_identity_crosses_versions")
+
+    proposals: list[SuggestedSheetFindingMatch] = []
+    for old, new in _unique_exact_pairs(older, newer, links):
+        basis = tuple(sorted({links[item.page_number][1] for item in old.evidence}))
+        body = {
+            "algorithm": SUGGESTED_SHEETS_ALGORITHM,
+            "project_uid": version_pair.project_uid,
+            "document_uid": version_pair.document_uid,
+            "source_version_uid": source.version_uid,
+            "target_version_uid": target.version_uid,
+            "source_run_id": source_run_id,
+            "target_run_id": target_run_id,
+            "source": asdict(old),
+            "target": asdict(new),
+            "sheet_suggestion_sha256s": basis,
+        }
+        digest = hashlib.sha256(json.dumps(
+            body, sort_keys=True, ensure_ascii=False, separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()
+        proposals.append(SuggestedSheetFindingMatch(
+            SUGGESTED_SHEETS_ALGORITHM, source.version_uid, target.version_uid,
+            source_run_id, target_run_id, old.finding_uid, new.finding_uid,
+            old.finding_observation_id, new.finding_observation_id, basis, digest,
+        ))
+    return tuple(sorted(proposals, key=lambda item: item.target_finding_uid))
+
+
 __all__ = [
     "FindingForMatch", "FindingMatchSuggestion", "FindingMatchSuggestionRefused",
-    "FindingQuote", "suggest_exact_finding_matches",
+    "FindingQuote", "SuggestedSheetFindingMatch", "SuggestedSheetPair",
+    "suggest_exact_finding_matches", "suggest_finding_matches_on_sheet_suggestions",
 ]

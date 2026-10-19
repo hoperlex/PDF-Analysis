@@ -14,7 +14,7 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **50 paths / 57 operations / 137 schemas**,
+The development API surface is **51 paths / 58 operations / 147 schemas**,
 the error catalogue has **25** codes, the migration head is
 **`0024_version_classification`**, and `VERSION` is `0.6.0`. These are checkout
 facts; the release tree has its own frozen 47/54/123 surface and
@@ -80,8 +80,12 @@ is unserved, and no beta acceptance is claimed.
   by the confirmed section through a text-profile registry — AR plus 13
   draft legacy-ported profiles, none for ПБ — and refuse an unclassified
   version or a section without a profile; the project screen groups
-  documents by confirmed section. Served comparison and expert review of
-  the draft profiles remain open.
+  documents by confirmed section. `compareDocumentVersions` serves the
+  deterministic comparison of two versions of one set (same stage and
+  section) and the W62 П→Р stage comparison: sheet pairing, paged line
+  diffs and finding-match proposals, no AI layer. Uploading a further
+  version into an existing set and expert review of the draft profiles
+  remain open.
 
 Detailed evidence is in `CFB-INT-DEV-PUBLISH-17.md` through
 `CFB-INT-DEV-PUBLISH-67.md`.

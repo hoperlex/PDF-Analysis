@@ -19,6 +19,7 @@ import pytest
 
 from w55b_qa_support import (
     call,
+    classify,
     committed,
     create_project,
     member_by_suffix,
@@ -64,7 +65,9 @@ def _ceiling_for(budget: int) -> str:
 def world(api_control, accounts) -> dict:
     """At the default ceiling ($1.00): a text-rich bundle between the low and the default
     budget, uploaded, and one run of it that reached a terminal state (the re-audit source);
-    and the AR baseline, uploaded and run."""
+    and the AR baseline, uploaded and run. Each version is classified (stage ``P``, section
+    ``AR``) before its first run: an unclassified one is refused before the budget is
+    consulted (`W59-SECTION-SEAL-01`)."""
     api_control.ensure(None)
     token = accounts.credential("budget-expert")
     project = create_project(token, "QA P3 budget")
@@ -73,11 +76,13 @@ def world(api_control, accounts) -> dict:
     assert _budget(LOW_CEILING) < count < _budget("1.00"), count
     rich_version = upload(project, rich, token)
     assert rich_version.status == 201, rich_version
+    classify(rich_version.json(), token)
     rich_run = start_run(rich_version.json()["version_uid"], token)
     assert rich_run.status == 202, rich_run
     rich_source = wait_terminal(rich_run.json()["run_id"], token)
     small_version = upload(project, committed("ar_baseline.zip"), token)
     assert small_version.status == 201, small_version
+    classify(small_version.json(), token)
     small_run = start_run(small_version.json()["version_uid"], token)
     assert small_run.status == 202, small_run
     small_source = wait_terminal(small_run.json()["run_id"], token)

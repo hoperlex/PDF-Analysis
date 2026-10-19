@@ -81,7 +81,16 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # :data:`SEALED_STUB_ADDRESSED`; this register missed it until `W59-SECTION-SEAL-01`).
 # `W59-SECTION-SEAL-01` added ``getVersionSectionReview``, addressed through its version's
 # document and project, which answers ``404 not_found`` for any link that names nothing.
-EXPECTED_ADDRESSED = 19
+# `W59-VERSION-COMPARE-01` added ``compareDocumentVersions`` the same way; its required
+# ``target_version_uid`` is supplied by :data:`REQUIRED_QUERY`, so the answer is about the path.
+EXPECTED_ADDRESSED = 20
+
+#: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
+#: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
+#: a true answer, but about the query and not about the path this sweep judges.
+REQUIRED_QUERY: dict[str, str] = {
+    "compareDocumentVersions": "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
+}
 EXPECTED_UNADDRESSED = 14
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
@@ -275,7 +284,7 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
         if operation_id in SEALED_STUB_ADDRESSED:
             continue
         path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
-        status, body = _get(app, path)
+        status, body = _get(app, path + REQUIRED_QUERY.get(operation_id, ""))
         code = body.get("error_code") if isinstance(body, dict) else None
         if (status, code) != (404, "not_found"):
             disagreements.append((operation_id, path, status, code))

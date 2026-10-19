@@ -25,6 +25,7 @@ from auditmanager.api.security import TokenSigner, derive_signing_key
 from auditmanager.bootstrap.adapters import (
     AccountAdapter,
     BlockAdapter,
+    ComparisonAdapter,
     CredentialAdapter,
     CsvExportAdapter,
     DashboardAdapter,
@@ -43,6 +44,7 @@ from auditmanager.bootstrap.adapters import (
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.runs.public import DurableCarrier, ReclaimingCarrier, run_to_terminal
+from auditmanager.sections.public import SECTION_CODES
 from auditmanager.releases.public import (
     ReleaseRepository, compute_build_id, read_product_version,
 )
@@ -310,6 +312,13 @@ def build_application(
             sessions,
             blob_store=store,
             executable_sections=text_profiles.executable_sections(),
+        ),
+        # `W59-VERSION-COMPARE-01`. Two versions of one set compared, read-only, over the
+        # same sessions and store: classifications from the documents projection, the
+        # section catalogue from `sections.public`, text layers held to their recorded
+        # digests.
+        comparisons=ComparisonAdapter(
+            sessions, blob_store=store, section_codes=SECTION_CODES,
         ),
     )
     return Application(
