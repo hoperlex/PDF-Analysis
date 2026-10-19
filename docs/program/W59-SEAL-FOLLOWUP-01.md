@@ -244,3 +244,53 @@ live-journey half (`classify-version` in `e2e:pc01`) is not touched here.
 All of these are inside the task's allowed paths. Not touched: `src/**`, `contracts/**`,
 migrations, `tests/support/**`, any `conftest.py` (including the two in the allowed
 directories), `web/**`, dependency files, `CURRENT_STATE.md`, the task file, refs and tags.
+
+## Follow-up: F-1 moved (integrator instruction after the merge)
+
+The integrator merged the branch, including `a37e5c0a`. It then told this lane to move
+records 04, 05, 06, 07 and 34 under `56efead4` (`W57A-SEAL-01B`) with a digest test, on the
+same branch, allowed paths and lane. The lane was brought up again on fresh volumes and
+migrated to `0024`.
+
+**Commit `374985f3`.** Each of the five bodies moves by one value: the `text_analysis`
+stage's `"stage_version": "1.0.0"` becomes `"1.1.0"`. That value is served because the
+sealed `contracts/analysis/v1/stage-registry.json` and `analysis/text/stage.py`
+`STAGE_VERSION` both say `1.1.0`. The records were built from a scratch capture of the
+journey. Only `exception` and `response` were replaced, after asserting the following:
+
+- status, headers, body `length`, tokens and the request side are unchanged (apart from the
+  minted-against-literal credential);
+- the new body equals the old one with exactly that one substring replaced;
+- the old body matches its digest at `77aa55bd`.
+
+The exception blocks:
+
+- Records 04–07 carry `EXCEPTION_W57ASEAL_RUN_STATUS`. That is `EXCEPTION_W18SEAL`'s debts
+  (`D-19`, `D-21`), its `R-5` ruling and its text unchanged, plus the third move, with
+  `decided_by` set to `56efead4`.
+- Record 34 carries its first block, `EXCEPTION_W57ASEAL_LIST_RUNS`.
+- The debt named is `D-181`, the register row whose resolution ("update those suites") this
+  performs. No row names the drift itself, and this lane may not write the register.
+  `W57A-SEAL-01B`'s task file cites no owner ruling, and both blocks say so.
+- `PERMITTED_EXCEPTIONS` now has 13 entries.
+
+`test_the_five_run_records_moved_by_the_text_stage_version_and_nothing_else` restores
+`1.0.0`, requires each body's digest at `77aa55bd`, and requires the other three stages to
+still say `1.0.0`.
+
+| check | result |
+|---|---|
+| scratch capture against the records before the move | 32 of 37 reproduced byte for byte; only 04–07 and 34 differed |
+| `tests/characterization` at `374985f3` | **66 passed, 0 failed**, exit 0 |
+| probe: another stage (`source_preparation`) also moved in record 06 | digest test fails ("another stage moved"), and so does record 06's comparison |
+| probe: a byte outside the stage changed in record 34 (`cost_micros` 34400 → 34401) | digest test fails ("moved by more than the text stage's version"), and so does record 34's comparison |
+| probe: record 04 back to `1.0.0` | digest test fails, and so does record 04's comparison |
+
+Each probe was reverted, and the files were compared with `cmp` afterwards.
+
+**What remains.** The characterization baseline and qa_w55b are both green on the lane, so
+`D-181`'s suite half is closed. Its live-journey half (`classify-version` in `e2e:pc01`) is
+still deferred to the complete gate. If the integrator registers a dedicated debt row for the
+stage-version drift, the `D-181` entry for these five records should be replaced with that row
+in four places: the two blocks in `journey.py`, the five record files, `PERMITTED_EXCEPTIONS`,
+and the digest test's `debt[-1]` assertion. F-3 (`capture.py` cannot be re-run on this tree) is unchanged.
