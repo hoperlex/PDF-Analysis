@@ -1574,3 +1574,67 @@ At 08:53 UTC the owner told `pdf-analysis-4a` to have `GATE-PKG-01` merged "afte
 offered an alternative by direct poll, and the owner chose it. `agent/gate-pkg-01` (`ea5a28a6`) is merged into the W55b candidate
 **before** W55b's single full gate. That gate is the package's first real run and satisfies its `R-70` case-3 gate, so nothing is
 waived. If the package's own machinery breaks the run, the integrator reverts that merge and gates W55b with the previous target.
+
+## 3.35 — `R-129` to `R-134`, W56a (`W56A-RULE-01`)
+
+These record the owner's H-1…H-10 answers in `dispatch/ROADMAP-TO-BETA.md` §10.14, already
+given on 2026-10-06. The owner instructed on 2026-10-14 that available next-wave work start
+while W55b acceptance is in progress. Recording the answers may therefore precede
+`W55B-INT-CLOSE`; `W56A-FREEZE-01` and implementation still follow that close. The check and
+review amendments are the already-numbered `R-124` and `R-126` above.
+
+| Ruling | Source | Substance |
+| --- | --- | --- |
+| `R-129` | H-2 | W56a's АР v2 profile adds dimensions, layout, facade, roof and documentation to v1's two categories. Its questions cover consistency and completeness of the project text, not compliance with norms. Norm categories and verification belong to W57. |
+| `R-130` | H-3 | The model proposes one of the five legacy severity levels; the expert decides severity when accepting a finding. The decision panel starts without a selected severity. Exports show the expert's decided value beside the proposal; a later non-accept verdict has no decided severity. |
+| `R-131` | H-4 | `finding_merge` groups grounded observations deterministically under `dispatch/W56-PLAN.md` §A3.3. A model cannot hide, merge or edit a finding through this stage. The critic only assesses findings, appears beside them and cannot change them; it is deferred to W56b under H-10. |
+| `R-132` | H-5 | W56a's recorded-response quality gate refuses aggregate recall below its measured baseline or control false-positive rate above it. Category figures are reported. The owner sets absolute beta thresholds in the later beta validation wave; this ruling does not invent them. |
+| `R-133` | H-6 | A live response that reports a model other than the configured and pinned one is a typed stage failure; no finding is published from it and no silent substitution is allowed. Live recordings follow a successful identity probe. |
+| `R-134` | H-1, H-7…H-10 | W56a does text first, with recognised text marked as context only on pages without a usable text layer; citations remain from the text layer. Drawing analysis, region evidence, OCR citations, chunking and the critic are W56b. The owner reviews v2 findings in the product on the portal export after release; that precision figure is reported, not gated. All W56a live calls stay within the $5 wave ceiling of `R-29`; a projected excess stops for an owner decision. |
+
+## 3.36 — `R-135` and `R-136`, code-first beta order (owner, 2026-10-15)
+
+The owner instructed that the remaining code planned before beta be completed now,
+that acceptance testing and `origin/main` publication be left out of the present work,
+and that complete gates follow the entire code series. The owner explicitly rejected
+a full local gate, then directed the integrator to accept the updated plan in `dev`
+and prepare exact code tasks. The plan is `dispatch/CODE-FIRST-TO-BETA.md`.
+
+| Ruling | Substance |
+| --- | --- |
+| `R-135` | W56a–W63 development candidates use bounded checks of changed code and migration upgrades. No intermediate full local `make gate`, broad acceptance run, paid live test, deployment, release tag or `origin/main` publication is part of this code series. A separate task runs full gates after all planned beta code on an exact clean candidate in an adequately resourced environment. This supersedes earlier per-lane/per-wave gate timing for `origin/dev` only; `MAIN_AUTODEPLOY_POLICY.md` still governs any later `origin/main` act. B1–B12 remain open acceptance criteria. |
+| `R-136` | To start W56a code while the two-gateway identity probe is blocked, split the freeze as proposed by `reviews/W56A-MODEL-REQUIREMENT-REVIEW-01.md`: a recorded-only development freeze may grant SEAL without `P02_LOCK.json` and disjoint GENERATOR preparation. `W56A-MODEL-PIN-01` alone may later write the lock after both distinct gateways pass the selected/default model and rate probes under `R-29`; PROVIDER and live activation wait for that pin. `R-133` is unchanged: a mismatched or missing reported model fails closed and publishes no finding. The failed `W56A-PROBE-01` stays failed. |
+
+## 3.37 — `R-137`, the W54 recognition repair in session (owner, 2026-10-19)
+
+The owner directed that the norms corpus be closed and that the 121 W54 blocks whose
+corpus text is the recognition model's own reasoning be re-recognised by Sonnet
+subagents of an interactive Claude Code session, instead of the paid proxy run that
+waited for a credential. The task is `tasks/W54-SESSION-REPAIR-01.md`.
+
+| Ruling | Substance |
+| --- | --- |
+| `R-137` | The repair keeps the page set, crop custody against the verified `SHA256SUMS`, the fixed `RECOGNITION_SYSTEM_PROMPT`, the two-read rule and the version-2 ledger; only the source of the text changes. Session answers go through `repair session-prepare` and `repair session-ledger`, not the durable proxy journal: no proxy call, charge or journal row is made or recorded. Each attempt names the session model, `stop_reason` `session_transcript`, zero tokens and an unpriced cost. This supersedes the 2026-10-16 `claude-opus-5` proxy selection and its `$10` sample/full procedure for this repair only; `R-106` still governs any later paid repair. |
+
+## 3.38 — `R-138`, the session repair ledger is accepted (owner, 2026-10-19)
+
+After the 16-page spot check in `W54-SESSION-REPAIR-01.md`, the owner was asked by
+direct poll whether to accept the 121-repair ledger, verify all 121 pages, or verify
+and add a correction path. The owner chose to accept it as it is.
+
+| Ruling | Substance |
+| --- | --- |
+| `R-138` | The `R-137` session ledger (121 applied, 0 unreliable) feeds the W54 repaired-snapshot load unchanged. The two confirmed single-word deviations from print (`blk_4da232ee…` map label, `blk_786d7fb9…` corrected printed typo) stay as recorded in the report; no full re-verification or correction path is added for this repair. |
+
+## 3.39 — `R-139`, night development window of 2026-10-20 (owner, 2026-10-20)
+
+The owner opened an unattended development window of 8–10 hours, named session
+`pdf-analysis-e9` integrator and main session for it, and instructed (quoted from the
+session, Russian): «задача продвинуться как можно дальше по роадмапу к бета версии…
+Минимум проверок и гейтов. Никаких опросов и пустых судейств… Игнорируем и переносим в
+долг аналитические и рефакторинг волны, сосредоточиваемся на функциональных слайсах,
+структуре хранения, нормах и разделах.»
+
+| Ruling | Substance |
+| --- | --- |
+| `R-139` | For this window the code-first order of `CODE-FIRST-TO-BETA.md` §2 is reordered by function, not by block: the W59 section seal, section profiles, normative-corpus serving (references, citations, import) and storage-structure slices may be frozen and integrated before W56b and W58-code close. W58 DEBT-CODE, analytical reviews, plan-judging rounds, refactoring and governance-only slices move to the debt register untouched. No owner poll is asked during the window; the integrator records each assumption it makes in the slice's task file. Checks stay bounded under `R-135` (no full gate); publication goes to `origin/dev` only; `origin/main`, tags, the stand and paid provider calls are out of scope. The W59 SECTION-SEAL prerequisites in `W59-SECTION-IDENTITY-DECISION-01.md` other than W56b/W58-code close still apply. |
