@@ -1,7 +1,8 @@
 # Current state
 
-**Updated 2026-10-19 from development candidate 67, which adds the `R-137`
-W54 session repair to published candidate 66
+**Updated 2026-10-20 for the night window under `R-139` (functional slices:
+sections, norms, storage structure), after development candidate 67 added
+the `R-137` W54 session repair to published candidate 66
 (`ec41bb5881b2e677af7f22af62266818f37b2a61`).** W55b is published on
 `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as `GATE OK`
 under R-125; the deploy workflow selected that tree and the owner then ran
@@ -37,13 +38,13 @@ two single-word deviations from print (a map label and a silently corrected
 printed typo) and two table-layout notes; under `R-138` the owner accepted
 the ledger as it is. See `W54-SESSION-REPAIR-01.md`.
 
-The repaired snapshot load, the BGE-M3 embedding build, the verified bundle
-and any DB/S3 or stand publication have not run. They wait for host
-capacity under W54 §3.9: on 2026-10-19 the host had 6.4 GB free disk and
-4.2 GB available RAM, and the `norms-worker` image has never been built.
-W54 export and import already check crop coverage, PDF custody slots, row
-semantics and the embedding-build digest offline; those guards are not a
-published bundle.
+The repaired snapshot `ns_01M59N8QNBVN91ACA2HCE6VE74` (674 documents,
+350,194 paragraphs, 55,855 chunks) is loaded in the local promotion database
+with a complete BGE-M3 embedding build (61,573 windows, set digest
+`e7fac64c…`), dumped and restore-verified, and exported as a verified bundle
+with `build: present` (`W54-SNAPSHOT-LOAD-01`, `W54-EMBED-BUILD-01`,
+`W54-BUNDLE-EXPORT-01`). The stand import, its copy record and the admin's
+designation of a current snapshot have not run; they need an owner window.
 
 ## Code-first series (R-135)
 
