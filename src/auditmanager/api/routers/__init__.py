@@ -1,6 +1,6 @@
-"""The fifty-five operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The fifty-seven operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles one ``APIRouter`` from the fifteen router modules. It takes
+:func:`build_router` assembles one ``APIRouter`` from the sixteen router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
 port is the composition root's job (``api/composition.py``), and a factory that reached for
 a concrete implementation would have taken that decision away from it.
@@ -79,10 +79,12 @@ from auditmanager.api.routers.ports import (
     RegistrationPort,
     ReleasesPort,
     RunPort,
+    SectionPort,
 )
 from auditmanager.api.routers.projects import build_project_routes
 from auditmanager.api.routers.registrations import build_registration_routes
 from auditmanager.api.routers.runs import build_run_routes
+from auditmanager.api.routers.sections import build_section_routes
 from auditmanager.api.routers.users import build_user_routes
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 
@@ -140,6 +142,7 @@ __all__ = [
     "ReleasesPort",
     "Router",
     "RunPort",
+    "SectionPort",
     "WireResponse",
     "build_auth_routes",
     "build_router",
@@ -186,9 +189,11 @@ def build_router(
     execution: ExecutionPort | None = None,
     norms: NormsSearchPort | None = None,
     norm_content: NormContentPort | None = None,
+    sections: SectionPort | None = None,
 ) -> Router:
-    """Assemble the fifty-five operations, from the fifteen router modules -- ``me``,
-    ``registrations`` and ``users`` are `W49-SEAL-01`'s three.
+    """Assemble the fifty-seven operations, from the sixteen router modules -- ``me``,
+    ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
+    `W59-SECTION-SEAL-01`'s.
 
     ``accounts`` and ``registrations`` are two more ports with a default, for the reason
     the paragraph below gives for the first three: every caller that does not serve them
@@ -248,6 +253,9 @@ def build_router(
     # `W55A-SEAL-01`. The seven norms operations: six on the search port, the PDF on the
     # content port. Optional with a default, for the reason `blocks` gives above.
     build_norm_routes(router, norms, norm_content)  # type: ignore[arg-type]
+    # `W59-SECTION-SEAL-01`. A version's classification and its section review. Optional
+    # with a default, for the reason `blocks` gives above.
+    build_section_routes(router, sections)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

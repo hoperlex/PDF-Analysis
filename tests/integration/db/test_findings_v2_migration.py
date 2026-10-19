@@ -20,7 +20,7 @@ from auditmanager.shared.identity import (
     VersionUid,
 )
 
-HEAD = "0023_norm_citations"
+HEAD = "0024_version_classification"  # W59-SECTION-SEAL-01 moved the head
 PREVIOUS = "0021_portal_bundles"
 
 

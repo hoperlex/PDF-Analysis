@@ -79,6 +79,19 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "GET",
         "/versions/ver_01M2545JSD15ETSNNV904X991J/portal-blocks/blk_00000000000000000000000000000000/crop",
     ),
+    # `W59-SECTION-SEAL-01`. The classification (expert) and the section review (any role),
+    # addressed through the version's document and project. The empty body is refused by
+    # the classification's own body model.
+    "classifyDocumentVersion": (
+        "PUT",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/classification",
+    ),
+    "getVersionSectionReview": (
+        "GET",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/section-review",
+    ),
     "listRunFindings": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     "exportRunCsv": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),
     "getFinding": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
@@ -136,6 +149,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "listNormSnapshots": _ANY_ROLE,
     "listVersionPortalBlocks": _ANY_ROLE,
     "streamVersionPortalBlockCrop": _ANY_ROLE,
+    # `W59-SECTION-SEAL-01`: the section review is a product read.
+    "getVersionSectionReview": _ANY_ROLE,
     "listRunFindings": _ANY_ROLE,
     "getFinding": _ANY_ROLE,
     "listDecisionHistory": _ANY_ROLE,
@@ -150,6 +165,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "createProject": _EXPERT,
     "uploadDocument": _EXPERT,
     "startRun": _EXPERT,
+    # `W59-SECTION-SEAL-01`: only an expert confirms a section; admin alone does not.
+    "classifyDocumentVersion": _EXPERT,
     "cancelRun": frozenset({"expert", "admin"}),
     "reauditRun": frozenset({"expert", "admin"}),
     "appendDecision": _EXPERT,

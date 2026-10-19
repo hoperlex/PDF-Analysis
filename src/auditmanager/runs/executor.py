@@ -522,8 +522,12 @@ def _run_text_analysis_stage(
     sleep: Sleep,
     clock: Clock,
     call_journal: ModelCallJournal,
+    profile: Any = AR_TEXT_PROFILE,
 ) -> tuple[StageResult, Mapping[str, Any] | None, AttemptSummary]:
     """Run ``text_analysis``, retrying transport failures, and publish its artifact.
+
+    ``profile`` is the run's pinned text profile, resolved before any effect
+    (`W59-SECTION-SEAL-01`): its prompt bundle is the one every attempt sends.
 
     Returns the stage result, the observations document, and the attempt tally.
 
@@ -593,7 +597,7 @@ def _run_text_analysis_stage(
             config=provider_config,
             document_graph=graph_document,
             block_index_document=block_index_document,
-            profile=AR_TEXT_PROFILE,
+            profile=profile,
             # One meter for the whole run, supplied by the caller above. Building it here
             # would give every attempt a fresh USD 1.00, which is precisely the reading of
             # OD-03 that a retry must not be able to buy.
@@ -717,6 +721,30 @@ def _run_evidence_gate(
     return True, publication
 
 
+#: `W59-SECTION-SEAL-01`. ``(analysis_profile_id, prompt_bundle_id) -> text profile``,
+#: raising ``LookupError`` for a pair it does not register. The composition root passes the
+#: section-keyed text-profile registry's ``resolve``. The profile is opaque here: it goes to
+#: ``run_text_analysis`` unread, which is why ``runs`` needs no import of its type.
+TextProfileResolver = Callable[[str, str], Any]
+
+
+def _pinned_text_profile(run: RunRow, resolve: TextProfileResolver) -> Any:
+    """The run's pinned text profile, or the refusal that fails the run before any effect."""
+    try:
+        return resolve(run.analysis_profile_id, run.prompt_bundle_id)
+    except LookupError:
+        raise DomainError(
+            ErrorCode.REQUIRED_NORM_UNAVAILABLE,
+            message=(
+                "the run's pinned analysis profile is not registered in this deployment; "
+                "no other profile is substituted"
+            ),
+            reference_kind="analysis_profile",
+            analysis_profile_id=run.analysis_profile_id,
+            prompt_bundle_id=run.prompt_bundle_id,
+        ) from None
+
+
 def _execute_run_body(
     session: Session,
     run_id: str,
@@ -736,8 +764,19 @@ def _execute_run_body(
     blob_metadata: BlobMetadataRepository | None = None,
     recorded_fixture_model_id: str | None = None,
     recorded_generation_settings: RecordedGenerationSettings | None = None,
+    text_profiles: TextProfileResolver | None = None,
 ) -> ExecutionResult:
     """Drive one run from ``created`` to a terminal state.
+
+    ``text_profiles`` (`W59-SECTION-SEAL-01`) resolves the run's **pinned**
+    ``(analysis_profile_id, prompt_bundle_id)`` to the text profile the ``text_analysis``
+    stage runs with, so a section-routed run executes with its own prompt bundle. It is
+    called before any state change or effect; a pair it cannot resolve fails the run with
+    ``required_norm_unavailable`` (``reference_kind: analysis_profile``) and no stage runs.
+    The served application always passes the section-keyed registry
+    (``bootstrap/composition.py``). ``None`` is the in-process harness's unrouted mode,
+    which predates routing and runs the v1 AR profile as every run did before this seal;
+    no served path reaches it.
 
     The executor owns the authority and external-effect commits; the caller commits the
     final stage/result transaction on normal return. Every stage result is persisted as it
@@ -808,6 +847,12 @@ def _execute_run_body(
             ErrorCode.ANALYSIS_INPUT_INVALID,
             message="recorded AR v2 fixture inputs require the persisted v2 profile",
         )
+
+    text_profile = (
+        AR_TEXT_PROFILE
+        if recorded_v2 or text_profiles is None
+        else _pinned_text_profile(run, text_profiles)
+    )
 
     # The run declares a provider mode; the adapter *is* one. Nothing compared them, so a
     # run started with provider_mode="live" and executed entirely by the recorded adapter
@@ -1043,6 +1088,7 @@ def _execute_run_body(
             call_journal=_DurableCallJournal(
                 session, job_repo, authority, effect_checkpoint
             ),
+            profile=text_profile,
         )
         _persist_and_bind(
             session,
@@ -1151,6 +1197,7 @@ __all__ = [
     "ExecutionResult",
     "RecordedV2ExecutionIntent",
     "Sleep",
+    "TextProfileResolver",
     "execute_run",
     "plan_recorded_v2_execution",
 ]

@@ -330,7 +330,7 @@ describe('every number the dashboard renders is the fixture, and nothing else is
   it('always shows the unclassified section row, never folded into the fourteen', () => {
     const markup = render(SUMMARY);
     expect(markup).toContain('data-section="unclassified"');
-    expect(visible(markup)).toContain('Без раздела: 15');
+    expect(visible(markup)).toContain(`Без раздела: ${PROJECT_SECTIONS.length + 1}`);
     // The mutation this catches, run by hand and confirmed red: deleting the
     // `<li data-section="unclassified">` block from `sections-panel.tsx` drops both
     // assertions above — the count moves nowhere, it simply stops being on screen, which

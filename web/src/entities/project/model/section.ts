@@ -33,6 +33,14 @@
  * belongs to a section — that claim would now be checkable in principle, and is simply not
  * one this product's own flow ever makes true.
  *
+ * **`W59-SECTION-SEAL-01`: fifteen, not fourteen.** The contract's `ProjectSection` gained
+ * `PS` (the explanatory note, «Пояснительная записка»), distinct from `PB` (fire safety).
+ * Legacy's fourteen keep their order and `PS` follows them, exactly as the backend's
+ * `dashboard.repository.PROJECT_SECTIONS` does. A version now also carries an
+ * expert-confirmed `classification` (stage and section) that run start routes on; whether a
+ * section can run is the API's `SectionReviewOption.executable`, not the `analysed` flag
+ * below, which still describes the original AR-only text prompt.
+ *
  * Counting per section is no longer absent: `getDashboardSummary` counts published
  * documents, per section, including the unclassified bucket every product upload falls
  * into today. A section *picker* on the upload form — the only way a reviewer could change
@@ -54,7 +62,8 @@ export type ProjectSectionCode =
   | 'ITP'
   | 'GP'
   | 'TX'
-  | 'POS';
+  | 'POS'
+  | 'PS';
 
 export interface ProjectSection {
   /**
@@ -94,6 +103,7 @@ export const PROJECT_SECTIONS: readonly ProjectSection[] = [
   { code: 'GP', abbr: 'ГП', name: 'Генеральный план', analysed: false },
   { code: 'TX', abbr: 'ТХ', name: 'Технологические решения', analysed: false },
   { code: 'POS', abbr: 'ПОС', name: 'Организация строительства', analysed: false },
+  { code: 'PS', abbr: 'ПЗ', name: 'Пояснительная записка', analysed: false },
 ];
 
 /** The section carrying `code`, or `null` when nothing does. Never a silent default. */

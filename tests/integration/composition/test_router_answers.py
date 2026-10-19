@@ -47,7 +47,9 @@ RELEASE_GETS = frozenset({"/system/version", "/releases"})
 #: `W55B-SEAL-01` named the two portal-block reads its port served as sealed stubs, each
 #: answering exactly `503 dependency_unavailable`. `W55B-GEOMETRY-01` serves them and empties
 #: this set, so they meet the sweep's ordinary rule: an absent `ver_` is `404`, never a `5xx`.
-SEALED_STUB_GETS: frozenset[str] = frozenset()
+#: `W57A-SEAL-01B` sealed the normative report as a refusing stub until the CITE reader; it
+#: answers exactly `503 dependency_unavailable` (named here by `W59-SECTION-SEAL-01`).
+SEALED_STUB_GETS: frozenset[str] = frozenset({"/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"})
 WORKER_GETS = frozenset({"/execution/workers"})
 
 _STATIC_TOKEN_CACHE: str | None = None

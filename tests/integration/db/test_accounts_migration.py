@@ -184,7 +184,7 @@ def test_the_migration_restates_the_boundary_patterns_exactly() -> None:
 
 
 def test_this_revision_precedes_the_release_head() -> None:
-    assert head_revision() == "0023_norm_citations"
+    assert head_revision() == "0024_version_classification"
 
 
 # =======================================================================================
@@ -697,7 +697,7 @@ class TestTheDowngrade:
         with migrated_engine.connect() as connection:
             assert connection.execute(
                 text("SELECT version_num FROM alembic_version")
-            ).scalar_one() == "0023_norm_citations"
+            ).scalar_one() == "0024_version_classification"
 
     @pytest.mark.parametrize(
         "occupy",

@@ -28,6 +28,7 @@ from .models import (
     ProjectListingRecord,
     ProjectRecord,
     UploadOutcome,
+    VersionClassificationRecord,
 )
 from .refusals import (
     SQLSTATE_APPEND_ONLY_VIOLATION,
@@ -62,6 +63,7 @@ __all__ = [
     "ProjectListingRecord",
     "ProjectRecord",
     "UploadOutcome",
+    "VersionClassificationRecord",
     "constraint_name_of",
     "domain_error_for",
     "sqlstate_of",

@@ -34,9 +34,18 @@ const LEGACY_CODES = [
   'AR', 'AI', 'KM', 'KJ', 'OV', 'EOM', 'VK', 'PT', 'PB', 'SS', 'ITP', 'GP', 'TX', 'POS',
 ] as const;
 
-describe('the section set is legacy’s, unchanged', () => {
-  it('carries the fourteen codes in the order legacy carries them', () => {
-    expect(PROJECT_SECTIONS.map((section) => section.code)).toEqual([...LEGACY_CODES]);
+/**
+ * `W59-SECTION-SEAL-01`: the current set is legacy's fourteen, in legacy's order, then `PS`
+ * (the explanatory note), which the contract's `ProjectSection` gained. `PS` is not `PB`.
+ */
+const CURRENT_CODES = [...LEGACY_CODES, 'PS'] as const;
+
+describe('the section set is legacy’s fourteen plus PS', () => {
+  it('carries the legacy fourteen in legacy order, then PS', () => {
+    expect(LEGACY_CODES).toHaveLength(14);
+    expect(PROJECT_SECTIONS.map((section) => section.code)).toEqual([...CURRENT_CODES]);
+    expect(findProjectSection('PS')?.abbr).toBe('ПЗ');
+    expect(findProjectSection('PB')?.abbr).toBe('ПБ');
   });
 
   it('gives every code exactly one row', () => {
