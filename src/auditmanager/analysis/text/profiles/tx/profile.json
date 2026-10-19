@@ -1,0 +1,35 @@
+{
+  "format": "text-profile/1",
+  "section_code": "TX",
+  "analysis_profile_id": "ap_01M5AXG1K6MGZGFCBG75M9ZR9D",
+  "prompt_bundle_id": "pb_01M5AXG1K6E7TR87P0RGP6QBZM",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "title_ru": "Технологические решения",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "16ba8e5d23e4782550e79355002fde1365f682b7",
+    "files": [
+      {
+        "path": "prompts/disciplines/TX/role.md",
+        "sha256": "c7613a8b11f2cfef40eac29b68343d62dbfec3d8811c82445e0be49162bbc30d"
+      },
+      {
+        "path": "prompts/disciplines/TX/checklist.md",
+        "sha256": "1ac7f1cc6b994952f2fa74b56b72db010e4c7c6e0a05d54801940408d76f1bbf"
+      },
+      {
+        "path": "prompts/disciplines/TX/drawing_types.md",
+        "sha256": "25adf17e19e877514a047342bb4b40b79389a8b0f2f5fe974f7ccf896780dbb4"
+      },
+      {
+        "path": "prompts/disciplines/TX/project_params.md",
+        "sha256": "213459e8dd3bfd9b8a1c03969ef42b5d0edb1bb417f66637582289595262de02"
+      },
+      {
+        "path": "prompts/disciplines/TX/finding_categories.md",
+        "sha256": "345de86c9456996ea95858548929cfc09dd60c4e51cc3c95c7f7fc71589fbe55"
+      }
+    ]
+  }
+}
