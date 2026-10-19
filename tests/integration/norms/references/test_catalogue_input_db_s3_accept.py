@@ -32,6 +32,7 @@ from auditmanager.storage.public import (
     BlobMetadataRepository, S3BlobStore, S3StorageSettings, parse_blob_role,
 )
 from auditmanager.storage.models import VerifiedBlob
+from tests.support.expected_facts import FACTS
 
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -167,7 +168,7 @@ def test_verified_catalogue_reads_exact_s3_bytes_for_current_attempt() -> None:
         with engine.connect() as connection, connection.begin():
             assert connection.execute(text(
                 "SELECT version_num FROM alembic_version"
-            )).scalar_one() == "0023_norm_citations"
+            )).scalar_one() == FACTS.migration_head
             session = Session(bind=connection)
             snapshot, document, set_id = (
                 str(NormsSnapshotId.new()), str(NormDocumentId.new()),

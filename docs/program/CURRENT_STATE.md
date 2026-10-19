@@ -14,9 +14,9 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **48 paths / 55 operations / 131 schemas**,
+The development API surface is **50 paths / 57 operations / 137 schemas**,
 the error catalogue has **25** codes, the migration head is
-**`0023_norm_citations`**, and `VERSION` is `0.6.0`. These are checkout
+**`0024_version_classification`**, and `VERSION` is `0.6.0`. These are checkout
 facts; the release tree has its own frozen 47/54/123 surface and
 `0021_portal_bundles` head. For the current deployment, run
 `infra/deploy/verify-deployed.sh`; this document is no substitute for that
@@ -74,9 +74,14 @@ is unserved, and no beta acceptance is claimed.
 - **W58.** Read-only source mirror, isolated target copy and a DB-plus-Blob
   drill with a guarded restore; a synthetic restore passed. A real recovery
   drill has not run.
-- **W59.** Version pairs, section identity, a 15-choice review preparation,
-  a same-section guard and exact sheet-text match proposals. The section
-  seal, persisted confirmations and served comparison remain open.
+- **W59 (served, night window `R-139`).** An expert confirms a version's
+  project stage (П/Р) and one of 15 sections (`classifyDocumentVersion`,
+  `getVersionSectionReview`, migration 0024); run start and re-audit route
+  by the confirmed section through a text-profile registry — AR plus 13
+  draft legacy-ported profiles, none for ПБ — and refuse an unclassified
+  version or a section without a profile; the project screen groups
+  documents by confirmed section. Served comparison and expert review of
+  the draft profiles remain open.
 
 Detailed evidence is in `CFB-INT-DEV-PUBLISH-17.md` through
 `CFB-INT-DEV-PUBLISH-67.md`.
