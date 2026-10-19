@@ -1625,3 +1625,16 @@ and add a correction path. The owner chose to accept it as it is.
 | Ruling | Substance |
 | --- | --- |
 | `R-138` | The `R-137` session ledger (121 applied, 0 unreliable) feeds the W54 repaired-snapshot load unchanged. The two confirmed single-word deviations from print (`blk_4da232ee…` map label, `blk_786d7fb9…` corrected printed typo) stay as recorded in the report; no full re-verification or correction path is added for this repair. |
+
+## 3.39 — `R-139`, night development window of 2026-10-20 (owner, 2026-10-20)
+
+The owner opened an unattended development window of 8–10 hours, named session
+`pdf-analysis-e9` integrator and main session for it, and instructed (quoted from the
+session, Russian): «задача продвинуться как можно дальше по роадмапу к бета версии…
+Минимум проверок и гейтов. Никаких опросов и пустых судейств… Игнорируем и переносим в
+долг аналитические и рефакторинг волны, сосредоточиваемся на функциональных слайсах,
+структуре хранения, нормах и разделах.»
+
+| Ruling | Substance |
+| --- | --- |
+| `R-139` | For this window the code-first order of `CODE-FIRST-TO-BETA.md` §2 is reordered by function, not by block: the W59 section seal, section profiles, normative-corpus serving (references, citations, import) and storage-structure slices may be frozen and integrated before W56b and W58-code close. W58 DEBT-CODE, analytical reviews, plan-judging rounds, refactoring and governance-only slices move to the debt register untouched. No owner poll is asked during the window; the integrator records each assumption it makes in the slice's task file. Checks stay bounded under `R-135` (no full gate); publication goes to `origin/dev` only; `origin/main`, tags, the stand and paid provider calls are out of scope. The W59 SECTION-SEAL prerequisites in `W59-SECTION-IDENTITY-DECISION-01.md` other than W56b/W58-code close still apply. |
