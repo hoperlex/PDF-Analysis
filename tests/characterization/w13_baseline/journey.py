@@ -94,6 +94,10 @@ TIMESTAMP_FIELDS = (
     # the entry it was waiting for.
     "finished_at",
     "completed_at",
+    # `W59-SEAL-FOLLOWUP-01`: the instant an expert confirmed a version's classification
+    # (`VersionClassification.confirmed_at`, `W59-SECTION-SEAL-01`). Case 02b is the first
+    # response here to carry one, and it is added by name for the reason above.
+    "confirmed_at",
 )
 
 #: The transport's multipart body limit for every route that is not an upload,
@@ -393,6 +397,13 @@ MULTIPART_BOUNDARY = "w13baselineboundary"
 AUTHORIZATION_HEADER = "Authorization"
 DEPLOYMENT_SECRET = "w13-baseline-static-token"
 API_TOKEN_VARIABLE = "AUDITMANAGER_API_TOKEN"
+#: The suite label of the account every request presents (``w13-baseline@suite.invalid``,
+#: a complete ``expert`` account since `W49-SEAL-01`; ``tests/support/accounts.py``).
+ACCOUNT_LABEL = "w13-baseline"
+
+#: `W59-SEAL-FOLLOWUP-01`. The classification case 02b confirms for the AR baseline: a
+#: design-stage (``P``) document of section ``AR``. Written out, not imported.
+CLASSIFICATION_REQUEST = {"project_stage": "P", "section_code": "AR"}
 
 
 _STATIC_TOKEN_CACHE: str | None = None
@@ -415,8 +426,28 @@ def static_token() -> str:
     if _STATIC_TOKEN_CACHE is None:
         from am_test_accounts import provisioned_credential
 
-        _STATIC_TOKEN_CACHE = provisioned_credential(DEPLOYMENT_SECRET, "w13-baseline")
+        _STATIC_TOKEN_CACHE = provisioned_credential(DEPLOYMENT_SECRET, ACCOUNT_LABEL)
     return _STATIC_TOKEN_CACHE
+
+
+_ACCOUNT_UID_CACHE: str | None = None
+
+
+def presented_account_uid() -> str:
+    """The ``user_uid`` of the account :func:`static_token` names -- a value this journey
+    **supplied**, read from the row it provisioned, never from a response.
+
+    `W59-SEAL-FOLLOWUP-01`. ``classifyDocumentVersion`` stores the expert who confirmed the
+    classification, so case 02b's body names this account. It is tokenised by exact value
+    under the first rule (the journey already knows it), after the response is checked to
+    name exactly this account. Lazy and memoised for :func:`static_token`'s reason.
+    """
+    global _ACCOUNT_UID_CACHE
+    if _ACCOUNT_UID_CACHE is None:
+        from am_test_accounts import provisioned_record
+
+        _ACCOUNT_UID_CACHE = str(provisioned_record(ACCOUNT_LABEL).user_uid)
+    return _ACCOUNT_UID_CACHE
 
 
 
@@ -850,8 +881,9 @@ def await_runs(app: Any, timeout: float = 300.0) -> None:
 def run_journey(good: Any, refused: Any) -> list[Exchange]:
     """Drive every case, in order, and return what came back.
 
-    **``startRun`` is reached as early as its own prerequisites allow** -- third request,
-    directly after the project and the document it needs. ``DEBT_REGISTER.md`` D-5 records
+    **``startRun`` is reached as early as its own prerequisites allow** -- fourth request,
+    directly after the project, the document and the classification it needs (the third
+    prerequisite since `W59-SECTION-SEAL-01`, case 02b). ``DEBT_REGISTER.md`` D-5 records
     that the first browser-driven ``POST /api/v1/runs`` answered 500 twice while every
     in-process suite had it green, so it is the one operation where this in-process
     baseline is likeliest to disagree with what a socket produces. Capturing it first
@@ -1042,6 +1074,52 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.timestamps(version)
     correlation(upload, t)
     content_length(upload, t)
+
+    # 2b -- classifyDocumentVersion ---------------------------------------------------
+    # `W59-SECTION-SEAL-01`: `startRun` refuses a version no expert has classified (422
+    # `required_norm_unavailable`, `reference_kind: version_classification`) and has no AR
+    # fallback, so the classification is now `startRun`'s third prerequisite. This is a
+    # new case and a new record (`W59-SEAL-FOLLOWUP-01`): adding an operation adds a case.
+    # The operation declares no `Idempotency-Key` -- an exact repeat answers the stored row.
+    t = Tokens()
+    classified = record(
+        "02b-classifyDocumentVersion.success",
+        "classifyDocumentVersion",
+        "startRun's third prerequisite since W59-SECTION-SEAL-01: an expert confirms the "
+        "version's project stage and section. 200, and the stored classification naming "
+        "its confirmer",
+        "PUT",
+        f"/projects/{project_uid}/documents/{version['document_uid']}/versions/"
+        f"{version_uid}/classification",
+        headers=json_headers,
+        body=json.dumps(CLASSIFICATION_REQUEST).encode("utf-8"),
+        body_note=(
+            "ClassifyDocumentVersionRequest: project_stage P (design), section_code AR; "
+            "no Idempotency-Key, the operation declares none"
+        ),
+        tokens=t,
+    )
+    classification = json_of(classified)
+    assert classified.status == 200, (classified.status, classification)
+    assert classification["version_uid"] == version_uid, classification
+    assert {
+        name: classification[name] for name in CLASSIFICATION_REQUEST
+    } == CLASSIFICATION_REQUEST, classification
+    assert classification["confirmed_by_user_uid"] == presented_account_uid(), (
+        "the classification names a confirmer other than the account this journey presents"
+    )
+    t.add("project_uid", project_uid, "the identity case 01 allocated")
+    t.add("version_uid", version_uid, "the identity case 02 allocated")
+    t.add("document_uid", version["document_uid"], "the identity case 02 allocated")
+    t.timestamps(classification)
+    t.add(
+        "user_uid",
+        presented_account_uid(),
+        "the account this journey provisions and presents on every request, read from its "
+        "own row; the classification names it as its confirmer",
+    )
+    correlation(classified, t)
+    content_length(classified, t)
 
     # 3 -- startRun -----------------------------------------------------------------
     # D-5: the operation a browser saw answer 500 twice. Captured as early as its

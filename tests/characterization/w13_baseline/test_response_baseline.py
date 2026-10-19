@@ -119,16 +119,24 @@ def _csv_compat_expected(expected: dict[str, Any]) -> dict[str, Any]:
     out["response"]["body"]["length"] += len(projected) - len(raw)
     return out
 
-#: The frozen document's fifteen operationIds, written out rather than read from the
-#: contract: this suite's job is to notice a surface that changed, and an expectation
-#: computed from a file the change could also touch would not.
+#: The operationIds this corpus covers, written out rather than read from the contract:
+#: this suite's job is to notice a surface that changed, and an expectation computed from a
+#: file the change could also touch would not.
 #:
 #: **`W18-SEAL` moved it from twelve to fifteen** under owner ruling `R-5`. Adding an
 #: operation adds a case and a record; it is not a permitted *change* to any record and
 #: carries no exception block. What changed here is the count, not the rule: every one of
 #: the fifteen still has to be covered by at least one record.
-FIFTEEN_OPERATIONS = (
+#:
+#: **`W59-SEAL-FOLLOWUP-01` moved it from fifteen to sixteen** with case 02b,
+#: ``classifyDocumentVersion``: since `W59-SECTION-SEAL-01` (`R-139`) ``startRun`` refuses
+#: a version no expert has classified, so the journey cannot reach case 03 without it. The
+#: rule is W18-SEAL's: a new case and a new record, no exception block. The served surface
+#: has more operations than these sixteen; the list is what this corpus records, and the
+#: assertion is that every one of them is covered and nothing else is named.
+SIXTEEN_OPERATIONS = (
     "appendDecision",
+    "classifyDocumentVersion",
     "createProject",
     "exportRunCsv",
     "getDocumentVersion",
@@ -169,16 +177,16 @@ def test_the_record_set_and_the_journey_agree(exchanges: dict[str, Any]) -> None
     assert recorded, "the baseline is empty"
 
 
-def test_every_one_of_the_fifteen_operations_is_covered() -> None:
+def test_every_one_of_the_sixteen_operations_is_covered() -> None:
     covered = set()
     for path in RECORD_FILES:
         operation = json.loads(path.read_text(encoding="utf-8"))["operation"]
         if operation is not None:
             covered.add(operation)
-    assert covered == set(FIFTEEN_OPERATIONS), (
-        f"operations with no record: {sorted(set(FIFTEEN_OPERATIONS) - covered)}; "
+    assert covered == set(SIXTEEN_OPERATIONS), (
+        f"operations with no record: {sorted(set(SIXTEEN_OPERATIONS) - covered)}; "
         f"records naming an operation the contract does not declare: "
-        f"{sorted(covered - set(FIFTEEN_OPERATIONS))}"
+        f"{sorted(covered - set(SIXTEEN_OPERATIONS))}"
     )
 
 

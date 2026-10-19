@@ -8,6 +8,52 @@ four-times-certified surface. This directory is what that rewrite has to be *wro
 
 **After the rewrite, the FastAPI implementation must reproduce these bytes exactly.**
 
+## Amended 2026-10-20 by `W59-SEAL-FOLLOWUP-01`, after `W59-SECTION-SEAL-01` (`R-139`)
+
+**Thirty-seven records: one case added.** Since `bd08e03c` (`W59-SECTION-SEAL-01`),
+`startRun` and `reauditRun` refuse a version that no expert has classified, with `422
+required_norm_unavailable` and `details.reference_kind: version_classification`, and
+there is no AR fallback. So the journey could no longer get past case 03. Measured on the
+lane at `77aa55bd`, the session fixture died at case 03 (`KeyError: 'run_id'`) and 50 tests
+errored.
+
+`02b-classifyDocumentVersion.success` is the added case: `PUT
+/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification` with
+`{"project_stage": "P", "section_code": "AR"}`, sent by the expert account the journey already
+presents. It is `startRun`'s third prerequisite, so it runs directly before case 03. Under
+`W18-SEAL`'s rule, adding an operation adds a case and a record and changes neither of the
+others, so the record carries no exception block. Three supporting changes:
+
+- `SIXTEEN_OPERATIONS` (was `FIFTEEN_OPERATIONS`) names `classifyDocumentVersion`.
+- `confirmed_at` is added to `TIMESTAMP_FIELDS` by name.
+- `{{user_uid}}` is the account the journey provisions and presents, read from its own row
+  (`journey.presented_account_uid`). That makes it a value the journey supplied, so it
+  qualifies under the first token rule, and it is tokenised only after the response is
+  asserted to name exactly that account.
+
+**How record 02b was produced: not by `capture.py`.** `capture.py` rewrites every record.
+On the current tree that would turn record 12 back into the 19-column CSV that `W56A`
+projects in memory against a digest. It would also replace every request's `Authorization`
+value with a freshly minted credential instead of the literal `Bearer
+w13-baseline-static-token` that `test_the_baseline_records_the_authenticated_era` requires.
+So the journey was driven once into a scratch directory, record 02b alone was taken, and its
+`Authorization` header was written in the corpus's literal form, like every other record's.
+Nothing else in that record was edited.
+
+**The vacuity measurement.** The same scratch run was compared against the 36 committed
+records using the suite's own comparison (`journey.differences`, with record 12 going through
+its CSV projection). 28 reproduced byte for byte. These 8 did not:
+
+| records | the difference | cause | treatment |
+|---|---|---|---|
+| 13, 32, 33 | the version body now ends with a `classification` property, after `display_title` | the classification case 02b made: every read that returns `DocumentVersion` projects it (`W59-SECTION-SEAL-01`) | see the next amendment, if present; otherwise red |
+| 04, 05, 06, 07, 34 | `text_analysis` `stage_version` `"1.0.0"` → `"1.1.0"`, one value in each body | **not the classification**: `56efead4` (`W57A-SEAL-01B`, 2026-10-16) moved the v1 text stage constant to `1.1.0`, and no run of this corpus reached a finished run after it | **not absorbed**: a pre-existing finding, left red for the integrator |
+
+The key-by-key comparison of the whole files showed two more differences, neither under
+`response`. Every record's request `Authorization` value differs (minted against literal, as
+explained above). Records 10 and 11 carry `exception` blocks that `journey.py` does not pass:
+`W49-SEAL-01` added them to the record files by hand. Neither difference was changed here.
+
 ## Amended 2026-09-18 by `W18-SEAL`, under owner ruling `R-5`
 
 **Thirty-six records, not thirty-three, and five of them carry a second debt.**
