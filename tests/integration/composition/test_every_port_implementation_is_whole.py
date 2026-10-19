@@ -72,6 +72,10 @@ PORT_FOR_ARGUMENT = {
     # `W55A-SEAL-01`.
     "norms": "NormsSearchPort",
     "norm_content": "NormContentPort",
+    # `W59-SECTION-SEAL-01`.
+    "sections": "SectionPort",
+    # `W59-VERSION-COMPARE-01`.
+    "comparisons": "ComparisonPort",
 }
 
 

@@ -1,130 +1,213 @@
 'use client';
 
 /**
- * The project's sections, as structure a reviewer can see and move through.
+ * The project's sections, holding the project's documents (`W59-SECTION-UI-01`).
  *
- * **Why the structure exists before the analysis does.** `R-18`'s rule for this alpha is
- * that a part of the product that is not built is shown as an honest stub rather than
- * hidden, so a reviewer sees the shape of the thing being built. `D-56` applies that rule
- * to sections: legacy organises every piece of work by section and carries fourteen,
- * ours analyses one, and the answer is fourteen sections of which thirteen say so.
+ * **What replaced what.** Until this lane the widget was `R-18`'s honest stub: fourteen
+ * section tabs, one of which opened the project's whole document list, thirteen of which
+ * said there was nothing there yet — because nothing in the product could say which section
+ * a document belonged to. Since `W59-SECTION-SEAL-01` an expert confirms a version's project
+ * stage and section, and the version carries that confirmation. So this is now the project's
+ * real storage structure: the fifteen sections in the order of the owner's poll answer
+ * `S-5`, each listing the documents whose **current** version is confirmed for it, with the
+ * stage on every row, and «Не классифицировано» for the documents still waiting for an expert.
  *
- * **The one sentence this widget exists to get right.** A document's section is stored
- * and checked on the server when an upload names one — this product's own upload form does
- * not offer that field, so every document it accepts arrives without one
- * (`entities/project/model/section.ts`). The `AR` restriction lives in the analysis
- * prompt, not in intake: the analysis is built for the text of `AR` documents and is
- * applied to whatever is uploaded, whichever section the server stores it under. So this
- * screen states a rule about the analysis, never a rule of intake and never a property of
- * a file — "this document belongs to АР" is a claim no code here makes, and the list below
- * is the project's whole document list, not one filtered by section. Both facts are on the
- * screen (`docs/program/reviews/W46-JUDGE-Y.md` §2, `Y2-a`).
+ * **One read.** It is `listDocuments`, the same request the project screen always made, and
+ * the grouping is `../model/structure.ts` over its items: each item is the document's current
+ * version, and its `classification` is the contract's own field. No request per document.
  *
- * **What it does not do.** No counts and no totals per section here.
- * `getDashboardSummary` now counts published documents per section, server-side
- * (`/dashboard`'s own sections panel) — but that is a different read this widget does not
- * make, and inventing a count here from this widget's own document list would be a number
- * this screen never asked the server for.
+ * **Paging.** The grouping covers the page the server answered (fifty documents); the pager
+ * underneath moves to the next page and the structure regroups it, and the screen says when
+ * there is more than one page rather than letting a reader take one page for the project.
  *
- * **State, not address.** The open section lives in React state, not in the URL. Sections
- * are a structure inside one screen; the route tree, `tests/e2e/pc01/journey/manifest.json`
- * and the conformance guard describe the same six screens they did before, and the
- * analysed section is what a fresh tab opens on, so a pasted project URL still renders
- * the documents and the upload exactly as it did.
+ * Every row links to its version and to its document, exactly as the flat list did, so the
+ * journey's walk from the project to a document is unchanged.
  */
 
 import { useState } from 'react';
-import type { ReactNode } from 'react';
 
-import { RoutePlaceholder } from '@/shared/ui';
-import {
-  ANALYSED_SECTION_CODE,
-  PROJECT_SECTIONS,
-  findProjectSection,
-  projectSectionTitle,
-} from '@/entities/project';
-import type { ProjectSectionCode } from '@/entities/project';
+import type { DocumentVersion, ProjectUid } from '@/shared/api';
+import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
+import { classifyListingFailure, routes } from '@/shared/lib';
+import { VersionRow, useDocumentList } from '@/entities/document-version';
 
+import { projectStructure } from '../model/structure';
 import styles from './project-sections.module.css';
 
 export interface ProjectSectionsProps {
-  /** The address of the screen these sections sit on, for the stub's `data-route`. */
-  readonly route: string;
-  /** The section open on arrival. The analysed one, unless a caller says otherwise. */
-  readonly initialSection?: ProjectSectionCode | undefined;
-  /** What the analysed section opens: this project's documents and the upload. */
-  readonly children: ReactNode;
+  readonly projectUid: ProjectUid;
 }
 
-/** The mark of the section the analysis is built for, for use in a sentence. */
-const ANALYSED_ABBR =
-  findProjectSection(ANALYSED_SECTION_CODE)?.abbr ?? ANALYSED_SECTION_CODE;
-
-export function ProjectSections({ route, initialSection, children }: ProjectSectionsProps) {
-  const [openCode, setOpenCode] = useState<ProjectSectionCode>(
-    initialSection ?? ANALYSED_SECTION_CODE,
+function DocumentRows({
+  projectUid,
+  documents,
+  toClassification = false,
+}: {
+  readonly projectUid: ProjectUid;
+  readonly documents: readonly DocumentVersion[];
+  /**
+   * Open each version at its stage-and-section panel rather than at the top: the reader of
+   * «Не классифицировано» came to confirm a section, and that is where it is done.
+   */
+  readonly toClassification?: boolean;
+}) {
+  return (
+    <ul className="am-rows">
+      {documents.map((version) => (
+        <VersionRow
+          key={version.document_uid}
+          version={version}
+          href={
+            toClassification
+              ? routes.versionClassification(projectUid, version.version_uid)
+              : routes.version(projectUid, version.version_uid)
+          }
+          secondary={{
+            href: routes.document(projectUid, version.document_uid),
+            label: 'Все версии документа',
+          }}
+        />
+      ))}
+    </ul>
   );
+}
 
-  const open = findProjectSection(openCode) ?? PROJECT_SECTIONS[0]!;
+export interface ProjectStructureViewProps {
+  readonly projectUid: ProjectUid;
+  readonly items: readonly DocumentVersion[];
+  /** Whether the server has a further page of this project's documents. */
+  readonly hasNextPage: boolean;
+}
+
+/** The grouped structure of one page of documents. Rendered by the static harness. */
+export function ProjectStructureView({ projectUid, items, hasNextPage }: ProjectStructureViewProps) {
+  const structure = projectStructure(items);
+  return (
+    <div data-project-structure="" data-document-count={items.length}>
+      <p className={styles.rule} data-section-rule="confirmed">
+        Документ стоит в разделе, который эксперт подтвердил для его текущей версии на экране
+        версии. Пока раздел не подтверждён, документ находится в группе «Не классифицировано», и
+        прогон по нему не запускается.
+      </p>
+      {hasNextPage ? (
+        <p className="am-note" data-structure-page="partial">
+          Показаны документы этой страницы списка; остальные документы проекта — на следующих
+          страницах.
+        </p>
+      ) : null}
+      <ol className={styles.sections}>
+        {structure.sections.map(({ section, documents }) => (
+          <li
+            key={section.code}
+            className={styles.section}
+            data-section-group={section.code}
+            data-section-documents={documents.length}
+          >
+            <h3 className={styles.heading}>
+              <span className={styles.abbr}>{section.abbr}</span> {section.name}
+              {documents.length === 0 ? (
+                <span className={styles.count}> — документов нет</span>
+              ) : (
+                <span className={styles.count}> — документов: {documents.length}</span>
+              )}
+            </h3>
+            {documents.length === 0 ? null : (
+              <DocumentRows projectUid={projectUid} documents={documents} />
+            )}
+          </li>
+        ))}
+        <li
+          className={styles.section}
+          data-section-group="unclassified"
+          data-section-documents={structure.unclassified.length}
+        >
+          <h3 className={styles.heading}>
+            Не классифицировано
+            {structure.unclassified.length === 0 ? (
+              <span className={styles.count}> — документов нет</span>
+            ) : (
+              <span className={styles.count}> — документов: {structure.unclassified.length}</span>
+            )}
+          </h3>
+          {structure.unclassified.length === 0 ? null : (
+            <DocumentRows
+              projectUid={projectUid}
+              documents={structure.unclassified}
+              toClassification
+            />
+          )}
+        </li>
+      </ol>
+    </div>
+  );
+}
+
+export function ProjectSections({ projectUid }: ProjectSectionsProps) {
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const query = useDocumentList(projectUid, cursor);
+
+  let body;
+  if (query.isPending) {
+    body = <LoadingState what="документы этого проекта" />;
+  } else if (query.isError) {
+    const failure = classifyListingFailure(query.error, {
+      collection: 'документы этого проекта',
+      parent: 'project',
+    });
+    body = (
+      <ErrorState
+        title={failure.title}
+        detail={<span data-list-failure={failure.kind}>{failure.detail}</span>}
+        correlationId={failure.correlationId}
+        {...(failure.retryable
+          ? { onRetry: () => void query.refetch(), retryLabel: 'Повторить' }
+          : {})}
+      />
+    );
+  } else if (query.data.items.length === 0 && cursor === undefined) {
+    body = (
+      <EmptyState
+        title="В этом проекте пока нет документов."
+        detail="Загрузите комплект документации ниже. Ничего не потеряно: в проекте действительно нет опубликованных документов."
+      />
+    );
+  } else {
+    const nextCursor = query.data.page.next_cursor;
+    body = (
+      <>
+        <ProjectStructureView
+          projectUid={projectUid}
+          items={query.data.items}
+          hasNextPage={nextCursor !== null}
+        />
+        <div className="am-pager">
+          {cursor === undefined ? null : (
+            <button
+              type="button"
+              className="am-button am-button--quiet am-button--small"
+              onClick={() => setCursor(undefined)}
+            >
+              В начало
+            </button>
+          )}
+          {nextCursor === null ? null : (
+            <button
+              type="button"
+              className="am-button am-button--quiet am-button--small"
+              onClick={() => setCursor(nextCursor)}
+            >
+              Дальше
+            </button>
+          )}
+        </div>
+      </>
+    );
+  }
 
   return (
-    <div data-open-section={open.code}>
+    <section className="am-section" data-project-sections={projectUid}>
       <h2>Разделы проекта</h2>
-      <nav aria-label="Разделы проекта">
-        <ul className={styles.tabs}>
-          {PROJECT_SECTIONS.map((section) => (
-            <li key={section.code}>
-              <button
-                type="button"
-                className={
-                  section.code === open.code
-                    ? 'am-button am-button--small'
-                    : 'am-button am-button--quiet am-button--small'
-                }
-                data-section={section.code}
-                data-analysed={section.analysed ? 'true' : 'false'}
-                aria-current={section.code === open.code ? 'true' : undefined}
-                onClick={() => setOpenCode(section.code)}
-              >
-                <span className={styles.abbr}>{section.abbr}</span> {section.name}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </nav>
-
-      <p className={styles.rule} data-section-rule="intake">
-        Разделы — это навигация. Раздел документа хранится и проверяется на сервере, когда его
-        называют при загрузке; форма загрузки этого продукта раздел не предлагает, поэтому ни
-        один список здесь не отобран по разделу.
-      </p>
-
-      {open.analysed ? (
-        <section className="am-section" data-section-panel={open.code}>
-          <h2>{projectSectionTitle(open)}</h2>
-          <div className="am-state" role="note">
-            <p className="am-state__title">Что сейчас принимается</p>
-            <div className="am-state__detail">
-              <p>
-                Анализ построен для текста раздела {ANALYSED_ABBR} — это единственный профиль
-                анализа, который есть у продукта, и он применяется к любому загруженному
-                документу вне зависимости от того, под каким разделом сервер его хранит. Раздел
-                документа сервер хранит и проверяет, когда его называют при загрузке, но форма
-                загрузки этого продукта его не предлагает, поэтому документ, отправленный через
-                неё, остаётся без раздела.
-              </p>
-              <p>Ниже — все документы проекта, в порядке, в котором их вернул сервер.</p>
-            </div>
-          </div>
-          {children}
-        </section>
-      ) : (
-        <RoutePlaceholder
-          screen={projectSectionTitle(open)}
-          route={route}
-          promise={`Отдельного анализа для этого раздела нет: анализ построен только для текста раздела ${ANALYSED_ABBR} и применяется к любому загруженному документу вне зависимости от того, под каким разделом он сохранён. Раздел появится в одной из следующих версий как самостоятельный экран, и ничего из уже загруженного при этом не теряется.`}
-        />
-      )}
-    </div>
+      {body}
+    </section>
   );
 }

@@ -533,7 +533,11 @@ class TestN1ComponentReferenceResolution:
         # document by identity and `setCurrentNormSnapshot` names a snapshot that may not exist.
         # `W55B-SEAL-01` adds two more: both portal-block reads address a version by identity.
         # W57a adds a run-scoped v3 report with its own 404 response.
-        assert len(report) == 33, report
+        # `W59-SECTION-SEAL-01` adds two: the classification and the section review address a
+        # version through its document and project.
+        # `W59-VERSION-COMPARE-01` adds one: the comparison addresses its source version the
+        # same way.
+        assert len(report) == 36, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

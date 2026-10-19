@@ -39,6 +39,7 @@ from .models import (
     ManifestEntry,
     ProjectListingRecord,
     ProjectRecord,
+    VersionClassificationRecord,
 )
 
 __all__ = [
@@ -135,8 +136,10 @@ _SELECT_VERSION = text(
     "SELECT v.version_uid, v.document_uid, d.project_uid, v.version_ordinal,"
     "       d.display_title, d.section, v.media_type, v.byte_size,"
     "       v.sha256, v.page_count, v.published_at,"
-    "       v.text_character_count, v.textless_pages, v.recognised_character_count "
+    "       v.text_character_count, v.textless_pages, v.recognised_character_count,"
+    "       c.project_stage, c.section_code, c.confirmed_by_user_uid, c.confirmed_at "
     "FROM document_version v JOIN document d ON d.document_uid = v.document_uid "
+    "LEFT JOIN document_version_classification c ON c.version_uid = v.version_uid "
     "WHERE v.version_uid = :version_uid"
 )
 _SELECT_MANIFEST = text(
@@ -159,8 +162,10 @@ _LIST_DOCUMENTS = text(
     "SELECT v.version_uid, v.document_uid, d.project_uid, v.version_ordinal,"
     "       d.display_title, d.section, v.media_type, v.byte_size,"
     "       v.sha256, v.page_count, v.published_at,"
-    "       v.text_character_count, v.textless_pages, v.recognised_character_count "
+    "       v.text_character_count, v.textless_pages, v.recognised_character_count,"
+    "       c.project_stage, c.section_code, c.confirmed_by_user_uid, c.confirmed_at "
     "FROM document d JOIN document_version v ON v.version_uid = d.current_version_uid "
+    "LEFT JOIN document_version_classification c ON c.version_uid = v.version_uid "
     "WHERE d.project_uid = :project_uid "
     "ORDER BY v.published_at DESC, v.version_uid DESC"
 )
@@ -175,8 +180,10 @@ _LIST_VERSIONS = text(
     "SELECT v.version_uid, v.document_uid, d.project_uid, v.version_ordinal,"
     "       d.display_title, d.section, v.media_type, v.byte_size,"
     "       v.sha256, v.page_count, v.published_at,"
-    "       v.text_character_count, v.textless_pages, v.recognised_character_count "
+    "       v.text_character_count, v.textless_pages, v.recognised_character_count,"
+    "       c.project_stage, c.section_code, c.confirmed_by_user_uid, c.confirmed_at "
     "FROM document_version v JOIN document d ON d.document_uid = v.document_uid "
+    "LEFT JOIN document_version_classification c ON c.version_uid = v.version_uid "
     "WHERE v.document_uid = :document_uid "
     "ORDER BY v.version_ordinal DESC"
 )
@@ -191,6 +198,32 @@ _SELECT_MANIFESTS = text(
     "SELECT version_uid, role, blob_id, sha256, size_bytes, media_type "
     "FROM input_manifest_entry WHERE version_uid = ANY(:version_uids) "
     "ORDER BY version_uid, role"
+)
+
+#: `W59-SECTION-SEAL-01`. The version's chain, so a version addressed through a document and a
+#: project is refused when either link names something else.
+_SELECT_VERSION_CHAIN = text(
+    "SELECT v.document_uid, d.project_uid FROM document_version v "
+    "JOIN document d ON d.document_uid = v.document_uid WHERE v.version_uid = :version_uid"
+)
+#: The stored upload name, read only as review evidence inside this process. It is never
+#: projected onto a record that leaves this package (see the module docstring).
+_SELECT_SOURCE_FILENAME = text(
+    "SELECT source_filename FROM document_version WHERE version_uid = :version_uid"
+)
+_SELECT_CLASSIFICATION = text(
+    "SELECT version_uid, project_stage, section_code, confirmed_by_user_uid, confirmed_at "
+    "FROM document_version_classification WHERE version_uid = :version_uid"
+)
+#: One row per version, decided by the primary key. ``DO NOTHING`` waits for a concurrent
+#: uncommitted insert of the same version and then returns no row, so the caller re-reads the
+#: winner instead of overwriting it: the first confirmation stands.
+_INSERT_CLASSIFICATION = text(
+    "INSERT INTO document_version_classification "
+    "(version_uid, project_stage, section_code, confirmed_by_user_uid) "
+    "VALUES (:version_uid, :project_stage, :section_code, :confirmed_by_user_uid) "
+    "ON CONFLICT (version_uid) DO NOTHING "
+    "RETURNING version_uid, project_stage, section_code, confirmed_by_user_uid, confirmed_at"
 )
 
 _VERSIONS_REFERENCING = text(
@@ -225,13 +258,25 @@ def _project_listing_record(row: Any) -> ProjectListingRecord:
     )
 
 
+def _classification_record(row: Any) -> VersionClassificationRecord:
+    version_uid, project_stage, section_code, confirmed_by, confirmed_at = tuple(row)
+    return VersionClassificationRecord(
+        version_uid=VersionUid(version_uid),
+        project_stage=project_stage,
+        section_code=section_code,
+        confirmed_by_user_uid=confirmed_by,
+        confirmed_at=confirmed_at,
+    )
+
+
 def _version_record(
     row: Any, manifest: tuple[ManifestEntry, ...]
 ) -> DocumentVersionRecord:
     """One ``document_version`` row, in the column order every SELECT here uses.
 
     Written once. ``get_version``, ``list_documents`` and ``list_versions`` project the
-    same fourteen columns in the same order, and three hand-unpacked copies of that tuple
+    same eighteen columns in the same order (`W59-SECTION-SEAL-01` added the four of the
+    left-joined classification), and three hand-unpacked copies of that tuple
     would be three places for one of them to shift a column silently -- which is a fault
     the reader cannot see, because every value here is a string, an int or (``section``)
     possibly ``None``.
@@ -251,7 +296,23 @@ def _version_record(
         text_character_count,
         textless_pages,
         recognised_character_count,
+        project_stage,
+        section_code,
+        confirmed_by_user_uid,
+        confirmed_at,
     ) = tuple(row)
+    # The left join yields all four or none: every column is NOT NULL in its own table.
+    classification = (
+        None
+        if project_stage is None
+        else VersionClassificationRecord(
+            version_uid=VersionUid(version_uid),
+            project_stage=project_stage,
+            section_code=section_code,
+            confirmed_by_user_uid=confirmed_by_user_uid,
+            confirmed_at=confirmed_at,
+        )
+    )
     return DocumentVersionRecord(
         version_uid=VersionUid(version_uid),
         document_uid=DocumentUid(document_uid),
@@ -274,6 +335,7 @@ def _version_record(
         recognised_character_count=(
             None if recognised_character_count is None else int(recognised_character_count)
         ),
+        classification=classification,
     )
 
 
@@ -321,7 +383,8 @@ class DocumentRepository:
     ) -> DocumentUid:
         """Create a document inside a project. ``current_version_uid`` starts unset.
 
-        ``section`` is one of ``0011_document_section``'s fourteen codes, or ``None`` for
+        ``section`` is one of the fifteen sections (``0024_version_classification``'s
+        widened CHECK; ``0011_document_section`` wrote legacy's fourteen), or ``None`` for
         a document nobody has classified yet -- the CHECK constraint is the same
         vocabulary the frozen ``ProjectSection`` enum declares, and this method does not
         re-validate it: an unrecognised value is refused by the database, not silently
@@ -498,6 +561,73 @@ class DocumentRepository:
         return tuple(
             _version_record(row, tuple(grouped[str(tuple(row)[0])])) for row in rows
         )
+
+    # -- version classification (`W59-SECTION-SEAL-01`) ----------------------
+
+    def get_version_in(
+        self,
+        session: Session,
+        *,
+        project_uid: ProjectUid,
+        document_uid: DocumentUid,
+        version_uid: VersionUid,
+    ) -> DocumentVersionRecord:
+        """One version addressed through its document and project, or ``not_found``.
+
+        Each link is proved: an unknown project is ``Project``, a document of another
+        project (or none) is ``Document``, and a version of another document (or none) is
+        ``DocumentVersion`` -- exactly the answer an unknown identity gets, so a foreign
+        version is never served under a path that does not own it.
+        """
+        self.get_project(session, project_uid)
+        if self.require_document(session, document_uid) != project_uid:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Document")
+        chain = session.execute(
+            _SELECT_VERSION_CHAIN, {"version_uid": str(version_uid)}
+        ).first()
+        if chain is None or tuple(chain)[0] != str(document_uid):
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="DocumentVersion")
+        return self.get_version(session, version_uid)
+
+    def source_filename_of(self, session: Session, version_uid: VersionUid) -> str | None:
+        """The stored upload name, as section-review evidence only. Never projected."""
+        return session.execute(
+            _SELECT_SOURCE_FILENAME, {"version_uid": str(version_uid)}
+        ).scalar_one_or_none()
+
+    def get_classification(
+        self, session: Session, version_uid: VersionUid
+    ) -> VersionClassificationRecord | None:
+        row = session.execute(
+            _SELECT_CLASSIFICATION, {"version_uid": str(version_uid)}
+        ).first()
+        return None if row is None else _classification_record(row)
+
+    def insert_classification(
+        self,
+        session: Session,
+        *,
+        version_uid: VersionUid,
+        project_stage: str,
+        section_code: str,
+        confirmed_by_user_uid: str,
+    ) -> VersionClassificationRecord | None:
+        """Insert the first classification of a version, or ``None`` when one already exists.
+
+        The row is append-only (``trg_document_version_classification_immutable``); this
+        method never updates one. ``None`` means a row was already there -- possibly
+        committed by a concurrent request a moment ago -- and the caller re-reads it.
+        """
+        row = session.execute(
+            _INSERT_CLASSIFICATION,
+            {
+                "version_uid": str(version_uid),
+                "project_stage": project_stage,
+                "section_code": section_code,
+                "confirmed_by_user_uid": confirmed_by_user_uid,
+            },
+        ).first()
+        return None if row is None else _classification_record(row)
 
     def find_version(
         self, session: Session, version_uid: VersionUid

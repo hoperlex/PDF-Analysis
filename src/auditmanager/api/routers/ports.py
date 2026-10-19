@@ -66,6 +66,8 @@ __all__ = [
     "ReleasesPort",
     "RunPort",
     "ExecutionPort",
+    "SectionPort",
+    "ComparisonPort",
     "UploadedDocument",
 ]
 
@@ -173,7 +175,7 @@ class DocumentPort(Protocol):
         the cost is visible in the one place that pays it, not hidden in the signature. It
         neither closes the handle nor keeps it after returning.
 
-        ``section`` is one of `R-40`'s fourteen project-section codes, or ``None`` when
+        ``section`` is one of `R-40`'s fifteen project-section codes, or ``None`` when
         the caller does not supply one -- optional here for the same reason
         ``display_title`` is: the frozen ``UploadDocumentRequest.section`` is not
         required, and this port does not invent a value the caller never gave it.
@@ -316,10 +318,48 @@ class DashboardPort(Protocol):
         """The whole deployment's operational shape, right now: all four panels.
 
         **Absent is not empty.** Every member of ``Verdict`` and ``RunState`` appears in
-        its panel even at a count of zero, every one of the fourteen frozen project
+        its panel even at a count of zero, every one of the fifteen current project
         sections appears in ``section_breakdown`` even with no documents, and the
         documents nobody has classified yet are their own row rather than a rounding
-        error folded into one of the fourteen.
+        error folded into one of the fifteen.
+        """
+
+
+@runtime_checkable
+class SectionPort(Protocol):
+    """``classifyDocumentVersion`` and ``getVersionSectionReview``. `W59-SECTION-SEAL-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    Both operations address a version through its document and project: a version that does
+    not belong to the named document, or a document outside the named project, is
+    ``not_found`` exactly as an unknown identity is.
+    """
+
+    def classify_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        version_uid: str,
+        project_stage: str,
+        section_code: str,
+        user_uid: str,
+    ) -> models.VersionClassification:
+        """Persist an expert's stage and section for one version, or answer the stored one.
+
+        The actor's role set is read from the account in the same transaction: ``expert``
+        is required and ``admin`` alone is refused (``permission_denied``). An exact repeat
+        answers the stored row, first confirmer kept; a different stage or section is
+        ``conflict`` with ``conflict_reason: version_already_classified`` and changes
+        nothing.
+        """
+
+    def get_section_review(
+        self, *, project_uid: str, document_uid: str, version_uid: str
+    ) -> models.SectionReview:
+        """All fifteen choices with display evidence and the current classification.
+
+        Display only: no suggestion confirms a section or authorizes a run.
         """
 
 
@@ -803,3 +843,29 @@ class NormContentPort(Protocol):
         self, *, norm_document_id: str, byte_range: ByteRange | None
     ) -> StreamedContent:
         """The document's source PDF, whole or one window, opened before returning."""
+
+
+@runtime_checkable
+class ComparisonPort(Protocol):
+    """``compareDocumentVersions``. `W59-VERSION-COMPARE-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    The answer is always a ``VersionComparison``: a pair the comparison rule does not admit
+    is ``outcome: refused`` with one closed reason, never an error envelope and never a
+    relabelled pair. Nothing behind this port writes.
+    """
+
+    def compare_versions(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        mode: str,
+        diff_offset: int,
+        diff_limit: int,
+    ) -> models.VersionComparison:
+        """The comparison of the two named versions, or why they are not compared."""

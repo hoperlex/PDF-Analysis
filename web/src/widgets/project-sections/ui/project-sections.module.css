@@ -1,24 +1,29 @@
 /*
- * Layout for the section navigation. Colour is deliberately absent.
+ * Layout for the project structure. Colour is deliberately absent.
  *
- * The open section is marked by the classes the design system already declares — a
- * primary `.am-button` against the quiet ones — and by `aria-current`, so this module
- * introduces no ink/paper pair of its own. That is not shyness: the contrast census in
- * `tests/unit/styles` measures pairs by crossing `globals.css` with rendered markup, and
- * a colour declared in a collocated module is a colour that census cannot see. Layout is
- * safe to keep here; colour belongs where it is measured.
- *
- * Every length below is a global token, as `globals.css` promises a collocated module
- * will consume rather than redefine.
+ * Every tone on this screen comes from classes the design system already declares —
+ * `.am-state` rows, `.am-badge--*` for the stage and section, `.am-note` — so this module
+ * introduces no ink/paper pair of its own: the contrast census in `tests/unit/styles`
+ * measures pairs by crossing `globals.css` with rendered markup, and colour belongs where it
+ * is measured. Every length below is a global token, as `globals.css` promises a collocated
+ * module will consume rather than redefine.
  */
 
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--am-gap-sm);
-  margin: 0 0 var(--am-gap);
+.sections {
+  display: grid;
+  gap: var(--am-gap);
+  margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.section {
+  min-width: 0;
+}
+
+.heading {
+  margin: 0 0 var(--am-gap-sm);
+  overflow-wrap: anywhere;
 }
 
 /* The designer's mark, which a reviewer scans for before reading the name. */
@@ -26,8 +31,13 @@
   font-weight: 700;
 }
 
+.count {
+  font-weight: 400;
+  font-size: var(--am-text-sm);
+}
+
 .rule {
-  margin: 0 0 var(--am-gap-lg);
+  margin: 0 0 var(--am-gap);
   max-width: 82ch;
   font-size: var(--am-text-sm);
   line-height: var(--am-leading-base);

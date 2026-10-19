@@ -217,6 +217,12 @@
           "method": "GET",
           "path": "/versions/{version_uid}",
           "operationId": "getDocumentVersion"
+        },
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review",
+          "operationId": "getVersionSectionReview",
+          "$why": "W59-SECTION-UI-01: the stage-and-section panel reads the review once the version has answered, in every state the version has -- confirmed, unconfirmed, expert or not -- at the address the version's own body names. The walk reaches this version from the document it captured, so {document_uid} is that version's document."
         }
       ],
       "optional_api": [
@@ -242,17 +248,33 @@
         "",
         "`expects_api` names one operation and that is a claim, not a floor. The screen calls",
         "`listRuns` on mount in EVERY state it has -- two runs, one run, and none -- so the",
-        "assertion holds whatever the stand contains, which is what makes it worth asserting."
+        "assertion holds whatever the stand contains, which is what makes it worth asserting.",
+        "",
+        "W59-VERSION-COMPARE-01 put the version comparison above the run comparison. It reads",
+        "the version (`getDocumentVersion`) and its set's versions (`listVersions`) on mount in",
+        "every state; `compareDocumentVersions` is asked only when the set has another version,",
+        "so it is optional here: the journey's set has one version."
       ],
       "expects_api": [
         {
           "method": "GET",
           "path": "/versions/{version_uid}/runs",
           "operationId": "listRuns"
+        },
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}",
+          "operationId": "getDocumentVersion"
+        },
+        {
+          "method": "GET",
+          "path": "/documents/{document_uid}/versions",
+          "operationId": "listVersions"
         }
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison", "operationId": "compareDocumentVersions", "$why_optional": "asked only when the set has another published version; the journey's set has one"}
       ],
       "follow": null
     },
@@ -918,6 +940,78 @@
         "forbids_rendered": [
           "[data-upload-failure]",
           "[data-precheck-problem]"
+        ]
+      },
+      {
+        "name": "classify-version",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/classify-version/ui/classify-version-form.tsx",
+        "$comment": [
+          "W59-SECTION-UI-01. Since W59-SECTION-SEAL-01 a run is routed from the version's",
+          "expert-confirmed stage and section, and an unclassified version is refused with",
+          "422 required_norm_unavailable (reference_kind: version_classification) before any run",
+          "exists. So the journey confirms one, the way a user does: on the version screen it has",
+          "just landed on, it chooses the stage П (design documentation) and the section АР -- the",
+          "fixture is the AR baseline bundle -- and presses the panel's own confirm button.",
+          "",
+          "The capture is the confirmed panel's document identity, which the PUT's path needs and",
+          "no earlier write step captured; the response must echo the stage and section chosen."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "input[data-stage-choice=\"P\"]"
+          },
+          {
+            "do": "click",
+            "selector": "input[data-section-choice=\"AR\"]"
+          },
+          {
+            "do": "click",
+            "selector": "button[data-classification-confirm]",
+            "text": "Подтвердить раздел"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+            "operationId": "classifyDocumentVersion",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "version_uid",
+            "matches": "^ver_%ID%$"
+          },
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "project_stage",
+            "equals": "P"
+          },
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "section_code",
+            "equals": "AR"
+          }
+        ],
+        "capture": {
+          "kind": "attribute",
+          "$why": "the panel switches to the confirmed classification, which carries the version's document identity",
+          "selector": "[data-classified-document]",
+          "attribute": "data-classified-document",
+          "as": [
+            "document_uid"
+          ],
+          "matches": "^(doc_%ID%)$",
+          "bound_ms": 30000
+        },
+        "forbids_rendered": [
+          "[data-classification-failure]",
+          "[data-classification-conflict]"
         ]
       },
       {

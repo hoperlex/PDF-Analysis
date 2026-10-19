@@ -211,6 +211,14 @@ class ExecutionAdapter(_SessionHolder):
 
         profile, bundle, mode = self._runs.current_configuration()
         budget = self._runs.input_budget_characters
+        # `W59-SECTION-SEAL-01`: a routed deployment routes the re-audit from the version's
+        # persisted classification now; the configured AR pair is then not passed at all.
+        routes = self._runs.section_profiles
+        explicit: dict[str, Any] = (
+            {"analysis_profile_id": profile, "prompt_bundle_id": bundle}
+            if routes is None
+            else {"section_profiles": routes}
+        )
 
         def write(session: Session) -> tuple[str, bool, RunStatusView]:
             # `R-82`: the new run records the configuration this deployment executes,
@@ -222,8 +230,8 @@ class ExecutionAdapter(_SessionHolder):
             result = reaudit_run(session, source_run_id=run_id,
                                  roles=self._roles(session, user_uid),
                                  idempotency_key=idempotency_key,
-                                 analysis_profile_id=profile, prompt_bundle_id=bundle,
-                                 provider_mode=mode, input_budget_characters=budget)
+                                 provider_mode=mode, input_budget_characters=budget,
+                                 **explicit)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
         new_id, replayed, view = self._write(write)
         if not replayed:
@@ -452,6 +460,7 @@ def _version_view(record: Any) -> DocumentVersionView:
         media_type=record.media_type,
         display_title=record.display_title,
         section=record.section,
+        classification=_classification_view(record.classification),
         input_manifest=tuple(
             ManifestEntryView(
                 role=e.role,
@@ -462,6 +471,143 @@ def _version_view(record: Any) -> DocumentVersionView:
             for e in record.manifest
         ),
     )
+
+
+def _classification_view(record: Any) -> models.VersionClassification | None:
+    """`W59-SECTION-SEAL-01`. The persisted classification in the frozen shape, or ``None``."""
+    if record is None:
+        return None
+    return models.VersionClassification(
+        version_uid=str(record.version_uid),
+        project_stage=models.ProjectStage(record.project_stage),
+        section_code=models.ProjectSection(record.section_code),
+        confirmed_by_user_uid=record.confirmed_by_user_uid,
+        confirmed_at=record.confirmed_at,
+    )
+
+
+class SectionAdapter(_SessionHolder):
+    """`W59-SECTION-SEAL-01`. A version's classification and its fifteen-choice review.
+
+    Thin like every adapter here: the command and the review live in
+    ``auditmanager.sections``; this opens the session, reads the actor's role set inside it,
+    reads the recognised-text evidence from the store **outside** it, and maps the result
+    into the frozen shapes. ``executable_sections`` is the registry's sealed set, the same
+    one run start routes through, so ``executable`` cannot disagree with what a run does.
+    """
+
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        *,
+        blob_store: Any,
+        executable_sections: frozenset[str],
+    ) -> None:
+        super().__init__(session_factory)
+        self._blob_store = blob_store
+        self._executable = frozenset(executable_sections)
+
+    def classify_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        version_uid: str,
+        project_stage: str,
+        section_code: str,
+        user_uid: str,
+    ) -> models.VersionClassification:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.sections.public import classify_document_version
+
+        def work(session: Session) -> models.VersionClassification:
+            stored = classify_document_version(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                version_uid=version_uid,
+                project_stage=project_stage,
+                section_code=section_code,
+                actor_uid=user_uid,
+                # Read in this transaction (the decision's authorization rule): the request
+                # register checked the role before the route; this is the command's own check.
+                actor_roles=AccountRepository().roles_of(session, user_uid),
+            )
+            view = _classification_view(stored)
+            assert view is not None
+            return view
+
+        return self._write(work)
+
+    def get_section_review(
+        self, *, project_uid: str, document_uid: str, version_uid: str
+    ) -> models.SectionReview:
+        from auditmanager.sections.public import build_section_review, read_section_review
+
+        facts = self._read(
+            lambda session: read_section_review(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                version_uid=version_uid,
+            )
+        )
+        text = None if facts.markdown is None else self._recognised_text(facts.markdown)
+        packet = build_section_review(facts, recognised_text=text)
+        return models.SectionReview(
+            version_uid=packet.version_uid,
+            classification=_classification_view(facts.classification),
+            recognised_text_consulted=text is not None,
+            options=[
+                models.SectionReviewOption(
+                    section_code=models.ProjectSection(option.code),
+                    name=option.name,
+                    executable=option.code in self._executable,
+                    suggestion=(
+                        None
+                        if option.suggestion is None
+                        else models.SectionSuggestion(
+                            score=option.suggestion.score,
+                            filename_patterns=list(option.suggestion.filename_patterns),
+                            text_keywords=list(option.suggestion.text_keywords),
+                            name_in_text=option.suggestion.name_in_text,
+                        )
+                    ),
+                )
+                for option in packet.options
+            ],
+        )
+
+    def _recognised_text(self, entry: Any) -> str:
+        """The markdown member's text, held to the manifest's SHA-256 and size."""
+        from auditmanager.ingest import domain_error_from_storage
+        from auditmanager.storage.public import BlobNotFoundError, StorageError
+
+        try:
+            chunks = self._blob_store.open_stream(
+                entry.blob_id, expected_sha256=entry.sha256, expected_size=entry.size_bytes
+            )
+            try:
+                payload = b"".join(chunks)
+            finally:
+                close = getattr(chunks, "close", None)
+                if close is not None:
+                    close()
+        except BlobNotFoundError:
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                blob_id=str(entry.blob_id),
+                role=entry.role,
+                expected_sha256=entry.sha256,
+            ) from None
+        except StorageError as exc:
+            raise domain_error_from_storage(exc, blob_id=str(entry.blob_id), role=entry.role) from None
+        try:
+            return payload.decode("utf-8")
+        except UnicodeDecodeError:
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR, blob_id=str(entry.blob_id), role=entry.role
+            ) from None
 
 
 class DocumentAdapter:
@@ -604,8 +750,17 @@ class RunAdapter(_SessionHolder):
         prompt_bundle_id: str,
         carrier: Any,
         input_budget_characters: int | None = None,
+        section_profiles: Mapping[str, tuple[str, str]] | None = None,
+        text_profiles: Any = None,
     ) -> None:
         super().__init__(session_factory)
+        # `W59-SECTION-SEAL-01`. The sealed section -> (profile, bundle) table run start and
+        # re-audit route through, and the registry resolver the executor runs a run's pinned
+        # profile with. The composition root always passes both
+        # (``test_the_served_application_routes_by_section``); ``None`` keeps the many tests
+        # that build a bare adapter on the explicit configured pair.
+        self._section_profiles = section_profiles
+        self._text_profiles = text_profiles
         self._blob_store = blob_store
         self._model_adapter = adapter
         self._provider_config = provider_config
@@ -650,12 +805,19 @@ class RunAdapter(_SessionHolder):
 
         from auditmanager.runs import RunRepository
 
+        # `W59-SECTION-SEAL-01`: routed from the version's persisted classification when the
+        # deployment has a section table; the configured pair is then not passed at all.
+        profile_source: dict[str, Any] = (
+            {"analysis_profile_id": self._profile, "prompt_bundle_id": self._bundle}
+            if self._section_profiles is None
+            else {"section_profiles": self._section_profiles}
+        )
+
         def work(session: Session) -> Any:
             started = start_audit_run(
                 session,
                 version_uid=version_uid,
-                analysis_profile_id=self._profile,
-                prompt_bundle_id=self._bundle,
+                **profile_source,
                 # The configured mode, never a caller-supplied one. execute_run refuses a
                 # run whose declared mode disagrees with the adapter it is given, and the
                 # composition root is the one place that knows both - so passing the
@@ -738,6 +900,7 @@ class RunAdapter(_SessionHolder):
                 blob_store=self._blob_store,
                 adapter=self._model_adapter,
                 provider_config=self._provider_config,
+                text_profiles=self._text_profiles,
             )
 
         return job
@@ -750,6 +913,16 @@ class RunAdapter(_SessionHolder):
         re-audit faces exactly the budget a start does -- today's, not the source run's.
         """
         return self._input_budget_characters
+
+    @property
+    def section_profiles(self) -> Mapping[str, tuple[str, str]] | None:
+        """The sealed section route table, or ``None`` for an unrouted test wiring."""
+        return self._section_profiles
+
+    @property
+    def text_profiles(self) -> Any:
+        """The registry resolver the executor runs a pinned profile with, or ``None``."""
+        return self._text_profiles
 
     def current_configuration(self) -> tuple[str, str, str]:
         """The analysis profile, prompt bundle and provider mode a new run receives.
@@ -2294,3 +2467,226 @@ def _typed_norm_chunks(chunks: Any, blob_id: str) -> Any:
         raise domain_error_from_storage(exc, blob_id=blob_id, role=NORM_SOURCE) from None
     finally:
         chunks.close()
+
+
+class ComparisonAdapter(_SessionHolder):
+    """``compareDocumentVersions`` (`W59-VERSION-COMPARE-01`).
+
+    The comparison context owns the rule (``comparison.public.VersionComparisonService``);
+    this adapter owns only the two port implementations it needs and the mapping into the
+    frozen ``VersionComparison``. **The path is proved first** (``get_version_in``): an
+    unknown project, a document of another project or a source version of another document
+    is ``404 not_found`` exactly as for every other addressed read (`D-67`); only then is the
+    target judged, and a target the rule does not admit is an answer with a closed reason.
+    One session holds every read -- the path chain, the version pair, both
+    classifications, the runs, the stage rows -- and each text layer is read from the store
+    with the SHA-256 and size its ``stage_result`` recorded, then checked as canonical
+    ``prepared.text_layer`` for exactly that version and page count. A missing or differing
+    blob is ``storage_integrity_error``, never an empty page; a run whose
+    ``source_preparation`` did not succeed has no text and the service refuses
+    ``text_unavailable``.
+    """
+
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        *,
+        blob_store: Any,
+        section_codes: frozenset[str],
+    ) -> None:
+        from auditmanager.comparison.public import VersionComparisonService
+
+        super().__init__(session_factory)
+        self._blob_store = blob_store
+        self._service = VersionComparisonService(
+            classifications=_ClassificationReader(),
+            analyses=_AnalysisReader(blob_store),
+            section_codes=section_codes,
+        )
+
+    def compare_versions(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        mode: str,
+        diff_offset: int,
+        diff_limit: int,
+    ) -> models.VersionComparison:
+        from auditmanager.comparison.public import (
+            ComparisonIntegrityError,
+            ComparisonRequest,
+            ComparisonRequestInvalid,
+        )
+
+        request = ComparisonRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            target_version_uid=target_version_uid,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+            diff_offset=diff_offset,
+            diff_limit=diff_limit,
+            mode=mode,
+        )
+        from auditmanager.documents.public import DocumentRepository
+        from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
+
+        def work(session: Session) -> Any:
+            DocumentRepository().get_version_in(
+                session,
+                project_uid=ProjectUid.parse(project_uid),
+                document_uid=DocumentUid.parse(document_uid),
+                version_uid=VersionUid.parse(source_version_uid),
+            )
+            return self._service.compare(session, request)
+
+        try:
+            result = self._read(work)
+        except ComparisonRequestInvalid as exc:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED, field=str(exc).removesuffix("_invalid"),
+                constraint="format",
+            ) from None
+        except ComparisonIntegrityError as exc:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="the stored comparison inputs contradict their own constraints",
+            ) from exc
+        return models.VersionComparison.model_validate(_comparison_view(result))
+
+
+class _ClassificationReader:
+    """The seal's persisted classification (``documents``), never an inferred one."""
+
+    def read_classification(self, session: Session, *, version_uid: str) -> Any:
+        from auditmanager.comparison.public import SuppliedVersionClassification
+        from auditmanager.documents.public import DocumentRepository
+        from auditmanager.shared.identity import VersionUid
+
+        stored = DocumentRepository().get_classification(session, VersionUid.parse(version_uid))
+        if stored is None:
+            return None
+        return SuppliedVersionClassification(
+            str(stored.version_uid), stored.project_stage, stored.section_code,
+        )
+
+
+class _AnalysisReader:
+    """Runs, saved text layers and published findings, for the comparison service."""
+
+    _SOURCE_STAGE = "source_preparation"
+
+    def __init__(self, blob_store: Any) -> None:
+        self._blob_store = blob_store
+
+    def runs_newest_first(self, session: Session, *, version_uid: str) -> Any:
+        from auditmanager.comparison.public import RunCandidate
+        from auditmanager.runs import RunRepository
+
+        return tuple(
+            RunCandidate(str(run.run_id), run.state)
+            for run in RunRepository().list_for_version(session, version_uid)
+        )
+
+    def saved_page_text(self, session: Session, *, run_id: str, version: Any) -> Any:
+        from auditmanager.analysis.public import (
+            ROLE_TEXT_LAYER,
+            ArtifactRef,
+            SuppliedTextSourceRefused,
+            check_supplied_text_layer_bytes,
+        )
+        from auditmanager.comparison.public import SavedPageText
+        from auditmanager.runs import RunRepository
+
+        stages = [
+            row for row in RunRepository().stage_results(session, run_id)
+            if row.stage_id == self._SOURCE_STAGE
+        ]
+        if len(stages) != 1 or stages[0].status != "succeeded":
+            return None
+        references = [a for a in stages[0].artifacts if a.get("role") == ROLE_TEXT_LAYER]
+        if len(references) != 1:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="a succeeded source preparation does not record exactly one text layer",
+            )
+        reference = references[0]
+        payload = _verified_artifact_bytes(self._blob_store, reference)
+        try:
+            layer = check_supplied_text_layer_bytes(
+                version_uid=version.version_uid,
+                expected_page_count=version.page_count,
+                text_layer_ref=ArtifactRef(**dict(reference)),
+                supplied_bytes=payload,
+            )
+        except (SuppliedTextSourceRefused, TypeError, ValueError):
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                blob_id=str(reference.get("blob_id")),
+                role=ROLE_TEXT_LAYER,
+                expected_sha256=str(reference.get("sha256")),
+            ) from None
+        return SavedPageText(
+            run_id, str(reference["sha256"]),
+            {page.page_number: page.text for page in layer.pages},
+        )
+
+    def published_findings(self, session: Session, *, run_id: str) -> Any:
+        from auditmanager.comparison.public import FindingEvidenceSnapshot, FindingSnapshot
+        from auditmanager.findings import published_finding_evidence, published_findings
+
+        evidence: dict[str, list[Any]] = {}
+        for item in published_finding_evidence(session, run_id):
+            evidence.setdefault(item.finding_observation_id, []).append(item)
+        return tuple(
+            FindingSnapshot(
+                row.finding_uid, row.finding_observation_id, row.category, row.finding_text,
+                tuple(
+                    FindingEvidenceSnapshot(item.page_number, item.quote)
+                    for item in sorted(
+                        evidence.get(row.finding_observation_id, ()),
+                        key=lambda item: item.evidence_ordinal,
+                    )
+                ),
+            )
+            for row in published_findings(session, run_id)
+        )
+
+
+def _verified_artifact_bytes(blob_store: Any, reference: Mapping[str, Any]) -> bytes:
+    """One artifact's bytes, held to the SHA-256 and size its stage row recorded."""
+    from auditmanager.ingest import domain_error_from_storage
+    from auditmanager.storage.public import BlobNotFoundError, StorageError, parse_blob_id
+
+    blob_id, role = str(reference["blob_id"]), str(reference["role"])
+    declared_sha256, declared_size = str(reference["sha256"]), int(reference["size_bytes"])
+    try:
+        chunks = blob_store.open_stream(
+            parse_blob_id(blob_id), expected_sha256=declared_sha256, expected_size=declared_size,
+        )
+        try:
+            return b"".join(chunks)
+        finally:
+            close = getattr(chunks, "close", None)
+            if close is not None:
+                close()
+    except BlobNotFoundError:
+        raise DomainError(
+            ErrorCode.STORAGE_INTEGRITY_ERROR,
+            blob_id=blob_id, role=role, expected_sha256=declared_sha256,
+        ) from None
+    except StorageError as exc:
+        raise domain_error_from_storage(exc, blob_id=blob_id, role=role) from None
+
+
+def _comparison_view(result: Any) -> dict[str, Any]:
+    """The read model as the frozen ``VersionComparison`` shape (field names are equal)."""
+    from dataclasses import asdict
+
+    return asdict(result)

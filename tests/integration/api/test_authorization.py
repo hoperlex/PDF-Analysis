@@ -181,6 +181,27 @@ GUARDED = (
         "/versions/ver_01M2545JSD15ETSNNV904X991J/portal-blocks/"
         "blk_0123456789abcdef0123456789abcdef/crop",
     ),
+    # `W57A-SEAL-01B`. The refusing normative report (any one role).
+    ("getRunNormVerification", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/norm-verification"),
+    # `W59-SECTION-SEAL-01`. A version's classification and its section review, addressed
+    # through the version's document and project: behind the seam before any port is asked.
+    (
+        "classifyDocumentVersion", "PUT",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/classification",
+    ),
+    (
+        "getVersionSectionReview", "GET",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/section-review",
+    ),
+    # `W59-VERSION-COMPARE-01`. Two versions of one set compared, addressed the same way.
+    (
+        "compareDocumentVersions", "GET",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
+        "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
+    ),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -254,7 +275,7 @@ def _envelope(answer) -> dict:
 
 
 def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) -> None:
-    """One request per guarded operation, with no credential. Fifty-one of fifty-four.
+    """One request per guarded operation, with no credential: all but the three open ones.
 
     The set comparison is what makes this a sweep rather than a list: a twentieth
     operation is either written into ``GUARDED`` and swept, or named in
@@ -262,7 +283,10 @@ def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) ->
     ``test_the_open_surface_is_exactly_the_register`` -- there is no third place for it to
     be, and an operation that is in neither fails here.
     """
-    assert len(GUARDED) == 51
+    # `W59-SECTION-SEAL-01`: counted from the two tables rather than restated, so the next
+    # reseal moves the tables and not a literal (``getRunNormVerification`` was missing from
+    # ``GUARDED`` since `W57A-SEAL-01B`; it is swept now).
+    assert len(GUARDED) + len(OPEN) == len({operation for operation, _, _ in (*GUARDED, *OPEN)})
     assert UNAUTHENTICATED_OPERATIONS == {
         "issueToken",
         "submitRegistration",
@@ -733,6 +757,9 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "norms.py",
         "registrations.py",
         "releases.py",
+        # `W59-SECTION-SEAL-01`: the classification records WHO confirmed it; whether they
+        # may is the role register's (expert) and the command's own re-read.
+        "sections.py",
         "users.py",
     ], (
         f"{subject_readers} depend on the verified subject. Reading WHO the caller is is "

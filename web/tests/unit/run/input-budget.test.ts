@@ -143,7 +143,10 @@ describe('the re-audit classifier prints the same figures', () => {
 describe('the start-run control shows the refusal with its figures and no retry', () => {
   function control(error: unknown): string {
     settled.error = error;
-    return renderToStaticMarkup(createElement(StartRunControl, { versionUid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B' }));
+    return renderToStaticMarkup(createElement(StartRunControl, {
+      projectUid: 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+      versionUid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+    }));
   }
 
   it('renders the warning state with both figures, the correlation id and one button only', () => {

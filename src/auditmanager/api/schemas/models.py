@@ -1,4 +1,4 @@
-"""The 123 ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
+"""The ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
 
 `T-1` makes FastAPI generate the served document, and `W13-CONF`'s conformance gate compares
 that document against the frozen contract. **The contract stays the authority**: every class
@@ -49,6 +49,7 @@ __all__ = [
     "ApproveRegistrationRequest",
     "AppendDecisionRequest",
     "AppendDecisionResponse",
+    "ClassifyDocumentVersionRequest",
     "BlockGeometry",
     "CorrelationId",
     "CostBasis",
@@ -81,6 +82,8 @@ __all__ = [
     "PersonNames",
     "Project",
     "ProjectPage",
+    "ProjectSection",
+    "ProjectStage",
     "ProjectUid",
     "PromptBundleId",
     "ProviderMode",
@@ -150,6 +153,9 @@ __all__ = [
     "PortalRecognisedText",
     "PortalBlock",
     "PortalBlockPage",
+    "SectionReview",
+    "SectionReviewOption",
+    "SectionSuggestion",
     "Sha256",
     "StageId",
     "StageState",
@@ -162,6 +168,17 @@ __all__ = [
     "UserUid",
     "Verdict",
     "VersionBlockIndex",
+    "VersionClassification",
+    "ComparedVersion",
+    "ComparisonRefusal",
+    "DiffHunk",
+    "FindingComparison",
+    "FindingMatchProposal",
+    "FindingRef",
+    "SheetDiff",
+    "SheetDiffPage",
+    "SheetPairing",
+    "VersionComparison",
     "VersionUid",
     "optional_property",
 ]
@@ -463,14 +480,16 @@ class DecisionEventType(str, enum.Enum):
 
 
 class ProjectSection(str, enum.Enum):
-    """Legacy's fourteen project sections (`D-56`, `R-40`).
+    """The fifteen project sections: legacy's fourteen (`D-56`, `R-40`) and ``PS``.
 
-    ``backend/app/pipeline/stages/prepare/task_builder.py:1362`` names these fourteen;
-    ``db/migrations/versions/20260925_0011_document_section.py`` restates them in the
-    ``document.section`` CHECK, and ``tests/contract/domain_p02/test_project_section_catalog.py``
-    is what keeps the two from disagreeing. A document with no section is not a fifteenth
-    member of this enum -- it is ``UploadDocumentRequest.section`` or
-    ``DocumentVersion.section`` absent, which is a different, equally real fact.
+    ``backend/app/pipeline/stages/prepare/task_builder.py:1362`` names the first fourteen;
+    ``db/migrations/versions/20260925_0011_document_section.py`` keeps them as the historical
+    ``document.section`` CHECK. `W59-SECTION-SEAL-01` adds ``PS`` (the explanatory note,
+    distinct from ``PB``, fire safety) and ``0024_version_classification`` widens that CHECK
+    and declares the version classification over the same fifteen;
+    ``tests/contract/domain_p02/test_project_section_catalog.py`` keeps the copies in step.
+    A document or version with no section is not a sixteenth member of this enum -- the
+    property is absent, which is a different, equally real fact.
     """
 
     AR = "AR"
@@ -487,6 +506,19 @@ class ProjectSection(str, enum.Enum):
     GP = "GP"
     TX = "TX"
     POS = "POS"
+    PS = "PS"
+
+
+class ProjectStage(str, enum.Enum):
+    """`W59-SECTION-SEAL-01`. The explicit project stage of one version.
+
+    ``P`` (design documentation) or ``R`` (working documentation). Bound to the version, never
+    inferred from a file name, and never the analysis ``stage_id``, which is why the property
+    that carries it is named ``project_stage``.
+    """
+
+    P = "P"
+    R = "R"
 
 
 class Role(str, enum.Enum):
@@ -563,7 +595,7 @@ class UploadDocumentRequest(_Object):
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
     #: `R-40`. Optional, like ``display_title`` beside it and for the same reason: a
-    #: caller that does not yet know which of the fourteen sections a document belongs
+    #: caller that does not yet know which of the fifteen sections a document belongs
     #: in gets a document with none, not a refused upload. See
     #: ``db/migrations/versions/20260925_0011_document_section.py``.
     section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -576,6 +608,55 @@ class InputManifestEntry(_Object):
     media_type: str
 
 
+class ClassifyDocumentVersionRequest(_Object):
+    """`W59-SECTION-SEAL-01`. An expert's explicit stage and section for one version."""
+
+    project_stage: ProjectStage
+    section_code: ProjectSection
+
+
+class VersionClassification(_Object):
+    """`W59-SECTION-SEAL-01`. The persisted, expert-confirmed classification of one version.
+
+    Written once (``0024_version_classification``); an exact repeat keeps the first
+    confirmer and a different stage or section is refused, not overwritten.
+    """
+
+    version_uid: VersionUid
+    project_stage: ProjectStage
+    section_code: ProjectSection
+    confirmed_by_user_uid: UserUid
+    confirmed_at: datetime
+
+
+class SectionSuggestion(_Object):
+    """Display evidence for one section: never a confirmation and never a route."""
+
+    score: Annotated[int, Field(ge=1)]
+    filename_patterns: list[Annotated[str, Field(min_length=1, max_length=64)]]
+    text_keywords: list[Annotated[str, Field(min_length=1, max_length=128)]]
+    name_in_text: bool
+
+
+class SectionReviewOption(_Object):
+    section_code: ProjectSection
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    #: Whether a text profile is registered for this section, so a version confirmed with it
+    #: can start a run. ``false`` is a refusal at run start, never an AR fallback.
+    executable: bool
+    suggestion: SectionSuggestion | None
+
+
+class SectionReview(_Object):
+    """All fifteen choices for one version, the current classification or ``null``."""
+
+    version_uid: VersionUid
+    classification: VersionClassification | None
+    #: Whether the version's recognised-text markdown was read as suggestion evidence.
+    recognised_text_consulted: bool
+    options: Annotated[list[SectionReviewOption], Field(min_length=15, max_length=15)]
+
+
 class DocumentVersion(_Object):
     version_uid: VersionUid
     document_uid: DocumentUid
@@ -585,8 +666,13 @@ class DocumentVersion(_Object):
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
     #: `R-40`. See ``UploadDocumentRequest.section``: optional for the same reason, and
-    #: never defaulted to one of the fourteen when a document was uploaded with none.
+    #: never defaulted to one of the fifteen when a document was uploaded with none.
     section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `W59-SECTION-SEAL-01`. The version's persisted classification; absent while no expert
+    #: has classified it. Never inherited from another version or from ``section``.
+    classification: VersionClassification = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
     source_filename: str | None = Field(default=None, json_schema_extra=optional_property)
     media_type: Literal["application/pdf"]
     byte_size: Annotated[int, Field(ge=0)]
@@ -1334,7 +1420,7 @@ class SectionDocumentCount(_Object):
 
     ``section`` is optional, exactly as ``DocumentVersion.section`` is, and its absence on
     one row of this list means the same thing it means there: this row is the
-    unclassified bucket, not a fifteenth section. Every one of the fourteen frozen codes
+    unclassified bucket, not a sixteenth section. Every one of the fifteen current codes
     is present even at ``document_count: 0`` -- "a section with no documents" is the
     dispatch brief's own example of absent not being empty.
     """
@@ -1518,3 +1604,160 @@ class ApproveRegistrationRequest(_Object):
 
 class RejectRegistrationRequest(_Object):
     reason: Annotated[str, Field(min_length=1, max_length=256)]
+
+
+# --- version comparison (`W59-VERSION-COMPARE-01`) -----------------------------------------
+#
+# The served read model of ``auditmanager.comparison``. Every pairing and every finding label
+# is a proposal; nothing here is an approved SheetLink, a finding match or a decision. The
+# closed vocabularies are ``Literal`` enums so they stay inline and the schema count small.
+
+_PageNumber = Annotated[int, Field(ge=1, le=500)]
+_LineIndex = Annotated[int, Field(ge=0, le=1000)]
+
+
+class ComparedVersion(_Object):
+    """One side of a comparison, as far as it was established before any refusal."""
+
+    version_uid: VersionUid
+    version_ordinal: Annotated[int, Field(ge=1)]
+    page_count: _PageNumber
+    sha256: Sha256
+    project_stage: ProjectStage | None
+    section_code: ProjectSection | None
+    run_id: RunId | None
+    text_layer_sha256: Sha256 | None
+
+
+class ComparisonRefusal(_Object):
+    """Why two versions are not compared; ``side`` when the reason is one side's."""
+
+    reason: Literal[
+        "same_version",
+        "version_not_found",
+        "different_set",
+        "foreign_project",
+        "version_not_published",
+        "version_order_invalid",
+        "stage_unclassified",
+        "section_unconfirmed",
+        "project_stage_mismatch",
+        "confirmed_section_mismatch",
+        "stage_pair_invalid",
+        "analysis_missing",
+        "run_not_of_version",
+        "run_not_published",
+        "text_unavailable",
+        "text_too_large",
+    ]
+    side: Literal["source", "target"] | None
+
+
+class SheetPairing(_Object):
+    """One sheet of either version and its proposed counterpart, if any."""
+
+    status: Literal["unchanged", "changed", "removed", "added"]
+    source_page_number: _PageNumber | None
+    target_page_number: _PageNumber | None
+    pairing_basis: Literal["exact_text", "similar_text"] | None
+    similarity_permille: Annotated[int, Field(ge=0, le=1000)] | None
+    shared_line_count: Annotated[int, Field(ge=0)] | None
+    suggestion_sha256: Sha256 | None
+    #: A present page whose text is blank: it cannot be paired by text.
+    textless: bool
+
+
+class DiffHunk(_Object):
+    """One span of a raw line diff; 0-based line indices, end exclusive. An ``equal`` span
+    carries its ranges and no lines."""
+
+    tag: Literal["equal", "insert", "delete", "replace"]
+    source_start: _LineIndex
+    source_end: _LineIndex
+    target_start: _LineIndex
+    target_end: _LineIndex
+    source_lines: Annotated[list[str], Field(max_length=1000)]
+    target_lines: Annotated[list[str], Field(max_length=1000)]
+
+
+class SheetDiff(_Object):
+    status: Literal["changed", "removed", "added"]
+    source_page_number: _PageNumber | None
+    target_page_number: _PageNumber | None
+    outcome: Literal["computed", "too_large"]
+    too_large_reason: Literal[
+        "source_text_too_large",
+        "source_text_too_many_lines",
+        "target_text_too_large",
+        "target_text_too_many_lines",
+        "text_not_utf8_encodable",
+    ] | None
+    source_line_count: _LineIndex | None
+    target_line_count: _LineIndex | None
+    added_line_count: _LineIndex | None
+    removed_line_count: _LineIndex | None
+    hunks: list[DiffHunk]
+    #: Binds the complete raw diff of the sheet, equal lines included.
+    evidence_sha256: Sha256 | None
+
+
+class SheetDiffPage(_Object):
+    """One page of the sheets with text differences; ``next_offset`` is null on the last."""
+
+    offset: Annotated[int, Field(ge=0)]
+    limit: Annotated[int, Field(ge=1, le=25)]
+    total: Annotated[int, Field(ge=0, le=1000)]
+    next_offset: Annotated[int, Field(ge=1)] | None
+    items: Annotated[list[SheetDiff], Field(max_length=25)]
+
+
+class FindingRef(_Object):
+    finding_uid: FindingUid
+    category: FindingCategory
+    finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
+    page_numbers: Annotated[list[Annotated[int, Field(ge=1)]], Field(min_length=1)]
+
+
+class FindingMatchProposal(_Object):
+    """A proposed label for a finding of either run; never a decision or a carryover."""
+
+    kind: Literal["unchanged", "probably_fixed", "undetermined", "new"]
+    basis: Literal[
+        "exact_issue_and_quotes",
+        "quotes_absent_from_paired_sheets",
+        "quote_still_on_paired_sheet",
+        "evidence_sheet_unpaired",
+        "evidence_over_limit",
+        "no_exact_source_match",
+    ]
+    source_finding: FindingRef | None
+    target_finding: FindingRef | None
+    proposal_sha256: Sha256 | None
+
+
+class FindingComparison(_Object):
+    status: Literal["compared", "unavailable"]
+    unavailable_reason: Literal["findings_over_limit"] | None
+    source_finding_count: Annotated[int, Field(ge=0)]
+    target_finding_count: Annotated[int, Field(ge=0)]
+    proposals: Annotated[list[FindingMatchProposal], Field(max_length=400)]
+
+
+class VersionComparison(_Object):
+    """Two versions of one set compared, or the explicit reason they are not."""
+
+    project_uid: ProjectUid
+    document_uid: DocumentUid
+    source_version_uid: VersionUid
+    target_version_uid: VersionUid
+    #: ``version``: the same stage and section on both. ``stage``: a ``P`` source and an
+    #: ``R`` target of the same section (the W62 design-to-working comparison).
+    mode: Literal["version", "stage"]
+    outcome: Literal["compared", "refused"]
+    refusal: ComparisonRefusal | None
+    source: ComparedVersion | None
+    target: ComparedVersion | None
+    comparison_sha256: Sha256 | None
+    sheets: Annotated[list[SheetPairing], Field(max_length=1000)]
+    sheet_diffs: SheetDiffPage | None
+    findings: FindingComparison | None

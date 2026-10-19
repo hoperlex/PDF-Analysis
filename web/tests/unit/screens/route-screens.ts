@@ -435,6 +435,24 @@ export const SEEDS: readonly Seed[] = [
       createElement(VersionDetailPage, {
         projectUid: s['project_uid'] as string,
         versionUid: s['version_uid'] as string,
+        roles: ['expert'],
+      }),
+    discipline: { project_uid: 'refuses', version_uid: 'refuses' },
+  },
+  {
+    /*
+     * `W59-SECTION-UI-01`: the same address for a session without the expert role. The
+     * expert's seed above draws the stage-and-section form; an administrator alone is refused
+     * that write by the API, so the panel draws one read-only sentence instead, and without
+     * this seed the instruments would never read it.
+     */
+    address: '/projects/[project_uid]/versions/[version_uid]',
+    name: 'version-detail-reader',
+    make: (s) =>
+      createElement(VersionDetailPage, {
+        projectUid: s['project_uid'] as string,
+        versionUid: s['version_uid'] as string,
+        roles: ['admin'],
       }),
     discipline: { project_uid: 'refuses', version_uid: 'refuses' },
   },

@@ -16,6 +16,7 @@ from auditmanager.documents.models import (
     ProjectListingRecord,
     ProjectRecord,
     UploadOutcome,
+    VersionClassificationRecord,
 )
 from auditmanager.documents.refusals import UNIQUE_VIOLATION, sqlstate_of
 from auditmanager.documents.repository import DocumentRepository
@@ -36,5 +37,6 @@ __all__ = [
     "ProjectListingRecord",
     "ProjectRecord",
     "UploadOutcome",
+    "VersionClassificationRecord",
     "sqlstate_of",
 ]

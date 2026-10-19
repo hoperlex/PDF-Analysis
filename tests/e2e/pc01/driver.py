@@ -238,6 +238,24 @@ class Client:
         headers = {"Range": byte_range} if byte_range else {}
         return self.request("GET", f"/versions/{version_uid}/content", headers=headers)
 
+    def classify_version(
+        self, *, project_uid: str, document_uid: str, version_uid: str,
+        project_stage: str = "R", section_code: str = "AR",
+    ) -> Answer:
+        """`W59-SECTION-SEAL-01`: an expert's stage and section for one version.
+
+        Run start routes the analysis profile from this persisted classification and refuses
+        a version that has none, so the journey classifies its AR baseline before it runs.
+        """
+        return self.request(
+            "PUT",
+            f"/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+            headers={"Content-Type": "application/json"},
+            body=json.dumps(
+                {"project_stage": project_stage, "section_code": section_code}
+            ).encode("utf-8"),
+        )
+
     def start_run(
         self, *, version_uid: str, key: str, provider_mode: str | None = None
     ) -> Answer:

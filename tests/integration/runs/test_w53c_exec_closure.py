@@ -161,6 +161,10 @@ class _ConfiguredRuns:
     """
 
     input_budget_characters: int | None = None
+    #: `W59-SECTION-SEAL-01`. No section table: this stub keeps the configured pair, as an
+    #: unrouted test wiring may; the served application always routes
+    #: (``test_the_served_application_routes_by_section.py``).
+    section_profiles: None = None
 
     def __init__(self, configuration: tuple[str, str, str]) -> None:
         self.configuration = configuration

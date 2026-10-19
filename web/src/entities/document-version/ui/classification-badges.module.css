@@ -1,0 +1,22 @@
+/*
+ * Layout for the stage-and-section badges. Colour is deliberately absent: each badge takes
+ * its tone from the design system's `.am-badge--*` modifiers in `globals.css`, where the
+ * contrast census measures it.
+ *
+ * `.am-badge` does not wrap, which is right for a one-word state and wrong for a section
+ * name: «Отопление, вентиляция и кондиционирование (ОВ)» is wider than a phone. These badges
+ * wrap inside themselves and between each other, so a long name never widens its screen.
+ */
+
+.badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+  max-width: 100%;
+}
+
+.badge {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}

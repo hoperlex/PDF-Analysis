@@ -36,6 +36,8 @@ EXPECTED_TABLES = {
     # `0023_norm_citations`: verified retrieval set and immutable partitions.
     "norm_retrieval_set",
     "finding_observation_norm_citation",
+    # `0024_version_classification`: one expert-confirmed stage and section per version.
+    "document_version_classification",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.

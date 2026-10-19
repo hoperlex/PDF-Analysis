@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388
+ *   sha256 d7704f0a78d297702ac3373d8c33bb20b9cd5f690ff57be6659329ecbb8a2a5c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -28,6 +28,10 @@ import type {
   CancelRunResult,
   ChangePasswordInput,
   ChangePasswordResult,
+  ClassifyDocumentVersionInput,
+  ClassifyDocumentVersionResult,
+  CompareDocumentVersionsInput,
+  CompareDocumentVersionsResult,
   CreateProjectInput,
   CreateProjectResult,
   ExportRunCsvInput,
@@ -52,6 +56,8 @@ import type {
   GetUserResult,
   GetVersionBlocksInput,
   GetVersionBlocksResult,
+  GetVersionSectionReviewInput,
+  GetVersionSectionReviewResult,
   IssueTokenInput,
   IssueTokenResult,
   ListDecisionHistoryInput,
@@ -189,6 +195,30 @@ export function changePassword(
   options?: RequestOptions,
 ): Promise<ApiResponse<ChangePasswordResult>> {
   return request<ChangePasswordResult>(OPERATIONS.changePassword, input, options);
+}
+
+/**
+ * Classify Document Version
+ *
+ * `PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification`.
+ */
+export function classifyDocumentVersion(
+  input: ClassifyDocumentVersionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ClassifyDocumentVersionResult>> {
+  return request<ClassifyDocumentVersionResult>(OPERATIONS.classifyDocumentVersion, input, options);
+}
+
+/**
+ * Compare Document Versions
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison`.
+ */
+export function compareDocumentVersions(
+  input: CompareDocumentVersionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CompareDocumentVersionsResult>> {
+  return request<CompareDocumentVersionsResult>(OPERATIONS.compareDocumentVersions, input, options);
 }
 
 /**
@@ -333,6 +363,18 @@ export function getVersionBlocks(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetVersionBlocksResult>> {
   return request<GetVersionBlocksResult>(OPERATIONS.getVersionBlocks, input, options);
+}
+
+/**
+ * Get Version Section Review
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review`.
+ */
+export function getVersionSectionReview(
+  input: GetVersionSectionReviewInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetVersionSectionReviewResult>> {
+  return request<GetVersionSectionReviewResult>(OPERATIONS.getVersionSectionReview, input, options);
 }
 
 /**
@@ -801,6 +843,8 @@ export const apiClient = {
   archiveUser,
   cancelRun,
   changePassword,
+  classifyDocumentVersion,
+  compareDocumentVersions,
   createProject,
   exportRunCsv,
   getDashboardSummary,
@@ -813,6 +857,7 @@ export const apiClient = {
   getRunStatus,
   getUser,
   getVersionBlocks,
+  getVersionSectionReview,
   issueToken,
   listDecisionHistory,
   listDecisions,

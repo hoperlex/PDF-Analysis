@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388
+ *   sha256 d7704f0a78d297702ac3373d8c33bb20b9cd5f690ff57be6659329ecbb8a2a5c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388';
+export const CONTRACT_DIGEST = 'd7704f0a78d297702ac3373d8c33bb20b9cd5f690ff57be6659329ecbb8a2a5c';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -29,6 +29,9 @@ export const SCHEMA_NAMES = [
   'ApproveRegistrationRequest',
   'BlockGeometry',
   'ChangePasswordRequest',
+  'ClassifyDocumentVersionRequest',
+  'ComparedVersion',
+  'ComparisonRefusal',
   'CorrelationId',
   'CostBasis',
   'CreateProjectRequest',
@@ -40,6 +43,7 @@ export const SCHEMA_NAMES = [
   'DecisionId',
   'DecisionRecord',
   'DecisionRecordPage',
+  'DiffHunk',
   'DocumentUid',
   'DocumentVersion',
   'DocumentVersionPage',
@@ -55,10 +59,13 @@ export const SCHEMA_NAMES = [
   'ExecutionWorkerPage',
   'Finding',
   'FindingCategory',
+  'FindingComparison',
   'FindingDetail',
+  'FindingMatchProposal',
   'FindingObservation',
   'FindingObservationId',
   'FindingPage',
+  'FindingRef',
   'FindingUid',
   'IdempotencyKey',
   'InputManifestEntry',
@@ -107,6 +114,7 @@ export const SCHEMA_NAMES = [
   'ProjectDocumentCount',
   'ProjectPage',
   'ProjectSection',
+  'ProjectStage',
   'ProjectUid',
   'PromptBundleId',
   'ProviderMode',
@@ -130,12 +138,18 @@ export const SCHEMA_NAMES = [
   'RunStatus',
   'RunStatusPage',
   'SectionDocumentCount',
+  'SectionReview',
+  'SectionReviewOption',
+  'SectionSuggestion',
   'SetCurrentNormSnapshotRequest',
   'SetExecutionPausedRequest',
   'SetJobPriorityRequest',
   'SetWorkerIntakeRequest',
   'Severity',
   'Sha256',
+  'SheetDiff',
+  'SheetDiffPage',
+  'SheetPairing',
   'StageId',
   'StageState',
   'StageStatus',
@@ -149,6 +163,8 @@ export const SCHEMA_NAMES = [
   'Verdict',
   'VerdictCount',
   'VersionBlockIndex',
+  'VersionClassification',
+  'VersionComparison',
   'VersionUid',
   'WorkerId',
   'WorkerState',
@@ -231,6 +247,30 @@ export type ChangePasswordRequest = {
   current_password: string;
   /** The password the account will hold. The bounds are mechanical. The deployment enforces a password policy on this operation — a refusal is `validation_failed` and names the rule in `message` — and that policy is not declared here, because it is the deployment's and may differ between them. No history and no expiry are enforced. A value equal to `current_password` is `validation_failed`, because a change that changes nothing would report a password as changed when it was not. */
   new_password: string;
+};
+
+/** `W59-SECTION-SEAL-01`. An expert's explicit stage and section for one version. */
+export type ClassifyDocumentVersionRequest = {
+  project_stage: ProjectStage;
+  section_code: ProjectSection;
+};
+
+/** One side of a comparison, as far as it was established before any refusal. */
+export type ComparedVersion = {
+  page_count: number;
+  project_stage: ProjectStage | null;
+  run_id: RunId | null;
+  section_code: ProjectSection | null;
+  sha256: Sha256;
+  text_layer_sha256: Sha256 | null;
+  version_ordinal: number;
+  version_uid: VersionUid;
+};
+
+/** Why two versions are not compared; ``side`` when the reason is one side's. */
+export type ComparisonRefusal = {
+  reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "text_unavailable" | "text_too_large";
+  side: "source" | "target" | null;
 };
 
 /** Not an entity identity. Never a foreign key and authorizes nothing. */
@@ -328,6 +368,20 @@ export type DecisionRecordPage = {
   page: PageInfo;
 };
 
+/**
+ * One span of a raw line diff; 0-based line indices, end exclusive. An ``equal`` span
+ * carries its ranges and no lines.
+ */
+export type DiffHunk = {
+  source_end: number;
+  source_lines: Array<string>;
+  source_start: number;
+  tag: "equal" | "insert" | "delete" | "replace";
+  target_end: number;
+  target_lines: Array<string>;
+  target_start: number;
+};
+
 export type DocumentUid = string;
 
 /** The contract pattern for `DocumentUid`. Anchored; use with `new RegExp()`. */
@@ -336,6 +390,8 @@ export const DOCUMENT_UID_PATTERN = "^doc_[0-9A-HJKMNP-TV-Z]{26}$";
 /** A published, immutable input state. There is no endpoint that modifies one. */
 export type DocumentVersion = {
   byte_size: number;
+  /** `W59-SECTION-SEAL-01`. The version's persisted, expert-confirmed project stage and section; absent while no expert has classified this version. Never inherited from another version, the document's `section`, a file name or a suggestion. */
+  classification?: VersionClassification;
   display_title?: string;
   document_uid: DocumentUid;
   input_manifest: Array<InputManifestEntry>;
@@ -343,7 +399,7 @@ export type DocumentVersion = {
   page_count: number;
   project_uid: ProjectUid;
   published_at: string;
-  /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
+  /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
   sha256: Sha256;
   /** The uploaded file name, for display. Never an identity. */
@@ -509,6 +565,14 @@ export const FINDING_CATEGORY_VALUES = [
 /** FindingCategory - the closed value set above. */
 export type FindingCategory = (typeof FINDING_CATEGORY_VALUES)[number];
 
+export type FindingComparison = {
+  proposals: Array<FindingMatchProposal>;
+  source_finding_count: number;
+  status: "compared" | "unavailable";
+  target_finding_count: number;
+  unavailable_reason: "findings_over_limit" | null;
+};
+
 /** One finding with its full current-verdict projection. Restates `Finding` rather than composing it with `allOf`: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `Finding` would reject the two properties the sibling branch adds. Both shapes stay closed, and tests/contract/api_v1 asserts this property set stays `Finding`'s plus exactly `latest_comment` and `decision_event_count`. */
 export type FindingDetail = {
   category: FindingCategory;
@@ -531,6 +595,15 @@ export type FindingDetail = {
   /** Document value grounded in the project evidence; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
   stated_value?: string;
   version_uid: VersionUid;
+};
+
+/** A proposed label for a finding of either run; never a decision or a carryover. */
+export type FindingMatchProposal = {
+  basis: "exact_issue_and_quotes" | "quotes_absent_from_paired_sheets" | "quote_still_on_paired_sheet" | "evidence_sheet_unpaired" | "evidence_over_limit" | "no_exact_source_match";
+  kind: "unchanged" | "probably_fixed" | "undetermined" | "new";
+  proposal_sha256: Sha256 | null;
+  source_finding: FindingRef | null;
+  target_finding: FindingRef | null;
 };
 
 export type FindingObservation = {
@@ -559,6 +632,13 @@ export const FINDING_OBSERVATION_ID_PATTERN = "^fobs_[0-9A-HJKMNP-TV-Z]{26}$";
 export type FindingPage = {
   items: Array<Finding>;
   page: PageInfo;
+};
+
+export type FindingRef = {
+  category: FindingCategory;
+  finding_text: string;
+  finding_uid: FindingUid;
+  page_numbers: Array<number>;
 };
 
 /** Durable semantic issue identity, carrying expert history across reruns. */
@@ -958,7 +1038,7 @@ export type ProjectPage = {
   page: PageInfo;
 };
 
-/** Legacy's fourteen project sections (`D-56`, `R-40`). A document with no section is not a fifteenth member of this enum -- it is `UploadDocumentRequest.section` or `DocumentVersion.section` absent, which is a different, equally real fact. */
+/** The fifteen project sections: legacy's fourteen (`D-56`, `R-40`), kept by migration `0011_document_section` as the historical record, and `PS` (the explanatory note, distinct from `PB`, fire safety), added by `W59-SECTION-SEAL-01`. A document or version with no section is not a sixteenth member of this enum -- the property is absent, which is a different, equally real fact. */
 export const PROJECT_SECTION_VALUES = [
   'AR',
   'AI',
@@ -974,10 +1054,26 @@ export const PROJECT_SECTION_VALUES = [
   'GP',
   'TX',
   'POS',
+  'PS',
 ] as const;
 
 /** ProjectSection - the closed value set above. */
 export type ProjectSection = (typeof PROJECT_SECTION_VALUES)[number];
+
+/**
+ * `W59-SECTION-SEAL-01`. The explicit project stage of one version.
+ *
+ * ``P`` (design documentation) or ``R`` (working documentation). Bound to the version, never
+ * inferred from a file name, and never the analysis ``stage_id``, which is why the property
+ * that carries it is named ``project_stage``.
+ */
+export const PROJECT_STAGE_VALUES = [
+  'P',
+  'R',
+] as const;
+
+/** ProjectStage - the closed value set above. */
+export type ProjectStage = (typeof PROJECT_STAGE_VALUES)[number];
 
 /** Opaque project identity. */
 export type ProjectUid = string;
@@ -1186,11 +1282,34 @@ export type RunStatusPage = {
   page: PageInfo;
 };
 
-/** How many published documents carry one project section (`R-40`, `D-56`). `section` absent means this row is the unclassified bucket, not a fifteenth section. Every one of the fourteen frozen codes is present even at `document_count: 0`. */
+/** How many published documents carry one project section (`R-40`, `D-56`). `section` absent means this row is the unclassified bucket, not a sixteenth section. Every one of the fifteen current codes is present even at `document_count: 0`. */
 export type SectionDocumentCount = {
   document_count: number;
-  /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
+  /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
+};
+
+/** All fifteen choices for one version, the current classification or ``null``. */
+export type SectionReview = {
+  classification: VersionClassification | null;
+  options: Array<SectionReviewOption>;
+  recognised_text_consulted: boolean;
+  version_uid: VersionUid;
+};
+
+export type SectionReviewOption = {
+  executable: boolean;
+  name: string;
+  section_code: ProjectSection;
+  suggestion: SectionSuggestion | null;
+};
+
+/** Display evidence for one section: never a confirmation and never a route. */
+export type SectionSuggestion = {
+  filename_patterns: Array<string>;
+  name_in_text: boolean;
+  score: number;
+  text_keywords: Array<string>;
 };
 
 /**
@@ -1231,6 +1350,41 @@ export type Sha256 = string;
 
 /** The contract pattern for `Sha256`. Anchored; use with `new RegExp()`. */
 export const SHA256_PATTERN = "^[0-9a-f]{64}$";
+
+export type SheetDiff = {
+  added_line_count: number | null;
+  evidence_sha256: Sha256 | null;
+  hunks: Array<DiffHunk>;
+  outcome: "computed" | "too_large";
+  removed_line_count: number | null;
+  source_line_count: number | null;
+  source_page_number: number | null;
+  status: "changed" | "removed" | "added";
+  target_line_count: number | null;
+  target_page_number: number | null;
+  too_large_reason: "source_text_too_large" | "source_text_too_many_lines" | "target_text_too_large" | "target_text_too_many_lines" | "text_not_utf8_encodable" | null;
+};
+
+/** One page of the sheets with text differences; ``next_offset`` is null on the last. */
+export type SheetDiffPage = {
+  items: Array<SheetDiff>;
+  limit: number;
+  next_offset: number | null;
+  offset: number;
+  total: number;
+};
+
+/** One sheet of either version and its proposed counterpart, if any. */
+export type SheetPairing = {
+  pairing_basis: "exact_text" | "similar_text" | null;
+  shared_line_count: number | null;
+  similarity_permille: number | null;
+  source_page_number: number | null;
+  status: "unchanged" | "changed" | "removed" | "added";
+  suggestion_sha256: Sha256 | null;
+  target_page_number: number | null;
+  textless: boolean;
+};
 
 /** A canonical stage identity from contracts/analysis/v1/stage-registry.json. PC-01 schedules the first four. */
 export const STAGE_ID_VALUES = [
@@ -1328,7 +1482,7 @@ export type UploadDocumentRequest = {
   display_title?: string;
   /** One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. At most 250 MiB; the PDF at most 500 pages. */
   file: Blob;
-  /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
+  /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
 };
 
@@ -1367,6 +1521,37 @@ export type VersionBlockIndex = {
   /** Binds this block index to the exact prepared text layer its spans index. Null exactly when `status` is `not_produced`. */
   text_layer_sha256: Sha256 | null;
   version_uid: VersionUid;
+};
+
+/**
+ * `W59-SECTION-SEAL-01`. The persisted, expert-confirmed classification of one version.
+ *
+ * Written once (``0024_version_classification``); an exact repeat keeps the first
+ * confirmer and a different stage or section is refused, not overwritten.
+ */
+export type VersionClassification = {
+  confirmed_at: string;
+  confirmed_by_user_uid: UserUid;
+  project_stage: ProjectStage;
+  section_code: ProjectSection;
+  version_uid: VersionUid;
+};
+
+/** Two versions of one set compared, or the explicit reason they are not. */
+export type VersionComparison = {
+  comparison_sha256: Sha256 | null;
+  document_uid: DocumentUid;
+  findings: FindingComparison | null;
+  mode: "version" | "stage";
+  outcome: "compared" | "refused";
+  project_uid: ProjectUid;
+  refusal: ComparisonRefusal | null;
+  sheet_diffs: SheetDiffPage | null;
+  sheets: Array<SheetPairing>;
+  source: ComparedVersion | null;
+  source_version_uid: VersionUid;
+  target: ComparedVersion | null;
+  target_version_uid: VersionUid;
 };
 
 export type VersionUid = string;

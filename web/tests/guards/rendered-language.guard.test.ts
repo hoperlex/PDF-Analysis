@@ -69,8 +69,11 @@ import type {
   RunActivity,
   RunStateCount,
   RunStatus,
+  SectionReview,
   StageId,
   StageStatus,
+  VersionClassification as VersionClassificationRecord,
+  VersionComparison,
 } from '@/shared/api';
 import { RUN_STATE_VALUES } from '@/shared/api';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
@@ -78,11 +81,15 @@ import { USER_PAGE_LIMIT } from '@/entities/user';
 import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import {
+  ALREADY_CLASSIFIED_DETAIL, CLASSIFY_NOT_PERMITTED_DETAIL, COMPARISON_DIFF_LIMIT,
   DOCUMENT_PAGE_LIMIT, UPLOAD_CONSTRAINTS_STATED, UPLOAD_ENVELOPE_RULES, VERSION_PAGE_LIMIT, classifyUploadFailure,
   precheckProblemMessage,
 } from '@/entities/document-version';
 import { UPLOAD_CONSTRAINTS_ADDED } from '@/entities/document-version/model/upload-failure';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
+import { ClassifyVersionFormView } from '@/features/classify-version';
+import { VersionClassification, VersionClassificationView } from '@/widgets/version-classification';
+import { ProjectStructureView } from '@/widgets/project-sections';
 import { AppFrame } from '@/_app';
 import { accountMenuProps } from '@/_app/account-menu';
 import { UpdateBannerView, WhatsNewView } from '@/_app/release-notices';
@@ -484,6 +491,41 @@ const version = (over: Partial<DocumentVersion> = {}): DocumentVersion => ({
   ...over,
 });
 
+/**
+ * `W59-SECTION-UI-01`. A version's stage-and-section classification and its review, with
+ * Cyrillic evidence: the patterns and keywords are the server's own words, so a Latin one
+ * left on a screen would be chrome the application wrote.
+ */
+const classification = (
+  over: Partial<VersionClassificationRecord> = {},
+): VersionClassificationRecord => ({
+  version_uid: VERSION_UID,
+  project_stage: 'P',
+  section_code: 'AR',
+  confirmed_at: '2026-10-20T08:00:00Z',
+  confirmed_by_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+  ...over,
+});
+
+const sectionReview = (over: Partial<SectionReview> = {}): SectionReview => ({
+  version_uid: VERSION_UID,
+  classification: null,
+  recognised_text_consulted: true,
+  options: PROJECT_SECTIONS.map((section) => ({
+    section_code: section.code,
+    name: section.name,
+    // One section without a registered profile, so the mark renders.
+    executable: section.code !== 'PB',
+    suggestion:
+      section.code === 'AR'
+        ? { score: 7, filename_patterns: ['АР'], text_keywords: ['поэтажный план'], name_in_text: true }
+        : section.code === 'KJ'
+          ? { score: 2, filename_patterns: ['КЖ'], text_keywords: [], name_in_text: false }
+          : null,
+  })),
+  ...over,
+});
+
 /*
  * ALL NINE stage ids, and each with a DIFFERENT stage status.
  *
@@ -635,6 +677,13 @@ const FINDINGS: readonly Finding[] = [
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}H`, category: 'facade' }),
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}J`, category: 'roof' }),
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}K`, category: 'documentation' }),
+  // `W59-SECTION-UI-01`: the five categories `W57A-SEAL-01B` added to the contract were
+  // rendered by no state, and the coverage case below was red on the lane's base for it.
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}M`, category: 'fire_safety' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}N`, category: 'evacuation' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}P`, category: 'accessibility' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}Q`, category: 'insulation' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}R`, category: 'sound' }),
 ];
 
 /** One decision event per `Verdict`, for the same reason the findings are four. */
@@ -765,6 +814,8 @@ const KEYS = {
   documents: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT),
   versions: queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT),
   version: queryKeys.versions.detail(VERSION_UID),
+  // `W59-SECTION-UI-01`: the version screen's stage-and-section panel.
+  sectionReview: queryKeys.versions.sectionReview(VERSION_UID),
   content: queryKeys.versions.content(VERSION_UID),
   runs: queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT),
   run: queryKeys.runs.detail(RUN_ID),
@@ -819,6 +870,8 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.documents, { items: [version()], page });
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.version, version());
+  // Unconfirmed, so the expert's seed draws the form and the reader's seed its sentence.
+  client.setQueryData(KEYS.sectionReview, sectionReview());
   client.setQueryData(KEYS.runs, { items: [run(runOverrides)], page });
   client.setQueryData(KEYS.run, run(runOverrides));
   client.setQueryData(KEYS.findings, { items: FINDINGS, page });
@@ -1099,6 +1152,119 @@ function without(status: RunStatus, fields: readonly (keyof RunStatus)[]): RunSt
  * `review-page.tsx` reading `.data.items` off a bare model. That is `D-57` seen from
  * inside a test, and it is the second time this file's own machinery has produced it.
  */
+/**
+ * `W59-VERSION-COMPARE-01`. The version in scope and a NEWER version of the same set, both
+ * confirmed (П then Р, one section, so the «Стадии П → Р» switch is offered), with the
+ * comparison of the pair seeded as given -- or not at all, which is its loading branch.
+ *
+ * Every value the comparison carries is Cyrillic, an identifier, a digest or a contract
+ * enum, for the reason the file header gives: anything Latin left on screen is chrome.
+ */
+const NEWER_VERSION_UID = `ver_${ULID.slice(0, -1)}C`;
+
+function comparisonBody(over: Partial<VersionComparison> = {}): VersionComparison {
+  const finding = (uid: string, text: string, page: number) => ({
+    finding_uid: `fnd_${ULID.slice(0, -1)}${uid}`,
+    category: 'layout' as const,
+    finding_text: text,
+    page_numbers: [page],
+  });
+  return {
+    project_uid: PROJECT_UID,
+    document_uid: DOCUMENT_UID,
+    source_version_uid: VERSION_UID,
+    target_version_uid: NEWER_VERSION_UID,
+    mode: 'version',
+    outcome: 'compared',
+    refusal: null,
+    source: {
+      version_uid: VERSION_UID, version_ordinal: 1, page_count: 4, sha256: SHA,
+      project_stage: 'P', section_code: 'AR', run_id: RUN_ID, text_layer_sha256: SHA,
+    },
+    target: {
+      version_uid: NEWER_VERSION_UID, version_ordinal: 2, page_count: 4, sha256: SHA,
+      project_stage: 'P', section_code: 'AR', run_id: `run_${ULID.slice(0, -1)}C`,
+      text_layer_sha256: SHA,
+    },
+    comparison_sha256: SHA,
+    sheets: [
+      { status: 'unchanged', source_page_number: 1, target_page_number: 1, pairing_basis: 'exact_text',
+        similarity_permille: 1000, shared_line_count: null, suggestion_sha256: SHA, textless: false },
+      { status: 'changed', source_page_number: 2, target_page_number: 2, pairing_basis: 'similar_text',
+        similarity_permille: 870, shared_line_count: 12, suggestion_sha256: SHA, textless: false },
+      { status: 'removed', source_page_number: 3, target_page_number: null, pairing_basis: null,
+        similarity_permille: null, shared_line_count: null, suggestion_sha256: null, textless: true },
+      { status: 'added', source_page_number: null, target_page_number: 3, pairing_basis: null,
+        similarity_permille: null, shared_line_count: null, suggestion_sha256: null, textless: false },
+      { status: 'removed', source_page_number: 4, target_page_number: null, pairing_basis: null,
+        similarity_permille: null, shared_line_count: null, suggestion_sha256: null, textless: false },
+    ],
+    sheet_diffs: {
+      offset: 0, limit: COMPARISON_DIFF_LIMIT, total: 13, next_offset: 2,
+      items: [
+        { status: 'changed', source_page_number: 2, target_page_number: 2, outcome: 'computed',
+          too_large_reason: null, source_line_count: 3, target_line_count: 3, added_line_count: 1,
+          removed_line_count: 1, evidence_sha256: SHA,
+          hunks: [
+            { tag: 'equal', source_start: 0, source_end: 2, target_start: 0, target_end: 2,
+              source_lines: [], target_lines: [] },
+            { tag: 'replace', source_start: 2, source_end: 3, target_start: 2, target_end: 3,
+              source_lines: ['Стена 200\n'], target_lines: ['Стена 250\n'] },
+          ] },
+        { status: 'added', source_page_number: null, target_page_number: 3, outcome: 'too_large',
+          too_large_reason: 'target_text_too_many_lines', source_line_count: null,
+          target_line_count: null, added_line_count: null, removed_line_count: null,
+          evidence_sha256: null, hunks: [] },
+      ],
+    },
+    findings: {
+      status: 'compared', unavailable_reason: null, source_finding_count: 3, target_finding_count: 2,
+      proposals: [
+        { kind: 'unchanged', basis: 'exact_issue_and_quotes', proposal_sha256: SHA,
+          source_finding: finding('1', 'Нет дверного проёма', 1),
+          target_finding: finding('2', 'Нет дверного проёма', 1) },
+        { kind: 'probably_fixed', basis: 'quotes_absent_from_paired_sheets', proposal_sha256: null,
+          source_finding: finding('3', 'Толщина стены не совпадает', 2), target_finding: null },
+        { kind: 'undetermined', basis: 'evidence_sheet_unpaired', proposal_sha256: null,
+          source_finding: finding('4', 'Узел не указан', 4), target_finding: null },
+        { kind: 'new', basis: 'no_exact_source_match', proposal_sha256: null,
+          source_finding: null, target_finding: finding('5', 'Цвет фасада не согласован', 3) },
+      ],
+    },
+    ...over,
+  };
+}
+
+function twoVersionClient(
+  loaded: (over?: Partial<RunStatus>) => Client,
+  comparison: VersionComparison | null,
+): Client {
+  const client = loaded();
+  const page = { next_cursor: null } as { next_cursor: null };
+  const older = version({ classification: classification({ project_stage: 'P' }) });
+  const newer = version({
+    version_uid: NEWER_VERSION_UID,
+    version_ordinal: 2,
+    classification: classification({ version_uid: NEWER_VERSION_UID, project_stage: 'R' }),
+  });
+  client.setQueryData(KEYS.version, older);
+  client.setQueryData(KEYS.versions, { items: [newer, older], page });
+  if (comparison !== null) {
+    client.setQueryData(
+      queryKeys.versions.comparison(VERSION_UID, NEWER_VERSION_UID, 'version', 0, COMPARISON_DIFF_LIMIT),
+      comparison,
+    );
+  }
+  return client;
+}
+
+/** The version is answered and its set's version list is not: the list's loading branch. */
+function versionsPendingClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
+  const client = loaded();
+  client.removeQueries({ queryKey: KEYS.versions, exact: true });
+  return client;
+}
+
 function twoRunClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
   const client = loaded();
   const page = { next_cursor: null } as { next_cursor: null };
@@ -1720,6 +1886,86 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       }),
   },
   ...BLOCKS_SHAPES,
+  /*
+   * `W59-SECTION-UI-01`. The stage-and-section panel's shapes an address does not select:
+   * the confirmed classification (with a section that has no profile, and after the
+   * reader's own confirmation was refused with `409`), the expert's form in flight and
+   * refused (`409`, `403`), a review that could not be read, and the project structure with
+   * documents confirmed under both stages. Each is a branch chosen by a settled mutation or
+   * by a review this matrix's shared seeds keep unconfirmed.
+   */
+  {
+    name: 'version-classification-confirmed',
+    make: () =>
+      createElement(VersionClassificationView, {
+        address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
+        review: sectionReview({ classification: classification({ project_stage: 'R', section_code: 'PB' }) }),
+        roles: ['expert'],
+        conflict: true,
+        onConflict: () => undefined,
+      }),
+  },
+  {
+    name: 'classify-version-form-pending',
+    make: () =>
+      createElement(ClassifyVersionFormView, {
+        review: sectionReview({ recognised_text_consulted: false }),
+        stage: 'R',
+        section: 'PB',
+        pending: true,
+        failure: null,
+        onStage: () => undefined,
+        onSection: () => undefined,
+        onConfirm: () => undefined,
+      }),
+  },
+  ...(['already_classified', 'not_permitted'] as const).map((kind) => ({
+    name: `classify-version-form-${kind}`,
+    make: () =>
+      createElement(ClassifyVersionFormView, {
+        review: sectionReview({
+          options: sectionReview().options.map((option) => ({ ...option, suggestion: null })),
+        }),
+        stage: 'P',
+        section: 'AR',
+        pending: false,
+        failure: {
+          kind,
+          detail: kind === 'already_classified' ? ALREADY_CLASSIFIED_DETAIL : CLASSIFY_NOT_PERMITTED_DETAIL,
+          correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100',
+          retryable: false,
+        },
+        onStage: () => undefined,
+        onSection: () => undefined,
+        onConfirm: () => undefined,
+      }),
+  })),
+  {
+    name: 'version-classification-read-failed',
+    make: () =>
+      createElement(VersionClassification, {
+        address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
+        roles: ['expert'],
+      }),
+    seedClient: (client) => seedError(client, KEYS.sectionReview, apiError(503, 'dependency_unavailable')),
+  },
+  {
+    name: 'project-structure-classified',
+    make: () =>
+      createElement(ProjectStructureView, {
+        projectUid: PROJECT_UID,
+        items: [
+          version({ classification: classification() }),
+          version({
+            document_uid: `doc_${ULID.slice(0, -1)}C`,
+            version_uid: `ver_${ULID.slice(0, -1)}C`,
+            classification: classification({ project_stage: 'R', section_code: 'KJ' }),
+          }),
+          version({ document_uid: `doc_${ULID.slice(0, -1)}D`, version_uid: `ver_${ULID.slice(0, -1)}D` }),
+        ],
+        hasNextPage: true,
+      }),
+  },
 ];
 
 const SCREENS: readonly ScreenCase[] = [
@@ -1809,6 +2055,16 @@ export const CACHE_STATES: readonly {
    * seeded run, the way `empty`, `refused` and `paged` do.
    */
   { state: 'two-runs', run: null },
+  /*
+   * `W59-VERSION-COMPARE-01`. The version comparison's four static branches: the set's
+   * version list in flight, two versions with the comparison in flight, the comparison
+   * answered (every sheet status, a diff page with a too-large sheet and a next page, every
+   * finding proposal kind) and the comparison refused. See `twoVersionClient`.
+   */
+  { state: 'versions-pending', run: null },
+  { state: 'two-versions', run: null },
+  { state: 'two-versions-compared', run: null },
+  { state: 'two-versions-refused', run: null },
 ];
 
 export function renderedScreens(): readonly { readonly where: string; readonly markup: string }[] {
@@ -1843,7 +2099,25 @@ function renderEveryScreen(): readonly { readonly where: string; readonly markup
                   ? pagedClient(loaded)
                   : state === 'two-runs'
                     ? twoRunClient(loaded)
-                    : loaded(overrides ?? {});
+                    : state === 'versions-pending'
+                      ? versionsPendingClient(loaded)
+                      : state === 'two-versions'
+                        ? twoVersionClient(loaded, null)
+                        : state === 'two-versions-compared'
+                          ? twoVersionClient(loaded, comparisonBody())
+                          : state === 'two-versions-refused'
+                            ? twoVersionClient(
+                                loaded,
+                                comparisonBody({
+                                  outcome: 'refused',
+                                  refusal: { reason: 'project_stage_mismatch', side: null },
+                                  comparison_sha256: null,
+                                  sheets: [],
+                                  sheet_diffs: null,
+                                  findings: null,
+                                }),
+                              )
+                            : loaded(overrides ?? {});
       screen.seedClient?.(client);
       out.push({ where: `${screen.name} (${state})`, markup: renderScreen(client, screen.make()) });
     }
@@ -1960,6 +2234,10 @@ const TRANSLATED_SCHEMAS = [
   // by «Блоки» in Russian (`entities/block`'s vocabulary) with the value in a `data-` attribute.
   'PortalBlockType',
   'PortalGeometryState',
+  // `W59-SECTION-UI-01`: a version's stage and section, said as «Стадия: П» and «Архитектурные
+  // решения (АР)» with the contract value in a `data-` attribute. The Latin code is never text.
+  'ProjectStage',
+  'ProjectSection',
 ] as const;
 
 function translatedVocabulary(): ReadonlySet<string> {
@@ -2337,6 +2615,16 @@ const SCHEMA_MARKERS: readonly {
     schema: 'PortalBlockType',
     attribute: 'data-portal-block-type',
     why: '`widgets/portal-blocks/ui/portal-block-card.tsx`, one per block, its type said as Текст / Изображение / Штамп.',
+  },
+  {
+    schema: 'ProjectStage',
+    attribute: 'data-project-stage',
+    why: '`entities/document-version/ui/classification-badges.tsx`, the stage badge on the version screen, every version row and the project structure.',
+  },
+  {
+    schema: 'ProjectSection',
+    attribute: 'data-section-group',
+    why: "`widgets/project-sections/ui/project-sections.tsx`, one group per section of the project structure, every one of the fifteen present even when empty.",
   },
   {
     schema: 'PortalGeometryState',

@@ -18,6 +18,7 @@ separately planned validation wave. Each candidate must be named by exact SHA th
 W48–W53 review that need a contract, a migration, a dependency, production access or a later
 wave's design; every other confirmed finding was closed by the W53-CLOSE lanes.
 **`W55B-INT-CLOSE` (2026-10-14) opened `D-159` … `D-177`** from `R-121`, the W55b judges, the rehearsal, `W55B-FIX` and the lane reports;
+**`NIGHT-1020-INT-01` (2026-10-20) opened `D-178` … `D-182`** from the W59 section lanes of the `R-139` night window;
 the findings `W55B-FIX` repairs are recorded in its report, not here.
 
 **Measured against the tree, not compiled from closure records** — `W4_CLOSURE.md` §3 records a
@@ -90,6 +91,11 @@ file exists to not become that. It very nearly did anyway; see the two rules bel
 | **D-175** | an adversarial PDF with no drawing elements (`q Q` operators) passes the upload reader cheaply and costs the worker's pdfplumber about 3.8 s a page, past the 900 s watchdog; and the document ceilings leave ×1.3–1.4 at 500 pages of the export's density (`W55B-JUDGE-X` recheck, X-2 residual, X-12) | with `D-171`: bound the stage's time, then derive the ceilings per page × pages |
 | **D-176** | the upload front door admits any signed, unexpired credential, a revoked or archived account's included, for up to its 1 h life; it reads the last `Authorization`/`Content-Type` header where Starlette reads the first (X-3 residual) | a revocation check that stays database-free, or a shorter token life |
 | **D-177** | a version may still hold up to about 11 GiB of crops (1 000 high-entropy IMAGE crops at 4 MP); the display name keeps U+2028/2029 and Hangul fillers (X-4, X-10 residuals) | a per-version crop byte budget; widen the name scrub |
+| **D-178** | the 13 legacy-ported section text profiles (`W59-SECTION-PROFILES-01`) are `draft`: no expert review, no field cases, no recorded responses from a real model; their open questions are in that report | expert review per section, field positive/negative cases, then `status: reviewed` (`R-139` night window) |
+| **D-179** | run-start refusals for an unclassified version or a section without a profile reuse `required_norm_unavailable` with `details.reference_kind` `version_classification` / `analysis_profile` instead of their own error codes | a catalogue reseal with dedicated codes at the final beta seal |
+| **D-180** | the dashboard's `section_breakdown` still groups by the legacy document-level `document.section`, not by the confirmed version classification | regroup by the current version's classification with its own test set |
+| **D-181** | pins the W59 seal could not reach: `tests/characterization/w13_baseline/**` and `tests/integration/qa_w55b/**` start runs without the new classify step; the PC-01 live journey with `classify-version` was checked only statically | update those suites and run the live journey in the deferred complete gate |
+| **D-182** | a conflicting classification is refused (`version_already_classified`); there is no append-only correction workflow with actor and reason | a correction command and screen when the owner rules on it |
 | **D-75** | one published account, and a lockout anyone can aim at it | **owner: `R-29` clause 2, both repairs** |
 | ~~D-76~~ | the same document went stale again underneath its correction note | **closed by `W47-CLOSE`**: live head/counts corrected and the exemption removed |
 | ~~D-77~~ | `origin/dev` sat **41 commits behind `origin/main`**, and a peer measured the programme on it | **closed by `W48-GOV`**: `OPERATING_CONSTRAINTS.md` §15 and `MAIN_DIRECT_AUTHORITY_REQUIRED` (`1843db5`) |

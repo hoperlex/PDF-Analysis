@@ -5,6 +5,11 @@ suggests pairs nor proves that the caller authorized the approval. Page numbers
 are coordinates in immutable DocumentVersions, not identities inferred from a
 filename, sheet label or display number. The later persistence layer owns the
 approved state and must store these raw results separately from AI synthesis.
+
+:func:`diff_page_lines` is the link-free core: it diffs two page texts and carries
+no comparison, link or approval identity. The served read-only comparison
+(``service.py``) uses it for *suggested* sheet pairs, so a suggestion is never
+dressed up as an ``ApprovedSheetPair``; the approved path below uses the same core.
 """
 
 from __future__ import annotations
@@ -59,6 +64,17 @@ class LineChange:
 
 
 @dataclass(frozen=True, slots=True)
+class PageLineDiff:
+    """Exact line differences of two page texts, with no pairing authority."""
+
+    source_sha256: str
+    target_sha256: str
+    source_line_count: int
+    target_line_count: int
+    changes: tuple[LineChange, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class RawTextDiff:
     algorithm: str
     comparison_id: str
@@ -97,7 +113,14 @@ def _lines(text: str, field: str) -> tuple[str, ...]:
     return lines
 
 
-def _raw_diff(pair: ApprovedSheetPair, source: str, target: str) -> RawTextDiff:
+def diff_page_lines(source: str, target: str) -> PageLineDiff:
+    """Diff two page texts line by line, keeping exact endings and Unicode.
+
+    The same per-page ceilings as an approved pair apply (200,000 characters and
+    1,000 lines per side); an oversized page refuses instead of being truncated.
+    Every equal and changed span is returned, so the caller can project changed
+    lines without losing the raw evidence the digests describe.
+    """
     source_lines = _lines(source, "source_text")
     target_lines = _lines(target, "target_text")
     try:
@@ -119,6 +142,14 @@ def _raw_diff(pair: ApprovedSheetPair, source: str, target: str) -> RawTextDiff:
         )
         for tag, source_start, source_end, target_start, target_end in matcher.get_opcodes()
     )
+    return PageLineDiff(
+        source_digest, target_digest, len(source_lines), len(target_lines), changes,
+    )
+
+
+def _raw_diff(pair: ApprovedSheetPair, source: str, target: str) -> RawTextDiff:
+    page = diff_page_lines(source, target)
+    source_digest, target_digest, changes = page.source_sha256, page.target_sha256, page.changes
     body = {
         "algorithm": ALGORITHM,
         "comparison_id": pair.comparison_id,
