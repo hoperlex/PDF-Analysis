@@ -41,6 +41,7 @@ from tests.integration.db.conftest import (  # type: ignore[import-not-found]
     clear_the_role_backfill,
     run_foundation_command,
 )
+from tests.support.expected_facts import FACTS
 
 REVISION = "0015_accounts_roles_registration"
 PREVIOUS = "0014_durable_analysis_effects"
@@ -184,7 +185,7 @@ def test_the_migration_restates_the_boundary_patterns_exactly() -> None:
 
 
 def test_this_revision_precedes_the_release_head() -> None:
-    assert head_revision() == "0024_version_classification"
+    assert head_revision() == FACTS.migration_head
 
 
 # =======================================================================================
@@ -697,7 +698,7 @@ class TestTheDowngrade:
         with migrated_engine.connect() as connection:
             assert connection.execute(
                 text("SELECT version_num FROM alembic_version")
-            ).scalar_one() == "0024_version_classification"
+            ).scalar_one() == FACTS.migration_head
 
     @pytest.mark.parametrize(
         "occupy",

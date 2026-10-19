@@ -36,7 +36,7 @@ from auditmanager.shared.identity import (
     VersionUid,
 )
 
-HEAD = "0024_version_classification"
+HEAD = "0024_version_classification"  # this revision, not the tree's head: every upgrade here targets it
 PREVIOUS = "0023_norm_citations"
 
 
@@ -146,7 +146,7 @@ def test_populated_0023_upgrades_without_fabricating_a_classification(
                     ids,
                 )
 
-    upgraded = foundation_command(_alembic("upgrade", "head"), url)
+    upgraded = foundation_command(_alembic("upgrade", HEAD), url)
     assert upgraded.returncode == 0, upgraded.describe()
 
     with engine.connect() as connection:
@@ -176,7 +176,7 @@ def test_the_classification_is_append_only_and_checked(
     at_previous: tuple[Engine, str, dict[str, str]], foundation_command: Any
 ) -> None:
     engine, url, ids = at_previous
-    assert foundation_command(_alembic("upgrade", "head"), url).returncode == 0
+    assert foundation_command(_alembic("upgrade", HEAD), url).returncode == 0
     with engine.begin() as connection:
         user = _user(connection)
         _classify(connection, ids["version"], user)
@@ -225,7 +225,7 @@ def test_every_current_section_is_admitted_and_ps_is_not_pb(
     at_previous: tuple[Engine, str, dict[str, str]], foundation_command: Any
 ) -> None:
     engine, url, _ = at_previous
-    assert foundation_command(_alembic("upgrade", "head"), url).returncode == 0
+    assert foundation_command(_alembic("upgrade", HEAD), url).returncode == 0
     current = ("AR", "AI", "KM", "KJ", "OV", "EOM", "VK", "PT", "PB", "SS", "ITP", "GP", "TX", "POS", "PS")
     with engine.begin() as connection:
         user = _user(connection)
@@ -242,7 +242,7 @@ def test_the_downgrade_drops_only_the_table_and_keeps_a_ps_document(
     at_previous: tuple[Engine, str, dict[str, str]], foundation_command: Any
 ) -> None:
     engine, url, ids = at_previous
-    assert foundation_command(_alembic("upgrade", "head"), url).returncode == 0
+    assert foundation_command(_alembic("upgrade", HEAD), url).returncode == 0
     with engine.begin() as connection:
         _classify(connection, ids["version"], _user(connection))
         connection.execute(
@@ -273,5 +273,5 @@ def test_the_downgrade_drops_only_the_table_and_keeps_a_ps_document(
                     text("UPDATE document SET section = 'PS', updated_at = now() WHERE document_uid = :document"),
                     ids,
                 )
-    reupgraded = foundation_command(_alembic("upgrade", "head"), url)
+    reupgraded = foundation_command(_alembic("upgrade", HEAD), url)
     assert reupgraded.returncode == 0, reupgraded.describe()

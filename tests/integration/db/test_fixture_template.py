@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from auditmanager.shared.db.config import DatabaseSettings
 from auditmanager.shared.db.engine import create_database_engine
+from tests.support.expected_facts import FACTS
 
 
 def test_one_migration_supplies_isolated_clones_and_empty_stays_empty(
@@ -35,15 +36,11 @@ def test_one_migration_supplies_isolated_clones_and_empty_stays_empty(
     empty_engine = create_database_engine(empty_database)
     try:
         with first_engine.begin() as connection:
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-                "0024_version_classification"
-            )
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == FACTS.migration_head
             connection.execute(text("CREATE TABLE fixture_marker (value integer NOT NULL)"))
             connection.execute(text("INSERT INTO fixture_marker VALUES (1)"))
         with second_engine.connect() as connection:
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-                "0024_version_classification"
-            )
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == FACTS.migration_head
             assert connection.execute(text("SELECT to_regclass('public.fixture_marker')")).scalar() is None
         with empty_engine.connect() as connection:
             assert connection.execute(text("SELECT to_regclass('public.alembic_version')")).scalar() is None
