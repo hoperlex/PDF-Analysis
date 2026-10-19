@@ -16,6 +16,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
+#: ``version``: the same explicit stage and section on both versions (W59). ``stage``: a
+#: ``P`` source and an ``R`` target of the same set and section (the W62 П/Р slice).
+MODE_VERSION: Final[str] = "version"
+MODE_STAGE: Final[str] = "stage"
+MODES: Final[tuple[str, ...]] = (MODE_VERSION, MODE_STAGE)
+
 OUTCOME_COMPARED: Final[str] = "compared"
 OUTCOME_REFUSED: Final[str] = "refused"
 
@@ -35,6 +41,7 @@ REFUSAL_REASONS: Final[tuple[str, ...]] = (
     "section_unconfirmed",
     "project_stage_mismatch",
     "confirmed_section_mismatch",
+    "stage_pair_invalid",
     "analysis_missing",
     "run_not_of_version",
     "run_not_published",
@@ -204,6 +211,7 @@ class VersionComparison:
     document_uid: str
     source_version_uid: str
     target_version_uid: str
+    mode: str
     outcome: str
     refusal: ComparisonRefusal | None
     source: ComparedVersion | None
@@ -220,7 +228,8 @@ __all__ = [
     "BASIS_QUOTES_ABSENT", "BASIS_QUOTE_PRESENT", "BASIS_SHEET_UNPAIRED",
     "ComparedVersion", "ComparisonRefusal", "DIFF_COMPUTED", "DIFF_TOO_LARGE",
     "DiffHunk", "FINDINGS_COMPARED", "FINDINGS_OVER_LIMIT", "FINDINGS_UNAVAILABLE",
-    "FindingComparison", "FindingProposal", "FindingRef", "OUTCOME_COMPARED",
+    "FindingComparison", "FindingProposal", "FindingRef", "MODES", "MODE_STAGE",
+    "MODE_VERSION", "OUTCOME_COMPARED",
     "OUTCOME_REFUSED", "PAIRING_EXACT_TEXT", "PAIRING_SIMILAR_TEXT",
     "PROPOSAL_BASES", "PROPOSAL_KINDS", "PROPOSAL_NEW", "PROPOSAL_PROBABLY_FIXED",
     "PROPOSAL_UNCHANGED", "PROPOSAL_UNDETERMINED", "REFUSAL_REASONS",

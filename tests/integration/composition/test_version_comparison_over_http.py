@@ -9,6 +9,10 @@ refused, both versions are analysed by recorded runs, and the comparison answers
 as an exact-text pair with no difference and every finding of the older run proposed as
 ``unchanged`` against the newer one. The text layers are read from MinIO by the shipped
 adapter, held to the digests their stage rows recorded.
+
+A third version of the same set is classified ``R``: ``mode=version`` refuses the P/R pair
+(``project_stage_mismatch``, never relabelled) and ``mode=stage`` compares it -- the W62
+П/Р slice. A path that names no version of the document is ``404``.
 """
 
 from __future__ import annotations
@@ -114,10 +118,11 @@ def world() -> dict[str, Any]:
     first = _upload(client, auth, project_uid, f"{tag}-v1")
     other = _upload(client, auth, project_uid, f"{tag}-other")
     v2 = _second_version(first["document_uid"], first["version_uid"])
+    v3 = _second_version(first["document_uid"], first["version_uid"])
     return {
         "app": app, "client": client, "auth": auth, "tag": tag, "project_uid": project_uid,
-        "document_uid": first["document_uid"], "v1": first["version_uid"], "v2": v2,
-        "other_version": other["version_uid"],
+        "document_uid": first["document_uid"], "v1": first["version_uid"], "v2": v2, "v3": v3,
+        "other_version": other["version_uid"], "other_document": other["document_uid"],
     }
 
 
@@ -131,12 +136,12 @@ def _compare(world: dict[str, Any], *, source: str, target: str, **query: Any) -
     )
 
 
-def _classify(world: dict[str, Any], version_uid: str) -> None:
+def _classify(world: dict[str, Any], version_uid: str, stage: str = "P") -> None:
     answer = world["client"].put(
         f"/projects/{world['project_uid']}/documents/{world['document_uid']}"
         f"/versions/{version_uid}/classification",
         headers=world["auth"] | {"Content-Type": "application/json"},
-        content=json.dumps({"project_stage": "P", "section_code": "AR"}).encode("utf-8"),
+        content=json.dumps({"project_stage": stage, "section_code": "AR"}).encode("utf-8"),
     )
     assert answer.status_code == 200, answer.content
 
@@ -197,6 +202,24 @@ def test_the_comparison_refuses_then_compares_as_its_inputs_appear(world) -> Non
     assert findings["source_finding_count"] == findings["target_finding_count"] > 0
     assert {p["kind"] for p in findings["proposals"]} == {"unchanged"}
     assert len(body["comparison_sha256"]) == 64
+    assert body["mode"] == "version"
+
+    _classify(world, world["v3"], stage="R")
+    working_run = _run(world, world["v3"])
+    assert world["app"].state.run_carrier.drain(timeout=300), "the R run never finished"
+    as_versions = _compare(world, source=world["v1"], target=world["v3"]).json()
+    assert (as_versions["mode"], as_versions["refusal"]) == (
+        "version", {"reason": "project_stage_mismatch", "side": None},
+    )
+    as_stages = _compare(world, source=world["v1"], target=world["v3"], mode="stage").json()
+    assert (as_stages["mode"], as_stages["outcome"]) == ("stage", "compared")
+    assert (as_stages["source"]["project_stage"], as_stages["target"]["project_stage"]) == (
+        "P", "R",
+    )
+    assert as_stages["target"]["run_id"] == working_run
+    assert [row["status"] for row in as_stages["sheets"]] == ["unchanged"] * pages
+    same_stage = _compare(world, source=world["v1"], target=world["v2"], mode="stage").json()
+    assert same_stage["refusal"] == {"reason": "stage_pair_invalid", "side": None}
 
 
 @pytest.mark.parametrize(
@@ -214,7 +237,21 @@ def test_pairs_outside_the_rule_are_refused_with_a_reason(world, pick, reason) -
     assert answer.json()["refusal"]["reason"] == reason
 
 
-@pytest.mark.parametrize("query", [{"diff_limit": 26}, {"diff_offset": -1}, {"source_run_id": "x"}])
+def test_a_path_that_names_no_version_of_the_document_is_404(world) -> None:
+    """`D-67`: the source version under another document is not this path's resource."""
+    answer = world["client"].get(
+        f"/projects/{world['project_uid']}/documents/{world['other_document']}"
+        f"/versions/{world['v1']}/comparison",
+        params={"target_version_uid": world["v2"]}, headers=world["auth"],
+    )
+    assert answer.status_code == 404, answer.content
+    assert answer.json()["error_code"] == "not_found"
+
+
+@pytest.mark.parametrize(
+    "query",
+    [{"diff_limit": 26}, {"diff_offset": -1}, {"source_run_id": "x"}, {"mode": "object"}],
+)
 def test_malformed_paging_or_run_identity_is_422(world, query) -> None:
     answer = _compare(world, source=world["v1"], target=world["v2"], **query)
     assert answer.status_code == 422, answer.content

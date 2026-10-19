@@ -397,3 +397,42 @@ def test_the_service_reads_versions_once_and_writes_nothing() -> None:
     result = _compare(session=session)
     assert session.statements == 1
     assert replace(result, sheet_diffs=None) == replace(_compare(), sheet_diffs=None)
+
+
+# -- mode=stage: the W62 П/Р slice ----------------------------------------------------------
+
+
+def test_stage_mode_compares_a_p_source_with_an_r_target_of_one_section() -> None:
+    service = _service(classifications={V1: ("P", "AR"), V2: ("R", "AR")})
+    result = _compare(service, mode="stage")
+    assert (result.mode, result.outcome) == ("stage", OUTCOME_COMPARED)
+    assert (result.source.project_stage, result.target.project_stage) == ("P", "R")
+    assert result.source.section_code == result.target.section_code == "AR"
+    assert result.sheets == _compare().sheets  # the raw comparison itself is unchanged
+    assert result.comparison_sha256 != _compare().comparison_sha256  # the mode is bound
+
+
+def test_the_same_p_r_pair_is_refused_in_version_mode_not_relabelled() -> None:
+    service = _service(classifications={V1: ("P", "AR"), V2: ("R", "AR")})
+    refused = _compare(service)
+    assert (refused.mode, refused.refusal.reason) == ("version", "project_stage_mismatch")
+
+
+@pytest.mark.parametrize(
+    ("classifications", "reason", "side"),
+    [
+        ({V1: ("P", "AR"), V2: ("P", "AR")}, "stage_pair_invalid", None),
+        ({V1: ("R", "AR"), V2: ("P", "AR")}, "stage_pair_invalid", None),
+        ({V1: ("P", "AR"), V2: ("R", "KJ")}, "confirmed_section_mismatch", None),
+        ({V2: ("R", "AR")}, "stage_unclassified", "source"),
+    ],
+)
+def test_stage_mode_refusals(classifications, reason, side) -> None:
+    result = _compare(_service(classifications=classifications), mode="stage")
+    assert (result.mode, result.outcome) == ("stage", OUTCOME_REFUSED)
+    assert (result.refusal.reason, result.refusal.side) == (reason, side)
+
+
+def test_an_unknown_mode_is_rejected_before_any_read() -> None:
+    with pytest.raises(ComparisonRequestInvalid, match="mode_invalid"):
+        _compare(mode="object")

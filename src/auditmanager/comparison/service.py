@@ -7,7 +7,11 @@ One read, in the caller's session, composes the prepared W59 modules:
    project, ordered source-before-target;
 2. :func:`~auditmanager.comparison.version_section_pair.prepare_same_section_version_pair`
    requires the same explicit ``P``/``R`` stage and the same confirmed section on
-   both, read from persisted classifications through :class:`VersionClassificationReader`;
+   both, read from persisted classifications through :class:`VersionClassificationReader`
+   (``mode=version``); with ``mode=stage``,
+   :func:`~auditmanager.comparison.version_section_pair.prepare_stage_section_version_pair`
+   requires a ``P`` source, an ``R`` target and the same section instead (the W62 П/Р
+   slice) -- the rest of the comparison is identical;
 3. each side's newest ``published`` run (or the run the caller names) supplies the
    saved page text and the published findings through :class:`VersionAnalysisReader`;
 4. :func:`~auditmanager.comparison.sheet_match_suggestions.suggest_sheet_pairs`
@@ -68,6 +72,9 @@ from auditmanager.comparison.read_model import (
     FINDINGS_COMPARED,
     FINDINGS_OVER_LIMIT,
     FINDINGS_UNAVAILABLE,
+    MODE_STAGE,
+    MODE_VERSION,
+    MODES,
     OUTCOME_COMPARED,
     OUTCOME_REFUSED,
     PAIRING_EXACT_TEXT,
@@ -110,6 +117,7 @@ from auditmanager.comparison.version_section_pair import (
     SuppliedVersionClassification,
     VersionSectionPairRefused,
     prepare_same_section_version_pair,
+    prepare_stage_section_version_pair,
 )
 from auditmanager.shared.identity import (
     FindingObservationId,
@@ -208,6 +216,7 @@ class ComparisonRequest:
     target_run_id: str | None = None
     diff_offset: int = 0
     diff_limit: int = DEFAULT_DIFF_LIMIT
+    mode: str = MODE_VERSION
 
 
 _VERSION_REFUSALS: Final[Mapping[str, str]] = {
@@ -229,6 +238,7 @@ _SECTION_REFUSALS: Final[Mapping[str, tuple[str, str | None]]] = {
     "target_section_unconfirmed": ("section_unconfirmed", SIDE_TARGET),
     "project_stage_mismatch": ("project_stage_mismatch", None),
     "confirmed_section_mismatch": ("confirmed_section_mismatch", None),
+    "stage_pair_invalid": ("stage_pair_invalid", None),
 }
 
 
@@ -278,10 +288,10 @@ class VersionComparisonService:
                 SIDE_SOURCE: _compared(pair.source),
                 SIDE_TARGET: _compared(pair.target),
             }
-            stage, section = self._classification(session, pair)
+            stages, section = self._classification(session, pair, request.mode)
             for label in (SIDE_SOURCE, SIDE_TARGET):
                 progress[label] = replace(
-                    progress[label], project_stage=stage, section_code=section,
+                    progress[label], project_stage=stages[label], section_code=section,
                 )
             run_ids = {
                 SIDE_SOURCE: self._run(session, pair.source, request.source_run_id, SIDE_SOURCE),
@@ -309,7 +319,7 @@ class VersionComparisonService:
             return VersionComparison(
                 request.project_uid, request.document_uid,
                 request.source_version_uid, request.target_version_uid,
-                OUTCOME_REFUSED, refused.refusal,
+                request.mode, OUTCOME_REFUSED, refused.refusal,
                 progress.get(SIDE_SOURCE), progress.get(SIDE_TARGET),
                 None, (), None, None,
             )
@@ -319,9 +329,9 @@ class VersionComparisonService:
         return VersionComparison(
             pair.project_uid, pair.document_uid,
             source.facts.version_uid, target.facts.version_uid,
-            OUTCOME_COMPARED, None,
+            request.mode, OUTCOME_COMPARED, None,
             progress[SIDE_SOURCE], progress[SIDE_TARGET],
-            _comparison_sha256(pair, progress, suggestions),
+            _comparison_sha256(pair, request.mode, progress, suggestions),
             sheets,
             _diff_page(pair, sheets, source, target, request.diff_offset, request.diff_limit),
             _finding_comparison(pair, suggestions, source, target),
@@ -347,12 +357,21 @@ class VersionComparisonService:
                 raise _Refused(_VERSION_REFUSALS[reason]) from None
             raise ComparisonIntegrityError(reason) from None
 
-    def _classification(self, session: Session, pair: OrderedVersionPair) -> tuple[str, str]:
+    def _classification(
+        self, session: Session, pair: OrderedVersionPair, mode: str,
+    ) -> tuple[dict[str, str], str]:
+        """Each side's stage and the one shared section, under ``mode``'s stage rule."""
         supplied = {
             label: self._stored_classification(session, facts.version_uid)
             for label, facts in ((SIDE_SOURCE, pair.source), (SIDE_TARGET, pair.target))
         }
         try:
+            if mode == MODE_STAGE:
+                staged = prepare_stage_section_version_pair(
+                    version_pair=pair, source=supplied[SIDE_SOURCE], target=supplied[SIDE_TARGET],
+                )
+                stages = {SIDE_SOURCE: staged.source_stage, SIDE_TARGET: staged.target_stage}
+                return stages, staged.confirmed_section_code
             same = prepare_same_section_version_pair(
                 version_pair=pair, source=supplied[SIDE_SOURCE], target=supplied[SIDE_TARGET],
             )
@@ -361,7 +380,8 @@ class VersionComparisonService:
             if reason in _SECTION_REFUSALS:
                 raise _Refused(*_SECTION_REFUSALS[reason]) from None
             raise ComparisonIntegrityError(reason) from None
-        return same.project_stage, same.confirmed_section_code
+        stages = {SIDE_SOURCE: same.project_stage, SIDE_TARGET: same.project_stage}
+        return stages, same.confirmed_section_code
 
     def _stored_classification(self, session: Session, version_uid: str) -> SuppliedVersionClassification:
         stored = self._classifications.read_classification(session, version_uid=version_uid)
@@ -426,6 +446,8 @@ class VersionComparisonService:
 def _check_request(request: ComparisonRequest) -> None:
     if not isinstance(request, ComparisonRequest):
         raise ComparisonRequestInvalid("request_invalid")
+    if request.mode not in MODES:
+        raise ComparisonRequestInvalid("mode_invalid")
     for field, value in (
         ("source_run_id", request.source_run_id), ("target_run_id", request.target_run_id),
     ):
@@ -613,6 +635,7 @@ def _diff_page(
 
 def _comparison_sha256(
     pair: OrderedVersionPair,
+    mode: str,
     progress: Mapping[str, ComparedVersion],
     suggestions: tuple[SheetPairSuggestion, ...],
 ) -> str:
@@ -628,6 +651,7 @@ def _comparison_sha256(
 
     return _digest({
         "algorithm": COMPARISON_ALGORITHM,
+        "mode": mode,
         "project_uid": pair.project_uid,
         "document_uid": pair.document_uid,
         "source": side(progress[SIDE_SOURCE]),

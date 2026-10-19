@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "ac504e3996fca799c453c9a068b29c690c3a214262a3e1391ebc27b706d4d4fb",
+    "sha256": "d7704f0a78d297702ac3373d8c33bb20b9cd5f690ff57be6659329ecbb8a2a5c",
     "content_commit": "c4cbc02",
     "content_commit_subject": "W59-VERSION-COMPARE-01 API reseal on integration base c4cbc026",
     "dispatch_named_commit": "c4cbc02",
-    "commit_note": "W59 adds the comparison of two versions of one set: compareDocumentVersions (GET .../versions/{version_uid}/comparison) and ten schemas (ComparisonRefusal, ComparedVersion, SheetPairing, DiffHunk, SheetDiff, SheetDiffPage, FindingRef, FindingMatchProposal, FindingComparison, VersionComparison). A refusal is a 200 answer with a closed reason; every pairing and finding match is a proposal; no error code is added.",
+    "commit_note": "W59 adds the comparison of two versions of one set: compareDocumentVersions (GET .../versions/{version_uid}/comparison, mode=version|stage, the stage mode being the W62 P-to-R slice) and ten schemas (ComparisonRefusal, ComparedVersion, SheetPairing, DiffHunk, SheetDiff, SheetDiffPage, FindingRef, FindingMatchProposal, FindingComparison, VersionComparison). A path naming no version is 404; a pair the rule does not admit is a 200 answer with a closed reason; every pairing and finding match is a proposal; no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
     "paths": 51,
     "operations": 58,
     "component_schemas": 147,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "ac504e3996fca799c453c9a068b29c690c3a214262a3e1391ebc27b706d4d4fb",
+    "snapshot_sha256": "d7704f0a78d297702ac3373d8c33bb20b9cd5f690ff57be6659329ecbb8a2a5c",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "d98c1741796defb607acd358f904811409bd8cc8d2c6be2c8222827f8987fa16",
-      "index.ts": "ef1f193e3e96c83f1ebfb97e293b57d039feab1dc9ac5070a683702af56994ab",
-      "operations.gen.ts": "968b3bf78ce6a418d017908c8fcff6b5271c963985b0f8715fc52655a4bc95f3",
-      "types.gen.ts": "b7f721180e2255722aab35150c0febf9e9ec0af462dbd886c09c92228b3818dd"
+      "client.gen.ts": "8b3ad3b220c607a741004df83b48d872b86d240ec690f3ba734e1ceb3bd4da1a",
+      "index.ts": "df21cf18a3a1e3540e4d57157c7ad2fd93920eab31ef0c784c72b5e2e99d2239",
+      "operations.gen.ts": "3a78240f2a75254f4235046e1434564ba80d8ec06f5f977cf8db2b0661b9b178",
+      "types.gen.ts": "597f68cff3980efb4b96363e2a7ea7b69ba902b185d1fbe754d1dfa85d39ee2a"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

@@ -850,8 +850,10 @@ until `W55A-SEARCH-01`). `W55B-SEAL-01` added the two portal-block reads on 2026
 expert-confirmed project stage and section, persisted by `0024_version_classification`, which
 `startRun` and `reauditRun` now route the analysis profile from. `W59-VERSION-COMPARE-01`
 added `compareDocumentVersions` on 2026-10-20: a read-only comparison of two versions of one
-set with the same stage and confirmed section, whose sheet pairs and finding matches are
-proposals and whose refusals are answers with a closed reason, never a relabelled pair.
+set with the same confirmed section and either the same stage (`mode=version`) or a `P`
+source and an `R` target (`mode=stage`, the W62 П/Р slice), whose sheet pairs and finding
+matches are proposals and whose refusals are answers with a closed reason, never a
+relabelled pair; a path naming no version of the document is `404`.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the

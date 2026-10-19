@@ -2513,6 +2513,7 @@ class ComparisonAdapter(_SessionHolder):
         target_version_uid: str,
         source_run_id: str | None,
         target_run_id: str | None,
+        mode: str,
         diff_offset: int,
         diff_limit: int,
     ) -> models.VersionComparison:
@@ -2531,6 +2532,7 @@ class ComparisonAdapter(_SessionHolder):
             target_run_id=target_run_id,
             diff_offset=diff_offset,
             diff_limit=diff_limit,
+            mode=mode,
         )
         from auditmanager.documents.public import DocumentRepository
         from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid

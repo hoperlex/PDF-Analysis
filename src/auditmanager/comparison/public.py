@@ -8,6 +8,9 @@ Everything else in this package stays private to it.
 from __future__ import annotations
 
 from auditmanager.comparison.read_model import (
+    MODE_STAGE,
+    MODE_VERSION,
+    MODES,
     OUTCOME_COMPARED,
     OUTCOME_REFUSED,
     PROPOSAL_BASES,
@@ -56,6 +59,9 @@ __all__ = [
     "FindingRef",
     "FindingSnapshot",
     "MAX_DIFF_LIMIT",
+    "MODES",
+    "MODE_STAGE",
+    "MODE_VERSION",
     "OUTCOME_COMPARED",
     "OUTCOME_REFUSED",
     "PROPOSAL_BASES",

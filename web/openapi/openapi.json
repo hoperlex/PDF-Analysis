@@ -1034,7 +1034,7 @@
           "documents"
         ],
         "summary": "Compare Document Versions",
-        "description": "Compare two versions of one document set: the path names the older (source) version and `target_version_uid` the newer one. Both must be published versions of the named document in the named project, with the same explicit project stage and the same confirmed section, and each needs a published run (the newest one, or the one `source_run_id` / `target_run_id` names). Otherwise the answer is `outcome: refused` with one `refusal.reason`; a pair is never relabelled. The answer carries proposed sheet pairs with their evidence, one page of raw line differences (`diff_offset`, `diff_limit`, `next_offset`) and proposed matches between the two runs' findings. Every pairing and match is a proposal; nothing is written. Any one role, `role:admin|expert`.",
+        "description": "Compare two versions of one document set: the path names the older (source) version and `target_version_uid` the newer one. Both must be published versions of the named document in the named project with the same confirmed section and, with `mode=version` (the default), the same explicit project stage; with `mode=stage` the source must be classified `P` and the target `R` (design to working documentation of one set). Each needs a published run (the newest one, or the one `source_run_id` / `target_run_id` names). A path that names no such version is `404`; otherwise a pair the rule does not admit is `outcome: refused` with one `refusal.reason`, never relabelled. The answer carries proposed sheet pairs with their evidence, one page of raw line differences (`diff_offset`, `diff_limit`, `next_offset`) and proposed matches between the two runs' findings. Every pairing and match is a proposal; nothing is written. Any one role, `role:admin|expert`.",
         "operationId": "compareDocumentVersions",
         "security": [
           {
@@ -1067,6 +1067,22 @@
             "schema": {
               "$ref": "#/components/schemas/RunId"
             }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "version",
+                "stage"
+              ],
+              "type": "string",
+              "description": "`version`: both versions carry the same project stage and section. `stage`: the source is classified `P`, the target `R`, with the same section.",
+              "default": "version",
+              "title": "Mode"
+            },
+            "description": "`version`: both versions carry the same project stage and section. `stage`: the source is classified `P`, the target `R`, with the same section."
           },
           {
             "name": "diff_offset",
@@ -1124,6 +1140,9 @@
           },
           "403": {
             "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -4801,6 +4820,7 @@
               "section_unconfirmed",
               "project_stage_mismatch",
               "confirmed_section_mismatch",
+              "stage_pair_invalid",
               "analysis_missing",
               "run_not_of_version",
               "run_not_published",
@@ -5453,6 +5473,14 @@
           "target_version_uid": {
             "$ref": "#/components/schemas/VersionUid"
           },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "version",
+              "stage"
+            ],
+            "title": "Mode"
+          },
           "outcome": {
             "type": "string",
             "enum": [
@@ -5537,6 +5565,7 @@
           "document_uid",
           "source_version_uid",
           "target_version_uid",
+          "mode",
           "outcome",
           "refusal",
           "source",

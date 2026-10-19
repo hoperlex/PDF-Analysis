@@ -1643,6 +1643,7 @@ class ComparisonRefusal(_Object):
         "section_unconfirmed",
         "project_stage_mismatch",
         "confirmed_section_mismatch",
+        "stage_pair_invalid",
         "analysis_missing",
         "run_not_of_version",
         "run_not_published",
@@ -1749,6 +1750,9 @@ class VersionComparison(_Object):
     document_uid: DocumentUid
     source_version_uid: VersionUid
     target_version_uid: VersionUid
+    #: ``version``: the same stage and section on both. ``stage``: a ``P`` source and an
+    #: ``R`` target of the same section (the W62 design-to-working comparison).
+    mode: Literal["version", "stage"]
     outcome: Literal["compared", "refused"]
     refusal: ComparisonRefusal | None
     source: ComparedVersion | None

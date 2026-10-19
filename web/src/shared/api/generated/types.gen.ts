@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 ac504e3996fca799c453c9a068b29c690c3a214262a3e1391ebc27b706d4d4fb
+ *   sha256 d7704f0a78d297702ac3373d8c33bb20b9cd5f690ff57be6659329ecbb8a2a5c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'ac504e3996fca799c453c9a068b29c690c3a214262a3e1391ebc27b706d4d4fb';
+export const CONTRACT_DIGEST = 'd7704f0a78d297702ac3373d8c33bb20b9cd5f690ff57be6659329ecbb8a2a5c';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -269,7 +269,7 @@ export type ComparedVersion = {
 
 /** Why two versions are not compared; ``side`` when the reason is one side's. */
 export type ComparisonRefusal = {
-  reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "text_unavailable" | "text_too_large";
+  reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "text_unavailable" | "text_too_large";
   side: "source" | "target" | null;
 };
 
@@ -1542,6 +1542,7 @@ export type VersionComparison = {
   comparison_sha256: Sha256 | null;
   document_uid: DocumentUid;
   findings: FindingComparison | null;
+  mode: "version" | "stage";
   outcome: "compared" | "refused";
   project_uid: ProjectUid;
   refusal: ComparisonRefusal | null;

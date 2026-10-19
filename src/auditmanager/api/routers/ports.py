@@ -864,6 +864,7 @@ class ComparisonPort(Protocol):
         target_version_uid: str,
         source_run_id: str | None,
         target_run_id: str | None,
+        mode: str,
         diff_offset: int,
         diff_limit: int,
     ) -> models.VersionComparison:
