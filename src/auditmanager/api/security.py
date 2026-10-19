@@ -338,6 +338,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listNormParagraphs": _ANY_ROLE,
         "streamNormDocumentContent": _ANY_ROLE,
         "listNormSnapshots": _ANY_ROLE,
+        # `W59-SECTION-SEAL-01`. A version's fifteen section choices and its classification.
+        "getVersionSectionReview": _ANY_ROLE,
         # The product version and release notes: any complete account, roles or none
         # (R-80), so a role-less person can still see what the product is.
         "getProductVersion": _ANY_COMPLETE_ACCOUNT,
@@ -351,6 +353,10 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "createProject": _EXPERT,
         "uploadDocument": _EXPERT,
         "startRun": _EXPERT,
+        # `W59-SECTION-SEAL-01`. Only an expert confirms a section; admin alone does not
+        # imply expert (the decision's authorization rule). The command re-reads the role
+        # set in its own transaction.
+        "classifyDocumentVersion": _EXPERT,
         "cancelRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "reauditRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "appendDecision": _EXPERT,

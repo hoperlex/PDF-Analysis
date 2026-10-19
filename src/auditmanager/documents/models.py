@@ -43,6 +43,7 @@ __all__ = [
     "ProjectListingRecord",
     "ProjectRecord",
     "UploadOutcome",
+    "VersionClassificationRecord",
 ]
 
 #: The blob role, in ``auditmanager.storage``'s namespace. Validated by
@@ -183,6 +184,23 @@ class ManifestEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class VersionClassificationRecord:
+    """`W59-SECTION-SEAL-01`. One version's expert-confirmed project stage and section.
+
+    Stored in ``document_version_classification`` (``0024``), outside the immutable
+    ``document_version`` row and with the same no-UPDATE/no-DELETE guarantee. It is a fact
+    about exactly one ``version_uid``: never inherited by a newer version, never derived from
+    ``document.section``, a file name or a suggestion.
+    """
+
+    version_uid: VersionUid
+    project_stage: str
+    section_code: str
+    confirmed_by_user_uid: str
+    confirmed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class DocumentVersionRecord:
     """One published, immutable version and its complete input manifest.
 
@@ -206,11 +224,12 @@ class DocumentVersionRecord:
     #: resolves a version by it, and `source_filename` stays withheld because a filename is
     #: named in foundation invariant 3 and a display title is not.
     display_title: str
-    #: `R-40`. One of legacy's fourteen project sections (`D-56`), or ``None`` when the
-    #: document has not been classified. Lives on the document, like ``display_title`` --
+    #: `R-40`. One of the fifteen project sections (legacy's fourteen, `D-56`, and ``PS``),
+    #: or ``None`` when the document has not been classified. Lives on the document, like ``display_title`` --
     #: it is a fact about what the document *is*, not about which published revision of
     #: its bytes this record describes -- and is set once, at upload, never rewritten.
-    #: ``None`` is a real answer and is never defaulted to one of the fourteen codes.
+    #: ``None`` is a real answer and is never defaulted to one of the codes. It is not the
+    #: version's classification below and never routes a run.
     section: str | None
     media_type: str
     byte_size: int
@@ -231,6 +250,9 @@ class DocumentVersionRecord:
     text_character_count: int | None = None
     textless_pages: tuple[int, ...] | None = None
     recognised_character_count: int | None = None
+    #: `W59-SECTION-SEAL-01`. The version's persisted classification, or ``None`` while no
+    #: expert has classified it. Run start routes the analysis profile from this field only.
+    classification: VersionClassificationRecord | None = None
 
     def entry(self, role: str) -> ManifestEntry:
         """The manifest entry for one role.

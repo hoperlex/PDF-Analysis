@@ -27,6 +27,7 @@ from auditmanager.runs.recorded_v2_publication import (
 from auditmanager.runs.repository import RunRepository, RunRow, StageResultRow
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import FindingObservationId, FindingUid, ModelCallId, RunId
+from tests.support.expected_facts import FACTS
 
 
 def test_saved_stage_statuses_choose_a_failure_without_blob_access() -> None:
@@ -173,7 +174,7 @@ def _case(sessions, blob_store, helpers, tmp_path: Path, *, finding: bool,
           tamper: str | None = None):
     with sessions() as session:
         assert session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0023_norm_citations"
+            FACTS.migration_head
         )
         seeded = helpers.seed_version(session, blob_store)
         run_id = str(RunId.new())

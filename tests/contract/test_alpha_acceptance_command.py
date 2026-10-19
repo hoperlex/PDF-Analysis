@@ -25,6 +25,9 @@ MANIFEST = ROOT / "tests" / "e2e" / "pc01" / "journey" / "manifest.json"
 # adds a screen moves both by adding it to the manifest. That the verifier still refuses a
 # shorter walk is shown with a one-route-short envelope (`W50-REGISTRY-01` report).
 ROUTES = len(json.loads(MANIFEST.read_text(encoding="utf-8"))["routes"])
+# The write steps, read the same way (`W59-SECTION-UI-01`, integrator grant): the verifier takes
+# the count from `manifest.write.steps`, so a step added to the journey moves both.
+WRITE_STEPS = len(json.loads(MANIFEST.read_text(encoding="utf-8"))["write"]["steps"])
 REVIEWER_ENV = {"E2E_PC01_LOGIN": "synthetic-reviewer", "E2E_PC01_PASSWORD": "not-a-real-secret"}
 
 
@@ -182,6 +185,7 @@ def _journey(*, phase: str = "all", provider_mode: str = "live", dependency: boo
     steps = [
         {"name": "create-project", "exchanges": []},
         {"name": "upload-document", "exchanges": []},
+        {"name": "classify-version", "exchanges": []},
         {
             "name": "start-run",
             "exchanges": [
@@ -200,8 +204,8 @@ def _journey(*, phase: str = "all", provider_mode: str = "live", dependency: boo
         "viewport": {"width": 780, "height": 900},
         "write": {
             "ran": phase != "read",
-            "stepsChecked": 3 if phase != "read" else 0,
-            "stepsDeclared": 3,
+            "stepsChecked": WRITE_STEPS if phase != "read" else 0,
+            "stepsDeclared": WRITE_STEPS,
             "stoppedAt": None,
             "captured": {"run_id": run_id},
             "steps": steps if phase != "read" else [],
@@ -284,6 +288,7 @@ if target.endswith('journey.mjs'):
     steps = [
         {{'name': 'create-project', 'exchanges': []}},
         {{'name': 'upload-document', 'exchanges': []}},
+        {{'name': 'classify-version', 'exchanges': []}},
         {{'name': 'start-run', 'exchanges': [{{
             'method': 'GET',
             'url': 'https://alpha.example.test/bff/v1/runs/' + run_id,
@@ -297,8 +302,8 @@ if target.endswith('journey.mjs'):
         'viewport': {{'width': 780, 'height': 900}},
         'write': {{
             'ran': phase != 'read',
-            'stepsChecked': 3 if phase != 'read' else 0,
-            'stepsDeclared': 3,
+            'stepsChecked': {WRITE_STEPS} if phase != 'read' else 0,
+            'stepsDeclared': {WRITE_STEPS},
             'stoppedAt': None,
             'captured': {{'run_id': run_id}},
             'steps': steps if phase != 'read' else [],

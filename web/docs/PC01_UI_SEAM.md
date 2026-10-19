@@ -288,6 +288,7 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.versions.content(versionUid)` | `['versions','content',uid]` | `B8` |
 | `queryKeys.versions.blocks(versionUid)` | `['versions','blocks',uid]` | `W45-BLOCKS` |
 | `queryKeys.versions.portalBlocks(versionUid, limit)` | `['versions','portal-blocks',uid,{limit}]` | `W55B-WEB-BLOCKS` |
+| `queryKeys.versions.sectionReview(versionUid)` | `['versions','section-review',uid]` | `W59-SECTION-UI-01` |
 | `queryKeys.runs.all()` | `['runs']` | `B7` |
 | `queryKeys.runs.detail(runId)` | `['runs','detail',id]` | `B7` |
 | `queryKeys.runs.findings(runId, filters?)` | `['runs','findings',id,filters]` | `B8` |
@@ -334,6 +335,13 @@ size is in the key so two readers asking different sizes never share pages. Both
 `versions` because a version's geometry is a property of the version, read from its latest
 run whose geometry stage succeeded, not of any one run; their third segments differ, so
 invalidating one never refetches the other.
+`versions.sectionReview` (`W59-SECTION-UI-01`) holds `getVersionSectionReview`: the fifteen
+section choices of one version and its persisted stage-and-section classification. A confirmed
+classification (`classifyDocumentVersion`) writes the answer into this key and into
+`versions.detail(uid)`, then invalidates this key, the document's first page of
+`versions.list`, `projects.all()` (the project screen groups documents by confirmed section)
+and `dashboard.summary()`; a `409 version_already_classified` invalidates this key and
+`versions.detail(uid)` so the stored classification is read back.
 `norms` entered in `W55A-WEB-NORMS` (the W55 plan names it): the normative corpus belongs to
 no project, run or finding. `setCurrentNormSnapshot` invalidates the whole `norms` prefix when
 it settles — a designation changes the snapshot list, the history and what search reads, and

@@ -1,0 +1,41 @@
+/*
+ * Layout for the stage-and-section form. Colour is deliberately absent: the hints, the
+ * problem line and the button take theirs from `globals.css` (`.am-form__*`, `.am-button`),
+ * where the contrast census measures them. Every length is a global token.
+ */
+
+.group {
+  display: grid;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  margin: 0 0 var(--am-gap-sm);
+  padding: 0;
+  font-weight: 600;
+}
+
+/* One choice: the control, then its label and evidence, wrapping inside the screen. */
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+}
+
+.label {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.evidence {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}

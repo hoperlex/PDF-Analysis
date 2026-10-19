@@ -91,7 +91,7 @@ describe('the upload form', () => {
 
 describe('the start-run control', () => {
   const control = () =>
-    renderWith(newClient(), createElement(StartRunControl, { versionUid: VERSION_UID }));
+    renderWith(newClient(), createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }));
 
   it('offers one button and no provider-mode selector', () => {
     const markup = control();

@@ -149,7 +149,13 @@ describe('each route delegates to its screen and to no other', () => {
       ...NO_QUERY,
     });
     expect(element.type).toBe(VersionDetailPage);
-    expect(element.props).toEqual({ projectUid: A_PROJECT, versionUid: A_VERSION });
+    // `W59-SECTION-UI-01`: and the session's roles, which decide whether the stage-and-section
+    // panel draws the expert's form or a read-only sentence.
+    expect(element.props).toEqual({
+      projectUid: A_PROJECT,
+      versionUid: A_VERSION,
+      roles: [...SIGNED_IN.roles],
+    });
   });
 
   it('.../comparison passes both to the comparison screen, and does not cross them', async () => {
@@ -643,6 +649,9 @@ describe('every screen address is built once and matches a route file on disk', 
       project: routes.project(PROJECT_UID),
       document: routes.document(PROJECT_UID, DOCUMENT_UID),
       version: routes.version(PROJECT_UID, VERSION_UID),
+      // `W59-SECTION-UI-01`: an unclassified document in the project structure opens its
+      // version at the stage-and-section panel, and so does the run control's refusal.
+      versionClassification: routes.versionClassification(PROJECT_UID, VERSION_UID),
       comparison: routes.comparison(PROJECT_UID, VERSION_UID),
       run: routes.run(PROJECT_UID, RUN_ID),
       review: routes.review(PROJECT_UID, RUN_ID),

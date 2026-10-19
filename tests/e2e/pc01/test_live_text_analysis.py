@@ -198,6 +198,15 @@ def live_run(page_texts: tuple[str, ...]) -> dict[str, Any]:
     assert answer.status == 201, answer.body
     version = answer.json
 
+    # `W59-SECTION-SEAL-01`: run start routes from the expert's classification and refuses
+    # an unclassified version; the AR baseline routes to the v1 AR profile.
+    answer = client.classify_version(
+        project_uid=project["project_uid"],
+        document_uid=version["document_uid"],
+        version_uid=version["version_uid"],
+    )
+    assert answer.status == 200, answer.body
+
     answer = client.start_run(
         version_uid=version["version_uid"], key=f"{tag}-run", provider_mode="live"
     )

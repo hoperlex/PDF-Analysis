@@ -124,7 +124,10 @@ default v1 profile remains unchanged. `W57A-SEAL-01A` adds
 `0023_norm_citations`: an `nrs_` retrieval set, two R-76 artifact custody
 roles, a frozen optional Run pin and a transaction-checked citation partition.
 The v3 API and executor are separate serial work; this migration changes no
-served profile.
+served profile. `W59-SECTION-SEAL-01` adds `0024_version_classification`: one
+append-only, expert-confirmed project stage (`P`/`R`) and section per version in
+`document_version_classification`, outside the immutable version row, and widens
+the `document.section` CHECK by `PS` (`0011` keeps legacy's fourteen as history).
 
 ### 3.1 Tables
 
@@ -823,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Fifty-five operations, sealed. `A5` generates the typed client from this document; `B6`
+Fifty-seven operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -842,6 +845,10 @@ registry's `listWorkers` and `setWorkerIntake` on 2026-10-12 (stubs answering
 operations on 2026-10-12 under `R-112` and `R-113` (stubs answering `dependency_unavailable`
 until `W55A-SEARCH-01`). `W55B-SEAL-01` added the two portal-block reads on 2026-10-13 under
 `R-116` and `R-119` (stubs answering `dependency_unavailable` until `W55B-GEOMETRY-01`).
+`W57A-SEAL-01B` added the refusing `getRunNormVerification`. `W59-SECTION-SEAL-01` added
+`classifyDocumentVersion` and `getVersionSectionReview` on 2026-10-20: a version's
+expert-confirmed project stage and section, persisted by `0024_version_classification`, which
+`startRun` and `reauditRun` now route the analysis profile from.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -913,6 +920,9 @@ could.
 | `setCurrentNormSnapshot` | `PUT /norms/snapshots/current` |
 | `listVersionPortalBlocks` | `GET /versions/{version_uid}/portal-blocks` |
 | `streamVersionPortalBlockCrop` | `GET /versions/{version_uid}/portal-blocks/{portal_block_id}/crop` |
+| `getRunNormVerification` | `GET /runs/{run_id}/norm-verification` |
+| `classifyDocumentVersion` | `PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification` |
+| `getVersionSectionReview` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review` |
 
 Rules that hold across the whole surface:
 
@@ -944,6 +954,10 @@ Rules that hold across the whole surface:
     a repeat whose target is already current answers the current designation as a replay
     and writes no history row, and a repeat after another designation is `conflict` with
     `conflict_reason: stale_current_snapshot`;
+  * `classifyDocumentVersion` (`W59-SECTION-SEAL-01`) writes one row per version: an exact
+    repeat answers the stored classification with its first confirmer, and a repeat with a
+    different stage or section is `conflict` with `conflict_reason:
+    version_already_classified`;
 * every response carries `X-Correlation-Id`;
 * every non-2xx body is the `ErrorEnvelope`, with `retryable` pinned to the catalog
   value for the reported code;

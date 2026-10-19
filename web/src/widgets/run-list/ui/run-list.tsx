@@ -37,6 +37,7 @@ export function RunList({ projectUid, versionUid, onRunStarted }: RunListProps) 
 
   const startControl = (
     <StartRunControl
+      projectUid={projectUid}
       versionUid={versionUid}
       {...(onRunStarted === undefined ? {} : { onStarted: onRunStarted })}
     />

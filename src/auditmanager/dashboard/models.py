@@ -90,7 +90,7 @@ class SectionDocumentCountRecord:
     """How many published documents carry one project section (`R-40`, `D-56`).
 
     ``section`` is ``None`` for the bucket of documents nobody has classified yet -- it is
-    reported, not dropped, because absent is not empty. Every one of the fourteen frozen
+    reported, not dropped, because absent is not empty. Every one of the fifteen current
     codes is present even when its count is ``0``: "a section with no documents" is the
     example the dispatch brief itself names.
     """

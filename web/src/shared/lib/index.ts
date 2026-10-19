@@ -8,7 +8,7 @@ export { resolveIntentKey } from './intent-key';
 export { useIntentKey } from './use-intent-key';
 
 export type { RouteIdentities } from './routes';
-export { routes } from './routes';
+export { VERSION_CLASSIFICATION_ANCHOR, routes } from './routes';
 
 export type { ListingFailure, ListingFailureKind, ListingSubject } from './listing-failure';
 export { classifyListingFailure } from './listing-failure';

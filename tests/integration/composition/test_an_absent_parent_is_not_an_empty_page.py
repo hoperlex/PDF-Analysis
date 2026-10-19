@@ -77,7 +77,11 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # (``searchNorms``, ``listNormSnapshots``, ``listNormSnapshotEvents``).
 # `W55B-SEAL-01` added two addressed GETs on `version_uid` (``listVersionPortalBlocks`` and
 # ``streamVersionPortalBlockCrop``), sealed stubs until `W55B-GEOMETRY-01` served them.
-EXPECTED_ADDRESSED = 17
+# `W57A-SEAL-01B` added ``getRunNormVerification`` on ``run_id``, a sealed stub (see
+# :data:`SEALED_STUB_ADDRESSED`; this register missed it until `W59-SECTION-SEAL-01`).
+# `W59-SECTION-SEAL-01` added ``getVersionSectionReview``, addressed through its version's
+# document and project, which answers ``404 not_found`` for any link that names nothing.
+EXPECTED_ADDRESSED = 19
 EXPECTED_UNADDRESSED = 14
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
@@ -128,7 +132,9 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 #: the document, its paragraphs and its PDF alike.
 #: `W55B-SEAL-01` filled it again with the two portal-block reads; `W55B-GEOMETRY-01` serves
 #: them and empties it, and an absent `ver_` is now `404 not_found` for both.
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
+#: `W57A-SEAL-01B` sealed ``getRunNormVerification`` as a refusing stub (``503``,
+#: ``dependency: norm_verification_reader``) until the CITE reader; it belongs here.
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({"getRunNormVerification"})
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a

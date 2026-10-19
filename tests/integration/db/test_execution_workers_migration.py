@@ -74,7 +74,7 @@ def _register(connection, *, slots: int = 1, version: str = "0.5.0+test") -> str
 def test_a_fresh_upgrade_creates_the_registry_and_the_lease_column(migrated_engine: Engine) -> None:
     with migrated_engine.connect() as connection:
         # `W55B-SEAL-01` moved the head past this revision; the registry is still there.
-        assert _head(connection) == "0023_norm_citations"
+        assert _head(connection) == "0024_version_classification"
         assert connection.execute(text("SELECT to_regclass('public.worker')")).scalar_one()
         assert connection.execute(text(
             "SELECT is_nullable FROM information_schema.columns "
@@ -101,7 +101,7 @@ def test_a_populated_0018_upgrades_and_its_leases_name_no_worker(
         upgraded = foundation_command(_alembic("upgrade", "head"), url)
         assert upgraded.returncode == 0, upgraded.describe()
         with engine.connect() as connection:
-            assert _head(connection) == "0023_norm_citations"
+            assert _head(connection) == "0024_version_classification"
             assert connection.execute(text(
                 "SELECT worker_id, expires_at IS NOT NULL FROM lease WHERE lease_id = :lease"
             ), ids).one() == (None, True)

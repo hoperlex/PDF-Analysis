@@ -31,7 +31,7 @@ from auditmanager.shared.identity import (
 )
 from auditmanager.shared.identity.ids import UserUid
 
-HEAD = "0023_norm_citations"  # W57A-SEAL-01A moved the head past this revision
+HEAD = "0024_version_classification"  # W59-SECTION-SEAL-01 moved the head past this revision
 PREVIOUS = "0019_execution_workers"
 MIGRATION = Path(__file__).resolve().parents[3] / "db/migrations/versions/20261012_0020_norms_search.py"
 

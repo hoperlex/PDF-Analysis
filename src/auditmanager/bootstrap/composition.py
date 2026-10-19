@@ -38,6 +38,7 @@ from auditmanager.bootstrap.adapters import (
     RegistrationAdapter,
     ReleasesAdapter,
     RunAdapter,
+    SectionAdapter,
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
@@ -126,6 +127,9 @@ def build_worker_runtime(
         )
     )
     model_adapter, provider_config, _profile_id, _bundle_id = _build_provider(resolved, env)
+    # `W59-SECTION-SEAL-01`. The worker runs each claimed run with the profile it pinned,
+    # resolved through the same registry the application routes with.
+    text_profiles = load_text_profiles()
 
     def execute(run_id: str, worker_id: str) -> None:
         run_to_terminal(
@@ -135,6 +139,7 @@ def build_worker_runtime(
             adapter=model_adapter,
             provider_config=provider_config,
             worker_id=worker_id,
+            text_profiles=text_profiles.resolve,
         )
 
     return WorkerRuntime(
@@ -199,6 +204,11 @@ def build_application(
     )
 
     model_adapter, provider_config, profile_id, bundle_id = _build_provider(resolved, env)
+    # `W59-SECTION-SEAL-01`. The section-keyed text-profile registry: AR from the v1
+    # constants plus every `text-profile/1` package. Loaded once; a bad package refuses the
+    # start rather than serving a partial table. Run start routes through its table, the
+    # executor resolves pinned profiles through it, and the review reports its sections.
+    text_profiles = load_text_profiles()
 
     ingest = IngestService(store, session_factory=sessions)
 
@@ -253,6 +263,11 @@ def build_application(
         # `W55B-BUDGET-01`: derived once by `settings.load` from the model and the ceiling, and
         # refused there when it cannot hold the AR document set. Always passed, never None.
         input_budget_characters=resolved.input_budget_characters,
+        # `W59-SECTION-SEAL-01`. Always both: a served run start routes from the version's
+        # persisted classification, never from the configured AR pair above, and a served
+        # run executes its pinned profile. ``test_the_served_application_routes_by_section``.
+        section_profiles=text_profiles.section_profiles(),
+        text_profiles=text_profiles.resolve,
     )
     if isinstance(carrier, DurableCarrier):
         carrier.configure_runner(run_adapter._job)
@@ -289,6 +304,13 @@ def build_application(
         # statement timeout; the norm PDF through its confirmed binding from the same store.
         norms=NormsSearchAdapter(sessions, timeout_ms=resolved.norms_search_timeout_ms),
         norm_content=NormContentAdapter(sessions, blob_store=store),
+        # `W59-SECTION-SEAL-01`. Classification and review over the same sessions and store;
+        # `executable` is the registry's own section set.
+        sections=SectionAdapter(
+            sessions,
+            blob_store=store,
+            executable_sections=text_profiles.executable_sections(),
+        ),
     )
     return Application(
         router=router,
@@ -298,6 +320,27 @@ def build_application(
         carrier=carrier,
         execution_role=resolved.execution_role,
     )
+
+
+def load_text_profiles() -> Any:
+    """The section-keyed text-profile registry, or a start-up refusal (`W59-SECTION-SEAL-01`).
+
+    ``analysis.text`` publishes no registry factory through ``analysis.public``; the
+    composition root assembles from the module that defines it, as ``_build_provider`` does
+    for the adapters.
+    """
+    from auditmanager.analysis.text.profile_registry import (
+        TextProfileLoadError,
+        load_text_profile_registry,
+    )
+
+    try:
+        return load_text_profile_registry()
+    except TextProfileLoadError as exc:
+        raise ConfigurationError(
+            f"the text-profile packages cannot be registered ({exc}); the application "
+            "refuses to start rather than route runs through a partial registry"
+        ) from exc
 
 
 def _provenance_mode(transport: str) -> str:

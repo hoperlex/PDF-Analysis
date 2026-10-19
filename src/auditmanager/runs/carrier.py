@@ -391,8 +391,12 @@ def run_to_terminal(
     provider_config: Any,
     runs: RunRepository | None = None,
     worker_id: str | None = None,
+    text_profiles: Any = None,
 ) -> None:
     """Execute one **queued** run to a terminal, in its own sessions.
+
+    ``text_profiles`` is handed to ``execute_run`` unchanged (`W59-SECTION-SEAL-01`): the
+    served application and the worker service pass the section-keyed registry's resolver.
 
     The job a carrier carries. It owns its transactions -- the request that accepted the
     run has committed and gone -- and every outcome is written to the **run row** before
@@ -427,6 +431,7 @@ def run_to_terminal(
                 provider_config=provider_config,
                 runs=run_repo,
                 jobs=JobRepository(worker_id=worker_id),
+                text_profiles=text_profiles,
             )
             session.commit()
     except ExecutionNotClaimed as refusal:

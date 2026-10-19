@@ -52,6 +52,13 @@ export { looksLikeRunId } from './model/address';
 export type { RunFailure, RunFailureKind } from './model/run-failure';
 export { classifyRunFailure } from './model/run-failure';
 
+export type { RoutingRefusal, RoutingRefusalKind } from './model/routing-refusal';
+export {
+  SECTION_PROFILE_UNAVAILABLE_REFUSAL,
+  VERSION_UNCLASSIFIED_REFUSAL,
+  routingRefusal,
+} from './model/routing-refusal';
+
 export type { InputBudgetFigures } from './model/input-budget';
 export { DIGIT_GROUP_SEPARATOR, groupDigits, inputBudgetFigures, inputBudgetSentence } from './model/input-budget';
 

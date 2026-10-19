@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 48,
+    "path_count": 50,
     "operations": [
       [
         "POST",
@@ -277,6 +277,16 @@
         "GET",
         "/runs/{run_id}/norm-verification",
         "getRunNormVerification"
+      ],
+      [
+        "PUT",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+        "classifyDocumentVersion"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review",
+        "getVersionSectionReview"
       ]
     ],
     "schema_names": [
@@ -410,13 +420,19 @@
       "UngroundedReason",
       "NormObservationCitationPartition",
       "NormFindingVerification",
-      "NormVerificationReport"
+      "NormVerificationReport",
+      "ProjectStage",
+      "ClassifyDocumentVersionRequest",
+      "VersionClassification",
+      "SectionSuggestion",
+      "SectionReviewOption",
+      "SectionReview"
     ]
   },
   "error_catalog": {
     "api_codes": 25,
     "stored_vocabulary": 23
   },
-  "migration_head": "0023_norm_citations",
+  "migration_head": "0024_version_classification",
   "contract_version": "1.0.0-draft.1"
 }

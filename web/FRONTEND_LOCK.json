@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388",
-    "content_commit": "c71048f",
-    "content_commit_subject": "W57A-SEAL-01B serial API reseal on committed 01A",
-    "dispatch_named_commit": "c71048f",
-    "commit_note": "W57a adds one refusing normative report operation, seven citation/report schemas, twelve categories and reasons, and the optional verified retrieval-set pin. The route does not expose unverified data.",
+    "sha256": "3e1f070a6db0dab87bd358112a3e66ebe6cc2bd44656c3af5152ff1e46a172ac",
+    "content_commit": "a1a25eb",
+    "content_commit_subject": "W59-SECTION-SEAL-01 API reseal on night round 1 base a1a25ebc",
+    "dispatch_named_commit": "a1a25eb",
+    "commit_note": "W59 adds the version classification: classifyDocumentVersion and getVersionSectionReview, six schemas (ProjectStage, ClassifyDocumentVersionRequest, VersionClassification, SectionSuggestion, SectionReviewOption, SectionReview), PS in ProjectSection and the optional DocumentVersion.classification. startRun and reauditRun route the profile from the persisted classification; no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 48,
-    "operations": 55,
-    "component_schemas": 131,
+    "paths": 50,
+    "operations": 57,
+    "component_schemas": 137,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388",
+    "snapshot_sha256": "3e1f070a6db0dab87bd358112a3e66ebe6cc2bd44656c3af5152ff1e46a172ac",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "c08a3b76a0a9bf402b82dee8104540d4951657dbdda7cdc3c9a613c56ea7277a",
-      "index.ts": "55d3053726cf670fda240636841b48557d712d77e8773a6f1380ebed4eb813cb",
-      "operations.gen.ts": "c5c44bc84334fe92766a1a891f13d97b2c508fb3767945b6661e68fe0d56b6f9",
-      "types.gen.ts": "d9606eef824e1d3a9eb8c35a19bd7c504133ed5b938c6a8440d2aeb220d6685a"
+      "client.gen.ts": "1ca8d5d3dff1618c6bd965664c972aefad35ff25b6ad6fc47db61c87ac61b6ff",
+      "index.ts": "1e74920d4e5be4a544feccb0b1d60425bf309ab9851836e205d8ffb5b565ca34",
+      "operations.gen.ts": "8798c9e143f84e97f2cb50be89dc52a363525e1c329e6e24856caac19ae1254d",
+      "types.gen.ts": "c37f3285b51240ddade6e70923034090cec26d7dc86bf24d3c7803be4757d44e"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

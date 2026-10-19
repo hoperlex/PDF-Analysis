@@ -21,7 +21,7 @@ from sqlalchemy.exc import DBAPIError
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
 
-HEAD = "0023_norm_citations"
+HEAD = "0024_version_classification"  # W59-SECTION-SEAL-01 moved the head
 PREVIOUS = "0020_norms_search"
 MIGRATION = Path(__file__).resolve().parents[3] / "db/migrations/versions/20261013_0021_portal_bundles.py"
 DIGEST = "a" * 64

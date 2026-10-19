@@ -118,6 +118,12 @@ REQUIRED_OPERATIONS = {
     "listNormSnapshots",
     "listNormSnapshotEvents",
     "setCurrentNormSnapshot",
+    # `W57A-SEAL-01B`. The refusing normative report of a v3 run (`D-151`).
+    "getRunNormVerification",
+    # `W59-SECTION-SEAL-01`. A version's expert classification (stage and section) and its
+    # fifteen-choice review, addressed through the version's document and project.
+    "classifyDocumentVersion",
+    "getVersionSectionReview",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
