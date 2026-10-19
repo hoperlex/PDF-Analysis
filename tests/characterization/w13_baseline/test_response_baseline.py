@@ -119,16 +119,24 @@ def _csv_compat_expected(expected: dict[str, Any]) -> dict[str, Any]:
     out["response"]["body"]["length"] += len(projected) - len(raw)
     return out
 
-#: The frozen document's fifteen operationIds, written out rather than read from the
-#: contract: this suite's job is to notice a surface that changed, and an expectation
-#: computed from a file the change could also touch would not.
+#: The operationIds this corpus covers, written out rather than read from the contract:
+#: this suite's job is to notice a surface that changed, and an expectation computed from a
+#: file the change could also touch would not.
 #:
 #: **`W18-SEAL` moved it from twelve to fifteen** under owner ruling `R-5`. Adding an
 #: operation adds a case and a record; it is not a permitted *change* to any record and
 #: carries no exception block. What changed here is the count, not the rule: every one of
 #: the fifteen still has to be covered by at least one record.
-FIFTEEN_OPERATIONS = (
+#:
+#: **`W59-SEAL-FOLLOWUP-01` moved it from fifteen to sixteen** with case 02b,
+#: ``classifyDocumentVersion``: since `W59-SECTION-SEAL-01` (`R-139`) ``startRun`` refuses
+#: a version no expert has classified, so the journey cannot reach case 03 without it. The
+#: rule is W18-SEAL's: a new case and a new record, no exception block. The served surface
+#: has more operations than these sixteen; the list is what this corpus records, and the
+#: assertion is that every one of them is covered and nothing else is named.
+SIXTEEN_OPERATIONS = (
     "appendDecision",
+    "classifyDocumentVersion",
     "createProject",
     "exportRunCsv",
     "getDocumentVersion",
@@ -169,16 +177,16 @@ def test_the_record_set_and_the_journey_agree(exchanges: dict[str, Any]) -> None
     assert recorded, "the baseline is empty"
 
 
-def test_every_one_of_the_fifteen_operations_is_covered() -> None:
+def test_every_one_of_the_sixteen_operations_is_covered() -> None:
     covered = set()
     for path in RECORD_FILES:
         operation = json.loads(path.read_text(encoding="utf-8"))["operation"]
         if operation is not None:
             covered.add(operation)
-    assert covered == set(FIFTEEN_OPERATIONS), (
-        f"operations with no record: {sorted(set(FIFTEEN_OPERATIONS) - covered)}; "
+    assert covered == set(SIXTEEN_OPERATIONS), (
+        f"operations with no record: {sorted(set(SIXTEEN_OPERATIONS) - covered)}; "
         f"records naming an operation the contract does not declare: "
-        f"{sorted(covered - set(FIFTEEN_OPERATIONS))}"
+        f"{sorted(covered - set(SIXTEEN_OPERATIONS))}"
     )
 
 
@@ -247,6 +255,18 @@ NON_TERMINAL_RUN_STATES = ("created", "queued", "running", "validating")
 #: (`2894951`) and its `permitted_change`, and
 #: :func:`test_the_two_author_records_moved_by_the_label_and_nothing_else` asserts the move
 #: is that label and nothing else.
+#:
+#: **`W59-SEAL-FOLLOWUP-01` added the tenth, eleventh and twelfth entries**, records 13, 32
+#: and 33, under `D-181`. They are one change seen three times. Since `W59-SECTION-SEAL-01`
+#: (`bd08e03c`, `R-139`), ``startRun`` refuses an unclassified version, so case 02b now
+#: classifies the journey's version. Every read that returns a ``DocumentVersion`` projects
+#: the stored classification, and these are the three records that read the version after
+#: case 02b. Each body moved by one appended property, ``classification``, and nothing else,
+#: and :func:`test_the_three_version_records_moved_by_the_classification_and_nothing_else`
+#: asserts that by digest against the bodies as they stood at ``77aa55bd``. Records 04-07 and
+#: 34 also stopped reproducing in the same measurement, for an unrelated reason: the
+#: ``text_analysis`` ``stage_version`` that `56efead4` moved to ``1.1.0``. They are **not**
+#: entered here; that is a finding for the integrator, not a permitted change.
 PERMITTED_EXCEPTIONS = {
     "03-startRun.success": ("D-19", "D-21", "D-20"),
     "04-startRun.replay": ("D-19", "D-21"),
@@ -255,8 +275,11 @@ PERMITTED_EXCEPTIONS = {
     "07-getRunStatus.correlation_supplied": ("D-19", "D-21"),
     "10-appendDecision.success": ("D-78",),
     "11-listDecisionHistory.success": ("D-78",),
+    "13-getDocumentVersion.success": ("D-181",),
     "16-listProjects.success": ("D-16",),
     "31-streamDocumentVersionContent.storage_credential_refused": ("D-7",),
+    "32-listDocuments.success": ("D-181",),
+    "33-listVersions.success": ("D-181",),
 }
 
 
@@ -302,6 +325,11 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     complete profile, whose name form outranks its login (`R-55`). The blocks cite that
     decision and the move is asserted by digest in
     ``test_the_two_author_records_moved_by_the_label_and_nothing_else``.
+
+    `D-181` is records 13, 32 and 33: the classification case 02b makes, projected onto
+    every ``DocumentVersion`` read of that version (`W59-SECTION-SEAL-01`, under `R-139`,
+    whose contract commit declared the property). The move is asserted by digest in
+    ``test_the_three_version_records_moved_by_the_classification_and_nothing_else``.
     """
     marked = {
         path.stem: json.loads(path.read_text(encoding="utf-8"))["exception"]
@@ -328,6 +356,11 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     # `R-5` explicitly did not, which is why `W18-SEAL` left this field unfilled; citing
     # it here would be citing an authority that was declined.
     assert "R-10" in exceptions["16-listProjects.success"]["ruling"]
+    # And the three `D-181` records cite the window that froze the seal that declared and
+    # filled `DocumentVersion.classification`.
+    for case in PERMITTED_EXCEPTIONS:
+        if "D-181" in PERMITTED_EXCEPTIONS[case]:
+            assert "R-139" in exceptions[case]["ruling"], case
 
 
 #: `W49-SEAL-01`. The SHA-256 of records 10 and 11's body text as captured before the seal
@@ -363,6 +396,61 @@ def test_the_two_author_records_moved_by_the_label_and_nothing_else() -> None:
             f"{case} moved by more than its author label"
         )
         assert "W49-SEAL-01" in record["exception"]["permitted_change"], case
+
+
+#: `W59-SEAL-FOLLOWUP-01`. The SHA-256 of records 13, 32 and 33's body text as committed at
+#: ``77aa55bd``, before case 02b classified the version. Read from the record files at that
+#: commit (``git show 77aa55bd:<record>``), never from the files now: an expectation computed
+#: from the files it checks could not report that something besides the classification moved.
+#: 32 and 33 share a digest because their pages were already byte-identical: one row, the same
+#: version, and an exhausted cursor.
+_PRE_CLASSIFICATION_VERSION_BODIES = {
+    "13-getDocumentVersion.success": (
+        "57e3a695ec6c4e86166d7f16683a7a90f38a9cc6f65f7b2b74b3bdea9e389b6a"
+    ),
+    "32-listDocuments.success": (
+        "fdbbe47e3c437cffd126b0721d7b5d8b71cfd35e23312d2ffc7c811a7ed41edf"
+    ),
+    "33-listVersions.success": (
+        "fdbbe47e3c437cffd126b0721d7b5d8b71cfd35e23312d2ffc7c811a7ed41edf"
+    ),
+}
+
+#: The one property each of the three bodies gained, exactly as a tokenised record spells it:
+#: the classification case 02b asked for (stage ``P``, section ``AR``), the version and the
+#: confirmer by exact value, and ``confirmed_at`` under its declared timestamp name. It is
+#: written out here and is not read from the journey or from case 02b's record.
+_APPENDED_CLASSIFICATION = (
+    ', "classification": {"version_uid": "{{version_uid}}", "project_stage": "P", '
+    '"section_code": "AR", "confirmed_by_user_uid": "{{user_uid}}", "confirmed_at": '
+    '"{{ts_6}}"}'
+)
+
+
+def test_the_three_version_records_moved_by_the_classification_and_nothing_else() -> None:
+    """The re-capture is asserted rather than just made. Take the appended classification
+    out and each body is the previous capture's again, digest for digest.
+
+    `W49-SEAL-01`'s method, and for its reason: a record rewritten wholesale pins whatever
+    the server said. What this pins is the *difference*. It is one property appended where
+    ``document_version_body`` emits it, after ``display_title``, and it must sit at the end
+    of the version object, never somewhere inside it.
+    """
+    for case, digest in _PRE_CLASSIFICATION_VERSION_BODIES.items():
+        record = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+        text = record["response"]["body"]["text"]
+        assert text.count(_APPENDED_CLASSIFICATION) == 1, case
+        assert f'"display_title": "AR baseline"{_APPENDED_CLASSIFICATION}}}' in text, (
+            f"{case}: the classification is not the last property of the version"
+        )
+        restored = text.replace(_APPENDED_CLASSIFICATION, "")
+        assert hashlib.sha256(restored.encode("utf-8")).hexdigest() == digest, (
+            f"{case} moved by more than its appended classification"
+        )
+        assert record["exception"]["debt"] == ["D-181"], case
+        assert "W59-SEAL-FOLLOWUP-01" in record["exception"]["permitted_change"], case
+        for token in ("{{ts_6}}", "{{user_uid}}"):
+            assert token in record["tokens"], (case, token)
 
 
 #: The four `RunStatus` records that report a **finished** run. Record 03 was the fifth
