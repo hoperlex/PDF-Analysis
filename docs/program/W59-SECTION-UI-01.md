@@ -127,6 +127,13 @@ All checks ran on the committed tree of this lane unless stated otherwise.
 - `contracts/api/v1/openapi.json` hashes to `3e1f070a…`;
 - the committed generated client therefore differs from what the contract generates.
 
+There is one more red outside the required set, seen when all of `tests/contract/api_v1` was
+run: `test_doc_prose_facts.py` (2 cases). It reads `docs/program/CURRENT_STATE.md` («48 paths
+/ 55 operations / 131 schemas», head `0023_norm_citations`), while the tree has 50/57/137 and
+`0024_version_classification`. That file is the integrator's. In the same run,
+`test_finding_detail_composition.py` errors because this worktree has no governance interpreter
+(`.venv/bootstrap`); none of the required tests asked for one.
+
 This lane did not change any of those files (`git diff 6231c0e6..HEAD` on `contracts/`,
 `web/openapi/`, `web/src/shared/api/generated/` and `web/FRONTEND_LOCK.json` is empty), and all
 of them are forbidden hotspots. Regenerating them belongs to `W59-SECTION-SEAL-01` or the
