@@ -253,6 +253,89 @@ EXCEPTION_W18SEAL = {
     ),
 }
 
+#: ``W59-SEAL-FOLLOWUP-01``, finding F-1, moved at the integrator's instruction. `56efead4`
+#: (`W57A-SEAL-01B`, 2026-10-16) resealed ``contracts/analysis/v1/stage-registry.json`` with
+#: ``text_analysis`` at ``1.1.0`` and moved the active v1 text stage constant
+#: (``analysis/text/stage.py`` ``STAGE_VERSION``) with it, so a finished run's
+#: ``text_analysis`` stage now reports ``"stage_version": "1.1.0"``. Five records render that
+#: stage. No run of this corpus reached a finished run between `56efead4` and
+#: `W59-SEAL-FOLLOWUP-01` -- `W59-SECTION-SEAL-01` stopped the journey at case 03 -- so the
+#: drift was first measured here, and it is unrelated to the classification of case 02b.
+#:
+#: **One value per record, and nothing else.** The other three stages keep ``1.0.0``, the
+#: text observation artifact version (not on this surface) stays ``1.0.0``, and record 03 (an
+#: accepted run, no stages) does not move.
+#: :func:`test_the_five_run_records_moved_by_the_text_stage_version_and_nothing_else` asserts
+#: it by digest against the bodies as they stood at ``77aa55bd``.
+#:
+#: **The debt is `D-181`**, the register row whose resolution -- "update those suites" --
+#: this follow-up performs. No register row names the stage-version drift itself, and this
+#: lane may not write the register; the drift's *origin* is `56efead4`, which is what
+#: ``decided_by`` cites. `W57A-SEAL-01B`'s task file cites no owner ruling.
+_W57A_STAGE_VERSION_CHANGE = (
+    "W57A-SEAL-01B, at 56efead4, measured and moved by W59-SEAL-FOLLOWUP-01: the "
+    "`text_analysis` stage's `stage_version` is `1.1.0` instead of `1.0.0` -- the sealed "
+    "stage registry `contracts/analysis/v1/stage-registry.json` declares `text_analysis` "
+    "at 1.1.0 and the active v1 text stage identity constant moved with it, so its "
+    "StageResult agrees with the registry. That one value is the whole of this move: the "
+    "other stages keep `1.0.0`, every other byte of the body is unchanged, and no status or "
+    "header moved; "
+    "`test_the_five_run_records_moved_by_the_text_stage_version_and_nothing_else` restores "
+    "`1.0.0` and requires the pre-move digest"
+)
+_EVERYTHING_ELSE = (
+    "Every other difference in this directory is a failure of the wave, whatever "
+    "argument accompanies it."
+)
+
+#: Records 04, 05, 06 and 07: `EXCEPTION_W18SEAL`'s two debts and its text, unchanged, plus
+#: the third move. An exception block describes the whole of a record's divergence from the
+#: `W13-BASE` capture -- `EXCEPTION_W20EXEC`'s rule for record 03 -- so this block carries all
+#: three, oldest first, and keeps citing `R-5` for `D-21`'s contract half.
+EXCEPTION_W57ASEAL_RUN_STATUS = {
+    **EXCEPTION_W18SEAL,
+    "debt": ["D-19", "D-21", "D-181"],
+    "ruling": (
+        EXCEPTION_W18SEAL["ruling"]
+        + ". D-181 (the stage version): no owner ruling -- `W57A-SEAL-01B`'s task file "
+        "cites none; the value follows the sealed stage registry"
+    ),
+    "decided_by": "56efead4",
+    "decided_by_subject": "W57A-SEAL-01B reseal normative citation API and stage registry",
+    "decided_on": "2026-10-16",
+    "permitted_change": (
+        EXCEPTION_W18SEAL["permitted_change"].removesuffix(
+            "This is the whole of the permitted change; the five records are compared byte "
+            "for byte against the new expectation like every other."
+        )
+        + _W57A_STAGE_VERSION_CHANGE
+        + ". This is the whole of the permitted change; the records are compared byte for "
+        "byte against the new expectation like every other."
+    ),
+    "everything_else": _EVERYTHING_ELSE,
+}
+
+#: Record 34: its one item is the whole `RunStatus` of the finished run, so it moves by the
+#: same one value. It was added by `W18-SEAL` with no exception block; this is its first.
+EXCEPTION_W57ASEAL_LIST_RUNS = {
+    "debt": ["D-181"],
+    "ruling": (
+        "no owner ruling -- `W57A-SEAL-01B`'s task file cites none; the value follows the "
+        "sealed stage registry, and no property was added, renamed, removed or re-typed"
+    ),
+    "status": "taken",
+    "decided_by": "56efead4",
+    "decided_by_subject": "W57A-SEAL-01B reseal normative citation API and stage registry",
+    "decided_on": "2026-10-16",
+    "permitted_change": (
+        _W57A_STAGE_VERSION_CHANGE
+        + ". This is the whole of the permitted change; the record is compared byte for "
+        "byte against the new expectation like every other."
+    ),
+    "everything_else": _EVERYTHING_ELSE,
+}
+
+
 #: ``DEBT_REGISTER.md`` D-16's other half, under owner ruling `R-10`: `Project` declares
 #: `document_count`, nothing produced it, and a project list rendered `documents --`.
 #: `W15-RUN` raised it; `W18-SEAL` declined it because `R-5` authorised three new
@@ -391,9 +474,9 @@ EXCEPTION_W20EXEC = {
 #:
 #: **Nothing else moved because of the classification.** Records 02 (the upload answers an
 #: unclassified version, before 02b), 03-07, 34 (a ``RunStatus`` pins the profile, not the
-#: classification) and every other record's response are what they were; 04-07 and 34 are
-#: red for an unrelated reason, `56efead4`'s ``stage_version``, which this block does not
-#: cover and this lane did not absorb (``docs/program/W59-SEAL-FOLLOWUP-01.md``).
+#: classification) and every other record's response are what they were. 04-07 and 34
+#: moved for an unrelated reason, `56efead4`'s ``stage_version``, under their own blocks
+#: (``EXCEPTION_W57ASEAL_RUN_STATUS``, ``EXCEPTION_W57ASEAL_LIST_RUNS``), not this one.
 EXCEPTION_W59SEAL = {
     "debt": ["D-181"],
     "ruling": (
@@ -1225,7 +1308,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
         body_note="byte-identical to case 03, under the same Idempotency-Key",
         tokens=t,
-        exception=EXCEPTION_W18SEAL,
+        exception=EXCEPTION_W57ASEAL_RUN_STATUS,
     )
     assert json_of(replay)["run_id"] == run_id, "the replay produced a different run"
     t.add("project_uid", project_uid, "the identity case 01 allocated")
@@ -1256,7 +1339,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         ).encode("utf-8"),
         body_note="the key of case 03, with provider_mode stated explicitly",
         tokens=t,
-        exception=EXCEPTION_W18SEAL,
+        exception=EXCEPTION_W57ASEAL_RUN_STATUS,
     )
     assert json_of(normalised)["run_id"] == run_id
     t.add("project_uid", project_uid, "the identity case 01 allocated")
@@ -1312,7 +1395,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         "GET",
         f"/runs/{run_id}",
         tokens=t,
-        exception=EXCEPTION_W18SEAL,
+        exception=EXCEPTION_W57ASEAL_RUN_STATUS,
     )
     t.add("project_uid", project_uid, "the identity case 01 allocated")
     t.add("version_uid", version_uid, "the identity case 02 allocated")
@@ -1332,7 +1415,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         f"/runs/{run_id}",
         headers={"X-Correlation-Id": "w13base-supplied-correlation-id"},
         tokens=t,
-        exception=EXCEPTION_W18SEAL,
+        exception=EXCEPTION_W57ASEAL_RUN_STATUS,
     )
     assert dict(supplied.headers)["X-Correlation-Id"] == "w13base-supplied-correlation-id"
     t.add("project_uid", project_uid, "the identity case 01 allocated")
@@ -2040,6 +2123,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         "GET",
         f"/versions/{version_uid}/runs",
         tokens=t,
+        exception=EXCEPTION_W57ASEAL_LIST_RUNS,
     )
     listed_runs = json_of(runs)
     assert [item["run_id"] for item in listed_runs["items"]] == [run_id], (

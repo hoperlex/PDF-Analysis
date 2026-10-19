@@ -263,16 +263,23 @@ NON_TERMINAL_RUN_STATES = ("created", "queued", "running", "validating")
 #: the stored classification, and these are the three records that read the version after
 #: case 02b. Each body moved by one appended property, ``classification``, and nothing else,
 #: and :func:`test_the_three_version_records_moved_by_the_classification_and_nothing_else`
-#: asserts that by digest against the bodies as they stood at ``77aa55bd``. Records 04-07 and
-#: 34 also stopped reproducing in the same measurement, for an unrelated reason: the
-#: ``text_analysis`` ``stage_version`` that `56efead4` moved to ``1.1.0``. They are **not**
-#: entered here; that is a finding for the integrator, not a permitted change.
+#: asserts that by digest against the bodies as they stood at ``77aa55bd``.
+#:
+#: **The `W59-SEAL-FOLLOWUP-01` follow-up (finding F-1) lengthened four entries and added a
+#: thirteenth**, at the integrator's instruction. Records 04-07 and 34 stopped reproducing
+#: in the same measurement for a reason unrelated to the classification: `56efead4`
+#: (`W57A-SEAL-01B`) moved the ``text_analysis`` ``stage_version`` to ``1.1.0``, and no run
+#: of this corpus had read a finished run since. Each body moved by that one value.
+#: :func:`test_the_five_run_records_moved_by_the_text_stage_version_and_nothing_else`
+#: asserts it by digest. The debt named is `D-181`, the register row whose resolution this
+#: performs; no row names the drift itself, and the blocks say so. Record 03 is an accepted
+#: run with no stages and does not move.
 PERMITTED_EXCEPTIONS = {
     "03-startRun.success": ("D-19", "D-21", "D-20"),
-    "04-startRun.replay": ("D-19", "D-21"),
-    "05-startRun.replay_with_normalised_property": ("D-19", "D-21"),
-    "06-getRunStatus.success": ("D-19", "D-21"),
-    "07-getRunStatus.correlation_supplied": ("D-19", "D-21"),
+    "04-startRun.replay": ("D-19", "D-21", "D-181"),
+    "05-startRun.replay_with_normalised_property": ("D-19", "D-21", "D-181"),
+    "06-getRunStatus.success": ("D-19", "D-21", "D-181"),
+    "07-getRunStatus.correlation_supplied": ("D-19", "D-21", "D-181"),
     "10-appendDecision.success": ("D-78",),
     "11-listDecisionHistory.success": ("D-78",),
     "13-getDocumentVersion.success": ("D-181",),
@@ -280,6 +287,7 @@ PERMITTED_EXCEPTIONS = {
     "31-streamDocumentVersionContent.storage_credential_refused": ("D-7",),
     "32-listDocuments.success": ("D-181",),
     "33-listVersions.success": ("D-181",),
+    "34-listRuns.success": ("D-181",),
 }
 
 
@@ -330,6 +338,11 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     every ``DocumentVersion`` read of that version (`W59-SECTION-SEAL-01`, under `R-139`,
     whose contract commit declared the property). The move is asserted by digest in
     ``test_the_three_version_records_moved_by_the_classification_and_nothing_else``.
+
+    `D-181` is also the third debt of records 04-07 and the only one of record 34: the
+    ``text_analysis`` ``stage_version`` `56efead4` moved to ``1.1.0``, first measured when
+    `W59-SEAL-FOLLOWUP-01` brought the journey past case 03 again. Asserted by digest in
+    ``test_the_five_run_records_moved_by_the_text_stage_version_and_nothing_else``.
     """
     marked = {
         path.stem: json.loads(path.read_text(encoding="utf-8"))["exception"]
@@ -356,11 +369,13 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     # `R-5` explicitly did not, which is why `W18-SEAL` left this field unfilled; citing
     # it here would be citing an authority that was declined.
     assert "R-10" in exceptions["16-listProjects.success"]["ruling"]
-    # And the three `D-181` records cite the window that froze the seal that declared and
-    # filled `DocumentVersion.classification`.
-    for case in PERMITTED_EXCEPTIONS:
-        if "D-181" in PERMITTED_EXCEPTIONS[case]:
-            assert "R-139" in exceptions[case]["ruling"], case
+    # And the three `D-181` records of the classification cite the window that froze the
+    # seal that declared and filled `DocumentVersion.classification`; the five of the stage
+    # version cite the commit that moved it.
+    for case in _PRE_CLASSIFICATION_VERSION_BODIES:
+        assert "R-139" in exceptions[case]["ruling"], case
+    for case in _PRE_TEXT_STAGE_VERSION_BODIES:
+        assert exceptions[case]["decided_by"] == "56efead4", case
 
 
 #: `W49-SEAL-01`. The SHA-256 of records 10 and 11's body text as captured before the seal
@@ -451,6 +466,56 @@ def test_the_three_version_records_moved_by_the_classification_and_nothing_else(
         assert "W59-SEAL-FOLLOWUP-01" in record["exception"]["permitted_change"], case
         for token in ("{{ts_6}}", "{{user_uid}}"):
             assert token in record["tokens"], (case, token)
+
+
+#: `W59-SEAL-FOLLOWUP-01`, finding F-1. The SHA-256 of records 04-07 and 34's body text as
+#: committed at ``77aa55bd`` (unchanged there since long before `56efead4`), read with
+#: ``git show 77aa55bd:<record>`` and never from the files now. 04-07 share a digest: two
+#: replays and two reads of the same finished run, which is the claim records 04 and 05 make.
+_PRE_TEXT_STAGE_VERSION_BODIES = {
+    "04-startRun.replay": (
+        "5ce9a0f515ba8bb2c12ef486039dd2d4d6c00aacd32a36a915476764eadfa204"
+    ),
+    "05-startRun.replay_with_normalised_property": (
+        "5ce9a0f515ba8bb2c12ef486039dd2d4d6c00aacd32a36a915476764eadfa204"
+    ),
+    "06-getRunStatus.success": (
+        "5ce9a0f515ba8bb2c12ef486039dd2d4d6c00aacd32a36a915476764eadfa204"
+    ),
+    "07-getRunStatus.correlation_supplied": (
+        "5ce9a0f515ba8bb2c12ef486039dd2d4d6c00aacd32a36a915476764eadfa204"
+    ),
+    "34-listRuns.success": (
+        "046762b234806df848eb1f0bcb4a3e268023a84a275e85b8a0a52b248e8dbd94"
+    ),
+}
+
+#: The one stage whose version moved, as a record spells it before and after. Written out;
+#: not read from ``analysis/text/stage.py`` or from the stage registry.
+_TEXT_STAGE_BEFORE = '"stage_id": "text_analysis", "status": "succeeded", "stage_version": "1.0.0"'
+_TEXT_STAGE_AFTER = '"stage_id": "text_analysis", "status": "succeeded", "stage_version": "1.1.0"'
+
+
+def test_the_five_run_records_moved_by_the_text_stage_version_and_nothing_else() -> None:
+    """Restore ``1.0.0`` in the one ``text_analysis`` stage and each body is the
+    ``77aa55bd`` capture again, digest for digest.
+
+    The other three stages each still say ``1.0.0`` -- a re-capture that had moved one of
+    them, or a second ``text_analysis`` entry, fails the count or the digest.
+    """
+    for case, digest in _PRE_TEXT_STAGE_VERSION_BODIES.items():
+        record = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+        text = record["response"]["body"]["text"]
+        assert text.count(_TEXT_STAGE_AFTER) == 1, case
+        assert _TEXT_STAGE_BEFORE not in text, case
+        assert text.count('"stage_version": "1.0.0"') == 3, f"{case}: another stage moved"
+        restored = text.replace(_TEXT_STAGE_AFTER, _TEXT_STAGE_BEFORE)
+        assert hashlib.sha256(restored.encode("utf-8")).hexdigest() == digest, (
+            f"{case} moved by more than the text stage's version"
+        )
+        assert record["exception"]["debt"][-1] == "D-181", case
+        assert record["exception"]["decided_by"] == "56efead4", case
+        assert "W59-SEAL-FOLLOWUP-01" in record["exception"]["permitted_change"], case
 
 
 #: The four `RunStatus` records that report a **finished** run. Record 03 was the fifth
