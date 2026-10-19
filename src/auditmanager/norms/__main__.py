@@ -728,7 +728,8 @@ def _command_session_ledger(args: argparse.Namespace, _environment: dict[str, st
         ledger = session_ledger(
             pages, directory=args.session_dir, base_snapshot=base,
             drop_sums_sha256=sums.sha256, model=args.model,
-            transcribed_at=args.transcribed_at, generated_at=_now(),
+            transcribed_at=args.transcribed_at, generated_at=_now(), dpi=args.dpi,
+            render=lambda crop: render_crop_png(crop, dpi=args.dpi),
         )
     except ReadsOutstanding as owed:
         print(json.dumps({"stopped": owed.reason, "outstanding": [
@@ -826,9 +827,8 @@ def repair_parser() -> argparse.ArgumentParser:
         session.add_argument("--sums", type=Path, required=True, help="the operator's SHA256SUMS over the drop")
         session.add_argument("--session-dir", type=Path, required=True)
         session.add_argument("--base-snapshot", default="", help="refuse unless the corpus is this snapshot")
-        if name == "session-prepare":
-            session.add_argument("--dpi", type=int, default=RENDER_DPI)
-        else:
+        session.add_argument("--dpi", type=int, default=RENDER_DPI)
+        if name == "session-ledger":
             session.add_argument("--model", required=True, help="the session model's exact identifier")
             session.add_argument("--transcribed-at", required=True, help="when the answers were written (ISO 8601)")
             session.add_argument("--out", type=Path, required=True)

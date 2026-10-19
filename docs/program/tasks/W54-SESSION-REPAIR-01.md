@@ -105,7 +105,7 @@ steps and take this ledger as input.
 
 - `PYTHONPATH=src .venv/bin/python -m pytest -q -p no:cacheprovider tests/integration/norms/repair/test_session_repair.py`;
 - `PYTHONPATH=src .venv/bin/python -m pytest -q -p no:cacheprovider tests/integration/norms -k "not postgres" --ignore=tests/integration/norms/custody/test_two_phase_custody.py`;
-- `PYTHONPATH=src .venv/bin/python -m pytest -q -p no:cacheprovider tests/contract/program tests/contract/test_alr05_boundaries.py`;
+- `PYTHONPATH=src .venv/bin/python -m pytest -q -p no:cacheprovider tests/contract/program tests/contract/architecture/test_alr05_boundaries.py`;
 - `ruff check` over the changed Python files, `git diff --check`, direct
   task `governance_findings` = `[]`, exact changed-path proof;
 - the real `session-ledger` over the transcribed directory: exit 0, 121

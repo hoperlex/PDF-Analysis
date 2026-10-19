@@ -1604,3 +1604,14 @@ and prepare exact code tasks. The plan is `dispatch/CODE-FIRST-TO-BETA.md`.
 | --- | --- |
 | `R-135` | W56a–W63 development candidates use bounded checks of changed code and migration upgrades. No intermediate full local `make gate`, broad acceptance run, paid live test, deployment, release tag or `origin/main` publication is part of this code series. A separate task runs full gates after all planned beta code on an exact clean candidate in an adequately resourced environment. This supersedes earlier per-lane/per-wave gate timing for `origin/dev` only; `MAIN_AUTODEPLOY_POLICY.md` still governs any later `origin/main` act. B1–B12 remain open acceptance criteria. |
 | `R-136` | To start W56a code while the two-gateway identity probe is blocked, split the freeze as proposed by `reviews/W56A-MODEL-REQUIREMENT-REVIEW-01.md`: a recorded-only development freeze may grant SEAL without `P02_LOCK.json` and disjoint GENERATOR preparation. `W56A-MODEL-PIN-01` alone may later write the lock after both distinct gateways pass the selected/default model and rate probes under `R-29`; PROVIDER and live activation wait for that pin. `R-133` is unchanged: a mismatched or missing reported model fails closed and publishes no finding. The failed `W56A-PROBE-01` stays failed. |
+
+## 3.37 — `R-137`, the W54 recognition repair in session (owner, 2026-10-19)
+
+The owner directed that the norms corpus be closed and that the 121 W54 blocks whose
+corpus text is the recognition model's own reasoning be re-recognised by Sonnet
+subagents of an interactive Claude Code session, instead of the paid proxy run that
+waited for a credential. The task is `tasks/W54-SESSION-REPAIR-01.md`.
+
+| Ruling | Substance |
+| --- | --- |
+| `R-137` | The repair keeps the page set, crop custody against the verified `SHA256SUMS`, the fixed `RECOGNITION_SYSTEM_PROMPT`, the two-read rule and the version-2 ledger; only the source of the text changes. Session answers go through `repair session-prepare` and `repair session-ledger`, not the durable proxy journal: no proxy call, charge or journal row is made or recorded. Each attempt names the session model, `stop_reason` `session_transcript`, zero tokens and an unpriced cost. This supersedes the 2026-10-16 `claude-opus-5` proxy selection and its `$10` sample/full procedure for this repair only; `R-106` still governs any later paid repair. |

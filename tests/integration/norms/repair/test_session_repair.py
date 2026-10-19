@@ -20,11 +20,12 @@ import pytest
 from auditmanager.norms import __main__ as command
 from auditmanager.norms import session_repair
 from auditmanager.norms.__main__ import RunRefused, render_crop_png
-from auditmanager.norms.corpus_source import degenerate_pages, snapshot_of
+from auditmanager.norms.corpus_source import degenerate_pages, open_corpus_projection, snapshot_of
 from auditmanager.norms.repair import RepairOutcome, repaired_snapshot
 from auditmanager.norms.repair_journal import LEDGER_SUMS_FIELD, read_ledger_file
 from auditmanager.norms.rerecognition import RECOGNITION_SYSTEM_PROMPT
 from auditmanager.norms.session_repair import (
+    ANSWERS_LOG,
     SESSION_STOP_REASON,
     ReadsOutstanding,
     SessionRefused,
@@ -107,7 +108,8 @@ class Drop:
         values: dict[str, Any] = {
             "directory": self.session, "base_snapshot": self.base,
             "drop_sums_sha256": self.sums_sha, "model": MODEL,
-            "transcribed_at": AT, "generated_at": AT,
+            "transcribed_at": AT, "generated_at": AT, "dpi": 72,
+            "render": lambda crop: render_crop_png(crop, dpi=72),
         }
         values.update(overrides)
         return session_ledger(self.pages, **values)
@@ -344,6 +346,7 @@ def test_a_page_set_that_differs_from_the_session_refuses(drop: Drop) -> None:
         session_ledger(
             drop.pages[:1], directory=drop.session, base_snapshot=drop.base,
             drop_sums_sha256=drop.sums_sha, model=MODEL, transcribed_at=AT, generated_at=AT,
+            dpi=72, render=lambda crop: render_crop_png(crop, dpi=72),
         )
 
     assert refused.value.reason == "session_mismatch"
@@ -352,6 +355,7 @@ def test_a_page_set_that_differs_from_the_session_refuses(drop: Drop) -> None:
 @pytest.mark.parametrize(
     ("override", "reason"),
     [({"model": ""}, "model_unnamed"), ({"model": "Sonnet"}, "model_unnamed"),
+     ({"model": "sonnet"}, "model_unnamed"), ({"model": "claude-sonnet"}, "model_unnamed"),
      ({"transcribed_at": "yesterday"}, "transcribed_at_invalid")],
 )
 def test_the_session_model_and_time_must_be_named_exactly(
@@ -385,14 +389,14 @@ def test_the_commands_write_a_ledger_the_bundle_export_can_read(
     drop.answer(SECOND, 1, DEGENERATE_PAGE)
     capsys.readouterr()
 
-    assert _run(drop, "session-ledger", "--model", MODEL, "--transcribed-at", AT,
+    assert _run(drop, "session-ledger", "--dpi", "72", "--model", MODEL, "--transcribed-at", AT,
                 "--out", str(out)) == command.EXIT_STOPPED
     stopped = json.loads(capsys.readouterr().out)
     assert stopped["outstanding"] == [{"document_slug": SLUG, "block_id": SECOND, "read": 2}]
     assert not out.exists()
 
     drop.answer(SECOND, 2, CLEAN_PAGE)
-    assert _run(drop, "session-ledger", "--model", MODEL, "--transcribed-at", AT,
+    assert _run(drop, "session-ledger", "--dpi", "72", "--model", MODEL, "--transcribed-at", AT,
                 "--out", str(out)) == 0
     ledger, sums = read_ledger_file(out.read_bytes())
     assert sums == drop.sums_sha
@@ -413,5 +417,187 @@ def test_a_session_refusal_surfaces_as_a_run_refusal(drop: Drop) -> None:
     assert _run(drop, "session-prepare", "--dpi", "72") == 0
 
     with pytest.raises(RunRefused, match="first_read_missing"):
-        _run(drop, "session-ledger", "--model", MODEL, "--transcribed-at", AT,
+        _run(drop, "session-ledger", "--dpi", "72", "--model", MODEL, "--transcribed-at", AT,
              "--out", str(drop.session / "ledger.json"))
+
+
+# --- review W54-SESSION-REPAIR-01: bindings, the answers log, downstream acceptance ----------
+
+
+def test_prepare_refuses_two_pages_with_one_block_id(drop: Drop) -> None:
+    with pytest.raises(SessionRefused) as refused:
+        prepare_session(
+            [drop.pages[0], drop.pages[0]], directory=drop.session, base_snapshot=drop.base,
+            drop_sums_sha256=drop.sums_sha, dpi=72,
+            render=lambda crop: render_crop_png(crop, dpi=72), now=AT,
+        )
+
+    assert refused.value.reason == "block_id_not_unique"
+    assert not (drop.session / "session.json").exists()
+
+
+def test_a_missing_or_malformed_session_refuses(drop: Drop) -> None:
+    with pytest.raises(SessionRefused) as absent:
+        drop.ledger()
+    assert absent.value.reason == "session_absent"
+
+    drop.prepare()
+    (drop.session / "session.json").write_bytes(b"\xff{not json")
+    with pytest.raises(SessionRefused) as malformed:
+        drop.ledger()
+    assert malformed.value.reason == "session_format"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("page_label", 7), ("crop_sha256", "0" * 64), ("original_sha256", "0" * 64)],
+)
+def test_a_recorded_page_that_differs_in_one_field_refuses(
+    drop: Drop, field: str, value: Any
+) -> None:
+    drop.prepare()
+    drop.answer(FIRST, 1, CLEAN_PAGE)
+    drop.answer(SECOND, 1, CLEAN_PAGE)
+    record = drop.session / "session.json"
+    document = json.loads(record.read_text(encoding="utf-8"))
+    document["pages"][1][field] = value
+    record.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SessionRefused) as refused:
+        drop.ledger()
+
+    assert refused.value.reason == "session_mismatch"
+
+
+def test_an_image_swapped_with_its_record_still_refuses(drop: Drop) -> None:
+    drop.prepare()
+    drop.answer(FIRST, 1, CLEAN_PAGE)
+    drop.answer(SECOND, 1, CLEAN_PAGE)
+    other = render_crop_png(minimal_pdf(240, 240), dpi=72)
+    (drop.session / "pages" / f"{SECOND}.png").write_bytes(other)
+    record = drop.session / "session.json"
+    document = json.loads(record.read_text(encoding="utf-8"))
+    document["pages"][1]["png_sha256"] = hashlib.sha256(other).hexdigest()
+    record.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SessionRefused, match="rendering of the crop") as refused:
+        drop.ledger()
+
+    assert refused.value.reason == "page_image_changed"
+
+
+def test_a_ledger_at_another_resolution_refuses(drop: Drop) -> None:
+    drop.prepare()
+    drop.answer(FIRST, 1, CLEAN_PAGE)
+    drop.answer(SECOND, 1, CLEAN_PAGE)
+
+    with pytest.raises(SessionRefused) as refused:
+        drop.ledger(dpi=150, render=lambda crop: render_crop_png(crop, dpi=150))
+
+    assert refused.value.reason == "session_mismatch"
+
+
+def test_a_linked_answer_cannot_stand_in_for_another_block(drop: Drop) -> None:
+    drop.prepare()
+    drop.answer(SECOND, 1, CLEAN_PAGE)
+    (drop.session / "answers" / f"{FIRST}.1.md").symlink_to(drop.session / "answers" / f"{SECOND}.1.md")
+
+    with pytest.raises(SessionRefused) as refused:
+        drop.ledger()
+
+    assert refused.value.reason == "answer_unexpected"
+
+
+def test_a_directory_among_the_answers_refuses(drop: Drop) -> None:
+    drop.prepare()
+    drop.answer(FIRST, 1, CLEAN_PAGE)
+    drop.answer(SECOND, 1, CLEAN_PAGE)
+    (drop.session / "answers" / f"{FIRST}.2.md").mkdir()
+
+    with pytest.raises(SessionRefused) as refused:
+        drop.ledger()
+
+    assert refused.value.reason == "answer_unexpected"
+
+
+def test_a_judged_read_cannot_be_replaced_after_a_stopped_run(drop: Drop) -> None:
+    drop.prepare()
+    drop.answer(FIRST, 1, DEGENERATE_PAGE)
+    drop.answer(SECOND, 1, CLEAN_PAGE)
+    with pytest.raises(ReadsOutstanding):
+        drop.ledger()
+    assert (drop.session / ANSWERS_LOG).is_file()
+
+    drop.answer(FIRST, 1, CLEAN_PAGE)
+    with pytest.raises(SessionRefused) as refused:
+        drop.ledger()
+    assert refused.value.reason == "answer_changed"
+
+    drop.answer(FIRST, 1, DEGENERATE_PAGE)
+    drop.answer(FIRST, 2, CLEAN_PAGE)
+    assert [a.ordinal for a in drop.ledger().repairs[0].attempts] == [1, 2]
+
+
+def test_a_judged_read_that_disappears_refuses(drop: Drop) -> None:
+    drop.prepare()
+    drop.answer(FIRST, 1, CLEAN_PAGE)
+    drop.answer(SECOND, 1, CLEAN_PAGE)
+    drop.ledger()
+    (drop.session / "answers" / f"{SECOND}.1.md").unlink()
+
+    with pytest.raises(SessionRefused) as refused:
+        drop.ledger()
+
+    assert refused.value.reason == "answer_changed"
+
+
+def test_rerunning_over_unchanged_answers_gives_the_same_repairs(drop: Drop) -> None:
+    drop.prepare()
+    drop.answer(FIRST, 1, CLEAN_PAGE)
+    drop.answer(SECOND, 1, CLEAN_PAGE.replace("7.2.4", "7.2.5"))
+
+    first, second = drop.ledger(), drop.ledger()
+
+    assert first.as_json() == second.as_json()
+    logged = (drop.session / ANSWERS_LOG).read_text(encoding="utf-8").splitlines()
+    assert len(logged) == 2
+
+
+def test_the_loader_projection_applies_the_session_ledger(drop: Drop) -> None:
+    drop.prepare()
+    drop.answer(FIRST, 1, CLEAN_PAGE)
+    drop.answer(SECOND, 1, CLEAN_PAGE.replace("7.2.4", "7.2.5"))
+    ledger = drop.ledger()
+
+    projection = open_corpus_projection(drop.root, repair_ledger=ledger)
+    texts = [p.text for document in projection.iter_documents() for p in document.paragraphs]
+
+    assert projection.repair_count == 2
+    assert projection.snapshot.snapshot_id == repaired_snapshot(snapshot_of(drop.root), ledger).snapshot_id
+    assert any("7.2.5 Расчёт" in text for text in texts)
+    assert not any("strict transcription engine" in text for text in texts)
+
+
+def test_the_command_refuses_a_corpus_that_is_not_the_named_snapshot(drop: Drop) -> None:
+    with pytest.raises(RunRefused, match="not the"):
+        _run(drop, "session-prepare", "--dpi", "72", "--base-snapshot",
+             "2026-07-23..2026-08-20+17d.000000000000")
+    assert not (drop.session / "session.json").exists()
+
+
+def test_the_ledger_refuses_one_block_named_twice_even_in_a_rewritten_session(drop: Drop) -> None:
+    drop.prepare()
+    drop.answer(FIRST, 1, CLEAN_PAGE)
+    record = drop.session / "session.json"
+    document = json.loads(record.read_text(encoding="utf-8"))
+    document["pages"] = [document["pages"][0], document["pages"][0]]
+    record.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(SessionRefused) as refused:
+        session_ledger(
+            [drop.pages[0], drop.pages[0]], directory=drop.session, base_snapshot=drop.base,
+            drop_sums_sha256=drop.sums_sha, model=MODEL, transcribed_at=AT, generated_at=AT,
+            dpi=72, render=lambda crop: render_crop_png(crop, dpi=72),
+        )
+
+    assert refused.value.reason == "block_id_not_unique"
