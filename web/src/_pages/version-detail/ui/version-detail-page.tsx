@@ -15,12 +15,18 @@
  * its own `project_uid`; the segment in the address is a display crumb that a user could
  * have mistyped or pasted from another project. Where the two disagree the server's answer
  * wins, and the screen says so rather than silently linking somewhere wrong.
+ *
+ * **`W59-SECTION-UI-01`: the stage and section.** Once the version has answered, its
+ * stage-and-section panel reads `getVersionSectionReview` at the address the version's own
+ * body names (project, document, version) and shows the confirmed classification, the
+ * expert's confirmation form, or a read-only sentence. The session's roles arrive from the
+ * route, which has just checked them; they decide only which of those is drawn.
  */
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import type { RunStatus } from '@/shared/api';
+import type { Role, RunStatus } from '@/shared/api';
 import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { looksLikeProjectUid } from '@/entities/project';
@@ -30,13 +36,16 @@ import {
   useDocumentVersion,
 } from '@/entities/document-version';
 import { RunList } from '@/widgets/run-list';
+import { VersionClassification } from '@/widgets/version-classification';
 
 export interface VersionDetailPageProps {
   readonly projectUid: string;
   readonly versionUid: string;
+  /** The session's roles, as the route's guard read them. */
+  readonly roles: readonly Role[];
 }
 
-export function VersionDetailPage({ projectUid, versionUid }: VersionDetailPageProps) {
+export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDetailPageProps) {
   const router = useRouter();
   const wellFormed = looksLikeProjectUid(projectUid) && looksLikeVersionUid(versionUid);
   const version = useDocumentVersion(wellFormed ? versionUid : null);
@@ -82,6 +91,14 @@ export function VersionDetailPage({ projectUid, versionUid }: VersionDetailPageP
               Все версии документа
             </Link>
           </p>
+          <VersionClassification
+            address={{
+              projectUid: version.data.project_uid,
+              documentUid: version.data.document_uid,
+              versionUid: version.data.version_uid,
+            }}
+            roles={roles}
+          />
         </>
       )}
 

@@ -196,6 +196,15 @@ const declaredRoutes = Array.isArray(manifestRead.value?.routes)
 if (declaredRoutes === null) {
   findings.push(`journey manifest is unavailable: ${manifestRead.error ?? 'it declares no routes'}`);
 }
+// The write steps a complete write phase checks, read the same way. `W59-SECTION-UI-01` added
+// `classify-version` before `start-run`, and a literal `3` here would have failed the stand's
+// acceptance over a journey that did everything its manifest says.
+const declaredWriteSteps = Array.isArray(manifestRead.value?.write?.steps)
+  ? manifestRead.value.write.steps.length
+  : null;
+if (declaredWriteSteps === null) {
+  findings.push(`journey manifest is unavailable: ${manifestRead.error ?? 'it declares no write steps'}`);
+}
 
 const expect = (condition, message) => {
   if (!condition) findings.push(message);
@@ -243,8 +252,14 @@ if (journey !== null) {
   expect(journey.viewport?.width === 780, 'journey viewport width is not 780px');
   expect(journey.viewport?.height === 900, 'journey viewport height is not 900px');
   expect(journey.write?.ran === true, 'write phase did not run');
-  expect(journey.write?.stepsDeclared === 3, 'write phase does not declare exactly 3 steps');
-  expect(journey.write?.stepsChecked === 3, 'write phase did not check 3/3 steps');
+  expect(
+    journey.write?.stepsDeclared === declaredWriteSteps,
+    `write phase does not declare exactly the ${declaredWriteSteps} steps of the manifest`,
+  );
+  expect(
+    journey.write?.stepsChecked === declaredWriteSteps,
+    `write phase did not check ${declaredWriteSteps}/${declaredWriteSteps} steps`,
+  );
   expect(journey.write?.stoppedAt === null, 'write phase stopped before completion');
   expect(
     journey.routesDeclared === declaredRoutes,
@@ -297,8 +312,9 @@ const journeyFailuresClean = Array.isArray(journey?.failures) && journey.failure
 const writeComplete =
   journey?.phase === 'all' &&
   journey?.write?.ran === true &&
-  journey?.write?.stepsChecked === 3 &&
-  journey?.write?.stepsDeclared === 3 &&
+  declaredWriteSteps !== null &&
+  journey?.write?.stepsChecked === declaredWriteSteps &&
+  journey?.write?.stepsDeclared === declaredWriteSteps &&
   journey?.write?.stoppedAt === null;
 const routesComplete =
   journey?.phase === 'all' &&

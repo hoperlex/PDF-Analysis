@@ -190,6 +190,17 @@ export const queryKeys = {
      */
     portalBlocks: (versionUid: VersionUid, limit: number) =>
       ['versions', 'portal-blocks', versionUid, { limit }] as const,
+    /**
+     * `getVersionSectionReview` for one version (`W59-SECTION-UI-01`): the fifteen section
+     * choices, their suggestion evidence, whether each has an analysis profile, and the
+     * persisted stage-and-section classification or `null`.
+     *
+     * Under `versions` beside `detail`, because the classification is a property of the
+     * version: `classifyDocumentVersion` changes this answer and the version's own
+     * `classification` field together, and one root reaches both. A distinct third segment,
+     * so re-reading the review never refetches the manifest, the text-line index or the PDF.
+     */
+    sectionReview: (versionUid: VersionUid) => ['versions', 'section-review', versionUid] as const,
   },
   runs: {
     all: () => ['runs'] as const,

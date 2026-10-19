@@ -13,6 +13,12 @@
  * The documents come first and the upload second. What is already here is what a returning
  * user came back for; the upload is the thing they do next.
  *
+ * `W59-SECTION-UI-01`: the documents are shown as the project's structure — the fifteen
+ * sections in the owner's `S-5` order, each holding the documents whose current version an
+ * expert confirmed for it, then «Не классифицировано» (`widgets/project-sections`). It is the
+ * same `listDocuments` read, grouped; the static fourteen-tab stub it replaces made no claim
+ * about membership because nothing could, and now the version's own classification can.
+ *
  * The route parameter is checked for shape only. A string that is not a `prj_<ULID>` is a
  * malformed URL, which is a different thing from a project the server says does not exist,
  * and saying so costs no request. The identity is never parsed for meaning beyond that.
@@ -25,7 +31,6 @@ import type { DocumentVersion } from '@/shared/api';
 import { PageShell, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { looksLikeProjectUid } from '@/entities/project';
-import { DocumentList } from '@/widgets/document-list';
 import { ProjectSections } from '@/widgets/project-sections';
 import { UploadPanel } from '@/widgets/upload-panel';
 
@@ -57,12 +62,9 @@ export function ProjectDetailPage({ projectUid }: ProjectDetailPageProps) {
       subtitle={<code>{projectUid}</code>}
       actions={<Link href={routes.projects()}>Все проекты</Link>}
     >
-      <ProjectSections route={routes.project(projectUid)}>
-        <h2>Документы</h2>
-        <DocumentList projectUid={projectUid} />
+      <ProjectSections projectUid={projectUid} />
 
-        <UploadPanel projectUid={projectUid} onUploaded={goToVersion} />
-      </ProjectSections>
+      <UploadPanel projectUid={projectUid} onUploaded={goToVersion} />
     </PageShell>
   );
 }

@@ -26,6 +26,12 @@ export interface RouteIdentities {
   readonly runId: string;
 }
 
+/**
+ * The fragment of the version screen's stage-and-section panel (`W59-SECTION-UI-01`). The
+ * panel carries it as its `id`, and a run refused for its classification links to it.
+ */
+export const VERSION_CLASSIFICATION_ANCHOR = 'version-classification';
+
 export const routes = {
   /** Execution journal, optionally focused on one run. */
   logs: (runId?: string): string =>
@@ -73,6 +79,14 @@ export const routes = {
   /** One published version: its manifest, its runs, and the control that starts one. */
   version: (projectUid: string, versionUid: string): string =>
     `/projects/${projectUid}/versions/${versionUid}`,
+
+  /**
+   * The same version screen, scrolled to its stage-and-section panel. Where the run control
+   * sends a reader whose run was refused because the version has no confirmed classification,
+   * or because the confirmed section has no analysis profile (`W59-SECTION-UI-01`).
+   */
+  versionClassification: (projectUid: string, versionUid: string): string =>
+    `/projects/${projectUid}/versions/${versionUid}#${VERSION_CLASSIFICATION_ANCHOR}`,
 
   /**
    * Two runs of one published version, side by side.

@@ -65,6 +65,10 @@ failing silently. Non-experts see the classification read-only.
 - `tests/e2e/pc01/journey/**`
 - `docs/program/W59-SECTION-UI-01.md`
 - `docs/program/tasks/W59-SECTION-UI-01.md`
+- `web/src/shared/api/query-keys.ts` (integrator grant, 2026-10-20: `versions.sectionReview`)
+- `web/docs/PC01_UI_SEAM.md` (integrator grant, 2026-10-20: the §6 row)
+- `web/tests/guards/dashboard-invalidation.guard.test.ts` (integrator grant, 2026-10-20: the map line for `use-classify-version`)
+- `tests/contract/test_alpha_acceptance_command.py` (integrator grant, 2026-10-20: write-step count from the manifest)
 
 ## Forbidden hotspots
 

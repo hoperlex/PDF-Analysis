@@ -138,7 +138,12 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
     const markup = withRouter(client, createElement(ProjectDetailPage, { projectUid: PROJECT_UID }));
 
     expect(markup).toContain(VERSION_UID);
-    expect(markup).toContain(`href="${routes.version(PROJECT_UID, VERSION_UID)}"`);
+    // `W59-SECTION-UI-01`: an unclassified document opens its version at the
+    // stage-and-section panel; the address is still the version's own.
+    expect(markup).toContain(`href="${routes.versionClassification(PROJECT_UID, VERSION_UID)}"`);
+    expect(routes.versionClassification(PROJECT_UID, VERSION_UID).startsWith(
+      routes.version(PROJECT_UID, VERSION_UID),
+    )).toBe(true);
     expect(markup).toContain(`href="${routes.document(PROJECT_UID, DOCUMENT_UID)}"`);
     expect(markup).toContain('data-document-count="1"');
   });
@@ -183,7 +188,7 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
 
 describe('the version screen asks the server on a cold load (D-16)', () => {
   const screen = (client: Client, versionUid = VERSION_UID, projectUid = PROJECT_UID) =>
-    withRouter(client, createElement(VersionDetailPage, { projectUid, versionUid }));
+    withRouter(client, createElement(VersionDetailPage, { projectUid, versionUid, roles: ['expert'] }));
 
   it('files two pending reads: the version itself and its runs', () => {
     const client = newClient();
