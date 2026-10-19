@@ -1,0 +1,35 @@
+{
+  "format": "text-profile/1",
+  "section_code": "KM",
+  "analysis_profile_id": "ap_01M5AXG1KB71SHN23H775AP551",
+  "prompt_bundle_id": "pb_01M5AXG1KB45S6A5TZ0ZTWRVHS",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "title_ru": "Конструкции металлические",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "16ba8e5d23e4782550e79355002fde1365f682b7",
+    "files": [
+      {
+        "path": "prompts/disciplines/KM/role.md",
+        "sha256": "e07abb3b3a69300b01bf2e974ed1fa35c93c41068d96cabe83775291de071920"
+      },
+      {
+        "path": "prompts/disciplines/KM/checklist.md",
+        "sha256": "544487191d8d819081298ed15ef532be9c5db6196942b4e959eb79de4d7bf993"
+      },
+      {
+        "path": "prompts/disciplines/KM/drawing_types.md",
+        "sha256": "63e89356ed9e993d1872af34c92e96d974e5920cd08e5d5307f7615582509bb3"
+      },
+      {
+        "path": "prompts/disciplines/KM/project_params.md",
+        "sha256": "8ddfed0a615de7c59cc6d1c38f1de402a0a79ff859474ee65d8dbbe8bdb4e6af"
+      },
+      {
+        "path": "prompts/disciplines/KM/finding_categories.md",
+        "sha256": "c6002c08dfbf69b88a38b5127e25a8d016a57947dceff04a7a6deb0f179c29af"
+      }
+    ]
+  }
+}

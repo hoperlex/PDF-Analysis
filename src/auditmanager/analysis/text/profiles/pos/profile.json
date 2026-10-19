@@ -1,0 +1,35 @@
+{
+  "format": "text-profile/1",
+  "section_code": "POS",
+  "analysis_profile_id": "ap_01M5AXG1K4V1JCGK60TZRM9B96",
+  "prompt_bundle_id": "pb_01M5AXG1K4QP84XW1DNYM72HN6",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "title_ru": "Проект организации строительства",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "16ba8e5d23e4782550e79355002fde1365f682b7",
+    "files": [
+      {
+        "path": "prompts/disciplines/POS/role.md",
+        "sha256": "19e2951c15fe0cb0ae328eb8fdcb60861265df8a2749296b49c811116b89e8cb"
+      },
+      {
+        "path": "prompts/disciplines/POS/checklist.md",
+        "sha256": "a4c5bba5d83e46841e1182f714adb4b459ce646f49b511b3f05ebac215d6a722"
+      },
+      {
+        "path": "prompts/disciplines/POS/drawing_types.md",
+        "sha256": "cf608107fe49ba9fb0de02cd8522381e638e66563ce07f0b33fefd11bcb1ebb5"
+      },
+      {
+        "path": "prompts/disciplines/POS/project_params.md",
+        "sha256": "42f8346450816b49b00082f91a3b798e4714fe2264e0be6a1ecc499537939032"
+      },
+      {
+        "path": "prompts/disciplines/POS/finding_categories.md",
+        "sha256": "6c10f378c333711e58a00cabd2853ff1e4097723cb4550a079a4b8ddc920c816"
+      }
+    ]
+  }
+}
