@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 3e1f070a6db0dab87bd358112a3e66ebe6cc2bd44656c3af5152ff1e46a172ac
+ *   sha256 d7704f0a78d297702ac3373d8c33bb20b9cd5f690ff57be6659329ecbb8a2a5c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '3e1f070a6db0dab87bd358112a3e66ebe6cc2bd44656c3af5152ff1e46a172ac';
+export const CONTRACT_DIGEST = 'd7704f0a78d297702ac3373d8c33bb20b9cd5f690ff57be6659329ecbb8a2a5c';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -30,6 +30,8 @@ export const SCHEMA_NAMES = [
   'BlockGeometry',
   'ChangePasswordRequest',
   'ClassifyDocumentVersionRequest',
+  'ComparedVersion',
+  'ComparisonRefusal',
   'CorrelationId',
   'CostBasis',
   'CreateProjectRequest',
@@ -41,6 +43,7 @@ export const SCHEMA_NAMES = [
   'DecisionId',
   'DecisionRecord',
   'DecisionRecordPage',
+  'DiffHunk',
   'DocumentUid',
   'DocumentVersion',
   'DocumentVersionPage',
@@ -56,10 +59,13 @@ export const SCHEMA_NAMES = [
   'ExecutionWorkerPage',
   'Finding',
   'FindingCategory',
+  'FindingComparison',
   'FindingDetail',
+  'FindingMatchProposal',
   'FindingObservation',
   'FindingObservationId',
   'FindingPage',
+  'FindingRef',
   'FindingUid',
   'IdempotencyKey',
   'InputManifestEntry',
@@ -141,6 +147,9 @@ export const SCHEMA_NAMES = [
   'SetWorkerIntakeRequest',
   'Severity',
   'Sha256',
+  'SheetDiff',
+  'SheetDiffPage',
+  'SheetPairing',
   'StageId',
   'StageState',
   'StageStatus',
@@ -155,6 +164,7 @@ export const SCHEMA_NAMES = [
   'VerdictCount',
   'VersionBlockIndex',
   'VersionClassification',
+  'VersionComparison',
   'VersionUid',
   'WorkerId',
   'WorkerState',
@@ -243,6 +253,24 @@ export type ChangePasswordRequest = {
 export type ClassifyDocumentVersionRequest = {
   project_stage: ProjectStage;
   section_code: ProjectSection;
+};
+
+/** One side of a comparison, as far as it was established before any refusal. */
+export type ComparedVersion = {
+  page_count: number;
+  project_stage: ProjectStage | null;
+  run_id: RunId | null;
+  section_code: ProjectSection | null;
+  sha256: Sha256;
+  text_layer_sha256: Sha256 | null;
+  version_ordinal: number;
+  version_uid: VersionUid;
+};
+
+/** Why two versions are not compared; ``side`` when the reason is one side's. */
+export type ComparisonRefusal = {
+  reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "text_unavailable" | "text_too_large";
+  side: "source" | "target" | null;
 };
 
 /** Not an entity identity. Never a foreign key and authorizes nothing. */
@@ -338,6 +366,20 @@ export type DecisionRecord = {
 export type DecisionRecordPage = {
   items: Array<DecisionRecord>;
   page: PageInfo;
+};
+
+/**
+ * One span of a raw line diff; 0-based line indices, end exclusive. An ``equal`` span
+ * carries its ranges and no lines.
+ */
+export type DiffHunk = {
+  source_end: number;
+  source_lines: Array<string>;
+  source_start: number;
+  tag: "equal" | "insert" | "delete" | "replace";
+  target_end: number;
+  target_lines: Array<string>;
+  target_start: number;
 };
 
 export type DocumentUid = string;
@@ -523,6 +565,14 @@ export const FINDING_CATEGORY_VALUES = [
 /** FindingCategory - the closed value set above. */
 export type FindingCategory = (typeof FINDING_CATEGORY_VALUES)[number];
 
+export type FindingComparison = {
+  proposals: Array<FindingMatchProposal>;
+  source_finding_count: number;
+  status: "compared" | "unavailable";
+  target_finding_count: number;
+  unavailable_reason: "findings_over_limit" | null;
+};
+
 /** One finding with its full current-verdict projection. Restates `Finding` rather than composing it with `allOf`: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `Finding` would reject the two properties the sibling branch adds. Both shapes stay closed, and tests/contract/api_v1 asserts this property set stays `Finding`'s plus exactly `latest_comment` and `decision_event_count`. */
 export type FindingDetail = {
   category: FindingCategory;
@@ -545,6 +595,15 @@ export type FindingDetail = {
   /** Document value grounded in the project evidence; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
   stated_value?: string;
   version_uid: VersionUid;
+};
+
+/** A proposed label for a finding of either run; never a decision or a carryover. */
+export type FindingMatchProposal = {
+  basis: "exact_issue_and_quotes" | "quotes_absent_from_paired_sheets" | "quote_still_on_paired_sheet" | "evidence_sheet_unpaired" | "evidence_over_limit" | "no_exact_source_match";
+  kind: "unchanged" | "probably_fixed" | "undetermined" | "new";
+  proposal_sha256: Sha256 | null;
+  source_finding: FindingRef | null;
+  target_finding: FindingRef | null;
 };
 
 export type FindingObservation = {
@@ -573,6 +632,13 @@ export const FINDING_OBSERVATION_ID_PATTERN = "^fobs_[0-9A-HJKMNP-TV-Z]{26}$";
 export type FindingPage = {
   items: Array<Finding>;
   page: PageInfo;
+};
+
+export type FindingRef = {
+  category: FindingCategory;
+  finding_text: string;
+  finding_uid: FindingUid;
+  page_numbers: Array<number>;
 };
 
 /** Durable semantic issue identity, carrying expert history across reruns. */
@@ -1285,6 +1351,41 @@ export type Sha256 = string;
 /** The contract pattern for `Sha256`. Anchored; use with `new RegExp()`. */
 export const SHA256_PATTERN = "^[0-9a-f]{64}$";
 
+export type SheetDiff = {
+  added_line_count: number | null;
+  evidence_sha256: Sha256 | null;
+  hunks: Array<DiffHunk>;
+  outcome: "computed" | "too_large";
+  removed_line_count: number | null;
+  source_line_count: number | null;
+  source_page_number: number | null;
+  status: "changed" | "removed" | "added";
+  target_line_count: number | null;
+  target_page_number: number | null;
+  too_large_reason: "source_text_too_large" | "source_text_too_many_lines" | "target_text_too_large" | "target_text_too_many_lines" | "text_not_utf8_encodable" | null;
+};
+
+/** One page of the sheets with text differences; ``next_offset`` is null on the last. */
+export type SheetDiffPage = {
+  items: Array<SheetDiff>;
+  limit: number;
+  next_offset: number | null;
+  offset: number;
+  total: number;
+};
+
+/** One sheet of either version and its proposed counterpart, if any. */
+export type SheetPairing = {
+  pairing_basis: "exact_text" | "similar_text" | null;
+  shared_line_count: number | null;
+  similarity_permille: number | null;
+  source_page_number: number | null;
+  status: "unchanged" | "changed" | "removed" | "added";
+  suggestion_sha256: Sha256 | null;
+  target_page_number: number | null;
+  textless: boolean;
+};
+
 /** A canonical stage identity from contracts/analysis/v1/stage-registry.json. PC-01 schedules the first four. */
 export const STAGE_ID_VALUES = [
   'source_preparation',
@@ -1434,6 +1535,23 @@ export type VersionClassification = {
   project_stage: ProjectStage;
   section_code: ProjectSection;
   version_uid: VersionUid;
+};
+
+/** Two versions of one set compared, or the explicit reason they are not. */
+export type VersionComparison = {
+  comparison_sha256: Sha256 | null;
+  document_uid: DocumentUid;
+  findings: FindingComparison | null;
+  mode: "version" | "stage";
+  outcome: "compared" | "refused";
+  project_uid: ProjectUid;
+  refusal: ComparisonRefusal | null;
+  sheet_diffs: SheetDiffPage | null;
+  sheets: Array<SheetPairing>;
+  source: ComparedVersion | null;
+  source_version_uid: VersionUid;
+  target: ComparedVersion | null;
+  target_version_uid: VersionUid;
 };
 
 export type VersionUid = string;

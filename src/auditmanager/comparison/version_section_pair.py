@@ -4,6 +4,12 @@ The caller must read both classifications from authoritative version-bound
 state with the ordered pair in one consistent transaction. These supplied
 values do not prove persistence, expert authorization or catalogue membership.
 P-versus-R comparison belongs to a later, separate W62 workflow.
+
+:func:`prepare_stage_section_version_pair` is that W62 guard's code slice
+(`W59-VERSION-COMPARE-01`, ``mode=stage``): the same exact set and order, the
+source classified ``P`` and the target ``R``, and the same confirmed section.
+It never pairs by file name, date or project name, and a cross-document
+"same object" comparison stays unsupported (no ``ObjectUid`` exists).
 """
 
 from __future__ import annotations
@@ -130,9 +136,55 @@ def prepare_same_section_version_pair(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class StageSectionVersionPair:
+    """Exact coordinates of a design-to-working (P to R) comparison of one set."""
+
+    project_uid: str
+    document_uid: str
+    source_version_uid: str
+    target_version_uid: str
+    source_stage: Literal["P"]
+    target_stage: Literal["R"]
+    confirmed_section_code: str
+
+
+def prepare_stage_section_version_pair(
+    *,
+    version_pair: OrderedVersionPair,
+    source: SuppliedVersionClassification,
+    target: SuppliedVersionClassification,
+) -> StageSectionVersionPair:
+    """Require an explicit ``P`` source, an explicit ``R`` target and one section.
+
+    Both classifications are checked exactly as for an ordinary comparison first, so an
+    unclassified side is refused as unclassified, not as a wrong stage. Any other stage
+    pair -- P/P, R/R or R before P -- is ``stage_pair_invalid``; it is never relabelled
+    as an ordinary version comparison.
+    """
+    _check_pair(version_pair)
+    _check_classification(source, expected_uid=version_pair.source.version_uid, label="source")
+    _check_classification(target, expected_uid=version_pair.target.version_uid, label="target")
+    if source.project_stage != "P" or target.project_stage != "R":
+        raise VersionSectionPairRefused("stage_pair_invalid")
+    if source.confirmed_section_code != target.confirmed_section_code:
+        raise VersionSectionPairRefused("confirmed_section_mismatch")
+    return StageSectionVersionPair(
+        project_uid=version_pair.project_uid,
+        document_uid=version_pair.document_uid,
+        source_version_uid=version_pair.source.version_uid,
+        target_version_uid=version_pair.target.version_uid,
+        source_stage="P",
+        target_stage="R",
+        confirmed_section_code=cast(str, source.confirmed_section_code),
+    )
+
+
 __all__ = [
     "SameSectionVersionPair",
+    "StageSectionVersionPair",
     "SuppliedVersionClassification",
     "VersionSectionPairRefused",
     "prepare_same_section_version_pair",
+    "prepare_stage_section_version_pair",
 ]

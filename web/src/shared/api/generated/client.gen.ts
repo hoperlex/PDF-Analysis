@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 3e1f070a6db0dab87bd358112a3e66ebe6cc2bd44656c3af5152ff1e46a172ac
+ *   sha256 d7704f0a78d297702ac3373d8c33bb20b9cd5f690ff57be6659329ecbb8a2a5c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -30,6 +30,8 @@ import type {
   ChangePasswordResult,
   ClassifyDocumentVersionInput,
   ClassifyDocumentVersionResult,
+  CompareDocumentVersionsInput,
+  CompareDocumentVersionsResult,
   CreateProjectInput,
   CreateProjectResult,
   ExportRunCsvInput,
@@ -205,6 +207,18 @@ export function classifyDocumentVersion(
   options?: RequestOptions,
 ): Promise<ApiResponse<ClassifyDocumentVersionResult>> {
   return request<ClassifyDocumentVersionResult>(OPERATIONS.classifyDocumentVersion, input, options);
+}
+
+/**
+ * Compare Document Versions
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison`.
+ */
+export function compareDocumentVersions(
+  input: CompareDocumentVersionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CompareDocumentVersionsResult>> {
+  return request<CompareDocumentVersionsResult>(OPERATIONS.compareDocumentVersions, input, options);
 }
 
 /**
@@ -830,6 +844,7 @@ export const apiClient = {
   cancelRun,
   changePassword,
   classifyDocumentVersion,
+  compareDocumentVersions,
   createProject,
   exportRunCsv,
   getDashboardSummary,

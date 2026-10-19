@@ -195,6 +195,13 @@ GUARDED = (
         "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
         "/versions/ver_01M2545JSD15ETSNNV904X991J/section-review",
     ),
+    # `W59-VERSION-COMPARE-01`. Two versions of one set compared, addressed the same way.
+    (
+        "compareDocumentVersions", "GET",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
+        "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
+    ),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the

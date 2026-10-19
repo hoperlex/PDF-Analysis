@@ -67,6 +67,7 @@ __all__ = [
     "RunPort",
     "ExecutionPort",
     "SectionPort",
+    "ComparisonPort",
     "UploadedDocument",
 ]
 
@@ -842,3 +843,29 @@ class NormContentPort(Protocol):
         self, *, norm_document_id: str, byte_range: ByteRange | None
     ) -> StreamedContent:
         """The document's source PDF, whole or one window, opened before returning."""
+
+
+@runtime_checkable
+class ComparisonPort(Protocol):
+    """``compareDocumentVersions``. `W59-VERSION-COMPARE-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    The answer is always a ``VersionComparison``: a pair the comparison rule does not admit
+    is ``outcome: refused`` with one closed reason, never an error envelope and never a
+    relabelled pair. Nothing behind this port writes.
+    """
+
+    def compare_versions(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        mode: str,
+        diff_offset: int,
+        diff_limit: int,
+    ) -> models.VersionComparison:
+        """The comparison of the two named versions, or why they are not compared."""
