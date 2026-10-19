@@ -146,3 +146,25 @@ Documentation only; revert the five files. No feature flag or data rollback.
 - known limits: W56a gateway remains blocked; W58–W63 need detailed freezes;
 - integration notes: full gates occur after all beta code on a separate exact
   candidate; manual acceptance and `origin/main` are outside this task.
+
+## Addendum 2026-10-19 — vertical slices, batched evidence, host condition
+
+Owner instruction of 2026-10-19. The sections above are the historical task
+and are not rewritten; this addendum is the only place where its scope grows.
+
+- change: `CODE-FIRST-TO-BETA.md` gains §2.1 (vertical slices, one freeze and
+  one integration record per slice or per group of slices of one block,
+  measured effect recorded at block close) and §2.2 (host capacity as the
+  condition for parallel lanes, measure A13); the freeze protocol of
+  `CODE-FIRST-SCOPE-W58-W63.md` gains item 5 pointing at them;
+- base: `origin/dev` `f942ca1c`; no frozen contract, migration head, API
+  surface or error catalogue is read or changed;
+- allowed paths of the addendum: this file,
+  `docs/program/dispatch/CODE-FIRST-TO-BETA.md` and
+  `docs/program/dispatch/CODE-FIRST-SCOPE-W58-W63.md` (freeze protocol only);
+- forbidden hotspots and non-goals: unchanged from the sections above; `R-135`,
+  B1–B12 and the scope table of the map are not modified;
+- required tests: `git diff --check`; changed-path inspection (the three paths
+  above only); `tests/contract/api_v1/test_surface_counts_in_prose.py` and
+  `tests/contract/api_v1/test_doc_prose_facts.py` (static, no containers);
+- rollback: revert the addendum commit; documentation only.
