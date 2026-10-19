@@ -121,8 +121,9 @@ where `.venv` links to the `w55b-main-candidate` interpreter.
 | Paths | Result |
 | --- | --- |
 | `tests/unit/norms tests/integration/norms/catalogue` | 71 passed |
-| `tests/unit/exports tests/integration/exports/test_xlsx_run_export.py` | 31 passed (the DB+S3 case drives a real recorded v1 run) |
-| `tests/integration/exports tests/unit/norms tests/unit/exports tests/integration/norms/catalogue tests/integration/norms/search tests/contract/architecture` | 410 passed, 1 skipped, **1 failed**: `test_v2_csv_severity.py::test_csv_uses_canonical_proposal_and_current_expert_decision`. This fails identically on the untouched base `849dddd4`, checked with `git archive` into the scratchpad: the test `UPDATE`s an immutable `finding_observation` row. Pre-existing, not touched here. |
+| `tests/unit/exports tests/integration/exports/test_xlsx_run_export.py` | 32 passed. The DB+S3 cases drive a real recorded v1 run and a merged, v2-shaped finding over it: a canonical row followed by «также найдено» rows. |
+| `tests/integration/exports tests/unit/norms tests/unit/exports tests/integration/norms/catalogue tests/integration/norms/search tests/contract/architecture` (first commit) | 410 passed, 1 skipped, 1 failed: `test_v2_csv_severity.py::test_csv_uses_canonical_proposal_and_current_expert_decision`. It fails the same way on the untouched base `849dddd4` (checked with `git archive` into the scratchpad), because it `UPDATE`s a `finding_observation` row and the 0002 immutability trigger has always refused that. |
+| `tests/integration/exports/test_v2_csv_severity.py` after the fix (integrator approval) | 2 passed. The canonical and member observations are now **new rows** copied from the published one, which is what the trigger's hint says to do. The test now also proves that the published observation, once it is no longer canonical, leaves the CSV. |
 | mutation: turn off the v1 canonical rule | the DB+S3 case fails with `xlsx_read_canonical_missing`, so the case exercises the rule |
 
 ## Phase B

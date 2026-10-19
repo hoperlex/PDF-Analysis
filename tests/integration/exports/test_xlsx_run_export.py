@@ -216,3 +216,80 @@ def test_unknown_and_unfinished_runs_are_refused_as_the_csv_refuses_them(
         export_run_csv(session, run_id)
     assert csv_caught.value.code is caught.value.code
     assert dict(csv_caught.value.detail_fields) == dict(caught.value.detail_fields)
+
+
+def test_a_merged_finding_exports_its_canonical_row_and_a_member_row(
+    session, seeded, blob_store, recorded_adapter, provider_config, new_key
+) -> None:
+    """A v2-shaped finding over the same real run: a canonical observation that proposes a
+    severity and a merged member, written as new rows (``finding_observation`` refuses
+    UPDATE) and named by the finding, as ``test_v2_csv_severity.py`` writes them. The
+    workbook shows the canonical text and proposal, then «также найдено» with the member's
+    location and text, both coloured by the canonical severity."""
+    from auditmanager.findings import published_findings
+    from auditmanager.shared.identity import FindingObservationId
+
+    run_id = _run(session, seeded, blob_store, recorded_adapter, provider_config,
+                  new_key("w57b-xlsx-merged"))
+    _add_companion(session, blob_store, seeded.version_uid)
+    finding = sorted(
+        published_findings(session, run_id), key=lambda item: str(item.finding_uid)
+    )[0]
+    original = str(finding.finding_observation_id)
+    canonical = str(FindingObservationId.new())
+    member = str(FindingObservationId.new())
+    for observation, text_value, severity in (
+        (canonical, "Каноническое замечание", "economic"),
+        (member, "Замечание участника", "critical"),
+    ):
+        session.execute(text(
+            "INSERT INTO finding_observation (finding_observation_id, run_id, finding_uid, "
+            "stage_id, category, finding_text, recommendation_text, grounded, "
+            "analysis_profile_id, prompt_bundle_id, provider_mode, proposed_severity) "
+            "SELECT :observation, run_id, finding_uid, stage_id, category, :text_value, "
+            "recommendation_text, TRUE, analysis_profile_id, prompt_bundle_id, provider_mode, "
+            ":severity FROM finding_observation WHERE finding_observation_id = :original"
+        ), {"observation": observation, "text_value": text_value, "severity": severity,
+            "original": original})
+        session.execute(text(
+            "INSERT INTO finding_evidence (finding_observation_id, evidence_ordinal, "
+            "page_number, quote, char_start, char_end) "
+            "SELECT :observation, 0, page_number, quote, char_start, char_end "
+            "FROM finding_evidence WHERE finding_observation_id = :original "
+            "ORDER BY evidence_ordinal LIMIT 1"
+        ), {"observation": observation, "original": original})
+    session.execute(text(
+        "UPDATE finding SET canonical_observation_id = :canonical WHERE finding_uid = :finding"
+    ), {"canonical": canonical, "finding": str(finding.finding_uid)})
+    original_pages = session.execute(text(
+        "SELECT page_number FROM finding_evidence WHERE finding_observation_id = :original "
+        "ORDER BY evidence_ordinal"
+    ), {"original": original}).scalars().all()
+    original_text = session.execute(text(
+        "SELECT finding_text FROM finding_observation WHERE finding_observation_id = :original"
+    ), {"original": original}).scalar_one()
+
+    export = _export(session, blob_store, run_id)
+    with zipfile.ZipFile(io.BytesIO(export.content)) as archive:
+        sheet = ET.fromstring(archive.read("xl/worksheets/sheet2.xml"))
+    styles = {cell.attrib["r"]: cell.attrib["s"] for cell in sheet.iter(f"{MAIN}c")}
+    findings = _cells(export.content, "xl/worksheets/sheet2.xml")
+    # The finding sorts first by identity. Its canonical row comes first, then one
+    # «также найдено» row per other observation in identity order: the published v1
+    # observation (now a member, the oldest identity) and the new member.
+    assert (findings["A2"], findings["D2"], findings["G2"]) == (
+        "1", "Каноническое замечание", "economic"
+    )
+    assert (findings["A3"], findings["B3"], findings["D3"], findings["K3"]) == (
+        "", "\n".join(str(100 + page) for page in original_pages), "также найдено",
+        original_text,
+    )
+    assert (findings["A4"], findings["B4"], findings["D4"], findings["K4"]) == (
+        "", str(100 + original_pages[0]), "также найдено", "Замечание участника"
+    )
+    assert findings["A5"] == "2"
+    economic = styles["A2"]
+    assert economic != "0" and styles["D3"] == styles["D4"] == economic
+    # The CSV exports the canonical observation only, as before.
+    rows = export_run_csv(session, run_id).content.decode("utf-8-sig")
+    assert canonical in rows and member not in rows and original not in rows
