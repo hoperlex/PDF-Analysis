@@ -1,0 +1,82 @@
+/*
+ * The version comparison's layout layer (`W59-VERSION-COMPARE-01`).
+ *
+ * Layout only, on purpose: no rule here sets a colour, so every colour on this screen comes
+ * from the element and class rules of `globals.css` (tables, badges, `ins`/`del`, buttons)
+ * and both palettes reach it unchanged. A colour-bearing rule added later joins the contrast
+ * census through its `import.meta.glob`, which then needs a rendered screen reaching it.
+ */
+
+.comparison {
+  display: block;
+  min-width: 0;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--am-gap);
+  margin-bottom: var(--am-gap);
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  font-size: var(--am-text-sm);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}
+
+.pair,
+.summary,
+.note {
+  margin: 0 0 var(--am-gap);
+  overflow-wrap: anywhere;
+}
+
+.refusal {
+  margin: var(--am-gap) 0;
+}
+
+.scroller {
+  overflow-x: auto;
+}
+
+.diff {
+  margin: var(--am-gap) 0;
+  min-width: 0;
+}
+
+.hunks {
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-sm);
+  overflow-x: auto;
+}
+
+.line {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.lineNumber {
+  display: inline-block;
+  min-width: 4ch;
+  margin-right: var(--am-gap-xs);
+}
+
+.equal {
+  margin: var(--am-gap-xs) 0;
+  font-style: italic;
+}
+
+.category,
+.pages {
+  font-size: var(--am-text-sm);
+}

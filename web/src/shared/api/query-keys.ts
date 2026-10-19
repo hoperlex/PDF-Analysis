@@ -201,6 +201,27 @@ export const queryKeys = {
      * so re-reading the review never refetches the manifest, the text-line index or the PDF.
      */
     sectionReview: (versionUid: VersionUid) => ['versions', 'section-review', versionUid] as const,
+    /**
+     * `compareDocumentVersions` for one ordered pair (`W59-VERSION-COMPARE-01`): the older
+     * (source) and newer (target) version of one set, the comparison mode and one page of
+     * line differences. Under `versions`, because a comparison is computed from two
+     * versions and their classifications and nothing else is its parent; classifying either
+     * version or publishing a run changes the answer, and `versions.all()` reaches it.
+     */
+    comparison: (
+      sourceVersionUid: VersionUid,
+      targetVersionUid: VersionUid,
+      mode: 'version' | 'stage',
+      diffOffset: number,
+      diffLimit: number,
+    ) =>
+      [
+        'versions',
+        'comparison',
+        sourceVersionUid,
+        targetVersionUid,
+        { mode, diffOffset, diffLimit },
+      ] as const,
   },
   runs: {
     all: () => ['runs'] as const,

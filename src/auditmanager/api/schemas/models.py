@@ -169,6 +169,16 @@ __all__ = [
     "Verdict",
     "VersionBlockIndex",
     "VersionClassification",
+    "ComparedVersion",
+    "ComparisonRefusal",
+    "DiffHunk",
+    "FindingComparison",
+    "FindingMatchProposal",
+    "FindingRef",
+    "SheetDiff",
+    "SheetDiffPage",
+    "SheetPairing",
+    "VersionComparison",
     "VersionUid",
     "optional_property",
 ]
@@ -1594,3 +1604,160 @@ class ApproveRegistrationRequest(_Object):
 
 class RejectRegistrationRequest(_Object):
     reason: Annotated[str, Field(min_length=1, max_length=256)]
+
+
+# --- version comparison (`W59-VERSION-COMPARE-01`) -----------------------------------------
+#
+# The served read model of ``auditmanager.comparison``. Every pairing and every finding label
+# is a proposal; nothing here is an approved SheetLink, a finding match or a decision. The
+# closed vocabularies are ``Literal`` enums so they stay inline and the schema count small.
+
+_PageNumber = Annotated[int, Field(ge=1, le=500)]
+_LineIndex = Annotated[int, Field(ge=0, le=1000)]
+
+
+class ComparedVersion(_Object):
+    """One side of a comparison, as far as it was established before any refusal."""
+
+    version_uid: VersionUid
+    version_ordinal: Annotated[int, Field(ge=1)]
+    page_count: _PageNumber
+    sha256: Sha256
+    project_stage: ProjectStage | None
+    section_code: ProjectSection | None
+    run_id: RunId | None
+    text_layer_sha256: Sha256 | None
+
+
+class ComparisonRefusal(_Object):
+    """Why two versions are not compared; ``side`` when the reason is one side's."""
+
+    reason: Literal[
+        "same_version",
+        "version_not_found",
+        "different_set",
+        "foreign_project",
+        "version_not_published",
+        "version_order_invalid",
+        "stage_unclassified",
+        "section_unconfirmed",
+        "project_stage_mismatch",
+        "confirmed_section_mismatch",
+        "stage_pair_invalid",
+        "analysis_missing",
+        "run_not_of_version",
+        "run_not_published",
+        "text_unavailable",
+        "text_too_large",
+    ]
+    side: Literal["source", "target"] | None
+
+
+class SheetPairing(_Object):
+    """One sheet of either version and its proposed counterpart, if any."""
+
+    status: Literal["unchanged", "changed", "removed", "added"]
+    source_page_number: _PageNumber | None
+    target_page_number: _PageNumber | None
+    pairing_basis: Literal["exact_text", "similar_text"] | None
+    similarity_permille: Annotated[int, Field(ge=0, le=1000)] | None
+    shared_line_count: Annotated[int, Field(ge=0)] | None
+    suggestion_sha256: Sha256 | None
+    #: A present page whose text is blank: it cannot be paired by text.
+    textless: bool
+
+
+class DiffHunk(_Object):
+    """One span of a raw line diff; 0-based line indices, end exclusive. An ``equal`` span
+    carries its ranges and no lines."""
+
+    tag: Literal["equal", "insert", "delete", "replace"]
+    source_start: _LineIndex
+    source_end: _LineIndex
+    target_start: _LineIndex
+    target_end: _LineIndex
+    source_lines: Annotated[list[str], Field(max_length=1000)]
+    target_lines: Annotated[list[str], Field(max_length=1000)]
+
+
+class SheetDiff(_Object):
+    status: Literal["changed", "removed", "added"]
+    source_page_number: _PageNumber | None
+    target_page_number: _PageNumber | None
+    outcome: Literal["computed", "too_large"]
+    too_large_reason: Literal[
+        "source_text_too_large",
+        "source_text_too_many_lines",
+        "target_text_too_large",
+        "target_text_too_many_lines",
+        "text_not_utf8_encodable",
+    ] | None
+    source_line_count: _LineIndex | None
+    target_line_count: _LineIndex | None
+    added_line_count: _LineIndex | None
+    removed_line_count: _LineIndex | None
+    hunks: list[DiffHunk]
+    #: Binds the complete raw diff of the sheet, equal lines included.
+    evidence_sha256: Sha256 | None
+
+
+class SheetDiffPage(_Object):
+    """One page of the sheets with text differences; ``next_offset`` is null on the last."""
+
+    offset: Annotated[int, Field(ge=0)]
+    limit: Annotated[int, Field(ge=1, le=25)]
+    total: Annotated[int, Field(ge=0, le=1000)]
+    next_offset: Annotated[int, Field(ge=1)] | None
+    items: Annotated[list[SheetDiff], Field(max_length=25)]
+
+
+class FindingRef(_Object):
+    finding_uid: FindingUid
+    category: FindingCategory
+    finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
+    page_numbers: Annotated[list[Annotated[int, Field(ge=1)]], Field(min_length=1)]
+
+
+class FindingMatchProposal(_Object):
+    """A proposed label for a finding of either run; never a decision or a carryover."""
+
+    kind: Literal["unchanged", "probably_fixed", "undetermined", "new"]
+    basis: Literal[
+        "exact_issue_and_quotes",
+        "quotes_absent_from_paired_sheets",
+        "quote_still_on_paired_sheet",
+        "evidence_sheet_unpaired",
+        "evidence_over_limit",
+        "no_exact_source_match",
+    ]
+    source_finding: FindingRef | None
+    target_finding: FindingRef | None
+    proposal_sha256: Sha256 | None
+
+
+class FindingComparison(_Object):
+    status: Literal["compared", "unavailable"]
+    unavailable_reason: Literal["findings_over_limit"] | None
+    source_finding_count: Annotated[int, Field(ge=0)]
+    target_finding_count: Annotated[int, Field(ge=0)]
+    proposals: Annotated[list[FindingMatchProposal], Field(max_length=400)]
+
+
+class VersionComparison(_Object):
+    """Two versions of one set compared, or the explicit reason they are not."""
+
+    project_uid: ProjectUid
+    document_uid: DocumentUid
+    source_version_uid: VersionUid
+    target_version_uid: VersionUid
+    #: ``version``: the same stage and section on both. ``stage``: a ``P`` source and an
+    #: ``R`` target of the same section (the W62 design-to-working comparison).
+    mode: Literal["version", "stage"]
+    outcome: Literal["compared", "refused"]
+    refusal: ComparisonRefusal | None
+    source: ComparedVersion | None
+    target: ComparedVersion | None
+    comparison_sha256: Sha256 | None
+    sheets: Annotated[list[SheetPairing], Field(max_length=1000)]
+    sheet_diffs: SheetDiffPage | None
+    findings: FindingComparison | None

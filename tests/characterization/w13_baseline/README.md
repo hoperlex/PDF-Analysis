@@ -8,6 +8,96 @@ four-times-certified surface. This directory is what that rewrite has to be *wro
 
 **After the rewrite, the FastAPI implementation must reproduce these bytes exactly.**
 
+## Amended 2026-10-20 by `W59-SEAL-FOLLOWUP-01`, after `W59-SECTION-SEAL-01` (`R-139`)
+
+**Thirty-seven records: one case added.** Since `bd08e03c` (`W59-SECTION-SEAL-01`),
+`startRun` and `reauditRun` refuse a version that no expert has classified, with `422
+required_norm_unavailable` and `details.reference_kind: version_classification`, and
+there is no AR fallback. So the journey could no longer get past case 03. Measured on the
+lane at `77aa55bd`, the session fixture died at case 03 (`KeyError: 'run_id'`) and 50 tests
+errored.
+
+`02b-classifyDocumentVersion.success` is the added case: `PUT
+/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification` with
+`{"project_stage": "P", "section_code": "AR"}`, sent by the expert account the journey already
+presents. It is `startRun`'s third prerequisite, so it runs directly before case 03. Under
+`W18-SEAL`'s rule, adding an operation adds a case and a record and changes neither of the
+others, so the record carries no exception block. Three supporting changes:
+
+- `SIXTEEN_OPERATIONS` (was `FIFTEEN_OPERATIONS`) names `classifyDocumentVersion`.
+- `confirmed_at` is added to `TIMESTAMP_FIELDS` by name.
+- `{{user_uid}}` is the account the journey provisions and presents, read from its own row
+  (`journey.presented_account_uid`). That makes it a value the journey supplied, so it
+  qualifies under the first token rule, and it is tokenised only after the response is
+  asserted to name exactly that account.
+
+**How record 02b was produced: not by `capture.py`.** `capture.py` rewrites every record.
+On the current tree that would turn record 12 back into the 19-column CSV that `W56A`
+projects in memory against a digest. It would also replace every request's `Authorization`
+value with a freshly minted credential instead of the literal `Bearer
+w13-baseline-static-token` that `test_the_baseline_records_the_authenticated_era` requires.
+So the journey was driven once into a scratch directory, record 02b alone was taken, and its
+`Authorization` header was written in the corpus's literal form, like every other record's.
+Nothing else in that record was edited.
+
+**The vacuity measurement.** The same scratch run was compared against the 36 committed
+records using the suite's own comparison (`journey.differences`, with record 12 going through
+its CSV projection). 28 reproduced byte for byte. These 8 did not:
+
+| records | the difference | cause | treatment |
+|---|---|---|---|
+| 13, 32, 33 | the version body now ends with a `classification` property, after `display_title` | the classification case 02b made: every read that returns `DocumentVersion` projects it (`W59-SECTION-SEAL-01`) | moved under `D-181`, asserted by digest (below) |
+| 04, 05, 06, 07, 34 | `text_analysis` `stage_version` `"1.0.0"` → `"1.1.0"`, one value in each body | **not the classification**: `56efead4` (`W57A-SEAL-01B`, 2026-10-16) moved the v1 text stage constant to `1.1.0`, and no run of this corpus reached a finished run after it | first left red as finding F-1, then moved at the integrator's instruction, asserted by digest (below) |
+
+The key-by-key comparison of the whole files showed two more differences, neither under
+`response`. Every record's request `Authorization` value differs (minted against literal, as
+explained above). Records 10 and 11 carry `exception` blocks that `journey.py` does not pass:
+`W49-SEAL-01` added them to the record files by hand. Neither difference was changed here.
+
+### Records 13, 32 and 33 moved, under `D-181`
+
+These three moved in a separate commit from the added case, so an integrator can take the
+case without the move. Each now carries an exception block (`journey.EXCEPTION_W59SEAL`):
+debt `D-181`, ruling `R-139`, decided by `bd08e03c`. `PERMITTED_EXCEPTIONS` has twelve
+entries. What moved is one appended property per body,
+
+    , "classification": {"version_uid": "{{version_uid}}", "project_stage": "P", "section_code": "AR", "confirmed_by_user_uid": "{{user_uid}}", "confirmed_at": "{{ts_6}}"}
+
+after `display_title`, plus the two tokens it introduces (`{{ts_6}}`, `{{user_uid}}`) and the
+body `length`. Status, headers, every other body byte, every existing token's reason and the
+whole request side are the committed ones. The records were built by keeping each committed
+file and replacing only `exception`, `response` and `tokens` with the scratch capture's, after
+asserting all of that. `test_the_three_version_records_moved_by_the_classification_and_nothing_else`
+then removes the property and requires each body's SHA-256 to equal its digest at `77aa55bd`,
+the same method `W49-SEAL-01` used for records 10 and 11.
+
+At that commit, records 04, 05, 06, 07 and 34 were **not** moved. Their `stage_version` drift is
+unrelated to the classification, so it was reported to the integrator as finding F-1.
+
+### Records 04, 05, 06, 07 and 34 moved, under `56efead4` (finding F-1)
+
+After merging the branch, the integrator told this lane to move the five records. `56efead4`
+(`W57A-SEAL-01B`, 2026-10-16) resealed `contracts/analysis/v1/stage-registry.json` with
+`text_analysis` at `1.1.0`, and the active v1 text stage constant moved with it. Each record
+renders one finished run, so each body moved by one value:
+
+    "stage_id": "text_analysis", "status": "succeeded", "stage_version": "1.0.0"  ->  "1.1.0"
+
+The other three stages keep `1.0.0`. Status, headers, every other body byte, the body
+`length`, the tokens and the request side are the committed ones. The method was the same as
+for records 13, 32 and 33: a scratch capture, and only `exception` and `response` replaced
+after asserting all of that. `test_the_five_run_records_moved_by_the_text_stage_version_and_nothing_else`
+restores `1.0.0` and requires each body's SHA-256 at `77aa55bd`. It also requires the other
+three stages to still say `1.0.0`.
+
+Records 04–07 now carry `EXCEPTION_W57ASEAL_RUN_STATUS`: `EXCEPTION_W18SEAL`'s debts, ruling
+and text unchanged, plus this third move, with `decided_by` set to `56efead4`. Record 34
+carries its first block, `EXCEPTION_W57ASEAL_LIST_RUNS`. **The debt named is `D-181`**,
+because it is the register row whose resolution ("update those suites") this performs. No
+row names the drift itself, and this lane may not write the register. `W57A-SEAL-01B`'s task
+file cites no owner ruling. `PERMITTED_EXCEPTIONS` has thirteen entries. Record 03, an
+accepted run with no stages, does not move. With this change every record reproduces.
+
 ## Amended 2026-09-18 by `W18-SEAL`, under owner ruling `R-5`
 
 **Thirty-six records, not thirty-three, and five of them carry a second debt.**

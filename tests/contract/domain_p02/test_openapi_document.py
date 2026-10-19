@@ -124,6 +124,9 @@ REQUIRED_OPERATIONS = {
     # fifteen-choice review, addressed through the version's document and project.
     "classifyDocumentVersion",
     "getVersionSectionReview",
+    # `W59-VERSION-COMPARE-01`. Two versions of one set compared, read-only; a refusal is
+    # an answer with a closed reason, not an envelope.
+    "compareDocumentVersions",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`

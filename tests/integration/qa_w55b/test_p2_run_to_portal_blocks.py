@@ -1,6 +1,8 @@
 """Probe 2 -- upload, run, then «Блоки»'s data over HTTP (`W55B-QA-01`).
 
-The bundle goes in through ``uploadDocument`` (INGEST), the run through ``startRun`` and
+The bundle goes in through ``uploadDocument`` (INGEST), the version is classified through
+``classifyDocumentVersion`` (stage ``P``, section ``AR``; `W59-SECTION-SEAL-01` refuses to
+run an unclassified one), the run goes through ``startRun`` and
 the served application's own in-process dispatcher in ``recorded`` mode (BUDGET's check,
 RECOGNISED's ``source_preparation``, GEOMETRY's ``page_geometry_extraction``), and the
 answer comes back through ``listVersionPortalBlocks`` and ``streamVersionPortalBlockCrop``.
@@ -23,6 +25,7 @@ from w55b_qa_support import (
     MIN_LONG_SIDE_PX,
     bundle_manifest,
     call,
+    classify,
     committed,
     create_project,
     manifest_entry,
@@ -51,9 +54,13 @@ FLAG_OF_KIND = {
 
 
 def _uploaded(token: str, archive: bytes, name: str) -> str:
+    """Upload ``archive`` into a new project and classify the version (stage ``P``,
+    section ``AR``): every probe here runs what it uploads, and since
+    `W59-SECTION-SEAL-01` an unclassified version cannot be run."""
     project = create_project(token, f"QA P2 {name}")
     answer = upload(project, archive, token)
     assert answer.status == 201, answer
+    classify(answer.json(), token)
     return str(answer.json()["version_uid"])
 
 
