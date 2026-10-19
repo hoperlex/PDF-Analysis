@@ -1,4 +1,4 @@
-"""The fifty-eight operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The fifty-nine operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the seventeen router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -195,7 +195,7 @@ def build_router(
     sections: SectionPort | None = None,
     comparisons: ComparisonPort | None = None,
 ) -> Router:
-    """Assemble the fifty-eight operations, from the seventeen router modules -- ``me``,
+    """Assemble the fifty-nine operations, from the seventeen router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s and ``comparison`` `W59-VERSION-COMPARE-01`'s.
 

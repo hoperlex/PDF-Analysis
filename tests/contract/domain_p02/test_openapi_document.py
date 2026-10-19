@@ -127,6 +127,9 @@ REQUIRED_OPERATIONS = {
     # `W59-VERSION-COMPARE-01`. Two versions of one set compared, read-only; a refusal is
     # an answer with a closed reason, not an envelope.
     "compareDocumentVersions",
+    # `W59-VERSION-UPLOAD-01`. The next version of an existing set: without it every
+    # upload starts a new document and a further version is unreachable from the product.
+    "uploadDocumentVersion",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -148,6 +151,8 @@ OPERATIONS_WITH_NO_CREDENTIAL_TO_REFUSE = {"submitRegistration"}
 WRITE_OPERATIONS = {
     "createProject",
     "uploadDocument",
+    # `W59-VERSION-UPLOAD-01`: publishes a version, keyed exactly as `uploadDocument`.
+    "uploadDocumentVersion",
     "startRun",
     "appendDecision",
     "approveRegistration",
