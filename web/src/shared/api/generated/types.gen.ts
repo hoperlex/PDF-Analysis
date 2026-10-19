@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388
+ *   sha256 a79d07c9da9f3225fbd0bea49e7cdca30f0c9b6ca9996daea1c8c0608dd722cb
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388';
+export const CONTRACT_DIGEST = 'a79d07c9da9f3225fbd0bea49e7cdca30f0c9b6ca9996daea1c8c0608dd722cb';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -29,6 +29,7 @@ export const SCHEMA_NAMES = [
   'ApproveRegistrationRequest',
   'BlockGeometry',
   'ChangePasswordRequest',
+  'ClassifyDocumentVersionRequest',
   'CorrelationId',
   'CostBasis',
   'CreateProjectRequest',
@@ -107,6 +108,7 @@ export const SCHEMA_NAMES = [
   'ProjectDocumentCount',
   'ProjectPage',
   'ProjectSection',
+  'ProjectStage',
   'ProjectUid',
   'PromptBundleId',
   'ProviderMode',
@@ -130,6 +132,9 @@ export const SCHEMA_NAMES = [
   'RunStatus',
   'RunStatusPage',
   'SectionDocumentCount',
+  'SectionReview',
+  'SectionReviewOption',
+  'SectionSuggestion',
   'SetCurrentNormSnapshotRequest',
   'SetExecutionPausedRequest',
   'SetJobPriorityRequest',
@@ -149,6 +154,7 @@ export const SCHEMA_NAMES = [
   'Verdict',
   'VerdictCount',
   'VersionBlockIndex',
+  'VersionClassification',
   'VersionUid',
   'WorkerId',
   'WorkerState',
@@ -231,6 +237,12 @@ export type ChangePasswordRequest = {
   current_password: string;
   /** The password the account will hold. The bounds are mechanical. The deployment enforces a password policy on this operation — a refusal is `validation_failed` and names the rule in `message` — and that policy is not declared here, because it is the deployment's and may differ between them. No history and no expiry are enforced. A value equal to `current_password` is `validation_failed`, because a change that changes nothing would report a password as changed when it was not. */
   new_password: string;
+};
+
+/** `W59-SECTION-SEAL-01`. An expert's explicit stage and section for one version. */
+export type ClassifyDocumentVersionRequest = {
+  project_stage: ProjectStage;
+  section_code: ProjectSection;
 };
 
 /** Not an entity identity. Never a foreign key and authorizes nothing. */
@@ -336,6 +348,8 @@ export const DOCUMENT_UID_PATTERN = "^doc_[0-9A-HJKMNP-TV-Z]{26}$";
 /** A published, immutable input state. There is no endpoint that modifies one. */
 export type DocumentVersion = {
   byte_size: number;
+  /** `W59-SECTION-SEAL-01`. The version's persisted, expert-confirmed project stage and section; absent while no expert has classified this version. Never inherited from another version, the document's `section`, a file name or a suggestion. */
+  classification?: VersionClassification;
   display_title?: string;
   document_uid: DocumentUid;
   input_manifest: Array<InputManifestEntry>;
@@ -343,7 +357,7 @@ export type DocumentVersion = {
   page_count: number;
   project_uid: ProjectUid;
   published_at: string;
-  /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
+  /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
   sha256: Sha256;
   /** The uploaded file name, for display. Never an identity. */
@@ -958,7 +972,7 @@ export type ProjectPage = {
   page: PageInfo;
 };
 
-/** Legacy's fourteen project sections (`D-56`, `R-40`). A document with no section is not a fifteenth member of this enum -- it is `UploadDocumentRequest.section` or `DocumentVersion.section` absent, which is a different, equally real fact. */
+/** The fifteen project sections: legacy's fourteen (`D-56`, `R-40`), kept by migration `0011_document_section` as the historical record, and `PS` (the explanatory note, distinct from `PB`, fire safety), added by `W59-SECTION-SEAL-01`. A document or version with no section is not a sixteenth member of this enum -- the property is absent, which is a different, equally real fact. */
 export const PROJECT_SECTION_VALUES = [
   'AR',
   'AI',
@@ -974,10 +988,26 @@ export const PROJECT_SECTION_VALUES = [
   'GP',
   'TX',
   'POS',
+  'PS',
 ] as const;
 
 /** ProjectSection - the closed value set above. */
 export type ProjectSection = (typeof PROJECT_SECTION_VALUES)[number];
+
+/**
+ * `W59-SECTION-SEAL-01`. The explicit project stage of one version.
+ *
+ * ``P`` (design documentation) or ``R`` (working documentation). Bound to the version, never
+ * inferred from a file name, and never the analysis ``stage_id``, which is why the property
+ * that carries it is named ``project_stage``.
+ */
+export const PROJECT_STAGE_VALUES = [
+  'P',
+  'R',
+] as const;
+
+/** ProjectStage - the closed value set above. */
+export type ProjectStage = (typeof PROJECT_STAGE_VALUES)[number];
 
 /** Opaque project identity. */
 export type ProjectUid = string;
@@ -1186,11 +1216,34 @@ export type RunStatusPage = {
   page: PageInfo;
 };
 
-/** How many published documents carry one project section (`R-40`, `D-56`). `section` absent means this row is the unclassified bucket, not a fifteenth section. Every one of the fourteen frozen codes is present even at `document_count: 0`. */
+/** How many published documents carry one project section (`R-40`, `D-56`). `section` absent means this row is the unclassified bucket, not a sixteenth section. Every one of the fifteen current codes is present even at `document_count: 0`. */
 export type SectionDocumentCount = {
   document_count: number;
-  /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
+  /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
+};
+
+/** All fifteen choices for one version, the current classification or ``null``. */
+export type SectionReview = {
+  classification: VersionClassification | null;
+  options: Array<SectionReviewOption>;
+  recognised_text_consulted: boolean;
+  version_uid: VersionUid;
+};
+
+export type SectionReviewOption = {
+  executable: boolean;
+  name: string;
+  section_code: ProjectSection;
+  suggestion: SectionSuggestion | null;
+};
+
+/** Display evidence for one section: never a confirmation and never a route. */
+export type SectionSuggestion = {
+  filename_patterns: Array<string>;
+  name_in_text: boolean;
+  score: number;
+  text_keywords: Array<string>;
 };
 
 /**
@@ -1328,7 +1381,7 @@ export type UploadDocumentRequest = {
   display_title?: string;
   /** One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. At most 250 MiB; the PDF at most 500 pages. */
   file: Blob;
-  /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
+  /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
 };
 
@@ -1366,6 +1419,20 @@ export type VersionBlockIndex = {
   status: "produced" | "not_produced";
   /** Binds this block index to the exact prepared text layer its spans index. Null exactly when `status` is `not_produced`. */
   text_layer_sha256: Sha256 | null;
+  version_uid: VersionUid;
+};
+
+/**
+ * `W59-SECTION-SEAL-01`. The persisted, expert-confirmed classification of one version.
+ *
+ * Written once (``0024_version_classification``); an exact repeat keeps the first
+ * confirmer and a different stage or section is refused, not overwritten.
+ */
+export type VersionClassification = {
+  confirmed_at: string;
+  confirmed_by_user_uid: UserUid;
+  project_stage: ProjectStage;
+  section_code: ProjectSection;
   version_uid: VersionUid;
 };
 

@@ -1,4 +1,4 @@
-"""The 123 ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
+"""The ``components.schemas`` of ``contracts/api/v1/openapi.json``, as Pydantic models.
 
 `T-1` makes FastAPI generate the served document, and `W13-CONF`'s conformance gate compares
 that document against the frozen contract. **The contract stays the authority**: every class
@@ -49,6 +49,7 @@ __all__ = [
     "ApproveRegistrationRequest",
     "AppendDecisionRequest",
     "AppendDecisionResponse",
+    "ClassifyDocumentVersionRequest",
     "BlockGeometry",
     "CorrelationId",
     "CostBasis",
@@ -81,6 +82,8 @@ __all__ = [
     "PersonNames",
     "Project",
     "ProjectPage",
+    "ProjectSection",
+    "ProjectStage",
     "ProjectUid",
     "PromptBundleId",
     "ProviderMode",
@@ -150,6 +153,9 @@ __all__ = [
     "PortalRecognisedText",
     "PortalBlock",
     "PortalBlockPage",
+    "SectionReview",
+    "SectionReviewOption",
+    "SectionSuggestion",
     "Sha256",
     "StageId",
     "StageState",
@@ -162,6 +168,7 @@ __all__ = [
     "UserUid",
     "Verdict",
     "VersionBlockIndex",
+    "VersionClassification",
     "VersionUid",
     "optional_property",
 ]
@@ -463,14 +470,16 @@ class DecisionEventType(str, enum.Enum):
 
 
 class ProjectSection(str, enum.Enum):
-    """Legacy's fourteen project sections (`D-56`, `R-40`).
+    """The fifteen project sections: legacy's fourteen (`D-56`, `R-40`) and ``PS``.
 
-    ``backend/app/pipeline/stages/prepare/task_builder.py:1362`` names these fourteen;
-    ``db/migrations/versions/20260925_0011_document_section.py`` restates them in the
-    ``document.section`` CHECK, and ``tests/contract/domain_p02/test_project_section_catalog.py``
-    is what keeps the two from disagreeing. A document with no section is not a fifteenth
-    member of this enum -- it is ``UploadDocumentRequest.section`` or
-    ``DocumentVersion.section`` absent, which is a different, equally real fact.
+    ``backend/app/pipeline/stages/prepare/task_builder.py:1362`` names the first fourteen;
+    ``db/migrations/versions/20260925_0011_document_section.py`` keeps them as the historical
+    ``document.section`` CHECK. `W59-SECTION-SEAL-01` adds ``PS`` (the explanatory note,
+    distinct from ``PB``, fire safety) and ``0024_version_classification`` widens that CHECK
+    and declares the version classification over the same fifteen;
+    ``tests/contract/domain_p02/test_project_section_catalog.py`` keeps the copies in step.
+    A document or version with no section is not a sixteenth member of this enum -- the
+    property is absent, which is a different, equally real fact.
     """
 
     AR = "AR"
@@ -487,6 +496,19 @@ class ProjectSection(str, enum.Enum):
     GP = "GP"
     TX = "TX"
     POS = "POS"
+    PS = "PS"
+
+
+class ProjectStage(str, enum.Enum):
+    """`W59-SECTION-SEAL-01`. The explicit project stage of one version.
+
+    ``P`` (design documentation) or ``R`` (working documentation). Bound to the version, never
+    inferred from a file name, and never the analysis ``stage_id``, which is why the property
+    that carries it is named ``project_stage``.
+    """
+
+    P = "P"
+    R = "R"
 
 
 class Role(str, enum.Enum):
@@ -563,7 +585,7 @@ class UploadDocumentRequest(_Object):
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
     #: `R-40`. Optional, like ``display_title`` beside it and for the same reason: a
-    #: caller that does not yet know which of the fourteen sections a document belongs
+    #: caller that does not yet know which of the fifteen sections a document belongs
     #: in gets a document with none, not a refused upload. See
     #: ``db/migrations/versions/20260925_0011_document_section.py``.
     section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -576,6 +598,55 @@ class InputManifestEntry(_Object):
     media_type: str
 
 
+class ClassifyDocumentVersionRequest(_Object):
+    """`W59-SECTION-SEAL-01`. An expert's explicit stage and section for one version."""
+
+    project_stage: ProjectStage
+    section_code: ProjectSection
+
+
+class VersionClassification(_Object):
+    """`W59-SECTION-SEAL-01`. The persisted, expert-confirmed classification of one version.
+
+    Written once (``0024_version_classification``); an exact repeat keeps the first
+    confirmer and a different stage or section is refused, not overwritten.
+    """
+
+    version_uid: VersionUid
+    project_stage: ProjectStage
+    section_code: ProjectSection
+    confirmed_by_user_uid: UserUid
+    confirmed_at: datetime
+
+
+class SectionSuggestion(_Object):
+    """Display evidence for one section: never a confirmation and never a route."""
+
+    score: Annotated[int, Field(ge=1)]
+    filename_patterns: list[Annotated[str, Field(min_length=1, max_length=64)]]
+    text_keywords: list[Annotated[str, Field(min_length=1, max_length=128)]]
+    name_in_text: bool
+
+
+class SectionReviewOption(_Object):
+    section_code: ProjectSection
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    #: Whether a text profile is registered for this section, so a version confirmed with it
+    #: can start a run. ``false`` is a refusal at run start, never an AR fallback.
+    executable: bool
+    suggestion: SectionSuggestion | None
+
+
+class SectionReview(_Object):
+    """All fifteen choices for one version, the current classification or ``null``."""
+
+    version_uid: VersionUid
+    classification: VersionClassification | None
+    #: Whether the version's recognised-text markdown was read as suggestion evidence.
+    recognised_text_consulted: bool
+    options: Annotated[list[SectionReviewOption], Field(min_length=15, max_length=15)]
+
+
 class DocumentVersion(_Object):
     version_uid: VersionUid
     document_uid: DocumentUid
@@ -585,8 +656,13 @@ class DocumentVersion(_Object):
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
     #: `R-40`. See ``UploadDocumentRequest.section``: optional for the same reason, and
-    #: never defaulted to one of the fourteen when a document was uploaded with none.
+    #: never defaulted to one of the fifteen when a document was uploaded with none.
     section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `W59-SECTION-SEAL-01`. The version's persisted classification; absent while no expert
+    #: has classified it. Never inherited from another version or from ``section``.
+    classification: VersionClassification = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
     source_filename: str | None = Field(default=None, json_schema_extra=optional_property)
     media_type: Literal["application/pdf"]
     byte_size: Annotated[int, Field(ge=0)]
@@ -1334,7 +1410,7 @@ class SectionDocumentCount(_Object):
 
     ``section`` is optional, exactly as ``DocumentVersion.section`` is, and its absence on
     one row of this list means the same thing it means there: this row is the
-    unclassified bucket, not a fifteenth section. Every one of the fourteen frozen codes
+    unclassified bucket, not a sixteenth section. Every one of the fifteen current codes
     is present even at ``document_count: 0`` -- "a section with no documents" is the
     dispatch brief's own example of absent not being empty.
     """

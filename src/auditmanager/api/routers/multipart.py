@@ -87,7 +87,7 @@ UPLOAD_RETRY_AFTER_SECONDS: Final[int] = 5
 #: The parts ``uploadDocument``'s form parser reads (`W55B-FIX`, X-3), where Starlette's own
 #: defaults are a thousand files and a thousand text fields of a MiB each, held in memory. The
 #: operation declares one file part (``file``) and two text parts (``display_title``, at most
-#: 400 characters, and ``section``, a name of fourteen). Two files and four text parts let a
+#: 400 characters, and ``section``, a name of fifteen). Two files and four text parts let a
 #: repeated or undeclared part reach the strict pass below, which names it (``unique_part``,
 #: ``additionalProperties``); one more is the parser's ``readable_multipart``. A text part of
 #: 16 KiB is ten times the longest title in UTF-8.

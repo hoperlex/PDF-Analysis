@@ -56,8 +56,11 @@ RUN_STATES: Final[tuple[str, ...]] = (
     "cancelled",
 )
 
-#: Exactly ``db/migrations/versions/20260925_0011_document_section.py``'s
-#: ``PROJECT_SECTIONS``, restated for the same reason.
+#: Exactly ``api.schemas.models.ProjectSection``'s fifteen members and
+#: ``db/migrations/versions/20261020_0024_version_classification.py``'s
+#: ``PROJECT_SECTIONS``, restated for the same reason: legacy's fourteen, in legacy's order
+#: (``0011_document_section`` keeps those as the historical record), then ``PS``
+#: (`W59-SECTION-SEAL-01`).
 PROJECT_SECTIONS: Final[tuple[str, ...]] = (
     "AR",
     "AI",
@@ -73,6 +76,7 @@ PROJECT_SECTIONS: Final[tuple[str, ...]] = (
     "GP",
     "TX",
     "POS",
+    "PS",
 )
 
 #: Findings by their current verdict, across every project. One row per finding: the
@@ -197,10 +201,10 @@ class DashboardRepository:
         ]
         # The unclassified bucket, appended rather than folded into `_filled`: `None` is
         # not a member of `PROJECT_SECTIONS` and forcing it into that tuple would make the
-        # vocabulary say there are fifteen sections. Appended unconditionally, including
+        # vocabulary say there are sixteen sections. Appended unconditionally, including
         # when its count is `0` -- omitting it there would silently say "no unclassified
         # documents exist as a concept" instead of "there happen to be none right now",
-        # which is exactly the distinction the other fourteen already preserve.
+        # which is exactly the distinction the other fifteen already preserve.
         sections.append(
             SectionDocumentCountRecord(
                 section=None, document_count=section_rows.get(None, 0)

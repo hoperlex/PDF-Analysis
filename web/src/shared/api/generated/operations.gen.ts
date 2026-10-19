@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 7257972c55bd5da5ba6c054dfc04703ebf01e81a71ad02fc9217058d2eedd388
+ *   sha256 a79d07c9da9f3225fbd0bea49e7cdca30f0c9b6ca9996daea1c8c0608dd722cb
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -21,6 +21,7 @@ import type {
   AppendDecisionResponse,
   ApproveRegistrationRequest,
   ChangePasswordRequest,
+  ClassifyDocumentVersionRequest,
   CorrelationId,
   CreateProjectRequest,
   Cursor,
@@ -71,6 +72,7 @@ import type {
   RunId,
   RunStatus,
   RunStatusPage,
+  SectionReview,
   SetCurrentNormSnapshotRequest,
   SetExecutionPausedRequest,
   SetJobPriorityRequest,
@@ -83,6 +85,7 @@ import type {
   UserUid,
   Verdict,
   VersionBlockIndex,
+  VersionClassification,
   VersionUid,
   WorkerId,
 } from './types.gen';
@@ -94,6 +97,7 @@ export const OPERATION_IDS = [
   'archiveUser',
   'cancelRun',
   'changePassword',
+  'classifyDocumentVersion',
   'createProject',
   'exportRunCsv',
   'getDashboardSummary',
@@ -106,6 +110,7 @@ export const OPERATION_IDS = [
   'getRunStatus',
   'getUser',
   'getVersionBlocks',
+  'getVersionSectionReview',
   'issueToken',
   'listDecisionHistory',
   'listDecisions',
@@ -288,6 +293,33 @@ export type ChangePasswordInput = {
 
 /** Success body of `changePassword` (`application/json`, HTTP 200). */
 export type ChangePasswordResult = IssueTokenResponse;
+
+// ------------------------------------------------------------------------------------
+// classifyDocumentVersion - PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification
+// ------------------------------------------------------------------------------------
+
+/**
+ * Classify Document Version
+ *
+ * Classify one version: its project stage (`P` or `R`) and one of the fifteen sections, confirmed by the calling expert. `expert` is required; `admin` alone is refused with `permission_denied` (`required_capability: role:expert`). The version must belong to the named document and the document to the named project, otherwise `not_found`. An exact repeat answers the stored row and keeps the first confirmer; a different stage or section is `conflict` with `conflict_reason: version_already_classified` and changes nothing -- there is no correction workflow yet. A suggestion, a file name or the legacy document `section` is never a classification.
+ */
+export type ClassifyDocumentVersionInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ClassifyDocumentVersionRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `classifyDocumentVersion` (`application/json`, HTTP 200). */
+export type ClassifyDocumentVersionResult = VersionClassification;
 
 // ------------------------------------------------------------------------------------
 // createProject - POST /projects
@@ -551,6 +583,31 @@ export type GetVersionBlocksInput = {
 
 /** Success body of `getVersionBlocks` (`application/json`, HTTP 200). */
 export type GetVersionBlocksResult = VersionBlockIndex;
+
+// ------------------------------------------------------------------------------------
+// getVersionSectionReview - GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Version Section Review
+ *
+ * The fifteen section choices for one version, each with the suggestion evidence its file name and recognised text carry (or `null`) and whether a text profile is registered for it (`executable`), plus the persisted classification or `null`. Display input only: nothing here confirms a section or starts a run. Any one role, `role:admin|expert`.
+ */
+export type GetVersionSectionReviewInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getVersionSectionReview` (`application/json`, HTTP 200). */
+export type GetVersionSectionReviewResult = SectionReview;
 
 // ------------------------------------------------------------------------------------
 // issueToken - POST /auth/token
@@ -1129,7 +1186,7 @@ export type ReadRegistrationStatusResult = RegistrationStatusResponse;
 /**
  * Reaudit Run
  *
- * A re-audit runs the same version on the current configuration (R-82), so it faces today's analysis input budget, not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set.
+ * A re-audit runs the same version on the current configuration (R-82), so it faces today's analysis input budget, not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version or a section with no registered text profile is `422 required_norm_unavailable` with `reference_kind` `version_classification` or `analysis_profile`.
  */
 export type ReauditRunInput = {
   /** Path parameters, substituted into `/runs/{run_id}/reaudit`. */
@@ -1357,6 +1414,8 @@ export type SetWorkerIntakeResult = ExecutionWorker;
  * PD-03, in the subset PC-01 exercises. A new idempotency key creates a run. The same key with the same payload returns the existing run and creates nothing, whatever state that run is in, terminal included. The same key with a different payload returns `idempotency_key_reuse` and creates nothing. A new key over a terminal run creates a new run and leaves the terminal one exactly as it was: a terminal run is never reopened.
  *
  * A version whose recorded text is larger than the analysis input budget is refused up front with `422 analysis_input_budget_exceeded` and no run exists (R-118). A version published before the portal-bundle upload has no recorded count and is not refused by this rule.
+ *
+ * `W59-SECTION-SEAL-01`: the run's analysis profile is routed from the version's persisted classification through the section-keyed profile registry -- never from a file name, a suggestion or the document's legacy `section`, and never by an AR fallback. A version with no classification is refused with `422 required_norm_unavailable` and `details.reference_kind: version_classification`; a confirmed section with no registered text profile is refused with the same code and `reference_kind: analysis_profile`. Both refusals precede the key's claim, so nothing is written. An existing run keeps the profile it pinned.
  */
 export type StartRunInput = {
   /** Request body, sent as `application/json`. */
@@ -1639,6 +1698,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['auth'],
   },
+  classifyDocumentVersion: {
+    operationId: 'classifyDocumentVersion',
+    method: 'PUT',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
   createProject: {
     operationId: 'createProject',
     method: 'POST',
@@ -1798,6 +1871,20 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/versions/{version_uid}/blocks',
     pathParams: ['version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['documents'],
+  },
+  getVersionSectionReview: {
+    operationId: 'getVersionSectionReview',
+    method: 'GET',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
     queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: false,
