@@ -20,6 +20,8 @@ from auditmanager.shared.identity import (
 from auditmanager.storage.models import derive_blob_id
 
 HEAD = "0023_norm_citations"
+#: The tree's head, which `W59-SECTION-SEAL-01` moved past this revision.
+TREE_HEAD = "0024_version_classification"
 PREVIOUS = "0022_findings_v2"
 QUOTE = "Требуемая ширина пути эвакуации составляет 1,2 м."
 
@@ -336,7 +338,7 @@ def test_populated_0022_upgrades_without_inventing_citations_and_refuses_downgra
         upgraded = foundation_command(_alembic("upgrade", "head"), url)
         assert upgraded.returncode == 0, upgraded.describe()
         with engine.connect() as connection:
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == HEAD
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == TREE_HEAD
             assert connection.execute(text(
                 "SELECT norm_citation_count FROM finding_observation "
                 "WHERE finding_observation_id = :o"
@@ -350,7 +352,7 @@ def test_populated_0022_upgrades_without_inventing_citations_and_refuses_downgra
         assert refused.returncode != 0
         assert "0023 downgrade refused" in refused.stderr
         with engine.connect() as connection:
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == HEAD
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == TREE_HEAD
             assert connection.execute(text(
                 "SELECT norm_citation_count FROM finding_observation "
                 "WHERE finding_observation_id = :o"

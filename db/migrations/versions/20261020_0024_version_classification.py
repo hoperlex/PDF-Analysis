@@ -26,11 +26,12 @@ legacy ``document.section``, a file name, the current head or a display ordinal.
 keep the profile they pinned and stay readable; an unclassified version is refused at the
 next run start until an expert classifies it.
 
-**The confirmer is a format-checked identity, not a foreign key.** A foreign key to
-``app_user`` would have to be registered in ``access.references`` -- the register an
-account purge consults and ``test_accounts_migration.py`` holds equal to the schema -- and
-that register is outside this task's paths. The identity is written by the authenticated
-command only; the missing RESTRICT reference is a recorded limitation of this revision.
+**The confirmer is a RESTRICT reference to ``app_user``.** An account that confirmed a
+classification is history the classification points at, so purging it is refused
+(``conflict``, ``account_referenced``) like an account that authored an expert decision.
+The column is registered in ``access.references`` -- the register an account purge
+consults and ``test_accounts_migration.py`` holds equal to the schema's foreign keys
+(integrator grant, `W59-SECTION-SEAL-01`).
 
 ``PS`` in the current vocabulary
 --------------------------------
@@ -89,12 +90,17 @@ def upgrade() -> None:
     op.execute(
         f"""
         CREATE TABLE document_version_classification (
-            version_uid           text PRIMARY KEY
-                REFERENCES document_version (version_uid) ON DELETE RESTRICT,
+            version_uid           text PRIMARY KEY,
             project_stage         text NOT NULL,
             section_code          text NOT NULL,
             confirmed_by_user_uid text NOT NULL,
             confirmed_at          timestamptz NOT NULL DEFAULT now(),
+            CONSTRAINT fk_document_version_classification_version
+                FOREIGN KEY (version_uid) REFERENCES document_version (version_uid)
+                ON DELETE RESTRICT,
+            CONSTRAINT fk_document_version_classification_confirmed_by
+                FOREIGN KEY (confirmed_by_user_uid) REFERENCES app_user (user_uid)
+                ON DELETE RESTRICT,
             CONSTRAINT ck_document_version_classification_version_uid_format
                 CHECK (version_uid ~ '^ver_{ULID}$'),
             CONSTRAINT ck_document_version_classification_project_stage

@@ -54,6 +54,9 @@ class DocumentVersionView:
     #: has not been classified -- see ``documents.models.DocumentVersionRecord.section``.
     section: str | None = None
     media_type: str = "application/pdf"
+    #: `W59-SECTION-SEAL-01`. The version's persisted classification (the frozen
+    #: ``VersionClassification``), or ``None`` while unclassified -- then omitted on the wire.
+    classification: Any = None
 
 
 def manifest_entry_body(view: ManifestEntryView) -> dict[str, Any]:
@@ -90,4 +93,6 @@ def document_version_body(view: DocumentVersionView) -> dict[str, Any]:
         body["display_title"] = view.display_title
     if view.section is not None:
         body["section"] = view.section
+    if view.classification is not None:
+        body["classification"] = view.classification.model_dump(mode="json")
     return body

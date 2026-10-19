@@ -67,6 +67,27 @@ from tests: the served application derives the budget once at start-up and alway
 (``bootstrap/settings.py``, ``RunAdapter``; held by
 ``tests/integration/composition/test_the_served_application_always_passes_a_budget.py``).
 
+Section routing (`W59-SECTION-SEAL-01`; `W59-SECTION-IDENTITY-DECISION-01`)
+-----------------------------------------------------------------------------
+The served application passes ``section_profiles`` -- the sealed section-to-profile table the
+composition root loaded from the text-profile registry -- and **no** profile or bundle of its
+own. ``start_audit_run`` and ``reaudit_run`` then read the version's **persisted**
+classification (``0024_version_classification``) in the run-creating transaction and route
+through :func:`auditmanager.sections.public.route_classified_version`: an unclassified
+version is ``required_norm_unavailable`` with ``reference_kind: version_classification``,
+a confirmed section with no registered profile the same code with ``reference_kind:
+analysis_profile``. There is no AR fallback: a suggestion, a file name and the legacy
+``document.section`` never reach this decision. Like the budget refusal, routing is
+decided after the version is read and **before** the key is claimed, so a refusal writes
+nothing; a key the ledger already knows replays the run it created, whose pinned profile is
+read back for the fingerprint rather than re-routed -- an existing run keeps its profile.
+
+An in-process caller (the integration suites, the offline harnesses) may still name a
+profile and bundle explicitly and pass no table; that is a caller choosing a profile, not a
+fallback, and the served path never takes it
+(``tests/integration/composition/test_the_served_application_routes_by_section.py``).
+Passing both, or neither, is a wiring fault and raises ``ValueError``.
+
 Why the command succeeds at creation
 ------------------------------------
 The command's outcome is *the run identity*, and that identity exists the moment the row
@@ -97,6 +118,7 @@ from auditmanager.ingest.public import (
     payload_fingerprint,
 )
 from auditmanager.runs.repository import RunRepository, RunRow
+from auditmanager.sections.public import route_classified_version
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
     AnalysisProfileId,
@@ -257,6 +279,42 @@ def start_run_fingerprint(
     )
 
 
+#: The sealed section → ``(analysis_profile_id, prompt_bundle_id)`` table run start routes
+#: through (`W59-SECTION-SEAL-01`), loaded once by the composition root.
+SectionProfiles = Mapping[str, tuple[str, str]]
+
+
+def _explicit_or_routed(
+    analysis_profile_id: str | None,
+    prompt_bundle_id: str | None,
+    section_profiles: SectionProfiles | None,
+) -> None:
+    """Exactly one profile source: an explicit pair (in-process callers) or the table."""
+    explicit = analysis_profile_id is not None or prompt_bundle_id is not None
+    if section_profiles is not None and explicit:
+        raise ValueError(
+            "a routed run start takes its profile from the section table; an explicit "
+            "profile or bundle beside it is a wiring fault"
+        )
+    if section_profiles is None and (analysis_profile_id is None or prompt_bundle_id is None):
+        raise ValueError(
+            "a run start needs either the section profile table or an explicit profile "
+            "and bundle; there is no default profile"
+        )
+
+
+def _pinned_profile(
+    session: Session, run_id: object, runs: RunRepository
+) -> tuple[str, str] | None:
+    """The profile pair a run already pinned, or ``None`` when the outcome names no run."""
+    if not isinstance(run_id, str):
+        return None
+    pinned = runs.find(session, run_id)
+    if pinned is None:
+        return None
+    return pinned.analysis_profile_id, pinned.prompt_bundle_id
+
+
 def _resolve_references(
     session: Session,
     *,
@@ -264,15 +322,18 @@ def _resolve_references(
     analysis_profile_id: str,
     prompt_bundle_id: str,
     documents: DocumentRepository,
+    version: Any | None = None,
 ) -> tuple[Any, dict[str, str]]:
     """The three ``created -> queued`` guard clauses PC-01 evaluates.
 
     Evaluated at creation rather than at the transition, because a run whose references
     do not resolve should never have become a row. The fourth clause is the
     ``NormsSnapshot`` one: the snapshot is read later, after the ledger accepts the key,
-    and a NULL pin is admitted until W57 (CD-6).
+    and a NULL pin is admitted until W57 (CD-6). ``version`` is the record a caller has
+    already read in this transaction, so it is not read twice.
     """
-    version = documents.get_version(session, version_uid)
+    if version is None:
+        version = documents.get_version(session, version_uid)
 
     blob_ids = {entry.role: str(entry.blob_id) for entry in version.manifest}
     if ROLE_SOURCE_DOCUMENT not in blob_ids:
@@ -335,8 +396,8 @@ def start_audit_run(
     session: Session,
     *,
     version_uid: VersionUid | str,
-    analysis_profile_id: str,
-    prompt_bundle_id: str,
+    analysis_profile_id: str | None = None,
+    prompt_bundle_id: str | None = None,
     provider_mode: str,
     idempotency_key: IdempotencyKey | str,
     commands: CommandRepository | None = None,
@@ -344,6 +405,7 @@ def start_audit_run(
     documents: DocumentRepository | None = None,
     norms_snapshot: NormsSnapshotReader = current_norms_snapshot,
     input_budget_characters: int | None = None,
+    section_profiles: SectionProfiles | None = None,
 ) -> StartedRun:
     """Create one durable ``AuditRun``, or answer what already happened under this key.
 
@@ -366,7 +428,12 @@ def start_audit_run(
     * the **same key with a different payload** raises ``idempotency_key_reuse``;
     * a **new key over a terminal run** creates a new run and leaves the old row alone,
       which needs no special case here: nothing in this path reads the earlier run.
+
+    ``section_profiles`` (`W59-SECTION-SEAL-01`): when given, the profile and bundle are
+    routed from the version's persisted classification and ``analysis_profile_id`` /
+    ``prompt_bundle_id`` must be omitted; see the module docstring.
     """
+    _explicit_or_routed(analysis_profile_id, prompt_bundle_id, section_profiles)
     command_repo = commands or CommandRepository()
     run_repo = runs or RunRepository()
     document_repo = documents or DocumentRepository()
@@ -382,25 +449,36 @@ def start_audit_run(
 
     budget = _checked_budget(input_budget_characters)
 
+    version_record = document_repo.get_version(session, resolved_version)
+    known = command_repo.find(
+        session, command_type=COMMAND_TYPE_START_RUN, idempotency_key=key
+    )
+    if section_profiles is not None:
+        # `W59-SECTION-SEAL-01`. A known key is answered by the ledger below with the
+        # profile its run pinned; only a new key is routed, and a refusal writes nothing.
+        pinned = None if known is None else _pinned_profile(
+            session, (known.outcome or {}).get("run_id"), run_repo
+        )
+        if pinned is None:
+            routed = route_classified_version(version_record, section_profiles)
+            pinned = (routed.analysis_profile_id, routed.prompt_bundle_id)
+        analysis_profile_id, prompt_bundle_id = pinned
+    assert analysis_profile_id is not None and prompt_bundle_id is not None
+
     _version, blob_ids = _resolve_references(
         session,
         version_uid=resolved_version,
         analysis_profile_id=analysis_profile_id,
         prompt_bundle_id=prompt_bundle_id,
         documents=document_repo,
+        version=version_record,
     )
 
     # `W55B-BUDGET-01`. Up front: after the version is read, before the key is claimed, so a
     # refusal writes no command record and a retry after the operator raises the ceiling is a
     # fresh start. A key the ledger already knows is not refused here -- it is answered below,
     # as a replay, whatever today's budget is.
-    if (
-        budget is not None
-        and command_repo.find(
-            session, command_type=COMMAND_TYPE_START_RUN, idempotency_key=key
-        )
-        is None
-    ):
+    if budget is not None and known is None:
         _refuse_over_budget(_version.text_character_count, budget)
 
     basis = input_basis_digest(
@@ -540,12 +618,14 @@ def cancel_audit_run(
 
 def reaudit_run(
     session: Session, *, source_run_id: str, roles: frozenset[str],
-    idempotency_key: str, analysis_profile_id: str, prompt_bundle_id: str,
+    idempotency_key: str, analysis_profile_id: str | None = None,
+    prompt_bundle_id: str | None = None,
     provider_mode: str, runs: RunRepository | None = None,
     jobs: JobRepository | None = None, commands: CommandRepository | None = None,
     documents: DocumentRepository | None = None,
     norms_snapshot: NormsSnapshotReader = current_norms_snapshot,
     input_budget_characters: int | None = None,
+    section_profiles: SectionProfiles | None = None,
 ) -> StartedRun:
     """Create one new run of a terminal source's document version, on today's configuration.
 
@@ -568,28 +648,34 @@ def reaudit_run(
     today's budget and not the one the source run was accepted under. The refusal precedes
     the key's claim (see the module docstring), and a key the ledger already knows replays.
     ``None`` means "no configuration" and is reachable only from tests.
+
+    `W59-SECTION-SEAL-01`: with ``section_profiles`` the new run is routed from the
+    version's persisted classification **now** -- never from the source run's profile --
+    and an unclassified version or a section without a registered profile is refused before
+    the key is claimed. A known key replays whatever it created.
     """
     _require_run_control_role(roles)
+    _explicit_or_routed(analysis_profile_id, prompt_bundle_id, section_profiles)
     budget = _checked_budget(input_budget_characters)
     repository = runs or RunRepository()
     ledger = commands or CommandRepository()
+    document_repo = documents or DocumentRepository()
     session.execute(text(
         "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
     ), {"run_id": source_run_id}).scalar_one_or_none()
     source = repository.get(session, source_run_id)
-    if (
-        budget is not None
-        and ledger.find(
-            session, command_type="reaudit_run", idempotency_key=IdempotencyKey(idempotency_key)
-        )
-        is None
-    ):
-        _refuse_over_budget(
-            (documents or DocumentRepository())
-            .get_version(session, VersionUid.parse(source.version_uid))
-            .text_character_count,
-            budget,
-        )
+    key_is_new = ledger.find(
+        session, command_type="reaudit_run", idempotency_key=IdempotencyKey(idempotency_key)
+    ) is None
+    source_version = None
+    if key_is_new and (section_profiles is not None or budget is not None):
+        source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
+        if section_profiles is not None:
+            routed = route_classified_version(source_version, section_profiles)
+            analysis_profile_id = routed.analysis_profile_id
+            prompt_bundle_id = routed.prompt_bundle_id
+        if budget is not None:
+            _refuse_over_budget(source_version.text_character_count, budget)
     claimed = ledger.begin(
         session, command_type="reaudit_run",
         idempotency_key=IdempotencyKey(idempotency_key),
@@ -616,12 +702,23 @@ def reaudit_run(
     if busy is not None:
         raise DomainError(ErrorCode.CONFLICT, message="a re-audit of this source is in progress")
     version_uid = VersionUid.parse(source.version_uid)
+    if section_profiles is not None and analysis_profile_id is None:
+        # Defensive: ``find`` reported the key known, so routing was deferred to the
+        # ledger's replay, and yet this request claimed it. Route now, before any write.
+        routed = route_classified_version(
+            source_version or document_repo.get_version(session, version_uid),
+            section_profiles,
+        )
+        analysis_profile_id = routed.analysis_profile_id
+        prompt_bundle_id = routed.prompt_bundle_id
+    assert analysis_profile_id is not None and prompt_bundle_id is not None
     _version, blob_ids = _resolve_references(
         session,
         version_uid=version_uid,
         analysis_profile_id=analysis_profile_id,
         prompt_bundle_id=prompt_bundle_id,
-        documents=documents or DocumentRepository(),
+        documents=document_repo,
+        version=source_version,
     )
     snapshot = norms_snapshot(session)
     digest = frozen_input_digest(
@@ -651,6 +748,7 @@ def reaudit_run(
 __all__ = [
     "COMMAND_TYPE_START_RUN",
     "NormsSnapshotReader",
+    "SectionProfiles",
     "ROLE_SOURCE_DOCUMENT",
     "StartedRun",
     "current_norms_snapshot",
