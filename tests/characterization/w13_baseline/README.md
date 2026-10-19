@@ -47,7 +47,7 @@ its CSV projection). 28 reproduced byte for byte. These 8 did not:
 | records | the difference | cause | treatment |
 |---|---|---|---|
 | 13, 32, 33 | the version body now ends with a `classification` property, after `display_title` | the classification case 02b made: every read that returns `DocumentVersion` projects it (`W59-SECTION-SEAL-01`) | moved under `D-181`, asserted by digest (below) |
-| 04, 05, 06, 07, 34 | `text_analysis` `stage_version` `"1.0.0"` → `"1.1.0"`, one value in each body | **not the classification**: `56efead4` (`W57A-SEAL-01B`, 2026-10-16) moved the v1 text stage constant to `1.1.0`, and no run of this corpus reached a finished run after it | **not absorbed**: a pre-existing finding, left red for the integrator |
+| 04, 05, 06, 07, 34 | `text_analysis` `stage_version` `"1.0.0"` → `"1.1.0"`, one value in each body | **not the classification**: `56efead4` (`W57A-SEAL-01B`, 2026-10-16) moved the v1 text stage constant to `1.1.0`, and no run of this corpus reached a finished run after it | first left red as finding F-1, then moved at the integrator's instruction, asserted by digest (below) |
 
 The key-by-key comparison of the whole files showed two more differences, neither under
 `response`. Every record's request `Authorization` value differs (minted against literal, as
@@ -71,8 +71,32 @@ asserting all of that. `test_the_three_version_records_moved_by_the_classificati
 then removes the property and requires each body's SHA-256 to equal its digest at `77aa55bd`,
 the same method `W49-SEAL-01` used for records 10 and 11.
 
-Records 04, 05, 06, 07 and 34 were **not** moved. Their `stage_version` drift is unrelated to
-the classification, so it stays a finding for the integrator.
+At that commit, records 04, 05, 06, 07 and 34 were **not** moved. Their `stage_version` drift is
+unrelated to the classification, so it was reported to the integrator as finding F-1.
+
+### Records 04, 05, 06, 07 and 34 moved, under `56efead4` (finding F-1)
+
+After merging the branch, the integrator told this lane to move the five records. `56efead4`
+(`W57A-SEAL-01B`, 2026-10-16) resealed `contracts/analysis/v1/stage-registry.json` with
+`text_analysis` at `1.1.0`, and the active v1 text stage constant moved with it. Each record
+renders one finished run, so each body moved by one value:
+
+    "stage_id": "text_analysis", "status": "succeeded", "stage_version": "1.0.0"  ->  "1.1.0"
+
+The other three stages keep `1.0.0`. Status, headers, every other body byte, the body
+`length`, the tokens and the request side are the committed ones. The method was the same as
+for records 13, 32 and 33: a scratch capture, and only `exception` and `response` replaced
+after asserting all of that. `test_the_five_run_records_moved_by_the_text_stage_version_and_nothing_else`
+restores `1.0.0` and requires each body's SHA-256 at `77aa55bd`. It also requires the other
+three stages to still say `1.0.0`.
+
+Records 04–07 now carry `EXCEPTION_W57ASEAL_RUN_STATUS`: `EXCEPTION_W18SEAL`'s debts, ruling
+and text unchanged, plus this third move, with `decided_by` set to `56efead4`. Record 34
+carries its first block, `EXCEPTION_W57ASEAL_LIST_RUNS`. **The debt named is `D-181`**,
+because it is the register row whose resolution ("update those suites") this performs. No
+row names the drift itself, and this lane may not write the register. `W57A-SEAL-01B`'s task
+file cites no owner ruling. `PERMITTED_EXCEPTIONS` has thirteen entries. Record 03, an
+accepted run with no stages, does not move. With this change every record reproduces.
 
 ## Amended 2026-09-18 by `W18-SEAL`, under owner ruling `R-5`
 
