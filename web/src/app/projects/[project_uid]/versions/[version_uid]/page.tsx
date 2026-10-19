@@ -24,6 +24,10 @@
  * goes to `/account/password`, an incomplete profile to `/account`. Declared
  * `force-dynamic` because the guard reads a cookie, and a screen served from a cache is a
  * screen showing somebody else's session.
+ *
+ * `W59-SECTION-UI-01`: the guard's subject also hands the screen the session's roles, the way
+ * `/norms` does, so the stage-and-section panel draws the confirmation form for an expert
+ * and a read-only sentence for anyone else. The API still checks the write.
  */
 
 import { notFound } from 'next/navigation';
@@ -45,8 +49,10 @@ export default async function VersionRoute({
   params: Promise<{ project_uid: string; version_uid: string }>;
   searchParams?: Promise<RouteParams> | undefined;
 }) {
-  await requireScreen('/projects/[project_uid]/versions/[version_uid]', { params, searchParams });
+  const subject = await requireScreen('/projects/[project_uid]/versions/[version_uid]', { params, searchParams });
   const { project_uid, version_uid } = await params;
   if (!looksLikeProjectUid(project_uid) || !looksLikeVersionUid(version_uid)) notFound();
-  return <VersionDetailPage projectUid={project_uid} versionUid={version_uid} />;
+  return (
+    <VersionDetailPage projectUid={project_uid} versionUid={version_uid} roles={subject.roles} />
+  );
 }

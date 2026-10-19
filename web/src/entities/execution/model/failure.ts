@@ -1,7 +1,7 @@
 import { ApiError, ApiFailure, catalogMessage } from '@/shared/api';
 // `W55B-WEB-BLOCKS` (`R-118`): a re-audit refused for its input budget prints the refusal's
 // two figures, worded once in the run entity for the start-run control and this command alike.
-import { inputBudgetSentence } from '@/entities/audit-run';
+import { inputBudgetSentence, routingRefusal } from '@/entities/audit-run';
 
 export type ExecutionFailureKind =
   | 'authentication'
@@ -29,11 +29,17 @@ export function executionFailure(error: unknown, write: boolean): ExecutionFailu
         ? 'unknown_outcome'
       : error.errorCode === 'conflict' || error.errorCode === 'idempotency_key_reuse'
         ? 'conflict' : 'refusal';
+    // `W59-SECTION-UI-01`: a re-audit is routed from the version's confirmed section exactly as
+    // a start is, so its two routing refusals carry the run entity's own sentences.
+    const routing =
+      error.errorCode === 'required_norm_unavailable' ? routingRefusal(error.details) : null;
     return {
       kind,
       detail: kind === 'unknown_outcome'
         ? 'Исход команды неизвестен. Проверьте состояние и повторяйте только с тем же ключом.'
-        : catalogMessage(error.errorCode) + budgetFigures(error),
+        : routing !== null
+          ? `${routing.title} ${routing.detail}`
+          : catalogMessage(error.errorCode) + budgetFigures(error),
       correlationId: error.correlationId,
     };
   }

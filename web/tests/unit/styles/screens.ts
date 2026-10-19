@@ -52,6 +52,9 @@ import { UploadPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
 import { CropFigureView } from '@/widgets/portal-blocks';
 import { VersionBlockViews } from '@/_pages/blocks';
+import { ClassifyVersionFormView } from '@/features/classify-version';
+import { ProjectStructureView } from '@/widgets/project-sections';
+import { VersionClassificationView } from '@/widgets/version-classification';
 import { portalBlocksQueryOptions } from '@/entities/block';
 import type {
   DecisionEvent,
@@ -62,17 +65,21 @@ import type {
   RunState,
   RunStatus,
 } from '@/shared/api';
-import type { DocumentVersion, Project } from '@/shared/api';
+import type { DocumentVersion, Project, SectionReview } from '@/shared/api';
 import type { Account } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
-import { ApiError, queryKeys } from '@/shared/api';
+import { ApiError, PROJECT_SECTION_VALUES, queryKeys } from '@/shared/api';
 import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, Menu, avatarColourIndex } from '@/shared/ui';
 import type { DisclosureProps, MenuProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
 import { groupByCategory } from '@/entities/finding';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
-import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
+import {
+  CLASSIFY_NOT_PERMITTED_DETAIL,
+  DOCUMENT_PAGE_LIMIT,
+  VERSION_PAGE_LIMIT,
+} from '@/entities/document-version';
 import type { StageRow } from '@/entities/audit-run';
 import { RUN_PAGE_LIMIT, StageTable } from '@/entities/audit-run';
 
@@ -170,6 +177,34 @@ const version = (): DocumentVersion => ({
 });
 
 /**
+ * `W59-SECTION-UI-01`. One version's section review: unconfirmed, one section suggested with
+ * evidence, one without a profile — so the expert's form renders every part it has.
+ */
+const sectionReview = (over: Partial<SectionReview> = {}): SectionReview => ({
+  version_uid: VERSION_UID,
+  classification: null,
+  recognised_text_consulted: false,
+  options: PROJECT_SECTION_VALUES.map((code) => ({
+    section_code: code,
+    name: code,
+    executable: code !== 'PB',
+    suggestion:
+      code === 'AR'
+        ? { score: 5, filename_patterns: ['АР'], text_keywords: ['фасад'], name_in_text: true }
+        : null,
+  })),
+  ...over,
+});
+
+const CONFIRMED = {
+  version_uid: VERSION_UID,
+  project_stage: 'R' as const,
+  section_code: 'PB' as const,
+  confirmed_at: '2026-10-20T08:00:00Z',
+  confirmed_by_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+};
+
+/**
  * A client whose four lists have ROWS IN THEM, and a next page.
  *
  * Every list in this census was cold, so `li.am-state` -- the class every project row and
@@ -186,6 +221,7 @@ function populatedClient() {
   client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), { items: [version()], page });
   client.setQueryData(queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT), { items: [version()], page });
   client.setQueryData(queryKeys.versions.detail(VERSION_UID), version());
+  client.setQueryData(queryKeys.versions.sectionReview(VERSION_UID), sectionReview());
   client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), { items: [runStatus({ run_id: RUN_ID })], page });
   // `diagnostic_observation_count` on purpose: the review header's diagnostics sentence
   // renders only above zero, and every fixture in this file left it at the default.
@@ -765,7 +801,56 @@ export function screens(): Screen[] {
     add('VersionList loaded', at(createElement(VersionList, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID })));
     add('RunList loaded', at(createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
     add('ProjectsPage loaded', at(createElement(ProjectsPage, {})));
-    add('VersionDetailPage loaded', at(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+    add('VersionDetailPage loaded', at(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] })));
+    // `W59-SECTION-UI-01`: the project structure with a classified and an unclassified
+    // document, the confirmed panel with a profile-less section after a refused
+    // confirmation, and the form carrying a refusal.
+    add(
+      'ProjectStructureView loaded',
+      at(
+        createElement(ProjectStructureView, {
+          projectUid: PROJECT_UID,
+          items: [
+            {
+              ...version(),
+              document_uid: `${DOCUMENT_UID.slice(0, -1)}C`,
+              version_uid: `${VERSION_UID.slice(0, -1)}C`,
+              classification: { ...CONFIRMED, version_uid: `${VERSION_UID.slice(0, -1)}C` },
+            },
+            // Unclassified, so its row links to the version's stage-and-section panel.
+            version(),
+          ],
+          hasNextPage: true,
+        }),
+      ),
+    );
+    add(
+      'VersionClassificationView confirmed',
+      at(
+        createElement(VersionClassificationView, {
+          address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
+          review: sectionReview({ classification: CONFIRMED }),
+          roles: ['expert'],
+          conflict: true,
+          onConflict: () => undefined,
+        }),
+      ),
+    );
+    add(
+      'ClassifyVersionFormView refused',
+      at(
+        createElement(ClassifyVersionFormView, {
+          review: sectionReview(),
+          stage: 'P',
+          section: 'PB',
+          pending: false,
+          failure: { kind: 'not_permitted', detail: CLASSIFY_NOT_PERMITTED_DETAIL, correlationId: 'cid', retryable: false },
+          onStage: () => undefined,
+          onSection: () => undefined,
+          onConfirm: () => undefined,
+        }),
+      ),
+    );
   }
 
   /*

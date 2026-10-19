@@ -449,13 +449,8 @@ describe('the census is taken over rendered screens, not over a list', () => {
         'measures the pair with no markup — the union of the two censuses is why this costs ' +
         'nothing rather than being excused.',
     },
-    {
-      selector: '.am-form__problem',
-      why:
-        'Renders only after a refused submission, which needs a click the harness cannot ' +
-        'fire. Declares both halves in one block, so `declaredPairs` measures it; see ' +
-        '`.am-form__chosen`.',
-    },
+    // `.am-form__problem` left this list in `W59-SECTION-UI-01`: the stage-and-section form's
+    // markup is a view driven by props, so `screens.ts` renders it carrying a refusal.
     {
       selector: '.am-form__created',
       why:

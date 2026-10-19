@@ -11,6 +11,11 @@
  * `analysis_input_invalid` is kept distinct from `validation_failed`: the first says the
  * declared analysis inputs are not acceptable, the second says the request was malformed,
  * and collapsing them would hide which one the operator has to fix.
+ *
+ * `W59-SECTION-UI-01`: `required_norm_unavailable` is a refusal with no run behind it, and
+ * the two kinds the section seal added — no confirmed classification, no profile for the
+ * confirmed section — get their own sentences (`./routing-refusal.ts`). Neither offers the
+ * АР profile or any other section in its place.
  */
 
 import type { ErrorCode } from '@/shared/api';
@@ -25,11 +30,15 @@ import {
 } from '@/shared/api';
 
 import { inputBudgetSentence } from './input-budget';
+import { routingRefusal } from './routing-refusal';
 
 export type RunFailureKind =
   | 'request_invalid'
   | 'analysis_input_invalid'
   | 'input_budget_exceeded'
+  | 'version_unclassified'
+  | 'section_profile_unavailable'
+  | 'reference_unavailable'
   | 'provider_unavailable'
   | 'not_found'
   | 'not_authenticated'
@@ -111,6 +120,27 @@ function fromApiError(error: ApiError): RunFailure {
           catalogMessage(error.errorCode) +
           (figures === null ? '' : ` ${figures}`) +
           ' Повтор с тем же текстом получит тот же отказ.',
+      };
+    }
+    case 'required_norm_unavailable': {
+      // Refused before a run exists, and the same request is refused again until something
+      // changes outside it — so `unsupported`, the tone that offers no retry.
+      const routing = routingRefusal(error.details);
+      if (routing !== null) {
+        return {
+          ...base,
+          kind: routing.kind,
+          presentation: 'unsupported',
+          title: routing.title,
+          detail: routing.detail,
+        };
+      }
+      return {
+        ...base,
+        kind: 'reference_unavailable',
+        presentation: 'unsupported',
+        title: 'Источник, нужный этому прогону, недоступен.',
+        detail: catalogMessage(error.errorCode),
       };
     }
     case 'validation_failed':
