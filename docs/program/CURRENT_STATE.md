@@ -1,206 +1,94 @@
 # Current state
 
-**Updated 2026-10-16 from published code-first development candidate 65
-(`8c39b9e0dfd63da7d32d1a848e609ae2dd437a01`), with dev66 unserved
-source, comparison and recovery checks integrated in this tree.** W55b is
-published on `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as
-`GATE OK` under R-125; the deploy workflow selected that tree and the owner
-subsequently ran `infra/deploy/verify-deployed.sh` on the host with a passing
-image/tree comparison. The workflow's own verify command was skipped because
-a child consumed its stdin. Its tested repair is on `origin/dev`; a separate
-gate attempt on workflow-fix candidate `babab5b5` was invalidated when the
-integrator deleted dependency directories used through worktree symlinks.
-Those dependencies were restored from the frozen lockfiles, but that attempt
-has no `GATE OK` and is not a product-code finding. Moving the repair to
-main requires a fresh complete gate and direct exact-SHA owner publication
-instruction. The owner explicitly waived five credentialed live W55b product checks for this
-release; those journeys remain unverified. See `W55B-INT-TAG-01.md`,
+**Updated 2026-10-19 from development candidate 67, which adds the `R-137`
+W54 session repair to published candidate 66
+(`ec41bb5881b2e677af7f22af62266818f37b2a61`).** W55b is published on
+`origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as `GATE OK`
+under R-125; the deploy workflow selected that tree and the owner then ran
+`infra/deploy/verify-deployed.sh` on the host with a passing image/tree
+comparison. The workflow's own verify step was skipped because a child
+consumed its stdin; the tested repair is on `origin/dev`, and moving it to
+main needs a fresh complete gate and a direct exact-SHA owner instruction.
+The owner waived five credentialed live W55b product checks for that release;
+those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
 The development API surface is **48 paths / 55 operations / 131 schemas**,
 the error catalogue has **25** codes, the migration head is
-**`0023_norm_citations`**, and `VERSION` is **`0.6.0`**. These are checkout
+**`0023_norm_citations`**, and `VERSION` is `0.6.0`. These are checkout
 facts; the release tree has its own frozen 47/54/123 surface and
 `0021_portal_bundles` head. For the current deployment, run
 `infra/deploy/verify-deployed.sh`; this document is no substitute for that
 probe.
 
-W54's 674-document, 31,619-file source has complete file checksums and a
-restore-verified base dump with 348,777 paragraphs and 55,702 chunks.
-The 121-page `claude-opus-5` repair still lacks a proxy credential. There is
-no repaired qualified snapshot, complete embedding checkpoint or DB/S3
-corpus publication. W54 export now checks the crop index, all 28,246 listed
-crop paths and each deduplicated source's bytes; import checks PDF custody
-slots, row semantics and the complete embedding-build digest before DB/S3.
-These are offline guards, not a published bundle. The full-corpus elapsed
-time of the added streaming build preflight has not been measured. W56b has
-unserved Run/Attempt-fenced readers for saved text windows, geometry crops
-and recognised-text regions; the OCR reader binds inner digests to the
-Version manifest. A targeted acceptance test of that reader passed on an
-isolated real PostgreSQL/S3 instance; it stopped before provider dispatch.
-W57a has an unserved v3 request candidate and local response evaluator.
-W57b has an unserved certified XLSX composition chain, a read-only verified
-catalogue custody reader, a current-Attempt saved PDF text-layer reader and
-an exact text-layer-to-reference-page bridge.
-The reader passed one targeted test on isolated real 0023 PostgreSQL/S3 with
-synthetic catalogue bytes, both confirmed bindings and current Attempt
-fencing. The page bridge preserves Unicode offsets and marks empty pages as
-unread in a pure pipeline test. The saved text reader verifies bounded Blob
-bytes and repeats Run, Version, stage and Attempt checks. A targeted real
-0023 PostgreSQL/S3 test proved the production executor's saved text-layer
-binding and confirmed that two OCR-only pages remain unread PDF text; a
-forged token refused before Blob access. The independent synthetic
-LibreOffice import and 54-cell
-probe passed outside sandbox after three earlier constrained failures.
-The dev63 candidate also rejects globally reused finding/observation IDs
-across W56a recorded evaluation runs, verifies W58 target Blob
-`content-sha256` metadata on retry and final readback, and checks W59 sheet
-snapshot character limits before UTF-8 allocation. Its combined focused
-offline suites pass; these changes do not activate a served route or prove a
-real recovery drill. The dev64 candidate adds a read-only W57b chain that
-combines the current Attempt's saved PDF text and verified catalogue, binds
-W56b crop source digest to the Version manifest, and refuses W59 observation
-IDs shared across versions. Its combined focused suite passes; the reference
-chain is unserved and requires an explicit reviewed slug tuple from a future
-caller. The dev65 candidate adds a bounded, read-only W56a Run-to-Version-to-PDF
-Blob attestation for seeded evaluation, a W56b current-Attempt reader that
-checks the complete saved crop cohort metadata but opens only one selected
-PNG, a 200-item bound on W59 decision carryover, and prompt refusal of FIFO
-paths in two W58 mirror readers. Its 438 combined focused tests pass. The
-W56a attestation does not prove original portal ZIP custody, a measured
-baseline or a recorded provider result; the W56b selective read does not
-certify unread sibling PNG bytes. The dev66 candidate joins that saved PDF
-attestation to the frozen local seeded PDF/portal ZIP fixture bytes without
-claiming persisted ZIP custody or a measured model result. It bounds W57b's
-explicit unparsed-slug listing before Blob reads, adds a pure W59 guard for
-same-stage/same-confirmed-section version pairs, and bounds W58 target S3
-listing pages and objects by the sealed inventory. Its 593 focused offline
-tests pass; the separate real DB/S3 catalogue acceptance test needs lane
-credentials and was not run. The complete B3.5 live export remains
-unverified. Served callers,
-provider/effect provenance, qualified corpus, reviewed catalogue slugs,
-approved W56b policy, W57a CAP-01 and W57b 0024 seal remain open. See
-`CFB-INT-DEV-PUBLISH-45.md` through `CFB-INT-DEV-PUBLISH-66.md`. R-135
-defers the complete beta gate to
-the final code candidate. No beta acceptance is claimed.
+## Normative corpus (W54)
 
-**The following detailed snapshot is the state at dev39, before W55b's
-main publication and later development candidates.** It is retained for
-the decisions and evidence links from that point in time.
+The 674-document, 31,619-file source drop has complete file checksums and a
+restore-verified base dump with 348,777 paragraphs and 55,702 chunks
+(`W54-CORPUS-OPERATE-01`, `W54-CORPUS-PROMOTION-01`).
 
-**Code-first dev39 / W55b candidate, 2026-10-16.** W58 synthetic DB/Blob
-restore passed after a driver fix; W56/W57 added unserved evidence readers.
-W55b `37393a97` counted `GATE OK` under R-125; main had not yet moved. See
-`CFB-INT-DEV-PUBLISH-39.md`.
+Under `R-137` the 121 blocks whose text was the recognition model's own
+reasoning were re-read by Sonnet subagents of a Claude Code session, not by
+the paid proxy run. The answers passed the unchanged two-read rule. The
+ignored ledger holds 121 applied repairs, 0 unreliable blocks and no charge,
+and the real drop's ledger validation accepted it. The repaired key is
+`2026-07-23..2026-08-20+17d+121r.0a1bafe103ff`. A 16-page spot check found
+two single-word deviations from print (a map label and a silently corrected
+printed typo) and two table-layout notes. Whether all 121 pages are verified
+and how a correction would be recorded is open for the owner. See
+`W54-SESSION-REPAIR-01.md`.
 
-**Code-first development candidate 31, 2026-10-16.** W57a grounds v3 PDF
-and normative proposals with separate N-labels for one paragraph; W56b
-verifies supplied saved crop references and PNG bytes. Neither proves real
-DB/S3 custody or activates served analysis. See `CFB-INT-DEV-PUBLISH-31.md`.
+The repaired snapshot load, the BGE-M3 embedding build, the verified bundle
+and any DB/S3 or stand publication have not run. They wait for host
+capacity under W54 §3.9: on 2026-10-19 the host had 6.4 GB free disk and
+4.2 GB available RAM, and the `norms-worker` image has never been built.
+W54 export and import already check crop coverage, PDF custody slots, row
+semantics and the embedding-build digest offline; those guards are not a
+published bundle.
 
-**Code-first development candidate 30, 2026-10-16.** W57a now has a pure,
-unserved AR v3 response schema/parser. Five normative categories require
-1–5 labelled citation proposals and two values; seven legacy categories
-forbid those fields. The served verification reader remains typed 503 until
-a registered v3 profile and CITE publisher exist. See
-`CFB-INT-DEV-PUBLISH-30.md` and `W57A-INT-V3-RESPONSE-PREP-01.md`.
+## Code-first series (R-135)
 
-**Code-first development candidate 29, 2026-10-16.** W56b has a pure
-complete IMAGE-crop cohort preflight: every checked IMAGE block needs one
-matching crop, while geometry-mismatch blocks are explicit skips. It does
-not read Blob bytes or call a model. See `CFB-INT-DEV-PUBLISH-29.md` and
-`W56B-INT-CROP-COHORT-PREP-01.md`.
+The plan is [`CODE-FIRST-TO-BETA.md`](dispatch/CODE-FIRST-TO-BETA.md);
+`R-135` defers the complete beta gate to the final code candidate, and each
+development candidate carries only its focused evidence. Every slice below
+is unserved, and no beta acceptance is claimed.
 
-**Code-first development candidate 28, 2026-10-16.** W58 has an unactivated
-guarded PostgreSQL restore callback for its offline DB-plus-Blob coordinator;
-the operator still must prove an empty isolated target and matching bucket.
-W54 embedding-build replay now re-reads stored window metadata before
-certifying a completed build. No real recovery drill or corpus publication
-has run. See `CFB-INT-DEV-PUBLISH-28.md`.
+- **W56a.** A recorded-only AR v2 profile, a source-bound saved request and
+  call, verified observations and merge, and a deterministic finding plan.
+  A transaction gate is reached only through the explicit offline executor
+  bridge. A bounded Run-to-Version-to-PDF attestation binds local seeded
+  evaluation bundles. Real model and price verification
+  (`W56A-MODEL-PIN-01` is stopped), a measured baseline and served
+  activation remain open.
+- **W57a.** Retrieval, map, qualification and citation preparations; the
+  0023 storage seal; a v3 request candidate, response parser, grounding
+  bridge and local evaluator. A qualified retrieval set, an active CITE
+  stage and CAP-01 remain open.
+- **W57b.** A certified XLSX composition chain, a verified catalogue custody
+  reader, a current-Attempt saved text-layer reader, a page bridge and a
+  bounded explicit slug chain. A reviewed slug source, the 0024 seal and the
+  served route remain open.
+- **W56b.** Run/Attempt-fenced readers for saved text windows, crops and
+  recognised-text regions. An approved vision/region/budget policy remains
+  open.
+- **W58.** Read-only source mirror, isolated target copy and a DB-plus-Blob
+  drill with a guarded restore; a synthetic restore passed. A real recovery
+  drill has not run.
+- **W59.** Version pairs, section identity, a 15-choice review preparation,
+  a same-section guard and exact sheet-text match proposals. The section
+  seal, persisted confirmations and served comparison remain open.
 
-**Code-first development candidate 27, 2026-10-16.** W56b has a pure,
-unserved OCR-region candidate that binds an exact recognised-text quote to
-a TEXT portal block and checked region on an explicitly textless page. It
-does not publish a finding or assert a PDF text-layer citation. See
-`CFB-INT-DEV-PUBLISH-27.md` and `W56B-INT-RECOGNISED-REGION-PREP-01.md`.
-
-## Development boundary at dev39
-
-The checked predecessor of this candidate is
-`origin/dev=f6f19220fa5ae019daae07a3771846e2523ce55a`.
-The development API surface is 48 paths / 55 operations / 131 schemas; the
-error catalogue has 25 codes and the migration head is `0023_norm_citations`.
-`VERSION` is `0.6.0`. These are checkout claims, not deployed-state evidence.
-The code-first order and prerequisites are in
-[`CODE-FIRST-TO-BETA.md`](dispatch/CODE-FIRST-TO-BETA.md).
-
-W56a has a recorded-only AR v2 profile, source-bound saved request and call,
-verified observation/merge artifacts, a deterministic finding plan and a
-transaction gate reached only through the explicit offline executor bridge.
-The gate rechecks stage and call provenance, publishes findings and
-terminalizes Run/Job/Attempt atomically. It does not make a live provider call. Its
-caller must commit once or roll back the whole transaction. The explicit
-executor path passed real persisted-run and Blob acceptance on an isolated
-lane. The measured baseline, real model/price verification, served executor
-activation and complete beta gate remain open.
-
-W57a has pure retrieval, map, qualification and citation preparations. The
-0023 storage seal supplies verified-set constraints, confirmed custody
-bindings, a frozen Run pin and a certified citation-count relation. The
-API/stage seal adds vocabulary and a refusing report read. The pure v3
-proposal parser and grounding bridge add no runtime profile or canonical
-result; prompt labels can name one paragraph through multiple map items.
-No qualified
-retrieval-set row or active CITE stage exists; the verified reader is unserved. W57b has XLSX
-preparation, but its citation reader and route wait for verified W57a reader
-and 0024 seal. W56b has unserved OCR-region and IMAGE crop-cohort candidates;
-the byte verifier checks only supplied in-memory data. Real run-scoped
-DB/S3 custody, Attempt fencing and an approved OCR citation policy remain
-required. See
-`W57-INT-SEAL-FREEZE-PROPOSAL-01.md`. W58 has read-only source-object mirror,
-isolated target-copy and offline DB-plus-Blob drill code, including a guarded
-PostgreSQL restore callback; it has not transferred a stand or proved
-recovery. W59 has version-pair,
-section-identity and unserved 15-choice review preparations; its section
-seal waits for the required recovery-code close.
-
-## Corpus and release boundaries at dev39
-
-W54's 674-document, 31,619-file source passed complete file checksums. Its
-57,445,702-byte base dump passed a disposable PostgreSQL restore and all 12
-tracked table fingerprints: 348,777 paragraphs and 55,702 chunks are present.
-The 121-page `claude-opus-5` repair has a zero-call priced plan, but no proxy
-credential file exists. Repaired snapshot, embeddings, qualified bundle and
-DB/S3 corpus publication remain pending. See `W54-CORPUS-PROMOTION-01.md` and
-`W54-CORPUS-REPAIR-PLAN-01.md`. Embedding-build replay now checks persisted
-window metadata, but a real build and qualified bundle remain absent.
-
-The old W55b `6d63802a` main candidate failed three complete-gate attempts;
-its successor `d3acd511` passed the earlier brittle test position but failed
-the fourth full gate at D-142 after 4,168 passes. Read-only gate DB evidence
-showed two valid Attempt-scoped publication rows; the test helper's
-Run/Blob `.one()` query was too broad. Test-only successor `37393a97`
-passed focused D-142 real-service checks; its new complete gate was running
-after a host memory/load window. None of these candidates had yet been
-published to `origin/main` at dev39. The remote main predecessor at the
-preparation read was `23fd729dbb06c642be0588017f6b195305e2e53e`.
-The owner confirmed alpha contained only generated test data on 2026-10-16;
-that condition was rechecked before applying the R-110 copy waiver. Main
-publication required a direct exact-SHA owner instruction and
-`docs/program/MAIN_AUTODEPLOY_POLICY.md`. Deployment identity must be checked
-with `infra/deploy/verify-deployed.sh`; it cannot be inferred from this file.
-
-`R-135` defers the complete W56–W63 beta gate to the final code candidate;
-intermediate dev tasks carry their focused evidence. At dev39 no W54 corpus,
-W56–W59 runtime, W55b deployment or beta acceptance was claimed.
+Detailed evidence is in `CFB-INT-DEV-PUBLISH-17.md` through
+`CFB-INT-DEV-PUBLISH-67.md`.
 
 ## Pointers and history
 
 Read the assigned task, completed `depends_on`, frozen contracts and allowed
 paths before editing. `docs/program/DEBT_REGISTER.md` tracks open work. The
-full 320-line state immediately before candidate 17 is preserved verbatim in
-[the 2026-10-16 state archive](history/CURRENT_STATE_2026-10-16_71373417.md);
-its dated integration reports carry the detailed checks and limitations.
+complete state at candidate 66 is preserved verbatim in
+[the 2026-10-19 state archive](history/CURRENT_STATE_2026-10-19_ec41bb58.md),
+and the 320-line state before candidate 17 in
+[the 2026-10-16 state archive](history/CURRENT_STATE_2026-10-16_71373417.md).
 
 ## Previous release state — wave 48 (historical record)
 
