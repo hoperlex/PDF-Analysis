@@ -67,7 +67,7 @@ export function sectionTitleOf(code: SectionCode): string {
   return projectSectionTitle(projectSectionOf(code));
 }
 
-/** The address one version is classified at: the contract's three path identities. */
+/** The address one version is classified at: its project, its document and the version itself. */
 export interface VersionAddress {
   readonly projectUid: string;
   readonly documentUid: string;
