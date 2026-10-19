@@ -2467,3 +2467,224 @@ def _typed_norm_chunks(chunks: Any, blob_id: str) -> Any:
         raise domain_error_from_storage(exc, blob_id=blob_id, role=NORM_SOURCE) from None
     finally:
         chunks.close()
+
+
+class ComparisonAdapter(_SessionHolder):
+    """``compareDocumentVersions`` (`W59-VERSION-COMPARE-01`).
+
+    The comparison context owns the rule (``comparison.public.VersionComparisonService``);
+    this adapter owns only the two port implementations it needs and the mapping into the
+    frozen ``VersionComparison``. **The path is proved first** (``get_version_in``): an
+    unknown project, a document of another project or a source version of another document
+    is ``404 not_found`` exactly as for every other addressed read (`D-67`); only then is the
+    target judged, and a target the rule does not admit is an answer with a closed reason.
+    One session holds every read -- the path chain, the version pair, both
+    classifications, the runs, the stage rows -- and each text layer is read from the store
+    with the SHA-256 and size its ``stage_result`` recorded, then checked as canonical
+    ``prepared.text_layer`` for exactly that version and page count. A missing or differing
+    blob is ``storage_integrity_error``, never an empty page; a run whose
+    ``source_preparation`` did not succeed has no text and the service refuses
+    ``text_unavailable``.
+    """
+
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        *,
+        blob_store: Any,
+        section_codes: frozenset[str],
+    ) -> None:
+        from auditmanager.comparison.public import VersionComparisonService
+
+        super().__init__(session_factory)
+        self._blob_store = blob_store
+        self._service = VersionComparisonService(
+            classifications=_ClassificationReader(),
+            analyses=_AnalysisReader(blob_store),
+            section_codes=section_codes,
+        )
+
+    def compare_versions(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        diff_offset: int,
+        diff_limit: int,
+    ) -> models.VersionComparison:
+        from auditmanager.comparison.public import (
+            ComparisonIntegrityError,
+            ComparisonRequest,
+            ComparisonRequestInvalid,
+        )
+
+        request = ComparisonRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            target_version_uid=target_version_uid,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+            diff_offset=diff_offset,
+            diff_limit=diff_limit,
+        )
+        from auditmanager.documents.public import DocumentRepository
+        from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
+
+        def work(session: Session) -> Any:
+            DocumentRepository().get_version_in(
+                session,
+                project_uid=ProjectUid.parse(project_uid),
+                document_uid=DocumentUid.parse(document_uid),
+                version_uid=VersionUid.parse(source_version_uid),
+            )
+            return self._service.compare(session, request)
+
+        try:
+            result = self._read(work)
+        except ComparisonRequestInvalid as exc:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED, field=str(exc).removesuffix("_invalid"),
+                constraint="format",
+            ) from None
+        except ComparisonIntegrityError as exc:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="the stored comparison inputs contradict their own constraints",
+            ) from exc
+        return models.VersionComparison.model_validate(_comparison_view(result))
+
+
+class _ClassificationReader:
+    """The seal's persisted classification (``documents``), never an inferred one."""
+
+    def read_classification(self, session: Session, *, version_uid: str) -> Any:
+        from auditmanager.comparison.public import SuppliedVersionClassification
+        from auditmanager.documents.public import DocumentRepository
+        from auditmanager.shared.identity import VersionUid
+
+        stored = DocumentRepository().get_classification(session, VersionUid.parse(version_uid))
+        if stored is None:
+            return None
+        return SuppliedVersionClassification(
+            str(stored.version_uid), stored.project_stage, stored.section_code,
+        )
+
+
+class _AnalysisReader:
+    """Runs, saved text layers and published findings, for the comparison service."""
+
+    _SOURCE_STAGE = "source_preparation"
+
+    def __init__(self, blob_store: Any) -> None:
+        self._blob_store = blob_store
+
+    def runs_newest_first(self, session: Session, *, version_uid: str) -> Any:
+        from auditmanager.comparison.public import RunCandidate
+        from auditmanager.runs import RunRepository
+
+        return tuple(
+            RunCandidate(str(run.run_id), run.state)
+            for run in RunRepository().list_for_version(session, version_uid)
+        )
+
+    def saved_page_text(self, session: Session, *, run_id: str, version: Any) -> Any:
+        from auditmanager.analysis.public import (
+            ROLE_TEXT_LAYER,
+            ArtifactRef,
+            SuppliedTextSourceRefused,
+            check_supplied_text_layer_bytes,
+        )
+        from auditmanager.comparison.public import SavedPageText
+        from auditmanager.runs import RunRepository
+
+        stages = [
+            row for row in RunRepository().stage_results(session, run_id)
+            if row.stage_id == self._SOURCE_STAGE
+        ]
+        if len(stages) != 1 or stages[0].status != "succeeded":
+            return None
+        references = [a for a in stages[0].artifacts if a.get("role") == ROLE_TEXT_LAYER]
+        if len(references) != 1:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="a succeeded source preparation does not record exactly one text layer",
+            )
+        reference = references[0]
+        payload = _verified_artifact_bytes(self._blob_store, reference)
+        try:
+            layer = check_supplied_text_layer_bytes(
+                version_uid=version.version_uid,
+                expected_page_count=version.page_count,
+                text_layer_ref=ArtifactRef(**dict(reference)),
+                supplied_bytes=payload,
+            )
+        except (SuppliedTextSourceRefused, TypeError, ValueError):
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                blob_id=str(reference.get("blob_id")),
+                role=ROLE_TEXT_LAYER,
+                expected_sha256=str(reference.get("sha256")),
+            ) from None
+        return SavedPageText(
+            run_id, str(reference["sha256"]),
+            {page.page_number: page.text for page in layer.pages},
+        )
+
+    def published_findings(self, session: Session, *, run_id: str) -> Any:
+        from auditmanager.comparison.public import FindingEvidenceSnapshot, FindingSnapshot
+        from auditmanager.findings import published_finding_evidence, published_findings
+
+        evidence: dict[str, list[Any]] = {}
+        for item in published_finding_evidence(session, run_id):
+            evidence.setdefault(item.finding_observation_id, []).append(item)
+        return tuple(
+            FindingSnapshot(
+                row.finding_uid, row.finding_observation_id, row.category, row.finding_text,
+                tuple(
+                    FindingEvidenceSnapshot(item.page_number, item.quote)
+                    for item in sorted(
+                        evidence.get(row.finding_observation_id, ()),
+                        key=lambda item: item.evidence_ordinal,
+                    )
+                ),
+            )
+            for row in published_findings(session, run_id)
+        )
+
+
+def _verified_artifact_bytes(blob_store: Any, reference: Mapping[str, Any]) -> bytes:
+    """One artifact's bytes, held to the SHA-256 and size its stage row recorded."""
+    from auditmanager.ingest import domain_error_from_storage
+    from auditmanager.storage.public import BlobNotFoundError, StorageError, parse_blob_id
+
+    blob_id, role = str(reference["blob_id"]), str(reference["role"])
+    declared_sha256, declared_size = str(reference["sha256"]), int(reference["size_bytes"])
+    try:
+        chunks = blob_store.open_stream(
+            parse_blob_id(blob_id), expected_sha256=declared_sha256, expected_size=declared_size,
+        )
+        try:
+            return b"".join(chunks)
+        finally:
+            close = getattr(chunks, "close", None)
+            if close is not None:
+                close()
+    except BlobNotFoundError:
+        raise DomainError(
+            ErrorCode.STORAGE_INTEGRITY_ERROR,
+            blob_id=blob_id, role=role, expected_sha256=declared_sha256,
+        ) from None
+    except StorageError as exc:
+        raise domain_error_from_storage(exc, blob_id=blob_id, role=role) from None
+
+
+def _comparison_view(result: Any) -> dict[str, Any]:
+    """The read model as the frozen ``VersionComparison`` shape (field names are equal)."""
+    from dataclasses import asdict
+
+    return asdict(result)

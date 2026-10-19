@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 50,
+    "path_count": 51,
     "operations": [
       [
         "POST",
@@ -287,6 +287,11 @@
         "GET",
         "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review",
         "getVersionSectionReview"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison",
+        "compareDocumentVersions"
       ]
     ],
     "schema_names": [
@@ -426,7 +431,17 @@
       "VersionClassification",
       "SectionSuggestion",
       "SectionReviewOption",
-      "SectionReview"
+      "SectionReview",
+      "ComparisonRefusal",
+      "ComparedVersion",
+      "SheetPairing",
+      "DiffHunk",
+      "SheetDiff",
+      "SheetDiffPage",
+      "FindingRef",
+      "FindingMatchProposal",
+      "FindingComparison",
+      "VersionComparison"
     ]
   },
   "error_catalog": {

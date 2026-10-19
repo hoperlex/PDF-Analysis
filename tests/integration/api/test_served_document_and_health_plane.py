@@ -148,6 +148,8 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             # `W59-SECTION-SEAL-01`: the classification takes a body. The section review
             # takes only path identities and declares none.
             "classifyDocumentVersion",
+            # `W59-VERSION-COMPARE-01`: a required target version and bounded paging.
+            "compareDocumentVersions",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

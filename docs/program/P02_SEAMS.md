@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Fifty-seven operations, sealed. `A5` generates the typed client from this document; `B6`
+Fifty-eight operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -848,7 +848,10 @@ until `W55A-SEARCH-01`). `W55B-SEAL-01` added the two portal-block reads on 2026
 `W57A-SEAL-01B` added the refusing `getRunNormVerification`. `W59-SECTION-SEAL-01` added
 `classifyDocumentVersion` and `getVersionSectionReview` on 2026-10-20: a version's
 expert-confirmed project stage and section, persisted by `0024_version_classification`, which
-`startRun` and `reauditRun` now route the analysis profile from.
+`startRun` and `reauditRun` now route the analysis profile from. `W59-VERSION-COMPARE-01`
+added `compareDocumentVersions` on 2026-10-20: a read-only comparison of two versions of one
+set with the same stage and confirmed section, whose sheet pairs and finding matches are
+proposals and whose refusals are answers with a closed reason, never a relabelled pair.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -923,6 +926,7 @@ could.
 | `getRunNormVerification` | `GET /runs/{run_id}/norm-verification` |
 | `classifyDocumentVersion` | `PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification` |
 | `getVersionSectionReview` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review` |
+| `compareDocumentVersions` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison` |
 
 Rules that hold across the whole surface:
 

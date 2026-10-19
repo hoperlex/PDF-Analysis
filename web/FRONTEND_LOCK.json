@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "3e1f070a6db0dab87bd358112a3e66ebe6cc2bd44656c3af5152ff1e46a172ac",
-    "content_commit": "a1a25eb",
-    "content_commit_subject": "W59-SECTION-SEAL-01 API reseal on night round 1 base a1a25ebc",
-    "dispatch_named_commit": "a1a25eb",
-    "commit_note": "W59 adds the version classification: classifyDocumentVersion and getVersionSectionReview, six schemas (ProjectStage, ClassifyDocumentVersionRequest, VersionClassification, SectionSuggestion, SectionReviewOption, SectionReview), PS in ProjectSection and the optional DocumentVersion.classification. startRun and reauditRun route the profile from the persisted classification; no error code is added.",
+    "sha256": "ac504e3996fca799c453c9a068b29c690c3a214262a3e1391ebc27b706d4d4fb",
+    "content_commit": "c4cbc02",
+    "content_commit_subject": "W59-VERSION-COMPARE-01 API reseal on integration base c4cbc026",
+    "dispatch_named_commit": "c4cbc02",
+    "commit_note": "W59 adds the comparison of two versions of one set: compareDocumentVersions (GET .../versions/{version_uid}/comparison) and ten schemas (ComparisonRefusal, ComparedVersion, SheetPairing, DiffHunk, SheetDiff, SheetDiffPage, FindingRef, FindingMatchProposal, FindingComparison, VersionComparison). A refusal is a 200 answer with a closed reason; every pairing and finding match is a proposal; no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 50,
-    "operations": 57,
-    "component_schemas": 137,
+    "paths": 51,
+    "operations": 58,
+    "component_schemas": 147,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "3e1f070a6db0dab87bd358112a3e66ebe6cc2bd44656c3af5152ff1e46a172ac",
+    "snapshot_sha256": "ac504e3996fca799c453c9a068b29c690c3a214262a3e1391ebc27b706d4d4fb",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "1ca8d5d3dff1618c6bd965664c972aefad35ff25b6ad6fc47db61c87ac61b6ff",
-      "index.ts": "1e74920d4e5be4a544feccb0b1d60425bf309ab9851836e205d8ffb5b565ca34",
-      "operations.gen.ts": "8798c9e143f84e97f2cb50be89dc52a363525e1c329e6e24856caac19ae1254d",
-      "types.gen.ts": "c37f3285b51240ddade6e70923034090cec26d7dc86bf24d3c7803be4757d44e"
+      "client.gen.ts": "d98c1741796defb607acd358f904811409bd8cc8d2c6be2c8222827f8987fa16",
+      "index.ts": "ef1f193e3e96c83f1ebfb97e293b57d039feab1dc9ac5070a683702af56994ab",
+      "operations.gen.ts": "968b3bf78ce6a418d017908c8fcff6b5271c963985b0f8715fc52655a4bc95f3",
+      "types.gen.ts": "b7f721180e2255722aab35150c0febf9e9ec0af462dbd886c09c92228b3818dd"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

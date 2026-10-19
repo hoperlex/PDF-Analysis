@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 3e1f070a6db0dab87bd358112a3e66ebe6cc2bd44656c3af5152ff1e46a172ac
+ *   sha256 ac504e3996fca799c453c9a068b29c690c3a214262a3e1391ebc27b706d4d4fb
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -86,6 +86,7 @@ import type {
   Verdict,
   VersionBlockIndex,
   VersionClassification,
+  VersionComparison,
   VersionUid,
   WorkerId,
 } from './types.gen';
@@ -98,6 +99,7 @@ export const OPERATION_IDS = [
   'cancelRun',
   'changePassword',
   'classifyDocumentVersion',
+  'compareDocumentVersions',
   'createProject',
   'exportRunCsv',
   'getDashboardSummary',
@@ -320,6 +322,42 @@ export type ClassifyDocumentVersionInput = {
 
 /** Success body of `classifyDocumentVersion` (`application/json`, HTTP 200). */
 export type ClassifyDocumentVersionResult = VersionClassification;
+
+// ------------------------------------------------------------------------------------
+// compareDocumentVersions - GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison
+// ------------------------------------------------------------------------------------
+
+/**
+ * Compare Document Versions
+ *
+ * Compare two versions of one document set: the path names the older (source) version and `target_version_uid` the newer one. Both must be published versions of the named document in the named project, with the same explicit project stage and the same confirmed section, and each needs a published run (the newest one, or the one `source_run_id` / `target_run_id` names). Otherwise the answer is `outcome: refused` with one `refusal.reason`; a pair is never relabelled. The answer carries proposed sheet pairs with their evidence, one page of raw line differences (`diff_offset`, `diff_limit`, `next_offset`) and proposed matches between the two runs' findings. Every pairing and match is a proposal; nothing is written. Any one role, `role:admin|expert`.
+ */
+export type CompareDocumentVersionsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Query string parameters. */
+  query: {
+    /** Sheets with text differences per answer. */
+    diff_limit?: number;
+    /** Position in the list of sheets with text differences. */
+    diff_offset?: number;
+    source_run_id?: RunId;
+    target_run_id?: RunId;
+    /** The newer version of the same set; the path names the older one. */
+    target_version_uid: VersionUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `compareDocumentVersions` (`application/json`, HTTP 200). */
+export type CompareDocumentVersionsResult = VersionComparison;
 
 // ------------------------------------------------------------------------------------
 // createProject - POST /projects
@@ -1710,6 +1748,20 @@ export const OPERATIONS = {
     responseMediaType: 'application/json',
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
+  compareDocumentVersions: {
+    operationId: 'compareDocumentVersions',
+    method: 'GET',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: ['diff_limit', 'diff_offset', 'source_run_id', 'target_run_id', 'target_version_uid'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
     tags: ['documents'],
   },
   createProject: {
