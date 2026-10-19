@@ -16,7 +16,7 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "a79d07c9da9f3225fbd0bea49e7cdca30f0c9b6ca9996daea1c8c0608dd722cb",
+    "sha256": "3e1f070a6db0dab87bd358112a3e66ebe6cc2bd44656c3af5152ff1e46a172ac",
     "content_commit": "a1a25eb",
     "content_commit_subject": "W59-SECTION-SEAL-01 API reseal on night round 1 base a1a25ebc",
     "dispatch_named_commit": "a1a25eb",
@@ -27,7 +27,7 @@
     "operations": 57,
     "component_schemas": 137,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "a79d07c9da9f3225fbd0bea49e7cdca30f0c9b6ca9996daea1c8c0608dd722cb",
+    "snapshot_sha256": "3e1f070a6db0dab87bd358112a3e66ebe6cc2bd44656c3af5152ff1e46a172ac",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "1540088a2308d91a179c9b14ef6e803aa3f9db1adf0dece2707eba59400b4964",
-      "index.ts": "df00511d35116a50ba21f3387f85015a2f270579cd98ff5eee6323d66f60a488",
-      "operations.gen.ts": "5389505c1ad01f3b9a8fe4d9e38d635764a989349ecd8e4476cebeb1f64773bb",
-      "types.gen.ts": "5dd271123a5376e2cd0b9f35bcb3ff18bc00b9336f167d5b92f2188c644b57ca"
+      "client.gen.ts": "1ca8d5d3dff1618c6bd965664c972aefad35ff25b6ad6fc47db61c87ac61b6ff",
+      "index.ts": "1e74920d4e5be4a544feccb0b1d60425bf309ab9851836e205d8ffb5b565ca34",
+      "operations.gen.ts": "8798c9e143f84e97f2cb50be89dc52a363525e1c329e6e24856caac19ae1254d",
+      "types.gen.ts": "c37f3285b51240ddade6e70923034090cec26d7dc86bf24d3c7803be4757d44e"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

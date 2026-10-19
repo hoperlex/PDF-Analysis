@@ -450,8 +450,12 @@ def start_audit_run(
     budget = _checked_budget(input_budget_characters)
 
     version_record = document_repo.get_version(session, resolved_version)
-    known = command_repo.find(
-        session, command_type=COMMAND_TYPE_START_RUN, idempotency_key=key
+    # Read only when a pre-claim decision needs it (the budget or the route), exactly as the
+    # budget alone read it before this seal.
+    known = (
+        command_repo.find(session, command_type=COMMAND_TYPE_START_RUN, idempotency_key=key)
+        if budget is not None or section_profiles is not None
+        else None
     )
     if section_profiles is not None:
         # `W59-SECTION-SEAL-01`. A known key is answered by the ledger below with the
@@ -664,11 +668,10 @@ def reaudit_run(
         "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
     ), {"run_id": source_run_id}).scalar_one_or_none()
     source = repository.get(session, source_run_id)
-    key_is_new = ledger.find(
-        session, command_type="reaudit_run", idempotency_key=IdempotencyKey(idempotency_key)
-    ) is None
     source_version = None
-    if key_is_new and (section_profiles is not None or budget is not None):
+    if (section_profiles is not None or budget is not None) and ledger.find(
+        session, command_type="reaudit_run", idempotency_key=IdempotencyKey(idempotency_key)
+    ) is None:
         source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
         if section_profiles is not None:
             routed = route_classified_version(source_version, section_profiles)

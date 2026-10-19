@@ -868,6 +868,17 @@
       }
     },
     "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProjectUid"
+        },
+        {
+          "$ref": "#/components/parameters/DocumentUid"
+        },
+        {
+          "$ref": "#/components/parameters/VersionUid"
+        }
+      ],
       "put": {
         "tags": [
           "documents"
@@ -882,36 +893,7 @@
         ],
         "parameters": [
           {
-            "name": "project_uid",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/ProjectUid"
-            }
-          },
-          {
-            "name": "document_uid",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/DocumentUid"
-            }
-          },
-          {
-            "name": "version_uid",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/VersionUid"
-            }
-          },
-          {
-            "name": "X-Correlation-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CorrelationId"
-            }
+            "$ref": "#/components/parameters/CorrelationId"
           }
         ],
         "requestBody": {
@@ -945,142 +927,41 @@
             }
           },
           "401": {
-            "headers": {
-              "X-Correlation-Id": {
-                "required": true,
-                "schema": {
-                  "$ref": "#/components/schemas/CorrelationId"
-                },
-                "description": "The correlation id for this request, assigned when the caller supplied none."
-              }
-            },
-            "description": "No credential was presented, or the deployment does not accept it.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
+            "$ref": "#/components/responses/AuthenticationRequired"
           },
           "403": {
-            "headers": {
-              "X-Correlation-Id": {
-                "required": true,
-                "schema": {
-                  "$ref": "#/components/schemas/CorrelationId"
-                },
-                "description": "The correlation id for this request, assigned when the caller supplied none."
-              }
-            },
-            "description": "The authenticated subject is not permitted this operation on this resource.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
+            "$ref": "#/components/responses/PermissionDenied"
           },
           "404": {
-            "headers": {
-              "X-Correlation-Id": {
-                "required": true,
-                "schema": {
-                  "$ref": "#/components/schemas/CorrelationId"
-                },
-                "description": "The correlation id for this request, assigned when the caller supplied none."
-              }
-            },
-            "description": "The addressed aggregate does not exist or is not visible to this caller.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
+            "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "headers": {
-              "X-Correlation-Id": {
-                "required": true,
-                "schema": {
-                  "$ref": "#/components/schemas/CorrelationId"
-                },
-                "description": "The correlation id for this request, assigned when the caller supplied none."
-              }
-            },
-            "description": "The change conflicts with durable state: `conflict` with `details.conflict_reason`, or `state_transition_not_allowed` against the declared machine.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
+            "$ref": "#/components/responses/StateConflict"
           },
           "422": {
-            "headers": {
-              "X-Correlation-Id": {
-                "required": true,
-                "schema": {
-                  "$ref": "#/components/schemas/CorrelationId"
-                },
-                "description": "The correlation id for this request, assigned when the caller supplied none."
-              }
-            },
-            "description": "The request was refused by a declared rule. `details` names which.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
+            "$ref": "#/components/responses/ValidationFailed"
           },
           "500": {
-            "headers": {
-              "X-Correlation-Id": {
-                "required": true,
-                "schema": {
-                  "$ref": "#/components/schemas/CorrelationId"
-                },
-                "description": "The correlation id for this request, assigned when the caller supplied none."
-              }
-            },
-            "description": "A server-side fault. Nothing was created.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
+            "$ref": "#/components/responses/InternalError"
           },
           "503": {
-            "headers": {
-              "X-Correlation-Id": {
-                "required": true,
-                "schema": {
-                  "$ref": "#/components/schemas/CorrelationId"
-                },
-                "description": "The correlation id for this request, assigned when the caller supplied none."
-              }
-            },
-            "description": "A required dependency is unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
+            "$ref": "#/components/responses/DependencyUnavailable"
           }
         }
       }
     },
     "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProjectUid"
+        },
+        {
+          "$ref": "#/components/parameters/DocumentUid"
+        },
+        {
+          "$ref": "#/components/parameters/VersionUid"
+        }
+      ],
       "get": {
         "tags": [
           "documents"
@@ -1095,36 +976,7 @@
         ],
         "parameters": [
           {
-            "name": "project_uid",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/ProjectUid"
-            }
-          },
-          {
-            "name": "document_uid",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/DocumentUid"
-            }
-          },
-          {
-            "name": "version_uid",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/VersionUid"
-            }
-          },
-          {
-            "name": "X-Correlation-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CorrelationId"
-            }
+            "$ref": "#/components/parameters/CorrelationId"
           }
         ],
         "responses": {
@@ -1148,99 +1000,19 @@
             }
           },
           "401": {
-            "headers": {
-              "X-Correlation-Id": {
-                "required": true,
-                "schema": {
-                  "$ref": "#/components/schemas/CorrelationId"
-                },
-                "description": "The correlation id for this request, assigned when the caller supplied none."
-              }
-            },
-            "description": "No credential was presented, or the deployment does not accept it.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
+            "$ref": "#/components/responses/AuthenticationRequired"
           },
           "403": {
-            "headers": {
-              "X-Correlation-Id": {
-                "required": true,
-                "schema": {
-                  "$ref": "#/components/schemas/CorrelationId"
-                },
-                "description": "The correlation id for this request, assigned when the caller supplied none."
-              }
-            },
-            "description": "The authenticated subject is not permitted this operation on this resource.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
+            "$ref": "#/components/responses/PermissionDenied"
           },
           "404": {
-            "headers": {
-              "X-Correlation-Id": {
-                "required": true,
-                "schema": {
-                  "$ref": "#/components/schemas/CorrelationId"
-                },
-                "description": "The correlation id for this request, assigned when the caller supplied none."
-              }
-            },
-            "description": "The addressed aggregate does not exist or is not visible to this caller.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
+            "$ref": "#/components/responses/NotFound"
           },
           "500": {
-            "headers": {
-              "X-Correlation-Id": {
-                "required": true,
-                "schema": {
-                  "$ref": "#/components/schemas/CorrelationId"
-                },
-                "description": "The correlation id for this request, assigned when the caller supplied none."
-              }
-            },
-            "description": "A server-side fault. Nothing was created.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
+            "$ref": "#/components/responses/InternalError"
           },
           "503": {
-            "headers": {
-              "X-Correlation-Id": {
-                "required": true,
-                "schema": {
-                  "$ref": "#/components/schemas/CorrelationId"
-                },
-                "description": "The correlation id for this request, assigned when the caller supplied none."
-              }
-            },
-            "description": "A required dependency is unavailable.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
+            "$ref": "#/components/responses/DependencyUnavailable"
           }
         }
       }
@@ -4160,7 +3932,7 @@
         }
       },
       "StateConflict": {
-        "description": "The change conflicts with durable state. `conflict` carries `details.conflict_reason`: `login_taken` (an active account holds the login), `request_pending` (a request for the login is already pending), `queue_full` (the pending queue is at its cap of 100), `account_referenced` (the account is referenced and cannot be purged) `last_admin` (no active account would hold `admin`) or, on `setCurrentNormSnapshot`, `stale_current_snapshot` (the current norms snapshot is no longer the one the caller named in `expected_current`). `state_transition_not_allowed` names the `app_user` or `registration_request` machine with `details.machine`, `current_state` and `requested_state`. On an operation that takes an idempotency key the idempotency-key codes are reported here too.",
+        "description": "The change conflicts with durable state. `conflict` carries `details.conflict_reason`: `login_taken` (an active account holds the login), `request_pending` (a request for the login is already pending), `queue_full` (the pending queue is at its cap of 100), `account_referenced` (the account is referenced and cannot be purged) `last_admin` (no active account would hold `admin`) or, on `setCurrentNormSnapshot`, `stale_current_snapshot` (the current norms snapshot is no longer the one the caller named in `expected_current`), or, on `classifyDocumentVersion`, `version_already_classified` (the version already holds a different stage or section; the first classification stands). `state_transition_not_allowed` names the `app_user` or `registration_request` machine with `details.machine`, `current_state` and `requested_state`. On an operation that takes an idempotency key the idempotency-key codes are reported here too.",
         "headers": {
           "X-Correlation-Id": {
             "$ref": "#/components/headers/CorrelationId"

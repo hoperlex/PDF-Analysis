@@ -85,6 +85,9 @@ section without an executable profile is refused; there is no AR fallback.
 - `infra/deploy/serve.py`
 - `docs/program/W59-SECTION-SEAL-01.md`
 - `docs/program/tasks/W59-SECTION-SEAL-01.md`
+- `src/auditmanager/access/references.py` — integrator grant by message on 2026-10-20,
+  limited to registering `document_version_classification.confirmed_by_user_uid`
+  (`ON DELETE RESTRICT`) in the account reference register.
 
 ## Lane resources
 

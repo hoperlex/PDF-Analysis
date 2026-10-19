@@ -153,6 +153,16 @@ def published_run() -> dict[str, Any]:
     )
     assert answer.status_code == 201, answer.content
     version_uid = answer.json()["version_uid"]
+    document_uid = answer.json()["document_uid"]
+
+    # `W59-SECTION-SEAL-01`: run start routes from the version's expert classification and
+    # refuses an unclassified version; the AR baseline routes to the v1 AR profile.
+    answer = client.put(
+        f"/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+        headers=auth | {"Content-Type": "application/json"},
+        content=json.dumps({"project_stage": "R", "section_code": "AR"}).encode("utf-8"),
+    )
+    assert answer.status_code == 200, answer.content
 
     answer = client.post(
         "/runs",
