@@ -312,9 +312,11 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.norms.document(normDocumentId)` | `['norms','document',id]` | `W55A-WEB-NORMS` |
 | `queryKeys.norms.paragraphs(normDocumentId, cursor?, limit?)` | `['norms','paragraphs',id,{cursor,limit}]` | `W55A-WEB-NORMS` |
 | `queryKeys.norms.content(normDocumentId)` | `['norms','content',id]` | `W55A-WEB-NORMS` |
+| `queryKeys.analysis.all()` | `['analysis']` | `W59-ANALYSIS-SETTINGS-01` |
+| `queryKeys.analysis.profiles()` | `['analysis','profiles']` | `W59-ANALYSIS-SETTINGS-01` |
 
 `projects`, `versions`, `runs`, `findings`, `dashboard`, `account`, `users`, `registrations`,
-`releases`, `execution`, `norms` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
+`releases`, `execution`, `norms`, `analysis` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
 is the signed-in account (`getMe`), `users` the administrator's view of the accounts, and
 `registrations` the requests awaiting or past a decision. A later lane adds key factories inside
 them and no new root.
@@ -346,6 +348,10 @@ and `dashboard.summary()`; a `409 version_already_classified` invalidates this k
 no project, run or finding. `setCurrentNormSnapshot` invalidates the whole `norms` prefix when
 it settles — a designation changes the snapshot list, the history and what search reads, and
 a stale refusal means the list must be read again. It changes nothing the dashboard reads.
+`analysis` entered in `W59-ANALYSIS-SETTINGS-01`: `analysis.profiles` holds
+`listAnalysisProfiles`, the text-profile registry the server routes runs through, which belongs
+to no project, run, version or execution. No action on this client writes it — the registry
+changes only when the server is redeployed — so nothing invalidates it; «Обновить» re-reads it.
 
 There is **no global domain store.** The query client in `_app` is the only cache. PC-01's
 state lives on the server; a second copy of it in the browser is a second source of truth

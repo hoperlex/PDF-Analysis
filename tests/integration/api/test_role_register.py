@@ -100,6 +100,8 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
         "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
     ),
+    # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry (any role); no parameter.
+    "listAnalysisProfiles": ("GET", "/analysis/profiles"),
     "listRunFindings": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     "exportRunCsv": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),
     "getFinding": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
@@ -161,6 +163,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "getVersionSectionReview": _ANY_ROLE,
     # `W59-VERSION-COMPARE-01`: the version comparison is a product read.
     "compareDocumentVersions": _ANY_ROLE,
+    # `W59-ANALYSIS-SETTINGS-01`: the analysis-profile registry is a product read.
+    "listAnalysisProfiles": _ANY_ROLE,
     "listRunFindings": _ANY_ROLE,
     "getFinding": _ANY_ROLE,
     "listDecisionHistory": _ANY_ROLE,

@@ -202,3 +202,28 @@ def test_the_registry_keeps_each_packages_source_block() -> None:
                 for item in declared["source"]["files"]
             ),
         )
+
+
+def test_the_listing_order_is_the_webs_project_structure_order() -> None:
+    """`listAnalysisProfiles` answers in ``PROJECT_STRUCTURE_ORDER``; the web titles the same
+    order ``PROJECT_STRUCTURE_ORDER`` (``web/src/entities/project/model/section.ts``). Read from
+    the source rather than restated, so the two literals cannot drift apart silently."""
+    import re
+
+    from auditmanager.analysis.text.profile_registry import (
+        PROJECT_STRUCTURE_ORDER,
+        SECTION_CODES,
+    )
+
+    source = (
+        REPOSITORY_ROOT / "web" / "src" / "entities" / "project" / "model" / "section.ts"
+    ).read_text(encoding="utf-8")
+    block = re.search(
+        r"export const PROJECT_STRUCTURE_ORDER: readonly ProjectSectionCode\[\] = \[(.*?)\];",
+        source,
+        re.DOTALL,
+    )
+    assert block is not None, "the web's PROJECT_STRUCTURE_ORDER literal was not found"
+    web_order = tuple(re.findall(r"'([A-Z]+)'", block.group(1)))
+    assert web_order == PROJECT_STRUCTURE_ORDER
+    assert set(PROJECT_STRUCTURE_ORDER) == SECTION_CODES and len(PROJECT_STRUCTURE_ORDER) == 15

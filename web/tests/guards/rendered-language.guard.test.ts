@@ -86,7 +86,8 @@ import {
   precheckProblemMessage,
 } from '@/entities/document-version';
 import { UPLOAD_CONSTRAINTS_ADDED } from '@/entities/document-version/model/upload-failure';
-import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
+import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS, PROJECT_STRUCTURE_ORDER, projectSectionOf } from '@/entities/project';
+import type { AnalysisProfileListItem } from '@/shared/api';
 import { ClassifyVersionFormView } from '@/features/classify-version';
 import { VersionClassification, VersionClassificationView } from '@/widgets/version-classification';
 import { ProjectStructureView } from '@/widgets/project-sections';
@@ -789,6 +790,34 @@ function dashboardSummary(over: Partial<DashboardSummary> = {}): DashboardSummar
   };
 }
 
+/**
+ * `W59-ANALYSIS-SETTINGS-01`: the registry «Настройки анализа» lists. AR builtin with no
+ * source, ПБ with no profile, every other section a draft ported from a Cyrillic-named
+ * repository — server data, seeded Cyrillic so that anything Latin left is chrome.
+ */
+const ANALYSIS_PROFILES: readonly AnalysisProfileListItem[] = PROJECT_STRUCTURE_ORDER.map((code, index) => {
+  const digit = (index % 10).toString();
+  const section = projectSectionOf(code);
+  if (code === 'PB') return { section_code: code, section_name: section.name, profile: null };
+  return {
+    section_code: code,
+    section_name: section.name,
+    profile: {
+      analysis_profile_id: `ap_01J9ZQ8K7NHVXW3T2R5M6P4Q8${digit}`,
+      prompt_bundle_id: `pb_01J9ZQ8K7NHVXW3T2R5M6P4Q8${digit}`,
+      profile_version: '1.0.0',
+      status: code === 'AR' ? 'builtin' : code === 'PS' ? 'reviewed' : 'draft',
+      prompt_bundle_sha256: digit.repeat(64),
+      content_sha256: 'a'.repeat(63) + digit,
+      source: code === 'AR' ? null : {
+        repository: 'прежняя-система',
+        commit: 'b'.repeat(40),
+        files: [{ path: `prompts/disciplines/${code}/role.md`, sha256: 'c'.repeat(64) }],
+      },
+    },
+  };
+});
+
 /** `W54-WORKERS-WEB`: one registered worker per sealed state, the first holding a run. */
 const WORKERS: readonly ExecutionWorker[] = [
   {
@@ -827,6 +856,8 @@ const KEYS = {
   executionJournal: queryKeys.execution.journal(),
   // `W54-WORKERS-WEB`: the «Исполнители» screen's first page.
   workers: queryKeys.execution.workers(undefined, WORKER_PAGE_LIMIT),
+  // `W59-ANALYSIS-SETTINGS-01`: «Настройки анализа», the registry's fifteen rows.
+  analysisProfiles: queryKeys.analysis.profiles(),
   dashboardSummary: queryKeys.dashboard.summary(),
   // The home page's own two reads (`W50-HOME-01`), seeded by `W50-SHELL-FRAME` so the recent
   // list and the administrator's tile render loaded rather than pending in every state.
@@ -948,6 +979,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   });
   // One worker per state, so every row shape and the collapsed offline group render.
   client.setQueryData(KEYS.workers, { items: WORKERS, page });
+  client.setQueryData(KEYS.analysisProfiles, { items: ANALYSIS_PROFILES });
   // A current snapshot and the three ways another one can stand; two designations; two hits;
   // a document with a heading, a body paragraph and an unreliable table row.
   client.setQueryData(KEYS.normSnapshots, { items: NORM_SNAPSHOTS, page });

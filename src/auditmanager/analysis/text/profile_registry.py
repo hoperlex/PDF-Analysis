@@ -52,6 +52,7 @@ from auditmanager.shared.identity import AnalysisProfileId, IdentityError, Promp
 __all__ = [
     "PACKAGE_FORMAT",
     "PACKAGES_ROOT",
+    "PROJECT_STRUCTURE_ORDER",
     "SECTION_CODES",
     "RegisteredTextProfile",
     "TextProfileLoadError",
@@ -74,6 +75,16 @@ SECTION_CODES: Final[frozenset[str]] = frozenset(
         "POS", "PS",
     }
 )
+
+#: Every section code in the project-structure order of poll answer ``S-5`` -- AR, then the
+#: cheap profiles first -- the order «Настройки анализа» lists the registry in
+#: (`W59-ANALYSIS-SETTINGS-01`). ``tests/integration/sections/test_section_recordings.py``
+#: holds it equal to the web's ``PROJECT_STRUCTURE_ORDER``.
+PROJECT_STRUCTURE_ORDER: Final[tuple[str, ...]] = (
+    "AR", "AI", "PS", "POS", "TX", "KJ", "KM", "OV", "VK", "PT", "EOM", "SS", "ITP", "GP", "PB",
+)
+if len(PROJECT_STRUCTURE_ORDER) != len(SECTION_CODES) or set(PROJECT_STRUCTURE_ORDER) != SECTION_CODES:
+    raise ValueError("project_structure_order_invalid")  # pragma: no cover - a literal
 
 _PROFILE_KEYS: Final[frozenset[str]] = frozenset(
     {

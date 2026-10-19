@@ -1,6 +1,6 @@
-"""The fifty-eight operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The fifty-nine operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles one ``APIRouter`` from the seventeen router modules. It takes
+:func:`build_router` assembles one ``APIRouter`` from the eighteen router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
 port is the composition root's job (``api/composition.py``), and a factory that reached for
 a concrete implementation would have taken that decision away from it.
@@ -54,6 +54,7 @@ from auditmanager.api.routers.idempotency import (
     IDEMPOTENCY_HEADER,
     require_idempotency_key,
 )
+from auditmanager.api.routers.analysis_profiles import build_analysis_profile_routes
 from auditmanager.api.routers.comparison import build_comparison_routes
 from auditmanager.api.routers.me import build_me_routes
 from auditmanager.api.routers.norms import build_norm_routes
@@ -66,6 +67,7 @@ from auditmanager.api.routers.multipart import (
 )
 from auditmanager.api.routers.ports import (
     AccountPort,
+    AnalysisProfilePort,
     BlockPort,
     ComparisonPort,
     CredentialPort,
@@ -146,6 +148,7 @@ __all__ = [
     "RunPort",
     "SectionPort",
     "ComparisonPort",
+    "AnalysisProfilePort",
     "WireResponse",
     "build_auth_routes",
     "build_router",
@@ -194,10 +197,12 @@ def build_router(
     norm_content: NormContentPort | None = None,
     sections: SectionPort | None = None,
     comparisons: ComparisonPort | None = None,
+    analysis_profiles: AnalysisProfilePort | None = None,
 ) -> Router:
-    """Assemble the fifty-eight operations, from the seventeen router modules -- ``me``,
+    """Assemble the fifty-nine operations, from the eighteen router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
-    `W59-SECTION-SEAL-01`'s and ``comparison`` `W59-VERSION-COMPARE-01`'s.
+    `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s and
+    ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s.
 
     ``accounts`` and ``registrations`` are two more ports with a default, for the reason
     the paragraph below gives for the first three: every caller that does not serve them
@@ -263,6 +268,9 @@ def build_router(
     # `W59-VERSION-COMPARE-01`. Two versions of one set compared, read-only. Optional with
     # a default, for the reason `blocks` gives above.
     build_comparison_routes(router, comparisons)  # type: ignore[arg-type]
+    # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only. Optional with a
+    # default, for the reason `blocks` gives above.
+    build_analysis_profile_routes(router, analysis_profiles)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 
