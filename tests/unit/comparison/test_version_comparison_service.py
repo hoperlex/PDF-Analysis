@@ -436,3 +436,37 @@ def test_stage_mode_refusals(classifications, reason, side) -> None:
 def test_an_unknown_mode_is_rejected_before_any_read() -> None:
     with pytest.raises(ComparisonRequestInvalid, match="mode_invalid"):
         _compare(mode="object")
+
+
+# -- the recomputation a command uses (`W59-DECISION-CARRYOVER-01`) -------------------------
+
+
+def test_current_finding_proposals_are_the_comparison_without_its_diff_page() -> None:
+    session = _session()
+    current = _service().current_finding_proposals(session, ComparisonRequest(
+        PROJECT, DOCUMENT, V1, V2, diff_offset=3, diff_limit=2,
+    ))
+    assert session.statements == 1
+    assert current.comparison.sheet_diffs is None
+    assert current.comparison == replace(_compare(), sheet_diffs=None)
+    assert current.observations == {
+        "source": {f.finding_uid: f.finding_observation_id for f in SOURCE_FINDINGS},
+        "target": {f.finding_uid: f.finding_observation_id for f in TARGET_FINDINGS},
+    }
+
+
+def test_current_finding_proposals_of_a_refused_pair_are_that_refusal() -> None:
+    unclassified = _service(classifications={V2: ("P", "AR")})
+    current = unclassified.current_finding_proposals(
+        _session(), ComparisonRequest(PROJECT, DOCUMENT, V1, V2),
+    )
+    assert current.comparison == _compare(service=unclassified)
+    assert current.comparison.outcome == OUTCOME_REFUSED
+    assert current.observations == {"source": {}, "target": {}}
+
+
+def test_current_finding_proposals_refuse_a_malformed_request_like_compare() -> None:
+    with pytest.raises(ComparisonRequestInvalid, match="mode_invalid"):
+        _service().current_finding_proposals(
+            _session(), ComparisonRequest(PROJECT, DOCUMENT, V1, V2, mode="object"),
+        )
