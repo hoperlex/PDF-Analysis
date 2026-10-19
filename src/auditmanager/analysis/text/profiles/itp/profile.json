@@ -1,0 +1,35 @@
+{
+  "format": "text-profile/1",
+  "section_code": "ITP",
+  "analysis_profile_id": "ap_01M5AXG1KQSW41PC130SWCS8CD",
+  "prompt_bundle_id": "pb_01M5AXG1KQR5A6ZPWDX4CC3CTS",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "title_ru": "Индивидуальный тепловой пункт",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "16ba8e5d23e4782550e79355002fde1365f682b7",
+    "files": [
+      {
+        "path": "prompts/disciplines/ITP/role.md",
+        "sha256": "18cb5f3e4f321b3f9eb526e0702d3f7bc49e972c4555bd0ab02b0f86d1bc2ca1"
+      },
+      {
+        "path": "prompts/disciplines/ITP/checklist.md",
+        "sha256": "22aa3697b2557feb65e2e25f1478e81ec2d48ba815818f62eef40a8059f0dbb1"
+      },
+      {
+        "path": "prompts/disciplines/ITP/drawing_types.md",
+        "sha256": "5ba8823dd2d2a8291dd9c17dc4a9d9a480af8dc3ade9b8a48efa652d0858b1ee"
+      },
+      {
+        "path": "prompts/disciplines/ITP/project_params.md",
+        "sha256": "0fbb238e3fe676e744610e4af63caed85014e30a4b3eb9b0652bc1f4fba19796"
+      },
+      {
+        "path": "prompts/disciplines/ITP/finding_categories.md",
+        "sha256": "113fe584e10e12b5c28ec4bb4342b58bd8277e1724cbfb8a712ac53fbdbe7e13"
+      }
+    ]
+  }
+}

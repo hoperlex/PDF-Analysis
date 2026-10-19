@@ -1,0 +1,35 @@
+{
+  "format": "text-profile/1",
+  "section_code": "PT",
+  "analysis_profile_id": "ap_01M5AXG1KHY5S7A1AFVND7FPS9",
+  "prompt_bundle_id": "pb_01M5AXG1KH4JG7TMH93XACNF6H",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "title_ru": "Противопожарный водопровод",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "16ba8e5d23e4782550e79355002fde1365f682b7",
+    "files": [
+      {
+        "path": "prompts/disciplines/PT/role.md",
+        "sha256": "8d9136f0d6bcc1434ed0569106c4c9cd65e7658e72e13ba8fbe97964322bbbb3"
+      },
+      {
+        "path": "prompts/disciplines/PT/checklist.md",
+        "sha256": "64e1b131ba76fc6c86d0844728c8ed3ce21c02e69a325c244eb93b0155c39bc7"
+      },
+      {
+        "path": "prompts/disciplines/PT/drawing_types.md",
+        "sha256": "ddb28b04a734d033de15b72bfea23662b9362abe142f7b550abb80cf1588e9cc"
+      },
+      {
+        "path": "prompts/disciplines/PT/project_params.md",
+        "sha256": "97d008af80e8d984715ccadca0a0fc1bb0c228f584851ae1155c519e462e230a"
+      },
+      {
+        "path": "prompts/disciplines/PT/finding_categories.md",
+        "sha256": "03e4ca176804c587c489939913747b97fd51d8b36b9f1c12b73170ab018f913e"
+      }
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "format": "text-profile/1",
+  "section_code": "SS",
+  "analysis_profile_id": "ap_01M5AXG1KN9C7BDD3CCHMFTMX3",
+  "prompt_bundle_id": "pb_01M5AXG1KNQRT6DYJWYC5X0C5J",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "title_ru": "Слаботочные системы",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "16ba8e5d23e4782550e79355002fde1365f682b7",
+    "files": [
+      {
+        "path": "prompts/disciplines/SS/role.md",
+        "sha256": "bce9846d362a4994e82dd6fbc9c026c96de91c8eb27a4c654bb2b403cf48fc7f"
+      },
+      {
+        "path": "prompts/disciplines/SS/checklist.md",
+        "sha256": "4efe2296d18124aae441a05d01f8ea70ddace7ec4cd6608362796a0003b020f6"
+      },
+      {
+        "path": "prompts/disciplines/SS/drawing_types.md",
+        "sha256": "8a2e1c23105da4aca67eadf9e811e38508607c4b8e865b3844af0a1bbf6366e2"
+      },
+      {
+        "path": "prompts/disciplines/SS/project_params.md",
+        "sha256": "d36990b5b154eb3351939f5f1a6d4457db17c6da9caf475e7c84bbdc2ca03637"
+      },
+      {
+        "path": "prompts/disciplines/SS/finding_categories.md",
+        "sha256": "ff8193946f57ecfbc0e9c10f4be0f41f74c3decfe67257f16d9ebb398b0719c9"
+      }
+    ]
+  }
+}
