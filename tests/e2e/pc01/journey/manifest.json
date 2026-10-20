@@ -674,13 +674,13 @@
       "path": "/analysis-settings",
       "page_module": "web/src/app/analysis-settings/page.tsx",
       "$comment": [
-        "Настройки анализа -- an honest stub on its way, R-66 (W50-REGISTRY-01).",
-        "",
-        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
-        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this entry",
-        "gains operations and the assertion starts carrying weight."
+        "Настройки анализа (R-66; W59-ANALYSIS-SETTINGS-01 graduated it from the honest stub)",
+        "reads the analysis-profile registry once on a cold route: the fifteen sections and",
+        "the profile each runs with. Read-only: the screen emits no write."
       ],
-      "expects_api": [],
+      "expects_api": [
+        {"method": "GET", "path": "/analysis/profiles", "operationId": "listAnalysisProfiles"}
+      ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],

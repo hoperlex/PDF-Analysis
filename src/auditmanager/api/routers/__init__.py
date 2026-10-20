@@ -1,6 +1,6 @@
-"""The sixty-two operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The sixty-three operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles one ``APIRouter`` from the eighteen router modules. It takes
+:func:`build_router` assembles one ``APIRouter`` from the nineteen router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
 port is the composition root's job (``api/composition.py``), and a factory that reached for
 a concrete implementation would have taken that decision away from it.
@@ -54,6 +54,7 @@ from auditmanager.api.routers.idempotency import (
     IDEMPOTENCY_HEADER,
     require_idempotency_key,
 )
+from auditmanager.api.routers.analysis_profiles import build_analysis_profile_routes
 from auditmanager.api.routers.comparison import build_comparison_routes
 from auditmanager.api.routers.dispatch import build_dispatch_routes
 from auditmanager.api.routers.me import build_me_routes
@@ -67,6 +68,7 @@ from auditmanager.api.routers.multipart import (
 )
 from auditmanager.api.routers.ports import (
     AccountPort,
+    AnalysisProfilePort,
     BlockPort,
     ComparisonPort,
     DispatchPort,
@@ -148,6 +150,7 @@ __all__ = [
     "RunPort",
     "SectionPort",
     "ComparisonPort",
+    "AnalysisProfilePort",
     "DispatchPort",
     "WireResponse",
     "build_auth_routes",
@@ -197,11 +200,13 @@ def build_router(
     norm_content: NormContentPort | None = None,
     sections: SectionPort | None = None,
     comparisons: ComparisonPort | None = None,
+    analysis_profiles: AnalysisProfilePort | None = None,
     dispatch: DispatchPort | None = None,
 ) -> Router:
-    """Assemble the sixty-two operations, from the eighteen router modules -- ``me``,
+    """Assemble the sixty-three operations, from the nineteen router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
-    `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s and ``dispatch``
+    `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
+    ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s and ``dispatch``
     `W61-DISPATCHER-01`'s.
 
     ``accounts`` and ``registrations`` are two more ports with a default, for the reason
@@ -268,6 +273,9 @@ def build_router(
     # `W59-VERSION-COMPARE-01`. Two versions of one set compared, read-only. Optional with
     # a default, for the reason `blocks` gives above.
     build_comparison_routes(router, comparisons)  # type: ignore[arg-type]
+    # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only. Optional with a
+    # default, for the reason `blocks` gives above.
+    build_analysis_profile_routes(router, analysis_profiles)  # type: ignore[arg-type]
     # `W61-DISPATCHER-01`. «Диспетчер»: work assignments and their history. Optional with a
     # default, for the reason `blocks` gives above.
     build_dispatch_routes(router, dispatch)  # type: ignore[arg-type]

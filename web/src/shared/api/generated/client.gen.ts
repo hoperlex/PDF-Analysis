@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 27afd4720a377b7024cbb146c533e4b3505c7cedf71c3138fed447fe87acae06
+ *   sha256 0c2d222b29c82eb3cf5d2ad8c37c3160b9ad4990b899b2093149113f7ad7fff4
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -64,6 +64,8 @@ import type {
   GetVersionSectionReviewResult,
   IssueTokenInput,
   IssueTokenResult,
+  ListAnalysisProfilesInput,
+  ListAnalysisProfilesResult,
   ListAssignmentsInput,
   ListAssignmentsResult,
   ListDecisionHistoryInput,
@@ -419,6 +421,18 @@ export function issueToken(
   options?: RequestOptions,
 ): Promise<ApiResponse<IssueTokenResult>> {
   return request<IssueTokenResult>(OPERATIONS.issueToken, input, options);
+}
+
+/**
+ * List the analysis profile of every section.
+ *
+ * `GET /analysis/profiles`.
+ */
+export function listAnalysisProfiles(
+  input: ListAnalysisProfilesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListAnalysisProfilesResult>> {
+  return request<ListAnalysisProfilesResult>(OPERATIONS.listAnalysisProfiles, input, options);
 }
 
 /**
@@ -917,6 +931,7 @@ export const apiClient = {
   getVersionBlocks,
   getVersionSectionReview,
   issueToken,
+  listAnalysisProfiles,
   listAssignments,
   listDecisionHistory,
   listDecisions,

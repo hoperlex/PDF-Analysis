@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 54,
+    "path_count": 55,
     "operations": [
       [
         "POST",
@@ -294,6 +294,11 @@
         "compareDocumentVersions"
       ],
       [
+        "GET",
+        "/analysis/profiles",
+        "listAnalysisProfiles"
+      ],
+      [
         "POST",
         "/assignments",
         "createAssignment"
@@ -462,6 +467,12 @@
       "FindingMatchProposal",
       "FindingComparison",
       "VersionComparison",
+      "AnalysisProfileStatus",
+      "AnalysisProfileSourceFile",
+      "AnalysisProfileSource",
+      "AnalysisProfileSummary",
+      "AnalysisProfileListItem",
+      "AnalysisProfileList",
       "AssignmentUid",
       "AssignmentStatus",
       "AssignmentEventKind",

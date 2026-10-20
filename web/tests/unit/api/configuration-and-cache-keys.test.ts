@@ -191,9 +191,10 @@ const USER_UID = 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const NORM_DOCUMENT_ID = 'ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 
 describe('every cache key starts in its own namespace', () => {
-  it('declares exactly the twelve roots', () => {
+  it('declares exactly the thirteen roots', () => {
     // `account`, `users` and `registrations` entered once, in `W50-REGISTRY-01`; `norms` in
-    // `W55A-WEB-NORMS`, which the W55 plan names (§A4 Stage B item 4); `assignments` in
+    // `W55A-WEB-NORMS`, which the W55 plan names (§A4 Stage B item 4); `analysis` in
+    // `W59-ANALYSIS-SETTINGS-01`, for the analysis-profile registry; `assignments` in
     // `W61-DISPATCHER-01`.
     expect([...QUERY_NAMESPACES]).toEqual([
       'projects',
@@ -207,6 +208,7 @@ describe('every cache key starts in its own namespace', () => {
       'releases',
       'execution',
       'norms',
+      'analysis',
       'assignments',
     ]);
   });
@@ -216,6 +218,7 @@ describe('every cache key starts in its own namespace', () => {
     expect(queryKeys.assignments.list({ mine: true })[0]).toBe('assignments');
     expect(queryKeys.assignments.detail('asg_01J9ZQ8K7NHVXW3T2R5M6P4Q8B')[0]).toBe('assignments');
     expect(queryKeys.projects.list()[0]).toBe('projects');
+    expect(queryKeys.analysis.profiles()).toEqual(['analysis', 'profiles']);
     expect(queryKeys.projects.detail(PROJECT_UID)[0]).toBe('projects');
     expect(queryKeys.versions.detail(VERSION_UID)[0]).toBe('versions');
     expect(queryKeys.versions.content(VERSION_UID)[0]).toBe('versions');

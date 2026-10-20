@@ -587,20 +587,20 @@ def test_a_stale_claim_in_a_previously_excluded_conf_file_is_red() -> None:
     """`D-99`: mutate the real extensionless scanner input in memory; `.conf` is not skipped."""
     relative = "infra/deploy/proxy/nginx.conf"
     text = (REPO_ROOT / relative).read_text(encoding="utf-8")
-    mutated = text.replace("the fifty-four paths", "the fifty-three paths", 1)
+    mutated = text.replace("the fifty-five paths", "the fifty-four paths", 1)
     assert mutated != text
     wrong = _wrong_surface_claims(relative, mutated)
-    assert any("'fifty-three paths' states 53" in item for item in wrong), wrong
+    assert any("'fifty-four paths' states 54" in item for item in wrong), wrong
 
 
 def test_a_stale_current_claim_in_p02_seams_is_red() -> None:
     """`D-100`: the once-unscanned live seam document is mutation-tested by path."""
     relative = "docs/program/P02_SEAMS.md"
     text = (REPO_ROOT / relative).read_text(encoding="utf-8")
-    mutated = text.replace("Sixty-two operations, sealed.", "Sixty-one operations, sealed.", 1)
+    mutated = text.replace("Sixty-three operations, sealed.", "Sixty-two operations, sealed.", 1)
     assert mutated != text
     wrong = _wrong_surface_claims(relative, mutated)
-    assert any("'Sixty-one operations' states 61" in item for item in wrong), wrong
+    assert any("'Sixty-two operations' states 62" in item for item in wrong), wrong
 
 
 def test_the_guard_reaches_the_bff_route_handler() -> None:

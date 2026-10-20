@@ -94,7 +94,10 @@ EXPECTED_ADDRESSED = 21
 REQUIRED_QUERY: dict[str, str] = {
     "compareDocumentVersions": "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
 }
-EXPECTED_UNADDRESSED = 15
+# `W59-ANALYSIS-SETTINGS-01` added ``listAnalysisProfiles``, unaddressed: the registry's
+# fifteen rows, answered as ``items`` like a collection with no parent identity.
+# With ``listAssignments`` (`W61-DISPATCHER-01`, above) the unaddressed half is sixteen.
+EXPECTED_UNADDRESSED = 16
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.

@@ -202,6 +202,8 @@ GUARDED = (
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
         "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
     ),
+    # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only.
+    ("listAnalysisProfiles", "GET", "/analysis/profiles"),
     # `W61-DISPATCHER-01`. «Диспетчер»: creating, listing, reading and moving an assignment.
     ("createAssignment", "POST", "/assignments"),
     ("listAssignments", "GET", "/assignments"),
