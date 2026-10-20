@@ -128,3 +128,37 @@ Merged `W59-VERSION-COMPARE-01` (`367ea390`).
 | `W59-VERSION-UPLOAD-01` | `641f2b9e` | queued |
 | `W61-DISPATCHER-01` (migration 0025 in phase A) | `979632af` | queued |
 | `W59-SEAL-FOLLOWUP-01` (suites only) | `77aa55bd` | none needed |
+
+## 9. Integrator decision: a shared contract slot (from 04:30)
+
+With four lanes queued behind one contract owner and the window closing, the
+integrator opened the slot to parallel reseals under `R-139`: each lane reseals from
+the published integration tip, and before its hand-back merges the newest tip, keeps
+both sides' paths and schemas in `contracts/api/v1/openapi.json`, and **re-derives**
+every derived artifact (web mirror copy, `api:generate`, `api:verify`,
+`FRONTEND_LOCK.json`, `tests/support/expected_facts.json`, every surface-count prose
+line) instead of hand-merging it, then reruns `tests/contract`. The migration head
+stays single-owner (`0025` dispatcher, `0026` price lists chained on it). AGENTS §3's
+single-owner rule is suspended for the API surface only, for this window only.
+
+## 10. Slices published from the shared slot
+
+- **`W59-ANALYSIS-SETTINGS-01`** (`b344f004`) — candidate `0f0903f2`. «Настройки
+  анализа» lists the 15 sections with their profile (`listAnalysisProfiles`, status
+  builtin/draft/reviewed, prompt-bundle hash, legacy source); АИ, ПЗ, ПОС and ТХ runs
+  reach `published` in recorded mode with synthetic recordings keyed to each profile's
+  own request; ПБ and unclassified versions are refused; one profile's recording never
+  answers another's. 51/58/147 → **52/59/153**.
+- **`W59-VERSION-UPLOAD-01`** (`bddaa058`) — candidate `a820849a`. «Загрузить новую
+  версию» adds the next immutable version to an existing set (`uploadDocumentVersion`,
+  same envelope, custody and outbox as `uploadDocument`); the new version is current and
+  unclassified, older versions untouched; a concurrent-upload ordinal race in
+  `publish_version` (reachable before) is fixed by a row lock. This closes the gap the
+  comparison slice found. **53/60/154**; nginx upload locations widened in both proxy
+  files.
+- **Checks on the merged tree** after each merge: `tests/contract` + `tests/unit` +
+  journey conformance (+ upload headroom): 1113 passed, the two base reds only; web
+  `typecheck` clean; mirror byte-identical.
+- **Debts to add at window close:** synthetic recordings cover only the AR baseline
+  document and four sections; `Dockerfile.api` comment names only `text_analysis/**`;
+  D-174 (BFF memory under a real 250 MiB bundle) now also covers the version upload.
