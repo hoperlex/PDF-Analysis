@@ -236,6 +236,7 @@ GUARDED = (
         "getSpecificationPrices", "GET",
         "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
         "/specification-prices",
+    ),
     # `W60-OPT-PROPOSALS-01`. Optimisation passes, their proposals and the decisions on them.
     (
         "startOptimisationPass",
