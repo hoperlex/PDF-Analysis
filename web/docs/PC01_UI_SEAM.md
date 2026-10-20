@@ -292,6 +292,7 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.runs.all()` | `['runs']` | `B7` |
 | `queryKeys.runs.detail(runId)` | `['runs','detail',id]` | `B7` |
 | `queryKeys.runs.findings(runId, filters?)` | `['runs','findings',id,filters]` | `B8` |
+| `queryKeys.runs.normReferences(runId)` | `['runs','norm-references',id]` | `NORM-REFS-RUN-01` |
 | `queryKeys.findings.detail(findingUid)` | `['findings','detail',uid]` | `B8` |
 | `queryKeys.findings.decisions(findingUid)` | `['findings','decisions',uid]` | `B8` |
 | `queryKeys.dashboard.summary()` | `['dashboard','summary']` | `W46-WIRE` |
@@ -345,6 +346,12 @@ verdict projection appears in the finding list — `queryKeys.runs.findings(runI
 `queryKeys.dashboard.summary()`. `queryKeys.dashboard.summary()` is also invalidated by
 `uploadDocument` and by `startRun`/a run reaching a terminal state — it is one read over the
 whole deployment, so more of the seam writes to it than to any other key here.
+`runs.normReferences` (`NORM-REFS-RUN-01`) holds `getRunNormReferences`: the norms a stopped run's
+saved text cites, checked against the snapshot that run pinned. It is filed under `runs` because it
+is a function of one run's stored text and pinned snapshot, both fixed once the run has stopped;
+`runs.all()` (which `startRun` and re-audit invalidate) drops it with the rest, and «Обновить» on
+the section re-reads it. The section is mounted by the run page only for a terminal run. Nothing on
+this key writes.
 W53 execution reads share the `execution` prefix: cancel/re-audit invalidate that prefix,
 `runs.all()` and the dashboard; priority/pause invalidate `execution`. A focused
 journal cursor includes its run id in the key so another run cannot reuse that page.
