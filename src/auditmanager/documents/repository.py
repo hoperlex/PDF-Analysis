@@ -35,6 +35,7 @@ from auditmanager.storage.public import BlobId, parse_blob_id
 
 from .models import (
     ROLE_SOURCE_DOCUMENT,
+    ClassificationRevisionRecord,
     CurrentVersionPlacementRecord,
     DocumentVersionRecord,
     ManifestEntry,
@@ -156,9 +157,10 @@ _SELECT_VERSION = text(
     "       d.display_title, d.section, v.media_type, v.byte_size,"
     "       v.sha256, v.page_count, v.published_at,"
     "       v.text_character_count, v.textless_pages, v.recognised_character_count,"
-    "       c.project_stage, c.section_code, c.confirmed_by_user_uid, c.confirmed_at "
+    "       c.project_stage, c.section_code, c.confirmed_by_user_uid, c.confirmed_at,"
+    "       c.revision "
     "FROM document_version v JOIN document d ON d.document_uid = v.document_uid "
-    "LEFT JOIN document_version_classification c ON c.version_uid = v.version_uid "
+    "LEFT JOIN version_classification_current c ON c.version_uid = v.version_uid "
     "WHERE v.version_uid = :version_uid"
 )
 _SELECT_MANIFEST = text(
@@ -182,17 +184,18 @@ _LIST_DOCUMENTS = text(
     "       d.display_title, d.section, v.media_type, v.byte_size,"
     "       v.sha256, v.page_count, v.published_at,"
     "       v.text_character_count, v.textless_pages, v.recognised_character_count,"
-    "       c.project_stage, c.section_code, c.confirmed_by_user_uid, c.confirmed_at "
+    "       c.project_stage, c.section_code, c.confirmed_by_user_uid, c.confirmed_at,"
+    "       c.revision "
     "FROM document d JOIN document_version v ON v.version_uid = d.current_version_uid "
-    "LEFT JOIN document_version_classification c ON c.version_uid = v.version_uid "
+    "LEFT JOIN version_classification_current c ON c.version_uid = v.version_uid "
     "WHERE d.project_uid = :project_uid "
     "ORDER BY v.published_at DESC, v.version_uid DESC"
 )
 
 #: `SECTION-READ-MODEL-01`. The document sets whose **current** version is confirmed in one
 #: section: ``document.current_version_uid`` selects the version, and that version's own row in
-#: ``document_version_classification`` (``W59-SECTION-IDENTITY-DECISION-01``) is the
-#: confirmation. The inner join on the classification is the rule: a set whose current version
+#: ``version_classification_current`` (``W59-SECTION-IDENTITY-DECISION-01``; the latest
+#: revision since `CLASSIFICATION-CORRECTION-01`) is the confirmation. The inner join on the classification is the rule: a set whose current version
 #: has none is not a member, and neither is a set whose *older* version was confirmed in this
 #: section -- the legacy ``document.section`` is not read at all. ``_LIST_DOCUMENTS``' join
 #: (``document`` to ``document_version`` on ``current_version_uid``), so a document with no
@@ -208,7 +211,7 @@ _LIST_SECTION_MEMBERS = text(
     "FROM document d "
     "JOIN project p ON p.project_uid = d.project_uid "
     "JOIN document_version v ON v.version_uid = d.current_version_uid "
-    "JOIN document_version_classification c ON c.version_uid = v.version_uid "
+    "JOIN version_classification_current c ON c.version_uid = v.version_uid "
     "WHERE c.section_code = :section_code "
     "  AND (CAST(:project_uid AS text) IS NULL OR d.project_uid = CAST(:project_uid AS text)) "
     "  AND (CAST(:after AS text) IS NULL OR d.document_uid > CAST(:after AS text)) "
@@ -224,7 +227,7 @@ _LIST_UNCLASSIFIED_CURRENT = text(
     "FROM document d "
     "JOIN project p ON p.project_uid = d.project_uid "
     "JOIN document_version v ON v.version_uid = d.current_version_uid "
-    "LEFT JOIN document_version_classification c ON c.version_uid = v.version_uid "
+    "LEFT JOIN version_classification_current c ON c.version_uid = v.version_uid "
     "WHERE c.version_uid IS NULL "
     "  AND (CAST(:project_uid AS text) IS NULL OR d.project_uid = CAST(:project_uid AS text)) "
     "  AND (CAST(:after AS text) IS NULL OR d.document_uid > CAST(:after AS text)) "
@@ -244,9 +247,10 @@ _LIST_VERSIONS = text(
     "       d.display_title, d.section, v.media_type, v.byte_size,"
     "       v.sha256, v.page_count, v.published_at,"
     "       v.text_character_count, v.textless_pages, v.recognised_character_count,"
-    "       c.project_stage, c.section_code, c.confirmed_by_user_uid, c.confirmed_at "
+    "       c.project_stage, c.section_code, c.confirmed_by_user_uid, c.confirmed_at,"
+    "       c.revision "
     "FROM document_version v JOIN document d ON d.document_uid = v.document_uid "
-    "LEFT JOIN document_version_classification c ON c.version_uid = v.version_uid "
+    "LEFT JOIN version_classification_current c ON c.version_uid = v.version_uid "
     "WHERE v.document_uid = :document_uid "
     "ORDER BY v.version_ordinal DESC"
 )
@@ -274,9 +278,14 @@ _SELECT_VERSION_CHAIN = text(
 _SELECT_SOURCE_FILENAME = text(
     "SELECT source_filename FROM document_version WHERE version_uid = :version_uid"
 )
+#: `CLASSIFICATION-CORRECTION-01`. Every classification read goes through the **current**
+#: view -- the latest revision, the original confirmation while there is no correction -- so a
+#: corrected version is read the same way by every consumer. Only the first-confirmation
+#: insert below touches the base table.
 _SELECT_CLASSIFICATION = text(
-    "SELECT version_uid, project_stage, section_code, confirmed_by_user_uid, confirmed_at "
-    "FROM document_version_classification WHERE version_uid = :version_uid"
+    "SELECT version_uid, project_stage, section_code, confirmed_by_user_uid, confirmed_at,"
+    "       revision "
+    "FROM version_classification_current WHERE version_uid = :version_uid"
 )
 #: One row per version, decided by the primary key. ``DO NOTHING`` waits for a concurrent
 #: uncommitted insert of the same version and then returns no row, so the caller re-reads the
@@ -286,7 +295,36 @@ _INSERT_CLASSIFICATION = text(
     "(version_uid, project_stage, section_code, confirmed_by_user_uid) "
     "VALUES (:version_uid, :project_stage, :section_code, :confirmed_by_user_uid) "
     "ON CONFLICT (version_uid) DO NOTHING "
-    "RETURNING version_uid, project_stage, section_code, confirmed_by_user_uid, confirmed_at"
+    "RETURNING version_uid, project_stage, section_code, confirmed_by_user_uid, confirmed_at,"
+    "          1 AS revision"
+)
+#: `CLASSIFICATION-CORRECTION-01`. A correction of one version is decided against its whole
+#: history, so the original row is locked first: two corrections of the same version serialise
+#: here, and the second reads the first's committed revision. ``FOR NO KEY UPDATE`` fires no
+#: trigger (the original row's UPDATE/DELETE guard fires only on those statements) and does not
+#: conflict with the ``FOR KEY SHARE`` a correction's foreign key takes on the same row. No row
+#: means the version has no classification yet.
+_LOCK_CLASSIFICATION = text(
+    "SELECT version_uid FROM document_version_classification "
+    "WHERE version_uid = :version_uid FOR NO KEY UPDATE"
+)
+#: Every revision of one version, oldest first: the original as revision 1 (no reason) and the
+#: corrections after it (``version_classification_revision``).
+_LIST_CLASSIFICATION_REVISIONS = text(
+    "SELECT version_uid, revision, project_stage, section_code, actor_user_uid, reason, "
+    "       decided_at "
+    "FROM version_classification_revision WHERE version_uid = :version_uid ORDER BY revision"
+)
+#: Append revision ``:revision`` -- the caller computed it under the lock; the primary key
+#: ``(version_uid, revision)`` and ``am_check_classification_correction_chain`` are the second
+#: and third layers behind that.
+_INSERT_CORRECTION = text(
+    "INSERT INTO document_version_classification_correction "
+    "(version_uid, revision, project_stage, section_code, corrected_by_user_uid, reason) "
+    "VALUES (:version_uid, :revision, :project_stage, :section_code, :corrected_by_user_uid, "
+    "        :reason) "
+    "RETURNING version_uid, revision, project_stage, section_code, corrected_by_user_uid, "
+    "          reason, corrected_at"
 )
 
 _VERSIONS_REFERENCING = text(
@@ -322,13 +360,29 @@ def _project_listing_record(row: Any) -> ProjectListingRecord:
 
 
 def _classification_record(row: Any) -> VersionClassificationRecord:
-    version_uid, project_stage, section_code, confirmed_by, confirmed_at = tuple(row)
+    version_uid, project_stage, section_code, confirmed_by, confirmed_at, revision = tuple(row)
     return VersionClassificationRecord(
         version_uid=VersionUid(version_uid),
         project_stage=project_stage,
         section_code=section_code,
         confirmed_by_user_uid=confirmed_by,
         confirmed_at=confirmed_at,
+        revision=int(revision),
+    )
+
+
+def _revision_record(row: Any) -> ClassificationRevisionRecord:
+    (
+        version_uid, revision, project_stage, section_code, actor_user_uid, reason, decided_at,
+    ) = tuple(row)
+    return ClassificationRevisionRecord(
+        version_uid=VersionUid(version_uid),
+        revision=int(revision),
+        project_stage=project_stage,
+        section_code=section_code,
+        actor_user_uid=actor_user_uid,
+        reason=reason,
+        decided_at=decided_at,
     )
 
 
@@ -392,8 +446,9 @@ def _version_record(
     """One ``document_version`` row, in the column order every SELECT here uses.
 
     Written once. ``get_version``, ``list_documents`` and ``list_versions`` project the
-    same eighteen columns in the same order (`W59-SECTION-SEAL-01` added the four of the
-    left-joined classification), and three hand-unpacked copies of that tuple
+    same nineteen columns in the same order (`W59-SECTION-SEAL-01` added the four of the
+    left-joined classification, `CLASSIFICATION-CORRECTION-01` its revision, and the join is
+    now to the current view), and three hand-unpacked copies of that tuple
     would be three places for one of them to shift a column silently -- which is a fault
     the reader cannot see, because every value here is a string, an int or (``section``)
     possibly ``None``.
@@ -417,8 +472,9 @@ def _version_record(
         section_code,
         confirmed_by_user_uid,
         confirmed_at,
+        classification_revision,
     ) = tuple(row)
-    # The left join yields all four or none: every column is NOT NULL in its own table.
+    # The left join yields all five or none: every column is NOT NULL in its own table.
     classification = (
         None
         if project_stage is None
@@ -428,6 +484,7 @@ def _version_record(
             section_code=section_code,
             confirmed_by_user_uid=confirmed_by_user_uid,
             confirmed_at=confirmed_at,
+            revision=int(classification_revision),
         )
     )
     return DocumentVersionRecord(
@@ -708,8 +765,8 @@ class DocumentRepository:
 
         One statement over the whole deployment (or over one project, when ``project_uid``
         is given) instead of one ``list_documents`` per project. A set is a member when
-        ``document.current_version_uid`` has a ``document_version_classification`` row with
-        this code; an older version's confirmation, the legacy ``document.section``, a file
+        ``document.current_version_uid`` has a current classification
+        (``version_classification_current``) with this code; an older version's confirmation, the legacy ``document.section``, a file
         name and a suggestion never make it one. At most ``limit`` records, ascending by
         ``document_uid``; pass the last record's ``document_uid`` as ``after`` for the next
         page, and a page shorter than ``limit`` ends the walk. An unknown project filter is
@@ -789,6 +846,57 @@ class DocumentRepository:
             _SELECT_CLASSIFICATION, {"version_uid": str(version_uid)}
         ).first()
         return None if row is None else _classification_record(row)
+
+    def lock_classification(self, session: Session, version_uid: VersionUid) -> bool:
+        """Lock the version's original classification row; ``False`` when it has none.
+
+        The first step of a correction (`CLASSIFICATION-CORRECTION-01`): corrections of one
+        version serialise on this lock until the holder's transaction ends, and the caller
+        reads the history only after it holds it.
+        """
+        return (
+            session.execute(_LOCK_CLASSIFICATION, {"version_uid": str(version_uid)}).first()
+            is not None
+        )
+
+    def list_classification_revisions(
+        self, session: Session, version_uid: VersionUid
+    ) -> tuple[ClassificationRevisionRecord, ...]:
+        """Every revision of one version's classification, oldest first; empty if unclassified."""
+        rows = session.execute(
+            _LIST_CLASSIFICATION_REVISIONS, {"version_uid": str(version_uid)}
+        ).all()
+        return tuple(_revision_record(row) for row in rows)
+
+    def insert_correction(
+        self,
+        session: Session,
+        *,
+        version_uid: VersionUid,
+        revision: int,
+        project_stage: str,
+        section_code: str,
+        corrected_by_user_uid: str,
+        reason: str,
+    ) -> ClassificationRevisionRecord:
+        """Append revision ``revision`` (>= 2). Never updates a row.
+
+        The caller holds :meth:`lock_classification` and has decided the revision number from
+        the history it read under it; a duplicate number, a gap or a no-op is refused by the
+        database (primary key, ``am_check_classification_correction_chain``).
+        """
+        row = session.execute(
+            _INSERT_CORRECTION,
+            {
+                "version_uid": str(version_uid),
+                "revision": revision,
+                "project_stage": project_stage,
+                "section_code": section_code,
+                "corrected_by_user_uid": corrected_by_user_uid,
+                "reason": reason,
+            },
+        ).one()
+        return _revision_record(row)
 
     def insert_classification(
         self,

@@ -9,6 +9,10 @@ classification ``documents`` stores in ``document_version_classification``
   version, authorized from the account's role set read in the same transaction. An exact
   repeat answers the stored row (first confirmer kept); a different choice is ``conflict``
   with ``conflict_reason: version_already_classified`` and writes nothing.
+* :func:`correct_document_version_classification` -- an expert's append-only correction of
+  the stage and/or section (`CLASSIFICATION-CORRECTION-01`): the rules are
+  :mod:`auditmanager.sections.correction`'s; this reads the version's whole history under a
+  lock, applies them and appends one revision, or answers the revision an exact repeat created.
 * :func:`read_section_review` -- the facts a review needs, read in one session; the review
   itself (:func:`build_section_review`) is computed afterwards, outside any transaction,
   because the recognised-text evidence is read from the object store.
@@ -29,10 +33,16 @@ from sqlalchemy.orm import Session
 
 from auditmanager.documents.public import (
     MANIFEST_ROLE_MARKDOWN,
+    ClassificationRevisionRecord,
     DocumentRepository,
     DocumentVersionRecord,
     ManifestEntry,
     VersionClassificationRecord,
+)
+from auditmanager.sections.correction import (
+    ClassificationRevision,
+    CorrectionRequest,
+    plan_classification_correction,
 )
 from auditmanager.sections.confirmation import (
     ExpertSectionConfirmation,
@@ -55,6 +65,7 @@ __all__ = [
     "SECTION_CODES",
     "build_section_review",
     "classify_document_version",
+    "correct_document_version_classification",
     "read_section_review",
     "route_classified_version",
     "section_names",
@@ -183,7 +194,8 @@ def _domain_refusal(reason: str) -> DomainError:
             ErrorCode.CONFLICT,
             message=(
                 "this version is already classified with a different project stage or "
-                "section; the first classification stands and was not changed"
+                "section; the classification stands and was not changed -- an expert "
+                "corrects it with a reason instead"
             ),
             aggregate_type="DocumentVersionClassification",
             conflict_reason=CONFLICT_VERSION_ALREADY_CLASSIFIED,
@@ -204,6 +216,92 @@ def _domain_refusal(reason: str) -> DomainError:
     return DomainError(ErrorCode.INTERNAL_ERROR, message=f"classification refused: {reason}")
 
 
+# -- correct -------------------------------------------------------------------------
+
+
+def correct_document_version_classification(
+    session: Session,
+    *,
+    project_uid: str,
+    document_uid: str,
+    version_uid: str,
+    project_stage: str,
+    section_code: str,
+    reason: str,
+    expected_revision: int,
+    actor_uid: str,
+    actor_roles: frozenset[str],
+    documents: DocumentRepository | None = None,
+) -> VersionClassificationRecord:
+    """Append one expert correction of a version's classification, or answer its exact repeat.
+
+    The caller owns the transaction and reads ``actor_roles`` from the account inside it.
+    Order: the version chain (``not_found``); the version's original classification row is
+    locked, so corrections of one version serialise; its whole history is read under the lock;
+    the pure rules decide (:func:`plan_classification_correction`); an ``append`` is inserted
+    as the next revision, an ``unchanged`` answers the stored revision the same request
+    created. The answer is that revision as a classification: its values, the expert who made
+    it and when, and its number -- not necessarily the version's current one when someone
+    corrected after it.
+    """
+    repository = documents or DocumentRepository()
+    version_id = VersionUid.parse(version_uid)
+    repository.get_version_in(
+        session,
+        project_uid=ProjectUid.parse(project_uid),
+        document_uid=DocumentUid.parse(document_uid),
+        version_uid=version_id,
+    )
+    repository.lock_classification(session, version_id)
+    stored = repository.list_classification_revisions(session, version_id)
+    plan = plan_classification_correction(
+        version_uid=str(version_id),
+        history=[_revision_of(entry) for entry in stored],
+        request=CorrectionRequest(
+            project_stage=project_stage,
+            section_code=section_code,
+            reason=reason,
+            expected_revision=expected_revision,
+        ),
+        actor_uid=actor_uid,
+        actor_roles=actor_roles,
+    )
+    if plan.action == "unchanged":
+        answered = next(
+            entry for entry in stored if entry.revision == plan.revision.revision
+        )
+    else:
+        assert plan.revision.reason is not None  # corrections always carry a reason
+        answered = repository.insert_correction(
+            session,
+            version_uid=version_id,
+            revision=plan.revision.revision,
+            project_stage=plan.revision.project_stage,
+            section_code=plan.revision.section_code,
+            corrected_by_user_uid=plan.revision.actor_user_uid,
+            reason=plan.revision.reason,
+        )
+    return VersionClassificationRecord(
+        version_uid=answered.version_uid,
+        project_stage=answered.project_stage,
+        section_code=answered.section_code,
+        confirmed_by_user_uid=answered.actor_user_uid,
+        confirmed_at=answered.decided_at,
+        revision=answered.revision,
+    )
+
+
+def _revision_of(entry: ClassificationRevisionRecord) -> ClassificationRevision:
+    return ClassificationRevision(
+        version_uid=str(entry.version_uid),
+        revision=entry.revision,
+        project_stage=entry.project_stage,
+        section_code=entry.section_code,
+        actor_user_uid=entry.actor_user_uid,
+        reason=entry.reason,
+    )
+
+
 # -- review --------------------------------------------------------------------------
 
 
@@ -215,6 +313,9 @@ class ReviewFacts:
     classification: VersionClassificationRecord | None
     source_filename: str
     markdown: ManifestEntry | None
+    #: `CLASSIFICATION-CORRECTION-01`. Every revision of the classification, oldest first
+    #: (revision 1 is the original confirmation); empty while the version is unclassified.
+    revisions: tuple[ClassificationRevisionRecord, ...] = ()
 
 
 def read_section_review(
@@ -241,6 +342,7 @@ def read_section_review(
         classification=version.classification,
         source_filename=repository.source_filename_of(session, version.version_uid) or "",
         markdown=markdown,
+        revisions=repository.list_classification_revisions(session, version.version_uid),
     )
 
 

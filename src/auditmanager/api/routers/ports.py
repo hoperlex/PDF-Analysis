@@ -352,10 +352,11 @@ class DashboardPort(Protocol):
 
 @runtime_checkable
 class SectionPort(Protocol):
-    """``classifyDocumentVersion`` and ``getVersionSectionReview``. `W59-SECTION-SEAL-01`.
+    """``classifyDocumentVersion``, ``correctVersionClassification`` and
+    ``getVersionSectionReview``. `W59-SECTION-SEAL-01`, `CLASSIFICATION-CORRECTION-01`.
 
     A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
-    Both operations address a version through its document and project: a version that does
+    Each operation addresses a version through its document and project: a version that does
     not belong to the named document, or a document outside the named project, is
     ``not_found`` exactly as an unknown identity is.
     """
@@ -377,6 +378,28 @@ class SectionPort(Protocol):
         answers the stored row, first confirmer kept; a different stage or section is
         ``conflict`` with ``conflict_reason: version_already_classified`` and changes
         nothing.
+        """
+
+    def correct_classification(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        version_uid: str,
+        project_stage: str,
+        section_code: str,
+        reason: str,
+        expected_revision: int,
+        user_uid: str,
+    ) -> models.VersionClassification:
+        """Append an expert's correction of the version's stage and/or section.
+
+        `CLASSIFICATION-CORRECTION-01`. ``expert`` is required (``admin`` alone is
+        ``permission_denied``). The answer is the revision written, or the stored revision an
+        exact repeat (same expert, values, reason and ``expected_revision``) created. A stale
+        ``expected_revision`` is ``conflict`` (``classification_revision_stale``), an
+        unclassified version ``conflict`` (``version_not_classified``), a correction equal to
+        the current classification ``validation_failed``. Nothing is ever overwritten.
         """
 
     def get_section_review(

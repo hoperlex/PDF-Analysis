@@ -57,6 +57,7 @@ export function classification(overrides: Partial<VersionClassification> = {}): 
     section_code: 'AR',
     confirmed_at: '2026-10-20T08:00:00Z',
     confirmed_by_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+    revision: 1,
     ...overrides,
   };
 }
@@ -69,6 +70,7 @@ export function review(overrides: Partial<SectionReview> = {}): SectionReview {
   return {
     version_uid: VERSION_UID,
     classification: null,
+    revisions: [],
     recognised_text_consulted: true,
     options: PROJECT_SECTION_VALUES.map((code) => ({
       section_code: code,

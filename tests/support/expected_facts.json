@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 71,
+    "path_count": 72,
     "operations": [
       [
         "POST",
@@ -289,6 +289,11 @@
         "classifyDocumentVersion"
       ],
       [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections",
+        "correctVersionClassification"
+      ],
+      [
         "GET",
         "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review",
         "getVersionSectionReview"
@@ -547,7 +552,9 @@
       "NormVerificationReport",
       "ProjectStage",
       "ClassifyDocumentVersionRequest",
+      "CorrectVersionClassificationRequest",
       "VersionClassification",
+      "VersionClassificationRevision",
       "SectionSuggestion",
       "SectionReviewOption",
       "SectionReview",
@@ -651,6 +658,6 @@
     "api_codes": 25,
     "stored_vocabulary": 23
   },
-  "migration_head": "0027_optimisation_proposals",
+  "migration_head": "0028_classification_corrections",
   "contract_version": "1.0.0-draft.1"
 }

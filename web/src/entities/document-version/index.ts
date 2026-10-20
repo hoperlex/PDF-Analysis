@@ -25,7 +25,10 @@ export { looksLikeDocumentUid, looksLikeVersionUid } from './model/address';
 export type {
   ClassificationFailure,
   ClassificationFailureKind,
+  CorrectionFailure,
+  CorrectionFailureKind,
   OrderedSectionOptions,
+  ReasonProblem,
   ProjectStagePresentation,
   SuggestionEvidence,
   VersionAddress,
@@ -33,12 +36,26 @@ export type {
 export {
   ALREADY_CLASSIFIED_DETAIL,
   CLASSIFY_NOT_PERMITTED_DETAIL,
+  CORRECTION_NOT_CLASSIFIED_DETAIL,
+  CORRECTION_NOT_PERMITTED_DETAIL,
+  CORRECTION_REASON_DETAIL,
+  CORRECTION_REASON_MAX_LENGTH,
+  CORRECTION_STALE_DETAIL,
+  CORRECTION_UNCHANGED_DETAIL,
   PROJECT_STAGES,
   PROJECT_STAGE_LABELS,
   canClassifyVersion,
+  canCorrectClassification,
   classificationFailure,
+  correctionFailure,
+  differsFromCurrent,
+  isCorrected,
   orderSectionOptions,
+  reasonProblem,
+  reasonProblemText,
   reviewOptionOf,
+  revisionText,
+  revisionsNewestFirst,
   sectionTitleOf,
   stageBadgeText,
   stageChoiceText,
@@ -88,3 +105,5 @@ export { VersionPanel } from './ui/version-panel';
 
 export type { ClassificationBadgesProps } from './ui/classification-badges';
 export { ClassificationBadges } from './ui/classification-badges';
+export type { ClassificationHistoryProps } from './ui/classification-history';
+export { ClassificationHistory } from './ui/classification-history';

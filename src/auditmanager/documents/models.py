@@ -186,12 +186,17 @@ class ManifestEntry:
 
 @dataclass(frozen=True, slots=True)
 class VersionClassificationRecord:
-    """`W59-SECTION-SEAL-01`. One version's expert-confirmed project stage and section.
+    """One version's **current** expert-confirmed project stage and section.
 
-    Stored in ``document_version_classification`` (``0024``), outside the immutable
-    ``document_version`` row and with the same no-UPDATE/no-DELETE guarantee. It is a fact
-    about exactly one ``version_uid``: never inherited by a newer version, never derived from
-    ``document.section``, a file name or a suggestion.
+    `W59-SECTION-SEAL-01` stored the original confirmation in
+    ``document_version_classification`` (``0024``), outside the immutable ``document_version``
+    row and with the same no-UPDATE/no-DELETE guarantee. `CLASSIFICATION-CORRECTION-01`
+    (``0028``) lets an expert correct it by appending revisions; this record is what the view
+    ``version_classification_current`` derives: the latest revision, ``revision`` 1 while the
+    version has no correction. ``confirmed_by_user_uid`` and ``confirmed_at`` are those of
+    **that revision** -- who stands behind these values. It is a fact about exactly one
+    ``version_uid``: never inherited by a newer version, never derived from ``document.section``,
+    a file name or a suggestion.
     """
 
     version_uid: VersionUid
@@ -199,6 +204,24 @@ class VersionClassificationRecord:
     section_code: str
     confirmed_by_user_uid: str
     confirmed_at: datetime
+    revision: int = 1
+
+
+@dataclass(frozen=True, slots=True)
+class ClassificationRevisionRecord:
+    """`CLASSIFICATION-CORRECTION-01`. One numbered entry of a version's classification history.
+
+    Revision 1 is the original confirmation (``reason`` ``None``); revisions 2.. are the
+    append-only corrections, each with the expert who made it and why.
+    """
+
+    version_uid: VersionUid
+    revision: int
+    project_stage: str
+    section_code: str
+    actor_user_uid: str
+    reason: str | None
+    decided_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,11 +235,11 @@ class CurrentVersionPlacementRecord:
     (title, ordinal, page count) and the placement itself; it carries no manifest and no
     blob handle.
 
-    ``project_stage`` and ``section_code`` are the **current version's** persisted
-    classification (``document_version_classification``): both set, or both ``None`` while no
-    expert has classified that version. They are never read from the legacy ``document.section``,
-    from an older version of the set or from a file name, and ``version_ordinal`` is a display
-    value, never a key (foundation invariant 3).
+    ``project_stage`` and ``section_code`` are the **current version's** current classification
+    (``version_classification_current``, the latest revision since `CLASSIFICATION-CORRECTION-01`):
+    both set, or both ``None`` while no expert has classified that version. They are never read
+    from the legacy ``document.section``, from an older version of the set or from a file name,
+    and ``version_ordinal`` is a display value, never a key (foundation invariant 3).
     """
 
     project_uid: ProjectUid

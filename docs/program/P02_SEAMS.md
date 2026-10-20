@@ -128,6 +128,11 @@ served profile. `W59-SECTION-SEAL-01` adds `0024_version_classification`: one
 append-only, expert-confirmed project stage (`P`/`R`) and section per version in
 `document_version_classification`, outside the immutable version row, and widens
 the `document.section` CHECK by `PS` (`0011` keeps legacy's fourteen as history).
+`CLASSIFICATION-CORRECTION-01` adds `0028_classification_corrections`: the append-only
+`document_version_classification_correction` (revision 2, 3, ... with the correcting expert and a
+reason; revision 1 is the unchanged original) and the views `version_classification_revision`
+(the history) and `version_classification_current` (the latest revision, which every classification
+read uses).
 
 ### 3.1 Tables
 
@@ -826,7 +831,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Eighty-one operations, sealed. `A5` generates the typed client from this document; `B6`
+Eighty-two operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -848,7 +853,10 @@ until `W55A-SEARCH-01`). `W55B-SEAL-01` added the two portal-block reads on 2026
 `W57A-SEAL-01B` added the refusing `getRunNormVerification`. `W59-SECTION-SEAL-01` added
 `classifyDocumentVersion` and `getVersionSectionReview` on 2026-10-20: a version's
 expert-confirmed project stage and section, persisted by `0024_version_classification`, which
-`startRun` and `reauditRun` now route the analysis profile from. `W59-VERSION-COMPARE-01`
+`startRun` and `reauditRun` now route the analysis profile from. `CLASSIFICATION-CORRECTION-01`
+added `correctVersionClassification`: an expert's append-only correction (a numbered revision
+with a reason, `0028_classification_corrections`); the current classification is the latest
+revision and every read of it goes through `version_classification_current`. `W59-VERSION-COMPARE-01`
 added `compareDocumentVersions` on 2026-10-20: a read-only comparison of two versions of one
 set with the same confirmed section and either the same stage (`mode=version`) or a `P`
 source and an `R` target (`mode=stage`, the W62 П/Р slice), whose sheet pairs and finding
@@ -988,6 +996,7 @@ could.
 | `streamVersionPortalBlockCrop` | `GET /versions/{version_uid}/portal-blocks/{portal_block_id}/crop` |
 | `getRunNormVerification` | `GET /runs/{run_id}/norm-verification` |
 | `classifyDocumentVersion` | `PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification` |
+| `correctVersionClassification` | `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections` |
 | `getVersionSectionReview` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review` |
 | `compareDocumentVersions` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison` |
 | `listAnalysisProfiles` | `GET /analysis/profiles` |
@@ -1054,6 +1063,13 @@ Rules that hold across the whole surface:
     repeat answers the stored classification with its first confirmer, and a repeat with a
     different stage or section is `conflict` with `conflict_reason:
     version_already_classified`;
+  * `correctVersionClassification` (`CLASSIFICATION-CORRECTION-01`) appends a numbered
+    revision and is a compare-and-set on `expected_revision`: an exact repeat (same expert,
+    values, reason and `expected_revision`) answers the stored revision and writes nothing, a
+    stale `expected_revision` is `conflict` with `conflict_reason:
+    classification_revision_stale`, an unclassified version is `conflict` with
+    `conflict_reason: version_not_classified`, and a pair equal to the current
+    classification is `validation_failed`;
   * `createAssignment` (`W61-DISPATCHER-01`) keeps one open assignment per scope: an exact
     repeat (same assignee and note) answers the open assignment, and any other creation on
     that scope is `conflict` with `conflict_reason: assignment_open`;

@@ -17,7 +17,14 @@ import { sectionTitleOf, stageBadgeText } from '../model/classification';
 import styles from './classification-badges.module.css';
 
 export interface ClassificationBadgesProps {
-  readonly classification: VersionClassification | null | undefined;
+  /**
+   * The pair to show: a version's classification, or one entry of its history
+   * (`CLASSIFICATION-CORRECTION-01`) -- only the stage and the section are read.
+   */
+  readonly classification:
+    | Pick<VersionClassification, 'project_stage' | 'section_code'>
+    | null
+    | undefined;
   /**
    * `true` only when the section review said, explicitly, that no analysis profile is
    * registered for the confirmed section. Absent or `false` adds nothing.

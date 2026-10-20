@@ -1,0 +1,35 @@
+/*
+ * Layout for the classification history. Colour is deliberately absent: the badges, the notes
+ * and the code samples take theirs from `globals.css`, where the contrast census measures
+ * them. Every length is a global token.
+ */
+
+.list {
+  display: grid;
+  gap: var(--am-gap-md);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  display: grid;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A reason is the expert's own text: keep its line breaks, wrap what is too long. */
+.reason {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

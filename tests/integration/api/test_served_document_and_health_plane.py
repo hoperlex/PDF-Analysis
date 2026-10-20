@@ -148,6 +148,8 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             # `W59-SECTION-SEAL-01`: the classification takes a body. The section review
             # takes only path identities and declares none.
             "classifyDocumentVersion",
+            # `CLASSIFICATION-CORRECTION-01`: the correction takes a body.
+            "correctVersionClassification",
             # `W59-VERSION-COMPARE-01`: a required target version and bounded paging.
             "compareDocumentVersions",
             # `W59-VERSION-UPLOAD-01`: the next version takes a multipart body.

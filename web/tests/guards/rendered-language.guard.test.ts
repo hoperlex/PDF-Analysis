@@ -86,14 +86,17 @@ import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import {
   ALREADY_CLASSIFIED_DETAIL, CARRYOVER_CONFLICT_TEXT, CARRYOVER_NOT_PERMITTED_DETAIL,
-  CLASSIFY_NOT_PERMITTED_DETAIL, COMPARISON_DIFF_LIMIT,
+  CLASSIFY_NOT_PERMITTED_DETAIL, COMPARISON_DIFF_LIMIT, CORRECTION_NOT_CLASSIFIED_DETAIL,
+  CORRECTION_NOT_PERMITTED_DETAIL, CORRECTION_REASON_DETAIL, CORRECTION_STALE_DETAIL,
+  CORRECTION_UNCHANGED_DETAIL,
   DOCUMENT_PAGE_LIMIT, UPLOAD_CONSTRAINTS_STATED, UPLOAD_ENVELOPE_RULES, VERSION_PAGE_LIMIT, classifyUploadFailure,
   precheckProblemMessage,
 } from '@/entities/document-version';
 import { UPLOAD_CONSTRAINTS_ADDED } from '@/entities/document-version/model/upload-failure';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS, PROJECT_STRUCTURE_ORDER, projectSectionOf } from '@/entities/project';
-import type { AnalysisProfileListItem, CarryoverCandidate } from '@/shared/api';
+import type { AnalysisProfileListItem, CarryoverCandidate, VersionClassificationRevision } from '@/shared/api';
 import { ClassifyVersionFormView } from '@/features/classify-version';
+import { CorrectVersionClassificationFormView } from '@/features/correct-version-classification';
 import { CarryOverDecisionView } from '@/features/carry-over-decision';
 import { VersionClassification, VersionClassificationView } from '@/widgets/version-classification';
 import { ProjectStructureView } from '@/widgets/project-sections';
@@ -526,8 +529,26 @@ const classification = (
   section_code: 'AR',
   confirmed_at: '2026-10-20T08:00:00Z',
   confirmed_by_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+  revision: 1,
   ...over,
 });
+
+/**
+ * `CLASSIFICATION-CORRECTION-01`. A classification's history: the original confirmation and two
+ * corrections with the experts' own reasons (Cyrillic, one with a line break), and the Russian
+ * sentence of each refusal the correction form can show.
+ */
+const CLASSIFICATION_HISTORY: VersionClassificationRevision[] = [
+  { revision: 1, project_stage: 'P', section_code: 'AR', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', at: '2026-10-20T08:00:00Z', reason: null },
+  { revision: 2, project_stage: 'R', section_code: 'KJ', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8G', at: '2026-10-21T09:30:00Z', reason: 'Раздел определён по штампу листа неверно,\nэто конструкции железобетонные.' },
+];
+const CORRECTION_DETAILS = {
+  stale: CORRECTION_STALE_DETAIL,
+  not_classified: CORRECTION_NOT_CLASSIFIED_DETAIL,
+  unchanged: CORRECTION_UNCHANGED_DETAIL,
+  reason: CORRECTION_REASON_DETAIL,
+  not_permitted: CORRECTION_NOT_PERMITTED_DETAIL,
+} as const;
 
 /**
  * `W60-OPT-MATCH-01`. One answer of «Спецификация и цены», every value Cyrillic, an identifier
@@ -640,6 +661,7 @@ const specificationSets = (client: Client): void => {
 const sectionReview = (over: Partial<SectionReview> = {}): SectionReview => ({
   version_uid: VERSION_UID,
   classification: null,
+  revisions: [],
   recognised_text_consulted: true,
   options: PROJECT_SECTIONS.map((section) => ({
     section_code: section.code,
@@ -2192,6 +2214,72 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         onConflict: () => undefined,
       }),
   },
+  /*
+   * `CLASSIFICATION-CORRECTION-01`. The confirmed panel after a correction (revision, history
+   * with reasons, the «Исправить» control), with the correction form open, and the form in
+   * flight and refused in every way a reader can be shown.
+   */
+  ...([false, true] as const).map((correcting) => ({
+    name: `version-classification-corrected${correcting ? '-correcting' : ''}`,
+    make: () =>
+      createElement(VersionClassificationView, {
+        address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
+        review: sectionReview({
+          classification: classification({
+            project_stage: 'R',
+            section_code: 'KJ',
+            revision: 2,
+          }),
+          revisions: CLASSIFICATION_HISTORY,
+        }),
+        roles: ['expert'],
+        conflict: false,
+        onConflict: () => undefined,
+        correcting,
+        onCorrecting: () => undefined,
+      }),
+  })),
+  {
+    name: 'correct-version-classification-form-pending',
+    make: () =>
+      createElement(CorrectVersionClassificationFormView, {
+        review: sectionReview(),
+        current: classification({ project_stage: 'R', section_code: 'KJ', revision: 2 }),
+        stage: 'P',
+        section: 'KJ',
+        reason: 'Лист относится к проектной документации',
+        pending: true,
+        failure: null,
+        onStage: () => undefined,
+        onSection: () => undefined,
+        onReason: () => undefined,
+        onSubmit: () => undefined,
+        onCancel: () => undefined,
+      }),
+  },
+  ...(['stale', 'not_classified', 'unchanged', 'reason', 'not_permitted'] as const).map((kind) => ({
+    name: `correct-version-classification-form-${kind}`,
+    make: () =>
+      createElement(CorrectVersionClassificationFormView, {
+        review: sectionReview(),
+        current: classification({ project_stage: 'R', section_code: 'KJ', revision: 2 }),
+        stage: 'P',
+        section: 'AR',
+        reason: kind === 'reason' ? '...' : 'Лист относится к проектной документации',
+        pending: false,
+        failure: {
+          kind,
+          detail: CORRECTION_DETAILS[kind],
+          correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100',
+          retryable: false,
+        },
+        onStage: () => undefined,
+        onSection: () => undefined,
+        onReason: () => undefined,
+        onSubmit: () => undefined,
+        onCancel: () => undefined,
+      }),
+  })),
   {
     name: 'classify-version-form-pending',
     make: () =>

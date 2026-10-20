@@ -109,8 +109,10 @@ _SPEND = text(
 #: (`SECTION-READ-MODEL-01`, `W59-SECTION-IDENTITY-DECISION-01`). ``document.current_version_uid``
 #: selects the version -- the same join ``DocumentRepository._LIST_PROJECTS`` counts through,
 #: so "a document" means one with a published current version here as in every other count
-#: this contract publishes -- and that version's row in ``document_version_classification`` is
-#: its confirmed section. The ``LEFT JOIN`` is the unclassified rule: a current version no
+#: this contract publishes -- and that version's row in ``version_classification_current`` is
+#: its confirmed section: the latest revision, so a section an expert corrected
+#: (`CLASSIFICATION-CORRECTION-01`) counts under the corrected one and never under the original.
+#: The ``LEFT JOIN`` is the unclassified rule: a current version no
 #: expert has classified has no row, so ``section_code`` is NULL and ``GROUP BY`` puts every
 #: such document in one NULL group, which SQL already groups together, rather than this query
 #: having to special-case it. The legacy ``document.section`` is **not read at all**: it is
@@ -119,7 +121,7 @@ _SPEND = text(
 _DOCUMENTS_BY_SECTION = text(
     "SELECT c.section_code, count(*) "
     "FROM document d JOIN document_version v ON v.version_uid = d.current_version_uid "
-    "LEFT JOIN document_version_classification c ON c.version_uid = v.version_uid "
+    "LEFT JOIN version_classification_current c ON c.version_uid = v.version_uid "
     "GROUP BY c.section_code"
 )
 
