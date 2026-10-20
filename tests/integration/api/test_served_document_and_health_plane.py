@@ -173,6 +173,13 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "setProjectVendorList",
             # `W60-OPT-MATCH-01`: the priced specification's bounded paging.
             "getSpecificationPrices",
+            # `W60-OPT-PROPOSALS-01`: a keyed start, a project read with filters, a paged
+            # read and a keyed decision with a closed body. The decision history and the CSV
+            # take a pattern-checked path identity only and declare no 422.
+            "startOptimisationPass",
+            "listOptimisationPasses",
+            "listOptimisationProposals",
+            "decideOptimisationProposal",
             # `W63-SECTION-FORM7-01`: a path code, filters and paging.
             "getSectionSpecification",
         }, declared_422

@@ -324,6 +324,11 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.optimisation.projectVendorLists(projectUid)` | `['optimisation','vendor-lists',uid]` | `W60-PRICE-LIST-01` |
 | `queryKeys.optimisation.specificationPrices(projectUid, documentUid, offset?, limit?)` | `['optimisation','specification-prices',projectUid,documentUid,{offset,limit}]` | `W60-OPT-MATCH-01` |
 | `queryKeys.optimisation.specificationPricesAll(projectUid)` | `['optimisation','specification-prices',projectUid]` | `W60-OPT-MATCH-01` |
+| `queryKeys.optimisation.passes(projectUid, documentUid)` | `['optimisation','passes',uid,docUid]` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.allPasses()` | `['optimisation','passes']` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.proposalsOf(passId)` | `['optimisation','proposals',id]` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.proposals(passId, decision, offset, limit)` | `['optimisation','proposals',id,{decision,offset,limit}]` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.proposalDecisions(proposalId)` | `['optimisation','proposal-decisions',id]` | `W60-OPT-PROPOSALS-01` |
 | `queryKeys.optimisation.sectionSpecification(sectionCode, {projectUid?, q?, offset?, limit?})` | `['optimisation','section-specification',sectionCode,{projectUid,q,offset,limit}]` | `W63-SECTION-FORM7-01` |
 
 `projects`, `versions`, `runs`, `findings`, `dashboard`, `account`, `users`, `registrations`,
@@ -380,6 +385,17 @@ answer. None of them changes a number the dashboard reads.
 offset are part of the key. It reads every project's price list, and `uploadPriceList` belongs to
 another slice, so nothing invalidates it; its query is declared with `staleTime: 0` and is asked
 again whenever the screen mounts, and «Обновить» re-reads it.
+
+`W60-OPT-PROPOSALS-01` adds «Предложения» to the same root: `optimisation.passes(uid, docUid)` holds
+`listOptimisationPasses` for one document set (each pass carries its counts by decision),
+`optimisation.proposals(...)` one page of `listOptimisationProposals` (the decision filter and the page
+are in the key) and `optimisation.proposalDecisions(id)` one proposal's history, read only when it is
+opened. `startOptimisationPass` invalidates every project's `passes` prefix and the new pass's
+proposals; `decideOptimisationProposal` invalidates the pass's `proposalsOf` prefix, the `passes`
+prefix (the counts by decision are on the pass) and the proposal's history. Both mint their
+`Idempotency-Key` per intent and drop it once the intent completes — a decision is appended on
+purpose, and a pass over changed inputs must not replay the old one. A proposal is not a finding:
+neither command invalidates a finding, a decision journal or the dashboard.
 
 There is **no global domain store.** The query client in `_app` is the only cache. PC-01's
 state lives on the server; a second copy of it in the browser is a second source of truth

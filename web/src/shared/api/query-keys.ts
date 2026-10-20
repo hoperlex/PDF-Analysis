@@ -43,6 +43,9 @@ import type {
   PriceListId,
   FindingCategory,
   NormDocumentId,
+  OptimisationPassId,
+  OptimisationProposalId,
+  ProposalDecisionState,
   FindingUid,
   ProjectSection,
   ProjectUid,
@@ -176,6 +179,25 @@ export const queryKeys = {
     specificationPricesAll: (projectUid: ProjectUid) =>
       ['optimisation', 'specification-prices', projectUid] as const,
     /**
+     * «Предложения» (`W60-OPT-PROPOSALS-01`). `passes` holds `listOptimisationPasses` for one
+     * project and, optionally, one document set; `proposals` one page of
+     * `listOptimisationProposals` (the page and the decision filter are in the key);
+     * `proposalDecisions` one proposal's history. Starting a pass invalidates the project's
+     * `passes`; a decision invalidates the pass's `proposalsOf` prefix, every project's
+     * `passes` (the counts by decision are on the pass) and the proposal's history.
+     */
+    passes: (projectUid: ProjectUid, documentUid: DocumentUid | null) =>
+      ['optimisation', 'passes', projectUid, documentUid] as const,
+    allPasses: () => ['optimisation', 'passes'] as const,
+    proposalsOf: (passId: OptimisationPassId) => ['optimisation', 'proposals', passId] as const,
+    proposals: (
+      passId: OptimisationPassId,
+      decision: ProposalDecisionState | null,
+      offset: number,
+      limit: number,
+    ) => ['optimisation', 'proposals', passId, { decision, offset, limit }] as const,
+    proposalDecisions: (proposalId: OptimisationProposalId) =>
+      ['optimisation', 'proposal-decisions', proposalId] as const,
      * One page of `getSectionSpecification` (`W63-SECTION-FORM7-01`): a section's combined
      * Form-7 specification across projects. The section is a filter, the project filter and
      * the search text are part of the answer, so each is part of the key. Any project's

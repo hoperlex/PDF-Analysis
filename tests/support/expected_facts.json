@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 66,
+    "path_count": 71,
     "operations": [
       [
         "POST",
@@ -374,6 +374,36 @@
         "getSpecificationPrices"
       ],
       [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/optimisation-passes",
+        "startOptimisationPass"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/optimisation-passes",
+        "listOptimisationPasses"
+      ],
+      [
+        "GET",
+        "/optimisation-passes/{optimisation_pass_id}/proposals",
+        "listOptimisationProposals"
+      ],
+      [
+        "POST",
+        "/optimisation-proposals/{optimisation_proposal_id}/decisions",
+        "decideOptimisationProposal"
+      ],
+      [
+        "GET",
+        "/optimisation-proposals/{optimisation_proposal_id}/decisions",
+        "listProposalDecisions"
+      ],
+      [
+        "GET",
+        "/optimisation-passes/{optimisation_pass_id}/export.csv",
+        "exportOptimisationProposalsCsv"
+      ],
+      [
         "GET",
         "/sections/{section_code}/specification",
         "getSectionSpecification"
@@ -591,6 +621,24 @@
       "SpecificationPriceRow",
       "SpecificationRowPage",
       "SpecificationPrices",
+      "OptimisationPassId",
+      "OptimisationProposalId",
+      "ProposalDecisionId",
+      "OptimisationProposalType",
+      "ProposalMatchBasis",
+      "ProposalAnalogBasis",
+      "ProposalVerdict",
+      "ProposalDecisionState",
+      "ProposalDecisionCounts",
+      "OptimisationPass",
+      "OptimisationPassList",
+      "ProposalPosition",
+      "ProposalDecision",
+      "OptimisationProposal",
+      "OptimisationProposalPage",
+      "DecideOptimisationProposalRequest",
+      "ProposalDecisionResult",
+      "ProposalDecisionList",
       "SectionSpecificationSource",
       "SectionSpecificationProject",
       "SectionSpecificationExcludedVersion",
@@ -603,6 +651,6 @@
     "api_codes": 25,
     "stored_vocabulary": 23
   },
-  "migration_head": "0026_price_lists",
+  "migration_head": "0027_optimisation_proposals",
   "contract_version": "1.0.0-draft.1"
 }

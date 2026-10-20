@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "f6192e9cb641c10bdfdfa9f05d4e7f67bfe50299cd8c0e9d73b6f4272b0f4bad",
-    "content_commit": "1c643357",
-    "content_commit_subject": "W63-SECTION-FORM7-01 API reseal on integration base 1c643357",
-    "dispatch_named_commit": "1c643357",
-    "commit_note": "W63-SECTION-FORM7-01 adds a section's combined Form-7 specification across projects: getSectionSpecification (GET /sections/{section_code}/specification, any one role; optional project_uid, q, offset, limit) and six schemas (SectionSpecification, SectionSpecificationProject, SectionSpecificationSource, SectionSpecificationExcludedVersion, SectionSpecificationRow, SectionSpecificationRowPage), built from the priced specification's own: every row carries its project, set, version, page, sheet and line span, rows are never merged across projects, each row is priced from its own project's current price list, totals exist per project and currency only, a current version nobody classified is listed as excluded, a bound is a state; no error code is added.",
+    "sha256": "8894201e289133bae89c844d0861bdfb0688f5749eb27cd39e1fc1d3a1ee7a5b",
+    "content_commit": "e668171b",
+    "content_commit_subject": "W63-SECTION-FORM7-01 API reseal on integration base e668171b",
+    "dispatch_named_commit": "e668171b",
+    "commit_note": "W60 adds the optimisation passes, their deterministic proposals and the experts' decisions: startOptimisationPass (POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes, expert, keyed), listOptimisationPasses, listOptimisationProposals, decideOptimisationProposal (expert, keyed), listProposalDecisions and exportOptimisationProposalsCsv, five paths and eighteen schemas, on top of W60-OPT-MATCH-01 (getSpecificationPrices), W60-PRICE-LIST-01 (six price-list and vendor-list operations) and W61-DISPATCHER-01; the identities opp_, opr_ and opd_ (domain revision 17); no error code is added. W63-SECTION-FORM7-01 adds a section's combined Form-7 specification across projects: getSectionSpecification (GET /sections/{section_code}/specification, any one role; optional project_uid, q, offset, limit) and six schemas (SectionSpecification, SectionSpecificationProject, SectionSpecificationSource, SectionSpecificationExcludedVersion, SectionSpecificationRow, SectionSpecificationRowPage), built from the priced specification's own: every row carries its project, set, version, page, sheet and line span, rows are never merged across projects, each row is priced from its own project's current price list, totals exist per project and currency only, a current version nobody classified is listed as excluded, a bound is a state; no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 66,
-    "operations": 75,
-    "component_schemas": 217,
+    "paths": 71,
+    "operations": 81,
+    "component_schemas": 235,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "f6192e9cb641c10bdfdfa9f05d4e7f67bfe50299cd8c0e9d73b6f4272b0f4bad",
+    "snapshot_sha256": "8894201e289133bae89c844d0861bdfb0688f5749eb27cd39e1fc1d3a1ee7a5b",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "6c5133fdbed3414550062ce7488abc860cc280cf6a2a55f69bb937f758dfd314",
-      "index.ts": "b1651d5a450f724873f57819622ccab4f464d39ac364a01f28646a2d70310be2",
-      "operations.gen.ts": "7b8c0528dc07a4d8cf90e887a6cd8d953d3d5b1ec68fda6c13f3d3bd15e97436",
-      "types.gen.ts": "973e74d7c4dbc195939b1a3c46040dfd7ef1ba22e7480bc1e048dd85a089994a"
+      "client.gen.ts": "26c153e3b73957caad6f752e5acdf41a7431a3349a74d3ab76358121c2b613b6",
+      "index.ts": "da30ac764efe0e6a470a8bbe95873b252ffe046fffae84bfa54d0cfb403000bf",
+      "operations.gen.ts": "e542543f08ab7f0050031e744240c7fc2e76e72d0fde547b90b08273066f8677",
+      "types.gen.ts": "746ec9a3f11df8fc5b8567cfcd2eb9f4fc22255d7e63860747885a298c161087"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

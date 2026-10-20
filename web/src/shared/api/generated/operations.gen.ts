@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 f6192e9cb641c10bdfdfa9f05d4e7f67bfe50299cd8c0e9d73b6f4272b0f4bad
+ *   sha256 8894201e289133bae89c844d0861bdfb0688f5749eb27cd39e1fc1d3a1ee7a5b
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -35,6 +35,7 @@ import type {
   CreateProjectRequest,
   Cursor,
   DashboardSummary,
+  DecideOptimisationProposalRequest,
   DecisionEventPage,
   DecisionRecordPage,
   DocumentUid,
@@ -66,6 +67,11 @@ import type {
   NormSnapshotPage,
   NormVerificationReport,
   NormsSnapshotId,
+  OptimisationPass,
+  OptimisationPassId,
+  OptimisationPassList,
+  OptimisationProposalId,
+  OptimisationProposalPage,
   PortalBlockId,
   PortalBlockPage,
   PriceListId,
@@ -77,6 +83,9 @@ import type {
   ProjectPage,
   ProjectSection,
   ProjectUid,
+  ProposalDecisionList,
+  ProposalDecisionResult,
+  ProposalDecisionState,
   RegistrationRequest,
   RegistrationRequestId,
   RegistrationRequestPage,
@@ -128,6 +137,8 @@ export const OPERATION_IDS = [
   'compareDocumentVersions',
   'createAssignment',
   'createProject',
+  'decideOptimisationProposal',
+  'exportOptimisationProposalsCsv',
   'exportRunCsv',
   'exportRunXlsx',
   'getAssignment',
@@ -157,9 +168,12 @@ export const OPERATION_IDS = [
   'listNormParagraphs',
   'listNormSnapshotEvents',
   'listNormSnapshots',
+  'listOptimisationPasses',
+  'listOptimisationProposals',
   'listPriceListPositions',
   'listPriceListRevisions',
   'listProjects',
+  'listProposalDecisions',
   'listRegistrations',
   'listReleases',
   'listRunFindings',
@@ -182,6 +196,7 @@ export const OPERATION_IDS = [
   'setJobPriority',
   'setProjectVendorList',
   'setWorkerIntake',
+  'startOptimisationPass',
   'startRun',
   'streamDocumentVersionContent',
   'streamNormDocumentContent',
@@ -477,6 +492,59 @@ export type CreateProjectInput = {
 
 /** Success body of `createProject` (`application/json`, HTTP 201). */
 export type CreateProjectResult = Project;
+
+// ------------------------------------------------------------------------------------
+// decideOptimisationProposal - POST /optimisation-proposals/{optimisation_proposal_id}/decisions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Decide Optimisation Proposal
+ *
+ * Append an expert's decision on a proposal: `accept`, `reject` or `revise` (the comment is required for `revise`, at most 2000 characters). Decisions are only appended, never changed; the latest one is current, and any number may follow. `expert` is required (`admin` alone is `permission_denied`); an unknown proposal is `404`. An exact repeat of the `Idempotency-Key` answers the stored decision; the same key with another verdict, comment, proposal or caller is `409 idempotency_key_reuse`. The decision belongs to the proposal alone: no finding is read or changed.
+ */
+export type DecideOptimisationProposalInput = {
+  /** Path parameters, substituted into `/optimisation-proposals/{optimisation_proposal_id}/decisions`. */
+  path: {
+    optimisation_proposal_id: OptimisationProposalId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: DecideOptimisationProposalRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `decideOptimisationProposal` (`application/json`, HTTP 201). */
+export type DecideOptimisationProposalResult = ProposalDecisionResult;
+
+// ------------------------------------------------------------------------------------
+// exportOptimisationProposalsCsv - GET /optimisation-passes/{optimisation_pass_id}/export.csv
+// ------------------------------------------------------------------------------------
+
+/**
+ * Export Optimisation Proposals Csv
+ *
+ * Every proposal of the pass as a CSV file, one row each in ordinal order: the pass, the specification row's provenance, both positions, both exact unit prices, the saving (an empty cell when it is absent, never `0`) and the current decision. UTF-8 with a byte-order mark, CRLF line endings, RFC 4180 quoting; every cell that a spreadsheet would read as a formula is prefixed with an apostrophe. Computed on request from the stored rows; separate from the findings' CSV. An unknown pass is `404`. Any one role, `role:admin|expert`.
+ */
+export type ExportOptimisationProposalsCsvInput = {
+  /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/export.csv`. */
+  path: {
+    optimisation_pass_id: OptimisationPassId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `exportOptimisationProposalsCsv` (`text/csv`, HTTP 200). */
+export type ExportOptimisationProposalsCsvResult = Blob;
 
 // ------------------------------------------------------------------------------------
 // exportRunCsv - GET /runs/{run_id}/export.csv
@@ -1212,6 +1280,66 @@ export type ListNormSnapshotsInput = {
 export type ListNormSnapshotsResult = NormSnapshotPage;
 
 // ------------------------------------------------------------------------------------
+// listOptimisationPasses - GET /projects/{project_uid}/optimisation-passes
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Optimisation Passes
+ *
+ * The project's optimisation passes, newest first (at most `limit`, 100 by default), each with its counts by decision; `document_uid` narrows to one document set of the project. An unknown project or a set of another project is `404`. Any one role, `role:admin|expert`.
+ */
+export type ListOptimisationPassesInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/optimisation-passes`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    document_uid?: DocumentUid;
+    /** Passes per answer. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listOptimisationPasses` (`application/json`, HTTP 200). */
+export type ListOptimisationPassesResult = OptimisationPassList;
+
+// ------------------------------------------------------------------------------------
+// listOptimisationProposals - GET /optimisation-passes/{optimisation_pass_id}/proposals
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Optimisation Proposals
+ *
+ * One page of a pass's proposals in ordinal order (`offset`, `limit`, `next_offset`), each with its provenance in the specification, the matched and the proposed position, both exact unit prices, the saving where it is computable and its current decision. `decision` narrows to the proposals in one decision state (`pending` for none yet); the pass's `decision_counts` always count every proposal. An unknown pass is `404`. Any one role, `role:admin|expert`.
+ */
+export type ListOptimisationProposalsInput = {
+  /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/proposals`. */
+  path: {
+    optimisation_pass_id: OptimisationPassId;
+  };
+  /** Query string parameters. */
+  query?: {
+    decision?: ProposalDecisionState;
+    /** Proposals per answer. */
+    limit?: number;
+    /** Position in the pass's proposals, in ordinal order. */
+    offset?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listOptimisationProposals` (`application/json`, HTTP 200). */
+export type ListOptimisationProposalsResult = OptimisationProposalPage;
+
+// ------------------------------------------------------------------------------------
 // listPriceListPositions - GET /price-lists/{price_list_id}/positions
 // ------------------------------------------------------------------------------------
 
@@ -1285,6 +1413,29 @@ export type ListProjectsInput = {
 
 /** Success body of `listProjects` (`application/json`, HTTP 200). */
 export type ListProjectsResult = ProjectPage;
+
+// ------------------------------------------------------------------------------------
+// listProposalDecisions - GET /optimisation-proposals/{optimisation_proposal_id}/decisions
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Proposal Decisions
+ *
+ * The proposal's whole append-only decision history, oldest first, each with its verdict, comment, author and time; the last one is current. An unknown proposal is `404`. Any one role, `role:admin|expert`.
+ */
+export type ListProposalDecisionsInput = {
+  /** Path parameters, substituted into `/optimisation-proposals/{optimisation_proposal_id}/decisions`. */
+  path: {
+    optimisation_proposal_id: OptimisationProposalId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listProposalDecisions` (`application/json`, HTTP 200). */
+export type ListProposalDecisionsResult = ProposalDecisionList;
 
 // ------------------------------------------------------------------------------------
 // listRegistrations - GET /registrations
@@ -1859,6 +2010,35 @@ export type SetWorkerIntakeInput = {
 export type SetWorkerIntakeResult = ExecutionWorker;
 
 // ------------------------------------------------------------------------------------
+// startOptimisationPass - POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes
+// ------------------------------------------------------------------------------------
+
+/**
+ * Start Optimisation Pass
+ *
+ * Start the optimisation pass of the document set's current AR version. The pass pins the version, its newest published run and that run's saved text layer, the project's current price-list revision and the effective AR vendor list (the project's own, else the administrator's), reads the specification, matches it against the price list and stores the deterministic proposals `cheaper_analog`: for a row matched to exactly one position, another position of the same revision in the same unit and currency, with a lower unit price, from a vendor on the list, of the same kind of product (at most three per row). The saving is `(current − proposed) × quantity` and is absent when the row's quantity is not a plain number. `expert` is required (`admin` alone is `permission_denied`). A precondition that is not met is `409 conflict` with `conflict_reason` `version_unclassified`, `section_not_ar`, `price_list_missing`, `analysis_missing`, `text_unavailable`, `specification_too_large` or `vendor_list_missing` and nothing is written, not even the key; an unknown project or a set of another project is `404`. An exact repeat of the `Idempotency-Key` answers the stored pass, the same key for another set or caller is `409 idempotency_key_reuse`, and a new key over exactly the same inputs answers the pass already stored instead of writing a second one.
+ */
+export type StartOptimisationPassInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/optimisation-passes`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `startOptimisationPass` (`application/json`, HTTP 201). */
+export type StartOptimisationPassResult = OptimisationPass;
+
+// ------------------------------------------------------------------------------------
 // startRun - POST /runs
 // ------------------------------------------------------------------------------------
 
@@ -2312,6 +2492,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 409, 422, 500, 503],
     tags: ['projects'],
   },
+  decideOptimisationProposal: {
+    operationId: 'decideOptimisationProposal',
+    method: 'POST',
+    path: '/optimisation-proposals/{optimisation_proposal_id}/decisions',
+    pathParams: ['optimisation_proposal_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['optimisation'],
+  },
+  exportOptimisationProposalsCsv: {
+    operationId: 'exportOptimisationProposalsCsv',
+    method: 'GET',
+    path: '/optimisation-passes/{optimisation_pass_id}/export.csv',
+    pathParams: ['optimisation_pass_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'text/csv',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['optimisation'],
+  },
   exportRunCsv: {
     operationId: 'exportRunCsv',
     method: 'GET',
@@ -2718,6 +2926,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['norms'],
   },
+  listOptimisationPasses: {
+    operationId: 'listOptimisationPasses',
+    method: 'GET',
+    path: '/projects/{project_uid}/optimisation-passes',
+    pathParams: ['project_uid'],
+    queryParams: ['document_uid', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
+  },
+  listOptimisationProposals: {
+    operationId: 'listOptimisationProposals',
+    method: 'GET',
+    path: '/optimisation-passes/{optimisation_pass_id}/proposals',
+    pathParams: ['optimisation_pass_id'],
+    queryParams: ['decision', 'limit', 'offset'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
+  },
   listPriceListPositions: {
     operationId: 'listPriceListPositions',
     method: 'GET',
@@ -2759,6 +2995,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['projects'],
+  },
+  listProposalDecisions: {
+    operationId: 'listProposalDecisions',
+    method: 'GET',
+    path: '/optimisation-proposals/{optimisation_proposal_id}/decisions',
+    pathParams: ['optimisation_proposal_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['optimisation'],
   },
   listRegistrations: {
     operationId: 'listRegistrations',
@@ -3067,6 +3317,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  startOptimisationPass: {
+    operationId: 'startOptimisationPass',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/optimisation-passes',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['optimisation'],
   },
   startRun: {
     operationId: 'startRun',

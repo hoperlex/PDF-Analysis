@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 f6192e9cb641c10bdfdfa9f05d4e7f67bfe50299cd8c0e9d73b6f4272b0f4bad
+ *   sha256 8894201e289133bae89c844d0861bdfb0688f5749eb27cd39e1fc1d3a1ee7a5b
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'f6192e9cb641c10bdfdfa9f05d4e7f67bfe50299cd8c0e9d73b6f4272b0f4bad';
+export const CONTRACT_DIGEST = '8894201e289133bae89c844d0861bdfb0688f5749eb27cd39e1fc1d3a1ee7a5b';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -56,6 +56,7 @@ export const SCHEMA_NAMES = [
   'CreateProjectRequest',
   'Cursor',
   'DashboardSummary',
+  'DecideOptimisationProposalRequest',
   'DecisionEvent',
   'DecisionEventPage',
   'DecisionEventType',
@@ -123,6 +124,13 @@ export const SCHEMA_NAMES = [
   'NormVerificationReport',
   'NormsSnapshotId',
   'ObservationProvenance',
+  'OptimisationPass',
+  'OptimisationPassId',
+  'OptimisationPassList',
+  'OptimisationProposal',
+  'OptimisationProposalId',
+  'OptimisationProposalPage',
+  'OptimisationProposalType',
   'PageInfo',
   'PersonNames',
   'PortalBlock',
@@ -156,6 +164,16 @@ export const SCHEMA_NAMES = [
   'ProjectStage',
   'ProjectUid',
   'PromptBundleId',
+  'ProposalAnalogBasis',
+  'ProposalDecision',
+  'ProposalDecisionCounts',
+  'ProposalDecisionId',
+  'ProposalDecisionList',
+  'ProposalDecisionResult',
+  'ProposalDecisionState',
+  'ProposalMatchBasis',
+  'ProposalPosition',
+  'ProposalVerdict',
   'ProviderMode',
   'RegistrationRequest',
   'RegistrationRequestId',
@@ -580,6 +598,15 @@ export type DashboardSummary = {
   findings_by_verdict: Array<VerdictCount>;
   run_activity: RunActivity;
   section_breakdown: Array<SectionDocumentCount>;
+};
+
+/**
+ * `W60-OPT-PROPOSALS-01`. An expert's verdict on a proposal, with a comment that
+ * ``revise`` requires.
+ */
+export type DecideOptimisationProposalRequest = {
+  comment?: string;
+  verdict: ProposalVerdict;
 };
 
 /** One appended event. Never updated and never removed. */
@@ -1252,6 +1279,118 @@ export type ObservationProvenance = {
   stage_id: StageId;
 };
 
+/**
+ * One optimisation pass, pinned to everything it read: the version, its published run
+ * and that run's text layer, the price-list revision and the vendor-list revision (global
+ * or the project's own, ``vendor_list_source``), and the three algorithm versions.
+ */
+export type OptimisationPass = {
+  decision_counts: ProposalDecisionCounts;
+  document_uid: DocumentUid;
+  extraction_algorithm: string;
+  generator_version: string;
+  match_algorithm: string;
+  matched_row_count: number;
+  optimisation_pass_id: OptimisationPassId;
+  price_list_id: PriceListId;
+  project_uid: ProjectUid;
+  proposal_count: number;
+  proposed_row_count: number;
+  run_id: RunId;
+  specification_row_count: number;
+  started_at: string;
+  started_by_label: string;
+  started_by_user_uid: UserUid;
+  text_layer_sha256: Sha256;
+  vendor_list_id: VendorListId;
+  vendor_list_source: VendorListScope;
+  version_uid: VersionUid;
+};
+
+export type OptimisationPassId = string;
+
+/** The contract pattern for `OptimisationPassId`. Anchored; use with `new RegExp()`. */
+export const OPTIMISATION_PASS_ID_PATTERN = "^opp_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** A project's passes, newest first. */
+export type OptimisationPassList = {
+  items: Array<OptimisationPass>;
+};
+
+/**
+ * One proposal: a specification row matched to ``matched_position`` and a cheaper
+ * ``proposed_position`` of the same price-list revision, in the same unit and currency,
+ * from a vendor on the pass's vendor list.
+ *
+ * ``row_text`` is the description as the saved text layer shows it (name, mark, code and
+ * manufacturer cells run together); page, sheet and lines say where it is. Both unit prices
+ * are the positions' stored prices. ``saving`` is ``(current_unit_price −
+ * proposed_unit_price) × quantity`` and is ``null`` -- never ``0`` -- when ``quantity`` is
+ * ``null`` because the row's quantity text is not a plain number. ``ordinal`` is a display
+ * order inside the pass, never an identity.
+ */
+export type OptimisationProposal = {
+  analog_basis: ProposalAnalogBasis;
+  currency: string;
+  current_decision: ProposalDecision | null;
+  current_unit_price: string;
+  current_verdict: ProposalDecisionState;
+  line_end: number;
+  line_start: number;
+  matched_basis: ProposalMatchBasis;
+  matched_position: ProposalPosition;
+  name_similarity: string;
+  optimisation_pass_id: OptimisationPassId;
+  optimisation_proposal_id: OptimisationProposalId;
+  ordinal: number;
+  page_number: number;
+  proposal_type: OptimisationProposalType;
+  proposed_position: ProposalPosition;
+  proposed_unit_price: string;
+  proposed_vendor: string;
+  quantity: string | null;
+  quantity_text: string | null;
+  rationale: string;
+  row_position: string | null;
+  row_text: string;
+  saving: string | null;
+  sheet_label: string | null;
+  spec_row_key: string;
+  table_ordinal: number;
+  unit: string;
+};
+
+export type OptimisationProposalId = string;
+
+/** The contract pattern for `OptimisationProposalId`. Anchored; use with `new RegExp()`. */
+export const OPTIMISATION_PROPOSAL_ID_PATTERN = "^opr_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * One page of a pass's proposals in ordinal order. ``total`` counts the proposals the
+ * ``decision`` filter admits; the pass's ``decision_counts`` count all of them.
+ */
+export type OptimisationProposalPage = {
+  decision: ProposalDecisionState | null;
+  items: Array<OptimisationProposal>;
+  limit: number;
+  next_offset: number | null;
+  offset: number;
+  optimisation_pass: OptimisationPass;
+  total: number;
+};
+
+/**
+ * The kind of a proposal. Only the deterministic one exists: a cheaper position of the
+ * same price list. The legacy ``faster_install``, ``simpler_design`` and ``lifecycle`` need
+ * judgement and wait for the model-assisted slice.
+ */
+export const OPTIMISATION_PROPOSAL_TYPE_VALUES = [
+  'cheaper_analog',
+] as const;
+
+/** OptimisationProposalType - the closed value set above. */
+export type OptimisationProposalType = (typeof OPTIMISATION_PROPOSAL_TYPE_VALUES)[number];
+
 export type PageInfo = {
   /** Token for the next page, or null when this is the last page. */
   next_cursor: Cursor | null;
@@ -1585,6 +1724,107 @@ export type PromptBundleId = string;
 
 /** The contract pattern for `PromptBundleId`. Anchored; use with `new RegExp()`. */
 export const PROMPT_BUNDLE_ID_PATTERN = "^pb_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * Why the proposed position is the same kind of product: one code family (the leading
+ * letters of the code or mark, ``ПК 60-12-8`` ~ ``ПК 63-15-8``), or at least half of the
+ * words of the two names in common.
+ */
+export const PROPOSAL_ANALOG_BASIS_VALUES = [
+  'code_family',
+  'name_similarity',
+] as const;
+
+/** ProposalAnalogBasis - the closed value set above. */
+export type ProposalAnalogBasis = (typeof PROPOSAL_ANALOG_BASIS_VALUES)[number];
+
+/** One appended expert decision. Never changed; the proposal's latest one is current. */
+export type ProposalDecision = {
+  actor_label: string;
+  actor_user_uid: UserUid;
+  comment: string | null;
+  decided_at: string;
+  optimisation_proposal_id: OptimisationProposalId;
+  proposal_decision_id: ProposalDecisionId;
+  verdict: ProposalVerdict;
+};
+
+/**
+ * How many of a pass's proposals stand in each decision state; the four sum to the
+ * pass's ``proposal_count``. These are the proposals' own counts, never finding counts.
+ */
+export type ProposalDecisionCounts = {
+  accept: number;
+  pending: number;
+  reject: number;
+  revise: number;
+};
+
+export type ProposalDecisionId = string;
+
+/** The contract pattern for `ProposalDecisionId`. Anchored; use with `new RegExp()`. */
+export const PROPOSAL_DECISION_ID_PATTERN = "^opd_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** Every decision of one proposal, oldest first; the last is current. */
+export type ProposalDecisionList = {
+  items: Array<ProposalDecision>;
+};
+
+/** The decision appended (or replayed) and the proposal as it now stands. */
+export type ProposalDecisionResult = {
+  decision: ProposalDecision;
+  proposal: OptimisationProposal;
+};
+
+/**
+ * A proposal's current decision: its latest verdict, or ``pending`` when nobody decided.
+ * Also the ``decision`` filter of ``listOptimisationProposals``.
+ */
+export const PROPOSAL_DECISION_STATE_VALUES = [
+  'pending',
+  'accept',
+  'reject',
+  'revise',
+] as const;
+
+/** ProposalDecisionState - the closed value set above. */
+export type ProposalDecisionState = (typeof PROPOSAL_DECISION_STATE_VALUES)[number];
+
+/** How the specification row was matched to its current price-list position. */
+export const PROPOSAL_MATCH_BASIS_VALUES = [
+  'code',
+  'mark',
+  'name',
+] as const;
+
+/** ProposalMatchBasis - the closed value set above. */
+export type ProposalMatchBasis = (typeof PROPOSAL_MATCH_BASIS_VALUES)[number];
+
+/**
+ * A price-list position a proposal names. ``row_number`` is its source row, never an
+ * identity.
+ */
+export type ProposalPosition = {
+  code: string | null;
+  mark: string | null;
+  name: string;
+  price_list_position_id: PriceListPositionId;
+  row_number: number;
+  vendor: string | null;
+};
+
+/**
+ * An expert's verdict on a proposal. ``revise`` says the analog is right in principle
+ * and the proposal needs changing; its comment is required.
+ */
+export const PROPOSAL_VERDICT_VALUES = [
+  'accept',
+  'reject',
+  'revise',
+] as const;
+
+/** ProposalVerdict - the closed value set above. */
+export type ProposalVerdict = (typeof PROPOSAL_VERDICT_VALUES)[number];
 
 /** Whether the model call was made live or replayed from a recording. Visible in the UI and in the CSV, because a recorded run is not evidence of a live one. */
 export const PROVIDER_MODE_VALUES = [

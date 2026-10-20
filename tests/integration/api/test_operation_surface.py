@@ -102,6 +102,9 @@ def test_every_declared_operation_is_reachable(
         # of the fifteen codes, a closed vocabulary rather than an identity).
         "price_list_id": "prl_01M2545JSD15ETSNNV904X991W",
         "section_code": "EOM",
+        # `W60-OPT-PROPOSALS-01`: a pass and one of its proposals.
+        "optimisation_pass_id": "opp_01M2545JSD15ETSNNV904X991W",
+        "optimisation_proposal_id": "opr_01M2545JSD15ETSNNV904X991W",
     }
     for operation_id, method, template in sorted(declared_operations(openapi_document)):
         path = template

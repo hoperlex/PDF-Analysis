@@ -185,8 +185,8 @@ def test_portal_block_id_is_an_external_identifier_and_not_one_of_the_identities
     assert external["prefix"] == "blk" and external["is_entity_identity"] is False
     assert external["pattern"] == "^blk_[0-9a-f]{32}$"
     # W57a adds nrs_ beside the external blk_; W61-DISPATCHER-01 asg_; W60-PRICE-LIST-01 prl_,
-    # prp_ and vnl_.
-    assert len(IDENTIFIERS["identifiers"]) == 37
+    # prp_ and vnl_; W60-OPT-PROPOSALS-01 opp_, opr_ and opd_.
+    assert len(IDENTIFIERS["identifiers"]) == 40
 
 
 # --- the error catalog --------------------------------------------------------------------

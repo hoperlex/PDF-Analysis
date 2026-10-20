@@ -1,3 +1,3 @@
-/** Public API of the `optimisation` page slice. */
+/** Public API of the `optimisation` page slice: the retired stub that points to the project tab. */
 
-export { OptimisationPage } from './ui/optimisation-page';
+export { OPTIMISATION_MOVED_TO, OptimisationPage } from './ui/optimisation-page';

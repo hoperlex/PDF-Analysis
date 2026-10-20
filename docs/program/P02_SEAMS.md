@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Seventy-five operations, sealed. `A5` generates the typed client from this document; `B6`
+Eighty-one operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -892,6 +892,17 @@ from its newest published run's saved text and matched to the project's current 
 a price and an amount only on a row matched to one position in the same unit with a numeric
 quantity, totals per currency over those rows only; a precondition that does not hold is one
 `state`, and a set outside the project is `404`. Read-only, any one role.
+`W60-OPT-PROPOSALS-01` added six more `optimisation` operations on 2026-10-20, the «Предложения»
+of «Оптимизация проекта»: `startOptimisationPass` (`expert`, keyed) pins a document set's
+current AR version, its newest published run, the current price-list revision and the effective
+AR vendor list and stores the deterministic `cheaper_analog` proposals, refusing an unmet
+precondition as `conflict` with its `conflict_reason` and writing nothing; `listOptimisationPasses`,
+`listOptimisationProposals` and `listProposalDecisions` read them (any one role) with counts by
+decision; `decideOptimisationProposal` (`expert`, keyed) appends an accept, reject or revise
+decision and never changes an earlier one; `exportOptimisationProposalsCsv` is the
+formula-escaped CSV of one pass. A proposal is a separate entity beside findings: no operation
+here reads or changes a finding, and a saving is stated only where a price-list position and a
+numeric quantity state it. Migration `0027_optimisation_proposals` stores them.
 `W63-SECTION-FORM7-01` added `getSectionSpecification` on 2026-10-20: «Оптимизация разделов»,
 the Form-7 rows of every project whose document set's current version an expert confirmed in
 a section, each row priced from its own project's current price list. The section code is a
@@ -992,6 +1003,12 @@ could.
 | `setGlobalVendorList` | `PUT /vendor-lists/{section_code}` |
 | `setProjectVendorList` | `PUT /projects/{project_uid}/vendor-lists/{section_code}` |
 | `getSpecificationPrices` | `GET /projects/{project_uid}/documents/{document_uid}/specification-prices` |
+| `startOptimisationPass` | `POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes` |
+| `listOptimisationPasses` | `GET /projects/{project_uid}/optimisation-passes` |
+| `listOptimisationProposals` | `GET /optimisation-passes/{optimisation_pass_id}/proposals` |
+| `decideOptimisationProposal` | `POST /optimisation-proposals/{optimisation_proposal_id}/decisions` |
+| `listProposalDecisions` | `GET /optimisation-proposals/{optimisation_proposal_id}/decisions` |
+| `exportOptimisationProposalsCsv` | `GET /optimisation-passes/{optimisation_pass_id}/export.csv` |
 | `getSectionSpecification` | `GET /sections/{section_code}/specification` |
 
 Rules that hold across the whole surface:
@@ -999,13 +1016,15 @@ Rules that hold across the whole surface:
 * the writes that take a required `Idempotency-Key` header are `createProject`,
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
-  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`
-  and `uploadPriceList`, and no others. A repeat of the decision carryover under another key
+  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`,
+  `uploadPriceList`, `startOptimisationPass` and `decideOptimisationProposal`, and no others. A repeat of the decision carryover under another key
   that names the same pair and decision answers the event already carried (`replayed: true`)
   and appends nothing.
   `setGlobalVendorList` and `setProjectVendorList` take no key: a repeat of the latest
   revision's entries writes nothing and answers it, and a writer that read an older revision
   is refused by `expected_vendor_list_id` (`conflict_reason: vendor_list_changed`).
+  A new key over exactly the inputs of a stored optimisation pass answers that pass and
+  writes nothing; every decision under a new key is a new appended event.
   The key is passed through to the owning command handler and never re-derived in the
   router: an identical repeat replays the first answer, and another payload under the same
   key is `idempotency_key_reuse`. The other writes take no key. What a repeat of each does

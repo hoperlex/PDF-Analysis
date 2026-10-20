@@ -90,8 +90,10 @@ export interface ScreenEntry {
  * `R-66`: **Работа** — Проекты, Дашборд, «Оптимизация разделов» (and «Диспетчер» since
  * `W61-DISPATCHER-01`); **Знания** — База знаний,
  * Блоки, «Нормы»; **Система** — Журнал выполнения, Исполнители, «Настройки анализа»,
- * «Очередь». `/optimisation` left the menu and stays a registered, reachable screen in
- * `hidden` until project optimisation becomes a project tab. The four new sections were
+ * «Очередь». `/optimisation` left the menu and stayed a registered, reachable screen in
+ * `hidden` until project optimisation became a project tab; since `W60-OPT-PROPOSALS-01`
+ * completed that tab its route has no screen of its own and redirects to `/projects` (the row
+ * stays, because the route tree and the registry are held equal). The four new sections were
  * honest stubs, `session`/`any-role`; «Очередь» graduated in W53 and «Нормы» in
  * `W55A-WEB-NORMS`, which adds its document view `/norms/document` beside it (reached from a
  * search result, so out of the menu); «Оптимизация разделов» graduated in `W63-SECTION-FORM7-01`

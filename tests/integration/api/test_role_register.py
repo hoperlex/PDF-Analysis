@@ -129,6 +129,30 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "getEffectiveVendorLists": ("GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists"),
     "setGlobalVendorList": ("PUT", "/vendor-lists/EOM"),
     "setProjectVendorList": ("PUT", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists/EOM"),
+    # `W60-OPT-PROPOSALS-01`. Passes, proposals and decisions; the writes' missing bodies are
+    # refused by their models only after the role decided.
+    "startOptimisationPass": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991G"
+        "/optimisation-passes",
+    ),
+    "listOptimisationPasses": ("GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/optimisation-passes"),
+    "listOptimisationProposals": (
+        "GET",
+        "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/proposals",
+    ),
+    "decideOptimisationProposal": (
+        "POST",
+        "/optimisation-proposals/opr_01M2545JSD15ETSNNV904X991N/decisions",
+    ),
+    "listProposalDecisions": (
+        "GET",
+        "/optimisation-proposals/opr_01M2545JSD15ETSNNV904X991N/decisions",
+    ),
+    "exportOptimisationProposalsCsv": (
+        "GET",
+        "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/export.csv",
+    ),
     "listRunFindings": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     "exportRunCsv": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),
     # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook (expert, as the CSV) and the norms
@@ -246,6 +270,14 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "listPriceListRevisions": _ANY_ROLE,
     "listPriceListPositions": _ANY_ROLE,
     "getEffectiveVendorLists": _ANY_ROLE,
+    # `W60-OPT-PROPOSALS-01`: an expert starts a pass and decides its proposals (an
+    # administrator alone reads and does not decide, R-60); any one role reads and exports.
+    "startOptimisationPass": _EXPERT,
+    "decideOptimisationProposal": _EXPERT,
+    "listOptimisationPasses": _ANY_ROLE,
+    "listOptimisationProposals": _ANY_ROLE,
+    "listProposalDecisions": _ANY_ROLE,
+    "exportOptimisationProposalsCsv": _ANY_ROLE,
     "exportRunCsv": _EXPERT,
     # `W61-DISPATCHER-01`: assigning work is an administrator's act (R-60).
     "createAssignment": _ADMIN,
