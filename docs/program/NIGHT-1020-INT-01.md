@@ -223,3 +223,33 @@ single-owner rule is suspended for the API surface only, for this window only.
   **`0027_optimisation_proposals`**. Merged-tree checks: 1491 passed, the two base reds only;
   `typecheck` clean.
 - **Still unmerged at 12:50:** `W63-SECTION-FORM7-01` (phase B in progress).
+- **`W63-SECTION-FORM7-01`** (`fbe7535a`) — candidate `95f63ea3`. «Оптимизация разделов»
+  replaces the last menu stub: pick a section (S-5 order), optionally a project, search; the
+  Form-7 table of the current versions confirmed in that section with project, set, version,
+  page and sheet on every row, each row priced from its own project's list, per-project and
+  per-currency totals only, no section total, unclassified versions listed apart
+  (`getSectionSpecification`). **70/80/229 → 71/81/235**, head unchanged `0027`. Merged-tree
+  checks: 1517 passed, the two base reds only; `typecheck` clean; `alembic heads` = one head
+  `0027_optimisation_proposals`.
+
+## 11. Window close (13:30 +05)
+
+- **Served in the window (16 slices + records):** W54 local import, sections (seal, 13 draft
+  profiles, UI, settings, follow-up suites), version upload, version and П→Р comparison,
+  decision carryover, norms catalogue + Excel, dispatcher, price lists, specification and
+  prices, proposals, section Form-7. Surface 48/55/131 → **71/81/235**; migrations
+  0024 → **0027**; error catalogue unchanged at 25.
+- **Measured effect of `CODE-FIRST-TO-BETA.md` §2.1 (item 6)**, same base `f942ca1c` →
+  `origin/dev`: 158 commits of which 105 non-merge; **54 of 105 touch only `docs/`** (51 %);
+  added lines `docs/program` 7,470 vs `src` 20,729 + `web` 13,237 → ratio **0.22** (the rule's
+  base was 49.2k vs 19.2k, ratio ≈ 2.6); tests 25,395; migrations 1,512. Slices: 16, each
+  with one task file and one lane report; **one** integration record (this file) for the
+  whole window instead of one per candidate.
+- **Not done (see debts `D-178` … `D-188`):** complete gate, live journey, DB suites on the
+  merged tree, field evidence for the profiles, real-document quality of the extractor,
+  stand import of the norms bundle, `verify-deployed.sh` for `ec3ebf07`.
+- **Process lessons.** (1) A lane's hand-made "merge" (single parent) makes the integrator's
+  merge conflict in every generated file: require `git merge-base --is-ancestor <tip> HEAD`
+  and re-derive generated artifacts. (2) `CURRENT_STATE.md` has a 120-line guard
+  (`CurrentStateTest`): keep the code-first section compact. (3) A reboot kills subagents:
+  resume them by id and inspect branches before trusting a hand-back that never came.
