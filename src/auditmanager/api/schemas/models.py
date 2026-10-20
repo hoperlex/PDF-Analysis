@@ -46,6 +46,12 @@ __all__ = [
     "Account",
     "AccountPage",
     "AnalysisProfileId",
+    "AnalysisProfileList",
+    "AnalysisProfileListItem",
+    "AnalysisProfileSource",
+    "AnalysisProfileSourceFile",
+    "AnalysisProfileStatus",
+    "AnalysisProfileSummary",
     "ApproveRegistrationRequest",
     "AppendDecisionRequest",
     "AppendDecisionResponse",
@@ -1761,3 +1767,65 @@ class VersionComparison(_Object):
     sheets: Annotated[list[SheetPairing], Field(max_length=1000)]
     sheet_diffs: SheetDiffPage | None
     findings: FindingComparison | None
+
+
+# --- analysis profiles (`W59-ANALYSIS-SETTINGS-01`) ----------------------------------------
+#
+# The section-keyed text-profile registry as «Настройки анализа» reads it: one row per section
+# in the project-structure order, each with its registered profile or ``null``. Read-only: no
+# operation edits a profile or changes its status.
+
+
+class AnalysisProfileStatus(str, enum.Enum):
+    """`W59-ANALYSIS-SETTINGS-01`. Where a registered text profile stands.
+
+    ``builtin``: AR's v1 profile, written in this repository. ``draft``: a package ported from
+    the legacy prompts and not yet reviewed by an expert. ``reviewed``: a package an expert has
+    reviewed. Every status is executable; the status is recorded, never hidden.
+    """
+
+    BUILTIN = "builtin"
+    DRAFT = "draft"
+    REVIEWED = "reviewed"
+
+
+class AnalysisProfileSourceFile(_Object):
+    """One legacy file a package's prompt was ported from, with its SHA-256."""
+
+    path: Annotated[str, Field(min_length=1, max_length=400)]
+    sha256: Sha256
+
+
+class AnalysisProfileSource(_Object):
+    """The legacy repository, commit and files a package's prompt was ported from."""
+
+    repository: Annotated[str, Field(min_length=1, max_length=200)]
+    commit: Annotated[str, Field(min_length=1, max_length=200)]
+    files: Annotated[list[AnalysisProfileSourceFile], Field(min_length=1, max_length=50)]
+
+
+class AnalysisProfileSummary(_Object):
+    """One registered text profile: its identities, version, status and content hashes."""
+
+    analysis_profile_id: AnalysisProfileId
+    prompt_bundle_id: PromptBundleId
+    profile_version: Annotated[str, Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")]
+    status: AnalysisProfileStatus
+    prompt_bundle_sha256: Sha256
+    content_sha256: Sha256
+    #: ``null`` for the builtin AR profile, whose prompt was written here, not ported.
+    source: AnalysisProfileSource | None
+
+
+class AnalysisProfileListItem(_Object):
+    """One section and its registered profile, or ``null`` when none is registered."""
+
+    section_code: ProjectSection
+    section_name: Annotated[str, Field(min_length=1, max_length=200)]
+    profile: AnalysisProfileSummary | None
+
+
+class AnalysisProfileList(_Object):
+    """All fifteen sections, in the project-structure order, each with its profile or ``null``."""
+
+    items: Annotated[list[AnalysisProfileListItem], Field(min_length=15, max_length=15)]
