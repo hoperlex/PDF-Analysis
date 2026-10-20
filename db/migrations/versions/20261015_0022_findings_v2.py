@@ -170,6 +170,30 @@ def upgrade() -> None:
     _error_checks(_NEW_ERROR_CODES)
 
 
+def _downgrade_verdict_view() -> None:
+    """Give ``finding_current_verdict`` back its nine ``0021`` columns.
+
+    ``CREATE OR REPLACE VIEW`` can append columns (the upgrade relies on that) but can never
+    remove one: PostgreSQL stops with ``cannot drop columns from view``, so the first
+    downgrade through this revision failed. The view is dropped and created again in its
+    ``0021`` shape by the same helper the upgrade uses. The drop has no ``CASCADE``: a reader
+    that came to depend on the view stops the downgrade instead of being dropped with it.
+    A drop also discards the view's comment (``0002``'s, which ``CREATE OR REPLACE`` kept on
+    the way up), so the comment is read from the catalog first and set again afterwards.
+    """
+    connection = op.get_bind()
+    restore = connection.execute(
+        text(
+            "SELECT format('COMMENT ON VIEW finding_current_verdict IS %L', "
+            "obj_description('finding_current_verdict'::regclass, 'pg_class'))"
+        )
+    ).scalar_one()
+    op.execute("DROP VIEW finding_current_verdict")
+    _current_verdict_view(with_severity=False)
+    # ``\:`` keeps a colon inside the comment from being read as a bind parameter.
+    op.execute(text(restore.replace(":", "\\:")))
+
+
 def downgrade() -> None:
     connection = op.get_bind()
     retained = connection.execute(
@@ -187,7 +211,7 @@ def downgrade() -> None:
         raise RuntimeError("0022 downgrade refused: retained finding, decision or v2 error data")
 
     _error_checks(_OLD_ERROR_CODES)
-    _current_verdict_view(with_severity=False)
+    _downgrade_verdict_view()
     op.execute("ALTER TABLE finding DROP CONSTRAINT fk_finding_canonical_observation")
     op.execute("ALTER TABLE finding DROP COLUMN canonical_observation_id")
     op.execute("ALTER TABLE finding_observation DROP CONSTRAINT uq_finding_observation_finding_id")
