@@ -56,8 +56,10 @@ class TestTheRouterRefusesADuplicateOperationId:
 
         original = package.build_export_routes
 
-        def with_the_collision(router: APIRouter, exports: object) -> None:
-            original(router, exports)
+        def with_the_collision(
+            router: APIRouter, exports: object, xlsx: object = None
+        ) -> None:
+            original(router, exports, xlsx)  # type: ignore[arg-type]
             router.include_router(extra)
             router.routes.extend(extra.routes)
 

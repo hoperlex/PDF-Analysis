@@ -335,6 +335,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # the snapshot list are product data, so any one role (R-80, plan section A3.6).
         "searchNorms": _ANY_ROLE,
         "getNormDocument": _ANY_ROLE,
+        # `W57B-NORMS-CATALOGUE-XLSX-01`. The catalogue is product data like the search.
+        "listNormDocuments": _ANY_ROLE,
         "listNormParagraphs": _ANY_ROLE,
         "streamNormDocumentContent": _ANY_ROLE,
         "listNormSnapshots": _ANY_ROLE,
@@ -364,6 +366,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "reauditRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "appendDecision": _EXPERT,
         "exportRunCsv": _EXPERT,
+        # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook is the CSV's sibling: the same role.
+        "exportRunXlsx": _EXPERT,
         # Account and registration-request management.
         "listRegistrations": _ADMIN,
         "approveRegistration": _ADMIN,

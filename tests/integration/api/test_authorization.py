@@ -202,6 +202,9 @@ GUARDED = (
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
         "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
     ),
+    # `W57B-NORMS-CATALOGUE-XLSX-01`. The norms catalogue and the run's workbook.
+    ("listNormDocuments", "GET", "/norm-documents"),
+    ("exportRunXlsx", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.xlsx"),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -753,6 +756,9 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "auth.py",
         "decisions.py",
         "execution.py",
+        # `W57B-NORMS-CATALOGUE-XLSX-01`: the workbook's export authorization records WHO
+        # downloaded it; whether they may is the role register's (expert, as the CSV).
+        "export.py",
         "me.py",
         "norms.py",
         "registrations.py",

@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 d7704f0a78d297702ac3373d8c33bb20b9cd5f690ff57be6659329ecbb8a2a5c
+ *   sha256 0587779617c5f211c32b09050e9d0a3a0520b4b07484daaa3004b4da64387b52
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -46,6 +46,7 @@ import type {
   IssueTokenResponse,
   JobId,
   MarkReleaseNotesReadRequest,
+  NormCatalogueEntryPage,
   NormCurrentSnapshot,
   NormDocument,
   NormDocumentId,
@@ -102,6 +103,7 @@ export const OPERATION_IDS = [
   'compareDocumentVersions',
   'createProject',
   'exportRunCsv',
+  'exportRunXlsx',
   'getDashboardSummary',
   'getDocumentVersion',
   'getFinding',
@@ -119,6 +121,7 @@ export const OPERATION_IDS = [
   'listDocuments',
   'listExecutionJournal',
   'listExecutionQueue',
+  'listNormDocuments',
   'listNormParagraphs',
   'listNormSnapshotEvents',
   'listNormSnapshots',
@@ -409,6 +412,33 @@ export type ExportRunCsvInput = {
 
 /** Success body of `exportRunCsv` (`text/csv`, HTTP 200). */
 export type ExportRunCsvResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// exportRunXlsx - GET /runs/{run_id}/export.xlsx
+// ------------------------------------------------------------------------------------
+
+/**
+ * Download the Excel workbook for one run.
+ *
+ * Synchronous, like `exportRunCsv`, and with its states and role: nothing is created, there is no export resource or identity, and repeating the request returns byte-identical bytes. An unknown run is `404`; a run whose terminal does not declare `publishes_result: true` is `409 state_transition_not_allowed`, decided on the run before anything else is read. A `partial` run is exported.
+ *
+ * The workbook is the W57b layout (`docs/program/dispatch/W57-PLAN.md` section B3.5): «Сводка» with the run's identity and the counts by severity (decided, else proposed) and by category, and «Замечания» with one row per finding -- № | Лист/стр. | Категория | Замечание | Рекомендация | Серьёзность (решение эксперта) | Серьёзность (предложение модели) | Норма (документ, пункт) | Цитата нормы | Решение эксперта | Комментарий -- and a «также найдено» row per merged member. Standard-library writer, stored ZIP parts in a fixed order with fixed timestamps, inline strings, no formula; XML-forbidden characters become U+FFFD.
+ *
+ * «Лист/стр.» comes only from the version's verified portal companion: a version without one, or whose companion does not verify, is `422 storage_integrity_error` with `role: source.structured_companion`; a page number is never shown as a sheet label. The norm columns carry a finding's verified citations when the run has certified citation partitions, read through its pinned retrieval set; when they do not verify the answer is `422 required_norm_unavailable` with `reference_kind: norm_retrieval_set`, never a workbook without them. A run without citation partitions exports with the norm columns empty. Roles: `expert` (`role:expert`), as `exportRunCsv`. Added by W57B-NORMS-CATALOGUE-XLSX-01.
+ */
+export type ExportRunXlsxInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/export.xlsx`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `exportRunXlsx` (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, HTTP 200). */
+export type ExportRunXlsxResult = Blob;
 
 // ------------------------------------------------------------------------------------
 // getDashboardSummary - GET /dashboard
@@ -818,6 +848,36 @@ export type ListExecutionQueueInput = {
 
 /** Success body of `listExecutionQueue` (`application/json`, HTTP 200). */
 export type ListExecutionQueueResult = ExecutionQueuePage;
+
+// ------------------------------------------------------------------------------------
+// listNormDocuments - GET /norm-documents
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Norm Documents
+ *
+ * Every document of the current norms snapshot (R-112) as a catalogue, in designation order (natural, case- and homoglyph-folded), then title, then identity. `designation` and `title` are derived for display from the document's stored file name -- dates dotted, designation numbers dotted, a cut edition note closed or shown as `(ред. …)` -- and never alter or replace the stored rows; a name no rule can derive is shown as `getNormDocument` shows it, and `title` is null when the name carries nothing after the designation. `q` (1-200 characters) keeps documents whose designation or title contains it from the start of a word, folded the same way, and a `q` ending in a digit ends a number there; `kind` (1-100 characters) keeps documents whose stored kind equals it, and `kinds` lists every kind of the snapshot with its count. A `q` or `kind` holding a control character or nothing to filter by is `422 validation_failed` (`field` `q` or `kind`, `constraint: format`). The cursor is opaque and bound to `q`, `kind` and the snapshot; another listing refuses it. `total` counts the documents the filters keep. With no current snapshot the answer is `422 required_norm_unavailable` with `reference_kind: norms_snapshot`, never an empty page. Every row carries its `source_attribution` (NORM-Q04). Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Added by W57B-NORMS-CATALOGUE-XLSX-01.
+ */
+export type ListNormDocumentsInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** A document kind as the catalogue's `kinds` lists it, matched exactly. */
+    kind?: string;
+    /** Page size. */
+    limit?: number;
+    /** Text the designation or title contains from the start of a word. */
+    q?: string;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listNormDocuments` (`application/json`, HTTP 200). */
+export type ListNormDocumentsResult = NormCatalogueEntryPage;
 
 // ------------------------------------------------------------------------------------
 // listNormParagraphs - GET /norm-documents/{norm_document_id}/paragraphs
@@ -1794,6 +1854,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['export'],
   },
+  exportRunXlsx: {
+    operationId: 'exportRunXlsx',
+    method: 'GET',
+    path: '/runs/{run_id}/export.xlsx',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['export'],
+  },
   getDashboardSummary: {
     operationId: 'getDashboardSummary',
     method: 'GET',
@@ -2031,6 +2105,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['execution'],
+  },
+  listNormDocuments: {
+    operationId: 'listNormDocuments',
+    method: 'GET',
+    path: '/norm-documents',
+    pathParams: [],
+    queryParams: ['cursor', 'kind', 'limit', 'q'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['norms'],
   },
   listNormParagraphs: {
     operationId: 'listNormParagraphs',

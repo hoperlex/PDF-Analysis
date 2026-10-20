@@ -120,9 +120,13 @@ import type { ExecutionWorker } from '@/shared/api';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { RECENT_PROJECT_LIMIT } from '@/widgets/home-tiles';
-import { NORM_EVENT_PAGE_LIMIT, NORM_PARAGRAPH_PAGE_LIMIT, NORM_SEARCH_PAGE_LIMIT, NORM_SNAPSHOT_LIMIT } from '@/entities/norms';
+import {
+  NORM_CATALOGUE_PAGE_LIMIT, NORM_EVENT_PAGE_LIMIT, NORM_PARAGRAPH_PAGE_LIMIT, NORM_SEARCH_PAGE_LIMIT,
+  NORM_SNAPSHOT_LIMIT,
+} from '@/entities/norms';
 import { NormsPage } from '@/_pages/norms';
 import { NormSearchResults } from '@/widgets/norm-search';
+import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormParagraphList, NormPdf } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { VersionBlockViews } from '@/_pages/blocks';
@@ -132,7 +136,8 @@ import {
   BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, notProducedPage, portalPage,
 } from '../unit/blocks/fixtures';
 import {
-  NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_QUERY, NORM_SNAPSHOTS, normDocument,
+  NORM_CATALOGUE_PAGE, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_QUERY, NORM_SNAPSHOTS,
+  normDocument,
 } from '../unit/norms/fixtures';
 
 import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles } from './lib/repo';
@@ -275,6 +280,7 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
   // ------------------------------------------------------------------------------------
   { word: 'PDF', why: 'The document format, and the only one this application accepts. A proper noun in Russian too ("PDF-документ"). `application/pdf` is matched separately as a media type.' },
   { word: 'CSV', why: 'The export format. RFC 4180 names it, no contract here does, and Russian technical writing does not translate it.' },
+  { word: 'Excel', why: 'The spreadsheet application the run\'s workbook is made for (`exportRunXlsx`, «Скачать Excel» in `W57-PLAN.md` section B3.7). A product name; Russian writing does not translate it, and no contract here defines the word.' },
   { word: 'ZIP', why: 'The archive format of the portal bundle, the only upload this application accepts (`W55B-INGEST-01`). A proper noun in Russian technical writing ("ZIP-архив"); the container format is fixed by PKWARE\'s APPNOTE, and no contract here defines the word. `application/zip` is matched separately as a media type, and a member\'s name such as `_blocks.json` as a filename.' },
   { word: 'API', why: 'The name of the seam the screens talk to. Universal in Russian technical writing; nothing in `contracts/` defines the word itself.' },
   { word: 'RFC', why: 'The IETF document series, cited by number beside the CSV escaping rule. A citation, not a label.' },
@@ -843,6 +849,8 @@ const KEYS = {
   normSearch: queryKeys.norms.search(NORM_QUERY, undefined, NORM_SEARCH_PAGE_LIMIT),
   normDocument: queryKeys.norms.document(NORM_DOCUMENT_ID),
   normParagraphs: queryKeys.norms.paragraphs(NORM_DOCUMENT_ID, undefined, NORM_PARAGRAPH_PAGE_LIMIT),
+  // `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue's first page with no filter.
+  normCatalogue: queryKeys.norms.catalogue(undefined, undefined, undefined, NORM_CATALOGUE_PAGE_LIMIT),
 } as const;
 
 /**
@@ -955,6 +963,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.normSearch, { items: NORM_HITS, page });
   client.setQueryData(KEYS.normDocument, normDocument());
   client.setQueryData(KEYS.normParagraphs, { items: NORM_PARAGRAPHS, page, source_attribution: 'consultant_plus' });
+  client.setQueryData(KEYS.normCatalogue, NORM_CATALOGUE_PAGE);
   return client;
 }
 
@@ -1790,6 +1799,45 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     seedClient: (client: Client) => seedError(client, KEYS.normSearch, normsRefusal(
       'required_norm_unavailable', { reference_kind: 'norms_snapshot' },
     )),
+  },
+  /*
+   * `W57B-NORMS-CATALOGUE-XLSX-01`. The catalogue view of «Нормы»: loaded, refused, failed
+   * and pending, and the table's empty pages.
+   */
+  {
+    name: 'norms-catalogue-loaded',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+  },
+  {
+    name: 'norms-catalogue-refused',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+    seedClient: (client: Client) => seedError(client, KEYS.normCatalogue, normsRefusal(
+      'validation_failed', { field: 'q', constraint: 'format' },
+    )),
+  },
+  {
+    name: 'norms-catalogue-failed',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+    seedClient: (client: Client) => seedError(client, KEYS.normCatalogue, normsRefusal(
+      'dependency_unavailable', {},
+    )),
+  },
+  {
+    name: 'norms-catalogue-pending',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+    seedClient: (client: Client) => { client.removeQueries({ queryKey: KEYS.normCatalogue }); },
+  },
+  {
+    name: 'norm-catalogue-nothing-kept',
+    make: () => createElement(NormCatalogueTable, { items: [], total: 0, filtered: true, onFirst: null, onNext: null }),
+  },
+  {
+    name: 'norm-catalogue-empty-snapshot',
+    make: () => createElement(NormCatalogueTable, { items: [], total: 0, filtered: false, onFirst: null, onNext: null }),
+  },
+  {
+    name: 'norm-catalogue-empty-later-page',
+    make: () => createElement(NormCatalogueTable, { items: [], total: 3, filtered: false, onFirst: () => {}, onNext: null }),
   },
   {
     name: 'norm-search-nothing-found',

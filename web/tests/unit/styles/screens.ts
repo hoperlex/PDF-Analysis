@@ -41,6 +41,7 @@ import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
 import { NormSearchResults } from '@/widgets/norm-search';
+import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { ExportPanel } from '@/widgets/export-panel';
@@ -101,7 +102,8 @@ import {
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
 import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
 import {
-  NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS, normDocument,
+  NORM_CATALOGUE_ITEMS, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS,
+  normDocument,
 } from '../norms/fixtures';
 
 import { BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, portalPage } from '../blocks/fixtures';
@@ -617,6 +619,10 @@ export function screens(): Screen[] {
   })));
   add('NormSnapshotHistory loaded', withRouter(createElement(NormSnapshotHistory, {
     items: NORM_EVENTS, onFirst: null, onNext: noop,
+  })));
+  // `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue table with its two rows and ruled lines.
+  add('NormCatalogueTable loaded', withRouter(createElement(NormCatalogueTable, {
+    items: NORM_CATALOGUE_ITEMS, total: 2, filtered: false, onFirst: null, onNext: noop,
   })));
 
   // The finding list, with a row SELECTED — `aria-current='true'` is the only place

@@ -127,6 +127,10 @@ REQUIRED_OPERATIONS = {
     # `W59-VERSION-COMPARE-01`. Two versions of one set compared, read-only; a refusal is
     # an answer with a closed reason, not an envelope.
     "compareDocumentVersions",
+    # `W57B-NORMS-CATALOGUE-XLSX-01`. The current snapshot's documents as a catalogue for any
+    # role, and the run's Excel workbook with the CSV's states and role.
+    "listNormDocuments",
+    "exportRunXlsx",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`

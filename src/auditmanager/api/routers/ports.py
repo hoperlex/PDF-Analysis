@@ -69,6 +69,7 @@ __all__ = [
     "SectionPort",
     "ComparisonPort",
     "UploadedDocument",
+    "XlsxExportPort",
 ]
 
 
@@ -573,6 +574,23 @@ class CsvExportPort(Protocol):
 
 
 @runtime_checkable
+class XlsxExportPort(Protocol):
+    """``exportRunXlsx`` (`W57B-NORMS-CATALOGUE-XLSX-01`).
+
+    The router adds nothing to the bytes: the workbook's layout and every refusal belong to
+    ``auditmanager.exports.export_run_xlsx``. The refusals are ``exportRunCsv``'s first --
+    ``not_found`` and ``state_transition_not_allowed`` decided on the run row before
+    anything else is read -- then ``storage_integrity_error`` (``role:
+    source.structured_companion``) for a version without verifiable sheet labels and
+    ``required_norm_unavailable`` (``reference_kind: norm_retrieval_set``) for citations
+    that do not verify. Nothing is created, so a repeat returns byte-identical bytes.
+    """
+
+    def export_run_xlsx(self, *, run_id: str, principal_id: str) -> bytes:
+        """The workbook bytes for one run, for the principal the seam admitted."""
+
+
+@runtime_checkable
 class CredentialPort(Protocol):
     """``issueToken`` and ``changePassword``, and the epoch read the seam performs.
 
@@ -804,6 +822,15 @@ class NormsSearchPort(Protocol):
 
     def get_document(self, *, norm_document_id: str) -> models.NormDocument:
         """One norm document; ``not_found`` for an identity that names nothing."""
+
+    def list_catalogue(
+        self, *, q: str | None, kind: str | None, cursor: str | None, limit: int
+    ) -> models.NormCatalogueEntryPage:
+        """``listNormDocuments`` (`W57B-NORMS-CATALOGUE-XLSX-01`): the current snapshot's
+        documents with display names, filtered by text and kind, in designation order; no
+        current snapshot is ``required_norm_unavailable`` (``reference_kind:
+        norms_snapshot``); a ``q`` or ``kind`` with nothing to filter by, or a foreign
+        cursor, is ``validation_failed``."""
 
     def list_paragraphs(
         self, *, norm_document_id: str, cursor: str | None, limit: int

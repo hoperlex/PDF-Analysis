@@ -537,7 +537,8 @@ class TestN1ComponentReferenceResolution:
         # version through its document and project.
         # `W59-VERSION-COMPARE-01` adds one: the comparison addresses its source version the
         # same way.
-        assert len(report) == 36, report
+        # `W57B-NORMS-CATALOGUE-XLSX-01` adds one: `exportRunXlsx` refuses an unknown run.
+        assert len(report) == 37, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]
