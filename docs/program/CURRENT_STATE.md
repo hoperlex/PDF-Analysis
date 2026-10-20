@@ -14,7 +14,7 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **64 paths / 73 operations / 198 schemas**,
+The development API surface is **65 paths / 74 operations / 211 schemas**,
 the error catalogue has **25** codes, the migration head is
 **`0026_price_lists`**, and `VERSION` is `0.6.0`. These are checkout
 facts; the release tree has its own frozen 47/54/123 surface and
@@ -84,7 +84,11 @@ for the `R-139` night window of 2026-10-20, `NIGHT-1020-INT-01.md`.
   задачи»; every change is an append-only event. The «Оптимизация» tab (W60,
   migration 0026) stores price lists (CSV/XLSX, immutable revisions with a
   parse report) and vendor lists per section; no money figure exists without
-  a price-list position. Expert review of the draft profiles remains open.
+  a price-list position. «Спецификация и цены» (`getSpecificationPrices`)
+  reads the AR specification rows from a version's saved text and matches
+  them to the current price list; amounts and per-currency totals only for
+  matched same-unit rows with a numeric quantity. Expert review of the draft
+  profiles remains open.
 
 ## Pointers and history
 
