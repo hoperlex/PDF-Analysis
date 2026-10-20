@@ -127,6 +127,9 @@ REQUIRED_OPERATIONS = {
     # `W59-VERSION-COMPARE-01`. Two versions of one set compared, read-only; a refusal is
     # an answer with a closed reason, not an envelope.
     "compareDocumentVersions",
+    # `W59-DECISION-CARRYOVER-01`. An expert-confirmed carryover of one decision to the
+    # matched finding of the next version: a keyed write to the decision ledger.
+    "carryOverDecision",
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry run start routes through,
     # read-only, for «Настройки анализа».
     "listAnalysisProfiles",
@@ -164,6 +167,8 @@ WRITE_OPERATIONS = {
     "setJobPriority",
     "setExecutionPaused",
     "setWorkerIntake",
+    # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
+    "carryOverDecision",
 }
 
 PAGINATED_OPERATIONS = {

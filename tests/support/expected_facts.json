@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 53,
+    "path_count": 54,
     "operations": [
       [
         "POST",
@@ -302,6 +302,11 @@
         "GET",
         "/analysis/profiles",
         "listAnalysisProfiles"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers",
+        "carryOverDecision"
       ]
     ],
     "schema_names": [
@@ -458,7 +463,11 @@
       "AnalysisProfileSource",
       "AnalysisProfileSummary",
       "AnalysisProfileListItem",
-      "AnalysisProfileList"
+      "AnalysisProfileList",
+      "CarryoverSourceDecision",
+      "CarryoverCandidate",
+      "CarryOverDecisionRequest",
+      "CarryOverDecisionResponse"
     ]
   },
   "error_catalog": {

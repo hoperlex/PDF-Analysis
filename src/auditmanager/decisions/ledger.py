@@ -78,10 +78,11 @@ expert who authored a decision cannot be purged (`R-61`).
 from __future__ import annotations
 
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
@@ -416,6 +417,31 @@ def decision_history(session: Session, finding_uid: str) -> tuple[DecisionEvent,
     """
     rows = session.execute(_EVENTS_FOR_FINDING, {"finding_uid": finding_uid}).mappings().all()
     return tuple(_row_to_event(row) for row in rows)
+
+
+_EVENTS_BY_ID = text(
+    """
+    SELECT decision_id, finding_uid, finding_observation_id, event_type,
+           verdict, severity, comment, author_label, author_user_uid, command_id, recorded_at
+    FROM expert_decision_event
+    WHERE decision_id IN :decision_ids
+    """
+).bindparams(bindparam("decision_ids", expanding=True))
+
+
+def decision_events_by_id(
+    session: Session, decision_ids: Sequence[str]
+) -> dict[str, DecisionEvent]:
+    """The named events that exist, keyed by ``decision_id``; an unknown id is absent.
+
+    One read for a bounded batch (`W59-DECISION-CARRYOVER-01` reads at most one source
+    decision per proposed pair). An empty request reads nothing.
+    """
+    wanted = sorted({value for value in decision_ids if isinstance(value, str)})
+    if not wanted:
+        return {}
+    rows = session.execute(_EVENTS_BY_ID, {"decision_ids": wanted}).mappings().all()
+    return {row["decision_id"]: _row_to_event(row) for row in rows}
 
 
 COMMAND_TYPE_APPEND_DECISION = "append_decision"
