@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import os
+import re
 import shutil
 import subprocess
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
 from auditmanager.exports.xlsx import Citation, FindingMember, FindingRow, WorkbookInput, render_xlsx
-from scripts.rehearsal.w57b.xlsx_soffice_probe import ProbeRefused, probe_xlsx
+from scripts.rehearsal.w57b.xlsx_soffice_probe import ProbeRefused, _workbook_cells, probe_xlsx
 
 
 def _render(*, finding_text: str = "=1+1") -> bytes:
@@ -111,3 +115,89 @@ def test_real_soffice_roundtrip() -> None:
     result = probe_xlsx(_render())
     assert result.sheet_names == ("Сводка", "Замечания")
     assert result.compared_cell_count > 35
+
+
+_CATEGORIES = (
+    "internal_contradiction", "explicit_placeholder", "dimensions", "layout", "facade", "roof",
+    "documentation", "evacuation", "fire_safety", "accessibility", "insulation", "sound",
+)
+_SEVERITIES = ("critical", "economic", "operational", "recommendation", "check_adjacent")
+_VERDICTS = ("pending", "accepted", "rejected", "needs_manual_review")
+
+
+def _column_number(letters: str) -> int:
+    number = 0
+    for letter in letters:
+        number = number * 26 + ord(letter) - 64
+    return number
+
+
+@pytest.mark.skipif(
+    os.getenv("W57B_RUN_SOFFICE") != "1" or shutil.which("soffice") is None,
+    reason="manual: needs soffice on PATH and W57B_RUN_SOFFICE=1",
+)
+def test_real_soffice_csv_shows_every_label_cell_by_cell(tmp_path: Path) -> None:
+    """`XLSX-RU-LABELS-01`: LibreOffice reads every sheet back as the cells the XML holds.
+
+    Every category, severity and verdict is present, so each Russian label is a cell the
+    application had to open as text. The comparison is independent of the writer: the
+    expected grid comes from the probe's own XML reader, the actual grid from the CSV
+    LibreOffice writes for each sheet (its own profile under ``tmp_path``).
+    """
+    findings = tuple(
+        FindingRow(
+            finding_uid=f"finding_{index:02d}", sheet_page=f"АР-{index} / {index}",
+            category=category, finding_text=f"Замечание {index}",
+            decided_severity=_SEVERITIES[index % 5] if index % 2 else None,
+            proposed_severity=_SEVERITIES[(index + 1) % 5],
+            expert_decision=_VERDICTS[index % 4] if index % 2 == 0 else "accepted",
+        )
+        for index, category in enumerate(_CATEGORIES)
+    )
+    content = render_xlsx(
+        WorkbookInput("prj_1", "ver_1", "run_1", "ar_v3", "ns_1", "recorded", findings)
+    ).content
+    source = tmp_path / "in" / "labels.xlsx"
+    source.parent.mkdir()
+    source.write_bytes(content)
+    out, profile, runtime, home = (tmp_path / name for name in ("out", "profile", "run", "home"))
+    for directory in (out, profile):
+        directory.mkdir()
+    for directory in (runtime, home):
+        directory.mkdir(mode=0o700)
+    environment = {
+        **os.environ, "XDG_RUNTIME_DIR": str(runtime), "HOME": str(home),
+        "SAL_USE_VCLPLUGIN": "svp",
+    }
+    done = subprocess.run(
+        [
+            "soffice", f"-env:UserInstallation={profile.as_uri()}", "--headless",
+            "--convert-to", "csv:Text - txt - csv (StarCalc):44,34,76,1,,0,false,true,false,false,false,-1",
+            "--outdir", str(out), str(source),
+        ],
+        capture_output=True, text=True, timeout=120, env=environment,
+    )
+    assert done.returncode == 0, done.stderr
+    names, expected = _workbook_cells(content)
+    compared = 0
+    for name in names:
+        (path,) = out.glob(f"labels-{name}.csv")
+        grid = list(csv.reader(io.StringIO(path.read_text(encoding="utf-8"), newline="")))
+        wanted = {}
+        for (sheet, address), (kind, value) in expected.items():
+            if sheet != name:
+                continue
+            match = re.fullmatch(r"([A-Z]+)([0-9]+)", address)
+            assert match is not None
+            shown = str(int(value)) if isinstance(value, Decimal) else value
+            wanted[(int(match.group(2)), _column_number(match.group(1)))] = shown
+        for (row, column), shown in wanted.items():
+            assert grid[row - 1][column - 1] == shown, (name, row, column)
+            compared += 1
+        # ... and nothing else is filled: no formula result, no stray cell.
+        filled = {
+            (row, column) for row, cells in enumerate(grid, start=1)
+            for column, value in enumerate(cells, start=1) if value != ""
+        }
+        assert filled == set(wanted), (name, sorted(filled ^ set(wanted))[:5])
+    assert compared > 120  # 143 non-empty cells for twelve findings
