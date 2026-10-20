@@ -460,4 +460,10 @@ def test_the_csv_is_escaped_complete_and_separate_from_findings(world, expert, a
     assert "run_id,run_state,provider_mode" not in lines[0]  # not the findings' file
     assert client.get(f"/optimisation-passes/{pass_id}/export.csv", headers=expert).content == content
     assert client.get(f"/optimisation-passes/{UNKNOWN_PASS}/export.csv", headers=expert).status_code == 404
-    assert client.get("/optimisation-passes/opr_not_a_pass/export.csv", headers=expert).status_code == 404
+    # A malformed identity addresses nothing: `404`, naming the aggregate the path was about.
+    malformed_pass = client.get("/optimisation-passes/opr_not_a_pass/export.csv", headers=expert)
+    assert malformed_pass.status_code == 404
+    assert malformed_pass.json()["details"] == {"aggregate_type": "OptimisationPass"}
+    malformed_proposal = client.get("/optimisation-proposals/opp_not_a_proposal/decisions", headers=expert)
+    assert malformed_proposal.status_code == 404
+    assert malformed_proposal.json()["details"] == {"aggregate_type": "OptimisationProposal"}
