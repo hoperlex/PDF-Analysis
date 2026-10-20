@@ -9,6 +9,7 @@
  * `onSuccess` and `onSettled` the browser would run.
  */
 
+import { partialMatchKey } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const calls = vi.hoisted(() => ({ invalidations: [] as unknown[] }));
@@ -84,14 +85,33 @@ describe('the price-list upload', () => {
     expect(Object.keys(sent?.body ?? {})).toEqual(['file']);
   });
 
-  it('asks the project’s revisions and priced specifications again, and not the dashboard', () => {
+  it('asks the project’s revisions, priced specifications and the section view again, and not the dashboard', () => {
     const hook = useUploadPriceList() as unknown as Captured<UploadPriceListCommand, PriceListRevision>;
     hook.onSuccess?.(revision(), {} as UploadPriceListCommand);
-    // `W60-OPT-MATCH-01`: the new revision decides every price on «Спецификация и цены».
+    // `W60-OPT-MATCH-01`: the new revision decides every price on «Спецификация и цены»;
+    // `SECTION-READ-MODEL-01`: and on every open page of «Оптимизация разделов».
     expect(calls.invalidations).toEqual([
       [{ queryKey: queryKeys.optimisation.priceLists(OPT_PROJECT_UID) }],
       [{ queryKey: queryKeys.optimisation.specificationPricesAll(OPT_PROJECT_UID) }],
+      [{ queryKey: ['optimisation', 'section-specification'] }],
     ]);
+  });
+
+  it('invalidates a prefix of every key the section view is read under', () => {
+    const hook = useUploadPriceList() as unknown as Captured<UploadPriceListCommand, PriceListRevision>;
+    hook.onSuccess?.(revision(), {} as UploadPriceListCommand);
+    const [{ queryKey: invalidated }] = calls.invalidations[2] as [{ queryKey: readonly unknown[] }];
+    const read: (readonly unknown[])[] = [
+      queryKeys.optimisation.sectionSpecification('AR'),
+      queryKeys.optimisation.sectionSpecification('KJ', { projectUid: OPT_PROJECT_UID, q: 'щит', offset: 50, limit: 50 }),
+      queryKeys.optimisation.sectionSpecification('PS', { offset: 100 }),
+    ];
+    for (const key of read) {
+      expect(partialMatchKey(key, invalidated)).toBe(true);
+    }
+    // The prefix is the section view's alone: it moves no other optimisation read.
+    expect(partialMatchKey(queryKeys.optimisation.priceLists(OPT_PROJECT_UID), invalidated)).toBe(false);
+    expect(partialMatchKey(queryKeys.optimisation.vendorLists(), invalidated)).toBe(false);
   });
 });
 

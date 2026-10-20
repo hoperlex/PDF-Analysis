@@ -35,6 +35,7 @@ from auditmanager.storage.public import BlobId, parse_blob_id
 
 from .models import (
     ROLE_SOURCE_DOCUMENT,
+    CurrentVersionPlacementRecord,
     DocumentVersionRecord,
     ManifestEntry,
     ProjectListingRecord,
@@ -44,6 +45,7 @@ from .models import (
 
 __all__ = [
     "MAX_DISPLAY_TITLE",
+    "MAX_PLACEMENT_PAGE",
     "MAX_PROJECT_NAME",
     "DocumentRepository",
 ]
@@ -52,6 +54,11 @@ __all__ = [
 #: the CHECK constraint refuses it with a driver error.
 MAX_PROJECT_NAME: Final[int] = 200
 MAX_DISPLAY_TITLE: Final[int] = 400
+
+#: The most placements one page of ``list_current_versions_in_section`` /
+#: ``list_unclassified_current_versions`` returns. A caller that needs more reads the next
+#: page; no read here is unbounded.
+MAX_PLACEMENT_PAGE: Final[int] = 1000
 
 _INSERT_PROJECT = text(
     "INSERT INTO project (project_uid, name) VALUES (:project_uid, :name) "
@@ -182,6 +189,50 @@ _LIST_DOCUMENTS = text(
     "ORDER BY v.published_at DESC, v.version_uid DESC"
 )
 
+#: `SECTION-READ-MODEL-01`. The document sets whose **current** version is confirmed in one
+#: section: ``document.current_version_uid`` selects the version, and that version's own row in
+#: ``document_version_classification`` (``W59-SECTION-IDENTITY-DECISION-01``) is the
+#: confirmation. The inner join on the classification is the rule: a set whose current version
+#: has none is not a member, and neither is a set whose *older* version was confirmed in this
+#: section -- the legacy ``document.section`` is not read at all. ``_LIST_DOCUMENTS``' join
+#: (``document`` to ``document_version`` on ``current_version_uid``), so a document with no
+#: published current version is absent here exactly as it is from ``listDocuments``.
+#:
+#: Keyset-paged on ``document_uid`` -- the primary key of ``document``, and one current version
+#: per document, so the order is total and a page never repeats or skips a row while the next
+#: is read. The optional filters use ``CAST(:x AS text) IS NULL`` so one statement serves
+#: "every project" and "this project" without string assembly.
+_LIST_SECTION_MEMBERS = text(
+    "SELECT d.document_uid, d.project_uid, p.name, d.display_title, v.version_uid,"
+    "       v.version_ordinal, v.page_count, c.project_stage, c.section_code "
+    "FROM document d "
+    "JOIN project p ON p.project_uid = d.project_uid "
+    "JOIN document_version v ON v.version_uid = d.current_version_uid "
+    "JOIN document_version_classification c ON c.version_uid = v.version_uid "
+    "WHERE c.section_code = :section_code "
+    "  AND (CAST(:project_uid AS text) IS NULL OR d.project_uid = CAST(:project_uid AS text)) "
+    "  AND (CAST(:after AS text) IS NULL OR d.document_uid > CAST(:after AS text)) "
+    "ORDER BY d.document_uid "
+    "LIMIT :limit"
+)
+#: The complement: the sets whose current version no expert has classified (the ``LEFT JOIN``
+#: finds no row). Same join, same keyset, same filters; ``project_stage`` and ``section_code``
+#: come back NULL by construction.
+_LIST_UNCLASSIFIED_CURRENT = text(
+    "SELECT d.document_uid, d.project_uid, p.name, d.display_title, v.version_uid,"
+    "       v.version_ordinal, v.page_count, c.project_stage, c.section_code "
+    "FROM document d "
+    "JOIN project p ON p.project_uid = d.project_uid "
+    "JOIN document_version v ON v.version_uid = d.current_version_uid "
+    "LEFT JOIN document_version_classification c ON c.version_uid = v.version_uid "
+    "WHERE c.version_uid IS NULL "
+    "  AND (CAST(:project_uid AS text) IS NULL OR d.project_uid = CAST(:project_uid AS text)) "
+    "  AND (CAST(:after AS text) IS NULL OR d.document_uid > CAST(:after AS text)) "
+    "ORDER BY d.document_uid "
+    "LIMIT :limit"
+)
+_COUNT_PROJECTS = text("SELECT count(*) FROM project")
+
 #: `listVersions`. Every published version of one document, newest first.
 #: `version_ordinal` is the document's own publication order and is monotonic per
 #: document, so it orders these rows exactly and needs no tiebreaker: the schema's
@@ -279,6 +330,60 @@ def _classification_record(row: Any) -> VersionClassificationRecord:
         confirmed_by_user_uid=confirmed_by,
         confirmed_at=confirmed_at,
     )
+
+
+def _placement_record(row: Any) -> CurrentVersionPlacementRecord:
+    """One ``_LIST_SECTION_MEMBERS`` / ``_LIST_UNCLASSIFIED_CURRENT`` row, in column order."""
+    (
+        document_uid,
+        project_uid,
+        project_name,
+        display_title,
+        version_uid,
+        version_ordinal,
+        page_count,
+        project_stage,
+        section_code,
+    ) = tuple(row)
+    return CurrentVersionPlacementRecord(
+        project_uid=ProjectUid(project_uid),
+        project_name=project_name,
+        document_uid=DocumentUid(document_uid),
+        display_title=display_title,
+        version_uid=VersionUid(version_uid),
+        version_ordinal=int(version_ordinal),
+        page_count=int(page_count),
+        project_stage=project_stage,
+        section_code=section_code,
+    )
+
+
+def _placements(
+    session: Session,
+    statement: Any,
+    parameters: dict[str, Any],
+    *,
+    project_uid: ProjectUid | None,
+    after: DocumentUid | None,
+    limit: int,
+) -> tuple[CurrentVersionPlacementRecord, ...]:
+    """Run one placement statement with its optional filters and a checked page size."""
+    if not isinstance(limit, int) or isinstance(limit, bool):
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="limit", constraint="type")
+    if not 1 <= limit <= MAX_PLACEMENT_PAGE:
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED, field="limit", constraint=f"1..{MAX_PLACEMENT_PAGE}"
+        )
+    rows = session.execute(
+        statement,
+        {
+            **parameters,
+            "project_uid": None if project_uid is None else str(project_uid),
+            "after": None if after is None else str(after),
+            "limit": limit,
+        },
+    ).all()
+    return tuple(_placement_record(row) for row in rows)
 
 
 def _version_record(
@@ -582,6 +687,66 @@ class DocumentRepository:
             )
         return tuple(
             _version_record(row, tuple(grouped[str(tuple(row)[0])])) for row in rows
+        )
+
+    # -- the section view's membership (`SECTION-READ-MODEL-01`) -------------
+
+    def count_projects(self, session: Session) -> int:
+        """How many projects exist -- one statement, no listing."""
+        return int(session.execute(_COUNT_PROJECTS).scalar_one())
+
+    def list_current_versions_in_section(
+        self,
+        session: Session,
+        *,
+        section_code: str,
+        project_uid: ProjectUid | None = None,
+        after: DocumentUid | None = None,
+        limit: int = MAX_PLACEMENT_PAGE,
+    ) -> tuple[CurrentVersionPlacementRecord, ...]:
+        """The document sets whose **current** version is confirmed in ``section_code``.
+
+        One statement over the whole deployment (or over one project, when ``project_uid``
+        is given) instead of one ``list_documents`` per project. A set is a member when
+        ``document.current_version_uid`` has a ``document_version_classification`` row with
+        this code; an older version's confirmation, the legacy ``document.section``, a file
+        name and a suggestion never make it one. At most ``limit`` records, ascending by
+        ``document_uid``; pass the last record's ``document_uid`` as ``after`` for the next
+        page, and a page shorter than ``limit`` ends the walk. An unknown project filter is
+        an empty answer here -- a caller that must tell the two apart proves the project with
+        :meth:`get_project` first. ``section_code`` is not re-validated: an unrecognised code
+        matches nothing.
+        """
+        return _placements(
+            session,
+            _LIST_SECTION_MEMBERS,
+            {"section_code": section_code},
+            project_uid=project_uid,
+            after=after,
+            limit=limit,
+        )
+
+    def list_unclassified_current_versions(
+        self,
+        session: Session,
+        *,
+        project_uid: ProjectUid | None = None,
+        after: DocumentUid | None = None,
+        limit: int = MAX_PLACEMENT_PAGE,
+    ) -> tuple[CurrentVersionPlacementRecord, ...]:
+        """The document sets whose current version no expert has classified.
+
+        Paged like :meth:`list_current_versions_in_section`. ``project_stage`` and
+        ``section_code`` are ``None`` on every record: an unclassified version is not a
+        sixteenth section.
+        """
+        return _placements(
+            session,
+            _LIST_UNCLASSIFIED_CURRENT,
+            {},
+            project_uid=project_uid,
+            after=after,
+            limit=limit,
         )
 
     # -- version classification (`W59-SECTION-SEAL-01`) ----------------------

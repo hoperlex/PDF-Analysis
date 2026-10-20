@@ -11,6 +11,7 @@ from auditmanager.documents.models import (
     ROLE_SOURCE_MARKDOWN,
     ROLE_SOURCE_STAMP_AUDIT,
     ROLE_SOURCE_STRUCTURED_COMPANION,
+    CurrentVersionPlacementRecord,
     DocumentVersionRecord,
     ManifestEntry,
     ProjectListingRecord,
@@ -19,18 +20,20 @@ from auditmanager.documents.models import (
     VersionClassificationRecord,
 )
 from auditmanager.documents.refusals import UNIQUE_VIOLATION, sqlstate_of
-from auditmanager.documents.repository import DocumentRepository
+from auditmanager.documents.repository import MAX_PLACEMENT_PAGE, DocumentRepository
 
 __all__ = [
     "MANIFEST_ROLE_MARKDOWN",
     "MANIFEST_ROLE_SOURCE_DOCUMENT",
     "MANIFEST_ROLE_STAMP_AUDIT",
     "MANIFEST_ROLE_STRUCTURED_COMPANION",
+    "MAX_PLACEMENT_PAGE",
     "ROLE_SOURCE_DOCUMENT",
     "ROLE_SOURCE_MARKDOWN",
     "ROLE_SOURCE_STAMP_AUDIT",
     "ROLE_SOURCE_STRUCTURED_COMPANION",
     "UNIQUE_VIOLATION",
+    "CurrentVersionPlacementRecord",
     "DocumentRepository",
     "DocumentVersionRecord",
     "ManifestEntry",

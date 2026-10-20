@@ -28,27 +28,95 @@ from __future__ import annotations
 
 import ast
 import pathlib
+from datetime import datetime, timezone
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from auditmanager.api.routers import ports as port_module
 from auditmanager.bootstrap.adapters import DecisionAdapter
-from auditmanager.shared.errors import DomainError, ErrorCode
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 
-def test_pre_decide_adapter_refuses_a_severity_instead_of_dropping_it() -> None:
-    adapter = DecisionAdapter(None)  # type: ignore[arg-type]  # refusal precedes session use
-    with pytest.raises(DomainError) as caught:
-        adapter.append_decision(
-            finding_uid="unused", finding_observation_id="unused", event_type="accept",
-            severity="economic", idempotency_key="unused", author_label="reviewer",
-            author_user_uid="unused",
+class _CommittingSession:
+    """A session that does nothing but remember it was committed.
+
+    ``DecisionAdapter`` opens one per call and commits on a clean return. The ledger is
+    replaced below, so this is the only thing the adapter touches.
+    """
+
+    def __init__(self) -> None:
+        self.committed = False
+
+    def __enter__(self) -> "_CommittingSession":
+        return self
+
+    def __exit__(self, *_exc: object) -> bool:
+        return False
+
+    def commit(self) -> None:
+        self.committed = True
+
+
+@pytest.mark.parametrize("severity", ["economic", None])
+def test_the_decision_adapter_hands_a_severity_to_the_ledger_instead_of_dropping_it(
+    monkeypatch: pytest.MonkeyPatch, severity: str | None
+) -> None:
+    """`W56A-INT-DECIDED-SEVERITY-01` replaced the adapter's pre-decide refusal.
+
+    Until `12916869` ``DecisionAdapter.append_decision`` refused a severity before opening a
+    session (``dependency_unavailable``, ``dependency: v2_decision_ledger``) because the ledger
+    could not store one, and this test pinned that refusal. The ledger now stores a severity on
+    an ``accept``, so the adapter forwards it; the rule the old name stated -- **a severity is
+    never silently dropped** -- is unchanged, and what it now means is that the value the
+    caller gave is the value the ledger receives and the value the answer reports.
+
+    The ledger is a recorder here (its own refusals -- a severity on a reject or a comment, on a
+    legacy observation -- and its persistence are proved against PostgreSQL in
+    ``tests/integration/decisions/test_v2_severity_*.py``), so this is about the adapter alone.
+    The ``None`` case is the control: an adapter that always sent a constant would pass the
+    other case and fail this one.
+    """
+    import auditmanager.decisions as ledger
+
+    received: dict[str, Any] = {}
+
+    def append_decision_under_key(_session: Any, **kwargs: Any) -> tuple[Any, bool]:
+        received.update(kwargs)
+        return (
+            SimpleNamespace(
+                decision_id="dec_unused", finding_uid=kwargs["finding_uid"],
+                finding_observation_id=kwargs["finding_observation_id"],
+                event_type=kwargs["event_type"], author_label=kwargs["author_label"],
+                recorded_at=datetime(2026, 10, 20, 9, 0, tzinfo=timezone.utc),
+                verdict="accepted", severity=kwargs.get("severity"), comment=kwargs["comment"],
+            ),
+            False,
         )
-    assert caught.value.code is ErrorCode.DEPENDENCY_UNAVAILABLE
-    assert caught.value.detail_fields == {"dependency": "v2_decision_ledger"}
+
+    monkeypatch.setattr(ledger, "append_decision_under_key", append_decision_under_key)
+    monkeypatch.setattr(
+        ledger, "current_verdict", lambda _session, _uid: SimpleNamespace(current_verdict="accepted")
+    )
+    session = _CommittingSession()
+    adapter = DecisionAdapter(lambda: session)  # type: ignore[arg-type]
+
+    appended = adapter.append_decision(
+        finding_uid="fnd_unused", finding_observation_id="fob_unused", event_type="accept",
+        severity=severity, idempotency_key="key-unused", author_label="reviewer",
+        author_user_uid="usr_unused",
+    )
+
+    assert received.get("severity", "<not passed>") == severity, (
+        f"the adapter gave the ledger severity={received.get('severity', '<not passed>')!r}, "
+        f"not {severity!r}"
+    )
+    assert appended.event.severity == severity
+    assert appended.current_verdict == "accepted"
+    assert session.committed, "a clean return did not commit"
+
 
 #: The keyword each port is passed under, and the protocol it must satisfy. Read off
 #: ``build_router``'s own signature below, so a seventh port cannot be missed here.
