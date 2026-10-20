@@ -13,7 +13,7 @@ not positive, has more than six decimals or is not below 10^14 is refused, never
 **A currency** is an ISO 4217 code (any three Latin letters, upper-cased) or one of the
 spelled forms in :data:`CURRENCY_WORDS`; anything else is unrecognised.
 
-**A section** is one of the fifteen codes, in Latin (``EOM``) or as its Cyrillic abbreviation
+**A section** is one of the fifteen sections, by its code in Latin (``EOM``) or as its Cyrillic abbreviation
 (``ЭОМ``), or the section's catalogue name; anything else is unrecognised (a warning: the
 position keeps its price and has no section).
 """

@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.identifiers",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 15,
-  "revision_note": "Candidate revision 15 by W61-DISPATCHER-01. Adds opaque WorkAssignment identity asg_ for one assignment of a project or document to an expert; its history events reuse audit_event_id (evt_). No other identity changes.",
+  "candidate_revision": 16,
+  "revision_note": "Candidate revision 16 by W60-PRICE-LIST-01. Adds the opaque PriceList (prl_), PriceListPosition (prp_) and VendorList (vnl_) identities of a project's uploaded price list, its parsed positions and a vendor-list revision; no other identity changes.",
   "status": "draft_candidate",
   "frozen": false,
   "format": "<prefix>_<ULID>",
@@ -62,7 +62,10 @@
     "user_uid": "usr",
     "request_id": "reg",
     "norm_retrieval_set_id": "nrs",
-    "assignment_uid": "asg"
+    "assignment_uid": "asg",
+    "price_list_id": "prl",
+    "price_list_position_id": "prp",
+    "vendor_list_id": "vnl"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -112,7 +115,10 @@
     "User": "user_uid",
     "RegistrationRequest": "request_id",
     "NormRetrievalSet": "norm_retrieval_set_id",
-    "WorkAssignment": "assignment_uid"
+    "WorkAssignment": "assignment_uid",
+    "PriceList": "price_list_id",
+    "PriceListPosition": "price_list_position_id",
+    "VendorList": "vendor_list_id"
   },
   "distinct_identities": [
     {
@@ -223,6 +229,20 @@
       "authority": "R-79 and R-106 owner rulings",
       "evidence": [
         "W54-PLAN.md section 3.3"
+      ]
+    },
+    {
+      "name": "optimisation_identity",
+      "identifiers": [
+        "price_list_id",
+        "price_list_position_id",
+        "vendor_list_id"
+      ],
+      "rule": "PriceList identifies one immutable upload of a project's price list (a revision); PriceListPosition one parsed position of exactly one PriceList; VendorList one immutable revision of a section's vendor list, global or of one project. Each is allocated independently. A revision number, a source row number, the uploaded file name, the file's checksum and a section code are attributes and display values, never substitutes for these identities; correcting a price list or a vendor list creates a new revision with a new identity.",
+      "authority": "W60-PRICE-LIST-01; ROADMAP-TO-BETA.md section 10.1 A-3 to A-5",
+      "evidence": [
+        "W60-PRICE-LIST-01",
+        "0026_price_lists"
       ]
     }
   ],

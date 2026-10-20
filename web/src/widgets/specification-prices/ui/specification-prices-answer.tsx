@@ -148,7 +148,7 @@ function Totals({ answer }: { readonly answer: SpecificationPrices }) {
   const excludedTotal = excluded.reduce((sum, [, count]) => sum + count, 0);
   return (
     <section className={styles.totals} aria-label="Итоги" data-spec-totals="">
-      <h4 className={styles.subheading}>Итого по однозначно сопоставленным строкам</h4>
+      <h3 className={styles.subheading}>Итого по однозначно сопоставленным строкам</h3>
       {matching.totals.length === 0 ? (
         <p data-spec-total="none">
           Итога нет: ни одна строка не сопоставлена с одной позицией прайс-листа в той же единице

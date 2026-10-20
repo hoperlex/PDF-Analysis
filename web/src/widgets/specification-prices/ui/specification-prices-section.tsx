@@ -94,7 +94,7 @@ export function SpecificationPricesSection({ projectUid }: SpecificationPricesSe
   return (
     <section className={styles.section} aria-labelledby="specification-prices-heading" data-specification-prices="">
       <div className={styles.bar}>
-        <h3 id="specification-prices-heading" className={styles.heading}>Спецификация и цены</h3>
+        <h2 id="specification-prices-heading" className={styles.heading}>Спецификация и цены</h2>
         <button
           type="button"
           className="am-button am-button--quiet"

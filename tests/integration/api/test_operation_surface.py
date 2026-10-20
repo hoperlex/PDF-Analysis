@@ -98,6 +98,10 @@ def test_every_declared_operation_is_reachable(
         "portal_block_id": "blk_0123456789abcdef0123456789abcdef",
         # `W61-DISPATCHER-01`.
         "assignment_uid": "asg_01M2545JSD15ETSNNV904X991W",
+        # `W60-PRICE-LIST-01`: a price-list revision, and a vendor list's section slot (one
+        # of the fifteen codes, a closed vocabulary rather than an identity).
+        "price_list_id": "prl_01M2545JSD15ETSNNV904X991W",
+        "section_code": "EOM",
     }
     for operation_id, method, template in sorted(declared_operations(openapi_document)):
         path = template

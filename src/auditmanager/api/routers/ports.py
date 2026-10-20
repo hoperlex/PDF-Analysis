@@ -70,6 +70,7 @@ __all__ = [
     "SectionPort",
     "ComparisonPort",
     "AnalysisProfilePort",
+    "OptimisationPort",
     "SpecificationPricesPort",
     "UploadedDocument",
     "XlsxExportPort",
@@ -1031,3 +1032,66 @@ class DispatchPort(Protocol):
         ``reassigned``/``cancelled`` by ``admin``; a move the table does not allow is
         ``state_transition_not_allowed`` (``machine: work_assignment``).
         """
+
+
+@runtime_checkable
+class OptimisationPort(Protocol):
+    """The six «Оптимизация проекта» operations. `W60-PRICE-LIST-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    Behind it: ``auditmanager.optimisation``. Every write reads the actor's role set in its
+    own transaction (``expert`` uploads a price list and overrides a project's vendor list;
+    ``admin`` keeps the global vendor list); every read needs any one role. No method here
+    computes a total, a proposal or a price that a price list does not state.
+    """
+
+    def upload_price_list(
+        self,
+        *,
+        project_uid: str,
+        content: BinaryIO,
+        source_filename: str,
+        default_currency: str | None,
+        idempotency_key: str,
+        user_uid: str,
+    ) -> models.PriceListRevision:
+        """Store one price list as the project's newest revision, or answer the exact repeat."""
+
+    def list_price_list_revisions(
+        self, *, project_uid: str, user_uid: str
+    ) -> models.PriceListRevisionList:
+        """Every revision of the project's price list, newest first."""
+
+    def list_price_list_positions(
+        self, *, price_list_id: str, offset: int, limit: int, user_uid: str
+    ) -> models.PriceListPositionPage:
+        """One page of a revision's positions with the revision and its parse report."""
+
+    def get_effective_vendor_lists(
+        self, *, project_uid: str, user_uid: str
+    ) -> models.EffectiveVendorLists:
+        """All fifteen sections' vendor lists as they apply to the project."""
+
+    def set_global_vendor_list(
+        self,
+        *,
+        section_code: str,
+        entries: Sequence[models.VendorListEntry],
+        expected_vendor_list_id: str | None,
+        expect_current: bool,
+        user_uid: str,
+    ) -> models.VendorListRevision:
+        """Append a global revision, or answer the latest unchanged on an exact repeat."""
+
+    def set_project_vendor_list(
+        self,
+        *,
+        project_uid: str,
+        section_code: str,
+        mode: str,
+        entries: Sequence[models.VendorListEntry],
+        expected_vendor_list_id: str | None,
+        expect_current: bool,
+        user_uid: str,
+    ) -> models.SectionVendorList:
+        """Append a project revision (or none on a repeat) and answer the section's state."""

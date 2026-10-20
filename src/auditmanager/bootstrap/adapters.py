@@ -3342,3 +3342,322 @@ def _assignment_event_view(event: Any, labels: _Labels) -> models.AssignmentEven
         new_assignee_label=None if new_assignee is None else labels.of(new_assignee),
         occurred_at=event.occurred_at,
     )
+
+
+class OptimisationAdapter(_SessionHolder):
+    """The six «Оптимизация проекта» operations (`W60-PRICE-LIST-01`).
+
+    Thin like every adapter here: ``auditmanager.optimisation`` owns the parser, the upload's
+    units of work (``PriceListUploads``), the vendor-list commands and the reads; this opens
+    a session, reads the actor's role set **inside it** for the commands and reads, and maps
+    the records into the frozen shapes. The stored parse report's maps become the contract's
+    ordered lists here, in the context's own canonical orders (fields, reasons, currency
+    sources) -- ``jsonb`` keeps no key order, so the order is never the stored one.
+    """
+
+    def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any) -> None:
+        from auditmanager.optimisation.public import PriceListUploads
+
+        super().__init__(session_factory)
+        self._uploads = PriceListUploads(blob_store, session_factory=session_factory)
+
+    @staticmethod
+    def _roles(session: Session, user_uid: str) -> frozenset[str]:
+        from auditmanager.access.public import AccountRepository
+
+        return AccountRepository().roles_of(session, user_uid)
+
+    def upload_price_list(
+        self,
+        *,
+        project_uid: str,
+        content: BinaryIO,
+        source_filename: str,
+        default_currency: str | None,
+        idempotency_key: str,
+        user_uid: str,
+    ) -> models.PriceListRevision:
+        outcome = self._uploads.upload(
+            project_uid=project_uid,
+            content=content,
+            source_filename=source_filename,
+            idempotency_key=idempotency_key,
+            actor_uid=user_uid,
+            default_currency=default_currency,
+        )
+        return _price_list_revision_view(outcome.revision)
+
+    def list_price_list_revisions(
+        self, *, project_uid: str, user_uid: str
+    ) -> models.PriceListRevisionList:
+        from auditmanager.optimisation.public import list_price_list_revisions
+
+        def read(session: Session) -> models.PriceListRevisionList:
+            records = list_price_list_revisions(
+                session, project_uid=project_uid, actor_roles=self._roles(session, user_uid)
+            )
+            return models.PriceListRevisionList(
+                items=[_price_list_revision_view(record) for record in records]
+            )
+
+        return self._read(read)
+
+    def list_price_list_positions(
+        self, *, price_list_id: str, offset: int, limit: int, user_uid: str
+    ) -> models.PriceListPositionPage:
+        from auditmanager.optimisation.public import list_price_list_positions
+
+        def read(session: Session) -> models.PriceListPositionPage:
+            page = list_price_list_positions(
+                session,
+                price_list_id=price_list_id,
+                actor_roles=self._roles(session, user_uid),
+                offset=offset,
+                limit=limit,
+            )
+            return models.PriceListPositionPage(
+                revision=_price_list_revision_view(page.revision),
+                parse_report=_parse_report_view(page.revision.parse_report),
+                items=[_price_list_position_view(position) for position in page.positions],
+                offset=page.offset,
+                limit=page.limit,
+                total=page.total,
+                next_offset=page.next_offset,
+            )
+
+        return self._read(read)
+
+    def get_effective_vendor_lists(
+        self, *, project_uid: str, user_uid: str
+    ) -> models.EffectiveVendorLists:
+        from auditmanager.optimisation.public import get_effective_vendor_lists
+
+        def read(session: Session) -> models.EffectiveVendorLists:
+            lists = get_effective_vendor_lists(
+                session, project_uid=project_uid, actor_roles=self._roles(session, user_uid)
+            )
+            return models.EffectiveVendorLists(
+                project_uid=project_uid, items=[_section_vendor_list_view(item) for item in lists]
+            )
+
+        return self._read(read)
+
+    def set_global_vendor_list(
+        self,
+        *,
+        section_code: str,
+        entries: Sequence[models.VendorListEntry],
+        expected_vendor_list_id: str | None,
+        expect_current: bool,
+        user_uid: str,
+    ) -> models.VendorListRevision:
+        from auditmanager.optimisation.public import set_global_vendor_list
+
+        def work(session: Session) -> models.VendorListRevision:
+            change = set_global_vendor_list(
+                session,
+                section_code=section_code,
+                entries=[_entry_input(entry) for entry in entries],
+                actor_uid=user_uid,
+                actor_roles=self._roles(session, user_uid),
+                expected_vendor_list_id=expected_vendor_list_id,
+                expect_current=expect_current,
+            )
+            if change.revision is None:  # pragma: no cover - a global set always has one
+                raise DomainError(ErrorCode.INTERNAL_ERROR)
+            return _vendor_list_revision_view(change.revision)
+
+        return self._write(work)
+
+    def set_project_vendor_list(
+        self,
+        *,
+        project_uid: str,
+        section_code: str,
+        mode: str,
+        entries: Sequence[models.VendorListEntry],
+        expected_vendor_list_id: str | None,
+        expect_current: bool,
+        user_uid: str,
+    ) -> models.SectionVendorList:
+        from auditmanager.optimisation.public import (
+            get_effective_vendor_lists,
+            set_project_vendor_list,
+        )
+
+        def work(session: Session) -> models.SectionVendorList:
+            roles = self._roles(session, user_uid)
+            set_project_vendor_list(
+                session,
+                project_uid=project_uid,
+                section_code=section_code,
+                mode=mode,
+                entries=[_entry_input(entry) for entry in entries],
+                actor_uid=user_uid,
+                actor_roles=roles,
+                expected_vendor_list_id=expected_vendor_list_id,
+                expect_current=expect_current,
+            )
+            for item in get_effective_vendor_lists(
+                session, project_uid=project_uid, actor_roles=roles
+            ):
+                if item.section_code == section_code:
+                    return _section_vendor_list_view(item)
+            raise DomainError(ErrorCode.INTERNAL_ERROR)  # pragma: no cover - fifteen always
+
+        return self._write(work)
+
+
+def _entry_input(entry: models.VendorListEntry) -> dict[str, Any]:
+    return {"material": entry.material, "vendor": entry.vendor, "note": entry.note}
+
+
+def _plain_decimal(value: Any) -> str:
+    """A stored ``numeric`` as the contract's exact plain decimal text: no exponent, no
+    trailing zero. Formatting only; the value was validated when it was stored."""
+    text = format(value.normalize(), "f")
+    return text
+
+
+def _price_list_revision_view(record: Any) -> models.PriceListRevision:
+    return models.PriceListRevision(
+        price_list_id=record.price_list_id,
+        project_uid=record.project_uid,
+        revision_number=record.revision_number,
+        is_current=record.is_current,
+        uploaded_by_user_uid=record.uploaded_by_user_uid,
+        uploaded_at=record.uploaded_at,
+        source_format=models.PriceListFormat(record.source_format),
+        source_filename=record.source_filename,
+        media_type=record.media_type,
+        size_bytes=record.size_bytes,
+        sha256=record.sha256,
+        default_currency=record.default_currency,
+        data_row_count=record.data_row_count,
+        accepted_row_count=record.accepted_row_count,
+        skipped_row_count=record.skipped_row_count,
+    )
+
+
+def _parse_report_view(report: Mapping[str, Any]) -> models.PriceListParseReport:
+    from auditmanager.optimisation.public import (
+        CURRENCY_SOURCES,
+        FIELD_ORDER,
+        SKIP_REASONS,
+        WARNING_REASONS,
+    )
+
+    columns = report.get("columns") or {}
+    ambiguous = report.get("ambiguous_columns") or {}
+    skipped_counts = report.get("skipped_by_reason") or {}
+    warning_counts = report.get("warnings_by_reason") or {}
+    sources = report.get("currency_sources") or {}
+    return models.PriceListParseReport(
+        report_version=report["report_version"],
+        format=models.PriceListFormat(report["format"]),
+        sheet=report.get("sheet"),
+        encoding=report.get("encoding"),
+        delimiter=report.get("delimiter"),
+        header_row=report["header_row"],
+        columns=[
+            models.PriceListColumn(
+                field=models.PriceListField(name),
+                column=columns[name]["column"],
+                header=columns[name]["header"],
+            )
+            for name in FIELD_ORDER
+            if name in columns
+        ],
+        ambiguous_columns=[
+            models.PriceListAmbiguousColumn(
+                field=models.PriceListField(name), headers=list(ambiguous[name])
+            )
+            for name in FIELD_ORDER
+            if name in ambiguous
+        ],
+        ignored_columns=list(report.get("ignored_columns") or []),
+        price_header_currency=report.get("price_header_currency"),
+        default_currency=report.get("default_currency"),
+        preamble_rows=report["preamble_rows"],
+        blank_rows=report["blank_rows"],
+        data_rows=report["data_rows"],
+        accepted_rows=report["accepted_rows"],
+        skipped_rows=report["skipped_rows"],
+        skipped_by_reason=[
+            models.PriceListReasonCount(
+                reason=models.PriceListRowReason(reason), count=skipped_counts[reason]
+            )
+            for reason in SKIP_REASONS
+            if reason in skipped_counts
+        ],
+        skipped=[
+            models.PriceListRowNote(row=item["row"], reason=models.PriceListRowReason(item["reason"]))
+            for item in report.get("skipped") or []
+        ],
+        skipped_listed_in_full=report["skipped_listed_in_full"],
+        warnings_by_reason=[
+            models.PriceListReasonCount(
+                reason=models.PriceListRowReason(reason), count=warning_counts[reason]
+            )
+            for reason in WARNING_REASONS
+            if reason in warning_counts
+        ],
+        warnings=[
+            models.PriceListRowNote(row=item["row"], reason=models.PriceListRowReason(item["reason"]))
+            for item in report.get("warnings") or []
+        ],
+        currency_sources=[
+            models.PriceListCurrencySourceCount(
+                source=models.PriceListCurrencySource(source), count=sources[source]
+            )
+            for source in CURRENCY_SOURCES
+            if source in sources
+        ],
+    )
+
+
+def _price_list_position_view(position: Any) -> models.PriceListPosition:
+    return models.PriceListPosition(
+        price_list_position_id=position.price_list_position_id,
+        row_number=position.row_number,
+        code=position.code,
+        name=position.name,
+        mark=position.mark,
+        unit=position.unit,
+        unit_price=_plain_decimal(position.unit_price),
+        currency=position.currency,
+        vendor=position.vendor,
+        section_code=None
+        if position.section_code is None
+        else models.ProjectSection(position.section_code),
+    )
+
+
+def _vendor_list_revision_view(record: Any) -> models.VendorListRevision:
+    return models.VendorListRevision(
+        vendor_list_id=record.vendor_list_id,
+        scope=models.VendorListScope(record.scope),
+        project_uid=record.project_uid,
+        section_code=models.ProjectSection(record.section_code),
+        mode=models.VendorListMode(record.mode),
+        revision_number=record.revision_number,
+        entries=[
+            models.VendorListEntry(material=entry.material, vendor=entry.vendor, note=entry.note)
+            for entry in record.entries
+        ],
+        set_by_user_uid=record.set_by_user_uid,
+        set_at=record.set_at,
+    )
+
+
+def _section_vendor_list_view(item: Any) -> models.SectionVendorList:
+    def view(record: Any) -> models.VendorListRevision | None:
+        return None if record is None else _vendor_list_revision_view(record)
+
+    return models.SectionVendorList(
+        section_code=models.ProjectSection(item.section_code),
+        source=models.VendorListSource(item.source),
+        effective=view(item.effective),
+        global_revision=view(item.global_revision),
+        project_revision=view(item.project_revision),
+    )

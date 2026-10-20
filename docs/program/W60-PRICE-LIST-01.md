@@ -3,8 +3,8 @@
 **Base:** `4327e61a` (`origin/dev` `0f0903f2` plus the frozen task file plus `W61-DISPATCHER-01`
 phase A `3461747c`, migration head `0025_work_assignments`), branch `agent/w60-price-list-01`,
 isolated worktree `w60-price-list`, lane PostgreSQL 57570 / MinIO 61170–61171. **Status:**
-phase A (migration and domain context) complete; phase B (operations, reseal, the
-«Оптимизация» tab) waits for the contract slot. Development candidate under `R-135`: no full
+phases A and B complete (phase B merged `c22f2049`, then `beafeab5`, the integration tip on the
+integrator's go). Development candidate under `R-135`: no full
 gate, no live journey, no push, merge into another branch or tag.
 
 ## Phase A — result
@@ -127,12 +127,131 @@ no:cacheprovider <paths>`; host before the runs: 6.3 GiB free on `/`, 6 GiB memo
 - `git diff --check` clean; every new module compiles. Deferred under `R-135`: the full gate,
   the whole contract battery, the frontend and the live journey.
 
-### Known limitations
+## Phase B — operations, reseal, the «Оптимизация» tab
 
-- `prl`, `prp`, `vnl` are minted on the registry's pattern but are not contracted
-  (`contracts/domain/v1/identifiers.json` and `shared/identity/ids.py` are phase B paths).
-- New detail values (`vendor_list_changed`, `inherit_has_no_entries`, the file constraints) are
-  to be registered in `contracts/domain/v1` / the OpenAPI document in phase B.
+Merged `c22f2049` (54/61/158) on the integrator's go, then `beafeab5` (56/63/161: the norms
+catalogue and the Excel export), re-deriving every generated artifact both times.
+
+### Surface
+
+| | before (`beafeab5`) | after |
+|---|---|---|
+| paths / operations / schemas | 56 / 63 / 161 | 61 / 69 / 188 |
+| API error codes / migration head | 25 / `0024_version_classification` | 25 / `0026_price_lists` (this branch also carries `0025`) |
+
+Six operations, tag `optimisation`, accepted as proposed:
+
+| operation | method and path | role |
+|---|---|---|
+| `uploadPriceList` | `POST /projects/{project_uid}/price-lists` (multipart `file` + optional `default_currency`, `Idempotency-Key`) | `expert` |
+| `listPriceListRevisions` | `GET /projects/{project_uid}/price-lists` | any one role |
+| `listPriceListPositions` | `GET /price-lists/{price_list_id}/positions?offset&limit` (limit ≤ 500) | any one role |
+| `getEffectiveVendorLists` | `GET /projects/{project_uid}/vendor-lists` | any one role |
+| `setGlobalVendorList` | `PUT /vendor-lists/{section_code}` | `admin` |
+| `setProjectVendorList` | `PUT /projects/{project_uid}/vendor-lists/{section_code}` (`mode` `list`/`inherit`) | `expert` |
+
+Twenty-seven schemas (`PriceListId`, `PriceListPositionId`, `VendorListId`, `PriceListFormat`,
+`PriceListField`, `PriceListRowReason`, `PriceListCurrencySource`, `PriceListColumn`,
+`PriceListAmbiguousColumn`, `PriceListRowNote`, `PriceListReasonCount`,
+`PriceListCurrencySourceCount`, `PriceListParseReport`, `PriceListRevision`,
+`PriceListRevisionList`, `PriceListPosition`, `PriceListPositionPage`, `UploadPriceListRequest`,
+`VendorListMode`, `VendorListScope`, `VendorListSource`, `VendorListEntry`, `VendorListRevision`,
+`SectionVendorList`, `EffectiveVendorLists`, `SetGlobalVendorListRequest`,
+`SetProjectVendorListRequest`). A unit price crosses the wire as its exact decimal text. The
+stored report's maps become ordered lists in the adapter, in the context's canonical orders
+(`jsonb` keeps no key order). A section code outside the fifteen in a path is `404`
+(`aggregate_type: VendorList`), like a malformed identity; `setGlobalVendorList` therefore
+declares `404` too. `section_code` is the one non-identity path parameter, registered in
+`tests/contract/domain_p02/test_openapi_document.py` (`VOCABULARY_PATH_PARAMETERS`) and held to
+the closed `ProjectSection` enum by a new test.
+
+**Contract family placement (integrator decision on XS-11/U-06).** These operations live in
+`contracts/api/v1` like every served operation; a `contracts/optimization/v1` family is reserved
+for the future LLM proposal pipeline and is not created here.
+
+Domain catalog revision 15 (`identifiers.json`, `error-codes.json`, `state-machines.json` and
+their schemas move together): `price_list_id` (`prl`), `price_list_position_id` (`prp`),
+`vendor_list_id` (`vnl`) with an `optimisation_identity` distinct-identity rule; notes register
+`conflict_reason: vendor_list_changed` and the price-list `constraint` values. The shared
+registry gains `PriceListId`, `PriceListPositionId`, `VendorListId`; `optimisation/identity.py`
+now validates through them (the only phase B change inside `src/auditmanager/optimisation/`
+besides two exported orders in `public.py` / `parsing/__init__.py` and three wording fixes the
+error-code prose guard asked for).
+
+### Backend
+
+- `api/schemas/models.py` (27 models), `api/routers/ports.py` (`OptimisationPort`),
+  `api/routers/optimisation.py` (six routes; the upload uses `UploadRoute`'s bounded form parser
+  and `require_a_strict_multipart_body`, **not** the upload gate: 10 MiB is inside the
+  ordinary 26 MiB body cap and nginx's 32m default, so `_UPLOAD_ROUTE`, `nginx.conf` locations and
+  `tls-server.conf` are unchanged), `api/routers/__init__.py` (nineteenth router module),
+  `api/routers/handlers.py` (`price_list_id` → `PriceList`, `section_code` → `VendorList` for a
+  malformed path), `api/security.py` (role table).
+- `bootstrap/adapters.py` — `OptimisationAdapter` (reads roles in each transaction, maps records
+  to the frozen shapes); `bootstrap/composition.py` wires it over the same sessions and store.
+
+### Web
+
+- The project screen has two tabs, «Документы» (default; the cold load still makes only the
+  documents' calls) and «Оптимизация»; the route passes the guard's `roles`.
+- `entities/price-list` (query options, Russian labels for every reason, source, field, format
+  and currency, the refusal sentences for every file constraint), `features/upload-price-list`
+  (multipart upload under an intent key, optional default currency, 10 MiB pre-check),
+  `features/set-vendor-list` (project and global commands with `expected_vendor_list_id`, a row
+  editor), `widgets/project-optimisation` (revisions with the current one marked, positions with
+  exact prices and the parse report — skipped rows with reasons, warnings, ambiguous and ignored
+  columns, currency sources — paging, and the fifteen sections' vendor lists with the controls
+  each role is given). Own module CSS on the global tokens only.
+- New query root `optimisation` (`priceLists`, `positions`, `vendorLists`,
+  `projectVendorLists`), recorded in `web/docs/PC01_UI_SEAM.md` §6.
+
+### Reseal files
+
+`contracts/api/v1/openapi.json` and byte-identical `web/openapi/openapi.json`, regenerated
+`web/src/shared/api/generated/**`, `web/FRONTEND_LOCK.json` (both digests, the four generated
+files, 61/69/188), `tests/support/expected_facts.json` (surface and head `0026`), the registers in
+`tests/contract/domain_p02/test_openapi_document.py`, `tests/contract/api_v1/
+{test_openapi_conformance,test_w55b_portal_bundle_seal,test_surface_counts_in_prose}.py`,
+`tests/integration/api/{test_authorization,test_role_register,test_served_document_and_health_plane,
+test_operation_surface}.py`, `tests/integration/composition/{test_every_port_implementation_is_whole,
+test_an_absent_parent_is_not_an_empty_page}.py`, the surface prose in `P02_SEAMS.md` (history,
+table, keyed-write rule), `ALPHA_ROADMAP.md`, `infra/deploy/{README.md,proxy/nginx.conf,serve.py}`,
+`api/{README.md,app.py,health.py}`, `api/routers/{declarations,errors}.py`, the BFF `route.ts` and
+`shared/api/authorization.ts`; `docs/manual-tests/PC-01_prototype.md` (head) and
+`ALPHA_PUBLIC_ACCEPTANCE.md` (A09 item 3). Web registers: `narrow-sets`, `seam-operations`,
+`dashboard-invalidation` (both hooks `false`), `configuration-and-cache-keys`, `routes.test.ts`,
+the rendered-language guard (`optimisationShapes()`), the contrast census (and `.am-form__chosen`
+left its excuse list, now rendered). `CONTRACT_PIN_REGISTRY.md` needed no change (no needle
+moved). `docs/program/CURRENT_STATE.md` is the integrator's and still states 56/63/161 and head
+`0024`.
+
+### Checks (phase B, on the merged tree)
+
+| command | result |
+|---|---|
+| `tests/contract/api_v1/test_openapi_conformance_live.py` | passed (served document = contract) |
+| `pytest tests/contract` (whole directory) | 1059 passed; 86 failed + 126 errors, all known: `test_cp00_candidate` 48 + 126 errors, `test_validate_bootstrap` 21 (`jsonschema` absent), `test_cp00_final_state` 3, `test_doc_prose_facts` 2 (`CURRENT_STATE.md` only), `test_error_kernel::test_there_are_twenty_four`, `test_ar_v2_seeded::test_seeded_categories_equal_the_sealed_api_enum` |
+| `npm --prefix web ci` / `api:generate` / `api:verify` | exit 0; 69 operations, `--check: OK` |
+| `npm --prefix web run lint -- --quiet`, `typecheck` | exit 0, exit 0 |
+| vitest `tests/guards tests/contract tests/unit/api tests/unit/styles tests/unit/screens tests/unit/qa_w50 tests/unit/optimisation tests/unit/projects tests/unit/upload` | 70 files, 1180 passed (rendered-language guard included) |
+| `pytest tests/e2e/test_pc01_journey_conformance.py` | 87 passed |
+| lane: `tests/integration/composition/test_optimisation_over_http.py` | 4 passed (upload, replay, `409`, `422 price_list_format`, `403`, `404`; revisions; positions with the report and exact prices; vendor lists global and project, stale `409`, inherit, `404` for a section outside the fifteen) |
+| lane: `tests/integration/api/{test_authorization,test_role_register,test_served_document_and_health_plane,test_operation_surface,test_router_and_body_rules,test_multipart_rules,test_identity_rules,test_schema_conformance,test_schema_bounds,test_no_internal_identifiers,test_query_surface,test_listing_surface,test_absent_and_empty_are_not_the_same_answer}.py`, `tests/integration/composition/{test_every_port_implementation_is_whole,test_an_absent_parent_is_not_an_empty_page,test_composition_root,test_router_answers}.py` | all pass except three pre-existing: `test_query_surface::test_the_filter_vocabularies_are_the_frozen_ones` (`FindingCategory` has 12 members since W56a), `test_query_surface::test_every_declared_query_parameter_is_read_by_the_router_that_declares_it` (already red for the offset-paged `compareDocumentVersions`; `listPriceListPositions` joins it, see risks), `test_every_port_implementation_is_whole::test_pre_decide_adapter_refuses_a_severity_instead_of_dropping_it` (W59 noted it) |
+| lane: `tests/unit/optimisation tests/integration/optimisation tests/integration/db/{test_price_lists_migration,test_schema_shape,test_schema_invariant_inventory,test_accounts_migration}.py` | 252 passed (6 downgrade cases deselected: the known `0022` view failure) |
+
+Deferred under `R-135`: the full gate, the live journey, the whole frontend suite.
+
+### Risks and limits
+
+- `test_query_surface`'s driver pages by cursor; neither offset-paged operation
+  (`compareDocumentVersions`, now `listPriceListPositions`) is driven by it. The positions'
+  `offset`/`limit`/`next_offset` are driven by `tests/integration/optimisation` and the
+  over-HTTP suite instead.
+- The journey manifest declares no optimisation call: the tab reads nothing until opened, and
+  the journey does not open it. The live journey was not run.
+- No price date or VAT flag is parsed (the price header's text is in the report).
+
+### Known limitations
 - `auditmanager.ingest.reconciliation` does not know `price_list_revision`: an available
   price-list Blob appears in its `unattributed_blobs` (visible and adoptable, never
   action-ready). The interrupted states (`temporary`/`verifying` Blob, `in_progress` command)
@@ -143,3 +262,29 @@ no:cacheprovider <paths>`; host before the runs: 6.3 GiB free on `/`, 6 GiB memo
   the report so the expert sees «с НДС»/«без НДС».
 - A replay of a stored key re-reads the file to compute its digest, but is answered before the
   file is parsed again.
+- A single domain-catalog revision (15) is claimed here; if another lane contracts an identity
+  first (the dispatcher's `asg`), the later merge must renumber, not keep two revision 15s.
+
+## Integrator instructions
+
+1. Merge `agent/w60-price-list-01` (phases A and B are one slice) after `W61-DISPATCHER-01`'s
+   final. Keep both sides of `contracts/api/v1/openapi.json`, `contracts/domain/v1/**` and
+   every register; re-derive the mirror, `api:generate`, `api:verify`, `FRONTEND_LOCK.json`,
+   `expected_facts.json` and every count — never hand-merge generated files. `migration_head`
+   stays `0026_price_lists`.
+2. Move `docs/program/CURRENT_STATE.md` to the merged surface and head `0026_price_lists`.
+3. `make migrate` on the stand applies `0026` (and `0025`) with no backfill.
+
+## Hotspot proof
+
+- `git log --no-merges 4327e61a..HEAD -- docs/program/CURRENT_STATE.md web/src/_app/providers.tsx
+  web/src/app/globals.css src/auditmanager/dispatch pyproject.toml uv.lock web/package.json
+  web/package-lock.json` lists only the integrator's three `docs(state)` commits that arrived
+  with the merged integration tips (`a820849a`, `c22f2049`, `beafeab5`); no commit of this task
+  touches any of them.
+- `git diff 3461747c HEAD -- src/auditmanager/dispatch
+  db/migrations/versions/20261020_0025_work_assignments.py` is empty: the dispatcher's phase A is
+  carried unchanged.
+- No dependency was added; no ref, tag or push was made. Phase A touched only its seven paths and
+  the two docs; phase B's `contracts/domain/v1/**` and `shared/identity/**` edits are the
+  integrator's grant.

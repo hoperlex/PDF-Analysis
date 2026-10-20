@@ -354,6 +354,10 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "compareDocumentVersions": _ANY_ROLE,
         # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only: any one role.
         "listAnalysisProfiles": _ANY_ROLE,
+        # `W60-PRICE-LIST-01`. Price lists and vendor lists are product data: any one role reads.
+        "listPriceListRevisions": _ANY_ROLE,
+        "listPriceListPositions": _ANY_ROLE,
+        "getEffectiveVendorLists": _ANY_ROLE,
         # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's
         # price list; a read that writes nothing, so any one role.
         "getSpecificationPrices": _ANY_ROLE,
@@ -382,6 +386,11 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # `W59-DECISION-CARRYOVER-01`. A carried decision is a verdict like any other: only an
         # expert confirms it, and the command re-reads the role set in its own transaction.
         "carryOverDecision": _EXPERT,
+        # `W60-PRICE-LIST-01`. An expert uploads a project's price list and overrides its vendor
+        # list per section; the global vendor list is an administrator's.
+        "uploadPriceList": _EXPERT,
+        "setProjectVendorList": _EXPERT,
+        "setGlobalVendorList": _ADMIN,
         "exportRunCsv": _EXPERT,
         # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook is the CSV's sibling: the same role.
         "exportRunXlsx": _EXPERT,

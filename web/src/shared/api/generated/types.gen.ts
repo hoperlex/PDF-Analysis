@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 0f5bb58861e76de74081cd6e718fea9b66e840ed53d28759e919a08f8903023f
+ *   sha256 d8da2b79d0534c9604719e6e1b1bf06825d1843f81bba46141c08758ec9bf081
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '0f5bb58861e76de74081cd6e718fea9b66e840ed53d28759e919a08f8903023f';
+export const CONTRACT_DIGEST = 'd8da2b79d0534c9604719e6e1b1bf06825d1843f81bba46141c08758ec9bf081';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -66,6 +66,7 @@ export const SCHEMA_NAMES = [
   'DocumentUid',
   'DocumentVersion',
   'DocumentVersionPage',
+  'EffectiveVendorLists',
   'ErrorCode',
   'ErrorEnvelope',
   'Evidence',
@@ -131,6 +132,22 @@ export const SCHEMA_NAMES = [
   'PortalCrop',
   'PortalGeometryState',
   'PortalRecognisedText',
+  'PriceListAmbiguousColumn',
+  'PriceListColumn',
+  'PriceListCurrencySource',
+  'PriceListCurrencySourceCount',
+  'PriceListField',
+  'PriceListFormat',
+  'PriceListId',
+  'PriceListParseReport',
+  'PriceListPosition',
+  'PriceListPositionId',
+  'PriceListPositionPage',
+  'PriceListReasonCount',
+  'PriceListRevision',
+  'PriceListRevisionList',
+  'PriceListRowNote',
+  'PriceListRowReason',
   'ProductVersion',
   'Project',
   'ProjectDocumentCount',
@@ -163,9 +180,12 @@ export const SCHEMA_NAMES = [
   'SectionReview',
   'SectionReviewOption',
   'SectionSuggestion',
+  'SectionVendorList',
   'SetCurrentNormSnapshotRequest',
   'SetExecutionPausedRequest',
+  'SetGlobalVendorListRequest',
   'SetJobPriorityRequest',
+  'SetProjectVendorListRequest',
   'SetWorkerIntakeRequest',
   'Severity',
   'Sha256',
@@ -196,7 +216,14 @@ export const SCHEMA_NAMES = [
   'UpdateUserRequest',
   'UploadDocumentRequest',
   'UploadDocumentVersionRequest',
+  'UploadPriceListRequest',
   'UserUid',
+  'VendorListEntry',
+  'VendorListId',
+  'VendorListMode',
+  'VendorListRevision',
+  'VendorListScope',
+  'VendorListSource',
   'Verdict',
   'VerdictCount',
   'VersionBlockIndex',
@@ -657,6 +684,12 @@ export type DocumentVersion = {
 export type DocumentVersionPage = {
   items: Array<DocumentVersion>;
   page: PageInfo;
+};
+
+/** All fifteen sections' vendor lists as they apply to one project, in section order. */
+export type EffectiveVendorLists = {
+  items: Array<SectionVendorList>;
+  project_uid: ProjectUid;
 };
 
 /** Exactly the key set of contracts/domain/v1/error-codes.json. */
@@ -1292,6 +1325,187 @@ export type PortalRecognisedText = {
   text: string;
 };
 
+/** An optional field two or more columns could be: none of them was read. */
+export type PriceListAmbiguousColumn = {
+  field: PriceListField;
+  headers: Array<string>;
+};
+
+/** One header column mapped to a field: its 1-based position and its header text. */
+export type PriceListColumn = {
+  column: number;
+  field: PriceListField;
+  header: string;
+};
+
+/** Where an accepted row's currency came from: its cell, the price header, the default. */
+export const PRICE_LIST_CURRENCY_SOURCE_VALUES = [
+  'column',
+  'price_header',
+  'default',
+] as const;
+
+/** PriceListCurrencySource - the closed value set above. */
+export type PriceListCurrencySource = (typeof PRICE_LIST_CURRENCY_SOURCE_VALUES)[number];
+
+export type PriceListCurrencySourceCount = {
+  count: number;
+  source: PriceListCurrencySource;
+};
+
+/** A position field a header column was mapped to. */
+export const PRICE_LIST_FIELD_VALUES = [
+  'name',
+  'unit',
+  'unit_price',
+  'code',
+  'mark',
+  'currency',
+  'vendor',
+  'section',
+] as const;
+
+/** PriceListField - the closed value set above. */
+export type PriceListField = (typeof PRICE_LIST_FIELD_VALUES)[number];
+
+/** The uploaded file's format, recognised by its bytes and never by its name. */
+export const PRICE_LIST_FORMAT_VALUES = [
+  'csv',
+  'xlsx',
+] as const;
+
+/** PriceListFormat - the closed value set above. */
+export type PriceListFormat = (typeof PRICE_LIST_FORMAT_VALUES)[number];
+
+export type PriceListId = string;
+
+/** The contract pattern for `PriceListId`. Anchored; use with `new RegExp()`. */
+export const PRICE_LIST_ID_PATTERN = "^prl_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * How one file was read: deterministic, so the same bytes always report the same.
+ *
+ * ``skipped`` and ``warnings`` list at most the first 1000 rows each;
+ * ``skipped_by_reason`` and ``warnings_by_reason`` always count every one.
+ */
+export type PriceListParseReport = {
+  accepted_rows: number;
+  ambiguous_columns: Array<PriceListAmbiguousColumn>;
+  blank_rows: number;
+  columns: Array<PriceListColumn>;
+  currency_sources: Array<PriceListCurrencySourceCount>;
+  data_rows: number;
+  default_currency: string | null;
+  delimiter: ";" | "\t" | "," | null;
+  encoding: "utf-8" | "utf-8-sig" | "utf-16" | "cp1251" | null;
+  format: PriceListFormat;
+  header_row: number;
+  ignored_columns: Array<string>;
+  preamble_rows: number;
+  price_header_currency: string | null;
+  report_version: 1;
+  sheet: string | null;
+  skipped: Array<PriceListRowNote>;
+  skipped_by_reason: Array<PriceListReasonCount>;
+  skipped_listed_in_full: boolean;
+  skipped_rows: number;
+  warnings: Array<PriceListRowNote>;
+  warnings_by_reason: Array<PriceListReasonCount>;
+};
+
+/** One parsed position. ``row_number`` is its source row, never an identity. */
+export type PriceListPosition = {
+  code: string | null;
+  currency: string;
+  mark: string | null;
+  name: string;
+  price_list_position_id: PriceListPositionId;
+  row_number: number;
+  section_code: ProjectSection | null;
+  unit: string;
+  unit_price: string;
+  vendor: string | null;
+};
+
+export type PriceListPositionId = string;
+
+/** The contract pattern for `PriceListPositionId`. Anchored; use with `new RegExp()`. */
+export const PRICE_LIST_POSITION_ID_PATTERN = "^prp_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** One page of a revision's positions in source-row order, with the revision's report. */
+export type PriceListPositionPage = {
+  items: Array<PriceListPosition>;
+  limit: number;
+  next_offset: number | null;
+  offset: number;
+  parse_report: PriceListParseReport;
+  revision: PriceListRevision;
+  total: number;
+};
+
+export type PriceListReasonCount = {
+  count: number;
+  reason: PriceListRowReason;
+};
+
+/**
+ * One uploaded price list of a project: an immutable revision; the highest is current.
+ *
+ * ``revision_number`` orders a project's revisions for display and is never an identity;
+ * ``source_filename`` is the uploaded file's name, display only.
+ */
+export type PriceListRevision = {
+  accepted_row_count: number;
+  data_row_count: number;
+  default_currency: string | null;
+  is_current: boolean;
+  media_type: "text/csv" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  price_list_id: PriceListId;
+  project_uid: ProjectUid;
+  revision_number: number;
+  sha256: Sha256;
+  size_bytes: number;
+  skipped_row_count: number;
+  source_filename: string;
+  source_format: PriceListFormat;
+  uploaded_at: string;
+  uploaded_by_user_uid: UserUid;
+};
+
+/** Every price-list revision of one project, newest first; the first one is current. */
+export type PriceListRevisionList = {
+  items: Array<PriceListRevision>;
+};
+
+/** One source row (as the spreadsheet numbers it) and why it is reported. */
+export type PriceListRowNote = {
+  reason: PriceListRowReason;
+  row: number;
+};
+
+/**
+ * Why a data row was skipped (the first ten), or a warning on an accepted row (the last).
+ *
+ * A skipped row is never repaired: a price that is not a plain number, not positive, finer
+ * than six decimals or not below 10^14 is reported, never guessed or rounded.
+ */
+export const PRICE_LIST_ROW_REASON_VALUES = [
+  'name_missing',
+  'unit_missing',
+  'price_missing',
+  'price_not_a_number',
+  'price_not_positive',
+  'price_precision',
+  'price_too_large',
+  'currency_missing',
+  'currency_unrecognised',
+  'value_too_long',
+  'section_unrecognised',
+] as const;
+
+/** PriceListRowReason - the closed value set above. */
+export type PriceListRowReason = (typeof PRICE_LIST_ROW_REASON_VALUES)[number];
+
 /** The running product version from VERSION, its content-derived build identifier, and the unchanged API contract version. */
 export type ProductVersion = {
   build_id: string;
@@ -1592,6 +1806,15 @@ export type SectionSuggestion = {
   text_keywords: Array<string>;
 };
 
+/** One section's vendor list as it applies to a project, with both scopes' latest. */
+export type SectionVendorList = {
+  effective: VendorListRevision | null;
+  global_revision: VendorListRevision | null;
+  project_revision: VendorListRevision | null;
+  section_code: ProjectSection;
+  source: VendorListSource;
+};
+
 /**
  * ``expected_current`` is the snapshot the caller believes is current, ``null`` when it
  * believes none is; a stale belief is ``conflict`` (``stale_current_snapshot``).
@@ -1605,8 +1828,31 @@ export type SetExecutionPausedRequest = {
   paused: boolean;
 };
 
+/**
+ * `W60-PRICE-LIST-01`. A section's global vendor list, as a whole new revision.
+ *
+ * ``expected_vendor_list_id``, when present, is the revision the caller read (``null``:
+ * there was none); a different latest revision is ``conflict`` and nothing is written.
+ */
+export type SetGlobalVendorListRequest = {
+  entries: Array<VendorListEntry>;
+  expected_vendor_list_id?: VendorListId | null;
+};
+
 export type SetJobPriorityRequest = {
   priority: number;
+};
+
+/**
+ * `W60-PRICE-LIST-01`. A project's own vendor list for a section, or its removal.
+ *
+ * ``mode: inherit`` takes ``entries: []`` and removes the override. ``expected_vendor_list_id``
+ * as for :class:`SetGlobalVendorListRequest`, for this project's revisions.
+ */
+export type SetProjectVendorListRequest = {
+  entries: Array<VendorListEntry>;
+  expected_vendor_list_id?: VendorListId | null;
+  mode: VendorListMode;
 };
 
 export type SetWorkerIntakeRequest = {
@@ -1711,7 +1957,7 @@ export type SpecificationMatching = {
 export type SpecificationPriceListRef = {
   default_currency: string | null;
   position_count: number;
-  price_list_id: string;
+  price_list_id: PriceListId;
   revision_number: number;
   source_filename: string;
   uploaded_at: string;
@@ -1723,7 +1969,7 @@ export type SpecificationPricePosition = {
   currency: string;
   mark: string | null;
   name: string;
-  price_list_position_id: string;
+  price_list_position_id: PriceListPositionId;
   row_number: number;
   unit: string;
   unit_price: string;
@@ -1735,7 +1981,7 @@ export type SpecificationPriceRow = {
   amount: string | null;
   basis: "code" | "mark" | "name" | null;
   candidate_count: number;
-  candidate_position_ids: Array<string>;
+  candidate_position_ids: Array<PriceListPositionId>;
   excluded_reason: "no_position" | "unit_mismatch" | "row_unit_missing" | "ambiguous" | "quantity_not_numeric" | null;
   group: string | null;
   line_end: number;
@@ -1936,11 +2182,79 @@ export type UploadDocumentVersionRequest = {
   file: Blob;
 };
 
+/**
+ * `W60-PRICE-LIST-01`. The multipart body of ``uploadPriceList``.
+ *
+ * ``file`` is the price list (CSV, or an XLSX whose first sheet is read), at most 10 MiB;
+ * ``default_currency`` applies to rows whose currency neither their own cell nor the price
+ * column's header names.
+ */
+export type UploadPriceListRequest = {
+  default_currency?: string;
+  file: Blob;
+};
+
 /** Opaque account identity. An e-mail address is the sign-in identifier and a unique key among active accounts; this is the identity every reference names. */
 export type UserUid = string;
 
 /** The contract pattern for `UserUid`. Anchored; use with `new RegExp()`. */
 export const USER_UID_PATTERN = "^usr_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** One entry: the material or equipment group it covers, the allowed vendor, a note. */
+export type VendorListEntry = {
+  material?: string | null;
+  note?: string | null;
+  vendor: string;
+};
+
+export type VendorListId = string;
+
+/** The contract pattern for `VendorListId`. Anchored; use with `new RegExp()`. */
+export const VENDOR_LIST_ID_PATTERN = "^vnl_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * ``list``: these entries apply (none at all is an explicit "no restriction").
+ * ``inherit``: a project revision that removes the override; the global list applies.
+ */
+export const VENDOR_LIST_MODE_VALUES = [
+  'list',
+  'inherit',
+] as const;
+
+/** VendorListMode - the closed value set above. */
+export type VendorListMode = (typeof VENDOR_LIST_MODE_VALUES)[number];
+
+/** One immutable revision of a section's vendor list, global or of one project. */
+export type VendorListRevision = {
+  entries: Array<VendorListEntry>;
+  mode: VendorListMode;
+  project_uid: ProjectUid | null;
+  revision_number: number;
+  scope: VendorListScope;
+  section_code: ProjectSection;
+  set_at: string;
+  set_by_user_uid: UserUid;
+  vendor_list_id: VendorListId;
+};
+
+/** VendorListScope. */
+export const VENDOR_LIST_SCOPE_VALUES = [
+  'global',
+  'project',
+] as const;
+
+/** VendorListScope - the closed value set above. */
+export type VendorListScope = (typeof VENDOR_LIST_SCOPE_VALUES)[number];
+
+/** Which revision applies to a project's section: its own list, the global one, or none. */
+export const VENDOR_LIST_SOURCE_VALUES = [
+  'project',
+  'global',
+  'none',
+] as const;
+
+/** VendorListSource - the closed value set above. */
+export type VendorListSource = (typeof VENDOR_LIST_SOURCE_VALUES)[number];
 
 /** The current projected verdict. `pending` when the ledger holds no verdict-bearing event, and after a revocation. `needs_manual_review` is declared for the closed union and has no PC-01 producer. */
 export const VERDICT_VALUES = [

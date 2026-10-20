@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.state-machines",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 15,
-  "revision_note": "Candidate revision 15 by W61-DISPATCHER-01. Adds the work_assignment machine (assigned, in_progress, returned, done, cancelled); its states are derived from an append-only event history and decided by auditmanager.dispatch, not seeded into contract_state_transition. No other machine or transition changes.",
+  "candidate_revision": 16,
+  "revision_note": "Candidate revision 16 by W60-PRICE-LIST-01. No machine or transition change; domain family moves with the new prl_, prp_ and vnl_ identities.",
   "status": "draft_candidate",
   "frozen": false,
   "rules": [

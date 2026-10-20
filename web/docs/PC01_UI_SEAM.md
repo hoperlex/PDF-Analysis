@@ -284,8 +284,6 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.projects.all()` | `['projects']` | `B7` |
 | `queryKeys.projects.list(cursor?, limit?)` | `['projects','list',{cursor,limit}]` | `B7` |
 | `queryKeys.projects.detail(projectUid)` | `['projects','detail',uid]` | `B7` |
-| `queryKeys.projects.specificationPrices(projectUid, documentUid, offset?, limit?)` | `['projects','specification-prices',projectUid,documentUid,{offset,limit}]` | `W60-OPT-MATCH-01` |
-| `queryKeys.projects.specificationPricesAll(projectUid)` | `['projects','specification-prices',projectUid]` | `W60-OPT-MATCH-01` |
 | `queryKeys.versions.detail(versionUid)` | `['versions','detail',uid]` | `B7` |
 | `queryKeys.versions.content(versionUid)` | `['versions','content',uid]` | `B8` |
 | `queryKeys.versions.blocks(versionUid)` | `['versions','blocks',uid]` | `W45-BLOCKS` |
@@ -319,9 +317,16 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.assignments.all()` | `['assignments']` | `W61-DISPATCHER-01` |
 | `queryKeys.assignments.list(filters?)` | `['assignments','list',filters]` | `W61-DISPATCHER-01` |
 | `queryKeys.assignments.detail(assignmentUid)` | `['assignments','detail',uid]` | `W61-DISPATCHER-01` |
+| `queryKeys.optimisation.all()` | `['optimisation']` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.priceLists(projectUid)` | `['optimisation','price-lists',uid]` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.positions(priceListId, offset, limit)` | `['optimisation','positions',id,{offset,limit}]` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.vendorLists()` | `['optimisation','vendor-lists']` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.projectVendorLists(projectUid)` | `['optimisation','vendor-lists',uid]` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.specificationPrices(projectUid, documentUid, offset?, limit?)` | `['optimisation','specification-prices',projectUid,documentUid,{offset,limit}]` | `W60-OPT-MATCH-01` |
+| `queryKeys.optimisation.specificationPricesAll(projectUid)` | `['optimisation','specification-prices',projectUid]` | `W60-OPT-MATCH-01` |
 
 `projects`, `versions`, `runs`, `findings`, `dashboard`, `account`, `users`, `registrations`,
-`releases`, `execution`, `norms`, `analysis`, `assignments` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
+`releases`, `execution`, `norms`, `analysis`, `assignments`, `optimisation` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
 is the signed-in account (`getMe`), `users` the administrator's view of the accounts, and
 `registrations` the requests awaiting or past a decision. A later lane adds key factories inside
 them and no new root.
@@ -356,16 +361,19 @@ and `dashboard.summary()`; a `409 version_already_classified` invalidates this k
 no project, run or finding. `setCurrentNormSnapshot` invalidates the whole `norms` prefix when
 it settles — a designation changes the snapshot list, the history and what search reads, and
 a stale refusal means the list must be read again. It changes nothing the dashboard reads.
-`projects.specificationPrices` (`W60-OPT-MATCH-01`) holds one page of `getSpecificationPrices`, a
-document set's AR specification priced from the project's current price list. It is filed under
-`projects` because the project's price list decides every price: an upload of a price list
-invalidates `projects.specificationPricesAll(projectUid)`, every set and page of that project;
-«Обновить» on the tab re-reads it. Nothing on this key writes.
-
 `analysis` entered in `W59-ANALYSIS-SETTINGS-01`: `analysis.profiles` holds
 `listAnalysisProfiles`, the text-profile registry the server routes runs through, which belongs
 to no project, run, version or execution. No action on this client writes it — the registry
 changes only when the server is redeployed — so nothing invalidates it; «Обновить» re-reads it.
+`optimisation` entered in `W60-PRICE-LIST-01`: the project screen's «Оптимизация» tab.
+`optimisation.priceLists(uid)` holds `listPriceListRevisions`; `optimisation.positions` one page of
+`listPriceListPositions` (the page is in the key); `optimisation.projectVendorLists(uid)` holds
+`getEffectiveVendorLists` under the prefix `optimisation.vendorLists()`. `uploadPriceList`
+invalidates the project's `priceLists` and — because the new revision decides every price —
+`optimisation.specificationPricesAll(uid)`, the prefix of `getSpecificationPrices` pages
+(`W60-OPT-MATCH-01`, «Спецификация и цены» on the same tab); `setProjectVendorList` and `setGlobalVendorList` invalidate
+the whole `vendorLists()` prefix, because a change of the general list moves every project's
+answer. None of them changes a number the dashboard reads.
 
 There is **no global domain store.** The query client in `_app` is the only cache. PC-01's
 state lives on the server; a second copy of it in the browser is a second source of truth

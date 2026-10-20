@@ -179,3 +179,12 @@ single-owner rule is suspended for the API surface only, for this window only.
 - **Checks on the merged tree** after each: `tests/contract` + `tests/unit` + journey
   conformance 1184 passed, the two base reds only; web `typecheck` clean; mirror
   byte-identical.
+- **`W61-DISPATCHER-01`** (`6f014201`) — candidate `f7664f59`. «Диспетчер» (`/dispatcher`,
+  group «Работа»): an administrator assigns a project or a document set to an active
+  expert, reassigns or cancels; the expert takes it, completes it or returns it with a
+  reason from «Мои задачи» on the home screen; one open assignment per scope; every
+  change is an append-only event and the state is derived by a view (migration
+  `0025_work_assignments`, `asg_` identities, state machine `work_assignment`, domain
+  candidate revision 15). Q-2's W61/W62 placement is moot for the code under `R-139`.
+  **59/67/171**, head **`0025_work_assignments`**. Merged-tree checks: 1249 passed, the
+  two base reds only; `typecheck` clean.

@@ -24,6 +24,7 @@ import {
   specificationPricesQueryOptions,
   specificationStatusLabel,
 } from '@/entities/specification-price';
+import { ProjectOptimisation } from '@/widgets/project-optimisation';
 import {
   SpecificationPricesAnswer,
   SpecificationPricesChooser,
@@ -238,7 +239,7 @@ describe('the set chooser offers only sets confirmed as АР', () => {
     client.setQueryData(queryKeys.projects.documents(PROJECT, undefined, 50), {
       items: versions, page: { next_cursor: null },
     });
-    client.setQueryData(queryKeys.projects.specificationPrices(PROJECT, DOCUMENT, 0, SPECIFICATION_ROW_LIMIT), answer());
+    client.setQueryData(queryKeys.optimisation.specificationPrices(PROJECT, DOCUMENT, 0, SPECIFICATION_ROW_LIMIT), answer());
     const markup = renderScreen(client, createElement(SpecificationPricesSection, { projectUid: PROJECT }));
     expect(markup).toContain('data-spec-chooser="1"');
     expect(markup).toContain('Архитектурные решения — версия 2');
@@ -253,7 +254,7 @@ describe('the set chooser offers only sets confirmed as АР', () => {
     });
     seedError(
       client,
-      queryKeys.projects.specificationPrices(PROJECT, DOCUMENT, 0, SPECIFICATION_ROW_LIMIT),
+      queryKeys.optimisation.specificationPrices(PROJECT, DOCUMENT, 0, SPECIFICATION_ROW_LIMIT),
       new ApiError(404, {
         contract_version: '1.0.0-draft.1', error_code: 'not_found', message: 'Нет такого комплекта.',
         correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false,
@@ -290,8 +291,23 @@ describe('presentation', () => {
 
   it('keys one page of one set under the project', () => {
     expect(specificationPricesQueryOptions(PROJECT, DOCUMENT, 50).queryKey).toEqual(
-      ['projects', 'specification-prices', PROJECT, DOCUMENT, { offset: 50, limit: SPECIFICATION_ROW_LIMIT }],
+      ['optimisation', 'specification-prices', PROJECT, DOCUMENT, { offset: 50, limit: SPECIFICATION_ROW_LIMIT }],
     );
-    expect(queryKeys.projects.specificationPricesAll(PROJECT)).toEqual(['projects', 'specification-prices', PROJECT]);
+    expect(queryKeys.optimisation.specificationPricesAll(PROJECT)).toEqual(['optimisation', 'specification-prices', PROJECT]);
+  });
+});
+
+describe('the «Оптимизация» tab', () => {
+  it('shows «Спецификация и цены» between the price lists and the vendor lists', () => {
+    const markup = renderScreen(newClient(), createElement(ProjectOptimisation, {
+      projectUid: PROJECT as never, roles: ['expert'],
+    }));
+    const price = markup.indexOf('Прайс-листы проекта');
+    const specification = markup.indexOf('data-specification-prices');
+    const vendors = markup.indexOf('Вендор-листы по разделам');
+    expect(price).toBeGreaterThan(-1);
+    expect(specification).toBeGreaterThan(price);
+    expect(vendors).toBeGreaterThan(specification);
+    expect(markup).toContain('Спецификация и цены');
   });
 });

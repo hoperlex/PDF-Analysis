@@ -155,6 +155,7 @@ import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles 
 import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
 import { newClient, renderScreen, seedError } from '../unit/screens/harness';
+import { optimisationShapes } from '../unit/optimisation/fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
 import {
   ADMIN_AND_EXPERT,
@@ -1754,6 +1755,8 @@ const BLOCKS_SHAPES: readonly ScreenCase[] = [
 ];
 
 const EXTRA_SHAPES: readonly ScreenCase[] = [
+  // `W60-PRICE-LIST-01`: the project's «Оптимизация» tab in every branch its widgets have.
+  ...optimisationShapes(),
   {
     name: 'update-banner',
     make: () => createElement(UpdateBannerView, { onUpdate: () => undefined, onLater: () => undefined }),
@@ -2308,7 +2311,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       specificationSets(client);
       seedError(
         client,
-        queryKeys.projects.specificationPrices(PROJECT_UID, DOCUMENT_UID, 0, SPECIFICATION_ROW_LIMIT),
+        queryKeys.optimisation.specificationPrices(PROJECT_UID, DOCUMENT_UID, 0, SPECIFICATION_ROW_LIMIT),
         apiError(503, 'dependency_unavailable'),
       );
     },

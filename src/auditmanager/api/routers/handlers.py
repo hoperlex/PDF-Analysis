@@ -71,6 +71,10 @@ AGGREGATE_OF_PATH_PARAMETER: Final[Mapping[str, str]] = {
     # `W49-SEAL-01`. The entity names of `contracts/domain/v1/identifiers.json`.
     "user_uid": "User",
     "request_id": "RegistrationRequest",
+    # `W60-PRICE-LIST-01`. A price-list revision, and a vendor list's section slot: a code
+    # outside the fifteen addresses no vendor list, so it is `404` like a malformed identity.
+    "price_list_id": "PriceList",
+    "section_code": "VendorList",
 }
 
 #: The contract's spelling of each header this surface reads, keyed by the lower-cased name

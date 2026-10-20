@@ -194,6 +194,33 @@ __all__ = [
     "CarryoverSourceDecision",
     "VersionComparison",
     "VersionUid",
+    "PriceListId",
+    "PriceListPositionId",
+    "VendorListId",
+    "PriceListFormat",
+    "PriceListField",
+    "PriceListRowReason",
+    "PriceListCurrencySource",
+    "PriceListColumn",
+    "PriceListAmbiguousColumn",
+    "PriceListRowNote",
+    "PriceListReasonCount",
+    "PriceListCurrencySourceCount",
+    "PriceListParseReport",
+    "PriceListRevision",
+    "PriceListRevisionList",
+    "PriceListPosition",
+    "PriceListPositionPage",
+    "UploadPriceListRequest",
+    "VendorListMode",
+    "VendorListScope",
+    "VendorListSource",
+    "VendorListEntry",
+    "VendorListRevision",
+    "SectionVendorList",
+    "EffectiveVendorLists",
+    "SetGlobalVendorListRequest",
+    "SetProjectVendorListRequest",
     "SpecificationPriceListRef",
     "SpecificationSkipCounts",
     "SpecificationSkippedLine",
@@ -2068,6 +2095,306 @@ class AnalysisProfileList(_Object):
     items: Annotated[list[AnalysisProfileListItem], Field(min_length=15, max_length=15)]
 
 
+# --- optimisation: project price lists and vendor lists (`W60-PRICE-LIST-01`) ------------
+#
+# The storage slice of «Оптимизация проекта». A money figure exists only as a position of an
+# uploaded price list: these shapes carry stored prices and vendor restrictions, never a
+# total, a proposal or an inferred price. A unit price crosses the wire as its exact decimal
+# text, never as a JSON number that a client would read as a binary float.
+
+#: `W60-PRICE-LIST-01`. The three identities ``contracts/domain/v1/identifiers.json``
+#: revision 15 adds: a price-list revision, one of its positions, a vendor-list revision.
+PriceListId = TypeAliasType("PriceListId", Annotated[str, Field(pattern=rf"^prl_{_ULID}$")])
+PriceListPositionId = TypeAliasType(
+    "PriceListPositionId", Annotated[str, Field(pattern=rf"^prp_{_ULID}$")]
+)
+VendorListId = TypeAliasType("VendorListId", Annotated[str, Field(pattern=rf"^vnl_{_ULID}$")])
+
+#: An ISO 4217 currency code, as the price list or the uploader stated it; never converted.
+_CURRENCY = r"^[A-Z]{3}$"
+#: The exact unit price as stored: a positive plain decimal below 10^14 with at most six
+#: decimals and no trailing zero (``125.5``, ``12345.67``, ``0.000001``).
+_UNIT_PRICE = r"^(0|[1-9][0-9]{0,13})(\.[0-9]{0,5}[1-9])?$"
+
+
+class PriceListFormat(str, enum.Enum):
+    """The uploaded file's format, recognised by its bytes and never by its name."""
+
+    CSV = "csv"
+    XLSX = "xlsx"
+
+
+class PriceListField(str, enum.Enum):
+    """A position field a header column was mapped to."""
+
+    NAME = "name"
+    UNIT = "unit"
+    UNIT_PRICE = "unit_price"
+    CODE = "code"
+    MARK = "mark"
+    CURRENCY = "currency"
+    VENDOR = "vendor"
+    SECTION = "section"
+
+
+class PriceListRowReason(str, enum.Enum):
+    """Why a data row was skipped (the first ten), or a warning on an accepted row (the last).
+
+    A skipped row is never repaired: a price that is not a plain number, not positive, finer
+    than six decimals or not below 10^14 is reported, never guessed or rounded.
+    """
+
+    NAME_MISSING = "name_missing"
+    UNIT_MISSING = "unit_missing"
+    PRICE_MISSING = "price_missing"
+    PRICE_NOT_A_NUMBER = "price_not_a_number"
+    PRICE_NOT_POSITIVE = "price_not_positive"
+    PRICE_PRECISION = "price_precision"
+    PRICE_TOO_LARGE = "price_too_large"
+    CURRENCY_MISSING = "currency_missing"
+    CURRENCY_UNRECOGNISED = "currency_unrecognised"
+    VALUE_TOO_LONG = "value_too_long"
+    SECTION_UNRECOGNISED = "section_unrecognised"
+
+
+class PriceListCurrencySource(str, enum.Enum):
+    """Where an accepted row's currency came from: its cell, the price header, the default."""
+
+    COLUMN = "column"
+    PRICE_HEADER = "price_header"
+    DEFAULT = "default"
+
+
+class PriceListColumn(_Object):
+    """One header column mapped to a field: its 1-based position and its header text."""
+
+    field: PriceListField
+    column: Annotated[int, Field(ge=1, le=200)]
+    header: Annotated[str, Field(min_length=1, max_length=200)]
+
+
+class PriceListAmbiguousColumn(_Object):
+    """An optional field two or more columns could be: none of them was read."""
+
+    field: PriceListField
+    headers: Annotated[
+        list[Annotated[str, Field(min_length=1, max_length=200)]], Field(min_length=2)
+    ]
+
+
+class PriceListRowNote(_Object):
+    """One source row (as the spreadsheet numbers it) and why it is reported."""
+
+    row: Annotated[int, Field(ge=1)]
+    reason: PriceListRowReason
+
+
+class PriceListReasonCount(_Object):
+    reason: PriceListRowReason
+    count: Annotated[int, Field(ge=1)]
+
+
+class PriceListCurrencySourceCount(_Object):
+    source: PriceListCurrencySource
+    count: Annotated[int, Field(ge=1)]
+
+
+class PriceListParseReport(_Object):
+    """How one file was read: deterministic, so the same bytes always report the same.
+
+    ``skipped`` and ``warnings`` list at most the first 1000 rows each;
+    ``skipped_by_reason`` and ``warnings_by_reason`` always count every one.
+    """
+
+    report_version: Literal[1]
+    format: PriceListFormat
+    #: The first sheet's name (XLSX), else ``null``.
+    sheet: Annotated[str, Field(max_length=200)] | None
+    encoding: Literal["utf-8", "utf-8-sig", "utf-16", "cp1251"] | None
+    delimiter: Literal[";", "\t", ","] | None
+    header_row: Annotated[int, Field(ge=1)]
+    columns: Annotated[list[PriceListColumn], Field(min_length=3, max_length=8)]
+    ambiguous_columns: Annotated[list[PriceListAmbiguousColumn], Field(max_length=5)]
+    ignored_columns: Annotated[
+        list[Annotated[str, Field(min_length=1, max_length=200)]], Field(max_length=50)
+    ]
+    price_header_currency: Annotated[str, Field(pattern=_CURRENCY)] | None
+    default_currency: Annotated[str, Field(pattern=_CURRENCY)] | None
+    preamble_rows: Annotated[int, Field(ge=0)]
+    blank_rows: Annotated[int, Field(ge=0)]
+    data_rows: Annotated[int, Field(ge=1, le=20000)]
+    accepted_rows: Annotated[int, Field(ge=1, le=20000)]
+    skipped_rows: Annotated[int, Field(ge=0, le=20000)]
+    skipped_by_reason: list[PriceListReasonCount]
+    skipped: Annotated[list[PriceListRowNote], Field(max_length=1000)]
+    skipped_listed_in_full: bool
+    warnings_by_reason: list[PriceListReasonCount]
+    warnings: Annotated[list[PriceListRowNote], Field(max_length=1000)]
+    currency_sources: Annotated[list[PriceListCurrencySourceCount], Field(min_length=1)]
+
+
+class PriceListRevision(_Object):
+    """One uploaded price list of a project: an immutable revision; the highest is current.
+
+    ``revision_number`` orders a project's revisions for display and is never an identity;
+    ``source_filename`` is the uploaded file's name, display only.
+    """
+
+    price_list_id: PriceListId
+    project_uid: ProjectUid
+    revision_number: Annotated[int, Field(ge=1)]
+    is_current: bool
+    uploaded_by_user_uid: UserUid
+    uploaded_at: datetime
+    source_format: PriceListFormat
+    source_filename: Annotated[str, Field(min_length=1, max_length=255)]
+    media_type: Literal[
+        "text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    ]
+    size_bytes: Annotated[int, Field(ge=1, le=10485760)]
+    sha256: Sha256
+    default_currency: Annotated[str, Field(pattern=_CURRENCY)] | None
+    data_row_count: Annotated[int, Field(ge=1, le=20000)]
+    accepted_row_count: Annotated[int, Field(ge=1, le=20000)]
+    skipped_row_count: Annotated[int, Field(ge=0, le=20000)]
+
+
+class PriceListRevisionList(_Object):
+    """Every price-list revision of one project, newest first; the first one is current."""
+
+    items: list[PriceListRevision]
+
+
+class PriceListPosition(_Object):
+    """One parsed position. ``row_number`` is its source row, never an identity."""
+
+    price_list_position_id: PriceListPositionId
+    row_number: Annotated[int, Field(ge=1)]
+    code: Annotated[str, Field(min_length=1, max_length=200)] | None
+    name: Annotated[str, Field(min_length=1, max_length=2000)]
+    mark: Annotated[str, Field(min_length=1, max_length=500)] | None
+    unit: Annotated[str, Field(min_length=1, max_length=50)]
+    unit_price: Annotated[str, Field(pattern=_UNIT_PRICE)]
+    currency: Annotated[str, Field(pattern=_CURRENCY)]
+    vendor: Annotated[str, Field(min_length=1, max_length=500)] | None
+    section_code: ProjectSection | None
+
+
+class PriceListPositionPage(_Object):
+    """One page of a revision's positions in source-row order, with the revision's report."""
+
+    revision: PriceListRevision
+    parse_report: PriceListParseReport
+    items: Annotated[list[PriceListPosition], Field(max_length=500)]
+    offset: Annotated[int, Field(ge=0)]
+    limit: Annotated[int, Field(ge=1, le=500)]
+    total: Annotated[int, Field(ge=1, le=20000)]
+    next_offset: Annotated[int, Field(ge=1)] | None
+
+
+class UploadPriceListRequest(_Object):
+    """`W60-PRICE-LIST-01`. The multipart body of ``uploadPriceList``.
+
+    ``file`` is the price list (CSV, or an XLSX whose first sheet is read), at most 10 MiB;
+    ``default_currency`` applies to rows whose currency neither their own cell nor the price
+    column's header names.
+    """
+
+    file: Annotated[UploadFile, WithJsonSchema(_BINARY_STRING)]
+    default_currency: Annotated[str, Field(pattern=_CURRENCY)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+
+
+class VendorListMode(str, enum.Enum):
+    """``list``: these entries apply (none at all is an explicit "no restriction").
+    ``inherit``: a project revision that removes the override; the global list applies."""
+
+    LIST = "list"
+    INHERIT = "inherit"
+
+
+class VendorListScope(str, enum.Enum):
+    GLOBAL = "global"
+    PROJECT = "project"
+
+
+class VendorListSource(str, enum.Enum):
+    """Which revision applies to a project's section: its own list, the global one, or none."""
+
+    PROJECT = "project"
+    GLOBAL = "global"
+    NONE = "none"
+
+
+class VendorListEntry(_Object):
+    """One entry: the material or equipment group it covers, the allowed vendor, a note."""
+
+    material: Annotated[str, Field(min_length=1, max_length=500)] | None = Field(
+        default=None, json_schema_extra=optional_property
+    )
+    vendor: Annotated[str, Field(min_length=1, max_length=500)]
+    note: Annotated[str, Field(min_length=1, max_length=1000)] | None = Field(
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class VendorListRevision(_Object):
+    """One immutable revision of a section's vendor list, global or of one project."""
+
+    vendor_list_id: VendorListId
+    scope: VendorListScope
+    project_uid: ProjectUid | None
+    section_code: ProjectSection
+    mode: VendorListMode
+    revision_number: Annotated[int, Field(ge=1)]
+    entries: Annotated[list[VendorListEntry], Field(max_length=500)]
+    set_by_user_uid: UserUid
+    set_at: datetime
+
+
+class SectionVendorList(_Object):
+    """One section's vendor list as it applies to a project, with both scopes' latest."""
+
+    section_code: ProjectSection
+    source: VendorListSource
+    effective: VendorListRevision | None
+    global_revision: VendorListRevision | None
+    project_revision: VendorListRevision | None
+
+
+class EffectiveVendorLists(_Object):
+    """All fifteen sections' vendor lists as they apply to one project, in section order."""
+
+    project_uid: ProjectUid
+    items: Annotated[list[SectionVendorList], Field(min_length=15, max_length=15)]
+
+
+class SetGlobalVendorListRequest(_Object):
+    """`W60-PRICE-LIST-01`. A section's global vendor list, as a whole new revision.
+
+    ``expected_vendor_list_id``, when present, is the revision the caller read (``null``:
+    there was none); a different latest revision is ``conflict`` and nothing is written.
+    """
+
+    entries: Annotated[list[VendorListEntry], Field(max_length=500)]
+    expected_vendor_list_id: VendorListId | None = Field(
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class SetProjectVendorListRequest(_Object):
+    """`W60-PRICE-LIST-01`. A project's own vendor list for a section, or its removal.
+
+    ``mode: inherit`` takes ``entries: []`` and removes the override. ``expected_vendor_list_id``
+    as for :class:`SetGlobalVendorListRequest`, for this project's revisions.
+    """
+
+    mode: VendorListMode
+    entries: Annotated[list[VendorListEntry], Field(max_length=500)]
+    expected_vendor_list_id: VendorListId | None = Field(
+        default=None, json_schema_extra=optional_property
+    )
 # --- the priced specification (`W60-OPT-MATCH-01`) -------------------------------------------
 #
 # «Спецификация и цены»: the specification rows of a document set's current AR version, read
@@ -2075,15 +2402,14 @@ class AnalysisProfileList(_Object):
 # (``auditmanager.optimisation``). A price and an amount appear only on a row matched to exactly
 # one position in the same unit with a numeric quantity; totals are per currency over those
 # rows only. Money is exact decimal text, never a JSON number and never rounded. The closed
-# vocabularies are ``Literal`` enums so they stay inline; the price-list identities are inline
-# patterns until the price-list reseal names them.
+# vocabularies are ``Literal`` enums so they stay inline; the price-list identities are the
+# price-list reseal's (`PriceListId`, `PriceListPositionId`).
 
 _SpecificationDecimal = Annotated[str, Field(pattern=r"^-?[0-9]+(\.[0-9]+)?$", max_length=48)]
 _SpecificationCurrency = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
 _SpecificationPage = Annotated[int, Field(ge=1, le=500)]
 _SpecificationLine = Annotated[int, Field(ge=1)]
 _SpecificationCount = Annotated[int, Field(ge=0)]
-_PriceListPositionRef = Annotated[str, Field(pattern=rf"^prp_{_ULID}$")]
 _SpecificationUnit = Literal["шт", "м", "м2", "м3", "кг", "т", "компл", "п.м"]
 _SpecificationSkipReason = Literal[
     "table_header_ambiguous",
@@ -2103,7 +2429,7 @@ _SpecificationExclusion = Literal[
 class SpecificationPriceListRef(_Object):
     """The price-list revision the rows were matched against: the project's current one."""
 
-    price_list_id: Annotated[str, Field(pattern=rf"^prl_{_ULID}$")]
+    price_list_id: PriceListId
     #: Display order within the project, never an identity.
     revision_number: Annotated[int, Field(ge=1)]
     #: The uploaded file's base name, for display only.
@@ -2203,7 +2529,7 @@ class SpecificationMatching(_Object):
 class SpecificationPricePosition(_Object):
     """The one price-list position a row is matched to, as the price list states it."""
 
-    price_list_position_id: _PriceListPositionRef
+    price_list_position_id: PriceListPositionId
     #: The source row in the uploaded file, for display only.
     row_number: Annotated[int, Field(ge=1)]
     code: str | None
@@ -2242,7 +2568,7 @@ class SpecificationPriceRow(_Object):
     basis: Literal["code", "mark", "name"] | None
     price_position: SpecificationPricePosition | None
     #: At most five candidates in source-row order: the tie, or the positions in another unit.
-    candidate_position_ids: Annotated[list[_PriceListPositionRef], Field(max_length=5)]
+    candidate_position_ids: Annotated[list[PriceListPositionId], Field(max_length=5)]
     candidate_count: _SpecificationCount
     amount: _SpecificationDecimal | None
     excluded_reason: _SpecificationExclusion | None

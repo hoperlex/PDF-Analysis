@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Sixty-eight operations, sealed. `A5` generates the typed client from this document; `B6`
+Seventy-four operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -877,6 +877,15 @@ states and role.
 over `0025_work_assignments`' immutable assignment and its append-only event history; the
 status is the latest event's projection and the `work_assignment` machine is decided by
 `auditmanager.dispatch`.
+`W60-PRICE-LIST-01` added six `optimisation` operations on 2026-10-20: `uploadPriceList` stores
+a project's CSV or XLSX price list (at most 10 MiB, `expert`, keyed) as an immutable revision
+bound to its file, with parsed positions and a deterministic parse report in which every data
+row is accepted or skipped with a reason; `listPriceListRevisions` and `listPriceListPositions`
+read them; `getEffectiveVendorLists` answers the fifteen sections' vendor lists for a project;
+`setGlobalVendorList` (`admin`) and `setProjectVendorList` (`expert`, `list` or `inherit`)
+append versioned revisions, refusing a stale `expected_vendor_list_id`
+(`conflict_reason: vendor_list_changed`). No operation answers a total, a proposal or a price a
+price list does not state; migration `0026_price_lists` stores them.
 `W60-OPT-MATCH-01` added `getSpecificationPrices` on 2026-10-20: «Спецификация и цены», the
 specification rows of a document set's current `AR`-classified version, read deterministically
 from its newest published run's saved text and matched to the project's current price list;
@@ -967,6 +976,12 @@ could.
 | `listAssignments` | `GET /assignments` |
 | `getAssignment` | `GET /assignments/{assignment_uid}` |
 | `transitionAssignment` | `POST /assignments/{assignment_uid}/transitions` |
+| `uploadPriceList` | `POST /projects/{project_uid}/price-lists` |
+| `listPriceListRevisions` | `GET /projects/{project_uid}/price-lists` |
+| `listPriceListPositions` | `GET /price-lists/{price_list_id}/positions` |
+| `getEffectiveVendorLists` | `GET /projects/{project_uid}/vendor-lists` |
+| `setGlobalVendorList` | `PUT /vendor-lists/{section_code}` |
+| `setProjectVendorList` | `PUT /projects/{project_uid}/vendor-lists/{section_code}` |
 | `getSpecificationPrices` | `GET /projects/{project_uid}/documents/{document_uid}/specification-prices` |
 
 Rules that hold across the whole surface:
@@ -974,9 +989,13 @@ Rules that hold across the whole surface:
 * the writes that take a required `Idempotency-Key` header are `createProject`,
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
-  `setExecutionPaused`, `setWorkerIntake` and `carryOverDecision`, and no others. A
-  repeat of the decision carryover under another key that names the same pair and
-  decision answers the event already carried (`replayed: true`) and appends nothing.
+  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`
+  and `uploadPriceList`, and no others. A repeat of the decision carryover under another key
+  that names the same pair and decision answers the event already carried (`replayed: true`)
+  and appends nothing.
+  `setGlobalVendorList` and `setProjectVendorList` take no key: a repeat of the latest
+  revision's entries writes nothing and answers it, and a writer that read an older revision
+  is refused by `expected_vendor_list_id` (`conflict_reason: vendor_list_changed`).
   The key is passed through to the owning command handler and never re-derived in the
   router: an identical repeat replays the first answer, and another payload under the same
   key is `idempotency_key_reuse`. The other writes take no key. What a repeat of each does

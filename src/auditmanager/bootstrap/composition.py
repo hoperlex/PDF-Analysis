@@ -37,6 +37,7 @@ from auditmanager.bootstrap.adapters import (
     FindingAdapter,
     NormContentAdapter,
     NormsSearchAdapter,
+    OptimisationAdapter,
     ProjectAdapter,
     RegistrationAdapter,
     ReleasesAdapter,
@@ -333,6 +334,9 @@ def build_application(
         # `W61-DISPATCHER-01`. «Диспетчер» over the same session factory; the role set
         # and the people's labels are read through `access` in each transaction.
         dispatch=DispatchAdapter(sessions),
+        # `W60-PRICE-LIST-01`. Project price lists (the uploaded file kept as a Blob in the
+        # same store) and vendor lists, over the same sessions.
+        optimisation=OptimisationAdapter(sessions, blob_store=store),
         # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's
         # current price list; the saved text layers are read as the comparison reads them.
         specification_prices=SpecificationPricesAdapter(sessions, blob_store=store),

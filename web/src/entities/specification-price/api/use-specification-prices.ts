@@ -23,7 +23,7 @@ export function specificationPricesQueryOptions(
   limit = SPECIFICATION_ROW_LIMIT,
 ) {
   return {
-    queryKey: queryKeys.projects.specificationPrices(projectUid, documentUid, offset, limit),
+    queryKey: queryKeys.optimisation.specificationPrices(projectUid, documentUid, offset, limit),
     queryFn: async (): Promise<SpecificationPrices> =>
       (
         await getSpecificationPrices({

@@ -113,7 +113,9 @@ describe('each route delegates to its screen and to no other', () => {
   it('/projects/{project_uid} passes the project address through, unparsed', async () => {
     const element = await ProjectRoute({ params: Promise.resolve({ project_uid: A_PROJECT }), ...NO_QUERY });
     expect(element.type).toBe(ProjectDetailPage);
-    expect(element.props).toEqual({ projectUid: A_PROJECT });
+    // `W60-PRICE-LIST-01`: and the session's roles, which decide which controls the
+    // «Оптимизация» tab draws.
+    expect(element.props).toEqual({ projectUid: A_PROJECT, roles: [...SIGNED_IN.roles] });
   });
 
   it('/projects/{project_uid}/runs/{run_id} passes both, and does not cross them', async () => {
