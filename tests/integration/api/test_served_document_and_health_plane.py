@@ -150,6 +150,14 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "classifyDocumentVersion",
             # `W59-VERSION-COMPARE-01`: a required target version and bounded paging.
             "compareDocumentVersions",
+            # `W59-VERSION-UPLOAD-01`: the next version takes a multipart body.
+            "uploadDocumentVersion",
+            # `W59-DECISION-CARRYOVER-01`: the carryover takes a closed body.
+            "carryOverDecision",
+            # `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue's filters and paging, and the
+            # workbook's source refusals (`storage_integrity_error`, `required_norm_unavailable`).
+            "listNormDocuments",
+            "exportRunXlsx",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

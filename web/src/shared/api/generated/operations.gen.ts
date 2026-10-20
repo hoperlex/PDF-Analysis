@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2
+ *   sha256 40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -21,6 +21,8 @@ import type {
   AppendDecisionRequest,
   AppendDecisionResponse,
   ApproveRegistrationRequest,
+  CarryOverDecisionRequest,
+  CarryOverDecisionResponse,
   ChangePasswordRequest,
   ClassifyDocumentVersionRequest,
   CorrelationId,
@@ -47,6 +49,7 @@ import type {
   IssueTokenResponse,
   JobId,
   MarkReleaseNotesReadRequest,
+  NormCatalogueEntryPage,
   NormCurrentSnapshot,
   NormDocument,
   NormDocumentId,
@@ -83,6 +86,7 @@ import type {
   UpdateMyProfileRequest,
   UpdateUserRequest,
   UploadDocumentRequest,
+  UploadDocumentVersionRequest,
   UserUid,
   Verdict,
   VersionBlockIndex,
@@ -98,11 +102,13 @@ export const OPERATION_IDS = [
   'approveRegistration',
   'archiveUser',
   'cancelRun',
+  'carryOverDecision',
   'changePassword',
   'classifyDocumentVersion',
   'compareDocumentVersions',
   'createProject',
   'exportRunCsv',
+  'exportRunXlsx',
   'getDashboardSummary',
   'getDocumentVersion',
   'getFinding',
@@ -121,6 +127,7 @@ export const OPERATION_IDS = [
   'listDocuments',
   'listExecutionJournal',
   'listExecutionQueue',
+  'listNormDocuments',
   'listNormParagraphs',
   'listNormSnapshotEvents',
   'listNormSnapshots',
@@ -153,6 +160,7 @@ export const OPERATION_IDS = [
   'updateMyProfile',
   'updateUser',
   'uploadDocument',
+  'uploadDocumentVersion',
 ] as const;
 
 /** The closed set of operations this client can perform. */
@@ -266,6 +274,38 @@ export type CancelRunInput = {
 
 /** Success body of `cancelRun` (`application/json`, HTTP 200). */
 export type CancelRunResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
+// carryOverDecision - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers
+// ------------------------------------------------------------------------------------
+
+/**
+ * Carry Over Decision
+ *
+ * Carry one expert decision from a finding of the path's (older) version to the finding of `target_version_uid` that the comparison proposes as `unchanged`, on the calling expert's confirmation. The comparison is recomputed with the body's `mode` and runs when the confirmation arrives, and must still propose exactly this pair; the source finding's current verdict must still be the `source_decision_id` the expert was shown (`accepted` or `rejected`), and the target finding must have no decision event yet. The target receives one new `accept` or `reject` event authored by the caller, whose `comment` records the carried-from finding, decision and versions; a severity is carried with an accept or the carryover is refused, never dropped. Nothing else is written: the source finding and its decisions stay as they were. An exact repeat answers the event already carried, `replayed: true`, and keeps its first expert. A refusal is `conflict` with `conflict_reason` `carryover_pair_not_proposed`, `carryover_source_decision_not_current`, `carryover_target_already_decided` or `carryover_severity_not_carryable`. `expert` is required; `admin` alone is refused (`required_capability: role:expert`).
+ */
+export type CarryOverDecisionInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CarryOverDecisionRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `carryOverDecision` (`application/json`, HTTP 201). */
+export type CarryOverDecisionResult = CarryOverDecisionResponse;
 
 // ------------------------------------------------------------------------------------
 // changePassword - POST /auth/password
@@ -411,6 +451,33 @@ export type ExportRunCsvInput = {
 
 /** Success body of `exportRunCsv` (`text/csv`, HTTP 200). */
 export type ExportRunCsvResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// exportRunXlsx - GET /runs/{run_id}/export.xlsx
+// ------------------------------------------------------------------------------------
+
+/**
+ * Download the Excel workbook for one run.
+ *
+ * Synchronous, like `exportRunCsv`, and with its states and role: nothing is created, there is no export resource or identity, and repeating the request returns byte-identical bytes. An unknown run is `404`; a run whose terminal does not declare `publishes_result: true` is `409 state_transition_not_allowed`, decided on the run before anything else is read. A `partial` run is exported.
+ *
+ * The workbook is the W57b layout (`docs/program/dispatch/W57-PLAN.md` section B3.5): «Сводка» with the run's identity and the counts by severity (decided, else proposed) and by category, and «Замечания» with one row per finding -- № | Лист/стр. | Категория | Замечание | Рекомендация | Серьёзность (решение эксперта) | Серьёзность (предложение модели) | Норма (документ, пункт) | Цитата нормы | Решение эксперта | Комментарий -- and a «также найдено» row per merged member. Standard-library writer, stored ZIP parts in a fixed order with fixed timestamps, inline strings, no formula; XML-forbidden characters become U+FFFD.
+ *
+ * «Лист/стр.» comes only from the version's verified portal companion: a version without one, or whose companion does not verify, is `422 storage_integrity_error` with `role: source.structured_companion`; a page number is never shown as a sheet label. The norm columns carry a finding's verified citations when the run has certified citation partitions, read through its pinned retrieval set; when they do not verify the answer is `422 required_norm_unavailable` with `reference_kind: norm_retrieval_set`, never a workbook without them. A run without citation partitions exports with the norm columns empty. Roles: `expert` (`role:expert`), as `exportRunCsv`. Added by W57B-NORMS-CATALOGUE-XLSX-01.
+ */
+export type ExportRunXlsxInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/export.xlsx`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `exportRunXlsx` (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, HTTP 200). */
+export type ExportRunXlsxResult = Blob;
 
 // ------------------------------------------------------------------------------------
 // getDashboardSummary - GET /dashboard
@@ -839,6 +906,36 @@ export type ListExecutionQueueInput = {
 
 /** Success body of `listExecutionQueue` (`application/json`, HTTP 200). */
 export type ListExecutionQueueResult = ExecutionQueuePage;
+
+// ------------------------------------------------------------------------------------
+// listNormDocuments - GET /norm-documents
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Norm Documents
+ *
+ * Every document of the current norms snapshot (R-112) as a catalogue, in designation order (natural, case- and homoglyph-folded), then title, then identity. `designation` and `title` are derived for display from the document's stored file name -- dates dotted, designation numbers dotted, a cut edition note closed or shown as `(ред. …)` -- and never alter or replace the stored rows; a name no rule can derive is shown as `getNormDocument` shows it, and `title` is null when the name carries nothing after the designation. `q` (1-200 characters) keeps documents whose designation or title contains it from the start of a word, folded the same way, and a `q` ending in a digit ends a number there; `kind` (1-100 characters) keeps documents whose stored kind equals it, and `kinds` lists every kind of the snapshot with its count. A `q` or `kind` holding a control character or nothing to filter by is `422 validation_failed` (`field` `q` or `kind`, `constraint: format`). The cursor is opaque and bound to `q`, `kind` and the snapshot; another listing refuses it. `total` counts the documents the filters keep. With no current snapshot the answer is `422 required_norm_unavailable` with `reference_kind: norms_snapshot`, never an empty page. Every row carries its `source_attribution` (NORM-Q04). Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Added by W57B-NORMS-CATALOGUE-XLSX-01.
+ */
+export type ListNormDocumentsInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** A document kind as the catalogue's `kinds` lists it, matched exactly. */
+    kind?: string;
+    /** Page size. */
+    limit?: number;
+    /** Text the designation or title contains from the start of a word. */
+    q?: string;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listNormDocuments` (`application/json`, HTTP 200). */
+export type ListNormDocumentsResult = NormCatalogueEntryPage;
 
 // ------------------------------------------------------------------------------------
 // listNormParagraphs - GET /norm-documents/{norm_document_id}/paragraphs
@@ -1681,6 +1778,41 @@ export type UploadDocumentInput = {
 export type UploadDocumentResult = DocumentVersion;
 
 // ------------------------------------------------------------------------------------
+// uploadDocumentVersion - POST /projects/{project_uid}/documents/{document_uid}/versions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Upload one portal bundle as the next immutable version of an existing document.
+ *
+ * The same ingest path as `uploadDocument`, into a document that already exists. The body is one portal bundle under exactly `uploadDocument`'s envelope (the same members, bounds, refusals and `constraint` details, a bare PDF refused with `portal_bundle_required`), and the same third-upload-in-flight refusal (`503 dependency_unavailable`, `details.dependency: upload_capacity`, `Retry-After`).
+ *
+ * The new version gets the document's next `version_ordinal` and becomes its current version; every older version, its classification, runs, findings and decisions are unchanged. It inherits nothing: it takes no display title (the document keeps its own) and no section, and its `classification` is absent until an expert confirms one with `classifyDocumentVersion`. Two uploads into one document at the same time get consecutive ordinals.
+ *
+ * An unknown project, an unknown document, or a document of another project is `404 not_found` (`details.aggregate_type` `Project` or `Document`), decided before the key is claimed or a byte is read into storage. The `Idempotency-Key` behaves as for `uploadDocument`: an exact repeat answers the version it created, and the same key with another document or another bundle is `409 idempotency_key_reuse`.
+ */
+export type UploadDocumentVersionInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `multipart/form-data`. */
+  body: UploadDocumentVersionRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `uploadDocumentVersion` (`application/json`, HTTP 201). */
+export type UploadDocumentVersionResult = DocumentVersion;
+
+// ------------------------------------------------------------------------------------
 // Runtime descriptors
 // ------------------------------------------------------------------------------------
 
@@ -1744,6 +1876,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  carryOverDecision: {
+    operationId: 'carryOverDecision',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['decisions'],
   },
   changePassword: {
     operationId: 'changePassword',
@@ -1813,6 +1959,20 @@ export const OPERATIONS = {
     responseMediaType: 'text/csv',
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['export'],
+  },
+  exportRunXlsx: {
+    operationId: 'exportRunXlsx',
+    method: 'GET',
+    path: '/runs/{run_id}/export.xlsx',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['export'],
   },
   getDashboardSummary: {
@@ -2066,6 +2226,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['execution'],
+  },
+  listNormDocuments: {
+    operationId: 'listNormDocuments',
+    method: 'GET',
+    path: '/norm-documents',
+    pathParams: [],
+    queryParams: ['cursor', 'kind', 'limit', 'q'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['norms'],
   },
   listNormParagraphs: {
     operationId: 'listNormParagraphs',
@@ -2506,6 +2680,20 @@ export const OPERATIONS = {
     method: 'POST',
     path: '/projects/{project_uid}/documents',
     pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'multipart/form-data',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
+  uploadDocumentVersion: {
+    operationId: 'uploadDocumentVersion',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions',
+    pathParams: ['document_uid', 'project_uid'],
     queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: true,

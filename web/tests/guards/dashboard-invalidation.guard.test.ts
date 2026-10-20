@@ -171,6 +171,9 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/record-verdict/model/use-record-verdict.ts': true,
   'src/features/start-run/model/use-start-run.ts': true,
   'src/features/upload-document/model/use-upload-document.ts': true,
+  // `W59-VERSION-UPLOAD-01`: a further version moves the document's current version, and the
+  // dashboard's panels count versions and group the current ones by section.
+  'src/features/upload-document/model/use-upload-document-version.ts': true,
   'src/features/cancel-run/model/use-cancel-run.ts': true,
   'src/features/reaudit-run/model/use-reaudit-run.ts': true,
   'src/features/set-job-priority/model/use-set-job-priority.ts': false,
@@ -185,6 +188,8 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   // not write; the backend half of the window is still being written, so the hook
   // invalidates the dashboard anyway, and this entry holds it to that.
   'src/features/classify-version/model/use-classify-version.ts': true,
+  // `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict, and the dashboard counts verdicts.
+  'src/features/carry-over-decision/model/use-carry-over-decision.ts': true,
 };
 
 /** A feature model source with an executable mutation call, independent of its filename. */

@@ -88,6 +88,7 @@ export { QUERY_NAMESPACES, queryKeys } from './query-keys';
 
 export type { CsvColumn } from './csv-columns';
 export { CSV_COLUMNS, CSV_ENCODING, csvFileName } from './csv-columns';
+export { xlsxFileName } from './xlsx';
 
 export { VersionCheckError, checkWebVersion, shouldShowUpdate } from './version-check';
 

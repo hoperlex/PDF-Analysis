@@ -2,7 +2,8 @@
  * Public API of the `document-version` entity: the PC-01 input envelope (a portal bundle),
  * the pre-check a browser can honestly make, the classification of every upload failure, the
  * read-only panel for a published version, and (`W59-SECTION-UI-01`) the version's
- * expert-confirmed stage and section with the review that offers them.
+ * expert-confirmed stage and section with the review that offers them; (`W59-DECISION-
+ * CARRYOVER-01`) which comparison rows could carry a decision, and its refusals in Russian.
  */
 
 export type { ChosenFile, UploadPrecheckProblem } from './model/upload-envelope';
@@ -60,6 +61,18 @@ export {
   stageModeOffered,
   versionLabel,
 } from './model/comparison';
+export type {
+  CarryoverConflictReason,
+  CarryoverFailure,
+  CarryoverFailureKind,
+} from './model/carryover';
+export {
+  CARRYOVER_CONFLICT_TEXT,
+  CARRYOVER_NOT_PERMITTED_DETAIL,
+  canCarryOverDecision,
+  carryoverCandidateOf,
+  carryoverFailure,
+} from './model/carryover';
 export {
   DOCUMENT_PAGE_LIMIT,
   documentListQueryOptions,

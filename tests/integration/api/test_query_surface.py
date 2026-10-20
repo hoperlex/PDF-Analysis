@@ -834,8 +834,14 @@ SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset({"listVersionPortalBloc
 #: The four norms listings, driven over the shipped ``NormsSearchAdapter`` on this suite's
 #: rollback-joined session (`W55A-PIN-01`).
 NORMS_QUERY_OPERATIONS: frozenset[str] = frozenset(
-    {"searchNorms", "listNormParagraphs", "listNormSnapshots", "listNormSnapshotEvents"}
+    {"searchNorms", "listNormParagraphs", "listNormSnapshots", "listNormSnapshotEvents",
+     # `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue, over the same adapter.
+     "listNormDocuments"}
 )
+
+#: The second document of the current snapshot, so the catalogue has two rows of two kinds
+#: (`W57B-NORMS-CATALOGUE-XLSX-01`); a real slug of the W54 snapshot.
+CATALOGUE_SECOND_SLUG = "ГОСТ_21_501-2018__Межгосударственный_стандарт__Система_прое"
 
 #: The words the seeded norms paragraphs carry. ``SEARCH_WORD`` (``здания``) stems to the
 #: lexeme every paragraph holds; ``NARROW_WORD`` is in one paragraph only.
@@ -918,6 +924,14 @@ def _seed_norms(session: Session) -> dict[str, Any]:
     designate(first)
     current, document = snapshot()
     designate(current)
+    session.execute(text(
+        "INSERT INTO norm_document (norm_document_id, norms_snapshot_id, "
+        "source_document_ref, slug, title, doc_type, source_attribution, pdf_page_count, "
+        "block_count, page_heading_count, recognised_characters, paragraph_count) "
+        "VALUES (:d, :s, 'query-surface-second', :slug, :title, 'ГОСТ', 'consultant_plus', "
+        "2, 2, 0, 100, 0)"
+    ), {"d": str(NormDocumentId.new()), "s": current, "slug": CATALOGUE_SECOND_SLUG,
+        "title": f"{CATALOGUE_SECOND_SLUG}.pdf"})
     return {"first": first, "current": current, "document": document}
 
 
@@ -1021,6 +1035,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listNormParagraphs": f"/norm-documents/{norms['document']}/paragraphs",
         "listNormSnapshots": "/norms/snapshots",
         "listNormSnapshotEvents": "/norms/snapshots/events",
+        # `W57B-NORMS-CATALOGUE-XLSX-01`. The current snapshot's two documents.
+        "listNormDocuments": "/norm-documents",
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -1043,6 +1059,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listNormParagraphs": {"cursor", "limit"},
         "listNormSnapshots": {"cursor", "limit"},
         "listNormSnapshotEvents": {"cursor", "limit"},
+        "listNormDocuments": {"q", "kind", "cursor", "limit"},
     }, f"the contract's query surface moved: {declared}"
 
     accounts_and_requests = _seed_accounts_and_requests(session, shipped_router)
@@ -1241,7 +1258,21 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             if not accepted["items"] or carried != {"accepted"} or impossible["items"]:
                 inert.setdefault(operation_id, []).append("verdict")
 
-        if "q" in names:
+        if "q" in names and operation_id == "listNormDocuments":
+            # The catalogue's text filter keeps the document whose designation it starts.
+            kept = ok(get(surface, f"{target}{sep}q={quote('ГОСТ 21.501')}&limit=200"))
+            if [item["designation"] for item in kept["items"]] != ["ГОСТ 21.501-2018"]:
+                inert.setdefault(operation_id, []).append("q")
+
+        if "kind" in names:
+            # The kind filter keeps exactly that kind's rows.
+            kept = ok(get(surface, f"{target}{sep}kind={quote('СП')}&limit=200"))
+            if [item["kind"] for item in kept["items"]] != ["СП"] or len(
+                baseline["items"]
+            ) == len(kept["items"]):
+                inert.setdefault(operation_id, []).append("kind")
+
+        if "q" in names and operation_id == "searchNorms":
             # Another query is another answer: one paragraph instead of three.
             narrow = ok(get(surface, f"/norms/search?q={quote(NARROW_WORD)}&limit=200"))
             ids = [item["norm_paragraph_id"] for item in baseline["items"]]

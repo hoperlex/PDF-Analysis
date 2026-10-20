@@ -97,6 +97,7 @@ function compared(over: Partial<VersionComparison> = {}): VersionComparison {
           target_finding: { finding_uid: 'fnd_01M2545JSD15ETSNNV904X991K', category: 'layout',
             finding_text: 'Нет дверного проёма', page_numbers: [3] } },
       ],
+      carryover_candidates: [],
     },
     ...over,
   };

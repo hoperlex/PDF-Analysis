@@ -207,6 +207,18 @@ class VersionAnalysisReader(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class CurrentFindingProposals:
+    """A comparison recomputed for a command, and each compared finding's observation.
+
+    ``observations`` maps ``source`` and ``target`` to ``finding_uid`` ->
+    ``finding_observation_id`` of that side's run; both are empty for a refusal.
+    """
+
+    comparison: VersionComparison
+    observations: Mapping[str, Mapping[str, str]]
+
+
+@dataclass(frozen=True, slots=True)
 class ComparisonRequest:
     project_uid: str
     document_uid: str
@@ -258,6 +270,38 @@ class _Side:
     findings: tuple[FindingSnapshot, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _Prepared:
+    """Both sides of a pair that passed every precondition, and its sheet suggestions."""
+
+    pair: OrderedVersionPair
+    progress: dict[str, ComparedVersion]
+    source: _Side
+    target: _Side
+    suggestions: tuple[SheetPairSuggestion, ...]
+
+
+def _assemble(
+    request: ComparisonRequest, prepared: _Prepared, *, with_diff_page: bool,
+) -> VersionComparison:
+    pair, progress, suggestions = prepared.pair, prepared.progress, prepared.suggestions
+    source, target = prepared.source, prepared.target
+    sheets = _sheet_rows(suggestions, source, target)
+    return VersionComparison(
+        pair.project_uid, pair.document_uid,
+        source.facts.version_uid, target.facts.version_uid,
+        request.mode, OUTCOME_COMPARED, None,
+        progress[SIDE_SOURCE], progress[SIDE_TARGET],
+        _comparison_sha256(pair, request.mode, progress, suggestions),
+        sheets,
+        (
+            _diff_page(pair, sheets, source, target, request.diff_offset, request.diff_limit)
+            if with_diff_page else None
+        ),
+        _finding_comparison(pair, suggestions, source, target),
+    )
+
+
 class VersionComparisonService:
     """Compare two explicitly named versions of one set, read-only."""
 
@@ -281,6 +325,36 @@ class VersionComparisonService:
         should keep one snapshot across the call.
         """
         _check_request(request)
+        prepared = self._prepare(session, request)
+        if isinstance(prepared, VersionComparison):
+            return prepared
+        return _assemble(request, prepared, with_diff_page=True)
+
+    def current_finding_proposals(
+        self, session: Session, request: ComparisonRequest,
+    ) -> CurrentFindingProposals:
+        """The same comparison recomputed now, without its diff page, for a command.
+
+        ``comparison`` is exactly what :meth:`compare` answers for ``request`` except
+        that ``sheet_diffs`` is ``None`` (the diff page is display, not a precondition);
+        a refusal is the same refusal. ``observations`` names each compared finding's
+        observation per side, which a decision about that finding must cite. Nothing is
+        written.
+        """
+        _check_request(request)
+        prepared = self._prepare(session, request)
+        if isinstance(prepared, VersionComparison):
+            return CurrentFindingProposals(prepared, {SIDE_SOURCE: {}, SIDE_TARGET: {}})
+        return CurrentFindingProposals(
+            _assemble(request, prepared, with_diff_page=False),
+            {
+                label: {item.finding_uid: item.finding_observation_id for item in side.findings}
+                for label, side in ((SIDE_SOURCE, prepared.source), (SIDE_TARGET, prepared.target))
+            },
+        )
+
+    def _prepare(self, session: Session, request: ComparisonRequest) -> VersionComparison | _Prepared:
+        """Every precondition and both sides, or the refused comparison itself."""
         progress: dict[str, ComparedVersion] = {}
         try:
             pair = self._version_pair(session, request)
@@ -323,19 +397,7 @@ class VersionComparisonService:
                 progress.get(SIDE_SOURCE), progress.get(SIDE_TARGET),
                 None, (), None, None,
             )
-
-        source, target = sides[SIDE_SOURCE], sides[SIDE_TARGET]
-        sheets = _sheet_rows(suggestions, source, target)
-        return VersionComparison(
-            pair.project_uid, pair.document_uid,
-            source.facts.version_uid, target.facts.version_uid,
-            request.mode, OUTCOME_COMPARED, None,
-            progress[SIDE_SOURCE], progress[SIDE_TARGET],
-            _comparison_sha256(pair, request.mode, progress, suggestions),
-            sheets,
-            _diff_page(pair, sheets, source, target, request.diff_offset, request.diff_limit),
-            _finding_comparison(pair, suggestions, source, target),
-        )
+        return _Prepared(pair, progress, sides[SIDE_SOURCE], sides[SIDE_TARGET], suggestions)
 
     # -- preconditions ---------------------------------------------------------
 
@@ -806,7 +868,8 @@ def _finding_comparison(
 
 __all__ = [
     "COMPARISON_ALGORITHM", "ComparisonIntegrityError", "ComparisonRequest",
-    "ComparisonRequestInvalid", "DEFAULT_DIFF_LIMIT", "FindingEvidenceSnapshot",
+    "ComparisonRequestInvalid", "CurrentFindingProposals", "DEFAULT_DIFF_LIMIT",
+    "FindingEvidenceSnapshot",
     "FindingSnapshot", "MAX_DIFF_LIMIT", "MAX_DIFF_PAGE_CHARACTERS", "RUN_STATE_PUBLISHED",
     "RunCandidate", "SHEET_DIFF_ALGORITHM", "SavedPageText", "VersionAnalysisReader",
     "VersionClassificationReader", "VersionComparisonService",

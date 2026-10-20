@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 52,
+    "path_count": 56,
     "operations": [
       [
         "POST",
@@ -17,6 +17,11 @@
         "POST",
         "/projects/{project_uid}/documents",
         "uploadDocument"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions",
+        "uploadDocumentVersion"
       ],
       [
         "GET",
@@ -297,6 +302,21 @@
         "GET",
         "/analysis/profiles",
         "listAnalysisProfiles"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers",
+        "carryOverDecision"
+      ],
+      [
+        "GET",
+        "/norm-documents",
+        "listNormDocuments"
+      ],
+      [
+        "GET",
+        "/runs/{run_id}/export.xlsx",
+        "exportRunXlsx"
       ]
     ],
     "schema_names": [
@@ -372,6 +392,7 @@
       "UpdateMyProfileRequest",
       "UpdateUserRequest",
       "UploadDocumentRequest",
+      "UploadDocumentVersionRequest",
       "UserUid",
       "Verdict",
       "VerdictCount",
@@ -408,6 +429,9 @@
       "NormSearchHit",
       "NormSearchPage",
       "NormDocument",
+      "NormCatalogueEntry",
+      "NormKindCount",
+      "NormCatalogueEntryPage",
       "NormParagraph",
       "NormParagraphPage",
       "NormSnapshot",
@@ -452,7 +476,11 @@
       "AnalysisProfileSource",
       "AnalysisProfileSummary",
       "AnalysisProfileListItem",
-      "AnalysisProfileList"
+      "AnalysisProfileList",
+      "CarryoverSourceDecision",
+      "CarryoverCandidate",
+      "CarryOverDecisionRequest",
+      "CarryOverDecisionResponse"
     ]
   },
   "error_catalog": {

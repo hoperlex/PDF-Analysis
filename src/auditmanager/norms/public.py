@@ -34,6 +34,14 @@ from auditmanager.norms.bundle import (  # W54-BUNDLE-01
     requeue_bundle,
     verify_bundle,
 )
+from auditmanager.norms.catalogue import (  # W57B-NORMS-CATALOGUE-XLSX-01
+    CatalogueEntry,
+    CataloguePage,
+    DisplayName,
+    KindCount,
+    display_name,
+)
+from auditmanager.norms.catalogue import list_documents as list_norm_catalogue  # W57B-NORMS-CATALOGUE-XLSX-01
 from auditmanager.norms.chunking import (  # W54-SNAPSHOT-01
     RELIABLE_CHUNKING_PROFILE_VERSION,
     ChunkingRefused,
@@ -205,7 +213,9 @@ __all__ = [
     "Checkpoint",
     "ChunkingRefused",
     "CorpusLoadResult",
+    "CatalogueEntry",
     "CatalogueInputRefused",
+    "CataloguePage",
     "CurrentSnapshot",
     "CustodyDispatcher",
     "CustodyIncident",
@@ -222,10 +232,12 @@ __all__ = [
     "DispatchReport",
     "DispatchResult",
     "DispatchStep",
+    "DisplayName",
     "DocumentRow",
     "EmbeddingSetDigest",
     "EventPosition",
     "IncidentKind",
+    "KindCount",
     "Manifest",
     "ManifestIndex",
     "NearestEmbedding",
@@ -259,6 +271,7 @@ __all__ = [
     "compute_fingerprint",
     "current_snapshot",
     "decode_event_cursor",
+    "display_name",
     "encode_event_cursor",
     "export_bundle",
     "get_norm_document",
@@ -267,6 +280,7 @@ __all__ = [
     "import_bundle",
     "import_snapshot",
     "inspect_degeneracy",
+    "list_norm_catalogue",
     "list_norm_paragraphs",
     "list_norm_snapshots",
     "list_snapshot_events",

@@ -81,14 +81,16 @@ import { USER_PAGE_LIMIT } from '@/entities/user';
 import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import {
-  ALREADY_CLASSIFIED_DETAIL, CLASSIFY_NOT_PERMITTED_DETAIL, COMPARISON_DIFF_LIMIT,
+  ALREADY_CLASSIFIED_DETAIL, CARRYOVER_CONFLICT_TEXT, CARRYOVER_NOT_PERMITTED_DETAIL,
+  CLASSIFY_NOT_PERMITTED_DETAIL, COMPARISON_DIFF_LIMIT,
   DOCUMENT_PAGE_LIMIT, UPLOAD_CONSTRAINTS_STATED, UPLOAD_ENVELOPE_RULES, VERSION_PAGE_LIMIT, classifyUploadFailure,
   precheckProblemMessage,
 } from '@/entities/document-version';
 import { UPLOAD_CONSTRAINTS_ADDED } from '@/entities/document-version/model/upload-failure';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS, PROJECT_STRUCTURE_ORDER, projectSectionOf } from '@/entities/project';
-import type { AnalysisProfileListItem } from '@/shared/api';
+import type { AnalysisProfileListItem, CarryoverCandidate } from '@/shared/api';
 import { ClassifyVersionFormView } from '@/features/classify-version';
+import { CarryOverDecisionView } from '@/features/carry-over-decision';
 import { VersionClassification, VersionClassificationView } from '@/widgets/version-classification';
 import { ProjectStructureView } from '@/widgets/project-sections';
 import { AppFrame } from '@/_app';
@@ -121,9 +123,13 @@ import type { ExecutionWorker } from '@/shared/api';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { RECENT_PROJECT_LIMIT } from '@/widgets/home-tiles';
-import { NORM_EVENT_PAGE_LIMIT, NORM_PARAGRAPH_PAGE_LIMIT, NORM_SEARCH_PAGE_LIMIT, NORM_SNAPSHOT_LIMIT } from '@/entities/norms';
+import {
+  NORM_CATALOGUE_PAGE_LIMIT, NORM_EVENT_PAGE_LIMIT, NORM_PARAGRAPH_PAGE_LIMIT, NORM_SEARCH_PAGE_LIMIT,
+  NORM_SNAPSHOT_LIMIT,
+} from '@/entities/norms';
 import { NormsPage } from '@/_pages/norms';
 import { NormSearchResults } from '@/widgets/norm-search';
+import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormParagraphList, NormPdf } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { VersionBlockViews } from '@/_pages/blocks';
@@ -133,7 +139,8 @@ import {
   BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, notProducedPage, portalPage,
 } from '../unit/blocks/fixtures';
 import {
-  NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_QUERY, NORM_SNAPSHOTS, normDocument,
+  NORM_CATALOGUE_PAGE, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_QUERY, NORM_SNAPSHOTS,
+  normDocument,
 } from '../unit/norms/fixtures';
 
 import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles } from './lib/repo';
@@ -276,6 +283,7 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
   // ------------------------------------------------------------------------------------
   { word: 'PDF', why: 'The document format, and the only one this application accepts. A proper noun in Russian too ("PDF-документ"). `application/pdf` is matched separately as a media type.' },
   { word: 'CSV', why: 'The export format. RFC 4180 names it, no contract here does, and Russian technical writing does not translate it.' },
+  { word: 'Excel', why: 'The spreadsheet application the run\'s workbook is made for (`exportRunXlsx`, «Скачать Excel» in `W57-PLAN.md` section B3.7). A product name; Russian writing does not translate it, and no contract here defines the word.' },
   { word: 'ZIP', why: 'The archive format of the portal bundle, the only upload this application accepts (`W55B-INGEST-01`). A proper noun in Russian technical writing ("ZIP-архив"); the container format is fixed by PKWARE\'s APPNOTE, and no contract here defines the word. `application/zip` is matched separately as a media type, and a member\'s name such as `_blocks.json` as a filename.' },
   { word: 'API', why: 'The name of the seam the screens talk to. Universal in Russian technical writing; nothing in `contracts/` defines the word itself.' },
   { word: 'RFC', why: 'The IETF document series, cited by number beside the CSV escaping rule. A citation, not a label.' },
@@ -874,6 +882,8 @@ const KEYS = {
   normSearch: queryKeys.norms.search(NORM_QUERY, undefined, NORM_SEARCH_PAGE_LIMIT),
   normDocument: queryKeys.norms.document(NORM_DOCUMENT_ID),
   normParagraphs: queryKeys.norms.paragraphs(NORM_DOCUMENT_ID, undefined, NORM_PARAGRAPH_PAGE_LIMIT),
+  // `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue's first page with no filter.
+  normCatalogue: queryKeys.norms.catalogue(undefined, undefined, undefined, NORM_CATALOGUE_PAGE_LIMIT),
 } as const;
 
 /**
@@ -987,6 +997,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.normSearch, { items: NORM_HITS, page });
   client.setQueryData(KEYS.normDocument, normDocument());
   client.setQueryData(KEYS.normParagraphs, { items: NORM_PARAGRAPHS, page, source_attribution: 'consultant_plus' });
+  client.setQueryData(KEYS.normCatalogue, NORM_CATALOGUE_PAGE);
   return client;
 }
 
@@ -1262,10 +1273,28 @@ function comparisonBody(over: Partial<VersionComparison> = {}): VersionCompariso
         { kind: 'new', basis: 'no_exact_source_match', proposal_sha256: null,
           source_finding: null, target_finding: finding('5', 'Цвет фасада не согласован', 3) },
       ],
+      // `W59-DECISION-CARRYOVER-01`: the unchanged pair is a candidate, so the expert's
+      // «Перенести решение» renders in this pass.
+      carryover_candidates: [CARRYOVER_CANDIDATE],
     },
     ...over,
   };
 }
+
+/** `W59-DECISION-CARRYOVER-01`. The decision on the unchanged pair's older finding. */
+const CARRYOVER_CANDIDATE: CarryoverCandidate = {
+  proposal_sha256: SHA,
+  source_finding_uid: `fnd_${ULID.slice(0, -1)}1`,
+  target_finding_uid: `fnd_${ULID.slice(0, -1)}2`,
+  source_decision: {
+    decision_id: `dec_${ULID}`,
+    verdict: 'accepted',
+    severity: 'critical',
+    comment: 'Проём действительно не показан.',
+    author_label: 'Иванова Е. В.',
+    recorded_at: '2026-10-20T08:00:00Z',
+  },
+};
 
 function twoVersionClient(
   loaded: (over?: Partial<RunStatus>) => Client,
@@ -1823,6 +1852,45 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       'required_norm_unavailable', { reference_kind: 'norms_snapshot' },
     )),
   },
+  /*
+   * `W57B-NORMS-CATALOGUE-XLSX-01`. The catalogue view of «Нормы»: loaded, refused, failed
+   * and pending, and the table's empty pages.
+   */
+  {
+    name: 'norms-catalogue-loaded',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+  },
+  {
+    name: 'norms-catalogue-refused',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+    seedClient: (client: Client) => seedError(client, KEYS.normCatalogue, normsRefusal(
+      'validation_failed', { field: 'q', constraint: 'format' },
+    )),
+  },
+  {
+    name: 'norms-catalogue-failed',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+    seedClient: (client: Client) => seedError(client, KEYS.normCatalogue, normsRefusal(
+      'dependency_unavailable', {},
+    )),
+  },
+  {
+    name: 'norms-catalogue-pending',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+    seedClient: (client: Client) => { client.removeQueries({ queryKey: KEYS.normCatalogue }); },
+  },
+  {
+    name: 'norm-catalogue-nothing-kept',
+    make: () => createElement(NormCatalogueTable, { items: [], total: 0, filtered: true, onFirst: null, onNext: null }),
+  },
+  {
+    name: 'norm-catalogue-empty-snapshot',
+    make: () => createElement(NormCatalogueTable, { items: [], total: 0, filtered: false, onFirst: null, onNext: null }),
+  },
+  {
+    name: 'norm-catalogue-empty-later-page',
+    make: () => createElement(NormCatalogueTable, { items: [], total: 3, filtered: false, onFirst: () => {}, onNext: null }),
+  },
   {
     name: 'norm-search-nothing-found',
     make: () => createElement(NormSearchResults, { items: [], onFirst: null, onNext: null }),
@@ -1970,6 +2038,78 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         onStage: () => undefined,
         onSection: () => undefined,
         onConfirm: () => undefined,
+      }),
+  })),
+  /*
+   * `W59-DECISION-CARRYOVER-01`. «Перенести решение»: the confirmation (with a severity and a
+   * comment), in flight, carried, already carried, and every refusal a reader can be shown.
+   */
+  ...([false, true] as const).map((pending) => ({
+    name: `carry-over-decision-confirming${pending ? '-pending' : ''}`,
+    make: () =>
+      createElement(CarryOverDecisionView, {
+        candidate: CARRYOVER_CANDIDATE,
+        target: { finding_uid: CARRYOVER_CANDIDATE.target_finding_uid, category: 'layout',
+          finding_text: 'Нет дверного проёма', page_numbers: [1] },
+        confirming: true,
+        pending,
+        result: null,
+        failure: null,
+        onOpen: () => undefined,
+        onConfirm: () => undefined,
+        onCancel: () => undefined,
+      }),
+  })),
+  ...([false, true] as const).map((replayed) => ({
+    name: `carry-over-decision-${replayed ? 'replayed' : 'carried'}`,
+    make: () =>
+      createElement(CarryOverDecisionView, {
+        candidate: CARRYOVER_CANDIDATE,
+        target: { finding_uid: CARRYOVER_CANDIDATE.target_finding_uid, category: 'layout',
+          finding_text: 'Нет дверного проёма', page_numbers: [1] },
+        confirming: false,
+        pending: false,
+        result: {
+          event: {
+            decision_id: `dec_${ULID.slice(0, -1)}9`, finding_uid: CARRYOVER_CANDIDATE.target_finding_uid,
+            finding_observation_id: `fobs_${ULID}`, event_type: 'accept', verdict: 'accepted',
+            severity: 'critical', comment: 'Решение перенесено из версии 1.', author_label: 'Иванова Е. В.',
+            recorded_at: '2026-10-20T09:00:00Z',
+          },
+          current_verdict: 'accepted',
+          replayed,
+          source_finding_uid: CARRYOVER_CANDIDATE.source_finding_uid,
+          source_decision_id: CARRYOVER_CANDIDATE.source_decision.decision_id,
+          source_version_uid: VERSION_UID,
+          source_version_ordinal: 1,
+          target_version_uid: NEWER_VERSION_UID,
+          mode: 'version',
+        },
+        failure: null,
+        onOpen: () => undefined,
+        onConfirm: () => undefined,
+        onCancel: () => undefined,
+      }),
+  })),
+  ...([
+    ...(Object.keys(CARRYOVER_CONFLICT_TEXT) as (keyof typeof CARRYOVER_CONFLICT_TEXT)[]).map(
+      (kind) => ({ kind, detail: CARRYOVER_CONFLICT_TEXT[kind] }),
+    ),
+    { kind: 'not_permitted' as const, detail: CARRYOVER_NOT_PERMITTED_DETAIL },
+  ]).map(({ kind, detail }) => ({
+    name: `carry-over-decision-${kind}`,
+    make: () =>
+      createElement(CarryOverDecisionView, {
+        candidate: CARRYOVER_CANDIDATE,
+        target: { finding_uid: CARRYOVER_CANDIDATE.target_finding_uid, category: 'layout',
+          finding_text: 'Нет дверного проёма', page_numbers: [1] },
+        confirming: false,
+        pending: false,
+        result: null,
+        failure: { kind, detail, correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false },
+        onOpen: () => undefined,
+        onConfirm: () => undefined,
+        onCancel: () => undefined,
       }),
   })),
   {
@@ -3056,7 +3196,8 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
   {
     label: 'Загрузка: загружаемый файл…',
     why:
-      '`upload-document-form.tsx`, while the upload is in flight; same mechanism as the ' +
+      '`upload-outcome.tsx`, under either upload form while the upload is in flight (the ' +
+      'first version or, `W59-VERSION-UPLOAD-01`, the next one); same mechanism as the ' +
       'new project, and the same reason no seed reaches it. The words it carries are ' +
       'judged by `no branch label carries English, reachable or not`. `D-82`.',
   },
