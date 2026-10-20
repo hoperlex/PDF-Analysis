@@ -223,10 +223,58 @@ caused (`test_doc_prose_facts`).
 
 | Check | Result |
 | --- | --- |
-| `tests/contract` (whole directory, container-free), final merge | 87 failed, 126 errors, 1057 passed. Compared by test ID with the base clone at `1af17a48`, the only new red is `test_doc_prose_facts`, which fails on `CURRENT_STATE.md` only. The rest are pre-existing or environmental: 126 `test_cp00_candidate` errors come from `NotADirectoryError: .../w57b-catalogue-xlsx/.git` because a worktree's `.git` is a file; plus `test_error_kernel::test_there_are_twenty_four`, `test_ar_v2_seeded::...api_enum`, `test_alpha_acceptance_command`, `test_cp00_final_state` (3) and `test_validate_bootstrap` (22), all failing on the base too. |
-| `npm --prefix web run api:verify` | OK, 62 operations |
+| `tests/contract` (whole directory, container-free) at the final merge `bf5c1b9b` | 85 failed, 126 errors, 1,059 passed. Compared by test ID with the base clone's run at `1af17a48`, the **only** new red is `test_doc_prose_facts`, which fails on `CURRENT_STATE.md` alone (the base's triple). Everything else is pre-existing or environmental: the `test_cp00_candidate` errors come from `NotADirectoryError: .../w57b-catalogue-xlsx/.git` because a worktree's `.git` is a file; the remainder (`test_error_kernel`, `test_ar_v2_seeded`, `test_alpha_acceptance_command`, `test_cp00_final_state`, `test_validate_bootstrap`) also fails on the base. |
+| `npm --prefix web run api:verify` | OK, 63 operations, SHA-256 `40efbb75…4beb6` |
 | `npm --prefix web run typecheck`, `lint --quiet` | clean |
-| vitest: `tests/guards tests/contract tests/unit/{norms,export,screens,styles,review,widgets,api}` | 74 files, 1,166 tests passed (base guards: 28 files / 420 passed) |
-| `tests/e2e/test_pc01_journey_conformance.py` and composition root/token channel (env exported) | 118 passed |
-| composition `test_an_absent_parent_is_not_an_empty_page.py`, `test_every_port_implementation_is_whole.py` | 31 passed. Pre-existing on base `0f0903f2`: `test_pre_decide_adapter_refuses_a_severity_instead_of_dropping_it` (`TypeError`) |
-| API surface files (`test_operation_surface`, `served_document`, `schema_conformance`, `role_register`, `router_and_body_rules`, `authorization`, `listing_surface`, `no_internal_identifiers`) | see the integrator instructions; run on the final merge |
+| vitest: `tests/guards tests/contract tests/unit/{norms,export,screens,styles,review,widgets,api}` | 74 files, 1,168 tests passed |
+| `tests/e2e/test_pc01_journey_conformance.py` + API surface (`test_operation_surface`, `served_document_and_health_plane`, `role_register`, `authorization`, `router_and_body_rules`) + download-name guard + `tests/unit/{norms,exports}`, final merge | 265 passed |
+| Previous merge (`9b8bcb6d`): the API surface files above plus `schema_conformance`, `listing_surface`, `no_internal_identifiers`, composition root, absent-parent and port-whole registers, `tests/integration/exports`, `tests/integration/norms/catalogue` | 509 passed, 1 skipped, 1 failed. The failure is pre-existing on base `0f0903f2`: `test_pre_decide_adapter_refuses_a_severity_instead_of_dropping_it` (`TypeError`). |
+| Not run (R-135) | full gate, live journey, whole frontend suite, any provider call, LibreOffice |
+
+## Risks and known limitations
+
+- **Excel needs a portal companion.** A legacy bare-PDF version is refused with `422
+  storage_integrity_error`. Uploads have required portal bundles since W55b, so this affects
+  older versions only. Every v1 run on such a version exports CSV but not Excel.
+- **Raw values in the workbook.** The certified writer emits contract values (`critical`,
+  `fire_safety`, `pending`) and English summary keys for severities. Localised labels in the
+  workbook would be a writer change, not attempted here.
+- **The citation path is untested end to end.** It is wired (`read_verified_citations`
+  injected; the run's own `analysis_profile_id` is passed as the profile identity) but has no
+  real v3 run behind it. Its refusal mapping is unit-tested; a CITE-active run is the first
+  real exercise.
+- **`kind` is the stored `doc_type` verbatim.** Some values are truncated first words of
+  the file name, such as `Федеральный` and `Здания`. No display mapping is applied.
+- **Display derivation only on the catalogue.** `getNormDocument` and `searchNorms` still
+  show the stored projection, so a row opened from the catalogue shows the old designation
+  on the document page. Switching them would change two served payloads, which this task
+  did not open.
+- **Catalogue scale.** The catalogue reads the snapshot's documents in one statement per
+  request (674 rows, about 20 ms). That is fine at corpus scale but grows linearly with it.
+- `test_query_surface.py::test_every_declared_query_parameter_is_read_by_the_router_that_declares_it`
+  stays red for other lanes' reasons (`compareDocumentVersions` is not driven, and the
+  category case fails). The catalogue's own parameters were proven with those excluded
+  locally.
+
+## Integrator instructions
+
+1. Merge `agent/w57b-catalogue-xlsx-01` (phase A and phase B together, one slice). It
+   already contains `c22f2049`. If `integration/night-1020` has moved again, merge it and
+   re-derive the generated files as this lane did: take the base's contract, facts, lock
+   and generated client, re-apply the two paths, two operations, three schemas and the
+   reseal paragraph, run `api:generate`, then update the lock and facts.
+2. Update `docs/program/CURRENT_STATE.md` to **56 paths / 63 operations / 161 schemas**.
+   The error catalogue
+   (25 codes) and head (`0024_version_classification`) are unchanged. This turns
+   `test_doc_prose_facts` green.
+3. No migration, no new error code, no dependency change. Rollback is reverting the merge.
+
+## Hotspot proof
+
+Not touched: `db/migrations/**`, the dependency and lock files (`pyproject.toml`,
+`uv.lock`, `web/package*.json`), `web/src/_app/providers.tsx`, `web/src/app/globals.css`,
+`docs/program/CURRENT_STATE.md`, the snapshot rows and the bundle (the stand was only read,
+over `default_transaction_read_only=on` sessions; one slug was re-read after the probe and
+is unchanged), refs, tags and the stand. `contracts/**`, `bootstrap/composition.py` and the
+API surface were edited only after the integrator's go message from `1af17a48`, which handed
+over the contract slot.
