@@ -94,7 +94,7 @@ def test_all_seeded_plans_score_and_keep_rejected_diagnostics() -> None:
     assert scored.match.recall == 1.0
     assert scored.match.missed_issue_ids == ()
     assert scored.match.control_false_positive_rate == 0.0
-    assert scored.match.finding_group_count == 21
+    assert scored.match.finding_group_count == 36
     assert scored.diagnostics[0].rejected[0].failures == (
         (0, 1, "не найдена", "quotation_absent"),
     )
@@ -106,7 +106,7 @@ def test_one_removed_seeded_issue_lowers_recall() -> None:
     complete = score_seeded_plans(MANIFEST, _runs())
     doctored = score_seeded_plans(MANIFEST, _runs(omit="ic_area"))
     assert complete.match.recall == 1.0
-    assert doctored.match.recall == 20 / 21
+    assert doctored.match.recall == 35 / 36
     assert doctored.match.missed_issue_ids == ("ic_area",)
 
 
@@ -116,7 +116,7 @@ def test_any_group_member_can_match_and_published_ordinals_are_checked() -> None
     publication = _published(first)
     scored = score_seeded_plans(MANIFEST, (replace(first, publication=publication), *runs[1:]))
     assert scored.match.recall == 1.0
-    assert scored.match.finding_group_count == 21
+    assert scored.match.finding_group_count == 36
     assert first.plan.groups[0].members[0].evidence[0].quote != MANIFEST["issues"][0]["evidence"][0]["quote"]
     broken = replace(publication, findings=(
         replace(publication.findings[0], canonical_observation_id="wrong"),
@@ -153,7 +153,7 @@ def test_all_published_runs_with_distinct_ids_keep_the_same_score() -> None:
     runs = tuple(replace(run, publication=_published(run)) for run in _runs())
     scored = score_seeded_plans(MANIFEST, runs)
     assert scored.match.recall == 1.0
-    assert scored.match.finding_group_count == 21
+    assert scored.match.finding_group_count == 36
     assert scored.match.control_false_positive_rate == 0.0
 
 

@@ -34,19 +34,19 @@ def group(case: dict, *, quote: str | None = None, page: int | None = None,
 def test_empty_predictions_are_zero_recall_with_nonzero_denominators() -> None:
     report = score(MANIFEST, ())
     assert report.recall == 0.0
-    assert len(report.missed_issue_ids) == 21
-    assert report.control_count == 7
+    assert len(report.missed_issue_ids) == 36
+    assert report.control_count == 12
     assert report.control_false_positive_rate == 0.0
     assert report.finding_group_count == 0
-    assert len(report.per_category) == 7
+    assert len(report.per_category) == 12
 
 
-def test_one_exact_seeded_match_changes_recall_by_one_twenty_first() -> None:
+def test_one_exact_seeded_match_changes_recall_by_one_thirty_sixth() -> None:
     first = MANIFEST["issues"][0]
     report = score(MANIFEST, (group(first),))
     assert report.matched_issue_ids == (first["id"],)
-    assert report.recall == 1 / 21
-    assert len(report.missed_issue_ids) == 20
+    assert report.recall == 1 / 36
+    assert len(report.missed_issue_ids) == 35
 
 
 def test_any_member_may_match_even_when_the_first_member_does_not() -> None:
@@ -84,7 +84,7 @@ def test_a_control_hit_is_false_positive_pressure_not_seeded_recall() -> None:
     control = MANIFEST["controls"][0]
     report = score(MANIFEST, (group(control),))
     assert report.matched_control_ids == (control["id"],)
-    assert report.control_false_positive_rate == 1 / 7
+    assert report.control_false_positive_rate == 1 / 12
     assert report.recall == 0.0
     category = next(item for item in report.per_category if item.category == control["category"])
     assert category.controls_hit == 1 and category.controls_total == 1
