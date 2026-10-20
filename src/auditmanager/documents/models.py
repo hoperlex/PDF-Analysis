@@ -38,6 +38,7 @@ __all__ = [
     "ROLE_SOURCE_MARKDOWN",
     "ROLE_SOURCE_STAMP_AUDIT",
     "ROLE_SOURCE_STRUCTURED_COMPANION",
+    "CurrentVersionPlacementRecord",
     "DocumentVersionRecord",
     "ManifestEntry",
     "ProjectListingRecord",
@@ -198,6 +199,35 @@ class VersionClassificationRecord:
     section_code: str
     confirmed_by_user_uid: str
     confirmed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class CurrentVersionPlacementRecord:
+    """`SECTION-READ-MODEL-01`. A document set's **current** version and where it is placed.
+
+    The narrow row the section views read -- «Оптимизация разделов» finds its member sets and
+    its unclassified ones through it -- so a caller asks «which sets' current versions are
+    confirmed in section X» without walking every project's ``listDocuments``. It carries the
+    set's address (project, document, version), the three display facts the view prints
+    (title, ordinal, page count) and the placement itself; it carries no manifest and no
+    blob handle.
+
+    ``project_stage`` and ``section_code`` are the **current version's** persisted
+    classification (``document_version_classification``): both set, or both ``None`` while no
+    expert has classified that version. They are never read from the legacy ``document.section``,
+    from an older version of the set or from a file name, and ``version_ordinal`` is a display
+    value, never a key (foundation invariant 3).
+    """
+
+    project_uid: ProjectUid
+    project_name: str
+    document_uid: DocumentUid
+    display_title: str
+    version_uid: VersionUid
+    version_ordinal: int
+    page_count: int
+    project_stage: str | None
+    section_code: str | None
 
 
 @dataclass(frozen=True, slots=True)
