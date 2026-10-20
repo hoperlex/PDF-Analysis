@@ -551,7 +551,9 @@ class TestN1ComponentReferenceResolution:
         # through its project.
         # `W60-OPT-PROPOSALS-01` adds six: starting a pass names a project and a document set,
         # and every other operation of the slice addresses a pass or a proposal by identity.
-        assert len(report) == 55, report
+        # `W63-SECTION-FORM7-01` adds one: a section code outside the fifteen addresses no
+        # section's combined specification, and the unknown `project_uid` filter is `404` too.
+        assert len(report) == 56, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

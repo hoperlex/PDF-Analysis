@@ -180,6 +180,8 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "listOptimisationPasses",
             "listOptimisationProposals",
             "decideOptimisationProposal",
+            # `W63-SECTION-FORM7-01`: a path code, filters and paging.
+            "getSectionSpecification",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

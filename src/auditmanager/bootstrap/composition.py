@@ -44,6 +44,7 @@ from auditmanager.bootstrap.adapters import (
     ReleasesAdapter,
     RunAdapter,
     SectionAdapter,
+    SectionSpecificationAdapter,
     SpecificationPricesAdapter,
     XlsxExportAdapter,
 )
@@ -345,6 +346,8 @@ def build_application(
         # decisions over the same sessions; the saved text layers are read as the comparison
         # reads them.
         optimisation_proposals=OptimisationProposalAdapter(sessions, blob_store=store),
+        # `W63-SECTION-FORM7-01`. The same saved-text port, a section's rows across projects.
+        section_specifications=SectionSpecificationAdapter(sessions, blob_store=store),
     )
     return Application(
         router=router,

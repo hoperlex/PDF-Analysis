@@ -99,6 +99,9 @@ import { VersionClassification, VersionClassificationView } from '@/widgets/vers
 import { ProjectStructureView } from '@/widgets/project-sections';
 import { SpecificationPricesAnswer, SpecificationPricesSection } from '@/widgets/specification-prices';
 import { SPECIFICATION_ROW_LIMIT } from '@/entities/specification-price';
+import { SectionSpecificationAnswer, SectionSpecificationSection } from '@/widgets/section-specification';
+import { SECTION_ROW_LIMIT } from '@/entities/section-specification';
+import { SECTION_NO_ROWS, sectionAnswer, sectionKey, sectionPagedAnswer } from '../unit/section-specification/fixtures';
 import { AppFrame } from '@/_app';
 import { accountMenuProps } from '@/_app/account-menu';
 import { UpdateBannerView, WhatsNewView } from '@/_app/release-notices';
@@ -2357,6 +2360,105 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         }),
     }),
   ),
+  /*
+   * `W63-SECTION-FORM7-01`. «Оптимизация разделов» is the whole of `/section-optimisation`, whose
+   * route-derived screen is its read pending; its own read refused, and the answer in every
+   * shape it can carry, are rendered here through the widget's parts.
+   */
+  { name: 'section-specification-section', make: () => createElement(SectionSpecificationSection) },
+  {
+    name: 'section-specification-refused',
+    make: () => createElement(SectionSpecificationSection),
+    seedClient: (client) => seedError(client, sectionKey(), apiError(503, 'dependency_unavailable')),
+  },
+  {
+    name: 'section-specification-ready',
+    make: () => createElement(SectionSpecificationAnswer, { answer: sectionAnswer(), onPage: () => undefined, onSelectProject: () => undefined }),
+  },
+  {
+    name: 'section-specification-paged',
+    make: () => createElement(SectionSpecificationAnswer, { answer: sectionPagedAnswer(), onPage: () => undefined, onSelectProject: () => undefined }),
+  },
+  {
+    name: 'section-specification-narrowed',
+    make: () =>
+      createElement(SectionSpecificationAnswer, {
+        answer: sectionAnswer({
+          project_filter: PROJECT_UID as never, excluded: [], excluded_count: 0, source_count: 4, row_count: 4,
+          projects: [sectionAnswer().projects[0]!],
+          rows: { ...sectionAnswer().rows!, offset: 0, total: 4, next_offset: null, items: sectionAnswer().rows!.items.slice(0, 4) },
+        }),
+        onPage: null,
+        onSelectProject: null,
+      }),
+  },
+  {
+    name: 'section-specification-searched-nothing',
+    make: () =>
+      createElement(SectionSpecificationAnswer, {
+        answer: sectionAnswer({
+          query: 'ёлочка',
+          rows: { offset: 0, limit: SECTION_ROW_LIMIT, total: 0, next_offset: null, items: [] },
+        }),
+        onPage: () => undefined,
+        onSelectProject: () => undefined,
+      }),
+  },
+  {
+    name: 'section-specification-no-rows',
+    make: () =>
+      createElement(SectionSpecificationAnswer, {
+        answer: sectionAnswer({ row_count: 0, rows: { offset: 0, limit: SECTION_ROW_LIMIT, total: 0, next_offset: null, items: [] } }),
+        onPage: () => undefined,
+        onSelectProject: () => undefined,
+      }),
+  },
+  {
+    name: 'section-specification-empty',
+    make: () =>
+      createElement(SectionSpecificationAnswer, {
+        answer: sectionAnswer({
+          projects: [], excluded: [], excluded_count: 0, source_count: 0, row_count: 0,
+          rows: { offset: 0, limit: SECTION_ROW_LIMIT, total: 0, next_offset: null, items: [] },
+        }),
+        onPage: () => undefined,
+        onSelectProject: () => undefined,
+      }),
+  },
+  {
+    name: 'section-specification-empty-project',
+    make: () =>
+      createElement(SectionSpecificationAnswer, {
+        answer: sectionAnswer({
+          project_filter: PROJECT_UID as never, projects: [], excluded: [], excluded_count: 0, source_count: 0, row_count: 0,
+          rows: { offset: 0, limit: SECTION_ROW_LIMIT, total: 0, next_offset: null, items: [] },
+        }),
+        onPage: null,
+        onSelectProject: null,
+      }),
+  },
+  ...(['projects', 'sources', 'rows'] as const).map((reason) => ({
+    name: `section-specification-too-large-${reason}`,
+    make: () =>
+      createElement(SectionSpecificationAnswer, {
+        answer: sectionAnswer({
+          ...SECTION_NO_ROWS,
+          state: 'section_too_large',
+          limit_reason: reason,
+          ...(reason === 'projects' ? { projects: [], excluded: [], excluded_count: 0, source_count: 0 } : {
+            projects: sectionAnswer().projects.map((item) => ({
+              ...item, price_state: 'not_read' as const, price_list: null, matching: null, row_count: 0,
+              sources: item.sources.map((source) => ({
+                ...source, state: 'not_read' as const, run_id: null, text_layer_sha256: null, row_count: null,
+                table_count: null, skipped_by_reason: null,
+              })),
+            })),
+          }),
+        }),
+        onPage: null,
+        onSelectProject: () => undefined,
+      }),
+  })),
   {
     name: 'version-classification-read-failed',
     make: () =>

@@ -71,6 +71,7 @@ __all__ = [
     "ComparisonPort",
     "AnalysisProfilePort",
     "OptimisationPort",
+    "SectionSpecificationPort",
     "SpecificationPricesPort",
     "OptimisationProposalPort",
     "UploadedDocument",
@@ -978,6 +979,30 @@ class SpecificationPricesPort(Protocol):
         self, *, project_uid: str, document_uid: str, offset: int, limit: int, user_uid: str
     ) -> models.SpecificationPrices:
         """The priced specification of the set's current AR version, or its state."""
+
+
+@runtime_checkable
+class SectionSpecificationPort(Protocol):
+    """``getSectionSpecification``. `W63-SECTION-FORM7-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives. The
+    answer is always a ``SectionSpecification``: a bound that stops it (``section_too_large``)
+    and a set without a run or a saved text are states in the answer, never an error envelope
+    and never an empty table. An unknown ``project_uid`` filter is ``404``. Nothing behind
+    this port writes.
+    """
+
+    def get_section_specification(
+        self,
+        *,
+        section_code: str,
+        project_uid: str | None,
+        query: str | None,
+        offset: int,
+        limit: int,
+        user_uid: str,
+    ) -> models.SectionSpecification:
+        """The section's combined specification of current versions, priced per project."""
 
 
 class DispatchPort(Protocol):

@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 70,
+    "path_count": 71,
     "operations": [
       [
         "POST",
@@ -402,6 +402,11 @@
         "GET",
         "/optimisation-passes/{optimisation_pass_id}/export.csv",
         "exportOptimisationProposalsCsv"
+      ],
+      [
+        "GET",
+        "/sections/{section_code}/specification",
+        "getSectionSpecification"
       ]
     ],
     "schema_names": [
@@ -633,7 +638,13 @@
       "OptimisationProposalPage",
       "DecideOptimisationProposalRequest",
       "ProposalDecisionResult",
-      "ProposalDecisionList"
+      "ProposalDecisionList",
+      "SectionSpecificationSource",
+      "SectionSpecificationProject",
+      "SectionSpecificationExcludedVersion",
+      "SectionSpecificationRow",
+      "SectionSpecificationRowPage",
+      "SectionSpecification"
     ]
   },
   "error_catalog": {

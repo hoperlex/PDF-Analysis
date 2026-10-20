@@ -329,6 +329,7 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.optimisation.proposalsOf(passId)` | `['optimisation','proposals',id]` | `W60-OPT-PROPOSALS-01` |
 | `queryKeys.optimisation.proposals(passId, decision, offset, limit)` | `['optimisation','proposals',id,{decision,offset,limit}]` | `W60-OPT-PROPOSALS-01` |
 | `queryKeys.optimisation.proposalDecisions(proposalId)` | `['optimisation','proposal-decisions',id]` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.sectionSpecification(sectionCode, {projectUid?, q?, offset?, limit?})` | `['optimisation','section-specification',sectionCode,{projectUid,q,offset,limit}]` | `W63-SECTION-FORM7-01` |
 
 `projects`, `versions`, `runs`, `findings`, `dashboard`, `account`, `users`, `registrations`,
 `releases`, `execution`, `norms`, `analysis`, `assignments`, `optimisation` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
@@ -379,6 +380,11 @@ invalidates the project's `priceLists` and — because the new revision decides 
 (`W60-OPT-MATCH-01`, «Спецификация и цены» on the same tab); `setProjectVendorList` and `setGlobalVendorList` invalidate
 the whole `vendorLists()` prefix, because a change of the general list moves every project's
 answer. None of them changes a number the dashboard reads.
+`optimisation.sectionSpecification(section, filters)` holds one page of `getSectionSpecification`
+(`W63-SECTION-FORM7-01`, «Оптимизация разделов»): the project filter, the search text and the
+offset are part of the key. It reads every project's price list, and `uploadPriceList` belongs to
+another slice, so nothing invalidates it; its query is declared with `staleTime: 0` and is asked
+again whenever the screen mounts, and «Обновить» re-reads it.
 
 `W60-OPT-PROPOSALS-01` adds «Предложения» to the same root: `optimisation.passes(uid, docUid)` holds
 `listOptimisationPasses` for one document set (each pass carries its counts by decision),

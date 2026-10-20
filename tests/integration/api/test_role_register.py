@@ -165,6 +165,8 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
         "/specification-prices",
     ),
+    # `W63-SECTION-FORM7-01`. A section's combined specification across projects (any role).
+    "getSectionSpecification": ("GET", "/sections/AR/specification"),
     "getFinding": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
     "appendDecision": ("POST", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
     "listDecisionHistory": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
@@ -235,6 +237,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "transitionAssignment": _ANY_ROLE,
     # `W60-OPT-MATCH-01`: the priced specification is a product read.
     "getSpecificationPrices": _ANY_ROLE,
+    # `W63-SECTION-FORM7-01`: a section's combined specification is a product read.
+    "getSectionSpecification": _ANY_ROLE,
     "listRunFindings": _ANY_ROLE,
     "getFinding": _ANY_ROLE,
     "listDecisionHistory": _ANY_ROLE,

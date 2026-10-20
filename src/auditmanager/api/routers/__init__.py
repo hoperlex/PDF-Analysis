@@ -1,4 +1,4 @@
-"""The eighty operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The eighty-one operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the twenty-two router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -55,6 +55,7 @@ from auditmanager.api.routers.idempotency import (
     require_idempotency_key,
 )
 from auditmanager.api.routers.analysis_profiles import build_analysis_profile_routes
+from auditmanager.api.routers.section_specification import build_section_specification_routes
 from auditmanager.api.routers.specification_prices import build_specification_price_routes
 from auditmanager.api.routers.comparison import build_comparison_routes
 from auditmanager.api.routers.dispatch import build_dispatch_routes
@@ -91,6 +92,7 @@ from auditmanager.api.routers.ports import (
     ReleasesPort,
     RunPort,
     SectionPort,
+    SectionSpecificationPort,
     SpecificationPricesPort,
     XlsxExportPort,
 )
@@ -160,6 +162,7 @@ __all__ = [
     "AnalysisProfilePort",
     "DispatchPort",
     "OptimisationPort",
+    "SectionSpecificationPort",
     "SpecificationPricesPort",
     "OptimisationProposalPort",
     "WireResponse",
@@ -216,8 +219,9 @@ def build_router(
     optimisation: OptimisationPort | None = None,
     specification_prices: SpecificationPricesPort | None = None,
     optimisation_proposals: OptimisationProposalPort | None = None,
+    section_specifications: SectionSpecificationPort | None = None,
 ) -> Router:
-    """Assemble the eighty operations, from the twenty-two router modules -- ``me``,
+    """Assemble the eighty-one operations, from the twenty-three router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
@@ -307,6 +311,9 @@ def build_router(
     # `W60-OPT-PROPOSALS-01`. The optimisation passes, their proposals and the experts'
     # decisions. Optional with a default, for the reason `blocks` gives above.
     build_optimisation_proposal_routes(router, optimisation_proposals)  # type: ignore[arg-type]
+    # `W63-SECTION-FORM7-01`. A section's combined Form-7 specification across projects,
+    # read-only. Optional with a default, for the reason `blocks` gives above.
+    build_section_specification_routes(router, section_specifications)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

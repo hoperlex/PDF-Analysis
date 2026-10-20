@@ -1055,6 +1055,10 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listOptimisationProposals": (
             "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/proposals"
         ),
+        # `W63-SECTION-FORM7-01`. Driven by its own test below
+        # (`test_section_specification_reads_the_query_parameters_it_declares`): its rows come
+        # from saved text layers across projects, which this sweep has none of.
+        "getSectionSpecification": "/sections/AR/specification",
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -1082,6 +1086,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "getSpecificationPrices": {"offset", "limit"},
         "listOptimisationPasses": {"document_uid", "limit"},
         "listOptimisationProposals": {"decision", "offset", "limit"},
+        "getSectionSpecification": {"project_uid", "q", "offset", "limit"},
     }, f"the contract's query surface moved: {declared}"
 
     accounts_and_requests = _seed_accounts_and_requests(session, shipped_router)
@@ -1209,6 +1214,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             "getSpecificationPrices",
             "listOptimisationPasses",
             "listOptimisationProposals",
+            "getSectionSpecification",
         ):
             continue  # driven by its own test below
         target = targets[operation_id]
@@ -1768,3 +1774,83 @@ def test_optimisation_proposals_read_the_query_parameters_they_declare(
     for query in ("offset=-1", "limit=0", "limit=201", "decision=accepted", "offset=x"):
         assert get(surface, f"{proposals}?{query}").status == 422, query
     assert (len(echo.passes), len(echo.proposals)) == before, "a refused request reached the port"
+
+
+def test_section_specification_reads_the_query_parameters_it_declares(
+    shipped_router: Surface,
+) -> None:
+    """`W63-SECTION-FORM7-01`: ``project_uid``, ``q``, ``offset`` and ``limit`` reach the port.
+
+    The rule of the sweep above -- supply the parameter and require the answer to change --
+    over a port that answers what it was asked: it echoes the section code, the project filter,
+    the search text and the page it received. The composition itself (membership across
+    projects, each row priced from its own project's list, totals per project, the bounds) is
+    proved against PostgreSQL and MinIO in
+    ``tests/integration/optimisation/test_section_specification.py``.
+    """
+    from auditmanager.api.routers.section_specification import build_section_specification_routes
+    from auditmanager.api.schemas import models
+
+    class _Echo:
+        def __init__(self) -> None:
+            self.asked: list[tuple[str, str | None, str | None, int, int]] = []
+
+        def get_section_specification(
+            self,
+            *,
+            section_code: str,
+            project_uid: str | None,
+            query: str | None,
+            offset: int,
+            limit: int,
+            user_uid: str,
+        ) -> models.SectionSpecification:
+            self.asked.append((section_code, project_uid, query, offset, limit))
+            return models.SectionSpecification.model_validate({
+                "section_code": section_code, "state": "ready", "limit_reason": None,
+                "project_filter": project_uid, "query": query,
+                "extraction_algorithm": "specification-text-v1",
+                "match_algorithm": "price-match-v1",
+                "projects": [], "excluded": [], "excluded_count": 0, "source_count": 0,
+                "row_count": 0,
+                "rows": {"offset": offset, "limit": limit, "total": 0, "next_offset": None, "items": []},
+            })
+
+    echo = _Echo()
+    router = Router(credentials=shipped_router.router.credentials)
+    build_section_specification_routes(router, echo)  # type: ignore[arg-type]
+    surface = Surface(router)
+    project = "prj_01M2545JSD15ETSNNV904X991F"
+    inert: list[str] = []
+
+    bare = ok(get(surface, "/sections/KJ/specification"))
+    if (bare["section_code"], bare["project_filter"], bare["query"]) != ("KJ", None, None):
+        inert.append("defaults")
+    if (bare["rows"]["offset"], bare["rows"]["limit"]) != (0, 50):
+        inert.append("paging defaults")
+    filtered = ok(get(surface, f"/sections/AR/specification?project_uid={project}&q=%D0%B4%D0%B2%D0%B5%D1%80%D1%8C&offset=120&limit=7"))
+    if filtered["project_filter"] != project:
+        inert.append("project_uid")
+    if filtered["query"] != "дверь":
+        inert.append("q")
+    if (filtered["rows"]["offset"], filtered["rows"]["limit"]) != (120, 7):
+        inert.append("offset/limit")
+    empty = ok(get(surface, "/sections/AR/specification?project_uid=&q="))
+    if (empty["project_filter"], empty["query"]) != (None, None):
+        inert.append("empty values are absent")
+    assert inert == [], f"getSectionSpecification accepts and ignores: {inert}; asked {echo.asked}"
+    assert echo.asked == [
+        ("KJ", None, None, 0, 50),
+        ("AR", project, "дверь", 120, 7),
+        ("AR", None, None, 0, 50),
+    ]
+    before = len(echo.asked)
+    for query in ("offset=-1", "limit=0", "limit=201", "offset=x", "limit=x", "project_uid=prj_bad",
+                  "q=" + "д" * 201):
+        refused = get(surface, f"/sections/AR/specification?{query}")
+        assert refused.status == 422, (query, refused.status, refused.body)
+    for code in ("XX", "ar", "АР"):
+        unknown = get(surface, f"/sections/{code}/specification")
+        assert unknown.status == 404, (code, unknown.status, unknown.body)
+        assert json.loads(unknown.body)["details"] == {"aggregate_type": "SectionSpecification"}
+    assert len(echo.asked) == before, "a refused request reached the port"

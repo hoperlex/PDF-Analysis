@@ -11,6 +11,8 @@
  * operations `W55A-SEAL-01` sealed, and renders their refusal before a snapshot is current.
  * `W59-ANALYSIS-SETTINGS-01` graduates `/analysis-settings`: `listAnalysisProfiles` answers
  * the text-profile registry the server routes runs through, and the screen lists it.
+ * `W63-SECTION-FORM7-01` graduates `/section-optimisation`: `getSectionSpecification` answers a
+ * section's combined Form-7 specification across projects, and the screen shows it.
  *
  * `OWNER_RULINGS_2026-09-17.md` §3.11 says preparation is four things and no more: a
  * place in the navigation, a `RoutePlaceholder` carrying a real `promise`, the data shape
@@ -64,10 +66,8 @@ vi.mock('next/headers', () => ({
 }));
 
 import { AppFrame } from '@/_app';
-import { SectionOptimisationPage } from '@/_pages/section-optimisation';
 import { RoutePlaceholder } from '@/shared/ui';
 import { forgetEverySession, openSession } from '@/app/bff/session/store';
-import SectionOptimisationRoute from '@/app/section-optimisation/page';
 import { newClient, renderScreen } from '../unit/screens/harness';
 
 // ------------------------------------------------------------------ rendering machinery
@@ -103,16 +103,23 @@ export function visibleText(markup: string): string[] {
  * Prepared sections only. Built execution pages are covered by the route-derived
  * screen census, not by placeholder promises.
  */
-const SECTIONS = [
-  {
-    name: 'section-optimisation',
-    route: '/section-optimisation',
-    title: 'Оптимизация разделов',
-    screen: SectionOptimisationPage,
-    routeFile: SectionOptimisationRoute,
-    stub: true,
-  },
-] as const;
+/** One prepared section: the screen, the route file that serves it and what it promises. */
+interface PreparedSection {
+  readonly name: string;
+  readonly route: string;
+  readonly title: string;
+  readonly screen: () => ReactElement | null;
+  readonly routeFile: (props: { searchParams: Promise<Record<string, never>> }) => Promise<ReactElement>;
+  readonly stub: boolean;
+}
+
+/**
+ * **No stub is left.** `/section-optimisation` was the last (`W63-SECTION-FORM7-01` built it
+ * over `getSectionSpecification`) and `/optimisation` stopped being a screen when the project's
+ * «Оптимизация» tab took its place. The rules below stay, each shown to fail against a broken
+ * input by its `can fail` case, so a stub added later is held to them by adding its entry here.
+ */
+const SECTIONS: readonly PreparedSection[] = [];
 
 /**
  * The generic sentence the component falls back to, taken from the component itself.

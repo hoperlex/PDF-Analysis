@@ -88,6 +88,8 @@ PORT_FOR_ARGUMENT = {
     "specification_prices": "SpecificationPricesPort",
     # `W60-OPT-PROPOSALS-01`.
     "optimisation_proposals": "OptimisationProposalPort",
+    # `W63-SECTION-FORM7-01`.
+    "section_specifications": "SectionSpecificationPort",
 }
 
 

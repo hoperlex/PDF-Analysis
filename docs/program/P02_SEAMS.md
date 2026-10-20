@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Eighty operations, sealed. `A5` generates the typed client from this document; `B6`
+Eighty-one operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -903,6 +903,15 @@ decision and never changes an earlier one; `exportOptimisationProposalsCsv` is t
 formula-escaped CSV of one pass. A proposal is a separate entity beside findings: no operation
 here reads or changes a finding, and a saving is stated only where a price-list position and a
 numeric quantity state it. Migration `0027_optimisation_proposals` stores them.
+`W63-SECTION-FORM7-01` added `getSectionSpecification` on 2026-10-20: «Оптимизация разделов»,
+the Form-7 rows of every project whose document set's current version an expert confirmed in
+a section, each row priced from its own project's current price list. The section code is a
+filter, not an identity: every row names its project, set, version, page, sheet and line span,
+rows are never merged across projects, totals exist per project and currency only and there
+is no section total; a current version nobody classified is listed as excluded, one confirmed
+in another section never appears; a bound is a `200` with `state: section_too_large`, a
+section code outside the fifteen and an unknown `project_uid` filter are `404`. Read-only,
+any one role.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -1000,6 +1009,7 @@ could.
 | `decideOptimisationProposal` | `POST /optimisation-proposals/{optimisation_proposal_id}/decisions` |
 | `listProposalDecisions` | `GET /optimisation-proposals/{optimisation_proposal_id}/decisions` |
 | `exportOptimisationProposalsCsv` | `GET /optimisation-passes/{optimisation_pass_id}/export.csv` |
+| `getSectionSpecification` | `GET /sections/{section_code}/specification` |
 
 Rules that hold across the whole surface:
 

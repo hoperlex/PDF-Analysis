@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 b8436f965becf99d5fcda4466b9b7636babebc72aa4b93de9308af5be111fa92
+ *   sha256 8894201e289133bae89c844d0861bdfb0688f5749eb27cd39e1fc1d3a1ee7a5b
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'b8436f965becf99d5fcda4466b9b7636babebc72aa4b93de9308af5be111fa92';
+export const CONTRACT_DIGEST = '8894201e289133bae89c844d0861bdfb0688f5749eb27cd39e1fc1d3a1ee7a5b';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -197,6 +197,12 @@ export const SCHEMA_NAMES = [
   'SectionDocumentCount',
   'SectionReview',
   'SectionReviewOption',
+  'SectionSpecification',
+  'SectionSpecificationExcludedVersion',
+  'SectionSpecificationProject',
+  'SectionSpecificationRow',
+  'SectionSpecificationRowPage',
+  'SectionSpecificationSource',
   'SectionSuggestion',
   'SectionVendorList',
   'SetCurrentNormSnapshotRequest',
@@ -2036,6 +2042,133 @@ export type SectionReviewOption = {
   name: string;
   section_code: ProjectSection;
   suggestion: SectionSuggestion | null;
+};
+
+/**
+ * The combined Form-7 specification of one section, project by project.
+ *
+ * ``state`` is ``ready`` or ``section_too_large`` with ``limit_reason`` naming the bound that
+ * stopped it (``projects`` scanned, member ``sources`` read, ``rows`` held); then the
+ * membership is still listed with every set ``not_read`` and ``rows`` is ``null`` -- narrowing
+ * to one project (``project_filter``) is the way in. ``excluded`` lists the current versions
+ * nobody classified (the first 200; ``excluded_count`` is complete). ``row_count`` counts
+ * every row in scope and ``rows.total`` the rows the text search keeps. There is no section
+ * total: the totals live in each project's ``matching``.
+ */
+export type SectionSpecification = {
+  excluded: Array<SectionSpecificationExcludedVersion>;
+  excluded_count: number;
+  extraction_algorithm: "specification-text-v1";
+  limit_reason: "projects" | "sources" | "rows" | null;
+  match_algorithm: "price-match-v1";
+  project_filter: ProjectUid | null;
+  projects: Array<SectionSpecificationProject>;
+  query: string | null;
+  row_count: number;
+  rows: SectionSpecificationRowPage | null;
+  section_code: ProjectSection;
+  source_count: number;
+  state: "ready" | "section_too_large";
+};
+
+/** A current version that cannot be placed in a section yet: nobody classified it. */
+export type SectionSpecificationExcludedVersion = {
+  display_title: string;
+  document_uid: DocumentUid;
+  project_name: string;
+  project_uid: ProjectUid;
+  reason: "version_unclassified";
+  version_ordinal: number;
+  version_uid: VersionUid;
+};
+
+/**
+ * One project with member sets: its price list, its sets and its own totals.
+ *
+ * ``price_state`` is ``priced`` (the current price-list revision was read), ``price_list_missing``
+ * (none uploaded: the rows are served without any match and no figure) or ``not_read`` (over a
+ * bound). ``matching`` covers this project's rows only and is ``null`` unless ``priced``; its
+ * totals are per currency and never mixed with another project's.
+ */
+export type SectionSpecificationProject = {
+  matching: SpecificationMatching | null;
+  name: string;
+  price_list: SpecificationPriceListRef | null;
+  price_state: "priced" | "price_list_missing" | "not_read";
+  project_uid: ProjectUid;
+  row_count: number;
+  sources: Array<SectionSpecificationSource>;
+};
+
+/**
+ * One Form-7 row with its full address and, where the project has a price list, its match.
+ *
+ * ``price_status`` is the match (``matched``, ``ambiguous``, ``unmatched``) or
+ * ``price_list_missing`` when the row's project has no price list: then every match field is
+ * empty and no price or amount exists. ``amount`` only when the row counts in its project's
+ * total for its currency.
+ */
+export type SectionSpecificationRow = {
+  amount: string | null;
+  basis: "code" | "mark" | "name" | null;
+  candidate_count: number;
+  candidate_position_ids: Array<PriceListPositionId>;
+  document_uid: DocumentUid;
+  excluded_reason: "no_position" | "unit_mismatch" | "row_unit_missing" | "ambiguous" | "quantity_not_numeric" | null;
+  group: string | null;
+  line_end: number;
+  line_start: number;
+  mass_text: string | null;
+  name: string;
+  note: string | null;
+  page_number: number;
+  position: string | null;
+  price_position: SpecificationPricePosition | null;
+  price_status: "matched" | "ambiguous" | "unmatched" | "price_list_missing";
+  project_uid: ProjectUid;
+  quantity: string | null;
+  quantity_issue: "not_numeric" | "ambiguous" | null;
+  quantity_text: string | null;
+  reason: "no_position" | "unit_mismatch" | "row_unit_missing" | "several_positions" | null;
+  row_id: string;
+  sheet_label: string | null;
+  table_ordinal: number;
+  unit: "шт" | "м" | "м2" | "м3" | "кг" | "т" | "компл" | "п.м" | null;
+  unit_text: string | null;
+  version_uid: VersionUid;
+};
+
+/** One page of the rows that survive the text search; the counts cover every row. */
+export type SectionSpecificationRowPage = {
+  items: Array<SectionSpecificationRow>;
+  limit: number;
+  next_offset: number | null;
+  offset: number;
+  total: number;
+};
+
+/**
+ * One document set whose current version is confirmed in the section, and how far it read.
+ *
+ * ``state`` is ``ready`` when the saved text was read and the rows extracted;
+ * ``analysis_missing`` (no published run) and ``text_unavailable`` (a run without a saved
+ * text layer) name what is missing; ``specification_too_large`` is the extractor's own row
+ * bound; ``not_read`` is a set the answer did not read because it is over a bound
+ * (``SectionSpecification.limit_reason``). The extraction facts are ``null`` until read.
+ */
+export type SectionSpecificationSource = {
+  display_title: string;
+  document_uid: DocumentUid;
+  page_count: number;
+  project_stage: ProjectStage;
+  row_count: number | null;
+  run_id: RunId | null;
+  skipped_by_reason: SpecificationSkipCounts | null;
+  state: "ready" | "analysis_missing" | "text_unavailable" | "specification_too_large" | "not_read";
+  table_count: number | null;
+  text_layer_sha256: Sha256 | null;
+  version_ordinal: number;
+  version_uid: VersionUid;
 };
 
 /** Display evidence for one section: never a confirmation and never a route. */

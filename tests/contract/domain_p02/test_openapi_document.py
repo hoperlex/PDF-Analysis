@@ -165,6 +165,9 @@ REQUIRED_OPERATIONS = {
     "decideOptimisationProposal",
     "listProposalDecisions",
     "exportOptimisationProposalsCsv",
+    # `W63-SECTION-FORM7-01`. A section's combined Form-7 specification across projects,
+    # read-only, for «Оптимизация разделов».
+    "getSectionSpecification",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`

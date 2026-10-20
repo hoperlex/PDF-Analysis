@@ -47,6 +47,7 @@ import type {
   OptimisationProposalId,
   ProposalDecisionState,
   FindingUid,
+  ProjectSection,
   ProjectUid,
   RegistrationStatus,
   RunId,
@@ -116,6 +117,14 @@ export interface UserListFilters {
 export interface RegistrationListFilters {
   readonly status?: RegistrationStatus;
   readonly cursor?: string;
+  readonly limit?: number;
+}
+
+/** Filters that make a page of `getSectionSpecification` a distinct cache entry. */
+export interface SectionSpecificationFilters {
+  readonly projectUid?: ProjectUid | null;
+  readonly q?: string | null;
+  readonly offset?: number;
   readonly limit?: number;
 }
 
@@ -189,6 +198,28 @@ export const queryKeys = {
     ) => ['optimisation', 'proposals', passId, { decision, offset, limit }] as const,
     proposalDecisions: (proposalId: OptimisationProposalId) =>
       ['optimisation', 'proposal-decisions', proposalId] as const,
+    /**
+     * One page of `getSectionSpecification` (`W63-SECTION-FORM7-01`): a section's combined
+     * Form-7 specification across projects. The section is a filter, the project filter and
+     * the search text are part of the answer, so each is part of the key. Any project's
+     * price list decides prices in it, and the upload command belongs to another slice, so the
+     * read is never served from a cache: `staleTime: 0` re-reads it on every mount.
+     */
+    sectionSpecification: (
+      sectionCode: ProjectSection,
+      filter: SectionSpecificationFilters = {},
+    ) =>
+      [
+        'optimisation',
+        'section-specification',
+        sectionCode,
+        {
+          projectUid: filter.projectUid ?? null,
+          q: filter.q ?? null,
+          offset: filter.offset ?? 0,
+          limit: filter.limit ?? null,
+        },
+      ] as const,
   },
   /**
    * «Настройки анализа» (`W59-ANALYSIS-SETTINGS-01`): `listAnalysisProfiles`, the text-profile

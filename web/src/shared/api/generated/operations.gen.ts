@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 b8436f965becf99d5fcda4466b9b7636babebc72aa4b93de9308af5be111fa92
+ *   sha256 8894201e289133bae89c844d0861bdfb0688f5749eb27cd39e1fc1d3a1ee7a5b
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -98,6 +98,7 @@ import type {
   RunStatus,
   RunStatusPage,
   SectionReview,
+  SectionSpecification,
   SectionVendorList,
   SetCurrentNormSnapshotRequest,
   SetExecutionPausedRequest,
@@ -150,6 +151,7 @@ export const OPERATION_IDS = [
   'getProductVersion',
   'getRunNormVerification',
   'getRunStatus',
+  'getSectionSpecification',
   'getSpecificationPrices',
   'getUser',
   'getVersionBlocks',
@@ -807,6 +809,39 @@ export type GetRunStatusInput = {
 
 /** Success body of `getRunStatus` (`application/json`, HTTP 200). */
 export type GetRunStatusResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
+// getSectionSpecification - GET /sections/{section_code}/specification
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Section Specification
+ *
+ * «Оптимизация разделов»: the Form-7 rows of every project whose document set's current version an expert confirmed in the section, each row priced from its own project's current price list as `matched`, `ambiguous` or `unmatched` with its reason (or `price_list_missing` when the project has none). The section code is a filter, not an identity: every row carries its project, document set, version, page, sheet and line span, rows are never merged across projects, and totals exist per project and per currency only -- there is no section total. A current version nobody classified is listed in `excluded`; one confirmed in another section never appears. `project_uid` narrows the answer to one project (an unknown one is `404`); `q` keeps the rows whose own text contains it and never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set without a published run or a saved text layer is its own `state`. Over a bound (projects scanned, member sets read, rows held) the answer is `200` with `state: section_too_large`, the bound in `limit_reason`, the membership listed and no rows; narrow to one project. A section code outside the fifteen is `404`. Nothing is written. Any one role, `role:admin|expert`.
+ */
+export type GetSectionSpecificationInput = {
+  /** Path parameters, substituted into `/sections/{section_code}/specification`. */
+  path: {
+    section_code: ProjectSection;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Specification rows per answer. */
+    limit?: number;
+    /** Position in the list of rows that survive the search. */
+    offset?: number;
+    project_uid?: ProjectUid;
+    /** Text a row's position, description, group, unit or note contains, ignoring case, `ё` and runs of spaces. Narrows the rows only, never a project's totals. */
+    q?: string;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getSectionSpecification` (`application/json`, HTTP 200). */
+export type GetSectionSpecificationResult = SectionSpecification;
 
 // ------------------------------------------------------------------------------------
 // getSpecificationPrices - GET /projects/{project_uid}/documents/{document_uid}/specification-prices
@@ -2652,6 +2687,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['runs'],
+  },
+  getSectionSpecification: {
+    operationId: 'getSectionSpecification',
+    method: 'GET',
+    path: '/sections/{section_code}/specification',
+    pathParams: ['section_code'],
+    queryParams: ['limit', 'offset', 'project_uid', 'q'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
   },
   getSpecificationPrices: {
     operationId: 'getSpecificationPrices',

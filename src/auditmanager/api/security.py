@@ -367,6 +367,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listOptimisationProposals": _ANY_ROLE,
         "listProposalDecisions": _ANY_ROLE,
         "exportOptimisationProposalsCsv": _ANY_ROLE,
+        # `W63-SECTION-FORM7-01`. A read of current versions' rows across projects.
+        "getSectionSpecification": _ANY_ROLE,
         # The product version and release notes: any complete account, roles or none
         # (R-80), so a role-less person can still see what the product is.
         "getProductVersion": _ANY_COMPLETE_ACCOUNT,

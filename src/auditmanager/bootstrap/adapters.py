@@ -3040,6 +3040,53 @@ class _SpecificationTextReader:
         return SavedPageText(text.run_id, text.text_layer_sha256, dict(text.pages))
 
 
+def _price_list_ref_view(revision: Any, position_count: int | None) -> dict[str, Any]:
+    """The price-list revision a row was matched against, as ``SpecificationPriceListRef``."""
+    return {
+        "price_list_id": revision.price_list_id,
+        "revision_number": revision.revision_number,
+        "source_filename": revision.source_filename,
+        "uploaded_at": revision.uploaded_at,
+        "default_currency": revision.default_currency,
+        "position_count": position_count,
+    }
+
+
+def _price_position_view(position: Any) -> dict[str, Any]:
+    """The one position a row is matched to, as ``SpecificationPricePosition``."""
+    from auditmanager.optimisation.public import canonical_amount
+
+    return {
+        "price_list_position_id": position.price_list_position_id,
+        "row_number": position.row_number,
+        "code": position.code,
+        "name": position.name,
+        "mark": position.mark,
+        "unit": position.unit,
+        "unit_price": canonical_amount(position.unit_price),
+        "currency": position.currency,
+        "vendor": position.vendor,
+    }
+
+
+def _matching_view(
+    algorithm: str, status_counts: Any, totals: Any, excluded_by_reason: Any
+) -> dict[str, Any]:
+    """Counts, per-currency totals and exclusions as ``SpecificationMatching`` (zeros written)."""
+    from auditmanager.optimisation.public import EXCLUSION_REASONS, canonical_amount
+
+    return {
+        "algorithm": algorithm,
+        "counts": dict(status_counts),
+        "totals": [
+            {"currency": total.currency, "amount": canonical_amount(total.amount),
+             "row_count": total.row_count}
+            for total in totals
+        ],
+        "excluded": {reason: excluded_by_reason.get(reason, 0) for reason in EXCLUSION_REASONS},
+    }
+
+
 def _specification_prices_view(result: Any) -> dict[str, Any]:
     """The optimisation read model as the frozen ``SpecificationPrices`` shape.
 
@@ -3047,26 +3094,16 @@ def _specification_prices_view(result: Any) -> dict[str, Any]:
     ``canonical_amount`` -- never a float, never rounded. The skip and exclusion counts are
     written out for every declared reason, zero included.
     """
-    from auditmanager.optimisation.public import (
-        EXCLUSION_REASONS,
-        SPECIFICATION_SKIP_REASONS,
-        canonical_amount,
-    )
+    from auditmanager.optimisation.public import SPECIFICATION_SKIP_REASONS, canonical_amount
 
     def decimal(value: Any) -> str | None:
         return None if value is None else canonical_amount(value)
 
-    price_list = None
-    if result.price_list is not None:
-        revision = result.price_list
-        price_list = {
-            "price_list_id": revision.price_list_id,
-            "revision_number": revision.revision_number,
-            "source_filename": revision.source_filename,
-            "uploaded_at": revision.uploaded_at,
-            "default_currency": revision.default_currency,
-            "position_count": result.position_count,
-        }
+    price_list = (
+        None
+        if result.price_list is None
+        else _price_list_ref_view(result.price_list, result.position_count)
+    )
     extraction = None
     if result.extraction is not None:
         found = result.extraction
@@ -3096,18 +3133,9 @@ def _specification_prices_view(result: Any) -> dict[str, Any]:
     matching = None
     if result.matching is not None:
         outcome = result.matching
-        matching = {
-            "algorithm": outcome.algorithm,
-            "counts": dict(outcome.status_counts),
-            "totals": [
-                {"currency": total.currency, "amount": canonical_amount(total.amount),
-                 "row_count": total.row_count}
-                for total in outcome.totals
-            ],
-            "excluded": {
-                reason: outcome.excluded_by_reason.get(reason, 0) for reason in EXCLUSION_REASONS
-            },
-        }
+        matching = _matching_view(
+            outcome.algorithm, outcome.status_counts, outcome.totals, outcome.excluded_by_reason
+        )
     rows = None
     if result.rows is not None:
         page = result.rows
@@ -3134,17 +3162,7 @@ def _specification_prices_view(result: Any) -> dict[str, Any]:
                 "status": match.status,
                 "reason": match.reason,
                 "basis": match.basis,
-                "price_position": None if position is None else {
-                    "price_list_position_id": position.price_list_position_id,
-                    "row_number": position.row_number,
-                    "code": position.code,
-                    "name": position.name,
-                    "mark": position.mark,
-                    "unit": position.unit,
-                    "unit_price": canonical_amount(position.unit_price),
-                    "currency": position.currency,
-                    "vendor": position.vendor,
-                },
+                "price_position": None if position is None else _price_position_view(position),
                 "candidate_position_ids": list(match.candidate_ids),
                 "candidate_count": match.candidate_count,
                 "amount": decimal(match.amount),
@@ -3171,6 +3189,174 @@ def _specification_prices_view(result: Any) -> dict[str, Any]:
         "text_layer_sha256": result.text_layer_sha256,
         "extraction": extraction,
         "matching": matching,
+        "rows": rows,
+    }
+
+
+# --- the section's combined specification (`W63-SECTION-FORM7-01`) --------------------------
+
+
+class SectionSpecificationAdapter(_SessionHolder):
+    """``getSectionSpecification`` (`W63-SECTION-FORM7-01`).
+
+    The optimisation context owns the rule (``optimisation.public.read_section_specification``:
+    membership by the current version's confirmed section, each project's own price list, the
+    newest published run's saved text, extraction, matching, the per-project totals, the
+    bounds); this adapter owns only what it needs from outside the context -- the saved-text
+    port, which is :class:`_SpecificationTextReader` exactly as ``getSpecificationPrices``
+    uses it -- and the mapping into the frozen ``SectionSpecification``. One session holds
+    every read and the actor's role set is read from the account inside it.
+    """
+
+    def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any) -> None:
+        super().__init__(session_factory)
+        self._reader = _SpecificationTextReader(blob_store)
+
+    def get_section_specification(
+        self,
+        *,
+        section_code: str,
+        project_uid: str | None,
+        query: str | None,
+        offset: int,
+        limit: int,
+        user_uid: str,
+    ) -> models.SectionSpecification:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import read_section_specification
+
+        def work(session: Session) -> Any:
+            return read_section_specification(
+                session,
+                section_code=section_code,
+                actor_roles=AccountRepository().roles_of(session, user_uid),
+                reader=self._reader,
+                project_uid=project_uid,
+                query=query,
+                offset=offset,
+                limit=limit,
+            )
+
+        return models.SectionSpecification.model_validate(
+            _section_specification_view(self._read(work))
+        )
+
+
+def _section_specification_view(result: Any) -> dict[str, Any]:
+    """The optimisation read model as the frozen ``SectionSpecification`` shape.
+
+    The price-list reference, the price position, the match counts, the per-currency totals
+    and the exclusion counts are the priced specification's own mappings; every decimal is its
+    exact plain text through ``canonical_amount``, never a float and never rounded. A project
+    has a ``matching`` only when its price list was read, and a source has its extraction facts
+    only when its text was read.
+    """
+    from auditmanager.optimisation.public import SPECIFICATION_SKIP_REASONS, canonical_amount
+
+    def decimal(value: Any) -> str | None:
+        return None if value is None else canonical_amount(value)
+
+    def source(item: Any) -> dict[str, Any]:
+        return {
+            "document_uid": item.document_uid,
+            "display_title": item.display_title,
+            "version_uid": item.version_uid,
+            "version_ordinal": item.version_ordinal,
+            "page_count": item.page_count,
+            "project_stage": item.project_stage,
+            "state": item.state,
+            "run_id": item.run_id,
+            "text_layer_sha256": item.text_layer_sha256,
+            "row_count": item.row_count,
+            "table_count": item.table_count,
+            "skipped_by_reason": None if item.table_count is None else {
+                reason: item.skipped_by_reason.get(reason, 0)
+                for reason in SPECIFICATION_SKIP_REASONS
+            },
+        }
+
+    def project(item: Any) -> dict[str, Any]:
+        return {
+            "project_uid": item.project_uid,
+            "name": item.project_name,
+            "price_state": item.price_state,
+            "price_list": None if item.price_list is None else _price_list_ref_view(
+                item.price_list, item.position_count
+            ),
+            "sources": [source(entry) for entry in item.sources],
+            "row_count": item.row_count,
+            "matching": None if item.price_state != "priced" else _matching_view(
+                result.match_algorithm, item.status_counts, item.totals, item.excluded_by_reason
+            ),
+        }
+
+    def row(item: Any) -> dict[str, Any]:
+        found, match = item.row, item.match
+        position = None if match is None else match.position
+        return {
+            "project_uid": item.project_uid,
+            "document_uid": item.document_uid,
+            "version_uid": item.version_uid,
+            "row_id": found.row_id,
+            "page_number": found.page_number,
+            "sheet_label": found.sheet_label,
+            "line_start": found.line_start,
+            "line_end": found.line_end,
+            "table_ordinal": found.table_ordinal,
+            "group": found.group,
+            "position": found.position,
+            "name": found.name,
+            "unit_text": found.unit_text,
+            "unit": found.unit,
+            "quantity_text": found.quantity_text,
+            "quantity": decimal(found.quantity),
+            "quantity_issue": found.quantity_issue,
+            "mass_text": found.mass_text,
+            "note": found.note,
+            "price_status": item.price_status,
+            "reason": None if match is None else match.reason,
+            "basis": None if match is None else match.basis,
+            "price_position": None if position is None else _price_position_view(position),
+            "candidate_position_ids": [] if match is None else list(match.candidate_ids),
+            "candidate_count": 0 if match is None else match.candidate_count,
+            "amount": None if match is None else decimal(match.amount),
+            "excluded_reason": None if match is None else match.excluded_reason,
+        }
+
+    rows = None
+    if result.rows is not None:
+        page = result.rows
+        rows = {
+            "offset": page.offset,
+            "limit": page.limit,
+            "total": page.total,
+            "next_offset": page.next_offset,
+            "items": [row(item) for item in page.items],
+        }
+    return {
+        "section_code": result.section_code,
+        "state": result.state,
+        "limit_reason": result.limit_reason,
+        "project_filter": result.project_filter,
+        "query": result.query,
+        "extraction_algorithm": result.extraction_algorithm,
+        "match_algorithm": result.match_algorithm,
+        "projects": [project(item) for item in result.projects],
+        "excluded": [
+            {
+                "project_uid": item.project_uid,
+                "project_name": item.project_name,
+                "document_uid": item.document_uid,
+                "display_title": item.display_title,
+                "version_uid": item.version_uid,
+                "version_ordinal": item.version_ordinal,
+                "reason": item.reason,
+            }
+            for item in result.excluded
+        ],
+        "excluded_count": result.excluded_count,
+        "source_count": result.source_count,
+        "row_count": result.row_count,
         "rows": rows,
     }
 
