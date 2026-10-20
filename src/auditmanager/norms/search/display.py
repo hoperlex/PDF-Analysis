@@ -1,11 +1,15 @@
-"""The catalogue's display name of a norm document, derived from its stored slug.
+"""The display name of a norm document, derived from its stored slug: one derivation for the
+catalogue, ``searchNorms`` and ``getNormDocument``.
 
-`W57B-NORMS-CATALOGUE-XLSX-01`. The corpus names a document only by its source file name:
-``norm_document.slug`` is that name without ``.pdf`` and ``title`` is the name itself. The
-exporter that wrote those names replaced every space, dot, slash and asterisk with ``_``,
-wrote ``. `` as ``__`` and cut the name at about sixty characters, so
-:func:`auditmanager.norms.search.designation_of` -- the slug before the first ``__``,
-underscores as spaces -- shows ``Приказ МЧС России от 24 04 2013 N 288 (ред`` for
+`W57B-NORMS-CATALOGUE-XLSX-01` wrote the derivation for the catalogue;
+`NORMS-DISPLAY-DESIGNATION-01` moved it here, next to :func:`.query.designation_of`, so that
+the search and the document page (which sit below the catalogue) show the same readable
+designation without a second copy of the rules. The corpus names a document only by its
+source file name: ``norm_document.slug`` is that name without ``.pdf`` and ``title`` is the
+name itself. The exporter that wrote those names replaced every space, dot, slash and
+asterisk with ``_``, wrote ``. `` as ``__`` and cut the name at about sixty characters, so
+:func:`.query.designation_of` -- the slug before the first ``__``, underscores as spaces --
+shows ``Приказ МЧС России от 24 04 2013 N 288 (ред`` for
 ``Приказ_МЧС_России_от_24_04_2013_N_288_(ред__от_27_06_2023)``: the ``__`` that split it was
 the abbreviation dot of ``ред.``, not a separator.
 
@@ -17,20 +21,28 @@ the abbreviation dot of ``ред.``, not a separator.
 2. **Abbreviation dots.** A ``__`` inside parentheses is ``. `` (``(ред__от`` is ``(ред. от``);
    in the title every ``__`` is ``. ``.
 3. **Dates.** ``от_DD_MM_YYYY`` with a real day and month is ``от DD.MM.YYYY``.
-4. **Designation numbers.** After a document-type word of
-   :data:`auditmanager.norms.search.DESIGNATION_TYPES` (and up to four-letter words such as
-   ``Р``, ``IEC``), the underscores *between* numeric tokens were dots:
-   ``СП_54_13330_2022`` is ``СП 54.13330.2022``, ``ГОСТ_1759_5-87`` is ``ГОСТ 1759.5-87``.
-   Text inside parentheses (``(EN_136_1998)``, where the lost character may have been a
-   colon) is not touched.
+4. **Designation numbers.** After a document-type word of :data:`.query.DESIGNATION_TYPES`
+   (and up to four-letter words such as ``Р``, ``IEC``), the underscores *between* numeric
+   tokens were dots: ``СП_54_13330_2022`` is ``СП 54.13330.2022``, ``ГОСТ_1759_5-87`` is
+   ``ГОСТ 1759.5-87``. Text inside parentheses (``(EN_136_1998)``, where the lost character
+   may have been a colon) is not touched.
 
 A designation left with an unclosed parenthesis is repaired only when the parenthesis is an
 edition note cut short: a complete ``(ред. от DD.MM.YYYY`` gets its ``)``, a shorter one
 (``(ред``, ``(ред. от 2``) becomes ``(ред. …)``, and ``(с изм.`` likewise. Anything else is
 **not derivable**, and the designation falls back to the stored projection verbatim
-(:func:`auditmanager.norms.search.designation_of`), so a row is either fully derived or shown
-exactly as the document page shows it. Nothing here reads a row, writes one or guesses a
-character the slug does not carry; the same slug always gives the same name.
+(:func:`.query.designation_of`), so a row is either fully derived or shown exactly as the
+document page used to show it. Nothing here reads a row, writes one or guesses a character
+the slug does not carry; the same slug always gives the same name.
+
+**The reader's designation.** :func:`reader_designation` is what ``searchNorms`` and
+``getNormDocument`` show: the derived designation, except that a derivation longer than
+:data:`DESIGNATION_MAX_CHARACTERS` -- the ``maxLength`` of ``NormSearchHit.designation`` and
+``NormDocument.designation`` -- is replaced by the stored projection, so the answer always
+validates against the sealed schema and no reseal is needed. That bound is not guessed:
+``tests/unit/norms/test_reader_designation.py`` reads it from the contract. Persisted
+``NormCitation.designation`` is a different value from a different path and is never read or
+written here.
 """
 
 from __future__ import annotations
@@ -39,9 +51,20 @@ import re
 from dataclasses import dataclass
 from typing import Final
 
-from ..search import DESIGNATION_TYPES, designation_of, fold
+from .query import DESIGNATION_TYPES, designation_of, fold
 
-__all__ = ["DisplayName", "display_name"]
+__all__ = [
+    "DESIGNATION_MAX_CHARACTERS",
+    "DisplayName",
+    "display_name",
+    "reader_designation",
+]
+
+#: The ``maxLength`` of ``NormSearchHit.designation`` and ``NormDocument.designation`` in
+#: ``contracts/api/v1/openapi.json``; restated here like ``MAX_QUERY_CHARACTERS`` and checked
+#: against the contract by ``tests/unit/norms/test_reader_designation.py``.
+DESIGNATION_MAX_CHARACTERS: Final[int] = 500
+
 
 #: The separator the exporter wrote for ``. ``.
 _DOT_SPACE: Final[str] = "__"
@@ -62,7 +85,8 @@ _WHITESPACE: Final[re.Pattern[str]] = re.compile(r"\s+")
 
 @dataclass(frozen=True, slots=True)
 class DisplayName:
-    """What the catalogue shows for one document; never stored, never an identity."""
+    """What the catalogue (and, through :func:`reader_designation`, the search) shows for one
+    document; never stored, never an identity."""
 
     designation: str
     #: The rest of the file name, or ``None`` when the name carries nothing after the
@@ -84,6 +108,20 @@ def display_name(slug: str) -> DisplayName:
     return DisplayName(
         designation=designation, title=title or None, derived=designation != stored
     )
+
+
+def reader_designation(slug: str) -> str:
+    """The designation ``searchNorms`` and ``getNormDocument`` show for ``slug``.
+
+    The derived designation of :func:`display_name`; when that is longer than
+    :data:`DESIGNATION_MAX_CHARACTERS` the stored projection
+    (:func:`.query.designation_of`) instead -- this one rule, applied the same way to every
+    document, is the whole fallback.
+    """
+    derived = display_name(slug).designation
+    if len(derived) > DESIGNATION_MAX_CHARACTERS:
+        return designation_of(slug)
+    return derived
 
 
 # --- rule 1: where the designation ends ----------------------------------------------------

@@ -62,6 +62,7 @@ from .cursor import (
     encode_snapshot_cursor,
     query_binding,
 )
+from .display import reader_designation
 from .fragment import (
     HEADLINE_OPTIONS,
     MARKERS,
@@ -69,7 +70,7 @@ from .fragment import (
     fragment_from_headline,
     plain_fragment,
 )
-from .query import ParsedQuery, designation_of, parse_query, unsearchable
+from .query import ParsedQuery, parse_query, unsearchable
 
 __all__ = [
     "DocumentView",
@@ -413,7 +414,7 @@ def _hit(row: Any, snapshot: str, parsed: ParsedQuery) -> SearchHit:
         norms_snapshot_id=snapshot,
         norm_document_id=str(row.norm_document_id),
         norm_paragraph_id=str(row.norm_paragraph_id),
-        designation=designation_of(str(row.slug)),
+        designation=reader_designation(str(row.slug)),
         title=str(row.title),
         doc_type=str(row.doc_type),
         clause_number=None if row.clause_number is None else str(row.clause_number),
@@ -475,7 +476,7 @@ def get_document(session: Session, norm_document_id: str) -> DocumentView:
     return DocumentView(
         norm_document_id=str(row.norm_document_id),
         norms_snapshot_id=str(row.norms_snapshot_id),
-        designation=designation_of(str(row.slug)),
+        designation=reader_designation(str(row.slug)),
         title=str(row.title),
         doc_type=str(row.doc_type),
         drawn_on=row.drawn_on,
