@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 56,
+    "path_count": 59,
     "operations": [
       [
         "POST",
@@ -317,6 +317,26 @@
         "GET",
         "/runs/{run_id}/export.xlsx",
         "exportRunXlsx"
+      ],
+      [
+        "POST",
+        "/assignments",
+        "createAssignment"
+      ],
+      [
+        "GET",
+        "/assignments",
+        "listAssignments"
+      ],
+      [
+        "GET",
+        "/assignments/{assignment_uid}",
+        "getAssignment"
+      ],
+      [
+        "POST",
+        "/assignments/{assignment_uid}/transitions",
+        "transitionAssignment"
       ]
     ],
     "schema_names": [
@@ -480,13 +500,23 @@
       "CarryoverSourceDecision",
       "CarryoverCandidate",
       "CarryOverDecisionRequest",
-      "CarryOverDecisionResponse"
+      "CarryOverDecisionResponse",
+      "AssignmentUid",
+      "AssignmentStatus",
+      "AssignmentEventKind",
+      "AssignmentTransitionKind",
+      "CreateAssignmentRequest",
+      "TransitionAssignmentRequest",
+      "Assignment",
+      "AssignmentEvent",
+      "AssignmentDetail",
+      "AssignmentPage"
     ]
   },
   "error_catalog": {
     "api_codes": 25,
     "stored_vocabulary": 23
   },
-  "migration_head": "0024_version_classification",
+  "migration_head": "0025_work_assignments",
   "contract_version": "1.0.0-draft.1"
 }

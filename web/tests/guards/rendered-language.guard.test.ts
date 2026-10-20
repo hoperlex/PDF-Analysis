@@ -73,11 +73,14 @@ import type {
   StageId,
   StageStatus,
   VersionClassification as VersionClassificationRecord,
+  Assignment,
+  AssignmentDetail,
   VersionComparison,
 } from '@/shared/api';
 import { RUN_STATE_VALUES } from '@/shared/api';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { USER_PAGE_LIMIT } from '@/entities/user';
+import { ASSIGNMENT_PAGE_LIMIT } from '@/entities/assignment';
 import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import {
@@ -112,6 +115,8 @@ import type { RegistrationRequest } from '@/shared/api';
 import { RegistrationQueue } from '@/widgets/registration-queue';
 import { VersionHistoryView } from '@/widgets/version-history';
 import { UserCard } from '@/widgets/user-card';
+import { AssignmentHistory } from '@/widgets/assignment-board';
+import { MY_TASKS_LIMIT } from '@/widgets/my-tasks';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
@@ -884,6 +889,12 @@ const KEYS = {
   normParagraphs: queryKeys.norms.paragraphs(NORM_DOCUMENT_ID, undefined, NORM_PARAGRAPH_PAGE_LIMIT),
   // `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue's first page with no filter.
   normCatalogue: queryKeys.norms.catalogue(undefined, undefined, undefined, NORM_CATALOGUE_PAGE_LIMIT),
+  // `W61-DISPATCHER-01`: «Диспетчер»'s first page, the home screen's «Мои задачи», and one
+  // assignment's history.
+  assignments: queryKeys.assignments.list({ limit: ASSIGNMENT_PAGE_LIMIT }),
+  myTasks: queryKeys.assignments.list({ mine: true, limit: MY_TASKS_LIMIT }),
+  // The history's assignment is the returned one, `C` in `ASSIGNMENTS` below.
+  assignment: queryKeys.assignments.detail(`asg_${'01J9ZQ8K7NHVXW3T2R5M6P4Q8'}C`),
 } as const;
 
 /**
@@ -998,6 +1009,9 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.normDocument, normDocument());
   client.setQueryData(KEYS.normParagraphs, { items: NORM_PARAGRAPHS, page, source_attribution: 'consultant_plus' });
   client.setQueryData(KEYS.normCatalogue, NORM_CATALOGUE_PAGE);
+  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
+  client.setQueryData(KEYS.myTasks, { items: [...ASSIGNMENTS], page });
+  client.setQueryData(KEYS.assignment, ASSIGNMENT_DETAIL);
   return client;
 }
 
@@ -1066,6 +1080,8 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.normSearch, { items: [], page });
   client.setQueryData(KEYS.normDocument, normDocument({ unreliable_paragraph_count: 0, paragraph_count: 0 }));
   client.setQueryData(KEYS.normParagraphs, { items: [], page, source_attribution: 'consultant_plus' });
+  client.setQueryData(KEYS.assignments, { items: [], page });
+  client.setQueryData(KEYS.myTasks, { items: [], page });
   client.setQueryData(
     KEYS.dashboardSummary,
     dashboardSummary({
@@ -1106,6 +1122,7 @@ function pagedClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.runs, { items: [run()], page });
   client.setQueryData(KEYS.journal, { items: [record()], page });
+  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
   return client;
 }
 
@@ -1438,6 +1455,56 @@ const ADMIN_USER_ACCOUNT: Account = {
   profile_complete: true,
   roles: ['admin', 'expert'],
   user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+};
+
+/**
+ * `W61-DISPATCHER-01`: one assignment per status, so every status label, every move the two
+ * roles are offered, a note, a reason, a document title and a project-wide row render. The
+ * first two are the seeded account's own (`KEYS.account`), so the assignee's moves render on
+ * the dispatcher's screen too; the rest belong to another expert.
+ */
+function assignment(letter: string, status: Assignment['status'], over: Partial<Assignment> = {}): Assignment {
+  return {
+    assignment_uid: `asg_${'01J9ZQ8K7NHVXW3T2R5M6P4Q8'}${letter}`,
+    project_uid: PROJECT_UID,
+    project_name: 'Договор поставки',
+    document_uid: null,
+    document_title: null,
+    assignee_user_uid: ADMIN_USER_ACCOUNT.user_uid,
+    assignee_label: ADMIN_USER_ACCOUNT.display_label,
+    created_by_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C',
+    created_by_label: 'Начальникова Е. В.',
+    note: null,
+    status,
+    status_reason: null,
+    created_at: '2026-10-20T08:00:00Z',
+    updated_at: '2026-10-20T09:00:00Z',
+    ...over,
+  };
+}
+
+const ASSIGNMENTS: readonly Assignment[] = [
+  assignment('A', 'assigned', { note: 'Проверить армирование до пятницы' }),
+  assignment('B', 'in_progress', { document_uid: DOCUMENT_UID, document_title: 'Пояснительная записка' }),
+  assignment('C', 'returned', {
+    assignee_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D',
+    assignee_label: 'Экспертова Д. Д.',
+    status_reason: 'Раздел не мой',
+  }),
+  assignment('D', 'done', { assignee_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', assignee_label: 'Экспертова Д. Д.' }),
+  assignment('E', 'cancelled', { status_reason: 'Проект закрыт' }),
+];
+
+const ASSIGNMENT_DETAIL: AssignmentDetail = {
+  assignment: ASSIGNMENTS[2] as Assignment,
+  history: [
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', kind: 'assigned', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', actor_label: 'Начальникова Е. В.', reason: null, new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:00:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', kind: 'started', actor_user_uid: ADMIN_USER_ACCOUNT.user_uid, actor_label: ADMIN_USER_ACCOUNT.display_label, reason: null, new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:10:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', kind: 'reassigned', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', actor_label: 'Начальникова Е. В.', reason: 'Отпуск', new_assignee_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', new_assignee_label: 'Экспертова Д. Д.', occurred_at: '2026-10-20T08:20:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', kind: 'returned', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', actor_label: 'Экспертова Д. Д.', reason: 'Раздел не мой', new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:30:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8E', kind: 'completed', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', actor_label: 'Экспертова Д. Д.', reason: null, new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:40:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', kind: 'cancelled', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', actor_label: 'Начальникова Е. В.', reason: 'Проект закрыт', new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:50:00Z' },
+  ],
 };
 
 const QUEUE_REQUEST: RegistrationRequest = {
@@ -2302,6 +2369,16 @@ function renderEveryScreen(): readonly { readonly where: string; readonly markup
   userClient.setQueryData(KEYS.user, badAccount);
   out.push({ where: 'user-card (invalid data)', markup: renderScreen(userClient, createElement(UserCard, { userUid: badAccount.user_uid })) });
   /*
+   * `W61-DISPATCHER-01`: an assignment's history opens only when its row's «История» is
+   * pressed, which one static render cannot do — so the widget is rendered on its own, in
+   * the three states a cache can hold: in flight, answered and failed.
+   */
+  const historyOf = (client: Client) =>
+    renderScreen(client, createElement(AssignmentHistory, { assignmentUid: ASSIGNMENT_DETAIL.assignment.assignment_uid }));
+  out.push({ where: 'assignment-history (cold)', markup: historyOf(newClient()) });
+  out.push({ where: 'assignment-history (loaded)', markup: historyOf(loadedClient()) });
+  out.push({ where: 'assignment-history (failed)', markup: historyOf(failedClient()) });
+  /*
    * The review screen with its detail and history still in flight, appended once.
    *
    * It is looked up BY NAME. This read `SCREENS[5]!.make()`, which made the position of
@@ -2636,7 +2713,10 @@ describe('the guard renders the screens it claims to render', () => {
     // a vacuity check stops checking. `W30-LISTS` ruled against hard-coded counts two waves
     // ago and this was one of them.
     expect(screens.length).toBe(
-      SCREENS.length * CACHE_STATES.length + 3 + malformedVariants(IDENTITIES).length,
+      // `+ 3`: the account and user-card invalid-data shapes and the review's detail-pending
+      // one; `+ 3` more since `W61-DISPATCHER-01`: an assignment's history, cold, loaded
+      // and failed.
+      SCREENS.length * CACHE_STATES.length + 6 + malformedVariants(IDENTITIES).length,
     );
     // The derived half is non-trivial too: a route walk that returned nothing would leave
     // this file rendering only the shapes below the derivation and still satisfy the
@@ -3145,6 +3225,14 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  * red rather than leaving a stale excuse in place.
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
+  {
+    label: 'Действие не выполнено.',
+    why: '«Диспетчер» and «Мои задачи» show this only after the transitionAssignment mutation settles with a failure. One static render cannot press a move button or seed the mutation observer through a query cache.',
+  },
+  {
+    label: 'Назначение не создано.',
+    why: 'The dispatcher\'s creation form shows this only after the createAssignment mutation settles with a failure. One static render cannot submit the form or seed the mutation observer through a query cache.',
+  },
   {
     label: 'Команда отклонена',
     why: 'QueuePage can show this only after a command mutation settles with a typed refusal. The static harness cannot fire its confirmation or seed the mutation observer through a query cache.',

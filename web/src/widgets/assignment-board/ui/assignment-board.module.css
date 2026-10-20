@@ -1,0 +1,42 @@
+/* «Диспетчер» (`W61-DISPATCHER-01`). Layout only; the table, buttons and states take the shared
+   tokens. */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.note,
+.meta {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.history {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}

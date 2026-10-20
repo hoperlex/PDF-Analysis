@@ -60,6 +60,12 @@ IMMUTABLE_TABLES = {
     "norm_current_snapshot_event",
     "norm_retrieval_set",
     "finding_observation_norm_citation",
+    # `0024_version_classification`: the first expert classification stands (``AM003``).
+    "document_version_classification",
+    # `0025_work_assignments`: an assignment header and its append-only history; the
+    # status is derived from the history (view ``work_assignment_current``), never updated.
+    "work_assignment",
+    "work_assignment_event",
 }
 
 
@@ -267,6 +273,13 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "from_snapshot_id": "ns",
         "to_snapshot_id": "ns",
         "actor_user_uid": "usr",
+        # `W59-SECTION-SEAL-01`, migration 0024: the classification's confirmer.
+        "confirmed_by_user_uid": "usr",
+        # `W61-DISPATCHER-01`, migration 0025: the assignment's people.
+        "assignee_user_uid": "usr",
+        "created_by_user_uid": "usr",
+        "new_assignee_user_uid": "usr",
+        "assignment_uid": "asg",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

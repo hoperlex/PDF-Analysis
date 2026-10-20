@@ -2960,3 +2960,172 @@ def _comparison_view(result: Any, candidates: Sequence[Any] = ()) -> dict[str, A
             for item in candidates
         ]
     return view
+
+
+# --------------------------------------------------------------------------------------
+# `W61-DISPATCHER-01`: the «Диспетчер» port, over `auditmanager.dispatch`.
+# --------------------------------------------------------------------------------------
+
+
+class DispatchAdapter(_SessionHolder):
+    """Thin like every adapter here: the commands, the rules and the reads live in
+    ``auditmanager.dispatch``; this opens the session, reads the actor's role set inside it,
+    resolves the people's display labels through ``access`` (`R-55`: the label is resolved in
+    one place, ``UserRecord.display_label``) and maps the records into the frozen shapes."""
+
+    def create_assignment(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str | None,
+        assignee_user_uid: str,
+        note: str | None,
+        user_uid: str,
+    ) -> models.Assignment:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import assign_work
+
+        def work(session: Session) -> models.Assignment:
+            accounts = AccountRepository()
+            record = assign_work(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                assignee_user_uid=assignee_user_uid,
+                note=note,
+                actor_uid=user_uid,
+                actor_roles=accounts.roles_of(session, user_uid),
+                accounts=accounts,
+            )
+            return _assignment_view(record, _Labels(session, accounts))
+
+        return self._write(work)
+
+    def list_assignments(
+        self, *, user_uid: str, mine: bool, status: str | None, project_uid: str | None
+    ) -> Sequence[models.Assignment]:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import list_assignments
+
+        def work(session: Session) -> list[models.Assignment]:
+            accounts = AccountRepository()
+            records = list_assignments(
+                session,
+                viewer_uid=user_uid,
+                viewer_roles=accounts.roles_of(session, user_uid),
+                mine=mine,
+                status=status,
+                project_uid=project_uid,
+            )
+            labels = _Labels(session, accounts)
+            return [_assignment_view(record, labels) for record in records]
+
+        return self._read(work)
+
+    def get_assignment(self, *, assignment_uid: str, user_uid: str) -> models.AssignmentDetail:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import get_assignment
+
+        def work(session: Session) -> models.AssignmentDetail:
+            accounts = AccountRepository()
+            detail = get_assignment(
+                session,
+                assignment_uid=assignment_uid,
+                viewer_uid=user_uid,
+                viewer_roles=accounts.roles_of(session, user_uid),
+            )
+            labels = _Labels(session, accounts)
+            return models.AssignmentDetail(
+                assignment=_assignment_view(detail.assignment, labels),
+                history=[_assignment_event_view(event, labels) for event in detail.history],
+            )
+
+        return self._read(work)
+
+    def transition_assignment(
+        self,
+        *,
+        assignment_uid: str,
+        kind: str,
+        reason: str | None,
+        new_assignee_user_uid: str | None,
+        user_uid: str,
+    ) -> models.Assignment:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import transition_assignment
+
+        def work(session: Session) -> models.Assignment:
+            accounts = AccountRepository()
+            record = transition_assignment(
+                session,
+                assignment_uid=assignment_uid,
+                kind=kind,
+                actor_uid=user_uid,
+                actor_roles=accounts.roles_of(session, user_uid),
+                reason=reason,
+                new_assignee_user_uid=new_assignee_user_uid,
+                accounts=accounts,
+            )
+            return _assignment_view(record, _Labels(session, accounts))
+
+        return self._write(work)
+
+
+class _Labels:
+    """Display labels of the accounts one answer names, each read once per session.
+
+    Every user identity here is a RESTRICT reference, so the account exists; a missing one
+    would be a fault, never a blank name.
+    """
+
+    __slots__ = ("_accounts", "_known", "_session")
+
+    def __init__(self, session: Session, accounts: Any) -> None:
+        self._session = session
+        self._accounts = accounts
+        self._known: dict[str, str] = {}
+
+    def of(self, user_uid: str) -> str:
+        label = self._known.get(user_uid)
+        if label is None:
+            account = self._accounts.get_account(self._session, user_uid)
+            if account is None:  # pragma: no cover - a RESTRICT reference names an account
+                raise DomainError(
+                    ErrorCode.INTERNAL_ERROR, message="an assignment names an unknown account"
+                )
+            label = account.record.display_label
+            self._known[user_uid] = label
+        return label
+
+
+def _assignment_view(record: Any, labels: _Labels) -> models.Assignment:
+    return models.Assignment(
+        assignment_uid=record.assignment_uid,
+        project_uid=record.project_uid,
+        project_name=record.project_name,
+        document_uid=record.document_uid,
+        document_title=record.document_title,
+        assignee_user_uid=record.assignee_user_uid,
+        assignee_label=labels.of(record.assignee_user_uid),
+        created_by_user_uid=record.created_by_user_uid,
+        created_by_label=labels.of(record.created_by_user_uid),
+        note=record.note,
+        status=models.AssignmentStatus(record.status),
+        status_reason=record.status_reason,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _assignment_event_view(event: Any, labels: _Labels) -> models.AssignmentEvent:
+    new_assignee = event.new_assignee_user_uid
+    return models.AssignmentEvent(
+        event_id=event.event_id,
+        kind=models.AssignmentEventKind(event.kind),
+        actor_user_uid=event.actor_user_uid,
+        actor_label=labels.of(event.actor_user_uid),
+        reason=event.reason,
+        new_assignee_user_uid=new_assignee,
+        new_assignee_label=None if new_assignee is None else labels.of(new_assignee),
+        occurred_at=event.occurred_at,
+    )

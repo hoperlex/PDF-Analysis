@@ -87,7 +87,8 @@ export interface ScreenEntry {
 /**
  * Every screen, in menu order within each group.
  *
- * `R-66`: **Работа** — Проекты, Дашборд, «Оптимизация разделов»; **Знания** — База знаний,
+ * `R-66`: **Работа** — Проекты, Дашборд, «Оптимизация разделов» (and «Диспетчер» since
+ * `W61-DISPATCHER-01`); **Знания** — База знаний,
  * Блоки, «Нормы»; **Система** — Журнал выполнения, Исполнители, «Настройки анализа»,
  * «Очередь». `/optimisation` left the menu and stays a registered, reachable screen in
  * `hidden` until project optimisation becomes a project tab. The four new sections were
@@ -111,6 +112,19 @@ export const SCREEN_REGISTRY = [
   {
     address: '/section-optimisation',
     label: 'Оптимизация разделов',
+    group: 'work',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: true,
+  },
+  /*
+   * `W61-DISPATCHER-01` (roadmap Q-2): «Диспетчер». `any-role`, because both roles open it —
+   * an administrator assigns and oversees, an expert works on what is given to them — and the
+   * API decides what each reads and may do.
+   */
+  {
+    address: '/dispatcher',
+    label: 'Диспетчер',
     group: 'work',
     access: 'session',
     roles: 'any-role',

@@ -140,6 +140,12 @@ REQUIRED_OPERATIONS = {
     # role, and the run's Excel workbook with the CSV's states and role.
     "listNormDocuments",
     "exportRunXlsx",
+    # `W61-DISPATCHER-01`. «Диспетчер»: assign work to an expert, list and read assignments
+    # with their history, and move an assignment along the `work_assignment` machine.
+    "createAssignment",
+    "listAssignments",
+    "getAssignment",
+    "transitionAssignment",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`

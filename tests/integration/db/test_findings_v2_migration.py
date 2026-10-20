@@ -19,8 +19,9 @@ from auditmanager.shared.identity import (
     RunId,
     VersionUid,
 )
+from tests.support.expected_facts import FACTS
 
-HEAD = "0024_version_classification"  # W59-SECTION-SEAL-01 moved the head
+HEAD = FACTS.migration_head  # the tree's head, from tests/support/expected_facts.json
 PREVIOUS = "0021_portal_bundles"
 
 

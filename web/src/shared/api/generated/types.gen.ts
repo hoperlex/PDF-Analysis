@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6
+ *   sha256 10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6';
+export const CONTRACT_DIGEST = '10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -33,6 +33,14 @@ export const SCHEMA_NAMES = [
   'AppendDecisionRequest',
   'AppendDecisionResponse',
   'ApproveRegistrationRequest',
+  'Assignment',
+  'AssignmentDetail',
+  'AssignmentEvent',
+  'AssignmentEventKind',
+  'AssignmentPage',
+  'AssignmentStatus',
+  'AssignmentTransitionKind',
+  'AssignmentUid',
   'BlockGeometry',
   'CarryOverDecisionRequest',
   'CarryOverDecisionResponse',
@@ -44,6 +52,7 @@ export const SCHEMA_NAMES = [
   'ComparisonRefusal',
   'CorrelationId',
   'CostBasis',
+  'CreateAssignmentRequest',
   'CreateProjectRequest',
   'Cursor',
   'DashboardSummary',
@@ -168,6 +177,7 @@ export const SCHEMA_NAMES = [
   'StageStatus',
   'StartRunRequest',
   'SubmitRegistrationRequest',
+  'TransitionAssignmentRequest',
   'UngroundedReason',
   'UpdateMyProfileRequest',
   'UpdateUserRequest',
@@ -287,6 +297,95 @@ export type ApproveRegistrationRequest = {
   /** The roles the new account receives: at least one. */
   roles: Array<Role>;
 };
+
+/** `W61-DISPATCHER-01`. One assignment as it now stands. */
+export type Assignment = {
+  assignee_label: string;
+  assignee_user_uid: UserUid;
+  assignment_uid: AssignmentUid;
+  created_at: string;
+  created_by_label: string;
+  created_by_user_uid: UserUid;
+  document_title: string | null;
+  document_uid: DocumentUid | null;
+  note: string | null;
+  project_name: string;
+  project_uid: ProjectUid;
+  status: AssignmentStatus;
+  status_reason: string | null;
+  updated_at: string;
+};
+
+/** `W61-DISPATCHER-01`. One assignment and its whole history, oldest event first. */
+export type AssignmentDetail = {
+  assignment: Assignment;
+  history: Array<AssignmentEvent>;
+};
+
+/** `W61-DISPATCHER-01`. One recorded event; never changed. */
+export type AssignmentEvent = {
+  actor_label: string;
+  actor_user_uid: UserUid;
+  event_id: string;
+  kind: AssignmentEventKind;
+  new_assignee_label: string | null;
+  new_assignee_user_uid: UserUid | null;
+  occurred_at: string;
+  reason: string | null;
+};
+
+/** `W61-DISPATCHER-01`. One event of an assignment's append-only history. */
+export const ASSIGNMENT_EVENT_KIND_VALUES = [
+  'assigned',
+  'started',
+  'completed',
+  'returned',
+  'reassigned',
+  'cancelled',
+] as const;
+
+/** AssignmentEventKind - the closed value set above. */
+export type AssignmentEventKind = (typeof ASSIGNMENT_EVENT_KIND_VALUES)[number];
+
+export type AssignmentPage = {
+  items: Array<Assignment>;
+  page: PageInfo;
+};
+
+/**
+ * `W61-DISPATCHER-01`. An assignment's status, derived from its latest event.
+ *
+ * ``assigned`` (after ``assigned`` or ``reassigned``), ``in_progress`` (``started``),
+ * ``done`` (``completed``), ``returned`` and ``cancelled``. ``done`` and ``cancelled`` are
+ * terminal.
+ */
+export const ASSIGNMENT_STATUS_VALUES = [
+  'assigned',
+  'in_progress',
+  'done',
+  'returned',
+  'cancelled',
+] as const;
+
+/** AssignmentStatus - the closed value set above. */
+export type AssignmentStatus = (typeof ASSIGNMENT_STATUS_VALUES)[number];
+
+/** `W61-DISPATCHER-01`. The events a transition may append: every kind but ``assigned``. */
+export const ASSIGNMENT_TRANSITION_KIND_VALUES = [
+  'started',
+  'completed',
+  'returned',
+  'reassigned',
+  'cancelled',
+] as const;
+
+/** AssignmentTransitionKind - the closed value set above. */
+export type AssignmentTransitionKind = (typeof ASSIGNMENT_TRANSITION_KIND_VALUES)[number];
+
+export type AssignmentUid = string;
+
+/** The contract pattern for `AssignmentUid`. Anchored; use with `new RegExp()`. */
+export const ASSIGNMENT_UID_PATTERN = "^asg_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /** One derived block, one extracted text line. `block_id` is an anchor inside this artifact -- it matches `Evidence.block_id`'s pattern -- and is never a contract identifier. */
 export type BlockGeometry = {
@@ -412,6 +511,14 @@ export const COST_BASIS_VALUES = [
 
 /** CostBasis - the closed value set above. */
 export type CostBasis = (typeof COST_BASIS_VALUES)[number];
+
+/** `W61-DISPATCHER-01`. Give a project, or one document of it, to an active expert. */
+export type CreateAssignmentRequest = {
+  assignee_user_uid: UserUid;
+  document_uid?: DocumentUid;
+  note?: string;
+  project_uid: ProjectUid;
+};
 
 export type CreateProjectRequest = {
   /** Display label. Not unique and not an identity. */
@@ -1599,6 +1706,13 @@ export type SubmitRegistrationRequest = {
   middle_name?: string;
   /** The account's future password, held to the deployment's password policy with the applicant's names and e-mail local part added to its blocklist. Stored hashed until the decision, which removes it; it appears in no response body, no error detail and no diagnostic record. */
   password: string;
+};
+
+/** `W61-DISPATCHER-01`. One move along an assignment's history. */
+export type TransitionAssignmentRequest = {
+  kind: AssignmentTransitionKind;
+  new_assignee_user_uid?: UserUid;
+  reason?: string;
 };
 
 /** Closed deterministic observation-withholding reasons; a withheld item is never a published finding. */

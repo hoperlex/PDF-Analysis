@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6
+ *   sha256 10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -34,12 +34,16 @@ import type {
   ClassifyDocumentVersionResult,
   CompareDocumentVersionsInput,
   CompareDocumentVersionsResult,
+  CreateAssignmentInput,
+  CreateAssignmentResult,
   CreateProjectInput,
   CreateProjectResult,
   ExportRunCsvInput,
   ExportRunCsvResult,
   ExportRunXlsxInput,
   ExportRunXlsxResult,
+  GetAssignmentInput,
+  GetAssignmentResult,
   GetDashboardSummaryInput,
   GetDashboardSummaryResult,
   GetDocumentVersionInput,
@@ -66,6 +70,8 @@ import type {
   IssueTokenResult,
   ListAnalysisProfilesInput,
   ListAnalysisProfilesResult,
+  ListAssignmentsInput,
+  ListAssignmentsResult,
   ListDecisionHistoryInput,
   ListDecisionHistoryResult,
   ListDecisionsInput,
@@ -136,6 +142,8 @@ import type {
   StreamVersionPortalBlockCropResult,
   SubmitRegistrationInput,
   SubmitRegistrationResult,
+  TransitionAssignmentInput,
+  TransitionAssignmentResult,
   UpdateMyProfileInput,
   UpdateMyProfileResult,
   UpdateUserInput,
@@ -244,6 +252,18 @@ export function compareDocumentVersions(
 }
 
 /**
+ * Assign a project, or one document of it, to an expert.
+ *
+ * `POST /assignments`.
+ */
+export function createAssignment(
+  input: CreateAssignmentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateAssignmentResult>> {
+  return request<CreateAssignmentResult>(OPERATIONS.createAssignment, input, options);
+}
+
+/**
  * Create a project.
  *
  * `POST /projects` - a write; carries a required Idempotency-Key.
@@ -277,6 +297,18 @@ export function exportRunXlsx(
   options?: RequestOptions,
 ): Promise<ApiResponse<ExportRunXlsxResult>> {
   return request<ExportRunXlsxResult>(OPERATIONS.exportRunXlsx, input, options);
+}
+
+/**
+ * Read one assignment with its history.
+ *
+ * `GET /assignments/{assignment_uid}`.
+ */
+export function getAssignment(
+  input: GetAssignmentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetAssignmentResult>> {
+  return request<GetAssignmentResult>(OPERATIONS.getAssignment, input, options);
 }
 
 /**
@@ -433,6 +465,18 @@ export function listAnalysisProfiles(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListAnalysisProfilesResult>> {
   return request<ListAnalysisProfilesResult>(OPERATIONS.listAnalysisProfiles, input, options);
+}
+
+/**
+ * List assignments.
+ *
+ * `GET /assignments`.
+ */
+export function listAssignments(
+  input: ListAssignmentsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListAssignmentsResult>> {
+  return request<ListAssignmentsResult>(OPERATIONS.listAssignments, input, options);
 }
 
 /**
@@ -856,6 +900,18 @@ export function submitRegistration(
 }
 
 /**
+ * Move an assignment: start, complete, return, reassign or cancel it.
+ *
+ * `POST /assignments/{assignment_uid}/transitions`.
+ */
+export function transitionAssignment(
+  input: TransitionAssignmentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<TransitionAssignmentResult>> {
+  return request<TransitionAssignmentResult>(OPERATIONS.transitionAssignment, input, options);
+}
+
+/**
  * Set the signed-in account's names, and complete its profile.
  *
  * `PATCH /me`.
@@ -916,9 +972,11 @@ export const apiClient = {
   changePassword,
   classifyDocumentVersion,
   compareDocumentVersions,
+  createAssignment,
   createProject,
   exportRunCsv,
   exportRunXlsx,
+  getAssignment,
   getDashboardSummary,
   getDocumentVersion,
   getFinding,
@@ -932,6 +990,7 @@ export const apiClient = {
   getVersionSectionReview,
   issueToken,
   listAnalysisProfiles,
+  listAssignments,
   listDecisionHistory,
   listDecisions,
   listDocuments,
@@ -967,6 +1026,7 @@ export const apiClient = {
   streamNormDocumentContent,
   streamVersionPortalBlockCrop,
   submitRegistration,
+  transitionAssignment,
   updateMyProfile,
   updateUser,
   uploadDocument,

@@ -31,6 +31,22 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `W61-DISPATCHER-01` for ``0025_work_assignments``, measured, not predicted:
+#: two fresh databases on the lane's PostgreSQL 17 + pgvector stack, one upgraded to ``0024``
+#: (whose inventory equalled the 0024 seal below in every family) and one to ``0025``, had
+#: every family's rows diffed. Every added row is this revision's and nothing was removed or
+#: redefined: columns +28 -> 493 (``work_assignment`` 7, ``work_assignment_event`` 8, the
+#: view ``work_assignment_current`` 13); relations +3 -> 56 (two tables, one view);
+#: constraints +27 -> 526 (``work_assignment``: primary key, four foreign keys, six CHECKs
+#: and the constraint trigger's row ``trg_work_assignment_has_assigned_event``;
+#: ``work_assignment_event``: primary key, ``uq_..._assignment_uid_seq``, three foreign keys
+#: and ten CHECKs); indexes +6 -> 132 (two primary keys, the unique ``seq`` pair,
+#: ``ix_work_assignment_scope``, ``ix_work_assignment_created`` and the partial
+#: ``ix_work_assignment_event_new_assignee``); triggers +3 -> 57 (the two
+#: ``am_immutable_row`` triggers and the deferred constraint trigger); functions +1 -> 24
+#: (``am_require_work_assignment_event``); views +1 -> 2. Extensions, sequences, policies
+#: and the state topology are identical to the 0024 seal (the ``work_assignment`` machine is
+#: decided by ``auditmanager.dispatch``; nothing is seeded into ``contract_state_transition``).
 #: Resealed by `W59-SECTION-SEAL-01` for ``0024_version_classification`` from a fresh
 #: upgrade on the lane's PostgreSQL 17 + pgvector stack. Against the 0023 seal below, five
 #: families moved and each by exactly the migration's DDL: columns +5 -> 465 (the five
@@ -121,13 +137,13 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (465, "a19060f1d010e19d55830e22ec925898cf4ac5f2c1581fd97e1ed47a16aa8e0f"),
-    "relations": (53, "9c8549992f106ce157eb7571722056abd96fc4b6c09e1ba232a62af4418c4fb5"),
-    "constraints": (499, "207c7a638ba24c8d5e34f5ec5de113300e2af1239272408d8e67084b5c3c80f3"),
-    "indexes": (126, "0bf1412236d8f44b38c83d402c451c7beb8ee38c09d6f5bd2f70dd758f404bd8"),
-    "triggers": (54, "69a52575e017cbfe10c22b3b65cad77ff86d27f687f92efc3d2e464969ce3951"),
-    "functions": (23, "bad3814bf14b0674083f7d3f600486206028f9f41e831f132838b6ba36a26407"),
-    "views": (1, "201878c83e7dbcf07d73c8681391a7d8dad1af7bc5285a80397db82ee617187b"),
+    "columns": (493, "c1f789b1bd4efdf26fde1d9a21bc1111021d5149e0a6a69b8c86b72ca25b5fef"),
+    "relations": (56, "1facc0d8577d0b6c43b9dfd3ba59548f969d2ca12477203ef1cdde341eb94c88"),
+    "constraints": (526, "df299b7409abe1bbee1aab93eb5845f2a9a65e83a25262d092696e509342b352"),
+    "indexes": (132, "21bcd9d6d9fb3b8a8117b37a8661b1346082517c1fd6f48a8cacff79ba470d1c"),
+    "triggers": (57, "5a0ecf7cc653b05904179adce150e2384948852ddaf90602a1c7dc189326cd2f"),
+    "functions": (24, "da815b4bd762b8dbae611de09d11d006d829a02d096a52cd3d8301cfa392a82d"),
+    "views": (2, "caa1bb6a500a67cd406cf34f7fb6fe410811592659a0f527806c4b3c827fa65f"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),
     "policies": (0, "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"),

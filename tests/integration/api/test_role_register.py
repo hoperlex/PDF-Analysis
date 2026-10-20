@@ -115,6 +115,12 @@ SAMPLES: dict[str, tuple[str, str]] = {
     ),
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry (any role); no parameter.
     "listAnalysisProfiles": ("GET", "/analysis/profiles"),
+    # `W61-DISPATCHER-01`. «Диспетчер»: creating (admin) and listing, reading and moving
+    # (any one role) an assignment. The empty body is refused by the body models.
+    "createAssignment": ("POST", "/assignments"),
+    "listAssignments": ("GET", "/assignments"),
+    "getAssignment": ("GET", "/assignments/asg_01M2545JSD15ETSNNV904X991W"),
+    "transitionAssignment": ("POST", "/assignments/asg_01M2545JSD15ETSNNV904X991W/transitions"),
     "listRunFindings": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     "exportRunCsv": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),
     # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook (expert, as the CSV) and the norms
@@ -184,6 +190,11 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "listAnalysisProfiles": _ANY_ROLE,
     "listNormDocuments": _ANY_ROLE,
     "exportRunXlsx": _EXPERT,
+    # `W61-DISPATCHER-01`: the dispatcher's reads and moves at the seam; the dispatch context
+    # decides who reads which assignment and who makes which move.
+    "listAssignments": _ANY_ROLE,
+    "getAssignment": _ANY_ROLE,
+    "transitionAssignment": _ANY_ROLE,
     "listRunFindings": _ANY_ROLE,
     "getFinding": _ANY_ROLE,
     "listDecisionHistory": _ANY_ROLE,
@@ -208,6 +219,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     # `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict; admin alone does not.
     "carryOverDecision": _EXPERT,
     "exportRunCsv": _EXPERT,
+    # `W61-DISPATCHER-01`: assigning work is an administrator's act (R-60).
+    "createAssignment": _ADMIN,
     "listRegistrations": _ADMIN,
     "approveRegistration": _ADMIN,
     "rejectRegistration": _ADMIN,

@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6
+ *   sha256 10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -21,11 +21,17 @@ import type {
   AppendDecisionRequest,
   AppendDecisionResponse,
   ApproveRegistrationRequest,
+  Assignment,
+  AssignmentDetail,
+  AssignmentPage,
+  AssignmentStatus,
+  AssignmentUid,
   CarryOverDecisionRequest,
   CarryOverDecisionResponse,
   ChangePasswordRequest,
   ClassifyDocumentVersionRequest,
   CorrelationId,
+  CreateAssignmentRequest,
   CreateProjectRequest,
   Cursor,
   DashboardSummary,
@@ -83,6 +89,7 @@ import type {
   SetWorkerIntakeRequest,
   StartRunRequest,
   SubmitRegistrationRequest,
+  TransitionAssignmentRequest,
   UpdateMyProfileRequest,
   UpdateUserRequest,
   UploadDocumentRequest,
@@ -106,9 +113,11 @@ export const OPERATION_IDS = [
   'changePassword',
   'classifyDocumentVersion',
   'compareDocumentVersions',
+  'createAssignment',
   'createProject',
   'exportRunCsv',
   'exportRunXlsx',
+  'getAssignment',
   'getDashboardSummary',
   'getDocumentVersion',
   'getFinding',
@@ -122,6 +131,7 @@ export const OPERATION_IDS = [
   'getVersionSectionReview',
   'issueToken',
   'listAnalysisProfiles',
+  'listAssignments',
   'listDecisionHistory',
   'listDecisions',
   'listDocuments',
@@ -157,6 +167,7 @@ export const OPERATION_IDS = [
   'streamNormDocumentContent',
   'streamVersionPortalBlockCrop',
   'submitRegistration',
+  'transitionAssignment',
   'updateMyProfile',
   'updateUser',
   'uploadDocument',
@@ -404,6 +415,27 @@ export type CompareDocumentVersionsInput = {
 export type CompareDocumentVersionsResult = VersionComparison;
 
 // ------------------------------------------------------------------------------------
+// createAssignment - POST /assignments
+// ------------------------------------------------------------------------------------
+
+/**
+ * Assign a project, or one document of it, to an expert.
+ *
+ * Requires `admin`. Gives the named project, or one document of it (`document_uid`, which must belong to the project, otherwise `not_found`), to an active account holding `expert` (otherwise `validation_failed`, `constraint: active_expert_required`), with an optional note. The assignment starts `assigned` with its `assigned` event. One open assignment per scope: an exact repeat (same assignee and note) answers the open one, and any other creation there is `conflict` with `conflict_reason: assignment_open` -- reassign or cancel that one instead. No `Idempotency-Key`: the open-scope rule is what makes a repeat safe.
+ */
+export type CreateAssignmentInput = {
+  /** Request body, sent as `application/json`. */
+  body: CreateAssignmentRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `createAssignment` (`application/json`, HTTP 200). */
+export type CreateAssignmentResult = Assignment;
+
+// ------------------------------------------------------------------------------------
 // createProject - POST /projects
 // ------------------------------------------------------------------------------------
 
@@ -478,6 +510,29 @@ export type ExportRunXlsxInput = {
 
 /** Success body of `exportRunXlsx` (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, HTTP 200). */
 export type ExportRunXlsxResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// getAssignment - GET /assignments/{assignment_uid}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read one assignment with its history.
+ *
+ * Any one role. The assignment and every event of its append-only history, oldest first, each with its actor. An assignment the caller may not read -- an expert reading one that is not currently theirs -- is `not_found`.
+ */
+export type GetAssignmentInput = {
+  /** Path parameters, substituted into `/assignments/{assignment_uid}`. */
+  path: {
+    assignment_uid: AssignmentUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getAssignment` (`application/json`, HTTP 200). */
+export type GetAssignmentResult = AssignmentDetail;
 
 // ------------------------------------------------------------------------------------
 // getDashboardSummary - GET /dashboard
@@ -761,6 +816,35 @@ export type ListAnalysisProfilesInput = {
 
 /** Success body of `listAnalysisProfiles` (`application/json`, HTTP 200). */
 export type ListAnalysisProfilesResult = AnalysisProfileList;
+
+// ------------------------------------------------------------------------------------
+// listAssignments - GET /assignments
+// ------------------------------------------------------------------------------------
+
+/**
+ * List assignments.
+ *
+ * Any one role. An administrator reads every assignment (`mine=true` narrows to the ones currently given to them); an expert reads only the assignments currently given to them, whatever `mine` says. `status` and `project_uid` narrow the list; newest first, ordered by `(created_at, assignment_uid)`.
+ */
+export type ListAssignmentsInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+    mine?: boolean;
+    project_uid?: ProjectUid;
+    status?: AssignmentStatus;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listAssignments` (`application/json`, HTTP 200). */
+export type ListAssignmentsResult = AssignmentPage;
 
 // ------------------------------------------------------------------------------------
 // listDecisionHistory - GET /findings/{finding_uid}/decisions
@@ -1694,6 +1778,31 @@ export type SubmitRegistrationInput = {
 export type SubmitRegistrationResult = RegistrationStatusResponse;
 
 // ------------------------------------------------------------------------------------
+// transitionAssignment - POST /assignments/{assignment_uid}/transitions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Move an assignment: start, complete, return, reassign or cancel it.
+ *
+ * Appends one event. `started`, `completed` and `returned` (with a `reason`) are the current assignee's, holding `expert` (an administrator who is not the assignee is `permission_denied`, `required_capability: assignment:assignee`); `reassigned` (with `new_assignee_user_uid`, an active expert) and `cancelled` (optional `reason`) are an administrator's. A request equal to the latest event answers the assignment unchanged; any other move the `work_assignment` machine does not declare is `state_transition_not_allowed`. An expert addressing an assignment that is not currently theirs gets `not_found`.
+ */
+export type TransitionAssignmentInput = {
+  /** Path parameters, substituted into `/assignments/{assignment_uid}/transitions`. */
+  path: {
+    assignment_uid: AssignmentUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: TransitionAssignmentRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `transitionAssignment` (`application/json`, HTTP 200). */
+export type TransitionAssignmentResult = Assignment;
+
+// ------------------------------------------------------------------------------------
 // updateMyProfile - PATCH /me
 // ------------------------------------------------------------------------------------
 
@@ -1933,6 +2042,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['documents'],
   },
+  createAssignment: {
+    operationId: 'createAssignment',
+    method: 'POST',
+    path: '/assignments',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['dispatch'],
+  },
   createProject: {
     operationId: 'createProject',
     method: 'POST',
@@ -1974,6 +2097,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['export'],
+  },
+  getAssignment: {
+    operationId: 'getAssignment',
+    method: 'GET',
+    path: '/assignments/{assignment_uid}',
+    pathParams: ['assignment_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['dispatch'],
   },
   getDashboardSummary: {
     operationId: 'getDashboardSummary',
@@ -2156,6 +2293,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 500, 503],
     tags: ['analysis'],
+  },
+  listAssignments: {
+    operationId: 'listAssignments',
+    method: 'GET',
+    path: '/assignments',
+    pathParams: [],
+    queryParams: ['cursor', 'limit', 'mine', 'project_uid', 'status'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['dispatch'],
   },
   listDecisionHistory: {
     operationId: 'listDecisionHistory',
@@ -2646,6 +2797,20 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [409, 422, 500, 503],
     tags: ['registrations'],
+  },
+  transitionAssignment: {
+    operationId: 'transitionAssignment',
+    method: 'POST',
+    path: '/assignments/{assignment_uid}/transitions',
+    pathParams: ['assignment_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['dispatch'],
   },
   updateMyProfile: {
     operationId: 'updateMyProfile',
