@@ -3,8 +3,10 @@
 Status: **complete** on `agent/w59-version-upload-01`. Phase A was committed alone at
 `78ee20bf` (base `641f2b9e` = `origin/dev` `1af17a48` + the frozen task file). Phase B was
 built after the integrator handed over the contract slot from `1049367e`, then merged with
-`integration/night-1020` at `a50dafd4`. Surface: **52 paths / 59 operations / 148 schemas**,
-head `0024_version_classification` unchanged, no error code added.
+`integration/night-1020` at `0f0903f2` (W59-ANALYSIS-SETTINGS-01's `listAnalysisProfiles`, 52/59/153).
+Final surface on the merged tree: **53 paths / 60 operations / 154 schemas**. This lane adds one path,
+one operation and one schema. Head `0024_version_classification` is unchanged and no error code was
+added.
 
 ## Phase A — the next version in ingest and documents
 
@@ -125,15 +127,19 @@ stage-and-section panel. The hook writes `versions.detail` and invalidates:
 The version list's note «Одна версия на загрузку…» was false from this change on; it now says
 that every version stays addressable and the newest is current.
 
-**Reseal.** Contract and `web/openapi/openapi.json` are byte-identical. The generated client was
-regenerated (`api:generate`; `api:verify` OK, 59 operations, contract sha256
-`a9c44e95edf033bc63807c9bd382292ca7cc7bbe456dacbc8744f66cb20880d0`). `FRONTEND_LOCK.json` has
-new digests and counts. `tests/support/expected_facts.json` has 52 paths, one operation and one
-schema added. Surface prose was updated in:
+**Reseal**, re-derived after the merge with `0f0903f2`:
+- contract and `web/openapi/openapi.json` are byte-identical;
+- the generated client was regenerated (`api:generate`; `api:verify` OK, 60 operations, contract sha256
+  `2dd62b45a6505c7bf9a88fa3b461866b0732656c78a05a77c67c77aec281446d`);
+- `FRONTEND_LOCK.json` has new digests and 53/60/154;
+- `tests/support/expected_facts.json` has 53 paths, one operation and one schema added.
+
+Surface prose (at 53/60/154) was updated in:
 - `P02_SEAMS.md`: count, history sentence, table row, keyed-write list;
 - `ALPHA_ROADMAP.md`;
 - `infra/deploy/{README.md,serve.py,proxy/nginx.conf}`;
-- the API package docstrings, including «Forty-two of the fifty-nine» declaring their own `422`;
+- the API package docstrings, including «Forty-two of the sixty» declaring their own `422`
+  and «eighteen of the sixty» that declare none;
 - the BFF `route.ts`;
 - `shared/api/authorization.ts`.
 
@@ -148,7 +154,7 @@ Test pins moved:
 - the pre-check wiring guard, which now also scans the version form with two mutations.
 
 `docs/manual-tests/CP-06_comparison_core.md` gains `MT06-07`.
-`docs/program/CURRENT_STATE.md` is not touched: it still says 51/58/147, which is the one
+`docs/program/CURRENT_STATE.md` is not touched: it still says 52/59/153, which is the one
 expected red of `test_doc_prose_facts::test_the_scanned_docs_state_the_contract_surface_this_tree_has`.
 
 **Checks (phase B).** Python with `PYTHONPATH=src $PY -m pytest …`; web with `npx vitest run …`
@@ -157,13 +163,14 @@ in `web/`.
 | What | Result |
 | --- | --- |
 | `tests/contract` (whole directory, container-free) | All green except: the known pre-existing reds `test_error_kernel::test_there_are_twenty_four` and `test_ar_v2_seeded::test_seeded_categories_equal_the_sealed_api_enum`; the `CURRENT_STATE.md` triple (integrator's); and environment-only failures of a git worktree: `test_cp00_candidate` (174, `NotADirectoryError` copying `.git`, which is a file in a worktree), `test_validate_bootstrap` (21, `jsonschema` absent from the bootstrap interpreter), `test_cp00_final_state` (3, CP-00 manifest paths and tags). |
-| `tests/contract/api_v1` + `domain_p02` | 440 passed, 1 failed (the `CURRENT_STATE.md` triple) |
+| `tests/contract/api_v1` + `domain_p02` (before the merge) | 440 passed, 1 failed (the `CURRENT_STATE.md` triple) |
 | proxy: `test_proxy_rate_limits`, `test_upload_limit_headroom`, `test_proxy_tls_path`, `test_proxy_security_headers` | 84 passed |
 | `tests/integration/api/test_version_upload.py` (new, lane DB) | 8 passed |
-| api + composition subset: role register, authorization, served document, operation surface, router and body rules, multipart rules, journey, schema conformance, version upload, composition root, token channel, every port, router answers, absent parent, TLS path | 294 passed, 1 skipped, 1 failed: `test_every_port_implementation_is_whole::test_pre_decide_adapter_refuses_a_severity_instead_of_dropping_it`, pre-existing on the base (recorded by `W59-VERSION-COMPARE-01`) |
+| api + composition subset before the merge: role register, authorization, served document, operation surface, router and body rules, multipart rules, journey, schema conformance, version upload, composition root, token channel, every port, router answers, absent parent, TLS path | 294 passed, 1 skipped, 1 failed: `test_every_port_implementation_is_whole::test_pre_decide_adapter_refuses_a_severity_instead_of_dropping_it`, pre-existing on the base (recorded by `W59-VERSION-COMPARE-01`) |
+| after the merge with `0f0903f2`: role register, authorization, served document, operation surface, router and body rules, version upload, multipart rules, composition root, token channel, every port, TLS path, proxy rate limits, upload headroom, journey conformance | 385 passed, 1 failed (the same pre-existing `test_pre_decide_adapter_…`) |
 | `tests/e2e/test_pc01_journey_conformance.py` | 87 passed |
 | `npm --prefix web run api:verify` / `lint -- --quiet` / `typecheck` | OK / clean / clean |
-| vitest `tests/guards tests/unit/screens tests/unit/styles tests/unit/api tests/unit/upload tests/contract` (includes the rendered-language guard) | 54 files, 916 passed (before the final note edit); after it, the whole set again green; `tests/unit/upload` 3 passed |
+| vitest `tests/guards tests/unit/screens tests/unit/styles tests/unit/api tests/unit/upload tests/contract` (includes the rendered-language guard), on the merged tree | 54 files, 916 passed |
 
 Mutation probe M3: `_UPLOAD_ROUTE` reverted to `^/projects/[^/]+/documents$` makes three tests fail.
 Two are `TestEveryRouteHasItsOwnCap` version-path cases; the third is
@@ -196,8 +203,8 @@ the whole integration battery, any provider call.
 
 - Merge the branch head. It contains phase A, the reseal and the web slice, merged with
   `integration/night-1020` at the last check.
-- Update `CURRENT_STATE.md` to the final triple: 52/59/148 if no other reseal landed first.
-  Otherwise re-derive after the merge.
+- Update `CURRENT_STATE.md` to **53/60/154**, the triple on this branch merged with `0f0903f2`.
+  If NORMS-CATALOGUE-XLSX or DISPATCHER lands first, re-derive it after the merge.
 - Record this as the first upload path for further versions. W59-VERSION-COMPARE-01's
   "further versions are unreachable" limitation is closed.
 - No migration, dependency, `providers.tsx`, global style, ref or tag was touched.
