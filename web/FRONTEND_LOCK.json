@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2",
-    "content_commit": "1049367",
-    "content_commit_subject": "W59-ANALYSIS-SETTINGS-01 API reseal on integration base 1049367e",
-    "dispatch_named_commit": "1049367",
-    "commit_note": "W59 adds the read of the analysis-profile registry: listAnalysisProfiles (GET /analysis/profiles, any one role) and six schemas (AnalysisProfileStatus, AnalysisProfileSourceFile, AnalysisProfileSource, AnalysisProfileSummary, AnalysisProfileListItem, AnalysisProfileList): the fifteen sections in the project-structure order, each with its registered text profile or null. Read-only; no error code is added.",
+    "sha256": "d8da2b79d0534c9604719e6e1b1bf06825d1843f81bba46141c08758ec9bf081",
+    "content_commit": "40cd159f",
+    "content_commit_subject": "W60-OPT-MATCH-01 API reseal on integration base 40cd159f",
+    "dispatch_named_commit": "40cd159f",
+    "commit_note": "W60-OPT-MATCH-01 adds the priced specification of a document set: getSpecificationPrices (GET /projects/{project_uid}/documents/{document_uid}/specification-prices, any one role; offset/limit paging) and thirteen schemas (SpecificationPrices, SpecificationPriceListRef, SpecificationExtractionSummary, SpecificationSkipCounts, SpecificationSkippedLine, SpecificationTable, SpecificationMatching, SpecificationMatchCounts, SpecificationExclusionCounts, SpecificationCurrencyTotal, SpecificationRowPage, SpecificationPriceRow, SpecificationPricePosition): the current AR version's specification rows matched to the project's current price list, a price and an amount only on a row matched in the same unit with a numeric quantity, totals per currency; a precondition that does not hold is one state; no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 52,
-    "operations": 59,
-    "component_schemas": 153,
+    "paths": 65,
+    "operations": 74,
+    "component_schemas": 211,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2",
+    "snapshot_sha256": "d8da2b79d0534c9604719e6e1b1bf06825d1843f81bba46141c08758ec9bf081",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "ef3ab3f95d60790ce9daec35bf3b8b2c26d0bf7761567f1ca95adcf2170b066a",
-      "index.ts": "7d1bf293aa8f5d433c61f528997211a3224001a4fdaae8d66f0251854304f5aa",
-      "operations.gen.ts": "30059220ac5568b0678865d60abc95bd02be80b89317ca6c40230d0720a3ed82",
-      "types.gen.ts": "0a5179ac84507913fc6b35888d633e4ba506cb1e73f86272c9f9740a251cd016"
+      "client.gen.ts": "4be96f5d60cae19c7a4862f10b02e78c7002fb8904083c93a4a234ae634a0e19",
+      "index.ts": "fc29d8f8ffd0152c5fac64e3ac8e69bed1824e3c8a3857a4e6a2ade8779faea9",
+      "operations.gen.ts": "9d03a248ee91f7f0af0ba04999823201902613e6124ccdcd4bf6101664c87cc8",
+      "types.gen.ts": "304eec49f34dc8e674ed26e993079983a7b82c5fc6707e783743174b89d0922b"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

@@ -61,6 +61,12 @@ GUARDED = (
     ("createProject", "POST", "/projects"),
     ("listProjects", "GET", "/projects"),
     ("uploadDocument", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents"),
+    # `W59-VERSION-UPLOAD-01`. The next version of a document, addressed through its project.
+    (
+        "uploadDocumentVersion", "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions",
+    ),
     ("getDocumentVersion", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J"),
     (
         "streamDocumentVersionContent",
@@ -202,8 +208,35 @@ GUARDED = (
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
         "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
     ),
+    # `W59-DECISION-CARRYOVER-01`. The carryover of a decision, addressed the same way.
+    (
+        "carryOverDecision", "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/carryovers",
+    ),
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only.
     ("listAnalysisProfiles", "GET", "/analysis/profiles"),
+    # `W57B-NORMS-CATALOGUE-XLSX-01`. The norms catalogue and the run's workbook.
+    ("listNormDocuments", "GET", "/norm-documents"),
+    ("exportRunXlsx", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.xlsx"),
+    # `W61-DISPATCHER-01`. «Диспетчер»: creating, listing, reading and moving an assignment.
+    ("createAssignment", "POST", "/assignments"),
+    ("listAssignments", "GET", "/assignments"),
+    ("getAssignment", "GET", "/assignments/asg_01M2545JSD15ETSNNV904X991K"),
+    ("transitionAssignment", "POST", "/assignments/asg_01M2545JSD15ETSNNV904X991K/transitions"),
+    # `W60-PRICE-LIST-01`. Project price lists and vendor lists.
+    ("uploadPriceList", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/price-lists"),
+    ("listPriceListRevisions", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/price-lists"),
+    ("listPriceListPositions", "GET", "/price-lists/prl_01M2545JSD15ETSNNV904X991N/positions"),
+    ("getEffectiveVendorLists", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists"),
+    ("setGlobalVendorList", "PUT", "/vendor-lists/EOM"),
+    ("setProjectVendorList", "PUT", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists/EOM"),
+    # `W60-OPT-MATCH-01`. The priced specification of a document set, read-only.
+    (
+        "getSpecificationPrices", "GET",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/specification-prices",
+    ),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -753,15 +786,33 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
     )
     assert subject_readers == [
         "auth.py",
+        # `W59-DECISION-CARRYOVER-01`: the carried decision records WHO confirmed it, as
+        # `appendDecision` does; whether they may is the role register's (expert) and the
+        # command's own re-read.
+        "comparison.py",
         "decisions.py",
+        # `W61-DISPATCHER-01`: an assignment records WHO created or moved it; what they may
+        # do is the role register's and the dispatch context's own re-read of the role set.
+        "dispatch.py",
         "execution.py",
+        # `W57B-NORMS-CATALOGUE-XLSX-01`: the workbook's export authorization records WHO
+        # downloaded it; whether they may is the role register's (expert, as the CSV).
+        "export.py",
         "me.py",
         "norms.py",
+        # `W60-PRICE-LIST-01`: a price list and a vendor-list revision record WHO uploaded or
+        # set them, and the reads hand the caller to the context, which reads the role set in
+        # its own transaction; whether they may is the role register's.
+        "optimisation.py",
         "registrations.py",
         "releases.py",
         # `W59-SECTION-SEAL-01`: the classification records WHO confirmed it; whether they
         # may is the role register's (expert) and the command's own re-read.
         "sections.py",
+        # `W60-OPT-MATCH-01`: the priced specification passes WHO reads it so the read's own
+        # role re-read happens in its transaction; whether they may is the role register's
+        # (any one role), decided before the handler runs.
+        "specification_prices.py",
         "users.py",
     ], (
         f"{subject_readers} depend on the verified subject. Reading WHO the caller is is "

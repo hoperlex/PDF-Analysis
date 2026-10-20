@@ -225,6 +225,14 @@ On the review screen click «Скачать <run_id>-findings.csv» (Download).
 screen. Downloading again without new decisions produces byte-identical
 content.
 
+Then click «Скачать Excel» beside it (`W57B-NORMS-CATALOGUE-XLSX-01`).
+
+**PASS:** `<run_id>-findings.xlsx` downloads and opens with the sheets «Сводка» and
+«Замечания»; «Замечания» has one row per finding with its «Лист/стр.» from the portal
+bundle; downloading again without new decisions produces byte-identical content. A
+version without a verifiable portal block list is refused with a message on the panel,
+never answered with an empty file.
+
 ### A08 — second run and comparison
 
 Start a second run of the same immutable version. After it reaches a terminal
@@ -241,7 +249,12 @@ number equals the routes in `tests/e2e/pc01/journey/manifest.json`:
 
 1. `/` — home, including the administrator's pending-registration count;
 2. `/projects`;
-3. project;
+3. project — and its «Оптимизация» tab (`W60-PRICE-LIST-01`): as an expert upload a CSV or
+   Excel price list (a row with «по запросу» as its price is listed as skipped, not priced);
+   the revision list marks the newest one current, the positions show the exact prices in the
+   stated currency with the report of how the file was read; the vendor lists name, per section,
+   whether the project's list, the general list or none applies, and only an administrator is
+   offered «Изменить общий список»;
 4. document;
 5. version;
 6. version comparison;

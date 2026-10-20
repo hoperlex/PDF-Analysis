@@ -1,6 +1,6 @@
-"""The fifty-nine operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The seventy-four operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles one ``APIRouter`` from the eighteen router modules. It takes
+:func:`build_router` assembles one ``APIRouter`` from the twenty-one router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
 port is the composition root's job (``api/composition.py``), and a factory that reached for
 a concrete implementation would have taken that decision away from it.
@@ -55,9 +55,12 @@ from auditmanager.api.routers.idempotency import (
     require_idempotency_key,
 )
 from auditmanager.api.routers.analysis_profiles import build_analysis_profile_routes
+from auditmanager.api.routers.specification_prices import build_specification_price_routes
 from auditmanager.api.routers.comparison import build_comparison_routes
+from auditmanager.api.routers.dispatch import build_dispatch_routes
 from auditmanager.api.routers.me import build_me_routes
 from auditmanager.api.routers.norms import build_norm_routes
+from auditmanager.api.routers.optimisation import build_optimisation_routes
 from auditmanager.api.routers.releases import build_release_routes
 from auditmanager.api.routers.multipart import (
     MAX_BODY,
@@ -68,8 +71,10 @@ from auditmanager.api.routers.multipart import (
 from auditmanager.api.routers.ports import (
     AccountPort,
     AnalysisProfilePort,
+    OptimisationPort,
     BlockPort,
     ComparisonPort,
+    DispatchPort,
     CredentialPort,
     CsvExportPort,
     DashboardPort,
@@ -84,6 +89,8 @@ from auditmanager.api.routers.ports import (
     ReleasesPort,
     RunPort,
     SectionPort,
+    SpecificationPricesPort,
+    XlsxExportPort,
 )
 from auditmanager.api.routers.projects import build_project_routes
 from auditmanager.api.routers.registrations import build_registration_routes
@@ -149,6 +156,9 @@ __all__ = [
     "SectionPort",
     "ComparisonPort",
     "AnalysisProfilePort",
+    "DispatchPort",
+    "OptimisationPort",
+    "SpecificationPricesPort",
     "WireResponse",
     "build_auth_routes",
     "build_router",
@@ -198,11 +208,18 @@ def build_router(
     sections: SectionPort | None = None,
     comparisons: ComparisonPort | None = None,
     analysis_profiles: AnalysisProfilePort | None = None,
+    xlsx_exports: XlsxExportPort | None = None,
+    dispatch: DispatchPort | None = None,
+    optimisation: OptimisationPort | None = None,
+    specification_prices: SpecificationPricesPort | None = None,
 ) -> Router:
-    """Assemble the fifty-nine operations, from the eighteen router modules -- ``me``,
+    """Assemble the seventy-four operations, from the twenty-one router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
-    `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s and
-    ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s.
+    `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
+    ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
+    ``optimisation`` `W60-PRICE-LIST-01`'s; `W57B-NORMS-CATALOGUE-XLSX-01` adds
+    ``listNormDocuments`` to the norms router and ``exportRunXlsx`` (on ``xlsx_exports``) to
+    the export router; ``specification_prices`` is `W60-OPT-MATCH-01`'s.
 
     ``accounts`` and ``registrations`` are two more ports with a default, for the reason
     the paragraph below gives for the first three: every caller that does not serve them
@@ -251,7 +268,9 @@ def build_router(
     # fallback to the behaviour this closes.
     build_finding_routes(router, findings, runs)
     build_decision_routes(router, decisions, findings)
-    build_export_routes(router, exports)
+    # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook on its own port, optional with a default
+    # for the reason `blocks` gives above.
+    build_export_routes(router, exports, xlsx_exports)  # type: ignore[arg-type]
     build_auth_routes(router, credentials)  # type: ignore[arg-type]
     build_dashboard_routes(router, dashboard)  # type: ignore[arg-type]
     build_me_routes(router, accounts)  # type: ignore[arg-type]
@@ -271,6 +290,15 @@ def build_router(
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only. Optional with a
     # default, for the reason `blocks` gives above.
     build_analysis_profile_routes(router, analysis_profiles)  # type: ignore[arg-type]
+    # `W61-DISPATCHER-01`. «Диспетчер»: work assignments and their history. Optional with a
+    # default, for the reason `blocks` gives above.
+    build_dispatch_routes(router, dispatch)  # type: ignore[arg-type]
+    # `W60-PRICE-LIST-01`. Project price lists and vendor lists. Optional with a default, for
+    # the reason `blocks` gives above.
+    build_optimisation_routes(router, optimisation)  # type: ignore[arg-type]
+    # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's price
+    # list, read-only. Optional with a default, for the reason `blocks` gives above.
+    build_specification_price_routes(router, specification_prices)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

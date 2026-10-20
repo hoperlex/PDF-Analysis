@@ -171,6 +171,9 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/record-verdict/model/use-record-verdict.ts': true,
   'src/features/start-run/model/use-start-run.ts': true,
   'src/features/upload-document/model/use-upload-document.ts': true,
+  // `W59-VERSION-UPLOAD-01`: a further version moves the document's current version, and the
+  // dashboard's panels count versions and group the current ones by section.
+  'src/features/upload-document/model/use-upload-document-version.ts': true,
   'src/features/cancel-run/model/use-cancel-run.ts': true,
   'src/features/reaudit-run/model/use-reaudit-run.ts': true,
   'src/features/set-job-priority/model/use-set-job-priority.ts': false,
@@ -180,11 +183,21 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   // `W55A-WEB-NORMS`: designating the current norms snapshot changes no number the dashboard
   // reads; it invalidates the `norms` root instead.
   'src/features/set-current-snapshot/model/use-set-current-snapshot.ts': false,
+  // `W60-PRICE-LIST-01`: a price list and a vendor list change no number the dashboard reads;
+  // they invalidate the `optimisation` keys instead.
+  'src/features/upload-price-list/model/use-upload-price-list.ts': false,
+  'src/features/set-vendor-list/model/use-set-vendor-list.ts': false,
   // `W59-SECTION-UI-01` (integrator grant): confirming a version's stage and section. The
   // breakdown groups by the document's legacy `section` today, which a classification does
   // not write; the backend half of the window is still being written, so the hook
   // invalidates the dashboard anyway, and this entry holds it to that.
   'src/features/classify-version/model/use-classify-version.ts': true,
+  // `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict, and the dashboard counts verdicts.
+  'src/features/carry-over-decision/model/use-carry-over-decision.ts': true,
+  // `W61-DISPATCHER-01`: creating and moving a work assignment changes no number the
+  // dashboard reads; both invalidate the `assignments` root instead.
+  'src/features/create-assignment/model/use-create-assignment.ts': false,
+  'src/features/transition-assignment/model/use-transition-assignment.ts': false,
 };
 
 /** A feature model source with an executable mutation call, independent of its filename. */

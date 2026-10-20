@@ -84,8 +84,8 @@ FIXTURE_TOOLS = REPOSITORY_ROOT / "tools" / "fixtures"
 
 #: The two locations that take the larger body, exactly as both nginx files write them.
 UPLOAD_LOCATIONS = (
-    "location ~ ^/api/v1/projects/[^/]+/documents$ {",
-    "location ~ ^/bff/v1/projects/[^/]+/documents$ {",
+    "location ~ ^/api/v1/projects/[^/]+/documents(?:/[^/]+/versions)?$ {",
+    "location ~ ^/bff/v1/projects/[^/]+/documents(?:/[^/]+/versions)?$ {",
 )
 SERVER_SCOPE = "server {"
 
@@ -477,12 +477,12 @@ server {
     # 32m leaves the refusal where the contract puts it.
     client_max_body_size 32m;
 
-    location ~ ^/api/v1/projects/[^/]+/documents$ {
+    location ~ ^/api/v1/projects/[^/]+/documents(?:/[^/]+/versions)?$ {
         client_max_body_size 260m;
         proxy_pass http://api:8000;
     }
 
-    location ~ ^/bff/v1/projects/[^/]+/documents$ {
+    location ~ ^/bff/v1/projects/[^/]+/documents(?:/[^/]+/versions)?$ {
         client_max_body_size 260m;
         proxy_pass http://web:3000;
     }

@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Fifty-nine operations, sealed. `A5` generates the typed client from this document; `B6`
+Seventy-four operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -858,6 +858,40 @@ relabelled pair; a path naming no version of the document is `404`.
 text-profile registry run start routes through, read-only, as fifteen sections in the
 project-structure order, each with its profile (identities, version, status, hashes, legacy
 source) or `null`.
+`W59-VERSION-UPLOAD-01` added `uploadDocumentVersion` on 2026-10-20: one portal bundle, under `uploadDocument`'s
+envelope and custody, published as the next immutable version of an existing document, which
+becomes its current version and inherits no title, section or classification; a document of
+another project is `404`.
+`W59-DECISION-CARRYOVER-01` added `carryOverDecision` on 2026-10-20: an expert confirms
+carrying one source decision to the target finding the recomputed comparison proposes as
+`unchanged`, and the decision ledger appends one `accept` or `reject` event on the target,
+authored by that expert, whose comment records the carried-from finding, decision and
+versions; the comparison's `findings.carryover_candidates` lists what could be carried, and
+nothing is carried without the confirmation.
+`W57B-NORMS-CATALOGUE-XLSX-01` added `listNormDocuments` and `exportRunXlsx` on 2026-10-20:
+the current norms snapshot's documents as a catalogue with display names derived from the
+stored file names (any one role), and the run's W57b Excel workbook with `exportRunCsv`'s
+states and role.
+`W61-DISPATCHER-01` added the four «Диспетчер» operations on 2026-10-20 under roadmap Q-2:
+`createAssignment` (`admin`), `listAssignments`, `getAssignment` and `transitionAssignment`,
+over `0025_work_assignments`' immutable assignment and its append-only event history; the
+status is the latest event's projection and the `work_assignment` machine is decided by
+`auditmanager.dispatch`.
+`W60-PRICE-LIST-01` added six `optimisation` operations on 2026-10-20: `uploadPriceList` stores
+a project's CSV or XLSX price list (at most 10 MiB, `expert`, keyed) as an immutable revision
+bound to its file, with parsed positions and a deterministic parse report in which every data
+row is accepted or skipped with a reason; `listPriceListRevisions` and `listPriceListPositions`
+read them; `getEffectiveVendorLists` answers the fifteen sections' vendor lists for a project;
+`setGlobalVendorList` (`admin`) and `setProjectVendorList` (`expert`, `list` or `inherit`)
+append versioned revisions, refusing a stale `expected_vendor_list_id`
+(`conflict_reason: vendor_list_changed`). No operation answers a total, a proposal or a price a
+price list does not state; migration `0026_price_lists` stores them.
+`W60-OPT-MATCH-01` added `getSpecificationPrices` on 2026-10-20: «Спецификация и цены», the
+specification rows of a document set's current `AR`-classified version, read deterministically
+from its newest published run's saved text and matched to the project's current price list;
+a price and an amount only on a row matched to one position in the same unit with a numeric
+quantity, totals per currency over those rows only; a precondition that does not hold is one
+`state`, and a set outside the project is `404`. Read-only, any one role.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -878,6 +912,7 @@ could.
 | `createProject` | `POST /projects` |
 | `listProjects` | `GET /projects` |
 | `uploadDocument` | `POST /projects/{project_uid}/documents` |
+| `uploadDocumentVersion` | `POST /projects/{project_uid}/documents/{document_uid}/versions` |
 | `getDocumentVersion` | `GET /versions/{version_uid}` |
 | `streamDocumentVersionContent` | `GET /versions/{version_uid}/content` |
 | `startRun` | `POST /runs` |
@@ -887,6 +922,7 @@ could.
 | `appendDecision` | `POST /findings/{finding_uid}/decisions` |
 | `listDecisionHistory` | `GET /findings/{finding_uid}/decisions` |
 | `exportRunCsv` | `GET /runs/{run_id}/export.csv` |
+| `exportRunXlsx` | `GET /runs/{run_id}/export.xlsx` |
 | `issueToken` | `POST /auth/token` |
 | `listDocuments` | `GET /projects/{project_uid}/documents` |
 | `listVersions` | `GET /documents/{document_uid}/versions` |
@@ -921,6 +957,7 @@ could.
 | `listWorkers` | `GET /execution/workers` |
 | `setWorkerIntake` | `PUT /execution/workers/{worker_id}/intake` |
 | `searchNorms` | `GET /norms/search` |
+| `listNormDocuments` | `GET /norm-documents` |
 | `getNormDocument` | `GET /norm-documents/{norm_document_id}` |
 | `listNormParagraphs` | `GET /norm-documents/{norm_document_id}/paragraphs` |
 | `streamNormDocumentContent` | `GET /norm-documents/{norm_document_id}/content` |
@@ -934,12 +971,31 @@ could.
 | `getVersionSectionReview` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review` |
 | `compareDocumentVersions` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison` |
 | `listAnalysisProfiles` | `GET /analysis/profiles` |
+| `carryOverDecision` | `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers` |
+| `createAssignment` | `POST /assignments` |
+| `listAssignments` | `GET /assignments` |
+| `getAssignment` | `GET /assignments/{assignment_uid}` |
+| `transitionAssignment` | `POST /assignments/{assignment_uid}/transitions` |
+| `uploadPriceList` | `POST /projects/{project_uid}/price-lists` |
+| `listPriceListRevisions` | `GET /projects/{project_uid}/price-lists` |
+| `listPriceListPositions` | `GET /price-lists/{price_list_id}/positions` |
+| `getEffectiveVendorLists` | `GET /projects/{project_uid}/vendor-lists` |
+| `setGlobalVendorList` | `PUT /vendor-lists/{section_code}` |
+| `setProjectVendorList` | `PUT /projects/{project_uid}/vendor-lists/{section_code}` |
+| `getSpecificationPrices` | `GET /projects/{project_uid}/documents/{document_uid}/specification-prices` |
 
 Rules that hold across the whole surface:
 
 * the writes that take a required `Idempotency-Key` header are `createProject`,
-  `uploadDocument`, `startRun`, `appendDecision`, `approveRegistration`, `cancelRun`,
-  `reauditRun`, `setJobPriority`, `setExecutionPaused` and `setWorkerIntake`, and no others.
+  `uploadDocument`, `uploadDocumentVersion`, `startRun`, `appendDecision`,
+  `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
+  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`
+  and `uploadPriceList`, and no others. A repeat of the decision carryover under another key
+  that names the same pair and decision answers the event already carried (`replayed: true`)
+  and appends nothing.
+  `setGlobalVendorList` and `setProjectVendorList` take no key: a repeat of the latest
+  revision's entries writes nothing and answers it, and a writer that read an older revision
+  is refused by `expected_vendor_list_id` (`conflict_reason: vendor_list_changed`).
   The key is passed through to the owning command handler and never re-derived in the
   router: an identical repeat replays the first answer, and another payload under the same
   key is `idempotency_key_reuse`. The other writes take no key. What a repeat of each does
@@ -969,6 +1025,13 @@ Rules that hold across the whole surface:
     repeat answers the stored classification with its first confirmer, and a repeat with a
     different stage or section is `conflict` with `conflict_reason:
     version_already_classified`;
+  * `createAssignment` (`W61-DISPATCHER-01`) keeps one open assignment per scope: an exact
+    repeat (same assignee and note) answers the open assignment, and any other creation on
+    that scope is `conflict` with `conflict_reason: assignment_open`;
+  * `transitionAssignment` (`W61-DISPATCHER-01`): a repeat equal to the latest event (same
+    kind, reason and new assignee) answers the assignment unchanged and appends nothing; any
+    other move the `work_assignment` machine does not declare from the current state is
+    `state_transition_not_allowed`;
 * every response carries `X-Correlation-Id`;
 * every non-2xx body is the `ErrorEnvelope`, with `retryable` pinned to the catalog
   value for the reported code;

@@ -335,16 +335,32 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # the snapshot list are product data, so any one role (R-80, plan section A3.6).
         "searchNorms": _ANY_ROLE,
         "getNormDocument": _ANY_ROLE,
+        # `W57B-NORMS-CATALOGUE-XLSX-01`. The catalogue is product data like the search.
+        "listNormDocuments": _ANY_ROLE,
         "listNormParagraphs": _ANY_ROLE,
         "streamNormDocumentContent": _ANY_ROLE,
         "listNormSnapshots": _ANY_ROLE,
         # `W59-SECTION-SEAL-01`. A version's fifteen section choices and its classification.
         "getVersionSectionReview": _ANY_ROLE,
+        # `W61-DISPATCHER-01`. The dispatcher's reads and moves: any one role at the seam; the
+        # dispatch context decides in its own transaction who reads which assignment (an
+        # expert only their own) and who makes which move (the assignee's three, the
+        # administrator's two).
+        "listAssignments": _ANY_ROLE,
+        "getAssignment": _ANY_ROLE,
+        "transitionAssignment": _ANY_ROLE,
         # `W59-VERSION-COMPARE-01`. Two versions of one set compared; a read that writes
         # nothing, so any one role.
         "compareDocumentVersions": _ANY_ROLE,
         # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only: any one role.
         "listAnalysisProfiles": _ANY_ROLE,
+        # `W60-PRICE-LIST-01`. Price lists and vendor lists are product data: any one role reads.
+        "listPriceListRevisions": _ANY_ROLE,
+        "listPriceListPositions": _ANY_ROLE,
+        "getEffectiveVendorLists": _ANY_ROLE,
+        # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's
+        # price list; a read that writes nothing, so any one role.
+        "getSpecificationPrices": _ANY_ROLE,
         # The product version and release notes: any complete account, roles or none
         # (R-80), so a role-less person can still see what the product is.
         "getProductVersion": _ANY_COMPLETE_ACCOUNT,
@@ -357,6 +373,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # Product changes -- projects, uploads, runs, verdicts, comments, the export.
         "createProject": _EXPERT,
         "uploadDocument": _EXPERT,
+        # `W59-VERSION-UPLOAD-01`. The next version of a document: the same roles as the first.
+        "uploadDocumentVersion": _EXPERT,
         "startRun": _EXPERT,
         # `W59-SECTION-SEAL-01`. Only an expert confirms a section; admin alone does not
         # imply expert (the decision's authorization rule). The command re-reads the role
@@ -365,7 +383,20 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "cancelRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "reauditRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "appendDecision": _EXPERT,
+        # `W59-DECISION-CARRYOVER-01`. A carried decision is a verdict like any other: only an
+        # expert confirms it, and the command re-reads the role set in its own transaction.
+        "carryOverDecision": _EXPERT,
+        # `W60-PRICE-LIST-01`. An expert uploads a project's price list and overrides its vendor
+        # list per section; the global vendor list is an administrator's.
+        "uploadPriceList": _EXPERT,
+        "setProjectVendorList": _EXPERT,
+        "setGlobalVendorList": _ADMIN,
         "exportRunCsv": _EXPERT,
+        # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook is the CSV's sibling: the same role.
+        "exportRunXlsx": _EXPERT,
+        # `W61-DISPATCHER-01`. Assigning work is an administrator's act (R-60); the command
+        # re-reads the role set in its own transaction.
+        "createAssignment": _ADMIN,
         # Account and registration-request management.
         "listRegistrations": _ADMIN,
         "approveRegistration": _ADMIN,

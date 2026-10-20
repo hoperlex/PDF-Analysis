@@ -48,7 +48,6 @@ account that holds or handed out work cannot be purged (archive remains).
 
 ## Identity
 
-`asg_<ULID>` is minted here (`identity.py`) on the shared registry's pattern, but is not in
-`contracts/domain/v1/identifiers.json` yet: phase A of the task owns neither that file nor
-`shared/identity`. Contracting it moves the prefix into the registry; this type then
-validates through it, as `access.UserUid` does.
+`asg_<ULID>` is contracted (`identifiers.json`, entity `WorkAssignment`) and owned by the
+shared registry; `identity.py` validates through it and refuses with `validation_failed`
+(`field: assignment_uid`). History events use `evt_<ULID>` (`AuditEventId`).

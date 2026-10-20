@@ -144,3 +144,28 @@ def test_missing_observation_and_evidence_cannot_be_silently_dropped() -> None:
                  [dict(_row("obs_1", 0, 3), evidence_ordinal=None)]):
         with pytest.raises(ValueError, match="xlsx_read_incomplete_finding"):
             _read(_Session(rows=rows))
+
+
+def test_a_v1_finding_is_its_single_observation() -> None:
+    """`W57B-NORMS-CATALOGUE-XLSX-01`: a v1 finding has no canonical identity (only the v2
+    publication writes one) and exactly one observation, which is the row the CSV exports;
+    its absent recommendation is an empty cell, never ``None``."""
+    rows = [
+        dict(_row("obs_1", 0, 3, canonical=None), recommendation_text=None,
+             proposed_severity=None, current_verdict="pending", decided_severity=None),
+        dict(_row("obs_1", 1, 4, canonical=None), recommendation_text=None,
+             proposed_severity=None, current_verdict="pending", decided_severity=None),
+    ]
+    run, findings = _read(_Session(rows=rows), citations={"fnd_1": ()})
+    (finding,) = findings
+    assert finding.canonical_observation_id == "obs_1"
+    assert finding.member_observation_ids == ()
+    workbook = project_workbook(run, findings)
+    row = workbook.findings[0]
+    assert (row.sheet_page, row.recommendation, row.proposed_severity) == ("АР-3\nАР-4", "", None)
+
+
+def test_no_canonical_identity_with_two_observations_still_refuses() -> None:
+    rows = [_row("obs_1", 0, 3, canonical=None), _row("obs_2", 0, 4, canonical=None)]
+    with pytest.raises(ValueError, match="xlsx_read_canonical_missing"):
+        _read(_Session(rows=rows))

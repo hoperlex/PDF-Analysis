@@ -24,6 +24,10 @@
  * goes to `/account/password`, an incomplete profile to `/account`. Declared
  * `force-dynamic` because the guard reads a cookie, and a screen served from a cache is a
  * screen showing somebody else's session.
+ *
+ * `W60-PRICE-LIST-01`: the guard's subject also hands the screen the session's roles, so the
+ * «Оптимизация» tab draws the price-list upload and the project's vendor-list controls for an
+ * expert and the general vendor list's controls for an administrator. The API checks each write.
  */
 
 import { notFound } from 'next/navigation';
@@ -44,8 +48,8 @@ export default async function ProjectRoute({
   params: Promise<{ project_uid: string }>;
   searchParams?: Promise<RouteParams> | undefined;
 }) {
-  await requireScreen('/projects/[project_uid]', { params, searchParams });
+  const subject = await requireScreen('/projects/[project_uid]', { params, searchParams });
   const { project_uid } = await params;
   if (!looksLikeProjectUid(project_uid)) notFound();
-  return <ProjectDetailPage projectUid={project_uid} />;
+  return <ProjectDetailPage projectUid={project_uid} roles={subject.roles} />;
 }

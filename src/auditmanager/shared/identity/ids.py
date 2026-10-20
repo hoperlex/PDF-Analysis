@@ -245,6 +245,22 @@ class NormRetrievalSetId(OpaqueId, prefix="nrs", entity="NormRetrievalSet"):
     """Identity of one snapshot-bound normative retrieval set and catalogue."""
 
 
+class PriceListId(OpaqueId, prefix="prl", entity="PriceList"):
+    """Identity of one uploaded price-list revision of a project (`W60-PRICE-LIST-01`).
+
+    Minted by ``auditmanager.optimisation`` since migration ``0026_price_lists``. Never
+    derived from the project, the revision number, the file name or its checksum.
+    """
+
+
+class PriceListPositionId(OpaqueId, prefix="prp", entity="PriceListPosition"):
+    """Identity of one parsed position of one price-list revision; never its row number."""
+
+
+class VendorListId(OpaqueId, prefix="vnl", entity="VendorList"):
+    """Identity of one immutable vendor-list revision of a section, global or of a project."""
+
+
 class NormCustodyAdmissionId(OpaqueId, prefix="nad", entity="NormCustodyAdmission"):
     """Identity of one custody intent and its outbox row (`R-76`, migration ``0018``).
 
@@ -306,6 +322,14 @@ class RegistrationRequestId(OpaqueId, prefix="reg", entity="RegistrationRequest"
     """Identity of one registration request (``request_id``). `W49-SEAL-01` moved ``reg`` here.
 
     Minted by ``auditmanager.access.registrations`` since migration ``0015``.
+    """
+
+
+class AssignmentUid(OpaqueId, prefix="asg", entity="WorkAssignment"):
+    """Identity of one work assignment of the dispatcher (`W61-DISPATCHER-01`).
+
+    Minted by ``auditmanager.dispatch``; never derived from the project, the document, the
+    assignee or a position in a list. Its history events are ``AuditEventId`` (``evt_``).
     """
 
 

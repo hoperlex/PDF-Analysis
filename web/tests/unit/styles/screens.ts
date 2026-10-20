@@ -41,7 +41,9 @@ import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
+import { SpecificationPricesAnswer } from '@/widgets/specification-prices';
 import { NormSearchResults } from '@/widgets/norm-search';
+import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { ExportPanel } from '@/widgets/export-panel';
@@ -102,10 +104,13 @@ import {
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
 import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
 import {
-  NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS, normDocument,
+  NORM_CATALOGUE_ITEMS, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS,
+  normDocument,
 } from '../norms/fixtures';
 
 import { BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, portalPage } from '../blocks/fixtures';
+
+import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixtures';
 
 import type { Screen } from './contrast';
 
@@ -530,6 +535,59 @@ export function screens(): Screen[] {
   })));
   // `W59-ANALYSIS-SETTINGS-01`: «Настройки анализа» — a builtin profile, a draft with its
   // legacy source, and a section with no profile, so every row shape is censused.
+  // `W60-OPT-MATCH-01`: «Спецификация и цены» — a row of each status (three badge tones), a
+  // counted amount beside dashes, the totals panel on its tint, and a state that stops it.
+  {
+    const position = 'prp_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+    const base = {
+      page_number: 14, sheet_label: '10', line_start: 3, line_end: 3, table_ordinal: 1, group: null,
+      unit_text: 'шт', unit: 'шт' as const, quantity_text: '12', quantity: '12', quantity_issue: null,
+      mass_text: null, note: null, basis: null, reason: null, price_position: null,
+      candidate_position_ids: [position], candidate_count: 1, amount: null, excluded_reason: null,
+    };
+    const ready = {
+      project_uid: PROJECT_UID, document_uid: DOCUMENT_UID, version_uid: VERSION_UID, version_ordinal: 1,
+      page_count: 8, state: 'ready' as const, project_stage: 'R' as const, section_code: 'AR' as const,
+      price_list: {
+        price_list_id: 'prl_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', revision_number: 1, source_filename: 'Прайс',
+        uploaded_at: '2026-10-20T08:00:00Z', default_currency: 'RUB', position_count: 3,
+      },
+      run_id: RUN_ID, text_layer_sha256: SHA,
+      extraction: {
+        algorithm: 'specification-text-v1' as const, table_count: 1, row_count: 3, skipped_count: 0,
+        skipped_by_reason: {
+          table_header_ambiguous: 0, text_before_first_row: 0, continuation_limit: 0, anchor_ambiguous: 0,
+          position_missing: 0, name_missing: 0, column_numbering: 0, rows_over_limit: 0,
+        },
+        skipped: [], tables: [],
+      },
+      matching: {
+        algorithm: 'price-match-v1' as const, counts: { matched: 1, ambiguous: 1, unmatched: 1 },
+        totals: [{ currency: 'RUB', amount: '180000', row_count: 1 }],
+        excluded: { no_position: 1, unit_mismatch: 0, row_unit_missing: 0, ambiguous: 1, quantity_not_numeric: 0 },
+      },
+      rows: {
+        offset: 0, limit: 50, total: 3, next_offset: null,
+        items: [
+          { ...base, row_id: `sr-${'a'.repeat(32)}`, group: 'Изделия', position: '1', name: 'Металлический щит', status: 'matched' as const,
+            basis: 'name' as const, amount: '180000', price_position: {
+              price_list_position_id: position, row_number: 1, code: null, name: 'Металлический щит', mark: null,
+              unit: 'шт', unit_price: '15000', currency: 'RUB', vendor: null,
+            } },
+          { ...base, row_id: `sr-${'b'.repeat(32)}`, position: '2', name: 'Пена монтажная', status: 'ambiguous' as const,
+            reason: 'several_positions' as const, candidate_count: 2, excluded_reason: 'ambiguous' as const },
+          { ...base, row_id: `sr-${'c'.repeat(32)}`, position: '3', name: 'Профиль', status: 'unmatched' as const,
+            reason: 'no_position' as const, candidate_position_ids: [], candidate_count: 0, excluded_reason: 'no_position' as const },
+        ],
+      },
+    };
+    add('SpecificationPricesAnswer ready', render(createElement(SpecificationPricesAnswer, { answer: ready, onPage: noop })));
+    add('SpecificationPricesAnswer stopped', render(createElement(SpecificationPricesAnswer, {
+      answer: { ...ready, state: 'price_list_missing' as const, price_list: null, run_id: null, text_layer_sha256: null,
+        extraction: null, matching: null, rows: null },
+      onPage: null,
+    })));
+  }
   add('AnalysisProfileTable loaded', render(createElement(AnalysisProfileTable, {
     items: [
       {
@@ -553,6 +611,20 @@ export function screens(): Screen[] {
       { section_code: 'PB', section_name: 'Пожарная безопасность', profile: null },
     ],
   })));
+  // `W60-PRICE-LIST-01`: the «Оптимизация» tab loaded (revisions, a positions page with its
+  // report, the fifteen vendor lists), and every other shape its widgets have.
+  {
+    const client = newClient();
+    seedLoadedOptimisation(client);
+    const loaded = optimisationShapes().find((shape) => shape.name === 'optimisation-loaded');
+    if (loaded !== undefined) add('ProjectOptimisation loaded', renderScreen(client, loaded.make()));
+  }
+  for (const shape of optimisationShapes()) {
+    if (shape.name === 'optimisation-loaded') continue;
+    const client = newClient();
+    shape.seedClient?.(client);
+    add(`ProjectOptimisation ${shape.name}`, renderScreen(client, shape.make()));
+  }
   // The worker registry: one row per state, the offline one in the collapsed group, and an
   // administrator's intake switch on each.
   add('WorkerList loaded', withRouter(createElement(WorkerList, {
@@ -643,6 +715,10 @@ export function screens(): Screen[] {
   })));
   add('NormSnapshotHistory loaded', withRouter(createElement(NormSnapshotHistory, {
     items: NORM_EVENTS, onFirst: null, onNext: noop,
+  })));
+  // `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue table with its two rows and ruled lines.
+  add('NormCatalogueTable loaded', withRouter(createElement(NormCatalogueTable, {
+    items: NORM_CATALOGUE_ITEMS, total: 2, filtered: false, onFirst: null, onNext: noop,
   })));
 
   // The finding list, with a row SELECTED — `aria-current='true'` is the only place

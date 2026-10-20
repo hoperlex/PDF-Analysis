@@ -78,6 +78,14 @@ PORT_FOR_ARGUMENT = {
     "comparisons": "ComparisonPort",
     # `W59-ANALYSIS-SETTINGS-01`.
     "analysis_profiles": "AnalysisProfilePort",
+    # `W57B-NORMS-CATALOGUE-XLSX-01`.
+    "xlsx_exports": "XlsxExportPort",
+    # `W61-DISPATCHER-01`.
+    "dispatch": "DispatchPort",
+    # `W60-PRICE-LIST-01`.
+    "optimisation": "OptimisationPort",
+    # `W60-OPT-MATCH-01`.
+    "specification_prices": "SpecificationPricesPort",
 }
 
 

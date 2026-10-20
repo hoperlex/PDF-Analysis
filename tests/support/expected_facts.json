@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 52,
+    "path_count": 65,
     "operations": [
       [
         "POST",
@@ -17,6 +17,11 @@
         "POST",
         "/projects/{project_uid}/documents",
         "uploadDocument"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions",
+        "uploadDocumentVersion"
       ],
       [
         "GET",
@@ -297,6 +302,76 @@
         "GET",
         "/analysis/profiles",
         "listAnalysisProfiles"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers",
+        "carryOverDecision"
+      ],
+      [
+        "GET",
+        "/norm-documents",
+        "listNormDocuments"
+      ],
+      [
+        "GET",
+        "/runs/{run_id}/export.xlsx",
+        "exportRunXlsx"
+      ],
+      [
+        "POST",
+        "/assignments",
+        "createAssignment"
+      ],
+      [
+        "GET",
+        "/assignments",
+        "listAssignments"
+      ],
+      [
+        "GET",
+        "/assignments/{assignment_uid}",
+        "getAssignment"
+      ],
+      [
+        "POST",
+        "/assignments/{assignment_uid}/transitions",
+        "transitionAssignment"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/price-lists",
+        "uploadPriceList"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/price-lists",
+        "listPriceListRevisions"
+      ],
+      [
+        "GET",
+        "/price-lists/{price_list_id}/positions",
+        "listPriceListPositions"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/vendor-lists",
+        "getEffectiveVendorLists"
+      ],
+      [
+        "PUT",
+        "/vendor-lists/{section_code}",
+        "setGlobalVendorList"
+      ],
+      [
+        "PUT",
+        "/projects/{project_uid}/vendor-lists/{section_code}",
+        "setProjectVendorList"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/specification-prices",
+        "getSpecificationPrices"
       ]
     ],
     "schema_names": [
@@ -372,6 +447,7 @@
       "UpdateMyProfileRequest",
       "UpdateUserRequest",
       "UploadDocumentRequest",
+      "UploadDocumentVersionRequest",
       "UserUid",
       "Verdict",
       "VerdictCount",
@@ -408,6 +484,9 @@
       "NormSearchHit",
       "NormSearchPage",
       "NormDocument",
+      "NormCatalogueEntry",
+      "NormKindCount",
+      "NormCatalogueEntryPage",
       "NormParagraph",
       "NormParagraphPage",
       "NormSnapshot",
@@ -452,7 +531,61 @@
       "AnalysisProfileSource",
       "AnalysisProfileSummary",
       "AnalysisProfileListItem",
-      "AnalysisProfileList"
+      "AnalysisProfileList",
+      "CarryoverSourceDecision",
+      "CarryoverCandidate",
+      "CarryOverDecisionRequest",
+      "CarryOverDecisionResponse",
+      "AssignmentUid",
+      "AssignmentStatus",
+      "AssignmentEventKind",
+      "AssignmentTransitionKind",
+      "CreateAssignmentRequest",
+      "TransitionAssignmentRequest",
+      "Assignment",
+      "AssignmentEvent",
+      "AssignmentDetail",
+      "AssignmentPage",
+      "PriceListId",
+      "PriceListPositionId",
+      "VendorListId",
+      "PriceListFormat",
+      "PriceListField",
+      "PriceListRowReason",
+      "PriceListCurrencySource",
+      "PriceListColumn",
+      "PriceListAmbiguousColumn",
+      "PriceListRowNote",
+      "PriceListReasonCount",
+      "PriceListCurrencySourceCount",
+      "PriceListParseReport",
+      "PriceListRevision",
+      "PriceListRevisionList",
+      "PriceListPosition",
+      "PriceListPositionPage",
+      "UploadPriceListRequest",
+      "VendorListMode",
+      "VendorListScope",
+      "VendorListSource",
+      "VendorListEntry",
+      "VendorListRevision",
+      "SectionVendorList",
+      "EffectiveVendorLists",
+      "SetGlobalVendorListRequest",
+      "SetProjectVendorListRequest",
+      "SpecificationPriceListRef",
+      "SpecificationSkipCounts",
+      "SpecificationSkippedLine",
+      "SpecificationTable",
+      "SpecificationExtractionSummary",
+      "SpecificationMatchCounts",
+      "SpecificationExclusionCounts",
+      "SpecificationCurrencyTotal",
+      "SpecificationMatching",
+      "SpecificationPricePosition",
+      "SpecificationPriceRow",
+      "SpecificationRowPage",
+      "SpecificationPrices"
     ]
   },
   "error_catalog": {

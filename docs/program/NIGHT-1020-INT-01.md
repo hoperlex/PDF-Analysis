@@ -128,3 +128,77 @@ Merged `W59-VERSION-COMPARE-01` (`367ea390`).
 | `W59-VERSION-UPLOAD-01` | `641f2b9e` | queued |
 | `W61-DISPATCHER-01` (migration 0025 in phase A) | `979632af` | queued |
 | `W59-SEAL-FOLLOWUP-01` (suites only) | `77aa55bd` | none needed |
+
+## 9. Integrator decision: a shared contract slot (from 04:30)
+
+With four lanes queued behind one contract owner and the window closing, the
+integrator opened the slot to parallel reseals under `R-139`: each lane reseals from
+the published integration tip, and before its hand-back merges the newest tip, keeps
+both sides' paths and schemas in `contracts/api/v1/openapi.json`, and **re-derives**
+every derived artifact (web mirror copy, `api:generate`, `api:verify`,
+`FRONTEND_LOCK.json`, `tests/support/expected_facts.json`, every surface-count prose
+line) instead of hand-merging it, then reruns `tests/contract`. The migration head
+stays single-owner (`0025` dispatcher, `0026` price lists chained on it). AGENTS §3's
+single-owner rule is suspended for the API surface only, for this window only.
+
+## 10. Slices published from the shared slot
+
+- **`W59-ANALYSIS-SETTINGS-01`** (`b344f004`) — candidate `0f0903f2`. «Настройки
+  анализа» lists the 15 sections with their profile (`listAnalysisProfiles`, status
+  builtin/draft/reviewed, prompt-bundle hash, legacy source); АИ, ПЗ, ПОС and ТХ runs
+  reach `published` in recorded mode with synthetic recordings keyed to each profile's
+  own request; ПБ and unclassified versions are refused; one profile's recording never
+  answers another's. 51/58/147 → **52/59/153**.
+- **`W59-VERSION-UPLOAD-01`** (`bddaa058`) — candidate `a820849a`. «Загрузить новую
+  версию» adds the next immutable version to an existing set (`uploadDocumentVersion`,
+  same envelope, custody and outbox as `uploadDocument`); the new version is current and
+  unclassified, older versions untouched; a concurrent-upload ordinal race in
+  `publish_version` (reachable before) is fixed by a row lock. This closes the gap the
+  comparison slice found. **53/60/154**; nginx upload locations widened in both proxy
+  files.
+- **Checks on the merged tree** after each merge: `tests/contract` + `tests/unit` +
+  journey conformance (+ upload headroom): 1113 passed, the two base reds only; web
+  `typecheck` clean; mirror byte-identical.
+- **Debts to add at window close:** synthetic recordings cover only the AR baseline
+  document and four sections; `Dockerfile.api` comment names only `text_analysis/**`;
+  D-174 (BFF memory under a real 250 MiB bundle) now also covers the version upload.
+- **`W59-DECISION-CARRYOVER-01`** (`2d8dbee8`) — candidate `c22f2049`. On «Сравнение
+  версий» an expert carries a decision from an older finding onto the `unchanged`
+  matched finding of the newer version («Перенести решение»), only while the
+  recomputed comparison still proposes the pair; the target gets one new event with a
+  fixed provenance sentence, nothing else is written; no migration. A pre-existing red
+  (`test_rules_are_load_bearing`, `decided_severity`) is repaired. **54/61/158**.
+- **`W57B-NORMS-CATALOGUE-XLSX-01`** (`4639f3be`) — candidate `beafeab5`. «Нормы» gains a
+  catalogue of the current snapshot (`listNormDocuments`: 674 documents, 23 kinds;
+  257 display designations repaired by a deterministic derivation, snapshot rows
+  untouched, measured read-only on the local real-corpus stand at ~20 ms); a run's
+  findings download as Excel in the legacy layout (`exportRunXlsx`, expert) through the
+  certified chain, two chain defects fixed (500-page label bound, v1 findings). A
+  pre-existing red (`test_v2_csv_severity` UPDATE on an immutable row) repaired.
+  **56/63/161**.
+- **Checks on the merged tree** after each: `tests/contract` + `tests/unit` + journey
+  conformance 1184 passed, the two base reds only; web `typecheck` clean; mirror
+  byte-identical.
+- **`W61-DISPATCHER-01`** (`6f014201`) — candidate `f7664f59`. «Диспетчер» (`/dispatcher`,
+  group «Работа»): an administrator assigns a project or a document set to an active
+  expert, reassigns or cancels; the expert takes it, completes it or returns it with a
+  reason from «Мои задачи» on the home screen; one open assignment per scope; every
+  change is an append-only event and the state is derived by a view (migration
+  `0025_work_assignments`, `asg_` identities, state machine `work_assignment`, domain
+  candidate revision 15). Q-2's W61/W62 placement is moot for the code under `R-139`.
+  **59/67/171**, head **`0025_work_assignments`**. Merged-tree checks: 1249 passed, the
+  two base reds only; `typecheck` clean.
+- **`W60-PRICE-LIST-01`** (`6b7f981b`) — candidate `40cd159f`. The project's «Оптимизация»
+  tab: an expert uploads a price list (CSV, or the first sheet of an XLSX; stdlib parsing,
+  ≤ 10 MiB, ≤ 20 000 rows, deterministic parse report, skipped rows listed with reasons);
+  every upload is an immutable revision bound to its Blob; an administrator keeps a global
+  vendor list per section, an expert may override it per project (migration
+  `0026_price_lists`, identities `prl_`/`prp_`/`vnl_`). No money figure exists without a
+  price-list position. **59/67/171 → 64/73/198**, head **`0026_price_lists`**.
+  Merged-tree checks: `tests/contract` + `tests/unit` + journey conformance 1347 passed,
+  base reds only; `typecheck` clean. Integrator edit: the code-first section of
+  `CURRENT_STATE.md` was compacted to stay under the 120-line guard.
+- **Restart note (07:00–11:07).** The host rebooted at 07:00:28; the integrator session
+  and every lane subagent died. Branches and worktrees survived; lane stacks did not
+  (containers gone, incl. the local norms stand). The session resumed at 11:07 and
+  resumed the stopped lanes by agent id.

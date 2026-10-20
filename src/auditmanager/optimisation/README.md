@@ -19,7 +19,7 @@ Other contexts import `auditmanager.optimisation.public` only.
   its row counts. A deferred trigger refuses a revision whose positions are not all written.
 - `price_list_position` — immutable: `prp_<ULID>`, source row number, code?, name, mark?,
   unit, exact `numeric` unit price (> 0, < 10^14, ≤ 6 decimals), ISO 4217 currency, vendor?,
-  section? (one of the fifteen codes).
+  section? (one of the fifteen sections).
 - `vendor_list_revision` — immutable: `vnl_<ULID>`, scope `global` (no project) or `project`,
   section, mode `list` | `inherit`, `revision_number` per (scope, project, section), entry
   count, actor, time. `vendor_list_entry` — its ordered entries (material?, vendor, note?).
@@ -78,6 +78,6 @@ limit ≤ 500, `next_offset`), `get_effective_vendor_lists` (all fifteen section
 
 ## Identity
 
-`prl`, `prp` and `vnl` are minted here (`identity.py`) on the shared registry's pattern but are
-not in `contracts/domain/v1/identifiers.json` yet (phase A owns neither that file nor
-`shared/identity`); contracting them moves the prefixes into the registry.
+`prl`, `prp` and `vnl` are contracted (`contracts/domain/v1/identifiers.json` revision 16) and
+registered in `shared/identity`; `identity.py` validates through the registry's types and
+answers a malformed value with `validation_failed` naming the field.

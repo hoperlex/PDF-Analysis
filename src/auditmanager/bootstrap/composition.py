@@ -27,6 +27,7 @@ from auditmanager.bootstrap.adapters import (
     AnalysisProfileAdapter,
     BlockAdapter,
     ComparisonAdapter,
+    DispatchAdapter,
     CredentialAdapter,
     CsvExportAdapter,
     DashboardAdapter,
@@ -36,11 +37,14 @@ from auditmanager.bootstrap.adapters import (
     FindingAdapter,
     NormContentAdapter,
     NormsSearchAdapter,
+    OptimisationAdapter,
     ProjectAdapter,
     RegistrationAdapter,
     ReleasesAdapter,
     RunAdapter,
     SectionAdapter,
+    SpecificationPricesAdapter,
+    XlsxExportAdapter,
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
@@ -307,6 +311,9 @@ def build_application(
         # statement timeout; the norm PDF through its confirmed binding from the same store.
         norms=NormsSearchAdapter(sessions, timeout_ms=resolved.norms_search_timeout_ms),
         norm_content=NormContentAdapter(sessions, blob_store=store),
+        # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook: the same session factory, and the
+        # version's portal companion read from the same store.
+        xlsx_exports=XlsxExportAdapter(sessions, blob_store=store),
         # `W59-SECTION-SEAL-01`. Classification and review over the same sessions and store;
         # `executable` is the registry's own section set.
         sections=SectionAdapter(
@@ -324,6 +331,15 @@ def build_application(
         # `W59-ANALYSIS-SETTINGS-01`. The same registry run start routes through, listed
         # read-only for «Настройки анализа», named from the reviewed section catalogue.
         analysis_profiles=AnalysisProfileAdapter(text_profiles, section_names=section_names()),
+        # `W61-DISPATCHER-01`. «Диспетчер» over the same session factory; the role set
+        # and the people's labels are read through `access` in each transaction.
+        dispatch=DispatchAdapter(sessions),
+        # `W60-PRICE-LIST-01`. Project price lists (the uploaded file kept as a Blob in the
+        # same store) and vendor lists, over the same sessions.
+        optimisation=OptimisationAdapter(sessions, blob_store=store),
+        # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's
+        # current price list; the saved text layers are read as the comparison reads them.
+        specification_prices=SpecificationPricesAdapter(sessions, blob_store=store),
     )
     return Application(
         router=router,

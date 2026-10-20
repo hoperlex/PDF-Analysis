@@ -66,14 +66,19 @@ def test_the_migration_restates_the_formats_and_the_bounds(migration: ModuleType
     assert limits.MAX_DATA_ROWS == 20_000
 
 
-@pytest.mark.parametrize("identity", [PriceListId, PriceListPositionId, VendorListId])
-def test_each_identity_is_opaque_free_in_the_registry_and_checked(identity: type) -> None:
-    assert identity.prefix not in IDENTITY_TYPES_BY_PREFIX
+@pytest.mark.parametrize(
+    ("identity", "prefix"),
+    [(PriceListId, "prl"), (PriceListPositionId, "prp"), (VendorListId, "vnl")],
+)
+def test_each_identity_is_contracted_opaque_and_checked(identity: type, prefix: str) -> None:
+    # `W60-PRICE-LIST-01` phase B contracted the three prefixes; the boundary's type
+    # validates through the registry's.
+    assert IDENTITY_TYPES_BY_PREFIX[prefix] is identity.registry_type
     minted = identity.new()
     assert identity.parse(str(minted)) == minted
-    assert str(minted).startswith(f"{identity.prefix}_")
-    assert identity._pattern.pattern == pattern_for(identity.prefix)
-    for bad in ("", f"{identity.prefix}_short", "prj_01ARZ3NDEKTSV4RRFFQ69G5FAV", 7):
+    assert str(minted).startswith(f"{prefix}_")
+    assert identity.pattern() == pattern_for(prefix)
+    for bad in ("", f"{prefix}_short", "prj_01ARZ3NDEKTSV4RRFFQ69G5FAV", 7):
         with pytest.raises(DomainError) as caught:
             identity.parse(bad)
         assert caught.value.code is ErrorCode.VALIDATION_FAILED

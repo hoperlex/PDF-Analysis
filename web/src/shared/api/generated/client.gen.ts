@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2
+ *   sha256 d8da2b79d0534c9604719e6e1b1bf06825d1843f81bba46141c08758ec9bf081
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -26,20 +26,30 @@ import type {
   ArchiveUserResult,
   CancelRunInput,
   CancelRunResult,
+  CarryOverDecisionInput,
+  CarryOverDecisionResult,
   ChangePasswordInput,
   ChangePasswordResult,
   ClassifyDocumentVersionInput,
   ClassifyDocumentVersionResult,
   CompareDocumentVersionsInput,
   CompareDocumentVersionsResult,
+  CreateAssignmentInput,
+  CreateAssignmentResult,
   CreateProjectInput,
   CreateProjectResult,
   ExportRunCsvInput,
   ExportRunCsvResult,
+  ExportRunXlsxInput,
+  ExportRunXlsxResult,
+  GetAssignmentInput,
+  GetAssignmentResult,
   GetDashboardSummaryInput,
   GetDashboardSummaryResult,
   GetDocumentVersionInput,
   GetDocumentVersionResult,
+  GetEffectiveVendorListsInput,
+  GetEffectiveVendorListsResult,
   GetFindingInput,
   GetFindingResult,
   GetMeInput,
@@ -52,6 +62,8 @@ import type {
   GetRunNormVerificationResult,
   GetRunStatusInput,
   GetRunStatusResult,
+  GetSpecificationPricesInput,
+  GetSpecificationPricesResult,
   GetUserInput,
   GetUserResult,
   GetVersionBlocksInput,
@@ -62,6 +74,8 @@ import type {
   IssueTokenResult,
   ListAnalysisProfilesInput,
   ListAnalysisProfilesResult,
+  ListAssignmentsInput,
+  ListAssignmentsResult,
   ListDecisionHistoryInput,
   ListDecisionHistoryResult,
   ListDecisionsInput,
@@ -72,12 +86,18 @@ import type {
   ListExecutionJournalResult,
   ListExecutionQueueInput,
   ListExecutionQueueResult,
+  ListNormDocumentsInput,
+  ListNormDocumentsResult,
   ListNormParagraphsInput,
   ListNormParagraphsResult,
   ListNormSnapshotEventsInput,
   ListNormSnapshotEventsResult,
   ListNormSnapshotsInput,
   ListNormSnapshotsResult,
+  ListPriceListPositionsInput,
+  ListPriceListPositionsResult,
+  ListPriceListRevisionsInput,
+  ListPriceListRevisionsResult,
   ListProjectsInput,
   ListProjectsResult,
   ListRegistrationsInput,
@@ -116,8 +136,12 @@ import type {
   SetCurrentNormSnapshotResult,
   SetExecutionPausedInput,
   SetExecutionPausedResult,
+  SetGlobalVendorListInput,
+  SetGlobalVendorListResult,
   SetJobPriorityInput,
   SetJobPriorityResult,
+  SetProjectVendorListInput,
+  SetProjectVendorListResult,
   SetWorkerIntakeInput,
   SetWorkerIntakeResult,
   StartRunInput,
@@ -130,12 +154,18 @@ import type {
   StreamVersionPortalBlockCropResult,
   SubmitRegistrationInput,
   SubmitRegistrationResult,
+  TransitionAssignmentInput,
+  TransitionAssignmentResult,
   UpdateMyProfileInput,
   UpdateMyProfileResult,
   UpdateUserInput,
   UpdateUserResult,
   UploadDocumentInput,
   UploadDocumentResult,
+  UploadDocumentVersionInput,
+  UploadDocumentVersionResult,
+  UploadPriceListInput,
+  UploadPriceListResult,
 } from './operations.gen';
 import { OPERATIONS } from './operations.gen';
 
@@ -188,6 +218,18 @@ export function cancelRun(
 }
 
 /**
+ * Carry Over Decision
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers` - a write; carries a required Idempotency-Key.
+ */
+export function carryOverDecision(
+  input: CarryOverDecisionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CarryOverDecisionResult>> {
+  return request<CarryOverDecisionResult>(OPERATIONS.carryOverDecision, input, options);
+}
+
+/**
  * Change the signed-in account's password and revoke its old credentials.
  *
  * `POST /auth/password`.
@@ -224,6 +266,18 @@ export function compareDocumentVersions(
 }
 
 /**
+ * Assign a project, or one document of it, to an expert.
+ *
+ * `POST /assignments`.
+ */
+export function createAssignment(
+  input: CreateAssignmentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateAssignmentResult>> {
+  return request<CreateAssignmentResult>(OPERATIONS.createAssignment, input, options);
+}
+
+/**
  * Create a project.
  *
  * `POST /projects` - a write; carries a required Idempotency-Key.
@@ -248,6 +302,30 @@ export function exportRunCsv(
 }
 
 /**
+ * Download the Excel workbook for one run.
+ *
+ * `GET /runs/{run_id}/export.xlsx`.
+ */
+export function exportRunXlsx(
+  input: ExportRunXlsxInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ExportRunXlsxResult>> {
+  return request<ExportRunXlsxResult>(OPERATIONS.exportRunXlsx, input, options);
+}
+
+/**
+ * Read one assignment with its history.
+ *
+ * `GET /assignments/{assignment_uid}`.
+ */
+export function getAssignment(
+  input: GetAssignmentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetAssignmentResult>> {
+  return request<GetAssignmentResult>(OPERATIONS.getAssignment, input, options);
+}
+
+/**
  * One aggregate read across the whole deployment: all four dashboard panels.
  *
  * `GET /dashboard`.
@@ -269,6 +347,18 @@ export function getDocumentVersion(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetDocumentVersionResult>> {
   return request<GetDocumentVersionResult>(OPERATIONS.getDocumentVersion, input, options);
+}
+
+/**
+ * Get Effective Vendor Lists
+ *
+ * `GET /projects/{project_uid}/vendor-lists`.
+ */
+export function getEffectiveVendorLists(
+  input: GetEffectiveVendorListsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetEffectiveVendorListsResult>> {
+  return request<GetEffectiveVendorListsResult>(OPERATIONS.getEffectiveVendorLists, input, options);
 }
 
 /**
@@ -344,6 +434,18 @@ export function getRunStatus(
 }
 
 /**
+ * Get Specification Prices
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/specification-prices`.
+ */
+export function getSpecificationPrices(
+  input: GetSpecificationPricesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetSpecificationPricesResult>> {
+  return request<GetSpecificationPricesResult>(OPERATIONS.getSpecificationPrices, input, options);
+}
+
+/**
  * Read one account.
  *
  * `GET /users/{user_uid}`.
@@ -401,6 +503,18 @@ export function listAnalysisProfiles(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListAnalysisProfilesResult>> {
   return request<ListAnalysisProfilesResult>(OPERATIONS.listAnalysisProfiles, input, options);
+}
+
+/**
+ * List assignments.
+ *
+ * `GET /assignments`.
+ */
+export function listAssignments(
+  input: ListAssignmentsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListAssignmentsResult>> {
+  return request<ListAssignmentsResult>(OPERATIONS.listAssignments, input, options);
 }
 
 /**
@@ -464,6 +578,18 @@ export function listExecutionQueue(
 }
 
 /**
+ * List Norm Documents
+ *
+ * `GET /norm-documents`.
+ */
+export function listNormDocuments(
+  input: ListNormDocumentsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListNormDocumentsResult>> {
+  return request<ListNormDocumentsResult>(OPERATIONS.listNormDocuments, input, options);
+}
+
+/**
  * List Norm Paragraphs
  *
  * `GET /norm-documents/{norm_document_id}/paragraphs`.
@@ -497,6 +623,30 @@ export function listNormSnapshots(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListNormSnapshotsResult>> {
   return request<ListNormSnapshotsResult>(OPERATIONS.listNormSnapshots, input, options);
+}
+
+/**
+ * List Price List Positions
+ *
+ * `GET /price-lists/{price_list_id}/positions`.
+ */
+export function listPriceListPositions(
+  input: ListPriceListPositionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListPriceListPositionsResult>> {
+  return request<ListPriceListPositionsResult>(OPERATIONS.listPriceListPositions, input, options);
+}
+
+/**
+ * List Price List Revisions
+ *
+ * `GET /projects/{project_uid}/price-lists`.
+ */
+export function listPriceListRevisions(
+  input: ListPriceListRevisionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListPriceListRevisionsResult>> {
+  return request<ListPriceListRevisionsResult>(OPERATIONS.listPriceListRevisions, input, options);
 }
 
 /**
@@ -728,6 +878,18 @@ export function setExecutionPaused(
 }
 
 /**
+ * Set Global Vendor List
+ *
+ * `PUT /vendor-lists/{section_code}`.
+ */
+export function setGlobalVendorList(
+  input: SetGlobalVendorListInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetGlobalVendorListResult>> {
+  return request<SetGlobalVendorListResult>(OPERATIONS.setGlobalVendorList, input, options);
+}
+
+/**
  * Set Priority
  *
  * `PUT /execution/queue/{job_id}/priority` - a write; carries a required Idempotency-Key.
@@ -737,6 +899,18 @@ export function setJobPriority(
   options?: RequestOptions,
 ): Promise<ApiResponse<SetJobPriorityResult>> {
   return request<SetJobPriorityResult>(OPERATIONS.setJobPriority, input, options);
+}
+
+/**
+ * Set Project Vendor List
+ *
+ * `PUT /projects/{project_uid}/vendor-lists/{section_code}`.
+ */
+export function setProjectVendorList(
+  input: SetProjectVendorListInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetProjectVendorListResult>> {
+  return request<SetProjectVendorListResult>(OPERATIONS.setProjectVendorList, input, options);
 }
 
 /**
@@ -812,6 +986,18 @@ export function submitRegistration(
 }
 
 /**
+ * Move an assignment: start, complete, return, reassign or cancel it.
+ *
+ * `POST /assignments/{assignment_uid}/transitions`.
+ */
+export function transitionAssignment(
+  input: TransitionAssignmentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<TransitionAssignmentResult>> {
+  return request<TransitionAssignmentResult>(OPERATIONS.transitionAssignment, input, options);
+}
+
+/**
  * Set the signed-in account's names, and complete its profile.
  *
  * `PATCH /me`.
@@ -848,6 +1034,30 @@ export function uploadDocument(
 }
 
 /**
+ * Upload one portal bundle as the next immutable version of an existing document.
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/versions` - a write; carries a required Idempotency-Key.
+ */
+export function uploadDocumentVersion(
+  input: UploadDocumentVersionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UploadDocumentVersionResult>> {
+  return request<UploadDocumentVersionResult>(OPERATIONS.uploadDocumentVersion, input, options);
+}
+
+/**
+ * Upload Price List
+ *
+ * `POST /projects/{project_uid}/price-lists` - a write; carries a required Idempotency-Key.
+ */
+export function uploadPriceList(
+  input: UploadPriceListInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UploadPriceListResult>> {
+  return request<UploadPriceListResult>(OPERATIONS.uploadPriceList, input, options);
+}
+
+/**
  * The whole client as one object, for a consumer that would rather inject it than
  * import each function. The named exports above are the ordinary way in.
  */
@@ -856,32 +1066,42 @@ export const apiClient = {
   approveRegistration,
   archiveUser,
   cancelRun,
+  carryOverDecision,
   changePassword,
   classifyDocumentVersion,
   compareDocumentVersions,
+  createAssignment,
   createProject,
   exportRunCsv,
+  exportRunXlsx,
+  getAssignment,
   getDashboardSummary,
   getDocumentVersion,
+  getEffectiveVendorLists,
   getFinding,
   getMe,
   getNormDocument,
   getProductVersion,
   getRunNormVerification,
   getRunStatus,
+  getSpecificationPrices,
   getUser,
   getVersionBlocks,
   getVersionSectionReview,
   issueToken,
   listAnalysisProfiles,
+  listAssignments,
   listDecisionHistory,
   listDecisions,
   listDocuments,
   listExecutionJournal,
   listExecutionQueue,
+  listNormDocuments,
   listNormParagraphs,
   listNormSnapshotEvents,
   listNormSnapshots,
+  listPriceListPositions,
+  listPriceListRevisions,
   listProjects,
   listRegistrations,
   listReleases,
@@ -901,14 +1121,19 @@ export const apiClient = {
   searchNorms,
   setCurrentNormSnapshot,
   setExecutionPaused,
+  setGlobalVendorList,
   setJobPriority,
+  setProjectVendorList,
   setWorkerIntake,
   startRun,
   streamDocumentVersionContent,
   streamNormDocumentContent,
   streamVersionPortalBlockCrop,
   submitRegistration,
+  transitionAssignment,
   updateMyProfile,
   updateUser,
   uploadDocument,
+  uploadDocumentVersion,
+  uploadPriceList,
 } as const;
