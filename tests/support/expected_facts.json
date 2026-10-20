@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 61,
+    "path_count": 64,
     "operations": [
       [
         "POST",
@@ -320,6 +320,26 @@
       ],
       [
         "POST",
+        "/assignments",
+        "createAssignment"
+      ],
+      [
+        "GET",
+        "/assignments",
+        "listAssignments"
+      ],
+      [
+        "GET",
+        "/assignments/{assignment_uid}",
+        "getAssignment"
+      ],
+      [
+        "POST",
+        "/assignments/{assignment_uid}/transitions",
+        "transitionAssignment"
+      ],
+      [
+        "POST",
         "/projects/{project_uid}/price-lists",
         "uploadPriceList"
       ],
@@ -511,6 +531,16 @@
       "CarryoverCandidate",
       "CarryOverDecisionRequest",
       "CarryOverDecisionResponse",
+      "AssignmentUid",
+      "AssignmentStatus",
+      "AssignmentEventKind",
+      "AssignmentTransitionKind",
+      "CreateAssignmentRequest",
+      "TransitionAssignmentRequest",
+      "Assignment",
+      "AssignmentEvent",
+      "AssignmentDetail",
+      "AssignmentPage",
       "PriceListId",
       "PriceListPositionId",
       "VendorListId",

@@ -27,6 +27,7 @@ from auditmanager.bootstrap.adapters import (
     AnalysisProfileAdapter,
     BlockAdapter,
     ComparisonAdapter,
+    DispatchAdapter,
     CredentialAdapter,
     CsvExportAdapter,
     DashboardAdapter,
@@ -329,6 +330,9 @@ def build_application(
         # `W59-ANALYSIS-SETTINGS-01`. The same registry run start routes through, listed
         # read-only for «Настройки анализа», named from the reviewed section catalogue.
         analysis_profiles=AnalysisProfileAdapter(text_profiles, section_names=section_names()),
+        # `W61-DISPATCHER-01`. «Диспетчер» over the same session factory; the role set
+        # and the people's labels are read through `access` in each transaction.
+        dispatch=DispatchAdapter(sessions),
         # `W60-PRICE-LIST-01`. Project price lists (the uploaded file kept as a Blob in the
         # same store) and vendor lists, over the same sessions.
         optimisation=OptimisationAdapter(sessions, blob_store=store),

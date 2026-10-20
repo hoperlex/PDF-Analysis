@@ -6,7 +6,7 @@
  * owner, and `web/docs/PC01_UI_SEAM.md` records which Gate B session uses which.
  *
  * Rules:
- *   - every key starts with one of the twelve root namespaces below;
+ *   - every key starts with one of the fourteen root namespaces below;
  *   - a key is built by calling a function here, never by writing an array literal;
  *   - invalidation targets a prefix — `queryKeys.runs.all()` invalidates every run key;
  *   - a key filled by more than one site carries its value type, as a `DataTag`. See
@@ -37,6 +37,8 @@
 import type { DataTag } from '@tanstack/react-query';
 
 import type {
+  AssignmentStatus,
+  AssignmentUid,
   DocumentUid,
   PriceListId,
   FindingCategory,
@@ -52,11 +54,15 @@ import type {
 } from './generated/types.gen';
 
 /**
- * The twelve root namespaces. Nothing else is a legal first key segment.
+ * The fourteen root namespaces. Nothing else is a legal first key segment.
  *
  * `account`, `users` and `registrations` entered together, once, in `W50-REGISTRY-01`
  * (`W50-PLAN.md` §3.6): the signed-in account, the administrator's account list and the
  * registration requests. Later lanes add key factories inside them and no new root.
+ *
+ * `assignments` entered once, in `W61-DISPATCHER-01`: the dispatcher's work assignments belong
+ * to no single project read (a list spans every project), and one move changes the list, the
+ * assignment's detail and the home screen's «Мои задачи» at once.
  *
  * `norms` entered once, in `W55A-WEB-NORMS` (`W55-PLAN.md` §A4 Stage B item 4, which names
  * the namespace): the normative corpus belongs to no project, run or finding, and one
@@ -82,6 +88,7 @@ export const QUERY_NAMESPACES = [
   'execution',
   'norms',
   'analysis',
+  'assignments',
   'optimisation',
 ] as const;
 
@@ -105,6 +112,15 @@ export interface UserListFilters {
 /** Filters that make a page of `listRegistrations` a distinct cache entry. */
 export interface RegistrationListFilters {
   readonly status?: RegistrationStatus;
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
+/** Filters that make a page of `listAssignments` a distinct cache entry. */
+export interface AssignmentListFilters {
+  readonly mine?: boolean;
+  readonly status?: AssignmentStatus;
+  readonly project_uid?: ProjectUid;
   readonly cursor?: string;
   readonly limit?: number;
 }
@@ -145,6 +161,17 @@ export const queryKeys = {
   analysis: {
     all: () => ['analysis'] as const,
     profiles: () => ['analysis', 'profiles'] as const,
+  },
+  /**
+   * «Диспетчер» (`W61-DISPATCHER-01`). One root, because every command — a creation or a
+   * move — changes what more than one key answers: the list's row (status, assignee), the
+   * detail's history and the home screen's «Мои задачи». Each command invalidates
+   * `assignments.all()`.
+   */
+  assignments: {
+    all: () => ['assignments'] as const,
+    list: (filters: AssignmentListFilters = {}) => ['assignments', 'list', filters] as const,
+    detail: (assignmentUid: AssignmentUid) => ['assignments', 'detail', assignmentUid] as const,
   },
   /**
    * The «Нормы» screens (`W55A-WEB-NORMS`). One root, because `setCurrentNormSnapshot`

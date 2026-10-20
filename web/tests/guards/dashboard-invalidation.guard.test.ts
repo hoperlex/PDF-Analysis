@@ -194,6 +194,10 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/classify-version/model/use-classify-version.ts': true,
   // `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict, and the dashboard counts verdicts.
   'src/features/carry-over-decision/model/use-carry-over-decision.ts': true,
+  // `W61-DISPATCHER-01`: creating and moving a work assignment changes no number the
+  // dashboard reads; both invalidate the `assignments` root instead.
+  'src/features/create-assignment/model/use-create-assignment.ts': false,
+  'src/features/transition-assignment/model/use-transition-assignment.ts': false,
 };
 
 /** A feature model source with an executable mutation call, independent of its filename. */

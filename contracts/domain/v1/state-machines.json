@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.state-machines",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 15,
-  "revision_note": "Candidate revision 15 by W60-PRICE-LIST-01. No machine or transition change; domain family moves with the new prl_, prp_ and vnl_ identities.",
+  "candidate_revision": 16,
+  "revision_note": "Candidate revision 16 by W60-PRICE-LIST-01. No machine or transition change; domain family moves with the new prl_, prp_ and vnl_ identities.",
   "status": "draft_candidate",
   "frozen": false,
   "rules": [
@@ -938,6 +938,133 @@
       ],
       "notes": [
         "At most one pending request per login (a partial unique index) and at most 100 pending requests in all; both refusals are conflict, with conflict_reason request_pending and queue_full."
+      ]
+    },
+    "work_assignment": {
+      "entity": "WorkAssignment",
+      "identifier": "assignment_uid",
+      "purpose": "One assignment of a project, or of one document of it, to an expert by an administrator (the dispatcher, roadmap Q-2). Every change is an appended event with its actor and time; the state is the projection of the latest event and is never stored as an updatable column.",
+      "authoritative_writer": "the dispatch bounded context (auditmanager.dispatch); work_assignment and work_assignment_event (migration 0025) refuse UPDATE and DELETE",
+      "initial": "assigned",
+      "transitions": {
+        "assigned": [
+          "in_progress",
+          "returned",
+          "assigned",
+          "cancelled"
+        ],
+        "in_progress": [
+          "done",
+          "returned",
+          "assigned",
+          "cancelled"
+        ],
+        "returned": [
+          "assigned",
+          "cancelled"
+        ]
+      },
+      "terminal": [
+        "done",
+        "cancelled"
+      ],
+      "terminal_semantics": {
+        "done": {
+          "outcome": "success",
+          "publishes_result": false,
+          "description": "The assignee completed the work (a completed event). The assignment is closed; new work on the same scope is a new assignment."
+        },
+        "cancelled": {
+          "outcome": "cancelled",
+          "publishes_result": false,
+          "description": "An administrator cancelled the assignment (a cancelled event, with an optional reason). It is closed; new work on the same scope is a new assignment."
+        }
+      },
+      "guards": [
+        {
+          "from": "assigned",
+          "to": "in_progress",
+          "trigger": "the assignee starts the work (transitionAssignment kind started)",
+          "guard": "the actor is the current assignee and holds expert; the assignment row is locked",
+          "on_violation": "permission_denied"
+        },
+        {
+          "from": "in_progress",
+          "to": "done",
+          "trigger": "the assignee completes the work (transitionAssignment kind completed)",
+          "guard": "the actor is the current assignee and holds expert",
+          "on_violation": "permission_denied"
+        },
+        {
+          "from": "assigned",
+          "to": "returned",
+          "trigger": "the assignee returns the work with a reason (transitionAssignment kind returned)",
+          "guard": "the actor is the current assignee and holds expert; the reason is 1-2000 characters",
+          "on_violation": "permission_denied"
+        },
+        {
+          "from": "in_progress",
+          "to": "returned",
+          "trigger": "the assignee returns the work with a reason (transitionAssignment kind returned)",
+          "guard": "the actor is the current assignee and holds expert; the reason is 1-2000 characters",
+          "on_violation": "permission_denied"
+        },
+        {
+          "from": "assigned",
+          "to": "assigned",
+          "trigger": "an administrator reassigns the work (transitionAssignment kind reassigned)",
+          "guard": "the actor holds admin; the new assignee is an active account holding expert and is not the current assignee",
+          "on_violation": "validation_failed"
+        },
+        {
+          "from": "in_progress",
+          "to": "assigned",
+          "trigger": "an administrator reassigns the work (transitionAssignment kind reassigned)",
+          "guard": "the actor holds admin; the new assignee is an active account holding expert and is not the current assignee",
+          "on_violation": "validation_failed"
+        },
+        {
+          "from": "returned",
+          "to": "assigned",
+          "trigger": "an administrator reassigns returned work (transitionAssignment kind reassigned)",
+          "guard": "the actor holds admin; the new assignee, who may be the same expert, is an active account holding expert",
+          "on_violation": "validation_failed"
+        },
+        {
+          "from": "assigned",
+          "to": "cancelled",
+          "trigger": "an administrator cancels the assignment (transitionAssignment kind cancelled)",
+          "guard": "the actor holds admin",
+          "on_violation": "permission_denied"
+        },
+        {
+          "from": "in_progress",
+          "to": "cancelled",
+          "trigger": "an administrator cancels the assignment (transitionAssignment kind cancelled)",
+          "guard": "the actor holds admin",
+          "on_violation": "permission_denied"
+        },
+        {
+          "from": "returned",
+          "to": "cancelled",
+          "trigger": "an administrator cancels the assignment (transitionAssignment kind cancelled)",
+          "guard": "the actor holds admin",
+          "on_violation": "permission_denied"
+        }
+      ],
+      "retry": {
+        "in_place": true,
+        "creates": "nothing; a request equal to the latest event (same kind, reason and new assignee) answers the current state, and any other move the table does not declare is state_transition_not_allowed with these machine details",
+        "note": "Two moves on one assignment serialise on its row lock, and the per-assignment event sequence is unique, so the second is decided against the first."
+      },
+      "evidence": [
+        "ROADMAP-TO-BETA.md section 10.5 Q-2",
+        "OWNER_RULINGS_2026-09-17.md R-60",
+        "W61-DISPATCHER-01"
+      ],
+      "notes": [
+        "createAssignment creates the assignment in assigned, with its assigned event; one open (non-terminal) assignment per scope (the project, or the project and one document): an exact repeat answers it and any other creation there is conflict with conflict_reason assignment_open.",
+        "An expert reads only the assignments currently given to them; anything else is not_found. An administrator who is not the assignee is refused the assignee's moves with permission_denied and required_capability assignment:assignee."
       ]
     }
   },

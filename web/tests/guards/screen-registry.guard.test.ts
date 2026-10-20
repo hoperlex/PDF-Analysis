@@ -126,7 +126,7 @@ function cycleFindings(registry: readonly ScreenEntry[]): string[] {
 /** The ruling, as data. Order matters: it is the menu's order. */
 const R66: Partial<Record<ScreenGroup, string[]>> = {
   home: ['/'],
-  work: ['/projects', '/dashboard', '/section-optimisation'],
+  work: ['/projects', '/dashboard', '/section-optimisation', '/dispatcher'],
   knowledge: ['/knowledge-base', '/blocks', '/norms'],
   system: ['/logs', '/workers', '/analysis-settings', '/queue'],
   admin: ['/admin/users', '/admin/registrations'],
@@ -150,9 +150,10 @@ describe('the registry is the route tree: every page has a row and every row a p
   });
 
   it('reads a tree and a registry of a credible size', () => {
-    // `W55A-WEB-NORMS` added the norms document view: 27 -> 28.
-    expect(routeAddresses().length).toBe(28);
-    expect(REGISTRY.length).toBe(28);
+    // `W55A-WEB-NORMS` added the norms document view: 27 -> 28. `W61-DISPATCHER-01` added
+    // «Диспетчер»: 28 -> 29.
+    expect(routeAddresses().length).toBe(29);
+    expect(REGISTRY.length).toBe(29);
   });
 
   it('has no page without a row and no row without a page', () => {

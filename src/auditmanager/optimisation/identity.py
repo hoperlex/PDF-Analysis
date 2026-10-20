@@ -2,7 +2,7 @@
 
 ``prl_<ULID>`` -- one uploaded price-list revision; ``prp_<ULID>`` -- one parsed position of it;
 ``vnl_<ULID>`` -- one revision of a vendor list. `W60-PRICE-LIST-01` phase B contracted all
-three (``contracts/domain/v1/identifiers.json`` revision 15), so the shared registry
+three (``contracts/domain/v1/identifiers.json`` revision 16), so the shared registry
 (:mod:`auditmanager.shared.identity.ids`) owns the prefixes and their patterns, and migration
 ``0026_price_lists`` restates each as a format CHECK. The types here **validate through the
 registry's types** (:class:`~auditmanager.shared.identity.PriceListId` and the two beside it),

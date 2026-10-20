@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "b40a30f7db5951e3f2d0c3ad0ff4e650d5818fba959c8680baca1f660a1c3cdb",
-    "content_commit": "beafeab",
-    "content_commit_subject": "W60-PRICE-LIST-01 API reseal on integration base beafeab5",
-    "dispatch_named_commit": "beafeab",
-    "commit_note": "W60 adds project price lists and vendor lists: uploadPriceList (POST /projects/{project_uid}/price-lists, expert, keyed, multipart CSV/XLSX), listPriceListRevisions, listPriceListPositions, getEffectiveVendorLists, setGlobalVendorList (admin) and setProjectVendorList (expert), five paths and twenty-seven schemas, on top of W57B-NORMS-CATALOGUE-XLSX-01 (listNormDocuments, exportRunXlsx); the identities prl_, prp_ and vnl_; no error code is added.",
+    "sha256": "008b484aac0aed7144f4ce5842282a4a352e486a42654ec60e8926c85d23aa52",
+    "content_commit": "f7664f5",
+    "content_commit_subject": "W60-PRICE-LIST-01 API reseal on integration base f7664f59",
+    "dispatch_named_commit": "f7664f5",
+    "commit_note": "W60 adds project price lists and vendor lists: uploadPriceList (POST /projects/{project_uid}/price-lists, expert, keyed, multipart CSV/XLSX), listPriceListRevisions, listPriceListPositions, getEffectiveVendorLists, setGlobalVendorList (admin) and setProjectVendorList (expert), five paths and twenty-seven schemas, on top of W61-DISPATCHER-01 (the four assignment operations); the identities prl_, prp_ and vnl_ (domain revision 16); no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 61,
-    "operations": 69,
-    "component_schemas": 188,
+    "paths": 64,
+    "operations": 73,
+    "component_schemas": 198,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "b40a30f7db5951e3f2d0c3ad0ff4e650d5818fba959c8680baca1f660a1c3cdb",
+    "snapshot_sha256": "008b484aac0aed7144f4ce5842282a4a352e486a42654ec60e8926c85d23aa52",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "91f4116b178ed558183fb03e9edf235e09fd0938f855ae1a8d6c0df1733a8021",
-      "index.ts": "a4ead52a1cdd6331ec73fe0947733b207b495fa17455b92193b40c1c4e8861db",
-      "operations.gen.ts": "22ea94dd5e03b6950606a9725b0645b35fd2f9c9b7255d7f0c53280ca2ff3718",
-      "types.gen.ts": "6668ab22d0814d2ec5cb2df8813b9a672e91e3262c9d9ee4de4e73377523ad8e"
+      "client.gen.ts": "7f951a46a4e0cacf6f917510f3915bd6491bd394877b89a2b479187098a47020",
+      "index.ts": "bdd04dbd0f06a0e837cd10f6f371c2091892df3f68210d05d17e4cdcaab97a6a",
+      "operations.gen.ts": "e61b2802a1c9861471aeb55d9caf4fe293ce06d732ec586f804a2e6f5ceb9dad",
+      "types.gen.ts": "5008c0e8618b7c1b9dea0ce3795e182cf8a75f6457e4939ba75da970d82933c9"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

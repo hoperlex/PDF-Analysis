@@ -222,6 +222,16 @@ __all__ = [
     "SetGlobalVendorListRequest",
     "SetProjectVendorListRequest",
     "optional_property",
+    "Assignment",
+    "AssignmentDetail",
+    "AssignmentEvent",
+    "AssignmentEventKind",
+    "AssignmentPage",
+    "AssignmentStatus",
+    "AssignmentTransitionKind",
+    "AssignmentUid",
+    "CreateAssignmentRequest",
+    "TransitionAssignmentRequest",
 ]
 
 
@@ -1582,6 +1592,113 @@ class Account(_Object):
 
 class AccountPage(_Object):
     items: list[Account]
+    page: PageInfo
+
+
+# --- `W61-DISPATCHER-01`: «Диспетчер» -------------------------------------------------
+
+AssignmentUid = TypeAliasType(
+    "AssignmentUid", Annotated[str, Field(pattern=rf"^asg_{_ULID}$")]
+)
+
+
+class AssignmentStatus(str, enum.Enum):
+    """`W61-DISPATCHER-01`. An assignment's status, derived from its latest event.
+
+    ``assigned`` (after ``assigned`` or ``reassigned``), ``in_progress`` (``started``),
+    ``done`` (``completed``), ``returned`` and ``cancelled``. ``done`` and ``cancelled`` are
+    terminal.
+    """
+
+    ASSIGNED = "assigned"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+    RETURNED = "returned"
+    CANCELLED = "cancelled"
+
+
+class AssignmentEventKind(str, enum.Enum):
+    """`W61-DISPATCHER-01`. One event of an assignment's append-only history."""
+
+    ASSIGNED = "assigned"
+    STARTED = "started"
+    COMPLETED = "completed"
+    RETURNED = "returned"
+    REASSIGNED = "reassigned"
+    CANCELLED = "cancelled"
+
+
+class AssignmentTransitionKind(str, enum.Enum):
+    """`W61-DISPATCHER-01`. The events a transition may append: every kind but ``assigned``."""
+
+    STARTED = "started"
+    COMPLETED = "completed"
+    RETURNED = "returned"
+    REASSIGNED = "reassigned"
+    CANCELLED = "cancelled"
+
+
+_AssignmentText = Annotated[str, Field(min_length=1, max_length=2000)]
+
+
+class CreateAssignmentRequest(_Object):
+    """`W61-DISPATCHER-01`. Give a project, or one document of it, to an active expert."""
+
+    project_uid: ProjectUid
+    document_uid: DocumentUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    assignee_user_uid: UserUid
+    note: _AssignmentText = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class TransitionAssignmentRequest(_Object):
+    """`W61-DISPATCHER-01`. One move along an assignment's history."""
+
+    kind: AssignmentTransitionKind
+    reason: _AssignmentText = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    new_assignee_user_uid: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class Assignment(_Object):
+    """`W61-DISPATCHER-01`. One assignment as it now stands."""
+
+    assignment_uid: AssignmentUid
+    project_uid: ProjectUid
+    project_name: Annotated[str, Field(min_length=1, max_length=200)]
+    document_uid: DocumentUid | None
+    document_title: Annotated[str, Field(min_length=1, max_length=400)] | None
+    assignee_user_uid: UserUid
+    assignee_label: Annotated[str, Field(min_length=1, max_length=254)]
+    created_by_user_uid: UserUid
+    created_by_label: Annotated[str, Field(min_length=1, max_length=254)]
+    note: _AssignmentText | None
+    status: AssignmentStatus
+    status_reason: _AssignmentText | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AssignmentEvent(_Object):
+    """`W61-DISPATCHER-01`. One recorded event; never changed."""
+
+    event_id: Annotated[str, Field(pattern=rf"^evt_{_ULID}$")]
+    kind: AssignmentEventKind
+    actor_user_uid: UserUid
+    actor_label: Annotated[str, Field(min_length=1, max_length=254)]
+    reason: _AssignmentText | None
+    new_assignee_user_uid: UserUid | None
+    new_assignee_label: Annotated[str, Field(min_length=1, max_length=254)] | None
+    occurred_at: datetime
+
+
+class AssignmentDetail(_Object):
+    """`W61-DISPATCHER-01`. One assignment and its whole history, oldest event first."""
+
+    assignment: Assignment
+    history: list[AssignmentEvent]
+
+
+class AssignmentPage(_Object):
+    items: list[Assignment]
     page: PageInfo
 
 

@@ -85,9 +85,13 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # ``target_version_uid`` is supplied by :data:`REQUIRED_QUERY`, so the answer is about the path.
 # `W57B-NORMS-CATALOGUE-XLSX-01` added ``exportRunXlsx`` on ``run_id``: an absent run is
 # ``404 not_found``, as for ``exportRunCsv``.
+# `W61-DISPATCHER-01` added ``getAssignment`` on ``assignment_uid`` (``404`` for an identity that
+# names nothing, or an assignment the caller may not read) and ``listAssignments``, an
+# unaddressed collection.
 # `W60-PRICE-LIST-01` added three: ``listPriceListRevisions`` and ``getEffectiveVendorLists``
 # on ``project_uid`` and ``listPriceListPositions`` on ``price_list_id``.
-EXPECTED_ADDRESSED = 24
+# With both, the addressed half is twenty-five.
+EXPECTED_ADDRESSED = 25
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
@@ -99,7 +103,9 @@ REQUIRED_QUERY: dict[str, str] = {
 # fifteen rows, answered as ``items`` like a collection with no parent identity.
 # `W57B-NORMS-CATALOGUE-XLSX-01` added ``listNormDocuments``, unaddressed: see
 # :data:`CURRENT_SNAPSHOT_COLLECTIONS`.
-EXPECTED_UNADDRESSED = 16
+# With ``listAssignments`` (`W61-DISPATCHER-01`) and ``listNormDocuments`` the unaddressed half is
+# seventeen.
+EXPECTED_UNADDRESSED = 17
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.

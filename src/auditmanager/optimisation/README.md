@@ -78,6 +78,6 @@ limit ≤ 500, `next_offset`), `get_effective_vendor_lists` (all fifteen section
 
 ## Identity
 
-`prl`, `prp` and `vnl` are contracted (`contracts/domain/v1/identifiers.json` revision 15) and
+`prl`, `prp` and `vnl` are contracted (`contracts/domain/v1/identifiers.json` revision 16) and
 registered in `shared/identity`; `identity.py` validates through the registry's types and
 answers a malformed value with `validation_failed` naming the field.
