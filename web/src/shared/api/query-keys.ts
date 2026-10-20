@@ -198,6 +198,7 @@ export const queryKeys = {
     ) => ['optimisation', 'proposals', passId, { decision, offset, limit }] as const,
     proposalDecisions: (proposalId: OptimisationProposalId) =>
       ['optimisation', 'proposal-decisions', proposalId] as const,
+    /**
      * One page of `getSectionSpecification` (`W63-SECTION-FORM7-01`): a section's combined
      * Form-7 specification across projects. The section is a filter, the project filter and
      * the search text are part of the answer, so each is part of the key. Any project's
