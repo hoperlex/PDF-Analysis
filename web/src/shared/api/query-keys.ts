@@ -6,7 +6,7 @@
  * owner, and `web/docs/PC01_UI_SEAM.md` records which Gate B session uses which.
  *
  * Rules:
- *   - every key starts with one of the eleven root namespaces below;
+ *   - every key starts with one of the twelve root namespaces below;
  *   - a key is built by calling a function here, never by writing an array literal;
  *   - invalidation targets a prefix — `queryKeys.runs.all()` invalidates every run key;
  *   - a key filled by more than one site carries its value type, as a `DataTag`. See
@@ -51,7 +51,7 @@ import type {
 } from './generated/types.gen';
 
 /**
- * The eleven root namespaces. Nothing else is a legal first key segment.
+ * The twelve root namespaces. Nothing else is a legal first key segment.
  *
  * `account`, `users` and `registrations` entered together, once, in `W50-REGISTRY-01`
  * (`W50-PLAN.md` §3.6): the signed-in account, the administrator's account list and the
@@ -60,6 +60,9 @@ import type {
  * `norms` entered once, in `W55A-WEB-NORMS` (`W55-PLAN.md` §A4 Stage B item 4, which names
  * the namespace): the normative corpus belongs to no project, run or finding, and one
  * designation of the current snapshot changes every answer under it at once.
+ *
+ * `analysis` entered once, in `W59-ANALYSIS-SETTINGS-01`: the analysis-profile registry
+ * belongs to no project, run, version or execution.
  */
 export const QUERY_NAMESPACES = [
   'projects',
@@ -73,6 +76,7 @@ export const QUERY_NAMESPACES = [
   'releases',
   'execution',
   'norms',
+  'analysis',
 ] as const;
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
@@ -108,6 +112,16 @@ export interface FindingListFilters {
 }
 
 export const queryKeys = {
+  /**
+   * «Настройки анализа» (`W59-ANALYSIS-SETTINGS-01`): `listAnalysisProfiles`, the text-profile
+   * registry the server routes runs through. A root of its own, entered once by that task:
+   * the registry belongs to no project, run, version or execution, and it changes only when
+   * the server is redeployed — no action on this client writes it, so nothing invalidates it.
+   */
+  analysis: {
+    all: () => ['analysis'] as const,
+    profiles: () => ['analysis', 'profiles'] as const,
+  },
   /**
    * The «Нормы» screens (`W55A-WEB-NORMS`). One root, because `setCurrentNormSnapshot`
    * changes what every key under it answers: the snapshot list's `current` flag, the

@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 53,
+    "path_count": 54,
     "operations": [
       [
         "POST",
@@ -295,6 +295,11 @@
       ],
       [
         "GET",
+        "/analysis/profiles",
+        "listAnalysisProfiles"
+      ],
+      [
+        "GET",
         "/norm-documents",
         "listNormDocuments"
       ],
@@ -454,7 +459,13 @@
       "FindingRef",
       "FindingMatchProposal",
       "FindingComparison",
-      "VersionComparison"
+      "VersionComparison",
+      "AnalysisProfileStatus",
+      "AnalysisProfileSourceFile",
+      "AnalysisProfileSource",
+      "AnalysisProfileSummary",
+      "AnalysisProfileListItem",
+      "AnalysisProfileList"
     ]
   },
   "error_catalog": {

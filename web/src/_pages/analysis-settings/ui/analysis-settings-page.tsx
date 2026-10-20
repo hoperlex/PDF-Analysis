@@ -1,25 +1,43 @@
+'use client';
+
 /**
- * `/analysis-settings` — the presets of an analysis, on their way (`R-66`, group «Система»).
+ * `/analysis-settings` — «Настройки анализа» (`R-66`, group «Система»; `W59-ANALYSIS-SETTINGS-01`).
  *
- * An honest stub in `R-23`'s sense: it says the section is coming, what will be in it and
- * when — the "when" named by an event in words, never by a number. The owner ruled the
- * event: **together with the АР section in working order.**
- *
- * What the section would read: the presets of models and stages an administrator keeps and
- * an expert picks from when starting an analysis. The contract names an analysis profile by
- * an opaque identity on a run, and has no operation that lists or edits profiles —
- * `docs/program/W50-REGISTRY-01.md` records the measurement — so the screen shows no number
- * and invents no preset.
+ * Graduated from the honest stub: `listAnalysisProfiles` answers the text-profile registry
+ * the server routes runs through, so the screen lists the fifteen sections with the profile
+ * each one runs with — or «профиль не создан» — for any account holding a role. It is
+ * read-only: profiles are not edited, uploaded or reviewed here, and the contract has no
+ * operation that would. A draft profile says in words that it still needs an expert's review.
  */
 
-import { RoutePlaceholder } from '@/shared/ui';
+import { useAnalysisProfiles } from '@/entities/analysis-profile';
+import { failureMessage } from '@/shared/api/failure-message';
+import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
+import { ErrorState, LoadingState, PageShell } from '@/shared/ui';
 
 export function AnalysisSettingsPage() {
+  const profiles = useAnalysisProfiles();
+  const failure = profiles.error === null ? null : failureMessage(profiles.error);
   return (
-    <RoutePlaceholder
-      screen="Настройки анализа"
-      route="/analysis-settings"
-      promise="Здесь будут наборы настроек анализа — какие модели и стадии применяются к документу: администратор ведёт эти наборы, а эксперт выбирает нужный при запуске. Экран появится вместе с полностью рабочим разделом АР."
-    />
+    <PageShell
+      title="Настройки анализа"
+      subtitle="Профиль анализа каждого раздела: с ним сервер выполняет прогон версии, раздел которой подтвердил эксперт. Экран только показывает профили — изменить их здесь нельзя."
+      actions={<button className="am-button am-button--quiet" type="button" onClick={() => void profiles.refetch()}>Обновить</button>}
+    >
+      {profiles.isPending ? <LoadingState what="профилей анализа" /> : null}
+      {failure !== null ? (
+        <div data-analysis-profiles-failure={failure.kind}>
+          <ErrorState
+            title="Профили анализа не прочитаны"
+            detail={failure.detail}
+            correlationId={failure.correlationId}
+            onRetry={() => void profiles.refetch()}
+          />
+        </div>
+      ) : null}
+      {profiles.data !== undefined && failure === null ? (
+        <AnalysisProfileTable items={profiles.data.items} />
+      ) : null}
+    </PageShell>
   );
 }

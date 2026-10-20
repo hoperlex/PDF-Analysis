@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 0587779617c5f211c32b09050e9d0a3a0520b4b07484daaa3004b4da64387b52
+ *   sha256 49fb8daeecc61aef0078acf17230011cd3d9a2e896693e20b87c90504d3304b9
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.

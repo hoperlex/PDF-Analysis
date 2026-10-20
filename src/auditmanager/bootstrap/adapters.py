@@ -2557,6 +2557,61 @@ def _typed_norm_chunks(chunks: Any, blob_id: str) -> Any:
         chunks.close()
 
 
+class AnalysisProfileAdapter:
+    """``listAnalysisProfiles`` (`W59-ANALYSIS-SETTINGS-01`).
+
+    The composition root's sealed text-profile registry -- the one run start routes through
+    and the executor resolves pinned profiles from -- mapped once, at construction, into the
+    frozen ``AnalysisProfileList``: the fifteen sections in the project-structure order
+    (``PROJECT_STRUCTURE_ORDER``), each named from the reviewed section catalogue and carrying
+    its registered profile or ``null``. Built once because the registry is immutable for the
+    life of the process; a section the catalogue cannot name fails start-up, not a request.
+    No session and no store: nothing here reads the database or writes anything.
+    """
+
+    __slots__ = ("_listing",)
+
+    def __init__(self, registry: Any, *, section_names: Mapping[str, str]) -> None:
+        from auditmanager.analysis.text.profile_registry import PROJECT_STRUCTURE_ORDER
+
+        items: list[models.AnalysisProfileListItem] = []
+        for code in PROJECT_STRUCTURE_ORDER:
+            entry = registry.entries.get(code)
+            items.append(
+                models.AnalysisProfileListItem(
+                    section_code=models.ProjectSection(code),
+                    section_name=section_names[code],
+                    profile=None if entry is None else _profile_summary(entry),
+                )
+            )
+        self._listing = models.AnalysisProfileList(items=items)
+
+    def list_analysis_profiles(self) -> models.AnalysisProfileList:
+        return self._listing
+
+
+def _profile_summary(entry: Any) -> models.AnalysisProfileSummary:
+    """One registry entry as the frozen summary. ``source`` is ``None`` for builtin AR."""
+    profile = entry.profile
+    source = entry.source
+    return models.AnalysisProfileSummary(
+        analysis_profile_id=entry.analysis_profile_id,
+        prompt_bundle_id=entry.prompt_bundle_id,
+        profile_version=profile.profile_version,
+        status=models.AnalysisProfileStatus(entry.status),
+        prompt_bundle_sha256=profile.prompt_bundle.content_sha256,
+        content_sha256=profile.content_sha256,
+        source=None if source is None else models.AnalysisProfileSource(
+            repository=source.repository,
+            commit=source.commit,
+            files=[
+                models.AnalysisProfileSourceFile(path=item.path, sha256=item.sha256)
+                for item in source.files
+            ],
+        ),
+    )
+
+
 class ComparisonAdapter(_SessionHolder):
     """``compareDocumentVersions`` (`W59-VERSION-COMPARE-01`).
 

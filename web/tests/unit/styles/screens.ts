@@ -40,6 +40,7 @@ import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
+import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
 import { NormSearchResults } from '@/widgets/norm-search';
 import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList } from '@/widgets/norm-document';
@@ -528,6 +529,31 @@ export function screens(): Screen[] {
     busy: false,
     workerOf: () => ({ kind: 'held' as const, workerId: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A' }),
     onCancel: noop, onReaudit: noop, onPriority: noop, onNext: null, onPrevious: null,
+  })));
+  // `W59-ANALYSIS-SETTINGS-01`: «Настройки анализа» — a builtin profile, a draft with its
+  // legacy source, and a section with no profile, so every row shape is censused.
+  add('AnalysisProfileTable loaded', render(createElement(AnalysisProfileTable, {
+    items: [
+      {
+        section_code: 'AR', section_name: 'Архитектурные решения',
+        profile: {
+          analysis_profile_id: 'ap_01M25P3TH08VVTTGJRXYBZZ7RP', prompt_bundle_id: 'pb_01M25P3TH0PDQYVKTRQFEM0CYS',
+          profile_version: '1.0.0', status: 'builtin', prompt_bundle_sha256: SHA, content_sha256: SHA, source: null,
+        },
+      },
+      {
+        section_code: 'PS', section_name: 'Пояснительная записка',
+        profile: {
+          analysis_profile_id: 'ap_01M5AXG1K22R027A33VTKZ468P', prompt_bundle_id: 'pb_01M5AXG1K2JQQH7R4ACTBW8974',
+          profile_version: '1.0.0', status: 'draft', prompt_bundle_sha256: SHA, content_sha256: SHA,
+          source: {
+            repository: 'прежняя-система', commit: 'b'.repeat(40),
+            files: [{ path: 'prompts/disciplines/PS/role.md', sha256: SHA }],
+          },
+        },
+      },
+      { section_code: 'PB', section_name: 'Пожарная безопасность', profile: null },
+    ],
   })));
   // The worker registry: one row per state, the offline one in the collapsed group, and an
   // administrator's intake switch on each.

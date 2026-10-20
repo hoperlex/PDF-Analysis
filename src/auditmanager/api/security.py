@@ -345,6 +345,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # `W59-VERSION-COMPARE-01`. Two versions of one set compared; a read that writes
         # nothing, so any one role.
         "compareDocumentVersions": _ANY_ROLE,
+        # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only: any one role.
+        "listAnalysisProfiles": _ANY_ROLE,
         # The product version and release notes: any complete account, roles or none
         # (R-80), so a role-less person can still see what the product is.
         "getProductVersion": _ANY_COMPLETE_ACCOUNT,

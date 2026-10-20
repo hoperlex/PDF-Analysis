@@ -18,6 +18,7 @@ import pytest
 from w55b_qa_support import (
     SECRET,
     call,
+    classify,
     committed,
     create_project,
     portal_blocks,
@@ -29,13 +30,15 @@ from w55b_qa_support import (
 
 @pytest.fixture(scope="module")
 def produced(api_control, accounts) -> dict:
-    """A version of ``ar_baseline.zip`` uploaded and run by one expert, and one of its crops."""
+    """A version of ``ar_baseline.zip`` uploaded, classified and run by one expert, and one
+    of its crops."""
     api_control.ensure(None)
     owner = accounts.credential("access-owner")
     project = create_project(owner, "QA P4 access")
     answer = upload(project, committed("ar_baseline.zip"), owner)
     assert answer.status == 201, answer
     version = answer.json()["version_uid"]
+    classify(answer.json(), owner)  # `W59-SECTION-SEAL-01`: no run of an unclassified version
     run = start_run(version, owner)
     assert run.status == 202, run
     assert wait_terminal(run.json()["run_id"], owner)["state"] == "published"

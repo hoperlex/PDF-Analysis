@@ -98,3 +98,33 @@ Merged in order: `W59-SECTION-PROFILES-01` (`e027b0d9`), `W54-LOCAL-IMPORT-01`
 | `W59-VERSION-COMPARE-01` | `890deb80` | holds it from `c4cbc026` |
 | `W57B-NORMS-CATALOGUE-XLSX-01` | `849dddd4` | next |
 | `W59-ANALYSIS-SETTINGS-01` | `121ef2ce` | after it |
+
+## 7. Slice W59 comparison (+ W62 П→Р) — published as development candidate `1af17a48`
+
+Merged `W59-VERSION-COMPARE-01` (`367ea390`).
+
+- **User-visible result.** «Сравнение версий» on the version screen: pick another
+  version of the same set; with the same stage and section the deterministic
+  comparison shows sheet pairing, paged line diffs with page anchors and finding-match
+  proposals (labelled as proposals); `mode=stage` compares an earlier П version with a
+  later Р version of the same section — the code half of W62 STAGE-COMPARE. Any other
+  pair is refused with one closed reason; no AI layer, nothing persisted.
+- **Contract.** 50/57/137 → **51/58/147** (`compareDocumentVersions`, 10 schemas); head
+  and error catalogue unchanged; mirror byte-identical.
+- **Checks on the merged tree.** `tests/contract` + `tests/unit` + journey conformance:
+  1094 passed, 2 failed (both reproduce on the base: `test_error_kernel`,
+  `test_ar_v2_seeded`); web `typecheck` clean. Lane: 187 comparison tests (two 500-page
+  versions), 9 HTTP composition cases, 835 vitest, lint clean.
+- **Found gap.** A further version cannot be uploaded into an existing set through the
+  product (`uploadDocument` always creates a new document) — dispatched as
+  `W59-VERSION-UPLOAD-01`.
+
+## 8. Round 3 dispatch and slot queue
+
+| Task | Phase A base | Slot |
+| --- | --- | --- |
+| `W57B-NORMS-CATALOGUE-XLSX-01` | `849dddd4` | holds it from `1af17a48` |
+| `W59-ANALYSIS-SETTINGS-01` | `121ef2ce` | queued |
+| `W59-VERSION-UPLOAD-01` | `641f2b9e` | queued |
+| `W61-DISPATCHER-01` (migration 0025 in phase A) | `979632af` | queued |
+| `W59-SEAL-FOLLOWUP-01` (suites only) | `77aa55bd` | none needed |

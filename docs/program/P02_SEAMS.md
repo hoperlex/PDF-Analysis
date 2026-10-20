@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Sixty operations, sealed. `A5` generates the typed client from this document; `B6`
+Sixty-one operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -854,6 +854,10 @@ set with the same confirmed section and either the same stage (`mode=version`) o
 source and an `R` target (`mode=stage`, the W62 П/Р slice), whose sheet pairs and finding
 matches are proposals and whose refusals are answers with a closed reason, never a
 relabelled pair; a path naming no version of the document is `404`.
+`W59-ANALYSIS-SETTINGS-01` added `listAnalysisProfiles` on 2026-10-20: the section-keyed
+text-profile registry run start routes through, read-only, as fifteen sections in the
+project-structure order, each with its profile (identities, version, status, hashes, legacy
+source) or `null`.
 `W57B-NORMS-CATALOGUE-XLSX-01` added `listNormDocuments` and `exportRunXlsx` on 2026-10-20:
 the current norms snapshot's documents as a catalogue with display names derived from the
 stored file names (any one role), and the run's W57b Excel workbook with `exportRunCsv`'s
@@ -935,6 +939,7 @@ could.
 | `classifyDocumentVersion` | `PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification` |
 | `getVersionSectionReview` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review` |
 | `compareDocumentVersions` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison` |
+| `listAnalysisProfiles` | `GET /analysis/profiles` |
 
 Rules that hold across the whole surface:
 

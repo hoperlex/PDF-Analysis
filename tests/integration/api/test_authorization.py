@@ -202,6 +202,8 @@ GUARDED = (
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
         "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
     ),
+    # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only.
+    ("listAnalysisProfiles", "GET", "/analysis/profiles"),
     # `W57B-NORMS-CATALOGUE-XLSX-01`. The norms catalogue and the run's workbook.
     ("listNormDocuments", "GET", "/norm-documents"),
     ("exportRunXlsx", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.xlsx"),

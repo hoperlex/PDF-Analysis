@@ -76,6 +76,10 @@ PORT_FOR_ARGUMENT = {
     "sections": "SectionPort",
     # `W59-VERSION-COMPARE-01`.
     "comparisons": "ComparisonPort",
+    # `W59-ANALYSIS-SETTINGS-01`.
+    "analysis_profiles": "AnalysisProfilePort",
+    # `W57B-NORMS-CATALOGUE-XLSX-01`.
+    "xlsx_exports": "XlsxExportPort",
 }
 
 

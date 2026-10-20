@@ -260,7 +260,9 @@ number equals the routes in `tests/e2e/pc01/journey/manifest.json`:
 18. `/account`;
 19. `/section-optimisation`;
 20. `/norms`;
-21. `/analysis-settings`;
+21. `/analysis-settings` — fifteen sections in the project-structure order, read-only: АР
+    «встроенный», the drafts «черновик, требует экспертной проверки», ПБ «профиль не создан»;
+    «Подробнее» shows the identities, both hashes and the legacy source;
 22. `/queue`;
 23. `/register` in a separate private window;
 24. `/register/submitted` after submitting a test registration;

@@ -19,9 +19,10 @@
  * knows how many operations there are. Swapping the credential later is an edit to the
  * credential selection below, not a sweep through a handler per operation.
  *
- * Those figures are **sixty operations across fifty-three paths**, which is what the
- * frozen document declares after `W59-VERSION-COMPARE-01` adds the comparison of two
- * versions of one set.
+ * Those figures are **sixty-one operations across fifty-four paths**, which is what the
+ * frozen document declares after `W59-ANALYSIS-SETTINGS-01` adds the read of the
+ * analysis-profile registry and `W57B-NORMS-CATALOGUE-XLSX-01` the norms catalogue and
+ * the run's Excel workbook.
  * This file said fifteen and twelve once, sixteen and thirteen after that, and nineteen and
  * sixteen after `W45-BLOCKS`, each true until the next reseal, and it is the fifth stale count in this programme, so it is no
  * longer corrected by hand:
