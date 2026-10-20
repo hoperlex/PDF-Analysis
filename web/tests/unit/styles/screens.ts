@@ -42,6 +42,7 @@ import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
 import { SpecificationPricesAnswer } from '@/widgets/specification-prices';
+import { SectionSpecificationAnswer } from '@/widgets/section-specification';
 import { NormSearchResults } from '@/widgets/norm-search';
 import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList } from '@/widgets/norm-document';
@@ -111,6 +112,7 @@ import {
 import { BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, portalPage } from '../blocks/fixtures';
 
 import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixtures';
+import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
 
 import type { Screen } from './contrast';
 
@@ -588,6 +590,25 @@ export function screens(): Screen[] {
       onPage: null,
     })));
   }
+  // `W63-SECTION-FORM7-01`: «Оптимизация разделов» — a priced project beside one with no price
+  // list, rows of every status (three badge tones), a counted amount beside dashes, the totals
+  // per project, an excluded version, and the bound that stops the read.
+  add('SectionSpecificationAnswer ready', render(createElement(SectionSpecificationAnswer, {
+    answer: sectionAnswer(), onPage: noop, onSelectProject: noop,
+  })));
+  add('SectionSpecificationAnswer too large', render(createElement(SectionSpecificationAnswer, {
+    answer: sectionAnswer({
+      ...SECTION_NO_ROWS, state: 'section_too_large', limit_reason: 'sources',
+      projects: sectionAnswer().projects.map((item) => ({
+        ...item, price_state: 'not_read' as const, price_list: null, matching: null, row_count: 0,
+        sources: item.sources.map((source) => ({
+          ...source, state: 'not_read' as const, run_id: null, text_layer_sha256: null, row_count: null,
+          table_count: null, skipped_by_reason: null,
+        })),
+      })),
+    }),
+    onPage: null, onSelectProject: noop,
+  })));
   add('AnalysisProfileTable loaded', render(createElement(AnalysisProfileTable, {
     items: [
       {

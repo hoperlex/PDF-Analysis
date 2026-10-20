@@ -271,7 +271,13 @@ number equals the routes in `tests/e2e/pc01/journey/manifest.json`:
 16. `/dashboard`;
 17. `/403`;
 18. `/account`;
-19. `/section-optimisation`;
+19. `/section-optimisation` — «Оптимизация разделов» opens on АР; the section picker lists the
+    fifteen sections in the project-structure order; each project of the section is a panel with
+    its sets, its price list (or «нет прайс-листа») and its own totals per currency — there is no
+    total for the section; the rows carry the project, set, version, sheet and page; a project
+    without a price list shows rows with a dash instead of a price; the project filter and the
+    search narrow the rows and never a project's totals; a version nobody classified is listed
+    under «Текущие версии без подтверждённого раздела»;
 20. `/norms`;
 21. `/analysis-settings` — fifteen sections in the project-structure order, read-only: АР
     «встроенный», the drafts «черновик, требует экспертной проверки», ПБ «профиль не создан»;

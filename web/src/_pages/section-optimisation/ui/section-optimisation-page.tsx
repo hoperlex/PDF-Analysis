@@ -1,26 +1,31 @@
+'use client';
+
 /**
- * `/section-optimisation` — optimisation across a documentation section, on its way (`R-66`,
- * group «Работа»).
+ * `/section-optimisation` — «Оптимизация разделов» (`R-66`, group «Работа»;
+ * `W63-SECTION-FORM7-01`).
  *
- * An honest stub in `R-23`'s sense: it says the section is coming, what will be in it and
- * when — the "when" named by an event in words, never by a number. The owner ruled the
- * event: **after all sections are implemented.** Only the АР section is analysed today
- * (`ANALYSED_SECTION_CODE` in `entities/project`).
+ * Graduated from the honest stub: `getSectionSpecification` answers, for a section, the
+ * combined Form-7 specification of the current versions of every project whose document set an
+ * expert confirmed in it — the nine columns of the form with the project, set, version, sheet
+ * and page on every row, a project filter and a text search, and each row's match against its
+ * own project's price list. It is a read view: replicating an accepted optimisation into other
+ * projects is a later slice, and nothing here writes. The section code only filters; rows are
+ * never merged across projects and the totals exist per project and per currency.
  *
- * Not `/optimisation`, which is the optimisation of one project and stays registered,
- * outside the menu, until it becomes a tab of the project screen. This one works across all
- * the documents of one documentation section. The frozen contract has no operation for it —
- * `docs/program/W50-REGISTRY-01.md` records the measurement — so the screen shows no number.
+ * Not `/optimisation`, which is the optimisation of one project and stays registered, outside
+ * the menu, until it becomes a tab of the project screen.
  */
 
-import { RoutePlaceholder } from '@/shared/ui';
+import { PageShell } from '@/shared/ui';
+import { SectionSpecificationSection } from '@/widgets/section-specification';
 
 export function SectionOptimisationPage() {
   return (
-    <RoutePlaceholder
-      screen="Оптимизация разделов"
-      route="/section-optimisation"
-      promise="Здесь будет оптимизация в пределах раздела проектной документации: сразу по всем документам одного раздела, а не по каждому документу отдельно. Экран появится после того, как в приложении будут реализованы все разделы."
-    />
+    <PageShell
+      title="Оптимизация разделов"
+      subtitle="Сводная спецификация раздела по текущим версиям комплектов всех проектов. Экран только показывает данные: переносить решения между проектами здесь пока нельзя."
+    >
+      <SectionSpecificationSection />
+    </PageShell>
   );
 }

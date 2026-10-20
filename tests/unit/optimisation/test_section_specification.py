@@ -51,6 +51,7 @@ from auditmanager.optimisation.section_specification import (
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
 
+STATUSES_MATCHED = (STATUS_MATCHED, STATUS_AMBIGUOUS, STATUS_UNMATCHED)
 NOW = datetime(2026, 10, 20, 9, 0, tzinfo=UTC)
 EXPERT = "usr_01M2545JSD15ETSNNV904XA0E1"
 LAYER = "a" * 64
@@ -613,3 +614,104 @@ def test_contradictory_answers_are_internal_errors(world: World) -> None:
 
 def test_the_answer_is_deterministic(world: World) -> None:
     assert world.read() == world.read()
+
+
+# -- the wire: the read model as the frozen ``SectionSpecification`` --------------------------
+
+
+def _wire(answer: SectionSpecification) -> Any:
+    """The composition root's mapping, validated by the frozen response model."""
+    from auditmanager.api.schemas import models
+    from auditmanager.bootstrap.adapters import _section_specification_view
+
+    return models.SectionSpecification.model_validate(_section_specification_view(answer))
+
+
+def test_the_wire_carries_every_row_with_its_address_and_its_own_match(world: World) -> None:
+    wire = _wire(world.read())
+    alpha, zarya, bare = wire.projects
+    assert [p.price_state for p in wire.projects] == ["priced", "priced", "price_list_missing"]
+    rows = wire.rows.items
+    assert len(rows) == 12
+    by_name = {(row.project_uid, row.name): row for row in rows}
+    door_alpha = by_name[(alpha.project_uid, DOOR)]
+    door_zarya = by_name[(zarya.project_uid, DOOR)]
+    assert (door_alpha.price_status, door_alpha.amount, door_alpha.price_position.unit_price) == (
+        "matched", "100000", "25000",
+    )
+    assert (door_zarya.amount, door_zarya.price_position.unit_price) == ("120000", "30000")
+    assert door_alpha.row_id != door_zarya.row_id and door_alpha.version_uid != door_zarya.version_uid
+    anchor = by_name[(alpha.project_uid, ANCHOR)]
+    assert (anchor.amount, anchor.price_position.currency) == ("2550", "EUR")
+    assert by_name[(zarya.project_uid, WINDOW)].price_status == "ambiguous"
+    assert by_name[(zarya.project_uid, WINDOW)].candidate_count == 2
+    unpriced = [row for row in rows if row.project_uid == bare.project_uid]
+    assert {row.price_status for row in unpriced} == {"price_list_missing"}
+    for row in unpriced:
+        assert (row.reason, row.basis, row.price_position, row.amount, row.excluded_reason) == (
+            None, None, None, None, None,
+        )
+        assert (row.candidate_position_ids, row.candidate_count) == ([], 0)
+
+
+def test_the_wire_keeps_money_as_exact_text_and_totals_per_project(world: World) -> None:
+    wire = _wire(world.read())
+    alpha, zarya, bare = wire.projects
+    assert [(t.currency, t.amount, t.row_count) for t in alpha.matching.totals] == [
+        ("EUR", "2550", 1), ("RUB", "100000", 1),
+    ]
+    assert [(t.currency, t.amount) for t in zarya.matching.totals] == [("RUB", "120000")]
+    assert bare.matching is None and bare.price_list is None
+    assert dict(zarya.matching.excluded.model_dump()) == {
+        "no_position": 2, "unit_mismatch": 0, "row_unit_missing": 0, "ambiguous": 1,
+        "quantity_not_numeric": 0,
+    }
+    assert alpha.matching.counts.model_dump() == {"matched": 2, "ambiguous": 0, "unmatched": 2}
+    assert alpha.price_list.position_count == 2 and alpha.price_list.revision_number == 1
+    dumped = wire.model_dump(mode="json")
+    assert "totals" not in dumped and "total" not in dumped
+    assert isinstance(dumped["projects"][0]["matching"]["totals"][0]["amount"], str)
+
+
+def test_the_wire_writes_every_skip_reason_for_a_read_source_and_none_for_an_unread_one(
+    world: World,
+) -> None:
+    alpha = _uid(world, "корпус 1 «Альфа»")
+    world.version(alpha, "АР-1a без анализа", "AR", published=False)
+    wire = _wire(world.read())
+    project = next(item for item in wire.projects if item.project_uid == alpha)
+    read, missing = project.sources
+    assert read.state == "ready" and set(read.skipped_by_reason.model_dump()) == set(
+        specification.SKIP_REASONS
+    )
+    assert (missing.state, missing.skipped_by_reason, missing.row_count, missing.run_id) == (
+        "analysis_missing", None, None, None,
+    )
+
+
+def test_the_wire_of_a_bound_lists_the_membership_and_no_rows(world: World, monkeypatch) -> None:
+    monkeypatch.setattr(module, "MAX_SECTION_SOURCES", 2)
+    wire = _wire(world.read())
+    assert (wire.state, wire.limit_reason, wire.rows, wire.row_count) == ("section_too_large", "sources", None, 0)
+    assert [p.price_state for p in wire.projects] == ["not_read"] * 3
+    assert all(p.matching is None and p.price_list is None for p in wire.projects)
+    assert {s.state for p in wire.projects for s in p.sources} == {"not_read"}
+
+
+def test_the_wire_vocabularies_are_the_read_models(world: World) -> None:
+    from typing import get_args
+
+    from auditmanager.api.schemas import models
+
+    fields = models.SectionSpecification.model_fields
+    assert set(get_args(fields["state"].annotation)) == set(module.SECTION_STATES)
+    (limit_literal,) = [arg for arg in get_args(fields["limit_reason"].annotation) if arg is not type(None)]
+    assert set(get_args(limit_literal)) == set(module.LIMIT_REASONS)
+    project = models.SectionSpecificationProject.model_fields["price_state"].annotation
+    assert set(get_args(project)) == set(module.PRICE_STATES)
+    source = models.SectionSpecificationSource.model_fields["state"].annotation
+    assert set(get_args(source)) == set(module.SOURCE_STATES)
+    row = models.SectionSpecificationRow.model_fields["price_status"].annotation
+    assert set(get_args(row)) == {*STATUSES_MATCHED, module.ROW_PRICE_LIST_MISSING}
+    excluded = models.SectionSpecificationExcludedVersion.model_fields["reason"].annotation
+    assert set(get_args(excluded)) == {module.EXCLUSION_VERSION_UNCLASSIFIED}
