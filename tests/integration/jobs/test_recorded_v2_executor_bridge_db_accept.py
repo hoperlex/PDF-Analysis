@@ -30,6 +30,7 @@ from auditmanager.storage.public import parse_blob_id
 from tests.integration.runs.test_v2_recorded_executor_bridge import (
     _Documents, _Jobs, _Runs, _Session, _config, _run,
 )
+from tests.support.expected_facts import FACTS
 
 
 MODEL_ID = "fixture/ar-v2-recorded"
@@ -113,7 +114,7 @@ def test_persisted_recorded_executor_saves_five_stages_one_call_and_one_terminal
 ) -> None:
     with sessions() as setup:
         assert setup.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0022_findings_v2"
+            FACTS.migration_head
         )
         seeded = helpers.seed_version(setup, blob_store)
         key = IdempotencyKey(f"w56a-bridge-{uuid.uuid4().hex}")

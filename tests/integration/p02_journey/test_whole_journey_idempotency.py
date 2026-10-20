@@ -1,8 +1,10 @@
 """Step 7: the whole sequence repeated under the same keys, counted across every table.
 
 Each module proved its own idempotency. This is the first thing to repeat the sequence
-end to end and count rows across all sixteen P02 tables afterwards, which is what
+end to end and count rows across every base table afterwards, which is what
 "creates no duplicate versions, runs, observations or decisions" actually claims.
+:func:`journey.assert_table_list_is_complete` keeps that list equal to the live schema, so
+a table added by a later migration cannot narrow the claim without this suite going red.
 """
 
 from __future__ import annotations
