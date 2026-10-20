@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,6 +21,30 @@ from auditmanager.storage.public import derive_blob_id
 from tests.integration.analysis.test_ar_v2_recorded_artifact import (
     RUN, VERSION, _build, _prepared, _replay,
 )
+
+
+_STAGE_REGISTRY_CONTRACT = (
+    Path(__file__).resolve().parents[3]
+    / "contracts" / "analysis" / "v1" / "stage-registry.json"
+)
+# text_analysis was sealed at 1.0.0 until W57A-SEAL-01B moved it to 1.1.0.
+_RETIRED_TEXT_STAGE_VERSION = "1.0.0"
+
+
+def _stage_version(stage_id: str) -> str:
+    """The version the sealed stage-registry contract declares today.
+
+    Read from the contract file itself, not from the registry object the code
+    under test consults, and never written out by hand: a reseal then moves
+    this test with the contract instead of leaving a stale pin behind.
+    """
+    document = json.loads(_STAGE_REGISTRY_CONTRACT.read_text(encoding="utf-8"))
+    versions = {entry["stage_id"]: entry["stage_version"] for entry in document["stages"]}
+    return versions[stage_id]
+
+
+def _reason(failure: pytest.ExceptionInfo[DomainError]) -> object:
+    return failure.value.detail_fields.get("reason")
 
 
 class _Session:
@@ -42,17 +67,20 @@ class _Runs:
             prompt_bundle_id=str(AR_V2_RECORDED_BUNDLE_ID),
         )
         self.results = (StageResultRow(
-            stage_id="source_preparation", stage_version="1.0.0", status="succeeded",
+            stage_id="source_preparation", stage_version=_stage_version("source_preparation"),
+            status="succeeded",
             artifacts=(source_reference.to_document(),) + (
                 () if recognised_reference is None else (recognised_reference.to_document(),)
             ), metrics={}, error=None,
         ), StageResultRow(
-            stage_id="text_analysis", stage_version="1.0.0", status="succeeded",
+            stage_id="text_analysis", stage_version=_stage_version("text_analysis"),
+            status="succeeded",
             artifacts=(reference.to_document(),), metrics={}, error=None,
         ))
         if already_merged:
             self.results += (StageResultRow(
-                stage_id="finding_merge", stage_version="1.0.0", status="succeeded",
+                stage_id="finding_merge", stage_version=_stage_version("finding_merge"),
+                status="succeeded",
                 artifacts=(), metrics={}, error=None,
             ),)
 
@@ -192,13 +220,33 @@ def test_saved_source_reference_mismatch_refuses_before_effect(
     wrong = dict(runs.results[0].artifacts[0])
     wrong["sha256"] = "0" * 64
     runs.results = (StageResultRow(
-        stage_id="source_preparation", stage_version="1.0.0", status="succeeded",
-        artifacts=(wrong,), metrics={}, error=None,
+        stage_id="source_preparation", stage_version=_stage_version("source_preparation"),
+        status="succeeded", artifacts=(wrong,), metrics={}, error=None,
     ), *runs.results[1:])
     with pytest.raises(DomainError) as failure:
         execute()
     assert failure.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert _reason(failure) == "recorded_source_reference_mismatch"
     assert "stage_started" not in events and not bound
+
+
+def test_text_stage_saved_under_the_retired_version_refuses_before_effect(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    # The pin this file carried until the gate of 43670efc: a text stage row
+    # written before W57A-SEAL-01B is not the stage the registry now declares.
+    assert _stage_version("text_analysis") != _RETIRED_TEXT_STAGE_VERSION
+    execute, events, bound, store, runs = _exercise(monkeypatch, tmp_path)
+    runs.results = (
+        runs.results[0],
+        replace(runs.results[1], stage_version=_RETIRED_TEXT_STAGE_VERSION),
+    )
+    with pytest.raises(DomainError) as failure:
+        execute()
+    assert failure.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert _reason(failure) == "text_stage_not_complete"
+    assert "text_read" not in events and "stage_started" not in events
+    assert "merge_published" not in events and not bound
 
 
 def test_text_blob_bytes_must_match_saved_reference(
@@ -209,6 +257,7 @@ def test_text_blob_bytes_must_match_saved_reference(
     with pytest.raises(DomainError) as failure:
         execute()
     assert failure.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert _reason(failure) == "recorded_observation_artifact_invalid"
     assert "stage_started" not in events and "merge_published" not in events and not bound
 
 
@@ -224,6 +273,7 @@ def test_unreadable_saved_blob_is_a_typed_refusal_before_effect(
     with pytest.raises(DomainError) as failure:
         execute()
     assert failure.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert _reason(failure) == "input_unreadable"
     assert "stage_started" not in events and "merge_published" not in events and not bound
 
 
@@ -256,4 +306,5 @@ def test_invalid_saved_text_refuses_before_merge_effect(
     with pytest.raises(DomainError) as failure:
         execute()
     assert failure.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert _reason(failure) == "recorded_observation_artifact_invalid"
     assert "stage_started" not in events and "merge_published" not in events and not bound
