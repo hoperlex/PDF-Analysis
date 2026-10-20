@@ -40,9 +40,6 @@ export const routes = {
   /** Durable execution queue. */
   queue: (): string => '/queue',
 
-  /** «Диспетчер»: work assignments (`W61-DISPATCHER-01`). */
-  dispatcher: (): string => '/dispatcher',
-
   /** The worker registry, «Исполнители» (`W54-WORKERS-WEB`). */
   workers: (): string => '/workers',
 

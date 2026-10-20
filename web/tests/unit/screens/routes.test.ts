@@ -652,8 +652,6 @@ describe('every screen address is built once and matches a route file on disk', 
     const built: Record<string, string> = {
       logs: routes.logs(RUN_ID),
       queue: routes.queue(),
-      // `W61-DISPATCHER-01`: «Мои задачи» on the home screen links the whole list.
-      dispatcher: routes.dispatcher(),
       workers: routes.workers(),
       projects: routes.projects(),
       project: routes.project(PROJECT_UID),

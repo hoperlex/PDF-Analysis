@@ -621,7 +621,7 @@ describe('«Мои задачи» (`W61-DISPATCHER-01`)', () => {
     expect(markup).not.toContain(`data-my-task="asg_${ULID_STEM}E"`);
     expect(markup).toContain(`href="${routes.project(PROJECTS[0]!.project_uid)}"`);
     expect(markup).toContain(`href="${routes.document(PROJECTS[0]!.project_uid, `doc_${ULID_STEM}B`)}"`);
-    expect(markup).toContain(`href="${routes.dispatcher()}"`);
+    expect(markup).toContain('href="/dispatcher"');
     // Take the assigned one, complete the one in progress, return either; nothing on the
     // returned one, which waits for an administrator.
     expect(markup).toContain('data-assignment-move="started"');

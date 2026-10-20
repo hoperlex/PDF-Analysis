@@ -41,7 +41,6 @@
 import type { Role } from '@/shared/api';
 import type { ScreenAddress } from '@/shared/config';
 import { screenAt } from '@/shared/config';
-import { routes } from '@/shared/lib';
 import { screenRolesAdmit } from '@/shared/config/screen-registry';
 import { ErrorState } from '@/shared/ui';
 import { UnknownRoleError, roleLabels } from '@/entities/account';
@@ -65,6 +64,9 @@ export interface HomePageProps {
 const UNKNOWN_ROLE_TITLE = 'Учётная запись содержит неизвестную роль.';
 const UNKNOWN_ROLE_DETAIL =
   'Сервер назвал роль, которой этот клиент не знает, поэтому решить, что показать на этой странице, достоверно нельзя — плитки скрыты.';
+
+/** «Диспетчер»'s registered address (`W61-DISPATCHER-01`); a static address needs no builder. */
+const DISPATCHER_SCREEN: ScreenAddress = '/dispatcher';
 
 /** The role labels, or `null` when the set holds a value outside the contract's. */
 function labelsOf(roles: readonly Role[]): readonly string[] | null {
@@ -93,7 +95,7 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
   const registrations = opens('/admin/registrations', roles);
   // «Мои задачи» summarises the expert's own part of «Диспетчер»: mounted when the registry
   // opens that screen and the session holds `expert`, the role work is assigned to.
-  const tasks = opens('/dispatcher', roles) && roles.includes('expert');
+  const tasks = opens(DISPATCHER_SCREEN, roles) && roles.includes('expert');
 
   return (
     <section className="am-page" data-screen="home">
@@ -118,7 +120,7 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
           </div>
         ) : projects || summary || registrations || tasks ? (
           <>
-            {tasks ? <MyTasks roles={roles} listHref={routes.dispatcher()} /> : null}
+            {tasks ? <MyTasks roles={roles} listHref={DISPATCHER_SCREEN} /> : null}
             {projects || summary || registrations ? (
               <div className={styles.tiles}>
                 {projects ? <RecentProjectsTile /> : null}

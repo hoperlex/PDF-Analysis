@@ -163,7 +163,8 @@ four: `test_openapi_document`, `test_authorization`, `test_role_register`,
   whole list.
 - Slices: entity `assignment`, features `create-assignment` and `transition-assignment`,
   widgets `assignment-board` and `my-tasks`, page `dispatcher`, route `app/dispatcher`; query
-  root `assignments` (documented in `web/docs/PC01_UI_SEAM.md` §6); `routes.dispatcher()`.
+  root `assignments` (documented in `web/docs/PC01_UI_SEAM.md` §6); the home block links the
+  registered `/dispatcher` address (no new route builder: the address is static).
 
 ### Known limitations
 
