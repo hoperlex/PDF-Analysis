@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 59,
+    "path_count": 64,
     "operations": [
       [
         "POST",
@@ -337,6 +337,36 @@
         "POST",
         "/assignments/{assignment_uid}/transitions",
         "transitionAssignment"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/price-lists",
+        "uploadPriceList"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/price-lists",
+        "listPriceListRevisions"
+      ],
+      [
+        "GET",
+        "/price-lists/{price_list_id}/positions",
+        "listPriceListPositions"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/vendor-lists",
+        "getEffectiveVendorLists"
+      ],
+      [
+        "PUT",
+        "/vendor-lists/{section_code}",
+        "setGlobalVendorList"
+      ],
+      [
+        "PUT",
+        "/projects/{project_uid}/vendor-lists/{section_code}",
+        "setProjectVendorList"
       ]
     ],
     "schema_names": [
@@ -510,7 +540,34 @@
       "Assignment",
       "AssignmentEvent",
       "AssignmentDetail",
-      "AssignmentPage"
+      "AssignmentPage",
+      "PriceListId",
+      "PriceListPositionId",
+      "VendorListId",
+      "PriceListFormat",
+      "PriceListField",
+      "PriceListRowReason",
+      "PriceListCurrencySource",
+      "PriceListColumn",
+      "PriceListAmbiguousColumn",
+      "PriceListRowNote",
+      "PriceListReasonCount",
+      "PriceListCurrencySourceCount",
+      "PriceListParseReport",
+      "PriceListRevision",
+      "PriceListRevisionList",
+      "PriceListPosition",
+      "PriceListPositionPage",
+      "UploadPriceListRequest",
+      "VendorListMode",
+      "VendorListScope",
+      "VendorListSource",
+      "VendorListEntry",
+      "VendorListRevision",
+      "SectionVendorList",
+      "EffectiveVendorLists",
+      "SetGlobalVendorListRequest",
+      "SetProjectVendorListRequest"
     ]
   },
   "error_catalog": {

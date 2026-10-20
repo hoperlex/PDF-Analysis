@@ -441,22 +441,16 @@ describe('the census is taken over rendered screens, not over a list', () => {
         '`--am-line-soft` on `--am-surface`, is measured at other sites in both palettes, so ' +
         'no pair is missing from the census; the RULE is what is unevaluated.',
     },
-    {
-      selector: '.am-form__chosen',
-      why:
-        'Renders only after a file has been chosen, which needs a change event the harness ' +
-        'cannot fire. It declares its ink and its tint in the SAME block, so `declaredPairs` ' +
-        'measures the pair with no markup — the union of the two censuses is why this costs ' +
-        'nothing rather than being excused.',
-    },
+    // `.am-form__chosen` left this list in `W60-PRICE-LIST-01`: the price-list upload form's
+    // markup is a view driven by props, so `screens.ts` renders it with a file chosen.
     // `.am-form__problem` left this list in `W59-SECTION-UI-01`: the stage-and-section form's
     // markup is a view driven by props, so `screens.ts` renders it carrying a refusal.
     {
       selector: '.am-form__created',
       why:
         'Renders only after a project has been created, which needs a mutation to settle. ' +
-        'Declares both halves in one block, so `declaredPairs` measures it; see ' +
-        '`.am-form__chosen`.',
+        'Declares its ink and its tint in the same block, so `declaredPairs` measures the pair ' +
+        'with no markup.',
     },
   ];
 

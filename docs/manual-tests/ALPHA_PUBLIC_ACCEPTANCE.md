@@ -249,7 +249,12 @@ number equals the routes in `tests/e2e/pc01/journey/manifest.json`:
 
 1. `/` — home, including the administrator's pending-registration count;
 2. `/projects`;
-3. project;
+3. project — and its «Оптимизация» tab (`W60-PRICE-LIST-01`): as an expert upload a CSV or
+   Excel price list (a row with «по запросу» as its price is listed as skipped, not priced);
+   the revision list marks the newest one current, the positions show the exact prices in the
+   stated currency with the report of how the file was read; the vendor lists name, per section,
+   whether the project's list, the general list or none applies, and only an administrator is
+   offered «Изменить общий список»;
 4. document;
 5. version;
 6. version comparison;

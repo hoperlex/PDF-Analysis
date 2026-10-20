@@ -82,6 +82,8 @@ PORT_FOR_ARGUMENT = {
     "xlsx_exports": "XlsxExportPort",
     # `W61-DISPATCHER-01`.
     "dispatch": "DispatchPort",
+    # `W60-PRICE-LIST-01`.
+    "optimisation": "OptimisationPort",
 }
 
 

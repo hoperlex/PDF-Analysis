@@ -88,8 +88,10 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # `W61-DISPATCHER-01` added ``getAssignment`` on ``assignment_uid`` (``404`` for an identity that
 # names nothing, or an assignment the caller may not read) and ``listAssignments``, an
 # unaddressed collection.
-# With both, the addressed half is twenty-two.
-EXPECTED_ADDRESSED = 22
+# `W60-PRICE-LIST-01` added three: ``listPriceListRevisions`` and ``getEffectiveVendorLists``
+# on ``project_uid`` and ``listPriceListPositions`` on ``price_list_id``.
+# With both, the addressed half is twenty-five.
+EXPECTED_ADDRESSED = 25
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --

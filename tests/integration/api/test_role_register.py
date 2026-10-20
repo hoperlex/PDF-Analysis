@@ -121,6 +121,14 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "listAssignments": ("GET", "/assignments"),
     "getAssignment": ("GET", "/assignments/asg_01M2545JSD15ETSNNV904X991W"),
     "transitionAssignment": ("POST", "/assignments/asg_01M2545JSD15ETSNNV904X991W/transitions"),
+    # `W60-PRICE-LIST-01`. Price lists and vendor lists; the writes' missing bodies are refused
+    # by their models only after the role decided.
+    "uploadPriceList": ("POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/price-lists"),
+    "listPriceListRevisions": ("GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/price-lists"),
+    "listPriceListPositions": ("GET", "/price-lists/prl_01M2545JSD15ETSNNV904X991N/positions"),
+    "getEffectiveVendorLists": ("GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists"),
+    "setGlobalVendorList": ("PUT", "/vendor-lists/EOM"),
+    "setProjectVendorList": ("PUT", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists/EOM"),
     "listRunFindings": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     "exportRunCsv": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),
     # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook (expert, as the CSV) and the norms
@@ -218,6 +226,14 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "appendDecision": _EXPERT,
     # `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict; admin alone does not.
     "carryOverDecision": _EXPERT,
+    # `W60-PRICE-LIST-01`: an expert uploads a price list and overrides a project's vendor
+    # list; the global vendor list is an administrator's; any one role reads.
+    "uploadPriceList": _EXPERT,
+    "setProjectVendorList": _EXPERT,
+    "setGlobalVendorList": _ADMIN,
+    "listPriceListRevisions": _ANY_ROLE,
+    "listPriceListPositions": _ANY_ROLE,
+    "getEffectiveVendorLists": _ANY_ROLE,
     "exportRunCsv": _EXPERT,
     # `W61-DISPATCHER-01`: assigning work is an administrator's act (R-60).
     "createAssignment": _ADMIN,

@@ -146,6 +146,14 @@ REQUIRED_OPERATIONS = {
     "listAssignments",
     "getAssignment",
     "transitionAssignment",
+    # `W60-PRICE-LIST-01`. «Оптимизация проекта»'s stored inputs: a project's price-list
+    # revisions and positions, and each section's vendor list, global and per project.
+    "uploadPriceList",
+    "listPriceListRevisions",
+    "listPriceListPositions",
+    "getEffectiveVendorLists",
+    "setGlobalVendorList",
+    "setProjectVendorList",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -179,6 +187,10 @@ WRITE_OPERATIONS = {
     "setWorkerIntake",
     # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
     "carryOverDecision",
+    # `W60-PRICE-LIST-01`. Stores a file and a revision, keyed like `uploadDocument`. The two
+    # vendor-list writes are not keyed: an exact repeat writes nothing, and a stale writer is
+    # refused by `expected_vendor_list_id`.
+    "uploadPriceList",
 }
 
 PAGINATED_OPERATIONS = {
@@ -352,13 +364,46 @@ def test_every_path_parameter_is_required_and_pattern_bound(openapi_document: di
         assert schema["pattern"].endswith("$"), name
 
 
+#: `W60-PRICE-LIST-01`. Path parameters that are not identities and are allowed anyway, each
+#: with the closed contract enum it must resolve to. ``section_code`` addresses a vendor list's
+#: SLOT -- one of the fifteen sections, globally or within a project -- not a resource: every
+#: revision in that slot has its own ``vnl_`` identity. A closed vocabulary key is none of
+#: the non-identities this guard exists for (a file name, an ordinal, a sheet number, a
+#: checksum), and the second test below holds it to the enum, so a free-text key cannot
+#: borrow the exception.
+VOCABULARY_PATH_PARAMETERS: dict[str, str] = {"section_code": "#/components/schemas/ProjectSection"}
+
+
 def test_no_endpoint_addresses_a_resource_by_a_non_identity(openapi_document: dict) -> None:
     """No path keys on a file name, an ordinal, a sheet number or a checksum."""
     for path in openapi_document["paths"]:
         for parameter in re.findall(r"\{([^}]+)\}", path):
+            if parameter in VOCABULARY_PATH_PARAMETERS:
+                continue
             assert parameter.endswith(("_uid", "_id")), (
                 f"{path} addresses a resource by {parameter!r}, which is not an identity"
             )
+
+
+def test_a_vocabulary_path_parameter_is_its_closed_enum(openapi_document: dict) -> None:
+    seen = 0
+    for path, item in openapi_document["paths"].items():
+        for method, operation in item.items():
+            if method not in HTTP_METHODS:
+                continue
+            for parameter in [*item.get("parameters", []), *operation.get("parameters", [])]:
+                resolved = (
+                    _resolve(openapi_document, parameter["$ref"])
+                    if "$ref" in parameter
+                    else parameter
+                )
+                expected = VOCABULARY_PATH_PARAMETERS.get(resolved["name"])
+                if resolved["in"] != "path" or expected is None:
+                    continue
+                seen += 1
+                assert resolved["schema"] == {"$ref": expected}, f"{method.upper()} {path}"
+                assert "enum" in _resolve(openapi_document, expected), expected
+    assert seen >= 2, "no vocabulary path parameter was found; the exception is unused"
 
 
 # ---------------------------------------------------------------------------
