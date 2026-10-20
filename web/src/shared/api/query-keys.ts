@@ -38,6 +38,7 @@ import type { DataTag } from '@tanstack/react-query';
 
 import type {
   DocumentUid,
+  PriceListId,
   FindingCategory,
   NormDocumentId,
   FindingUid,
@@ -63,6 +64,10 @@ import type {
  *
  * `analysis` entered once, in `W59-ANALYSIS-SETTINGS-01`: the analysis-profile registry
  * belongs to no project, run, version or execution.
+ *
+ * `optimisation` entered once, in `W60-PRICE-LIST-01`: a project's price-list revisions and
+ * their positions, and the vendor lists — whose global half belongs to no project, so one
+ * administrator's change moves what every project's «Оптимизация» tab reads.
  */
 export const QUERY_NAMESPACES = [
   'projects',
@@ -77,6 +82,7 @@ export const QUERY_NAMESPACES = [
   'execution',
   'norms',
   'analysis',
+  'optimisation',
 ] as const;
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
@@ -112,6 +118,24 @@ export interface FindingListFilters {
 }
 
 export const queryKeys = {
+  /**
+   * «Оптимизация» on the project screen (`W60-PRICE-LIST-01`). `priceLists` holds
+   * `listPriceListRevisions` for one project; `positions` one page of
+   * `listPriceListPositions` (the page is in the key, so two pages never share an entry);
+   * `vendorLists` the prefix of every project's `getEffectiveVendorLists`, because a change
+   * of the GLOBAL list moves all of them at once. An upload invalidates the project's
+   * `priceLists`; either vendor-list write invalidates `vendorLists()`. Nothing here is a
+   * number the dashboard reads.
+   */
+  optimisation: {
+    all: () => ['optimisation'] as const,
+    priceLists: (projectUid: ProjectUid) => ['optimisation', 'price-lists', projectUid] as const,
+    positions: (priceListId: PriceListId, offset: number, limit: number) =>
+      ['optimisation', 'positions', priceListId, { offset, limit }] as const,
+    vendorLists: () => ['optimisation', 'vendor-lists'] as const,
+    projectVendorLists: (projectUid: ProjectUid) =>
+      ['optimisation', 'vendor-lists', projectUid] as const,
+  },
   /**
    * «Настройки анализа» (`W59-ANALYSIS-SETTINGS-01`): `listAnalysisProfiles`, the text-profile
    * registry the server routes runs through. A root of its own, entered once by that task:

@@ -314,9 +314,14 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.norms.content(normDocumentId)` | `['norms','content',id]` | `W55A-WEB-NORMS` |
 | `queryKeys.analysis.all()` | `['analysis']` | `W59-ANALYSIS-SETTINGS-01` |
 | `queryKeys.analysis.profiles()` | `['analysis','profiles']` | `W59-ANALYSIS-SETTINGS-01` |
+| `queryKeys.optimisation.all()` | `['optimisation']` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.priceLists(projectUid)` | `['optimisation','price-lists',uid]` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.positions(priceListId, offset, limit)` | `['optimisation','positions',id,{offset,limit}]` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.vendorLists()` | `['optimisation','vendor-lists']` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.projectVendorLists(projectUid)` | `['optimisation','vendor-lists',uid]` | `W60-PRICE-LIST-01` |
 
 `projects`, `versions`, `runs`, `findings`, `dashboard`, `account`, `users`, `registrations`,
-`releases`, `execution`, `norms`, `analysis` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
+`releases`, `execution`, `norms`, `analysis`, `optimisation` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
 is the signed-in account (`getMe`), `users` the administrator's view of the accounts, and
 `registrations` the requests awaiting or past a decision. A later lane adds key factories inside
 them and no new root.
@@ -352,6 +357,13 @@ a stale refusal means the list must be read again. It changes nothing the dashbo
 `listAnalysisProfiles`, the text-profile registry the server routes runs through, which belongs
 to no project, run, version or execution. No action on this client writes it — the registry
 changes only when the server is redeployed — so nothing invalidates it; «Обновить» re-reads it.
+`optimisation` entered in `W60-PRICE-LIST-01`: the project screen's «Оптимизация» tab.
+`optimisation.priceLists(uid)` holds `listPriceListRevisions`; `optimisation.positions` one page of
+`listPriceListPositions` (the page is in the key); `optimisation.projectVendorLists(uid)` holds
+`getEffectiveVendorLists` under the prefix `optimisation.vendorLists()`. `uploadPriceList`
+invalidates the project's `priceLists`; `setProjectVendorList` and `setGlobalVendorList` invalidate
+the whole `vendorLists()` prefix, because a change of the general list moves every project's
+answer. None of them changes a number the dashboard reads.
 
 There is **no global domain store.** The query client in `_app` is the only cache. PC-01's
 state lives on the server; a second copy of it in the browser is a second source of truth
