@@ -1,6 +1,6 @@
 """The seventy-four operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles one ``APIRouter`` from the twenty router modules. It takes
+:func:`build_router` assembles one ``APIRouter`` from the twenty-one router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
 port is the composition root's job (``api/composition.py``), and a factory that reached for
 a concrete implementation would have taken that decision away from it.
@@ -211,6 +211,7 @@ def build_router(
     xlsx_exports: XlsxExportPort | None = None,
     dispatch: DispatchPort | None = None,
     optimisation: OptimisationPort | None = None,
+    specification_prices: SpecificationPricesPort | None = None,
 ) -> Router:
     """Assemble the seventy-four operations, from the twenty-one router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``

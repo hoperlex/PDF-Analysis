@@ -1,6 +1,6 @@
 'use client';
 
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import type { DocumentUid, ProjectUid, SpecificationPrices } from '@/shared/api';
 import { getSpecificationPrices, queryKeys } from '@/shared/api';
@@ -34,7 +34,10 @@ export function specificationPricesQueryOptions(
   } as const;
 }
 
-/** Disabled until a set is chosen; the previous page stays on screen while the next loads. */
+/**
+ * Disabled until a set is chosen. The previous page of the **same** set stays on screen while
+ * the next loads; another set's answer never stands in for this one's.
+ */
 export function useSpecificationPrices(
   projectUid: ProjectUid,
   documentUid: DocumentUid | null,
@@ -43,6 +46,7 @@ export function useSpecificationPrices(
   return useQuery<SpecificationPrices>({
     ...specificationPricesQueryOptions(projectUid, (documentUid ?? '') as DocumentUid, offset),
     enabled: documentUid !== null,
-    placeholderData: keepPreviousData,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[3] === documentUid ? previous : undefined,
   });
 }
