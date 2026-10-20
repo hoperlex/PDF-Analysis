@@ -14,7 +14,7 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **54 paths / 61 operations / 158 schemas**,
+The development API surface is **56 paths / 63 operations / 161 schemas**,
 the error catalogue has **25** codes, the migration head is
 **`0024_version_classification`**, and `VERSION` is `0.6.0`. These are checkout
 facts; the release tree has its own frozen 47/54/123 surface and
@@ -43,7 +43,11 @@ The repaired snapshot `ns_01M59N8QNBVN91ACA2HCE6VE74` (674 documents,
 with a complete BGE-M3 embedding build (61,573 windows, set digest
 `e7fac64c…`), dumped and restore-verified, and exported as a verified bundle
 with `build: present` (`W54-SNAPSHOT-LOAD-01`, `W54-EMBED-BUILD-01`,
-`W54-BUNDLE-EXPORT-01`). The stand import, its copy record and the admin's
+`W54-BUNDLE-EXPORT-01`). `W54-LOCAL-IMPORT-01` imported that bundle into an
+isolated local stack and served search, document, paragraphs and ranged PDF
+from it; «Нормы» now also has a catalogue (`listNormDocuments`) with
+derived display designations, and a run's findings download as Excel
+(`exportRunXlsx`). The stand import, its copy record and the admin's
 designation of a current snapshot have not run; they need an owner window.
 
 ## Code-first series (R-135)
