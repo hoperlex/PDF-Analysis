@@ -67,7 +67,7 @@ appends nothing; a refusal writes nothing; revision 1 is never rewritten.
 | D7 | **`correctVersionClassification` is unkeyed `POST` returning `201` for a new revision and for a repeat.** No `Idempotency-Key`: `expected_revision` + actor + values + reason is the idempotency rule, as for `classifyDocumentVersion`; `createAssignment` is the precedent for an unkeyed `POST`. | A `POST` also avoids the pinned `PUT`/`PATCH`/`DELETE` set in `tests/e2e/pc01/test_acceptance.py` (no mutating method under `/versions` but the classification). |
 | D8 | **No new opaque identity.** A revision is addressed only as `(version_uid, revision)`; `revision` is a per-version order used as the optimistic-concurrency token (the error catalogue already lists `expected_revision`), never a handle on its own. | AGENTS §4 forbids a display number as identity; here the number has no meaning without the version. An opaque id would be a contract-slot change to `shared/identity` and `identifiers.json`. |
 | D9 | **`DocumentVersionRecord` equality ignores the classification** (done in phase A). | See 5.C: a correction that commits while a run stage re-reads the version must not fail the run. |
-| D10 | **The dashboard is repointed** (5.A row 7), in its own commit so it can be dropped. It also closes `D-180`. | The task's outcome lists the dashboard; today it groups by the legacy `document.section`, so there is nothing to repoint without changing `SectionDocumentCount`'s meaning. |
+| D10 | **Superseded by the integrator's notice after acceptance (see the addendum at the end):** `SECTION-READ-MODEL-01` (`fee74158`, dev `802b3823`) already groups the dashboard by the confirmed classification of each document's current version and closed `D-180`; phase B has no separate dashboard commit but repoints the dashboard query and three new `documents` queries to the current view. | At the phase A base the dashboard still grouped by the legacy `document.section`; the first draft of D10 proposed repointing it in its own commit. |
 
 ## 4. Phase A checks (container-free)
 
@@ -140,7 +140,7 @@ repository's reads moves the whole product at once.
 | 4 | `:226` `_SELECT_CLASSIFICATION` (`get_classification` :620) | one version's classification; used by the comparison adapter `_ClassificationReader` (`bootstrap/adapters.py:2822`) and by the classify command's "re-read the winner" | `FROM version_classification_current` |
 | 5 | `:233` `_INSERT_CLASSIFICATION` | writes **revision 1** into the base table — stays on the base table; `RETURNING` adds a literal `1 AS revision` | the append-only original stays exactly as 0024 made it (forbidden hotspot) |
 | 6 | `db/migrations/versions/20261020_0027_optimisation_proposals.py:219` function `am_check_optimisation_pass_scope` | `JOIN document_version_classification c … AND c.section_code = 'AR'` — the version must be classified `AR` when a pass is written | `CREATE OR REPLACE FUNCTION` in `0028` with `JOIN version_classification_current c`; the trigger `trg_optimisation_pass_scope` stays; `0028`'s downgrade restores the `0027` body first |
-| 7 | `dashboard/repository.py` `_DOCUMENTS_BY_SECTION` | **not the table**: groups published documents by the legacy `document.section` (`D-180`) | `… JOIN document_version v ON v.version_uid = d.current_version_uid LEFT JOIN version_classification_current c ON c.version_uid = v.version_uid GROUP BY c.section_code`; `NULL` stays the «не подтверждён» group; its suites (`tests/integration/composition/test_dashboard_summary_over_a_fresh_deployment.py`, `test_an_absent_parent_is_not_an_empty_page.py`, the web `widgets/dashboard` model) and the `SectionDocumentCount` prose in the contract are re-derived; own commit (D10) |
+| 7 | `dashboard/repository.py` `_DOCUMENTS_BY_SECTION` — **as of the phase A base only; superseded, see the addendum** | at the base: **not the table**, it groups published documents by the legacy `document.section` (`D-180`); after the merge of `fee74158` it groups by the confirmed classification of the current version and reads the table (join to re-measure on the merged tree) | `… JOIN document_version v ON v.version_uid = d.current_version_uid LEFT JOIN version_classification_current c ON c.version_uid = v.version_uid GROUP BY c.section_code`; the base-tree suites (`tests/integration/composition/test_dashboard_summary_over_a_fresh_deployment.py`, `test_an_absent_parent_is_not_an_empty_page.py`) and the web `widgets/dashboard` model are the places to re-check; the repoint is part of the ordinary repository commit, not a separate one |
 
 New SQL (phase B), not a repoint: the history read (`version_classification_revision` view, ordered
 by `revision`), the lock `SELECT … FOR NO KEY UPDATE` on the original row, the correction insert.
@@ -187,7 +187,7 @@ invalidates `versions.sectionReview`, the document's version list, `projects.all
 |---|---|
 | `queryKeys.versions.all()` | detail (infinite stale time), list, section review, comparisons (`versions.comparisons()` — a pair guard answers differently) |
 | `queryKeys.projects.all()` | structure and badges |
-| `queryKeys.dashboard.summary()` | the section breakdown once D10 lands |
+| `queryKeys.dashboard.summary()` | the section breakdown groups by the current classification (after `fee74158`) |
 | `queryKeys.optimisation.all()` | specification prices, passes, section Form-7 (`section-specification`) |
 | `queryKeys.runs.all()` | the run control's «классификация» refusal state and the routing refusal |
 
@@ -310,7 +310,7 @@ lock on the hot path for no reachable inconsistency).
 5. the reseal: contract (`api:generate`), the web mirror byte-identical, `npm --prefix web ci`,
    `api:verify`, `FRONTEND_LOCK.json`, `expected_facts.json`, the pins of 5.E, surface prose with
    the mutation lines of `test_surface_counts_in_prose.py` (not `CURRENT_STATE.md`);
-6. the dashboard repoint (own commit, D10);
+6. repoint the dashboard repository query and the three `documents` queries `SECTION-READ-MODEL-01` added (`list_current_versions_in_section`, `list_unclassified_current_versions`, `count_projects`) to `version_classification_current`, each with a test that fails against the original-only table once a correction exists (re-measured on the merged tree; no separate commit);
 7. web: the correction control and the history in the version panel (expert only), the hook and
    the invalidation of 5.D, rendered-language guard, vitest for the changed files, journey
    manifest entry (static conformance);
@@ -334,8 +334,7 @@ rendered-language guard, journey conformance. No full gate, no live journey.
   sets, optimisation passes, run start); written passes, decisions, findings and runs stay.
 * **`classifyDocumentVersion` after a correction** is `409` for a retry of the original request
   (D4).
-* **The dashboard repoint changes `SectionDocumentCount`'s meaning** (D10); if the integrator
-  drops that commit, `D-180` stays open and the dashboard keeps the legacy grouping.
+* **The Form-7 section view and the dashboard follow corrections** only once their queries read the current view (phase B step 6); until then a corrected version would still count under its original section.
 * **The downgrade is lossy by nature** (it logs the count); it never touches the original rows.
 
 ## 12. Hotspot proof (phase A)
@@ -346,3 +345,16 @@ and this report — all in the first group of allowed paths. Not touched: `contr
 `db/migrations/**`, the composition root, `web/**`, `access/references.py`,
 `pyproject.toml`, `uv.lock`, `CURRENT_STATE.md`, `DEBT_REGISTER.md`, any ref or tag, the stand,
 migrations `0001`…`0027`, the stored original confirmations.
+
+## Addendum — after the integrator accepted phase A
+
+The integrator approved D1-D9 as written and changed D10: `SECTION-READ-MODEL-01` is already
+merged into the integration branch (`fee74158`; dev `802b3823`). Its dashboard query groups by the
+confirmed classification of each document's current version (`D-180` closed there), and the
+`documents` context gained the public queries `list_current_versions_in_section`,
+`list_unclassified_current_versions` and `count_projects`, used by the section Form-7 view. Phase B
+therefore (a) has no separate dashboard-repoint commit, and (b) after the real merge, greps the
+merged tree for every `document_version_classification` join again — the list in section 5.A is
+the phase A base, not the final inventory — and repoints the dashboard repository query and those
+three `documents` queries to `version_classification_current`, with tests. Rows 7 and the step list
+above are marked accordingly. Nothing else in this report changes.
