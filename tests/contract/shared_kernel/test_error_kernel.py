@@ -31,8 +31,12 @@ class TheEnumIsExactlyTheCatalog(unittest.TestCase):
     def test_member_set_equals_the_catalog_key_set(self) -> None:
         self.assertEqual(frozenset(c.value for c in ErrorCode), frozenset(RAW["codes"]))
 
-    def test_there_are_twenty_four(self) -> None:
-        """Twenty-four since `W55B-SEAL-01` added `analysis_input_budget_exceeded`, the
+    def test_there_are_twenty_five(self) -> None:
+        """Twenty-five since `W56A-SEAL-01` (commit `bcd5ad26`, candidate revision 13) added
+        `model_identity_mismatch`, the fail-closed refusal of a provider response whose model
+        identity differs from the configured and pinned model (`R-133`).
+
+        The twenty-fourth was `analysis_input_budget_exceeded`, added by `W55B-SEAL-01`: the
         up-front refusal of a version above the analysis input budget (`R-118`).
 
         The twenty-third was `rate_limited` (`W49-SEAL-01`), which only the edge in front of
@@ -40,8 +44,12 @@ class TheEnumIsExactlyTheCatalog(unittest.TestCase):
 
         The twenty-second was `staged_upload_lost`, added under `R-8` settling `D-18`; the
         twenty-first `dependency_credential_refused`, added by `R-3` at the wave-13 reseal.
+
+        Mutation: add or remove one code in the catalogue and the enum together -> the count
+        differs from this pin and this test reddens (`GATE-FIX-CONTRACT-01` replayed it by
+        restoring the stale pin, 24, against the 25-code tree).
         """
-        self.assertEqual(len(list(ErrorCode)), 24)
+        self.assertEqual(len(list(ErrorCode)), 25)
 
     def test_contract_version_is_read_not_restated(self) -> None:
         self.assertEqual(CONTRACT_VERSION, RAW["contract_version"])
