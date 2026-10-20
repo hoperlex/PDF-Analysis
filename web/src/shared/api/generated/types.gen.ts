@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 a2011725a14b674e920263c43a3920179a77a30af4ee2c88bed7b8d30561caaf
+ *   sha256 2baf46c8cff4db0aa496119d2160bc2c53e13d4eb6ebdb5a0eb17624315e197e
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'a2011725a14b674e920263c43a3920179a77a30af4ee2c88bed7b8d30561caaf';
+export const CONTRACT_DIGEST = '2baf46c8cff4db0aa496119d2160bc2c53e13d4eb6ebdb5a0eb17624315e197e';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -42,6 +42,10 @@ export const SCHEMA_NAMES = [
   'AssignmentTransitionKind',
   'AssignmentUid',
   'BlockGeometry',
+  'CarryOverDecisionRequest',
+  'CarryOverDecisionResponse',
+  'CarryoverCandidate',
+  'CarryoverSourceDecision',
   'ChangePasswordRequest',
   'ClassifyDocumentVersionRequest',
   'ComparedVersion',
@@ -400,6 +404,65 @@ export type BlockGeometry = {
   page_number: number;
 };
 
+/**
+ * `W59-DECISION-CARRYOVER-01`. One expert confirmation of one proposed pair.
+ *
+ * The path names the source (older) version; the comparison is recomputed with these
+ * values when the confirmation arrives. ``source_decision_id`` is the decision the expert
+ * was shown: if the source's current verdict has moved on, nothing is carried.
+ */
+export type CarryOverDecisionRequest = {
+  mode: "version" | "stage";
+  source_decision_id: DecisionId;
+  source_finding_uid: FindingUid;
+  source_run_id?: RunId;
+  target_finding_uid: FindingUid;
+  target_run_id?: RunId;
+  target_version_uid: VersionUid;
+};
+
+/**
+ * `W59-DECISION-CARRYOVER-01`. The carried event on the target finding and where it
+ * came from. ``replayed`` is true when the target already carried exactly this event (an
+ * exact repeat): nothing was appended and the first confirmation stands.
+ */
+export type CarryOverDecisionResponse = {
+  current_verdict: Verdict;
+  event: DecisionEvent;
+  mode: "version" | "stage";
+  replayed: boolean;
+  source_decision_id: DecisionId;
+  source_finding_uid: FindingUid;
+  source_version_ordinal: number;
+  source_version_uid: VersionUid;
+  target_version_uid: VersionUid;
+};
+
+/**
+ * `W59-DECISION-CARRYOVER-01`. An ``unchanged`` proposal whose source finding carries an
+ * expert decision and whose target finding has no decision event yet. Listing it carries
+ * nothing: only ``carryOverDecision``, confirmed by an expert, does.
+ */
+export type CarryoverCandidate = {
+  proposal_sha256: Sha256;
+  source_decision: CarryoverSourceDecision;
+  source_finding_uid: FindingUid;
+  target_finding_uid: FindingUid;
+};
+
+/**
+ * `W59-DECISION-CARRYOVER-01`. The source finding's current verdict-bearing event, as
+ * the confirming expert is shown it before «Перенести решение».
+ */
+export type CarryoverSourceDecision = {
+  author_label: string;
+  comment: string | null;
+  decision_id: DecisionId;
+  recorded_at: string;
+  severity: Severity | null;
+  verdict: "accepted" | "rejected";
+};
+
 export type ChangePasswordRequest = {
   /** The password the account holds now, proved before anything is changed. It appears in no response body, no error detail and no diagnostic record. A value that is not this account's is `authentication_required` -- the same refusal a missing credential gets, because 'this deployment does not accept this' is one fact. */
   current_password: string;
@@ -732,6 +795,7 @@ export const FINDING_CATEGORY_VALUES = [
 export type FindingCategory = (typeof FINDING_CATEGORY_VALUES)[number];
 
 export type FindingComparison = {
+  carryover_candidates: Array<CarryoverCandidate>;
   proposals: Array<FindingMatchProposal>;
   source_finding_count: number;
   status: "compared" | "unavailable";

@@ -152,6 +152,8 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "compareDocumentVersions",
             # `W59-VERSION-UPLOAD-01`: the next version takes a multipart body.
             "uploadDocumentVersion",
+            # `W59-DECISION-CARRYOVER-01`: the carryover takes a closed body.
+            "carryOverDecision",
             # `W61-DISPATCHER-01`: a creation and a move take bodies, the listing filters and
             # pages. Reading one assignment takes only its path identity and declares none.
             "createAssignment",

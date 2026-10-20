@@ -255,6 +255,12 @@ export const queryKeys = {
      * versions and their classifications and nothing else is its parent; classifying either
      * version or publishing a run changes the answer, and `versions.all()` reaches it.
      */
+    /**
+     * Every comparison answer, whatever the pair, mode or page (`W59-DECISION-CARRYOVER-01`):
+     * a carried decision changes the pair's `carryover_candidates`, and the prefix reaches
+     * every page and mode of it without naming them.
+     */
+    comparisons: () => ['versions', 'comparison'] as const,
     comparison: (
       sourceVersionUid: VersionUid,
       targetVersionUid: VersionUid,

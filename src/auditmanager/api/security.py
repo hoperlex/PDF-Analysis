@@ -374,6 +374,9 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "cancelRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "reauditRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "appendDecision": _EXPERT,
+        # `W59-DECISION-CARRYOVER-01`. A carried decision is a verdict like any other: only an
+        # expert confirms it, and the command re-reads the role set in its own transaction.
+        "carryOverDecision": _EXPERT,
         "exportRunCsv": _EXPERT,
         # `W61-DISPATCHER-01`. Assigning work is an administrator's act (R-60); the command
         # re-reads the role set in its own transaction.

@@ -185,6 +185,10 @@ __all__ = [
     "SheetDiff",
     "SheetDiffPage",
     "SheetPairing",
+    "CarryOverDecisionRequest",
+    "CarryOverDecisionResponse",
+    "CarryoverCandidate",
+    "CarryoverSourceDecision",
     "VersionComparison",
     "VersionUid",
     "optional_property",
@@ -1870,12 +1874,37 @@ class FindingMatchProposal(_Object):
     proposal_sha256: Sha256 | None
 
 
+class CarryoverSourceDecision(_Object):
+    """`W59-DECISION-CARRYOVER-01`. The source finding's current verdict-bearing event, as
+    the confirming expert is shown it before «Перенести решение»."""
+
+    decision_id: DecisionId
+    verdict: Literal["accepted", "rejected"]
+    severity: Severity | None
+    comment: str | None
+    author_label: Annotated[str, Field(min_length=1, max_length=128)]
+    recorded_at: datetime
+
+
+class CarryoverCandidate(_Object):
+    """`W59-DECISION-CARRYOVER-01`. An ``unchanged`` proposal whose source finding carries an
+    expert decision and whose target finding has no decision event yet. Listing it carries
+    nothing: only ``carryOverDecision``, confirmed by an expert, does."""
+
+    proposal_sha256: Sha256
+    source_finding_uid: FindingUid
+    target_finding_uid: FindingUid
+    source_decision: CarryoverSourceDecision
+
+
 class FindingComparison(_Object):
     status: Literal["compared", "unavailable"]
     unavailable_reason: Literal["findings_over_limit"] | None
     source_finding_count: Annotated[int, Field(ge=0)]
     target_finding_count: Annotated[int, Field(ge=0)]
     proposals: Annotated[list[FindingMatchProposal], Field(max_length=400)]
+    #: `W59-DECISION-CARRYOVER-01`. Empty when the findings are unavailable.
+    carryover_candidates: Annotated[list[CarryoverCandidate], Field(max_length=200)]
 
 
 class VersionComparison(_Object):
@@ -1898,6 +1927,37 @@ class VersionComparison(_Object):
     findings: FindingComparison | None
 
 
+class CarryOverDecisionRequest(_Object):
+    """`W59-DECISION-CARRYOVER-01`. One expert confirmation of one proposed pair.
+
+    The path names the source (older) version; the comparison is recomputed with these
+    values when the confirmation arrives. ``source_decision_id`` is the decision the expert
+    was shown: if the source's current verdict has moved on, nothing is carried.
+    """
+
+    target_version_uid: VersionUid
+    mode: Literal["version", "stage"]
+    source_finding_uid: FindingUid
+    target_finding_uid: FindingUid
+    source_decision_id: DecisionId
+    source_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    target_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class CarryOverDecisionResponse(_Object):
+    """`W59-DECISION-CARRYOVER-01`. The carried event on the target finding and where it
+    came from. ``replayed`` is true when the target already carried exactly this event (an
+    exact repeat): nothing was appended and the first confirmation stands."""
+
+    event: DecisionEvent
+    current_verdict: Verdict
+    replayed: bool
+    source_finding_uid: FindingUid
+    source_decision_id: DecisionId
+    source_version_uid: VersionUid
+    source_version_ordinal: Annotated[int, Field(ge=1)]
+    target_version_uid: VersionUid
+    mode: Literal["version", "stage"]
 # --- analysis profiles (`W59-ANALYSIS-SETTINGS-01`) ----------------------------------------
 #
 # The section-keyed text-profile registry as «Настройки анализа» reads it: one row per section

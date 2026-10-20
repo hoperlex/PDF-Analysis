@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 56,
+    "path_count": 57,
     "operations": [
       [
         "POST",
@@ -305,6 +305,11 @@
       ],
       [
         "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers",
+        "carryOverDecision"
+      ],
+      [
+        "POST",
         "/assignments",
         "createAssignment"
       ],
@@ -479,6 +484,10 @@
       "AnalysisProfileSummary",
       "AnalysisProfileListItem",
       "AnalysisProfileList",
+      "CarryoverSourceDecision",
+      "CarryoverCandidate",
+      "CarryOverDecisionRequest",
+      "CarryOverDecisionResponse",
       "AssignmentUid",
       "AssignmentStatus",
       "AssignmentEventKind",

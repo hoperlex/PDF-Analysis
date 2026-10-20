@@ -10,3 +10,6 @@ export { admitFinding, admitFindings, isRenderableFinding } from './model/admiss
 
 export type { FindingGroup } from './model/grouping';
 export { countGrouped, groupByCategory } from './model/grouping';
+
+/** The Russian label of each AR v2 severity; no expert choice is implied. */
+export { SEVERITY_LABELS } from './model/severity-labels';

@@ -188,6 +188,8 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   // not write; the backend half of the window is still being written, so the hook
   // invalidates the dashboard anyway, and this entry holds it to that.
   'src/features/classify-version/model/use-classify-version.ts': true,
+  // `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict, and the dashboard counts verdicts.
+  'src/features/carry-over-decision/model/use-carry-over-decision.ts': true,
   // `W61-DISPATCHER-01`: creating and moving a work assignment changes no number the
   // dashboard reads; both invalidate the `assignments` root instead.
   'src/features/create-assignment/model/use-create-assignment.ts': false,
