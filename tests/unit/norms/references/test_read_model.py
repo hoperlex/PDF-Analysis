@@ -224,6 +224,15 @@ def test_a_cited_amendment_of_an_older_base_is_answered_by_a_newer_base_edition(
     assert (item.outcome, item.matched_designation) == ("newer_edition", "СП 51.13330.2016")
 
 
+def test_a_cited_amendment_is_answered_by_the_newest_newer_base_edition() -> None:
+    item = _outcome(
+        "Изменение N 1 к СП 51.13330.2011",
+        SP51_BASE, "СП_51_13330_2016__Защита_от_шума", "СП_51_13330_2022__Защита_от_шума",
+    )
+
+    assert (item.outcome, item.matched_designation) == ("newer_edition", "СП 51.13330.2022")
+
+
 # --- laws and acts are one citation in both word orders -----------------------------------
 
 
