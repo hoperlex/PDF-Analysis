@@ -9,8 +9,9 @@ snapshot (:func:`auditmanager.norms.search.resolve_scope`); with none current th
 (identity, slug, kind, page and paragraph counts, attribution and ``content_available`` --
 the same custody-binding expression ``getNormDocument`` evaluates). On the real corpus that is
 674 rows in about 6 ms. Everything after it is a function of those rows: the display name
-(:mod:`.designation`), the filters, the order and the page. So the filters match what a reader
-sees -- the derived designation and title -- and a row is never altered.
+(:func:`auditmanager.norms.search.display_name`, whose designation ``searchNorms`` and
+``getNormDocument`` show too), the filters, the order and the page. So the filters match what
+a reader sees -- the derived designation and title -- and a row is never altered.
 
 * ``q`` (1-200 characters) keeps a document when its designation and title, folded like the
   search's designations (case, ``ё``, Latin homoglyphs) with every run of punctuation as one
@@ -43,14 +44,13 @@ from sqlalchemy.orm import Session
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 from ..current_snapshot import PDF_BINDING_SQL, QUALIFICATION_PARAMETERS
-from ..search import fold, resolve_scope
+from ..search import display_name, fold, resolve_scope
 from .cursor import (
     catalogue_binding,
     decode_catalogue_cursor,
     encode_catalogue_cursor,
     refused,
 )
-from .designation import display_name
 
 __all__ = [
     "CatalogueEntry",

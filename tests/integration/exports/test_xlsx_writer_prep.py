@@ -104,15 +104,16 @@ def test_summary_totals_use_decided_then_proposed_and_categories():
         "prj_1", "ver_1", "run_1", "ar_v3", "ns_1", "recorded"
     ]
     assert [(summary[f"A{row}"][0], summary[f"B{row}"][0]) for row in range(9, 15)] == [
-        ("critical", "1"),
-        ("economic", "0"),
-        ("operational", "1"),
-        ("recommendation", "0"),
-        ("check_adjacent", "0"),
+        ("Критическое", "1"),
+        ("Экономическое", "0"),
+        ("Эксплуатационное", "1"),
+        ("Рекомендация", "0"),
+        ("Проверить смежный раздел", "0"),
         ("Без серьёзности", "1"),
     ]
+    # Ordered by the contract value (accessibility < fire_safety), shown as its label.
     assert [(summary[f"A{row}"][0], summary[f"B{row}"][0]) for row in (16, 17)] == [
-        ("accessibility", "1"), ("fire_safety", "2")
+        ("Доступность", "1"), ("Пожарная безопасность", "2")
     ]
     assert len(SEVERITIES) == 5
 

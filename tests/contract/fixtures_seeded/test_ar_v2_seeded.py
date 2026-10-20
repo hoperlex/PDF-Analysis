@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import io
 import json
 import sys
@@ -13,8 +14,10 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools" / "fixtures"))
+sys.path.insert(0, str(ROOT / "tools"))
 
 from ar_corpus import pdfextract  # noqa: E402
+from evaluation import local_bundle  # noqa: E402
 from seeded import cases, generate, validate  # noqa: E402
 
 CORPUS = ROOT / "fixtures" / "evaluation" / "ar_v2"
@@ -34,8 +37,8 @@ def test_committed_corpus_is_complete_and_independently_readable(committed) -> N
     manifest, files = committed
     validate.validate_bytes(manifest, files, require_full=True)
     assert len(manifest["bundles"]) == 10
-    assert len(manifest["issues"]) == 21
-    assert len(manifest["controls"]) == 7
+    assert len(manifest["issues"]) == 36
+    assert len(manifest["controls"]) == 12
     assert {item["category"] for item in manifest["issues"]} == set(cases.CATEGORIES)
     assert {item["category"] for item in manifest["controls"]} == set(cases.CATEGORIES)
     for entry in manifest["bundles"]:
@@ -45,6 +48,14 @@ def test_committed_corpus_is_complete_and_independently_readable(committed) -> N
 def test_seeded_categories_equal_the_sealed_api_enum() -> None:
     contract = json.loads((ROOT / "contracts" / "api" / "v1" / "openapi.json").read_text())
     assert tuple(contract["components"]["schemas"]["FindingCategory"]["enum"]) == cases.CATEGORIES
+
+
+def test_the_evaluation_adapter_freezes_the_committed_manifest_digest() -> None:
+    """Regenerating the corpus without re-freezing the adapter refuses every saved-Run join
+    (`seeded_local_manifest_changed`); this reddens in `tests/contract` instead of only in the
+    database-backed `tests/integration/evaluation`."""
+    raw = (CORPUS / "expected_issues.json").read_bytes()
+    assert local_bundle.FROZEN_SEEDED_MANIFEST_SHA256 == hashlib.sha256(raw).hexdigest()
 
 
 def test_regeneration_is_byte_stable_and_matches_committed_bytes(committed) -> None:

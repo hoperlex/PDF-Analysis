@@ -21,6 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auditmanager.documents.public import DocumentRepository
+from auditmanager.shared.errors import DomainError, ErrorCode
 
 from .models import (
     DashboardSummaryRecord,
@@ -104,16 +105,22 @@ _SPEND = text(
     "FROM model_call"
 )
 
-#: Published documents by section. ``JOIN ... ON v.version_uid = d.current_version_uid``
-#: is the same join ``DocumentRepository._LIST_PROJECTS`` counts through, so "a document"
-#: means the same thing here as it does in every other count this contract publishes: one
-#: with a published current version. ``GROUP BY d.section`` puts every unclassified
-#: document in one NULL group, which SQL already groups together, rather than this
-#: query having to special-case it.
+#: Published documents by the section their **current version** is confirmed in
+#: (`SECTION-READ-MODEL-01`, `W59-SECTION-IDENTITY-DECISION-01`). ``document.current_version_uid``
+#: selects the version -- the same join ``DocumentRepository._LIST_PROJECTS`` counts through,
+#: so "a document" means one with a published current version here as in every other count
+#: this contract publishes -- and that version's row in ``document_version_classification`` is
+#: its confirmed section. The ``LEFT JOIN`` is the unclassified rule: a current version no
+#: expert has classified has no row, so ``section_code`` is NULL and ``GROUP BY`` puts every
+#: such document in one NULL group, which SQL already groups together, rather than this query
+#: having to special-case it. The legacy ``document.section`` is **not read at all**: it is
+#: the old document-level label, not an expert's confirmation, and an older version's
+#: classification never counts for the set whose head moved on.
 _DOCUMENTS_BY_SECTION = text(
-    "SELECT d.section, count(*) "
+    "SELECT c.section_code, count(*) "
     "FROM document d JOIN document_version v ON v.version_uid = d.current_version_uid "
-    "GROUP BY d.section"
+    "LEFT JOIN document_version_classification c ON c.version_uid = v.version_uid "
+    "GROUP BY c.section_code"
 )
 
 
@@ -195,6 +202,16 @@ class DashboardRepository:
             row[0]: int(row[1])
             for row in (tuple(r) for r in session.execute(_DOCUMENTS_BY_SECTION).all())
         }
+        # A code this vocabulary does not list would be dropped by `_filled` and the
+        # breakdown would quietly add up to fewer documents than exist. The database admits
+        # exactly the fifteen (`ck_document_version_classification_section_code`), so this is
+        # unreachable until a sixteenth is added there without being added here -- and then
+        # it is refused out loud rather than under-counted.
+        if any(code is not None and code not in PROJECT_SECTIONS for code in section_rows):
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="a confirmed section is missing from the dashboard vocabulary",
+            )
         sections = [
             SectionDocumentCountRecord(section=section, document_count=count)
             for section, count in _filled(section_rows, PROJECT_SECTIONS)

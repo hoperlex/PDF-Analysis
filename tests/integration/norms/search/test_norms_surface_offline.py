@@ -210,7 +210,7 @@ def test_a_page_carries_hits_with_attribution_offsets_and_a_bound_cursor() -> No
     body = response.json()
     assert len(body["items"]) == 2
     hit = body["items"][0]
-    assert hit["designation"] == "СП 54 13330 2022"
+    assert hit["designation"] == "СП 54.13330.2022"
     assert hit["source_attribution"] == "consultant_plus"
     assert hit["page_label"] == 12 and hit["clause_number"] == "7.1.4"
     fragment = hit["fragment"]
@@ -260,7 +260,7 @@ def test_a_document_says_whether_its_pdf_is_served() -> None:
     served = surface.get(f"/norm-documents/{NDOC}").json()
     assert served["content_available"] is True
     assert served["unreliable_paragraph_count"] == 1
-    assert served["designation"] == "СП 54 13330 2022"
+    assert served["designation"] == "СП 54.13330.2022"
     assert surface.get(f"/norm-documents/{BARE}").json()["content_available"] is False
     status, code, details = _envelope(surface.get(f"/norm-documents/{ABSENT}"))
     assert (status, code, details) == (404, "not_found", {"aggregate_type": "NormDocument"})
@@ -369,6 +369,77 @@ def test_a_tampered_pdf_stops_short_of_its_declared_length() -> None:
     body = b"".join(m.get("body", b"") for m in sent if m["type"] == "http.response.body")
     assert len(body) < len(DATA)
     assert len(DATA) - len(body) == (len(DATA) % CONTENT_CHUNK_BYTES or CONTENT_CHUNK_BYTES)
+
+
+# --- the display designation of a document (`NORMS-DISPLAY-DESIGNATION-01`) -----------------
+
+CUT_EDITION = "Приказ_МЧС_России_от_24_04_2013_N_288_(ред__от_27_06_2023)"
+CUT_EDITION_SHOWN = "Приказ МЧС России от 24.04.2013 N 288 (ред. от 27.06.2023)"
+#: Constructed: the derivation is 501 characters (``(ред`` becomes ``(ред. …)``), the stored
+#: projection 497; the schemas of ``NormSearchHit`` and ``NormDocument`` allow 500.
+OVER_THE_BOUND = "Б" * 492 + "_(ред"
+
+
+def _row_of(slug: str, index: int = 0) -> SimpleNamespace:
+    row = _hit_row(index)
+    row.slug = slug
+    return row
+
+
+def test_a_hit_and_its_document_show_the_same_readable_designation() -> None:
+    database = _searchable()
+    database.search_rows = [_row_of(CUT_EDITION)]
+    database.documents = {NDOC: Document(NDOC, SNAPSHOT, slug=CUT_EDITION)}
+    surface = Surface(database)
+    hit = surface.get("/norms/search?q=здания").json()["items"][0]
+    served = surface.get(f"/norm-documents/{NDOC}").json()
+    assert hit["designation"] == CUT_EDITION_SHOWN
+    assert served["designation"] == CUT_EDITION_SHOWN
+    # Only the designation moved: the title is still the stored one.
+    assert hit["title"] == "Свод правил. Здания жилые многоквартирные"
+    assert served["title"] == "Свод правил. Здания жилые многоквартирные"
+
+
+def test_a_designation_the_rules_cannot_derive_is_shown_as_stored() -> None:
+    slug = "Градостроительный_кодекс_Российской_Федерации_от_29_12_200"
+    database = _searchable()
+    database.search_rows = [_row_of(slug)]
+    database.documents = {NDOC: Document(NDOC, SNAPSHOT, slug=slug)}
+    surface = Surface(database)
+    stored = "Градостроительный кодекс Российской Федерации от 29 12 200"
+    assert surface.get("/norms/search?q=здания").json()["items"][0]["designation"] == stored
+    assert surface.get(f"/norm-documents/{NDOC}").json()["designation"] == stored
+
+
+def test_a_derivation_over_the_schema_bound_falls_back_and_the_answer_still_validates() -> None:
+    database = _searchable()
+    database.search_rows = [_row_of(OVER_THE_BOUND)]
+    database.documents = {NDOC: Document(NDOC, SNAPSHOT, slug=OVER_THE_BOUND)}
+    surface = Surface(database)
+    searched = surface.get("/norms/search?q=здания")
+    served = surface.get(f"/norm-documents/{NDOC}")
+    assert (searched.status_code, served.status_code) == (200, 200)
+    stored = "Б" * 492 + " (ред"
+    assert searched.json()["items"][0]["designation"] == stored
+    assert served.json()["designation"] == stored
+
+
+def test_hits_keep_the_order_the_database_gave_them() -> None:
+    """The statement orders by the slug's tokens (``сп 104 …`` before ``сп 54 …``, as text);
+    the readable designations (``СП 54.13330.2022``, ``СП 104.13330.2016``) would sort the
+    other way in natural order. The service shows the database's order, never its own."""
+    rows = [
+        _row_of("СП_104_13330_2016__Свод_правил__Инженерная_защита_территори", 0),
+        _row_of("СП_54_13330_2022__Свод_правил__Здания_жилые_многоквартирные", 1),
+        _row_of("СП_3_13130_2009__Свод_правил__Системы_противопожарной_защит", 2),
+    ]
+    database = _searchable()
+    database.search_rows = rows
+    items = Surface(database).get("/norms/search?q=здания").json()["items"]
+    assert [item["norm_paragraph_id"] for item in items] == [row.norm_paragraph_id for row in rows]
+    assert [item["designation"] for item in items] == [
+        "СП 104.13330.2016", "СП 54.13330.2022", "СП 3.13130.2009"
+    ]
 
 
 # --- the designation, at the adapter -------------------------------------------------------

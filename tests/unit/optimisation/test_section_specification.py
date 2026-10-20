@@ -10,7 +10,7 @@ documented bounds, filters that narrow rows but never a project's totals.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -19,8 +19,8 @@ from typing import Any
 import pytest
 
 from auditmanager.documents.public import (
+    CurrentVersionPlacementRecord,
     DocumentVersionRecord,
-    ProjectListingRecord,
     ProjectRecord,
     VersionClassificationRecord,
 )
@@ -79,26 +79,92 @@ TANK = "Ёмкость накопительная ЕН-200"
 
 @dataclass
 class _Documents:
-    """The documents projection: projects, and the current version of each set."""
+    """The documents projection: projects, and the current version of each set.
+
+    It answers the two placement queries the module reads (`SECTION-READ-MODEL-01`) the way
+    the real repository does -- ascending by ``document_uid``, keyset-paged, one project
+    optionally -- and records every question. ``tamper`` lets a test make the projection
+    contradict itself; ``ignore_after`` makes it ignore the page key.
+    """
 
     projects: dict[str, str] = field(default_factory=dict)
     current: dict[str, list[DocumentVersionRecord]] = field(default_factory=dict)
-    listed: list[str] = field(default_factory=list)
+    queried: list[tuple[str, str | None, str | None, int]] = field(default_factory=list)
+    tamper: Callable[[str, list[CurrentVersionPlacementRecord]], list[CurrentVersionPlacementRecord]] | None = None
+    ignore_after: bool = False
 
     def get_project(self, session: Any, project_uid: ProjectUid) -> ProjectRecord:
         if str(project_uid) not in self.projects:
             raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Project")
         return ProjectRecord(project_uid, self.projects[str(project_uid)], NOW)
 
-    def list_projects(self, session: Any) -> tuple[ProjectListingRecord, ...]:
-        return tuple(
-            ProjectListingRecord(ProjectUid.parse(uid), name, NOW, len(self.current.get(uid, ())))
-            for uid, name in self.projects.items()
+    def count_projects(self, session: Any) -> int:
+        return len(self.projects)
+
+    def _placement(self, record: DocumentVersionRecord) -> CurrentVersionPlacementRecord:
+        classification = record.classification
+        return CurrentVersionPlacementRecord(
+            project_uid=record.project_uid,
+            project_name=self.projects[str(record.project_uid)],
+            document_uid=record.document_uid,
+            display_title=record.display_title,
+            version_uid=record.version_uid,
+            version_ordinal=record.version_ordinal,
+            page_count=record.page_count,
+            project_stage=None if classification is None else classification.project_stage,
+            section_code=None if classification is None else classification.section_code,
         )
 
-    def list_documents(self, session: Any, project_uid: ProjectUid) -> tuple[DocumentVersionRecord, ...]:
-        self.listed.append(str(project_uid))
-        return tuple(self.current.get(str(project_uid), ()))
+    def _page(
+        self,
+        kind: str,
+        keep: Callable[[CurrentVersionPlacementRecord], bool],
+        project_uid: ProjectUid | None,
+        after: DocumentUid | None,
+        limit: int,
+    ) -> tuple[CurrentVersionPlacementRecord, ...]:
+        self.queried.append(
+            (kind, None if project_uid is None else str(project_uid), None if after is None else str(after), limit)
+        )
+        assert len(self.queried) < 50, "the walk does not end"
+        records = [
+            self._placement(record)
+            for uid, versions in self.current.items()
+            if project_uid is None or uid == str(project_uid)
+            for record in versions
+        ]
+        page = sorted((item for item in records if keep(item)), key=lambda item: str(item.document_uid))
+        if after is not None and not self.ignore_after:
+            page = [item for item in page if str(item.document_uid) > str(after)]
+        page = page[:limit]
+        if self.tamper is not None:
+            page = self.tamper(kind, page)
+        return tuple(page)
+
+    def list_current_versions_in_section(
+        self,
+        session: Any,
+        *,
+        section_code: str,
+        project_uid: ProjectUid | None = None,
+        after: DocumentUid | None = None,
+        limit: int,
+    ) -> tuple[CurrentVersionPlacementRecord, ...]:
+        return self._page(
+            "members", lambda item: item.section_code == section_code, project_uid, after, limit
+        )
+
+    def list_unclassified_current_versions(
+        self,
+        session: Any,
+        *,
+        project_uid: ProjectUid | None = None,
+        after: DocumentUid | None = None,
+        limit: int,
+    ) -> tuple[CurrentVersionPlacementRecord, ...]:
+        return self._page(
+            "unclassified", lambda item: item.section_code is None, project_uid, after, limit
+        )
 
 
 @dataclass
@@ -334,8 +400,9 @@ def test_an_unclassified_current_version_is_listed_as_excluded_and_contributes_n
 
 
 def test_only_the_current_versions_classification_counts(world: World) -> None:
-    """The stand-in lists current versions only, as ``listDocuments`` does: a set whose
-    current version is unclassified is excluded whatever an older version said."""
+    """The stand-in places current versions only: a set whose current version is unclassified
+    is excluded. That an *older* version's confirmation is ignored is a property of the real
+    query and is held on real rows (``tests/integration/documents``)."""
     project = world.project("Корпус 6")
     world.version(project, "АР-6", None)
     answer = world.read()
@@ -352,6 +419,88 @@ def test_a_projects_several_member_sets_are_sources_in_title_order(world: World)
         ("АР-0 паркинг", "P"), ("АР-1", "R"),
     ]
     assert project.row_count == 8
+
+
+def test_a_project_with_several_sets_across_sections_places_each_set_by_its_own_version(
+    world: World,
+) -> None:
+    """`SECTION-READ-MODEL-01`: one project holds an AR set, a second AR set, a KJ set and an
+    unclassified one. Each section's answer takes exactly the sets whose current version is
+    confirmed there; the project's other sets neither join it nor hide in it."""
+    mixed = world.project("Корпус 7 смешанный")
+    world.version(mixed, "АР-7б", "AR", stage="P")
+    world.version(mixed, "АР-7а", "AR")
+    world.version(mixed, "КЖ-7", "KJ")
+    world.version(mixed, "Комплект без раздела", None)
+    in_ar = next(item for item in world.read().projects if item.project_uid == mixed)
+    assert [(source.display_title, source.project_stage) for source in in_ar.sources] == [
+        ("АР-7а", "R"), ("АР-7б", "P"),
+    ]
+    assert in_ar.price_state == PRICE_STATE_PRICE_LIST_MISSING
+    assert "Комплект без раздела" in {item.display_title for item in world.read().excluded}
+    in_kj = world.read("KJ")
+    kj_mixed = next(item for item in in_kj.projects if item.project_uid == mixed)
+    assert [source.display_title for source in kj_mixed.sources] == ["КЖ-7"]
+    assert {source.display_title for p in in_kj.projects for source in p.sources} == {"КЖ-3", "КЖ-7"}
+    assert world.read("PB").projects == ()
+    only = world.read(project_uid=mixed)
+    assert [source.display_title for source in only.projects[0].sources] == ["АР-7а", "АР-7б"]
+    assert [item.display_title for item in only.excluded] == ["Комплект без раздела"]
+
+
+def test_membership_is_two_documents_queries_and_names_the_project_filter(world: World) -> None:
+    """No `list_documents` per project: the whole deployment is one members query and one
+    unclassified query, and a named project is passed to both."""
+    world.read()
+    assert [(kind, project, after) for kind, project, after, _ in world.documents.queried] == [
+        ("members", None, None), ("unclassified", None, None),
+    ]
+    zarya = _uid(world, "Корпус 2 «Заря»")
+    world.documents.queried.clear()
+    world.read(project_uid=zarya)
+    assert [(kind, project) for kind, project, _, _ in world.documents.queried] == [
+        ("members", zarya), ("unclassified", zarya),
+    ]
+
+
+def test_a_walk_over_many_pages_answers_what_one_page_answers(world: World, monkeypatch) -> None:
+    for number in range(4):
+        world.version(_uid(world, "Корпус 5 без прайса"), f"АР-5.{number}", "AR")
+        world.version(_uid(world, "Корпус 4 без раздела"), f"Комплект {number}", None)
+    whole = world.read()
+    whole_queries = len(world.documents.queried)
+    monkeypatch.setattr(module, "_MEMBERSHIP_PAGE", 2)
+    world.documents.queried.clear()
+    paged = world.read()
+    assert paged == whole
+    assert len(world.documents.queried) > whole_queries
+    assert whole.source_count == 7 and whole.excluded_count == 5
+    # Every page after the first names the key it follows, and it is the last it was given.
+    members = [(kind, after) for kind, _, after, _ in world.documents.queried if kind == "members"]
+    assert members[0][1] is None and all(after is not None for _, after in members[1:])
+    assert len({after for _, after in members}) == len(members)
+
+
+def test_the_exclusion_listing_keeps_the_first_in_answer_order_across_pages(
+    world: World, monkeypatch
+) -> None:
+    loose = _uid(world, "Корпус 4 без раздела")
+    for title in ("Ж", "Д", "Б", "Г", "А", "В"):  # created in no particular title order
+        world.version(loose, title, None)
+    monkeypatch.setattr(module, "_MEMBERSHIP_PAGE", 2)
+    monkeypatch.setattr(module, "MAX_LISTED_EXCLUDED", 3)
+    answer = world.read()
+    assert answer.excluded_count == 7
+    assert [item.display_title for item in answer.excluded] == ["А", "Б", "В"]
+
+
+def test_a_projection_that_ignores_its_page_key_is_an_internal_error(
+    world: World, monkeypatch
+) -> None:
+    monkeypatch.setattr(module, "_MEMBERSHIP_PAGE", 1)
+    world.documents.ignore_after = True
+    _refused(ErrorCode.INTERNAL_ERROR, world.read)
+    assert len(world.documents.queried) == 2  # the second page was refused, not asked for again
 
 
 # -- rows: provenance, own price list, never merged -----------------------------------------
@@ -519,7 +668,7 @@ def test_too_many_projects_is_explicit_and_scans_nothing(world: World, monkeypat
     answer = world.read()
     assert (answer.state, answer.limit_reason) == (SECTION_STATE_TOO_LARGE, LIMIT_PROJECTS)
     assert (answer.projects, answer.excluded, answer.rows) == ((), (), None)
-    assert world.documents.listed == [] and world.reader.asked == []
+    assert world.documents.queried == [] and world.reader.asked == []
     # One project named: the bound on the scan does not apply.
     narrowed = world.read(project_uid=_uid(world, "Корпус 2 «Заря»"))
     assert narrowed.state == SECTION_STATE_READY and narrowed.rows.total == 4
@@ -583,16 +732,29 @@ def test_roles_and_request_values(world: World) -> None:
 def test_contradictory_answers_are_internal_errors(world: World) -> None:
     alpha = _uid(world, "корпус 1 «Альфа»")
     zarya = _uid(world, "Корпус 2 «Заря»")
-    stray = world.documents.current[alpha][0]
-    world.documents.current[zarya].append(stray)  # a version of Alpha listed under Zarya
+
+    def tampered(kind: str, change: Callable[[CurrentVersionPlacementRecord], CurrentVersionPlacementRecord]) -> None:
+        world.documents.tamper = lambda asked, page: [
+            change(item) if asked == kind else item for item in page
+        ]
+
+    # The projection lists a set as a member of a section other than the one asked.
+    tampered("members", lambda item: replace(item, section_code="KJ"))
     _refused(ErrorCode.INTERNAL_ERROR, world.read)
-    world.documents.current[zarya].pop()
+    # A member that carries no stage.
+    tampered("members", lambda item: replace(item, project_stage=None))
+    _refused(ErrorCode.INTERNAL_ERROR, world.read)
+    # A set of another project listed under the one project named.
+    tampered("members", lambda item: replace(item, project_uid=ProjectUid.parse(zarya)))
+    _refused(ErrorCode.INTERNAL_ERROR, world.read, project_uid=alpha)
+    tampered("unclassified", lambda item: replace(item, project_uid=ProjectUid.parse(alpha)))
+    _refused(ErrorCode.INTERNAL_ERROR, world.read, project_uid=_uid(world, "Корпус 4 без раздела"))
+    # An "unclassified" set that carries a classification.
+    tampered("unclassified", lambda item: replace(item, section_code="AR", project_stage="R"))
+    _refused(ErrorCode.INTERNAL_ERROR, world.read)
+    world.documents.tamper = None
 
     version = world.documents.current[alpha][0]
-    foreign = replace(version.classification, version_uid=VersionUid.new())
-    world.documents.current[alpha][0] = replace(version, classification=foreign)
-    _refused(ErrorCode.INTERNAL_ERROR, world.read)
-    world.documents.current[alpha][0] = version
 
     stale = replace(world.prices.revisions[alpha][0], is_current=False)
     world.prices.revisions[alpha][0] = stale

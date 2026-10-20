@@ -127,6 +127,10 @@ def test_the_migration_creates_the_canonical_and_rebuildable_topology(
         "norm_embedding_profile",
         "norm_paragraph",
         "norm_repair_call",
+        # `0023_norm_citations` (W57a): the verified retrieval set a Run pins. A stale pin was
+        # the defect here (`GATE-FIX-DB-01`): the table is created by that migration, and
+        # `test_migration_lifecycle.EXPECTED_TABLES` already lists it.
+        "norm_retrieval_set",
         "norms_snapshot",
     }
     assert "FOREIGN KEY (norms_snapshot_id)" in audit_fk

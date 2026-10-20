@@ -89,11 +89,12 @@ def test_canonical_member_order_verdict_citations_and_rendered_rows() -> None:
         "АР-2 / стр. 2", "АР-3 / стр. 3", "АР-4 / стр. 4",
     ]
     assert cells["D2"] == "Главное"
-    assert cells["F2"] == "critical"
-    assert cells["G2"] == "operational"
+    assert cells["C2"] == "Пожарная безопасность"
+    assert cells["F2"] == "Критическое"
+    assert cells["G2"] == "Эксплуатационное"
     assert cells["H2"] == "СП 1, п. 2"
     assert cells["I2"] == "Норма 1"
-    assert cells["J2"] == "accepted"
+    assert cells["J2"] == "принято"
     assert cells["K2"] == "Проверено"
 
 
@@ -104,8 +105,8 @@ def test_rejected_verdict_carries_no_decided_severity_and_preserves_proposal() -
     assert row.proposed_severity == "operational"
     cells = _sheet_cells(render_xlsx(project_workbook(_run(), (finding,))).content)
     assert cells["F2"] == ""
-    assert cells["G2"] == "operational"
-    assert cells["J2"] == "rejected"
+    assert cells["G2"] == "Эксплуатационное"
+    assert cells["J2"] == "отклонено"
 
 
 def test_all_evidence_labels_are_explicit_and_keep_evidence_order() -> None:

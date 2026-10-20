@@ -22,6 +22,7 @@ import pytest
 from sqlalchemy import text
 
 from auditmanager.exports import ExportAuthorization, export_run_csv, export_run_xlsx
+from auditmanager.exports.xlsx.labels import CATEGORY_LABELS
 from auditmanager.exports.xlsx.writer import CONTENT_TYPE, FINDING_COLUMNS
 from auditmanager.findings import published_finding_count
 from auditmanager.runs import execute_run, start_audit_run
@@ -169,8 +170,17 @@ def test_a_real_v1_run_exports_with_portal_labels_and_empty_norm_columns(
     assert [findings[f"A{row}"] for row in rows] == [str(n) for n in range(1, expected + 1)]
     for row in rows:
         assert findings[f"H{row}"] == "" and findings[f"I{row}"] == ""
-        assert findings[f"J{row}"] == "pending"
+        assert findings[f"J{row}"] == "не решено"  # the screens' word for ``pending``
         assert findings[f"D{row}"]
+
+    # «Категория» is the screens' label of the stored category, never the contract value.
+    stored = session.execute(text(
+        "SELECT f.category FROM finding f WHERE f.allocated_by_run_id = :r "
+        "ORDER BY f.finding_uid COLLATE \"C\""
+    ), {"r": run_id}).scalars().all()
+    shown = [findings[f"C{row}"] for row in rows]
+    assert shown == [CATEGORY_LABELS[category] for category in stored]
+    assert not set(shown) & set(CATEGORY_LABELS)
 
     # «Сводка»: the run's identity and the counts by category of the same findings.
     summary = _cells(export.content, "xl/worksheets/sheet1.xml")
@@ -278,7 +288,7 @@ def test_a_merged_finding_exports_its_canonical_row_and_a_member_row(
     # «также найдено» row per other observation in identity order: the published v1
     # observation (now a member, the oldest identity) and the new member.
     assert (findings["A2"], findings["D2"], findings["G2"]) == (
-        "1", "Каноническое замечание", "economic"
+        "1", "Каноническое замечание", "Экономическое"
     )
     assert (findings["A3"], findings["B3"], findings["D3"], findings["K3"]) == (
         "", "\n".join(str(100 + page) for page in original_pages), "также найдено",

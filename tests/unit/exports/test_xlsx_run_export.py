@@ -236,7 +236,9 @@ def test_a_v1_run_renders_with_labels_and_empty_norm_columns(preflight) -> None:
     for row in ("2", "3"):
         assert findings[f"E{row}"] == ""  # no recommendation: an empty cell
         assert findings[f"H{row}"] == "" and findings[f"I{row}"] == ""  # no citations
-        assert findings[f"J{row}"] == "pending"
+        # The screens' words, not the contract values: «Категория», «Решение эксперта».
+        assert findings[f"C{row}"] == "Документация"
+        assert findings[f"J{row}"] == "не решено"
     assert "A4" not in findings
 
     summary = _cells(export.content, "xl/worksheets/sheet1.xml")
@@ -245,6 +247,11 @@ def test_a_v1_run_renders_with_labels_and_empty_norm_columns(preflight) -> None:
     assert (summary["A7"], summary["B7"]) == (
         "Атрибуция", "ответы модели воспроизведены из записи (recorded)"
     )
+    # «Сводка» counts: severities and categories in the same words, never the raw values.
+    assert (summary["A9"], summary["B9"]) == ("Критическое", "0")
+    assert (summary["A14"], summary["B14"]) == ("Без серьёзности", "2")
+    assert (summary["A16"], summary["B16"]) == ("Документация", "2")
+    assert not {"critical", "documentation", "pending"} & set(summary.values())
 
 
 def test_the_same_run_state_gives_the_same_bytes(preflight) -> None:

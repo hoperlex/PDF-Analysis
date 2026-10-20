@@ -2,6 +2,11 @@
 
 This module knows only supplied values. It does not read a run, grant a role,
 assign a download name, decide a finding or infer a norm citation.
+
+Enum cells (severity, category, verdict) are written as the Russian labels the screens
+show (:mod:`.labels`, held equal to the web tables by a lockstep test); a value outside
+the closed set is refused, never printed raw. Identifiers stay opaque and free text is
+written verbatim (`XLSX-RU-LABELS-01`).
 """
 
 from __future__ import annotations
@@ -13,18 +18,20 @@ from dataclasses import dataclass
 from typing import Final
 from xml.sax.saxutils import escape
 
+from auditmanager.exports.xlsx.labels import (
+    CATEGORY_LABELS,
+    SEVERITY_LABELS,
+    VERDICT_LABELS,
+    label,
+)
+
 
 CONTENT_TYPE: Final[str] = (
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
 MAX_CELL_CHARACTERS: Final[int] = 32_767
-SEVERITIES: Final[tuple[str, ...]] = (
-    "critical",
-    "economic",
-    "operational",
-    "recommendation",
-    "check_adjacent",
-)
+#: The contract's severity values in the contract's order (one source: the label table).
+SEVERITIES: Final[tuple[str, ...]] = tuple(SEVERITY_LABELS)
 FINDING_COLUMNS: Final[tuple[str, ...]] = (
     "№",
     "Лист/стр.",
@@ -186,9 +193,17 @@ def _validate(source: WorkbookInput) -> None:
         for value in (finding.sheet_page, finding.category, finding.finding_text):
             if not isinstance(value, str) or not value:
                 raise ValueError("xlsx_finding_invalid")
+        if finding.category not in CATEGORY_LABELS:
+            raise ValueError("xlsx_category_invalid")
         for severity in (finding.decided_severity, finding.proposed_severity):
             if severity is not None and severity not in SEVERITIES:
                 raise ValueError("xlsx_severity_invalid")
+        # "" is the dataclass default: no verdict supplied, so the cell stays empty.
+        if finding.expert_decision != "" and (
+            not isinstance(finding.expert_decision, str)
+            or finding.expert_decision not in VERDICT_LABELS
+        ):
+            raise ValueError("xlsx_verdict_invalid")
         if not isinstance(finding.citations, tuple) or not isinstance(finding.members, tuple):
             raise ValueError("xlsx_finding_invalid")
         for citation in finding.citations:
@@ -219,13 +234,30 @@ def _summary(source: WorkbookInput, cells: _Cells) -> bytes:
         for finding in source.findings
     )
     for severity in SEVERITIES:
-        rows.append(_row(len(rows) + 1, (severity, by_severity[severity]), 0, cells))
+        rows.append(
+            _row(len(rows) + 1, (SEVERITY_LABELS[severity], by_severity[severity]), 0, cells)
+        )
     rows.append(_row(len(rows) + 1, ("Без серьёзности", by_severity[None]), 0, cells))
     rows.append(_row(len(rows) + 1, ("Категория", "Количество"), 1, cells))
     by_category = Counter(finding.category for finding in source.findings)
+    # Ordered by the contract value (the order before labels), shown as its label.
     for category in sorted(by_category):
-        rows.append(_row(len(rows) + 1, (category, by_category[category]), 0, cells))
+        rows.append(
+            _row(len(rows) + 1, (CATEGORY_LABELS[category], by_category[category]), 0, cells)
+        )
     return _sheet(rows, (30, 72))
+
+
+def _severity_label(severity: str | None) -> str:
+    return "" if severity is None else label(
+        SEVERITY_LABELS, severity, refusal="xlsx_severity_invalid"
+    )
+
+
+def _verdict_label(verdict: str) -> str:
+    return "" if verdict == "" else label(
+        VERDICT_LABELS, verdict, refusal="xlsx_verdict_invalid"
+    )
 
 
 def _findings(source: WorkbookInput, cells: _Cells) -> bytes:
@@ -244,14 +276,14 @@ def _findings(source: WorkbookInput, cells: _Cells) -> bytes:
                 (
                     ordinal,
                     finding.sheet_page,
-                    finding.category,
+                    label(CATEGORY_LABELS, finding.category, refusal="xlsx_category_invalid"),
                     finding.finding_text,
                     finding.recommendation,
-                    finding.decided_severity or "",
-                    finding.proposed_severity or "",
+                    _severity_label(finding.decided_severity),
+                    _severity_label(finding.proposed_severity),
                     norm_labels,
                     norm_quotes,
-                    finding.expert_decision,
+                    _verdict_label(finding.expert_decision),
                     finding.comment,
                 ),
                 style,

@@ -108,7 +108,7 @@ def test_a_designation_narrows_ranked_words(seeded: Seeded) -> None:
     assert seeded.ids("СП 54 здания") == [seeded.stairs]
     page = seeded.adapter.search(q="СП 54 здания", norms_snapshot_id=None, cursor=None, limit=5)
     hit = page.items[0]
-    assert (hit.designation, hit.page_label, hit.clause_number) == ("СП 54 13330 2022", 12, "7.1.4")
+    assert (hit.designation, hit.page_label, hit.clause_number) == ("СП 54.13330.2022", 12, "7.1.4")
     spans = [hit.fragment.text[h.char_start:h.char_end] for h in hit.fragment.highlights]
     assert spans and all(span.lower().startswith("здан") for span in spans)
     assert hit.source_attribution.value == "consultant_plus"

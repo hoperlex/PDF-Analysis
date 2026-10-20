@@ -29,6 +29,7 @@ from fastapi import APIRouter, Path, Query, Response
 from pydantic import BeforeValidator, Field, WithJsonSchema
 
 from auditmanager.api.routers.declarations import envelope_responses, success
+from auditmanager.api.routers.export import attachment_disposition
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.ports import OptimisationProposalPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
@@ -301,7 +302,7 @@ def build_optimisation_proposal_routes(
             (
                 ("Content-Type", _CSV),
                 ("Content-Length", str(len(content))),
-                ("Content-Disposition", f'attachment; filename="{optimisation_pass_id}.csv"'),
+                ("Content-Disposition", attachment_disposition(optimisation_pass_id, suffix="csv")),
             ),
             content,
         )

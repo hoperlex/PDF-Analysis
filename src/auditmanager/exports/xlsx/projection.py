@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from auditmanager.exports.xlsx.labels import VERDICT_LABELS
 from auditmanager.exports.xlsx.writer import (
     Citation,
     FindingMember,
@@ -17,7 +18,8 @@ from auditmanager.exports.xlsx.writer import (
 )
 
 
-_VERDICTS = frozenset({"pending", "accepted", "rejected", "needs_manual_review"})
+#: The closed verdict set, from the label table (one source for the workbook).
+_VERDICTS = frozenset(VERDICT_LABELS)
 
 
 @dataclass(frozen=True, slots=True)

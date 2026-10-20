@@ -3,12 +3,14 @@
 `W63-SECTION-FORM7-01`. One read, in the caller's session, composes for a **section code**:
 
 1. **membership** from the documents projection (``documents.public``,
-   `W59-SECTION-SEAL-01`): every document set whose **current** version is confirmed by an
-   expert in that section is a *source*. A current version confirmed in another section is
-   not part of the answer at all; a current version nobody has classified is listed in
-   :attr:`SectionSpecification.excluded` with its reason and contributes nothing. An older
-   version's classification, a file name, a suggestion or the set's legacy ``section`` never
-   makes a set a member;
+   `W59-SECTION-SEAL-01`, `SECTION-READ-MODEL-01`): every document set whose **current**
+   version is confirmed by an expert in that section is a *source*. A current version
+   confirmed in another section is not part of the answer at all; a current version nobody
+   has classified is listed in :attr:`SectionSpecification.excluded` with its reason and
+   contributes nothing. An older version's classification, a file name, a suggestion or the
+   set's legacy ``section`` never makes a set a member. Members and unclassified sets are
+   two keyset-paged documents queries over the whole deployment -- not one ``listDocuments``
+   per project;
 2. per project, its **current price-list revision** (highest ``revision_number``) and its
    positions -- or the explicit price state ``price_list_missing``;
 3. per source, the version's **newest published run** and that run's verified saved
@@ -36,8 +38,11 @@ whitespace runs are folded; it never narrows the projects, their states or their
 **Bounds** (documented caps; an answer over one is the explicit state
 ``section_too_large`` with :attr:`SectionSpecification.limit_reason`, never a cut list):
 
-* at most :data:`MAX_SCANNED_PROJECTS` projects are scanned for membership (one documents
-  read each) -- more is ``limit_reason: projects`` and no project is listed;
+* a deployment of more than :data:`MAX_SCANNED_PROJECTS` projects is answered
+  ``limit_reason: projects`` and no project is listed, unless one project is named. The bound
+  was set when membership cost one documents read per project; membership is now a handful of
+  paged queries, and the bound is kept as the documented cap it was (retiring it is a wire
+  decision: ``projects`` is a frozen ``limit_reason`` value);
 * at most :data:`MAX_SECTION_SOURCES` member sets are read (one run lookup, one text layer
   and one extraction each) -- more is ``limit_reason: sources``;
 * at most :data:`MAX_SECTION_ROWS` rows in all (each version is also held to the
@@ -59,16 +64,17 @@ Any one role reads (`R-80`). A port answer that contradicts its own constraints 
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal
+from itertools import groupby
 from typing import Final
 
 from sqlalchemy.orm import Session
 
-from auditmanager.documents.public import DocumentRepository, DocumentVersionRecord
+from auditmanager.documents.public import CurrentVersionPlacementRecord, DocumentRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import IdentityError, ProjectUid
+from auditmanager.shared.identity import DocumentUid, IdentityError, ProjectUid
 
 from .matching import (
     EXCLUSION_REASONS,
@@ -179,6 +185,11 @@ MAX_SECTION_SOURCES: Final[int] = 20
 MAX_SECTION_ROWS: Final[int] = 20_000
 MAX_LISTED_EXCLUDED: Final[int] = 200
 MAX_QUERY_LENGTH: Final[int] = 200
+
+#: Placements asked of the documents projection per query. Membership is read page by page
+#: (keyset on the set's identity), so no single read is unbounded; the total is not capped
+#: here -- the source and row caps above are what bound the work done *with* the members.
+_MEMBERSHIP_PAGE: Final[int] = 500
 
 
 # --- records ----------------------------------------------------------------------------
@@ -349,11 +360,57 @@ def _integrity(message: str) -> DomainError:
 class _Member:
     project_uid: str
     project_name: str
-    versions: tuple[DocumentVersionRecord, ...]
+    versions: tuple[CurrentVersionPlacementRecord, ...]
 
 
-def _title_order(version: DocumentVersionRecord) -> tuple[str, str]:
+def _title_order(version: CurrentVersionPlacementRecord) -> tuple[str, str]:
     return (version.display_title.casefold(), str(version.document_uid))
+
+
+def _listing_order(version: CurrentVersionPlacementRecord) -> tuple[str, str, str, str]:
+    """Projects by name (case folded) then identity, a project's sets by title then identity."""
+    return (version.project_name.casefold(), str(version.project_uid), *_title_order(version))
+
+
+def _walk(
+    fetch: Callable[[DocumentUid | None], Sequence[CurrentVersionPlacementRecord]],
+) -> Iterator[Sequence[CurrentVersionPlacementRecord]]:
+    """The pages of a keyset-ordered documents query, until one is empty or short.
+
+    A page that does not start after the key it was asked to follow would repeat the same
+    rows for ever; the projection contradicting its own paging is ``internal_error``.
+    """
+    after: DocumentUid | None = None
+    while True:
+        page = fetch(after)
+        if not page:
+            return
+        if after is not None and str(page[0].document_uid) <= str(after):
+            raise _integrity("the documents projection did not advance its page")
+        yield page
+        if len(page) < _MEMBERSHIP_PAGE:
+            return
+        after = page[-1].document_uid
+
+
+def _checked_member(
+    item: CurrentVersionPlacementRecord, *, section: str, project: str | None
+) -> CurrentVersionPlacementRecord:
+    if item.section_code != section or item.project_stage is None:
+        raise _integrity("a listed set is not confirmed in the requested section")
+    if project is not None and str(item.project_uid) != project:
+        raise _integrity("a listed current version belongs to another project")
+    return item
+
+
+def _checked_unclassified(
+    item: CurrentVersionPlacementRecord, *, project: str | None
+) -> CurrentVersionPlacementRecord:
+    if item.section_code is not None or item.project_stage is not None:
+        raise _integrity("a listed unclassified set carries a classification")
+    if project is not None and str(item.project_uid) != project:
+        raise _integrity("a listed current version belongs to another project")
+    return item
 
 
 def _membership(
@@ -361,46 +418,65 @@ def _membership(
     documents: DocumentRepository,
     *,
     section: str,
-    scope: Sequence[tuple[str, str]],
-) -> tuple[list[_Member], list[ExcludedVersion]]:
-    """Member sets and unclassified current versions of the projects in scope, in order."""
-    members: list[_Member] = []
-    excluded: list[ExcludedVersion] = []
-    for project_uid, project_name in sorted(scope, key=lambda item: (item[1].casefold(), item[0])):
-        in_section: list[DocumentVersionRecord] = []
-        unclassified: list[DocumentVersionRecord] = []
-        for version in documents.list_documents(session, ProjectUid.parse(project_uid)):
-            if str(version.project_uid) != project_uid:
-                raise _integrity("a listed current version belongs to another project")
-            classification = version.classification
-            if classification is None:
-                unclassified.append(version)
-            elif classification.version_uid != version.version_uid:
-                raise _integrity("a classification is attached to another version")
-            elif classification.section_code == section:
-                in_section.append(version)
-        if in_section:
-            members.append(
-                _Member(project_uid, project_name, tuple(sorted(in_section, key=_title_order)))
-            )
-        excluded.extend(
-            ExcludedVersion(
-                project_uid=project_uid,
-                project_name=project_name,
-                document_uid=str(version.document_uid),
-                display_title=version.display_title,
-                version_uid=str(version.version_uid),
-                version_ordinal=version.version_ordinal,
-                reason=EXCLUSION_VERSION_UNCLASSIFIED,
-            )
-            for version in sorted(unclassified, key=_title_order)
+    project_uid: ProjectUid | None,
+) -> tuple[list[_Member], list[ExcludedVersion], int]:
+    """Member sets, and the first unclassified current versions with their full count.
+
+    Two paged documents queries over the whole deployment (or the one project named): the
+    sets whose current version is confirmed in ``section``, and the sets whose current version
+    is not classified at all. Both come back in the answer's order. The exclusion listing keeps
+    only the first :data:`MAX_LISTED_EXCLUDED` while it counts them all, so the memory held is
+    bounded however many sets are unclassified.
+    """
+    project = None if project_uid is None else str(project_uid)
+
+    listed: list[CurrentVersionPlacementRecord] = []
+    for page in _walk(
+        lambda after: documents.list_current_versions_in_section(
+            session,
+            section_code=section,
+            project_uid=project_uid,
+            after=after,
+            limit=_MEMBERSHIP_PAGE,
         )
-    return members, excluded
+    ):
+        listed.extend(_checked_member(item, section=section, project=project) for item in page)
+    members: list[_Member] = []
+    for owner, items in groupby(
+        sorted(listed, key=_listing_order), key=lambda item: str(item.project_uid)
+    ):
+        sets = tuple(items)
+        members.append(_Member(owner, sets[0].project_name, sets))
+
+    unclassified_count = 0
+    first: list[CurrentVersionPlacementRecord] = []
+    for page in _walk(
+        lambda after: documents.list_unclassified_current_versions(
+            session, project_uid=project_uid, after=after, limit=_MEMBERSHIP_PAGE
+        )
+    ):
+        unclassified_count += len(page)
+        first = sorted(
+            [*first, *(_checked_unclassified(item, project=project) for item in page)],
+            key=_listing_order,
+        )[:MAX_LISTED_EXCLUDED]
+    excluded = [
+        ExcludedVersion(
+            project_uid=str(item.project_uid),
+            project_name=item.project_name,
+            document_uid=str(item.document_uid),
+            display_title=item.display_title,
+            version_uid=str(item.version_uid),
+            version_ordinal=item.version_ordinal,
+            reason=EXCLUSION_VERSION_UNCLASSIFIED,
+        )
+        for item in first
+    ]
+    return members, excluded, unclassified_count
 
 
-def _source(version: DocumentVersionRecord, state: str) -> SectionSource:
-    classification = version.classification
-    assert classification is not None  # members are classified by construction
+def _source(version: CurrentVersionPlacementRecord, state: str) -> SectionSource:
+    assert version.project_stage is not None  # members are classified by construction
     return SectionSource(
         project_uid=str(version.project_uid),
         document_uid=str(version.document_uid),
@@ -408,7 +484,7 @@ def _source(version: DocumentVersionRecord, state: str) -> SectionSource:
         version_uid=str(version.version_uid),
         version_ordinal=version.version_ordinal,
         page_count=version.page_count,
-        project_stage=classification.project_stage,
+        project_stage=version.project_stage,
         state=state,
         run_id=None,
         text_layer_sha256=None,
@@ -445,7 +521,7 @@ class _ReadProject:
 def _read_source(
     session: Session,
     reader: SavedTextReader,
-    version: DocumentVersionRecord,
+    version: CurrentVersionPlacementRecord,
     positions: tuple[PriceListPositionRecord, ...] | None,
 ) -> tuple[SectionSource, tuple[SectionRow, ...], tuple[RowMatch, ...]]:
     source = _source(version, SOURCE_STATE_READY)
@@ -619,20 +695,18 @@ def read_section_specification(
     )
 
     if project_filter is not None:
-        record = documents.get_project(session, project_filter)
-        scope: list[tuple[str, str]] = [(str(record.project_uid), record.name)]
-    else:
-        listing = documents.list_projects(session)
-        if len(listing) > MAX_SCANNED_PROJECTS:
-            return replace(answer, state=SECTION_STATE_TOO_LARGE, limit_reason=LIMIT_PROJECTS)
-        scope = [(str(item.project_uid), item.name) for item in listing]
+        documents.get_project(session, project_filter)  # an unknown project is not_found
+    elif documents.count_projects(session) > MAX_SCANNED_PROJECTS:
+        return replace(answer, state=SECTION_STATE_TOO_LARGE, limit_reason=LIMIT_PROJECTS)
 
-    members, excluded = _membership(session, documents, section=section, scope=scope)
+    members, excluded, excluded_count = _membership(
+        session, documents, section=section, project_uid=project_filter
+    )
     source_count = sum(len(member.versions) for member in members)
     answer = replace(
         answer,
-        excluded=tuple(excluded[:MAX_LISTED_EXCLUDED]),
-        excluded_count=len(excluded),
+        excluded=tuple(excluded),
+        excluded_count=excluded_count,
         source_count=source_count,
     )
     unread = tuple(_unread(member) for member in members)
