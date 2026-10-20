@@ -43,6 +43,9 @@ import type {
   PriceListId,
   FindingCategory,
   NormDocumentId,
+  OptimisationPassId,
+  OptimisationProposalId,
+  ProposalDecisionState,
   FindingUid,
   ProjectUid,
   RegistrationStatus,
@@ -151,6 +154,26 @@ export const queryKeys = {
     vendorLists: () => ['optimisation', 'vendor-lists'] as const,
     projectVendorLists: (projectUid: ProjectUid) =>
       ['optimisation', 'vendor-lists', projectUid] as const,
+    /**
+     * «Предложения» (`W60-OPT-PROPOSALS-01`). `passes` holds `listOptimisationPasses` for one
+     * project and, optionally, one document set; `proposals` one page of
+     * `listOptimisationProposals` (the page and the decision filter are in the key);
+     * `proposalDecisions` one proposal's history. Starting a pass invalidates the project's
+     * `passes`; a decision invalidates the pass's `proposalsOf` prefix, every project's
+     * `passes` (the counts by decision are on the pass) and the proposal's history.
+     */
+    passes: (projectUid: ProjectUid, documentUid: DocumentUid | null) =>
+      ['optimisation', 'passes', projectUid, documentUid] as const,
+    allPasses: () => ['optimisation', 'passes'] as const,
+    proposalsOf: (passId: OptimisationPassId) => ['optimisation', 'proposals', passId] as const,
+    proposals: (
+      passId: OptimisationPassId,
+      decision: ProposalDecisionState | null,
+      offset: number,
+      limit: number,
+    ) => ['optimisation', 'proposals', passId, { decision, offset, limit }] as const,
+    proposalDecisions: (proposalId: OptimisationProposalId) =>
+      ['optimisation', 'proposal-decisions', proposalId] as const,
   },
   /**
    * «Настройки анализа» (`W59-ANALYSIS-SETTINGS-01`): `listAnalysisProfiles`, the text-profile

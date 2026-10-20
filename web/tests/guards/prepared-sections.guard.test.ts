@@ -64,11 +64,9 @@ vi.mock('next/headers', () => ({
 }));
 
 import { AppFrame } from '@/_app';
-import { OptimisationPage } from '@/_pages/optimisation';
 import { SectionOptimisationPage } from '@/_pages/section-optimisation';
 import { RoutePlaceholder } from '@/shared/ui';
 import { forgetEverySession, openSession } from '@/app/bff/session/store';
-import OptimisationRoute from '@/app/optimisation/page';
 import SectionOptimisationRoute from '@/app/section-optimisation/page';
 import { newClient, renderScreen } from '../unit/screens/harness';
 
@@ -106,14 +104,6 @@ export function visibleText(markup: string): string[] {
  * screen census, not by placeholder promises.
  */
 const SECTIONS = [
-  {
-    name: 'optimisation',
-    route: '/optimisation',
-    title: 'Оптимизация',
-    screen: OptimisationPage,
-    routeFile: OptimisationRoute,
-    stub: false,
-  },
   {
     name: 'section-optimisation',
     route: '/section-optimisation',
@@ -255,8 +245,8 @@ describe('R-23: each prepared section has a place in the navigation', () => {
   it('the frame links every section in the menu, for a session that may open them', () => {
     // `W50-SHELL-FRAME`: the menu is the registry's rows the session may open, so a guest
     // sees only «Вход» and the case renders a complete session. Under `R-66` `/optimisation`
-    // left the menu (it stays a registered, reachable screen in `hidden`), and the four stubs
-    // are linked from here on.
+    // left the menu (it stayed a registered screen in `hidden`, and since `W60-OPT-PROPOSALS-01`
+    // only points to the project's «Оптимизация» tab), and the stubs are linked from here on.
     const session = {
       login: 'проверяющий@пример.испытание',
       displayLabel: 'Проверяющий П. П.',
@@ -270,7 +260,7 @@ describe('R-23: each prepared section has a place in the navigation', () => {
     // there, otherwise "contains /blocks" could pass on a frame that lost everything else.
     expect(targets).toContain('/knowledge-base');
     expect(targets).toContain('/account/password');
-    for (const { route } of SECTIONS.filter((section) => section.route !== '/optimisation')) {
+    for (const { route } of SECTIONS) {
       expect(targets).toContain(route);
     }
     expect(targets).not.toContain('/optimisation');

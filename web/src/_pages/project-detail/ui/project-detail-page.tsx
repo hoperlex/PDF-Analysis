@@ -21,6 +21,8 @@
  *
  * `W60-PRICE-LIST-01`: two tabs. «Документы» (the default, everything above) and «Оптимизация»
  * — the project's price list and the vendor lists per section (`widgets/project-optimisation`).
+ * `W60-OPT-PROPOSALS-01` adds «Предложения» to that tab (`widgets/optimisation-proposals`):
+ * the deterministic cheaper-analog proposals of an АР set, with the experts' decisions.
  * The optimisation tab reads nothing until it is opened, so a cold load of the project still
  * makes exactly the calls the documents need. The session's roles, as the route's guard read
  * them, decide which controls that tab draws; the API still checks every write.
@@ -38,6 +40,7 @@ import type { DocumentVersion, Role } from '@/shared/api';
 import { PageShell, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { looksLikeProjectUid } from '@/entities/project';
+import { OptimisationProposals } from '@/widgets/optimisation-proposals';
 import { ProjectOptimisation } from '@/widgets/project-optimisation';
 import { ProjectSections } from '@/widgets/project-sections';
 import { UploadPanel } from '@/widgets/upload-panel';
@@ -101,7 +104,10 @@ export function ProjectDetailPage({ projectUid, roles = [] }: ProjectDetailPageP
           <UploadPanel projectUid={projectUid} onUploaded={goToVersion} />
         </>
       ) : (
-        <ProjectOptimisation projectUid={projectUid} roles={roles} />
+        <>
+          <ProjectOptimisation projectUid={projectUid} roles={roles} />
+          <OptimisationProposals projectUid={projectUid} roles={roles} />
+        </>
       )}
     </PageShell>
   );

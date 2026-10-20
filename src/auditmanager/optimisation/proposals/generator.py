@@ -347,7 +347,13 @@ def _label(position: PriceListPositionRecord) -> str:
     return f"«{position.name}»" + (f" ({', '.join(extras)})" if extras else "")
 
 
-def _rationale(matched: _Keyed, candidate: _Candidate, unit: str) -> str:
+def _rationale(matched: _Keyed, candidate: _Candidate) -> str:
+    """The sentence an expert reads beside the two prices: which position, from whom, why.
+
+    Words only -- no price, no currency code, no decimal: the figures are the proposal's own
+    fields, shown exactly by whoever renders them, and a second copy of them in prose would be
+    a second thing to keep equal.
+    """
     current, proposed = matched.position, candidate.position
     basis = (
         f"одно семейство кода «{matched.family}»"
@@ -356,9 +362,7 @@ def _rationale(matched: _Keyed, candidate: _Candidate, unit: str) -> str:
     )
     return (
         f"Более дешёвый аналог: {_label(proposed)}, поставщик {proposed.vendor}, "
-        f"{canonical_amount(proposed.unit_price)} {proposed.currency} за {unit} вместо "
-        f"{canonical_amount(current.unit_price)} {current.currency} за {_label(current)}; "
-        f"основание: {basis}."
+        f"вместо {_label(current)}; основание: {basis}."
     )
 
 
@@ -416,7 +420,7 @@ def generate_cheaper_analogs(
                         proposed_unit_price=proposed.unit_price,
                         quantity=match.row.quantity,
                     ),
-                    rationale=_rationale(matched, candidate, unit),
+                    rationale=_rationale(matched, candidate),
                 )
             )
     return GeneratorOutcome(

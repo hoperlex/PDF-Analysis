@@ -153,6 +153,7 @@ import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
 import { newClient, renderScreen, seedError } from '../unit/screens/harness';
 import { optimisationShapes } from '../unit/optimisation/fixtures';
+import { proposalShapes } from '../unit/optimisation-proposals/fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
 import {
   ADMIN_AND_EXPERT,
@@ -1646,6 +1647,8 @@ const BLOCKS_SHAPES: readonly ScreenCase[] = [
 const EXTRA_SHAPES: readonly ScreenCase[] = [
   // `W60-PRICE-LIST-01`: the project's «Оптимизация» tab in every branch its widgets have.
   ...optimisationShapes(),
+  // `W60-OPT-PROPOSALS-01`: «Предложения» in every branch its widget, features and entity have.
+  ...proposalShapes(),
   {
     name: 'update-banner',
     make: () => createElement(UpdateBannerView, { onUpdate: () => undefined, onLater: () => undefined }),

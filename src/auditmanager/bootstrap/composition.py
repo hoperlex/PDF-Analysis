@@ -38,6 +38,7 @@ from auditmanager.bootstrap.adapters import (
     NormContentAdapter,
     NormsSearchAdapter,
     OptimisationAdapter,
+    OptimisationProposalAdapter,
     ProjectAdapter,
     RegistrationAdapter,
     ReleasesAdapter,
@@ -336,6 +337,10 @@ def build_application(
         # `W60-PRICE-LIST-01`. Project price lists (the uploaded file kept as a Blob in the
         # same store) and vendor lists, over the same sessions.
         optimisation=OptimisationAdapter(sessions, blob_store=store),
+        # `W60-OPT-PROPOSALS-01`. The optimisation passes, their proposals and the experts'
+        # decisions over the same sessions; the saved text layers are read as the comparison
+        # reads them.
+        optimisation_proposals=OptimisationProposalAdapter(sessions, blob_store=store),
     )
     return Application(
         router=router,

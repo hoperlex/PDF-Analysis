@@ -358,6 +358,12 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listPriceListRevisions": _ANY_ROLE,
         "listPriceListPositions": _ANY_ROLE,
         "getEffectiveVendorLists": _ANY_ROLE,
+        # `W60-OPT-PROPOSALS-01`. Passes, proposals, their decision history and the CSV are
+        # product data: any one role reads and exports.
+        "listOptimisationPasses": _ANY_ROLE,
+        "listOptimisationProposals": _ANY_ROLE,
+        "listProposalDecisions": _ANY_ROLE,
+        "exportOptimisationProposalsCsv": _ANY_ROLE,
         # The product version and release notes: any complete account, roles or none
         # (R-80), so a role-less person can still see what the product is.
         "getProductVersion": _ANY_COMPLETE_ACCOUNT,
@@ -388,6 +394,11 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "uploadPriceList": _EXPERT,
         "setProjectVendorList": _EXPERT,
         "setGlobalVendorList": _ADMIN,
+        # `W60-OPT-PROPOSALS-01`. An expert starts an optimisation pass and decides its
+        # proposals (R-60: an administrator without `expert` reads and does not decide); the
+        # commands re-read the role set in their own transaction.
+        "startOptimisationPass": _EXPERT,
+        "decideOptimisationProposal": _EXPERT,
         "exportRunCsv": _EXPERT,
         # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook is the CSV's sibling: the same role.
         "exportRunXlsx": _EXPERT,

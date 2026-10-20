@@ -322,6 +322,11 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.optimisation.positions(priceListId, offset, limit)` | `['optimisation','positions',id,{offset,limit}]` | `W60-PRICE-LIST-01` |
 | `queryKeys.optimisation.vendorLists()` | `['optimisation','vendor-lists']` | `W60-PRICE-LIST-01` |
 | `queryKeys.optimisation.projectVendorLists(projectUid)` | `['optimisation','vendor-lists',uid]` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.passes(projectUid, documentUid)` | `['optimisation','passes',uid,docUid]` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.allPasses()` | `['optimisation','passes']` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.proposalsOf(passId)` | `['optimisation','proposals',id]` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.proposals(passId, decision, offset, limit)` | `['optimisation','proposals',id,{decision,offset,limit}]` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.proposalDecisions(proposalId)` | `['optimisation','proposal-decisions',id]` | `W60-OPT-PROPOSALS-01` |
 
 `projects`, `versions`, `runs`, `findings`, `dashboard`, `account`, `users`, `registrations`,
 `releases`, `execution`, `norms`, `analysis`, `assignments`, `optimisation` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
@@ -370,6 +375,17 @@ changes only when the server is redeployed — so nothing invalidates it; «Об
 invalidates the project's `priceLists`; `setProjectVendorList` and `setGlobalVendorList` invalidate
 the whole `vendorLists()` prefix, because a change of the general list moves every project's
 answer. None of them changes a number the dashboard reads.
+
+`W60-OPT-PROPOSALS-01` adds «Предложения» to the same root: `optimisation.passes(uid, docUid)` holds
+`listOptimisationPasses` for one document set (each pass carries its counts by decision),
+`optimisation.proposals(...)` one page of `listOptimisationProposals` (the decision filter and the page
+are in the key) and `optimisation.proposalDecisions(id)` one proposal's history, read only when it is
+opened. `startOptimisationPass` invalidates every project's `passes` prefix and the new pass's
+proposals; `decideOptimisationProposal` invalidates the pass's `proposalsOf` prefix, the `passes`
+prefix (the counts by decision are on the pass) and the proposal's history. Both mint their
+`Idempotency-Key` per intent and drop it once the intent completes — a decision is appended on
+purpose, and a pass over changed inputs must not replay the old one. A proposal is not a finding:
+neither command invalidates a finding, a decision journal or the dashboard.
 
 There is **no global domain store.** The query client in `_app` is the only cache. PC-01's
 state lives on the server; a second copy of it in the browser is a second source of truth

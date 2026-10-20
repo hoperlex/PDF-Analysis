@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "008b484aac0aed7144f4ce5842282a4a352e486a42654ec60e8926c85d23aa52",
-    "content_commit": "f7664f5",
-    "content_commit_subject": "W60-PRICE-LIST-01 API reseal on integration base f7664f59",
-    "dispatch_named_commit": "f7664f5",
-    "commit_note": "W60 adds project price lists and vendor lists: uploadPriceList (POST /projects/{project_uid}/price-lists, expert, keyed, multipart CSV/XLSX), listPriceListRevisions, listPriceListPositions, getEffectiveVendorLists, setGlobalVendorList (admin) and setProjectVendorList (expert), five paths and twenty-seven schemas, on top of W61-DISPATCHER-01 (the four assignment operations); the identities prl_, prp_ and vnl_ (domain revision 16); no error code is added.",
+    "sha256": "a01f5ec172ae3ad10d236266cad1372edc1f2cd274f4ade40cf8cf0dd97cb7c9",
+    "content_commit": "40cd159",
+    "content_commit_subject": "W60-OPT-PROPOSALS-01 API reseal on integration base 40cd159f",
+    "dispatch_named_commit": "40cd159",
+    "commit_note": "W60 adds the optimisation passes, their deterministic proposals and the experts' decisions: startOptimisationPass (POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes, expert, keyed), listOptimisationPasses, listOptimisationProposals, decideOptimisationProposal (expert, keyed), listProposalDecisions and exportOptimisationProposalsCsv, five paths and eighteen schemas, on top of W60-PRICE-LIST-01 (the six price-list and vendor-list operations) and W61-DISPATCHER-01; the identities opp_, opr_ and opd_ (domain revision 17); no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 64,
-    "operations": 73,
-    "component_schemas": 198,
+    "paths": 69,
+    "operations": 79,
+    "component_schemas": 216,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "008b484aac0aed7144f4ce5842282a4a352e486a42654ec60e8926c85d23aa52",
+    "snapshot_sha256": "a01f5ec172ae3ad10d236266cad1372edc1f2cd274f4ade40cf8cf0dd97cb7c9",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "7f951a46a4e0cacf6f917510f3915bd6491bd394877b89a2b479187098a47020",
-      "index.ts": "bdd04dbd0f06a0e837cd10f6f371c2091892df3f68210d05d17e4cdcaab97a6a",
-      "operations.gen.ts": "e61b2802a1c9861471aeb55d9caf4fe293ce06d732ec586f804a2e6f5ceb9dad",
-      "types.gen.ts": "5008c0e8618b7c1b9dea0ce3795e182cf8a75f6457e4939ba75da970d82933c9"
+      "client.gen.ts": "92c397dff3aff38020bb080565017f7b1e1f511a483070d9b1e22846a0a44eb9",
+      "index.ts": "e9cd303f0bca92eb0617c0d49e432d87bf5278768c2cf3691c3a29614f66b113",
+      "operations.gen.ts": "37c3d79baf449a5f693fb2299b05244190f0451f28c8a14e9ad1e17088117a25",
+      "types.gen.ts": "52e23b1c65294eb727a501b5b6ed9a60cd2bf3dedf8823e32ca9ecede2a6eefc"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

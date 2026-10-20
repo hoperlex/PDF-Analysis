@@ -71,6 +71,7 @@ __all__ = [
     "ComparisonPort",
     "AnalysisProfilePort",
     "OptimisationPort",
+    "OptimisationProposalPort",
     "UploadedDocument",
     "XlsxExportPort",
 ]
@@ -1077,3 +1078,64 @@ class OptimisationPort(Protocol):
         user_uid: str,
     ) -> models.SectionVendorList:
         """Append a project revision (or none on a repeat) and answer the section's state."""
+
+
+@runtime_checkable
+class OptimisationProposalPort(Protocol):
+    """The six «Предложения» operations. `W60-OPT-PROPOSALS-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    Behind it: ``auditmanager.optimisation.proposals``. Every method reads the actor's role
+    set in its own transaction (``expert`` starts a pass and decides a proposal -- an account
+    holding only ``admin`` does neither; any one role reads and exports). Nothing here is a
+    finding, reads a finding or changes one; no money figure exists that a price-list
+    position does not state.
+    """
+
+    def start_optimisation_pass(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        idempotency_key: str,
+        user_uid: str,
+    ) -> models.OptimisationPass:
+        """Start the pass for the document set's current AR version, answer the stored pass
+        with exactly these inputs, or refuse with the first unmet precondition."""
+
+    def list_optimisation_passes(
+        self, *, project_uid: str, document_uid: str | None, limit: int, user_uid: str
+    ) -> models.OptimisationPassList:
+        """The project's passes, newest first, each with its counts by decision."""
+
+    def list_optimisation_proposals(
+        self,
+        *,
+        optimisation_pass_id: str,
+        decision: str | None,
+        offset: int,
+        limit: int,
+        user_uid: str,
+    ) -> models.OptimisationProposalPage:
+        """One page of a pass's proposals with each one's current decision."""
+
+    def decide_optimisation_proposal(
+        self,
+        *,
+        optimisation_proposal_id: str,
+        verdict: str,
+        comment: str | None,
+        idempotency_key: str,
+        user_uid: str,
+    ) -> models.ProposalDecisionResult:
+        """Append one decision, or answer the one stored under the key."""
+
+    def list_proposal_decisions(
+        self, *, optimisation_proposal_id: str, user_uid: str
+    ) -> models.ProposalDecisionList:
+        """Every decision of one proposal, oldest first."""
+
+    def export_optimisation_proposals_csv(
+        self, *, optimisation_pass_id: str, user_uid: str
+    ) -> bytes:
+        """The pass's proposals as the formula-escaped CSV bytes."""

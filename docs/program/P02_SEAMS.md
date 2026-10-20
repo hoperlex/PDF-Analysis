@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Seventy-three operations, sealed. `A5` generates the typed client from this document; `B6`
+Seventy-nine operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -886,6 +886,17 @@ read them; `getEffectiveVendorLists` answers the fifteen sections' vendor lists 
 append versioned revisions, refusing a stale `expected_vendor_list_id`
 (`conflict_reason: vendor_list_changed`). No operation answers a total, a proposal or a price a
 price list does not state; migration `0026_price_lists` stores them.
+`W60-OPT-PROPOSALS-01` added six more `optimisation` operations on 2026-10-20, the «Предложения»
+of «Оптимизация проекта»: `startOptimisationPass` (`expert`, keyed) pins a document set's
+current AR version, its newest published run, the current price-list revision and the effective
+AR vendor list and stores the deterministic `cheaper_analog` proposals, refusing an unmet
+precondition as `conflict` with its `conflict_reason` and writing nothing; `listOptimisationPasses`,
+`listOptimisationProposals` and `listProposalDecisions` read them (any one role) with counts by
+decision; `decideOptimisationProposal` (`expert`, keyed) appends an accept, reject or revise
+decision and never changes an earlier one; `exportOptimisationProposalsCsv` is the
+formula-escaped CSV of one pass. A proposal is a separate entity beside findings: no operation
+here reads or changes a finding, and a saving is stated only where a price-list position and a
+numeric quantity state it. Migration `0027_optimisation_proposals` stores them.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -976,19 +987,27 @@ could.
 | `getEffectiveVendorLists` | `GET /projects/{project_uid}/vendor-lists` |
 | `setGlobalVendorList` | `PUT /vendor-lists/{section_code}` |
 | `setProjectVendorList` | `PUT /projects/{project_uid}/vendor-lists/{section_code}` |
+| `startOptimisationPass` | `POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes` |
+| `listOptimisationPasses` | `GET /projects/{project_uid}/optimisation-passes` |
+| `listOptimisationProposals` | `GET /optimisation-passes/{optimisation_pass_id}/proposals` |
+| `decideOptimisationProposal` | `POST /optimisation-proposals/{optimisation_proposal_id}/decisions` |
+| `listProposalDecisions` | `GET /optimisation-proposals/{optimisation_proposal_id}/decisions` |
+| `exportOptimisationProposalsCsv` | `GET /optimisation-passes/{optimisation_pass_id}/export.csv` |
 
 Rules that hold across the whole surface:
 
 * the writes that take a required `Idempotency-Key` header are `createProject`,
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
-  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`
-  and `uploadPriceList`, and no others. A repeat of the decision carryover under another key
+  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`,
+  `uploadPriceList`, `startOptimisationPass` and `decideOptimisationProposal`, and no others. A repeat of the decision carryover under another key
   that names the same pair and decision answers the event already carried (`replayed: true`)
   and appends nothing.
   `setGlobalVendorList` and `setProjectVendorList` take no key: a repeat of the latest
   revision's entries writes nothing and answers it, and a writer that read an older revision
   is refused by `expected_vendor_list_id` (`conflict_reason: vendor_list_changed`).
+  A new key over exactly the inputs of a stored optimisation pass answers that pass and
+  writes nothing; every decision under a new key is a new appended event.
   The key is passed through to the owning command handler and never re-derived in the
   router: an identical repeat replays the first answer, and another payload under the same
   key is `idempotency_key_reuse`. The other writes take no key. What a repeat of each does

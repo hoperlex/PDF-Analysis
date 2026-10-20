@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 64,
+    "path_count": 69,
     "operations": [
       [
         "POST",
@@ -367,6 +367,36 @@
         "PUT",
         "/projects/{project_uid}/vendor-lists/{section_code}",
         "setProjectVendorList"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/optimisation-passes",
+        "startOptimisationPass"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/optimisation-passes",
+        "listOptimisationPasses"
+      ],
+      [
+        "GET",
+        "/optimisation-passes/{optimisation_pass_id}/proposals",
+        "listOptimisationProposals"
+      ],
+      [
+        "POST",
+        "/optimisation-proposals/{optimisation_proposal_id}/decisions",
+        "decideOptimisationProposal"
+      ],
+      [
+        "GET",
+        "/optimisation-proposals/{optimisation_proposal_id}/decisions",
+        "listProposalDecisions"
+      ],
+      [
+        "GET",
+        "/optimisation-passes/{optimisation_pass_id}/export.csv",
+        "exportOptimisationProposalsCsv"
       ]
     ],
     "schema_names": [
@@ -567,7 +597,25 @@
       "SectionVendorList",
       "EffectiveVendorLists",
       "SetGlobalVendorListRequest",
-      "SetProjectVendorListRequest"
+      "SetProjectVendorListRequest",
+      "OptimisationPassId",
+      "OptimisationProposalId",
+      "ProposalDecisionId",
+      "OptimisationProposalType",
+      "ProposalMatchBasis",
+      "ProposalAnalogBasis",
+      "ProposalVerdict",
+      "ProposalDecisionState",
+      "ProposalDecisionCounts",
+      "OptimisationPass",
+      "OptimisationPassList",
+      "ProposalPosition",
+      "ProposalDecision",
+      "OptimisationProposal",
+      "OptimisationProposalPage",
+      "DecideOptimisationProposalRequest",
+      "ProposalDecisionResult",
+      "ProposalDecisionList"
     ]
   },
   "error_catalog": {

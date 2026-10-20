@@ -1,0 +1,154 @@
+/* «Предложения» on the project's «Оптимизация» tab (`W60-OPT-PROPOSALS-01`). Global tokens only. */
+
+.section {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.heading {
+  margin: 1rem 0 0.5rem;
+}
+
+.rule {
+  margin: 0 0 0.75rem;
+  color: var(--am-ink-muted);
+}
+
+.chooser {
+  margin: 0 0 0.75rem;
+}
+
+.chooser select {
+  max-width: 100%;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.25rem 0.75rem;
+  margin: 0 0 0.75rem;
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.count {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--am-line-soft);
+  background: var(--am-surface);
+}
+
+.passes {
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.pass {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--am-line-soft);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 0.75rem;
+}
+
+.card {
+  margin: 0 0 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--am-line-soft);
+  background: var(--am-surface);
+  min-width: 0;
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.cardTitle {
+  margin: 0;
+}
+
+.state {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--am-line-soft);
+}
+
+.provenance {
+  margin: 0.25rem 0;
+  color: var(--am-ink-muted);
+}
+
+.quote {
+  margin: 0.25rem 0 0.5rem;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--am-line-soft);
+}
+
+.frame {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cell {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--am-line-soft);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.price {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.hint {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.decision {
+  margin: 0.5rem 0;
+}
+
+.history {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}

@@ -134,7 +134,9 @@ def test_a_matched_row_gets_its_cheaper_analogs_cheapest_first() -> None:
     assert first.analog_basis == BASIS_NAME_SIMILARITY and first.similarity == Decimal("0.6666")
     # ДПМ-01/60 and ДПМ-02/60: one code family wins over the (also full) name similarity.
     assert second.analog_basis == BASIS_CODE_FAMILY and second.similarity == Decimal("1")
-    assert "Более дешёвый аналог" in first.rationale and "19500 RUB за шт" in first.rationale
+    assert "Более дешёвый аналог" in first.rationale and "поставщик Кнауф Гипс" in first.rationale
+    assert "вместо «Дверь противопожарная» (ДПМ-01/60)" in first.rationale
+    assert not any(character.isdigit() for character in first.rationale.split("(")[0])
     assert (result.rows_total, result.rows_matched, result.rows_with_proposals) == (1, 1, 1)
 
 

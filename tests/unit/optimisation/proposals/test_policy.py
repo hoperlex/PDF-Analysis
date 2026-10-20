@@ -91,16 +91,26 @@ def test_every_refusal_reason_is_a_non_ready_specification_state_or_the_vendor_l
     assert policy.PASS_REFUSAL_REASONS[-1] == policy.REFUSAL_VENDOR_LIST_MISSING
 
 
-def test_the_identities_are_free_in_the_registry_and_well_formed() -> None:
-    for prefix in (OPTIMISATION_PASS_ID_PREFIX, OPTIMISATION_PROPOSAL_ID_PREFIX, PROPOSAL_DECISION_ID_PREFIX):
-        assert prefix not in IDENTITY_TYPES_BY_PREFIX
-    for identity in (OptimisationPassId, OptimisationProposalId, ProposalDecisionId):
+def test_the_identities_are_contracted_and_validate_through_the_registry() -> None:
+    """`W60-OPT-PROPOSALS-01` phase B contracted ``opp``, ``opr`` and ``opd`` (revision 17)."""
+    from auditmanager.shared import identity as registry
+
+    for identity, shared in (
+        (OptimisationPassId, registry.OptimisationPassId),
+        (OptimisationProposalId, registry.OptimisationProposalId),
+        (ProposalDecisionId, registry.ProposalDecisionId),
+    ):
+        assert IDENTITY_TYPES_BY_PREFIX[shared.prefix] is shared
         minted = identity.new()
-        assert str(minted).startswith(identity.prefix + "_") and len(str(minted)) == 30
+        assert str(minted).startswith(shared.prefix + "_") and len(str(minted)) == 30
         assert identity.parse(str(minted)) == minted
+        shared(str(minted))  # the registry's own type accepts what this boundary mints
         with pytest.raises(DomainError) as caught:
-            identity.parse(identity.prefix + "_short")
+            identity.parse(shared.prefix + "_short")
         assert caught.value.code is ErrorCode.VALIDATION_FAILED
+    assert OPTIMISATION_PASS_ID_PREFIX == "opp"
+    assert OPTIMISATION_PROPOSAL_ID_PREFIX == "opr"
+    assert PROPOSAL_DECISION_ID_PREFIX == "opd"
     with pytest.raises(DomainError):
         OptimisationPassId.parse(str(OptimisationProposalId.new()))
 

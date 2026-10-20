@@ -187,6 +187,10 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   // they invalidate the `optimisation` keys instead.
   'src/features/upload-price-list/model/use-upload-price-list.ts': false,
   'src/features/set-vendor-list/model/use-set-vendor-list.ts': false,
+  // `W60-OPT-PROPOSALS-01`: a pass and a decision on a proposal change no number the dashboard
+  // reads (a proposal is not a finding); they invalidate the `optimisation` keys instead.
+  'src/features/start-optimisation-pass/model/use-start-optimisation-pass.ts': false,
+  'src/features/decide-optimisation-proposal/model/use-decide-optimisation-proposal.ts': false,
   // `W59-SECTION-UI-01` (integrator grant): confirming a version's stage and section. The
   // breakdown groups by the document's legacy `section` today, which a classification does
   // not write; the backend half of the window is still being written, so the hook

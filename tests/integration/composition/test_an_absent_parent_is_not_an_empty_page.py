@@ -90,8 +90,11 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # unaddressed collection.
 # `W60-PRICE-LIST-01` added three: ``listPriceListRevisions`` and ``getEffectiveVendorLists``
 # on ``project_uid`` and ``listPriceListPositions`` on ``price_list_id``.
-# With both, the addressed half is twenty-five.
-EXPECTED_ADDRESSED = 25
+# `W60-OPT-PROPOSALS-01` added four: ``listOptimisationPasses`` on ``project_uid``, and
+# ``listOptimisationProposals``, ``listProposalDecisions`` and ``exportOptimisationProposalsCsv``
+# on a pass or a proposal identity.
+# With all of them, the addressed half is twenty-nine.
+EXPECTED_ADDRESSED = 29
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --

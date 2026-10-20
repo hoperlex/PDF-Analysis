@@ -110,6 +110,7 @@ import {
 import { BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, portalPage } from '../blocks/fixtures';
 
 import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixtures';
+import { proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
 
 import type { Screen } from './contrast';
 
@@ -570,6 +571,20 @@ export function screens(): Screen[] {
     const client = newClient();
     shape.seedClient?.(client);
     add(`ProjectOptimisation ${shape.name}`, renderScreen(client, shape.make()));
+  }
+  // `W60-OPT-PROPOSALS-01`: «Предложения» loaded (a set chooser, two passes, proposals in
+  // several decision states) and every other shape its widget, features and entity have.
+  {
+    const client = newClient();
+    seedLoadedProposals(client);
+    const loaded = proposalShapes().find((shape) => shape.name === 'proposals-loaded');
+    if (loaded !== undefined) add('OptimisationProposals loaded', renderScreen(client, loaded.make()));
+  }
+  for (const shape of proposalShapes()) {
+    if (shape.name === 'proposals-loaded') continue;
+    const client = newClient();
+    shape.seedClient?.(client);
+    add(`OptimisationProposals ${shape.name}`, renderScreen(client, shape.make()));
   }
   // The worker registry: one row per state, the offline one in the collapsed group, and an
   // administrator's intake switch on each.

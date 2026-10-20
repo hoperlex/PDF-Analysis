@@ -231,6 +231,34 @@ GUARDED = (
     ("getEffectiveVendorLists", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists"),
     ("setGlobalVendorList", "PUT", "/vendor-lists/EOM"),
     ("setProjectVendorList", "PUT", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists/EOM"),
+    # `W60-OPT-PROPOSALS-01`. Optimisation passes, their proposals and the decisions on them.
+    (
+        "startOptimisationPass",
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991G"
+        "/optimisation-passes",
+    ),
+    ("listOptimisationPasses", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/optimisation-passes"),
+    (
+        "listOptimisationProposals",
+        "GET",
+        "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/proposals",
+    ),
+    (
+        "decideOptimisationProposal",
+        "POST",
+        "/optimisation-proposals/opr_01M2545JSD15ETSNNV904X991N/decisions",
+    ),
+    (
+        "listProposalDecisions",
+        "GET",
+        "/optimisation-proposals/opr_01M2545JSD15ETSNNV904X991N/decisions",
+    ),
+    (
+        "exportOptimisationProposalsCsv",
+        "GET",
+        "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/export.csv",
+    ),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -798,6 +826,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # set them, and the reads hand the caller to the context, which reads the role set in
         # its own transaction; whether they may is the role register's.
         "optimisation.py",
+        # `W60-OPT-PROPOSALS-01`: a pass and a decision record WHO started or decided them, and
+        # the reads hand the caller to the context, which reads the role set in its own
+        # transaction; whether they may is the role register's.
+        "optimisation_proposals.py",
         "registrations.py",
         "releases.py",
         # `W59-SECTION-SEAL-01`: the classification records WHO confirmed it; whether they

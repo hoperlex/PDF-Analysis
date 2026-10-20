@@ -154,6 +154,14 @@ REQUIRED_OPERATIONS = {
     "getEffectiveVendorLists",
     "setGlobalVendorList",
     "setProjectVendorList",
+    # `W60-OPT-PROPOSALS-01`. «Предложения»: the optimisation pass of a document set's AR
+    # version, its deterministic proposals, the experts' decisions on them and the CSV.
+    "startOptimisationPass",
+    "listOptimisationPasses",
+    "listOptimisationProposals",
+    "decideOptimisationProposal",
+    "listProposalDecisions",
+    "exportOptimisationProposalsCsv",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -191,6 +199,10 @@ WRITE_OPERATIONS = {
     # vendor-list writes are not keyed: an exact repeat writes nothing, and a stale writer is
     # refused by `expected_vendor_list_id`.
     "uploadPriceList",
+    # `W60-OPT-PROPOSALS-01`. Both append rows, so both are keyed: a pass is also found again
+    # by its inputs under a new key, and every decision under a new key is a new event.
+    "startOptimisationPass",
+    "decideOptimisationProposal",
 }
 
 PAGINATED_OPERATIONS = {

@@ -221,6 +221,24 @@ __all__ = [
     "EffectiveVendorLists",
     "SetGlobalVendorListRequest",
     "SetProjectVendorListRequest",
+    "OptimisationPass",
+    "OptimisationPassId",
+    "OptimisationPassList",
+    "OptimisationProposal",
+    "OptimisationProposalId",
+    "OptimisationProposalPage",
+    "OptimisationProposalType",
+    "ProposalAnalogBasis",
+    "ProposalDecision",
+    "ProposalDecisionCounts",
+    "ProposalDecisionId",
+    "ProposalDecisionList",
+    "ProposalDecisionResult",
+    "ProposalDecisionState",
+    "ProposalMatchBasis",
+    "ProposalPosition",
+    "ProposalVerdict",
+    "DecideOptimisationProposalRequest",
     "optional_property",
     "Assignment",
     "AssignmentDetail",
@@ -2382,3 +2400,223 @@ class SetProjectVendorListRequest(_Object):
     expected_vendor_list_id: VendorListId | None = Field(
         default=None, json_schema_extra=optional_property
     )
+
+
+# --- optimisation proposals (`W60-OPT-PROPOSALS-01`) --------------------------------------
+#
+# The deterministic «более дешёвый аналог» proposals of an optimisation pass, and the experts'
+# decisions on them. A proposal is a separate entity beside findings: its own identity, its own
+# append-only decisions, its own counts and its own CSV. Every money figure is a price-list
+# position's stored price or a product of one with a numeric specification quantity; a saving
+# is absent (``null``), never ``0``, when the row's quantity is not a number. Prices, quantities
+# and savings cross the wire as exact decimal text, never as JSON numbers.
+
+#: `W60-OPT-PROPOSALS-01`. The three identities ``contracts/domain/v1/identifiers.json``
+#: revision 17 adds: a pass, one of its proposals, one decision on a proposal.
+OptimisationPassId = TypeAliasType(
+    "OptimisationPassId", Annotated[str, Field(pattern=rf"^opp_{_ULID}$")]
+)
+OptimisationProposalId = TypeAliasType(
+    "OptimisationProposalId", Annotated[str, Field(pattern=rf"^opr_{_ULID}$")]
+)
+ProposalDecisionId = TypeAliasType(
+    "ProposalDecisionId", Annotated[str, Field(pattern=rf"^opd_{_ULID}$")]
+)
+
+#: A non-negative exact decimal: a quantity (below 10^13, at most six decimals) or a saving
+#: (the product of a price difference below 10^14 by such a quantity, at most twelve
+#: decimals), plain text with no exponent and no trailing zero.
+_EXACT_DECIMAL = r"^(0|[1-9][0-9]{0,26})(\.[0-9]{0,11}[1-9])?$"
+#: The share of shared words of two names, ``0`` to ``1`` with at most four decimals.
+_SIMILARITY = r"^(0|1|0\.[0-9]{0,3}[1-9])$"
+_SPEC_ROW_KEY = r"^sr-[0-9a-f]{32}$"
+
+
+class OptimisationProposalType(str, enum.Enum):
+    """The kind of a proposal. Only the deterministic one exists: a cheaper position of the
+    same price list. The legacy ``faster_install``, ``simpler_design`` and ``lifecycle`` need
+    judgement and wait for the model-assisted slice."""
+
+    CHEAPER_ANALOG = "cheaper_analog"
+
+
+class ProposalMatchBasis(str, enum.Enum):
+    """How the specification row was matched to its current price-list position."""
+
+    CODE = "code"
+    MARK = "mark"
+    NAME = "name"
+
+
+class ProposalAnalogBasis(str, enum.Enum):
+    """Why the proposed position is the same kind of product: one code family (the leading
+    letters of the code or mark, ``ПК 60-12-8`` ~ ``ПК 63-15-8``), or at least half of the
+    words of the two names in common."""
+
+    CODE_FAMILY = "code_family"
+    NAME_SIMILARITY = "name_similarity"
+
+
+class ProposalVerdict(str, enum.Enum):
+    """An expert's verdict on a proposal. ``revise`` says the analog is right in principle
+    and the proposal needs changing; its comment is required."""
+
+    ACCEPT = "accept"
+    REJECT = "reject"
+    REVISE = "revise"
+
+
+class ProposalDecisionState(str, enum.Enum):
+    """A proposal's current decision: its latest verdict, or ``pending`` when nobody decided.
+    Also the ``decision`` filter of ``listOptimisationProposals``."""
+
+    PENDING = "pending"
+    ACCEPT = "accept"
+    REJECT = "reject"
+    REVISE = "revise"
+
+
+class ProposalDecisionCounts(_Object):
+    """How many of a pass's proposals stand in each decision state; the four sum to the
+    pass's ``proposal_count``. These are the proposals' own counts, never finding counts."""
+
+    pending: Annotated[int, Field(ge=0, le=30000)]
+    accept: Annotated[int, Field(ge=0, le=30000)]
+    reject: Annotated[int, Field(ge=0, le=30000)]
+    revise: Annotated[int, Field(ge=0, le=30000)]
+
+
+class OptimisationPass(_Object):
+    """One optimisation pass, pinned to everything it read: the version, its published run
+    and that run's text layer, the price-list revision and the vendor-list revision (global
+    or the project's own, ``vendor_list_source``), and the three algorithm versions."""
+
+    optimisation_pass_id: OptimisationPassId
+    project_uid: ProjectUid
+    document_uid: DocumentUid
+    version_uid: VersionUid
+    run_id: RunId
+    text_layer_sha256: Sha256
+    price_list_id: PriceListId
+    vendor_list_id: VendorListId
+    vendor_list_source: VendorListScope
+    extraction_algorithm: Annotated[str, Field(min_length=1, max_length=64)]
+    match_algorithm: Annotated[str, Field(min_length=1, max_length=64)]
+    generator_version: Annotated[str, Field(min_length=1, max_length=64)]
+    specification_row_count: Annotated[int, Field(ge=0, le=10000)]
+    matched_row_count: Annotated[int, Field(ge=0, le=10000)]
+    proposed_row_count: Annotated[int, Field(ge=0, le=10000)]
+    proposal_count: Annotated[int, Field(ge=0, le=30000)]
+    decision_counts: ProposalDecisionCounts
+    started_by_user_uid: UserUid
+    started_by_label: Annotated[str, Field(min_length=1, max_length=254)]
+    started_at: datetime
+
+
+class OptimisationPassList(_Object):
+    """A project's passes, newest first."""
+
+    items: Annotated[list[OptimisationPass], Field(max_length=100)]
+
+
+class ProposalPosition(_Object):
+    """A price-list position a proposal names. ``row_number`` is its source row, never an
+    identity."""
+
+    price_list_position_id: PriceListPositionId
+    row_number: Annotated[int, Field(ge=1)]
+    code: Annotated[str, Field(min_length=1, max_length=200)] | None
+    name: Annotated[str, Field(min_length=1, max_length=2000)]
+    mark: Annotated[str, Field(min_length=1, max_length=500)] | None
+    vendor: Annotated[str, Field(min_length=1, max_length=500)] | None
+
+
+class ProposalDecision(_Object):
+    """One appended expert decision. Never changed; the proposal's latest one is current."""
+
+    proposal_decision_id: ProposalDecisionId
+    optimisation_proposal_id: OptimisationProposalId
+    verdict: ProposalVerdict
+    comment: Annotated[str, Field(min_length=1, max_length=2000)] | None
+    actor_user_uid: UserUid
+    actor_label: Annotated[str, Field(min_length=1, max_length=254)]
+    decided_at: datetime
+
+
+class OptimisationProposal(_Object):
+    """One proposal: a specification row matched to ``matched_position`` and a cheaper
+    ``proposed_position`` of the same price-list revision, in the same unit and currency,
+    from a vendor on the pass's vendor list.
+
+    ``row_text`` is the description as the saved text layer shows it (name, mark, code and
+    manufacturer cells run together); page, sheet and lines say where it is. Both unit prices
+    are the positions' stored prices. ``saving`` is ``(current_unit_price −
+    proposed_unit_price) × quantity`` and is ``null`` -- never ``0`` -- when ``quantity`` is
+    ``null`` because the row's quantity text is not a plain number. ``ordinal`` is a display
+    order inside the pass, never an identity.
+    """
+
+    optimisation_proposal_id: OptimisationProposalId
+    optimisation_pass_id: OptimisationPassId
+    ordinal: Annotated[int, Field(ge=1, le=30000)]
+    proposal_type: OptimisationProposalType
+    spec_row_key: Annotated[str, Field(pattern=_SPEC_ROW_KEY)]
+    page_number: Annotated[int, Field(ge=1)]
+    sheet_label: Annotated[str, Field(min_length=1, max_length=100)] | None
+    line_start: Annotated[int, Field(ge=1)]
+    line_end: Annotated[int, Field(ge=1)]
+    table_ordinal: Annotated[int, Field(ge=1)]
+    row_position: Annotated[str, Field(min_length=1, max_length=100)] | None
+    row_text: Annotated[str, Field(min_length=1, max_length=8000)]
+    matched_position: ProposalPosition
+    matched_basis: ProposalMatchBasis
+    proposed_position: ProposalPosition
+    analog_basis: ProposalAnalogBasis
+    name_similarity: Annotated[str, Field(pattern=_SIMILARITY)]
+    proposed_vendor: Annotated[str, Field(min_length=1, max_length=500)]
+    unit: Annotated[str, Field(min_length=1, max_length=50)]
+    quantity: Annotated[str, Field(pattern=_EXACT_DECIMAL)] | None
+    quantity_text: Annotated[str, Field(min_length=1, max_length=100)] | None
+    current_unit_price: Annotated[str, Field(pattern=_UNIT_PRICE)]
+    proposed_unit_price: Annotated[str, Field(pattern=_UNIT_PRICE)]
+    currency: Annotated[str, Field(pattern=_CURRENCY)]
+    saving: Annotated[str, Field(pattern=_EXACT_DECIMAL)] | None
+    rationale: Annotated[str, Field(min_length=1, max_length=10000)]
+    current_verdict: ProposalDecisionState
+    current_decision: ProposalDecision | None
+
+
+class OptimisationProposalPage(_Object):
+    """One page of a pass's proposals in ordinal order. ``total`` counts the proposals the
+    ``decision`` filter admits; the pass's ``decision_counts`` count all of them."""
+
+    optimisation_pass: OptimisationPass
+    decision: ProposalDecisionState | None
+    items: Annotated[list[OptimisationProposal], Field(max_length=200)]
+    offset: Annotated[int, Field(ge=0)]
+    limit: Annotated[int, Field(ge=1, le=200)]
+    total: Annotated[int, Field(ge=0, le=30000)]
+    next_offset: Annotated[int, Field(ge=1)] | None
+
+
+class DecideOptimisationProposalRequest(_Object):
+    """`W60-OPT-PROPOSALS-01`. An expert's verdict on a proposal, with a comment that
+    ``revise`` requires."""
+
+    verdict: ProposalVerdict
+    comment: Annotated[str, Field(min_length=1, max_length=2000)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+
+
+class ProposalDecisionResult(_Object):
+    """The decision appended (or replayed) and the proposal as it now stands."""
+
+    decision: ProposalDecision
+    proposal: OptimisationProposal
+
+
+class ProposalDecisionList(_Object):
+    """Every decision of one proposal, oldest first; the last is current."""
+
+    items: list[ProposalDecision]
