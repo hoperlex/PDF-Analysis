@@ -1,8 +1,10 @@
 # W59-VERSION-UPLOAD-01 — upload a further version into an existing document set
 
-Status: **phase A complete** on `agent/w59-version-upload-01` (base `641f2b9e` = `origin/dev`
-`1af17a48` + the frozen task file). Phase B (contract, router, BFF, screen) waits for the
-integrator to hand over the contract slot.
+Status: **complete** on `agent/w59-version-upload-01`. Phase A was committed alone at
+`78ee20bf` (base `641f2b9e` = `origin/dev` `1af17a48` + the frozen task file). Phase B was
+built after the integrator handed over the contract slot from `1049367e`, then merged with
+`integration/night-1020` at `a50dafd4`. Surface: **52 paths / 59 operations / 148 schemas**,
+head `0024_version_classification` unchanged, no error code added.
 
 ## Phase A — the next version in ingest and documents
 
@@ -76,7 +78,131 @@ current_version_uid`, classification in its own table).
 - Other callers of `publish_version`, read-only: `tests/integration/runs/test_w59_classification_command.py`
   + `tests/integration/composition/test_version_comparison_over_http.py`: **17 passed**.
 
-## Proposed operation for phase B
+## Phase B — `uploadDocumentVersion`, the BFF and the document screen
+
+**Operation** (accepted as proposed). `POST /projects/{project_uid}/documents/{document_uid}/versions`,
+`uploadDocumentVersion`, tag `documents`, role `expert` (as `uploadDocument`):
+`Idempotency-Key` required, `multipart/form-data` with the `file` part encoded
+`application/zip`, closed `UploadDocumentVersionRequest` (the bundle only: a `display_title` or
+`section` part is `422 additionalProperties`), `201 DocumentVersion` for a new version and for an
+exact replay, refusals `401/403/404/409/422/500/503`. A `404` for an unknown document or a document
+of another project carries `details.aggregate_type: Document`.
+
+**Edge.**
+- The route is declared like `uploadDocument`: `UploadRoute` part bounds, the strict multipart
+  pass, the part's handle passed to the port unread. `DocumentPort.upload_document_version` →
+  `DocumentAdapter.upload_document_version` → `IngestService.upload_next_version`.
+- `_UPLOAD_ROUTE` (`api/routers/multipart.py`) now matches `^/projects/[^/]+/documents(?:/[^/]+/versions)?$`.
+  The version upload therefore gets the 251 MiB body cap and takes one of the same two upload
+  slots. A path under a version (classification, section review, comparison) gets neither.
+- **Proxy (integrator grant).** `infra/deploy/proxy/nginx.conf` and `tls-server.conf` widen their
+  two upload locations to the same single optional suffix:
+  `location ~ ^/(api|bff)/v1/projects/[^/]+/documents(?:/[^/]+/versions)?$`. Both files are written
+  out, not with the alternation shown here. The integrator granted `tls-server.conf` and
+  `tests/e2e/test_upload_limit_headroom.py` by message on 2026-10-20; both pin these exact location
+  strings, as does `tests/contract/test_proxy_rate_limits.py`. No new location block was added:
+  the size, timeout, rewrite and throttle lines are the existing ones.
+- **BFF.** `credentialed-forward.ts` already streams every `multipart/form-data` body with
+  `duplex: 'half'`, `redirect: 'error'`, `window: null` and the 290 s deadline, whatever the path.
+  The new path needed no code. A unit test pins the version path to exactly that treatment.
+
+**Screen.** `/projects/{p}/documents/{d}` now shows «Новая версия» under the version list. It holds
+the same «Что принимается» envelope note as the project's upload panel (one `EnvelopeNote`), a
+sentence on what carries over (the version becomes current, older versions keep their stage,
+section, runs, findings and decisions, the new one inherits nothing), and
+`UploadDocumentVersionForm`:
+- the picker, «Загрузить новую версию», no title field;
+- the same pre-check and the same refusal states through `UploadOutcome`, which is now shared with
+  `UploadDocumentForm` (the markup moved, it did not change);
+- the intent key is bound to the document and the file.
+
+On success the screen opens `routes.versionClassification(...)`, the new version's
+stage-and-section panel. The hook writes `versions.detail` and invalidates:
+- `versions.lists(document_uid)`, a new prefix key covering every page of `listVersions`;
+- `projects.all()`: the document list and structure, the project detail and the listing;
+- `dashboard.summary()`.
+
+The version list's note «Одна версия на загрузку…» was false from this change on; it now says
+that every version stays addressable and the newest is current.
+
+**Reseal.** Contract and `web/openapi/openapi.json` are byte-identical. The generated client was
+regenerated (`api:generate`; `api:verify` OK, 59 operations, contract sha256
+`a9c44e95edf033bc63807c9bd382292ca7cc7bbe456dacbc8744f66cb20880d0`). `FRONTEND_LOCK.json` has
+new digests and counts. `tests/support/expected_facts.json` has 52 paths, one operation and one
+schema added. Surface prose was updated in:
+- `P02_SEAMS.md`: count, history sentence, table row, keyed-write list;
+- `ALPHA_ROADMAP.md`;
+- `infra/deploy/{README.md,serve.py,proxy/nginx.conf}`;
+- the API package docstrings, including «Forty-two of the fifty-nine» declaring their own `422`;
+- the BFF `route.ts`;
+- `shared/api/authorization.ts`.
+
+Test pins moved:
+- the `NotFound` reference count, 36 → 37;
+- the prose-guard mutations;
+- the P02 operation sets;
+- the API role and authorization samples;
+- the served-422 set;
+- the web keyed-write list, ten → eleven;
+- the dashboard-invalidation registry;
+- the pre-check wiring guard, which now also scans the version form with two mutations.
+
+`docs/manual-tests/CP-06_comparison_core.md` gains `MT06-07`.
+`docs/program/CURRENT_STATE.md` is not touched: it still says 51/58/147, which is the one
+expected red of `test_doc_prose_facts::test_the_scanned_docs_state_the_contract_surface_this_tree_has`.
+
+**Checks (phase B).** Python with `PYTHONPATH=src $PY -m pytest …`; web with `npx vitest run …`
+in `web/`.
+
+| What | Result |
+| --- | --- |
+| `tests/contract` (whole directory, container-free) | All green except: the known pre-existing reds `test_error_kernel::test_there_are_twenty_four` and `test_ar_v2_seeded::test_seeded_categories_equal_the_sealed_api_enum`; the `CURRENT_STATE.md` triple (integrator's); and environment-only failures of a git worktree: `test_cp00_candidate` (174, `NotADirectoryError` copying `.git`, which is a file in a worktree), `test_validate_bootstrap` (21, `jsonschema` absent from the bootstrap interpreter), `test_cp00_final_state` (3, CP-00 manifest paths and tags). |
+| `tests/contract/api_v1` + `domain_p02` | 440 passed, 1 failed (the `CURRENT_STATE.md` triple) |
+| proxy: `test_proxy_rate_limits`, `test_upload_limit_headroom`, `test_proxy_tls_path`, `test_proxy_security_headers` | 84 passed |
+| `tests/integration/api/test_version_upload.py` (new, lane DB) | 8 passed |
+| api + composition subset: role register, authorization, served document, operation surface, router and body rules, multipart rules, journey, schema conformance, version upload, composition root, token channel, every port, router answers, absent parent, TLS path | 294 passed, 1 skipped, 1 failed: `test_every_port_implementation_is_whole::test_pre_decide_adapter_refuses_a_severity_instead_of_dropping_it`, pre-existing on the base (recorded by `W59-VERSION-COMPARE-01`) |
+| `tests/e2e/test_pc01_journey_conformance.py` | 87 passed |
+| `npm --prefix web run api:verify` / `lint -- --quiet` / `typecheck` | OK / clean / clean |
+| vitest `tests/guards tests/unit/screens tests/unit/styles tests/unit/api tests/unit/upload tests/contract` (includes the rendered-language guard) | 54 files, 916 passed (before the final note edit); after it, the whole set again green; `tests/unit/upload` 3 passed |
+
+Mutation probe M3: `_UPLOAD_ROUTE` reverted to `^/projects/[^/]+/documents$` makes three tests fail.
+Two are `TestEveryRouteHasItsOwnCap` version-path cases; the third is
+`TestTheUploadGate::test_a_version_upload_shares_the_same_two_slots`. The file was restored from a copy.
+
+Not run (R-135): the full gate, the live browser journey (`e2e:pc01`), the whole frontend suite,
+the whole integration battery, any provider call.
+
+## Risks and limitations
+
+- **D-174 stays open for this path too.** The BFF's resident set under a real 250 MiB bundle through
+  nginx and `next start` is unmeasured. The version upload takes the same code path, so it inherits
+  the same open measurement rather than adding a new one.
+- **The live journey does not exercise «Загрузить новую версию».** The PC-01 manifest was left
+  unchanged, because a step that was never run live would be an unverified handle for the deferred
+  full gate. It needs a journey step plus the live run.
+- **A byte-identical bundle is admitted as a new version** under a new key, reusing the blobs. That
+  is the same rule as `uploadDocument`, and nothing in the task asked to refuse it.
+- **`document.section` is still shown on the new version.** It is the legacy document-level fact
+  written at the first upload and is not a classification; the new version's `classification` is
+  `null`. `D-180` (dashboard grouping by legacy section) is unchanged.
+- **One stale comment is outside this task's paths.** `web/src/shared/lib/routes.ts` (`routes.document`)
+  still says a document has exactly one version.
+- **Pin merges with parallel reseal lanes.** The literal `NotFound` count (37), the
+  «Forty-two of the fifty-nine» prose and every surface count were derived on this lane's tree. A
+  merge with the parallel lanes (NORMS-CATALOGUE-XLSX, ANALYSIS-SETTINGS, DISPATCHER) must re-derive
+  them.
+
+## Integrator instructions
+
+- Merge the branch head. It contains phase A, the reseal and the web slice, merged with
+  `integration/night-1020` at the last check.
+- Update `CURRENT_STATE.md` to the final triple: 52/59/148 if no other reseal landed first.
+  Otherwise re-derive after the merge.
+- Record this as the first upload path for further versions. W59-VERSION-COMPARE-01's
+  "further versions are unreachable" limitation is closed.
+- No migration, dependency, `providers.tsx`, global style, ref or tag was touched.
+
+## Proposed operation for phase B (as sent to the integrator)
 
 `POST /projects/{project_uid}/documents/{document_uid}/versions`, `operationId:
 uploadDocumentVersion`, tag `documents`, the same roles as `uploadDocument`:
