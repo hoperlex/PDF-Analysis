@@ -188,3 +188,17 @@ single-owner rule is suspended for the API surface only, for this window only.
   candidate revision 15). Q-2's W61/W62 placement is moot for the code under `R-139`.
   **59/67/171**, head **`0025_work_assignments`**. Merged-tree checks: 1249 passed, the
   two base reds only; `typecheck` clean.
+- **`W60-PRICE-LIST-01`** (`6b7f981b`) — candidate `40cd159f`. The project's «Оптимизация»
+  tab: an expert uploads a price list (CSV, or the first sheet of an XLSX; stdlib parsing,
+  ≤ 10 MiB, ≤ 20 000 rows, deterministic parse report, skipped rows listed with reasons);
+  every upload is an immutable revision bound to its Blob; an administrator keeps a global
+  vendor list per section, an expert may override it per project (migration
+  `0026_price_lists`, identities `prl_`/`prp_`/`vnl_`). No money figure exists without a
+  price-list position. **59/67/171 → 64/73/198**, head **`0026_price_lists`**.
+  Merged-tree checks: `tests/contract` + `tests/unit` + journey conformance 1347 passed,
+  base reds only; `typecheck` clean. Integrator edit: the code-first section of
+  `CURRENT_STATE.md` was compacted to stay under the 120-line guard.
+- **Restart note (07:00–11:07).** The host rebooted at 07:00:28; the integrator session
+  and every lane subagent died. Branches and worktrees survived; lane stacks did not
+  (containers gone, incl. the local norms stand). The session resumed at 11:07 and
+  resumed the stopped lanes by agent id.
