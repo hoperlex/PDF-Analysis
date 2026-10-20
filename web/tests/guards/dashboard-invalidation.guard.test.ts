@@ -185,6 +185,8 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   // not write; the backend half of the window is still being written, so the hook
   // invalidates the dashboard anyway, and this entry holds it to that.
   'src/features/classify-version/model/use-classify-version.ts': true,
+  // `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict, and the dashboard counts verdicts.
+  'src/features/carry-over-decision/model/use-carry-over-decision.ts': true,
 };
 
 /** A feature model source with an executable mutation call, independent of its filename. */
