@@ -140,3 +140,13 @@ def _disposition(run_id: str, *, suffix: str = "csv") -> str:
     and the workbook the same name with ``.xlsx``.
     """
     return f'attachment; filename="{run_id}.{suffix}"'
+
+
+def attachment_disposition(opaque_id: str, *, suffix: str) -> str:
+    """The same single spelling for another download named by an opaque identity.
+
+    ``_disposition`` stays the one place that writes ``attachment;``; a second router that
+    serves a download (the optimisation proposals' CSV) asks it here instead of spelling
+    the header again, so the download-name guard keeps pointing at one file.
+    """
+    return _disposition(opaque_id, suffix=suffix)
