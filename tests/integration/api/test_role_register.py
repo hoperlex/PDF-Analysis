@@ -100,6 +100,12 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
         "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
     ),
+    # `W61-DISPATCHER-01`. «Диспетчер»: creating (admin) and listing, reading and moving
+    # (any one role) an assignment. The empty body is refused by the body models.
+    "createAssignment": ("POST", "/assignments"),
+    "listAssignments": ("GET", "/assignments"),
+    "getAssignment": ("GET", "/assignments/asg_01M2545JSD15ETSNNV904X991W"),
+    "transitionAssignment": ("POST", "/assignments/asg_01M2545JSD15ETSNNV904X991W/transitions"),
     "listRunFindings": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     "exportRunCsv": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),
     "getFinding": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
@@ -161,6 +167,11 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "getVersionSectionReview": _ANY_ROLE,
     # `W59-VERSION-COMPARE-01`: the version comparison is a product read.
     "compareDocumentVersions": _ANY_ROLE,
+    # `W61-DISPATCHER-01`: the dispatcher's reads and moves at the seam; the dispatch context
+    # decides who reads which assignment and who makes which move.
+    "listAssignments": _ANY_ROLE,
+    "getAssignment": _ANY_ROLE,
+    "transitionAssignment": _ANY_ROLE,
     "listRunFindings": _ANY_ROLE,
     "getFinding": _ANY_ROLE,
     "listDecisionHistory": _ANY_ROLE,
@@ -181,6 +192,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "reauditRun": frozenset({"expert", "admin"}),
     "appendDecision": _EXPERT,
     "exportRunCsv": _EXPERT,
+    # `W61-DISPATCHER-01`: assigning work is an administrator's act (R-60).
+    "createAssignment": _ADMIN,
     "listRegistrations": _ADMIN,
     "approveRegistration": _ADMIN,
     "rejectRegistration": _ADMIN,

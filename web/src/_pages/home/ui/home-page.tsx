@@ -3,7 +3,8 @@
  *
  * It greets the account by name, says which roles it holds, and shows three tiles: the five
  * most recent projects, the summary the dashboard reads, and — for a session holding `admin`
- * only — how many registration requests wait for a decision.
+ * only — how many registration requests wait for a decision. A session holding `expert` also
+ * gets «Мои задачи» (`W61-DISPATCHER-01`): its open assignments, with their moves and links.
  *
  * ## Which tiles: the registry decides, as it does for the screens they summarise
  *
@@ -40,9 +41,11 @@
 import type { Role } from '@/shared/api';
 import type { ScreenAddress } from '@/shared/config';
 import { screenAt } from '@/shared/config';
+import { routes } from '@/shared/lib';
 import { screenRolesAdmit } from '@/shared/config/screen-registry';
 import { ErrorState } from '@/shared/ui';
 import { UnknownRoleError, roleLabels } from '@/entities/account';
+import { MyTasks } from '@/widgets/my-tasks';
 import {
   PendingRegistrationsTile,
   RecentProjectsTile,
@@ -88,6 +91,9 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
   const projects = opens('/projects', roles);
   const summary = opens('/dashboard', roles);
   const registrations = opens('/admin/registrations', roles);
+  // «Мои задачи» summarises the expert's own part of «Диспетчер»: mounted when the registry
+  // opens that screen and the session holds `expert`, the role work is assigned to.
+  const tasks = opens('/dispatcher', roles) && roles.includes('expert');
 
   return (
     <section className="am-page" data-screen="home">
@@ -110,12 +116,17 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
           <div data-home-fault="closed-vocabulary">
             <ErrorState title={UNKNOWN_ROLE_TITLE} detail={UNKNOWN_ROLE_DETAIL} />
           </div>
-        ) : projects || summary || registrations ? (
-          <div className={styles.tiles}>
-            {projects ? <RecentProjectsTile /> : null}
-            {summary ? <SummaryTile /> : null}
-            {registrations ? <PendingRegistrationsTile href={registrationsScreenLink()} /> : null}
-          </div>
+        ) : projects || summary || registrations || tasks ? (
+          <>
+            {tasks ? <MyTasks roles={roles} listHref={routes.dispatcher()} /> : null}
+            {projects || summary || registrations ? (
+              <div className={styles.tiles}>
+                {projects ? <RecentProjectsTile /> : null}
+                {summary ? <SummaryTile /> : null}
+                {registrations ? <PendingRegistrationsTile href={registrationsScreenLink()} /> : null}
+              </div>
+            ) : null}
+          </>
         ) : (
           <p className="am-note" data-home-tiles="none">
             Разделы с данными откроются, когда администратор назначит учётной записи роль.

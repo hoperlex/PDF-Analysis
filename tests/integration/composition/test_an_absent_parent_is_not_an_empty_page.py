@@ -83,7 +83,10 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # document and project, which answers ``404 not_found`` for any link that names nothing.
 # `W59-VERSION-COMPARE-01` added ``compareDocumentVersions`` the same way; its required
 # ``target_version_uid`` is supplied by :data:`REQUIRED_QUERY`, so the answer is about the path.
-EXPECTED_ADDRESSED = 20
+# `W61-DISPATCHER-01` added ``getAssignment`` on ``assignment_uid`` (``404`` for an identity that
+# names nothing, or an assignment the caller may not read) and ``listAssignments``, an
+# unaddressed collection.
+EXPECTED_ADDRESSED = 21
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
@@ -91,7 +94,7 @@ EXPECTED_ADDRESSED = 20
 REQUIRED_QUERY: dict[str, str] = {
     "compareDocumentVersions": "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
 }
-EXPECTED_UNADDRESSED = 14
+EXPECTED_UNADDRESSED = 15
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.

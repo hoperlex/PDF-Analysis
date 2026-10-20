@@ -26,6 +26,7 @@ from auditmanager.bootstrap.adapters import (
     AccountAdapter,
     BlockAdapter,
     ComparisonAdapter,
+    DispatchAdapter,
     CredentialAdapter,
     CsvExportAdapter,
     DashboardAdapter,
@@ -320,6 +321,9 @@ def build_application(
         comparisons=ComparisonAdapter(
             sessions, blob_store=store, section_codes=SECTION_CODES,
         ),
+        # `W61-DISPATCHER-01`. «Диспетчер» over the same session factory; the role set
+        # and the people's labels are read through `access` in each transaction.
+        dispatch=DispatchAdapter(sessions),
     )
     return Application(
         router=router,

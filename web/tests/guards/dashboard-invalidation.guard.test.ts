@@ -185,6 +185,10 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   // not write; the backend half of the window is still being written, so the hook
   // invalidates the dashboard anyway, and this entry holds it to that.
   'src/features/classify-version/model/use-classify-version.ts': true,
+  // `W61-DISPATCHER-01`: creating and moving a work assignment changes no number the
+  // dashboard reads; both invalidate the `assignments` root instead.
+  'src/features/create-assignment/model/use-create-assignment.ts': false,
+  'src/features/transition-assignment/model/use-transition-assignment.ts': false,
 };
 
 /** A feature model source with an executable mutation call, independent of its filename. */

@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Fifty-eight operations, sealed. `A5` generates the typed client from this document; `B6`
+Sixty-two operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -853,7 +853,12 @@ added `compareDocumentVersions` on 2026-10-20: a read-only comparison of two ver
 set with the same confirmed section and either the same stage (`mode=version`) or a `P`
 source and an `R` target (`mode=stage`, the W62 П/Р slice), whose sheet pairs and finding
 matches are proposals and whose refusals are answers with a closed reason, never a
-relabelled pair; a path naming no version of the document is `404`.
+relabelled pair; a path naming no version of the document is `404`. `W61-DISPATCHER-01`
+added the four «Диспетчер» operations on 2026-10-20 under roadmap Q-2: `createAssignment`
+(`admin`), `listAssignments`, `getAssignment` and `transitionAssignment`, over
+`0025_work_assignments`' immutable assignment and its append-only event history; the
+status is the latest event's projection and the `work_assignment` machine is decided by
+`auditmanager.dispatch`.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -929,6 +934,10 @@ could.
 | `classifyDocumentVersion` | `PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification` |
 | `getVersionSectionReview` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review` |
 | `compareDocumentVersions` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison` |
+| `createAssignment` | `POST /assignments` |
+| `listAssignments` | `GET /assignments` |
+| `getAssignment` | `GET /assignments/{assignment_uid}` |
+| `transitionAssignment` | `POST /assignments/{assignment_uid}/transitions` |
 
 Rules that hold across the whole surface:
 
@@ -964,6 +973,13 @@ Rules that hold across the whole surface:
     repeat answers the stored classification with its first confirmer, and a repeat with a
     different stage or section is `conflict` with `conflict_reason:
     version_already_classified`;
+  * `createAssignment` (`W61-DISPATCHER-01`) keeps one open assignment per scope: an exact
+    repeat (same assignee and note) answers the open assignment, and any other creation on
+    that scope is `conflict` with `conflict_reason: assignment_open`;
+  * `transitionAssignment` (`W61-DISPATCHER-01`): a repeat equal to the latest event (same
+    kind, reason and new assignee) answers the assignment unchanged and appends nothing; any
+    other move the `work_assignment` machine does not declare from the current state is
+    `state_transition_not_allowed`;
 * every response carries `X-Correlation-Id`;
 * every non-2xx body is the `ErrorEnvelope`, with `retryable` pinned to the catalog
   value for the reported code;

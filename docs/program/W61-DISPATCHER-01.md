@@ -1,10 +1,11 @@
 # W61-DISPATCHER-01 — «Диспетчер»: work assignments, statuses, «Мои задачи»
 
-**Base:** `979632af` (`origin/dev` `68868d83` plus the frozen task file), branch
-`agent/w61-dispatcher-01`, isolated worktree `w61-dispatcher`, lane PostgreSQL 57530 / MinIO
-61130. **Status:** phase A (migration and domain context) complete; phase B (operations,
-reseal, screens) waits for the contract slot. Development candidate under `R-135`: no full
-gate, no live journey, no push, merge into another branch or tag.
+**Base:** `979632af` (`origin/dev` `68868d83` plus the frozen task file) for phase A; phase B
+from the integrator's go at `1049367e` (`integration/night-1020` = `origin/dev`, 51/58/147),
+merged as `5e20c6e5`. Branch `agent/w61-dispatcher-01`, isolated worktree `w61-dispatcher`,
+lane PostgreSQL 57530 / MinIO 61130. **Status:** phases A and B complete. Development
+candidate under `R-135`: no full gate, no live journey, no push, merge into another branch or
+tag.
 
 ## Phase A — result
 
@@ -92,13 +93,74 @@ All on the lane's own containers (`make up`, `make migrate` to `0025_work_assign
   `docs/program/CURRENT_STATE.md` (integrator) and `docs/manual-tests/PC-01_prototype.md`
   (phase B path) still say `0024`.
 
+## Phase B — result
+
+### Surface
+
+| | before (`1049367e`) | after |
+|---|---|---|
+| paths / operations / schemas | 51 / 58 / 147 | 54 / 62 / 157 |
+| API error codes | 25 | 25 |
+| migration head | `0024_version_classification` | `0025_work_assignments` |
+
+Four operations, tag `dispatch` (`src/auditmanager/api/routers/dispatch.py`, port
+`DispatchPort`, adapter `DispatchAdapter`, wired in `bootstrap/composition.py`):
+
+- `createAssignment` — `POST /assignments`, `admin` (seam register and the command's own
+  check), body `CreateAssignmentRequest {project_uid, document_uid?, assignee_user_uid,
+  note?}`, `200 Assignment` (new or the exact repeat). `404` for a project or a document not
+  of it; `422` `active_expert_required`; `409 conflict` `assignment_open`.
+- `listAssignments` — `GET /assignments?mine&status&project_uid&cursor&limit`, any one role,
+  `200 AssignmentPage`, newest first; an expert reads only the work currently given to them.
+- `getAssignment` — `GET /assignments/{assignment_uid}`, any one role, `200 AssignmentDetail`
+  (assignment and history, oldest first); `404` when absent or not visible. No `422`: a
+  path identity only, like `getUser`.
+- `transitionAssignment` — `POST /assignments/{assignment_uid}/transitions`, any one role at
+  the seam; body `TransitionAssignmentRequest {kind, reason?, new_assignee_user_uid?}`;
+  `200 Assignment`; `403` (`assignment:assignee`, `role:admin`, `role:expert`), `404`,
+  `409 state_transition_not_allowed` (`machine: work_assignment`), `422`.
+
+Ten schemas: `AssignmentUid`, `AssignmentStatus`, `AssignmentEventKind`,
+`AssignmentTransitionKind`, `CreateAssignmentRequest`, `TransitionAssignmentRequest`,
+`Assignment`, `AssignmentEvent`, `AssignmentDetail`, `AssignmentPage`; one parameter
+component `AssignmentUid`; tag `dispatch`. People are named by `display_label` resolved in
+the adapter through `access` (`R-55`), never by a client.
+
+Domain family moved to candidate revision 15 together: `identifiers.json` contracts `asg`
+(entity `WorkAssignment`; the shared registry gains `AssignmentUid` and the dispatch type
+validates through it), `state-machines.json` gains `work_assignment` (not seeded into
+`contract_state_transition`; decided by `auditmanager.dispatch`), and `error-codes.json`
+notes register `assignment_open`, `active_expert_required`, `differs_from_current_assignee`
+and `assignment:assignee`. No error code added.
+
+Reseal: `web/openapi/openapi.json` byte-identical to the contract, client regenerated
+(`api:generate`, `api:verify` OK, contract SHA-256
+`27afd4720a377b7024cbb146c533e4b3505c7cedf71c3138fed447fe87acae06`), `FRONTEND_LOCK.json`,
+`expected_facts.json`, the surface prose (P02_SEAMS operation table and §7 repeat rules,
+ALPHA_ROADMAP, manual-tests head, infra/deploy README/nginx/serve, api README/app/health,
+declarations, errors, BFF route, authorization.ts) and the count pins in `tests/contract`.
+
+### Web
+
+- «Диспетчер» at `/dispatcher`, in «Работа» after «Оптимизация разделов» (`any-role`): an
+  administrator gets «Назначить работу» (project, optional document, active expert, note) and
+  the list with status filter, «Только мои», reassign/cancel and per-row history; an expert
+  gets their own work with «Взять в работу» / «Отметить выполненным» / «Вернуть» (reason).
+  The viewer's identity comes from `getMe`, so the assignee's moves appear only on their rows.
+- «Мои задачи» on the home screen for a session holding `expert`: open work (assigned, in
+  progress, returned) with the moves and links to the project or document, and a link to the
+  whole list.
+- Slices: entity `assignment`, features `create-assignment` and `transition-assignment`,
+  widgets `assignment-board` and `my-tasks`, page `dispatcher`, route `app/dispatcher`; query
+  root `assignments` (documented in `web/docs/PC01_UI_SEAM.md` §6); `routes.dispatcher()`.
+
 ### Known limitations
 
-- `asg` is minted on the shared registry's pattern but is not contracted: phase B needs
-  `contracts/domain/v1/identifiers.json` **and** `src/auditmanager/shared/identity/ids.py`
-  (the catalog test holds them equal), and `shared/**` is not in this task's paths.
-- New detail values (`assignment_open`, `active_expert_required`,
-  `differs_from_current_assignee`, `assignment:assignee`) and the `work_assignment` machine
-  are to be registered in `contracts/domain/v1` in phase B.
 - An account archived or stripped of `expert` keeps its open assignments; an administrator
   reassigns or cancels them.
+- The creation form lists the first page of projects and of each project's documents (50),
+  and the first page of accounts (50) as the expert choices.
+- The live browser journey was not run (`R-135`); the manifest gains the `/dispatcher` route
+  and the home screen's optional `listAssignments`.
+- `docs/program/CURRENT_STATE.md` still states 51/58/147 and head `0024` (integrator's file;
+  `test_doc_prose_facts` names exactly those two lines).

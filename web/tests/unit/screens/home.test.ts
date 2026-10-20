@@ -33,6 +33,8 @@ import type { HomePageProps } from '@/_pages/home';
 import pageStyles from '@/_pages/home/ui/home-page.module.css';
 import { ROLE_LABELS } from '@/entities/account';
 import type {
+  Assignment,
+  AssignmentPage,
   DashboardSummary,
   ErrorCode,
   ErrorEnvelope,
@@ -54,6 +56,7 @@ import {
   summaryFigures,
 } from '@/widgets/home-tiles';
 import tileStyles from '@/widgets/home-tiles/ui/home-tiles.module.css';
+import { MY_TASKS_LIMIT } from '@/widgets/my-tasks';
 
 import { newClient, renderScreen, seedError } from './harness';
 
@@ -121,7 +124,40 @@ const KEYS = {
   projects: queryKeys.projects.list(undefined, RECENT_PROJECT_LIMIT),
   summary: queryKeys.dashboard.summary(),
   registrations: queryKeys.registrations.list({ status: 'pending', limit: 1 }),
+  assignments: queryKeys.assignments.list({ mine: true, limit: MY_TASKS_LIMIT }),
 } as const;
+
+/** `W61-DISPATCHER-01`: the expert's own work, one row per status, as `listAssignments` answers. */
+function assignment(letter: string, status: Assignment['status'], over: Partial<Assignment> = {}): Assignment {
+  return {
+    assignment_uid: `asg_${ULID_STEM}${letter}`,
+    project_uid: PROJECTS[0]!.project_uid,
+    project_name: 'Проект номер 7',
+    document_uid: null,
+    document_title: null,
+    assignee_user_uid: `usr_${ULID_STEM}A`,
+    assignee_label: 'Петрова А. С.',
+    created_by_user_uid: `usr_${ULID_STEM}B`,
+    created_by_label: 'Иванов И. И.',
+    note: null,
+    status,
+    status_reason: null,
+    created_at: '2026-10-20T08:00:00.000Z',
+    updated_at: '2026-10-20T09:00:00.000Z',
+    ...over,
+  };
+}
+
+const MY_WORK: AssignmentPage = {
+  items: [
+    assignment('A', 'assigned', { note: 'Проверить армирование до пятницы' }),
+    assignment('B', 'in_progress', { document_uid: `doc_${ULID_STEM}B`, document_title: 'КЖ-1' }),
+    assignment('C', 'returned', { status_reason: 'Не мой раздел' }),
+    assignment('D', 'done'),
+    assignment('E', 'cancelled'),
+  ],
+  page: NO_NEXT,
+};
 
 const RAW_MESSAGE = 'Сырое сообщение сервера, которого на экране быть не должно';
 
@@ -151,6 +187,7 @@ function loaded(over: { projects?: ProjectPage; summary?: DashboardSummary; pend
   client.setQueryData(KEYS.projects, over.projects ?? projectPage(PROJECTS.slice(0, 5)));
   client.setQueryData(KEYS.summary, over.summary ?? summary());
   client.setQueryData(KEYS.registrations, registrationPage(over.pending ?? 3));
+  client.setQueryData(KEYS.assignments, MY_WORK);
   return client;
 }
 
@@ -253,6 +290,7 @@ async function requestsOf(element: ReactElement): Promise<string[]> {
     '/bff/v1/projects': projectPage(PROJECTS.slice(0, 5)),
     '/bff/v1/dashboard': summary(),
     '/bff/v1/registrations': registrationPage(2),
+    '/bff/v1/assignments': MY_WORK,
   };
   vi.stubGlobal(
     'fetch',
@@ -285,6 +323,7 @@ describe('the administrator’s tile, and what the page asks the API', () => {
     expect(markup).not.toContain('data-home-tile="registrations"');
     expect(markup).not.toContain('Заявки на регистрацию');
     expect(await requestsOf(home(EXPERT))).toEqual([
+      'GET /bff/v1/assignments?limit=50&mine=true',
       'GET /bff/v1/dashboard',
       'GET /bff/v1/projects?limit=5',
     ]);
@@ -295,6 +334,7 @@ describe('the administrator’s tile, and what the page asks the API', () => {
     expect(markup).toContain('data-home-tile="registrations"');
     expect(markup).toContain('Заявки на регистрацию');
     expect(await requestsOf(home(ADMIN))).toEqual([
+      'GET /bff/v1/assignments?limit=50&mine=true',
       'GET /bff/v1/dashboard',
       'GET /bff/v1/projects?limit=5',
       'GET /bff/v1/registrations?limit=1&status=pending',
@@ -376,7 +416,10 @@ describe('the five most recent projects', () => {
     const client = loaded({ projects: projectPage(PROJECTS) });
     const markup = draw(home(EXPERT), client);
     expect(markup).toContain(`data-recent-project-count="${RECENT_PROJECT_LIMIT}"`);
-    const links = [...markup.matchAll(/<a href="(\/projects\/prj_[^"]+)">([^<]+)<\/a>/g)];
+    // Within the tile: «Мои задачи» (`W61-DISPATCHER-01`) links projects too.
+    const start = markup.indexOf('data-home-tile="recent-projects"');
+    const tile = markup.slice(start, markup.indexOf('</section>', start));
+    const links = [...tile.matchAll(/<a href="(\/projects\/prj_[^"]+)">([^<]+)<\/a>/g)];
     expect(links.map((link) => link[2])).toEqual(PROJECTS.slice(0, 5).map((project) => project.name));
     expect(links.map((link) => link[1])).toEqual(
       PROJECTS.slice(0, 5).map((project) => routes.project(project.project_uid)),
@@ -559,5 +602,44 @@ describe('every branch is rendered by some state here, and none carries English'
     for (const { name, markup } of rendered) {
       expect({ name, raw: markup.includes(RAW_MESSAGE) }).toEqual({ name, raw: false });
     }
+  });
+});
+
+describe('«Мои задачи» (`W61-DISPATCHER-01`)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('an expert sees the open work only, each linked, with the assignee\'s moves', () => {
+    const markup = draw(home(EXPERT), loaded());
+    expect(markup).toContain('data-home-block="my-tasks"');
+    expect(markup).toContain('data-my-tasks="3"');
+    expect(markup).toContain(`data-my-task="asg_${ULID_STEM}A"`);
+    expect(markup).toContain(`data-my-task="asg_${ULID_STEM}C"`);
+    expect(markup).not.toContain(`data-my-task="asg_${ULID_STEM}D"`);
+    expect(markup).not.toContain(`data-my-task="asg_${ULID_STEM}E"`);
+    expect(markup).toContain(`href="${routes.project(PROJECTS[0]!.project_uid)}"`);
+    expect(markup).toContain(`href="${routes.document(PROJECTS[0]!.project_uid, `doc_${ULID_STEM}B`)}"`);
+    expect(markup).toContain(`href="${routes.dispatcher()}"`);
+    // Take the assigned one, complete the one in progress, return either; nothing on the
+    // returned one, which waits for an administrator.
+    expect(markup).toContain('data-assignment-move="started"');
+    expect(markup).toContain('data-assignment-move="completed"');
+    expect(markup).toContain('data-assignment-move="returned"');
+    expect(markup).not.toContain('data-assignment-move="reassigned"');
+    expect(markup).toContain('ждёт решения администратора');
+  });
+
+  it('is not mounted for an administrator alone, who is given no work', async () => {
+    const markup = draw(home(['admin']), loaded());
+    expect(markup).not.toContain('data-home-block="my-tasks"');
+    expect(await requestsOf(home(['admin']))).not.toContain('GET /bff/v1/assignments?limit=50&mine=true');
+  });
+
+  it('says so when nothing is open', () => {
+    const client = loaded();
+    client.setQueryData(KEYS.assignments, { items: [assignment('D', 'done')], page: NO_NEXT });
+    expect(draw(home(EXPERT), client)).toContain('data-my-tasks="none"');
   });
 });

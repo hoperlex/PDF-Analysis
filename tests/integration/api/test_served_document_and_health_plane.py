@@ -150,6 +150,11 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "classifyDocumentVersion",
             # `W59-VERSION-COMPARE-01`: a required target version and bounded paging.
             "compareDocumentVersions",
+            # `W61-DISPATCHER-01`: a creation and a move take bodies, the listing filters and
+            # pages. Reading one assignment takes only its path identity and declares none.
+            "createAssignment",
+            "listAssignments",
+            "transitionAssignment",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

@@ -141,6 +141,7 @@
           "operationId": "listRegistrations",
           "$why_optional": "only a session holding `admin` reads the pending-request count"
         },
+        {"method": "GET", "path": "/assignments", "operationId": "listAssignments", "$why_optional": "only a session holding `expert` reads its own open work for «Мои задачи» (W61-DISPATCHER-01)"},
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "PUT", "path": "/me/release-notes", "operationId": "markReleaseNotesRead", "$why_optional": "only when What’s New is dismissed"}
       ],
@@ -699,6 +700,27 @@
       ],
       "optional_api": [
         {"method": "GET", "path": "/execution/workers", "operationId": "listWorkers", "$why_optional": "read only while a listed job is leased or running, to name the worker holding its run (W54-WORKERS-WEB)"},
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
+      "follow": null
+    },
+    {
+      "name": "dispatcher",
+      "path": "/dispatcher",
+      "page_module": "web/src/app/dispatcher/page.tsx",
+      "$comment": [
+        "«Диспетчер» (W61-DISPATCHER-01, roadmap Q-2) reads the assignments the session may see and the signed-in account,",
+        "whose identity decides which rows carry the assignee's moves. An administrator also reads the active experts",
+        "for the creation form and a reassignment, and the projects it may assign. Commands require explicit user intent",
+        "and are not emitted by this read journey."
+      ],
+      "expects_api": [
+        {"method": "GET", "path": "/assignments", "operationId": "listAssignments"},
+        {"method": "GET", "path": "/me", "operationId": "getMe"}
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/users", "operationId": "listUsers", "$why_optional": "only a session holding `admin` reads the experts a creation or a reassignment may name"},
+        {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "only a session holding `admin` reads the projects of the creation form"},
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": null

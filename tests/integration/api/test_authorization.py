@@ -202,6 +202,11 @@ GUARDED = (
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
         "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
     ),
+    # `W61-DISPATCHER-01`. «Диспетчер»: creating, listing, reading and moving an assignment.
+    ("createAssignment", "POST", "/assignments"),
+    ("listAssignments", "GET", "/assignments"),
+    ("getAssignment", "GET", "/assignments/asg_01M2545JSD15ETSNNV904X991K"),
+    ("transitionAssignment", "POST", "/assignments/asg_01M2545JSD15ETSNNV904X991K/transitions"),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -752,6 +757,9 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
     assert subject_readers == [
         "auth.py",
         "decisions.py",
+        # `W61-DISPATCHER-01`: an assignment records WHO created or moved it; what they may
+        # do is the role register's and the dispatch context's own re-read of the role set.
+        "dispatch.py",
         "execution.py",
         "me.py",
         "norms.py",

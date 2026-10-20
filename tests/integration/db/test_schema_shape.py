@@ -223,13 +223,6 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     # ``target_kind`` names, like ``aggregate_id``; ``ck_norm_custody_role_shape`` checks it
     # per kind.
     "target_id",
-    # `0025_work_assignments`: ``asg`` is minted by ``auditmanager.dispatch`` on the registry's
-    # pattern but is not in ``identifiers.json`` yet (phase A of `W61-DISPATCHER-01` owns
-    # neither the catalog nor the registry), so this sweep has no prefix to resolve it
-    # through. Its format CHECK on both tables is asserted directly in
-    # ``test_work_assignments_migration.py``. When ``asg`` is contracted, move it into
-    # ``prefix_by_column``.
-    "assignment_uid",
 }
 
 
@@ -286,6 +279,7 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "assignee_user_uid": "usr",
         "created_by_user_uid": "usr",
         "new_assignee_user_uid": "usr",
+        "assignment_uid": "asg",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

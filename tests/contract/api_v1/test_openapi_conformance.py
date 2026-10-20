@@ -537,7 +537,9 @@ class TestN1ComponentReferenceResolution:
         # version through its document and project.
         # `W59-VERSION-COMPARE-01` adds one: the comparison addresses its source version the
         # same way.
-        assert len(report) == 36, report
+        # `W61-DISPATCHER-01` adds three: creating an assignment names a project and document
+        # that may not exist, and reading or moving one addresses it by identity.
+        assert len(report) == 39, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

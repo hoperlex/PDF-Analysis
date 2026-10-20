@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 51,
+    "path_count": 54,
     "operations": [
       [
         "POST",
@@ -292,6 +292,26 @@
         "GET",
         "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison",
         "compareDocumentVersions"
+      ],
+      [
+        "POST",
+        "/assignments",
+        "createAssignment"
+      ],
+      [
+        "GET",
+        "/assignments",
+        "listAssignments"
+      ],
+      [
+        "GET",
+        "/assignments/{assignment_uid}",
+        "getAssignment"
+      ],
+      [
+        "POST",
+        "/assignments/{assignment_uid}/transitions",
+        "transitionAssignment"
       ]
     ],
     "schema_names": [
@@ -441,7 +461,17 @@
       "FindingRef",
       "FindingMatchProposal",
       "FindingComparison",
-      "VersionComparison"
+      "VersionComparison",
+      "AssignmentUid",
+      "AssignmentStatus",
+      "AssignmentEventKind",
+      "AssignmentTransitionKind",
+      "CreateAssignmentRequest",
+      "TransitionAssignmentRequest",
+      "Assignment",
+      "AssignmentEvent",
+      "AssignmentDetail",
+      "AssignmentPage"
     ]
   },
   "error_catalog": {

@@ -19,7 +19,7 @@
  * knows how many operations there are. Swapping the credential later is an edit to the
  * credential selection below, not a sweep through a handler per operation.
  *
- * Those figures are **fifty-eight operations across fifty-one paths**, which is what the
+ * Those figures are **sixty-two operations across fifty-four paths**, which is what the
  * frozen document declares after `W59-VERSION-COMPARE-01` adds the comparison of two
  * versions of one set.
  * This file said fifteen and twelve once, sixteen and thirteen after that, and nineteen and

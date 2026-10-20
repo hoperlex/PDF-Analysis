@@ -76,6 +76,8 @@ PORT_FOR_ARGUMENT = {
     "sections": "SectionPort",
     # `W59-VERSION-COMPARE-01`.
     "comparisons": "ComparisonPort",
+    # `W61-DISPATCHER-01`.
+    "dispatch": "DispatchPort",
 }
 
 

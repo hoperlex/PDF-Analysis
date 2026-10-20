@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.identifiers",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 14,
-  "revision_note": "Candidate revision 14 by W57A-SEAL-01A. Adds opaque NormRetrievalSet identity nrs_ for a verified, snapshot-bound normative retrieval set; no other identity changes.",
+  "candidate_revision": 15,
+  "revision_note": "Candidate revision 15 by W61-DISPATCHER-01. Adds opaque WorkAssignment identity asg_ for one assignment of a project or document to an expert; its history events reuse audit_event_id (evt_). No other identity changes.",
   "status": "draft_candidate",
   "frozen": false,
   "format": "<prefix>_<ULID>",
@@ -61,7 +61,8 @@
     "erasure_request_id": "era",
     "user_uid": "usr",
     "request_id": "reg",
-    "norm_retrieval_set_id": "nrs"
+    "norm_retrieval_set_id": "nrs",
+    "assignment_uid": "asg"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -110,7 +111,8 @@
     "ErasureRequest": "erasure_request_id",
     "User": "user_uid",
     "RegistrationRequest": "request_id",
-    "NormRetrievalSet": "norm_retrieval_set_id"
+    "NormRetrievalSet": "norm_retrieval_set_id",
+    "WorkAssignment": "assignment_uid"
   },
   "distinct_identities": [
     {
