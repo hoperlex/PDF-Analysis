@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "a9ce1b50e34d0994734e3c221b763c014667efce16ed4d063ac6713f5b6ee4fe",
-    "content_commit": "a820849",
-    "content_commit_subject": "W59-DECISION-CARRYOVER-01 API reseal on integration base a820849a",
-    "dispatch_named_commit": "a820849",
-    "commit_note": "W59 adds the expert-confirmed carryover of a decision to the next version: carryOverDecision (POST .../versions/{version_uid}/comparison/carryovers, expert only, keyed), four schemas (CarryoverSourceDecision, CarryoverCandidate, CarryOverDecisionRequest, CarryOverDecisionResponse) and the required FindingComparison.carryover_candidates. A refusal is conflict with one of four carryover conflict_reason values; no error code is added.",
+    "sha256": "40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6",
+    "content_commit": "c22f2049",
+    "content_commit_subject": "W57B-NORMS-CATALOGUE-XLSX-01 API reseal on integration base c22f2049",
+    "dispatch_named_commit": "c22f2049",
+    "commit_note": "W57B adds the norms catalogue and the run's Excel export on top of W59-DECISION-CARRYOVER-01: listNormDocuments (GET /norm-documents, any one role; q/kind filters, bound cursor, total and kinds) and exportRunXlsx (GET /runs/{run_id}/export.xlsx, expert, exportRunCsv's states; refusals storage_integrity_error with role source.structured_companion and required_norm_unavailable with reference_kind norm_retrieval_set) and three schemas (NormCatalogueEntry, NormKindCount, NormCatalogueEntryPage); no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 54,
-    "operations": 61,
-    "component_schemas": 158,
+    "paths": 56,
+    "operations": 63,
+    "component_schemas": 161,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "a9ce1b50e34d0994734e3c221b763c014667efce16ed4d063ac6713f5b6ee4fe",
+    "snapshot_sha256": "40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "6b4585478dd4ca927b09b615d790cd34a9fc788d3159f05331f48f5a405ec45b",
-      "index.ts": "a52846cc58fa1a097a2c3705f5cf3323e6e69685b239b395841fd6c09b0f1e43",
-      "operations.gen.ts": "86c14ddefe5d7bfc9a12e53b92a6059035b10d2c58b2114b82ed73a83c57d970",
-      "types.gen.ts": "1c838283589b0609a37f6dc67bcec1aefca48eb570326534b92b8bea3c322ba3"
+      "client.gen.ts": "a43fad9998842a07ad2facc019493d8a97c4272648e0ef6077972677c6b18498",
+      "index.ts": "87c095e2b31f96a8faaaf94b5915dc1e136e8c6386ec2a0ebcb976e724180308",
+      "operations.gen.ts": "be1baf56a69da4c620683a2e4da4e01a4c94ec78429a451482cb880a26a4496c",
+      "types.gen.ts": "51677029bbcd0a5555f06c9e332ce916b5da077aacc05c8e090954e0d72498ae"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

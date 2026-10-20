@@ -136,6 +136,10 @@ REQUIRED_OPERATIONS = {
     # `W59-VERSION-UPLOAD-01`. The next version of an existing set: without it every
     # upload starts a new document and a further version is unreachable from the product.
     "uploadDocumentVersion",
+    # `W57B-NORMS-CATALOGUE-XLSX-01`. The current snapshot's documents as a catalogue for any
+    # role, and the run's Excel workbook with the CSV's states and role.
+    "listNormDocuments",
+    "exportRunXlsx",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`

@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Sixty-one operations, sealed. `A5` generates the typed client from this document; `B6`
+Sixty-three operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -868,6 +868,10 @@ carrying one source decision to the target finding the recomputed comparison pro
 authored by that expert, whose comment records the carried-from finding, decision and
 versions; the comparison's `findings.carryover_candidates` lists what could be carried, and
 nothing is carried without the confirmation.
+`W57B-NORMS-CATALOGUE-XLSX-01` added `listNormDocuments` and `exportRunXlsx` on 2026-10-20:
+the current norms snapshot's documents as a catalogue with display names derived from the
+stored file names (any one role), and the run's W57b Excel workbook with `exportRunCsv`'s
+states and role.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -898,6 +902,7 @@ could.
 | `appendDecision` | `POST /findings/{finding_uid}/decisions` |
 | `listDecisionHistory` | `GET /findings/{finding_uid}/decisions` |
 | `exportRunCsv` | `GET /runs/{run_id}/export.csv` |
+| `exportRunXlsx` | `GET /runs/{run_id}/export.xlsx` |
 | `issueToken` | `POST /auth/token` |
 | `listDocuments` | `GET /projects/{project_uid}/documents` |
 | `listVersions` | `GET /documents/{document_uid}/versions` |
@@ -932,6 +937,7 @@ could.
 | `listWorkers` | `GET /execution/workers` |
 | `setWorkerIntake` | `PUT /execution/workers/{worker_id}/intake` |
 | `searchNorms` | `GET /norms/search` |
+| `listNormDocuments` | `GET /norm-documents` |
 | `getNormDocument` | `GET /norm-documents/{norm_document_id}` |
 | `listNormParagraphs` | `GET /norm-documents/{norm_document_id}/paragraphs` |
 | `streamNormDocumentContent` | `GET /norm-documents/{norm_document_id}/content` |

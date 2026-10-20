@@ -180,14 +180,22 @@ describe('each route delegates to its screen and to no other', () => {
   it('/norms hands the screen the session roles and the search the address carries (W55A-WEB-NORMS)', async () => {
     const plain = await NormsRoute({ searchParams: Promise.resolve({}) });
     expect(plain.type).toBe(NormsPage);
-    expect(plain.props).toEqual({ roles: ['expert'], query: null });
+    expect(plain.props).toEqual({ roles: ['expert'], query: null, catalogue: null });
     const searched = await NormsRoute({ searchParams: Promise.resolve({ q: '  СП 54 п. 5.1 ' }) });
-    expect(searched.props).toEqual({ roles: ['expert'], query: 'СП 54 п. 5.1' });
+    expect(searched.props).toEqual({ roles: ['expert'], query: 'СП 54 п. 5.1', catalogue: null });
     // A blank search is no search, and a repeated parameter is not read as one.
-    expect((await NormsRoute({ searchParams: Promise.resolve({ q: '   ' }) })).props).toEqual({ roles: ['expert'], query: null });
-    expect((await NormsRoute({ searchParams: Promise.resolve({ q: ['а', 'б'] }) })).props).toEqual({ roles: ['expert'], query: null });
+    expect((await NormsRoute({ searchParams: Promise.resolve({ q: '   ' }) })).props).toEqual({ roles: ['expert'], query: null, catalogue: null });
+    expect((await NormsRoute({ searchParams: Promise.resolve({ q: ['а', 'б'] }) })).props).toEqual({ roles: ['expert'], query: null, catalogue: null });
     jar.value = openSession({ ...SIGNED_IN, roles: ['admin'] }, 'a-credential', 3600);
-    expect((await NormsRoute({ searchParams: Promise.resolve({}) })).props).toEqual({ roles: ['admin'], query: null });
+    expect((await NormsRoute({ searchParams: Promise.resolve({}) })).props).toEqual({ roles: ['admin'], query: null, catalogue: null });
+    // `W57B-NORMS-CATALOGUE-XLSX-01`: `?view=catalogue` opens the catalogue with its own
+    // filters, trimmed, a blank one being none; any other view is the search.
+    expect((await NormsRoute({ searchParams: Promise.resolve({ view: 'catalogue', cq: ' СП 54 ', kind: 'СП' }) })).props)
+      .toEqual({ roles: ['admin'], query: null, catalogue: { q: 'СП 54', kind: 'СП' } });
+    expect((await NormsRoute({ searchParams: Promise.resolve({ view: 'catalogue', cq: '  ' }) })).props)
+      .toEqual({ roles: ['admin'], query: null, catalogue: { q: null, kind: null } });
+    expect((await NormsRoute({ searchParams: Promise.resolve({ view: 'другое', cq: 'СП' }) })).props)
+      .toEqual({ roles: ['admin'], query: null, catalogue: null });
   });
 
   it('/norms/document delegates the document identity and the page, unparsed beyond their shape', async () => {

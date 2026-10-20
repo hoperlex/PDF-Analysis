@@ -4,6 +4,13 @@ This is a read adapter, not an export policy or citation resolver. The current
 schema stores evidence page numbers but no display labels or finding citations.
 Both must be supplied explicitly by the future sealed caller; even an empty
 citation set is an explicit value. All reads use the caller's transaction.
+
+**A v1 finding** (`W57B-NORMS-CATALOGUE-XLSX-01`) has no ``canonical_observation_id``: only
+the v2 publication writes one, and a v1 publication writes exactly one observation per
+finding. Such a finding's single observation is its canonical one, exactly the row the CSV
+exports for it (``canonical_observation_id IS NULL OR ...``); a finding with no canonical
+identity and more than one observation is still refused. A v1 observation may have no
+recommendation; its cell is empty, as the CSV's is.
 """
 
 from __future__ import annotations
@@ -164,6 +171,8 @@ def read_xlsx_projection(
         observations = entry["observations"]
         assert isinstance(observations, dict)
         canonical = entry["canonical"]
+        if canonical is None and len(observations) == 1:
+            canonical = next(iter(observations))  # a v1 finding: see the module docstring
         if canonical is None or canonical not in observations:
             raise ValueError("xlsx_read_canonical_missing")
         reads = tuple(
@@ -172,7 +181,9 @@ def read_xlsx_projection(
                 finding_uid=finding_uid,
                 category=entry["category"],
                 finding_text=item["text"],
-                recommendation=item["recommendation"],
+                recommendation=(
+                    "" if item["recommendation"] is None else item["recommendation"]
+                ),
                 proposed_severity=item["severity"],
                 evidence=tuple(item["evidence"]),
             )

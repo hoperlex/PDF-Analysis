@@ -1689,6 +1689,61 @@ class CsvExportAdapter(_SessionHolder):
         return self._read(lambda s: export_run_csv(s, run_id).content)
 
 
+class XlsxExportAdapter(_SessionHolder):
+    """``exportRunXlsx`` (`W57B-NORMS-CATALOGUE-XLSX-01`).
+
+    One read transaction for the whole workbook: the run, its sheet labels, its findings and
+    its citations are read in the same session. The role decision is the seam's
+    (``OPERATION_ROLES["exportRunXlsx"]``) and is stated to the use case as such; the Blob
+    reader reads the version's portal companion from the same store as every other read
+    here, with storage failures typed as ``IngestService`` types them; the citation reader is
+    W57a's verified one, injected because the export context may not import it.
+    """
+
+    def __init__(self, sessions: sessionmaker[Session], *, blob_store: Any) -> None:
+        super().__init__(sessions)
+        self._blob_store = blob_store
+
+    def _read_blob(self, blob_id: str) -> bytes:
+        from auditmanager.documents.public import MANIFEST_ROLE_STRUCTURED_COMPANION
+        from auditmanager.ingest import domain_error_from_storage
+        from auditmanager.storage.public import BlobId, BlobNotFoundError, StorageError
+
+        try:
+            return self._blob_store.read(BlobId(blob_id))
+        except BlobNotFoundError:
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                blob_id=blob_id,
+                role=MANIFEST_ROLE_STRUCTURED_COMPANION,
+            ) from None
+        except StorageError as exc:
+            raise domain_error_from_storage(
+                exc, blob_id=blob_id, role=MANIFEST_ROLE_STRUCTURED_COMPANION
+            ) from None
+
+    def export_run_xlsx(self, *, run_id: str, principal_id: str) -> bytes:
+        from auditmanager.exports import ExportAuthorization, export_run_xlsx
+        from auditmanager.findings.citation_reader import read_verified_citations
+
+        authorization = ExportAuthorization(
+            run_id=run_id,
+            principal_id=principal_id,
+            operation="exportRunXlsx",
+            decision="allow",
+            decision_ref="api.security.OPERATION_ROLES[exportRunXlsx]",
+        )
+        return self._read(
+            lambda s: export_run_xlsx(
+                s,
+                run_id,
+                authorization=authorization,
+                read_blob=self._read_blob,
+                read_citations=read_verified_citations,
+            ).content
+        )
+
+
 class DashboardAdapter(_SessionHolder):
     """``getDashboardSummary``. `R-44`. Reads the same session factory as everything
     else here; nothing new is opened for it."""
@@ -2268,6 +2323,39 @@ class NormsSearchAdapter(_SessionHolder):
         return models.NormSearchPage(
             items=[_norm_hit(hit) for hit in page.items],
             page=models.PageInfo(next_cursor=page.next_cursor),
+        )
+
+    def list_catalogue(
+        self, *, q: str | None, kind: str | None, cursor: str | None, limit: int
+    ) -> models.NormCatalogueEntryPage:
+        from auditmanager.norms.public import list_norm_catalogue
+
+        page = self._read(
+            lambda session: list_norm_catalogue(
+                session, q=q, kind=kind, cursor=cursor, limit=limit
+            )
+        )
+        return models.NormCatalogueEntryPage(
+            norms_snapshot_id=page.norms_snapshot_id,
+            items=[
+                models.NormCatalogueEntry(
+                    norm_document_id=item.norm_document_id,
+                    designation=item.designation,
+                    title=item.title,
+                    kind=item.kind,
+                    page_count=item.page_count,
+                    paragraph_count=item.paragraph_count,
+                    content_available=item.content_available,
+                    source_attribution=models.NormSourceAttribution(item.source_attribution),
+                )
+                for item in page.items
+            ],
+            page=models.PageInfo(next_cursor=page.next_cursor),
+            total=page.total,
+            kinds=[
+                models.NormKindCount(kind=kind_count.kind, document_count=kind_count.document_count)
+                for kind_count in page.kinds
+            ],
         )
 
     def get_document(self, *, norm_document_id: str) -> models.NormDocument:

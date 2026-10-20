@@ -137,6 +137,9 @@ export const queryKeys = {
     events: (cursor?: string, limit?: number) => ['norms', 'events', { cursor, limit }] as const,
     search: (q: string, cursor?: string, limit?: number) =>
       ['norms', 'search', { q, cursor, limit }] as const,
+    /** One page of the catalogue (`W57B-NORMS-CATALOGUE-XLSX-01`), keyed by its filters and cursor. */
+    catalogue: (q?: string, kind?: string, cursor?: string, limit?: number) =>
+      ['norms', 'catalogue', { q, kind, cursor, limit }] as const,
     document: (normDocumentId: NormDocumentId) => ['norms', 'document', normDocumentId] as const,
     paragraphs: (normDocumentId: NormDocumentId, cursor?: string, limit?: number) =>
       ['norms', 'paragraphs', normDocumentId, { cursor, limit }] as const,

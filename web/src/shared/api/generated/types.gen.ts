@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 a9ce1b50e34d0994734e3c221b763c014667efce16ed4d063ac6713f5b6ee4fe
+ *   sha256 40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'a9ce1b50e34d0994734e3c221b763c014667efce16ed4d063ac6713f5b6ee4fe';
+export const CONTRACT_DIGEST = '40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -85,6 +85,8 @@ export const SCHEMA_NAMES = [
   'MarkReleaseNotesReadRequest',
   'ModelCallId',
   'NormBuildState',
+  'NormCatalogueEntry',
+  'NormCatalogueEntryPage',
   'NormCitation',
   'NormCitationState',
   'NormCurrentSnapshot',
@@ -93,6 +95,7 @@ export const SCHEMA_NAMES = [
   'NormFindingVerification',
   'NormFragment',
   'NormHighlight',
+  'NormKindCount',
   'NormObservationCitationPartition',
   'NormParagraph',
   'NormParagraphId',
@@ -825,6 +828,35 @@ export const NORM_BUILD_STATE_VALUES = [
 /** NormBuildState - the closed value set above. */
 export type NormBuildState = (typeof NORM_BUILD_STATE_VALUES)[number];
 
+/**
+ * One document of the current snapshot as the catalogue lists it
+ * (`W57B-NORMS-CATALOGUE-XLSX-01`). ``designation`` and ``title`` are derived for display
+ * from the stored file name and are never identities; ``title`` is null when the name
+ * carries nothing after the designation. ``kind`` is the stored document type verbatim.
+ */
+export type NormCatalogueEntry = {
+  content_available: boolean;
+  designation: string;
+  kind: string;
+  norm_document_id: NormDocumentId;
+  page_count: number;
+  paragraph_count: number;
+  source_attribution: NormSourceAttribution;
+  title: string | null;
+};
+
+/**
+ * One page of the catalogue; ``total`` counts the documents the filters keep and
+ * ``kinds`` lists every kind of the snapshot with its document count.
+ */
+export type NormCatalogueEntryPage = {
+  items: Array<NormCatalogueEntry>;
+  kinds: Array<NormKindCount>;
+  norms_snapshot_id: NormsSnapshotId;
+  page: PageInfo;
+  total: number;
+};
+
 /** One persisted, verified citation to a labelled paragraph in the run-pinned snapshot and retrieval set. A rebound preserves the cited label and identifies the one matching paragraph. Never inferred from a display designation. */
 export type NormCitation = {
   clause_number: string | null;
@@ -897,6 +929,11 @@ export type NormFragment = {
 export type NormHighlight = {
   char_end: number;
   char_start: number;
+};
+
+export type NormKindCount = {
+  document_count: number;
+  kind: string;
 };
 
 /** One canonical or merged observation with its independently certified citation partition. A zero partition is explicit, never inferred from an empty SQL result. */

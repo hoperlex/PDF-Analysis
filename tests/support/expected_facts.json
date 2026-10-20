@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 54,
+    "path_count": 56,
     "operations": [
       [
         "POST",
@@ -307,6 +307,16 @@
         "POST",
         "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers",
         "carryOverDecision"
+      ],
+      [
+        "GET",
+        "/norm-documents",
+        "listNormDocuments"
+      ],
+      [
+        "GET",
+        "/runs/{run_id}/export.xlsx",
+        "exportRunXlsx"
       ]
     ],
     "schema_names": [
@@ -419,6 +429,9 @@
       "NormSearchHit",
       "NormSearchPage",
       "NormDocument",
+      "NormCatalogueEntry",
+      "NormKindCount",
+      "NormCatalogueEntryPage",
       "NormParagraph",
       "NormParagraphPage",
       "NormSnapshot",

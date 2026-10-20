@@ -1,10 +1,12 @@
-"""The seven norms operations: text search, documents, paragraphs, content and the current
-snapshot. `W55A-SEAL-01` (`W55-PLAN.md` section A3.6; owner rulings R-80, R-112, R-113).
+"""The eight norms operations: text search, the catalogue, documents, paragraphs, content
+and the current snapshot. `W55A-SEAL-01` (`W55-PLAN.md` section A3.6; owner rulings R-80,
+R-112, R-113); ``listNormDocuments`` is `W57B-NORMS-CATALOGUE-XLSX-01`'s.
 
 =============================  ========================================================  =======
 operation                      method and path                                           roles
 =============================  ========================================================  =======
 ``searchNorms``                ``GET /norms/search?q=&norms_snapshot_id=&cursor=&limit=``  any one
+``listNormDocuments``          ``GET /norm-documents?q=&kind=&cursor=&limit=``           any one
 ``getNormDocument``            ``GET /norm-documents/{norm_document_id}``                  any one
 ``listNormParagraphs``         ``GET /norm-documents/{norm_document_id}/paragraphs``       any one
 ``streamNormDocumentContent``  ``GET /norm-documents/{norm_document_id}/content``          any one
@@ -15,7 +17,7 @@ operation                      method and path                                  
 
 The roles live in :data:`auditmanager.api.security.OPERATION_ROLES`, decided before a
 handler runs. Every operation delegates to one port method and renders what comes back:
-:class:`~auditmanager.api.routers.ports.NormsSearchPort` for six of them and
+:class:`~auditmanager.api.routers.ports.NormsSearchPort` for seven of them and
 :class:`~auditmanager.api.routers.ports.NormContentPort` for the PDF. `W55A-SEARCH-01`
 gave both their bodies in ``bootstrap/adapters.py`` (over ``auditmanager.norms.search`` and
 ``auditmanager.norms.current_snapshot``).
@@ -76,6 +78,27 @@ NormsSnapshotFilterParam = Annotated[
 
 NormDocumentIdParam = Annotated[models.NormDocumentId, Path()]
 
+#: The catalogue's text filter: 1-200 characters, matched from the start of a word of the
+#: derived designation and title (``W57B-NORMS-CATALOGUE-XLSX-01``).
+CatalogueQueryParam = Annotated[
+    Annotated[str, Field(min_length=1, max_length=200)] | None,
+    WithJsonSchema({"type": "string", "minLength": 1, "maxLength": 200}),
+    Query(
+        description="Text the designation or title contains from the start of a word.",
+        json_schema_extra=optional_property,
+    ),
+]
+
+#: The catalogue's kind filter: the stored document type, matched exactly.
+CatalogueKindParam = Annotated[
+    Annotated[str, Field(min_length=1, max_length=100)] | None,
+    WithJsonSchema({"type": "string", "minLength": 1, "maxLength": 100}),
+    Query(
+        description="A document kind as the catalogue's `kinds` lists it, matched exactly.",
+        json_schema_extra=optional_property,
+    ),
+]
+
 _PDF_CONTENT: Final[dict[str, Any]] = {
     PDF_MEDIA_TYPE: {"schema": {"type": "string", "format": "binary"}}
 }
@@ -100,6 +123,22 @@ def build_norm_routes(
         page = norms.search(
             q=q, norms_snapshot_id=norms_snapshot_id, cursor=cursor, limit=limit
         )
+        return json_response(200, encode_json(page.model_dump(mode="json")))
+
+    @router.get(
+        "/norm-documents", operation_id="listNormDocuments", tags=["norms"],
+        response_model=models.NormCatalogueEntryPage,
+        responses={**success(200, "One page of the current snapshot's documents with display "
+                                  "names, in designation order, with attribution."),
+                   **envelope_responses(401, 403, 422, 500, 503)},
+    )
+    def list_norm_documents(
+        q: CatalogueQueryParam = None,
+        kind: CatalogueKindParam = None,
+        cursor: CursorParam = None,  # type: ignore[assignment]
+        limit: LimitParam = 50,
+    ) -> WireResponse:
+        page = norms.list_catalogue(q=q, kind=kind, cursor=cursor, limit=limit)
         return json_response(200, encode_json(page.model_dump(mode="json")))
 
     @router.get(
