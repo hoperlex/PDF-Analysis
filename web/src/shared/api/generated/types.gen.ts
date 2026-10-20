@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2
+ *   sha256 10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2';
+export const CONTRACT_DIGEST = '10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -33,13 +33,26 @@ export const SCHEMA_NAMES = [
   'AppendDecisionRequest',
   'AppendDecisionResponse',
   'ApproveRegistrationRequest',
+  'Assignment',
+  'AssignmentDetail',
+  'AssignmentEvent',
+  'AssignmentEventKind',
+  'AssignmentPage',
+  'AssignmentStatus',
+  'AssignmentTransitionKind',
+  'AssignmentUid',
   'BlockGeometry',
+  'CarryOverDecisionRequest',
+  'CarryOverDecisionResponse',
+  'CarryoverCandidate',
+  'CarryoverSourceDecision',
   'ChangePasswordRequest',
   'ClassifyDocumentVersionRequest',
   'ComparedVersion',
   'ComparisonRefusal',
   'CorrelationId',
   'CostBasis',
+  'CreateAssignmentRequest',
   'CreateProjectRequest',
   'Cursor',
   'DashboardSummary',
@@ -81,6 +94,8 @@ export const SCHEMA_NAMES = [
   'MarkReleaseNotesReadRequest',
   'ModelCallId',
   'NormBuildState',
+  'NormCatalogueEntry',
+  'NormCatalogueEntryPage',
   'NormCitation',
   'NormCitationState',
   'NormCurrentSnapshot',
@@ -89,6 +104,7 @@ export const SCHEMA_NAMES = [
   'NormFindingVerification',
   'NormFragment',
   'NormHighlight',
+  'NormKindCount',
   'NormObservationCitationPartition',
   'NormParagraph',
   'NormParagraphId',
@@ -161,10 +177,12 @@ export const SCHEMA_NAMES = [
   'StageStatus',
   'StartRunRequest',
   'SubmitRegistrationRequest',
+  'TransitionAssignmentRequest',
   'UngroundedReason',
   'UpdateMyProfileRequest',
   'UpdateUserRequest',
   'UploadDocumentRequest',
+  'UploadDocumentVersionRequest',
   'UserUid',
   'Verdict',
   'VerdictCount',
@@ -280,6 +298,95 @@ export type ApproveRegistrationRequest = {
   roles: Array<Role>;
 };
 
+/** `W61-DISPATCHER-01`. One assignment as it now stands. */
+export type Assignment = {
+  assignee_label: string;
+  assignee_user_uid: UserUid;
+  assignment_uid: AssignmentUid;
+  created_at: string;
+  created_by_label: string;
+  created_by_user_uid: UserUid;
+  document_title: string | null;
+  document_uid: DocumentUid | null;
+  note: string | null;
+  project_name: string;
+  project_uid: ProjectUid;
+  status: AssignmentStatus;
+  status_reason: string | null;
+  updated_at: string;
+};
+
+/** `W61-DISPATCHER-01`. One assignment and its whole history, oldest event first. */
+export type AssignmentDetail = {
+  assignment: Assignment;
+  history: Array<AssignmentEvent>;
+};
+
+/** `W61-DISPATCHER-01`. One recorded event; never changed. */
+export type AssignmentEvent = {
+  actor_label: string;
+  actor_user_uid: UserUid;
+  event_id: string;
+  kind: AssignmentEventKind;
+  new_assignee_label: string | null;
+  new_assignee_user_uid: UserUid | null;
+  occurred_at: string;
+  reason: string | null;
+};
+
+/** `W61-DISPATCHER-01`. One event of an assignment's append-only history. */
+export const ASSIGNMENT_EVENT_KIND_VALUES = [
+  'assigned',
+  'started',
+  'completed',
+  'returned',
+  'reassigned',
+  'cancelled',
+] as const;
+
+/** AssignmentEventKind - the closed value set above. */
+export type AssignmentEventKind = (typeof ASSIGNMENT_EVENT_KIND_VALUES)[number];
+
+export type AssignmentPage = {
+  items: Array<Assignment>;
+  page: PageInfo;
+};
+
+/**
+ * `W61-DISPATCHER-01`. An assignment's status, derived from its latest event.
+ *
+ * ``assigned`` (after ``assigned`` or ``reassigned``), ``in_progress`` (``started``),
+ * ``done`` (``completed``), ``returned`` and ``cancelled``. ``done`` and ``cancelled`` are
+ * terminal.
+ */
+export const ASSIGNMENT_STATUS_VALUES = [
+  'assigned',
+  'in_progress',
+  'done',
+  'returned',
+  'cancelled',
+] as const;
+
+/** AssignmentStatus - the closed value set above. */
+export type AssignmentStatus = (typeof ASSIGNMENT_STATUS_VALUES)[number];
+
+/** `W61-DISPATCHER-01`. The events a transition may append: every kind but ``assigned``. */
+export const ASSIGNMENT_TRANSITION_KIND_VALUES = [
+  'started',
+  'completed',
+  'returned',
+  'reassigned',
+  'cancelled',
+] as const;
+
+/** AssignmentTransitionKind - the closed value set above. */
+export type AssignmentTransitionKind = (typeof ASSIGNMENT_TRANSITION_KIND_VALUES)[number];
+
+export type AssignmentUid = string;
+
+/** The contract pattern for `AssignmentUid`. Anchored; use with `new RegExp()`. */
+export const ASSIGNMENT_UID_PATTERN = "^asg_[0-9A-HJKMNP-TV-Z]{26}$";
+
 /** One derived block, one extracted text line. `block_id` is an anchor inside this artifact -- it matches `Evidence.block_id`'s pattern -- and is never a contract identifier. */
 export type BlockGeometry = {
   /** Points, top-left origin, y increasing downward -- see `bbox_unit` and `bbox_origin` beside it. */
@@ -298,6 +405,65 @@ export type BlockGeometry = {
   /** Document-global offset into the version's prepared text layer, counted in Unicode code points -- the same sequence `Evidence.char_start` indexes. */
   char_start: number;
   page_number: number;
+};
+
+/**
+ * `W59-DECISION-CARRYOVER-01`. One expert confirmation of one proposed pair.
+ *
+ * The path names the source (older) version; the comparison is recomputed with these
+ * values when the confirmation arrives. ``source_decision_id`` is the decision the expert
+ * was shown: if the source's current verdict has moved on, nothing is carried.
+ */
+export type CarryOverDecisionRequest = {
+  mode: "version" | "stage";
+  source_decision_id: DecisionId;
+  source_finding_uid: FindingUid;
+  source_run_id?: RunId;
+  target_finding_uid: FindingUid;
+  target_run_id?: RunId;
+  target_version_uid: VersionUid;
+};
+
+/**
+ * `W59-DECISION-CARRYOVER-01`. The carried event on the target finding and where it
+ * came from. ``replayed`` is true when the target already carried exactly this event (an
+ * exact repeat): nothing was appended and the first confirmation stands.
+ */
+export type CarryOverDecisionResponse = {
+  current_verdict: Verdict;
+  event: DecisionEvent;
+  mode: "version" | "stage";
+  replayed: boolean;
+  source_decision_id: DecisionId;
+  source_finding_uid: FindingUid;
+  source_version_ordinal: number;
+  source_version_uid: VersionUid;
+  target_version_uid: VersionUid;
+};
+
+/**
+ * `W59-DECISION-CARRYOVER-01`. An ``unchanged`` proposal whose source finding carries an
+ * expert decision and whose target finding has no decision event yet. Listing it carries
+ * nothing: only ``carryOverDecision``, confirmed by an expert, does.
+ */
+export type CarryoverCandidate = {
+  proposal_sha256: Sha256;
+  source_decision: CarryoverSourceDecision;
+  source_finding_uid: FindingUid;
+  target_finding_uid: FindingUid;
+};
+
+/**
+ * `W59-DECISION-CARRYOVER-01`. The source finding's current verdict-bearing event, as
+ * the confirming expert is shown it before «Перенести решение».
+ */
+export type CarryoverSourceDecision = {
+  author_label: string;
+  comment: string | null;
+  decision_id: DecisionId;
+  recorded_at: string;
+  severity: Severity | null;
+  verdict: "accepted" | "rejected";
 };
 
 export type ChangePasswordRequest = {
@@ -345,6 +511,14 @@ export const COST_BASIS_VALUES = [
 
 /** CostBasis - the closed value set above. */
 export type CostBasis = (typeof COST_BASIS_VALUES)[number];
+
+/** `W61-DISPATCHER-01`. Give a project, or one document of it, to an active expert. */
+export type CreateAssignmentRequest = {
+  assignee_user_uid: UserUid;
+  document_uid?: DocumentUid;
+  note?: string;
+  project_uid: ProjectUid;
+};
 
 export type CreateProjectRequest = {
   /** Display label. Not unique and not an identity. */
@@ -624,6 +798,7 @@ export const FINDING_CATEGORY_VALUES = [
 export type FindingCategory = (typeof FINDING_CATEGORY_VALUES)[number];
 
 export type FindingComparison = {
+  carryover_candidates: Array<CarryoverCandidate>;
   proposals: Array<FindingMatchProposal>;
   source_finding_count: number;
   status: "compared" | "unavailable";
@@ -760,6 +935,35 @@ export const NORM_BUILD_STATE_VALUES = [
 /** NormBuildState - the closed value set above. */
 export type NormBuildState = (typeof NORM_BUILD_STATE_VALUES)[number];
 
+/**
+ * One document of the current snapshot as the catalogue lists it
+ * (`W57B-NORMS-CATALOGUE-XLSX-01`). ``designation`` and ``title`` are derived for display
+ * from the stored file name and are never identities; ``title`` is null when the name
+ * carries nothing after the designation. ``kind`` is the stored document type verbatim.
+ */
+export type NormCatalogueEntry = {
+  content_available: boolean;
+  designation: string;
+  kind: string;
+  norm_document_id: NormDocumentId;
+  page_count: number;
+  paragraph_count: number;
+  source_attribution: NormSourceAttribution;
+  title: string | null;
+};
+
+/**
+ * One page of the catalogue; ``total`` counts the documents the filters keep and
+ * ``kinds`` lists every kind of the snapshot with its document count.
+ */
+export type NormCatalogueEntryPage = {
+  items: Array<NormCatalogueEntry>;
+  kinds: Array<NormKindCount>;
+  norms_snapshot_id: NormsSnapshotId;
+  page: PageInfo;
+  total: number;
+};
+
 /** One persisted, verified citation to a labelled paragraph in the run-pinned snapshot and retrieval set. A rebound preserves the cited label and identifies the one matching paragraph. Never inferred from a display designation. */
 export type NormCitation = {
   clause_number: string | null;
@@ -832,6 +1036,11 @@ export type NormFragment = {
 export type NormHighlight = {
   char_end: number;
   char_start: number;
+};
+
+export type NormKindCount = {
+  document_count: number;
+  kind: string;
 };
 
 /** One canonical or merged observation with its independently certified citation partition. A zero partition is explicit, never inferred from an empty SQL result. */
@@ -1499,6 +1708,13 @@ export type SubmitRegistrationRequest = {
   password: string;
 };
 
+/** `W61-DISPATCHER-01`. One move along an assignment's history. */
+export type TransitionAssignmentRequest = {
+  kind: AssignmentTransitionKind;
+  new_assignee_user_uid?: UserUid;
+  reason?: string;
+};
+
 /** Closed deterministic observation-withholding reasons; a withheld item is never a published finding. */
 export const UNGROUNDED_REASON_VALUES = [
   'quotation_absent',
@@ -1542,6 +1758,12 @@ export type UploadDocumentRequest = {
   file: Blob;
   /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
+};
+
+/** The next version of an existing document: one portal bundle and nothing else. There is no title and no section, because a further version takes neither; an undeclared part is refused like any other. */
+export type UploadDocumentVersionRequest = {
+  /** One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. At most 250 MiB; the PDF at most 500 pages. */
+  file: Blob;
 };
 
 /** Opaque account identity. An e-mail address is the sign-in identifier and a unique key among active accounts; this is the identity every reference names. */

@@ -127,9 +127,25 @@ REQUIRED_OPERATIONS = {
     # `W59-VERSION-COMPARE-01`. Two versions of one set compared, read-only; a refusal is
     # an answer with a closed reason, not an envelope.
     "compareDocumentVersions",
+    # `W59-DECISION-CARRYOVER-01`. An expert-confirmed carryover of one decision to the
+    # matched finding of the next version: a keyed write to the decision ledger.
+    "carryOverDecision",
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry run start routes through,
     # read-only, for «Настройки анализа».
     "listAnalysisProfiles",
+    # `W59-VERSION-UPLOAD-01`. The next version of an existing set: without it every
+    # upload starts a new document and a further version is unreachable from the product.
+    "uploadDocumentVersion",
+    # `W57B-NORMS-CATALOGUE-XLSX-01`. The current snapshot's documents as a catalogue for any
+    # role, and the run's Excel workbook with the CSV's states and role.
+    "listNormDocuments",
+    "exportRunXlsx",
+    # `W61-DISPATCHER-01`. «Диспетчер»: assign work to an expert, list and read assignments
+    # with their history, and move an assignment along the `work_assignment` machine.
+    "createAssignment",
+    "listAssignments",
+    "getAssignment",
+    "transitionAssignment",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -151,6 +167,8 @@ OPERATIONS_WITH_NO_CREDENTIAL_TO_REFUSE = {"submitRegistration"}
 WRITE_OPERATIONS = {
     "createProject",
     "uploadDocument",
+    # `W59-VERSION-UPLOAD-01`: publishes a version, keyed exactly as `uploadDocument`.
+    "uploadDocumentVersion",
     "startRun",
     "appendDecision",
     "approveRegistration",
@@ -159,6 +177,8 @@ WRITE_OPERATIONS = {
     "setJobPriority",
     "setExecutionPaused",
     "setWorkerIntake",
+    # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
+    "carryOverDecision",
 }
 
 PAGINATED_OPERATIONS = {

@@ -6,7 +6,7 @@
  * owner, and `web/docs/PC01_UI_SEAM.md` records which Gate B session uses which.
  *
  * Rules:
- *   - every key starts with one of the twelve root namespaces below;
+ *   - every key starts with one of the thirteen root namespaces below;
  *   - a key is built by calling a function here, never by writing an array literal;
  *   - invalidation targets a prefix — `queryKeys.runs.all()` invalidates every run key;
  *   - a key filled by more than one site carries its value type, as a `DataTag`. See
@@ -37,6 +37,8 @@
 import type { DataTag } from '@tanstack/react-query';
 
 import type {
+  AssignmentStatus,
+  AssignmentUid,
   DocumentUid,
   FindingCategory,
   NormDocumentId,
@@ -51,11 +53,15 @@ import type {
 } from './generated/types.gen';
 
 /**
- * The twelve root namespaces. Nothing else is a legal first key segment.
+ * The thirteen root namespaces. Nothing else is a legal first key segment.
  *
  * `account`, `users` and `registrations` entered together, once, in `W50-REGISTRY-01`
  * (`W50-PLAN.md` §3.6): the signed-in account, the administrator's account list and the
  * registration requests. Later lanes add key factories inside them and no new root.
+ *
+ * `assignments` entered once, in `W61-DISPATCHER-01`: the dispatcher's work assignments belong
+ * to no single project read (a list spans every project), and one move changes the list, the
+ * assignment's detail and the home screen's «Мои задачи» at once.
  *
  * `norms` entered once, in `W55A-WEB-NORMS` (`W55-PLAN.md` §A4 Stage B item 4, which names
  * the namespace): the normative corpus belongs to no project, run or finding, and one
@@ -77,6 +83,7 @@ export const QUERY_NAMESPACES = [
   'execution',
   'norms',
   'analysis',
+  'assignments',
 ] as const;
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
@@ -103,6 +110,15 @@ export interface RegistrationListFilters {
   readonly limit?: number;
 }
 
+/** Filters that make a page of `listAssignments` a distinct cache entry. */
+export interface AssignmentListFilters {
+  readonly mine?: boolean;
+  readonly status?: AssignmentStatus;
+  readonly project_uid?: ProjectUid;
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
 /** Filters that make a finding list a distinct cache entry. */
 export interface FindingListFilters {
   readonly category?: FindingCategory;
@@ -123,6 +139,17 @@ export const queryKeys = {
     profiles: () => ['analysis', 'profiles'] as const,
   },
   /**
+   * «Диспетчер» (`W61-DISPATCHER-01`). One root, because every command — a creation or a
+   * move — changes what more than one key answers: the list's row (status, assignee), the
+   * detail's history and the home screen's «Мои задачи». Each command invalidates
+   * `assignments.all()`.
+   */
+  assignments: {
+    all: () => ['assignments'] as const,
+    list: (filters: AssignmentListFilters = {}) => ['assignments', 'list', filters] as const,
+    detail: (assignmentUid: AssignmentUid) => ['assignments', 'detail', assignmentUid] as const,
+  },
+  /**
    * The «Нормы» screens (`W55A-WEB-NORMS`). One root, because `setCurrentNormSnapshot`
    * changes what every key under it answers: the snapshot list's `current` flag, the
    * history, and which snapshot a search reads. The designation invalidates `norms.all()`.
@@ -137,6 +164,9 @@ export const queryKeys = {
     events: (cursor?: string, limit?: number) => ['norms', 'events', { cursor, limit }] as const,
     search: (q: string, cursor?: string, limit?: number) =>
       ['norms', 'search', { q, cursor, limit }] as const,
+    /** One page of the catalogue (`W57B-NORMS-CATALOGUE-XLSX-01`), keyed by its filters and cursor. */
+    catalogue: (q?: string, kind?: string, cursor?: string, limit?: number) =>
+      ['norms', 'catalogue', { q, kind, cursor, limit }] as const,
     document: (normDocumentId: NormDocumentId) => ['norms', 'document', normDocumentId] as const,
     paragraphs: (normDocumentId: NormDocumentId, cursor?: string, limit?: number) =>
       ['norms', 'paragraphs', normDocumentId, { cursor, limit }] as const,
@@ -184,6 +214,12 @@ export const queryKeys = {
     list: (documentUid: DocumentUid, cursor?: string, limit?: number) =>
       ['versions', 'list', documentUid, { cursor, limit }] as const,
     /**
+     * Every page of `listVersions` for one document, as a prefix of {@link list}
+     * (`W59-VERSION-UPLOAD-01`). `uploadDocumentVersion` puts a new first row on every page
+     * boundary of that list, so it invalidates all of them, whatever cursor a screen holds.
+     */
+    lists: (documentUid: DocumentUid) => ['versions', 'list', documentUid] as const,
+    /**
      * `getVersionBlocks`. `W45-BLOCKS`.
      *
      * Under `versions` and not under a fifth root namespace, for the same reason
@@ -222,6 +258,12 @@ export const queryKeys = {
      * versions and their classifications and nothing else is its parent; classifying either
      * version or publishing a run changes the answer, and `versions.all()` reaches it.
      */
+    /**
+     * Every comparison answer, whatever the pair, mode or page (`W59-DECISION-CARRYOVER-01`):
+     * a carried decision changes the pair's `carryover_candidates`, and the prefix reaches
+     * every page and mode of it without naming them.
+     */
+    comparisons: () => ['versions', 'comparison'] as const,
     comparison: (
       sourceVersionUid: VersionUid,
       targetVersionUid: VersionUid,

@@ -83,7 +83,13 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # document and project, which answers ``404 not_found`` for any link that names nothing.
 # `W59-VERSION-COMPARE-01` added ``compareDocumentVersions`` the same way; its required
 # ``target_version_uid`` is supplied by :data:`REQUIRED_QUERY`, so the answer is about the path.
-EXPECTED_ADDRESSED = 20
+# `W57B-NORMS-CATALOGUE-XLSX-01` added ``exportRunXlsx`` on ``run_id``: an absent run is
+# ``404 not_found``, as for ``exportRunCsv``.
+# `W61-DISPATCHER-01` added ``getAssignment`` on ``assignment_uid`` (``404`` for an identity that
+# names nothing, or an assignment the caller may not read) and ``listAssignments``, an
+# unaddressed collection.
+# With both, the addressed half is twenty-two.
+EXPECTED_ADDRESSED = 22
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
@@ -93,7 +99,11 @@ REQUIRED_QUERY: dict[str, str] = {
 }
 # `W59-ANALYSIS-SETTINGS-01` added ``listAnalysisProfiles``, unaddressed: the registry's
 # fifteen rows, answered as ``items`` like a collection with no parent identity.
-EXPECTED_UNADDRESSED = 15
+# `W57B-NORMS-CATALOGUE-XLSX-01` added ``listNormDocuments``, unaddressed: see
+# :data:`CURRENT_SNAPSHOT_COLLECTIONS`.
+# With ``listAssignments`` (`W61-DISPATCHER-01`) and ``listNormDocuments`` the unaddressed half is
+# seventeen.
+EXPECTED_UNADDRESSED = 17
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -152,6 +162,12 @@ SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({"getRunNormVerification"})
 #: page. Exempt from the page check and checked for that refusal instead
 #: (:func:`test_a_query_without_its_text_is_refused_and_never_a_page`).
 QUERY_OPERATIONS = frozenset({"searchNorms"})
+
+#: `W57B-NORMS-CATALOGUE-XLSX-01`. Collections scoped to the current norms snapshot: with
+#: none designated the answer is ``422 required_norm_unavailable`` (``reference_kind:
+#: norms_snapshot``), exactly as ``searchNorms`` answers, never an empty page; with one it is
+#: a page. Swept for one of those two answers and nothing else.
+CURRENT_SNAPSHOT_COLLECTIONS = frozenset({"listNormDocuments"})
 
 
 def _prefixes() -> dict[str, str]:
@@ -323,6 +339,10 @@ def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None
         ):
             continue
         status, body = _get(app, template)
+        if operation_id in CURRENT_SNAPSHOT_COLLECTIONS and status == 422:
+            assert isinstance(body, dict) and body.get("error_code") == "required_norm_unavailable"
+            assert body.get("details") == {"reference_kind": "norms_snapshot"}, body
+            continue
         assert status == 200, f"{operation_id} answered {status}: {body}"
         assert isinstance(body, dict) and isinstance(body.get("items"), list), (
             f"{operation_id} answered 200 without a page: {body}"

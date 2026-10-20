@@ -1,4 +1,5 @@
-"""``compareDocumentVersions`` (`W59-VERSION-COMPARE-01`).
+"""``compareDocumentVersions`` (`W59-VERSION-COMPARE-01`) and ``carryOverDecision``
+(`W59-DECISION-CARRYOVER-01`).
 
 One read addressed through the version's document and project, like the section
 operations beside it: ``/projects/{project_uid}/documents/{document_uid}/versions/
@@ -15,6 +16,11 @@ request with the same stored facts always refuses the same way. A malformed
 identity or paging value is ``422``; a stored fact that contradicts its own
 constraints is ``500``. Nothing is written: every pairing and finding label in the
 answer is a proposal, and no AI layer produces or edits any value in it.
+
+**The one write beside it** is ``carryOverDecision``: an expert confirms carrying one source
+decision to the target finding of an ``unchanged`` proposal. The comparison is recomputed in
+the confirming transaction, and the decision ledger appends one event on the target, authored
+by the caller; ``findings.carryover_candidates`` in the read lists what could be carried.
 """
 
 from __future__ import annotations
@@ -24,11 +30,17 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Path, Query
 from pydantic import Field, WithJsonSchema
 
-from auditmanager.api.routers.declarations import envelope_responses, success
+from auditmanager.api.routers.declarations import (
+    STATE_CONFLICT_DESCRIPTION,
+    envelope_responses,
+    success,
+)
+from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.ports import ComparisonPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
 from auditmanager.api.schemas.models import optional_property
+from auditmanager.api.security import CurrentSubject
 
 __all__ = ["build_comparison_routes"]
 
@@ -112,3 +124,68 @@ def build_comparison_routes(router: APIRouter, comparisons: ComparisonPort) -> N
             diff_limit=diff_limit,
         )
         return json_response(200, encode_json(comparison.model_dump(mode="json")))
+
+    @router.post(
+        f"{_VERSION_PATH}/comparison/carryovers",
+        operation_id="carryOverDecision",
+        tags=["decisions"],
+        status_code=201,
+        response_model=models.CarryOverDecisionResponse,
+        responses={
+            **success(
+                201, "The carried decision event on the target finding, new or an exact repeat.",
+            ),
+            **envelope_responses(
+                401, 403, 404, 409, 422, 500, 503,
+                descriptions={409: STATE_CONFLICT_DESCRIPTION},
+            ),
+        },
+        description=(
+            "Carry one expert decision from a finding of the path's (older) version to the "
+            "finding of `target_version_uid` that the comparison proposes as `unchanged`, on "
+            "the calling expert's confirmation. The comparison is recomputed with the body's "
+            "`mode` and runs when the confirmation arrives, and must still propose exactly "
+            "this pair; the source finding's current verdict must still be the "
+            "`source_decision_id` the expert was shown (`accepted` or `rejected`), and the "
+            "target finding must have no decision event yet. The target receives one new "
+            "`accept` or `reject` event authored by the caller, whose `comment` records the "
+            "carried-from finding, decision and versions; a severity is carried with an "
+            "accept or the carryover is refused, never dropped. Nothing else is written: the "
+            "source finding and its decisions stay as they were. An exact repeat answers the "
+            "event already carried, `replayed: true`, and keeps its first expert. A refusal "
+            "is `conflict` with `conflict_reason` `carryover_pair_not_proposed`, "
+            "`carryover_source_decision_not_current`, `carryover_target_already_decided` or "
+            "`carryover_severity_not_carryable`. `expert` is required; `admin` alone is "
+            "refused (`required_capability: role:expert`)."
+        ),
+    )
+    def carry_over_decision(
+        subject: CurrentSubject,
+        project_uid: Annotated[models.ProjectUid, Path()],
+        document_uid: Annotated[models.DocumentUid, Path()],
+        version_uid: Annotated[models.VersionUid, Path()],
+        body: models.CarryOverDecisionRequest,
+        idempotency_key: RequiredIdempotencyKey,
+    ) -> WireResponse:
+        # The author is the verified subject, never the body (`D-78`, `R-37`, `W49-SEAL-01`),
+        # exactly as `appendDecision` records it.
+        carried = comparisons.carry_over_decision(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=version_uid,
+            target_version_uid=body.target_version_uid,
+            mode=body.mode,
+            source_finding_uid=body.source_finding_uid,
+            target_finding_uid=body.target_finding_uid,
+            source_decision_id=body.source_decision_id,
+            source_run_id=body.source_run_id,
+            target_run_id=body.target_run_id,
+            idempotency_key=idempotency_key,
+            author_label=subject.display_label,
+            author_user_uid=subject.user_uid,
+        )
+        # `exclude_unset`: an event without a severity omits the property, as `appendDecision`
+        # renders it -- `DecisionEvent.severity` is optional, never null.
+        return json_response(
+            201, encode_json(carried.model_dump(mode="json", exclude_unset=True)),
+        )

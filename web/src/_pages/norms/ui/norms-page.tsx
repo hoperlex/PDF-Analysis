@@ -9,6 +9,11 @@
  * search reads; before an administrator designates one it renders the refusal — search would
  * answer `required_norm_unavailable` — and never an empty list.
  *
+ * «Каталог» (`W57B-NORMS-CATALOGUE-XLSX-01`) is the other view, opened by the address
+ * (`?view=catalogue`): every document of the current snapshot with its readable designation,
+ * filtered by text and kind, each row opening the document page. Before a snapshot is
+ * current it renders the same refusal as search, and sends no read.
+ *
  * An administrator also sees every snapshot, «Сделать текущим» on a qualifying one behind a
  * confirmation, and the append-only history. The roles come from the session the route
  * guard already read (as on the home page), so an expert's screen draws no control and
@@ -18,11 +23,13 @@
 import { useRef, useState } from 'react';
 
 import type { NormSnapshot, NormsSnapshotId } from '@/shared/api';
-import type { CurrentSnapshotReading, NormFailure } from '@/entities/norms';
+import type { CurrentSnapshotReading, NormCatalogueFilter, NormFailure } from '@/entities/norms';
 import {
-  currentSnapshotOf, normFailure, useNormSearch, useNormSnapshotEvents, useNormSnapshots,
+  currentSnapshotOf, normFailure, useNormCatalogue, useNormSearch, useNormSnapshotEvents,
+  useNormSnapshots,
 } from '@/entities/norms';
 import { useSetCurrentSnapshot } from '@/features/set-current-snapshot';
+import { NormCatalogueForm, NormCatalogueTable, NormViews } from '@/widgets/norm-catalogue';
 import { NoCurrentSnapshot, NormSearchForm, NormSearchResults } from '@/widgets/norm-search';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
@@ -32,6 +39,8 @@ export interface NormsPageProps {
   readonly roles: readonly string[];
   /** The search the address carries (`?q=`), or `null` for none. */
   readonly query?: string | null | undefined;
+  /** The catalogue's filters when the address opens it (`?view=catalogue`), else `null`. */
+  readonly catalogue?: NormCatalogueFilter | null | undefined;
 }
 
 /** A confirmed-to-be designation: the snapshot, and which snapshot the screen showed current. */
@@ -126,6 +135,56 @@ function SearchSection({ query }: { readonly query: string }) {
   );
 }
 
+/** One catalogue listing, its own pages. Keyed by its filters, so a new filter starts on page one. */
+function CatalogueSection({ filter }: { readonly filter: NormCatalogueFilter }) {
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const catalogue = useNormCatalogue(filter, cursor, true);
+  const filtered = filter.q !== null || filter.kind !== null;
+  if (catalogue.isPending) {
+    return (
+      <>
+        <NormCatalogueForm query={filter.q} kind={filter.kind} kinds={[]} disabled={false} />
+        <LoadingState what="каталог документов" />
+      </>
+    );
+  }
+  if (catalogue.error !== null) {
+    const failure = normFailure(catalogue.error);
+    return (
+      <>
+        <NormCatalogueForm query={filter.q} kind={filter.kind} kinds={[]} disabled={false} />
+        {failure.kind === 'no_current_snapshot' ? <NoCurrentSnapshot /> : (
+          <div data-norms-catalogue-failure={failure.kind}>
+            {failure.kind === 'validation_failed' ? (
+              <UnsupportedState title="Отбор не принят" detail={failure.detail} />
+            ) : (
+              <ErrorState
+                title="Каталог не прочитан"
+                detail={failure.detail}
+                correlationId={failure.correlationId}
+                onRetry={failure.retryable ? () => void catalogue.refetch() : undefined}
+              />
+            )}
+          </div>
+        )}
+      </>
+    );
+  }
+  const next = catalogue.data.page.next_cursor;
+  return (
+    <>
+      <NormCatalogueForm query={filter.q} kind={filter.kind} kinds={catalogue.data.kinds} disabled={false} />
+      <NormCatalogueTable
+        items={catalogue.data.items}
+        total={catalogue.data.total}
+        filtered={filtered}
+        onFirst={cursor === undefined ? null : () => setCursor(undefined)}
+        onNext={next === null ? null : () => setCursor(next)}
+      />
+    </>
+  );
+}
+
 function DesignationHistory() {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const events = useNormSnapshotEvents(cursor, true);
@@ -153,7 +212,7 @@ function DesignationHistory() {
   );
 }
 
-export function NormsPage({ roles, query = null }: NormsPageProps) {
+export function NormsPage({ roles, query = null, catalogue = null }: NormsPageProps) {
   const administrator = roles.includes('admin');
   const snapshots = useNormSnapshots();
   const designate = useSetCurrentSnapshot();
@@ -220,8 +279,19 @@ export function NormsPage({ roles, query = null }: NormsPageProps) {
         {reading !== null ? <CurrentSnapshotStatus reading={reading} /> : null}
       </section>
 
-      <NormSearchForm query={query} disabled={searchRefused} />
-      {query !== null && !searchRefused ? <SearchSection key={query} query={query} /> : null}
+      <NormViews active={catalogue === null ? 'search' : 'catalogue'} />
+      {catalogue === null ? (
+        <>
+          <NormSearchForm query={query} disabled={searchRefused} />
+          {query !== null && !searchRefused ? <SearchSection key={query} query={query} /> : null}
+        </>
+      ) : (
+        <section aria-label="Каталог документов текущего снимка" data-norms-catalogue>
+          {searchRefused ? <NoCurrentSnapshot /> : (
+            <CatalogueSection key={`${catalogue.q ?? ''}\u0000${catalogue.kind ?? ''}`} filter={catalogue} />
+          )}
+        </section>
+      )}
 
       {administrator ? (
         <section aria-label="Снимки нормативной базы" data-norms-administration>

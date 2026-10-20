@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2
+ *   sha256 10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -26,16 +26,24 @@ import type {
   ArchiveUserResult,
   CancelRunInput,
   CancelRunResult,
+  CarryOverDecisionInput,
+  CarryOverDecisionResult,
   ChangePasswordInput,
   ChangePasswordResult,
   ClassifyDocumentVersionInput,
   ClassifyDocumentVersionResult,
   CompareDocumentVersionsInput,
   CompareDocumentVersionsResult,
+  CreateAssignmentInput,
+  CreateAssignmentResult,
   CreateProjectInput,
   CreateProjectResult,
   ExportRunCsvInput,
   ExportRunCsvResult,
+  ExportRunXlsxInput,
+  ExportRunXlsxResult,
+  GetAssignmentInput,
+  GetAssignmentResult,
   GetDashboardSummaryInput,
   GetDashboardSummaryResult,
   GetDocumentVersionInput,
@@ -62,6 +70,8 @@ import type {
   IssueTokenResult,
   ListAnalysisProfilesInput,
   ListAnalysisProfilesResult,
+  ListAssignmentsInput,
+  ListAssignmentsResult,
   ListDecisionHistoryInput,
   ListDecisionHistoryResult,
   ListDecisionsInput,
@@ -72,6 +82,8 @@ import type {
   ListExecutionJournalResult,
   ListExecutionQueueInput,
   ListExecutionQueueResult,
+  ListNormDocumentsInput,
+  ListNormDocumentsResult,
   ListNormParagraphsInput,
   ListNormParagraphsResult,
   ListNormSnapshotEventsInput,
@@ -130,12 +142,16 @@ import type {
   StreamVersionPortalBlockCropResult,
   SubmitRegistrationInput,
   SubmitRegistrationResult,
+  TransitionAssignmentInput,
+  TransitionAssignmentResult,
   UpdateMyProfileInput,
   UpdateMyProfileResult,
   UpdateUserInput,
   UpdateUserResult,
   UploadDocumentInput,
   UploadDocumentResult,
+  UploadDocumentVersionInput,
+  UploadDocumentVersionResult,
 } from './operations.gen';
 import { OPERATIONS } from './operations.gen';
 
@@ -188,6 +204,18 @@ export function cancelRun(
 }
 
 /**
+ * Carry Over Decision
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers` - a write; carries a required Idempotency-Key.
+ */
+export function carryOverDecision(
+  input: CarryOverDecisionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CarryOverDecisionResult>> {
+  return request<CarryOverDecisionResult>(OPERATIONS.carryOverDecision, input, options);
+}
+
+/**
  * Change the signed-in account's password and revoke its old credentials.
  *
  * `POST /auth/password`.
@@ -224,6 +252,18 @@ export function compareDocumentVersions(
 }
 
 /**
+ * Assign a project, or one document of it, to an expert.
+ *
+ * `POST /assignments`.
+ */
+export function createAssignment(
+  input: CreateAssignmentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateAssignmentResult>> {
+  return request<CreateAssignmentResult>(OPERATIONS.createAssignment, input, options);
+}
+
+/**
  * Create a project.
  *
  * `POST /projects` - a write; carries a required Idempotency-Key.
@@ -245,6 +285,30 @@ export function exportRunCsv(
   options?: RequestOptions,
 ): Promise<ApiResponse<ExportRunCsvResult>> {
   return request<ExportRunCsvResult>(OPERATIONS.exportRunCsv, input, options);
+}
+
+/**
+ * Download the Excel workbook for one run.
+ *
+ * `GET /runs/{run_id}/export.xlsx`.
+ */
+export function exportRunXlsx(
+  input: ExportRunXlsxInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ExportRunXlsxResult>> {
+  return request<ExportRunXlsxResult>(OPERATIONS.exportRunXlsx, input, options);
+}
+
+/**
+ * Read one assignment with its history.
+ *
+ * `GET /assignments/{assignment_uid}`.
+ */
+export function getAssignment(
+  input: GetAssignmentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetAssignmentResult>> {
+  return request<GetAssignmentResult>(OPERATIONS.getAssignment, input, options);
 }
 
 /**
@@ -404,6 +468,18 @@ export function listAnalysisProfiles(
 }
 
 /**
+ * List assignments.
+ *
+ * `GET /assignments`.
+ */
+export function listAssignments(
+  input: ListAssignmentsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListAssignmentsResult>> {
+  return request<ListAssignmentsResult>(OPERATIONS.listAssignments, input, options);
+}
+
+/**
  * Read the decision history of one finding, oldest first.
  *
  * `GET /findings/{finding_uid}/decisions`.
@@ -461,6 +537,18 @@ export function listExecutionQueue(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListExecutionQueueResult>> {
   return request<ListExecutionQueueResult>(OPERATIONS.listExecutionQueue, input, options);
+}
+
+/**
+ * List Norm Documents
+ *
+ * `GET /norm-documents`.
+ */
+export function listNormDocuments(
+  input: ListNormDocumentsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListNormDocumentsResult>> {
+  return request<ListNormDocumentsResult>(OPERATIONS.listNormDocuments, input, options);
 }
 
 /**
@@ -812,6 +900,18 @@ export function submitRegistration(
 }
 
 /**
+ * Move an assignment: start, complete, return, reassign or cancel it.
+ *
+ * `POST /assignments/{assignment_uid}/transitions`.
+ */
+export function transitionAssignment(
+  input: TransitionAssignmentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<TransitionAssignmentResult>> {
+  return request<TransitionAssignmentResult>(OPERATIONS.transitionAssignment, input, options);
+}
+
+/**
  * Set the signed-in account's names, and complete its profile.
  *
  * `PATCH /me`.
@@ -848,6 +948,18 @@ export function uploadDocument(
 }
 
 /**
+ * Upload one portal bundle as the next immutable version of an existing document.
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/versions` - a write; carries a required Idempotency-Key.
+ */
+export function uploadDocumentVersion(
+  input: UploadDocumentVersionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UploadDocumentVersionResult>> {
+  return request<UploadDocumentVersionResult>(OPERATIONS.uploadDocumentVersion, input, options);
+}
+
+/**
  * The whole client as one object, for a consumer that would rather inject it than
  * import each function. The named exports above are the ordinary way in.
  */
@@ -856,11 +968,15 @@ export const apiClient = {
   approveRegistration,
   archiveUser,
   cancelRun,
+  carryOverDecision,
   changePassword,
   classifyDocumentVersion,
   compareDocumentVersions,
+  createAssignment,
   createProject,
   exportRunCsv,
+  exportRunXlsx,
+  getAssignment,
   getDashboardSummary,
   getDocumentVersion,
   getFinding,
@@ -874,11 +990,13 @@ export const apiClient = {
   getVersionSectionReview,
   issueToken,
   listAnalysisProfiles,
+  listAssignments,
   listDecisionHistory,
   listDecisions,
   listDocuments,
   listExecutionJournal,
   listExecutionQueue,
+  listNormDocuments,
   listNormParagraphs,
   listNormSnapshotEvents,
   listNormSnapshots,
@@ -908,7 +1026,9 @@ export const apiClient = {
   streamNormDocumentContent,
   streamVersionPortalBlockCrop,
   submitRegistration,
+  transitionAssignment,
   updateMyProfile,
   updateUser,
   uploadDocument,
+  uploadDocumentVersion,
 } as const;

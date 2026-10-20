@@ -14,9 +14,9 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **52 paths / 59 operations / 153 schemas**,
+The development API surface is **59 paths / 67 operations / 171 schemas**,
 the error catalogue has **25** codes, the migration head is
-**`0024_version_classification`**, and `VERSION` is `0.6.0`. These are checkout
+**`0025_work_assignments`**, and `VERSION` is `0.6.0`. These are checkout
 facts; the release tree has its own frozen 47/54/123 surface and
 `0021_portal_bundles` head. For the current deployment, run
 `infra/deploy/verify-deployed.sh`; this document is no substitute for that
@@ -43,7 +43,11 @@ The repaired snapshot `ns_01M59N8QNBVN91ACA2HCE6VE74` (674 documents,
 with a complete BGE-M3 embedding build (61,573 windows, set digest
 `e7fac64c…`), dumped and restore-verified, and exported as a verified bundle
 with `build: present` (`W54-SNAPSHOT-LOAD-01`, `W54-EMBED-BUILD-01`,
-`W54-BUNDLE-EXPORT-01`). The stand import, its copy record and the admin's
+`W54-BUNDLE-EXPORT-01`). `W54-LOCAL-IMPORT-01` imported that bundle into an
+isolated local stack and served search, document, paragraphs and ranged PDF
+from it; «Нормы» now also has a catalogue (`listNormDocuments`) with
+derived display designations, and a run's findings download as Excel
+(`exportRunXlsx`). The stand import, its copy record and the admin's
 designation of a current snapshot have not run; they need an owner window.
 
 ## Code-first series (R-135)
@@ -86,9 +90,14 @@ is unserved, and no beta acceptance is claimed.
   diffs and finding-match proposals, no AI layer. «Настройки анализа»
   lists every section's profile (`listAnalysisProfiles`); АИ, ПЗ, ПОС
   and ТХ runs are proven in recorded mode with synthetic recordings
-  only. Uploading a further
-  version into an existing set and expert review of the draft profiles
-  remain open.
+  only. `uploadDocumentVersion` adds the next version to an existing set
+  («Загрузить новую версию»); `carryOverDecision` lets an expert carry a
+  decision onto an `unchanged` matched finding of the newer version,
+  recorded as a new event with its provenance. «Диспетчер» (W61 code,
+  migration 0025) lets an administrator assign a project or document set to
+  an expert, who moves it through «Мои задачи» on the home screen; every
+  change is an append-only event. Expert review of the draft profiles remains
+  open.
 
 Detailed evidence is in `CFB-INT-DEV-PUBLISH-17.md` through
 `CFB-INT-DEV-PUBLISH-67.md`.

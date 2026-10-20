@@ -19,8 +19,8 @@ while the other two still look right, so each is read and each is checked:
   API location there is -- `W55B-STREAM-01`'s upload location, which a regex match takes out
   of the prefix location and which therefore repeats the same three lines -- and nowhere
   else, with no other `/api/v1` location;
-* the two upload locations (`/api/v1/projects/*/documents` and `/bff/v1/projects/*/documents`)
-  are the only places `client_max_body_size` is raised, to `260m`, with the explicit timeouts
+* the two upload locations (`/api/v1/projects/*/documents` and `/bff/v1/projects/*/documents`,
+  each also matching `.../documents/*/versions` since `W59-VERSION-UPLOAD-01`) are the only places `client_max_body_size` is raised, to `260m`, with the explicit timeouts
   the plan fixes, the `rewrite` and the URI-less `proxy_pass` the API one needs, and neither
   declares a header of its own (that would drop the server's security headers);
 * the named location both bodies send a 429 to returns JSON whose `error_code`,
@@ -75,8 +75,8 @@ RETURN_LINE = re.compile(r"^return (\d{3}) '(.*)';$")
 CLIENT_ADDRESS = "$binary_remote_addr"
 NAMED_LOCATION = "@rate_limited"
 #: `W55B-STREAM-01`. The two regex locations that take the larger body, written out.
-UPLOAD_API_LOCATION = "location ~ ^/api/v1/projects/[^/]+/documents$ {"
-UPLOAD_BFF_LOCATION = "location ~ ^/bff/v1/projects/[^/]+/documents$ {"
+UPLOAD_API_LOCATION = "location ~ ^/api/v1/projects/[^/]+/documents(?:/[^/]+/versions)?$ {"
+UPLOAD_BFF_LOCATION = "location ~ ^/bff/v1/projects/[^/]+/documents(?:/[^/]+/versions)?$ {"
 API_LOCATIONS = frozenset(
     {"location = /api/v1 {", "location /api/v1/ {", UPLOAD_API_LOCATION}
 )
@@ -645,8 +645,8 @@ MUTATIONS = [
     (
         "the web upload location loses its cap",
         "nginx.conf",
-        "    location ~ ^/bff/v1/projects/[^/]+/documents$ {\n        client_max_body_size 260m;\n",
-        "    location ~ ^/bff/v1/projects/[^/]+/documents$ {\n",
+        "    location ~ ^/bff/v1/projects/[^/]+/documents(?:/[^/]+/versions)?$ {\n        client_max_body_size 260m;\n",
+        "    location ~ ^/bff/v1/projects/[^/]+/documents(?:/[^/]+/versions)?$ {\n",
     ),
     (
         "the api upload location loses its body timeout",
@@ -699,7 +699,7 @@ MUTATIONS = [
     (
         "the upload location widened to a prefix",
         "nginx.conf",
-        "location ~ ^/bff/v1/projects/[^/]+/documents$ {",
+        "location ~ ^/bff/v1/projects/[^/]+/documents(?:/[^/]+/versions)?$ {",
         "location ~ ^/bff/v1/projects/ {",
     ),
     (

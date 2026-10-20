@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2",
-    "content_commit": "1049367",
-    "content_commit_subject": "W59-ANALYSIS-SETTINGS-01 API reseal on integration base 1049367e",
-    "dispatch_named_commit": "1049367",
-    "commit_note": "W59 adds the read of the analysis-profile registry: listAnalysisProfiles (GET /analysis/profiles, any one role) and six schemas (AnalysisProfileStatus, AnalysisProfileSourceFile, AnalysisProfileSource, AnalysisProfileSummary, AnalysisProfileListItem, AnalysisProfileList): the fifteen sections in the project-structure order, each with its registered text profile or null. Read-only; no error code is added.",
+    "sha256": "10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa",
+    "content_commit": "beafeab",
+    "content_commit_subject": "W61-DISPATCHER-01 API reseal on integration base beafeab",
+    "dispatch_named_commit": "beafeab",
+    "commit_note": "W61 adds the dispatcher: createAssignment (POST /assignments, admin), listAssignments (GET /assignments, any one role; an expert reads only their own), getAssignment (GET /assignments/{assignment_uid}, with the append-only history) and transitionAssignment (POST /assignments/{assignment_uid}/transitions: started/completed/returned by the assignee, reassigned/cancelled by admin), and ten schemas (AssignmentUid, AssignmentStatus, AssignmentEventKind, AssignmentTransitionKind, CreateAssignmentRequest, TransitionAssignmentRequest, Assignment, AssignmentEvent, AssignmentDetail, AssignmentPage). No error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 52,
-    "operations": 59,
-    "component_schemas": 153,
+    "paths": 59,
+    "operations": 67,
+    "component_schemas": 171,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2",
+    "snapshot_sha256": "10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "ef3ab3f95d60790ce9daec35bf3b8b2c26d0bf7761567f1ca95adcf2170b066a",
-      "index.ts": "7d1bf293aa8f5d433c61f528997211a3224001a4fdaae8d66f0251854304f5aa",
-      "operations.gen.ts": "30059220ac5568b0678865d60abc95bd02be80b89317ca6c40230d0720a3ed82",
-      "types.gen.ts": "0a5179ac84507913fc6b35888d633e4ba506cb1e73f86272c9f9740a251cd016"
+      "client.gen.ts": "6ab4630a124c425749200a4235506735e5ad364e922b5aea43ac09cac6e73817",
+      "index.ts": "451899cc43939a12c52f19ba44b0dae229e4f33d4f4bc407b7b406d3c8757d37",
+      "operations.gen.ts": "065b319ca7bb956be37545f8feb779983e3836db072269f5d5f8b4dfe13395fa",
+      "types.gen.ts": "5351beacb57960e4930aa22941c217f7c3439d8ff3dba1c4adfc84412225b7a7"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

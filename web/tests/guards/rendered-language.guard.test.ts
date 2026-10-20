@@ -73,22 +73,27 @@ import type {
   StageId,
   StageStatus,
   VersionClassification as VersionClassificationRecord,
+  Assignment,
+  AssignmentDetail,
   VersionComparison,
 } from '@/shared/api';
 import { RUN_STATE_VALUES } from '@/shared/api';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { USER_PAGE_LIMIT } from '@/entities/user';
+import { ASSIGNMENT_PAGE_LIMIT } from '@/entities/assignment';
 import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import {
-  ALREADY_CLASSIFIED_DETAIL, CLASSIFY_NOT_PERMITTED_DETAIL, COMPARISON_DIFF_LIMIT,
+  ALREADY_CLASSIFIED_DETAIL, CARRYOVER_CONFLICT_TEXT, CARRYOVER_NOT_PERMITTED_DETAIL,
+  CLASSIFY_NOT_PERMITTED_DETAIL, COMPARISON_DIFF_LIMIT,
   DOCUMENT_PAGE_LIMIT, UPLOAD_CONSTRAINTS_STATED, UPLOAD_ENVELOPE_RULES, VERSION_PAGE_LIMIT, classifyUploadFailure,
   precheckProblemMessage,
 } from '@/entities/document-version';
 import { UPLOAD_CONSTRAINTS_ADDED } from '@/entities/document-version/model/upload-failure';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS, PROJECT_STRUCTURE_ORDER, projectSectionOf } from '@/entities/project';
-import type { AnalysisProfileListItem } from '@/shared/api';
+import type { AnalysisProfileListItem, CarryoverCandidate } from '@/shared/api';
 import { ClassifyVersionFormView } from '@/features/classify-version';
+import { CarryOverDecisionView } from '@/features/carry-over-decision';
 import { VersionClassification, VersionClassificationView } from '@/widgets/version-classification';
 import { ProjectStructureView } from '@/widgets/project-sections';
 import { AppFrame } from '@/_app';
@@ -110,6 +115,8 @@ import type { RegistrationRequest } from '@/shared/api';
 import { RegistrationQueue } from '@/widgets/registration-queue';
 import { VersionHistoryView } from '@/widgets/version-history';
 import { UserCard } from '@/widgets/user-card';
+import { AssignmentHistory } from '@/widgets/assignment-board';
+import { MY_TASKS_LIMIT } from '@/widgets/my-tasks';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
@@ -121,9 +128,13 @@ import type { ExecutionWorker } from '@/shared/api';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { RECENT_PROJECT_LIMIT } from '@/widgets/home-tiles';
-import { NORM_EVENT_PAGE_LIMIT, NORM_PARAGRAPH_PAGE_LIMIT, NORM_SEARCH_PAGE_LIMIT, NORM_SNAPSHOT_LIMIT } from '@/entities/norms';
+import {
+  NORM_CATALOGUE_PAGE_LIMIT, NORM_EVENT_PAGE_LIMIT, NORM_PARAGRAPH_PAGE_LIMIT, NORM_SEARCH_PAGE_LIMIT,
+  NORM_SNAPSHOT_LIMIT,
+} from '@/entities/norms';
 import { NormsPage } from '@/_pages/norms';
 import { NormSearchResults } from '@/widgets/norm-search';
+import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormParagraphList, NormPdf } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { VersionBlockViews } from '@/_pages/blocks';
@@ -133,7 +144,8 @@ import {
   BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, notProducedPage, portalPage,
 } from '../unit/blocks/fixtures';
 import {
-  NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_QUERY, NORM_SNAPSHOTS, normDocument,
+  NORM_CATALOGUE_PAGE, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_QUERY, NORM_SNAPSHOTS,
+  normDocument,
 } from '../unit/norms/fixtures';
 
 import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles } from './lib/repo';
@@ -276,6 +288,7 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
   // ------------------------------------------------------------------------------------
   { word: 'PDF', why: 'The document format, and the only one this application accepts. A proper noun in Russian too ("PDF-документ"). `application/pdf` is matched separately as a media type.' },
   { word: 'CSV', why: 'The export format. RFC 4180 names it, no contract here does, and Russian technical writing does not translate it.' },
+  { word: 'Excel', why: 'The spreadsheet application the run\'s workbook is made for (`exportRunXlsx`, «Скачать Excel» in `W57-PLAN.md` section B3.7). A product name; Russian writing does not translate it, and no contract here defines the word.' },
   { word: 'ZIP', why: 'The archive format of the portal bundle, the only upload this application accepts (`W55B-INGEST-01`). A proper noun in Russian technical writing ("ZIP-архив"); the container format is fixed by PKWARE\'s APPNOTE, and no contract here defines the word. `application/zip` is matched separately as a media type, and a member\'s name such as `_blocks.json` as a filename.' },
   { word: 'API', why: 'The name of the seam the screens talk to. Universal in Russian technical writing; nothing in `contracts/` defines the word itself.' },
   { word: 'RFC', why: 'The IETF document series, cited by number beside the CSV escaping rule. A citation, not a label.' },
@@ -874,6 +887,14 @@ const KEYS = {
   normSearch: queryKeys.norms.search(NORM_QUERY, undefined, NORM_SEARCH_PAGE_LIMIT),
   normDocument: queryKeys.norms.document(NORM_DOCUMENT_ID),
   normParagraphs: queryKeys.norms.paragraphs(NORM_DOCUMENT_ID, undefined, NORM_PARAGRAPH_PAGE_LIMIT),
+  // `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue's first page with no filter.
+  normCatalogue: queryKeys.norms.catalogue(undefined, undefined, undefined, NORM_CATALOGUE_PAGE_LIMIT),
+  // `W61-DISPATCHER-01`: «Диспетчер»'s first page, the home screen's «Мои задачи», and one
+  // assignment's history.
+  assignments: queryKeys.assignments.list({ limit: ASSIGNMENT_PAGE_LIMIT }),
+  myTasks: queryKeys.assignments.list({ mine: true, limit: MY_TASKS_LIMIT }),
+  // The history's assignment is the returned one, `C` in `ASSIGNMENTS` below.
+  assignment: queryKeys.assignments.detail(`asg_${'01J9ZQ8K7NHVXW3T2R5M6P4Q8'}C`),
 } as const;
 
 /**
@@ -987,6 +1008,10 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.normSearch, { items: NORM_HITS, page });
   client.setQueryData(KEYS.normDocument, normDocument());
   client.setQueryData(KEYS.normParagraphs, { items: NORM_PARAGRAPHS, page, source_attribution: 'consultant_plus' });
+  client.setQueryData(KEYS.normCatalogue, NORM_CATALOGUE_PAGE);
+  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
+  client.setQueryData(KEYS.myTasks, { items: [...ASSIGNMENTS], page });
+  client.setQueryData(KEYS.assignment, ASSIGNMENT_DETAIL);
   return client;
 }
 
@@ -1055,6 +1080,8 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.normSearch, { items: [], page });
   client.setQueryData(KEYS.normDocument, normDocument({ unreliable_paragraph_count: 0, paragraph_count: 0 }));
   client.setQueryData(KEYS.normParagraphs, { items: [], page, source_attribution: 'consultant_plus' });
+  client.setQueryData(KEYS.assignments, { items: [], page });
+  client.setQueryData(KEYS.myTasks, { items: [], page });
   client.setQueryData(
     KEYS.dashboardSummary,
     dashboardSummary({
@@ -1095,6 +1122,7 @@ function pagedClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.runs, { items: [run()], page });
   client.setQueryData(KEYS.journal, { items: [record()], page });
+  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
   return client;
 }
 
@@ -1262,10 +1290,28 @@ function comparisonBody(over: Partial<VersionComparison> = {}): VersionCompariso
         { kind: 'new', basis: 'no_exact_source_match', proposal_sha256: null,
           source_finding: null, target_finding: finding('5', 'Цвет фасада не согласован', 3) },
       ],
+      // `W59-DECISION-CARRYOVER-01`: the unchanged pair is a candidate, so the expert's
+      // «Перенести решение» renders in this pass.
+      carryover_candidates: [CARRYOVER_CANDIDATE],
     },
     ...over,
   };
 }
+
+/** `W59-DECISION-CARRYOVER-01`. The decision on the unchanged pair's older finding. */
+const CARRYOVER_CANDIDATE: CarryoverCandidate = {
+  proposal_sha256: SHA,
+  source_finding_uid: `fnd_${ULID.slice(0, -1)}1`,
+  target_finding_uid: `fnd_${ULID.slice(0, -1)}2`,
+  source_decision: {
+    decision_id: `dec_${ULID}`,
+    verdict: 'accepted',
+    severity: 'critical',
+    comment: 'Проём действительно не показан.',
+    author_label: 'Иванова Е. В.',
+    recorded_at: '2026-10-20T08:00:00Z',
+  },
+};
 
 function twoVersionClient(
   loaded: (over?: Partial<RunStatus>) => Client,
@@ -1409,6 +1455,56 @@ const ADMIN_USER_ACCOUNT: Account = {
   profile_complete: true,
   roles: ['admin', 'expert'],
   user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+};
+
+/**
+ * `W61-DISPATCHER-01`: one assignment per status, so every status label, every move the two
+ * roles are offered, a note, a reason, a document title and a project-wide row render. The
+ * first two are the seeded account's own (`KEYS.account`), so the assignee's moves render on
+ * the dispatcher's screen too; the rest belong to another expert.
+ */
+function assignment(letter: string, status: Assignment['status'], over: Partial<Assignment> = {}): Assignment {
+  return {
+    assignment_uid: `asg_${'01J9ZQ8K7NHVXW3T2R5M6P4Q8'}${letter}`,
+    project_uid: PROJECT_UID,
+    project_name: 'Договор поставки',
+    document_uid: null,
+    document_title: null,
+    assignee_user_uid: ADMIN_USER_ACCOUNT.user_uid,
+    assignee_label: ADMIN_USER_ACCOUNT.display_label,
+    created_by_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C',
+    created_by_label: 'Начальникова Е. В.',
+    note: null,
+    status,
+    status_reason: null,
+    created_at: '2026-10-20T08:00:00Z',
+    updated_at: '2026-10-20T09:00:00Z',
+    ...over,
+  };
+}
+
+const ASSIGNMENTS: readonly Assignment[] = [
+  assignment('A', 'assigned', { note: 'Проверить армирование до пятницы' }),
+  assignment('B', 'in_progress', { document_uid: DOCUMENT_UID, document_title: 'Пояснительная записка' }),
+  assignment('C', 'returned', {
+    assignee_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D',
+    assignee_label: 'Экспертова Д. Д.',
+    status_reason: 'Раздел не мой',
+  }),
+  assignment('D', 'done', { assignee_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', assignee_label: 'Экспертова Д. Д.' }),
+  assignment('E', 'cancelled', { status_reason: 'Проект закрыт' }),
+];
+
+const ASSIGNMENT_DETAIL: AssignmentDetail = {
+  assignment: ASSIGNMENTS[2] as Assignment,
+  history: [
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', kind: 'assigned', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', actor_label: 'Начальникова Е. В.', reason: null, new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:00:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', kind: 'started', actor_user_uid: ADMIN_USER_ACCOUNT.user_uid, actor_label: ADMIN_USER_ACCOUNT.display_label, reason: null, new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:10:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', kind: 'reassigned', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', actor_label: 'Начальникова Е. В.', reason: 'Отпуск', new_assignee_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', new_assignee_label: 'Экспертова Д. Д.', occurred_at: '2026-10-20T08:20:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', kind: 'returned', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', actor_label: 'Экспертова Д. Д.', reason: 'Раздел не мой', new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:30:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8E', kind: 'completed', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', actor_label: 'Экспертова Д. Д.', reason: null, new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:40:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', kind: 'cancelled', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', actor_label: 'Начальникова Е. В.', reason: 'Проект закрыт', new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:50:00Z' },
+  ],
 };
 
 const QUEUE_REQUEST: RegistrationRequest = {
@@ -1823,6 +1919,45 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       'required_norm_unavailable', { reference_kind: 'norms_snapshot' },
     )),
   },
+  /*
+   * `W57B-NORMS-CATALOGUE-XLSX-01`. The catalogue view of «Нормы»: loaded, refused, failed
+   * and pending, and the table's empty pages.
+   */
+  {
+    name: 'norms-catalogue-loaded',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+  },
+  {
+    name: 'norms-catalogue-refused',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+    seedClient: (client: Client) => seedError(client, KEYS.normCatalogue, normsRefusal(
+      'validation_failed', { field: 'q', constraint: 'format' },
+    )),
+  },
+  {
+    name: 'norms-catalogue-failed',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+    seedClient: (client: Client) => seedError(client, KEYS.normCatalogue, normsRefusal(
+      'dependency_unavailable', {},
+    )),
+  },
+  {
+    name: 'norms-catalogue-pending',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+    seedClient: (client: Client) => { client.removeQueries({ queryKey: KEYS.normCatalogue }); },
+  },
+  {
+    name: 'norm-catalogue-nothing-kept',
+    make: () => createElement(NormCatalogueTable, { items: [], total: 0, filtered: true, onFirst: null, onNext: null }),
+  },
+  {
+    name: 'norm-catalogue-empty-snapshot',
+    make: () => createElement(NormCatalogueTable, { items: [], total: 0, filtered: false, onFirst: null, onNext: null }),
+  },
+  {
+    name: 'norm-catalogue-empty-later-page',
+    make: () => createElement(NormCatalogueTable, { items: [], total: 3, filtered: false, onFirst: () => {}, onNext: null }),
+  },
   {
     name: 'norm-search-nothing-found',
     make: () => createElement(NormSearchResults, { items: [], onFirst: null, onNext: null }),
@@ -1970,6 +2105,78 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         onStage: () => undefined,
         onSection: () => undefined,
         onConfirm: () => undefined,
+      }),
+  })),
+  /*
+   * `W59-DECISION-CARRYOVER-01`. «Перенести решение»: the confirmation (with a severity and a
+   * comment), in flight, carried, already carried, and every refusal a reader can be shown.
+   */
+  ...([false, true] as const).map((pending) => ({
+    name: `carry-over-decision-confirming${pending ? '-pending' : ''}`,
+    make: () =>
+      createElement(CarryOverDecisionView, {
+        candidate: CARRYOVER_CANDIDATE,
+        target: { finding_uid: CARRYOVER_CANDIDATE.target_finding_uid, category: 'layout',
+          finding_text: 'Нет дверного проёма', page_numbers: [1] },
+        confirming: true,
+        pending,
+        result: null,
+        failure: null,
+        onOpen: () => undefined,
+        onConfirm: () => undefined,
+        onCancel: () => undefined,
+      }),
+  })),
+  ...([false, true] as const).map((replayed) => ({
+    name: `carry-over-decision-${replayed ? 'replayed' : 'carried'}`,
+    make: () =>
+      createElement(CarryOverDecisionView, {
+        candidate: CARRYOVER_CANDIDATE,
+        target: { finding_uid: CARRYOVER_CANDIDATE.target_finding_uid, category: 'layout',
+          finding_text: 'Нет дверного проёма', page_numbers: [1] },
+        confirming: false,
+        pending: false,
+        result: {
+          event: {
+            decision_id: `dec_${ULID.slice(0, -1)}9`, finding_uid: CARRYOVER_CANDIDATE.target_finding_uid,
+            finding_observation_id: `fobs_${ULID}`, event_type: 'accept', verdict: 'accepted',
+            severity: 'critical', comment: 'Решение перенесено из версии 1.', author_label: 'Иванова Е. В.',
+            recorded_at: '2026-10-20T09:00:00Z',
+          },
+          current_verdict: 'accepted',
+          replayed,
+          source_finding_uid: CARRYOVER_CANDIDATE.source_finding_uid,
+          source_decision_id: CARRYOVER_CANDIDATE.source_decision.decision_id,
+          source_version_uid: VERSION_UID,
+          source_version_ordinal: 1,
+          target_version_uid: NEWER_VERSION_UID,
+          mode: 'version',
+        },
+        failure: null,
+        onOpen: () => undefined,
+        onConfirm: () => undefined,
+        onCancel: () => undefined,
+      }),
+  })),
+  ...([
+    ...(Object.keys(CARRYOVER_CONFLICT_TEXT) as (keyof typeof CARRYOVER_CONFLICT_TEXT)[]).map(
+      (kind) => ({ kind, detail: CARRYOVER_CONFLICT_TEXT[kind] }),
+    ),
+    { kind: 'not_permitted' as const, detail: CARRYOVER_NOT_PERMITTED_DETAIL },
+  ]).map(({ kind, detail }) => ({
+    name: `carry-over-decision-${kind}`,
+    make: () =>
+      createElement(CarryOverDecisionView, {
+        candidate: CARRYOVER_CANDIDATE,
+        target: { finding_uid: CARRYOVER_CANDIDATE.target_finding_uid, category: 'layout',
+          finding_text: 'Нет дверного проёма', page_numbers: [1] },
+        confirming: false,
+        pending: false,
+        result: null,
+        failure: { kind, detail, correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false },
+        onOpen: () => undefined,
+        onConfirm: () => undefined,
+        onCancel: () => undefined,
       }),
   })),
   {
@@ -2161,6 +2368,16 @@ function renderEveryScreen(): readonly { readonly where: string; readonly markup
   const userClient = loadedClient();
   userClient.setQueryData(KEYS.user, badAccount);
   out.push({ where: 'user-card (invalid data)', markup: renderScreen(userClient, createElement(UserCard, { userUid: badAccount.user_uid })) });
+  /*
+   * `W61-DISPATCHER-01`: an assignment's history opens only when its row's «История» is
+   * pressed, which one static render cannot do — so the widget is rendered on its own, in
+   * the three states a cache can hold: in flight, answered and failed.
+   */
+  const historyOf = (client: Client) =>
+    renderScreen(client, createElement(AssignmentHistory, { assignmentUid: ASSIGNMENT_DETAIL.assignment.assignment_uid }));
+  out.push({ where: 'assignment-history (cold)', markup: historyOf(newClient()) });
+  out.push({ where: 'assignment-history (loaded)', markup: historyOf(loadedClient()) });
+  out.push({ where: 'assignment-history (failed)', markup: historyOf(failedClient()) });
   /*
    * The review screen with its detail and history still in flight, appended once.
    *
@@ -2496,7 +2713,10 @@ describe('the guard renders the screens it claims to render', () => {
     // a vacuity check stops checking. `W30-LISTS` ruled against hard-coded counts two waves
     // ago and this was one of them.
     expect(screens.length).toBe(
-      SCREENS.length * CACHE_STATES.length + 3 + malformedVariants(IDENTITIES).length,
+      // `+ 3`: the account and user-card invalid-data shapes and the review's detail-pending
+      // one; `+ 3` more since `W61-DISPATCHER-01`: an assignment's history, cold, loaded
+      // and failed.
+      SCREENS.length * CACHE_STATES.length + 6 + malformedVariants(IDENTITIES).length,
     );
     // The derived half is non-trivial too: a route walk that returned nothing would leave
     // this file rendering only the shapes below the derivation and still satisfy the
@@ -3006,6 +3226,14 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
   {
+    label: 'Действие не выполнено.',
+    why: '«Диспетчер» and «Мои задачи» show this only after the transitionAssignment mutation settles with a failure. One static render cannot press a move button or seed the mutation observer through a query cache.',
+  },
+  {
+    label: 'Назначение не создано.',
+    why: 'The dispatcher\'s creation form shows this only after the createAssignment mutation settles with a failure. One static render cannot submit the form or seed the mutation observer through a query cache.',
+  },
+  {
     label: 'Команда отклонена',
     why: 'QueuePage can show this only after a command mutation settles with a typed refusal. The static harness cannot fire its confirmation or seed the mutation observer through a query cache.',
   },
@@ -3056,7 +3284,8 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
   {
     label: 'Загрузка: загружаемый файл…',
     why:
-      '`upload-document-form.tsx`, while the upload is in flight; same mechanism as the ' +
+      '`upload-outcome.tsx`, under either upload form while the upload is in flight (the ' +
+      'first version or, `W59-VERSION-UPLOAD-01`, the next one); same mechanism as the ' +
       'new project, and the same reason no seed reaches it. The words it carries are ' +
       'judged by `no branch label carries English, reachable or not`. `D-82`.',
   },

@@ -309,6 +309,14 @@ class RegistrationRequestId(OpaqueId, prefix="reg", entity="RegistrationRequest"
     """
 
 
+class AssignmentUid(OpaqueId, prefix="asg", entity="WorkAssignment"):
+    """Identity of one work assignment of the dispatcher (`W61-DISPATCHER-01`).
+
+    Minted by ``auditmanager.dispatch``; never derived from the project, the document, the
+    assignee or a position in a list. Its history events are ``AuditEventId`` (``evt_``).
+    """
+
+
 #: Every concrete identity type, keyed by contract entity name.
 IDENTITY_TYPES_BY_ENTITY: Final[dict[str, type[OpaqueId]]] = {
     identity.entity: identity for identity in _REGISTRY.values()

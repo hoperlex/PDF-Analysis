@@ -182,6 +182,7 @@ class TestTheRebuildComparisonIsWideEnoughToMeanSomething:
         "latest_comment_decision_id",
         "latest_decision_id",
         "decision_event_count",
+        "decided_severity",
     )
     EXCLUDED_FIELDS = ("decision_recorded_at",)
 
@@ -203,6 +204,7 @@ class TestTheRebuildComparisonIsWideEnoughToMeanSomething:
             latest_decision_id="dec_00000000000000000000000004",
             decision_recorded_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
             decision_event_count=7,
+            decided_severity="critical",
         )
         assert probe.comparable() == (
             "fnd_00000000000000000000000001",
@@ -212,6 +214,7 @@ class TestTheRebuildComparisonIsWideEnoughToMeanSomething:
             "dec_00000000000000000000000003",
             "dec_00000000000000000000000004",
             7,
+            "critical",
         )
         # And the exclusion is intentional, not an omission: the timestamp is absent.
         assert probe.decision_recorded_at not in probe.comparable()

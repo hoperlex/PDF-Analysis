@@ -144,6 +144,9 @@ __all__ = [
     "NormSearchHit",
     "NormSearchPage",
     "NormDocument",
+    "NormCatalogueEntry",
+    "NormCatalogueEntryPage",
+    "NormKindCount",
     "NormParagraph",
     "NormParagraphPage",
     "NormSnapshot",
@@ -171,6 +174,7 @@ __all__ = [
     "UpdateMyProfileRequest",
     "UpdateUserRequest",
     "UploadDocumentRequest",
+    "UploadDocumentVersionRequest",
     "UserUid",
     "Verdict",
     "VersionBlockIndex",
@@ -184,9 +188,23 @@ __all__ = [
     "SheetDiff",
     "SheetDiffPage",
     "SheetPairing",
+    "CarryOverDecisionRequest",
+    "CarryOverDecisionResponse",
+    "CarryoverCandidate",
+    "CarryoverSourceDecision",
     "VersionComparison",
     "VersionUid",
     "optional_property",
+    "Assignment",
+    "AssignmentDetail",
+    "AssignmentEvent",
+    "AssignmentEventKind",
+    "AssignmentPage",
+    "AssignmentStatus",
+    "AssignmentTransitionKind",
+    "AssignmentUid",
+    "CreateAssignmentRequest",
+    "TransitionAssignmentRequest",
 ]
 
 
@@ -605,6 +623,17 @@ class UploadDocumentRequest(_Object):
     #: in gets a document with none, not a refused upload. See
     #: ``db/migrations/versions/20260925_0011_document_section.py``.
     section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class UploadDocumentVersionRequest(_Object):
+    """`W59-VERSION-UPLOAD-01`. The multipart body of ``uploadDocumentVersion``: the bundle only.
+
+    A further version takes no title and no section, so neither is declared; closed like
+    every object here, an undeclared part is refused rather than ignored. The ``file`` part's
+    ``encoding`` is restored with ``openapi_extra``, as for :class:`UploadDocumentRequest`.
+    """
+
+    file: Annotated[UploadFile, WithJsonSchema(_BINARY_STRING)]
 
 
 class InputManifestEntry(_Object):
@@ -1037,6 +1066,38 @@ class NormDocument(_Object):
     unreliable_paragraph_count: Annotated[int, Field(ge=0)]
     content_available: bool
     source_attribution: NormSourceAttribution
+
+
+class NormCatalogueEntry(_Object):
+    """One document of the current snapshot as the catalogue lists it
+    (`W57B-NORMS-CATALOGUE-XLSX-01`). ``designation`` and ``title`` are derived for display
+    from the stored file name and are never identities; ``title`` is null when the name
+    carries nothing after the designation. ``kind`` is the stored document type verbatim."""
+
+    norm_document_id: NormDocumentId
+    designation: Annotated[str, Field(min_length=1, max_length=520)]
+    title: Annotated[str, Field(min_length=1, max_length=1000)] | None
+    kind: Annotated[str, Field(min_length=1, max_length=100)]
+    page_count: Annotated[int, Field(ge=1)]
+    paragraph_count: Annotated[int, Field(ge=0)]
+    content_available: bool
+    source_attribution: NormSourceAttribution
+
+
+class NormKindCount(_Object):
+    kind: Annotated[str, Field(min_length=1, max_length=100)]
+    document_count: Annotated[int, Field(ge=1)]
+
+
+class NormCatalogueEntryPage(_Object):
+    """One page of the catalogue; ``total`` counts the documents the filters keep and
+    ``kinds`` lists every kind of the snapshot with its document count."""
+
+    norms_snapshot_id: NormsSnapshotId
+    items: list[NormCatalogueEntry]
+    page: PageInfo
+    total: Annotated[int, Field(ge=0)]
+    kinds: list[NormKindCount]
 
 
 class NormParagraph(_Object):
@@ -1507,6 +1568,113 @@ class AccountPage(_Object):
     page: PageInfo
 
 
+# --- `W61-DISPATCHER-01`: «Диспетчер» -------------------------------------------------
+
+AssignmentUid = TypeAliasType(
+    "AssignmentUid", Annotated[str, Field(pattern=rf"^asg_{_ULID}$")]
+)
+
+
+class AssignmentStatus(str, enum.Enum):
+    """`W61-DISPATCHER-01`. An assignment's status, derived from its latest event.
+
+    ``assigned`` (after ``assigned`` or ``reassigned``), ``in_progress`` (``started``),
+    ``done`` (``completed``), ``returned`` and ``cancelled``. ``done`` and ``cancelled`` are
+    terminal.
+    """
+
+    ASSIGNED = "assigned"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+    RETURNED = "returned"
+    CANCELLED = "cancelled"
+
+
+class AssignmentEventKind(str, enum.Enum):
+    """`W61-DISPATCHER-01`. One event of an assignment's append-only history."""
+
+    ASSIGNED = "assigned"
+    STARTED = "started"
+    COMPLETED = "completed"
+    RETURNED = "returned"
+    REASSIGNED = "reassigned"
+    CANCELLED = "cancelled"
+
+
+class AssignmentTransitionKind(str, enum.Enum):
+    """`W61-DISPATCHER-01`. The events a transition may append: every kind but ``assigned``."""
+
+    STARTED = "started"
+    COMPLETED = "completed"
+    RETURNED = "returned"
+    REASSIGNED = "reassigned"
+    CANCELLED = "cancelled"
+
+
+_AssignmentText = Annotated[str, Field(min_length=1, max_length=2000)]
+
+
+class CreateAssignmentRequest(_Object):
+    """`W61-DISPATCHER-01`. Give a project, or one document of it, to an active expert."""
+
+    project_uid: ProjectUid
+    document_uid: DocumentUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    assignee_user_uid: UserUid
+    note: _AssignmentText = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class TransitionAssignmentRequest(_Object):
+    """`W61-DISPATCHER-01`. One move along an assignment's history."""
+
+    kind: AssignmentTransitionKind
+    reason: _AssignmentText = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    new_assignee_user_uid: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class Assignment(_Object):
+    """`W61-DISPATCHER-01`. One assignment as it now stands."""
+
+    assignment_uid: AssignmentUid
+    project_uid: ProjectUid
+    project_name: Annotated[str, Field(min_length=1, max_length=200)]
+    document_uid: DocumentUid | None
+    document_title: Annotated[str, Field(min_length=1, max_length=400)] | None
+    assignee_user_uid: UserUid
+    assignee_label: Annotated[str, Field(min_length=1, max_length=254)]
+    created_by_user_uid: UserUid
+    created_by_label: Annotated[str, Field(min_length=1, max_length=254)]
+    note: _AssignmentText | None
+    status: AssignmentStatus
+    status_reason: _AssignmentText | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AssignmentEvent(_Object):
+    """`W61-DISPATCHER-01`. One recorded event; never changed."""
+
+    event_id: Annotated[str, Field(pattern=rf"^evt_{_ULID}$")]
+    kind: AssignmentEventKind
+    actor_user_uid: UserUid
+    actor_label: Annotated[str, Field(min_length=1, max_length=254)]
+    reason: _AssignmentText | None
+    new_assignee_user_uid: UserUid | None
+    new_assignee_label: Annotated[str, Field(min_length=1, max_length=254)] | None
+    occurred_at: datetime
+
+
+class AssignmentDetail(_Object):
+    """`W61-DISPATCHER-01`. One assignment and its whole history, oldest event first."""
+
+    assignment: Assignment
+    history: list[AssignmentEvent]
+
+
+class AssignmentPage(_Object):
+    items: list[Assignment]
+    page: PageInfo
+
+
 class ProductVersion(_Object):
     product_version: str
     build_id: str
@@ -1741,12 +1909,37 @@ class FindingMatchProposal(_Object):
     proposal_sha256: Sha256 | None
 
 
+class CarryoverSourceDecision(_Object):
+    """`W59-DECISION-CARRYOVER-01`. The source finding's current verdict-bearing event, as
+    the confirming expert is shown it before «Перенести решение»."""
+
+    decision_id: DecisionId
+    verdict: Literal["accepted", "rejected"]
+    severity: Severity | None
+    comment: str | None
+    author_label: Annotated[str, Field(min_length=1, max_length=128)]
+    recorded_at: datetime
+
+
+class CarryoverCandidate(_Object):
+    """`W59-DECISION-CARRYOVER-01`. An ``unchanged`` proposal whose source finding carries an
+    expert decision and whose target finding has no decision event yet. Listing it carries
+    nothing: only ``carryOverDecision``, confirmed by an expert, does."""
+
+    proposal_sha256: Sha256
+    source_finding_uid: FindingUid
+    target_finding_uid: FindingUid
+    source_decision: CarryoverSourceDecision
+
+
 class FindingComparison(_Object):
     status: Literal["compared", "unavailable"]
     unavailable_reason: Literal["findings_over_limit"] | None
     source_finding_count: Annotated[int, Field(ge=0)]
     target_finding_count: Annotated[int, Field(ge=0)]
     proposals: Annotated[list[FindingMatchProposal], Field(max_length=400)]
+    #: `W59-DECISION-CARRYOVER-01`. Empty when the findings are unavailable.
+    carryover_candidates: Annotated[list[CarryoverCandidate], Field(max_length=200)]
 
 
 class VersionComparison(_Object):
@@ -1769,6 +1962,37 @@ class VersionComparison(_Object):
     findings: FindingComparison | None
 
 
+class CarryOverDecisionRequest(_Object):
+    """`W59-DECISION-CARRYOVER-01`. One expert confirmation of one proposed pair.
+
+    The path names the source (older) version; the comparison is recomputed with these
+    values when the confirmation arrives. ``source_decision_id`` is the decision the expert
+    was shown: if the source's current verdict has moved on, nothing is carried.
+    """
+
+    target_version_uid: VersionUid
+    mode: Literal["version", "stage"]
+    source_finding_uid: FindingUid
+    target_finding_uid: FindingUid
+    source_decision_id: DecisionId
+    source_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    target_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class CarryOverDecisionResponse(_Object):
+    """`W59-DECISION-CARRYOVER-01`. The carried event on the target finding and where it
+    came from. ``replayed`` is true when the target already carried exactly this event (an
+    exact repeat): nothing was appended and the first confirmation stands."""
+
+    event: DecisionEvent
+    current_verdict: Verdict
+    replayed: bool
+    source_finding_uid: FindingUid
+    source_decision_id: DecisionId
+    source_version_uid: VersionUid
+    source_version_ordinal: Annotated[int, Field(ge=1)]
+    target_version_uid: VersionUid
+    mode: Literal["version", "stage"]
 # --- analysis profiles (`W59-ANALYSIS-SETTINGS-01`) ----------------------------------------
 #
 # The section-keyed text-profile registry as «Настройки анализа» reads it: one row per section

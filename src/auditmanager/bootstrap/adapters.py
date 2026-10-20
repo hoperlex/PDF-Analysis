@@ -41,7 +41,11 @@ from auditmanager.api.schemas.dashboard import (
     SectionDocumentCountView,
     VerdictCountView,
 )
-from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
+from auditmanager.api.schemas.decisions import (
+    DecisionEventView,
+    DecisionRecordView,
+    decision_event_body,
+)
 from auditmanager.api.schemas.documents import DocumentVersionView, ManifestEntryView
 from auditmanager.api.schemas.findings import (
     EvidenceView,
@@ -652,6 +656,33 @@ class DocumentAdapter:
             display_title=display_title,
             idempotency_key=IdempotencyKey(idempotency_key),
             section=section,
+        )
+        return _Uploaded(
+            _version_view(outcome.version), bool(getattr(outcome, "replayed", False))
+        )
+
+    def upload_document_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        content: BinaryIO,
+        source_filename: str,
+        idempotency_key: str,
+    ) -> Any:
+        """`W59-VERSION-UPLOAD-01`: the next version, through the same bundle entry.
+
+        ``IngestService.upload_next_version`` is ``upload_bundle`` with the document named, so
+        the handle travels exactly as in :meth:`upload_document` and nothing here reads it.
+        """
+        from auditmanager.shared.identity import DocumentUid, IdempotencyKey, ProjectUid
+
+        outcome = self._service.upload_next_version(
+            project_uid=ProjectUid.parse(project_uid),
+            document_uid=DocumentUid.parse(document_uid),
+            content=content,
+            source_filename=source_filename or "upload.zip",
+            idempotency_key=IdempotencyKey(idempotency_key),
         )
         return _Uploaded(
             _version_view(outcome.version), bool(getattr(outcome, "replayed", False))
@@ -1658,6 +1689,61 @@ class CsvExportAdapter(_SessionHolder):
         return self._read(lambda s: export_run_csv(s, run_id).content)
 
 
+class XlsxExportAdapter(_SessionHolder):
+    """``exportRunXlsx`` (`W57B-NORMS-CATALOGUE-XLSX-01`).
+
+    One read transaction for the whole workbook: the run, its sheet labels, its findings and
+    its citations are read in the same session. The role decision is the seam's
+    (``OPERATION_ROLES["exportRunXlsx"]``) and is stated to the use case as such; the Blob
+    reader reads the version's portal companion from the same store as every other read
+    here, with storage failures typed as ``IngestService`` types them; the citation reader is
+    W57a's verified one, injected because the export context may not import it.
+    """
+
+    def __init__(self, sessions: sessionmaker[Session], *, blob_store: Any) -> None:
+        super().__init__(sessions)
+        self._blob_store = blob_store
+
+    def _read_blob(self, blob_id: str) -> bytes:
+        from auditmanager.documents.public import MANIFEST_ROLE_STRUCTURED_COMPANION
+        from auditmanager.ingest import domain_error_from_storage
+        from auditmanager.storage.public import BlobId, BlobNotFoundError, StorageError
+
+        try:
+            return self._blob_store.read(BlobId(blob_id))
+        except BlobNotFoundError:
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                blob_id=blob_id,
+                role=MANIFEST_ROLE_STRUCTURED_COMPANION,
+            ) from None
+        except StorageError as exc:
+            raise domain_error_from_storage(
+                exc, blob_id=blob_id, role=MANIFEST_ROLE_STRUCTURED_COMPANION
+            ) from None
+
+    def export_run_xlsx(self, *, run_id: str, principal_id: str) -> bytes:
+        from auditmanager.exports import ExportAuthorization, export_run_xlsx
+        from auditmanager.findings.citation_reader import read_verified_citations
+
+        authorization = ExportAuthorization(
+            run_id=run_id,
+            principal_id=principal_id,
+            operation="exportRunXlsx",
+            decision="allow",
+            decision_ref="api.security.OPERATION_ROLES[exportRunXlsx]",
+        )
+        return self._read(
+            lambda s: export_run_xlsx(
+                s,
+                run_id,
+                authorization=authorization,
+                read_blob=self._read_blob,
+                read_citations=read_verified_citations,
+            ).content
+        )
+
+
 class DashboardAdapter(_SessionHolder):
     """``getDashboardSummary``. `R-44`. Reads the same session factory as everything
     else here; nothing new is opened for it."""
@@ -2239,6 +2325,39 @@ class NormsSearchAdapter(_SessionHolder):
             page=models.PageInfo(next_cursor=page.next_cursor),
         )
 
+    def list_catalogue(
+        self, *, q: str | None, kind: str | None, cursor: str | None, limit: int
+    ) -> models.NormCatalogueEntryPage:
+        from auditmanager.norms.public import list_norm_catalogue
+
+        page = self._read(
+            lambda session: list_norm_catalogue(
+                session, q=q, kind=kind, cursor=cursor, limit=limit
+            )
+        )
+        return models.NormCatalogueEntryPage(
+            norms_snapshot_id=page.norms_snapshot_id,
+            items=[
+                models.NormCatalogueEntry(
+                    norm_document_id=item.norm_document_id,
+                    designation=item.designation,
+                    title=item.title,
+                    kind=item.kind,
+                    page_count=item.page_count,
+                    paragraph_count=item.paragraph_count,
+                    content_available=item.content_available,
+                    source_attribution=models.NormSourceAttribution(item.source_attribution),
+                )
+                for item in page.items
+            ],
+            page=models.PageInfo(next_cursor=page.next_cursor),
+            total=page.total,
+            kinds=[
+                models.NormKindCount(kind=kind_count.kind, document_count=kind_count.document_count)
+                for kind_count in page.kinds
+            ],
+        )
+
     def get_document(self, *, norm_document_id: str) -> models.NormDocument:
         from auditmanager.norms.public import get_norm_document
 
@@ -2592,6 +2711,8 @@ class ComparisonAdapter(_SessionHolder):
         from auditmanager.documents.public import DocumentRepository
         from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
 
+        from auditmanager.comparison.public import carryover_candidates
+
         def work(session: Session) -> Any:
             DocumentRepository().get_version_in(
                 session,
@@ -2599,10 +2720,13 @@ class ComparisonAdapter(_SessionHolder):
                 document_uid=DocumentUid.parse(document_uid),
                 version_uid=VersionUid.parse(source_version_uid),
             )
-            return self._service.compare(session, request)
+            result = self._service.compare(session, request)
+            # `W59-DECISION-CARRYOVER-01`: what an expert could carry, read in the same
+            # session as the comparison it belongs to.
+            return result, carryover_candidates(session, result)
 
         try:
-            result = self._read(work)
+            result, candidates = self._read(work)
         except ComparisonRequestInvalid as exc:
             raise DomainError(
                 ErrorCode.VALIDATION_FAILED, field=str(exc).removesuffix("_invalid"),
@@ -2613,7 +2737,86 @@ class ComparisonAdapter(_SessionHolder):
                 ErrorCode.INTERNAL_ERROR,
                 message="the stored comparison inputs contradict their own constraints",
             ) from exc
-        return models.VersionComparison.model_validate(_comparison_view(result))
+        return models.VersionComparison.model_validate(_comparison_view(result, candidates))
+
+    def carry_over_decision(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_finding_uid: str,
+        target_finding_uid: str,
+        source_decision_id: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.CarryOverDecisionResponse:
+        """`W59-DECISION-CARRYOVER-01`. One write transaction: the actor's roles, the path,
+        the recomputed comparison and the ledger append (``comparison.public``)."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.comparison.public import (
+            CarryoverRequest,
+            ComparisonIntegrityError,
+            ComparisonRequestInvalid,
+            DecisionCarryoverService,
+        )
+
+        request = CarryoverRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            target_version_uid=target_version_uid,
+            source_finding_uid=source_finding_uid,
+            target_finding_uid=target_finding_uid,
+            source_decision_id=source_decision_id,
+            mode=mode,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+        )
+        service = DecisionCarryoverService(comparisons=self._service)
+
+        def work(session: Session) -> Any:
+            return service.carry_over(
+                session,
+                request,
+                actor_uid=author_user_uid,
+                actor_label=author_label,
+                # Read in this transaction: the request register checked the role before
+                # the route; this is the command's own check (`R-60`).
+                actor_roles=AccountRepository().roles_of(session, author_user_uid),
+                idempotency_key=idempotency_key,
+            )
+
+        try:
+            outcome = self._write(work)
+        except ComparisonRequestInvalid as exc:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED, field=str(exc).removesuffix("_invalid"),
+                constraint="format",
+            ) from None
+        except ComparisonIntegrityError as exc:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="the stored comparison inputs contradict their own constraints",
+            ) from exc
+        return models.CarryOverDecisionResponse(
+            event=models.DecisionEvent.model_validate(
+                decision_event_body(_event_view(outcome.event))
+            ),
+            current_verdict=models.Verdict(outcome.target_current_verdict),
+            replayed=outcome.replayed,
+            source_finding_uid=outcome.source_finding_uid,
+            source_decision_id=outcome.source_decision.decision_id,
+            source_version_uid=outcome.source_version_uid,
+            source_version_ordinal=outcome.source_version_ordinal,
+            target_version_uid=outcome.target_version_uid,
+            mode=outcome.mode,  # type: ignore[arg-type]
+        )
 
 
 class _ClassificationReader:
@@ -2740,8 +2943,189 @@ def _verified_artifact_bytes(blob_store: Any, reference: Mapping[str, Any]) -> b
         raise domain_error_from_storage(exc, blob_id=blob_id, role=role) from None
 
 
-def _comparison_view(result: Any) -> dict[str, Any]:
-    """The read model as the frozen ``VersionComparison`` shape (field names are equal)."""
+def _comparison_view(result: Any, candidates: Sequence[Any] = ()) -> dict[str, Any]:
+    """The read model as the frozen ``VersionComparison`` shape (field names are equal),
+    with `W59-DECISION-CARRYOVER-01`'s ``findings.carryover_candidates`` added."""
     from dataclasses import asdict
 
-    return asdict(result)
+    view = asdict(result)
+    if view["findings"] is not None:
+        view["findings"]["carryover_candidates"] = [
+            {
+                "proposal_sha256": item.proposal_sha256,
+                "source_finding_uid": item.source_finding.finding_uid,
+                "target_finding_uid": item.target_finding.finding_uid,
+                "source_decision": asdict(item.source_decision),
+            }
+            for item in candidates
+        ]
+    return view
+
+
+# --------------------------------------------------------------------------------------
+# `W61-DISPATCHER-01`: the «Диспетчер» port, over `auditmanager.dispatch`.
+# --------------------------------------------------------------------------------------
+
+
+class DispatchAdapter(_SessionHolder):
+    """Thin like every adapter here: the commands, the rules and the reads live in
+    ``auditmanager.dispatch``; this opens the session, reads the actor's role set inside it,
+    resolves the people's display labels through ``access`` (`R-55`: the label is resolved in
+    one place, ``UserRecord.display_label``) and maps the records into the frozen shapes."""
+
+    def create_assignment(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str | None,
+        assignee_user_uid: str,
+        note: str | None,
+        user_uid: str,
+    ) -> models.Assignment:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import assign_work
+
+        def work(session: Session) -> models.Assignment:
+            accounts = AccountRepository()
+            record = assign_work(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                assignee_user_uid=assignee_user_uid,
+                note=note,
+                actor_uid=user_uid,
+                actor_roles=accounts.roles_of(session, user_uid),
+                accounts=accounts,
+            )
+            return _assignment_view(record, _Labels(session, accounts))
+
+        return self._write(work)
+
+    def list_assignments(
+        self, *, user_uid: str, mine: bool, status: str | None, project_uid: str | None
+    ) -> Sequence[models.Assignment]:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import list_assignments
+
+        def work(session: Session) -> list[models.Assignment]:
+            accounts = AccountRepository()
+            records = list_assignments(
+                session,
+                viewer_uid=user_uid,
+                viewer_roles=accounts.roles_of(session, user_uid),
+                mine=mine,
+                status=status,
+                project_uid=project_uid,
+            )
+            labels = _Labels(session, accounts)
+            return [_assignment_view(record, labels) for record in records]
+
+        return self._read(work)
+
+    def get_assignment(self, *, assignment_uid: str, user_uid: str) -> models.AssignmentDetail:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import get_assignment
+
+        def work(session: Session) -> models.AssignmentDetail:
+            accounts = AccountRepository()
+            detail = get_assignment(
+                session,
+                assignment_uid=assignment_uid,
+                viewer_uid=user_uid,
+                viewer_roles=accounts.roles_of(session, user_uid),
+            )
+            labels = _Labels(session, accounts)
+            return models.AssignmentDetail(
+                assignment=_assignment_view(detail.assignment, labels),
+                history=[_assignment_event_view(event, labels) for event in detail.history],
+            )
+
+        return self._read(work)
+
+    def transition_assignment(
+        self,
+        *,
+        assignment_uid: str,
+        kind: str,
+        reason: str | None,
+        new_assignee_user_uid: str | None,
+        user_uid: str,
+    ) -> models.Assignment:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import transition_assignment
+
+        def work(session: Session) -> models.Assignment:
+            accounts = AccountRepository()
+            record = transition_assignment(
+                session,
+                assignment_uid=assignment_uid,
+                kind=kind,
+                actor_uid=user_uid,
+                actor_roles=accounts.roles_of(session, user_uid),
+                reason=reason,
+                new_assignee_user_uid=new_assignee_user_uid,
+                accounts=accounts,
+            )
+            return _assignment_view(record, _Labels(session, accounts))
+
+        return self._write(work)
+
+
+class _Labels:
+    """Display labels of the accounts one answer names, each read once per session.
+
+    Every user identity here is a RESTRICT reference, so the account exists; a missing one
+    would be a fault, never a blank name.
+    """
+
+    __slots__ = ("_accounts", "_known", "_session")
+
+    def __init__(self, session: Session, accounts: Any) -> None:
+        self._session = session
+        self._accounts = accounts
+        self._known: dict[str, str] = {}
+
+    def of(self, user_uid: str) -> str:
+        label = self._known.get(user_uid)
+        if label is None:
+            account = self._accounts.get_account(self._session, user_uid)
+            if account is None:  # pragma: no cover - a RESTRICT reference names an account
+                raise DomainError(
+                    ErrorCode.INTERNAL_ERROR, message="an assignment names an unknown account"
+                )
+            label = account.record.display_label
+            self._known[user_uid] = label
+        return label
+
+
+def _assignment_view(record: Any, labels: _Labels) -> models.Assignment:
+    return models.Assignment(
+        assignment_uid=record.assignment_uid,
+        project_uid=record.project_uid,
+        project_name=record.project_name,
+        document_uid=record.document_uid,
+        document_title=record.document_title,
+        assignee_user_uid=record.assignee_user_uid,
+        assignee_label=labels.of(record.assignee_user_uid),
+        created_by_user_uid=record.created_by_user_uid,
+        created_by_label=labels.of(record.created_by_user_uid),
+        note=record.note,
+        status=models.AssignmentStatus(record.status),
+        status_reason=record.status_reason,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _assignment_event_view(event: Any, labels: _Labels) -> models.AssignmentEvent:
+    new_assignee = event.new_assignee_user_uid
+    return models.AssignmentEvent(
+        event_id=event.event_id,
+        kind=models.AssignmentEventKind(event.kind),
+        actor_user_uid=event.actor_user_uid,
+        actor_label=labels.of(event.actor_user_uid),
+        reason=event.reason,
+        new_assignee_user_uid=new_assignee,
+        new_assignee_label=None if new_assignee is None else labels.of(new_assignee),
+        occurred_at=event.occurred_at,
+    )

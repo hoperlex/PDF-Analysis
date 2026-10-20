@@ -57,6 +57,7 @@ __all__ = [
     "CsvExportPort",
     "DashboardPort",
     "DecisionPort",
+    "DispatchPort",
     "DocumentPort",
     "FindingPort",
     "NormContentPort",
@@ -70,6 +71,7 @@ __all__ = [
     "ComparisonPort",
     "AnalysisProfilePort",
     "UploadedDocument",
+    "XlsxExportPort",
 ]
 
 
@@ -153,8 +155,8 @@ class ProjectPort(Protocol):
 
 @runtime_checkable
 class DocumentPort(Protocol):
-    """``uploadDocument``, ``getDocumentVersion``, ``streamDocumentVersionContent``,
-    ``listDocuments`` and ``listVersions``."""
+    """``uploadDocument``, ``uploadDocumentVersion``, ``getDocumentVersion``,
+    ``streamDocumentVersionContent``, ``listDocuments`` and ``listVersions``."""
 
     def upload_document(
         self,
@@ -180,6 +182,24 @@ class DocumentPort(Protocol):
         the caller does not supply one -- optional here for the same reason
         ``display_title`` is: the frozen ``UploadDocumentRequest.section`` is not
         required, and this port does not invent a value the caller never gave it.
+        """
+
+    def upload_document_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        content: BinaryIO,
+        source_filename: str,
+        idempotency_key: str,
+    ) -> UploadedDocument:
+        """Publish one portal bundle as the next immutable version of an existing document.
+
+        `W59-VERSION-UPLOAD-01`. The same handle contract and envelope as
+        :meth:`upload_document`. The document must exist and belong to ``project_uid``
+        (``not_found`` naming ``Document`` otherwise, an unknown project naming
+        ``Project``); the version takes the document's next ordinal and becomes its current
+        version; it takes no title and no section, and starts unclassified.
         """
 
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
@@ -574,6 +594,23 @@ class CsvExportPort(Protocol):
 
 
 @runtime_checkable
+class XlsxExportPort(Protocol):
+    """``exportRunXlsx`` (`W57B-NORMS-CATALOGUE-XLSX-01`).
+
+    The router adds nothing to the bytes: the workbook's layout and every refusal belong to
+    ``auditmanager.exports.export_run_xlsx``. The refusals are ``exportRunCsv``'s first --
+    ``not_found`` and ``state_transition_not_allowed`` decided on the run row before
+    anything else is read -- then ``storage_integrity_error`` (``role:
+    source.structured_companion``) for a version without verifiable sheet labels and
+    ``required_norm_unavailable`` (``reference_kind: norm_retrieval_set``) for citations
+    that do not verify. Nothing is created, so a repeat returns byte-identical bytes.
+    """
+
+    def export_run_xlsx(self, *, run_id: str, principal_id: str) -> bytes:
+        """The workbook bytes for one run, for the principal the seam admitted."""
+
+
+@runtime_checkable
 class CredentialPort(Protocol):
     """``issueToken`` and ``changePassword``, and the epoch read the seam performs.
 
@@ -806,6 +843,15 @@ class NormsSearchPort(Protocol):
     def get_document(self, *, norm_document_id: str) -> models.NormDocument:
         """One norm document; ``not_found`` for an identity that names nothing."""
 
+    def list_catalogue(
+        self, *, q: str | None, kind: str | None, cursor: str | None, limit: int
+    ) -> models.NormCatalogueEntryPage:
+        """``listNormDocuments`` (`W57B-NORMS-CATALOGUE-XLSX-01`): the current snapshot's
+        documents with display names, filtered by text and kind, in designation order; no
+        current snapshot is ``required_norm_unavailable`` (``reference_kind:
+        norms_snapshot``); a ``q`` or ``kind`` with nothing to filter by, or a foreign
+        cursor, is ``validation_failed``."""
+
     def list_paragraphs(
         self, *, norm_document_id: str, cursor: str | None, limit: int
     ) -> models.NormParagraphPage:
@@ -848,12 +894,15 @@ class NormContentPort(Protocol):
 
 @runtime_checkable
 class ComparisonPort(Protocol):
-    """``compareDocumentVersions``. `W59-VERSION-COMPARE-01`.
+    """``compareDocumentVersions`` and ``carryOverDecision``. `W59-VERSION-COMPARE-01`,
+    `W59-DECISION-CARRYOVER-01`.
 
     A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
-    The answer is always a ``VersionComparison``: a pair the comparison rule does not admit
-    is ``outcome: refused`` with one closed reason, never an error envelope and never a
-    relabelled pair. Nothing behind this port writes.
+    The comparison is always a ``VersionComparison``: a pair the comparison rule does not
+    admit is ``outcome: refused`` with one closed reason, never an error envelope and never
+    a relabelled pair, and the read writes nothing. The one write is the expert-confirmed
+    carryover of one source decision to the matched target finding, appended to the
+    decision ledger after the comparison is recomputed.
     """
 
     def compare_versions(
@@ -871,6 +920,30 @@ class ComparisonPort(Protocol):
     ) -> models.VersionComparison:
         """The comparison of the two named versions, or why they are not compared."""
 
+    def carry_over_decision(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_finding_uid: str,
+        target_finding_uid: str,
+        source_decision_id: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.CarryOverDecisionResponse:
+        """Carry the confirmed source decision to the target finding, or refuse.
+
+        The expert role is read from the account in the confirming transaction; ``admin``
+        alone is ``permission_denied``. A pair the recomputed comparison no longer proposes,
+        a source decision that is no longer current, a target that already has an event and
+        a severity the target cannot hold are each ``conflict`` with a ``conflict_reason``.
+        """
 
 @runtime_checkable
 class AnalysisProfilePort(Protocol):
@@ -885,3 +958,56 @@ class AnalysisProfilePort(Protocol):
 
     def list_analysis_profiles(self) -> models.AnalysisProfileList:
         """Every section and its registered text profile, or ``null`` when none is."""
+class DispatchPort(Protocol):
+    """The four «Диспетчер» operations. `W61-DISPATCHER-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    Every method reads the acting account's role set in its own transaction; the seam's role
+    register is only the outer door (``admin`` for creation, any one role otherwise).
+    """
+
+    def create_assignment(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str | None,
+        assignee_user_uid: str,
+        note: str | None,
+        user_uid: str,
+    ) -> models.Assignment:
+        """Create one assignment, or answer the open one this request repeats exactly.
+
+        ``admin`` only; the assignee must be an active ``expert`` (``validation_failed``,
+        ``constraint: active_expert_required``); the document must belong to the project
+        (``not_found``); another open assignment on the same scope is ``conflict`` with
+        ``conflict_reason: assignment_open``.
+        """
+
+    def list_assignments(
+        self, *, user_uid: str, mine: bool, status: str | None, project_uid: str | None
+    ) -> Sequence[models.Assignment]:
+        """Every assignment the caller may read, newest first, narrowed by the filters.
+
+        An administrator reads all (``mine`` narrows to their own); an expert always reads
+        only the assignments currently given to them.
+        """
+
+    def get_assignment(self, *, assignment_uid: str, user_uid: str) -> models.AssignmentDetail:
+        """One assignment and its history; ``not_found`` when absent or not visible."""
+
+    def transition_assignment(
+        self,
+        *,
+        assignment_uid: str,
+        kind: str,
+        reason: str | None,
+        new_assignee_user_uid: str | None,
+        user_uid: str,
+    ) -> models.Assignment:
+        """Append one event, answer an exact repeat unchanged, or refuse.
+
+        ``started``/``completed``/``returned`` by the current assignee holding ``expert``
+        (``permission_denied``, ``required_capability: assignment:assignee`` otherwise);
+        ``reassigned``/``cancelled`` by ``admin``; a move the table does not allow is
+        ``state_transition_not_allowed`` (``machine: work_assignment``).
+        """

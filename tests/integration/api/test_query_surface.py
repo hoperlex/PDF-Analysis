@@ -834,8 +834,14 @@ SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset({"listVersionPortalBloc
 #: The four norms listings, driven over the shipped ``NormsSearchAdapter`` on this suite's
 #: rollback-joined session (`W55A-PIN-01`).
 NORMS_QUERY_OPERATIONS: frozenset[str] = frozenset(
-    {"searchNorms", "listNormParagraphs", "listNormSnapshots", "listNormSnapshotEvents"}
+    {"searchNorms", "listNormParagraphs", "listNormSnapshots", "listNormSnapshotEvents",
+     # `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue, over the same adapter.
+     "listNormDocuments"}
 )
+
+#: The second document of the current snapshot, so the catalogue has two rows of two kinds
+#: (`W57B-NORMS-CATALOGUE-XLSX-01`); a real slug of the W54 snapshot.
+CATALOGUE_SECOND_SLUG = "ГОСТ_21_501-2018__Межгосударственный_стандарт__Система_прое"
 
 #: The words the seeded norms paragraphs carry. ``SEARCH_WORD`` (``здания``) stems to the
 #: lexeme every paragraph holds; ``NARROW_WORD`` is in one paragraph only.
@@ -918,6 +924,14 @@ def _seed_norms(session: Session) -> dict[str, Any]:
     designate(first)
     current, document = snapshot()
     designate(current)
+    session.execute(text(
+        "INSERT INTO norm_document (norm_document_id, norms_snapshot_id, "
+        "source_document_ref, slug, title, doc_type, source_attribution, pdf_page_count, "
+        "block_count, page_heading_count, recognised_characters, paragraph_count) "
+        "VALUES (:d, :s, 'query-surface-second', :slug, :title, 'ГОСТ', 'consultant_plus', "
+        "2, 2, 0, 100, 0)"
+    ), {"d": str(NormDocumentId.new()), "s": current, "slug": CATALOGUE_SECOND_SLUG,
+        "title": f"{CATALOGUE_SECOND_SLUG}.pdf"})
     return {"first": first, "current": current, "document": document}
 
 
@@ -1021,6 +1035,12 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listNormParagraphs": f"/norm-documents/{norms['document']}/paragraphs",
         "listNormSnapshots": "/norms/snapshots",
         "listNormSnapshotEvents": "/norms/snapshots/events",
+        # `W57B-NORMS-CATALOGUE-XLSX-01`. The current snapshot's two documents.
+        "listNormDocuments": "/norm-documents",
+        # `W61-DISPATCHER-01`. Driven by its own test below
+        # (`test_list_assignments_reads_every_query_parameter_it_declares`), over rows that
+        # test writes, because its filters are a role decision as much as a query one.
+        "listAssignments": "/assignments",
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -1043,6 +1063,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listNormParagraphs": {"cursor", "limit"},
         "listNormSnapshots": {"cursor", "limit"},
         "listNormSnapshotEvents": {"cursor", "limit"},
+        "listNormDocuments": {"q", "kind", "cursor", "limit"},
+        "listAssignments": {"mine", "status", "project_uid", "cursor", "limit"},
     }, f"the contract's query surface moved: {declared}"
 
     accounts_and_requests = _seed_accounts_and_requests(session, shipped_router)
@@ -1165,6 +1187,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
     assert appended.status == 201, appended.body
 
     for operation_id, names in declared.items():
+        if operation_id == "listAssignments":
+            continue  # driven by its own test below
         target = targets[operation_id]
         # `searchNorms`' target already carries its required `q`.
         sep = "&" if "?" in target else "?"
@@ -1241,7 +1265,21 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             if not accepted["items"] or carried != {"accepted"} or impossible["items"]:
                 inert.setdefault(operation_id, []).append("verdict")
 
-        if "q" in names:
+        if "q" in names and operation_id == "listNormDocuments":
+            # The catalogue's text filter keeps the document whose designation it starts.
+            kept = ok(get(surface, f"{target}{sep}q={quote('ГОСТ 21.501')}&limit=200"))
+            if [item["designation"] for item in kept["items"]] != ["ГОСТ 21.501-2018"]:
+                inert.setdefault(operation_id, []).append("q")
+
+        if "kind" in names:
+            # The kind filter keeps exactly that kind's rows.
+            kept = ok(get(surface, f"{target}{sep}kind={quote('СП')}&limit=200"))
+            if [item["kind"] for item in kept["items"]] != ["СП"] or len(
+                baseline["items"]
+            ) == len(kept["items"]):
+                inert.setdefault(operation_id, []).append("kind")
+
+        if "q" in names and operation_id == "searchNorms":
             # Another query is another answer: one paragraph instead of three.
             narrow = ok(get(surface, f"/norms/search?q={quote(NARROW_WORD)}&limit=200"))
             ids = [item["norm_paragraph_id"] for item in baseline["items"]]
@@ -1467,3 +1505,101 @@ def paged(session: Session) -> Catalogue:
     thing to drift.
     """
     return Catalogue(session)
+
+
+def test_list_assignments_reads_every_query_parameter_it_declares(
+    shipped_router: Surface, session: Session, session_factory: sessionmaker[Session]
+) -> None:
+    """`W61-DISPATCHER-01`: ``mine``, ``status``, ``project_uid``, ``cursor`` and ``limit``.
+
+    The same rule as the sweep above -- **supply the parameter and require the answer to
+    change** -- over assignments this test writes in its own rolled-back transaction: one
+    in progress for the caller in one project, one assigned to another expert in another.
+    The caller is given ``admin`` beside ``expert`` in the database (the dispatch context
+    reads the role set there), so ``mine`` is a narrowing it may lift.
+    """
+    import secrets
+
+    from auditmanager.access.public import AccountRepository, UserRepository
+    from auditmanager.api.routers.dispatch import build_dispatch_routes
+    from auditmanager.bootstrap.adapters import DispatchAdapter
+    from auditmanager.dispatch.public import assign_work, transition_assignment
+    from auditmanager.documents.public import DocumentRepository
+    from w13_api_driver import TEST_SUBJECT
+
+    caller = TEST_SUBJECT.user_uid
+    shipped_router.router.credentials.roles = frozenset({"expert", "admin"})
+    session.execute(
+        text(
+            "INSERT INTO app_user_role (user_uid, role) VALUES (:u, 'admin') "
+            "ON CONFLICT (user_uid, role) DO NOTHING"
+        ),
+        {"u": caller},
+    )
+    other = str(
+        UserRepository().create_user(
+            session, f"qs-assignee-{secrets.token_hex(4)}", "query-surface-password-3"
+        ).user_uid
+    )
+    AccountRepository().grant_role(session, user_uid=other, role="expert", granted_by=None)
+    documents = DocumentRepository()
+    first = str(documents.create_project(session, "Опросная площадка один").project_uid)
+    second = str(documents.create_project(session, "Опросная площадка два").project_uid)
+    roles = frozenset({"admin", "expert"})
+    mine = assign_work(
+        session, project_uid=first, document_uid=None, assignee_user_uid=caller, note=None,
+        actor_uid=caller, actor_roles=roles,
+    ).assignment_uid
+    theirs = assign_work(
+        session, project_uid=second, document_uid=None, assignee_user_uid=other, note=None,
+        actor_uid=caller, actor_roles=roles,
+    ).assignment_uid
+    transition_assignment(
+        session, assignment_uid=mine, kind="started", actor_uid=caller, actor_roles=roles
+    )
+    session.flush()
+
+    router = Router(credentials=shipped_router.router.credentials)
+    build_dispatch_routes(router, DispatchAdapter(session_factory))
+    surface = Surface(router)
+
+    def listed(query: str) -> list[dict[str, Any]]:
+        return ok(get(surface, f"/assignments?{query}"))["items"]
+
+    def ids(items: list[dict[str, Any]]) -> list[str]:
+        return [item["assignment_uid"] for item in items]
+
+    baseline = listed("limit=200")
+    assert {mine, theirs} <= set(ids(baseline)), ids(baseline)
+    inert: list[str] = []
+
+    limited = ok(get(surface, "/assignments?limit=1"))
+    if limited["items"] != baseline[:1]:
+        inert.append("limit")
+    resumed = listed(f"limit=1&cursor={limited['page']['next_cursor']}")
+    if resumed != baseline[1:2]:
+        inert.append("cursor")
+
+    own = listed("mine=true&limit=200")
+    if theirs in ids(own) or mine not in ids(own) or any(
+        item["assignee_user_uid"] != caller for item in own
+    ):
+        inert.append("mine")
+
+    progress = listed("status=in_progress&limit=200")
+    assigned = listed("status=assigned&limit=200")
+    if (
+        mine not in ids(progress)
+        or {item["status"] for item in progress} != {"in_progress"}
+        or theirs not in ids(assigned)
+        or mine in ids(assigned)
+    ):
+        inert.append("status")
+
+    scoped = listed(f"project_uid={first}&limit=200")
+    if ids(scoped) != [mine]:
+        inert.append("project_uid")
+
+    assert inert == [], f"listAssignments accepts and ignores: {inert}"
+    refused = get(surface, "/assignments?status=open")
+    assert refused.status == 422, refused.body
