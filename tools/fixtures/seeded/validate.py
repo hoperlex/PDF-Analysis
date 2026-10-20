@@ -132,7 +132,8 @@ def validate_bytes(manifest: dict, files: dict[str, bytes], *, require_full: boo
             _require(positive_counts[category] >= 3, f"{category}: fewer than three issues")
             _require(control_counts[category] >= 1, f"{category}: no near-miss")
             _require(len(spread[category]) >= 2, f"{category}: positives in only one bundle")
-        _require(len(issues) >= 21 and len(controls) >= 7, "minimum case count not met")
+        _require(len(issues) >= 3 * len(CATEGORIES) and len(controls) >= len(CATEGORIES),
+                 "minimum case count not met")
 
 
 def validate_directory(root: Path) -> dict:

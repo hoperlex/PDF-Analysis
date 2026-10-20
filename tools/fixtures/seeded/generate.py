@@ -97,7 +97,7 @@ def build(
                 item["missing_content"] = issue.missing_content
             issues.append(item)
         for index, control in enumerate(cases.CONTROLS):
-            if index != number or control.category not in chosen:
+            if index % BUNDLE_COUNT != number or control.category not in chosen:
                 continue
             page_lines[0].append(control.statement)
             controls.append({

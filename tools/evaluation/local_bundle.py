@@ -25,7 +25,9 @@ from evaluation.run_sources import (
 from seeded.validate import validate_bytes
 
 
-FROZEN_SEEDED_MANIFEST_SHA256 = "95e07c2919d46a600cb9ffead41c883fd38d141699c6857a4700126d6dae6fb7"
+# Re-frozen by GATE-FIX-CONTRACT-01: the corpus gained the five normative categories
+# (36 issues, 12 controls); the previous frozen value was 95e07c29...6dae6fb7 (21 and 7).
+FROZEN_SEEDED_MANIFEST_SHA256 = "067fafb9bf4b489a7bf869ba86134f4e5c23406e8cbe03e0c490aa0a127b89ae"
 MAX_LOCAL_MANIFEST_BYTES = 128 * 1024
 MAX_LOCAL_PORTAL_ZIP_BYTES = 4 * 1024 * 1024
 
