@@ -5,7 +5,8 @@ be a judgement made at the call site: it is this register, and every entry is a 
 foreign key to ``app_user(user_uid)`` created by migration ``0015`` or a later one
 (``0024_version_classification`` adds the classification's confirmer;
 ``0025_work_assignments`` adds an assignment's first assignee and creator, and each of its
-events' actor and new assignee).
+events' actor and new assignee; ``0026_price_lists`` adds a price list's uploader and a
+vendor-list revision's author).
 
 Three kinds of entry, by what the database does when the account row is deleted:
 
@@ -97,6 +98,18 @@ ACCOUNT_REFERENCES: Final[tuple[AccountReference, ...]] = (
         "new_assignee_user_uid",
         "RESTRICT",
         "this account was given a piece of work by reassignment (W61-DISPATCHER-01)",
+    ),
+    AccountReference(
+        "price_list_revision",
+        "uploaded_by_user_uid",
+        "RESTRICT",
+        "this account uploaded a project price list (W60-PRICE-LIST-01)",
+    ),
+    AccountReference(
+        "vendor_list_revision",
+        "set_by_user_uid",
+        "RESTRICT",
+        "this account changed a vendor list (W60-PRICE-LIST-01)",
     ),
     AccountReference(
         "registration_request",

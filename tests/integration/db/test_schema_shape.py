@@ -66,6 +66,12 @@ IMMUTABLE_TABLES = {
     # status is derived from the history (view ``work_assignment_current``), never updated.
     "work_assignment",
     "work_assignment_event",
+    # `0026_price_lists`: an uploaded price list, its positions, and each vendor-list
+    # revision with its entries are written once; the current one is a query.
+    "price_list_revision",
+    "price_list_position",
+    "vendor_list_revision",
+    "vendor_list_entry",
 }
 
 
@@ -230,6 +236,14 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     # ``test_work_assignments_migration.py``. When ``asg`` is contracted, move it into
     # ``prefix_by_column``.
     "assignment_uid",
+    # `0026_price_lists`: ``prl``, ``prp`` and ``vnl`` are minted by ``auditmanager.optimisation``
+    # on the registry's pattern but are not in ``identifiers.json`` yet (phase A of
+    # `W60-PRICE-LIST-01` owns neither the catalog nor the registry). Their format CHECKs are
+    # asserted directly in ``test_price_lists_migration.py``; when contracted, move them into
+    # ``prefix_by_column``.
+    "price_list_id",
+    "price_list_position_id",
+    "vendor_list_id",
 }
 
 
@@ -286,6 +300,9 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "assignee_user_uid": "usr",
         "created_by_user_uid": "usr",
         "new_assignee_user_uid": "usr",
+        # `W60-PRICE-LIST-01`, migration 0026: a price list's uploader, a vendor list's author.
+        "uploaded_by_user_uid": "usr",
+        "set_by_user_uid": "usr",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

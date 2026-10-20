@@ -31,6 +31,24 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `W60-PRICE-LIST-01` for ``0026_price_lists``, measured, not predicted: two
+#: fresh databases on the lane's PostgreSQL 17 + pgvector stack, one upgraded to ``0025``
+#: (whose inventory equalled the 0025 seal below in every family) and one to ``0026``, had
+#: every family's rows diffed. Every added row is this revision's and nothing was removed or
+#: redefined: columns +41 -> 534 (``price_list_revision`` 16, ``price_list_position`` 11,
+#: ``vendor_list_revision`` 9, ``vendor_list_entry`` 5); relations +4 -> 60 (four tables);
+#: constraints +56 -> 582 (``price_list_revision``: primary key, unique revision number, three
+#: foreign keys, fourteen CHECKs and the constraint trigger's row
+#: ``trg_price_list_revision_has_positions``; ``price_list_position``: primary key, unique row
+#: number, one foreign key, eleven CHECKs; ``vendor_list_revision``: primary key, the
+#: ``NULLS NOT DISTINCT`` unique revision number, two foreign keys, ten CHECKs and
+#: ``trg_vendor_list_revision_has_entries``; ``vendor_list_entry``: primary key, one foreign
+#: key, five CHECKs); indexes +9 -> 141 (the four primary keys, the three unique pairs,
+#: ``ix_price_list_revision_blob`` and ``ix_vendor_list_revision_set_by``); triggers +7 -> 64
+#: (four ``am_immutable_row`` triggers, ``trg_price_list_revision_blob_available`` and the two
+#: deferred constraint triggers); functions +3 -> 27 (``am_check_price_list_blob``,
+#: ``am_require_price_list_positions``, ``am_require_vendor_list_entries``). Views,
+#: extensions, sequences, policies and the state topology are identical to the 0025 seal.
 #: Resealed by `W61-DISPATCHER-01` for ``0025_work_assignments``, measured, not predicted:
 #: two fresh databases on the lane's PostgreSQL 17 + pgvector stack, one upgraded to ``0024``
 #: (whose inventory equalled the 0024 seal below in every family) and one to ``0025``, had
@@ -137,12 +155,12 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (493, "c1f789b1bd4efdf26fde1d9a21bc1111021d5149e0a6a69b8c86b72ca25b5fef"),
-    "relations": (56, "1facc0d8577d0b6c43b9dfd3ba59548f969d2ca12477203ef1cdde341eb94c88"),
-    "constraints": (526, "df299b7409abe1bbee1aab93eb5845f2a9a65e83a25262d092696e509342b352"),
-    "indexes": (132, "21bcd9d6d9fb3b8a8117b37a8661b1346082517c1fd6f48a8cacff79ba470d1c"),
-    "triggers": (57, "5a0ecf7cc653b05904179adce150e2384948852ddaf90602a1c7dc189326cd2f"),
-    "functions": (24, "da815b4bd762b8dbae611de09d11d006d829a02d096a52cd3d8301cfa392a82d"),
+    "columns": (534, "73c828518b4021dcbbcc02a1fcdcda3ee4e899819641a69a17fe1bd10d9848ae"),
+    "relations": (60, "94b6f46934843c0096ab740a63a43ab2e3c1938c4fbe53078a2ba468cabef626"),
+    "constraints": (582, "3ff7f3b4882a47859da9f23b23f611157245338f0e12e450ee0f5cdbfa2ab2fc"),
+    "indexes": (141, "fa481bb8de5ae149712dd16efb5175151666fe29e610380ff6a439cc4d27f0be"),
+    "triggers": (64, "3fe7fe40043f04a3a435efe8b13a85a88af27de1cd3bca66870691491e9f54a3"),
+    "functions": (27, "5d707324851da30fa93d32613a00cc1e65274aea7976cb5876e06089aa916bad"),
     "views": (2, "caa1bb6a500a67cd406cf34f7fb6fe410811592659a0f527806c4b3c827fa65f"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

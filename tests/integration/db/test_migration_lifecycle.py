@@ -41,6 +41,11 @@ EXPECTED_TABLES = {
     # `0025_work_assignments`: work given to experts and its append-only history.
     "work_assignment",
     "work_assignment_event",
+    # `0026_price_lists`: project price lists with their positions, and vendor lists.
+    "price_list_revision",
+    "price_list_position",
+    "vendor_list_revision",
+    "vendor_list_entry",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
