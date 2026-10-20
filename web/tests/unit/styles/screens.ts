@@ -42,6 +42,7 @@ import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
 import { SpecificationPricesAnswer } from '@/widgets/specification-prices';
+import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
 import { NormSearchResults } from '@/widgets/norm-search';
 import { NormCatalogueTable } from '@/widgets/norm-catalogue';
@@ -589,6 +590,34 @@ export function screens(): Screen[] {
       answer: { ...ready, state: 'price_list_missing' as const, price_list: null, run_id: null, text_layer_sha256: null,
         extraction: null, matching: null, rows: null },
       onPage: null,
+    })));
+  }
+  // `NORM-REFS-RUN-01`: «Нормативные ссылки» — a citation of each of the five outcomes (an ok,
+  // two degraded and two inert badge tones), the pages with no text layer, the legend, a corpus
+  // document whose designation is not read, and a state that stops the list.
+  {
+    const documentA = 'ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+    const anchor = (page: number) => ({ page_number: page, char_start: 10, char_end: 26, quote: 'СП 54.13330.2011' });
+    const answer = {
+      run_id: RUN_ID, version_uid: VERSION_UID, state: 'ready' as const, page_count: 8,
+      norms_snapshot_id: 'ns_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', text_layer_sha256: SHA, snapshot_document_count: 674,
+      counts: { in_corpus: 1, newer_edition: 1, older_edition_only: 1, not_in_corpus: 1, not_recognised: 1 },
+      occurrence_count: 5, unread_pages: [2],
+      items: [
+        { cited: 'СП 54.13330.2022', outcome: 'in_corpus' as const, occurrence_count: 1, anchors: [anchor(3)],
+          matched_norm_document_id: documentA, matched_designation: 'СП 54.13330.2022', matched_title: 'Свод правил' },
+        { cited: 'СП 54.13330.2011', outcome: 'newer_edition' as const, occurrence_count: 1, anchors: [anchor(1)],
+          matched_norm_document_id: documentA, matched_designation: 'СП 54.13330.2024' },
+        { cited: 'ГОСТ 21.101-2021', outcome: 'older_edition_only' as const, occurrence_count: 1, anchors: [anchor(4)],
+          matched_norm_document_id: documentA, matched_designation: 'ГОСТ 21.101-2020' },
+        { cited: 'ГОСТ Р 99999-2020', outcome: 'not_in_corpus' as const, occurrence_count: 1, anchors: [anchor(5)] },
+        { cited: 'СП 54.13330', outcome: 'not_recognised' as const, occurrence_count: 1, anchors: [anchor(6)] },
+      ],
+      unrecognised: [{ norm_document_id: documentA, slug: 'МДС_12-24_2006', designation: 'МДС 12-24.2006', title: 'Устройство обычных' }],
+    };
+    add('NormReferencesAnswer ready', render(createElement(NormReferencesAnswer, { answer })));
+    add('NormReferencesAnswer stopped', render(createElement(NormReferencesAnswer, {
+      answer: { run_id: RUN_ID, version_uid: VERSION_UID, state: 'text_unavailable' as const, page_count: 8 },
     })));
   }
   // `W63-SECTION-FORM7-01`: «Оптимизация разделов» — a priced project beside one with no price
