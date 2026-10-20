@@ -21,9 +21,11 @@
  * feature.
  */
 
-import type { DocumentVersion, ProjectUid } from '@/shared/api';
+import type { ReactNode } from 'react';
+
+import type { DocumentUid, DocumentVersion, ProjectUid } from '@/shared/api';
 import { PC01_UPLOAD_ENVELOPE, UPLOAD_ENVELOPE_RULES } from '@/entities/document-version';
-import { UploadDocumentForm } from '@/features/upload-document';
+import { UploadDocumentForm, UploadDocumentVersionForm } from '@/features/upload-document';
 
 export interface UploadPanelProps {
   readonly projectUid: ProjectUid;
@@ -36,33 +38,77 @@ export function UploadPanel({ projectUid, onUploaded }: UploadPanelProps) {
     <section className="am-section">
       <h2>Загрузка</h2>
 
-      <div className="am-state" role="note">
-        <p className="am-state__title">Что принимается</p>
-        <div className="am-state__detail">
-          <ul>
-            {UPLOAD_ENVELOPE_RULES.map((rule) => (
-              <li key={rule}>{rule}</li>
-            ))}
-          </ul>
-          <p>
-            Комплект получают из портала распознавания: он выгружает PDF вместе с файлами
-            блоков и распознанного текста одним ZIP-архивом. Файл за пределами этих
-            ограничений отклоняется с указанием причины на экране. Текст не
-            восстанавливается оптическим распознаванием, а частично читаемый документ
-            никогда не принимается молча. Ограничения: {PC01_UPLOAD_ENVELOPE.maxBytesLabel}{' '}
-            и {PC01_UPLOAD_ENVELOPE.maxPages} страниц.
-          </p>
-          <p>
-            Опубликованная версия неизменяема: здесь ничто её не редактирует и не заменяет.
-            Повторная загрузка публикует второй документ, и оба остаются адресуемыми.
-          </p>
-        </div>
-      </div>
+      <EnvelopeNote>
+        <p>
+          Опубликованная версия неизменяема: здесь ничто её не редактирует и не заменяет.
+          Повторная загрузка публикует второй документ, и оба остаются адресуемыми.
+        </p>
+      </EnvelopeNote>
 
       <UploadDocumentForm
         projectUid={projectUid}
         {...(onUploaded === undefined ? {} : { onUploaded })}
       />
     </section>
+  );
+}
+
+export interface UploadVersionPanelProps {
+  readonly projectUid: ProjectUid;
+  readonly documentUid: DocumentUid;
+  /** Called with the new version. The screen decides where that leads. */
+  readonly onUploaded?: ((version: DocumentVersion) => void) | undefined;
+}
+
+/**
+ * Upload the next version of one document (`W59-VERSION-UPLOAD-01`): the same envelope,
+ * stated before the picker in the same words, and what a further version does and does not
+ * carry over.
+ */
+export function UploadVersionPanel({ projectUid, documentUid, onUploaded }: UploadVersionPanelProps) {
+  return (
+    <section className="am-section">
+      <h2>Новая версия</h2>
+
+      <EnvelopeNote>
+        <p>
+          Новая версия получает следующий номер и становится текущей версией документа.
+          Прежние версии, их стадия и раздел, прогоны, замечания и решения не меняются.
+          Новая версия ничего не наследует: название остаётся названием документа, а стадию и
+          раздел новой версии подтверждает эксперт.
+        </p>
+      </EnvelopeNote>
+
+      <UploadDocumentVersionForm
+        projectUid={projectUid}
+        documentUid={documentUid}
+        {...(onUploaded === undefined ? {} : { onUploaded })}
+      />
+    </section>
+  );
+}
+
+/** The accepted envelope, before the picker; `children` closes it with what the upload does. */
+function EnvelopeNote({ children }: { readonly children: ReactNode }) {
+  return (
+    <div className="am-state" role="note">
+      <p className="am-state__title">Что принимается</p>
+      <div className="am-state__detail">
+        <ul>
+          {UPLOAD_ENVELOPE_RULES.map((rule) => (
+            <li key={rule}>{rule}</li>
+          ))}
+        </ul>
+        <p>
+          Комплект получают из портала распознавания: он выгружает PDF вместе с файлами
+          блоков и распознанного текста одним ZIP-архивом. Файл за пределами этих
+          ограничений отклоняется с указанием причины на экране. Текст не
+          восстанавливается оптическим распознаванием, а частично читаемый документ
+          никогда не принимается молча. Ограничения: {PC01_UPLOAD_ENVELOPE.maxBytesLabel}{' '}
+          и {PC01_UPLOAD_ENVELOPE.maxPages} страниц.
+        </p>
+        {children}
+      </div>
+    </div>
   );
 }

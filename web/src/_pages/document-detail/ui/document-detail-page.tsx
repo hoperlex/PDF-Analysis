@@ -3,23 +3,28 @@
 /**
  * `/projects/{project_uid}/documents/{document_uid}` — one document and its versions.
  *
- * **Whether this route earns its place is argued in `docs/program/reviews/W19-SHELL.md`,
- * not assumed here.** The short form: through this surface a document has exactly one
- * version, so as a *step* in the journey this screen is a click that shows a list of one,
- * and the project screen therefore links straight past it to the version. It exists as an
- * *address*, because `document_uid` is a value this product prints — a column of the
- * exported CSV, a field of every `DocumentVersion` body, the subject of a `404` envelope —
- * and an identifier a product prints and cannot open is the shape of `D-16` itself.
+ * **Why this route exists is argued in `docs/program/reviews/W19-SHELL.md`.** It is an
+ * *address*, because `document_uid` is a value this product prints — a column of the exported
+ * CSV, a field of every `DocumentVersion` body, the subject of a `404` envelope — and an
+ * identifier a product prints and cannot open is the shape of `D-16` itself.
+ *
+ * Since `W59-VERSION-UPLOAD-01` it is also a *step*: the next version of the document is
+ * uploaded here («Загрузить новую версию»). The new version becomes the document's current
+ * one and inherits no stage or section, so on success the screen leads to that version's
+ * stage-and-section panel, where an expert confirms them before any run.
  *
  * It fetches `listVersions` on mount and reads nothing from a previous screen.
  */
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
+import type { DocumentVersion } from '@/shared/api';
 import { PageShell, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { looksLikeProjectUid } from '@/entities/project';
 import { looksLikeDocumentUid } from '@/entities/document-version';
+import { UploadVersionPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
 
 export interface DocumentDetailPageProps {
@@ -28,6 +33,8 @@ export interface DocumentDetailPageProps {
 }
 
 export function DocumentDetailPage({ projectUid, documentUid }: DocumentDetailPageProps) {
+  const router = useRouter();
+
   if (!looksLikeProjectUid(projectUid) || !looksLikeDocumentUid(documentUid)) {
     return (
       <PageShell title="Документ" actions={<Link href={routes.projects()}>Все проекты</Link>}>
@@ -38,6 +45,12 @@ export function DocumentDetailPage({ projectUid, documentUid }: DocumentDetailPa
       </PageShell>
     );
   }
+
+  // The new version's address comes from the server's answer, never from this screen's own
+  // path: the version is read back there, with its empty classification panel in front.
+  const goToNewVersion = (version: DocumentVersion) => {
+    router.push(routes.versionClassification(version.project_uid, version.version_uid));
+  };
 
   return (
     <PageShell
@@ -52,6 +65,11 @@ export function DocumentDetailPage({ projectUid, documentUid }: DocumentDetailPa
     >
       <h2>Опубликованные версии</h2>
       <VersionList projectUid={projectUid} documentUid={documentUid} />
+      <UploadVersionPanel
+        projectUid={projectUid}
+        documentUid={documentUid}
+        onUploaded={goToNewVersion}
+      />
     </PageShell>
   );
 }

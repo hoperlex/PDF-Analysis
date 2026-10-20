@@ -3024,7 +3024,8 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
   {
     label: 'Загрузка: загружаемый файл…',
     why:
-      '`upload-document-form.tsx`, while the upload is in flight; same mechanism as the ' +
+      '`upload-outcome.tsx`, under either upload form while the upload is in flight (the ' +
+      'first version or, `W59-VERSION-UPLOAD-01`, the next one); same mechanism as the ' +
       'new project, and the same reason no seed reaches it. The words it carries are ' +
       'judged by `no branch label carries English, reachable or not`. `D-82`.',
   },
