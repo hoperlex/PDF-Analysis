@@ -14,9 +14,9 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **65 paths / 74 operations / 211 schemas**,
+The development API surface is **70 paths / 80 operations / 229 schemas**,
 the error catalogue has **25** codes, the migration head is
-**`0026_price_lists`**, and `VERSION` is `0.6.0`. These are checkout
+**`0027_optimisation_proposals`**, and `VERSION` is `0.6.0`. These are checkout
 facts; the release tree has its own frozen 47/54/123 surface and
 `0021_portal_bundles` head. For the current deployment, run
 `infra/deploy/verify-deployed.sh`; this document is no substitute for that
@@ -87,8 +87,12 @@ for the `R-139` night window of 2026-10-20, `NIGHT-1020-INT-01.md`.
   a price-list position. «Спецификация и цены» (`getSpecificationPrices`)
   reads the AR specification rows from a version's saved text and matches
   them to the current price list; amounts and per-currency totals only for
-  matched same-unit rows with a numeric quantity. Expert review of the draft
-  profiles remains open.
+  matched same-unit rows with a numeric quantity. «Предложения» (migration
+  0027): an expert starts a pass for an AR set and gets deterministic
+  `cheaper_analog` proposals from the price list and the effective vendor
+  list, decides each (accept / reject / revise) in an append-only history, and
+  downloads a formula-escaped CSV; a saving exists only when both prices and a
+  quantity do. Expert review of the draft profiles remains open.
 
 ## Pointers and history
 
