@@ -536,10 +536,11 @@ class TestN1ComponentReferenceResolution:
         # `W59-SECTION-SEAL-01` adds two: the classification and the section review address a
         # version through its document and project.
         # `W59-VERSION-COMPARE-01` adds one: the comparison addresses its source version the
-        # same way.
+        # same way. `W59-VERSION-UPLOAD-01` adds one: the next-version upload addresses its
+        # document through its project.
         # `W61-DISPATCHER-01` adds three: creating an assignment names a project and document
         # that may not exist, and reading or moving one addresses it by identity.
-        assert len(report) == 39, report
+        assert len(report) == 40, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

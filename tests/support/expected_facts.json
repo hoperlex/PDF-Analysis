@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 55,
+    "path_count": 56,
     "operations": [
       [
         "POST",
@@ -17,6 +17,11 @@
         "POST",
         "/projects/{project_uid}/documents",
         "uploadDocument"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions",
+        "uploadDocumentVersion"
       ],
       [
         "GET",
@@ -392,6 +397,7 @@
       "UpdateMyProfileRequest",
       "UpdateUserRequest",
       "UploadDocumentRequest",
+      "UploadDocumentVersionRequest",
       "UserUid",
       "Verdict",
       "VerdictCount",

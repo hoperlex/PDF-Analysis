@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 0c2d222b29c82eb3cf5d2ad8c37c3160b9ad4990b899b2093149113f7ad7fff4
+ *   sha256 a2011725a14b674e920263c43a3920179a77a30af4ee2c88bed7b8d30561caaf
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '0c2d222b29c82eb3cf5d2ad8c37c3160b9ad4990b899b2093149113f7ad7fff4';
+export const CONTRACT_DIGEST = 'a2011725a14b674e920263c43a3920179a77a30af4ee2c88bed7b8d30561caaf';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -175,6 +175,7 @@ export const SCHEMA_NAMES = [
   'UpdateMyProfileRequest',
   'UpdateUserRequest',
   'UploadDocumentRequest',
+  'UploadDocumentVersionRequest',
   'UserUid',
   'Verdict',
   'VerdictCount',
@@ -1656,6 +1657,12 @@ export type UploadDocumentRequest = {
   file: Blob;
   /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
+};
+
+/** The next version of an existing document: one portal bundle and nothing else. There is no title and no section, because a further version takes neither; an undeclared part is refused like any other. */
+export type UploadDocumentVersionRequest = {
+  /** One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. At most 250 MiB; the PDF at most 500 pages. */
+  file: Blob;
 };
 
 /** Opaque account identity. An e-mail address is the sign-in identifier and a unique key among active accounts; this is the identity every reference names. */

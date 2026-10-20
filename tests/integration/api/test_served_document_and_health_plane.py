@@ -150,6 +150,8 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "classifyDocumentVersion",
             # `W59-VERSION-COMPARE-01`: a required target version and bounded paging.
             "compareDocumentVersions",
+            # `W59-VERSION-UPLOAD-01`: the next version takes a multipart body.
+            "uploadDocumentVersion",
             # `W61-DISPATCHER-01`: a creation and a move take bodies, the listing filters and
             # pages. Reading one assignment takes only its path identity and declares none.
             "createAssignment",

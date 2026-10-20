@@ -171,6 +171,9 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/record-verdict/model/use-record-verdict.ts': true,
   'src/features/start-run/model/use-start-run.ts': true,
   'src/features/upload-document/model/use-upload-document.ts': true,
+  // `W59-VERSION-UPLOAD-01`: a further version moves the document's current version, and the
+  // dashboard's panels count versions and group the current ones by section.
+  'src/features/upload-document/model/use-upload-document-version.ts': true,
   'src/features/cancel-run/model/use-cancel-run.ts': true,
   'src/features/reaudit-run/model/use-reaudit-run.ts': true,
   'src/features/set-job-priority/model/use-set-job-priority.ts': false,

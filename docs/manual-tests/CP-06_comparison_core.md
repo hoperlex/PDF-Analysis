@@ -82,6 +82,26 @@ No internal S3 object key/permanent public URL exposed.
 
 **Record** `PASS / FAIL / BLOCKED`, actual result, safe evidence reference.
 
+### MT06-07 — Upload a further version of one set
+
+`W59-VERSION-UPLOAD-01` (`uploadDocumentVersion`).
+
+**Action**
+On a document screen (`/projects/{project_uid}/documents/{document_uid}`) choose a second
+portal bundle under «Новая версия» and press «Загрузить новую версию». Repeat with a bare PDF,
+then with a bundle over the envelope, then send the same accepted bundle twice in a row
+(a double press).
+
+**Expected**
+The accepted bundle opens the new version at its stage-and-section panel: version number one
+higher, no stage or section, the document's own title. The document screen lists both versions,
+newest first; the project screen shows the new one as the document's current version; the older
+version keeps its stage, section, runs and findings and can be compared with the new one once
+both are classified and analysed. The bare PDF and the oversize bundle are refused with the same
+messages as the first upload and publish nothing; the double press publishes one version.
+
+**Record** `PASS / FAIL / BLOCKED`, actual result, safe evidence reference.
+
 ## Final acceptance checklist
 
 - [ ] User-owned mappings survive recompute.
