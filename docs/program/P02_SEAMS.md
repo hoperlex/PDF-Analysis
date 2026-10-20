@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Seventy-nine operations, sealed. `A5` generates the typed client from this document; `B6`
+Eighty operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -886,6 +886,12 @@ read them; `getEffectiveVendorLists` answers the fifteen sections' vendor lists 
 append versioned revisions, refusing a stale `expected_vendor_list_id`
 (`conflict_reason: vendor_list_changed`). No operation answers a total, a proposal or a price a
 price list does not state; migration `0026_price_lists` stores them.
+`W60-OPT-MATCH-01` added `getSpecificationPrices` on 2026-10-20: «Спецификация и цены», the
+specification rows of a document set's current `AR`-classified version, read deterministically
+from its newest published run's saved text and matched to the project's current price list;
+a price and an amount only on a row matched to one position in the same unit with a numeric
+quantity, totals per currency over those rows only; a precondition that does not hold is one
+`state`, and a set outside the project is `404`. Read-only, any one role.
 `W60-OPT-PROPOSALS-01` added six more `optimisation` operations on 2026-10-20, the «Предложения»
 of «Оптимизация проекта»: `startOptimisationPass` (`expert`, keyed) pins a document set's
 current AR version, its newest published run, the current price-list revision and the effective
@@ -987,6 +993,7 @@ could.
 | `getEffectiveVendorLists` | `GET /projects/{project_uid}/vendor-lists` |
 | `setGlobalVendorList` | `PUT /vendor-lists/{section_code}` |
 | `setProjectVendorList` | `PUT /projects/{project_uid}/vendor-lists/{section_code}` |
+| `getSpecificationPrices` | `GET /projects/{project_uid}/documents/{document_uid}/specification-prices` |
 | `startOptimisationPass` | `POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes` |
 | `listOptimisationPasses` | `GET /projects/{project_uid}/optimisation-passes` |
 | `listOptimisationProposals` | `GET /optimisation-passes/{optimisation_pass_id}/proposals` |

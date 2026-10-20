@@ -1,6 +1,6 @@
-"""The seventy-nine operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The eighty operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles one ``APIRouter`` from the twenty-one router modules. It takes
+:func:`build_router` assembles one ``APIRouter`` from the twenty-two router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
 port is the composition root's job (``api/composition.py``), and a factory that reached for
 a concrete implementation would have taken that decision away from it.
@@ -55,6 +55,7 @@ from auditmanager.api.routers.idempotency import (
     require_idempotency_key,
 )
 from auditmanager.api.routers.analysis_profiles import build_analysis_profile_routes
+from auditmanager.api.routers.specification_prices import build_specification_price_routes
 from auditmanager.api.routers.comparison import build_comparison_routes
 from auditmanager.api.routers.dispatch import build_dispatch_routes
 from auditmanager.api.routers.me import build_me_routes
@@ -90,6 +91,7 @@ from auditmanager.api.routers.ports import (
     ReleasesPort,
     RunPort,
     SectionPort,
+    SpecificationPricesPort,
     XlsxExportPort,
 )
 from auditmanager.api.routers.projects import build_project_routes
@@ -158,6 +160,7 @@ __all__ = [
     "AnalysisProfilePort",
     "DispatchPort",
     "OptimisationPort",
+    "SpecificationPricesPort",
     "OptimisationProposalPort",
     "WireResponse",
     "build_auth_routes",
@@ -211,16 +214,17 @@ def build_router(
     xlsx_exports: XlsxExportPort | None = None,
     dispatch: DispatchPort | None = None,
     optimisation: OptimisationPort | None = None,
+    specification_prices: SpecificationPricesPort | None = None,
     optimisation_proposals: OptimisationProposalPort | None = None,
 ) -> Router:
-    """Assemble the seventy-nine operations, from the twenty-one router modules -- ``me``,
+    """Assemble the eighty operations, from the twenty-two router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
     ``optimisation`` `W60-PRICE-LIST-01`'s, ``optimisation_proposals`` `W60-OPT-PROPOSALS-01`'s;
     `W57B-NORMS-CATALOGUE-XLSX-01` adds
     ``listNormDocuments`` to the norms router and ``exportRunXlsx`` (on ``xlsx_exports``) to
-    the export router.
+    the export router; ``specification_prices`` is `W60-OPT-MATCH-01`'s.
 
     ``accounts`` and ``registrations`` are two more ports with a default, for the reason
     the paragraph below gives for the first three: every caller that does not serve them
@@ -297,6 +301,9 @@ def build_router(
     # `W60-PRICE-LIST-01`. Project price lists and vendor lists. Optional with a default, for
     # the reason `blocks` gives above.
     build_optimisation_routes(router, optimisation)  # type: ignore[arg-type]
+    # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's price
+    # list, read-only. Optional with a default, for the reason `blocks` gives above.
+    build_specification_price_routes(router, specification_prices)  # type: ignore[arg-type]
     # `W60-OPT-PROPOSALS-01`. The optimisation passes, their proposals and the experts'
     # decisions. Optional with a default, for the reason `blocks` gives above.
     build_optimisation_proposal_routes(router, optimisation_proposals)  # type: ignore[arg-type]

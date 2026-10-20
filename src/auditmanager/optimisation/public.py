@@ -1,6 +1,7 @@
 """Cross-context surface of the optimisation boundary (`W60-PRICE-LIST-01`).
 
-The composition root serves the commands and the reads from here; nothing else in this
+The composition root serves the commands and the reads from here -- since `W60-OPT-MATCH-01`
+also the priced specification of a document set and its saved-text port; nothing else in this
 package is reached from outside it (``tests/contract/architecture/test_alr05_boundaries.py``).
 """
 
@@ -35,6 +36,17 @@ from auditmanager.optimisation.parsing import (
     parse_price_list,
 )
 from auditmanager.optimisation.parsing.limits import MAX_BYTES, MAX_DATA_ROWS
+from auditmanager.optimisation.matching import (
+    BASES as MATCH_BASES,
+    EXCLUSION_REASONS,
+    MATCH_ALGORITHM,
+    MAX_LISTED_CANDIDATES,
+    STATUSES as MATCH_STATUSES,
+    CurrencyTotal,
+    MatchOutcome,
+    RowMatch,
+    canonical_amount,
+)
 from auditmanager.optimisation.policy import (
     AGGREGATE_PRICE_LIST,
     AGGREGATE_VENDOR_LIST,
@@ -76,10 +88,35 @@ from auditmanager.optimisation.queries import (
     list_price_list_revisions,
     list_vendor_list_history,
 )
+from auditmanager.optimisation.project_match import (
+    DEFAULT_ROW_PAGE,
+    MAX_ROW_PAGE,
+    STATES as SPECIFICATION_PRICE_STATES,
+    RowPage,
+    RunCandidate,
+    SavedPageText,
+    SavedTextReader,
+    SpecificationPrices,
+    read_specification_prices,
+)
 from auditmanager.optimisation.repository import (
     PriceListPositionRecord,
     PriceListRevisionRecord,
     VendorListRevisionRecord,
+)
+from auditmanager.optimisation.specification import (
+    EXTRACTION_ALGORITHM,
+    FORM7_COLUMNS,
+    MAX_LISTED_SKIPS,
+    MAX_LISTED_TABLES,
+    MAX_SPECIFICATION_ROWS,
+    QUANTITY_ISSUES,
+    SKIP_REASONS as SPECIFICATION_SKIP_REASONS,
+    UNITS as SPECIFICATION_UNITS,
+    DetectedTable,
+    SkippedLine,
+    SpecificationExtraction,
+    SpecificationRow,
 )
 from auditmanager.optimisation.uploads import (
     COMMAND_TYPE_UPLOAD_PRICE_LIST,
@@ -98,10 +135,22 @@ __all__ = [
     "DEFAULT_POSITION_PAGE",
     "GENERATOR_VERSION",
     "FIELD_ORDER",
+    "DEFAULT_ROW_PAGE",
+    "EXCLUSION_REASONS",
+    "EXTRACTION_ALGORITHM",
     "FILE_CONSTRAINTS",
+    "FORM7_COLUMNS",
+    "MATCH_ALGORITHM",
+    "MATCH_BASES",
+    "MATCH_STATUSES",
     "MAX_BYTES",
     "MAX_DATA_ROWS",
+    "MAX_LISTED_CANDIDATES",
+    "MAX_LISTED_SKIPS",
+    "MAX_LISTED_TABLES",
     "MAX_POSITION_PAGE",
+    "MAX_ROW_PAGE",
+    "MAX_SPECIFICATION_ROWS",
     "MAX_VENDOR_LIST_ENTRIES",
     "MEDIA_TYPES",
     "MODES",
@@ -111,15 +160,22 @@ __all__ = [
     "PRICE_LIST_ID_PREFIX",
     "PRICE_LIST_POSITION_ID_PATTERN",
     "PRICE_LIST_POSITION_ID_PREFIX",
+    "QUANTITY_ISSUES",
     "REPORT_VERSION",
     "ROLE_PRICE_LIST_SOURCE",
     "SCOPES",
     "SECTION_ORDER",
     "SKIP_REASONS",
+    "SPECIFICATION_PRICE_STATES",
+    "SPECIFICATION_SKIP_REASONS",
+    "SPECIFICATION_UNITS",
     "VENDOR_LIST_ID_PATTERN",
     "VENDOR_LIST_ID_PREFIX",
     "WARNING_REASONS",
+    "CurrencyTotal",
+    "DetectedTable",
     "EffectiveVendorList",
+    "MatchOutcome",
     "ParseOutcome",
     "ParsedPosition",
     "PositionPage",
@@ -137,10 +193,20 @@ __all__ = [
     "PriceListRevisionRecord",
     "PriceListUploadOutcome",
     "PriceListUploads",
+    "RowMatch",
+    "RowPage",
+    "RunCandidate",
+    "SavedPageText",
+    "SavedTextReader",
+    "SkippedLine",
+    "SpecificationExtraction",
+    "SpecificationPrices",
+    "SpecificationRow",
     "VendorListChange",
     "VendorListEntry",
     "VendorListId",
     "VendorListRevisionRecord",
+    "canonical_amount",
     "get_effective_vendor_lists",
     "get_price_list_revision",
     "list_global_vendor_lists",
@@ -155,6 +221,7 @@ __all__ = [
     "list_proposal_decisions",
     "start_optimisation_pass",
     "parse_price_list",
+    "read_specification_prices",
     "set_global_vendor_list",
     "set_project_vendor_list",
 ]

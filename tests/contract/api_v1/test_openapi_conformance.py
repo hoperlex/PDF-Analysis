@@ -547,9 +547,11 @@ class TestN1ComponentReferenceResolution:
         # effective vendor lists and the project override each address a project or a price
         # list by identity, and the global vendor list answers `404` for a section outside
         # the fifteen.
+        # `W60-OPT-MATCH-01` adds one: the priced specification addresses its document set
+        # through its project.
         # `W60-OPT-PROPOSALS-01` adds six: starting a pass names a project and a document set,
         # and every other operation of the slice addresses a pass or a proposal by identity.
-        assert len(report) == 54, report
+        assert len(report) == 55, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

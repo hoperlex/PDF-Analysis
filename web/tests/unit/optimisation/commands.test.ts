@@ -84,10 +84,14 @@ describe('the price-list upload', () => {
     expect(Object.keys(sent?.body ?? {})).toEqual(['file']);
   });
 
-  it('asks the project’s revisions again, and not the dashboard', () => {
+  it('asks the project’s revisions and priced specifications again, and not the dashboard', () => {
     const hook = useUploadPriceList() as unknown as Captured<UploadPriceListCommand, PriceListRevision>;
     hook.onSuccess?.(revision(), {} as UploadPriceListCommand);
-    expect(calls.invalidations).toEqual([[{ queryKey: queryKeys.optimisation.priceLists(OPT_PROJECT_UID) }]]);
+    // `W60-OPT-MATCH-01`: the new revision decides every price on «Спецификация и цены».
+    expect(calls.invalidations).toEqual([
+      [{ queryKey: queryKeys.optimisation.priceLists(OPT_PROJECT_UID) }],
+      [{ queryKey: queryKeys.optimisation.specificationPricesAll(OPT_PROJECT_UID) }],
+    ]);
   });
 });
 

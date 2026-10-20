@@ -4,12 +4,15 @@
  * The project's «Оптимизация» tab (`W60-PRICE-LIST-01`): the stored inputs of project
  * optimisation — the project's price list and the vendor lists per section.
  *
- * This slice stores and shows prices; it proposes nothing and totals nothing. A money figure
- * on this screen is always one position of an uploaded price list, in the currency that price
- * list stated.
+ * A money figure on this screen is always one position of an uploaded price list, in the
+ * currency that price list stated — or, in «Спецификация и цены» (`W60-OPT-MATCH-01`), the
+ * product of such a price and a numeric quantity in the same unit, totalled per currency over
+ * the rows that have both and no others. Nothing here proposes a change.
  */
 
 import type { ProjectUid, Role } from '@/shared/api';
+
+import { SpecificationPricesSection } from '@/widgets/specification-prices';
 
 import { PriceListPanel } from './price-list-panel';
 import { VendorListsPanel } from './vendor-lists-panel';
@@ -30,6 +33,9 @@ export function ProjectOptimisation({ projectUid, roles }: ProjectOptimisationPr
           новая редакция, последняя действует, прежние остаются доступными.
         </p>
         <PriceListPanel projectUid={projectUid} canUpload={roles.includes('expert')} />
+      </section>
+      <section className="am-section">
+        <SpecificationPricesSection projectUid={projectUid} />
       </section>
       <section className="am-section">
         <h2>Вендор-листы по разделам</h2>

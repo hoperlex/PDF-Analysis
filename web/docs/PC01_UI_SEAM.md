@@ -322,6 +322,8 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.optimisation.positions(priceListId, offset, limit)` | `['optimisation','positions',id,{offset,limit}]` | `W60-PRICE-LIST-01` |
 | `queryKeys.optimisation.vendorLists()` | `['optimisation','vendor-lists']` | `W60-PRICE-LIST-01` |
 | `queryKeys.optimisation.projectVendorLists(projectUid)` | `['optimisation','vendor-lists',uid]` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.specificationPrices(projectUid, documentUid, offset?, limit?)` | `['optimisation','specification-prices',projectUid,documentUid,{offset,limit}]` | `W60-OPT-MATCH-01` |
+| `queryKeys.optimisation.specificationPricesAll(projectUid)` | `['optimisation','specification-prices',projectUid]` | `W60-OPT-MATCH-01` |
 | `queryKeys.optimisation.passes(projectUid, documentUid)` | `['optimisation','passes',uid,docUid]` | `W60-OPT-PROPOSALS-01` |
 | `queryKeys.optimisation.allPasses()` | `['optimisation','passes']` | `W60-OPT-PROPOSALS-01` |
 | `queryKeys.optimisation.proposalsOf(passId)` | `['optimisation','proposals',id]` | `W60-OPT-PROPOSALS-01` |
@@ -372,7 +374,9 @@ changes only when the server is redeployed — so nothing invalidates it; «Об
 `optimisation.priceLists(uid)` holds `listPriceListRevisions`; `optimisation.positions` one page of
 `listPriceListPositions` (the page is in the key); `optimisation.projectVendorLists(uid)` holds
 `getEffectiveVendorLists` under the prefix `optimisation.vendorLists()`. `uploadPriceList`
-invalidates the project's `priceLists`; `setProjectVendorList` and `setGlobalVendorList` invalidate
+invalidates the project's `priceLists` and — because the new revision decides every price —
+`optimisation.specificationPricesAll(uid)`, the prefix of `getSpecificationPrices` pages
+(`W60-OPT-MATCH-01`, «Спецификация и цены» on the same tab); `setProjectVendorList` and `setGlobalVendorList` invalidate
 the whole `vendorLists()` prefix, because a change of the general list moves every project's
 answer. None of them changes a number the dashboard reads.
 

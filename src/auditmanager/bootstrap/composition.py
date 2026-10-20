@@ -44,6 +44,7 @@ from auditmanager.bootstrap.adapters import (
     ReleasesAdapter,
     RunAdapter,
     SectionAdapter,
+    SpecificationPricesAdapter,
     XlsxExportAdapter,
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
@@ -337,6 +338,9 @@ def build_application(
         # `W60-PRICE-LIST-01`. Project price lists (the uploaded file kept as a Blob in the
         # same store) and vendor lists, over the same sessions.
         optimisation=OptimisationAdapter(sessions, blob_store=store),
+        # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's
+        # current price list; the saved text layers are read as the comparison reads them.
+        specification_prices=SpecificationPricesAdapter(sessions, blob_store=store),
         # `W60-OPT-PROPOSALS-01`. The optimisation passes, their proposals and the experts'
         # decisions over the same sessions; the saved text layers are read as the comparison
         # reads them.

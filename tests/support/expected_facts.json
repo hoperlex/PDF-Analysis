@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 69,
+    "path_count": 70,
     "operations": [
       [
         "POST",
@@ -369,6 +369,11 @@
         "setProjectVendorList"
       ],
       [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/specification-prices",
+        "getSpecificationPrices"
+      ],
+      [
         "POST",
         "/projects/{project_uid}/documents/{document_uid}/optimisation-passes",
         "startOptimisationPass"
@@ -598,6 +603,19 @@
       "EffectiveVendorLists",
       "SetGlobalVendorListRequest",
       "SetProjectVendorListRequest",
+      "SpecificationPriceListRef",
+      "SpecificationSkipCounts",
+      "SpecificationSkippedLine",
+      "SpecificationTable",
+      "SpecificationExtractionSummary",
+      "SpecificationMatchCounts",
+      "SpecificationExclusionCounts",
+      "SpecificationCurrencyTotal",
+      "SpecificationMatching",
+      "SpecificationPricePosition",
+      "SpecificationPriceRow",
+      "SpecificationRowPage",
+      "SpecificationPrices",
       "OptimisationPassId",
       "OptimisationProposalId",
       "ProposalDecisionId",

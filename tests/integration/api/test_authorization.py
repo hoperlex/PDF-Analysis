@@ -231,6 +231,11 @@ GUARDED = (
     ("getEffectiveVendorLists", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists"),
     ("setGlobalVendorList", "PUT", "/vendor-lists/EOM"),
     ("setProjectVendorList", "PUT", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists/EOM"),
+    # `W60-OPT-MATCH-01`. The priced specification of a document set, read-only.
+    (
+        "getSpecificationPrices", "GET",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/specification-prices",
     # `W60-OPT-PROPOSALS-01`. Optimisation passes, their proposals and the decisions on them.
     (
         "startOptimisationPass",
@@ -835,6 +840,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # `W59-SECTION-SEAL-01`: the classification records WHO confirmed it; whether they
         # may is the role register's (expert) and the command's own re-read.
         "sections.py",
+        # `W60-OPT-MATCH-01`: the priced specification passes WHO reads it so the read's own
+        # role re-read happens in its transaction; whether they may is the role register's
+        # (any one role), decided before the handler runs.
+        "specification_prices.py",
         "users.py",
     ], (
         f"{subject_readers} depend on the verified subject. Reading WHO the caller is is "

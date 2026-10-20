@@ -154,6 +154,9 @@ REQUIRED_OPERATIONS = {
     "getEffectiveVendorLists",
     "setGlobalVendorList",
     "setProjectVendorList",
+    # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's current
+    # price list, read-only, for «Спецификация и цены».
+    "getSpecificationPrices",
     # `W60-OPT-PROPOSALS-01`. «Предложения»: the optimisation pass of a document set's AR
     # version, its deterministic proposals, the experts' decisions on them and the CSV.
     "startOptimisationPass",
