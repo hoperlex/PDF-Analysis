@@ -202,6 +202,12 @@ GUARDED = (
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
         "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
     ),
+    # `W59-DECISION-CARRYOVER-01`. The carryover of a decision, addressed the same way.
+    (
+        "carryOverDecision", "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/carryovers",
+    ),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -751,6 +757,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
     )
     assert subject_readers == [
         "auth.py",
+        # `W59-DECISION-CARRYOVER-01`: the carried decision records WHO confirmed it, as
+        # `appendDecision` does; whether they may is the role register's (expert) and the
+        # command's own re-read.
+        "comparison.py",
         "decisions.py",
         "execution.py",
         "me.py",

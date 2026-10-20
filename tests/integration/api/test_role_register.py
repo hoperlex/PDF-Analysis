@@ -100,6 +100,13 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
         "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
     ),
+    # `W59-DECISION-CARRYOVER-01`. The expert's carryover of a decision, addressed the same
+    # way; the missing body is refused by the body model only after the role decided.
+    "carryOverDecision": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/carryovers",
+    ),
     "listRunFindings": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     "exportRunCsv": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),
     "getFinding": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
@@ -180,6 +187,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "cancelRun": frozenset({"expert", "admin"}),
     "reauditRun": frozenset({"expert", "admin"}),
     "appendDecision": _EXPERT,
+    # `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict; admin alone does not.
+    "carryOverDecision": _EXPERT,
     "exportRunCsv": _EXPERT,
     "listRegistrations": _ADMIN,
     "approveRegistration": _ADMIN,

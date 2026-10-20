@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 51,
+    "path_count": 52,
     "operations": [
       [
         "POST",
@@ -292,6 +292,11 @@
         "GET",
         "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison",
         "compareDocumentVersions"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers",
+        "carryOverDecision"
       ]
     ],
     "schema_names": [
@@ -441,7 +446,11 @@
       "FindingRef",
       "FindingMatchProposal",
       "FindingComparison",
-      "VersionComparison"
+      "VersionComparison",
+      "CarryoverSourceDecision",
+      "CarryoverCandidate",
+      "CarryOverDecisionRequest",
+      "CarryOverDecisionResponse"
     ]
   },
   "error_catalog": {

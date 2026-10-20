@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 d7704f0a78d297702ac3373d8c33bb20b9cd5f690ff57be6659329ecbb8a2a5c
+ *   sha256 010b706fba180d5a14820a91f8c5f41b0c879d8a5ba99dbff2e3d9dcc8e322b1
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -20,6 +20,8 @@ import type {
   AppendDecisionRequest,
   AppendDecisionResponse,
   ApproveRegistrationRequest,
+  CarryOverDecisionRequest,
+  CarryOverDecisionResponse,
   ChangePasswordRequest,
   ClassifyDocumentVersionRequest,
   CorrelationId,
@@ -97,6 +99,7 @@ export const OPERATION_IDS = [
   'approveRegistration',
   'archiveUser',
   'cancelRun',
+  'carryOverDecision',
   'changePassword',
   'classifyDocumentVersion',
   'compareDocumentVersions',
@@ -264,6 +267,38 @@ export type CancelRunInput = {
 
 /** Success body of `cancelRun` (`application/json`, HTTP 200). */
 export type CancelRunResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
+// carryOverDecision - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers
+// ------------------------------------------------------------------------------------
+
+/**
+ * Carry Over Decision
+ *
+ * Carry one expert decision from a finding of the path's (older) version to the finding of `target_version_uid` that the comparison proposes as `unchanged`, on the calling expert's confirmation. The comparison is recomputed with the body's `mode` and runs when the confirmation arrives, and must still propose exactly this pair; the source finding's current verdict must still be the `source_decision_id` the expert was shown (`accepted` or `rejected`), and the target finding must have no decision event yet. The target receives one new `accept` or `reject` event authored by the caller, whose `comment` records the carried-from finding, decision and versions; a severity is carried with an accept or the carryover is refused, never dropped. Nothing else is written: the source finding and its decisions stay as they were. An exact repeat answers the event already carried, `replayed: true`, and keeps its first expert. A refusal is `conflict` with `conflict_reason` `carryover_pair_not_proposed`, `carryover_source_decision_not_current`, `carryover_target_already_decided` or `carryover_severity_not_carryable`. `expert` is required; `admin` alone is refused (`required_capability: role:expert`).
+ */
+export type CarryOverDecisionInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CarryOverDecisionRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `carryOverDecision` (`application/json`, HTTP 201). */
+export type CarryOverDecisionResult = CarryOverDecisionResponse;
 
 // ------------------------------------------------------------------------------------
 // changePassword - POST /auth/password
@@ -1723,6 +1758,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  carryOverDecision: {
+    operationId: 'carryOverDecision',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['decisions'],
   },
   changePassword: {
     operationId: 'changePassword',
