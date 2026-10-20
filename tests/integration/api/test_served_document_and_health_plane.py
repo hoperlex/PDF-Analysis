@@ -154,6 +154,10 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "uploadDocumentVersion",
             # `W59-DECISION-CARRYOVER-01`: the carryover takes a closed body.
             "carryOverDecision",
+            # `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue's filters and paging, and the
+            # workbook's source refusals (`storage_integrity_error`, `required_norm_unavailable`).
+            "listNormDocuments",
+            "exportRunXlsx",
             # `W61-DISPATCHER-01`: a creation and a move take bodies, the listing filters and
             # pages. Reading one assignment takes only its path identity and declares none.
             "createAssignment",

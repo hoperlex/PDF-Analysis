@@ -225,6 +225,14 @@ On the review screen click «Скачать <run_id>-findings.csv» (Download).
 screen. Downloading again without new decisions produces byte-identical
 content.
 
+Then click «Скачать Excel» beside it (`W57B-NORMS-CATALOGUE-XLSX-01`).
+
+**PASS:** `<run_id>-findings.xlsx` downloads and opens with the sheets «Сводка» and
+«Замечания»; «Замечания» has one row per finding with its «Лист/стр.» from the portal
+bundle; downloading again without new decisions produces byte-identical content. A
+version without a verifiable portal block list is refused with a message on the panel,
+never answered with an empty file.
+
 ### A08 — second run and comparison
 
 Start a second run of the same immutable version. After it reaches a terminal

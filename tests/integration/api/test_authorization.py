@@ -216,6 +216,9 @@ GUARDED = (
     ),
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only.
     ("listAnalysisProfiles", "GET", "/analysis/profiles"),
+    # `W57B-NORMS-CATALOGUE-XLSX-01`. The norms catalogue and the run's workbook.
+    ("listNormDocuments", "GET", "/norm-documents"),
+    ("exportRunXlsx", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.xlsx"),
     # `W61-DISPATCHER-01`. «Диспетчер»: creating, listing, reading and moving an assignment.
     ("createAssignment", "POST", "/assignments"),
     ("listAssignments", "GET", "/assignments"),
@@ -779,6 +782,9 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # do is the role register's and the dispatch context's own re-read of the role set.
         "dispatch.py",
         "execution.py",
+        # `W57B-NORMS-CATALOGUE-XLSX-01`: the workbook's export authorization records WHO
+        # downloaded it; whether they may is the role register's (expert, as the CSV).
+        "export.py",
         "me.py",
         "norms.py",
         "registrations.py",

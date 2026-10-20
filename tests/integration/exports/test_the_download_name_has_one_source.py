@@ -48,8 +48,10 @@ SRC = Path(auditmanager.__file__).resolve().parent
 #: exists, and a test that imported it could not fail by it coming back.
 DEAD_TEMPLATE = "audit_run_{run_id}.csv"
 
-#: The name the system serves, as a literal, in the form the router writes it.
-SERVED_DISPOSITION = 'attachment; filename="{run_id}.csv"'
+#: The name the system serves, as a literal, in the form the router writes it: the run
+#: identity and the suffix -- ``csv`` by default, ``xlsx`` for the workbook
+#: (`W57B-NORMS-CATALOGUE-XLSX-01`).
+SERVED_DISPOSITION = 'attachment; filename="{run_id}.{suffix}"'
 
 
 class TestTheExportValueObjectNamesNoFile:
@@ -121,7 +123,9 @@ class TestOnlyOnePlaceInTheSourceSpellsADownloadName:
         asserted by `tests/integration/api/test_no_internal_identifiers.py`.
         """
         router = (SRC / "api/routers/export.py").read_text(encoding="utf-8")
-        assert SERVED_DISPOSITION in router, (
+        assert f"return f'{SERVED_DISPOSITION}'" in router, (
             f"`api/routers/export.py` no longer builds {SERVED_DISPOSITION!r}; the one "
             "place that names the download has changed what it names"
         )
+        assert 'def _disposition(run_id: str, *, suffix: str = "csv") -> str:' in router
+        assert '_disposition(run_id, suffix="xlsx")' in router

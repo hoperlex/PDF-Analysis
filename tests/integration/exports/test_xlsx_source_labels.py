@@ -104,6 +104,23 @@ def test_verified_portal_labels_are_version_bound_and_immutable() -> None:
     assert _read(_Session(_row(raw)), raw)[0] == result
 
 
+def test_a_version_over_thirty_pages_is_read() -> None:
+    """`W57B-NORMS-CATALOGUE-XLSX-01`: the bound is the 0021 page CHECK (500), not the
+    pre-0021 30 that refused every longer admitted portal version."""
+    document = _document()
+    document["pages"] = [
+        {"page_index": i, "width_px": 100, "height_px": 100, "rotation": 0}
+        for i in range(31)
+    ]
+    document["blocks"] = [_block(i, 100 + i, i + 1) for i in range(31)]
+    raw = _bytes(document)
+    row = _row(raw)
+    row["page_count"] = 31
+    result, reads = _read(_Session(row), raw)
+    assert reads == ["blob_a"]
+    assert len(result.page_labels) == 31 and result.page_labels[31] == "130"
+
+
 def test_missing_version_returns_none_without_storage_read() -> None:
     raw = _bytes(_document())
     result, reads = _read(_Session(None), raw)
@@ -122,6 +139,7 @@ def test_missing_version_returns_none_without_storage_read() -> None:
     ("blob_size_bytes", 1),
     ("blob_media_type", "text/plain"),
     ("page_count", 0),
+    ("page_count", 501),
 ])
 def test_unbound_manifest_and_blob_refuse_before_storage(field, value) -> None:
     raw = _bytes(_document())

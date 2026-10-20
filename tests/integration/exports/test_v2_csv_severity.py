@@ -72,7 +72,8 @@ def test_csv_uses_canonical_proposal_and_current_expert_decision(
         provider_config=provider_config,
     )
     finding = published_findings(session, started.run_id)[0]
-    canonical = str(finding.finding_observation_id)
+    original = str(finding.finding_observation_id)
+    canonical = str(FindingObservationId.new())
     member = str(FindingObservationId.new())
     before = next(
         row
@@ -81,41 +82,45 @@ def test_csv_uses_canonical_proposal_and_current_expert_decision(
     )
     assert before["severity"] == before["severity_proposed"] == ""
 
-    session.execute(
-        text(
-            "UPDATE finding_observation SET proposed_severity = 'economic' "
-            "WHERE finding_observation_id = :canonical"
-        ),
-        {"canonical": canonical},
-    )
+    # `finding_observation` refuses UPDATE ("correcting data creates a new entity with a new
+    # identifier"), so the proposing canonical observation and the member are new rows
+    # copied from the published one, and the finding names the canonical one
+    # (`W57B-NORMS-CATALOGUE-XLSX-01`: the earlier UPDATE of the published row could never
+    # pass the 0002 immutability trigger).
+    for observation, text_value, severity in (
+        (canonical, None, "economic"),
+        (member, "member text", "critical"),
+    ):
+        session.execute(
+            text(
+                "INSERT INTO finding_observation (finding_observation_id, run_id, "
+                "finding_uid, stage_id, category, finding_text, recommendation_text, "
+                "grounded, analysis_profile_id, prompt_bundle_id, provider_mode, "
+                "proposed_severity) "
+                "SELECT :observation, run_id, finding_uid, stage_id, category, "
+                "COALESCE(:text_value, finding_text), recommendation_text, TRUE, "
+                "analysis_profile_id, prompt_bundle_id, provider_mode, :severity "
+                "FROM finding_observation WHERE finding_observation_id = :original"
+            ),
+            {"observation": observation, "text_value": text_value, "severity": severity,
+             "original": original},
+        )
+        session.execute(
+            text(
+                "INSERT INTO finding_evidence (finding_observation_id, evidence_ordinal, "
+                "page_number, quote, char_start, char_end) "
+                "SELECT :observation, 0, page_number, quote, char_start, char_end "
+                "FROM finding_evidence WHERE finding_observation_id = :original "
+                "ORDER BY evidence_ordinal LIMIT 1"
+            ),
+            {"observation": observation, "original": original},
+        )
     session.execute(
         text(
             "UPDATE finding SET canonical_observation_id = :canonical "
             "WHERE finding_uid = :finding"
         ),
         {"canonical": canonical, "finding": finding.finding_uid},
-    )
-    session.execute(
-        text(
-            "INSERT INTO finding_observation (finding_observation_id, run_id, finding_uid, "
-            "stage_id, category, finding_text, recommendation_text, grounded, "
-            "analysis_profile_id, prompt_bundle_id, provider_mode, proposed_severity) "
-            "SELECT :member, run_id, finding_uid, stage_id, category, 'member text', "
-            "recommendation_text, TRUE, analysis_profile_id, prompt_bundle_id, "
-            "provider_mode, 'critical' FROM finding_observation "
-            "WHERE finding_observation_id = :canonical"
-        ),
-        {"member": member, "canonical": canonical},
-    )
-    session.execute(
-        text(
-            "INSERT INTO finding_evidence (finding_observation_id, evidence_ordinal, "
-            "page_number, quote, char_start, char_end) "
-            "SELECT :member, 0, page_number, quote, char_start, char_end "
-            "FROM finding_evidence WHERE finding_observation_id = :canonical "
-            "ORDER BY evidence_ordinal LIMIT 1"
-        ),
-        {"member": member, "canonical": canonical},
     )
     record_decision(
         session,

@@ -42,6 +42,7 @@ from auditmanager.bootstrap.adapters import (
     ReleasesAdapter,
     RunAdapter,
     SectionAdapter,
+    XlsxExportAdapter,
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
@@ -308,6 +309,9 @@ def build_application(
         # statement timeout; the norm PDF through its confirmed binding from the same store.
         norms=NormsSearchAdapter(sessions, timeout_ms=resolved.norms_search_timeout_ms),
         norm_content=NormContentAdapter(sessions, blob_store=store),
+        # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook: the same session factory, and the
+        # version's portal companion read from the same store.
+        xlsx_exports=XlsxExportAdapter(sessions, blob_store=store),
         # `W59-SECTION-SEAL-01`. Classification and review over the same sessions and store;
         # `executable` is the registry's own section set.
         sections=SectionAdapter(

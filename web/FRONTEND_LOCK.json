@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "2baf46c8cff4db0aa496119d2160bc2c53e13d4eb6ebdb5a0eb17624315e197e",
-    "content_commit": "c22f204",
-    "content_commit_subject": "W61-DISPATCHER-01 API reseal on integration base c22f204",
-    "dispatch_named_commit": "c22f204",
+    "sha256": "10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa",
+    "content_commit": "beafeab",
+    "content_commit_subject": "W61-DISPATCHER-01 API reseal on integration base beafeab",
+    "dispatch_named_commit": "beafeab",
     "commit_note": "W61 adds the dispatcher: createAssignment (POST /assignments, admin), listAssignments (GET /assignments, any one role; an expert reads only their own), getAssignment (GET /assignments/{assignment_uid}, with the append-only history) and transitionAssignment (POST /assignments/{assignment_uid}/transitions: started/completed/returned by the assignee, reassigned/cancelled by admin), and ten schemas (AssignmentUid, AssignmentStatus, AssignmentEventKind, AssignmentTransitionKind, CreateAssignmentRequest, TransitionAssignmentRequest, Assignment, AssignmentEvent, AssignmentDetail, AssignmentPage). No error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 57,
-    "operations": 65,
-    "component_schemas": 168,
+    "paths": 59,
+    "operations": 67,
+    "component_schemas": 171,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "2baf46c8cff4db0aa496119d2160bc2c53e13d4eb6ebdb5a0eb17624315e197e",
+    "snapshot_sha256": "10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "61ee08617d4ba974d0536143dcaed413f754d56afc13a2a02ff6e261ca106418",
-      "index.ts": "e93147136e8c6a1674989b1b9d689ed82740c669a04f71bfd052895e41eb7bd8",
-      "operations.gen.ts": "a351b662f64460f6e88bc04f33182d3fde6137db7c27b75c783914a3f02aa46b",
-      "types.gen.ts": "113efd9967318e2f9b036a4ccb69ec4546bf48e2eb62b34032114480e5289f21"
+      "client.gen.ts": "6ab4630a124c425749200a4235506735e5ad364e922b5aea43ac09cac6e73817",
+      "index.ts": "451899cc43939a12c52f19ba44b0dae229e4f33d4f4bc407b7b406d3c8757d37",
+      "operations.gen.ts": "065b319ca7bb956be37545f8feb779983e3836db072269f5d5f8b4dfe13395fa",
+      "types.gen.ts": "5351beacb57960e4930aa22941c217f7c3439d8ff3dba1c4adfc84412225b7a7"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

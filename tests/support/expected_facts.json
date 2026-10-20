@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 57,
+    "path_count": 59,
     "operations": [
       [
         "POST",
@@ -309,6 +309,16 @@
         "carryOverDecision"
       ],
       [
+        "GET",
+        "/norm-documents",
+        "listNormDocuments"
+      ],
+      [
+        "GET",
+        "/runs/{run_id}/export.xlsx",
+        "exportRunXlsx"
+      ],
+      [
         "POST",
         "/assignments",
         "createAssignment"
@@ -439,6 +449,9 @@
       "NormSearchHit",
       "NormSearchPage",
       "NormDocument",
+      "NormCatalogueEntry",
+      "NormKindCount",
+      "NormCatalogueEntryPage",
       "NormParagraph",
       "NormParagraphPage",
       "NormSnapshot",
