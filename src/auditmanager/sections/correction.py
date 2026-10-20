@@ -24,7 +24,7 @@ Rules, in the order they are decided (:func:`plan_classification_correction`)
    confirmation. Decided first, so a caller who may not correct learns nothing about the
    request's validity or the version's state. The corrector need not be the first confirmer.
 2. **The request's shape** (``validation_failed``): both target values are members of the
-   catalogue (stage ``P``/``R``, one of the fifteen codes); the reason is present, trimmed,
+   catalogue (stage ``P``/``R``, one of the fifteen sections); the reason is present, trimmed,
    not longer than :data:`MAX_REASON_LENGTH`, holds a letter or a digit and no control or
    surrogate character; ``expected_revision`` is an integer of at least 1 (a ``bool`` is not).
 3. **The history** is checked, not trusted (``internal_error`` if it is inconsistent, because

@@ -115,6 +115,15 @@ def test_roles_must_be_a_frozenset_of_known_roles() -> None:
         )
 
 
+def test_a_role_set_holding_an_unknown_role_is_refused_even_with_expert_in_it() -> None:
+    """Authenticated state naming a role the product does not have is corrupt: fail closed."""
+    for roles in (frozenset({"expert", "superuser"}), frozenset({"expert", ""})):
+        assert_refused(
+            refusal(lambda roles=roles: plan(roles=roles)),
+            ErrorCode.PERMISSION_DENIED, required_capability="role:expert",
+        )
+
+
 def test_an_invalid_actor_identity_is_refused_as_permission_denied() -> None:
     for actor in ("", "usr_x", "ver_01M25P3TH08VVTTGJRXYBZZ7RP", None, 7):
         assert_refused(
