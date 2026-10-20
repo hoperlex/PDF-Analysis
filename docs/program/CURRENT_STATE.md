@@ -54,57 +54,37 @@ designation of a current snapshot have not run; they need an owner window.
 
 The plan is [`CODE-FIRST-TO-BETA.md`](dispatch/CODE-FIRST-TO-BETA.md);
 `R-135` defers the complete beta gate to the final code candidate, and each
-development candidate carries only its focused evidence. Every slice below
-is unserved, and no beta acceptance is claimed.
+development candidate carries only its focused evidence. No beta acceptance
+is claimed. Detailed evidence: `CFB-INT-DEV-PUBLISH-17.md` … `-67.md` and,
+for the `R-139` night window of 2026-10-20, `NIGHT-1020-INT-01.md`.
 
-- **W56a.** A recorded-only AR v2 profile, a source-bound saved request and
-  call, verified observations and merge, and a deterministic finding plan.
-  A transaction gate is reached only through the explicit offline executor
-  bridge. A bounded Run-to-Version-to-PDF attestation binds local seeded
-  evaluation bundles. Real model and price verification
-  (`W56A-MODEL-PIN-01` is stopped), a measured baseline and served
-  activation remain open.
-- **W57a.** Retrieval, map, qualification and citation preparations; the
-  0023 storage seal; a v3 request candidate, response parser, grounding
-  bridge and local evaluator. A qualified retrieval set, an active CITE
-  stage and CAP-01 remain open.
-- **W57b.** A certified XLSX composition chain, a verified catalogue custody
-  reader, a current-Attempt saved text-layer reader, a page bridge and a
-  bounded explicit slug chain. A reviewed slug source, the 0024 seal and the
-  served route remain open.
-- **W56b.** Run/Attempt-fenced readers for saved text windows, crops and
-  recognised-text regions. An approved vision/region/budget policy remains
-  open.
-- **W58.** Read-only source mirror, isolated target copy and a DB-plus-Blob
-  drill with a guarded restore; a synthetic restore passed. A real recovery
-  drill has not run.
-- **W59 (served, night window `R-139`).** An expert confirms a version's
-  project stage (П/Р) and one of 15 sections (`classifyDocumentVersion`,
-  `getVersionSectionReview`, migration 0024); run start and re-audit route
-  by the confirmed section through a text-profile registry — AR plus 13
-  draft legacy-ported profiles, none for ПБ — and refuse an unclassified
-  version or a section without a profile; the project screen groups
-  documents by confirmed section. `compareDocumentVersions` serves the
-  deterministic comparison of two versions of one set (same stage and
-  section) and the W62 П→Р stage comparison: sheet pairing, paged line
-  diffs and finding-match proposals, no AI layer. «Настройки анализа»
-  lists every section's profile (`listAnalysisProfiles`); АИ, ПЗ, ПОС
-  and ТХ runs are proven in recorded mode with synthetic recordings
-  only. `uploadDocumentVersion` adds the next version to an existing set
-  («Загрузить новую версию»); `carryOverDecision` lets an expert carry a
-  decision onto an `unchanged` matched finding of the newer version,
-  recorded as a new event with its provenance. «Диспетчер» (W61 code,
-  migration 0025) lets an administrator assign a project or document set to
-  an expert, who moves it through «Мои задачи» on the home screen; every
-  change is an append-only event. The project's «Оптимизация» tab (W60,
+- **Unserved preparations.** W56a (recorded-only AR v2 profile, source-bound
+  request, observations, merge, finding plan; real model/price verification
+  `W56A-MODEL-PIN-01` stopped), W57a (retrieval, map, qualification and
+  citation preparations, v3 request/parser/grounding; qualified set, CITE
+  stage and CAP-01 open), W57b (certified XLSX chain, catalogue custody and
+  saved-text readers, slug chain; reviewed slug source and 0024 seal open),
+  W56b (Attempt-fenced readers for text windows, crops, regions; vision
+  policy open) and W58 (source mirror, isolated DB-plus-Blob restore drill,
+  synthetic restore passed, real drill not run).
+- **W59 sections (served).** An expert confirms a version's stage (П/Р) and
+  one of 15 sections (`classifyDocumentVersion`, `getVersionSectionReview`,
+  migration 0024); run start and re-audit route by the confirmed section
+  through a text-profile registry — AR plus 13 draft legacy-ported
+  profiles, none for ПБ — and refuse an unclassified version or a section
+  without a profile; the project screen groups documents by section.
+  «Настройки анализа» lists the profiles (`listAnalysisProfiles`); АИ, ПЗ,
+  ПОС and ТХ are proven in recorded mode with synthetic recordings only.
+- **Versions.** `uploadDocumentVersion` adds the next version to a set;
+  `compareDocumentVersions` serves the deterministic comparison (same stage
+  and section) and the W62 П→Р comparison; `carryOverDecision` carries an
+  expert decision onto an `unchanged` matched finding as a new event.
+- **Work and money.** «Диспетчер» (W61 code, migration 0025): an administrator
+  assigns a project or document set to an expert who works it through «Мои
+  задачи»; every change is an append-only event. The «Оптимизация» tab (W60,
   migration 0026) stores price lists (CSV/XLSX, immutable revisions with a
-  parse report) and vendor lists per section (global by an administrator,
-  project override by an expert); no money figure exists without a price-list
-  position. Expert review of the draft profiles remains
-  open.
-
-Detailed evidence is in `CFB-INT-DEV-PUBLISH-17.md` through
-`CFB-INT-DEV-PUBLISH-67.md`.
+  parse report) and vendor lists per section; no money figure exists without
+  a price-list position. Expert review of the draft profiles remains open.
 
 ## Pointers and history
 
