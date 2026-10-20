@@ -72,6 +72,11 @@ IMMUTABLE_TABLES = {
     "price_list_position",
     "vendor_list_revision",
     "vendor_list_entry",
+    # `0027_optimisation_proposals`: a pass and its proposals are written once; each expert
+    # decision is an appended row, and the current decision is a query.
+    "optimisation_pass",
+    "optimisation_proposal",
+    "optimisation_proposal_decision",
 }
 
 
@@ -244,6 +249,17 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     "price_list_id",
     "price_list_position_id",
     "vendor_list_id",
+    # `0027_optimisation_proposals`: ``opp``, ``opr`` and ``opd`` are minted by
+    # ``auditmanager.optimisation.proposals`` on the registry's pattern and are not contracted
+    # yet (phase A of `W60-OPT-PROPOSALS-01` owns neither the catalog nor the registry); the
+    # two position columns hold ``prp``, uncontracted since ``0026``. Their format CHECKs are
+    # asserted directly in ``test_optimisation_proposals_migration.py``; when contracted, move
+    # them into ``prefix_by_column``.
+    "optimisation_pass_id",
+    "optimisation_proposal_id",
+    "proposal_decision_id",
+    "matched_position_id",
+    "proposed_position_id",
 }
 
 
@@ -303,6 +319,9 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         # `W60-PRICE-LIST-01`, migration 0026: a price list's uploader, a vendor list's author.
         "uploaded_by_user_uid": "usr",
         "set_by_user_uid": "usr",
+        # `W60-OPT-PROPOSALS-01`, migration 0027: the expert who started a pass (a decision's
+        # actor is ``actor_user_uid`` above).
+        "started_by_user_uid": "usr",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()
