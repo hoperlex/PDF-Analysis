@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 a6b146917bbde2fdfb89cff0847b51f24beda1bc4ec1ed6886f100640f9638fc
+ *   sha256 a9ce1b50e34d0994734e3c221b763c014667efce16ed4d063ac6713f5b6ee4fe
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -138,6 +138,8 @@ import type {
   UpdateUserResult,
   UploadDocumentInput,
   UploadDocumentResult,
+  UploadDocumentVersionInput,
+  UploadDocumentVersionResult,
 } from './operations.gen';
 import { OPERATIONS } from './operations.gen';
 
@@ -862,6 +864,18 @@ export function uploadDocument(
 }
 
 /**
+ * Upload one portal bundle as the next immutable version of an existing document.
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/versions` - a write; carries a required Idempotency-Key.
+ */
+export function uploadDocumentVersion(
+  input: UploadDocumentVersionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UploadDocumentVersionResult>> {
+  return request<UploadDocumentVersionResult>(OPERATIONS.uploadDocumentVersion, input, options);
+}
+
+/**
  * The whole client as one object, for a consumer that would rather inject it than
  * import each function. The named exports above are the ordinary way in.
  */
@@ -926,4 +940,5 @@ export const apiClient = {
   updateMyProfile,
   updateUser,
   uploadDocument,
+  uploadDocumentVersion,
 } as const;

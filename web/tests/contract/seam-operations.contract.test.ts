@@ -84,7 +84,7 @@ describe('the seam operations', () => {
     expect(OPERATIONS.issueToken.requiresIdempotencyKey).toBe(false);
   });
 
-  it('requires an idempotency key on exactly the eleven keyed writes', () => {
+  it('requires an idempotency key on exactly the twelve keyed writes', () => {
     const writes = Object.values(OPERATIONS)
       .filter((op) => op.requiresIdempotencyKey)
       .map((op) => op.operationId)
@@ -105,6 +105,8 @@ describe('the seam operations', () => {
       'setWorkerIntake',
       'startRun',
       'uploadDocument',
+      // `W59-VERSION-UPLOAD-01`: the next version of a document is keyed like the first.
+      'uploadDocumentVersion',
     ]);
   });
 

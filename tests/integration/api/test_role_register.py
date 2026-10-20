@@ -44,6 +44,12 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "createProject": ("POST", "/projects"),
     "listProjects": ("GET", "/projects"),
     "uploadDocument": ("POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents"),
+    # `W59-VERSION-UPLOAD-01`. The next version of a document, addressed through its project.
+    "uploadDocumentVersion": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions",
+    ),
     "listDocuments": ("GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents"),
     "getDocumentVersion": ("GET", "/versions/ver_01M2545JSD15ETSNNV904X991J"),
     "streamDocumentVersionContent": ("GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/content"),
@@ -185,6 +191,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "changePassword": _ANY,
     "createProject": _EXPERT,
     "uploadDocument": _EXPERT,
+    # `W59-VERSION-UPLOAD-01`: the next version takes exactly the first upload's roles.
+    "uploadDocumentVersion": _EXPERT,
     "startRun": _EXPERT,
     # `W59-SECTION-SEAL-01`: only an expert confirms a section; admin alone does not.
     "classifyDocumentVersion": _EXPERT,

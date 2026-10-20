@@ -357,6 +357,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # Product changes -- projects, uploads, runs, verdicts, comments, the export.
         "createProject": _EXPERT,
         "uploadDocument": _EXPERT,
+        # `W59-VERSION-UPLOAD-01`. The next version of a document: the same roles as the first.
+        "uploadDocumentVersion": _EXPERT,
         "startRun": _EXPERT,
         # `W59-SECTION-SEAL-01`. Only an expert confirms a section; admin alone does not
         # imply expert (the decision's authorization rule). The command re-reads the role

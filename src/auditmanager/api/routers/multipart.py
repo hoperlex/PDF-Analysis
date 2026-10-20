@@ -95,10 +95,15 @@ UPLOAD_FORM_MAX_FILES: Final[int] = 2
 UPLOAD_FORM_MAX_FIELDS: Final[int] = 4
 UPLOAD_FORM_MAX_PART_BYTES: Final[int] = 16 * 1024
 
-#: ``POST /projects/{project_uid}/documents`` as the application serves it -- the proxy has
-#: already removed ``/api/v1``. Matched whole, never as a prefix, so no other route (and not
-#: ``GET`` of the same collection) gets the upload cap or takes an upload slot.
-_UPLOAD_ROUTE: Final[re.Pattern[str]] = re.compile(r"^/projects/[^/]+/documents$")
+#: ``POST /projects/{project_uid}/documents`` (``uploadDocument``) and, `W59-VERSION-UPLOAD-01`,
+#: ``POST /projects/{project_uid}/documents/{document_uid}/versions`` (``uploadDocumentVersion``)
+#: as the application serves them -- the proxy has already removed ``/api/v1``. Matched whole,
+#: never as a prefix, so no other route (not ``GET`` of the same collection, and not the
+#: classification, section-review or comparison routes under a version) gets the upload cap or
+#: takes an upload slot. Both uploads share the one pool of ``MAX_CONCURRENT_UPLOADS`` slots.
+_UPLOAD_ROUTE: Final[re.Pattern[str]] = re.compile(
+    r"^/projects/[^/]+/documents(?:/[^/]+/versions)?$"
+)
 
 #: ``records/22-uploadDocument.refusal.max_bytes.json``, byte for byte.
 _UPLOAD_TOO_LARGE: Final[str] = "The upload exceeds the maximum accepted size."
@@ -430,7 +435,7 @@ class _BoundedFormRequest(Request):
 
 
 class UploadRoute(APIRoute):
-    """``uploadDocument``'s route: the operation's handler, given a :class:`_BoundedFormRequest`.
+    """``uploadDocument``'s and ``uploadDocumentVersion``'s route: the operation's handler, given a :class:`_BoundedFormRequest`.
 
     FastAPI's own way to give one route another request class; the route is declared with it
     (``documents.py``), so no other operation's parsing changes.

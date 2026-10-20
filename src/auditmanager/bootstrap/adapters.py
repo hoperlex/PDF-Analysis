@@ -661,6 +661,33 @@ class DocumentAdapter:
             _version_view(outcome.version), bool(getattr(outcome, "replayed", False))
         )
 
+    def upload_document_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        content: BinaryIO,
+        source_filename: str,
+        idempotency_key: str,
+    ) -> Any:
+        """`W59-VERSION-UPLOAD-01`: the next version, through the same bundle entry.
+
+        ``IngestService.upload_next_version`` is ``upload_bundle`` with the document named, so
+        the handle travels exactly as in :meth:`upload_document` and nothing here reads it.
+        """
+        from auditmanager.shared.identity import DocumentUid, IdempotencyKey, ProjectUid
+
+        outcome = self._service.upload_next_version(
+            project_uid=ProjectUid.parse(project_uid),
+            document_uid=DocumentUid.parse(document_uid),
+            content=content,
+            source_filename=source_filename or "upload.zip",
+            idempotency_key=IdempotencyKey(idempotency_key),
+        )
+        return _Uploaded(
+            _version_view(outcome.version), bool(getattr(outcome, "replayed", False))
+        )
+
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
         from auditmanager.shared.identity import VersionUid
 

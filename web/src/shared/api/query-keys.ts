@@ -184,6 +184,12 @@ export const queryKeys = {
     list: (documentUid: DocumentUid, cursor?: string, limit?: number) =>
       ['versions', 'list', documentUid, { cursor, limit }] as const,
     /**
+     * Every page of `listVersions` for one document, as a prefix of {@link list}
+     * (`W59-VERSION-UPLOAD-01`). `uploadDocumentVersion` puts a new first row on every page
+     * boundary of that list, so it invalidates all of them, whatever cursor a screen holds.
+     */
+    lists: (documentUid: DocumentUid) => ['versions', 'list', documentUid] as const,
+    /**
      * `getVersionBlocks`. `W45-BLOCKS`.
      *
      * Under `versions` and not under a fifth root namespace, for the same reason

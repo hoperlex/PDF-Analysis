@@ -61,6 +61,12 @@ GUARDED = (
     ("createProject", "POST", "/projects"),
     ("listProjects", "GET", "/projects"),
     ("uploadDocument", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents"),
+    # `W59-VERSION-UPLOAD-01`. The next version of a document, addressed through its project.
+    (
+        "uploadDocumentVersion", "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions",
+    ),
     ("getDocumentVersion", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J"),
     (
         "streamDocumentVersionContent",
