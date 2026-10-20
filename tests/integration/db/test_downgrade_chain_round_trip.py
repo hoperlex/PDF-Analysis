@@ -9,7 +9,7 @@ because the only 0022 downgrade test is the *refusal* with retained data.
 
 This module proves the repaired chain with three claims, each against a real PostgreSQL server:
 
-* **the upgrade text is untouched.** The ``0022``..``0027`` upgrade surfaces (every top-level
+* **the upgrade text is untouched.** The ``0022``..``0028`` upgrade surfaces (every top-level
   statement except the docstring, ``downgrade()`` and the ``_downgrade_*`` helpers) are pinned
   by a digest taken from ``origin/dev``'s bytes. A downgrade may be repaired; an upgrade may not.
 * **every step down restores the schema exactly.** One database is walked up through every
@@ -70,6 +70,8 @@ UPGRADE_SURFACE_DIGESTS = {
     "20261020_0025_work_assignments.py": "7061fccf5c5dafa35d911ab9b913c39050bfaa8d0505833541c2724ce919d0e3",
     "20261020_0026_price_lists.py": "6b21a92cb743436230093aee86bd826699207cabaa331deae4102f312a6fae6d",
     "20261020_0027_optimisation_proposals.py": "5cbe94b32de47e8d62c3639680096027ff049adac5fd31618d6b5a644042e93f",
+    # `CLASSIFICATION-CORRECTION-01`: the first digest of a new revision is taken from its own bytes.
+    "20261020_0028_classification_corrections.py": "9a3b6ab94f09575c72d408eabb4a3f16f7b3230c085459d17e6c80ceb8cf2032",
 }
 
 
@@ -380,7 +382,8 @@ def _row_counts(engine: Engine) -> dict[str, int]:
 
 
 def _seed_rows_the_chain_drops(engine: Engine, ids: dict[str, str]) -> None:
-    """A classification (0024) and an assignment with its history (0025): dropped, by design."""
+    """A classification and a correction of it (0024, 0028) and an assignment with its history
+    (0025): dropped, by design."""
     with engine.begin() as connection:
         expert, admin = _user(connection), _user(connection)
         connection.execute(
@@ -388,6 +391,14 @@ def _seed_rows_the_chain_drops(engine: Engine, ids: dict[str, str]) -> None:
                 "INSERT INTO document_version_classification "
                 "(version_uid, project_stage, section_code, confirmed_by_user_uid) "
                 "VALUES (:version, 'R', 'KJ', :expert)"
+            ),
+            {**ids, "expert": expert},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO document_version_classification_correction "
+                "(version_uid, revision, project_stage, section_code, corrected_by_user_uid, reason) "
+                "VALUES (:version, 2, 'R', 'AR', :expert, 'Раздел указан неверно')"
             ),
             {**ids, "expert": expert},
         )
@@ -414,7 +425,7 @@ def _chain() -> list[str]:
     assert FIRST_TOUCHED in walk, f"{FIRST_TOUCHED} is not in the revision walk {walk}"
     chain = walk[walk.index(FIRST_TOUCHED) :]
     assert chain[-1] == head_revision()
-    assert len(chain) >= 7, f"the chain 0021..0027 shrank to {chain}"
+    assert len(chain) >= 8, f"the chain 0021..0028 shrank to {chain}"
     return chain
 
 
@@ -462,13 +473,20 @@ def test_every_step_down_restores_the_schema_and_head_upgrades_again(
             assert _row_counts(engine) == released, f"downgrading {revision} touched a released row"
             if revision == "0025_work_assignments":
                 assert "exist nowhere else and are dropped" in output, output
+            if revision == "0028_classification_corrections":
+                assert "1 correction(s) of 1 version(s)" in output, output
 
         # and up again: the round trip equals a straight upgrade
         run("upgrade", head)
         _assert_same(_inventory(straight), _inventory(engine), "round trip vs straight upgrade")
         assert _row_counts(engine) == released
         with engine.connect() as connection:
-            for table in ("document_version_classification", "work_assignment", "work_assignment_event"):
+            for table in (
+                "document_version_classification",
+                "document_version_classification_correction",
+                "work_assignment",
+                "work_assignment_event",
+            ):
                 assert connection.execute(text(f"SELECT count(*) FROM {table}")).scalar_one() == 0
     finally:
         engine.dispose()

@@ -25,7 +25,7 @@ from typing import Any
 
 import pytest
 from sqlalchemy import Engine, text
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.exc import DBAPIError
 
 from auditmanager.access.public import UserUid
 from auditmanager.shared.db.engine import create_database_engine
