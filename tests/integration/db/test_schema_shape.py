@@ -77,6 +77,9 @@ IMMUTABLE_TABLES = {
     "optimisation_pass",
     "optimisation_proposal",
     "optimisation_proposal_decision",
+    # `0028_classification_corrections`: a correction is appended once and never changed; the
+    # original confirmation above is revision 1 and the current classification is a view.
+    "document_version_classification_correction",
 }
 
 
@@ -301,6 +304,9 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         # `W60-OPT-PROPOSALS-01`, migration 0027: the expert who started a pass (a decision's
         # actor is ``actor_user_uid`` above).
         "started_by_user_uid": "usr",
+        # `CLASSIFICATION-CORRECTION-01`, migration 0028: the expert who corrected a version's
+        # classification.
+        "corrected_by_user_uid": "usr",
         # `W60-OPT-PROPOSALS-01` phase B contracted the three proposal identities; the two
         # position columns of a proposal hold ``prp``.
         "optimisation_pass_id": "opp",
