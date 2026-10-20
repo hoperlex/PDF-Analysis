@@ -1,8 +1,9 @@
 /**
- * `/analysis-settings` — the route file for «Настройки анализа», a section on its way (`R-66`).
+ * `/analysis-settings` — the route file for «Настройки анализа» (`R-66`).
  *
- * Delegation-only: the route decides nothing. The screen is an honest stub built the way
- * `/logs` is — `@/_pages/analysis-settings` renders `RoutePlaceholder` with a promise of its own.
+ * Delegation-only: the route decides nothing. `@/_pages/analysis-settings` lists the analysis
+ * profile of every section, read-only, since `W59-ANALYSIS-SETTINGS-01` graduated it from the
+ * honest stub it was.
  *
  * `W50-PLAN.md` §3.2: the route awaits `requireScreen` with its own address, `params` and
  * `searchParams` before it renders; the registry's row is `session`, roles `any`. Declared

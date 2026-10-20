@@ -208,6 +208,8 @@ GUARDED = (
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
         "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
     ),
+    # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only.
+    ("listAnalysisProfiles", "GET", "/analysis/profiles"),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the

@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 a9c44e95edf033bc63807c9bd382292ca7cc7bbe456dacbc8744f66cb20880d0
+ *   sha256 2dd62b45a6505c7bf9a88fa3b461866b0732656c78a05a77c67c77aec281446d
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,13 +17,19 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'a9c44e95edf033bc63807c9bd382292ca7cc7bbe456dacbc8744f66cb20880d0';
+export const CONTRACT_DIGEST = '2dd62b45a6505c7bf9a88fa3b461866b0732656c78a05a77c67c77aec281446d';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
   'Account',
   'AccountPage',
   'AnalysisProfileId',
+  'AnalysisProfileList',
+  'AnalysisProfileListItem',
+  'AnalysisProfileSource',
+  'AnalysisProfileSourceFile',
+  'AnalysisProfileStatus',
+  'AnalysisProfileSummary',
   'AppendDecisionRequest',
   'AppendDecisionResponse',
   'ApproveRegistrationRequest',
@@ -203,6 +209,58 @@ export type AnalysisProfileId = string;
 
 /** The contract pattern for `AnalysisProfileId`. Anchored; use with `new RegExp()`. */
 export const ANALYSIS_PROFILE_ID_PATTERN = "^ap_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** All fifteen sections, in the project-structure order, each with its profile or ``null``. */
+export type AnalysisProfileList = {
+  items: Array<AnalysisProfileListItem>;
+};
+
+/** One section and its registered profile, or ``null`` when none is registered. */
+export type AnalysisProfileListItem = {
+  profile: AnalysisProfileSummary | null;
+  section_code: ProjectSection;
+  section_name: string;
+};
+
+/** The legacy repository, commit and files a package's prompt was ported from. */
+export type AnalysisProfileSource = {
+  commit: string;
+  files: Array<AnalysisProfileSourceFile>;
+  repository: string;
+};
+
+/** One legacy file a package's prompt was ported from, with its SHA-256. */
+export type AnalysisProfileSourceFile = {
+  path: string;
+  sha256: Sha256;
+};
+
+/**
+ * `W59-ANALYSIS-SETTINGS-01`. Where a registered text profile stands.
+ *
+ * ``builtin``: AR's v1 profile, written in this repository. ``draft``: a package ported from
+ * the legacy prompts and not yet reviewed by an expert. ``reviewed``: a package an expert has
+ * reviewed. Every status is executable; the status is recorded, never hidden.
+ */
+export const ANALYSIS_PROFILE_STATUS_VALUES = [
+  'builtin',
+  'draft',
+  'reviewed',
+] as const;
+
+/** AnalysisProfileStatus - the closed value set above. */
+export type AnalysisProfileStatus = (typeof ANALYSIS_PROFILE_STATUS_VALUES)[number];
+
+/** One registered text profile: its identities, version, status and content hashes. */
+export type AnalysisProfileSummary = {
+  analysis_profile_id: AnalysisProfileId;
+  content_sha256: Sha256;
+  profile_version: string;
+  prompt_bundle_id: PromptBundleId;
+  prompt_bundle_sha256: Sha256;
+  source: AnalysisProfileSource | null;
+  status: AnalysisProfileStatus;
+};
 
 export type AppendDecisionRequest = {
   /** Required for `comment`; optional on any other event type. */

@@ -24,6 +24,7 @@ from auditmanager.api.routers import Router, build_router
 from auditmanager.api.security import TokenSigner, derive_signing_key
 from auditmanager.bootstrap.adapters import (
     AccountAdapter,
+    AnalysisProfileAdapter,
     BlockAdapter,
     ComparisonAdapter,
     CredentialAdapter,
@@ -44,7 +45,7 @@ from auditmanager.bootstrap.adapters import (
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.runs.public import DurableCarrier, ReclaimingCarrier, run_to_terminal
-from auditmanager.sections.public import SECTION_CODES
+from auditmanager.sections.public import SECTION_CODES, section_names
 from auditmanager.releases.public import (
     ReleaseRepository, compute_build_id, read_product_version,
 )
@@ -320,6 +321,9 @@ def build_application(
         comparisons=ComparisonAdapter(
             sessions, blob_store=store, section_codes=SECTION_CODES,
         ),
+        # `W59-ANALYSIS-SETTINGS-01`. The same registry run start routes through, listed
+        # read-only for «Настройки анализа», named from the reviewed section catalogue.
+        analysis_profiles=AnalysisProfileAdapter(text_profiles, section_names=section_names()),
     )
     return Application(
         router=router,

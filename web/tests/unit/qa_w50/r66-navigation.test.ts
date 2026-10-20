@@ -7,10 +7,11 @@
  * `/knowledge-base`, Блоки `/blocks`, «Нормы» `/norms` (stub); **Система** — Журнал выполнения
  * `/logs`, Исполнители `/workers`, «Настройки анализа» `/analysis-settings` (stub), «Очередь»
  * `/queue`; `/optimisation` leaves the menu and stays a registered, reachable screen
- * (group `hidden`). W53 built `/logs` and `/queue`, and `W55A-WEB-NORMS` built `/norms`; the
- * remaining two R-66 stubs still use `RoutePlaceholder`, say they are not implemented, show no
- * digit and invent no data. Access remains `session`, roles `any-role`. `/norms` keeps its
- * ruled place in the menu, asserted by `RULING` below and by the case after `STUBS`.
+ * (group `hidden`). W53 built `/logs` and `/queue`, `W55A-WEB-NORMS` built `/norms` and
+ * `W59-ANALYSIS-SETTINGS-01` built `/analysis-settings`; the remaining R-66 stub still uses
+ * `RoutePlaceholder`, says it is not implemented, shows no digit and invents no data. Access
+ * remains `session`, roles `any-role`. `/norms` and `/analysis-settings` keep their ruled place
+ * in the menu, asserted by `RULING` below and by the cases after `STUBS`.
  *
  * The expectation below is typed from the ruling, not read from the registry, and the menu is
  * read three ways: the data the frame builds (`buildNavigation`), and the two rendered states of
@@ -81,12 +82,12 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
 ];
 
 /**
- * The two remaining stubs of `R-66`, each with the group the ruling puts it in. `/norms` left
- * this list in `W55A-WEB-NORMS`: it is a built screen now, held below as one.
+ * The remaining stub of `R-66`, with the group the ruling puts it in. `/norms` left this list in
+ * `W55A-WEB-NORMS` and `/analysis-settings` in `W59-ANALYSIS-SETTINGS-01`: both are built
+ * screens now, held below as such.
  */
 const STUBS: readonly { readonly address: string; readonly label: string; readonly group: string }[] = [
   { address: '/section-optimisation', label: 'Оптимизация разделов', group: 'work' },
-  { address: '/analysis-settings', label: 'Настройки анализа', group: 'system' },
 ];
 
 const COMPLETE: SessionAccount = {
@@ -214,7 +215,7 @@ const fetchSpy = vi.fn(async () => {
   throw new Error('a stub made a network call');
 });
 
-describe('R-66: each of the two remaining stubs is an honest RoutePlaceholder', () => {
+describe('R-66: the remaining stub is an honest RoutePlaceholder', () => {
   beforeEach(() => {
     forgetEverySession();
     jar.value = openSession(COMPLETE, 'qa-credential', 3600);
@@ -307,6 +308,27 @@ describe('R-66: each of the two remaining stubs is an honest RoutePlaceholder', 
     expect(markup).not.toContain('data-route="/norms"');
     // It asks the server which snapshot is current, and searches nothing until asked to.
     expect(client.getQueryCache().getAll().map((query) => query.queryKey[1])).toEqual(['snapshots']);
+  });
+
+  it('/analysis-settings graduated (W59-ANALYSIS-SETTINGS-01): its ruled row and place are kept, and it reads the profile registry', async () => {
+    expect(screenAt('/analysis-settings')).toEqual({
+      address: '/analysis-settings',
+      label: 'Настройки анализа',
+      group: 'system',
+      access: 'session',
+      roles: 'any-role',
+      inMenu: true,
+    });
+    const module = (await import(/* @vite-ignore */ join(WEB_ROOT, 'src', 'app', 'analysis-settings', 'page.tsx'))) as {
+      default: (props: unknown) => Promise<ReactElement>;
+    };
+    const routed = await module.default({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
+    const client = newClient();
+    const markup = renderScreen(client, routed);
+    expect(markup).not.toContain('Раздел пока недоступен');
+    expect(markup).not.toContain('data-route="/analysis-settings"');
+    // One read: the registry, under its own key.
+    expect(client.getQueryCache().getAll().map((query) => query.queryKey)).toEqual([['analysis', 'profiles']]);
   });
 
   it('all R-66 menu addresses remain registered after stubs graduate', () => {

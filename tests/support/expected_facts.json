@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 52,
+    "path_count": 53,
     "operations": [
       [
         "POST",
@@ -297,6 +297,11 @@
         "GET",
         "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison",
         "compareDocumentVersions"
+      ],
+      [
+        "GET",
+        "/analysis/profiles",
+        "listAnalysisProfiles"
       ]
     ],
     "schema_names": [
@@ -447,7 +452,13 @@
       "FindingRef",
       "FindingMatchProposal",
       "FindingComparison",
-      "VersionComparison"
+      "VersionComparison",
+      "AnalysisProfileStatus",
+      "AnalysisProfileSourceFile",
+      "AnalysisProfileSource",
+      "AnalysisProfileSummary",
+      "AnalysisProfileListItem",
+      "AnalysisProfileList"
     ]
   },
   "error_catalog": {

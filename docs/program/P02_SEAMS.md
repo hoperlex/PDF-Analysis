@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Fifty-nine operations, sealed. `A5` generates the typed client from this document; `B6`
+Sixty operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -853,8 +853,12 @@ added `compareDocumentVersions` on 2026-10-20: a read-only comparison of two ver
 set with the same confirmed section and either the same stage (`mode=version`) or a `P`
 source and an `R` target (`mode=stage`, the W62 П/Р slice), whose sheet pairs and finding
 matches are proposals and whose refusals are answers with a closed reason, never a
-relabelled pair; a path naming no version of the document is `404`. `W59-VERSION-UPLOAD-01`
-added `uploadDocumentVersion` on 2026-10-20: one portal bundle, under `uploadDocument`'s
+relabelled pair; a path naming no version of the document is `404`.
+`W59-ANALYSIS-SETTINGS-01` added `listAnalysisProfiles` on 2026-10-20: the section-keyed
+text-profile registry run start routes through, read-only, as fifteen sections in the
+project-structure order, each with its profile (identities, version, status, hashes, legacy
+source) or `null`.
+`W59-VERSION-UPLOAD-01` added `uploadDocumentVersion` on 2026-10-20: one portal bundle, under `uploadDocument`'s
 envelope and custody, published as the next immutable version of an existing document, which
 becomes its current version and inherits no title, section or classification; a document of
 another project is `404`.
@@ -934,6 +938,7 @@ could.
 | `classifyDocumentVersion` | `PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification` |
 | `getVersionSectionReview` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review` |
 | `compareDocumentVersions` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison` |
+| `listAnalysisProfiles` | `GET /analysis/profiles` |
 
 Rules that hold across the whole surface:
 
