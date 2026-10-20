@@ -1,4 +1,4 @@
-"""``exportRunCsv``.
+"""``exportRunCsv`` and ``exportRunXlsx``.
 
 The handler adds **nothing** to what :class:`~auditmanager.api.routers.ports.CsvExportPort`
 returns. No rendering, no column list, no quoting, no policy: ``P02_SEAMS.md`` section 6
@@ -9,6 +9,11 @@ and ``records/12-exportRunCsv.success.json`` compares them as bytes.
 
 Nothing is created here. There is no export resource, no export identity and nothing to
 poll, because a synchronous read creates nothing.
+
+``exportRunXlsx`` (`W57B-NORMS-CATALOGUE-XLSX-01`) is the same bargain for the W57b
+workbook: :class:`~auditmanager.api.routers.ports.XlsxExportPort` returns the bytes and
+every refusal, and this file adds the media type and the download name -- built by
+:func:`_disposition`, the one place a download name is spelled.
 """
 
 from __future__ import annotations
@@ -18,9 +23,10 @@ from typing import Annotated, Final
 from fastapi import APIRouter, Path, Response
 
 from auditmanager.api.routers.declarations import envelope_responses, success
-from auditmanager.api.routers.ports import CsvExportPort
+from auditmanager.api.routers.ports import CsvExportPort, XlsxExportPort
 from auditmanager.api.routers.wire import WireResponse
 from auditmanager.api.schemas import models
+from auditmanager.api.security import CurrentSubject
 
 __all__ = ["build_export_routes"]
 
@@ -32,8 +38,22 @@ _CSV: Final[str] = "text/csv; charset=utf-8"
 #: parameters are different things, and the document declares the type.
 _CSV_MEDIA_TYPE: Final[str] = "text/csv"
 
+#: The workbook's media type; the bytes carry no charset parameter.
+_XLSX_MEDIA_TYPE: Final[str] = (
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
 
-def build_export_routes(router: APIRouter, exports: CsvExportPort) -> None:
+_DISPOSITION_HEADER: Final[dict[str, object]] = {
+    "schema": {"type": "string"},
+    "description": "Attachment with a display file name built from "
+    "opaque identifiers. The file name is presentation only and is "
+    "never an identity.",
+}
+
+
+def build_export_routes(
+    router: APIRouter, exports: CsvExportPort, xlsx: XlsxExportPort | None = None
+) -> None:
 
     @router.get(
         "/runs/{run_id}/export.csv",
@@ -75,14 +95,48 @@ def build_export_routes(router: APIRouter, exports: CsvExportPort) -> None:
             content,
         )
 
+    @router.get(
+        "/runs/{run_id}/export.xlsx",
+        operation_id="exportRunXlsx",
+        tags=["export"],
+        status_code=200,
+        response_class=Response,
+        responses={
+            **success(
+                200,
+                "The workbook for this exact run: «Сводка» and «Замечания».",
+                content={_XLSX_MEDIA_TYPE: {"schema": {"type": "string", "format": "binary"}}},
+                headers={"Content-Disposition": _DISPOSITION_HEADER},
+            ),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
+        },
+    )
+    def export_run_xlsx(
+        subject: CurrentSubject, run_id: Annotated[models.RunId, Path()]
+    ) -> WireResponse:
+        # Every refusal is the port's -- the run's state, its sheet labels, its citations;
+        # this handler reads nothing and decides nothing.
+        content = xlsx.export_run_xlsx(  # type: ignore[union-attr]
+            run_id=run_id, principal_id=subject.user_uid
+        )
+        return WireResponse(
+            200,
+            (
+                ("Content-Type", _XLSX_MEDIA_TYPE),
+                ("Content-Length", str(len(content))),
+                ("Content-Disposition", _disposition(run_id, suffix="xlsx")),
+            ),
+            content,
+        )
 
 
-def _disposition(run_id: str) -> str:
+def _disposition(run_id: str, *, suffix: str = "csv") -> str:
     """An attachment name built from the opaque run identity and nothing else.
 
     The frozen document allows a display file name here and says it "is presentation only
     and is never an identity". Building it from the ``run_id`` keeps that true: there is no
     source file name, no project label and no path in it, so the header reveals nothing the
-    response body does not already carry.
+    response body does not already carry. The CSV is ``attachment; filename="{run_id}.csv"``
+    and the workbook the same name with ``.xlsx``.
     """
-    return f'attachment; filename="{run_id}.csv"'
+    return f'attachment; filename="{run_id}.{suffix}"'

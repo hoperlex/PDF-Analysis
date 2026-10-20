@@ -4,7 +4,8 @@
  * Delegation-only: the route decides nothing about norms. It hands the screen the session's
  * roles — the guard has just read them, and the screen draws the administrator's controls
  * only for `admin`, as the home page draws its tiles — and the search the address carries in
- * `?q=`, so a search is an address that survives a reload.
+ * `?q=`, so a search is an address that survives a reload; `?view=catalogue` with `cq` and
+ * `kind` is the catalogue's address (`W57B-NORMS-CATALOGUE-XLSX-01`).
  *
  * `W50-PLAN.md` §3.2: the route awaits `requireScreen` with its own address, `params` and
  * `searchParams` before it renders; the registry's row is `session`, roles `any-role`
@@ -23,5 +24,12 @@ export default async function NormsRoute({ params, searchParams }: ScreenRoutePr
   const subject = await requireScreen('/norms', { params, searchParams });
   const query = searchParams === undefined ? {} : await searchParams;
   const q = typeof query.q === 'string' ? query.q.trim() : '';
-  return <NormsPage roles={subject.roles} query={q.length === 0 ? null : q} />;
+  // `W57B-NORMS-CATALOGUE-XLSX-01`: `?view=catalogue` opens the catalogue, with its own
+  // filters `cq` and `kind`; anything else is the search.
+  const text = (value: unknown): string | null => {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    return trimmed.length === 0 ? null : trimmed;
+  };
+  const catalogue = query.view === 'catalogue' ? { q: text(query.cq), kind: text(query.kind) } : null;
+  return <NormsPage roles={subject.roles} query={q.length === 0 ? null : q} catalogue={catalogue} />;
 }

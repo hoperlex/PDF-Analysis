@@ -1,4 +1,4 @@
-"""The sixty-seven operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The sixty-nine operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the nineteen router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -86,6 +86,7 @@ from auditmanager.api.routers.ports import (
     ReleasesPort,
     RunPort,
     SectionPort,
+    XlsxExportPort,
 )
 from auditmanager.api.routers.projects import build_project_routes
 from auditmanager.api.routers.registrations import build_registration_routes
@@ -201,13 +202,15 @@ def build_router(
     sections: SectionPort | None = None,
     comparisons: ComparisonPort | None = None,
     analysis_profiles: AnalysisProfilePort | None = None,
+    xlsx_exports: XlsxExportPort | None = None,
     optimisation: OptimisationPort | None = None,
 ) -> Router:
-    """Assemble the sixty-seven operations, from the nineteen router modules -- ``me``,
+    """Assemble the sixty-nine operations, from the nineteen router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s and ``optimisation``
-    `W60-PRICE-LIST-01`'s.
+    `W60-PRICE-LIST-01`'s; `W57B-NORMS-CATALOGUE-XLSX-01` adds ``listNormDocuments`` to the
+    norms router and ``exportRunXlsx`` (on ``xlsx_exports``) to the export router.
 
     ``accounts`` and ``registrations`` are two more ports with a default, for the reason
     the paragraph below gives for the first three: every caller that does not serve them
@@ -256,7 +259,9 @@ def build_router(
     # fallback to the behaviour this closes.
     build_finding_routes(router, findings, runs)
     build_decision_routes(router, decisions, findings)
-    build_export_routes(router, exports)
+    # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook on its own port, optional with a default
+    # for the reason `blocks` gives above.
+    build_export_routes(router, exports, xlsx_exports)  # type: ignore[arg-type]
     build_auth_routes(router, credentials)  # type: ignore[arg-type]
     build_dashboard_routes(router, dashboard)  # type: ignore[arg-type]
     build_me_routes(router, accounts)  # type: ignore[arg-type]

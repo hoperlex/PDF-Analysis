@@ -5,7 +5,8 @@
  */
 
 import type {
-  NormDocument, NormParagraph, NormSearchHit, NormSnapshot, NormSnapshotEvent,
+  NormCatalogueEntry, NormCatalogueEntryPage, NormDocument, NormParagraph, NormSearchHit,
+  NormSnapshot, NormSnapshotEvent,
 } from '@/shared/api';
 
 import { NORM_DOCUMENT_ID } from '../screens/route-screens';
@@ -157,3 +158,35 @@ export const NORM_PARAGRAPHS: readonly NormParagraph[] = [
     text_reliability: 'unreliable',
   },
 ];
+
+/** `W57B-NORMS-CATALOGUE-XLSX-01`: two catalogue rows of the current snapshot, Cyrillic throughout. */
+export const NORM_CATALOGUE_ITEMS: readonly NormCatalogueEntry[] = [
+  {
+    norm_document_id: NORM_DOCUMENT_ID,
+    designation: 'Приказ МЧС России от 24.04.2013 № 288 (ред. от 27.06.2023)',
+    title: null,
+    kind: 'Приказ',
+    page_count: 153,
+    paragraph_count: 1719,
+    content_available: true,
+    source_attribution: 'consultant_plus',
+  },
+  {
+    norm_document_id: 'ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+    designation: 'СП 54.13330.2022',
+    title: 'Свод правил. Здания жилые многоквартирные',
+    kind: 'СП',
+    page_count: 80,
+    paragraph_count: 900,
+    content_available: false,
+    source_attribution: 'unattributed',
+  },
+];
+
+export const NORM_CATALOGUE_PAGE: NormCatalogueEntryPage = {
+  norms_snapshot_id: CURRENT_SNAPSHOT_ID,
+  items: [...NORM_CATALOGUE_ITEMS],
+  page: { next_cursor: 'Y2F0YWxvZ3VlLW5leHQ' },
+  total: 3,
+  kinds: [{ kind: 'СП', document_count: 2 }, { kind: 'Приказ', document_count: 1 }],
+};

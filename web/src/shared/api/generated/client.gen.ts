@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 987c85e5d8c3a72f281632cabe30b2ec00d94a0908f803a9abe4657003586e34
+ *   sha256 89d7b74cb2e9428c28800baf48dbb8f5ca43856a72ea3e8175e9a795fe6139d2
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -38,6 +38,8 @@ import type {
   CreateProjectResult,
   ExportRunCsvInput,
   ExportRunCsvResult,
+  ExportRunXlsxInput,
+  ExportRunXlsxResult,
   GetDashboardSummaryInput,
   GetDashboardSummaryResult,
   GetDocumentVersionInput,
@@ -76,6 +78,8 @@ import type {
   ListExecutionJournalResult,
   ListExecutionQueueInput,
   ListExecutionQueueResult,
+  ListNormDocumentsInput,
+  ListNormDocumentsResult,
   ListNormParagraphsInput,
   ListNormParagraphsResult,
   ListNormSnapshotEventsInput,
@@ -273,6 +277,18 @@ export function exportRunCsv(
   options?: RequestOptions,
 ): Promise<ApiResponse<ExportRunCsvResult>> {
   return request<ExportRunCsvResult>(OPERATIONS.exportRunCsv, input, options);
+}
+
+/**
+ * Download the Excel workbook for one run.
+ *
+ * `GET /runs/{run_id}/export.xlsx`.
+ */
+export function exportRunXlsx(
+  input: ExportRunXlsxInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ExportRunXlsxResult>> {
+  return request<ExportRunXlsxResult>(OPERATIONS.exportRunXlsx, input, options);
 }
 
 /**
@@ -501,6 +517,18 @@ export function listExecutionQueue(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListExecutionQueueResult>> {
   return request<ListExecutionQueueResult>(OPERATIONS.listExecutionQueue, input, options);
+}
+
+/**
+ * List Norm Documents
+ *
+ * `GET /norm-documents`.
+ */
+export function listNormDocuments(
+  input: ListNormDocumentsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListNormDocumentsResult>> {
+  return request<ListNormDocumentsResult>(OPERATIONS.listNormDocuments, input, options);
 }
 
 /**
@@ -974,6 +1002,7 @@ export const apiClient = {
   compareDocumentVersions,
   createProject,
   exportRunCsv,
+  exportRunXlsx,
   getDashboardSummary,
   getDocumentVersion,
   getEffectiveVendorLists,
@@ -993,6 +1022,7 @@ export const apiClient = {
   listDocuments,
   listExecutionJournal,
   listExecutionQueue,
+  listNormDocuments,
   listNormParagraphs,
   listNormSnapshotEvents,
   listNormSnapshots,

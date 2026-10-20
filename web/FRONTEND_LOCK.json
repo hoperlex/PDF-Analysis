@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "987c85e5d8c3a72f281632cabe30b2ec00d94a0908f803a9abe4657003586e34",
-    "content_commit": "c22f204",
-    "content_commit_subject": "W60-PRICE-LIST-01 API reseal on integration base c22f2049",
-    "dispatch_named_commit": "c22f204",
-    "commit_note": "W60 adds project price lists and vendor lists: uploadPriceList (POST /projects/{project_uid}/price-lists, expert, keyed, multipart CSV/XLSX), listPriceListRevisions, listPriceListPositions, getEffectiveVendorLists, setGlobalVendorList (admin) and setProjectVendorList (expert), five paths and twenty-seven schemas; the identities prl_, prp_ and vnl_; no error code is added.",
+    "sha256": "89d7b74cb2e9428c28800baf48dbb8f5ca43856a72ea3e8175e9a795fe6139d2",
+    "content_commit": "beafeab",
+    "content_commit_subject": "W60-PRICE-LIST-01 API reseal on integration base beafeab5",
+    "dispatch_named_commit": "beafeab",
+    "commit_note": "W60 adds project price lists and vendor lists: uploadPriceList (POST /projects/{project_uid}/price-lists, expert, keyed, multipart CSV/XLSX), listPriceListRevisions, listPriceListPositions, getEffectiveVendorLists, setGlobalVendorList (admin) and setProjectVendorList (expert), five paths and twenty-seven schemas, on top of W57B-NORMS-CATALOGUE-XLSX-01 (listNormDocuments, exportRunXlsx); the identities prl_, prp_ and vnl_; no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 59,
-    "operations": 67,
-    "component_schemas": 185,
+    "paths": 61,
+    "operations": 69,
+    "component_schemas": 188,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "987c85e5d8c3a72f281632cabe30b2ec00d94a0908f803a9abe4657003586e34",
+    "snapshot_sha256": "89d7b74cb2e9428c28800baf48dbb8f5ca43856a72ea3e8175e9a795fe6139d2",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "444bbff2d9dbe1d49b252d20f05c1c8d866f4235124d97ef83b435c7dd70dc06",
-      "index.ts": "420f0ff6d326fa703815c7248bb0f77f29813cf6e2c9007f410374342dd1d1ae",
-      "operations.gen.ts": "3963c0748c64a140980ffbf9ba1f91dbd6b83682cd6a7aa7e15d16e838781b3d",
-      "types.gen.ts": "ab7201a0e92057bcea143bb1cfeafadf582c6ef9561491d25f65ede4391241d1"
+      "client.gen.ts": "026fcc0ce67bf4fe0bd834fb8848941b5c35f033f5d9b11c46ac2b59558089ea",
+      "index.ts": "45bb1355126872131a0acd5562563342b3b5ad19559834a199ed63dfe9818758",
+      "operations.gen.ts": "69900274ea834420c150714c9a04d50277b76bc61e4f4f59ddb0c51d8926533d",
+      "types.gen.ts": "dcdb01bcce155035acac782cab47115918081186179332631b0c1cfef0396816"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

@@ -540,10 +540,11 @@ class TestN1ComponentReferenceResolution:
         # document through its project.
         # `W59-DECISION-CARRYOVER-01` adds one: the carryover addresses the comparison's source
         # version the same way.
+        # `W57B-NORMS-CATALOGUE-XLSX-01` adds one: `exportRunXlsx` refuses an unknown run.
         # `W60-PRICE-LIST-01` adds five: the upload, the revision list, the positions page, the
         # effective vendor lists and the project override each address a project or a price
         # list by identity (the global vendor list addresses a section and declares no 404).
-        assert len(report) == 43, report
+        assert len(report) == 44, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

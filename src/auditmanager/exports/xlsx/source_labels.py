@@ -25,6 +25,10 @@ _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _BLOCK_ID = re.compile(r"blk_[0-9a-f]{32}\Z")
 _MAX_BLOCKS_BYTES = 4 * 1024 * 1024  # W55b admitted member ceiling
 _MAX_BLOCKS = 3000  # W55b admitted block ceiling
+#: ``ck_document_version_page_count`` since ``0021_portal_bundles`` (1..500). The reader
+#: first carried the pre-0021 bound of 30 and refused every longer admitted version as an
+#: unbound source (`W57B-NORMS-CATALOGUE-XLSX-01`).
+_MAX_PAGES = 500
 _SOURCE = text("""
     SELECT v.version_uid, v.page_count,
            m.version_uid AS manifest_version_uid, m.role AS manifest_role,
@@ -139,7 +143,7 @@ def read_verified_page_labels(
         row["version_uid"] != version_uid
         or row["manifest_version_uid"] != version_uid
         or row["manifest_role"] != _ROLE
-        or type(page_count) is not int or not 1 <= page_count <= 30
+        or type(page_count) is not int or not 1 <= page_count <= _MAX_PAGES
         or not isinstance(blob_id, str) or not blob_id
         or not isinstance(digest, str) or _SHA256.fullmatch(digest) is None
         or type(size) is not int or not 0 < size <= _MAX_BLOCKS_BYTES

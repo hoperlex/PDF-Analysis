@@ -144,6 +144,9 @@ __all__ = [
     "NormSearchHit",
     "NormSearchPage",
     "NormDocument",
+    "NormCatalogueEntry",
+    "NormCatalogueEntryPage",
+    "NormKindCount",
     "NormParagraph",
     "NormParagraphPage",
     "NormSnapshot",
@@ -1080,6 +1083,38 @@ class NormDocument(_Object):
     unreliable_paragraph_count: Annotated[int, Field(ge=0)]
     content_available: bool
     source_attribution: NormSourceAttribution
+
+
+class NormCatalogueEntry(_Object):
+    """One document of the current snapshot as the catalogue lists it
+    (`W57B-NORMS-CATALOGUE-XLSX-01`). ``designation`` and ``title`` are derived for display
+    from the stored file name and are never identities; ``title`` is null when the name
+    carries nothing after the designation. ``kind`` is the stored document type verbatim."""
+
+    norm_document_id: NormDocumentId
+    designation: Annotated[str, Field(min_length=1, max_length=520)]
+    title: Annotated[str, Field(min_length=1, max_length=1000)] | None
+    kind: Annotated[str, Field(min_length=1, max_length=100)]
+    page_count: Annotated[int, Field(ge=1)]
+    paragraph_count: Annotated[int, Field(ge=0)]
+    content_available: bool
+    source_attribution: NormSourceAttribution
+
+
+class NormKindCount(_Object):
+    kind: Annotated[str, Field(min_length=1, max_length=100)]
+    document_count: Annotated[int, Field(ge=1)]
+
+
+class NormCatalogueEntryPage(_Object):
+    """One page of the catalogue; ``total`` counts the documents the filters keep and
+    ``kinds`` lists every kind of the snapshot with its document count."""
+
+    norms_snapshot_id: NormsSnapshotId
+    items: list[NormCatalogueEntry]
+    page: PageInfo
+    total: Annotated[int, Field(ge=0)]
+    kinds: list[NormKindCount]
 
 
 class NormParagraph(_Object):

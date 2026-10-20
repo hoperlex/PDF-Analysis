@@ -216,6 +216,9 @@ GUARDED = (
     ),
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only.
     ("listAnalysisProfiles", "GET", "/analysis/profiles"),
+    # `W57B-NORMS-CATALOGUE-XLSX-01`. The norms catalogue and the run's workbook.
+    ("listNormDocuments", "GET", "/norm-documents"),
+    ("exportRunXlsx", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.xlsx"),
     # `W60-PRICE-LIST-01`. Project price lists and vendor lists.
     ("uploadPriceList", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/price-lists"),
     ("listPriceListRevisions", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/price-lists"),
@@ -778,6 +781,9 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "comparison.py",
         "decisions.py",
         "execution.py",
+        # `W57B-NORMS-CATALOGUE-XLSX-01`: the workbook's export authorization records WHO
+        # downloaded it; whether they may is the role register's (expert, as the CSV).
+        "export.py",
         "me.py",
         "norms.py",
         "registrations.py",

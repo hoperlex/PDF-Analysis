@@ -125,6 +125,10 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "setProjectVendorList": ("PUT", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists/EOM"),
     "listRunFindings": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     "exportRunCsv": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),
+    # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook (expert, as the CSV) and the norms
+    # catalogue (any role).
+    "exportRunXlsx": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.xlsx"),
+    "listNormDocuments": ("GET", "/norm-documents"),
     "getFinding": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
     "appendDecision": ("POST", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
     "listDecisionHistory": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
@@ -186,6 +190,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "compareDocumentVersions": _ANY_ROLE,
     # `W59-ANALYSIS-SETTINGS-01`: the analysis-profile registry is a product read.
     "listAnalysisProfiles": _ANY_ROLE,
+    "listNormDocuments": _ANY_ROLE,
+    "exportRunXlsx": _EXPERT,
     "listRunFindings": _ANY_ROLE,
     "getFinding": _ANY_ROLE,
     "listDecisionHistory": _ANY_ROLE,
