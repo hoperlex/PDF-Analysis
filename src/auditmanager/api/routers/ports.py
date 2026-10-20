@@ -416,6 +416,16 @@ class RunPort(Protocol):
     def get_norm_verification(self, *, run_id: str) -> models.NormVerificationReport:
         """Verified v3 report only. Until CITE supplies its reader, typed refusal."""
 
+    def get_run_norm_references(self, *, run_id: str) -> models.RunNormReferences:
+        """The norms the run's saved text cites, each against the run's pinned snapshot.
+
+        `NORM-REFS-RUN-01`. Computed per request, read-only, deterministic: no finding, no
+        severity, no model. A run that pinned no snapshot, has no saved text layer or cites
+        more than one answer carries is a ``state`` in the answer, never an empty list; an
+        unknown run is ``not_found``; a stored fact that contradicts its own constraints is
+        ``internal_error``.
+        """
+
     def run_exists(self, *, run_id: str) -> bool:
         """Is there such a run? `D-74`.
 

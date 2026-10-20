@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 8894201e289133bae89c844d0861bdfb0688f5749eb27cd39e1fc1d3a1ee7a5b
+ *   sha256 686ebea7b2efaf4332127ac0245fb87b2775ccd6e38f49db6a06776df535e6e2
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '8894201e289133bae89c844d0861bdfb0688f5749eb27cd39e1fc1d3a1ee7a5b';
+export const CONTRACT_DIGEST = '686ebea7b2efaf4332127ac0245fb87b2775ccd6e38f49db6a06776df535e6e2';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -112,6 +112,10 @@ export const SCHEMA_NAMES = [
   'NormParagraphId',
   'NormParagraphKind',
   'NormParagraphPage',
+  'NormReferenceAnchor',
+  'NormReferenceCounts',
+  'NormReferenceItem',
+  'NormReferenceUnrecognised',
   'NormRetrievalSetId',
   'NormSearchHit',
   'NormSearchPage',
@@ -190,6 +194,7 @@ export const SCHEMA_NAMES = [
   'RunActivity',
   'RunActivitySpend',
   'RunId',
+  'RunNormReferences',
   'RunState',
   'RunStateCount',
   'RunStatus',
@@ -1164,6 +1169,42 @@ export type NormParagraphPage = {
   source_attribution: NormSourceAttribution;
 };
 
+/** One occurrence of a citation: the PDF page and the offsets inside that page's text. */
+export type NormReferenceAnchor = {
+  char_end: number;
+  char_start: number;
+  page_number: number;
+  quote: string;
+};
+
+/** Distinct cited designations per outcome; every outcome is present, zeros written. */
+export type NormReferenceCounts = {
+  in_corpus: number;
+  newer_edition: number;
+  not_in_corpus: number;
+  not_recognised: number;
+  older_edition_only: number;
+};
+
+/** One distinct cited designation and what the pinned snapshot holds for it. `anchors` keeps at most ten occurrences in reading order; `occurrence_count` is the true number. The `matched_*` properties name the corpus document the outcome points at (the same edition, the newer one, or the newest earlier one) and are absent exactly for `not_in_corpus` and `not_recognised`. `matched_designation` and `matched_title` are derived for display from the stored file name and are never identities. */
+export type NormReferenceItem = {
+  anchors: Array<NormReferenceAnchor>;
+  cited: string;
+  matched_designation?: string;
+  matched_norm_document_id?: NormDocumentId;
+  matched_title?: string;
+  occurrence_count: number;
+  outcome: "in_corpus" | "newer_edition" | "older_edition_only" | "not_in_corpus" | "not_recognised";
+};
+
+/** A document of the pinned snapshot whose designation the parser cannot read. Such a document can never be matched by a citation, so the list is explicit rather than inferred. `slug` is the stored file name without `.pdf`; `designation` and `title` are derived for display from it. */
+export type NormReferenceUnrecognised = {
+  designation: string;
+  norm_document_id: NormDocumentId;
+  slug: string;
+  title?: string;
+};
+
 /** Verified immutable retrieval-set identity; never a display label or corpus filename. */
 export type NormRetrievalSetId = string;
 
@@ -1957,6 +1998,22 @@ export type RunId = string;
 
 /** The contract pattern for `RunId`. Anchored; use with `new RegExp()`. */
 export const RUN_ID_PATTERN = "^run_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** The norms a run's text cites, or the explicit reason that cannot be said. `state` is `ready` when the list was computed; `snapshot_not_pinned` when the run pinned no norms snapshot (none was current when it was created); `text_unavailable` when it has no saved text layer; `too_many_citations` when the text cites more than one answer carries (over 1000 distinct designations, or one longer than 300 characters). Everything after `text_layer_sha256` is present exactly when `state` is `ready`. `unread_pages` are pages with no text layer, on which no citation can be found; `occurrence_count` counts every occurrence, not only the anchors kept. */
+export type RunNormReferences = {
+  counts?: NormReferenceCounts;
+  items?: Array<NormReferenceItem>;
+  norms_snapshot_id?: NormsSnapshotId;
+  occurrence_count?: number;
+  page_count: number;
+  run_id: RunId;
+  snapshot_document_count?: number;
+  state: "ready" | "snapshot_not_pinned" | "text_unavailable" | "too_many_citations";
+  text_layer_sha256?: Sha256;
+  unread_pages?: Array<number>;
+  unrecognised?: Array<NormReferenceUnrecognised>;
+  version_uid: VersionUid;
+};
 
 /** The audit_run states of contracts/domain/v1/state-machines.json. The success terminal is `published`; there is no `succeeded` run state. `created` is transient and rarely observed by a client. `cancelled` is declared by the contract and is unreachable in PC-01, which has no cancel command. */
 export const RUN_STATE_VALUES = [

@@ -103,6 +103,37 @@ def build_run_routes(router: APIRouter, runs: RunPort) -> None:
         return json_response(200, encode_json(report.model_dump(mode="json")))
 
     @router.get(
+        "/runs/{run_id}/norm-references",
+        operation_id="getRunNormReferences",
+        tags=["runs"],
+        status_code=200,
+        response_model=models.RunNormReferences,
+        responses={
+            **success(200, "The norms the run's saved text cites, or the state that stops it."),
+            **envelope_responses(401, 403, 404, 500, 503),
+        },
+        description=(
+            "«Нормативные ссылки»: the normative documents (СП, ГОСТ, СНиП, СанПиН, ВСН, "
+            "federal laws and government acts) cited in the run's saved text, each resolved "
+            "against the norms snapshot the run pinned as `in_corpus`, `newer_edition`, "
+            "`older_edition_only` (the corpus holds only an earlier edition than the one "
+            "cited), `not_in_corpus` or `not_recognised`, with the pages each occurs on and "
+            "the corpus document it points at. Computed per request by the same resolver the "
+            "W57b rule uses; publishes no finding, proposes no severity and calls no model. "
+            "A precondition that does not hold is `state` (`snapshot_not_pinned`, "
+            "`text_unavailable`, `too_many_citations`), never an empty list; the corpus "
+            "documents whose designation the parser cannot read are listed as `unrecognised`; "
+            "pages without a text layer are `unread_pages`. An unknown run is `404`. Any one "
+            "role, `role:admin|expert`."
+        ),
+    )
+    def get_run_norm_references(run_id: Annotated[models.RunId, Path()]) -> WireResponse:
+        answer = runs.get_run_norm_references(run_id=run_id)
+        # `exclude_unset`: an answer that is not `ready` omits the list's properties, as the
+        # contract declares them optional and not nullable.
+        return json_response(200, encode_json(answer.model_dump(mode="json", exclude_unset=True)))
+
+    @router.get(
         "/versions/{version_uid}/runs",
         operation_id="listRuns",
         tags=["runs"],

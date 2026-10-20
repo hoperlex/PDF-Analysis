@@ -168,6 +168,9 @@ REQUIRED_OPERATIONS = {
     # `W63-SECTION-FORM7-01`. A section's combined Form-7 specification across projects,
     # read-only, for «Оптимизация разделов».
     "getSectionSpecification",
+    # `NORM-REFS-RUN-01`. The norms a run's saved text cites, checked against its pinned
+    # snapshot, read-only, for «Нормативные ссылки» on the run page.
+    "getRunNormReferences",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`

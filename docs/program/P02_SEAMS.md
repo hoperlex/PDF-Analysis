@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Eighty-one operations, sealed. `A5` generates the typed client from this document; `B6`
+Eighty-two operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -912,6 +912,15 @@ is no section total; a current version nobody classified is listed as excluded, 
 in another section never appears; a bound is a `200` with `state: section_too_large`, a
 section code outside the fifteen and an unknown `project_uid` filter are `404`. Read-only,
 any one role.
+
+`NORM-REFS-RUN-01` added `getRunNormReferences` on 2026-10-20: «Нормативные ссылки» on the run
+page, the normative documents the run's saved text cites, each resolved against the norms
+snapshot the run pinned as `in_corpus`, `newer_edition`, `older_edition_only`, `not_in_corpus`
+or `not_recognised`, with the pages it occurs on and the corpus document it points at. Computed
+per request by the W57b resolver; no finding, no severity, no model. A run that pinned no
+snapshot, has no saved text layer or cites more than one answer carries is a `200` with a
+`state`, never an empty list; the corpus documents whose designation the parser cannot read
+are listed; an unknown run is `404`. Read-only, any one role.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -1010,6 +1019,7 @@ could.
 | `listProposalDecisions` | `GET /optimisation-proposals/{optimisation_proposal_id}/decisions` |
 | `exportOptimisationProposalsCsv` | `GET /optimisation-passes/{optimisation_pass_id}/export.csv` |
 | `getSectionSpecification` | `GET /sections/{section_code}/specification` |
+| `getRunNormReferences` | `GET /runs/{run_id}/norm-references` |
 
 Rules that hold across the whole surface:
 

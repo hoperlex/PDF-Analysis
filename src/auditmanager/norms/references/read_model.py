@@ -41,6 +41,7 @@ from auditmanager.norms.search.display import display_name, reader_designation
 
 __all__ = [
     "IN_CORPUS",
+    "MAX_CITATION_CHARACTERS",
     "MAX_CITED_NORMS",
     "NEWER_EDITION",
     "NOT_IN_CORPUS",
@@ -78,12 +79,17 @@ if set(OUTCOME_CODES) != set(OUTCOMES):  # pragma: no cover - import-time totali
 #: Most distinct cited designations one answer carries. A text citing more is refused with
 #: :class:`TooManyCitations`, never cut: a real project cites tens to a few hundred norms.
 MAX_CITED_NORMS: Final[int] = 1000
+#: Longest cited text one answer carries. A designation is tens of characters; the extractor's
+#: pattern would also match a run of hundreds of digit groups in a damaged text layer, and an
+#: answer must have a bound the contract can state. Longer is :class:`TooManyCitations` too.
+MAX_CITATION_CHARACTERS: Final[int] = 300
 
 _NOT_MATCHED = frozenset({ABSENT, UNPARSED})
 
 
 class TooManyCitations(ReferenceRefused):
-    """The text cites more distinct designations than one answer carries."""
+    """The text cites more than one answer carries: too many distinct designations, or one
+    cited text longer than :data:`MAX_CITATION_CHARACTERS`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,6 +187,10 @@ def build_reference_read_model(
         if code is None:
             raise ReferenceRefused("the resolver answered an unknown outcome")
         occurrences = reference.occurrences
+        if len(reference.cited) > MAX_CITATION_CHARACTERS or any(
+            len(occurrence.raw_text) > MAX_CITATION_CHARACTERS for occurrence in occurrences
+        ):
+            raise TooManyCitations("a cited text is longer than one answer carries")
         if (
             not occurrences
             or len(occurrences) > MAX_EVIDENCE_OCCURRENCES

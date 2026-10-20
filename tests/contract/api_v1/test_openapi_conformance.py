@@ -553,7 +553,8 @@ class TestN1ComponentReferenceResolution:
         # and every other operation of the slice addresses a pass or a proposal by identity.
         # `W63-SECTION-FORM7-01` adds one: a section code outside the fifteen addresses no
         # section's combined specification, and the unknown `project_uid` filter is `404` too.
-        assert len(report) == 56, report
+        # `NORM-REFS-RUN-01` adds one: an unknown run has no norm references.
+        assert len(report) == 57, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

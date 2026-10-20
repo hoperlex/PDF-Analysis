@@ -15,6 +15,7 @@ import pytest
 
 from auditmanager.norms.references import read_model as module
 from auditmanager.norms.references.read_model import (
+    MAX_CITATION_CHARACTERS,
     MAX_CITED_NORMS,
     OUTCOME_CODES,
     OUTCOME_ORDER,
@@ -375,6 +376,18 @@ def test_more_distinct_citations_than_the_cap_are_refused_not_cut(monkeypatch) -
 
 def test_the_citation_cap_is_the_documented_number() -> None:
     assert MAX_CITED_NORMS == 1000
+    assert MAX_CITATION_CHARACTERS == 300
+
+
+def test_a_cited_text_longer_than_the_bound_is_refused_not_cut() -> None:
+    """A damaged text layer can hold ``СП`` followed by hundreds of digit groups."""
+    fits = "СП " + ".".join(["1"] * ((MAX_CITATION_CHARACTERS - 3) // 2))
+    too_long = fits + ".1.1"
+    assert len(fits) <= MAX_CITATION_CHARACTERS < len(too_long)
+
+    assert len(_model({1: fits}, SP54_2022).items) == 1
+    with pytest.raises(TooManyCitations):
+        _model({1: too_long}, SP54_2022)
 
 
 def test_the_same_input_gives_the_same_model() -> None:

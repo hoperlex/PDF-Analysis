@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 71,
+    "path_count": 72,
     "operations": [
       [
         "POST",
@@ -407,6 +407,11 @@
         "GET",
         "/sections/{section_code}/specification",
         "getSectionSpecification"
+      ],
+      [
+        "GET",
+        "/runs/{run_id}/norm-references",
+        "getRunNormReferences"
       ]
     ],
     "schema_names": [
@@ -644,7 +649,12 @@
       "SectionSpecificationExcludedVersion",
       "SectionSpecificationRow",
       "SectionSpecificationRowPage",
-      "SectionSpecification"
+      "SectionSpecification",
+      "NormReferenceCounts",
+      "NormReferenceAnchor",
+      "NormReferenceItem",
+      "NormReferenceUnrecognised",
+      "RunNormReferences"
     ]
   },
   "error_catalog": {
