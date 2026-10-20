@@ -68,6 +68,7 @@ __all__ = [
     "ExecutionPort",
     "SectionPort",
     "ComparisonPort",
+    "AnalysisProfilePort",
     "UploadedDocument",
 ]
 
@@ -897,3 +898,17 @@ class ComparisonPort(Protocol):
         a source decision that is no longer current, a target that already has an event and
         a severity the target cannot hold are each ``conflict`` with a ``conflict_reason``.
         """
+
+@runtime_checkable
+class AnalysisProfilePort(Protocol):
+    """``listAnalysisProfiles``. `W59-ANALYSIS-SETTINGS-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    The answer is the composition root's sealed text-profile registry, the one run start
+    routes through: all fifteen sections in the project-structure order, each with its
+    registered profile or ``null``. Nothing behind this port writes, and nothing edits a
+    profile or its status.
+    """
+
+    def list_analysis_profiles(self) -> models.AnalysisProfileList:
+        """Every section and its registered text profile, or ``null`` when none is."""

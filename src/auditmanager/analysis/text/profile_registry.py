@@ -52,10 +52,13 @@ from auditmanager.shared.identity import AnalysisProfileId, IdentityError, Promp
 __all__ = [
     "PACKAGE_FORMAT",
     "PACKAGES_ROOT",
+    "PROJECT_STRUCTURE_ORDER",
     "SECTION_CODES",
     "RegisteredTextProfile",
     "TextProfileLoadError",
     "TextProfileRegistry",
+    "TextProfileSource",
+    "TextProfileSourceFile",
     "TextProfileUnavailable",
     "load_text_profile_registry",
 ]
@@ -72,6 +75,16 @@ SECTION_CODES: Final[frozenset[str]] = frozenset(
         "POS", "PS",
     }
 )
+
+#: Every section code in the project-structure order of poll answer ``S-5`` -- AR, then the
+#: cheap profiles first -- the order «Настройки анализа» lists the registry in
+#: (`W59-ANALYSIS-SETTINGS-01`). ``tests/integration/sections/test_section_recordings.py``
+#: holds it equal to the web's ``PROJECT_STRUCTURE_ORDER``.
+PROJECT_STRUCTURE_ORDER: Final[tuple[str, ...]] = (
+    "AR", "AI", "PS", "POS", "TX", "KJ", "KM", "OV", "VK", "PT", "EOM", "SS", "ITP", "GP", "PB",
+)
+if len(PROJECT_STRUCTURE_ORDER) != len(SECTION_CODES) or set(PROJECT_STRUCTURE_ORDER) != SECTION_CODES:
+    raise ValueError("project_structure_order_invalid")  # pragma: no cover - a literal
 
 _PROFILE_KEYS: Final[frozenset[str]] = frozenset(
     {
@@ -103,6 +116,23 @@ class TextProfileUnavailable(LookupError):
 
 
 @dataclass(frozen=True, slots=True)
+class TextProfileSourceFile:
+    """One legacy file a package's prompt was ported from, with its SHA-256."""
+
+    path: str
+    sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class TextProfileSource:
+    """The package's ``source`` block, kept as read: legacy repository, commit and files."""
+
+    repository: str
+    commit: str
+    files: tuple[TextProfileSourceFile, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class RegisteredTextProfile:
     """One executable text profile and where it came from."""
 
@@ -113,6 +143,9 @@ class RegisteredTextProfile:
     title_ru: str
     #: The package directory relative to :data:`PACKAGES_ROOT`, or ``None`` for builtin AR.
     package: str | None
+    #: The package's validated ``source`` block, or ``None`` for builtin AR (whose prompt
+    #: was written in this repository, not ported). `W59-ANALYSIS-SETTINGS-01` lists it.
+    source: TextProfileSource | None = None
 
     @property
     def analysis_profile_id(self) -> str:
@@ -237,7 +270,7 @@ def _load_package(directory: Path, root: Path) -> RegisteredTextProfile:
     title = data["title_ru"]
     if not isinstance(title, str) or not title.strip():
         raise TextProfileLoadError(f"title_invalid: {name}")
-    _check_source(data["source"], name)
+    source = _check_source(data["source"], name)
     # Exactly one trailing newline is the file's, not the prompt's (see the module note).
     text = prompt[:-1] if prompt.endswith("\n") else prompt
     if not text.strip():
@@ -264,10 +297,11 @@ def _load_package(directory: Path, root: Path) -> RegisteredTextProfile:
         status=status,
         title_ru=title,
         package=directory.relative_to(root).as_posix(),
+        source=source,
     )
 
 
-def _check_source(source: Any, name: str) -> None:
+def _check_source(source: Any, name: str) -> TextProfileSource:
     if not isinstance(source, dict) or set(source) != _SOURCE_KEYS:
         raise TextProfileLoadError(f"source_invalid: {name}")
     if not all(isinstance(source[key], str) and source[key].strip() for key in ("repository", "commit")):
@@ -285,3 +319,8 @@ def _check_source(source: Any, name: str) -> None:
             or _SHA256.fullmatch(item["sha256"]) is None
         ):
             raise TextProfileLoadError(f"source_files_invalid: {name}")
+    return TextProfileSource(
+        repository=source["repository"],
+        commit=source["commit"],
+        files=tuple(TextProfileSourceFile(path=item["path"], sha256=item["sha256"]) for item in files),
+    )

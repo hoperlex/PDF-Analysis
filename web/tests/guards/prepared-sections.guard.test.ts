@@ -9,6 +9,8 @@
  * graduates `/workers`: `listWorkers` answers a real registry since `W54-WORKER-01`.
  * `W55A-WEB-NORMS` graduates `/norms`: it searches the current norms snapshot over the seven
  * operations `W55A-SEAL-01` sealed, and renders their refusal before a snapshot is current.
+ * `W59-ANALYSIS-SETTINGS-01` graduates `/analysis-settings`: `listAnalysisProfiles` answers
+ * the text-profile registry the server routes runs through, and the screen lists it.
  *
  * `OWNER_RULINGS_2026-09-17.md` §3.11 says preparation is four things and no more: a
  * place in the navigation, a `RoutePlaceholder` carrying a real `promise`, the data shape
@@ -62,12 +64,10 @@ vi.mock('next/headers', () => ({
 }));
 
 import { AppFrame } from '@/_app';
-import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
 import { OptimisationPage } from '@/_pages/optimisation';
 import { SectionOptimisationPage } from '@/_pages/section-optimisation';
 import { RoutePlaceholder } from '@/shared/ui';
 import { forgetEverySession, openSession } from '@/app/bff/session/store';
-import AnalysisSettingsRoute from '@/app/analysis-settings/page';
 import OptimisationRoute from '@/app/optimisation/page';
 import SectionOptimisationRoute from '@/app/section-optimisation/page';
 import { newClient, renderScreen } from '../unit/screens/harness';
@@ -120,14 +120,6 @@ const SECTIONS = [
     title: 'Оптимизация разделов',
     screen: SectionOptimisationPage,
     routeFile: SectionOptimisationRoute,
-    stub: true,
-  },
-  {
-    name: 'analysis-settings',
-    route: '/analysis-settings',
-    title: 'Настройки анализа',
-    screen: AnalysisSettingsPage,
-    routeFile: AnalysisSettingsRoute,
     stub: true,
   },
 ] as const;

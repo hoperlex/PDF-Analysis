@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 52,
+    "path_count": 53,
     "operations": [
       [
         "POST",
@@ -294,6 +294,11 @@
         "compareDocumentVersions"
       ],
       [
+        "GET",
+        "/analysis/profiles",
+        "listAnalysisProfiles"
+      ],
+      [
         "POST",
         "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers",
         "carryOverDecision"
@@ -447,6 +452,12 @@
       "FindingMatchProposal",
       "FindingComparison",
       "VersionComparison",
+      "AnalysisProfileStatus",
+      "AnalysisProfileSourceFile",
+      "AnalysisProfileSource",
+      "AnalysisProfileSummary",
+      "AnalysisProfileListItem",
+      "AnalysisProfileList",
       "CarryoverSourceDecision",
       "CarryoverCandidate",
       "CarryOverDecisionRequest",

@@ -19,7 +19,7 @@
  * knows how many operations there are. Swapping the credential later is an edit to the
  * credential selection below, not a sweep through a handler per operation.
  *
- * Those figures are **fifty-nine operations across fifty-two paths**, which is what the
+ * Those figures are **sixty operations across fifty-three paths**, which is what the
  * frozen document declares after `W59-DECISION-CARRYOVER-01` adds the expert-confirmed
  * carryover of a decision to the next version.
  * This file said fifteen and twelve once, sixteen and thirteen after that, and nineteen and

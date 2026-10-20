@@ -14,7 +14,7 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **51 paths / 58 operations / 147 schemas**,
+The development API surface is **52 paths / 59 operations / 153 schemas**,
 the error catalogue has **25** codes, the migration head is
 **`0024_version_classification`**, and `VERSION` is `0.6.0`. These are checkout
 facts; the release tree has its own frozen 47/54/123 surface and
@@ -83,7 +83,10 @@ is unserved, and no beta acceptance is claimed.
   documents by confirmed section. `compareDocumentVersions` serves the
   deterministic comparison of two versions of one set (same stage and
   section) and the W62 П→Р stage comparison: sheet pairing, paged line
-  diffs and finding-match proposals, no AI layer. Uploading a further
+  diffs and finding-match proposals, no AI layer. «Настройки анализа»
+  lists every section's profile (`listAnalysisProfiles`); АИ, ПЗ, ПОС
+  and ТХ runs are proven in recorded mode with synthetic recordings
+  only. Uploading a further
   version into an existing set and expert review of the draft profiles
   remain open.
 

@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 010b706fba180d5a14820a91f8c5f41b0c879d8a5ba99dbff2e3d9dcc8e322b1
+ *   sha256 a6b146917bbde2fdfb89cff0847b51f24beda1bc4ec1ed6886f100640f9638fc
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,6 +17,7 @@
 import type {
   Account,
   AccountPage,
+  AnalysisProfileList,
   AppendDecisionRequest,
   AppendDecisionResponse,
   ApproveRegistrationRequest,
@@ -117,6 +118,7 @@ export const OPERATION_IDS = [
   'getVersionBlocks',
   'getVersionSectionReview',
   'issueToken',
+  'listAnalysisProfiles',
   'listDecisionHistory',
   'listDecisions',
   'listDocuments',
@@ -708,6 +710,25 @@ export type IssueTokenInput = {
 
 /** Success body of `issueToken` (`application/json`, HTTP 200). */
 export type IssueTokenResult = IssueTokenResponse;
+
+// ------------------------------------------------------------------------------------
+// listAnalysisProfiles - GET /analysis/profiles
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the analysis profile of every section.
+ *
+ * The analysis profiles the server routes runs through: all fifteen sections in the project-structure order, each with its registered text profile -- identities, version, status (`builtin`, `draft` or `reviewed`), prompt-bundle and profile hashes and the legacy source of a ported package -- or `null` when no profile is registered, which run start refuses. Read-only: no operation edits a profile or its status. Any one role, `role:admin|expert`.
+ */
+export type ListAnalysisProfilesInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listAnalysisProfiles` (`application/json`, HTTP 200). */
+export type ListAnalysisProfilesResult = AnalysisProfileList;
 
 // ------------------------------------------------------------------------------------
 // listDecisionHistory - GET /findings/{finding_uid}/decisions
@@ -2010,6 +2031,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 422, 500, 503],
     tags: ['auth'],
+  },
+  listAnalysisProfiles: {
+    operationId: 'listAnalysisProfiles',
+    method: 'GET',
+    path: '/analysis/profiles',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['analysis'],
   },
   listDecisionHistory: {
     operationId: 'listDecisionHistory',

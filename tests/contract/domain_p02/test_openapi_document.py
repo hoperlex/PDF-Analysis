@@ -130,6 +130,9 @@ REQUIRED_OPERATIONS = {
     # `W59-DECISION-CARRYOVER-01`. An expert-confirmed carryover of one decision to the
     # matched finding of the next version: a keyed write to the decision ledger.
     "carryOverDecision",
+    # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry run start routes through,
+    # read-only, for «Настройки анализа».
+    "listAnalysisProfiles",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -467,7 +470,8 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
 #: rather than a drift nobody notices. Moves on a reseal that adds or removes every
 #: parameter, header and body an operation takes.
 INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
-    {"getDashboardSummary", "getMe", "getProductVersion", "listReleases"}
+    # `W59-ANALYSIS-SETTINGS-01` adds ``listAnalysisProfiles``: the registry takes no input.
+    {"getDashboardSummary", "getMe", "getProductVersion", "listReleases", "listAnalysisProfiles"}
 )
 
 
