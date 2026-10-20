@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2",
-    "content_commit": "1049367",
-    "content_commit_subject": "W59-ANALYSIS-SETTINGS-01 API reseal on integration base 1049367e",
+    "sha256": "2dd62b45a6505c7bf9a88fa3b461866b0732656c78a05a77c67c77aec281446d",
+    "content_commit": "0f0903f",
+    "content_commit_subject": "W59-VERSION-UPLOAD-01 API reseal merged onto integration base 0f0903f2",
     "dispatch_named_commit": "1049367",
-    "commit_note": "W59 adds the read of the analysis-profile registry: listAnalysisProfiles (GET /analysis/profiles, any one role) and six schemas (AnalysisProfileStatus, AnalysisProfileSourceFile, AnalysisProfileSource, AnalysisProfileSummary, AnalysisProfileListItem, AnalysisProfileList): the fifteen sections in the project-structure order, each with its registered text profile or null. Read-only; no error code is added.",
+    "commit_note": "W59 adds the upload of a further version of one set: uploadDocumentVersion (POST /projects/{project_uid}/documents/{document_uid}/versions, multipart like uploadDocument, Idempotency-Key required) and one schema (UploadDocumentVersionRequest, the bundle only), on top of W59-ANALYSIS-SETTINGS-01's listAnalysisProfiles. The new version takes the next ordinal, becomes the current version and inherits no title, section or classification; no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 52,
-    "operations": 59,
-    "component_schemas": 153,
+    "paths": 53,
+    "operations": 60,
+    "component_schemas": 154,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2",
+    "snapshot_sha256": "2dd62b45a6505c7bf9a88fa3b461866b0732656c78a05a77c67c77aec281446d",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "ef3ab3f95d60790ce9daec35bf3b8b2c26d0bf7761567f1ca95adcf2170b066a",
-      "index.ts": "7d1bf293aa8f5d433c61f528997211a3224001a4fdaae8d66f0251854304f5aa",
-      "operations.gen.ts": "30059220ac5568b0678865d60abc95bd02be80b89317ca6c40230d0720a3ed82",
-      "types.gen.ts": "0a5179ac84507913fc6b35888d633e4ba506cb1e73f86272c9f9740a251cd016"
+      "client.gen.ts": "1260a831ea001aa52a03d78a2b726a88c967139650e39d3a0f60eb22dfc1561e",
+      "index.ts": "836b6b47f93c0aaf21405c623f76dab8dc5f412dbd35c6c9ce8efe2224035823",
+      "operations.gen.ts": "384567a0dc392c8683816e9006c610f3d5178db8294178f2250760ba1a7a974d",
+      "types.gen.ts": "71b1eee9a6acf29f1714cb60741f973b1bd70d25af2b1a8a27b4effc6e908ee0"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

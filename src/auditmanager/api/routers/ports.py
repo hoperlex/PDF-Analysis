@@ -153,8 +153,8 @@ class ProjectPort(Protocol):
 
 @runtime_checkable
 class DocumentPort(Protocol):
-    """``uploadDocument``, ``getDocumentVersion``, ``streamDocumentVersionContent``,
-    ``listDocuments`` and ``listVersions``."""
+    """``uploadDocument``, ``uploadDocumentVersion``, ``getDocumentVersion``,
+    ``streamDocumentVersionContent``, ``listDocuments`` and ``listVersions``."""
 
     def upload_document(
         self,
@@ -180,6 +180,24 @@ class DocumentPort(Protocol):
         the caller does not supply one -- optional here for the same reason
         ``display_title`` is: the frozen ``UploadDocumentRequest.section`` is not
         required, and this port does not invent a value the caller never gave it.
+        """
+
+    def upload_document_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        content: BinaryIO,
+        source_filename: str,
+        idempotency_key: str,
+    ) -> UploadedDocument:
+        """Publish one portal bundle as the next immutable version of an existing document.
+
+        `W59-VERSION-UPLOAD-01`. The same handle contract and envelope as
+        :meth:`upload_document`. The document must exist and belong to ``project_uid``
+        (``not_found`` naming ``Document`` otherwise, an unknown project naming
+        ``Project``); the version takes the document's next ordinal and becomes its current
+        version; it takes no title and no section, and starts unclassified.
         """
 
     def get_version(self, *, version_uid: str) -> DocumentVersionView:

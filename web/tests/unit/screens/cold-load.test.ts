@@ -288,7 +288,7 @@ describe('the document screen asks the server on a cold load (D-16)', () => {
     expect(markup).toContain('data-version-count="1"');
   });
 
-  it('says why one version is what this transport can produce, rather than looking empty', () => {
+  it('says every version stays addressable and the newest is current, rather than looking empty', () => {
     const client = newClient();
     client.setQueryData(VERSIONS_KEY, versionPage([version()]));
     const markup = screen(client);
@@ -301,8 +301,13 @@ describe('the document screen asks the server on a cold load (D-16)', () => {
     // shape `R-18` forbids and the rendered-language ratchet had recorded. The CLAIM is
     // what this case is about and the claim is unchanged, so it is asserted here rather
     // than the transport's spelling of it.
-    expect(markup).toContain('каждая загрузка заводит новый документ');
-    expect(markup).toContain('ничего из загруженного не потеряно');
+    //
+    // W59-VERSION-UPLOAD-01: further versions are uploaded on the document screen now, so
+    // the old claim ("every upload starts a new document") became false and was replaced by
+    // the one that holds for every row.
+    expect(markup).not.toContain('каждая загрузка заводит новый документ');
+    expect(markup).toContain('Каждая версия неизменяема и остаётся адресуемой');
+    expect(markup).toContain('новая версия становится текущей');
   });
 
   it('distinguishes an unknown document from a document with no version', () => {

@@ -171,6 +171,7 @@ __all__ = [
     "UpdateMyProfileRequest",
     "UpdateUserRequest",
     "UploadDocumentRequest",
+    "UploadDocumentVersionRequest",
     "UserUid",
     "Verdict",
     "VersionBlockIndex",
@@ -605,6 +606,17 @@ class UploadDocumentRequest(_Object):
     #: in gets a document with none, not a refused upload. See
     #: ``db/migrations/versions/20260925_0011_document_section.py``.
     section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class UploadDocumentVersionRequest(_Object):
+    """`W59-VERSION-UPLOAD-01`. The multipart body of ``uploadDocumentVersion``: the bundle only.
+
+    A further version takes no title and no section, so neither is declared; closed like
+    every object here, an undeclared part is refused rather than ignored. The ``file`` part's
+    ``encoding`` is restored with ``openapi_extra``, as for :class:`UploadDocumentRequest`.
+    """
+
+    file: Annotated[UploadFile, WithJsonSchema(_BINARY_STRING)]
 
 
 class InputManifestEntry(_Object):

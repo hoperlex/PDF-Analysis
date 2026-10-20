@@ -15,24 +15,24 @@
  *                           rendered as that reason rather than as "upload failed".
  *
  * A checksum failure (`storage_integrity_error`) is a third, separate state, and a
- * dependency outage a fourth. None of them is a spinner, and none is a success.
+ * dependency outage a fourth. None of them is a spinner, and none is a success. They are
+ * rendered by `UploadOutcome`, which the next-version form shares (`W59-VERSION-UPLOAD-01`).
  */
 
 import { useState } from 'react';
 
 import type { DocumentVersion, ProjectUid } from '@/shared/api';
-import { ErrorState, LoadingState, UnsupportedState } from '@/shared/ui';
 import { useIntentKey } from '@/shared/lib';
 import type { UploadFailure, UploadPrecheckProblem } from '@/entities/document-version';
 import {
   PC01_UPLOAD_ENVELOPE,
   classifyUploadFailure,
   formatBytes,
-  precheckProblemMessage,
   precheckUploadFile,
 } from '@/entities/document-version';
 
 import { useUploadDocument } from '../model/use-upload-document';
+import { UploadOutcome } from './upload-outcome';
 
 export interface UploadDocumentFormProps {
   readonly projectUid: ProjectUid;
@@ -120,50 +120,12 @@ export function UploadDocumentForm({ projectUid, onUploaded }: UploadDocumentFor
         </div>
       </div>
 
-      {precheck !== null ? (
-        <UnsupportedState
-          title="Файл выходит за допустимые ограничения."
-          detail={
-            <>
-              <p data-precheck-problem={precheck}>{precheckProblemMessage(precheck)}</p>
-              <p>Ничего не отправлено. Выберите другой файл.</p>
-            </>
-          }
-        />
-      ) : null}
-
-      {mutation.isPending ? <LoadingState what="загружаемый файл" /> : null}
-
-      {failure !== null && failure.presentation === 'unsupported' ? (
-        <UnsupportedState
-          title={failure.title}
-          detail={
-            <>
-              <p data-upload-failure={failure.kind}>{failure.detail}</p>
-              {failure.correlationId === null ? null : (
-                <p>
-                  Идентификатор корреляции <code>{failure.correlationId}</code>
-                </p>
-              )}
-              <p>Версия не опубликована, прогон не запущен.</p>
-            </>
-          }
-        />
-      ) : null}
-
-      {failure !== null && failure.presentation === 'error' ? (
-        <ErrorState
-          title={failure.title}
-          detail={<span data-upload-failure={failure.kind}>{failure.detail}</span>}
-          correlationId={failure.correlationId}
-          {...(failure.retryable
-            ? {
-                onRetry: send,
-                retryLabel: 'Повторить с тем же ключом',
-              }
-            : {})}
-        />
-      ) : null}
+      <UploadOutcome
+        precheck={precheck}
+        pending={mutation.isPending}
+        failure={failure}
+        onRetry={send}
+      />
     </form>
   );
 }

@@ -451,6 +451,27 @@ class IngestDocumentAdapter:
         )
         return _Uploaded(version=uploaded.version, replayed=uploaded.replayed)
 
+    def upload_document_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        content: Any,
+        source_filename: str,
+        idempotency_key: str,
+    ) -> _Uploaded:
+        """`W59-VERSION-UPLOAD-01`. The shipped adapter's own body, as for the first upload."""
+        from auditmanager.bootstrap.adapters import DocumentAdapter
+
+        uploaded = DocumentAdapter(self._ingest).upload_document_version(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            content=content,
+            source_filename=source_filename,
+            idempotency_key=idempotency_key,
+        )
+        return _Uploaded(version=uploaded.version, replayed=uploaded.replayed)
+
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
         return self._view(self._ingest.get_version(VersionUid(version_uid)))
 

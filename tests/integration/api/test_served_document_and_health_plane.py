@@ -150,6 +150,8 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "classifyDocumentVersion",
             # `W59-VERSION-COMPARE-01`: a required target version and bounded paging.
             "compareDocumentVersions",
+            # `W59-VERSION-UPLOAD-01`: the next version takes a multipart body.
+            "uploadDocumentVersion",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

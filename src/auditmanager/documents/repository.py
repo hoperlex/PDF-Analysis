@@ -104,6 +104,18 @@ _INSERT_DOCUMENT = text(
 _SELECT_DOCUMENT = text(
     "SELECT document_uid, project_uid FROM document WHERE document_uid = :document_uid"
 )
+#: `W59-VERSION-UPLOAD-01`. The document row is locked before its next ordinal is read, so
+#: two publications into one document serialise here and the second reads the first's
+#: committed ordinal (each statement under ``READ COMMITTED`` takes a fresh snapshot).
+#: Without it both read the same ``max + 1`` and the second insert dies on
+#: ``uq_document_version_ordinal`` -- an ``internal_error`` for a perfectly valid upload.
+#: ``FOR NO KEY UPDATE`` is exactly the lock the closing ``UPDATE document`` takes anyway,
+#: taken earlier; unlike ``FOR UPDATE`` it does not block other transactions' foreign-key
+#: checks against the document.
+_LOCK_DOCUMENT = text(
+    "SELECT document_uid FROM document WHERE document_uid = :document_uid "
+    "FOR NO KEY UPDATE"
+)
 _NEXT_ORDINAL = text(
     "SELECT coalesce(max(version_ordinal), 0) + 1 FROM document_version "
     "WHERE document_uid = :document_uid"
@@ -440,6 +452,11 @@ class DocumentRepository:
         reproducible. The ordinal is derived here rather than supplied: it is a display
         value, and letting a caller choose one would make it look like a key.
 
+        The document row is locked first (``_LOCK_DOCUMENT``), so concurrent publications
+        into one document get consecutive ordinals instead of one of them failing on the
+        unique ordinal. The lock is held to the caller's commit. A document that does not
+        exist is refused as ``not_found`` before anything is written.
+
         The three counts of a portal bundle are all given or all absent; a partial set is
         refused here with the typed error the database would refuse it with, so a caller
         learns before a statement is issued.
@@ -456,6 +473,11 @@ class DocumentRepository:
             raise DomainError(
                 ErrorCode.STORAGE_INTEGRITY_ERROR, role=ROLE_SOURCE_DOCUMENT
             )
+        locked = session.execute(
+            _LOCK_DOCUMENT, {"document_uid": str(document_uid)}
+        ).first()
+        if locked is None:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Document")
         version_uid = VersionUid.new()
         ordinal = int(
             session.execute(_NEXT_ORDINAL, {"document_uid": str(document_uid)}).scalar_one()

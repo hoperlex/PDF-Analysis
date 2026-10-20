@@ -172,3 +172,41 @@ describe('the scanner goes red on W12-WEB’s two surviving mutations', () => {
     expect(scanPrecheckWiring(mutated).map((v) => v.rule)).toEqual(['precheck-runs-on-choice']);
   });
 });
+
+/**
+ * `W59-VERSION-UPLOAD-01`: the next-version form chooses and sends a bundle through the same
+ * envelope, so the same two rules hold over its own source -- and the same two mutations of
+ * it are reported, so a refactor of that form cannot pass this file vacuously.
+ */
+describe('the next-version upload form runs the pre-check and obeys it', () => {
+  const versionFormPath = join(
+    WEB_ROOT,
+    'src',
+    'features',
+    'upload-document',
+    'ui',
+    'upload-document-version-form.tsx',
+  );
+  const source = readText(versionFormPath);
+
+  it('reads the real form, and it has no wiring violation', () => {
+    expect(source).toContain('UploadDocumentVersionForm');
+    expect(scanPrecheckWiring(source)).toEqual([]);
+  });
+
+  it.each([
+    {
+      rule: 'precheck-runs-on-choice' as const,
+      from: '    setPrecheck(chosen === null ? null : precheckUploadFile(chosen));',
+      to: '    setPrecheck(null);',
+    },
+    {
+      rule: 'submit-consults-precheck' as const,
+      from: '    if (file === null || precheck !== null) return;',
+      to: '    if (file === null) return;',
+    },
+  ])('reports $rule when the form is mutated', ({ rule, from, to }) => {
+    expect(source.split(from).length - 1, `the mutated text is no longer in the form:\n${from}`).toBe(1);
+    expect(scanPrecheckWiring(source.replace(from, to)).map((v) => v.rule)).toContain(rule);
+  });
+});
