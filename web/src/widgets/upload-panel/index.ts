@@ -1,4 +1,4 @@
 /** Public API of the `upload-panel` widget. */
 
-export type { UploadPanelProps } from './ui/upload-panel';
-export { UploadPanel } from './ui/upload-panel';
+export type { UploadPanelProps, UploadVersionPanelProps } from './ui/upload-panel';
+export { UploadPanel, UploadVersionPanel } from './ui/upload-panel';

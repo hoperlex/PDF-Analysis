@@ -81,14 +81,16 @@ import { USER_PAGE_LIMIT } from '@/entities/user';
 import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import {
-  ALREADY_CLASSIFIED_DETAIL, CLASSIFY_NOT_PERMITTED_DETAIL, COMPARISON_DIFF_LIMIT,
+  ALREADY_CLASSIFIED_DETAIL, CARRYOVER_CONFLICT_TEXT, CARRYOVER_NOT_PERMITTED_DETAIL,
+  CLASSIFY_NOT_PERMITTED_DETAIL, COMPARISON_DIFF_LIMIT,
   DOCUMENT_PAGE_LIMIT, UPLOAD_CONSTRAINTS_STATED, UPLOAD_ENVELOPE_RULES, VERSION_PAGE_LIMIT, classifyUploadFailure,
   precheckProblemMessage,
 } from '@/entities/document-version';
 import { UPLOAD_CONSTRAINTS_ADDED } from '@/entities/document-version/model/upload-failure';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS, PROJECT_STRUCTURE_ORDER, projectSectionOf } from '@/entities/project';
-import type { AnalysisProfileListItem } from '@/shared/api';
+import type { AnalysisProfileListItem, CarryoverCandidate } from '@/shared/api';
 import { ClassifyVersionFormView } from '@/features/classify-version';
+import { CarryOverDecisionView } from '@/features/carry-over-decision';
 import { VersionClassification, VersionClassificationView } from '@/widgets/version-classification';
 import { ProjectStructureView } from '@/widgets/project-sections';
 import { AppFrame } from '@/_app';
@@ -1262,10 +1264,28 @@ function comparisonBody(over: Partial<VersionComparison> = {}): VersionCompariso
         { kind: 'new', basis: 'no_exact_source_match', proposal_sha256: null,
           source_finding: null, target_finding: finding('5', 'Цвет фасада не согласован', 3) },
       ],
+      // `W59-DECISION-CARRYOVER-01`: the unchanged pair is a candidate, so the expert's
+      // «Перенести решение» renders in this pass.
+      carryover_candidates: [CARRYOVER_CANDIDATE],
     },
     ...over,
   };
 }
+
+/** `W59-DECISION-CARRYOVER-01`. The decision on the unchanged pair's older finding. */
+const CARRYOVER_CANDIDATE: CarryoverCandidate = {
+  proposal_sha256: SHA,
+  source_finding_uid: `fnd_${ULID.slice(0, -1)}1`,
+  target_finding_uid: `fnd_${ULID.slice(0, -1)}2`,
+  source_decision: {
+    decision_id: `dec_${ULID}`,
+    verdict: 'accepted',
+    severity: 'critical',
+    comment: 'Проём действительно не показан.',
+    author_label: 'Иванова Е. В.',
+    recorded_at: '2026-10-20T08:00:00Z',
+  },
+};
 
 function twoVersionClient(
   loaded: (over?: Partial<RunStatus>) => Client,
@@ -1970,6 +1990,78 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         onStage: () => undefined,
         onSection: () => undefined,
         onConfirm: () => undefined,
+      }),
+  })),
+  /*
+   * `W59-DECISION-CARRYOVER-01`. «Перенести решение»: the confirmation (with a severity and a
+   * comment), in flight, carried, already carried, and every refusal a reader can be shown.
+   */
+  ...([false, true] as const).map((pending) => ({
+    name: `carry-over-decision-confirming${pending ? '-pending' : ''}`,
+    make: () =>
+      createElement(CarryOverDecisionView, {
+        candidate: CARRYOVER_CANDIDATE,
+        target: { finding_uid: CARRYOVER_CANDIDATE.target_finding_uid, category: 'layout',
+          finding_text: 'Нет дверного проёма', page_numbers: [1] },
+        confirming: true,
+        pending,
+        result: null,
+        failure: null,
+        onOpen: () => undefined,
+        onConfirm: () => undefined,
+        onCancel: () => undefined,
+      }),
+  })),
+  ...([false, true] as const).map((replayed) => ({
+    name: `carry-over-decision-${replayed ? 'replayed' : 'carried'}`,
+    make: () =>
+      createElement(CarryOverDecisionView, {
+        candidate: CARRYOVER_CANDIDATE,
+        target: { finding_uid: CARRYOVER_CANDIDATE.target_finding_uid, category: 'layout',
+          finding_text: 'Нет дверного проёма', page_numbers: [1] },
+        confirming: false,
+        pending: false,
+        result: {
+          event: {
+            decision_id: `dec_${ULID.slice(0, -1)}9`, finding_uid: CARRYOVER_CANDIDATE.target_finding_uid,
+            finding_observation_id: `fobs_${ULID}`, event_type: 'accept', verdict: 'accepted',
+            severity: 'critical', comment: 'Решение перенесено из версии 1.', author_label: 'Иванова Е. В.',
+            recorded_at: '2026-10-20T09:00:00Z',
+          },
+          current_verdict: 'accepted',
+          replayed,
+          source_finding_uid: CARRYOVER_CANDIDATE.source_finding_uid,
+          source_decision_id: CARRYOVER_CANDIDATE.source_decision.decision_id,
+          source_version_uid: VERSION_UID,
+          source_version_ordinal: 1,
+          target_version_uid: NEWER_VERSION_UID,
+          mode: 'version',
+        },
+        failure: null,
+        onOpen: () => undefined,
+        onConfirm: () => undefined,
+        onCancel: () => undefined,
+      }),
+  })),
+  ...([
+    ...(Object.keys(CARRYOVER_CONFLICT_TEXT) as (keyof typeof CARRYOVER_CONFLICT_TEXT)[]).map(
+      (kind) => ({ kind, detail: CARRYOVER_CONFLICT_TEXT[kind] }),
+    ),
+    { kind: 'not_permitted' as const, detail: CARRYOVER_NOT_PERMITTED_DETAIL },
+  ]).map(({ kind, detail }) => ({
+    name: `carry-over-decision-${kind}`,
+    make: () =>
+      createElement(CarryOverDecisionView, {
+        candidate: CARRYOVER_CANDIDATE,
+        target: { finding_uid: CARRYOVER_CANDIDATE.target_finding_uid, category: 'layout',
+          finding_text: 'Нет дверного проёма', page_numbers: [1] },
+        confirming: false,
+        pending: false,
+        result: null,
+        failure: { kind, detail, correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false },
+        onOpen: () => undefined,
+        onConfirm: () => undefined,
+        onCancel: () => undefined,
       }),
   })),
   {
@@ -3056,7 +3148,8 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
   {
     label: 'Загрузка: загружаемый файл…',
     why:
-      '`upload-document-form.tsx`, while the upload is in flight; same mechanism as the ' +
+      '`upload-outcome.tsx`, under either upload form while the upload is in flight (the ' +
+      'first version or, `W59-VERSION-UPLOAD-01`, the next one); same mechanism as the ' +
       'new project, and the same reason no seed reaches it. The words it carries are ' +
       'judged by `no branch label carries English, reachable or not`. `D-82`.',
   },

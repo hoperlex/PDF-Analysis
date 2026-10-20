@@ -41,7 +41,11 @@ from auditmanager.api.schemas.dashboard import (
     SectionDocumentCountView,
     VerdictCountView,
 )
-from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
+from auditmanager.api.schemas.decisions import (
+    DecisionEventView,
+    DecisionRecordView,
+    decision_event_body,
+)
 from auditmanager.api.schemas.documents import DocumentVersionView, ManifestEntryView
 from auditmanager.api.schemas.findings import (
     EvidenceView,
@@ -652,6 +656,33 @@ class DocumentAdapter:
             display_title=display_title,
             idempotency_key=IdempotencyKey(idempotency_key),
             section=section,
+        )
+        return _Uploaded(
+            _version_view(outcome.version), bool(getattr(outcome, "replayed", False))
+        )
+
+    def upload_document_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        content: BinaryIO,
+        source_filename: str,
+        idempotency_key: str,
+    ) -> Any:
+        """`W59-VERSION-UPLOAD-01`: the next version, through the same bundle entry.
+
+        ``IngestService.upload_next_version`` is ``upload_bundle`` with the document named, so
+        the handle travels exactly as in :meth:`upload_document` and nothing here reads it.
+        """
+        from auditmanager.shared.identity import DocumentUid, IdempotencyKey, ProjectUid
+
+        outcome = self._service.upload_next_version(
+            project_uid=ProjectUid.parse(project_uid),
+            document_uid=DocumentUid.parse(document_uid),
+            content=content,
+            source_filename=source_filename or "upload.zip",
+            idempotency_key=IdempotencyKey(idempotency_key),
         )
         return _Uploaded(
             _version_view(outcome.version), bool(getattr(outcome, "replayed", False))
@@ -2592,6 +2623,8 @@ class ComparisonAdapter(_SessionHolder):
         from auditmanager.documents.public import DocumentRepository
         from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
 
+        from auditmanager.comparison.public import carryover_candidates
+
         def work(session: Session) -> Any:
             DocumentRepository().get_version_in(
                 session,
@@ -2599,10 +2632,13 @@ class ComparisonAdapter(_SessionHolder):
                 document_uid=DocumentUid.parse(document_uid),
                 version_uid=VersionUid.parse(source_version_uid),
             )
-            return self._service.compare(session, request)
+            result = self._service.compare(session, request)
+            # `W59-DECISION-CARRYOVER-01`: what an expert could carry, read in the same
+            # session as the comparison it belongs to.
+            return result, carryover_candidates(session, result)
 
         try:
-            result = self._read(work)
+            result, candidates = self._read(work)
         except ComparisonRequestInvalid as exc:
             raise DomainError(
                 ErrorCode.VALIDATION_FAILED, field=str(exc).removesuffix("_invalid"),
@@ -2613,7 +2649,86 @@ class ComparisonAdapter(_SessionHolder):
                 ErrorCode.INTERNAL_ERROR,
                 message="the stored comparison inputs contradict their own constraints",
             ) from exc
-        return models.VersionComparison.model_validate(_comparison_view(result))
+        return models.VersionComparison.model_validate(_comparison_view(result, candidates))
+
+    def carry_over_decision(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_finding_uid: str,
+        target_finding_uid: str,
+        source_decision_id: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.CarryOverDecisionResponse:
+        """`W59-DECISION-CARRYOVER-01`. One write transaction: the actor's roles, the path,
+        the recomputed comparison and the ledger append (``comparison.public``)."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.comparison.public import (
+            CarryoverRequest,
+            ComparisonIntegrityError,
+            ComparisonRequestInvalid,
+            DecisionCarryoverService,
+        )
+
+        request = CarryoverRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            target_version_uid=target_version_uid,
+            source_finding_uid=source_finding_uid,
+            target_finding_uid=target_finding_uid,
+            source_decision_id=source_decision_id,
+            mode=mode,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+        )
+        service = DecisionCarryoverService(comparisons=self._service)
+
+        def work(session: Session) -> Any:
+            return service.carry_over(
+                session,
+                request,
+                actor_uid=author_user_uid,
+                actor_label=author_label,
+                # Read in this transaction: the request register checked the role before
+                # the route; this is the command's own check (`R-60`).
+                actor_roles=AccountRepository().roles_of(session, author_user_uid),
+                idempotency_key=idempotency_key,
+            )
+
+        try:
+            outcome = self._write(work)
+        except ComparisonRequestInvalid as exc:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED, field=str(exc).removesuffix("_invalid"),
+                constraint="format",
+            ) from None
+        except ComparisonIntegrityError as exc:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="the stored comparison inputs contradict their own constraints",
+            ) from exc
+        return models.CarryOverDecisionResponse(
+            event=models.DecisionEvent.model_validate(
+                decision_event_body(_event_view(outcome.event))
+            ),
+            current_verdict=models.Verdict(outcome.target_current_verdict),
+            replayed=outcome.replayed,
+            source_finding_uid=outcome.source_finding_uid,
+            source_decision_id=outcome.source_decision.decision_id,
+            source_version_uid=outcome.source_version_uid,
+            source_version_ordinal=outcome.source_version_ordinal,
+            target_version_uid=outcome.target_version_uid,
+            mode=outcome.mode,  # type: ignore[arg-type]
+        )
 
 
 class _ClassificationReader:
@@ -2740,8 +2855,20 @@ def _verified_artifact_bytes(blob_store: Any, reference: Mapping[str, Any]) -> b
         raise domain_error_from_storage(exc, blob_id=blob_id, role=role) from None
 
 
-def _comparison_view(result: Any) -> dict[str, Any]:
-    """The read model as the frozen ``VersionComparison`` shape (field names are equal)."""
+def _comparison_view(result: Any, candidates: Sequence[Any] = ()) -> dict[str, Any]:
+    """The read model as the frozen ``VersionComparison`` shape (field names are equal),
+    with `W59-DECISION-CARRYOVER-01`'s ``findings.carryover_candidates`` added."""
     from dataclasses import asdict
 
-    return asdict(result)
+    view = asdict(result)
+    if view["findings"] is not None:
+        view["findings"]["carryover_candidates"] = [
+            {
+                "proposal_sha256": item.proposal_sha256,
+                "source_finding_uid": item.source_finding.finding_uid,
+                "target_finding_uid": item.target_finding.finding_uid,
+                "source_decision": asdict(item.source_decision),
+            }
+            for item in candidates
+        ]
+    return view

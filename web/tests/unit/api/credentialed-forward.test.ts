@@ -449,6 +449,45 @@ describe('a request body is streamed to the API under a deadline', () => {
     expect(headersOf(calls[0]!.init).get('content-type')).toBe('multipart/form-data; boundary=x');
   });
 
+  it('streams the next version of a document exactly as it streams the first upload', async () => {
+    // `W59-VERSION-UPLOAD-01`: `uploadDocumentVersion` is the other multipart operation. The
+    // forward decides by the body, not by the path, so its bundle takes the same stream, the
+    // same refusal of redirects and the same deadline -- nothing here holds it whole.
+    const { stream, pulled } = pulledOnDemand(8, 1024);
+    const request = new Request('http://localhost/bff/v1/projects/prj_01/documents/doc_01/versions', {
+      method: 'POST',
+      body: stream,
+      duplex: 'half',
+      headers: { 'content-type': 'multipart/form-data; boundary=x' },
+    } as RequestInit & { duplex: 'half' });
+    let pulledAtCall = -1;
+    let received = 0;
+    const calls: Seen[] = [];
+    const fetch: FetchLike = async (url, init) => {
+      pulledAtCall = pulled();
+      calls.push({ url, init });
+      received = await drain(init.body as ReadableStream<Uint8Array>);
+      return okJson();
+    };
+
+    const response = await forwardWithCredential(
+      request,
+      ['projects', 'prj_01', 'documents', 'doc_01', 'versions'],
+      TARGET,
+      { fetch },
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls[0]!.url).toBe('http://api:8000/projects/prj_01/documents/doc_01/versions');
+    expect(calls[0]!.init.body).toBe(request.body);
+    expect((calls[0]!.init as RequestInit & { duplex?: string }).duplex).toBe('half');
+    expect(calls[0]!.init.redirect).toBe('error');
+    expect(calls[0]!.init.window).toBeNull();
+    expect(calls[0]!.init.signal).toBeInstanceOf(AbortSignal);
+    expect(pulledAtCall).toBe(0);
+    expect(received).toBe(8 * 1024);
+  });
+
   it('refuses redirects and names no window, so fetch neither clones the request nor tees its body', async () => {
     const { stream } = pulledOnDemand(2, 16);
     const { fetch, calls } = recordingFetch(okJson);

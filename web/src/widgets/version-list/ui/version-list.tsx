@@ -3,19 +3,15 @@
 /**
  * The published versions of one document, read from the server on mount.
  *
- * It returns one row today. That is a fact about the transport and not about this widget:
- * `uploadDocument` declares no `document_uid`, so every upload starts a new document at
- * ordinal 1, while `IngestService.upload_single_pdf` underneath does take one and does
- * publish a second version. `W18-SEAL` §2 measured both halves. So this is written for a
- * list, the count is rendered rather than assumed, and the day the transport carries a
- * `document_uid` this screen needs no change.
+ * It was written for a list while the transport could produce only one row (`W18-SEAL` §2:
+ * `uploadDocument` declared no `document_uid`), so the count is rendered rather than assumed.
+ * Since `W59-VERSION-UPLOAD-01` the document screen uploads further versions
+ * (`uploadDocumentVersion`) and this list grows with no change to its shape.
  *
- * It says so on screen, too, rather than leaving a reviewer to wonder whether a version
- * is missing — but **the on-screen sentence deliberately does not carry the reason.** It
- * said "a limitation in data transfer, not in storage", and `R-18` is that a finished
- * application does not explain its own transport to the person using it. A reviewer needs
- * to know that one row is expected and that nothing was lost; why the transport is shaped
- * that way is for this comment, which renders to nobody. `D-58`.
+ * The note under the rows said, until then, that one version per upload was expected; it now
+ * states what holds for every row instead — each version is immutable and stays addressable,
+ * and the newest is the document's current one — and, by `R-18`, still names no operation or
+ * field of the transport. `D-58`.
  */
 
 import { useState } from 'react';
@@ -79,8 +75,8 @@ export function VersionList({ projectUid, documentUid }: VersionListProps) {
       </ul>
       <p className="am-note">
         <em>
-          Одна версия на загрузку: сегодня каждая загрузка заводит новый документ, а не
-          новую версию уже существующего — ничего из загруженного не потеряно.
+          Каждая версия неизменяема и остаётся адресуемой: новая версия становится текущей,
+          а прежние не меняются и ничего из загруженного не теряется.
         </em>
       </p>
       <div className="am-pager">

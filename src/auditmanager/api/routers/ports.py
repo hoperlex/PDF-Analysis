@@ -153,8 +153,8 @@ class ProjectPort(Protocol):
 
 @runtime_checkable
 class DocumentPort(Protocol):
-    """``uploadDocument``, ``getDocumentVersion``, ``streamDocumentVersionContent``,
-    ``listDocuments`` and ``listVersions``."""
+    """``uploadDocument``, ``uploadDocumentVersion``, ``getDocumentVersion``,
+    ``streamDocumentVersionContent``, ``listDocuments`` and ``listVersions``."""
 
     def upload_document(
         self,
@@ -180,6 +180,24 @@ class DocumentPort(Protocol):
         the caller does not supply one -- optional here for the same reason
         ``display_title`` is: the frozen ``UploadDocumentRequest.section`` is not
         required, and this port does not invent a value the caller never gave it.
+        """
+
+    def upload_document_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        content: BinaryIO,
+        source_filename: str,
+        idempotency_key: str,
+    ) -> UploadedDocument:
+        """Publish one portal bundle as the next immutable version of an existing document.
+
+        `W59-VERSION-UPLOAD-01`. The same handle contract and envelope as
+        :meth:`upload_document`. The document must exist and belong to ``project_uid``
+        (``not_found`` naming ``Document`` otherwise, an unknown project naming
+        ``Project``); the version takes the document's next ordinal and becomes its current
+        version; it takes no title and no section, and starts unclassified.
         """
 
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
@@ -848,12 +866,15 @@ class NormContentPort(Protocol):
 
 @runtime_checkable
 class ComparisonPort(Protocol):
-    """``compareDocumentVersions``. `W59-VERSION-COMPARE-01`.
+    """``compareDocumentVersions`` and ``carryOverDecision``. `W59-VERSION-COMPARE-01`,
+    `W59-DECISION-CARRYOVER-01`.
 
     A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
-    The answer is always a ``VersionComparison``: a pair the comparison rule does not admit
-    is ``outcome: refused`` with one closed reason, never an error envelope and never a
-    relabelled pair. Nothing behind this port writes.
+    The comparison is always a ``VersionComparison``: a pair the comparison rule does not
+    admit is ``outcome: refused`` with one closed reason, never an error envelope and never
+    a relabelled pair, and the read writes nothing. The one write is the expert-confirmed
+    carryover of one source decision to the matched target finding, appended to the
+    decision ledger after the comparison is recomputed.
     """
 
     def compare_versions(
@@ -871,6 +892,30 @@ class ComparisonPort(Protocol):
     ) -> models.VersionComparison:
         """The comparison of the two named versions, or why they are not compared."""
 
+    def carry_over_decision(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_finding_uid: str,
+        target_finding_uid: str,
+        source_decision_id: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.CarryOverDecisionResponse:
+        """Carry the confirmed source decision to the target finding, or refuse.
+
+        The expert role is read from the account in the confirming transaction; ``admin``
+        alone is ``permission_denied``. A pair the recomputed comparison no longer proposes,
+        a source decision that is no longer current, a target that already has an event and
+        a severity the target cannot hold are each ``conflict`` with a ``conflict_reason``.
+        """
 
 @runtime_checkable
 class AnalysisProfilePort(Protocol):

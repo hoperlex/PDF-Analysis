@@ -44,6 +44,12 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "createProject": ("POST", "/projects"),
     "listProjects": ("GET", "/projects"),
     "uploadDocument": ("POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents"),
+    # `W59-VERSION-UPLOAD-01`. The next version of a document, addressed through its project.
+    "uploadDocumentVersion": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions",
+    ),
     "listDocuments": ("GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents"),
     "getDocumentVersion": ("GET", "/versions/ver_01M2545JSD15ETSNNV904X991J"),
     "streamDocumentVersionContent": ("GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/content"),
@@ -99,6 +105,13 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
         "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
+    ),
+    # `W59-DECISION-CARRYOVER-01`. The expert's carryover of a decision, addressed the same
+    # way; the missing body is refused by the body model only after the role decided.
+    "carryOverDecision": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/carryovers",
     ),
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry (any role); no parameter.
     "listAnalysisProfiles": ("GET", "/analysis/profiles"),
@@ -178,12 +191,16 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "changePassword": _ANY,
     "createProject": _EXPERT,
     "uploadDocument": _EXPERT,
+    # `W59-VERSION-UPLOAD-01`: the next version takes exactly the first upload's roles.
+    "uploadDocumentVersion": _EXPERT,
     "startRun": _EXPERT,
     # `W59-SECTION-SEAL-01`: only an expert confirms a section; admin alone does not.
     "classifyDocumentVersion": _EXPERT,
     "cancelRun": frozenset({"expert", "admin"}),
     "reauditRun": frozenset({"expert", "admin"}),
     "appendDecision": _EXPERT,
+    # `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict; admin alone does not.
+    "carryOverDecision": _EXPERT,
     "exportRunCsv": _EXPERT,
     "listRegistrations": _ADMIN,
     "approveRegistration": _ADMIN,

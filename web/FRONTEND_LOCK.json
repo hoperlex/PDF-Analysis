@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2",
-    "content_commit": "1049367",
-    "content_commit_subject": "W59-ANALYSIS-SETTINGS-01 API reseal on integration base 1049367e",
-    "dispatch_named_commit": "1049367",
-    "commit_note": "W59 adds the read of the analysis-profile registry: listAnalysisProfiles (GET /analysis/profiles, any one role) and six schemas (AnalysisProfileStatus, AnalysisProfileSourceFile, AnalysisProfileSource, AnalysisProfileSummary, AnalysisProfileListItem, AnalysisProfileList): the fifteen sections in the project-structure order, each with its registered text profile or null. Read-only; no error code is added.",
+    "sha256": "a9ce1b50e34d0994734e3c221b763c014667efce16ed4d063ac6713f5b6ee4fe",
+    "content_commit": "a820849",
+    "content_commit_subject": "W59-DECISION-CARRYOVER-01 API reseal on integration base a820849a",
+    "dispatch_named_commit": "a820849",
+    "commit_note": "W59 adds the expert-confirmed carryover of a decision to the next version: carryOverDecision (POST .../versions/{version_uid}/comparison/carryovers, expert only, keyed), four schemas (CarryoverSourceDecision, CarryoverCandidate, CarryOverDecisionRequest, CarryOverDecisionResponse) and the required FindingComparison.carryover_candidates. A refusal is conflict with one of four carryover conflict_reason values; no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 52,
-    "operations": 59,
-    "component_schemas": 153,
+    "paths": 54,
+    "operations": 61,
+    "component_schemas": 158,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2",
+    "snapshot_sha256": "a9ce1b50e34d0994734e3c221b763c014667efce16ed4d063ac6713f5b6ee4fe",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "ef3ab3f95d60790ce9daec35bf3b8b2c26d0bf7761567f1ca95adcf2170b066a",
-      "index.ts": "7d1bf293aa8f5d433c61f528997211a3224001a4fdaae8d66f0251854304f5aa",
-      "operations.gen.ts": "30059220ac5568b0678865d60abc95bd02be80b89317ca6c40230d0720a3ed82",
-      "types.gen.ts": "0a5179ac84507913fc6b35888d633e4ba506cb1e73f86272c9f9740a251cd016"
+      "client.gen.ts": "6b4585478dd4ca927b09b615d790cd34a9fc788d3159f05331f48f5a405ec45b",
+      "index.ts": "a52846cc58fa1a097a2c3705f5cf3323e6e69685b239b395841fd6c09b0f1e43",
+      "operations.gen.ts": "86c14ddefe5d7bfc9a12e53b92a6059035b10d2c58b2114b82ed73a83c57d970",
+      "types.gen.ts": "1c838283589b0609a37f6dc67bcec1aefca48eb570326534b92b8bea3c322ba3"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

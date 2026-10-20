@@ -184,6 +184,12 @@ export const queryKeys = {
     list: (documentUid: DocumentUid, cursor?: string, limit?: number) =>
       ['versions', 'list', documentUid, { cursor, limit }] as const,
     /**
+     * Every page of `listVersions` for one document, as a prefix of {@link list}
+     * (`W59-VERSION-UPLOAD-01`). `uploadDocumentVersion` puts a new first row on every page
+     * boundary of that list, so it invalidates all of them, whatever cursor a screen holds.
+     */
+    lists: (documentUid: DocumentUid) => ['versions', 'list', documentUid] as const,
+    /**
      * `getVersionBlocks`. `W45-BLOCKS`.
      *
      * Under `versions` and not under a fifth root namespace, for the same reason
@@ -222,6 +228,12 @@ export const queryKeys = {
      * versions and their classifications and nothing else is its parent; classifying either
      * version or publishing a run changes the answer, and `versions.all()` reaches it.
      */
+    /**
+     * Every comparison answer, whatever the pair, mode or page (`W59-DECISION-CARRYOVER-01`):
+     * a carried decision changes the pair's `carryover_candidates`, and the prefix reaches
+     * every page and mode of it without naming them.
+     */
+    comparisons: () => ['versions', 'comparison'] as const,
     comparison: (
       sourceVersionUid: VersionUid,
       targetVersionUid: VersionUid,

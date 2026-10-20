@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 2147d56515b4b96b8682e430a5833ba603f67dfae8ed0299fcf47bf97d5647e2
+ *   sha256 a9ce1b50e34d0994734e3c221b763c014667efce16ed4d063ac6713f5b6ee4fe
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -21,6 +21,8 @@ import type {
   AppendDecisionRequest,
   AppendDecisionResponse,
   ApproveRegistrationRequest,
+  CarryOverDecisionRequest,
+  CarryOverDecisionResponse,
   ChangePasswordRequest,
   ClassifyDocumentVersionRequest,
   CorrelationId,
@@ -83,6 +85,7 @@ import type {
   UpdateMyProfileRequest,
   UpdateUserRequest,
   UploadDocumentRequest,
+  UploadDocumentVersionRequest,
   UserUid,
   Verdict,
   VersionBlockIndex,
@@ -98,6 +101,7 @@ export const OPERATION_IDS = [
   'approveRegistration',
   'archiveUser',
   'cancelRun',
+  'carryOverDecision',
   'changePassword',
   'classifyDocumentVersion',
   'compareDocumentVersions',
@@ -153,6 +157,7 @@ export const OPERATION_IDS = [
   'updateMyProfile',
   'updateUser',
   'uploadDocument',
+  'uploadDocumentVersion',
 ] as const;
 
 /** The closed set of operations this client can perform. */
@@ -266,6 +271,38 @@ export type CancelRunInput = {
 
 /** Success body of `cancelRun` (`application/json`, HTTP 200). */
 export type CancelRunResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
+// carryOverDecision - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers
+// ------------------------------------------------------------------------------------
+
+/**
+ * Carry Over Decision
+ *
+ * Carry one expert decision from a finding of the path's (older) version to the finding of `target_version_uid` that the comparison proposes as `unchanged`, on the calling expert's confirmation. The comparison is recomputed with the body's `mode` and runs when the confirmation arrives, and must still propose exactly this pair; the source finding's current verdict must still be the `source_decision_id` the expert was shown (`accepted` or `rejected`), and the target finding must have no decision event yet. The target receives one new `accept` or `reject` event authored by the caller, whose `comment` records the carried-from finding, decision and versions; a severity is carried with an accept or the carryover is refused, never dropped. Nothing else is written: the source finding and its decisions stay as they were. An exact repeat answers the event already carried, `replayed: true`, and keeps its first expert. A refusal is `conflict` with `conflict_reason` `carryover_pair_not_proposed`, `carryover_source_decision_not_current`, `carryover_target_already_decided` or `carryover_severity_not_carryable`. `expert` is required; `admin` alone is refused (`required_capability: role:expert`).
+ */
+export type CarryOverDecisionInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CarryOverDecisionRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `carryOverDecision` (`application/json`, HTTP 201). */
+export type CarryOverDecisionResult = CarryOverDecisionResponse;
 
 // ------------------------------------------------------------------------------------
 // changePassword - POST /auth/password
@@ -1681,6 +1718,41 @@ export type UploadDocumentInput = {
 export type UploadDocumentResult = DocumentVersion;
 
 // ------------------------------------------------------------------------------------
+// uploadDocumentVersion - POST /projects/{project_uid}/documents/{document_uid}/versions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Upload one portal bundle as the next immutable version of an existing document.
+ *
+ * The same ingest path as `uploadDocument`, into a document that already exists. The body is one portal bundle under exactly `uploadDocument`'s envelope (the same members, bounds, refusals and `constraint` details, a bare PDF refused with `portal_bundle_required`), and the same third-upload-in-flight refusal (`503 dependency_unavailable`, `details.dependency: upload_capacity`, `Retry-After`).
+ *
+ * The new version gets the document's next `version_ordinal` and becomes its current version; every older version, its classification, runs, findings and decisions are unchanged. It inherits nothing: it takes no display title (the document keeps its own) and no section, and its `classification` is absent until an expert confirms one with `classifyDocumentVersion`. Two uploads into one document at the same time get consecutive ordinals.
+ *
+ * An unknown project, an unknown document, or a document of another project is `404 not_found` (`details.aggregate_type` `Project` or `Document`), decided before the key is claimed or a byte is read into storage. The `Idempotency-Key` behaves as for `uploadDocument`: an exact repeat answers the version it created, and the same key with another document or another bundle is `409 idempotency_key_reuse`.
+ */
+export type UploadDocumentVersionInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `multipart/form-data`. */
+  body: UploadDocumentVersionRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `uploadDocumentVersion` (`application/json`, HTTP 201). */
+export type UploadDocumentVersionResult = DocumentVersion;
+
+// ------------------------------------------------------------------------------------
 // Runtime descriptors
 // ------------------------------------------------------------------------------------
 
@@ -1744,6 +1816,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  carryOverDecision: {
+    operationId: 'carryOverDecision',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['decisions'],
   },
   changePassword: {
     operationId: 'changePassword',
@@ -2506,6 +2592,20 @@ export const OPERATIONS = {
     method: 'POST',
     path: '/projects/{project_uid}/documents',
     pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'multipart/form-data',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
+  uploadDocumentVersion: {
+    operationId: 'uploadDocumentVersion',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions',
+    pathParams: ['document_uid', 'project_uid'],
     queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: true,
