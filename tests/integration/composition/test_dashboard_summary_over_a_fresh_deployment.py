@@ -383,6 +383,17 @@ def _seed_published_document(
             text("UPDATE document SET current_version_uid = :v WHERE document_uid = :d"),
             {"v": version_uid, "d": document_uid},
         )
+        if section is not None:
+            # The dashboard counts the section a version is *confirmed* in, not the legacy
+            # document-level ``document.section`` (SECTION-READ-MODEL-01).
+            connection.execute(
+                text(
+                    "INSERT INTO document_version_classification "
+                    "(version_uid, project_stage, section_code, confirmed_by_user_uid) "
+                    "VALUES (:v, 'R', :sec, (SELECT user_uid FROM app_user ORDER BY user_uid LIMIT 1))"
+                ),
+                {"v": version_uid, "sec": section},
+            )
 
 
 def _walk_run_to(engine: Engine, run_id: str, target: str) -> None:

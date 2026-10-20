@@ -343,6 +343,44 @@ def test_a_set_without_a_published_run_is_analysis_missing(world: World) -> None
     assert project.row_count == 3
 
 
+def test_a_project_with_several_sets_across_sections_is_placed_set_by_set(world: World) -> None:
+    """`SECTION-READ-MODEL-01`: the school holds an AR set, a second AR set, a KJ set and a set
+    nobody has classified. Each section's answer takes exactly the sets whose current version
+    is confirmed there, found by the documents query rather than a scan of the projects."""
+    school = world.projects["school"]
+    world.set(school, "13АВ-РД-АР школа корпус Б", "AR")
+    world.set(school, "13АВ-РД-КЖ школа", "KJ")
+    world.set(school, "13АВ-РД школа без раздела", None)
+    ar = next(item for item in world.read().projects if item.project_uid == school)
+    assert [source.display_title for source in ar.sources] == [
+        "13АВ-РД-АР школа", "13АВ-РД-АР школа корпус Б",
+    ]
+    excluded = world.read().excluded
+    assert [item.display_title for item in excluded if item.project_uid == school] == [
+        "13АВ-РД школа без раздела",
+    ]
+    kj = world.read("KJ")
+    assert [project.project_uid for project in kj.projects] == [world.projects["clinic"], school]
+    school_kj = next(item for item in kj.projects if item.project_uid == school)
+    assert [source.display_title for source in school_kj.sources] == ["13АВ-РД-КЖ школа"]
+    only = world.read(project_uid=school)
+    assert [item.display_title for item in only.excluded] == ["13АВ-РД школа без раздела"]
+    assert world.read("PB").projects == ()
+
+
+def test_reading_the_membership_page_by_page_answers_what_one_page_answers(
+    world: World, monkeypatch
+) -> None:
+    school = world.projects["school"]
+    world.set(school, "13АВ-РД-АР школа корпус Б", "AR")
+    for number in range(3):
+        world.set(school, f"Комплект {number}", None)
+    whole = world.read()
+    monkeypatch.setattr(module, "_MEMBERSHIP_PAGE", 1)
+    assert world.read() == whole
+    assert whole.source_count == 4 and whole.excluded_count == 4
+
+
 # -- filters, paging, bounds ---------------------------------------------------------------------
 
 
