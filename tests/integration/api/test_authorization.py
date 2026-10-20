@@ -786,6 +786,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "export.py",
         "me.py",
         "norms.py",
+        # `W60-PRICE-LIST-01`: a price list and a vendor-list revision record WHO uploaded or
+        # set them, and the reads hand the caller to the context, which reads the role set in
+        # its own transaction; whether they may is the role register's.
+        "optimisation.py",
         "registrations.py",
         "releases.py",
         # `W59-SECTION-SEAL-01`: the classification records WHO confirmed it; whether they

@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 89d7b74cb2e9428c28800baf48dbb8f5ca43856a72ea3e8175e9a795fe6139d2
+ *   sha256 b40a30f7db5951e3f2d0c3ad0ff4e650d5818fba959c8680baca1f660a1c3cdb
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -1610,7 +1610,7 @@ export type SetExecutionPausedResult = ExecutionDispatchStatus;
 /**
  * Set Global Vendor List
  *
- * Set a section's global vendor list as a whole new immutable revision with its author and time; an empty list is an explicit "no restriction". An exact repeat of the latest revision writes nothing and answers it. With `expected_vendor_list_id` present (`null`: no revision was read), a different latest revision is `409 conflict` with `conflict_reason: vendor_list_changed` and nothing is written. `admin` is required (`required_capability: role:admin`).
+ * Set a section's global vendor list as a whole new immutable revision with its author and time; an empty list is an explicit "no restriction". An exact repeat of the latest revision writes nothing and answers it. With `expected_vendor_list_id` present (`null`: no revision was read), a different latest revision is `409 conflict` with `conflict_reason: vendor_list_changed` and nothing is written. A section code outside the fifteen addresses no vendor list and is `404`. `admin` is required (`required_capability: role:admin`).
  */
 export type SetGlobalVendorListInput = {
   /** Path parameters, substituted into `/vendor-lists/{section_code}`. */
@@ -2776,7 +2776,7 @@ export const OPERATIONS = {
     requestMediaType: 'application/json',
     responseMediaType: 'application/json',
     successStatuses: [200],
-    errorStatuses: [401, 403, 409, 422, 500, 503],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['optimisation'],
   },
   setJobPriority: {

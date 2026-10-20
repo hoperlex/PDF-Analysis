@@ -199,7 +199,8 @@ def build_optimisation_routes(router: APIRouter, optimisation: OptimisationPort)
         responses={
             **success(200, "The global revision now in force, new or an exact repeat."),
             **envelope_responses(
-                401, 403, 409, 422, 500, 503, descriptions={409: STATE_CONFLICT_DESCRIPTION}
+                401, 403, 404, 409, 422, 500, 503,
+                descriptions={409: STATE_CONFLICT_DESCRIPTION},
             ),
         },
         description=(
@@ -208,7 +209,8 @@ def build_optimisation_routes(router: APIRouter, optimisation: OptimisationPort)
             "of the latest revision writes nothing and answers it. With "
             "`expected_vendor_list_id` present (`null`: no revision was read), a different "
             "latest revision is `409 conflict` with `conflict_reason: vendor_list_changed` and "
-            "nothing is written. `admin` is required (`required_capability: role:admin`)."
+            "nothing is written. A section code outside the fifteen addresses no vendor list "
+            "and is `404`. `admin` is required (`required_capability: role:admin`)."
         ),
     )
     def set_global_vendor_list(

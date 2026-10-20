@@ -4404,7 +4404,7 @@
           "optimisation"
         ],
         "summary": "Set Global Vendor List",
-        "description": "Set a section's global vendor list as a whole new immutable revision with its author and time; an empty list is an explicit \"no restriction\". An exact repeat of the latest revision writes nothing and answers it. With `expected_vendor_list_id` present (`null`: no revision was read), a different latest revision is `409 conflict` with `conflict_reason: vendor_list_changed` and nothing is written. `admin` is required (`required_capability: role:admin`).",
+        "description": "Set a section's global vendor list as a whole new immutable revision with its author and time; an empty list is an explicit \"no restriction\". An exact repeat of the latest revision writes nothing and answers it. With `expected_vendor_list_id` present (`null`: no revision was read), a different latest revision is `409 conflict` with `conflict_reason: vendor_list_changed` and nothing is written. A section code outside the fifteen addresses no vendor list and is `404`. `admin` is required (`required_capability: role:admin`).",
         "operationId": "setGlobalVendorList",
         "security": [
           {
@@ -4451,6 +4451,9 @@
           },
           "403": {
             "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           },
           "409": {
             "$ref": "#/components/responses/StateConflict"
