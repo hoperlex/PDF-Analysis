@@ -25,11 +25,11 @@ from auditmanager.api.app import create_documentation_app
 from auditmanager.api.routers.runs import build_run_routes
 from auditmanager.api.schemas import models
 from auditmanager.api.security import OPERATION_ROLES
-from auditmanager.bootstrap.adapters import _norm_references_view
+from auditmanager.bootstrap.adapters import _RunSavedText, _norm_references_view
 from auditmanager.norms.references.read_model import build_reference_read_model
 from auditmanager.norms.references.snapshot_catalogue import catalogue_from_rows
 from auditmanager.norms.references.tokens import sql_designation_tokens
-from auditmanager.runs.public import RunNormReferences
+from auditmanager.runs.public import RunNormReferences, SavedRunPageText
 
 RUN = "run_01M2545JSD15ETSNNV904X991K"
 VERSION = "ver_01M2545JSD15ETSNNV904X991K"
@@ -222,3 +222,34 @@ def test_the_frozen_schema_refuses_what_the_mapping_must_never_emit(
     ])
 
     assert [results[name]["valid"] for name in ("null", "extra", "sixth")] == [False, False, False]
+
+
+# --- the saved-text port ---------------------------------------------------------------------
+
+
+class _ComparisonReader:
+    """Stands for ``_AnalysisReader``: answers the comparison's shape or ``None``."""
+
+    def __init__(self, answer: Any) -> None:
+        self.answer = answer
+        self.asked: list[tuple[str, str, int]] = []
+
+    def saved_page_text(self, session: Any, *, run_id: str, version: Any) -> Any:
+        self.asked.append((run_id, version.version_uid, version.page_count))
+        return self.answer
+
+
+def test_the_runs_saved_text_port_wraps_the_comparisons_reader_and_keeps_none() -> None:
+    from types import SimpleNamespace
+
+    reader = _RunSavedText(blob_store=object())
+    reader._analyses = _ComparisonReader(  # type: ignore[assignment]
+        SimpleNamespace(run_id=RUN, text_layer_sha256="a" * 64, pages={1: "СП 54.13330.2022", 2: ""})
+    )
+
+    saved = reader.saved_page_text(None, run_id=RUN, version_uid=VERSION, page_count=2)  # type: ignore[arg-type]
+
+    assert saved == SavedRunPageText(RUN, "a" * 64, {1: "СП 54.13330.2022", 2: ""})
+    assert reader._analyses.asked == [(RUN, VERSION, 2)]  # type: ignore[attr-defined]
+    reader._analyses = _ComparisonReader(None)  # type: ignore[assignment]
+    assert reader.saved_page_text(None, run_id=RUN, version_uid=VERSION, page_count=2) is None  # type: ignore[arg-type]
