@@ -237,6 +237,8 @@ GUARDED = (
         "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
         "/specification-prices",
     ),
+    # `W63-SECTION-FORM7-01`. A section's combined Form-7 specification, read-only.
+    ("getSectionSpecification", "GET", "/sections/AR/specification"),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -806,6 +808,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "optimisation.py",
         "registrations.py",
         "releases.py",
+        # `W63-SECTION-FORM7-01`: a section's combined specification passes WHO reads it for the
+        # same reason as the priced specification below: the read re-reads the role set in its
+        # own transaction; whether they may is the role register's (any one role).
+        "section_specification.py",
         # `W59-SECTION-SEAL-01`: the classification records WHO confirmed it; whether they
         # may is the role register's (expert) and the command's own re-read.
         "sections.py",

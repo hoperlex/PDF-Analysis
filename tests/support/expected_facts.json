@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 65,
+    "path_count": 66,
     "operations": [
       [
         "POST",
@@ -372,6 +372,11 @@
         "GET",
         "/projects/{project_uid}/documents/{document_uid}/specification-prices",
         "getSpecificationPrices"
+      ],
+      [
+        "GET",
+        "/sections/{section_code}/specification",
+        "getSectionSpecification"
       ]
     ],
     "schema_names": [
@@ -585,7 +590,13 @@
       "SpecificationPricePosition",
       "SpecificationPriceRow",
       "SpecificationRowPage",
-      "SpecificationPrices"
+      "SpecificationPrices",
+      "SectionSpecificationSource",
+      "SectionSpecificationProject",
+      "SectionSpecificationExcludedVersion",
+      "SectionSpecificationRow",
+      "SectionSpecificationRowPage",
+      "SectionSpecification"
     ]
   },
   "error_catalog": {

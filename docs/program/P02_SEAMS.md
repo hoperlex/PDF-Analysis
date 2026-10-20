@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Seventy-four operations, sealed. `A5` generates the typed client from this document; `B6`
+Seventy-five operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -892,6 +892,15 @@ from its newest published run's saved text and matched to the project's current 
 a price and an amount only on a row matched to one position in the same unit with a numeric
 quantity, totals per currency over those rows only; a precondition that does not hold is one
 `state`, and a set outside the project is `404`. Read-only, any one role.
+`W63-SECTION-FORM7-01` added `getSectionSpecification` on 2026-10-20: «Оптимизация разделов»,
+the Form-7 rows of every project whose document set's current version an expert confirmed in
+a section, each row priced from its own project's current price list. The section code is a
+filter, not an identity: every row names its project, set, version, page, sheet and line span,
+rows are never merged across projects, totals exist per project and currency only and there
+is no section total; a current version nobody classified is listed as excluded, one confirmed
+in another section never appears; a bound is a `200` with `state: section_too_large`, a
+section code outside the fifteen and an unknown `project_uid` filter are `404`. Read-only,
+any one role.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -983,6 +992,7 @@ could.
 | `setGlobalVendorList` | `PUT /vendor-lists/{section_code}` |
 | `setProjectVendorList` | `PUT /projects/{project_uid}/vendor-lists/{section_code}` |
 | `getSpecificationPrices` | `GET /projects/{project_uid}/documents/{document_uid}/specification-prices` |
+| `getSectionSpecification` | `GET /sections/{section_code}/specification` |
 
 Rules that hold across the whole surface:
 

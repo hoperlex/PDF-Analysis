@@ -2614,3 +2614,153 @@ class SpecificationPrices(_Object):
     extraction: SpecificationExtractionSummary | None
     matching: SpecificationMatching | None
     rows: SpecificationRowPage | None
+
+
+# --- the section's combined specification (`W63-SECTION-FORM7-01`) ---------------------------
+#
+# «Оптимизация разделов»: for one section code, the Form-7 rows of every project whose document
+# set's *current* version an expert confirmed in that section, each priced from **its own**
+# project's current price list (``auditmanager.optimisation.section_specification``). The
+# section code is a filter, not an identity: every row names its project, set and version, rows
+# are never merged across projects, and totals exist per project and per currency only -- there
+# is deliberately no section total. The row, the price position, the match counts, the totals
+# and the price-list reference are the priced specification's own schemas
+# (`W60-OPT-MATCH-01`); money is exact decimal text.
+
+_SectionSourceState = Literal[
+    "ready", "analysis_missing", "text_unavailable", "specification_too_large", "not_read",
+]
+
+
+class SectionSpecificationSource(_Object):
+    """One document set whose current version is confirmed in the section, and how far it read.
+
+    ``state`` is ``ready`` when the saved text was read and the rows extracted;
+    ``analysis_missing`` (no published run) and ``text_unavailable`` (a run without a saved
+    text layer) name what is missing; ``specification_too_large`` is the extractor's own row
+    bound; ``not_read`` is a set the answer did not read because it is over a bound
+    (``SectionSpecification.limit_reason``). The extraction facts are ``null`` until read.
+    """
+
+    document_uid: DocumentUid
+    display_title: Annotated[str, Field(min_length=1, max_length=400)]
+    version_uid: VersionUid
+    #: Display order within the set, never an identity.
+    version_ordinal: Annotated[int, Field(ge=1)]
+    page_count: _SpecificationPage
+    project_stage: ProjectStage
+    state: _SectionSourceState
+    run_id: RunId | None
+    text_layer_sha256: Sha256 | None
+    row_count: Annotated[int, Field(ge=0, le=10000)] | None
+    table_count: _SpecificationCount | None
+    skipped_by_reason: SpecificationSkipCounts | None
+
+
+class SectionSpecificationProject(_Object):
+    """One project with member sets: its price list, its sets and its own totals.
+
+    ``price_state`` is ``priced`` (the current price-list revision was read), ``price_list_missing``
+    (none uploaded: the rows are served without any match and no figure) or ``not_read`` (over a
+    bound). ``matching`` covers this project's rows only and is ``null`` unless ``priced``; its
+    totals are per currency and never mixed with another project's.
+    """
+
+    project_uid: ProjectUid
+    name: Annotated[str, Field(min_length=1, max_length=200)]
+    price_state: Literal["priced", "price_list_missing", "not_read"]
+    price_list: SpecificationPriceListRef | None
+    sources: list[SectionSpecificationSource]
+    row_count: Annotated[int, Field(ge=0, le=20000)]
+    matching: SpecificationMatching | None
+
+
+class SectionSpecificationExcludedVersion(_Object):
+    """A current version that cannot be placed in a section yet: nobody classified it."""
+
+    project_uid: ProjectUid
+    project_name: Annotated[str, Field(min_length=1, max_length=200)]
+    document_uid: DocumentUid
+    display_title: Annotated[str, Field(min_length=1, max_length=400)]
+    version_uid: VersionUid
+    version_ordinal: Annotated[int, Field(ge=1)]
+    reason: Literal["version_unclassified"]
+
+
+class SectionSpecificationRow(_Object):
+    """One Form-7 row with its full address and, where the project has a price list, its match.
+
+    ``price_status`` is the match (``matched``, ``ambiguous``, ``unmatched``) or
+    ``price_list_missing`` when the row's project has no price list: then every match field is
+    empty and no price or amount exists. ``amount`` only when the row counts in its project's
+    total for its currency.
+    """
+
+    project_uid: ProjectUid
+    document_uid: DocumentUid
+    version_uid: VersionUid
+    #: A digest of the version, page and line span: provenance, not a stored identity.
+    row_id: Annotated[str, Field(pattern=r"^sr-[0-9a-f]{32}$")]
+    page_number: _SpecificationPage
+    sheet_label: str | None
+    line_start: _SpecificationLine
+    line_end: _SpecificationLine
+    table_ordinal: Annotated[int, Field(ge=1)]
+    group: str | None
+    position: str | None
+    #: The name and, when the row fills them, the type/mark, code and manufacturer cells in
+    #: the Form-7 order: a text layer does not separate them.
+    name: Annotated[str, Field(min_length=1)]
+    unit_text: str | None
+    unit: _SpecificationUnit | None
+    quantity_text: str | None
+    quantity: _SpecificationDecimal | None
+    quantity_issue: Literal["not_numeric", "ambiguous"] | None
+    mass_text: str | None
+    note: str | None
+    price_status: Literal["matched", "ambiguous", "unmatched", "price_list_missing"]
+    reason: Literal["no_position", "unit_mismatch", "row_unit_missing", "several_positions"] | None
+    basis: Literal["code", "mark", "name"] | None
+    price_position: SpecificationPricePosition | None
+    #: At most five candidates in source-row order: the tie, or the positions in another unit.
+    candidate_position_ids: Annotated[list[PriceListPositionId], Field(max_length=5)]
+    candidate_count: _SpecificationCount
+    amount: _SpecificationDecimal | None
+    excluded_reason: _SpecificationExclusion | None
+
+
+class SectionSpecificationRowPage(_Object):
+    """One page of the rows that survive the text search; the counts cover every row."""
+
+    offset: Annotated[int, Field(ge=0)]
+    limit: Annotated[int, Field(ge=1, le=200)]
+    total: Annotated[int, Field(ge=0, le=20000)]
+    next_offset: Annotated[int, Field(ge=1)] | None
+    items: Annotated[list[SectionSpecificationRow], Field(max_length=200)]
+
+
+class SectionSpecification(_Object):
+    """The combined Form-7 specification of one section, project by project.
+
+    ``state`` is ``ready`` or ``section_too_large`` with ``limit_reason`` naming the bound that
+    stopped it (``projects`` scanned, member ``sources`` read, ``rows`` held); then the
+    membership is still listed with every set ``not_read`` and ``rows`` is ``null`` -- narrowing
+    to one project (``project_filter``) is the way in. ``excluded`` lists the current versions
+    nobody classified (the first 200; ``excluded_count`` is complete). ``row_count`` counts
+    every row in scope and ``rows.total`` the rows the text search keeps. There is no section
+    total: the totals live in each project's ``matching``.
+    """
+
+    section_code: ProjectSection
+    state: Literal["ready", "section_too_large"]
+    limit_reason: Literal["projects", "sources", "rows"] | None
+    project_filter: ProjectUid | None
+    query: Annotated[str, Field(min_length=1, max_length=200)] | None
+    extraction_algorithm: Literal["specification-text-v1"]
+    match_algorithm: Literal["price-match-v1"]
+    projects: Annotated[list[SectionSpecificationProject], Field(max_length=1000)]
+    excluded: Annotated[list[SectionSpecificationExcludedVersion], Field(max_length=200)]
+    excluded_count: _SpecificationCount
+    source_count: _SpecificationCount
+    row_count: Annotated[int, Field(ge=0, le=20000)]
+    rows: SectionSpecificationRowPage | None

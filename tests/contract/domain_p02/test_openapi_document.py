@@ -157,6 +157,9 @@ REQUIRED_OPERATIONS = {
     # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's current
     # price list, read-only, for «Спецификация и цены».
     "getSpecificationPrices",
+    # `W63-SECTION-FORM7-01`. A section's combined Form-7 specification across projects,
+    # read-only, for «Оптимизация разделов».
+    "getSectionSpecification",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`

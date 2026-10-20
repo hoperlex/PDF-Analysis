@@ -44,6 +44,7 @@ from auditmanager.api.routers.wire import WireResponse
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
+    "AGGREGATE_OF_OPERATION_PATH_PARAMETER",
     "AGGREGATE_OF_PATH_PARAMETER",
     "install_exception_handlers",
     "on_domain_error",
@@ -75,6 +76,14 @@ AGGREGATE_OF_PATH_PARAMETER: Final[Mapping[str, str]] = {
     # outside the fifteen addresses no vendor list, so it is `404` like a malformed identity.
     "price_list_id": "PriceList",
     "section_code": "VendorList",
+}
+
+#: A path parameter whose aggregate depends on the operation that reads it. `section_code`
+#: addresses a vendor list's section slot above, and a section's combined specification here
+#: (`W63-SECTION-FORM7-01`): a code outside the fifteen addresses neither, so it is `404`, but
+#: the aggregate it names is the operation's, never another operation's.
+AGGREGATE_OF_OPERATION_PATH_PARAMETER: Final[Mapping[tuple[str, str], str]] = {
+    ("getSectionSpecification", "section_code"): "SectionSpecification",
 }
 
 #: The contract's spelling of each header this surface reads, keyed by the lower-cased name
@@ -312,7 +321,9 @@ def _refusal(
 
     if where == "path":
         # 404, and no `validation_failed`: see AGGREGATE_OF_PATH_PARAMETER.
-        aggregate = AGGREGATE_OF_PATH_PARAMETER.get(name)
+        aggregate = AGGREGATE_OF_OPERATION_PATH_PARAMETER.get(
+            (operation or "", name)
+        ) or AGGREGATE_OF_PATH_PARAMETER.get(name)
         if aggregate is None:
             return DomainError(ErrorCode.NOT_FOUND)
         return DomainError(ErrorCode.NOT_FOUND, aggregate_type=aggregate)

@@ -1,6 +1,6 @@
-"""The seventy-four operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The seventy-five operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles one ``APIRouter`` from the twenty-one router modules. It takes
+:func:`build_router` assembles one ``APIRouter`` from the twenty-two router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
 port is the composition root's job (``api/composition.py``), and a factory that reached for
 a concrete implementation would have taken that decision away from it.
@@ -55,6 +55,7 @@ from auditmanager.api.routers.idempotency import (
     require_idempotency_key,
 )
 from auditmanager.api.routers.analysis_profiles import build_analysis_profile_routes
+from auditmanager.api.routers.section_specification import build_section_specification_routes
 from auditmanager.api.routers.specification_prices import build_specification_price_routes
 from auditmanager.api.routers.comparison import build_comparison_routes
 from auditmanager.api.routers.dispatch import build_dispatch_routes
@@ -89,6 +90,7 @@ from auditmanager.api.routers.ports import (
     ReleasesPort,
     RunPort,
     SectionPort,
+    SectionSpecificationPort,
     SpecificationPricesPort,
     XlsxExportPort,
 )
@@ -158,6 +160,7 @@ __all__ = [
     "AnalysisProfilePort",
     "DispatchPort",
     "OptimisationPort",
+    "SectionSpecificationPort",
     "SpecificationPricesPort",
     "WireResponse",
     "build_auth_routes",
@@ -212,8 +215,9 @@ def build_router(
     dispatch: DispatchPort | None = None,
     optimisation: OptimisationPort | None = None,
     specification_prices: SpecificationPricesPort | None = None,
+    section_specifications: SectionSpecificationPort | None = None,
 ) -> Router:
-    """Assemble the seventy-four operations, from the twenty-one router modules -- ``me``,
+    """Assemble the seventy-five operations, from the twenty-two router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
@@ -299,6 +303,9 @@ def build_router(
     # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's price
     # list, read-only. Optional with a default, for the reason `blocks` gives above.
     build_specification_price_routes(router, specification_prices)  # type: ignore[arg-type]
+    # `W63-SECTION-FORM7-01`. A section's combined Form-7 specification across projects,
+    # read-only. Optional with a default, for the reason `blocks` gives above.
+    build_section_specification_routes(router, section_specifications)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

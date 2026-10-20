@@ -43,6 +43,7 @@ from auditmanager.bootstrap.adapters import (
     ReleasesAdapter,
     RunAdapter,
     SectionAdapter,
+    SectionSpecificationAdapter,
     SpecificationPricesAdapter,
     XlsxExportAdapter,
 )
@@ -340,6 +341,8 @@ def build_application(
         # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's
         # current price list; the saved text layers are read as the comparison reads them.
         specification_prices=SpecificationPricesAdapter(sessions, blob_store=store),
+        # `W63-SECTION-FORM7-01`. The same saved-text port, a section's rows across projects.
+        section_specifications=SectionSpecificationAdapter(sessions, blob_store=store),
     )
     return Application(
         router=router,

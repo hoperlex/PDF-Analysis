@@ -86,6 +86,8 @@ PORT_FOR_ARGUMENT = {
     "optimisation": "OptimisationPort",
     # `W60-OPT-MATCH-01`.
     "specification_prices": "SpecificationPricesPort",
+    # `W63-SECTION-FORM7-01`.
+    "section_specifications": "SectionSpecificationPort",
 }
 
 

@@ -549,7 +549,9 @@ class TestN1ComponentReferenceResolution:
         # the fifteen.
         # `W60-OPT-MATCH-01` adds one: the priced specification addresses its document set
         # through its project.
-        assert len(report) == 49, report
+        # `W63-SECTION-FORM7-01` adds one: a section code outside the fifteen addresses no
+        # section's combined specification, and the unknown `project_uid` filter is `404` too.
+        assert len(report) == 50, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

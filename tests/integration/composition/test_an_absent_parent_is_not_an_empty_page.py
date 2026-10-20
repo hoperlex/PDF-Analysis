@@ -174,6 +174,16 @@ QUERY_OPERATIONS = frozenset({"searchNorms"})
 CURRENT_SNAPSHOT_COLLECTIONS = frozenset({"listNormDocuments"})
 
 
+#: `W63-SECTION-FORM7-01`. ``getSectionSpecification`` is addressed by a *closed code*, not by a
+#: parent identity: ``{section_code}`` is one of the fifteen sections, a filter over every
+#: project's current versions, so there is no parent to be missing and the empty section is a
+#: true answer (``200``, no projects). It joins neither half of the rule above; it is swept for
+#: its own two refusals by :func:`test_a_section_filter_answers_the_section_and_refuses_what_names_nothing`:
+#: a ``project_uid`` filter that names nothing is ``404 not_found`` (``Project``), and a code
+#: outside the fifteen is ``404 not_found`` (``SectionSpecification``).
+SECTION_FILTER_OPERATIONS = frozenset({"getSectionSpecification"})
+
+
 def _prefixes() -> dict[str, str]:
     catalog = json.loads(_CATALOG.read_text(encoding="utf-8"))
     return dict(catalog["identifiers"])
@@ -265,7 +275,13 @@ def _get_routes(app: Composed) -> tuple[tuple[str, str], ...]:
 
 
 def _addressed(routes: tuple[tuple[str, str], ...]) -> tuple[tuple[str, str], ...]:
-    return tuple((op, path) for op, path in routes if "{" in path)
+    return tuple(
+        (op, path) for op, path in routes if "{" in path and op not in SECTION_FILTER_OPERATIONS
+    )
+
+
+def _section_filtered(routes: tuple[tuple[str, str], ...]) -> tuple[tuple[str, str], ...]:
+    return tuple((op, path) for op, path in routes if op in SECTION_FILTER_OPERATIONS)
 
 
 def _unaddressed(routes: tuple[tuple[str, str], ...]) -> tuple[tuple[str, str], ...]:
@@ -314,6 +330,32 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
         "these operations answered something other than 404 not_found for an identity "
         f"that names nothing: {disagreements}"
     )
+
+
+def test_a_section_filter_answers_the_section_and_refuses_what_names_nothing(app: Composed) -> None:
+    """`W63-SECTION-FORM7-01`. The third kind of ``GET``: addressed by a code, not an identity.
+
+    Every code of the fifteen answers ``200`` -- an empty section is an answer, never a
+    ``404`` -- with the read's own shape (a state, its projects and the page of rows, or the
+    bound that stopped it); an unknown ``project_uid`` filter and a code outside the fifteen
+    are ``404 not_found`` naming the aggregate each addressed.
+    """
+    filtered = _section_filtered(_get_routes(app))
+    assert {operation_id for operation_id, _ in filtered} == SECTION_FILTER_OPERATIONS
+    for operation_id, template in filtered:
+        for code in ("AR", "PS"):
+            status, body = _get(app, template.replace("{section_code}", code))
+            assert status == 200, f"{operation_id} answered {status} for {code}: {body}"
+            assert isinstance(body, dict) and isinstance(body.get("projects"), list), body
+            assert body["section_code"] == code and body["state"] in ("ready", "section_too_large")
+            assert "items" not in body and "page" not in body, body
+        bare = template.replace("{section_code}", "AR")
+        status, body = _get(app, f"{bare}?project_uid={_absent_identity('project_uid')}")
+        assert (status, body.get("error_code")) == (404, "not_found"), (status, body)
+        assert body.get("details") == {"aggregate_type": "Project"}, body
+        status, body = _get(app, template.replace("{section_code}", "XX"))
+        assert (status, body.get("error_code")) == (404, "not_found"), (status, body)
+        assert body.get("details") == {"aggregate_type": "SectionSpecification"}, body
 
 
 def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None:

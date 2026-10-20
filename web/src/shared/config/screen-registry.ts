@@ -94,7 +94,8 @@ export interface ScreenEntry {
  * `hidden` until project optimisation becomes a project tab. The four new sections were
  * honest stubs, `session`/`any-role`; «Очередь» graduated in W53 and «Нормы» in
  * `W55A-WEB-NORMS`, which adds its document view `/norms/document` beside it (reached from a
- * search result, so out of the menu).
+ * search result, so out of the menu); «Оптимизация разделов» graduated in `W63-SECTION-FORM7-01`
+ * (`getSectionSpecification`) and keeps its row, group and place in the menu.
  *
  * `R-80`: every product screen is `any-role`; only home, the account's own screens and the
  * public ones stay `any`, so a role-less account sees its home page saying no role is
