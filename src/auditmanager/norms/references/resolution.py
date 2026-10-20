@@ -22,6 +22,8 @@ NEWER = "в корпусе есть более новая редакция"
 OLDER = "в корпусе только более ранняя редакция"
 ABSENT = "нет в корпусе"
 UNPARSED = "не сопоставлено"
+#: Every outcome :func:`resolve_references` can answer, in the order a reader is shown them.
+OUTCOMES = (PRESENT, NEWER, OLDER, ABSENT, UNPARSED)
 MAX_EVIDENCE_OCCURRENCES = 10
 
 _STANDARD = rf"{STANDARD_FAMILY_PATTERN}[ _]+\d+(?:[._-]\d+)*"
