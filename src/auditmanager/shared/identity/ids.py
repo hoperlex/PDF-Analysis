@@ -245,6 +245,22 @@ class NormRetrievalSetId(OpaqueId, prefix="nrs", entity="NormRetrievalSet"):
     """Identity of one snapshot-bound normative retrieval set and catalogue."""
 
 
+class PriceListId(OpaqueId, prefix="prl", entity="PriceList"):
+    """Identity of one uploaded price-list revision of a project (`W60-PRICE-LIST-01`).
+
+    Minted by ``auditmanager.optimisation`` since migration ``0026_price_lists``. Never
+    derived from the project, the revision number, the file name or its checksum.
+    """
+
+
+class PriceListPositionId(OpaqueId, prefix="prp", entity="PriceListPosition"):
+    """Identity of one parsed position of one price-list revision; never its row number."""
+
+
+class VendorListId(OpaqueId, prefix="vnl", entity="VendorList"):
+    """Identity of one immutable vendor-list revision of a section, global or of a project."""
+
+
 class NormCustodyAdmissionId(OpaqueId, prefix="nad", entity="NormCustodyAdmission"):
     """Identity of one custody intent and its outbox row (`R-76`, migration ``0018``).
 

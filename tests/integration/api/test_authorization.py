@@ -216,6 +216,13 @@ GUARDED = (
     ),
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only.
     ("listAnalysisProfiles", "GET", "/analysis/profiles"),
+    # `W60-PRICE-LIST-01`. Project price lists and vendor lists.
+    ("uploadPriceList", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/price-lists"),
+    ("listPriceListRevisions", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/price-lists"),
+    ("listPriceListPositions", "GET", "/price-lists/prl_01M2545JSD15ETSNNV904X991N/positions"),
+    ("getEffectiveVendorLists", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists"),
+    ("setGlobalVendorList", "PUT", "/vendor-lists/EOM"),
+    ("setProjectVendorList", "PUT", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists/EOM"),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the

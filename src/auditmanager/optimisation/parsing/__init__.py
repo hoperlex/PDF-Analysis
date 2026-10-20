@@ -19,7 +19,7 @@ number is skipped, never repaired.
 (``Цена, руб.``), else the uploader's declared ``default_currency``; with none of the three
 the row is skipped (``currency_missing``). The report counts rows by source.
 
-**Section** of a row: its section cell when that is one of the fifteen codes, a Cyrillic
+**Section** of a row: its section cell when that is one of the fifteen section codes in Latin, a Cyrillic
 abbreviation or a catalogue name; an unrecognised value leaves the position without a section
 and is a **warning** (``section_unrecognised``), not a skip -- the price itself is sound.
 
@@ -71,6 +71,8 @@ from .values import (
 from .xlsx_source import open_xlsx
 
 __all__ = [
+    "CURRENCY_SOURCES",
+    "FIELD_ORDER",
     "FILE_CONSTRAINTS",
     "FORMAT_CSV",
     "FORMAT_XLSX",
@@ -109,6 +111,8 @@ SKIP_REASONS: Final[tuple[str, ...]] = (
 WARNING_REASONS: Final[tuple[str, ...]] = ("section_unrecognised",)
 
 CURRENCY_SOURCES: Final[tuple[str, ...]] = ("column", "price_header", "default")
+#: The position fields in the order a report lists its mapped columns.
+FIELD_ORDER: Final[tuple[str, ...]] = FIELDS
 
 _ZIP_MAGIC: Final[bytes] = b"PK\x03\x04"
 _OLE2_MAGIC: Final[bytes] = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"

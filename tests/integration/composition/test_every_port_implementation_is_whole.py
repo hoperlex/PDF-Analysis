@@ -78,6 +78,8 @@ PORT_FOR_ARGUMENT = {
     "comparisons": "ComparisonPort",
     # `W59-ANALYSIS-SETTINGS-01`.
     "analysis_profiles": "AnalysisProfilePort",
+    # `W60-PRICE-LIST-01`.
+    "optimisation": "OptimisationPort",
 }
 
 

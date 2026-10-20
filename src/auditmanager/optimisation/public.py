@@ -23,6 +23,8 @@ from auditmanager.optimisation.identity import (
     VendorListId,
 )
 from auditmanager.optimisation.parsing import (
+    CURRENCY_SOURCES,
+    FIELD_ORDER,
     FILE_CONSTRAINTS,
     MEDIA_TYPES,
     REPORT_VERSION,
@@ -74,7 +76,9 @@ __all__ = [
     "AGGREGATE_VENDOR_LIST",
     "COMMAND_TYPE_UPLOAD_PRICE_LIST",
     "CONFLICT_VENDOR_LIST_CHANGED",
+    "CURRENCY_SOURCES",
     "DEFAULT_POSITION_PAGE",
+    "FIELD_ORDER",
     "FILE_CONSTRAINTS",
     "MAX_BYTES",
     "MAX_DATA_ROWS",

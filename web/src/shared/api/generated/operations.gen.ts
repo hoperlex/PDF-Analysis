@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 a9ce1b50e34d0994734e3c221b763c014667efce16ed4d063ac6713f5b6ee4fe
+ *   sha256 987c85e5d8c3a72f281632cabe30b2ec00d94a0908f803a9abe4657003586e34
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -34,6 +34,7 @@ import type {
   DocumentUid,
   DocumentVersion,
   DocumentVersionPage,
+  EffectiveVendorLists,
   ExecutionDispatchStatus,
   ExecutionJournalPage,
   ExecutionQueueItem,
@@ -60,9 +61,14 @@ import type {
   NormsSnapshotId,
   PortalBlockId,
   PortalBlockPage,
+  PriceListId,
+  PriceListPositionPage,
+  PriceListRevision,
+  PriceListRevisionList,
   ProductVersion,
   Project,
   ProjectPage,
+  ProjectSection,
   ProjectUid,
   RegistrationRequest,
   RegistrationRequestId,
@@ -76,9 +82,12 @@ import type {
   RunStatus,
   RunStatusPage,
   SectionReview,
+  SectionVendorList,
   SetCurrentNormSnapshotRequest,
   SetExecutionPausedRequest,
+  SetGlobalVendorListRequest,
   SetJobPriorityRequest,
+  SetProjectVendorListRequest,
   SetWorkerIntakeRequest,
   StartRunRequest,
   SubmitRegistrationRequest,
@@ -86,7 +95,9 @@ import type {
   UpdateUserRequest,
   UploadDocumentRequest,
   UploadDocumentVersionRequest,
+  UploadPriceListRequest,
   UserUid,
+  VendorListRevision,
   Verdict,
   VersionBlockIndex,
   VersionClassification,
@@ -109,6 +120,7 @@ export const OPERATION_IDS = [
   'exportRunCsv',
   'getDashboardSummary',
   'getDocumentVersion',
+  'getEffectiveVendorLists',
   'getFinding',
   'getMe',
   'getNormDocument',
@@ -128,6 +140,8 @@ export const OPERATION_IDS = [
   'listNormParagraphs',
   'listNormSnapshotEvents',
   'listNormSnapshots',
+  'listPriceListPositions',
+  'listPriceListRevisions',
   'listProjects',
   'listRegistrations',
   'listReleases',
@@ -147,7 +161,9 @@ export const OPERATION_IDS = [
   'searchNorms',
   'setCurrentNormSnapshot',
   'setExecutionPaused',
+  'setGlobalVendorList',
   'setJobPriority',
+  'setProjectVendorList',
   'setWorkerIntake',
   'startRun',
   'streamDocumentVersionContent',
@@ -158,6 +174,7 @@ export const OPERATION_IDS = [
   'updateUser',
   'uploadDocument',
   'uploadDocumentVersion',
+  'uploadPriceList',
 ] as const;
 
 /** The closed set of operations this client can perform. */
@@ -486,6 +503,29 @@ export type GetDocumentVersionInput = {
 
 /** Success body of `getDocumentVersion` (`application/json`, HTTP 200). */
 export type GetDocumentVersionResult = DocumentVersion;
+
+// ------------------------------------------------------------------------------------
+// getEffectiveVendorLists - GET /projects/{project_uid}/vendor-lists
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Effective Vendor Lists
+ *
+ * All fifteen sections' vendor lists as they apply to the project, in section order. For each: `source` `project` (the project's own latest revision, mode `list`), `global` (the administrator's latest) or `none`; the `effective` revision; and the latest revision of each scope. An unknown project is `404`. Any one role, `role:admin|expert`.
+ */
+export type GetEffectiveVendorListsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/vendor-lists`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getEffectiveVendorLists` (`application/json`, HTTP 200). */
+export type GetEffectiveVendorListsResult = EffectiveVendorLists;
 
 // ------------------------------------------------------------------------------------
 // getFinding - GET /findings/{finding_uid}
@@ -958,6 +998,59 @@ export type ListNormSnapshotsInput = {
 
 /** Success body of `listNormSnapshots` (`application/json`, HTTP 200). */
 export type ListNormSnapshotsResult = NormSnapshotPage;
+
+// ------------------------------------------------------------------------------------
+// listPriceListPositions - GET /price-lists/{price_list_id}/positions
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Price List Positions
+ *
+ * One page of a price-list revision's positions in source-row order (`offset`, `limit`, `next_offset`), with the revision and its parse report. Each unit price is its exact decimal text. An unknown revision is `404`. Any one role, `role:admin|expert`.
+ */
+export type ListPriceListPositionsInput = {
+  /** Path parameters, substituted into `/price-lists/{price_list_id}/positions`. */
+  path: {
+    price_list_id: PriceListId;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Positions per answer. */
+    limit?: number;
+    /** Position in the revision's positions, in source-row order. */
+    offset?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listPriceListPositions` (`application/json`, HTTP 200). */
+export type ListPriceListPositionsResult = PriceListPositionPage;
+
+// ------------------------------------------------------------------------------------
+// listPriceListRevisions - GET /projects/{project_uid}/price-lists
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Price List Revisions
+ *
+ * Every price-list revision of the project, newest first, the first flagged `is_current`. An unknown project is `404`. Any one role, `role:admin|expert`.
+ */
+export type ListPriceListRevisionsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/price-lists`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listPriceListRevisions` (`application/json`, HTTP 200). */
+export type ListPriceListRevisionsResult = PriceListRevisionList;
 
 // ------------------------------------------------------------------------------------
 // listProjects - GET /projects
@@ -1451,6 +1544,31 @@ export type SetExecutionPausedInput = {
 export type SetExecutionPausedResult = ExecutionDispatchStatus;
 
 // ------------------------------------------------------------------------------------
+// setGlobalVendorList - PUT /vendor-lists/{section_code}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Global Vendor List
+ *
+ * Set a section's global vendor list as a whole new immutable revision with its author and time; an empty list is an explicit "no restriction". An exact repeat of the latest revision writes nothing and answers it. With `expected_vendor_list_id` present (`null`: no revision was read), a different latest revision is `409 conflict` with `conflict_reason: vendor_list_changed` and nothing is written. `admin` is required (`required_capability: role:admin`).
+ */
+export type SetGlobalVendorListInput = {
+  /** Path parameters, substituted into `/vendor-lists/{section_code}`. */
+  path: {
+    section_code: ProjectSection;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetGlobalVendorListRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setGlobalVendorList` (`application/json`, HTTP 200). */
+export type SetGlobalVendorListResult = VendorListRevision;
+
+// ------------------------------------------------------------------------------------
 // setJobPriority - PUT /execution/queue/{job_id}/priority
 // ------------------------------------------------------------------------------------
 
@@ -1475,6 +1593,32 @@ export type SetJobPriorityInput = {
 
 /** Success body of `setJobPriority` (`application/json`, HTTP 200). */
 export type SetJobPriorityResult = ExecutionQueueItem;
+
+// ------------------------------------------------------------------------------------
+// setProjectVendorList - PUT /projects/{project_uid}/vendor-lists/{section_code}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Project Vendor List
+ *
+ * Set the project's own vendor list for a section (`mode: list`, possibly empty: no restriction for this project) or remove it (`mode: inherit`, `entries: []`), as a new immutable revision with its author and time; the answer is the section's state for the project afterwards. An exact repeat writes nothing; an `inherit` with no override in force writes nothing. Entries with `inherit` are `422` (`constraint: inherit_has_no_entries`); a stale `expected_vendor_list_id` is `409` (`conflict_reason: vendor_list_changed`). `expert` is required (`admin` alone is `permission_denied`); an unknown project is `404`.
+ */
+export type SetProjectVendorListInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/vendor-lists/{section_code}`. */
+  path: {
+    project_uid: ProjectUid;
+    section_code: ProjectSection;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetProjectVendorListRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setProjectVendorList` (`application/json`, HTTP 200). */
+export type SetProjectVendorListResult = SectionVendorList;
 
 // ------------------------------------------------------------------------------------
 // setWorkerIntake - PUT /execution/workers/{worker_id}/intake
@@ -1753,6 +1897,36 @@ export type UploadDocumentVersionInput = {
 export type UploadDocumentVersionResult = DocumentVersion;
 
 // ------------------------------------------------------------------------------------
+// uploadPriceList - POST /projects/{project_uid}/price-lists
+// ------------------------------------------------------------------------------------
+
+/**
+ * Upload Price List
+ *
+ * Upload one price list of the project: a CSV (UTF-8 with or without a byte-order mark, UTF-16 with one, or Windows-1251; `;`, tab or `,` delimited) or an XLSX, whose first sheet is read; at most 10 MiB and 20 000 data rows. It becomes the project's newest immutable revision, bound to the stored file; earlier revisions stay readable. Every data row is accepted as a position or skipped with a reason in the revision's parse report; a price is read only from a plain number and is never guessed. `default_currency` applies to rows whose currency neither their own cell nor the price column's header names. A file that cannot be a price list is `422 validation_failed` with `field: content` and one `constraint`, and creates nothing. `expert` is required (`admin` alone is `permission_denied`); an unknown project is `404`. An exact repeat of the `Idempotency-Key` answers the stored revision; the same key with another file, file name, currency, project or caller is `409 idempotency_key_reuse`.
+ */
+export type UploadPriceListInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/price-lists`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `multipart/form-data`. */
+  body: UploadPriceListRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `uploadPriceList` (`application/json`, HTTP 201). */
+export type UploadPriceListResult = PriceListRevision;
+
+// ------------------------------------------------------------------------------------
 // Runtime descriptors
 // ------------------------------------------------------------------------------------
 
@@ -1928,6 +2102,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['documents'],
+  },
+  getEffectiveVendorLists: {
+    operationId: 'getEffectiveVendorLists',
+    method: 'GET',
+    path: '/projects/{project_uid}/vendor-lists',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
   },
   getFinding: {
     operationId: 'getFinding',
@@ -2195,6 +2383,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['norms'],
   },
+  listPriceListPositions: {
+    operationId: 'listPriceListPositions',
+    method: 'GET',
+    path: '/price-lists/{price_list_id}/positions',
+    pathParams: ['price_list_id'],
+    queryParams: ['limit', 'offset'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
+  },
+  listPriceListRevisions: {
+    operationId: 'listPriceListRevisions',
+    method: 'GET',
+    path: '/projects/{project_uid}/price-lists',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
+  },
   listProjects: {
     operationId: 'listProjects',
     method: 'GET',
@@ -2461,6 +2677,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  setGlobalVendorList: {
+    operationId: 'setGlobalVendorList',
+    method: 'PUT',
+    path: '/vendor-lists/{section_code}',
+    pathParams: ['section_code'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['optimisation'],
+  },
   setJobPriority: {
     operationId: 'setJobPriority',
     method: 'PUT',
@@ -2474,6 +2704,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  setProjectVendorList: {
+    operationId: 'setProjectVendorList',
+    method: 'PUT',
+    path: '/projects/{project_uid}/vendor-lists/{section_code}',
+    pathParams: ['project_uid', 'section_code'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['optimisation'],
   },
   setWorkerIntake: {
     operationId: 'setWorkerIntake',
@@ -2614,5 +2858,19 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['documents'],
+  },
+  uploadPriceList: {
+    operationId: 'uploadPriceList',
+    method: 'POST',
+    path: '/projects/{project_uid}/price-lists',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'multipart/form-data',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['optimisation'],
   },
 } as const;

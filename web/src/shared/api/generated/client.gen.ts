@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 a9ce1b50e34d0994734e3c221b763c014667efce16ed4d063ac6713f5b6ee4fe
+ *   sha256 987c85e5d8c3a72f281632cabe30b2ec00d94a0908f803a9abe4657003586e34
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -42,6 +42,8 @@ import type {
   GetDashboardSummaryResult,
   GetDocumentVersionInput,
   GetDocumentVersionResult,
+  GetEffectiveVendorListsInput,
+  GetEffectiveVendorListsResult,
   GetFindingInput,
   GetFindingResult,
   GetMeInput,
@@ -80,6 +82,10 @@ import type {
   ListNormSnapshotEventsResult,
   ListNormSnapshotsInput,
   ListNormSnapshotsResult,
+  ListPriceListPositionsInput,
+  ListPriceListPositionsResult,
+  ListPriceListRevisionsInput,
+  ListPriceListRevisionsResult,
   ListProjectsInput,
   ListProjectsResult,
   ListRegistrationsInput,
@@ -118,8 +124,12 @@ import type {
   SetCurrentNormSnapshotResult,
   SetExecutionPausedInput,
   SetExecutionPausedResult,
+  SetGlobalVendorListInput,
+  SetGlobalVendorListResult,
   SetJobPriorityInput,
   SetJobPriorityResult,
+  SetProjectVendorListInput,
+  SetProjectVendorListResult,
   SetWorkerIntakeInput,
   SetWorkerIntakeResult,
   StartRunInput,
@@ -140,6 +150,8 @@ import type {
   UploadDocumentResult,
   UploadDocumentVersionInput,
   UploadDocumentVersionResult,
+  UploadPriceListInput,
+  UploadPriceListResult,
 } from './operations.gen';
 import { OPERATIONS } from './operations.gen';
 
@@ -285,6 +297,18 @@ export function getDocumentVersion(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetDocumentVersionResult>> {
   return request<GetDocumentVersionResult>(OPERATIONS.getDocumentVersion, input, options);
+}
+
+/**
+ * Get Effective Vendor Lists
+ *
+ * `GET /projects/{project_uid}/vendor-lists`.
+ */
+export function getEffectiveVendorLists(
+  input: GetEffectiveVendorListsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetEffectiveVendorListsResult>> {
+  return request<GetEffectiveVendorListsResult>(OPERATIONS.getEffectiveVendorLists, input, options);
 }
 
 /**
@@ -516,6 +540,30 @@ export function listNormSnapshots(
 }
 
 /**
+ * List Price List Positions
+ *
+ * `GET /price-lists/{price_list_id}/positions`.
+ */
+export function listPriceListPositions(
+  input: ListPriceListPositionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListPriceListPositionsResult>> {
+  return request<ListPriceListPositionsResult>(OPERATIONS.listPriceListPositions, input, options);
+}
+
+/**
+ * List Price List Revisions
+ *
+ * `GET /projects/{project_uid}/price-lists`.
+ */
+export function listPriceListRevisions(
+  input: ListPriceListRevisionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListPriceListRevisionsResult>> {
+  return request<ListPriceListRevisionsResult>(OPERATIONS.listPriceListRevisions, input, options);
+}
+
+/**
  * List projects, newest first.
  *
  * `GET /projects`.
@@ -744,6 +792,18 @@ export function setExecutionPaused(
 }
 
 /**
+ * Set Global Vendor List
+ *
+ * `PUT /vendor-lists/{section_code}`.
+ */
+export function setGlobalVendorList(
+  input: SetGlobalVendorListInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetGlobalVendorListResult>> {
+  return request<SetGlobalVendorListResult>(OPERATIONS.setGlobalVendorList, input, options);
+}
+
+/**
  * Set Priority
  *
  * `PUT /execution/queue/{job_id}/priority` - a write; carries a required Idempotency-Key.
@@ -753,6 +813,18 @@ export function setJobPriority(
   options?: RequestOptions,
 ): Promise<ApiResponse<SetJobPriorityResult>> {
   return request<SetJobPriorityResult>(OPERATIONS.setJobPriority, input, options);
+}
+
+/**
+ * Set Project Vendor List
+ *
+ * `PUT /projects/{project_uid}/vendor-lists/{section_code}`.
+ */
+export function setProjectVendorList(
+  input: SetProjectVendorListInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetProjectVendorListResult>> {
+  return request<SetProjectVendorListResult>(OPERATIONS.setProjectVendorList, input, options);
 }
 
 /**
@@ -876,6 +948,18 @@ export function uploadDocumentVersion(
 }
 
 /**
+ * Upload Price List
+ *
+ * `POST /projects/{project_uid}/price-lists` - a write; carries a required Idempotency-Key.
+ */
+export function uploadPriceList(
+  input: UploadPriceListInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UploadPriceListResult>> {
+  return request<UploadPriceListResult>(OPERATIONS.uploadPriceList, input, options);
+}
+
+/**
  * The whole client as one object, for a consumer that would rather inject it than
  * import each function. The named exports above are the ordinary way in.
  */
@@ -892,6 +976,7 @@ export const apiClient = {
   exportRunCsv,
   getDashboardSummary,
   getDocumentVersion,
+  getEffectiveVendorLists,
   getFinding,
   getMe,
   getNormDocument,
@@ -911,6 +996,8 @@ export const apiClient = {
   listNormParagraphs,
   listNormSnapshotEvents,
   listNormSnapshots,
+  listPriceListPositions,
+  listPriceListRevisions,
   listProjects,
   listRegistrations,
   listReleases,
@@ -930,7 +1017,9 @@ export const apiClient = {
   searchNorms,
   setCurrentNormSnapshot,
   setExecutionPaused,
+  setGlobalVendorList,
   setJobPriority,
+  setProjectVendorList,
   setWorkerIntake,
   startRun,
   streamDocumentVersionContent,
@@ -941,4 +1030,5 @@ export const apiClient = {
   updateUser,
   uploadDocument,
   uploadDocumentVersion,
+  uploadPriceList,
 } as const;

@@ -83,7 +83,9 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # document and project, which answers ``404 not_found`` for any link that names nothing.
 # `W59-VERSION-COMPARE-01` added ``compareDocumentVersions`` the same way; its required
 # ``target_version_uid`` is supplied by :data:`REQUIRED_QUERY`, so the answer is about the path.
-EXPECTED_ADDRESSED = 20
+# `W60-PRICE-LIST-01` added three: ``listPriceListRevisions`` and ``getEffectiveVendorLists``
+# on ``project_uid`` and ``listPriceListPositions`` on ``price_list_id``.
+EXPECTED_ADDRESSED = 23
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
