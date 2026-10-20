@@ -126,6 +126,106 @@ where `.venv` links to the `w55b-main-candidate` interpreter.
 | `tests/integration/exports/test_v2_csv_severity.py` after the fix (integrator approval) | 2 passed. The canonical and member observations are now **new rows** copied from the published one, which is what the trigger's hint says to do. The test now also proves that the published observation, once it is no longer canonical, leaves the CSV. |
 | mutation: turn off the v1 canonical rule | the DB+S3 case fails with `xlsx_read_canonical_missing`, so the case exercises the rule |
 
-## Phase B
+## Phase B — served operations and screens
 
-Pending the integrator's contract slot.
+The contract slot was handed over at `1af17a48`, and the branch then merged `0f0903f2`
+(W59-ANALYSIS-SETTINGS-01) and `a820849a` (W59-VERSION-UPLOAD-01). Each merge took the base's
+contract, facts, client and lock as they were and **re-derived** this lane's additions on top
+(a scratch script that re-applies the two paths, two operations, three schemas and the reseal
+paragraph, then `api:generate`), rather than hand-merging generated files. **Surface at the
+final merge: 53/60/154 → 55 paths / 62 operations / 157 schemas.** The error catalogue still
+has 25 codes, the migration head is still `0024_version_classification`, and
+`contract_version` is unchanged. `docs/program/CURRENT_STATE.md` is the integrator's and
+still states 53/60/154. It is the one remaining red in `tests/contract` that this lane
+caused (`test_doc_prose_facts`).
+
+### Contract (`contracts/api/v1/openapi.json`, byte copy in `web/openapi/openapi.json`)
+
+- **`listNormDocuments`**: `GET /norm-documents`, tag `norms`, any one role
+  (`role:admin|expert`). Query parameters: `q` (1..200), `kind` (1..100), `cursor`, `limit`
+  (1..200, default 50). 200 returns `NormCatalogueEntryPage`; refusals are 401/403/422/500/503.
+- **`exportRunXlsx`**: `GET /runs/{run_id}/export.xlsx`, tag `export`, `expert` (as
+  `exportRunCsv`). 200 returns `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+  with `Content-Disposition: attachment; filename="{run_id}.xlsx"`. Refusals: 401/403/404,
+  409 (`RunNotExportable`), 422 (`StorageIntegrityError`; the description also names
+  `required_norm_unavailable` / `norm_retrieval_set`), 500/503.
+- **Schemas:**
+  - `NormCatalogueEntry`: `norm_document_id`, `designation` (≤520), `title` (string or null),
+    `kind`, `page_count`, `paragraph_count`, `content_available`, `source_attribution`.
+  - `NormKindCount`.
+  - `NormCatalogueEntryPage`: `norms_snapshot_id`, `items`, `page`, `total`, `kinds`.
+  - No error code is added.
+- **Re-derived:** `api:generate` and `api:verify` (62 operations, contract SHA-256
+  `302c0f1bdb3ea21b5c1fc05817a45ada79c2e8624154d47032e03c420c9410fc`);
+  `web/FRONTEND_LOCK.json` (both digests, four generated-file digests, 55/62/157,
+  `content_commit` `a820849a`); `tests/support/expected_facts.json` (55, two triples, three
+  names).
+- **Subset counts re-measured from the merged contract:** 44 of 62 operations declare their
+  own 422 and 18 declare none; 59 of 62 need a credential; 38 operations reference `NotFound`
+  (+1, `exportRunXlsx`).
+
+### Backend
+
+- `api/routers/norms.py`: the catalogue route. `api/routers/export.py`: the workbook route.
+  The download name is still spelled only in `_disposition(run_id, *, suffix="csv")`, and the
+  guard test now asserts both suffixes.
+- `api/routers/ports.py`: adds `NormsSearchPort.list_catalogue` and a new `XlsxExportPort`.
+  `api/routers/__init__.py`: `build_router(..., xlsx_exports=None)`. `api/security.py`:
+  `listNormDocuments: _ANY_ROLE` and `exportRunXlsx: _EXPERT`.
+- `bootstrap/adapters.py`:
+  - `NormsSearchAdapter.list_catalogue` maps the service's page.
+  - `XlsxExportAdapter` runs one read transaction. It has a Blob reader on the shared store
+    (storage failures are typed by `domain_error_from_storage`, and a missing object becomes
+    `storage_integrity_error` with role `source.structured_companion`). It takes W57a's
+    `read_verified_citations` as the injected reader, since the composition root may import
+    it and the export context may not. Its `ExportAuthorization` states the seam's role
+    decision and carries the principal's `user_uid`.
+- `bootstrap/composition.py` wires `xlsx_exports=XlsxExportAdapter(sessions, blob_store=store)`.
+- **Prose and pins re-measured:** P02 §7 (sentence, history and table), `ALPHA_ROADMAP.md`,
+  `infra/deploy/{README.md, proxy/nginx.conf, serve.py}`, `api/{README.md, app.py, health.py}`,
+  `api/routers/{__init__, declarations, errors}.py`, the BFF route and `authorization.ts`. The
+  two mutation lines in `test_surface_counts_in_prose.py` now read «the fifty-four paths» and
+  «Sixty-one operations». The operation lists in `test_openapi_document.py`,
+  `test_authorization.py`, `test_role_register.py` and
+  `test_served_document_and_health_plane.py`, the NotFound count in
+  `test_openapi_conformance.py`, and the composition registers (`EXPECTED_ADDRESSED` 20→21,
+  `EXPECTED_UNADDRESSED` 15→16, `PORT_FOR_ARGUMENT` `xlsx_exports`) gained the two operations.
+- `test_query_surface.py` now drives `listNormDocuments`'s `q`/`kind`/`cursor`/`limit` over
+  a second seeded document. The test as a whole stays red for two pre-existing reasons that
+  belong to other lanes: `compareDocumentVersions` is not driven, and the category case
+  fails. With those excluded locally, the catalogue's parameters pass.
+
+### Web
+
+- **«Каталог» on `/norms`.** The view is addressed by `?view=catalogue&cq=&kind=`, and the
+  route passes `catalogue={q, kind}`. The page offers «Поиск» / «Каталог» as two links with
+  `aria-current`. The catalogue section has a `GET` filter form whose kind options come from
+  the answer's `kinds`. The table has «Обозначение» (a link to `/norms/document?id=…`),
+  «Название», «Вид», «Страниц», «Абзацев» and «PDF», plus the attribution line and a pager.
+  Before a snapshot is current the section shows the search's refusal and sends no read.
+  A refused filter shows «Отбор не принят»; a failed read shows «Каталог не прочитан» with
+  its correlation id. Code: `widgets/norm-catalogue/**`, `entities/norms` (`useNormCatalogue`,
+  `normCatalogueQueryOptions`) and `queryKeys.norms.catalogue`.
+- **«Скачать Excel»** sits in the export panel beside the CSV button, under the same
+  exportability rule. The panel owns its download (`useExportRunXlsx` in
+  `features/export-run`), built on component state rather than a query-cache mutation: a
+  download invalidates nothing, and the panel renders in static guards that have no query
+  client. File name: `shared/api/xlsx.ts` `xlsxFileName` gives `<run_id>-findings.xlsx`; the
+  server's header is still the authority. The two source refusals are shown in Russian
+  («Excel не выгружен»).
+- `rendered-language.guard.test.ts` gains `Excel` in `NOT_DERIVABLE` (a product name, from
+  the plan's «Скачать Excel»), catalogue cache states and the table's empty pages. The
+  contrast census (`tests/unit/styles/screens.ts`) renders the catalogue table. Route,
+  catalogue and Excel unit tests were added.
+
+### Phase B checks (lane containers; `.env` exported where a suite needs it)
+
+| Check | Result |
+| --- | --- |
+| `tests/contract` (whole directory, container-free), final merge | 87 failed, 126 errors, 1057 passed. Compared by test ID with the base clone at `1af17a48`, the only new red is `test_doc_prose_facts`, which fails on `CURRENT_STATE.md` only. The rest are pre-existing or environmental: 126 `test_cp00_candidate` errors come from `NotADirectoryError: .../w57b-catalogue-xlsx/.git` because a worktree's `.git` is a file; plus `test_error_kernel::test_there_are_twenty_four`, `test_ar_v2_seeded::...api_enum`, `test_alpha_acceptance_command`, `test_cp00_final_state` (3) and `test_validate_bootstrap` (22), all failing on the base too. |
+| `npm --prefix web run api:verify` | OK, 62 operations |
+| `npm --prefix web run typecheck`, `lint --quiet` | clean |
+| vitest: `tests/guards tests/contract tests/unit/{norms,export,screens,styles,review,widgets,api}` | 74 files, 1,166 tests passed (base guards: 28 files / 420 passed) |
+| `tests/e2e/test_pc01_journey_conformance.py` and composition root/token channel (env exported) | 118 passed |
+| composition `test_an_absent_parent_is_not_an_empty_page.py`, `test_every_port_implementation_is_whole.py` | 31 passed. Pre-existing on base `0f0903f2`: `test_pre_decide_adapter_refuses_a_severity_instead_of_dropping_it` (`TypeError`) |
+| API surface files (`test_operation_surface`, `served_document`, `schema_conformance`, `role_register`, `router_and_body_rules`, `authorization`, `listing_surface`, `no_internal_identifiers`) | see the integrator instructions; run on the final merge |
