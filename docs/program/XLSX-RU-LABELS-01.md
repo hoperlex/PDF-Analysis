@@ -134,10 +134,12 @@ Python: `…/w55b-main-candidate/.venv/bin/python -m pytest -c pyproject.toml --
 
 | Check | Tree | Result |
 | --- | --- | --- |
-| `tests/unit/exports` + `tests/integration/exports/test_xlsx_{writer_prep,projection_prep,soffice_probe,package,certified_package}.py`, container-free | `4a4775e3` | 118 passed, 1 skipped |
-| Lane stack (`auditmanager-xlsx-ru`, postgres 57660, s3 61260/61261), `tests/integration/exports` + `tests/unit/exports`, first run with the workbook dumped | `4a4775e3` | 221 passed, 2 skipped, 1 failed |
-| Same, the final tree | `ab9bbc94` | 221 passed, 2 skipped, 1 failed (75 s) |
-| `W57B_RUN_SOFFICE=1 … test_xlsx_soffice_probe.py` | `b8fd99ce` | 6 passed (the existing real roundtrip and the new CSV test) |
+| `tests/unit/exports` + `tests/integration/exports/test_xlsx_{writer_prep,projection_prep,soffice_probe,package,certified_package}.py`, container-free | `dfe70910` | 121 passed, 2 skipped |
+| `tests/unit/exports/test_xlsx_labels_lockstep.py` + `test_xlsx_writer_labels.py` | `dfe70910` | 48 passed |
+| Lane stack (`auditmanager-xlsx-ru`, postgres 57660, s3 61260/61261, migrated to `0027`), `tests/integration/exports` + `tests/unit/exports`, no bytecode cache | `dfe70910` | 224 passed, 2 skipped, 1 failed (77 s) |
+| Same, two earlier runs (the first with the real workbooks dumped for LibreOffice) | `4a4775e3`, `ab9bbc94` | 221 passed, 2 skipped, 1 failed each (same failure) |
+| `W57B_RUN_SOFFICE=1 … test_xlsx_soffice_probe.py` | `dfe70910` | 6 passed (the existing real roundtrip and the new CSV test) |
+| `tests/contract/api_v1/test_doc_prose_facts.py`, `test_surface_counts_in_prose.py`, `tests/contract/program` | `dfe70910` + this report | 105 passed |
 | `git diff --check 59f976fc` | final | clean |
 
 **The one failure is not from this change.**
@@ -283,8 +285,8 @@ integration run below was made on a tree with no bytecode cache.
 ## Deferred (R-135)
 
 Not run: the web label tests and any `npm` step (no `web/**` file changed; the web tables are
-only read as text), the whole `tests/contract` battery, the live journey, a full gate. Run: the
-docs prose guards named in the integration instruction, below.
+only read as text), the whole `tests/contract` battery (only the three documentation prose guards
+above ran), the live journey, a full gate. Nothing here claims `GATE OK`.
 
 ## Instruction to the integrator
 
