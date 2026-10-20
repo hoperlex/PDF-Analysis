@@ -30,8 +30,9 @@ from auditmanager.shared.identity import (
     NormsSnapshotId,
 )
 from auditmanager.shared.identity.ids import UserUid
+from tests.support.expected_facts import FACTS
 
-HEAD = "0024_version_classification"  # W59-SECTION-SEAL-01 moved the head past this revision
+HEAD = FACTS.migration_head  # the tree's head, from tests/support/expected_facts.json
 PREVIOUS = "0019_execution_workers"
 MIGRATION = Path(__file__).resolve().parents[3] / "db/migrations/versions/20261012_0020_norms_search.py"
 

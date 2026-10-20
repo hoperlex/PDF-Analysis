@@ -3,7 +3,9 @@
 `W49-PLAN.md` §3.1. Purging an account is irreversible, so "nothing references it" cannot
 be a judgement made at the call site: it is this register, and every entry is a real
 foreign key to ``app_user(user_uid)`` created by migration ``0015`` or a later one
-(``0024_version_classification`` adds the classification's confirmer).
+(``0024_version_classification`` adds the classification's confirmer;
+``0025_work_assignments`` adds an assignment's first assignee and creator, and each of its
+events' actor and new assignee).
 
 Three kinds of entry, by what the database does when the account row is deleted:
 
@@ -71,6 +73,30 @@ ACCOUNT_REFERENCES: Final[tuple[AccountReference, ...]] = (
         "confirmed_by_user_uid",
         "RESTRICT",
         "this account confirmed a version's project stage and section (W59-SECTION-SEAL-01)",
+    ),
+    AccountReference(
+        "work_assignment",
+        "assignee_user_uid",
+        "RESTRICT",
+        "this account was given a piece of work (W61-DISPATCHER-01)",
+    ),
+    AccountReference(
+        "work_assignment",
+        "created_by_user_uid",
+        "RESTRICT",
+        "this account assigned a piece of work (W61-DISPATCHER-01)",
+    ),
+    AccountReference(
+        "work_assignment_event",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account moved an assignment along its history (W61-DISPATCHER-01)",
+    ),
+    AccountReference(
+        "work_assignment_event",
+        "new_assignee_user_uid",
+        "RESTRICT",
+        "this account was given a piece of work by reassignment (W61-DISPATCHER-01)",
     ),
     AccountReference(
         "registration_request",

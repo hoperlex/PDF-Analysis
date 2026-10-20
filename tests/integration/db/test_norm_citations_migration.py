@@ -18,10 +18,11 @@ from auditmanager.shared.identity import (
     RunId, VersionUid,
 )
 from auditmanager.storage.models import derive_blob_id
+from tests.support.expected_facts import FACTS
 
 HEAD = "0023_norm_citations"
 #: The tree's head, which `W59-SECTION-SEAL-01` moved past this revision.
-TREE_HEAD = "0024_version_classification"
+TREE_HEAD = FACTS.migration_head
 PREVIOUS = "0022_findings_v2"
 QUOTE = "Требуемая ширина пути эвакуации составляет 1,2 м."
 

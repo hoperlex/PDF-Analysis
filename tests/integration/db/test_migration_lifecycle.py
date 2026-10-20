@@ -38,6 +38,9 @@ EXPECTED_TABLES = {
     "finding_observation_norm_citation",
     # `0024_version_classification`: one expert-confirmed stage and section per version.
     "document_version_classification",
+    # `0025_work_assignments`: work given to experts and its append-only history.
+    "work_assignment",
+    "work_assignment_event",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
@@ -73,7 +76,9 @@ EXPECTED_TABLES = {
     "stage_result",
 }
 
-EXPECTED_VIEWS = {"finding_current_verdict"}
+#: ``work_assignment_current`` (`0025_work_assignments`): each assignment's latest event and
+#: current assignee, derived from the history.
+EXPECTED_VIEWS = {"finding_current_verdict", "work_assignment_current"}
 
 #: The alpha runner instantiates none of these aggregates. Their absence is a deliverable, so
 #: it is asserted rather than assumed.

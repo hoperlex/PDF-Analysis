@@ -459,6 +459,6 @@
     "api_codes": 25,
     "stored_vocabulary": 23
   },
-  "migration_head": "0024_version_classification",
+  "migration_head": "0025_work_assignments",
   "contract_version": "1.0.0-draft.1"
 }

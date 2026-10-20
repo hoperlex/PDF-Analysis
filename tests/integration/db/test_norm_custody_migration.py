@@ -33,6 +33,7 @@ from auditmanager.shared.identity import (
     VersionUid,
 )
 from auditmanager.storage.models import derive_blob_id
+from tests.support.expected_facts import FACTS
 
 PDF_SHA = "c" * 64
 PDF_SIZE = 4096
@@ -196,7 +197,7 @@ def _refused(connection, statement: str, parameters: dict, *, sqlstate: str,
 
 def test_a_fresh_upgrade_creates_the_custody_tables_and_guards_inserts(migrated_engine: Engine) -> None:
     with migrated_engine.connect() as connection:
-        assert _head(connection) == "0024_version_classification"  # W59-SECTION-SEAL-01 moved the head
+        assert _head(connection) == FACTS.migration_head
         for table in ("norm_custody_admission", "norm_custody_binding", "norm_repair_call"):
             assert connection.execute(text("SELECT to_regclass(:t)"), {"t": f"public.{table}"}).scalar_one()
         definitions = dict(connection.execute(text(
@@ -229,7 +230,7 @@ def test_a_populated_0017_upgrades_and_keeps_every_row(empty_database, foundatio
         upgraded = foundation_command(_alembic("upgrade", "head"), url)
         assert upgraded.returncode == 0, upgraded.describe()
         with engine.connect() as connection:
-            assert _head(connection) == "0024_version_classification"  # W59-SECTION-SEAL-01 moved the head
+            assert _head(connection) == FACTS.migration_head
             assert connection.execute(text(
                 "SELECT unreliable_count FROM norms_snapshot WHERE norms_snapshot_id = :s"
             ), {"s": norms["snapshot"]}).scalar_one() == 0
