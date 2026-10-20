@@ -1,8 +1,11 @@
 # W59-DECISION-CARRYOVER-01 — expert-confirmed decision carryover
 
-Status: **phase A complete** on `agent/w59-decision-carryover-01` (base `a50dafd4` =
-`origin/dev` `1049367e` + the task file). Phase B (operation, reseal, web action) waits for
-the integrator's contract-slot handover.
+Status: **complete** on `agent/w59-decision-carryover-01`. Phase A (`f345b815`, no
+migration) was accepted; phase B (operation, reseal, web action) was done after the
+integrator handed over the shared contract slot, and the branch merges
+`integration/night-1020` up to `a820849a` (W59-ANALYSIS-SETTINGS-01, W59-VERSION-UPLOAD-01)
+with every generated artifact re-derived on the merged tree. Final surface: **54 paths /
+61 operations / 158 schemas**, head `0024_version_classification` (unchanged), 25 error codes.
 
 ## Result (phase A)
 
@@ -121,13 +124,108 @@ Lane `auditmanager-w59-carryover` (PostgreSQL 57560, MinIO 61160/61161, database
 - Pre-existing elsewhere (not touched): `test_every_port_implementation_is_whole::
   test_pre_decide_adapter_refuses_a_severity_instead_of_dropping_it`.
 
-## Proposed operation (phase B, pending the contract slot)
+## Result (phase B)
 
-`POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers`,
-`operationId: carryOverDecision`, `role:expert`, required `Idempotency-Key`; body (closed)
-`{target_version_uid, mode, source_finding_uid, target_finding_uid, source_decision_id,
-source_run_id?, target_run_id?}`; `201` (appended) / `200` (exact repeat) with the carried
-`DecisionEvent`, `current_verdict` and the provenance; `401, 403, 404, 409, 422, 500, 503`; four
-new `conflict_reason` values in `error-codes.json`. Candidates as an added field of
-`VersionComparison.findings` (`carryover_candidates`), computed in the same read by the adapter,
-rather than a new GET.
+**Operation.** `carryOverDecision` — `POST /projects/{project_uid}/documents/{document_uid}/
+versions/{version_uid}/comparison/carryovers`, tag `decisions`, `role:expert` (admin alone is
+`403`, `required_capability: role:expert`), required `Idempotency-Key`, closed body
+`CarryOverDecisionRequest {target_version_uid, mode, source_finding_uid, target_finding_uid,
+source_decision_id, source_run_id?, target_run_id?}`; `201 CarryOverDecisionResponse {event:
+DecisionEvent, current_verdict, replayed, source_finding_uid, source_decision_id,
+source_version_uid, source_version_ordinal, target_version_uid, mode}`; `401, 403, 404, 409
+(StateConflict), 422, 500, 503`. **One deviation from the proposal:** an exact repeat answers
+`201` with `replayed: true` rather than `200`, as `appendDecision` answers a replay — one success
+status keeps the generated client's result type single. `DecisionEvent.severity` is omitted, not
+null, when absent (`model_dump(exclude_unset=True)`, as `appendDecision` renders it).
+
+**Read.** `FindingComparison` gains the required `carryover_candidates` (≤ 200;
+`CarryoverCandidate {proposal_sha256, source_finding_uid, target_finding_uid, source_decision:
+CarryoverSourceDecision {decision_id, verdict (accepted|rejected), severity, comment,
+author_label, recorded_at}}`), computed by `ComparisonAdapter.compare_versions` in the same read
+session as the comparison; empty when the findings are unavailable.
+
+**Wiring.** `ComparisonPort.carry_over_decision`; `ComparisonAdapter.carry_over_decision` opens
+one write transaction, reads the account's roles in it (`AccountRepository.roles_of`) and calls
+`DecisionCarryoverService.carry_over`; the router passes the verified subject's `user_uid` and
+`display_label` (never the body). `OPERATION_ROLES["carryOverDecision"] = expert`. Four
+`conflict_reason` values are registered in `contracts/domain/v1/error-codes.json`
+(`conflict.notes`); no error code added.
+
+**Web.** On «Сравнение версий» the finding-proposal table gains «Решение эксперта». A row the
+server lists as a candidate shows «В более ранней версии: принято/отклонено» and, for an expert,
+«Перенести решение»; the confirmation shows the older decision (verdict, severity, author, time,
+comment) and the newer finding (category, text, sheets), and only «Подтвердить перенос» sends the
+command (one key per intent, reused on retry). Success shows «Решение перенесено…» (or «уже было
+перенесено ранее» for a replay) and invalidates every comparison answer
+(`queryKeys.versions.comparisons()`, new) and the newer finding's reads
+(`decisionCacheKeys(target, target run)`: ledger, detail, the run's findings, knowledge base,
+dashboard); a refusal is read in Russian per `conflict_reason` and re-reads the comparison. A
+non-expert sees «Решение более ранней версии может перенести эксперт.» and no button. New:
+`entities/document-version/model/carryover.ts`, `features/carry-over-decision/**`;
+`entities/finding` now exports `SEVERITY_LABELS`. No new CSS module (global `am-` classes).
+
+**Reseal artifacts** (re-derived after each merge, never hand-merged): contract (this lane's
+operation, four schemas, the `FindingComparison` property and an `info.description` paragraph,
+inserted by a script over the integration side's document — equal to git's textual merge),
+`web/openapi/openapi.json` byte-identical (sha256 `a9ce1b50…6ee4fe`), `api:generate` +
+`api:verify` (61 operations), `web/FRONTEND_LOCK.json` (contract/snapshot/generated digests,
+counts, content commit `a820849`), `tests/support/expected_facts.json` (54 paths, 61
+operations, 158 schemas), every surface-count prose line (re-measured from the contract, with
+the 422 subsets: 43 with / 18 without), the prose mutation literals in
+`test_surface_counts_in_prose.py`, the 404-reference count (38), `REQUIRED_OPERATIONS` and
+`WRITE_OPERATIONS`, the role register and authorization guard lists, the subject-reader list
+(`comparison.py`), the 422 set, the P02 seam table and its keyed-writes rule, the web keyed-writes
+list (twelve) and the dashboard-invalidation map. Surface prose: `app.py`, `health.py`,
+`routers/{__init__,declarations,errors}.py`, `api/README.md`, `P02_SEAMS.md`, `ALPHA_ROADMAP.md`,
+`infra/deploy/{README.md, proxy/nginx.conf, serve.py}`, the BFF route header and
+`shared/api/authorization.ts`. `CURRENT_STATE.md` is the integrator's and still states 53/60/154.
+
+## Checks (phase B, on the final merged tree `d10c06e3` + this report)
+
+- `tests/contract` (container-free; `test_cp00_candidate`, `test_cp00_final_state`,
+  `test_validate_bootstrap` deselected as environmental in a lane worktree — `.git` is a file,
+  the CP-00 tag and `jsonschema` are absent): **910 passed, 4 failed** — the two known
+  pre-existing reds (`test_error_kernel::test_there_are_twenty_four`,
+  `test_ar_v2_seeded::test_seeded_categories_equal_the_sealed_api_enum`),
+  `test_doc_prose_facts` (`CURRENT_STATE.md` 53/60/154, the integrator's file) and
+  `test_alpha_acceptance_command` (refuses an uncommitted checkout; green on a clean tree).
+- `npm --prefix web ci` once; `api:generate` / `api:verify` OK (61 operations); `lint --quiet`
+  clean; `typecheck` clean; vitest `tests/unit/comparison tests/guards tests/contract`: **453
+  passed** (31 files), including the rendered-language guard with the carryover states
+  (offered on the compared screen; confirming, pending, carried, replayed, each refusal).
+- `tests/e2e/test_pc01_journey_conformance.py`: **87 passed**.
+- Lane database (`make up` + `make migrate`, 0024): `tests/integration/comparison
+  tests/unit/comparison tests/integration/decisions` **306 passed**; focused API/composition
+  suites (`test_authorization`, `test_role_register`, `test_served_document_and_health_plane`,
+  `test_operation_surface`, `test_router_and_body_rules`, `test_decision_carryover_over_http`,
+  `test_version_comparison_over_http`, `test_every_port_implementation_is_whole`,
+  `test_an_absent_parent_is_not_an_empty_page`, `test_composition_root`,
+  `test_api_token_channel`): **158 passed, 1 failed** — the pre-existing
+  `test_pre_decide_adapter_refuses_a_severity_instead_of_dropping_it` (`DecisionAdapter`, red on
+  the base before this lane, untouched).
+- `test_decision_carryover_over_http.py` (new, recorded runs over the composed app): candidates
+  appear after an accept, `201` with provenance, replay under another key, crossed/decided/stale
+  `409` with their `conflict_reason`, missing key or body `422`.
+- Not run (R-135): full gate, live browser journey, whole frontend suite, provider calls.
+
+## Integrator instructions
+
+Merge the branch head `agent/w59-decision-carryover-01` (it already contains
+`integration/night-1020` at `a820849a`). If the integration branch moved again, re-run the
+derivation rather than hand-merging generated files: take the integration side of
+`contracts/api/v1/openapi.json`, re-insert this lane's operation/schemas/property, copy to
+`web/openapi/openapi.json`, `npm --prefix web run api:generate`, re-derive `FRONTEND_LOCK.json`,
+`expected_facts.json` and the surface prose. Update `CURRENT_STATE.md` to **54 paths / 61
+operations / 158 schemas** (head `0024_version_classification`, 25 error codes), which clears the
+one prose red. No migration, dependency, composition-root rule (the adapter gained a method on the
+existing `comparisons=` port), global style or ref changed. Rollback: revert the merge; carried
+decisions remain ordinary append-only decision events.
+
+## Hotspot proof
+
+`git diff --name-only integration/night-1020 HEAD` (61 paths) lies entirely inside this task's
+`allowed_paths` (checked by script); it contains no `db/migrations/**`, dependency manifest or
+lock, `web/src/_app/providers.tsx`, global style, `dispatch/**`, `CURRENT_STATE.md`, ref or tag.
+Phase A touched only `src/auditmanager/{comparison,decisions}/**`,
+`tests/{integration/comparison,integration/decisions,unit/comparison}/**` and this report.
+Nothing was pushed or tagged.
