@@ -370,3 +370,43 @@ def test_the_citation_cap_is_the_documented_number() -> None:
 
 def test_the_same_input_gives_the_same_model() -> None:
     assert _model(RECORDED) == _model(RECORDED)
+
+
+# --- the model refuses a resolver answer that contradicts itself ---------------------------
+
+
+def _stub_report(monkeypatch, **changes):
+    """Replace the resolver's one report by a copy of its real one with fields changed."""
+    from dataclasses import replace
+
+    real = module.resolve_references
+
+    def resolve(**keywords):
+        report = real(**keywords)
+        first = replace(report.references[0], **changes)
+        return replace(report, references=(first, *report.references[1:]))
+
+    monkeypatch.setattr(module, "resolve_references", resolve)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"outcome": "неизвестный исход"},
+        {"outcome": "нет в корпусе"},  # absent, yet it names a matched document
+        {"matched_document_id": None},  # present, yet it names no document
+        {"matched_document_id": "ndoc_" + "9" * 26},  # a document the catalogue does not hold
+        {"matched_designation": None},
+        {"occurrences": ()},
+        {"total_occurrences": 0},
+    ],
+    ids=[
+        "unknown-outcome", "absent-with-match", "present-without-match", "foreign-document",
+        "present-without-designation", "no-occurrence", "total-below-kept",
+    ],
+)
+def test_a_self_contradicting_resolver_answer_is_refused(monkeypatch, changes) -> None:
+    _stub_report(monkeypatch, **changes)
+
+    with pytest.raises(ReferenceRefused):
+        _model({1: "СП 54.13330.2022"}, SP54_2022)
