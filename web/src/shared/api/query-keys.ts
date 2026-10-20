@@ -178,6 +178,19 @@ export const queryKeys = {
      */
     documents: (projectUid: ProjectUid, cursor?: string, limit?: number) =>
       ['projects', 'documents', projectUid, { cursor, limit }] as const,
+    /**
+     * One page of `getSpecificationPrices` (`W60-OPT-MATCH-01`): a document set's AR
+     * specification priced from the project's current price list.
+     *
+     * Under `projects` because the answer is the project's: its price list decides every
+     * price, and a new upload changes the answer for every set — so a price-list upload
+     * invalidates {@link specificationPricesAll}, whatever set or page a screen holds.
+     */
+    specificationPrices: (projectUid: ProjectUid, documentUid: DocumentUid, offset?: number, limit?: number) =>
+      ['projects', 'specification-prices', projectUid, documentUid, { offset, limit }] as const,
+    /** Every set and page of {@link specificationPrices} for one project, as a prefix. */
+    specificationPricesAll: (projectUid: ProjectUid) =>
+      ['projects', 'specification-prices', projectUid] as const,
   },
   versions: {
     all: () => ['versions'] as const,

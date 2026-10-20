@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6
+ *   sha256 73bb6a236256b72026532d83dfec55571a0a2d2ec8125c1f058a1978604196e2
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -81,6 +81,7 @@ import type {
   SetExecutionPausedRequest,
   SetJobPriorityRequest,
   SetWorkerIntakeRequest,
+  SpecificationPrices,
   StartRunRequest,
   SubmitRegistrationRequest,
   UpdateMyProfileRequest,
@@ -117,6 +118,7 @@ export const OPERATION_IDS = [
   'getProductVersion',
   'getRunNormVerification',
   'getRunStatus',
+  'getSpecificationPrices',
   'getUser',
   'getVersionBlocks',
   'getVersionSectionReview',
@@ -642,6 +644,37 @@ export type GetRunStatusInput = {
 
 /** Success body of `getRunStatus` (`application/json`, HTTP 200). */
 export type GetRunStatusResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
+// getSpecificationPrices - GET /projects/{project_uid}/documents/{document_uid}/specification-prices
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Specification Prices
+ *
+ * «Спецификация и цены»: the specification rows of the document set's current version, read deterministically from its newest published run's saved text layer, each matched to the project's current price-list revision as `matched`, `ambiguous` or `unmatched` with its reason (code or mark first, then the normalised name, in the same unit; never a fuzzy guess). The version must be classified as section `AR`. A precondition that does not hold is `state` (`version_unclassified`, `section_not_ar`, `price_list_missing`, `analysis_missing`, `text_unavailable`, `specification_too_large`) with the facts read so far; a path naming no such set is `404`. A price and an amount appear only on a matched row with a numeric quantity; totals are per currency over those rows only, with every other row counted by its reason. Rows are paged (`offset`, `limit`, `next_offset`); counts and totals cover every row. Nothing is written. Any one role, `role:admin|expert`.
+ */
+export type GetSpecificationPricesInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/specification-prices`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Specification rows per answer. */
+    limit?: number;
+    /** Position in the list of specification rows. */
+    offset?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getSpecificationPrices` (`application/json`, HTTP 200). */
+export type GetSpecificationPricesResult = SpecificationPrices;
 
 // ------------------------------------------------------------------------------------
 // getUser - GET /users/{user_uid}
@@ -2086,6 +2119,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['runs'],
+  },
+  getSpecificationPrices: {
+    operationId: 'getSpecificationPrices',
+    method: 'GET',
+    path: '/projects/{project_uid}/documents/{document_uid}/specification-prices',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: ['limit', 'offset'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
   },
   getUser: {
     operationId: 'getUser',

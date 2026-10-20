@@ -19,12 +19,13 @@
  * knows how many operations there are. Swapping the credential later is an edit to the
  * credential selection below, not a sweep through a handler per operation.
  *
- * Those figures are **sixty-three operations across fifty-six paths**, which is what the
+ * Those figures are **sixty-four operations across fifty-seven paths**, which is what the
  * frozen document declares after `W59-ANALYSIS-SETTINGS-01` adds the read of the
  * analysis-profile registry, `W59-VERSION-UPLOAD-01` the upload of a further version
  * of one set, `W59-DECISION-CARRYOVER-01` the expert-confirmed carryover of a
- * decision to the next version and `W57B-NORMS-CATALOGUE-XLSX-01` the norms catalogue
- * and the run's Excel workbook.
+ * decision to the next version, `W57B-NORMS-CATALOGUE-XLSX-01` the norms catalogue
+ * and the run's Excel workbook and `W60-OPT-MATCH-01` the priced specification of a
+ * document set.
  * This file said fifteen and twelve once, sixteen and thirteen after that, and nineteen and
  * sixteen after `W45-BLOCKS`, each true until the next reseal, and it is the fifth stale count in this programme, so it is no
  * longer corrected by hand:

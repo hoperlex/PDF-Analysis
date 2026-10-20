@@ -121,6 +121,12 @@ SAMPLES: dict[str, tuple[str, str]] = {
     # catalogue (any role).
     "exportRunXlsx": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.xlsx"),
     "listNormDocuments": ("GET", "/norm-documents"),
+    # `W60-OPT-MATCH-01`. The priced specification of a document set (any role).
+    "getSpecificationPrices": (
+        "GET",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/specification-prices",
+    ),
     "getFinding": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
     "appendDecision": ("POST", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
     "listDecisionHistory": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
@@ -184,6 +190,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "listAnalysisProfiles": _ANY_ROLE,
     "listNormDocuments": _ANY_ROLE,
     "exportRunXlsx": _EXPERT,
+    # `W60-OPT-MATCH-01`: the priced specification is a product read.
+    "getSpecificationPrices": _ANY_ROLE,
     "listRunFindings": _ANY_ROLE,
     "getFinding": _ANY_ROLE,
     "listDecisionHistory": _ANY_ROLE,

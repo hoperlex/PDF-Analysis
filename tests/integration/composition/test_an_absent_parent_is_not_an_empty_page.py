@@ -85,7 +85,9 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # ``target_version_uid`` is supplied by :data:`REQUIRED_QUERY`, so the answer is about the path.
 # `W57B-NORMS-CATALOGUE-XLSX-01` added ``exportRunXlsx`` on ``run_id``: an absent run is
 # ``404 not_found``, as for ``exportRunCsv``.
-EXPECTED_ADDRESSED = 21
+# `W60-OPT-MATCH-01` added ``getSpecificationPrices``, addressed through its document set's
+# project: an absent project or a set outside it is ``404 not_found``.
+EXPECTED_ADDRESSED = 22
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --

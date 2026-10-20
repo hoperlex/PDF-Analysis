@@ -284,6 +284,8 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.projects.all()` | `['projects']` | `B7` |
 | `queryKeys.projects.list(cursor?, limit?)` | `['projects','list',{cursor,limit}]` | `B7` |
 | `queryKeys.projects.detail(projectUid)` | `['projects','detail',uid]` | `B7` |
+| `queryKeys.projects.specificationPrices(projectUid, documentUid, offset?, limit?)` | `['projects','specification-prices',projectUid,documentUid,{offset,limit}]` | `W60-OPT-MATCH-01` |
+| `queryKeys.projects.specificationPricesAll(projectUid)` | `['projects','specification-prices',projectUid]` | `W60-OPT-MATCH-01` |
 | `queryKeys.versions.detail(versionUid)` | `['versions','detail',uid]` | `B7` |
 | `queryKeys.versions.content(versionUid)` | `['versions','content',uid]` | `B8` |
 | `queryKeys.versions.blocks(versionUid)` | `['versions','blocks',uid]` | `W45-BLOCKS` |
@@ -348,6 +350,12 @@ and `dashboard.summary()`; a `409 version_already_classified` invalidates this k
 no project, run or finding. `setCurrentNormSnapshot` invalidates the whole `norms` prefix when
 it settles — a designation changes the snapshot list, the history and what search reads, and
 a stale refusal means the list must be read again. It changes nothing the dashboard reads.
+`projects.specificationPrices` (`W60-OPT-MATCH-01`) holds one page of `getSpecificationPrices`, a
+document set's AR specification priced from the project's current price list. It is filed under
+`projects` because the project's price list decides every price: an upload of a price list
+invalidates `projects.specificationPricesAll(projectUid)`, every set and page of that project;
+«Обновить» on the tab re-reads it. Nothing on this key writes.
+
 `analysis` entered in `W59-ANALYSIS-SETTINGS-01`: `analysis.profiles` holds
 `listAnalysisProfiles`, the text-profile registry the server routes runs through, which belongs
 to no project, run, version or execution. No action on this client writes it — the registry

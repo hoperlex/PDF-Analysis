@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6",
-    "content_commit": "c22f2049",
-    "content_commit_subject": "W57B-NORMS-CATALOGUE-XLSX-01 API reseal on integration base c22f2049",
-    "dispatch_named_commit": "c22f2049",
-    "commit_note": "W57B adds the norms catalogue and the run's Excel export on top of W59-DECISION-CARRYOVER-01: listNormDocuments (GET /norm-documents, any one role; q/kind filters, bound cursor, total and kinds) and exportRunXlsx (GET /runs/{run_id}/export.xlsx, expert, exportRunCsv's states; refusals storage_integrity_error with role source.structured_companion and required_norm_unavailable with reference_kind norm_retrieval_set) and three schemas (NormCatalogueEntry, NormKindCount, NormCatalogueEntryPage); no error code is added.",
+    "sha256": "73bb6a236256b72026532d83dfec55571a0a2d2ec8125c1f058a1978604196e2",
+    "content_commit": "beafeab5",
+    "content_commit_subject": "W60-OPT-MATCH-01 API reseal on integration base beafeab5",
+    "dispatch_named_commit": "beafeab5",
+    "commit_note": "W60-OPT-MATCH-01 adds the priced specification of a document set: getSpecificationPrices (GET /projects/{project_uid}/documents/{document_uid}/specification-prices, any one role; offset/limit paging) and thirteen schemas (SpecificationPrices, SpecificationPriceListRef, SpecificationExtractionSummary, SpecificationSkipCounts, SpecificationSkippedLine, SpecificationTable, SpecificationMatching, SpecificationMatchCounts, SpecificationExclusionCounts, SpecificationCurrencyTotal, SpecificationRowPage, SpecificationPriceRow, SpecificationPricePosition): the current AR version's specification rows matched to the project's current price list, a price and an amount only on a row matched in the same unit with a numeric quantity, totals per currency; a precondition that does not hold is one state; no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 56,
-    "operations": 63,
-    "component_schemas": 161,
+    "paths": 57,
+    "operations": 64,
+    "component_schemas": 174,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6",
+    "snapshot_sha256": "73bb6a236256b72026532d83dfec55571a0a2d2ec8125c1f058a1978604196e2",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "a43fad9998842a07ad2facc019493d8a97c4272648e0ef6077972677c6b18498",
-      "index.ts": "87c095e2b31f96a8faaaf94b5915dc1e136e8c6386ec2a0ebcb976e724180308",
-      "operations.gen.ts": "be1baf56a69da4c620683a2e4da4e01a4c94ec78429a451482cb880a26a4496c",
-      "types.gen.ts": "51677029bbcd0a5555f06c9e332ce916b5da077aacc05c8e090954e0d72498ae"
+      "client.gen.ts": "c3d329824d850d04759c9b80b94b6e5f7b6e60813d9896f1003d31314d068879",
+      "index.ts": "7dd4010a4c950cfd662c39e085a53d20a5fcff6bff8a2c204076946a15bac52a",
+      "operations.gen.ts": "f55c7cb30cb337784eff12d357941343cc890e11ae3f6ae2007b31b9e1cd7b87",
+      "types.gen.ts": "c31bd4aee604309d4fcbea28fdb9a2d77e76dd3bcca3d3c3e9f23947881735f6"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

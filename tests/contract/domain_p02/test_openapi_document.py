@@ -140,6 +140,9 @@ REQUIRED_OPERATIONS = {
     # role, and the run's Excel workbook with the CSV's states and role.
     "listNormDocuments",
     "exportRunXlsx",
+    # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's current
+    # price list, read-only, for «Спецификация и цены».
+    "getSpecificationPrices",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`

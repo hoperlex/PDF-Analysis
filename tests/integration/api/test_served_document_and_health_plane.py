@@ -158,6 +158,8 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             # workbook's source refusals (`storage_integrity_error`, `required_norm_unavailable`).
             "listNormDocuments",
             "exportRunXlsx",
+            # `W60-OPT-MATCH-01`: the priced specification's bounded paging.
+            "getSpecificationPrices",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

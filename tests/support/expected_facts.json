@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 56,
+    "path_count": 57,
     "operations": [
       [
         "POST",
@@ -317,6 +317,11 @@
         "GET",
         "/runs/{run_id}/export.xlsx",
         "exportRunXlsx"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/specification-prices",
+        "getSpecificationPrices"
       ]
     ],
     "schema_names": [
@@ -480,7 +485,20 @@
       "CarryoverSourceDecision",
       "CarryoverCandidate",
       "CarryOverDecisionRequest",
-      "CarryOverDecisionResponse"
+      "CarryOverDecisionResponse",
+      "SpecificationPriceListRef",
+      "SpecificationSkipCounts",
+      "SpecificationSkippedLine",
+      "SpecificationTable",
+      "SpecificationExtractionSummary",
+      "SpecificationMatchCounts",
+      "SpecificationExclusionCounts",
+      "SpecificationCurrencyTotal",
+      "SpecificationMatching",
+      "SpecificationPricePosition",
+      "SpecificationPriceRow",
+      "SpecificationRowPage",
+      "SpecificationPrices"
     ]
   },
   "error_catalog": {

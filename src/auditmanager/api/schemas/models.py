@@ -194,6 +194,19 @@ __all__ = [
     "CarryoverSourceDecision",
     "VersionComparison",
     "VersionUid",
+    "SpecificationPriceListRef",
+    "SpecificationSkipCounts",
+    "SpecificationSkippedLine",
+    "SpecificationTable",
+    "SpecificationExtractionSummary",
+    "SpecificationMatchCounts",
+    "SpecificationExclusionCounts",
+    "SpecificationCurrencyTotal",
+    "SpecificationMatching",
+    "SpecificationPricePosition",
+    "SpecificationPriceRow",
+    "SpecificationRowPage",
+    "SpecificationPrices",
     "optional_property",
 ]
 
@@ -1936,3 +1949,225 @@ class AnalysisProfileList(_Object):
     """All fifteen sections, in the project-structure order, each with its profile or ``null``."""
 
     items: Annotated[list[AnalysisProfileListItem], Field(min_length=15, max_length=15)]
+
+
+# --- the priced specification (`W60-OPT-MATCH-01`) -------------------------------------------
+#
+# «Спецификация и цены»: the specification rows of a document set's current AR version, read
+# from the newest published run's saved text and matched to the project's current price list
+# (``auditmanager.optimisation``). A price and an amount appear only on a row matched to exactly
+# one position in the same unit with a numeric quantity; totals are per currency over those
+# rows only. Money is exact decimal text, never a JSON number and never rounded. The closed
+# vocabularies are ``Literal`` enums so they stay inline; the price-list identities are inline
+# patterns until the price-list reseal names them.
+
+_SpecificationDecimal = Annotated[str, Field(pattern=r"^-?[0-9]+(\.[0-9]+)?$", max_length=48)]
+_SpecificationCurrency = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
+_SpecificationPage = Annotated[int, Field(ge=1, le=500)]
+_SpecificationLine = Annotated[int, Field(ge=1)]
+_SpecificationCount = Annotated[int, Field(ge=0)]
+_PriceListPositionRef = Annotated[str, Field(pattern=rf"^prp_{_ULID}$")]
+_SpecificationUnit = Literal["шт", "м", "м2", "м3", "кг", "т", "компл", "п.м"]
+_SpecificationSkipReason = Literal[
+    "table_header_ambiguous",
+    "text_before_first_row",
+    "continuation_limit",
+    "anchor_ambiguous",
+    "position_missing",
+    "name_missing",
+    "column_numbering",
+    "rows_over_limit",
+]
+_SpecificationExclusion = Literal[
+    "no_position", "unit_mismatch", "row_unit_missing", "ambiguous", "quantity_not_numeric",
+]
+
+
+class SpecificationPriceListRef(_Object):
+    """The price-list revision the rows were matched against: the project's current one."""
+
+    price_list_id: Annotated[str, Field(pattern=rf"^prl_{_ULID}$")]
+    #: Display order within the project, never an identity.
+    revision_number: Annotated[int, Field(ge=1)]
+    #: The uploaded file's base name, for display only.
+    source_filename: Annotated[str, Field(min_length=1, max_length=255)]
+    uploaded_at: datetime
+    default_currency: _SpecificationCurrency | None
+    position_count: Annotated[int, Field(ge=1, le=20000)]
+
+
+class SpecificationSkipCounts(_Object):
+    """Lines inside detected tables that became neither a row nor part of one, by reason."""
+
+    table_header_ambiguous: _SpecificationCount
+    text_before_first_row: _SpecificationCount
+    continuation_limit: _SpecificationCount
+    anchor_ambiguous: _SpecificationCount
+    position_missing: _SpecificationCount
+    name_missing: _SpecificationCount
+    column_numbering: _SpecificationCount
+    rows_over_limit: _SpecificationCount
+
+
+class SpecificationSkippedLine(_Object):
+    """One skipped line: where it is, why, and the start of its text."""
+
+    page_number: _SpecificationPage
+    line: _SpecificationLine
+    reason: _SpecificationSkipReason
+    excerpt: Annotated[str, Field(max_length=200)]
+
+
+class SpecificationTable(_Object):
+    """One detected specification table: its header lines and the Form-7 columns it names."""
+
+    ordinal: Annotated[int, Field(ge=1)]
+    page_number: _SpecificationPage
+    header_line_start: _SpecificationLine
+    header_line_end: _SpecificationLine
+    columns: Annotated[
+        list[Literal[
+            "position", "name", "type_mark", "code", "manufacturer", "unit", "quantity",
+            "mass", "note",
+        ]],
+        Field(min_length=3, max_length=9),
+    ]
+    #: The unit the quantity header carries (``Кол-во, шт.``) when there is no unit column.
+    implicit_unit: _SpecificationUnit | None
+    status: Literal["parsed", "header_ambiguous"]
+    row_count: _SpecificationCount
+
+
+class SpecificationExtractionSummary(_Object):
+    """What the extractor found: counts complete, listings capped at 200 each."""
+
+    algorithm: Literal["specification-text-v1"]
+    table_count: _SpecificationCount
+    row_count: Annotated[int, Field(ge=0, le=10000)]
+    skipped_count: _SpecificationCount
+    skipped_by_reason: SpecificationSkipCounts
+    skipped: Annotated[list[SpecificationSkippedLine], Field(max_length=200)]
+    tables: Annotated[list[SpecificationTable], Field(max_length=200)]
+
+
+class SpecificationMatchCounts(_Object):
+    matched: _SpecificationCount
+    ambiguous: _SpecificationCount
+    unmatched: _SpecificationCount
+
+
+class SpecificationExclusionCounts(_Object):
+    """Rows left out of every total, by the one reason each carries."""
+
+    no_position: _SpecificationCount
+    unit_mismatch: _SpecificationCount
+    row_unit_missing: _SpecificationCount
+    ambiguous: _SpecificationCount
+    quantity_not_numeric: _SpecificationCount
+
+
+class SpecificationCurrencyTotal(_Object):
+    """The exact sum of the amounts in one currency; never converted, never rounded."""
+
+    currency: _SpecificationCurrency
+    amount: _SpecificationDecimal
+    row_count: Annotated[int, Field(ge=1)]
+
+
+class SpecificationMatching(_Object):
+    """Every row's match counted, the totals per currency and what they leave out."""
+
+    algorithm: Literal["price-match-v1"]
+    counts: SpecificationMatchCounts
+    totals: Annotated[list[SpecificationCurrencyTotal], Field(max_length=200)]
+    excluded: SpecificationExclusionCounts
+
+
+class SpecificationPricePosition(_Object):
+    """The one price-list position a row is matched to, as the price list states it."""
+
+    price_list_position_id: _PriceListPositionRef
+    #: The source row in the uploaded file, for display only.
+    row_number: Annotated[int, Field(ge=1)]
+    code: str | None
+    name: Annotated[str, Field(min_length=1)]
+    mark: str | None
+    unit: Annotated[str, Field(min_length=1)]
+    unit_price: _SpecificationDecimal
+    currency: _SpecificationCurrency
+    vendor: str | None
+
+
+class SpecificationPriceRow(_Object):
+    """One specification row and its match. ``amount`` only when it counts in a total."""
+
+    #: A digest of the version, page and line span: provenance, not a stored identity.
+    row_id: Annotated[str, Field(pattern=r"^sr-[0-9a-f]{32}$")]
+    page_number: _SpecificationPage
+    sheet_label: str | None
+    line_start: _SpecificationLine
+    line_end: _SpecificationLine
+    table_ordinal: Annotated[int, Field(ge=1)]
+    group: str | None
+    position: str | None
+    #: The name and, when the row fills them, the type/mark, code and manufacturer cells in
+    #: the Form-7 order: a text layer does not separate them.
+    name: Annotated[str, Field(min_length=1)]
+    unit_text: str | None
+    unit: _SpecificationUnit | None
+    quantity_text: str | None
+    quantity: _SpecificationDecimal | None
+    quantity_issue: Literal["not_numeric", "ambiguous"] | None
+    mass_text: str | None
+    note: str | None
+    status: Literal["matched", "ambiguous", "unmatched"]
+    reason: Literal["no_position", "unit_mismatch", "row_unit_missing", "several_positions"] | None
+    basis: Literal["code", "mark", "name"] | None
+    price_position: SpecificationPricePosition | None
+    #: At most five candidates in source-row order: the tie, or the positions in another unit.
+    candidate_position_ids: Annotated[list[_PriceListPositionRef], Field(max_length=5)]
+    candidate_count: _SpecificationCount
+    amount: _SpecificationDecimal | None
+    excluded_reason: _SpecificationExclusion | None
+
+
+class SpecificationRowPage(_Object):
+    """One page of the rows; the counts and totals always cover every row."""
+
+    offset: Annotated[int, Field(ge=0)]
+    limit: Annotated[int, Field(ge=1, le=200)]
+    total: Annotated[int, Field(ge=0, le=10000)]
+    next_offset: Annotated[int, Field(ge=1)] | None
+    items: Annotated[list[SpecificationPriceRow], Field(max_length=200)]
+
+
+class SpecificationPrices(_Object):
+    """The priced specification of a set's current AR version, or the state that stops it.
+
+    The states are checked in order -- ``version_unclassified``, ``section_not_ar``,
+    ``price_list_missing``, ``analysis_missing``, ``text_unavailable``,
+    ``specification_too_large`` -- and each answer carries the facts read before it stopped.
+    """
+
+    project_uid: ProjectUid
+    document_uid: DocumentUid
+    version_uid: VersionUid
+    version_ordinal: Annotated[int, Field(ge=1)]
+    page_count: _SpecificationPage
+    state: Literal[
+        "ready",
+        "version_unclassified",
+        "section_not_ar",
+        "price_list_missing",
+        "analysis_missing",
+        "text_unavailable",
+        "specification_too_large",
+    ]
+    project_stage: ProjectStage | None
+    section_code: ProjectSection | None
+    price_list: SpecificationPriceListRef | None
+    run_id: RunId | None
+    text_layer_sha256: Sha256 | None
+    extraction: SpecificationExtractionSummary | None
+    matching: SpecificationMatching | None
+    rows: SpecificationRowPage | None

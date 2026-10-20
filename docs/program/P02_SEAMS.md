@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Sixty-three operations, sealed. `A5` generates the typed client from this document; `B6`
+Sixty-four operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -872,6 +872,12 @@ nothing is carried without the confirmation.
 the current norms snapshot's documents as a catalogue with display names derived from the
 stored file names (any one role), and the run's W57b Excel workbook with `exportRunCsv`'s
 states and role.
+`W60-OPT-MATCH-01` added `getSpecificationPrices` on 2026-10-20: «Спецификация и цены», the
+specification rows of a document set's current `AR`-classified version, read deterministically
+from its newest published run's saved text and matched to the project's current price list;
+a price and an amount only on a row matched to one position in the same unit with a numeric
+quantity, totals per currency over those rows only; a precondition that does not hold is one
+`state`, and a set outside the project is `404`. Read-only, any one role.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -952,6 +958,7 @@ could.
 | `compareDocumentVersions` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison` |
 | `listAnalysisProfiles` | `GET /analysis/profiles` |
 | `carryOverDecision` | `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers` |
+| `getSpecificationPrices` | `GET /projects/{project_uid}/documents/{document_uid}/specification-prices` |
 
 Rules that hold across the whole surface:
 

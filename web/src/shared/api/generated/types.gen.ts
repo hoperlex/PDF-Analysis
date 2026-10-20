@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6
+ *   sha256 73bb6a236256b72026532d83dfec55571a0a2d2ec8125c1f058a1978604196e2
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6';
+export const CONTRACT_DIGEST = '73bb6a236256b72026532d83dfec55571a0a2d2ec8125c1f058a1978604196e2';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -163,6 +163,19 @@ export const SCHEMA_NAMES = [
   'SheetDiff',
   'SheetDiffPage',
   'SheetPairing',
+  'SpecificationCurrencyTotal',
+  'SpecificationExclusionCounts',
+  'SpecificationExtractionSummary',
+  'SpecificationMatchCounts',
+  'SpecificationMatching',
+  'SpecificationPriceListRef',
+  'SpecificationPricePosition',
+  'SpecificationPriceRow',
+  'SpecificationPrices',
+  'SpecificationRowPage',
+  'SpecificationSkipCounts',
+  'SpecificationSkippedLine',
+  'SpecificationTable',
   'StageId',
   'StageState',
   'StageStatus',
@@ -1544,6 +1557,163 @@ export type SheetPairing = {
   suggestion_sha256: Sha256 | null;
   target_page_number: number | null;
   textless: boolean;
+};
+
+/** The exact sum of the amounts in one currency; never converted, never rounded. */
+export type SpecificationCurrencyTotal = {
+  amount: string;
+  currency: string;
+  row_count: number;
+};
+
+/** Rows left out of every total, by the one reason each carries. */
+export type SpecificationExclusionCounts = {
+  ambiguous: number;
+  no_position: number;
+  quantity_not_numeric: number;
+  row_unit_missing: number;
+  unit_mismatch: number;
+};
+
+/** What the extractor found: counts complete, listings capped at 200 each. */
+export type SpecificationExtractionSummary = {
+  algorithm: "specification-text-v1";
+  row_count: number;
+  skipped: Array<SpecificationSkippedLine>;
+  skipped_by_reason: SpecificationSkipCounts;
+  skipped_count: number;
+  table_count: number;
+  tables: Array<SpecificationTable>;
+};
+
+export type SpecificationMatchCounts = {
+  ambiguous: number;
+  matched: number;
+  unmatched: number;
+};
+
+/** Every row's match counted, the totals per currency and what they leave out. */
+export type SpecificationMatching = {
+  algorithm: "price-match-v1";
+  counts: SpecificationMatchCounts;
+  excluded: SpecificationExclusionCounts;
+  totals: Array<SpecificationCurrencyTotal>;
+};
+
+/** The price-list revision the rows were matched against: the project's current one. */
+export type SpecificationPriceListRef = {
+  default_currency: string | null;
+  position_count: number;
+  price_list_id: string;
+  revision_number: number;
+  source_filename: string;
+  uploaded_at: string;
+};
+
+/** The one price-list position a row is matched to, as the price list states it. */
+export type SpecificationPricePosition = {
+  code: string | null;
+  currency: string;
+  mark: string | null;
+  name: string;
+  price_list_position_id: string;
+  row_number: number;
+  unit: string;
+  unit_price: string;
+  vendor: string | null;
+};
+
+/** One specification row and its match. ``amount`` only when it counts in a total. */
+export type SpecificationPriceRow = {
+  amount: string | null;
+  basis: "code" | "mark" | "name" | null;
+  candidate_count: number;
+  candidate_position_ids: Array<string>;
+  excluded_reason: "no_position" | "unit_mismatch" | "row_unit_missing" | "ambiguous" | "quantity_not_numeric" | null;
+  group: string | null;
+  line_end: number;
+  line_start: number;
+  mass_text: string | null;
+  name: string;
+  note: string | null;
+  page_number: number;
+  position: string | null;
+  price_position: SpecificationPricePosition | null;
+  quantity: string | null;
+  quantity_issue: "not_numeric" | "ambiguous" | null;
+  quantity_text: string | null;
+  reason: "no_position" | "unit_mismatch" | "row_unit_missing" | "several_positions" | null;
+  row_id: string;
+  sheet_label: string | null;
+  status: "matched" | "ambiguous" | "unmatched";
+  table_ordinal: number;
+  unit: "шт" | "м" | "м2" | "м3" | "кг" | "т" | "компл" | "п.м" | null;
+  unit_text: string | null;
+};
+
+/**
+ * The priced specification of a set's current AR version, or the state that stops it.
+ *
+ * The states are checked in order -- ``version_unclassified``, ``section_not_ar``,
+ * ``price_list_missing``, ``analysis_missing``, ``text_unavailable``,
+ * ``specification_too_large`` -- and each answer carries the facts read before it stopped.
+ */
+export type SpecificationPrices = {
+  document_uid: DocumentUid;
+  extraction: SpecificationExtractionSummary | null;
+  matching: SpecificationMatching | null;
+  page_count: number;
+  price_list: SpecificationPriceListRef | null;
+  project_stage: ProjectStage | null;
+  project_uid: ProjectUid;
+  rows: SpecificationRowPage | null;
+  run_id: RunId | null;
+  section_code: ProjectSection | null;
+  state: "ready" | "version_unclassified" | "section_not_ar" | "price_list_missing" | "analysis_missing" | "text_unavailable" | "specification_too_large";
+  text_layer_sha256: Sha256 | null;
+  version_ordinal: number;
+  version_uid: VersionUid;
+};
+
+/** One page of the rows; the counts and totals always cover every row. */
+export type SpecificationRowPage = {
+  items: Array<SpecificationPriceRow>;
+  limit: number;
+  next_offset: number | null;
+  offset: number;
+  total: number;
+};
+
+/** Lines inside detected tables that became neither a row nor part of one, by reason. */
+export type SpecificationSkipCounts = {
+  anchor_ambiguous: number;
+  column_numbering: number;
+  continuation_limit: number;
+  name_missing: number;
+  position_missing: number;
+  rows_over_limit: number;
+  table_header_ambiguous: number;
+  text_before_first_row: number;
+};
+
+/** One skipped line: where it is, why, and the start of its text. */
+export type SpecificationSkippedLine = {
+  excerpt: string;
+  line: number;
+  page_number: number;
+  reason: "table_header_ambiguous" | "text_before_first_row" | "continuation_limit" | "anchor_ambiguous" | "position_missing" | "name_missing" | "column_numbering" | "rows_over_limit";
+};
+
+/** One detected specification table: its header lines and the Form-7 columns it names. */
+export type SpecificationTable = {
+  columns: Array<("position" | "name" | "type_mark" | "code" | "manufacturer" | "unit" | "quantity" | "mass" | "note")>;
+  header_line_end: number;
+  header_line_start: number;
+  implicit_unit: "шт" | "м" | "м2" | "м3" | "кг" | "т" | "компл" | "п.м" | null;
+  ordinal: number;
+  page_number: number;
+  row_count: number;
+  status: "parsed" | "header_ambiguous";
 };
 
 /** A canonical stage identity from contracts/analysis/v1/stage-registry.json. PC-01 schedules the first four. */

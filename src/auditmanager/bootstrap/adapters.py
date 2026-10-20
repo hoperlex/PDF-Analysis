@@ -2960,3 +2960,216 @@ def _comparison_view(result: Any, candidates: Sequence[Any] = ()) -> dict[str, A
             for item in candidates
         ]
     return view
+
+
+# --- the priced specification (`W60-OPT-MATCH-01`) ------------------------------------------
+
+
+class SpecificationPricesAdapter(_SessionHolder):
+    """``getSpecificationPrices`` (`W60-OPT-MATCH-01`).
+
+    The optimisation context owns the rule (``optimisation.public.read_specification_prices``:
+    the path, the AR classification, the current price list, the newest published run, the
+    extraction, the matching and the money rule); this adapter owns only the port it needs --
+    the saved text -- and the mapping into the frozen ``SpecificationPrices``. One session
+    holds every read and the actor's role set is read from the account inside it. The text
+    layer is the one the comparison reads (:class:`_AnalysisReader`): the run's single
+    ``source_preparation`` artifact, held to the SHA-256 and size its stage row recorded and
+    checked as canonical ``prepared.text_layer`` for exactly this version and page count. A
+    missing or differing blob is ``storage_integrity_error``, never an empty page.
+    """
+
+    def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any) -> None:
+        super().__init__(session_factory)
+        self._reader = _SpecificationTextReader(blob_store)
+
+    def get_specification_prices(
+        self, *, project_uid: str, document_uid: str, offset: int, limit: int, user_uid: str
+    ) -> models.SpecificationPrices:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import read_specification_prices
+
+        def work(session: Session) -> Any:
+            return read_specification_prices(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                actor_roles=AccountRepository().roles_of(session, user_uid),
+                reader=self._reader,
+                offset=offset,
+                limit=limit,
+            )
+
+        return models.SpecificationPrices.model_validate(_specification_prices_view(self._read(work)))
+
+
+class _VersionPages:
+    """The two facts :meth:`_AnalysisReader.saved_page_text` reads from a version."""
+
+    __slots__ = ("page_count", "version_uid")
+
+    def __init__(self, version_uid: str, page_count: int) -> None:
+        self.version_uid = version_uid
+        self.page_count = page_count
+
+
+class _SpecificationTextReader:
+    """The optimisation context's ``SavedTextReader`` over the comparison's run reader."""
+
+    def __init__(self, blob_store: Any) -> None:
+        self._analyses = _AnalysisReader(blob_store)
+
+    def runs_newest_first(self, session: Session, *, version_uid: str) -> Any:
+        from auditmanager.optimisation.public import RunCandidate
+
+        return tuple(
+            RunCandidate(run.run_id, run.state)
+            for run in self._analyses.runs_newest_first(session, version_uid=version_uid)
+        )
+
+    def saved_page_text(
+        self, session: Session, *, run_id: str, version_uid: str, page_count: int
+    ) -> Any:
+        from auditmanager.optimisation.public import SavedPageText
+
+        text = self._analyses.saved_page_text(
+            session, run_id=run_id, version=_VersionPages(version_uid, page_count)
+        )
+        if text is None:
+            return None
+        return SavedPageText(text.run_id, text.text_layer_sha256, dict(text.pages))
+
+
+def _specification_prices_view(result: Any) -> dict[str, Any]:
+    """The optimisation read model as the frozen ``SpecificationPrices`` shape.
+
+    Every decimal (quantity, unit price, amount, total) becomes its exact plain text through
+    ``canonical_amount`` -- never a float, never rounded. The skip and exclusion counts are
+    written out for every declared reason, zero included.
+    """
+    from auditmanager.optimisation.public import (
+        EXCLUSION_REASONS,
+        SPECIFICATION_SKIP_REASONS,
+        canonical_amount,
+    )
+
+    def decimal(value: Any) -> str | None:
+        return None if value is None else canonical_amount(value)
+
+    price_list = None
+    if result.price_list is not None:
+        revision = result.price_list
+        price_list = {
+            "price_list_id": revision.price_list_id,
+            "revision_number": revision.revision_number,
+            "source_filename": revision.source_filename,
+            "uploaded_at": revision.uploaded_at,
+            "default_currency": revision.default_currency,
+            "position_count": result.position_count,
+        }
+    extraction = None
+    if result.extraction is not None:
+        found = result.extraction
+        extraction = {
+            "algorithm": found.algorithm,
+            "table_count": found.table_count,
+            "row_count": len(found.rows),
+            "skipped_count": found.skipped_count,
+            "skipped_by_reason": {
+                reason: found.skipped_by_reason.get(reason, 0)
+                for reason in SPECIFICATION_SKIP_REASONS
+            },
+            "skipped": [
+                {"page_number": item.page_number, "line": item.line, "reason": item.reason,
+                 "excerpt": item.excerpt}
+                for item in found.skipped
+            ],
+            "tables": [
+                {"ordinal": table.ordinal, "page_number": table.page_number,
+                 "header_line_start": table.header_line_start,
+                 "header_line_end": table.header_line_end, "columns": list(table.columns),
+                 "implicit_unit": table.implicit_unit, "status": table.status,
+                 "row_count": table.row_count}
+                for table in found.tables
+            ],
+        }
+    matching = None
+    if result.matching is not None:
+        outcome = result.matching
+        matching = {
+            "algorithm": outcome.algorithm,
+            "counts": dict(outcome.status_counts),
+            "totals": [
+                {"currency": total.currency, "amount": canonical_amount(total.amount),
+                 "row_count": total.row_count}
+                for total in outcome.totals
+            ],
+            "excluded": {
+                reason: outcome.excluded_by_reason.get(reason, 0) for reason in EXCLUSION_REASONS
+            },
+        }
+    rows = None
+    if result.rows is not None:
+        page = result.rows
+        items = []
+        for match in page.items:
+            row, position = match.row, match.position
+            items.append({
+                "row_id": row.row_id,
+                "page_number": row.page_number,
+                "sheet_label": row.sheet_label,
+                "line_start": row.line_start,
+                "line_end": row.line_end,
+                "table_ordinal": row.table_ordinal,
+                "group": row.group,
+                "position": row.position,
+                "name": row.name,
+                "unit_text": row.unit_text,
+                "unit": row.unit,
+                "quantity_text": row.quantity_text,
+                "quantity": decimal(row.quantity),
+                "quantity_issue": row.quantity_issue,
+                "mass_text": row.mass_text,
+                "note": row.note,
+                "status": match.status,
+                "reason": match.reason,
+                "basis": match.basis,
+                "price_position": None if position is None else {
+                    "price_list_position_id": position.price_list_position_id,
+                    "row_number": position.row_number,
+                    "code": position.code,
+                    "name": position.name,
+                    "mark": position.mark,
+                    "unit": position.unit,
+                    "unit_price": canonical_amount(position.unit_price),
+                    "currency": position.currency,
+                    "vendor": position.vendor,
+                },
+                "candidate_position_ids": list(match.candidate_ids),
+                "candidate_count": match.candidate_count,
+                "amount": decimal(match.amount),
+                "excluded_reason": match.excluded_reason,
+            })
+        rows = {
+            "offset": page.offset,
+            "limit": page.limit,
+            "total": page.total,
+            "next_offset": page.next_offset,
+            "items": items,
+        }
+    return {
+        "project_uid": result.project_uid,
+        "document_uid": result.document_uid,
+        "version_uid": result.version_uid,
+        "version_ordinal": result.version_ordinal,
+        "page_count": result.page_count,
+        "state": result.state,
+        "project_stage": result.project_stage,
+        "section_code": result.section_code,
+        "price_list": price_list,
+        "run_id": result.run_id,
+        "text_layer_sha256": result.text_layer_sha256,
+        "extraction": extraction,
+        "matching": matching,
+        "rows": rows,
+    }

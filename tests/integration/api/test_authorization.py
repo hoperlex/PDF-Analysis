@@ -219,6 +219,12 @@ GUARDED = (
     # `W57B-NORMS-CATALOGUE-XLSX-01`. The norms catalogue and the run's workbook.
     ("listNormDocuments", "GET", "/norm-documents"),
     ("exportRunXlsx", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.xlsx"),
+    # `W60-OPT-MATCH-01`. The priced specification of a document set, read-only.
+    (
+        "getSpecificationPrices", "GET",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/specification-prices",
+    ),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -784,6 +790,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # `W59-SECTION-SEAL-01`: the classification records WHO confirmed it; whether they
         # may is the role register's (expert) and the command's own re-read.
         "sections.py",
+        # `W60-OPT-MATCH-01`: the priced specification passes WHO reads it so the read's own
+        # role re-read happens in its transaction; whether they may is the role register's
+        # (any one role), decided before the handler runs.
+        "specification_prices.py",
         "users.py",
     ], (
         f"{subject_readers} depend on the verified subject. Reading WHO the caller is is "

@@ -80,6 +80,8 @@ PORT_FOR_ARGUMENT = {
     "analysis_profiles": "AnalysisProfilePort",
     # `W57B-NORMS-CATALOGUE-XLSX-01`.
     "xlsx_exports": "XlsxExportPort",
+    # `W60-OPT-MATCH-01`.
+    "specification_prices": "SpecificationPricesPort",
 }
 
 

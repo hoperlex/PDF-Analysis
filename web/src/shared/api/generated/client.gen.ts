@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6
+ *   sha256 73bb6a236256b72026532d83dfec55571a0a2d2ec8125c1f058a1978604196e2
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -56,6 +56,8 @@ import type {
   GetRunNormVerificationResult,
   GetRunStatusInput,
   GetRunStatusResult,
+  GetSpecificationPricesInput,
+  GetSpecificationPricesResult,
   GetUserInput,
   GetUserResult,
   GetVersionBlocksInput,
@@ -373,6 +375,18 @@ export function getRunStatus(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetRunStatusResult>> {
   return request<GetRunStatusResult>(OPERATIONS.getRunStatus, input, options);
+}
+
+/**
+ * Get Specification Prices
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/specification-prices`.
+ */
+export function getSpecificationPrices(
+  input: GetSpecificationPricesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetSpecificationPricesResult>> {
+  return request<GetSpecificationPricesResult>(OPERATIONS.getSpecificationPrices, input, options);
 }
 
 /**
@@ -927,6 +941,7 @@ export const apiClient = {
   getProductVersion,
   getRunNormVerification,
   getRunStatus,
+  getSpecificationPrices,
   getUser,
   getVersionBlocks,
   getVersionSectionReview,
