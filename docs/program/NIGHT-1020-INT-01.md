@@ -202,3 +202,24 @@ single-owner rule is suspended for the API surface only, for this window only.
   and every lane subagent died. Branches and worktrees survived; lane stacks did not
   (containers gone, incl. the local norms stand). The session resumed at 11:07 and
   resumed the stopped lanes by agent id.
+- **`W60-OPT-MATCH-01`** (`98dd6c76`) — candidate `1c643357`. «Спецификация и цены» on the
+  «Оптимизация» tab (`getSpecificationPrices`): the AR specification rows are read from
+  the newest published run's saved text and matched to the current price list by exact
+  normalised name + unit (or code/mark); a price and amount only on a matched same-unit row
+  with a numeric quantity, totals per currency over those rows only, excluded rows counted
+  by reason. **64/73/198 → 65/74/211**. The lane's "merge" of `40cd159f` had a single
+  parent (content carried by hand), so a plain merge conflicted in 40 generated files; the
+  integrator verified the lane tree equals `40cd159f` plus the slice (no deletions) and
+  recorded the merge with the lane's tree and the real parents. From then on every lane was
+  told to make real merges (`git merge-base --is-ancestor <tip> HEAD`).
+- **`W60-OPT-PROPOSALS-01`** (`8d4c0fb7`) — candidate `e668171b`. «Предложения»: an expert
+  starts a pass for an AR set pinned to the version, run, price-list revision and the
+  effective vendor list, gets deterministic `cheaper_analog` proposals (same unit, vendor on
+  the list, cheaper matched price), decides each accept / reject / revise (comment required
+  for revise) in an append-only history, sees counts by decision apart from findings, and
+  downloads a formula-escaped CSV; a saving exists only with both prices and a quantity
+  (migration `0027_optimisation_proposals`, `opp_`/`opr_`/`opd_`, domain revision 17); the
+  hidden `/optimisation` stub is retired to a redirect. **65/74/211 → 70/80/229**, head
+  **`0027_optimisation_proposals`**. Merged-tree checks: 1491 passed, the two base reds only;
+  `typecheck` clean.
+- **Still unmerged at 12:50:** `W63-SECTION-FORM7-01` (phase B in progress).
