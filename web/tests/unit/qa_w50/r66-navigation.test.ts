@@ -60,6 +60,8 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
       ['/projects', 'Проекты'],
       ['/dashboard', 'Дашборд'],
       ['/section-optimisation', 'Оптимизация разделов'],
+      // `W61-DISPATCHER-01` (roadmap Q-2) adds «Диспетчер» at the end of «Работа».
+      ['/dispatcher', 'Диспетчер'],
     ],
   },
   {

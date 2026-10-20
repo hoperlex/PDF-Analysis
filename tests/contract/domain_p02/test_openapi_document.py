@@ -140,6 +140,12 @@ REQUIRED_OPERATIONS = {
     # role, and the run's Excel workbook with the CSV's states and role.
     "listNormDocuments",
     "exportRunXlsx",
+    # `W61-DISPATCHER-01`. «Диспетчер»: assign work to an expert, list and read assignments
+    # with their history, and move an assignment along the `work_assignment` machine.
+    "createAssignment",
+    "listAssignments",
+    "getAssignment",
+    "transitionAssignment",
     # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's current
     # price list, read-only, for «Спецификация и цены».
     "getSpecificationPrices",

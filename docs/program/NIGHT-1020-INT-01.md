@@ -162,3 +162,20 @@ single-owner rule is suspended for the API surface only, for this window only.
 - **Debts to add at window close:** synthetic recordings cover only the AR baseline
   document and four sections; `Dockerfile.api` comment names only `text_analysis/**`;
   D-174 (BFF memory under a real 250 MiB bundle) now also covers the version upload.
+- **`W59-DECISION-CARRYOVER-01`** (`2d8dbee8`) — candidate `c22f2049`. On «Сравнение
+  версий» an expert carries a decision from an older finding onto the `unchanged`
+  matched finding of the newer version («Перенести решение»), only while the
+  recomputed comparison still proposes the pair; the target gets one new event with a
+  fixed provenance sentence, nothing else is written; no migration. A pre-existing red
+  (`test_rules_are_load_bearing`, `decided_severity`) is repaired. **54/61/158**.
+- **`W57B-NORMS-CATALOGUE-XLSX-01`** (`4639f3be`) — candidate `beafeab5`. «Нормы» gains a
+  catalogue of the current snapshot (`listNormDocuments`: 674 documents, 23 kinds;
+  257 display designations repaired by a deterministic derivation, snapshot rows
+  untouched, measured read-only on the local real-corpus stand at ~20 ms); a run's
+  findings download as Excel in the legacy layout (`exportRunXlsx`, expert) through the
+  certified chain, two chain defects fixed (500-page label bound, v1 findings). A
+  pre-existing red (`test_v2_csv_severity` UPDATE on an immutable row) repaired.
+  **56/63/161**.
+- **Checks on the merged tree** after each: `tests/contract` + `tests/unit` + journey
+  conformance 1184 passed, the two base reds only; web `typecheck` clean; mirror
+  byte-identical.

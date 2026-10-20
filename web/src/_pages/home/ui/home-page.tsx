@@ -3,7 +3,8 @@
  *
  * It greets the account by name, says which roles it holds, and shows three tiles: the five
  * most recent projects, the summary the dashboard reads, and — for a session holding `admin`
- * only — how many registration requests wait for a decision.
+ * only — how many registration requests wait for a decision. A session holding `expert` also
+ * gets «Мои задачи» (`W61-DISPATCHER-01`): its open assignments, with their moves and links.
  *
  * ## Which tiles: the registry decides, as it does for the screens they summarise
  *
@@ -43,6 +44,7 @@ import { screenAt } from '@/shared/config';
 import { screenRolesAdmit } from '@/shared/config/screen-registry';
 import { ErrorState } from '@/shared/ui';
 import { UnknownRoleError, roleLabels } from '@/entities/account';
+import { MyTasks } from '@/widgets/my-tasks';
 import {
   PendingRegistrationsTile,
   RecentProjectsTile,
@@ -62,6 +64,9 @@ export interface HomePageProps {
 const UNKNOWN_ROLE_TITLE = 'Учётная запись содержит неизвестную роль.';
 const UNKNOWN_ROLE_DETAIL =
   'Сервер назвал роль, которой этот клиент не знает, поэтому решить, что показать на этой странице, достоверно нельзя — плитки скрыты.';
+
+/** «Диспетчер»'s registered address (`W61-DISPATCHER-01`); a static address needs no builder. */
+const DISPATCHER_SCREEN: ScreenAddress = '/dispatcher';
 
 /** The role labels, or `null` when the set holds a value outside the contract's. */
 function labelsOf(roles: readonly Role[]): readonly string[] | null {
@@ -88,6 +93,9 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
   const projects = opens('/projects', roles);
   const summary = opens('/dashboard', roles);
   const registrations = opens('/admin/registrations', roles);
+  // «Мои задачи» summarises the expert's own part of «Диспетчер»: mounted when the registry
+  // opens that screen and the session holds `expert`, the role work is assigned to.
+  const tasks = opens(DISPATCHER_SCREEN, roles) && roles.includes('expert');
 
   return (
     <section className="am-page" data-screen="home">
@@ -110,12 +118,17 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
           <div data-home-fault="closed-vocabulary">
             <ErrorState title={UNKNOWN_ROLE_TITLE} detail={UNKNOWN_ROLE_DETAIL} />
           </div>
-        ) : projects || summary || registrations ? (
-          <div className={styles.tiles}>
-            {projects ? <RecentProjectsTile /> : null}
-            {summary ? <SummaryTile /> : null}
-            {registrations ? <PendingRegistrationsTile href={registrationsScreenLink()} /> : null}
-          </div>
+        ) : projects || summary || registrations || tasks ? (
+          <>
+            {tasks ? <MyTasks roles={roles} listHref={DISPATCHER_SCREEN} /> : null}
+            {projects || summary || registrations ? (
+              <div className={styles.tiles}>
+                {projects ? <RecentProjectsTile /> : null}
+                {summary ? <SummaryTile /> : null}
+                {registrations ? <PendingRegistrationsTile href={registrationsScreenLink()} /> : null}
+              </div>
+            ) : null}
+          </>
         ) : (
           <p className="am-note" data-home-tiles="none">
             Разделы с данными откроются, когда администратор назначит учётной записи роль.

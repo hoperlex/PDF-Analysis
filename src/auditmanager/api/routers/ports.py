@@ -57,6 +57,7 @@ __all__ = [
     "CsvExportPort",
     "DashboardPort",
     "DecisionPort",
+    "DispatchPort",
     "DocumentPort",
     "FindingPort",
     "NormContentPort",
@@ -975,3 +976,58 @@ class SpecificationPricesPort(Protocol):
         self, *, project_uid: str, document_uid: str, offset: int, limit: int, user_uid: str
     ) -> models.SpecificationPrices:
         """The priced specification of the set's current AR version, or its state."""
+
+
+class DispatchPort(Protocol):
+    """The four «Диспетчер» operations. `W61-DISPATCHER-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    Every method reads the acting account's role set in its own transaction; the seam's role
+    register is only the outer door (``admin`` for creation, any one role otherwise).
+    """
+
+    def create_assignment(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str | None,
+        assignee_user_uid: str,
+        note: str | None,
+        user_uid: str,
+    ) -> models.Assignment:
+        """Create one assignment, or answer the open one this request repeats exactly.
+
+        ``admin`` only; the assignee must be an active ``expert`` (``validation_failed``,
+        ``constraint: active_expert_required``); the document must belong to the project
+        (``not_found``); another open assignment on the same scope is ``conflict`` with
+        ``conflict_reason: assignment_open``.
+        """
+
+    def list_assignments(
+        self, *, user_uid: str, mine: bool, status: str | None, project_uid: str | None
+    ) -> Sequence[models.Assignment]:
+        """Every assignment the caller may read, newest first, narrowed by the filters.
+
+        An administrator reads all (``mine`` narrows to their own); an expert always reads
+        only the assignments currently given to them.
+        """
+
+    def get_assignment(self, *, assignment_uid: str, user_uid: str) -> models.AssignmentDetail:
+        """One assignment and its history; ``not_found`` when absent or not visible."""
+
+    def transition_assignment(
+        self,
+        *,
+        assignment_uid: str,
+        kind: str,
+        reason: str | None,
+        new_assignee_user_uid: str | None,
+        user_uid: str,
+    ) -> models.Assignment:
+        """Append one event, answer an exact repeat unchanged, or refuse.
+
+        ``started``/``completed``/``returned`` by the current assignee holding ``expert``
+        (``permission_denied``, ``required_capability: assignment:assignee`` otherwise);
+        ``reassigned``/``cancelled`` by ``admin``; a move the table does not allow is
+        ``state_transition_not_allowed`` (``machine: work_assignment``).
+        """

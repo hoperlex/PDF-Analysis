@@ -37,7 +37,7 @@ function outline(navigation: Navigation): string[] {
 /** `R-66`, written out by hand from the ruling — never derived from the registry it checks. */
 const R66 = [
   'Главная /',
-  'Работа: Проекты /projects, Дашборд /dashboard, Оптимизация разделов /section-optimisation',
+  'Работа: Проекты /projects, Дашборд /dashboard, Оптимизация разделов /section-optimisation, Диспетчер /dispatcher',
   'Знания: База знаний /knowledge-base, Блоки /blocks, Нормы /norms',
   'Система: Журнал выполнения /logs, Исполнители /workers, Настройки анализа /analysis-settings, Очередь /queue',
 ];

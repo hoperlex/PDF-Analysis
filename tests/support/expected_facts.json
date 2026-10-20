@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 57,
+    "path_count": 60,
     "operations": [
       [
         "POST",
@@ -319,6 +319,26 @@
         "exportRunXlsx"
       ],
       [
+        "POST",
+        "/assignments",
+        "createAssignment"
+      ],
+      [
+        "GET",
+        "/assignments",
+        "listAssignments"
+      ],
+      [
+        "GET",
+        "/assignments/{assignment_uid}",
+        "getAssignment"
+      ],
+      [
+        "POST",
+        "/assignments/{assignment_uid}/transitions",
+        "transitionAssignment"
+      ],
+      [
         "GET",
         "/projects/{project_uid}/documents/{document_uid}/specification-prices",
         "getSpecificationPrices"
@@ -486,6 +506,16 @@
       "CarryoverCandidate",
       "CarryOverDecisionRequest",
       "CarryOverDecisionResponse",
+      "AssignmentUid",
+      "AssignmentStatus",
+      "AssignmentEventKind",
+      "AssignmentTransitionKind",
+      "CreateAssignmentRequest",
+      "TransitionAssignmentRequest",
+      "Assignment",
+      "AssignmentEvent",
+      "AssignmentDetail",
+      "AssignmentPage",
       "SpecificationPriceListRef",
       "SpecificationSkipCounts",
       "SpecificationSkippedLine",

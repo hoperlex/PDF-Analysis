@@ -78,6 +78,7 @@ export type { PollRunOptions } from './polling';
 export { pollRunStatus } from './polling';
 
 export type {
+  AssignmentListFilters,
   DecisionJournalFilters,
   FindingListFilters,
   QueryNamespace,

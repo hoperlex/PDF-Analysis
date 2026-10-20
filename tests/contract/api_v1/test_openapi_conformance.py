@@ -541,9 +541,11 @@ class TestN1ComponentReferenceResolution:
         # `W59-DECISION-CARRYOVER-01` adds one: the carryover addresses the comparison's source
         # version the same way.
         # `W57B-NORMS-CATALOGUE-XLSX-01` adds one: `exportRunXlsx` refuses an unknown run.
+        # `W61-DISPATCHER-01` adds three: creating an assignment names a project and document
+        # that may not exist, and reading or moving one addresses it by identity.
         # `W60-OPT-MATCH-01` adds one: the priced specification addresses its document set
         # through its project.
-        assert len(report) == 40, report
+        assert len(report) == 43, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

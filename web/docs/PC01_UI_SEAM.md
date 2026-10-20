@@ -316,12 +316,18 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.norms.content(normDocumentId)` | `['norms','content',id]` | `W55A-WEB-NORMS` |
 | `queryKeys.analysis.all()` | `['analysis']` | `W59-ANALYSIS-SETTINGS-01` |
 | `queryKeys.analysis.profiles()` | `['analysis','profiles']` | `W59-ANALYSIS-SETTINGS-01` |
+| `queryKeys.assignments.all()` | `['assignments']` | `W61-DISPATCHER-01` |
+| `queryKeys.assignments.list(filters?)` | `['assignments','list',filters]` | `W61-DISPATCHER-01` |
+| `queryKeys.assignments.detail(assignmentUid)` | `['assignments','detail',uid]` | `W61-DISPATCHER-01` |
 
 `projects`, `versions`, `runs`, `findings`, `dashboard`, `account`, `users`, `registrations`,
-`releases`, `execution`, `norms`, `analysis` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
+`releases`, `execution`, `norms`, `analysis`, `assignments` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
 is the signed-in account (`getMe`), `users` the administrator's view of the accounts, and
 `registrations` the requests awaiting or past a decision. A later lane adds key factories inside
 them and no new root.
+`assignments` entered once, in `W61-DISPATCHER-01`: «Диспетчер»'s work assignments, whose
+every command invalidates `queryKeys.assignments.all()` (the list, the detail and the home
+screen's «Мои задачи»).
 Invalidation targets a prefix: appending a decision invalidates
 `queryKeys.findings.decisions(uid)` and `queryKeys.findings.detail(uid)`, and — because the
 verdict projection appears in the finding list — `queryKeys.runs.findings(runId)` and
