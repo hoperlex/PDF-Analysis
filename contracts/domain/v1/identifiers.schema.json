@@ -42,7 +42,7 @@
       "const": "1.0.0-draft.0"
     },
     "candidate_revision": {
-      "const": 15,
+      "const": 16,
       "description": "Review round of this unreleased candidate. It is pinned here so the candidate cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned for a released version."
     },
     "revision_note": {
@@ -125,6 +125,9 @@
         "norm_document_id",
         "norm_paragraph_id",
         "norm_retrieval_set_id",
+        "price_list_id",
+        "price_list_position_id",
+        "vendor_list_id",
         "assignment_uid",
         "model_call_id",
         "comparison_id",
@@ -220,6 +223,9 @@
         "NormDocument",
         "NormParagraph",
         "NormRetrievalSet",
+        "PriceList",
+        "PriceListPosition",
+        "VendorList",
         "WorkAssignment",
         "ModelCallRecord",
         "Comparison",
@@ -256,6 +262,9 @@
           "norm_document_id",
           "norm_paragraph_id",
           "norm_retrieval_set_id",
+          "price_list_id",
+          "price_list_position_id",
+          "vendor_list_id",
           "assignment_uid",
           "norm_custody_admission_id",
           "norm_custody_binding_id",
@@ -318,6 +327,9 @@
                 "norm_document_id",
                 "norm_paragraph_id",
                 "norm_retrieval_set_id",
+                "price_list_id",
+                "price_list_position_id",
+                "vendor_list_id",
                 "assignment_uid",
                 "norm_custody_admission_id",
                 "norm_custody_binding_id",

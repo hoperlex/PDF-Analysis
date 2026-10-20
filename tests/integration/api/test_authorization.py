@@ -224,6 +224,13 @@ GUARDED = (
     ("listAssignments", "GET", "/assignments"),
     ("getAssignment", "GET", "/assignments/asg_01M2545JSD15ETSNNV904X991K"),
     ("transitionAssignment", "POST", "/assignments/asg_01M2545JSD15ETSNNV904X991K/transitions"),
+    # `W60-PRICE-LIST-01`. Project price lists and vendor lists.
+    ("uploadPriceList", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/price-lists"),
+    ("listPriceListRevisions", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/price-lists"),
+    ("listPriceListPositions", "GET", "/price-lists/prl_01M2545JSD15ETSNNV904X991N/positions"),
+    ("getEffectiveVendorLists", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists"),
+    ("setGlobalVendorList", "PUT", "/vendor-lists/EOM"),
+    ("setProjectVendorList", "PUT", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists/EOM"),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -787,6 +794,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "export.py",
         "me.py",
         "norms.py",
+        # `W60-PRICE-LIST-01`: a price list and a vendor-list revision record WHO uploaded or
+        # set them, and the reads hand the caller to the context, which reads the role set in
+        # its own transaction; whether they may is the role register's.
+        "optimisation.py",
         "registrations.py",
         "releases.py",
         # `W59-SECTION-SEAL-01`: the classification records WHO confirmed it; whether they

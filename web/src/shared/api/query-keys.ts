@@ -6,7 +6,7 @@
  * owner, and `web/docs/PC01_UI_SEAM.md` records which Gate B session uses which.
  *
  * Rules:
- *   - every key starts with one of the thirteen root namespaces below;
+ *   - every key starts with one of the fourteen root namespaces below;
  *   - a key is built by calling a function here, never by writing an array literal;
  *   - invalidation targets a prefix — `queryKeys.runs.all()` invalidates every run key;
  *   - a key filled by more than one site carries its value type, as a `DataTag`. See
@@ -40,6 +40,7 @@ import type {
   AssignmentStatus,
   AssignmentUid,
   DocumentUid,
+  PriceListId,
   FindingCategory,
   NormDocumentId,
   FindingUid,
@@ -53,7 +54,7 @@ import type {
 } from './generated/types.gen';
 
 /**
- * The thirteen root namespaces. Nothing else is a legal first key segment.
+ * The fourteen root namespaces. Nothing else is a legal first key segment.
  *
  * `account`, `users` and `registrations` entered together, once, in `W50-REGISTRY-01`
  * (`W50-PLAN.md` §3.6): the signed-in account, the administrator's account list and the
@@ -69,6 +70,10 @@ import type {
  *
  * `analysis` entered once, in `W59-ANALYSIS-SETTINGS-01`: the analysis-profile registry
  * belongs to no project, run, version or execution.
+ *
+ * `optimisation` entered once, in `W60-PRICE-LIST-01`: a project's price-list revisions and
+ * their positions, and the vendor lists — whose global half belongs to no project, so one
+ * administrator's change moves what every project's «Оптимизация» tab reads.
  */
 export const QUERY_NAMESPACES = [
   'projects',
@@ -84,6 +89,7 @@ export const QUERY_NAMESPACES = [
   'norms',
   'analysis',
   'assignments',
+  'optimisation',
 ] as const;
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
@@ -128,6 +134,24 @@ export interface FindingListFilters {
 }
 
 export const queryKeys = {
+  /**
+   * «Оптимизация» on the project screen (`W60-PRICE-LIST-01`). `priceLists` holds
+   * `listPriceListRevisions` for one project; `positions` one page of
+   * `listPriceListPositions` (the page is in the key, so two pages never share an entry);
+   * `vendorLists` the prefix of every project's `getEffectiveVendorLists`, because a change
+   * of the GLOBAL list moves all of them at once. An upload invalidates the project's
+   * `priceLists`; either vendor-list write invalidates `vendorLists()`. Nothing here is a
+   * number the dashboard reads.
+   */
+  optimisation: {
+    all: () => ['optimisation'] as const,
+    priceLists: (projectUid: ProjectUid) => ['optimisation', 'price-lists', projectUid] as const,
+    positions: (priceListId: PriceListId, offset: number, limit: number) =>
+      ['optimisation', 'positions', priceListId, { offset, limit }] as const,
+    vendorLists: () => ['optimisation', 'vendor-lists'] as const,
+    projectVendorLists: (projectUid: ProjectUid) =>
+      ['optimisation', 'vendor-lists', projectUid] as const,
+  },
   /**
    * «Настройки анализа» (`W59-ANALYSIS-SETTINGS-01`): `listAnalysisProfiles`, the text-profile
    * registry the server routes runs through. A root of its own, entered once by that task:

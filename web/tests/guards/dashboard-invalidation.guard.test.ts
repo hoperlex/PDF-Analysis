@@ -183,6 +183,10 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   // `W55A-WEB-NORMS`: designating the current norms snapshot changes no number the dashboard
   // reads; it invalidates the `norms` root instead.
   'src/features/set-current-snapshot/model/use-set-current-snapshot.ts': false,
+  // `W60-PRICE-LIST-01`: a price list and a vendor list change no number the dashboard reads;
+  // they invalidate the `optimisation` keys instead.
+  'src/features/upload-price-list/model/use-upload-price-list.ts': false,
+  'src/features/set-vendor-list/model/use-set-vendor-list.ts': false,
   // `W59-SECTION-UI-01` (integrator grant): confirming a version's stage and section. The
   // breakdown groups by the document's legacy `section` today, which a classification does
   // not write; the backend half of the window is still being written, so the hook

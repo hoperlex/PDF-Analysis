@@ -543,7 +543,11 @@ class TestN1ComponentReferenceResolution:
         # `W57B-NORMS-CATALOGUE-XLSX-01` adds one: `exportRunXlsx` refuses an unknown run.
         # `W61-DISPATCHER-01` adds three: creating an assignment names a project and document
         # that may not exist, and reading or moving one addresses it by identity.
-        assert len(report) == 42, report
+        # `W60-PRICE-LIST-01` adds six: the upload, the revision list, the positions page, the
+        # effective vendor lists and the project override each address a project or a price
+        # list by identity, and the global vendor list answers `404` for a section outside
+        # the fifteen.
+        assert len(report) == 48, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

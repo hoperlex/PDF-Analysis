@@ -109,6 +109,8 @@ import {
 
 import { BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, portalPage } from '../blocks/fixtures';
 
+import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixtures';
+
 import type { Screen } from './contrast';
 
 function withRouter(element: ReactElement): string {
@@ -555,6 +557,20 @@ export function screens(): Screen[] {
       { section_code: 'PB', section_name: 'Пожарная безопасность', profile: null },
     ],
   })));
+  // `W60-PRICE-LIST-01`: the «Оптимизация» tab loaded (revisions, a positions page with its
+  // report, the fifteen vendor lists), and every other shape its widgets have.
+  {
+    const client = newClient();
+    seedLoadedOptimisation(client);
+    const loaded = optimisationShapes().find((shape) => shape.name === 'optimisation-loaded');
+    if (loaded !== undefined) add('ProjectOptimisation loaded', renderScreen(client, loaded.make()));
+  }
+  for (const shape of optimisationShapes()) {
+    if (shape.name === 'optimisation-loaded') continue;
+    const client = newClient();
+    shape.seedClient?.(client);
+    add(`ProjectOptimisation ${shape.name}`, renderScreen(client, shape.make()));
+  }
   // The worker registry: one row per state, the offline one in the collapsed group, and an
   // administrator's intake switch on each.
   add('WorkerList loaded', withRouter(createElement(WorkerList, {

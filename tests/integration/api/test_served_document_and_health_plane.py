@@ -163,6 +163,14 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "createAssignment",
             "listAssignments",
             "transitionAssignment",
+            # `W60-PRICE-LIST-01`: a multipart upload, a paged read, two closed bodies, and
+            # two reads whose project identity is pattern-checked.
+            "uploadPriceList",
+            "listPriceListRevisions",
+            "listPriceListPositions",
+            "getEffectiveVendorLists",
+            "setGlobalVendorList",
+            "setProjectVendorList",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

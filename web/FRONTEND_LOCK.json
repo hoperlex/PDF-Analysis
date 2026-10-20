@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa",
-    "content_commit": "beafeab",
-    "content_commit_subject": "W61-DISPATCHER-01 API reseal on integration base beafeab",
-    "dispatch_named_commit": "beafeab",
-    "commit_note": "W61 adds the dispatcher: createAssignment (POST /assignments, admin), listAssignments (GET /assignments, any one role; an expert reads only their own), getAssignment (GET /assignments/{assignment_uid}, with the append-only history) and transitionAssignment (POST /assignments/{assignment_uid}/transitions: started/completed/returned by the assignee, reassigned/cancelled by admin), and ten schemas (AssignmentUid, AssignmentStatus, AssignmentEventKind, AssignmentTransitionKind, CreateAssignmentRequest, TransitionAssignmentRequest, Assignment, AssignmentEvent, AssignmentDetail, AssignmentPage). No error code is added.",
+    "sha256": "008b484aac0aed7144f4ce5842282a4a352e486a42654ec60e8926c85d23aa52",
+    "content_commit": "f7664f5",
+    "content_commit_subject": "W60-PRICE-LIST-01 API reseal on integration base f7664f59",
+    "dispatch_named_commit": "f7664f5",
+    "commit_note": "W60 adds project price lists and vendor lists: uploadPriceList (POST /projects/{project_uid}/price-lists, expert, keyed, multipart CSV/XLSX), listPriceListRevisions, listPriceListPositions, getEffectiveVendorLists, setGlobalVendorList (admin) and setProjectVendorList (expert), five paths and twenty-seven schemas, on top of W61-DISPATCHER-01 (the four assignment operations); the identities prl_, prp_ and vnl_ (domain revision 16); no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 59,
-    "operations": 67,
-    "component_schemas": 171,
+    "paths": 64,
+    "operations": 73,
+    "component_schemas": 198,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa",
+    "snapshot_sha256": "008b484aac0aed7144f4ce5842282a4a352e486a42654ec60e8926c85d23aa52",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "6ab4630a124c425749200a4235506735e5ad364e922b5aea43ac09cac6e73817",
-      "index.ts": "451899cc43939a12c52f19ba44b0dae229e4f33d4f4bc407b7b406d3c8757d37",
-      "operations.gen.ts": "065b319ca7bb956be37545f8feb779983e3836db072269f5d5f8b4dfe13395fa",
-      "types.gen.ts": "5351beacb57960e4930aa22941c217f7c3439d8ff3dba1c4adfc84412225b7a7"
+      "client.gen.ts": "7f951a46a4e0cacf6f917510f3915bd6491bd394877b89a2b479187098a47020",
+      "index.ts": "bdd04dbd0f06a0e837cd10f6f371c2091892df3f68210d05d17e4cdcaab97a6a",
+      "operations.gen.ts": "e61b2802a1c9861471aeb55d9caf4fe293ce06d732ec586f804a2e6f5ceb9dad",
+      "types.gen.ts": "5008c0e8618b7c1b9dea0ce3795e182cf8a75f6457e4939ba75da970d82933c9"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

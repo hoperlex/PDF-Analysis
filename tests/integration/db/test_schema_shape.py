@@ -66,6 +66,12 @@ IMMUTABLE_TABLES = {
     # status is derived from the history (view ``work_assignment_current``), never updated.
     "work_assignment",
     "work_assignment_event",
+    # `0026_price_lists`: an uploaded price list, its positions, and each vendor-list
+    # revision with its entries are written once; the current one is a query.
+    "price_list_revision",
+    "price_list_position",
+    "vendor_list_revision",
+    "vendor_list_entry",
 }
 
 
@@ -280,6 +286,13 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "created_by_user_uid": "usr",
         "new_assignee_user_uid": "usr",
         "assignment_uid": "asg",
+        # `W60-PRICE-LIST-01`, migration 0026: a price list's uploader, a vendor list's author.
+        "uploaded_by_user_uid": "usr",
+        "set_by_user_uid": "usr",
+        # `W60-PRICE-LIST-01` phase B contracted the three optimisation identities.
+        "price_list_id": "prl",
+        "price_list_position_id": "prp",
+        "vendor_list_id": "vnl",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()
