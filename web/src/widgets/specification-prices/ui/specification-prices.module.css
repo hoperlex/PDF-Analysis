@@ -1,0 +1,100 @@
+/* «Спецификация и цены» (`W60-OPT-MATCH-01`). Consumes the global tokens only. */
+
+.section {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.heading {
+  margin: 1rem 0 0.5rem;
+}
+
+.subheading {
+  margin: 0 0 0.25rem;
+}
+
+.rule {
+  margin: 0 0 0.75rem;
+  color: var(--am-ink-muted);
+}
+
+.chooser {
+  margin: 0 0 0.75rem;
+}
+
+.chooser select {
+  max-width: 100%;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.25rem 0.75rem;
+  margin: 0 0 0.75rem;
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.totals {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--am-line-soft);
+  background: var(--am-surface);
+}
+
+.list {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+
+.details {
+  margin: 0 0 0.75rem;
+}
+
+.details summary {
+  cursor: pointer;
+}
+
+.frame {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cell {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--am-line-soft);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.number {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.hint {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.group {
+  color: var(--am-ink-muted);
+}

@@ -91,7 +91,9 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # `W60-PRICE-LIST-01` added three: ``listPriceListRevisions`` and ``getEffectiveVendorLists``
 # on ``project_uid`` and ``listPriceListPositions`` on ``price_list_id``.
 # With both, the addressed half is twenty-five.
-EXPECTED_ADDRESSED = 25
+# `W60-OPT-MATCH-01` added ``getSpecificationPrices``, addressed through its document set's
+# project: an absent project or a set outside it is ``404 not_found``. Twenty-six.
+EXPECTED_ADDRESSED = 26
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --

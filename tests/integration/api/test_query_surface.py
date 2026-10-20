@@ -1041,6 +1041,13 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         # (`test_list_assignments_reads_every_query_parameter_it_declares`), over rows that
         # test writes, because its filters are a role decision as much as a query one.
         "listAssignments": "/assignments",
+        # `W60-OPT-MATCH-01`. Driven by its own test below
+        # (`test_specification_prices_reads_the_query_parameters_it_declares`): its rows come
+        # from a saved text layer, which this sweep has none of.
+        "getSpecificationPrices": (
+            f"/projects/{paged.project_uid}/documents/{paged.versioned_document_uid}"
+            "/specification-prices"
+        ),
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -1065,6 +1072,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listNormSnapshotEvents": {"cursor", "limit"},
         "listNormDocuments": {"q", "kind", "cursor", "limit"},
         "listAssignments": {"mine", "status", "project_uid", "cursor", "limit"},
+        "getSpecificationPrices": {"offset", "limit"},
     }, f"the contract's query surface moved: {declared}"
 
     accounts_and_requests = _seed_accounts_and_requests(session, shipped_router)
@@ -1187,7 +1195,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
     assert appended.status == 201, appended.body
 
     for operation_id, names in declared.items():
-        if operation_id == "listAssignments":
+        if operation_id in ("listAssignments", "getSpecificationPrices"):
             continue  # driven by its own test below
         target = targets[operation_id]
         # `searchNorms`' target already carries its required `q`.
@@ -1603,3 +1611,59 @@ def test_list_assignments_reads_every_query_parameter_it_declares(
     assert inert == [], f"listAssignments accepts and ignores: {inert}"
     refused = get(surface, "/assignments?status=open")
     assert refused.status == 422, refused.body
+
+
+def test_specification_prices_reads_the_query_parameters_it_declares(
+    shipped_router: Surface,
+) -> None:
+    """`W60-OPT-MATCH-01`: ``offset`` and ``limit`` reach the port, and only as declared.
+
+    The rule of the sweep above -- supply the parameter and require the answer to change --
+    over a port that answers what it was asked: its ``rows`` page echoes the ``offset`` and
+    ``limit`` it received. The priced rows themselves (paging over a real saved text layer,
+    totals that cover every row) are proved against PostgreSQL and MinIO in
+    ``tests/integration/optimisation/test_project_match.py``.
+    """
+    from auditmanager.api.routers.specification_prices import build_specification_price_routes
+    from auditmanager.api.schemas import models
+
+    class _Echo:
+        def __init__(self) -> None:
+            self.asked: list[tuple[int, int]] = []
+
+        def get_specification_prices(
+            self, *, project_uid: str, document_uid: str, offset: int, limit: int, user_uid: str
+        ) -> models.SpecificationPrices:
+            self.asked.append((offset, limit))
+            return models.SpecificationPrices.model_validate({
+                "project_uid": project_uid, "document_uid": document_uid,
+                "version_uid": "ver_01M2545JSD15ETSNNV904X991J", "version_ordinal": 1, "page_count": 1,
+                "state": "ready", "project_stage": "R", "section_code": "AR",
+                "price_list": None, "run_id": None, "text_layer_sha256": None,
+                "extraction": None, "matching": None,
+                "rows": {"offset": offset, "limit": limit, "total": 0, "next_offset": None, "items": []},
+            })
+
+    echo = _Echo()
+    router = Router(credentials=shipped_router.router.credentials)
+    build_specification_price_routes(router, echo)  # type: ignore[arg-type]
+    surface = Surface(router)
+    path = (
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/specification-prices"
+    )
+    inert: list[str] = []
+
+    bare = ok(get(surface, path))
+    if (bare["rows"]["offset"], bare["rows"]["limit"]) != (0, 50):
+        inert.append("defaults")
+    paged = ok(get(surface, f"{path}?offset=120&limit=7"))
+    if (paged["rows"]["offset"], paged["rows"]["limit"]) != (120, 7):
+        inert.append("offset/limit")
+    assert inert == [], f"getSpecificationPrices accepts and ignores: {inert}; asked {echo.asked}"
+    assert echo.asked == [(0, 50), (120, 7)]
+    before = len(echo.asked)
+    for query in ("offset=-1", "limit=0", "limit=201", "offset=x", "limit=x"):
+        refused = get(surface, f"{path}?{query}")
+        assert refused.status == 422, (query, refused.status, refused.body)
+    assert len(echo.asked) == before, "a refused request reached the port"

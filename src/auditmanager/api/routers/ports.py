@@ -71,6 +71,7 @@ __all__ = [
     "ComparisonPort",
     "AnalysisProfilePort",
     "OptimisationPort",
+    "SpecificationPricesPort",
     "UploadedDocument",
     "XlsxExportPort",
 ]
@@ -959,6 +960,23 @@ class AnalysisProfilePort(Protocol):
 
     def list_analysis_profiles(self) -> models.AnalysisProfileList:
         """Every section and its registered text profile, or ``null`` when none is."""
+
+
+@runtime_checkable
+class SpecificationPricesPort(Protocol):
+    """``getSpecificationPrices``. `W60-OPT-MATCH-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    The answer is always a ``SpecificationPrices``: a precondition that does not hold (an
+    unclassified or non-AR version, no price list, no published run, no saved text, too many
+    rows) is its explicit ``state``, never an error envelope and never an empty table. An
+    unknown project or a set outside it is ``404``. Nothing behind this port writes.
+    """
+
+    def get_specification_prices(
+        self, *, project_uid: str, document_uid: str, offset: int, limit: int, user_uid: str
+    ) -> models.SpecificationPrices:
+        """The priced specification of the set's current AR version, or its state."""
 
 
 class DispatchPort(Protocol):

@@ -151,6 +151,21 @@ export const queryKeys = {
     vendorLists: () => ['optimisation', 'vendor-lists'] as const,
     projectVendorLists: (projectUid: ProjectUid) =>
       ['optimisation', 'vendor-lists', projectUid] as const,
+    /**
+     * One page of `getSpecificationPrices` (`W60-OPT-MATCH-01`): a document set's AR
+     * specification priced from the project's current price list. The project's price list
+     * decides every price, so an upload invalidates {@link specificationPricesAll} for the
+     * project — every set and page, whatever a screen holds.
+     */
+    specificationPrices: (
+      projectUid: ProjectUid,
+      documentUid: DocumentUid,
+      offset?: number,
+      limit?: number,
+    ) => ['optimisation', 'specification-prices', projectUid, documentUid, { offset, limit }] as const,
+    /** Every set and page of {@link specificationPrices} for one project, as a prefix. */
+    specificationPricesAll: (projectUid: ProjectUid) =>
+      ['optimisation', 'specification-prices', projectUid] as const,
   },
   /**
    * «Настройки анализа» (`W59-ANALYSIS-SETTINGS-01`): `listAnalysisProfiles`, the text-profile

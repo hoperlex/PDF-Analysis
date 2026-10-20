@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Seventy-three operations, sealed. `A5` generates the typed client from this document; `B6`
+Seventy-four operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -886,6 +886,12 @@ read them; `getEffectiveVendorLists` answers the fifteen sections' vendor lists 
 append versioned revisions, refusing a stale `expected_vendor_list_id`
 (`conflict_reason: vendor_list_changed`). No operation answers a total, a proposal or a price a
 price list does not state; migration `0026_price_lists` stores them.
+`W60-OPT-MATCH-01` added `getSpecificationPrices` on 2026-10-20: «Спецификация и цены», the
+specification rows of a document set's current `AR`-classified version, read deterministically
+from its newest published run's saved text and matched to the project's current price list;
+a price and an amount only on a row matched to one position in the same unit with a numeric
+quantity, totals per currency over those rows only; a precondition that does not hold is one
+`state`, and a set outside the project is `404`. Read-only, any one role.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -976,6 +982,7 @@ could.
 | `getEffectiveVendorLists` | `GET /projects/{project_uid}/vendor-lists` |
 | `setGlobalVendorList` | `PUT /vendor-lists/{section_code}` |
 | `setProjectVendorList` | `PUT /projects/{project_uid}/vendor-lists/{section_code}` |
+| `getSpecificationPrices` | `GET /projects/{project_uid}/documents/{document_uid}/specification-prices` |
 
 Rules that hold across the whole surface:
 

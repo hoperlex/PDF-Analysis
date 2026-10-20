@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 64,
+    "path_count": 65,
     "operations": [
       [
         "POST",
@@ -367,6 +367,11 @@
         "PUT",
         "/projects/{project_uid}/vendor-lists/{section_code}",
         "setProjectVendorList"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/specification-prices",
+        "getSpecificationPrices"
       ]
     ],
     "schema_names": [
@@ -567,7 +572,20 @@
       "SectionVendorList",
       "EffectiveVendorLists",
       "SetGlobalVendorListRequest",
-      "SetProjectVendorListRequest"
+      "SetProjectVendorListRequest",
+      "SpecificationPriceListRef",
+      "SpecificationSkipCounts",
+      "SpecificationSkippedLine",
+      "SpecificationTable",
+      "SpecificationExtractionSummary",
+      "SpecificationMatchCounts",
+      "SpecificationExclusionCounts",
+      "SpecificationCurrencyTotal",
+      "SpecificationMatching",
+      "SpecificationPricePosition",
+      "SpecificationPriceRow",
+      "SpecificationRowPage",
+      "SpecificationPrices"
     ]
   },
   "error_catalog": {

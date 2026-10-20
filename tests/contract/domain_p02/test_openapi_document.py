@@ -154,6 +154,9 @@ REQUIRED_OPERATIONS = {
     "getEffectiveVendorLists",
     "setGlobalVendorList",
     "setProjectVendorList",
+    # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's current
+    # price list, read-only, for «Спецификация и цены».
+    "getSpecificationPrices",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`

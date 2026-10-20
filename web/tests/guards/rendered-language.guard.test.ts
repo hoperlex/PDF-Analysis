@@ -70,6 +70,7 @@ import type {
   RunStateCount,
   RunStatus,
   SectionReview,
+  SpecificationPrices,
   StageId,
   StageStatus,
   VersionClassification as VersionClassificationRecord,
@@ -96,6 +97,8 @@ import { ClassifyVersionFormView } from '@/features/classify-version';
 import { CarryOverDecisionView } from '@/features/carry-over-decision';
 import { VersionClassification, VersionClassificationView } from '@/widgets/version-classification';
 import { ProjectStructureView } from '@/widgets/project-sections';
+import { SpecificationPricesAnswer, SpecificationPricesSection } from '@/widgets/specification-prices';
+import { SPECIFICATION_ROW_LIMIT } from '@/entities/specification-price';
 import { AppFrame } from '@/_app';
 import { accountMenuProps } from '@/_app/account-menu';
 import { UpdateBannerView, WhatsNewView } from '@/_app/release-notices';
@@ -521,6 +524,114 @@ const classification = (
   confirmed_by_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
   ...over,
 });
+
+/**
+ * `W60-OPT-MATCH-01`. One answer of «Спецификация и цены», every value Cyrillic, an identifier
+ * or a contract enum. `ready` carries a row of each status, two currencies, every exclusion,
+ * a skipped line and a second page; the other states carry the facts read before they stop.
+ */
+const SPEC_POSITION = 'prp_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+const specificationAnswer = (over: Partial<SpecificationPrices> = {}): SpecificationPrices => ({
+  project_uid: PROJECT_UID,
+  document_uid: DOCUMENT_UID,
+  version_uid: VERSION_UID,
+  version_ordinal: 2,
+  page_count: 30,
+  state: 'ready',
+  project_stage: 'R',
+  section_code: 'AR',
+  price_list: {
+    price_list_id: 'prl_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+    revision_number: 3,
+    source_filename: 'Прайс проекта',
+    uploaded_at: '2026-10-20T08:00:00Z',
+    default_currency: 'RUB',
+    position_count: 120,
+  },
+  run_id: RUN_ID,
+  text_layer_sha256: SHA,
+  extraction: {
+    algorithm: 'specification-text-v1',
+    table_count: 2,
+    row_count: 120,
+    skipped_count: 1,
+    skipped_by_reason: {
+      table_header_ambiguous: 0, text_before_first_row: 0, continuation_limit: 0,
+      anchor_ambiguous: 0, position_missing: 1, name_missing: 0, column_numbering: 0,
+      rows_over_limit: 0,
+    },
+    skipped: [{ page_number: 14, line: 298, reason: 'position_missing', excerpt: 'План на отметке 2 Металлический щит 12' }],
+    tables: [],
+  },
+  matching: {
+    algorithm: 'price-match-v1',
+    counts: { matched: 3, ambiguous: 1, unmatched: 116 },
+    totals: [
+      { currency: 'EUR', amount: '2550', row_count: 1 },
+      { currency: 'RUB', amount: '502006.5', row_count: 2 },
+    ],
+    excluded: {
+      no_position: 110, unit_mismatch: 4, row_unit_missing: 2, ambiguous: 1, quantity_not_numeric: 1,
+    },
+  },
+  rows: {
+    offset: SPECIFICATION_ROW_LIMIT,
+    limit: SPECIFICATION_ROW_LIMIT,
+    total: 120,
+    next_offset: SPECIFICATION_ROW_LIMIT * 2,
+    items: [
+      {
+        row_id: `sr-${'a'.repeat(32)}`, page_number: 14, sheet_label: '10', line_start: 297, line_end: 298,
+        table_ordinal: 1, group: 'Изделия', position: '1', name: 'Металлический щит МЩ-1',
+        unit_text: 'шт.', unit: 'шт', quantity_text: '12', quantity: '12', quantity_issue: null,
+        mass_text: '45,5', note: 'по месту', status: 'matched', reason: null, basis: 'name',
+        price_position: {
+          price_list_position_id: SPEC_POSITION, row_number: 7, code: 'К-1', name: 'Мет. щит МЩ-1',
+          mark: 'МЩ-1', unit: 'шт', unit_price: '15000', currency: 'RUB', vendor: 'Завод',
+        },
+        candidate_position_ids: [SPEC_POSITION], candidate_count: 1, amount: '180000', excluded_reason: null,
+      },
+      {
+        row_id: `sr-${'b'.repeat(32)}`, page_number: 15, sheet_label: null, line_start: 4, line_end: 4,
+        table_ordinal: 2, group: null, position: '2', name: 'Лента монтажная',
+        unit_text: 'компл.', unit: 'компл', quantity_text: '1 250', quantity: null, quantity_issue: 'ambiguous',
+        mass_text: null, note: null, status: 'matched', reason: null, basis: 'mark',
+        price_position: {
+          price_list_position_id: SPEC_POSITION, row_number: 8, code: null, name: 'Лента',
+          mark: null, unit: 'компл', unit_price: '450', currency: 'RUB', vendor: null,
+        },
+        candidate_position_ids: [SPEC_POSITION], candidate_count: 1, amount: null,
+        excluded_reason: 'quantity_not_numeric',
+      },
+      {
+        row_id: `sr-${'c'.repeat(32)}`, page_number: 15, sheet_label: null, line_start: 5, line_end: 5,
+        table_ordinal: 2, group: null, position: '3', name: 'Пена монтажная',
+        unit_text: 'шт', unit: 'шт', quantity_text: '-', quantity: null, quantity_issue: 'not_numeric',
+        mass_text: null, note: null, status: 'ambiguous', reason: 'several_positions', basis: null,
+        price_position: null, candidate_position_ids: [SPEC_POSITION, SPEC_POSITION], candidate_count: 2,
+        amount: null, excluded_reason: 'ambiguous',
+      },
+      {
+        row_id: `sr-${'d'.repeat(32)}`, page_number: 15, sheet_label: null, line_start: 6, line_end: 6,
+        table_ordinal: 2, group: null, position: null, name: 'Профиль направляющий',
+        unit_text: 'п. м', unit: 'п.м', quantity_text: '120', quantity: '120', quantity_issue: null,
+        mass_text: null, note: null, status: 'unmatched', reason: 'unit_mismatch', basis: null,
+        price_position: null, candidate_position_ids: [SPEC_POSITION], candidate_count: 1,
+        amount: null, excluded_reason: 'unit_mismatch',
+      },
+    ],
+  },
+  ...over,
+});
+const SPECIFICATION_STOPPED = {
+  matching: null, rows: null, extraction: null, run_id: null, text_layer_sha256: null,
+} as const;
+const specificationSets = (client: Client): void => {
+  client.setQueryData(KEYS.documents, {
+    items: [version({ display_title: 'Архитектурные решения', classification: classification({ project_stage: 'R' }) })],
+    page: { next_cursor: null },
+  });
+};
 
 const sectionReview = (over: Partial<SectionReview> = {}): SectionReview => ({
   version_uid: VERSION_UID,
@@ -2182,6 +2293,67 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         onCancel: () => undefined,
       }),
   })),
+  /*
+   * `W60-OPT-MATCH-01`. «Спецификация и цены» is a widget the «Оптимизация» tab mounts, so no
+   * address selects it yet: its container in every documents state (pending, no АР set,
+   * refused), its own read pending and refused, and the answer in every state it can carry.
+   */
+  { name: 'specification-prices-section', make: () => createElement(SpecificationPricesSection, { projectUid: PROJECT_UID }) },
+  {
+    name: 'specification-prices-pending',
+    make: () => createElement(SpecificationPricesSection, { projectUid: PROJECT_UID }),
+    seedClient: specificationSets,
+  },
+  {
+    name: 'specification-prices-refused',
+    make: () => createElement(SpecificationPricesSection, { projectUid: PROJECT_UID }),
+    seedClient: (client) => {
+      specificationSets(client);
+      seedError(
+        client,
+        queryKeys.optimisation.specificationPrices(PROJECT_UID, DOCUMENT_UID, 0, SPECIFICATION_ROW_LIMIT),
+        apiError(503, 'dependency_unavailable'),
+      );
+    },
+  },
+  {
+    name: 'specification-prices-ready',
+    make: () => createElement(SpecificationPricesAnswer, { answer: specificationAnswer(), onPage: () => undefined }),
+  },
+  {
+    name: 'specification-prices-ready-empty',
+    make: () =>
+      createElement(SpecificationPricesAnswer, {
+        answer: specificationAnswer({
+          extraction: { ...specificationAnswer().extraction!, table_count: 0, row_count: 0, skipped_count: 0, skipped: [] },
+          matching: {
+            algorithm: 'price-match-v1',
+            counts: { matched: 0, ambiguous: 0, unmatched: 0 },
+            totals: [],
+            excluded: { no_position: 0, unit_mismatch: 0, row_unit_missing: 0, ambiguous: 0, quantity_not_numeric: 0 },
+          },
+          rows: { offset: 0, limit: SPECIFICATION_ROW_LIMIT, total: 0, next_offset: null, items: [] },
+        }),
+        onPage: () => undefined,
+      }),
+  },
+  ...(['version_unclassified', 'section_not_ar', 'price_list_missing', 'analysis_missing', 'text_unavailable', 'specification_too_large'] as const).map(
+    (state) => ({
+      name: `specification-prices-${state}`,
+      make: () =>
+        createElement(SpecificationPricesAnswer, {
+          answer: specificationAnswer({
+            ...SPECIFICATION_STOPPED,
+            state,
+            ...(state === 'version_unclassified' ? { project_stage: null, section_code: null, price_list: null } : {}),
+            ...(state === 'section_not_ar' ? { section_code: 'KJ', price_list: null } : {}),
+            ...(state === 'price_list_missing' ? { price_list: null } : {}),
+            ...(state === 'text_unavailable' ? { run_id: RUN_ID } : {}),
+          }),
+          onPage: null,
+        }),
+    }),
+  ),
   {
     name: 'version-classification-read-failed',
     make: () =>

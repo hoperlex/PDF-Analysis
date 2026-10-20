@@ -42,6 +42,11 @@ export function useUploadPriceList() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.optimisation.priceLists(revision.project_uid),
       });
+      // The new revision is the project's current one: every price in «Спецификация и цены»
+      // (`W60-OPT-MATCH-01`) was read from the previous one.
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.optimisation.specificationPricesAll(revision.project_uid),
+      });
     },
   });
 }

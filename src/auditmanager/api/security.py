@@ -358,6 +358,9 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listPriceListRevisions": _ANY_ROLE,
         "listPriceListPositions": _ANY_ROLE,
         "getEffectiveVendorLists": _ANY_ROLE,
+        # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's
+        # price list; a read that writes nothing, so any one role.
+        "getSpecificationPrices": _ANY_ROLE,
         # The product version and release notes: any complete account, roles or none
         # (R-80), so a role-less person can still see what the product is.
         "getProductVersion": _ANY_COMPLETE_ACCOUNT,
