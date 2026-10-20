@@ -195,7 +195,8 @@ _LIST_DOCUMENTS = text(
 #: `SECTION-READ-MODEL-01`. The document sets whose **current** version is confirmed in one
 #: section: ``document.current_version_uid`` selects the version, and that version's own row in
 #: ``version_classification_current`` (``W59-SECTION-IDENTITY-DECISION-01``; the latest
-#: revision since `CLASSIFICATION-CORRECTION-01`) is the confirmation. The inner join on the classification is the rule: a set whose current version
+#: revision since `CLASSIFICATION-CORRECTION-01`) is the confirmation. The inner join on the
+#: classification is the rule: a set whose current version
 #: has none is not a member, and neither is a set whose *older* version was confirmed in this
 #: section -- the legacy ``document.section`` is not read at all. ``_LIST_DOCUMENTS``' join
 #: (``document`` to ``document_version`` on ``current_version_uid``), so a document with no
@@ -766,8 +767,8 @@ class DocumentRepository:
         One statement over the whole deployment (or over one project, when ``project_uid``
         is given) instead of one ``list_documents`` per project. A set is a member when
         ``document.current_version_uid`` has a current classification
-        (``version_classification_current``) with this code; an older version's confirmation, the legacy ``document.section``, a file
-        name and a suggestion never make it one. At most ``limit`` records, ascending by
+        (``version_classification_current``) with this code; an older version's confirmation,
+        the legacy ``document.section``, a file name and a suggestion never make it one. At most ``limit`` records, ascending by
         ``document_uid``; pass the last record's ``document_uid`` as ``after`` for the next
         page, and a page shorter than ``limit`` ends the walk. An unknown project filter is
         an empty answer here -- a caller that must tell the two apart proves the project with
