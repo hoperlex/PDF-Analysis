@@ -826,7 +826,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Sixty-one operations, sealed. `A5` generates the typed client from this document; `B6`
+Sixty-two operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -858,6 +858,10 @@ relabelled pair; a path naming no version of the document is `404`.
 text-profile registry run start routes through, read-only, as fifteen sections in the
 project-structure order, each with its profile (identities, version, status, hashes, legacy
 source) or `null`.
+`W59-VERSION-UPLOAD-01` added `uploadDocumentVersion` on 2026-10-20: one portal bundle, under `uploadDocument`'s
+envelope and custody, published as the next immutable version of an existing document, which
+becomes its current version and inherits no title, section or classification; a document of
+another project is `404`.
 `W57B-NORMS-CATALOGUE-XLSX-01` added `listNormDocuments` and `exportRunXlsx` on 2026-10-20:
 the current norms snapshot's documents as a catalogue with display names derived from the
 stored file names (any one role), and the run's W57b Excel workbook with `exportRunCsv`'s
@@ -882,6 +886,7 @@ could.
 | `createProject` | `POST /projects` |
 | `listProjects` | `GET /projects` |
 | `uploadDocument` | `POST /projects/{project_uid}/documents` |
+| `uploadDocumentVersion` | `POST /projects/{project_uid}/documents/{document_uid}/versions` |
 | `getDocumentVersion` | `GET /versions/{version_uid}` |
 | `streamDocumentVersionContent` | `GET /versions/{version_uid}/content` |
 | `startRun` | `POST /runs` |
@@ -944,7 +949,7 @@ could.
 Rules that hold across the whole surface:
 
 * the writes that take a required `Idempotency-Key` header are `createProject`,
-  `uploadDocument`, `startRun`, `appendDecision`, `approveRegistration`, `cancelRun`,
+  `uploadDocument`, `uploadDocumentVersion`, `startRun`, `appendDecision`, `approveRegistration`, `cancelRun`,
   `reauditRun`, `setJobPriority`, `setExecutionPaused` and `setWorkerIntake`, and no others.
   The key is passed through to the owning command handler and never re-derived in the
   router: an identical repeat replays the first answer, and another payload under the same

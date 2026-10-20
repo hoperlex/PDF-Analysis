@@ -54,6 +54,17 @@ one, the stamp audit -- go through steps 2 to 6 together:
   published as unattributed blobs that ``Reconciler.report`` names -- no version exists;
 * step 6 binds all of them in the one transaction that also writes the version: **no
   version ever exists with a partial member set**.
+
+The next version of a document (`W59-VERSION-UPLOAD-01`)
+-------------------------------------------------------
+:meth:`IngestService.upload_next_version` is the same sequence again, not a copy of it: it
+calls :meth:`IngestService.upload_bundle` with the document named, so the envelope, the
+custody order, the breadcrumbs reconciliation reads and the command record are the ones
+above, line for line. What differs is only what step 1 checks (the document exists and
+belongs to the named project) and what step 6 writes (no new ``document`` row; the next
+ordinal under the document's row lock; ``current_version_uid`` moves). The new version
+inherits nothing: its classification is a separate row keyed by its own ``version_uid``,
+and no row exists until an expert confirms one.
 """
 
 from __future__ import annotations
@@ -516,6 +527,49 @@ class IngestService:
                     self._discard_quietly(temporary)
                 self._record_failure(claim, failure)
                 raise failure from None
+
+    def upload_next_version(
+        self,
+        *,
+        project_uid: ProjectUid,
+        document_uid: DocumentUid,
+        content: bytes | BinaryIO,
+        source_filename: str,
+        idempotency_key: IdempotencyKey,
+        limits: BundleLimits = DEFAULT_LIMITS,
+    ) -> UploadOutcome:
+        """Publish one portal bundle as the next immutable version of an existing document.
+
+        `W59-VERSION-UPLOAD-01`. Exactly :meth:`upload_bundle` with ``document_uid`` named
+        -- same envelope, same custody order, same command record -- so there is one upload
+        sequence in the system, not two that can drift. It adds what that entry leaves
+        optional:
+
+        * the document is required, and must belong to ``project_uid``: an unknown
+          document, or one from another project, is ``not_found`` naming ``Document``
+          (an unknown project is ``not_found`` naming ``Project``), before the key is
+          claimed or a byte is staged;
+        * no title and no section are taken. The document's title is the document's, and
+          ``document.section`` is the legacy document-level fact set at its first upload;
+          the new version's own stage and section start absent and are confirmed per
+          version (`W59-SECTION-IDENTITY-DECISION-01`);
+        * the version gets the document's next ordinal and becomes its current version in
+          the transaction that publishes it; older versions, their classifications, runs
+          and findings are rows this sequence never writes;
+        * the key's fingerprint names the document, so a retry with the same key and the
+          same bundle replays the first version, and the same key reused for another
+          document -- or for ``uploadDocument`` -- is ``idempotency_key_reuse``.
+        """
+        return self.upload_bundle(
+            project_uid=project_uid,
+            content=content,
+            source_filename=source_filename,
+            display_title=None,
+            idempotency_key=idempotency_key,
+            document_uid=document_uid,
+            section=None,
+            limits=limits,
+        )
 
     # -- internals -----------------------------------------------------------
 

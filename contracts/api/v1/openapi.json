@@ -441,6 +441,85 @@
         }
       }
     },
+    "/projects/{project_uid}/documents/{document_uid}/versions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProjectUid"
+        },
+        {
+          "$ref": "#/components/parameters/DocumentUid"
+        }
+      ],
+      "post": {
+        "operationId": "uploadDocumentVersion",
+        "tags": [
+          "documents"
+        ],
+        "summary": "Upload one portal bundle as the next immutable version of an existing document.",
+        "description": "The same ingest path as `uploadDocument`, into a document that already exists. The body is one portal bundle under exactly `uploadDocument`'s envelope (the same members, bounds, refusals and `constraint` details, a bare PDF refused with `portal_bundle_required`), and the same third-upload-in-flight refusal (`503 dependency_unavailable`, `details.dependency: upload_capacity`, `Retry-After`).\n\nThe new version gets the document's next `version_ordinal` and becomes its current version; every older version, its classification, runs, findings and decisions are unchanged. It inherits nothing: it takes no display title (the document keeps its own) and no section, and its `classification` is absent until an expert confirms one with `classifyDocumentVersion`. Two uploads into one document at the same time get consecutive ordinals.\n\nAn unknown project, an unknown document, or a document of another project is `404 not_found` (`details.aggregate_type` `Project` or `Document`), decided before the key is claimed or a byte is read into storage. The `Idempotency-Key` behaves as for `uploadDocument`: an exact repeat answers the version it created, and the same key with another document or another bundle is `409 idempotency_key_reuse`.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadDocumentVersionRequest"
+              },
+              "encoding": {
+                "file": {
+                  "contentType": "application/zip"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The next published, immutable version of the document.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentVersion"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/UploadRejected"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
     "/versions/{version_uid}": {
       "parameters": [
         {
@@ -4709,6 +4788,21 @@
           "section": {
             "description": "One of the fifteen project sections, or absent when the document has not been classified.",
             "$ref": "#/components/schemas/ProjectSection"
+          }
+        }
+      },
+      "UploadDocumentVersionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file"
+        ],
+        "description": "The next version of an existing document: one portal bundle and nothing else. There is no title and no section, because a further version takes neither; an undeclared part is refused like any other.",
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. At most 250 MiB; the PDF at most 500 pages."
           }
         }
       },
