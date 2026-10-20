@@ -1,11 +1,13 @@
 # W61-DISPATCHER-01 — «Диспетчер»: work assignments, statuses, «Мои задачи»
 
 **Base:** `979632af` (`origin/dev` `68868d83` plus the frozen task file) for phase A; phase B
-from the integrator's go at `1049367e` (`integration/night-1020` = `origin/dev`, 51/58/147),
-merged as `5e20c6e5`. Branch `agent/w61-dispatcher-01`, isolated worktree `w61-dispatcher`,
-lane PostgreSQL 57530 / MinIO 61130. **Status:** phases A and B complete. Development
-candidate under `R-135`: no full gate, no live journey, no push, merge into another branch or
-tag.
+from the integrator's go at `1049367e`, then kept current with `integration/night-1020` in
+the shared reseal slot (`R-139`): merged `0f0903f2` (analysis settings), `a820849a` (version
+upload), `c22f2049` (decision carryover), `beafeab5` (norms catalogue and Excel export) and
+the record-only tips after them, each time re-deriving every generated artifact. Branch
+`agent/w61-dispatcher-01`, isolated worktree `w61-dispatcher`, lane PostgreSQL 57530 / MinIO
+61130. **Status:** phases A and B complete. Development candidate under `R-135`: no full
+gate, no live journey, no push, merge into another branch or tag.
 
 ## Phase A — result
 
@@ -97,11 +99,13 @@ All on the lane's own containers (`make up`, `make migrate` to `0025_work_assign
 
 ### Surface
 
-| | before (`1049367e`) | after |
+| | integration tip `beafeab5` | this branch |
 |---|---|---|
-| paths / operations / schemas | 51 / 58 / 147 | 54 / 62 / 157 |
+| paths / operations / schemas | 56 / 63 / 161 | **59 / 67 / 171** |
 | API error codes | 25 | 25 |
-| migration head | `0024_version_classification` | `0025_work_assignments` |
+| migration head | `0024_version_classification` | **`0025_work_assignments`** |
+
+This lane adds 3 paths, 4 operations and 10 schemas to whatever the slot holds.
 
 Four operations, tag `dispatch` (`src/auditmanager/api/routers/dispatch.py`, port
 `DispatchPort`, adapter `DispatchAdapter`, wired in `bootstrap/composition.py`):
@@ -133,12 +137,19 @@ validates through it), `state-machines.json` gains `work_assignment` (not seeded
 notes register `assignment_open`, `active_expert_required`, `differs_from_current_assignee`
 and `assignment:assignee`. No error code added.
 
-Reseal: `web/openapi/openapi.json` byte-identical to the contract, client regenerated
-(`api:generate`, `api:verify` OK, contract SHA-256
-`27afd4720a377b7024cbb146c533e4b3505c7cedf71c3138fed447fe87acae06`), `FRONTEND_LOCK.json`,
-`expected_facts.json`, the surface prose (P02_SEAMS operation table and §7 repeat rules,
-ALPHA_ROADMAP, manual-tests head, infra/deploy README/nginx/serve, api README/app/health,
-declarations, errors, BFF route, authorization.ts) and the count pins in `tests/contract`.
+Reseal (re-derived after every merge of the slot): `web/openapi/openapi.json` byte-identical
+to the contract, client regenerated (`api:generate`, `api:verify` OK, contract SHA-256
+`10ee059fbcddc3381284510d486ebe30911ac4e9b99b65c8d4138842ee4e3bfa`), `FRONTEND_LOCK.json`,
+`expected_facts.json` (59/67/171, head `0025_work_assignments`), the surface prose
+(P02_SEAMS operation table and §7 repeat rules, ALPHA_ROADMAP triple, manual-tests head,
+infra/deploy README/nginx/serve, api README/app/health, declarations, errors, BFF route,
+authorization.ts), the 422 split (48 declare one, 19 do not), and the pins that count
+operations: the NotFound sweep (42), the GET partition (22 addressed / 17 not), the
+identifier count (34), the prose mutation lines. Tests that enumerate operations name the
+four: `test_openapi_document`, `test_authorization`, `test_role_register`,
+`test_operation_surface`, `test_served_document_and_health_plane`, `test_query_surface`
+(plus a dedicated test driving `mine`, `status`, `project_uid`, `cursor`, `limit`),
+`test_every_port_implementation_is_whole`.
 
 ### Web
 
