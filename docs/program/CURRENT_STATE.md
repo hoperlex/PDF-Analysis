@@ -14,9 +14,9 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **59 paths / 67 operations / 171 schemas**,
+The development API surface is **64 paths / 73 operations / 198 schemas**,
 the error catalogue has **25** codes, the migration head is
-**`0025_work_assignments`**, and `VERSION` is `0.6.0`. These are checkout
+**`0026_price_lists`**, and `VERSION` is `0.6.0`. These are checkout
 facts; the release tree has its own frozen 47/54/123 surface and
 `0021_portal_bundles` head. For the current deployment, run
 `infra/deploy/verify-deployed.sh`; this document is no substitute for that
@@ -96,7 +96,11 @@ is unserved, and no beta acceptance is claimed.
   recorded as a new event with its provenance. «Диспетчер» (W61 code,
   migration 0025) lets an administrator assign a project or document set to
   an expert, who moves it through «Мои задачи» on the home screen; every
-  change is an append-only event. Expert review of the draft profiles remains
+  change is an append-only event. The project's «Оптимизация» tab (W60,
+  migration 0026) stores price lists (CSV/XLSX, immutable revisions with a
+  parse report) and vendor lists per section (global by an administrator,
+  project override by an expert); no money figure exists without a price-list
+  position. Expert review of the draft profiles remains
   open.
 
 Detailed evidence is in `CFB-INT-DEV-PUBLISH-17.md` through
