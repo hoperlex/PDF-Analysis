@@ -3661,3 +3661,301 @@ def _section_vendor_list_view(item: Any) -> models.SectionVendorList:
         global_revision=view(item.global_revision),
         project_revision=view(item.project_revision),
     )
+
+
+# --------------------------------------------------------------------------------------
+# `W60-OPT-PROPOSALS-01`: the «Предложения» port, over `auditmanager.optimisation.proposals`.
+# --------------------------------------------------------------------------------------
+
+
+class OptimisationProposalAdapter(_SessionHolder):
+    """The six «Предложения» operations (`W60-OPT-PROPOSALS-01`).
+
+    Thin like every adapter here: ``auditmanager.optimisation`` owns the preconditions of a
+    pass, the generator, the exact repeats, the append-only decisions and the CSV bytes; this
+    opens a session, reads the actor's role set **inside it**, resolves the people's display
+    labels through ``access`` (`R-55`) and maps the records into the frozen shapes. The only
+    port a pass needs that the context does not own is the saved text of a run, supplied by
+    :class:`_ProposalTextReader` over the comparison's run reader: the run's single
+    ``source_preparation`` artifact, held to the digest and size its stage row recorded. A
+    missing or differing blob is ``storage_integrity_error``, never an empty page.
+    """
+
+    def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any) -> None:
+        super().__init__(session_factory)
+        self._reader = _ProposalTextReader(blob_store)
+
+    @staticmethod
+    def _roles(session: Session, user_uid: str) -> frozenset[str]:
+        from auditmanager.access.public import AccountRepository
+
+        return AccountRepository().roles_of(session, user_uid)
+
+    def start_optimisation_pass(
+        self, *, project_uid: str, document_uid: str, idempotency_key: str, user_uid: str
+    ) -> models.OptimisationPass:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import start_optimisation_pass
+
+        def work(session: Session) -> models.OptimisationPass:
+            accounts = AccountRepository()
+            started = start_optimisation_pass(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+                actor_roles=accounts.roles_of(session, user_uid),
+                reader=self._reader,
+            )
+            return _optimisation_pass_view(started.optimisation_pass, _Labels(session, accounts))
+
+        return self._write(work)
+
+    def list_optimisation_passes(
+        self, *, project_uid: str, document_uid: str | None, limit: int, user_uid: str
+    ) -> models.OptimisationPassList:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import list_optimisation_passes
+
+        def read(session: Session) -> models.OptimisationPassList:
+            accounts = AccountRepository()
+            records = list_optimisation_passes(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                limit=limit,
+                actor_roles=accounts.roles_of(session, user_uid),
+            )
+            labels = _Labels(session, accounts)
+            return models.OptimisationPassList(
+                items=[_optimisation_pass_view(record, labels) for record in records]
+            )
+
+        return self._read(read)
+
+    def list_optimisation_proposals(
+        self,
+        *,
+        optimisation_pass_id: str,
+        decision: str | None,
+        offset: int,
+        limit: int,
+        user_uid: str,
+    ) -> models.OptimisationProposalPage:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import list_optimisation_proposals
+
+        def read(session: Session) -> models.OptimisationProposalPage:
+            accounts = AccountRepository()
+            page = list_optimisation_proposals(
+                session,
+                optimisation_pass_id=optimisation_pass_id,
+                actor_roles=accounts.roles_of(session, user_uid),
+                decision=decision,
+                offset=offset,
+                limit=limit,
+            )
+            labels = _Labels(session, accounts)
+            return models.OptimisationProposalPage(
+                optimisation_pass=_optimisation_pass_view(page.optimisation_pass, labels),
+                decision=None if page.decision is None else models.ProposalDecisionState(page.decision),
+                items=[_optimisation_proposal_view(item, labels) for item in page.items],
+                offset=page.offset,
+                limit=page.limit,
+                total=page.total,
+                next_offset=page.next_offset,
+            )
+
+        return self._read(read)
+
+    def decide_optimisation_proposal(
+        self,
+        *,
+        optimisation_proposal_id: str,
+        verdict: str,
+        comment: str | None,
+        idempotency_key: str,
+        user_uid: str,
+    ) -> models.ProposalDecisionResult:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import decide_optimisation_proposal
+
+        def work(session: Session) -> models.ProposalDecisionResult:
+            accounts = AccountRepository()
+            decided = decide_optimisation_proposal(
+                session,
+                proposal_id=optimisation_proposal_id,
+                verdict=verdict,
+                comment=comment,
+                idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+                actor_roles=accounts.roles_of(session, user_uid),
+            )
+            labels = _Labels(session, accounts)
+            return models.ProposalDecisionResult(
+                decision=_proposal_decision_view(decided.decision, labels),
+                proposal=_optimisation_proposal_view(decided.proposal, labels),
+            )
+
+        return self._write(work)
+
+    def list_proposal_decisions(
+        self, *, optimisation_proposal_id: str, user_uid: str
+    ) -> models.ProposalDecisionList:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import list_proposal_decisions
+
+        def read(session: Session) -> models.ProposalDecisionList:
+            accounts = AccountRepository()
+            history = list_proposal_decisions(
+                session,
+                optimisation_proposal_id=optimisation_proposal_id,
+                actor_roles=accounts.roles_of(session, user_uid),
+            )
+            labels = _Labels(session, accounts)
+            return models.ProposalDecisionList(
+                items=[_proposal_decision_view(entry, labels) for entry in history]
+            )
+
+        return self._read(read)
+
+    def export_optimisation_proposals_csv(
+        self, *, optimisation_pass_id: str, user_uid: str
+    ) -> bytes:
+        from auditmanager.optimisation.public import export_optimisation_proposals_csv
+
+        def read(session: Session) -> bytes:
+            return export_optimisation_proposals_csv(
+                session,
+                optimisation_pass_id=optimisation_pass_id,
+                actor_roles=self._roles(session, user_uid),
+            ).content
+
+        return self._read(read)
+
+
+class _ProposalTextReader:
+    """The optimisation context's ``SavedTextReader`` over the comparison's run reader."""
+
+    def __init__(self, blob_store: Any) -> None:
+        self._analyses = _AnalysisReader(blob_store)
+
+    def runs_newest_first(self, session: Session, *, version_uid: str) -> Any:
+        from auditmanager.optimisation.public import RunCandidate
+
+        return tuple(
+            RunCandidate(run.run_id, run.state)
+            for run in self._analyses.runs_newest_first(session, version_uid=version_uid)
+        )
+
+    def saved_page_text(
+        self, session: Session, *, run_id: str, version_uid: str, page_count: int
+    ) -> Any:
+        from types import SimpleNamespace
+
+        from auditmanager.optimisation.public import SavedPageText
+
+        text = self._analyses.saved_page_text(
+            session,
+            run_id=run_id,
+            version=SimpleNamespace(version_uid=version_uid, page_count=page_count),
+        )
+        if text is None:
+            return None
+        return SavedPageText(text.run_id, text.text_layer_sha256, dict(text.pages))
+
+
+def _optimisation_pass_view(record: Any, labels: "_Labels") -> models.OptimisationPass:
+    counts = record.decision_counts
+    return models.OptimisationPass(
+        optimisation_pass_id=record.optimisation_pass_id,
+        project_uid=record.project_uid,
+        document_uid=record.document_uid,
+        version_uid=record.version_uid,
+        run_id=record.run_id,
+        text_layer_sha256=record.text_layer_sha256,
+        price_list_id=record.price_list_id,
+        vendor_list_id=record.vendor_list_id,
+        vendor_list_source=models.VendorListScope(record.vendor_list_source),
+        extraction_algorithm=record.extraction_algorithm,
+        match_algorithm=record.match_algorithm,
+        generator_version=record.generator_version,
+        specification_row_count=record.specification_row_count,
+        matched_row_count=record.matched_row_count,
+        proposed_row_count=record.proposed_row_count,
+        proposal_count=record.proposal_count,
+        decision_counts=models.ProposalDecisionCounts(
+            pending=counts["pending"],
+            accept=counts["accept"],
+            reject=counts["reject"],
+            revise=counts["revise"],
+        ),
+        started_by_user_uid=record.started_by_user_uid,
+        started_by_label=labels.of(record.started_by_user_uid),
+        started_at=record.started_at,
+    )
+
+
+def _proposal_decision_view(record: Any, labels: "_Labels") -> models.ProposalDecision:
+    return models.ProposalDecision(
+        proposal_decision_id=record.proposal_decision_id,
+        optimisation_proposal_id=record.optimisation_proposal_id,
+        verdict=models.ProposalVerdict(record.verdict),
+        comment=record.comment,
+        actor_user_uid=record.actor_user_uid,
+        actor_label=labels.of(record.actor_user_uid),
+        decided_at=record.decided_at,
+    )
+
+
+def _proposal_position_view(summary: Any) -> models.ProposalPosition:
+    return models.ProposalPosition(
+        price_list_position_id=summary.price_list_position_id,
+        row_number=summary.row_number,
+        code=summary.code,
+        name=summary.name,
+        mark=summary.mark,
+        vendor=summary.vendor,
+    )
+
+
+def _optional_decimal(value: Any) -> str | None:
+    return None if value is None else _plain_decimal(value)
+
+
+def _optimisation_proposal_view(record: Any, labels: "_Labels") -> models.OptimisationProposal:
+    """One stored proposal in the frozen shape; every decimal is its exact plain text and an
+    absent quantity or saving stays ``null`` -- never ``0``."""
+    return models.OptimisationProposal(
+        optimisation_proposal_id=record.optimisation_proposal_id,
+        optimisation_pass_id=record.optimisation_pass_id,
+        ordinal=record.ordinal,
+        proposal_type=models.OptimisationProposalType(record.proposal_type),
+        spec_row_key=record.spec_row_key,
+        page_number=record.page_number,
+        sheet_label=record.sheet_label,
+        line_start=record.line_start,
+        line_end=record.line_end,
+        table_ordinal=record.table_ordinal,
+        row_position=record.row_position,
+        row_text=record.row_text,
+        matched_position=_proposal_position_view(record.matched_position),
+        matched_basis=models.ProposalMatchBasis(record.matched_basis),
+        proposed_position=_proposal_position_view(record.proposed_position),
+        analog_basis=models.ProposalAnalogBasis(record.analog_basis),
+        name_similarity=_plain_decimal(record.name_similarity),
+        proposed_vendor=record.proposed_vendor,
+        unit=record.unit,
+        quantity=_optional_decimal(record.quantity),
+        quantity_text=record.quantity_text,
+        current_unit_price=_plain_decimal(record.current_unit_price),
+        proposed_unit_price=_plain_decimal(record.proposed_unit_price),
+        currency=record.currency,
+        saving=_optional_decimal(record.saving),
+        rationale=record.rationale,
+        current_verdict=models.ProposalDecisionState(record.current_verdict),
+        current_decision=None
+        if record.current_decision is None
+        else _proposal_decision_view(record.current_decision, labels),
+    )

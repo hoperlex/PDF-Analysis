@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.identifiers",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 16,
-  "revision_note": "Candidate revision 16 by W60-PRICE-LIST-01. Adds the opaque PriceList (prl_), PriceListPosition (prp_) and VendorList (vnl_) identities of a project's uploaded price list, its parsed positions and a vendor-list revision; no other identity changes.",
+  "candidate_revision": 17,
+  "revision_note": "Candidate revision 17 by W60-OPT-PROPOSALS-01. Adds the opaque OptimisationPass (opp_), OptimisationProposal (opr_) and ProposalDecision (opd_) identities of an optimisation pass over a document set's AR version, one of its deterministic proposals and one appended expert decision on a proposal; no other identity changes.",
   "status": "draft_candidate",
   "frozen": false,
   "format": "<prefix>_<ULID>",
@@ -65,7 +65,10 @@
     "assignment_uid": "asg",
     "price_list_id": "prl",
     "price_list_position_id": "prp",
-    "vendor_list_id": "vnl"
+    "vendor_list_id": "vnl",
+    "optimisation_pass_id": "opp",
+    "optimisation_proposal_id": "opr",
+    "proposal_decision_id": "opd"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -118,7 +121,10 @@
     "WorkAssignment": "assignment_uid",
     "PriceList": "price_list_id",
     "PriceListPosition": "price_list_position_id",
-    "VendorList": "vendor_list_id"
+    "VendorList": "vendor_list_id",
+    "OptimisationPass": "optimisation_pass_id",
+    "OptimisationProposal": "optimisation_proposal_id",
+    "ProposalDecision": "proposal_decision_id"
   },
   "distinct_identities": [
     {
@@ -243,6 +249,20 @@
       "evidence": [
         "W60-PRICE-LIST-01",
         "0026_price_lists"
+      ]
+    },
+    {
+      "name": "optimisation_proposal_identity",
+      "identifiers": [
+        "optimisation_pass_id",
+        "optimisation_proposal_id",
+        "proposal_decision_id"
+      ],
+      "rule": "OptimisationPass identifies one immutable pass over the current AR version of one document set, pinned to its published run, price-list revision and vendor-list revision; OptimisationProposal one deterministic proposal of exactly one OptimisationPass; ProposalDecision one appended expert decision on exactly one OptimisationProposal. Each is allocated independently and none is a finding or an ExpertDecision: a proposal is a separate entity beside findings with its own decisions, counts and export. A proposal's ordinal, a decision's seq, a specification row's provenance key and a position's row number are display or ordering values, never substitutes for these identities; a corrected pass is a new OptimisationPass.",
+      "authority": "W60-OPT-PROPOSALS-01; ROADMAP-TO-BETA.md section 10.1 A-2 to A-5",
+      "evidence": [
+        "W60-OPT-PROPOSALS-01",
+        "0027_optimisation_proposals"
       ]
     }
   ],

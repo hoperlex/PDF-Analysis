@@ -6,7 +6,8 @@ foreign key to ``app_user(user_uid)`` created by migration ``0015`` or a later o
 (``0024_version_classification`` adds the classification's confirmer;
 ``0025_work_assignments`` adds an assignment's first assignee and creator, and each of its
 events' actor and new assignee; ``0026_price_lists`` adds a price list's uploader and a
-vendor-list revision's author).
+vendor-list revision's author; ``0027_optimisation_proposals`` adds the expert who started an
+optimisation pass and the expert who decided an optimisation proposal).
 
 Three kinds of entry, by what the database does when the account row is deleted:
 
@@ -110,6 +111,18 @@ ACCOUNT_REFERENCES: Final[tuple[AccountReference, ...]] = (
         "set_by_user_uid",
         "RESTRICT",
         "this account changed a vendor list (W60-PRICE-LIST-01)",
+    ),
+    AccountReference(
+        "optimisation_pass",
+        "started_by_user_uid",
+        "RESTRICT",
+        "this account started an optimisation pass (W60-OPT-PROPOSALS-01)",
+    ),
+    AccountReference(
+        "optimisation_proposal_decision",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account decided an optimisation proposal (W60-OPT-PROPOSALS-01)",
     ),
     AccountReference(
         "registration_request",

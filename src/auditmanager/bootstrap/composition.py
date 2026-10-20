@@ -38,6 +38,7 @@ from auditmanager.bootstrap.adapters import (
     NormContentAdapter,
     NormsSearchAdapter,
     OptimisationAdapter,
+    OptimisationProposalAdapter,
     ProjectAdapter,
     RegistrationAdapter,
     ReleasesAdapter,
@@ -340,6 +341,10 @@ def build_application(
         # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's
         # current price list; the saved text layers are read as the comparison reads them.
         specification_prices=SpecificationPricesAdapter(sessions, blob_store=store),
+        # `W60-OPT-PROPOSALS-01`. The optimisation passes, their proposals and the experts'
+        # decisions over the same sessions; the saved text layers are read as the comparison
+        # reads them.
+        optimisation_proposals=OptimisationProposalAdapter(sessions, blob_store=store),
     )
     return Application(
         router=router,

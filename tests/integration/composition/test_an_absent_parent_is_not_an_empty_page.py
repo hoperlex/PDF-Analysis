@@ -93,7 +93,10 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # With both, the addressed half is twenty-five.
 # `W60-OPT-MATCH-01` added ``getSpecificationPrices``, addressed through its document set's
 # project: an absent project or a set outside it is ``404 not_found``. Twenty-six.
-EXPECTED_ADDRESSED = 26
+# `W60-OPT-PROPOSALS-01` added four: ``listOptimisationPasses`` on ``project_uid``, and
+# ``listOptimisationProposals``, ``listProposalDecisions`` and ``exportOptimisationProposalsCsv``
+# on a pass or a proposal identity. With all of them, the addressed half is thirty.
+EXPECTED_ADDRESSED = 30
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --

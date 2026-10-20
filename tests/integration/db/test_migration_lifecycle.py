@@ -46,6 +46,11 @@ EXPECTED_TABLES = {
     "price_list_position",
     "vendor_list_revision",
     "vendor_list_entry",
+    # `0027_optimisation_proposals`: optimisation passes, their proposals and the experts'
+    # append-only decisions on them.
+    "optimisation_pass",
+    "optimisation_proposal",
+    "optimisation_proposal_decision",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.

@@ -75,6 +75,9 @@ AGGREGATE_OF_PATH_PARAMETER: Final[Mapping[str, str]] = {
     # outside the fifteen addresses no vendor list, so it is `404` like a malformed identity.
     "price_list_id": "PriceList",
     "section_code": "VendorList",
+    # `W60-OPT-PROPOSALS-01`. A pass and a proposal.
+    "optimisation_pass_id": "OptimisationPass",
+    "optimisation_proposal_id": "OptimisationProposal",
 }
 
 #: The contract's spelling of each header this surface reads, keyed by the lower-cased name

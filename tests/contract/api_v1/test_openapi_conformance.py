@@ -549,7 +549,9 @@ class TestN1ComponentReferenceResolution:
         # the fifteen.
         # `W60-OPT-MATCH-01` adds one: the priced specification addresses its document set
         # through its project.
-        assert len(report) == 49, report
+        # `W60-OPT-PROPOSALS-01` adds six: starting a pass names a project and a document set,
+        # and every other operation of the slice addresses a pass or a proposal by identity.
+        assert len(report) == 55, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

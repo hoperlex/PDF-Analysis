@@ -1048,6 +1048,13 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             f"/projects/{paged.project_uid}/documents/{paged.versioned_document_uid}"
             "/specification-prices"
         ),
+        # `W60-OPT-PROPOSALS-01`. Driven by their own test below
+        # (`test_optimisation_proposals_read_the_query_parameters_they_declare`): a pass's
+        # proposals come from a specification read, which this sweep has none of.
+        "listOptimisationPasses": f"/projects/{paged.project_uid}/optimisation-passes",
+        "listOptimisationProposals": (
+            "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/proposals"
+        ),
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -1073,6 +1080,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listNormDocuments": {"q", "kind", "cursor", "limit"},
         "listAssignments": {"mine", "status", "project_uid", "cursor", "limit"},
         "getSpecificationPrices": {"offset", "limit"},
+        "listOptimisationPasses": {"document_uid", "limit"},
+        "listOptimisationProposals": {"decision", "offset", "limit"},
     }, f"the contract's query surface moved: {declared}"
 
     accounts_and_requests = _seed_accounts_and_requests(session, shipped_router)
@@ -1195,7 +1204,12 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
     assert appended.status == 201, appended.body
 
     for operation_id, names in declared.items():
-        if operation_id in ("listAssignments", "getSpecificationPrices"):
+        if operation_id in (
+            "listAssignments",
+            "getSpecificationPrices",
+            "listOptimisationPasses",
+            "listOptimisationProposals",
+        ):
             continue  # driven by its own test below
         target = targets[operation_id]
         # `searchNorms`' target already carries its required `q`.
@@ -1667,3 +1681,90 @@ def test_specification_prices_reads_the_query_parameters_it_declares(
         refused = get(surface, f"{path}?{query}")
         assert refused.status == 422, (query, refused.status, refused.body)
     assert len(echo.asked) == before, "a refused request reached the port"
+
+
+def test_optimisation_proposals_read_the_query_parameters_they_declare(
+    shipped_router: Surface,
+) -> None:
+    """`W60-OPT-PROPOSALS-01`: ``document_uid``, ``limit``, ``decision`` and ``offset`` reach the
+    port, and only as declared.
+
+    The rule of the sweep above -- supply the parameter and require the answer to change --
+    over a port that records what it was asked. The proposals themselves (paging over stored
+    rows, the filter by current decision, counts that cover every proposal) are proved against
+    PostgreSQL in ``tests/integration/optimisation/proposals`` and over HTTP in
+    ``tests/integration/composition/test_optimisation_proposals_over_http.py``.
+    """
+    from auditmanager.api.routers.optimisation_proposals import build_optimisation_proposal_routes
+    from auditmanager.api.schemas import models
+
+    class _Echo:
+        def __init__(self) -> None:
+            self.passes: list[tuple[str | None, int]] = []
+            self.proposals: list[tuple[str | None, int, int]] = []
+
+        def list_optimisation_passes(
+            self, *, project_uid: str, document_uid: str | None, limit: int, user_uid: str
+        ) -> models.OptimisationPassList:
+            self.passes.append((document_uid, limit))
+            return models.OptimisationPassList(items=[])
+
+        def list_optimisation_proposals(
+            self, *, optimisation_pass_id: str, decision: str | None, offset: int, limit: int,
+            user_uid: str,
+        ) -> models.OptimisationProposalPage:
+            self.proposals.append((decision, offset, limit))
+            return models.OptimisationProposalPage.model_validate({
+                "optimisation_pass": {
+                    "optimisation_pass_id": optimisation_pass_id,
+                    "project_uid": "prj_01M2545JSD15ETSNNV904X991F",
+                    "document_uid": "doc_01M2545JSD15ETSNNV904X991H",
+                    "version_uid": "ver_01M2545JSD15ETSNNV904X991J",
+                    "run_id": "run_01M2545JSD15ETSNNV904X991K",
+                    "text_layer_sha256": "e" * 64,
+                    "price_list_id": "prl_01M2545JSD15ETSNNV904X991N",
+                    "vendor_list_id": "vnl_01M2545JSD15ETSNNV904X991N",
+                    "vendor_list_source": "global",
+                    "extraction_algorithm": "specification-text-v1",
+                    "match_algorithm": "price-match-v1",
+                    "generator_version": "cheaper-analog-v1",
+                    "specification_row_count": 0, "matched_row_count": 0,
+                    "proposed_row_count": 0, "proposal_count": 0,
+                    "decision_counts": {"pending": 0, "accept": 0, "reject": 0, "revise": 0},
+                    "started_by_user_uid": "usr_01M2545JSD15ETSNNV904X991F",
+                    "started_by_label": "Петрова А.",
+                    "started_at": "2026-10-20T09:00:00Z",
+                },
+                "decision": decision, "items": [], "offset": offset, "limit": limit,
+                "total": 0, "next_offset": None,
+            })
+
+    echo = _Echo()
+    router = Router(credentials=shipped_router.router.credentials)
+    build_optimisation_proposal_routes(router, echo)  # type: ignore[arg-type]
+    surface = Surface(router)
+    project = "/projects/prj_01M2545JSD15ETSNNV904X991F/optimisation-passes"
+    proposals = "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/proposals"
+    document = "doc_01M2545JSD15ETSNNV904X991H"
+    inert: list[str] = []
+
+    ok(get(surface, project))
+    ok(get(surface, f"{project}?document_uid={document}&limit=7"))
+    if echo.passes != [(None, 100), (document, 7)]:
+        inert.append("document_uid/limit")
+    bare = ok(get(surface, proposals))
+    if (bare["decision"], bare["offset"], bare["limit"]) != (None, 0, 50):
+        inert.append("defaults")
+    paged = ok(get(surface, f"{proposals}?decision=revise&offset=120&limit=7"))
+    if (paged["decision"], paged["offset"], paged["limit"]) != ("revise", 120, 7):
+        inert.append("decision/offset/limit")
+    assert inert == [], (
+        f"the optimisation proposals accept and ignore: {inert}; asked {echo.passes} {echo.proposals}"
+    )
+    assert echo.proposals == [(None, 0, 50), ("revise", 120, 7)]
+    before = (len(echo.passes), len(echo.proposals))
+    for query in ("limit=0", "limit=101", "document_uid=x"):
+        assert get(surface, f"{project}?{query}").status == 422, query
+    for query in ("offset=-1", "limit=0", "limit=201", "decision=accepted", "offset=x"):
+        assert get(surface, f"{proposals}?{query}").status == 422, query
+    assert (len(echo.passes), len(echo.proposals)) == before, "a refused request reached the port"

@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "d8da2b79d0534c9604719e6e1b1bf06825d1843f81bba46141c08758ec9bf081",
-    "content_commit": "40cd159f",
-    "content_commit_subject": "W60-OPT-MATCH-01 API reseal on integration base 40cd159f",
-    "dispatch_named_commit": "40cd159f",
-    "commit_note": "W60-OPT-MATCH-01 adds the priced specification of a document set: getSpecificationPrices (GET /projects/{project_uid}/documents/{document_uid}/specification-prices, any one role; offset/limit paging) and thirteen schemas (SpecificationPrices, SpecificationPriceListRef, SpecificationExtractionSummary, SpecificationSkipCounts, SpecificationSkippedLine, SpecificationTable, SpecificationMatching, SpecificationMatchCounts, SpecificationExclusionCounts, SpecificationCurrencyTotal, SpecificationRowPage, SpecificationPriceRow, SpecificationPricePosition): the current AR version's specification rows matched to the project's current price list, a price and an amount only on a row matched in the same unit with a numeric quantity, totals per currency; a precondition that does not hold is one state; no error code is added.",
+    "sha256": "b8436f965becf99d5fcda4466b9b7636babebc72aa4b93de9308af5be111fa92",
+    "content_commit": "1c64335",
+    "content_commit_subject": "W60-OPT-PROPOSALS-01 API reseal on integration base 1c643357",
+    "dispatch_named_commit": "1c64335",
+    "commit_note": "W60 adds the optimisation passes, their deterministic proposals and the experts' decisions: startOptimisationPass (POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes, expert, keyed), listOptimisationPasses, listOptimisationProposals, decideOptimisationProposal (expert, keyed), listProposalDecisions and exportOptimisationProposalsCsv, five paths and eighteen schemas, on top of W60-OPT-MATCH-01 (getSpecificationPrices), W60-PRICE-LIST-01 (six price-list and vendor-list operations) and W61-DISPATCHER-01; the identities opp_, opr_ and opd_ (domain revision 17); no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 65,
-    "operations": 74,
-    "component_schemas": 211,
+    "paths": 70,
+    "operations": 80,
+    "component_schemas": 229,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "d8da2b79d0534c9604719e6e1b1bf06825d1843f81bba46141c08758ec9bf081",
+    "snapshot_sha256": "b8436f965becf99d5fcda4466b9b7636babebc72aa4b93de9308af5be111fa92",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "4be96f5d60cae19c7a4862f10b02e78c7002fb8904083c93a4a234ae634a0e19",
-      "index.ts": "fc29d8f8ffd0152c5fac64e3ac8e69bed1824e3c8a3857a4e6a2ade8779faea9",
-      "operations.gen.ts": "9d03a248ee91f7f0af0ba04999823201902613e6124ccdcd4bf6101664c87cc8",
-      "types.gen.ts": "304eec49f34dc8e674ed26e993079983a7b82c5fc6707e783743174b89d0922b"
+      "client.gen.ts": "3b0dde4f425d4a1e8f44bac85cd9c44d494bf6e39a30f9818bea162894f63bfd",
+      "index.ts": "7d9d5d6d6dad2f8ecfeb485ad493c42e6bfee1a107c90c292adc0b7b98374a60",
+      "operations.gen.ts": "d1a36aa9144352b316a0c32045e43a7991eca09a5626b23366e22d54f02eaef3",
+      "types.gen.ts": "80c6c66e9d70a373434242e2d86250fa117902ef7b5c5e4318bc7e8317c3fd65"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

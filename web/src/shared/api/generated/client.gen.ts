@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 d8da2b79d0534c9604719e6e1b1bf06825d1843f81bba46141c08758ec9bf081
+ *   sha256 b8436f965becf99d5fcda4466b9b7636babebc72aa4b93de9308af5be111fa92
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -38,6 +38,10 @@ import type {
   CreateAssignmentResult,
   CreateProjectInput,
   CreateProjectResult,
+  DecideOptimisationProposalInput,
+  DecideOptimisationProposalResult,
+  ExportOptimisationProposalsCsvInput,
+  ExportOptimisationProposalsCsvResult,
   ExportRunCsvInput,
   ExportRunCsvResult,
   ExportRunXlsxInput,
@@ -94,12 +98,18 @@ import type {
   ListNormSnapshotEventsResult,
   ListNormSnapshotsInput,
   ListNormSnapshotsResult,
+  ListOptimisationPassesInput,
+  ListOptimisationPassesResult,
+  ListOptimisationProposalsInput,
+  ListOptimisationProposalsResult,
   ListPriceListPositionsInput,
   ListPriceListPositionsResult,
   ListPriceListRevisionsInput,
   ListPriceListRevisionsResult,
   ListProjectsInput,
   ListProjectsResult,
+  ListProposalDecisionsInput,
+  ListProposalDecisionsResult,
   ListRegistrationsInput,
   ListRegistrationsResult,
   ListReleasesInput,
@@ -144,6 +154,8 @@ import type {
   SetProjectVendorListResult,
   SetWorkerIntakeInput,
   SetWorkerIntakeResult,
+  StartOptimisationPassInput,
+  StartOptimisationPassResult,
   StartRunInput,
   StartRunResult,
   StreamDocumentVersionContentInput,
@@ -287,6 +299,30 @@ export function createProject(
   options?: RequestOptions,
 ): Promise<ApiResponse<CreateProjectResult>> {
   return request<CreateProjectResult>(OPERATIONS.createProject, input, options);
+}
+
+/**
+ * Decide Optimisation Proposal
+ *
+ * `POST /optimisation-proposals/{optimisation_proposal_id}/decisions` - a write; carries a required Idempotency-Key.
+ */
+export function decideOptimisationProposal(
+  input: DecideOptimisationProposalInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<DecideOptimisationProposalResult>> {
+  return request<DecideOptimisationProposalResult>(OPERATIONS.decideOptimisationProposal, input, options);
+}
+
+/**
+ * Export Optimisation Proposals Csv
+ *
+ * `GET /optimisation-passes/{optimisation_pass_id}/export.csv`.
+ */
+export function exportOptimisationProposalsCsv(
+  input: ExportOptimisationProposalsCsvInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ExportOptimisationProposalsCsvResult>> {
+  return request<ExportOptimisationProposalsCsvResult>(OPERATIONS.exportOptimisationProposalsCsv, input, options);
 }
 
 /**
@@ -626,6 +662,30 @@ export function listNormSnapshots(
 }
 
 /**
+ * List Optimisation Passes
+ *
+ * `GET /projects/{project_uid}/optimisation-passes`.
+ */
+export function listOptimisationPasses(
+  input: ListOptimisationPassesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListOptimisationPassesResult>> {
+  return request<ListOptimisationPassesResult>(OPERATIONS.listOptimisationPasses, input, options);
+}
+
+/**
+ * List Optimisation Proposals
+ *
+ * `GET /optimisation-passes/{optimisation_pass_id}/proposals`.
+ */
+export function listOptimisationProposals(
+  input: ListOptimisationProposalsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListOptimisationProposalsResult>> {
+  return request<ListOptimisationProposalsResult>(OPERATIONS.listOptimisationProposals, input, options);
+}
+
+/**
  * List Price List Positions
  *
  * `GET /price-lists/{price_list_id}/positions`.
@@ -659,6 +719,18 @@ export function listProjects(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListProjectsResult>> {
   return request<ListProjectsResult>(OPERATIONS.listProjects, input, options);
+}
+
+/**
+ * List Proposal Decisions
+ *
+ * `GET /optimisation-proposals/{optimisation_proposal_id}/decisions`.
+ */
+export function listProposalDecisions(
+  input: ListProposalDecisionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListProposalDecisionsResult>> {
+  return request<ListProposalDecisionsResult>(OPERATIONS.listProposalDecisions, input, options);
 }
 
 /**
@@ -926,6 +998,18 @@ export function setWorkerIntake(
 }
 
 /**
+ * Start Optimisation Pass
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes` - a write; carries a required Idempotency-Key.
+ */
+export function startOptimisationPass(
+  input: StartOptimisationPassInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartOptimisationPassResult>> {
+  return request<StartOptimisationPassResult>(OPERATIONS.startOptimisationPass, input, options);
+}
+
+/**
  * Start a text-consistency run over one published version.
  *
  * `POST /runs` - a write; carries a required Idempotency-Key.
@@ -1072,6 +1156,8 @@ export const apiClient = {
   compareDocumentVersions,
   createAssignment,
   createProject,
+  decideOptimisationProposal,
+  exportOptimisationProposalsCsv,
   exportRunCsv,
   exportRunXlsx,
   getAssignment,
@@ -1100,9 +1186,12 @@ export const apiClient = {
   listNormParagraphs,
   listNormSnapshotEvents,
   listNormSnapshots,
+  listOptimisationPasses,
+  listOptimisationProposals,
   listPriceListPositions,
   listPriceListRevisions,
   listProjects,
+  listProposalDecisions,
   listRegistrations,
   listReleases,
   listRunFindings,
@@ -1125,6 +1214,7 @@ export const apiClient = {
   setJobPriority,
   setProjectVendorList,
   setWorkerIntake,
+  startOptimisationPass,
   startRun,
   streamDocumentVersionContent,
   streamNormDocumentContent,

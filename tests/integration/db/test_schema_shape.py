@@ -72,6 +72,11 @@ IMMUTABLE_TABLES = {
     "price_list_position",
     "vendor_list_revision",
     "vendor_list_entry",
+    # `0027_optimisation_proposals`: a pass and its proposals are written once; each expert
+    # decision is an appended row, and the current decision is a query.
+    "optimisation_pass",
+    "optimisation_proposal",
+    "optimisation_proposal_decision",
 }
 
 
@@ -293,6 +298,16 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "price_list_id": "prl",
         "price_list_position_id": "prp",
         "vendor_list_id": "vnl",
+        # `W60-OPT-PROPOSALS-01`, migration 0027: the expert who started a pass (a decision's
+        # actor is ``actor_user_uid`` above).
+        "started_by_user_uid": "usr",
+        # `W60-OPT-PROPOSALS-01` phase B contracted the three proposal identities; the two
+        # position columns of a proposal hold ``prp``.
+        "optimisation_pass_id": "opp",
+        "optimisation_proposal_id": "opr",
+        "proposal_decision_id": "opd",
+        "matched_position_id": "prp",
+        "proposed_position_id": "prp",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()
