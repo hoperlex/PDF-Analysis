@@ -162,7 +162,10 @@ def test_a_document_outside_the_named_project_is_not_found(
     response = _post(router, path, body, f"w59vu-404-{whose.replace(' ', '-')}")
 
     assert response.status == 404, response.body
-    assert json.loads(response.body)["error_code"] == "not_found"
+    envelope = json.loads(response.body)
+    assert envelope["error_code"] == "not_found"
+    # The aggregate names which rule refused, as the operation's description says.
+    assert envelope["details"]["aggregate_type"] == "Document", envelope
     assert _count_versions(session, first["document_uid"]) == 1
 
 
