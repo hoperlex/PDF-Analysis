@@ -11,6 +11,12 @@
  * approves a sheet pair, matches a finding or records a decision, and the raw differences
  * are shown exactly as computed.
  *
+ * **The one write it leads to** (`W59-DECISION-CARRYOVER-01`): on a «Без изменений» row whose
+ * older finding carries an expert decision and whose newer finding has none (the server's
+ * `findings.carryover_candidates`), an expert may press «Перенести решение» and confirm it;
+ * the newer finding then receives a new decision authored by that expert. Nothing is carried
+ * without the confirmation, and an account without the expert role sees no button.
+ *
  * «Стадии П → Р» (`mode=stage`, the W62 slice) is offered only when the older version is
  * confirmed at stage П and the newer at stage Р with one section; otherwise the ordinary
  * comparison is asked and, for a П/Р pair, refused with a reason that names the switch.
@@ -24,6 +30,7 @@ import { useState } from 'react';
 
 import type {
   DiffHunk,
+  DocumentUid,
   DocumentVersion,
   FindingMatchProposal,
   FindingRef,
@@ -35,6 +42,7 @@ import type {
 } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure } from '@/shared/lib';
+import { useMe } from '@/entities/account';
 import { CATEGORY_LABELS } from '@/entities/expert-decision';
 import {
   ClassificationBadges,
@@ -43,6 +51,8 @@ import {
   PROPOSAL_KIND_LABELS,
   SHEET_STATUS_LABELS,
   TOO_LARGE_TEXT,
+  canCarryOverDecision,
+  carryoverCandidateOf,
   orderedPair,
   pairingBasisText,
   refusalText,
@@ -52,6 +62,7 @@ import {
   useVersionList,
   versionLabel,
 } from '@/entities/document-version';
+import { CarryOverDecision } from '@/features/carry-over-decision';
 
 import styles from './version-comparison.module.css';
 
@@ -96,6 +107,8 @@ function SetComparison({
   readonly current: DocumentVersion;
 }) {
   const list = useVersionList(current.document_uid);
+  const me = useMe();
+  const mayCarry = me.data !== undefined && canCarryOverDecision(me.data.roles);
   const [chosenUid, setChosenUid] = useState<string | null>(null);
   const [stageMode, setStageMode] = useState(false);
   const [diffOffset, setDiffOffset] = useState(0);
@@ -187,7 +200,11 @@ function SetComparison({
       ) : comparison.isError ? (
         <ComparisonFailure error={comparison.error} />
       ) : (
-        <ComparisonResult comparison={comparison.data} onPage={setDiffOffset} />
+        <ComparisonResult
+          comparison={comparison.data}
+          onPage={setDiffOffset}
+          carry={mayCarry ? { projectUid, documentUid: current.document_uid } : null}
+        />
       )}
     </section>
   );
@@ -204,12 +221,20 @@ function ComparisonFailure({ error }: { readonly error: unknown }) {
   );
 }
 
+/** Where a carryover is sent; `null` when the account may not carry (not an expert). */
+interface CarryContext {
+  readonly projectUid: ProjectUid;
+  readonly documentUid: DocumentUid;
+}
+
 function ComparisonResult({
   comparison,
   onPage,
+  carry,
 }: {
   readonly comparison: Comparison;
   readonly onPage: (offset: number) => void;
+  readonly carry: CarryContext | null;
 }) {
   if (comparison.outcome === 'refused' || comparison.refusal !== null) {
     return (
@@ -242,7 +267,9 @@ function ComparisonResult({
       {comparison.sheet_diffs === null ? null : (
         <SheetDiffs page={comparison.sheet_diffs} onPage={onPage} />
       )}
-      {comparison.findings === null ? null : <FindingProposals findings={comparison.findings} />}
+      {comparison.findings === null ? null : (
+        <FindingProposals findings={comparison.findings} comparison={comparison} carry={carry} />
+      )}
     </div>
   );
 }
@@ -394,7 +421,51 @@ function FindingCell({ finding }: { readonly finding: FindingRef | null }) {
   );
 }
 
-function FindingProposals({ findings }: { readonly findings: NonNullable<Comparison['findings']> }) {
+function CarryCell({
+  findings,
+  proposal,
+  comparison,
+  carry,
+}: {
+  readonly findings: NonNullable<Comparison['findings']>;
+  readonly proposal: FindingMatchProposal;
+  readonly comparison: Comparison;
+  readonly carry: CarryContext | null;
+}) {
+  const candidate = carryoverCandidateOf(findings, proposal);
+  if (candidate === null || proposal.target_finding === null) return <span>—</span>;
+  if (carry === null) {
+    return (
+      <span className="am-note" data-carryover-state="read-only">
+        Решение более ранней версии может перенести эксперт.
+      </span>
+    );
+  }
+  return (
+    <CarryOverDecision
+      target={proposal.target_finding}
+      command={{
+        projectUid: carry.projectUid,
+        documentUid: carry.documentUid,
+        sourceVersionUid: comparison.source_version_uid,
+        targetVersionUid: comparison.target_version_uid,
+        mode: comparison.mode,
+        candidate,
+        targetRunId: comparison.target?.run_id ?? null,
+      }}
+    />
+  );
+}
+
+function FindingProposals({
+  findings,
+  comparison,
+  carry,
+}: {
+  readonly findings: NonNullable<Comparison['findings']>;
+  readonly comparison: Comparison;
+  readonly carry: CarryContext | null;
+}) {
   return (
     <>
       <h3>Соответствие замечаний (предложение)</h3>
@@ -414,6 +485,7 @@ function FindingProposals({ findings }: { readonly findings: NonNullable<Compari
                 <th scope="col">Более ранняя версия</th>
                 <th scope="col">Более поздняя версия</th>
                 <th scope="col">Основание</th>
+                <th scope="col">Решение эксперта</th>
               </tr>
             </thead>
             <tbody>
@@ -426,6 +498,14 @@ function FindingProposals({ findings }: { readonly findings: NonNullable<Compari
                   <td><FindingCell finding={proposal.source_finding} /></td>
                   <td><FindingCell finding={proposal.target_finding} /></td>
                   <td>{PROPOSAL_BASIS_TEXT[proposal.basis]}</td>
+                  <td>
+                    <CarryCell
+                      findings={findings}
+                      proposal={proposal}
+                      comparison={comparison}
+                      carry={carry}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>

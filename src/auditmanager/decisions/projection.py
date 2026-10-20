@@ -22,10 +22,11 @@ revocation exists only where an authorized expert appended a new event.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 _CURRENT_VERDICT = text(
@@ -94,8 +95,41 @@ def current_verdict(session: Session, finding_uid: str) -> CurrentVerdict | None
     missing row.
     """
     row = session.execute(_CURRENT_VERDICT, {"finding_uid": finding_uid}).mappings().first()
-    if row is None:
-        return None
+    return None if row is None else _verdict_from_row(row)
+
+
+_CURRENT_VERDICTS = text(
+    """
+    SELECT finding_uid,
+           current_verdict,
+           latest_verdict_decision_id,
+           latest_verdict_recorded_at,
+           latest_comment,
+           latest_comment_decision_id,
+           latest_decision_id,
+           decision_recorded_at,
+           decision_event_count,
+           decided_severity
+    FROM finding_current_verdict
+    WHERE finding_uid IN :finding_uids
+    """
+).bindparams(bindparam("finding_uids", expanding=True))
+
+
+def current_verdicts(session: Session, finding_uids: Sequence[str]) -> dict[str, CurrentVerdict]:
+    """The projection for a bounded batch of findings, keyed by ``finding_uid``.
+
+    The same view and the same row shape as :func:`current_verdict`, in one read; a
+    ``finding_uid`` no finding carries is absent from the answer, never ``pending``.
+    """
+    wanted = sorted({value for value in finding_uids if isinstance(value, str)})
+    if not wanted:
+        return {}
+    rows = session.execute(_CURRENT_VERDICTS, {"finding_uids": wanted}).mappings().all()
+    return {row["finding_uid"]: _verdict_from_row(row) for row in rows}
+
+
+def _verdict_from_row(row) -> CurrentVerdict:  # noqa: ANN001 - a SQLAlchemy RowMapping
     return CurrentVerdict(
         finding_uid=row["finding_uid"],
         current_verdict=row["current_verdict"],

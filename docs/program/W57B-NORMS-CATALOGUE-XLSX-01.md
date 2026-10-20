@@ -129,14 +129,15 @@ where `.venv` links to the `w55b-main-candidate` interpreter.
 ## Phase B — served operations and screens
 
 The contract slot was handed over at `1af17a48`, and the branch then merged `0f0903f2`
-(W59-ANALYSIS-SETTINGS-01) and `a820849a` (W59-VERSION-UPLOAD-01). Each merge took the base's
+(W59-ANALYSIS-SETTINGS-01), `a820849a` (W59-VERSION-UPLOAD-01) and `c22f2049`
+(W59-DECISION-CARRYOVER-01). Each merge took the base's
 contract, facts, client and lock as they were and **re-derived** this lane's additions on top
 (a scratch script that re-applies the two paths, two operations, three schemas and the reseal
 paragraph, then `api:generate`), rather than hand-merging generated files. **Surface at the
-final merge: 53/60/154 → 55 paths / 62 operations / 157 schemas.** The error catalogue still
+final merge: 54/61/158 → 56 paths / 63 operations / 161 schemas.** The error catalogue still
 has 25 codes, the migration head is still `0024_version_classification`, and
 `contract_version` is unchanged. `docs/program/CURRENT_STATE.md` is the integrator's and
-still states 53/60/154. It is the one remaining red in `tests/contract` that this lane
+still states the base's triple. It is the one remaining red in `tests/contract` that this lane
 caused (`test_doc_prose_facts`).
 
 ### Contract (`contracts/api/v1/openapi.json`, byte copy in `web/openapi/openapi.json`)
@@ -155,13 +156,13 @@ caused (`test_doc_prose_facts`).
   - `NormKindCount`.
   - `NormCatalogueEntryPage`: `norms_snapshot_id`, `items`, `page`, `total`, `kinds`.
   - No error code is added.
-- **Re-derived:** `api:generate` and `api:verify` (62 operations, contract SHA-256
-  `302c0f1bdb3ea21b5c1fc05817a45ada79c2e8624154d47032e03c420c9410fc`);
-  `web/FRONTEND_LOCK.json` (both digests, four generated-file digests, 55/62/157,
-  `content_commit` `a820849a`); `tests/support/expected_facts.json` (55, two triples, three
+- **Re-derived:** `api:generate` and `api:verify` (63 operations, contract SHA-256
+  `40efbb75d08420a3c5da7f96a43e9d958c066fa417968f1014db114b11b4beb6`);
+  `web/FRONTEND_LOCK.json` (both digests, four generated-file digests, 56/63/161,
+  `content_commit` `c22f2049`); `tests/support/expected_facts.json` (56, two triples, three
   names).
-- **Subset counts re-measured from the merged contract:** 44 of 62 operations declare their
-  own 422 and 18 declare none; 59 of 62 need a credential; 38 operations reference `NotFound`
+- **Subset counts re-measured from the merged contract:** 45 of 63 operations declare their
+  own 422 and 18 declare none; 60 of 63 need a credential; 39 operations reference `NotFound`
   (+1, `exportRunXlsx`).
 
 ### Backend
@@ -184,8 +185,8 @@ caused (`test_doc_prose_facts`).
 - **Prose and pins re-measured:** P02 §7 (sentence, history and table), `ALPHA_ROADMAP.md`,
   `infra/deploy/{README.md, proxy/nginx.conf, serve.py}`, `api/{README.md, app.py, health.py}`,
   `api/routers/{__init__, declarations, errors}.py`, the BFF route and `authorization.ts`. The
-  two mutation lines in `test_surface_counts_in_prose.py` now read «the fifty-four paths» and
-  «Sixty-one operations». The operation lists in `test_openapi_document.py`,
+  two mutation lines in `test_surface_counts_in_prose.py` now read «the fifty-five paths» and
+  «Sixty-two operations». The operation lists in `test_openapi_document.py`,
   `test_authorization.py`, `test_role_register.py` and
   `test_served_document_and_health_plane.py`, the NotFound count in
   `test_openapi_conformance.py`, and the composition registers (`EXPECTED_ADDRESSED` 20→21,

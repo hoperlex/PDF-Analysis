@@ -369,6 +369,9 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "cancelRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "reauditRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "appendDecision": _EXPERT,
+        # `W59-DECISION-CARRYOVER-01`. A carried decision is a verdict like any other: only an
+        # expert confirms it, and the command re-reads the role set in its own transaction.
+        "carryOverDecision": _EXPERT,
         "exportRunCsv": _EXPERT,
         # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook is the CSV's sibling: the same role.
         "exportRunXlsx": _EXPERT,

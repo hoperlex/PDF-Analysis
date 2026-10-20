@@ -152,6 +152,8 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "compareDocumentVersions",
             # `W59-VERSION-UPLOAD-01`: the next version takes a multipart body.
             "uploadDocumentVersion",
+            # `W59-DECISION-CARRYOVER-01`: the carryover takes a closed body.
+            "carryOverDecision",
             # `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue's filters and paging, and the
             # workbook's source refusals (`storage_integrity_error`, `required_norm_unavailable`).
             "listNormDocuments",

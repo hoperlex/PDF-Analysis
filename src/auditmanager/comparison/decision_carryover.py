@@ -162,6 +162,25 @@ def offer_decision_carryover(
     return tuple(sorted(offers, key=lambda item: item.match.target_finding_uid))
 
 
+def require_carryover_expert(expert_user_uid: str, actor_roles: frozenset[str]) -> None:
+    """Only an account holding ``expert`` confirms a carryover; ``admin`` alone does not.
+
+    ``actor_roles`` must be the account's role set read from authoritative state in the
+    confirming transaction (`R-60`), never a client claim. Shared by the pure plan below
+    and the served command (``comparison/carryover.py``).
+    """
+    try:
+        UserUid.parse(expert_user_uid)
+    except (DomainError, TypeError):
+        raise DecisionCarryoverRefused("expert_identity_invalid") from None
+    if (
+        not isinstance(actor_roles, frozenset)
+        or not actor_roles.issubset(ROLES)
+        or ROLE_EXPERT not in actor_roles
+    ):
+        raise DecisionCarryoverRefused("expert_role_required")
+
+
 def confirm_decision_carryover(
     *,
     current_matches: Sequence[MatchedDecision],
@@ -176,16 +195,7 @@ def confirm_decision_carryover(
     persist each event with source provenance and an idempotency key. This pure
     result is never itself an authority to write a verdict.
     """
-    try:
-        UserUid.parse(expert_user_uid)
-    except (DomainError, TypeError):
-        raise DecisionCarryoverRefused("expert_identity_invalid") from None
-    if (
-        not isinstance(actor_roles, frozenset)
-        or not actor_roles.issubset(ROLES)
-        or ROLE_EXPERT not in actor_roles
-    ):
-        raise DecisionCarryoverRefused("expert_role_required")
+    require_carryover_expert(expert_user_uid, actor_roles)
     if not isinstance(selected_offer_sha256s, (tuple, list)) or not selected_offer_sha256s:
         raise DecisionCarryoverRefused("selection_empty_or_invalid")
     if len(selected_offer_sha256s) > MAX_CARRYOVER_MATCHES:
