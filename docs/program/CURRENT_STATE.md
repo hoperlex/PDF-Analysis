@@ -14,7 +14,7 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **70 paths / 80 operations / 229 schemas**,
+The development API surface is **71 paths / 81 operations / 235 schemas**,
 the error catalogue has **25** codes, the migration head is
 **`0027_optimisation_proposals`**, and `VERSION` is `0.6.0`. These are checkout
 facts; the release tree has its own frozen 47/54/123 surface and
@@ -92,7 +92,11 @@ for the `R-139` night window of 2026-10-20, `NIGHT-1020-INT-01.md`.
   `cheaper_analog` proposals from the price list and the effective vendor
   list, decides each (accept / reject / revise) in an append-only history, and
   downloads a formula-escaped CSV; a saving exists only when both prices and a
-  quantity do. Expert review of the draft profiles remains open.
+  quantity do. «Оптимизация разделов» (`getSectionSpecification`) shows a
+  section's Form-7 specification across projects whose current version is
+  confirmed in it — rows never merged across projects, each priced from its
+  own project's list, per-project totals only. No menu item is a stub any
+  more. Expert review of the draft profiles remains open.
 
 ## Pointers and history
 
