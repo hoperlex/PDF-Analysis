@@ -19,7 +19,7 @@ in the schema references one with a foreign key.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Final
 
@@ -252,7 +252,14 @@ class DocumentVersionRecord:
     recognised_character_count: int | None = None
     #: `W59-SECTION-SEAL-01`. The version's persisted classification, or ``None`` while no
     #: expert has classified it. Run start routes the analysis profile from this field only.
-    classification: VersionClassificationRecord | None = None
+    #:
+    #: `CLASSIFICATION-CORRECTION-01`: the **current** classification, which an expert may
+    #: correct at any time -- unlike every other field here, which is immutable. So it is not
+    #: part of the record's equality: the run input readers re-read a version after reading
+    #: its bytes and refuse ``version_changed_during_*_read`` when the two records differ, and
+    #: a correction that commits in that window must not fail a run that is pinned to the
+    #: profile it started with.
+    classification: VersionClassificationRecord | None = field(default=None, compare=False)
 
     def entry(self, role: str) -> ManifestEntry:
         """The manifest entry for one role.
