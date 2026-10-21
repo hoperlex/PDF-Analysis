@@ -71,6 +71,7 @@ export function arVersion(overrides: Partial<DocumentVersion> = {}): DocumentVer
       section_code: 'AR',
       confirmed_at: '2026-10-20T08:00:00Z',
       confirmed_by_user_uid: EXPERT_UID,
+      revision: 1,
     },
     ...overrides,
   };
@@ -87,6 +88,7 @@ export function otherSectionVersion(): DocumentVersion {
       section_code: 'KJ',
       confirmed_at: '2026-10-20T08:00:00Z',
       confirmed_by_user_uid: EXPERT_UID,
+      revision: 1,
     },
   });
 }

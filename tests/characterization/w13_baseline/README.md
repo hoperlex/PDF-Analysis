@@ -8,6 +8,24 @@ four-times-certified surface. This directory is what that rewrite has to be *wro
 
 **After the rewrite, the FastAPI implementation must reproduce these bytes exactly.**
 
+## Amended 2026-10-21 by `CLASSIFICATION-CORRECTION-01`, after `W59-SEAL-FOLLOWUP-01`
+
+**37 records, none added: four moved by one property.** Migration `0028` lets an
+expert correct a version's classification by appending numbered revisions, and the sealed
+`VersionClassification` gained the required property `revision` (`1` is the original
+confirmation case 02b makes; corrections are `2` and later). So the `classification` object in
+records `02b`, `13`, `32` and `33` ends with `"revision": 1`, after `confirmed_at`, where the
+model emits it last. The other 33 records reproduced untouched.
+
+Measured, not assumed: the suite was run on the lane's own stack after the contract moved, and
+exactly these four failed, each at the byte where `"revision": 1` begins. They were edited by that
+one insertion in the record's response text (`capture.py` was not run: it rewrites every record,
+see the previous amendment). `13`, `32` and `33` already carried the `D-181` exception block and
+gained `D-182` and one sentence; `02b` was added without a block and now carries one of its own
+(`journey.EXCEPTION_CCORR`). `test_the_four_classification_records_moved_by_the_revision_and_nothing_else`
+pins the move by digest: take `, "revision": 1` out and each body is the previous capture's
+again. The case list, the operation list and the tokens are unchanged.
+
 ## Amended 2026-10-20 by `W59-SEAL-FOLLOWUP-01`, after `W59-SECTION-SEAL-01` (`R-139`)
 
 **Thirty-seven records: one case added.** Since `bd08e03c` (`W59-SECTION-SEAL-01`),

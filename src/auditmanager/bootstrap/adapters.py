@@ -487,6 +487,19 @@ def _classification_view(record: Any) -> models.VersionClassification | None:
         section_code=models.ProjectSection(record.section_code),
         confirmed_by_user_uid=record.confirmed_by_user_uid,
         confirmed_at=record.confirmed_at,
+        revision=record.revision,
+    )
+
+
+def _revision_view(record: Any) -> models.VersionClassificationRevision:
+    """`CLASSIFICATION-CORRECTION-01`. One history entry in the frozen shape."""
+    return models.VersionClassificationRevision(
+        revision=record.revision,
+        project_stage=models.ProjectStage(record.project_stage),
+        section_code=models.ProjectSection(record.section_code),
+        actor_user_uid=record.actor_user_uid,
+        at=record.decided_at,
+        reason=record.reason,
     )
 
 
@@ -543,6 +556,43 @@ class SectionAdapter(_SessionHolder):
 
         return self._write(work)
 
+    def correct_classification(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        version_uid: str,
+        project_stage: str,
+        section_code: str,
+        reason: str,
+        expected_revision: int,
+        user_uid: str,
+    ) -> models.VersionClassification:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.sections.public import correct_document_version_classification
+
+        def work(session: Session) -> models.VersionClassification:
+            stored = correct_document_version_classification(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                version_uid=version_uid,
+                project_stage=project_stage,
+                section_code=section_code,
+                reason=reason,
+                expected_revision=expected_revision,
+                actor_uid=user_uid,
+                # Read in this transaction, after the version's classification is locked by
+                # the command: the register checked the role before the route, this is the
+                # command's own check.
+                actor_roles=AccountRepository().roles_of(session, user_uid),
+            )
+            view = _classification_view(stored)
+            assert view is not None
+            return view
+
+        return self._write(work)
+
     def get_section_review(
         self, *, project_uid: str, document_uid: str, version_uid: str
     ) -> models.SectionReview:
@@ -561,6 +611,7 @@ class SectionAdapter(_SessionHolder):
         return models.SectionReview(
             version_uid=packet.version_uid,
             classification=_classification_view(facts.classification),
+            revisions=[_revision_view(entry) for entry in facts.revisions],
             recognised_text_consulted=text is not None,
             options=[
                 models.SectionReviewOption(

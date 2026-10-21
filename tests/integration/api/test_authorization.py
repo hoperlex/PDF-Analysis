@@ -197,6 +197,11 @@ GUARDED = (
         "/versions/ver_01M2545JSD15ETSNNV904X991J/classification",
     ),
     (
+        "correctVersionClassification", "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/classification/corrections",
+    ),
+    (
         "getVersionSectionReview", "GET",
         "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
         "/versions/ver_01M2545JSD15ETSNNV904X991J/section-review",

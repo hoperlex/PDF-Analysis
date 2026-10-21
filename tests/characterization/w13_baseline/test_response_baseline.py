@@ -275,6 +275,7 @@ NON_TERMINAL_RUN_STATES = ("created", "queued", "running", "validating")
 #: performs; no row names the drift itself, and the blocks say so. Record 03 is an accepted
 #: run with no stages and does not move.
 PERMITTED_EXCEPTIONS = {
+    "02b-classifyDocumentVersion.success": ("D-182",),
     "03-startRun.success": ("D-19", "D-21", "D-20"),
     "04-startRun.replay": ("D-19", "D-21", "D-181"),
     "05-startRun.replay_with_normalised_property": ("D-19", "D-21", "D-181"),
@@ -282,11 +283,11 @@ PERMITTED_EXCEPTIONS = {
     "07-getRunStatus.correlation_supplied": ("D-19", "D-21", "D-181"),
     "10-appendDecision.success": ("D-78",),
     "11-listDecisionHistory.success": ("D-78",),
-    "13-getDocumentVersion.success": ("D-181",),
+    "13-getDocumentVersion.success": ("D-181", "D-182"),
     "16-listProjects.success": ("D-16",),
     "31-streamDocumentVersionContent.storage_credential_refused": ("D-7",),
-    "32-listDocuments.success": ("D-181",),
-    "33-listVersions.success": ("D-181",),
+    "32-listDocuments.success": ("D-181", "D-182"),
+    "33-listVersions.success": ("D-181", "D-182"),
     "34-listRuns.success": ("D-181",),
 }
 
@@ -433,12 +434,13 @@ _PRE_CLASSIFICATION_VERSION_BODIES = {
 
 #: The one property each of the three bodies gained, exactly as a tokenised record spells it:
 #: the classification case 02b asked for (stage ``P``, section ``AR``), the version and the
-#: confirmer by exact value, and ``confirmed_at`` under its declared timestamp name. It is
+#: confirmer by exact value, ``confirmed_at`` under its declared timestamp name and, since
+#: `CLASSIFICATION-CORRECTION-01`, the ``revision`` (``1``: the original confirmation). It is
 #: written out here and is not read from the journey or from case 02b's record.
 _APPENDED_CLASSIFICATION = (
     ', "classification": {"version_uid": "{{version_uid}}", "project_stage": "P", '
     '"section_code": "AR", "confirmed_by_user_uid": "{{user_uid}}", "confirmed_at": '
-    '"{{ts_6}}"}'
+    '"{{ts_6}}", "revision": 1}'
 )
 
 
@@ -462,10 +464,57 @@ def test_the_three_version_records_moved_by_the_classification_and_nothing_else(
         assert hashlib.sha256(restored.encode("utf-8")).hexdigest() == digest, (
             f"{case} moved by more than its appended classification"
         )
-        assert record["exception"]["debt"] == ["D-181"], case
+        assert record["exception"]["debt"] == ["D-181", "D-182"], case
         assert "W59-SEAL-FOLLOWUP-01" in record["exception"]["permitted_change"], case
         for token in ("{{ts_6}}", "{{user_uid}}"):
             assert token in record["tokens"], (case, token)
+
+
+#: `CLASSIFICATION-CORRECTION-01`. The SHA-256 of the four classification-bearing records' body
+#: text as committed before the classification gained its ``revision`` (``git show
+#: 4d5ae509:<record>``'s ``response.body.text``, i.e. the lane's tip before this move), never
+#: read from the files now: an expectation computed from the files it checks could not report
+#: that something besides the ``revision`` moved. 32 and 33 share a digest for the reason the
+#: pre-classification ones do.
+_PRE_REVISION_BODIES = {
+    "02b-classifyDocumentVersion.success": (
+        "297ce59b12330e1464511409789aed47acb408ba3b44ec0287514349eb666f9f"
+    ),
+    "13-getDocumentVersion.success": (
+        "293c4564911d5d17cdb4e3b011f9bcd3788593c0bb2efebd81b72ed6ff89f3f5"
+    ),
+    "32-listDocuments.success": (
+        "6bf20cc177c7f898852c9d3bf8e8d6b04aca39dfacdbdb37e297f90f84708497"
+    ),
+    "33-listVersions.success": (
+        "6bf20cc177c7f898852c9d3bf8e8d6b04aca39dfacdbdb37e297f90f84708497"
+    ),
+}
+
+
+def test_the_four_classification_records_moved_by_the_revision_and_nothing_else() -> None:
+    """Take the one appended property out and each body is the previous capture's again.
+
+    The method of the two digest tests above, and for their reason: a re-capture pins whatever
+    the server said, so what is pinned is the *difference* -- ``, "revision": 1`` appended to
+    the ``classification`` object, after ``confirmed_at``, where the model emits it last.
+    """
+    appended = ', "revision": 1'
+    for case, digest in _PRE_REVISION_BODIES.items():
+        record = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+        text = record["response"]["body"]["text"]
+        assert text.count(appended) == 1, case
+        stamp = "{{ts_5}}" if case.startswith("02b") else "{{ts_6}}"
+        assert '"confirmed_at": "' + stamp + '"' + appended + "}" in text, (
+            f"{case}: the revision is not the last property of the classification"
+        )
+        restored = text.replace(appended, "")
+        assert hashlib.sha256(restored.encode("utf-8")).hexdigest() == digest, (
+            f"{case} moved by more than its revision"
+        )
+        assert "D-182" in record["exception"]["debt"], case
+        assert "CLASSIFICATION-CORRECTION-01" in record["exception"]["permitted_change"], case
+        assert record["exception"]["decided_by"] in ("f290f7b7", "bd08e03c"), case
 
 
 #: `W59-SEAL-FOLLOWUP-01`, finding F-1. The SHA-256 of records 04-07 and 34's body text as

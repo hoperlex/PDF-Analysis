@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "8894201e289133bae89c844d0861bdfb0688f5749eb27cd39e1fc1d3a1ee7a5b",
-    "content_commit": "e668171b",
-    "content_commit_subject": "W63-SECTION-FORM7-01 API reseal on integration base e668171b",
-    "dispatch_named_commit": "e668171b",
-    "commit_note": "W60 adds the optimisation passes, their deterministic proposals and the experts' decisions: startOptimisationPass (POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes, expert, keyed), listOptimisationPasses, listOptimisationProposals, decideOptimisationProposal (expert, keyed), listProposalDecisions and exportOptimisationProposalsCsv, five paths and eighteen schemas, on top of W60-OPT-MATCH-01 (getSpecificationPrices), W60-PRICE-LIST-01 (six price-list and vendor-list operations) and W61-DISPATCHER-01; the identities opp_, opr_ and opd_ (domain revision 17); no error code is added. W63-SECTION-FORM7-01 adds a section's combined Form-7 specification across projects: getSectionSpecification (GET /sections/{section_code}/specification, any one role; optional project_uid, q, offset, limit) and six schemas (SectionSpecification, SectionSpecificationProject, SectionSpecificationSource, SectionSpecificationExcludedVersion, SectionSpecificationRow, SectionSpecificationRowPage), built from the priced specification's own: every row carries its project, set, version, page, sheet and line span, rows are never merged across projects, each row is priced from its own project's current price list, totals exist per project and currency only, a current version nobody classified is listed as excluded, a bound is a state; no error code is added.",
+    "sha256": "b4b7b9fc67f80ae2a9dc0a12abeab442b5a2f06bc7434294261492566036224f",
+    "content_commit": "c90d52f3",
+    "content_commit_subject": "CLASSIFICATION-CORRECTION-01 API reseal on integration base c90d52f3",
+    "dispatch_named_commit": "c90d52f3",
+    "commit_note": "CLASSIFICATION-CORRECTION-01 adds an expert's append-only correction of a version's classification: correctVersionClassification (POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections, expert only, 201; body project_stage, section_code, reason, expected_revision) and two schemas (CorrectVersionClassificationRequest, VersionClassificationRevision). VersionClassification gains the required revision and SectionReview gains revisions, the history. No error code is added and contract_version does not move. Paths 71 -> 72, operations 81 -> 82, schemas 235 -> 237.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 71,
-    "operations": 81,
-    "component_schemas": 235,
+    "paths": 72,
+    "operations": 82,
+    "component_schemas": 237,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "8894201e289133bae89c844d0861bdfb0688f5749eb27cd39e1fc1d3a1ee7a5b",
+    "snapshot_sha256": "b4b7b9fc67f80ae2a9dc0a12abeab442b5a2f06bc7434294261492566036224f",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "26c153e3b73957caad6f752e5acdf41a7431a3349a74d3ab76358121c2b613b6",
-      "index.ts": "da30ac764efe0e6a470a8bbe95873b252ffe046fffae84bfa54d0cfb403000bf",
-      "operations.gen.ts": "e542543f08ab7f0050031e744240c7fc2e76e72d0fde547b90b08273066f8677",
-      "types.gen.ts": "746ec9a3f11df8fc5b8567cfcd2eb9f4fc22255d7e63860747885a298c161087"
+      "client.gen.ts": "131208f4a1cfe3ebf6202a7d4d907781cb7927b4f28e873958b9799052de2401",
+      "index.ts": "72c762637bfedf250b3beccfc9a23b0fec0dd172a1e8d89f5d0ff78df96b6213",
+      "operations.gen.ts": "c38502dc41421246690c4c514bb7eb0d6392a943381e0637e4d99830c984a9c0",
+      "types.gen.ts": "6cd6749d339e7822df490c065bad12f9e38a72da529d74e7f3319e9ce9d34763"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

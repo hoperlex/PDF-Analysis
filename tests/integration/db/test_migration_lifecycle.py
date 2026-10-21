@@ -51,6 +51,9 @@ EXPECTED_TABLES = {
     "optimisation_pass",
     "optimisation_proposal",
     "optimisation_proposal_decision",
+    # `0028_classification_corrections`: an expert's append-only corrections of a version's
+    # stage and section (revision 2 and later; revision 1 is `document_version_classification`).
+    "document_version_classification_correction",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
@@ -87,8 +90,15 @@ EXPECTED_TABLES = {
 }
 
 #: ``work_assignment_current`` (`0025_work_assignments`): each assignment's latest event and
-#: current assignee, derived from the history.
-EXPECTED_VIEWS = {"finding_current_verdict", "work_assignment_current"}
+#: current assignee, derived from the history. `0028_classification_corrections` adds the
+#: classification's history (``version_classification_revision``) and its derived current
+#: revision (``version_classification_current``).
+EXPECTED_VIEWS = {
+    "finding_current_verdict",
+    "work_assignment_current",
+    "version_classification_revision",
+    "version_classification_current",
+}
 
 #: The alpha runner instantiates none of these aggregates. Their absence is a deliverable, so
 #: it is asserted rather than assumed.

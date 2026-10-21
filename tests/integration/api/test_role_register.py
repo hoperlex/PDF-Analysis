@@ -93,6 +93,12 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
         "/versions/ver_01M2545JSD15ETSNNV904X991J/classification",
     ),
+    # `CLASSIFICATION-CORRECTION-01`. The correction is an expert's write on the same chain.
+    "correctVersionClassification": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/classification/corrections",
+    ),
     "getVersionSectionReview": (
         "GET",
         "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
@@ -257,6 +263,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "startRun": _EXPERT,
     # `W59-SECTION-SEAL-01`: only an expert confirms a section; admin alone does not.
     "classifyDocumentVersion": _EXPERT,
+    # `CLASSIFICATION-CORRECTION-01`: only an expert corrects a classification; admin alone does not.
+    "correctVersionClassification": _EXPERT,
     "cancelRun": frozenset({"expert", "admin"}),
     "reauditRun": frozenset({"expert", "admin"}),
     "appendDecision": _EXPERT,

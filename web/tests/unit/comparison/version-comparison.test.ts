@@ -30,6 +30,7 @@ function classification(versionUid: string, stage: 'P' | 'R', section = 'AR'): V
     section_code: section as VersionClassification['section_code'],
     confirmed_by_user_uid: `usr_${ULID}`,
     confirmed_at: '2026-10-20T08:00:00Z',
+    revision: 1,
   };
 }
 

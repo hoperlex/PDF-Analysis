@@ -8,7 +8,10 @@
  *
  *   - **confirmed** — the stage and section badges, who confirmed them and when, and «профиль
  *     анализа недоступен» when the review says the confirmed section has no registered
- *     analysis profile (so a run will be refused; nothing is analysed in its place);
+ *     analysis profile (so a run will be refused; nothing is analysed in its place). Since
+ *     `CLASSIFICATION-CORRECTION-01` it also names the revision, lists the history (every
+ *     earlier revision with its expert, time and reason) and, for an expert, offers
+ *     «Исправить»: the correction form, based on the revision shown;
  *   - **not confirmed, and the reader is an expert** — the confirmation form
  *     (`features/classify-version`);
  *   - **not confirmed, and the reader is not an expert** — one read-only sentence, «Раздел ещё
@@ -18,7 +21,9 @@
  * The roles come from the session the route has just checked (`requireScreen`), the way
  * «Нормы» receives them; they only decide which control to draw, and the API still checks
  * the write. A `409` from the form flips this panel to the confirmed branch with a note
- * that the stored classification came from another decision.
+ * that the stored classification came from another decision; a correction a colleague made
+ * first shows its own refusal inside the correction form and the panel reads the stored
+ * classification again.
  *
  * The panel carries `id="version-classification"`, which is where the run control's refusal
  * links to (`routes.versionClassification`).
@@ -33,11 +38,16 @@ import { failureMessage } from '@/shared/api/failure-message';
 import type { VersionAddress } from '@/entities/document-version';
 import {
   ClassificationBadges,
+  ClassificationHistory,
   canClassifyVersion,
+  canCorrectClassification,
+  isCorrected,
   reviewOptionOf,
+  revisionText,
   useSectionReview,
 } from '@/entities/document-version';
 import { ClassifyVersionForm } from '@/features/classify-version';
+import { CorrectVersionClassificationForm } from '@/features/correct-version-classification';
 
 export interface VersionClassificationProps {
   /** Built from the fetched version's own body, never from the address bar. */
@@ -53,6 +63,10 @@ export interface VersionClassificationViewProps {
   /** Whether the reader's own confirmation was just refused with `409`. */
   readonly conflict: boolean;
   readonly onConflict: () => void;
+  /** Whether the correction form is open (`CLASSIFICATION-CORRECTION-01`). Closed when absent. */
+  readonly correcting?: boolean | undefined;
+  /** Open or close the correction form. */
+  readonly onCorrecting?: ((open: boolean) => void) | undefined;
 }
 
 /** The three answers, from a review already in hand. Rendered by the static harness. */
@@ -62,6 +76,8 @@ export function VersionClassificationView({
   roles,
   conflict,
   onConflict,
+  correcting = false,
+  onCorrecting,
 }: VersionClassificationViewProps) {
   const classification = review.classification;
 
@@ -84,11 +100,14 @@ export function VersionClassificationView({
           {conflict ? (
             <p data-classification-conflict="">
               Стадия и раздел уже подтверждены другим решением — показана сохранённая
-              классификация. Ваш выбор не применён, и исправить её пока нельзя.
+              классификация. Ваш выбор не применён; изменить её может эксперт кнопкой
+              «Исправить» с указанием причины.
             </p>
           ) : null}
-          <p>
-            Подтверждено экспертом {formatInstant(classification.confirmed_at)} (
+          <p data-classification-revision-line={classification.revision}>
+            {revisionText(classification.revision)}.{' '}
+            {isCorrected(classification) ? 'Исправлено экспертом' : 'Подтверждено экспертом'}{' '}
+            {formatInstant(classification.confirmed_at)} (
             <code>{classification.confirmed_by_user_uid}</code>).
           </p>
           {profileUnavailable ? (
@@ -98,6 +117,29 @@ export function VersionClassificationView({
               запускается.
             </p>
           ) : null}
+          {canCorrectClassification(roles) && onCorrecting !== undefined ? (
+            correcting ? (
+              <CorrectVersionClassificationForm
+                address={address}
+                review={review}
+                current={classification}
+                onDone={() => onCorrecting(false)}
+                onCancel={() => onCorrecting(false)}
+              />
+            ) : (
+              <p>
+                <button
+                  type="button"
+                  className="am-button"
+                  data-classification-correct=""
+                  onClick={() => onCorrecting(true)}
+                >
+                  Исправить
+                </button>
+              </p>
+            )
+          ) : null}
+          <ClassificationHistory revisions={review.revisions} />
         </div>
       </div>
     );
@@ -126,6 +168,7 @@ export function VersionClassificationView({
 export function VersionClassification({ address, roles }: VersionClassificationProps) {
   const review = useSectionReview(address);
   const [conflict, setConflict] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
 
   let body;
   if (review.isPending) {
@@ -150,6 +193,8 @@ export function VersionClassification({ address, roles }: VersionClassificationP
         roles={roles}
         conflict={conflict}
         onConflict={() => setConflict(true)}
+        correcting={correcting}
+        onCorrecting={setCorrecting}
       />
     );
   }

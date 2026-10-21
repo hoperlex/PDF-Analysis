@@ -4,7 +4,18 @@
   "purpose": "startRun's third prerequisite since W59-SECTION-SEAL-01: an expert confirms the version's project stage and section. 200, and the stored classification naming its confirmer",
   "captured_through": "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()",
   "pre_authorization": "Captured after the T-6 seam landed. Every request here presents the configured bearer credential and is answered. No record here exercises a caller's rights, so none pins 401 or 403.",
-  "exception": null,
+  "exception": {
+    "debt": [
+      "D-182"
+    ],
+    "ruling": "OWNER_RULINGS_2026-09-17.md section 3.39, R-139 and R-135 -- the night development window and the code-first beta series in which the append-only correction of a version's classification (`CLASSIFICATION-CORRECTION-01`) was frozen and integrated. Its contract commit added the required `revision` to the sealed `VersionClassification`",
+    "status": "taken",
+    "decided_by": "f290f7b7",
+    "decided_by_subject": "docs(tasks): freeze CLASSIFICATION-CORRECTION-01 and NORM-REFS-RUN-01 (phase A static now)",
+    "decided_on": "2026-10-21",
+    "permitted_change": "`CLASSIFICATION-CORRECTION-01` (migration `0028_classification_corrections`) lets an expert correct a version's classification by appending numbered revisions, and `VersionClassification` gained the required property `revision`: 1 is the original confirmation this case makes, 2 and later are corrections. This record's body therefore ends its `classification` object with `revision` (`1`), appended after `confirmed_at` because the model emits it last. **No property was renamed, removed, re-typed or reordered and no status or header moved**; removing that one property restores the previous body byte for byte, which `test_the_four_classification_records_moved_by_the_revision_and_nothing_else` asserts by digest. `additionalProperties: false` is satisfied because `revision` is a name the resealed document declares. This is the whole of the permitted change; the record is compared byte for byte against the new expectation like every other.",
+    "everything_else": "Every other difference in this directory is a failure of the wave, whatever argument accompanies it."
+  },
   "unordered": null,
   "request": {
     "method": "PUT",
@@ -41,7 +52,7 @@
     "body": {
       "kind": "text",
       "length": 199,
-      "text": "{\"version_uid\": \"{{version_uid}}\", \"project_stage\": \"P\", \"section_code\": \"AR\", \"confirmed_by_user_uid\": \"{{user_uid}}\", \"confirmed_at\": \"{{ts_5}}\"}",
+      "text": "{\"version_uid\": \"{{version_uid}}\", \"project_stage\": \"P\", \"section_code\": \"AR\", \"confirmed_by_user_uid\": \"{{user_uid}}\", \"confirmed_at\": \"{{ts_5}}\", \"revision\": 1}",
       "note": ""
     }
   },
