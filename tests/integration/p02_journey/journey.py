@@ -65,7 +65,10 @@ BUNDLES = CORPUS / "bundles"
 BASELINE_BUNDLE = BUNDLES / "ar_baseline.zip"
 RECORDINGS = REPOSITORY_ROOT / "fixtures" / "recorded" / "text_analysis"
 
-#: Every base table in the P02 head. Counted before and after a replayed journey, because
+#: Every base table of the migrated schema (kept equal to ``information_schema`` by
+#: :func:`assert_table_list_is_complete`, which is what makes a new migration's tables
+#: show up here as a failure and not as a silently narrower claim). Counted before and
+#: after a replayed journey, because
 #: "idempotent" is a claim about the whole schema and not about the four tables a module
 #: happens to remember. ``alembic_version`` is included deliberately: a journey that
 #: migrated something would show up here and nowhere else.
@@ -124,6 +127,30 @@ P02_TABLES = (
     "provider_call_effect",
     "registration_request",
     "stage_result",
+    # `0023_norm_citations`. Retrieval-set custody and the certified norm-citation partition
+    # of an observation belong to the AR v3 citation path. The journey runs the AR text
+    # profile, which retrieves no norm and cites none, so both counts are expected
+    # unchanged across a replay -- a claim worth counting rather than leaving unread.
+    "norm_retrieval_set",
+    "finding_observation_norm_citation",
+    # `0024_version_classification`. A row appears only when an expert confirms a version's
+    # project stage and section; an upload and a run write none.
+    "document_version_classification",
+    # `0025_work_assignments`. A project or document given to an expert, and its history.
+    # The journey assigns nobody.
+    "work_assignment",
+    "work_assignment_event",
+    # `0026_price_lists`. The storage of the project-optimisation screens: price and vendor
+    # list revisions and their rows. The journey loads no list.
+    "price_list_revision",
+    "price_list_position",
+    "vendor_list_revision",
+    "vendor_list_entry",
+    # `0027_optimisation_proposals`. Optimisation passes, their proposals and the experts'
+    # decisions on them. The journey runs no pass and records no decision on one.
+    "optimisation_pass",
+    "optimisation_proposal",
+    "optimisation_proposal_decision",
 )
 
 

@@ -10,6 +10,12 @@ from pathlib import Path
 import pytest
 
 from auditmanager.analysis.profiles.ar_v2 import content
+from auditmanager.analysis.profiles.ar_v2.response_schema import (
+    CATEGORIES as AR_V2_CATEGORIES,
+)
+from auditmanager.analysis.profiles.ar_v3.response_schema import (
+    NORMATIVE_CATEGORIES as AR_V3_NORMATIVE_CATEGORIES,
+)
 
 
 def test_reviewed_sections_are_fixed_and_match_the_frozen_category_enum() -> None:
@@ -28,7 +34,12 @@ def test_reviewed_sections_are_fixed_and_match_the_frozen_category_enum() -> Non
     named = re.findall(r"^- ([a-z_]+):", category_text, re.MULTILINE)
     api = json.loads(Path("contracts/api/v1/openapi.json").read_text())
     frozen = api["components"]["schemas"]["FindingCategory"]["enum"]
-    assert named == frozen
+    # Since the normative-citation reseal the sealed enum holds twelve values:
+    # the seven AR v2 emits ("exactly seven" in the reviewed prompt) followed by
+    # the five normative ones that belong to AR v3. The AR v2 prompt names the
+    # first seven, the ones its own response schema allows, and none of the rest.
+    assert named == list(AR_V2_CATEGORIES)
+    assert frozen == named + list(AR_V3_NORMATIVE_CATEGORIES)
 
 
 def test_only_reviewed_prompt_blocks_are_returned() -> None:
