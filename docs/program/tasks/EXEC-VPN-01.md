@@ -28,7 +28,7 @@ lane does not run it.
 
 ## Frozen inputs
 
-- base commit: `origin/dev` at the integrator's freeze, after `EXEC-HTTP-01`;
+- base commit: `origin/dev` at the integrator's freeze, after `EXEC-SSH-01`;
 - plan §2 (directions; `vpn` as a transport label), §7 (what is provable without the
   stand);
 - `R-143a` (VPN on the host by the operator, not from the UI), `R-29` clause 2 (covered by

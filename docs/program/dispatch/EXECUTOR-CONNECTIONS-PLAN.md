@@ -210,8 +210,12 @@ Surveyed on `7cb317b0`; every line reference below is from that tree.
 
   Each secret is sealed to the active public key: ephemeral X25519, HKDF-SHA256, then
   AES-256-GCM. The associated data is
-  `secret_id|connection_id|purpose|kid|destination`. The destination is the normalised
-  origin (`scheme://host:port`) for `http_api`, or `host:port` for SSH.
+  `secret_id|connection_id|purpose|kid|destination`. The destination is the whole
+  route the secret travels: `transport|ssh_endpoint|origin`. Concretely it is
+  `direct||scheme://host:port` or `vpn||scheme://host:port` for `http_api`,
+  `ssh_tunnel|host:port|scheme://host:port` for a tunnelled `http_api` (so a changed
+  SSH endpoint unbinds the key even when the tunnelled origin stays
+  `http://localhost:11434`), and `ssh_command|host:port|` for SSH.
   - The ciphertext cannot be moved to another row.
   - **A key opens only for the destination it was entered for.** A revision that changes
     the destination leaves the current secret `secret_unreadable` for it, and the key must

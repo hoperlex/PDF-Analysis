@@ -12,7 +12,8 @@ command. Then «Проверить» runs.
 **«Проверить» on the worker:**
 
 1. On a first contact it reads the host key and shows its fingerprint. The administrator
-   confirms it, and the confirmed fingerprint goes into a new revision. From then on the
+   confirms it, and the confirmed host-key line (the probe's `observed_host_key`) goes into a
+   new revision as `host_key`. From then on the
    key is pinned, and a changed host key is refused as `host_key_changed`.
 2. It runs the profile once.
 

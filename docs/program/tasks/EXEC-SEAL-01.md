@@ -176,8 +176,9 @@ No paid call.
 1. **New bounded context `src/auditmanager/executors/`:**
    - `model.py` (kinds, settings validation per kind, the route vocabulary `text_analysis`);
    - `sealing.py`: X25519 + HKDF-SHA256 + AES-256-GCM. The associated data is
-     `secret_id|connection_id|purpose|kid|destination`. The destination is the
-     normalised `scheme://host:port` for `http_api`, or `host:port` for SSH (plan §4.1).
+     `secret_id|connection_id|purpose|kid|destination`. The destination is
+     `transport|ssh_endpoint|origin`, exactly as plan §4.1 defines it, so an `ssh_tunnel`
+     key is bound to the SSH endpoint as well as the tunnelled origin.
      The module also holds a key ring, a public-only loader for the `api` and a private
      loader for the worker. There is no fingerprint; the API stores and returns only
      `last4`;
@@ -193,7 +194,21 @@ No paid call.
      the public half of a generated SSH key;
    - `executor_connection_revision` carries the pin id and the gateway model name as
      separate fields (plan §3), neither derived from the other;
-   - `executor_probe` (state and outcome vocabulary: `requested`, `ok`, `ip_refused`,
+   - `executor_probe`, with these columns and the same fields in the contract's probe
+     schema:
+     - `probe_id`, `connection_id`, `revision_id`, `secret_id` (the secret it ran on);
+     - `state`, which is `requested`, `running` or `finished`;
+     - `outcome`;
+     - `reported_model`, `identity_basis`, `latency_ms`, `http_status`;
+     - `rate_check`, which is `checked`, `not_reported`, `mismatch` or `not_metered`;
+     - `observed_host_key`, the full line, for SSH;
+     - `detail`, scrubbed, 500 characters at most;
+     - `requested_at`, `requested_by`, `started_at`, `finished_at`.
+
+     `getExecutorConnection` returns each revision's latest probe and the last 10 probes.
+     The worker's sweep turns a probe that is still `requested`, never `running`, into
+     `no_worker` after 120 s; a `running` probe ends by its own kind's timeout.
+   - `executor_probe` outcome vocabulary: `requested`, `ok`, `ip_refused`,
      `credential_refused`, `model_mismatch`, `rate_mismatch`, `timeout`, `unreachable`,
      `protocol_error`, `secret_unreadable`, `host_key_unpinned`, `host_key_changed`,
      `no_runner_online`, `destination_refused`, `kind_not_served`, `no_worker`);
@@ -209,7 +224,9 @@ No paid call.
    - `CostBasis` and `ck_model_call_cost_basis` (`0004`) gain `unmetered` (plan §5). The
      six web consumers (`run-state-badge.tsx:128`, `run-presentation.ts:431-445` and the
      three widgets that index the label map) gain the case, with the caption
-     «не тарифицируется». The run-level aggregate rule belongs to `EXEC-HTTP-01`;
+     «не тарифицируется». `runCost` (`run-presentation.ts:406`) maps `unmetered` to that
+     caption, not to `unrecognized` and not to `absent`. The run-level aggregate rule
+     belongs to `EXEC-HTTP-01`;
    - `scripts/recovery/product_purge.py` and `schema_coverage.py` classify every new
      table, command type and event type. Every `executor_*` table is KEEP; `executor_task`
      arrives in `0031`, as PRODUCT.
@@ -299,8 +316,8 @@ The integrator hands the composition-root slot to `EXEC-HTTP-01` after this merg
 - **Commands and refusals.**
   - Every command is idempotent under the ledger; a replay returns the same metadata.
   - An expert writing gets `permission_denied`.
-  - An unpinned model in a revision is refused with `validation_failed` and reason
-    `model_not_pinned` (`analysis/text/lock.py:69-83`).
+  - An unpinned model in a revision is refused with `validation_failed`,
+    `constraint: model_not_pinned` (`analysis/text/lock.py:69-83`).
   - A `base_url` with `?` or `#` is refused, as `proxy.py` refuses it.
   - Archiving a connection that a route still names is a `conflict`.
 - **Secrets.**

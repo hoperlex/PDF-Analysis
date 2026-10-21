@@ -43,18 +43,22 @@ connection. The `api` container no longer receives the private material. The wor
 
 ## Enumerator ownership
 
-- enumerated_set_changed: no
-- enumerator_path: not_applicable
-- enumerator_owner: not_applicable
-- totality_query: not_applicable
+- enumerated_set_changed: yes
+- enumerator_path: web/src/app/bff/v1/[...path]/route.ts
+- enumerator_owner: EXEC-HTTP-01 (one new reserved BFF door for the secret form)
+- totality_query: `grep -n "function .*Door\|_SEGMENT" 'web/src/app/bff/v1/[...path]/route.ts'`
 
 An unconfigured route is refused by `startRun` and `reauditRun` with `dependency_unavailable`
 (503, already declared on both) and the safe detail `dependency: executor_route_missing`. No contract change is
 needed.
 
-The secret form uses the existing credentialed forward. If it cannot carry a native form
-post and a new BFF door is needed, stop: a new door is an enumerated change
-(`EXPOSURE-REVIEW-01.md` lists the doors), and the integrator amends this section.
+**The secret form needs a new reserved BFF door**, because the generic credentialed
+forward sends JSON and does not read a native form post. The precedent is
+`changeThePassword` (`route.ts:1172-1188`): the door reads the form, refuses a cross-site
+post exactly as the existing doors do, and sends the JSON body to `setExecutorSecret` with
+the session's credential. The API enforces the admin role. The door is listed in the
+slice report and the runbook. `EXPOSURE-REVIEW-01.md` is a dated review and is not
+rewritten.
 
 ## Captured premise evidence
 
@@ -101,6 +105,8 @@ post and a new BFF door is needed, stop: a new door is an enumerated change
 - `src/auditmanager/runs/**`
 - `src/auditmanager/workers/**`
 - `src/auditmanager/jobs/repository.py`
+- `src/auditmanager/dashboard/repository.py`
+- `tests/integration/dashboard/**`
 - `src/auditmanager/jobs/lease.py`
 - `src/auditmanager/jobs/public.py`
 - `src/auditmanager/jobs/events.py`
@@ -236,9 +242,13 @@ post and a new BFF door is needed, stop: a new door is an enumerated change
    - `rewrap` re-seals every current secret to the active kid by inserting new rows
      (`executor_secret` is immutable). Each new row keeps its destination, and a test
      shows the call still opens after a rewrap.
-   - The run-level cost rule: when every call is unmetered, the basis is `unmetered`
-     with a null `cost_micros`; when unmetered and metered calls mix, the basis is
-     `estimated` (`cost.py:76`, `runs/repository.py:161`).
+   - **The run-level cost rule.** It keeps the frozen "three fields move together"
+     invariant (`runs.py:150-157`), because the run did call a provider:
+     - when every call is unmetered: `cost_micros` 0, basis `unmetered`, call count n;
+     - when unmetered and metered calls mix: the metered sum, basis `estimated`.
+
+     The rule applies at `cost.py:76`, `runs/repository.py:161` and the dashboard
+     aggregate (`dashboard/repository.py:103`, `:199`).
    - `compose.server.yml`: the `api` service stops loading `provider.env` and receives
      `AUDITMANAGER_SECRETS_PUBLIC_KEYS`.
    - `readiness.sh` checks the source, the ring and the public keys.
