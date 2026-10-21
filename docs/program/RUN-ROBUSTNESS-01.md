@@ -70,3 +70,62 @@ operation, migration, dependency or web file.**
 6. **The crop budget lives in `runs`, not in the stage**, so the grant on `analysis/**` (degenerate-block handling only) was
    not exceeded: `analysis/**` is unchanged. A refused stage leaves the crops it had already published (content-addressed
    blobs, as every failed stage does).
+
+## 5. Checks (lane stack `auditmanager-run-robustness`, Postgres 57760, MinIO 61380; one pytest process at a time)
+
+New tests (all written to fail under the mutations in 6): `tests/integration/ingest/test_run_readers_agree.py` (21),
+`test_uncuttable_image_block.py` (60), `test_display_name_scrub.py` (+6 cases), `tests/integration/jobs/test_repeated_kill_names_the_stage.py` (7),
+`tests/integration/analysis/geometry/test_crop_byte_budget_stage.py` (2), `tests/integration/runs/test_crop_byte_budget_is_wired.py` (1),
+`tests/unit/runs/test_crop_byte_budget.py` (7), `tests/unit/runs/test_serving_start_sweeps_temporaries.py` (4),
+`tests/unit/jobs/test_stale_temporaries.py` (27).
+
+| Command (from the worktree, `.env` loaded) | Result |
+|---|---|
+| `pytest tests/integration/ingest` | 736 passed |
+| `pytest tests/integration/jobs tests/integration/workers` | 72 passed |
+| `pytest tests/integration/runs` | 455 passed (16 min) |
+| `pytest tests/integration/analysis tests/integration/documents` (private `TMPDIR`) | 888 passed |
+| `pytest tests/integration/qa_w55b tests/integration/qa_w53 tests/integration/execution` | 79 passed, 1 failed: `qa_w53/test_queue_and_effect_journal.py::test_pause_between_hint_and_claim_refuses_new_authority`, which depends on queued Jobs earlier tests left in the lane database; it passes alone (4 passed), and `qa_w55b` + `qa_w53` in the same order passed on this tip (73) and on `origin/dev` `3a90f5b9` (73) |
+| `pytest tests/unit` | 878 passed |
+| `pytest tests/contract --ignore=…test_cp00_candidate.py --ignore=…test_cp00_final_state.py --ignore=…test_validate_bootstrap.py` | 940 passed, 19 281 subtests; the one failure (`test_alpha_acceptance_command`: "checkout contains uncommitted changes") passed after the commit (33 passed); `tests/contract/architecture` and `test_doc_prose_facts.py` 47 passed at the final tree |
+| `pytest tests/integration/composition` | **partial**: stopped by the 595 s clock at 35 % with no failure; not repeated (host disk) |
+| `git diff --check` | clean |
+
+Not run: the complete `make gate`, the web suites and the live journey (no web file changed; `R-135`). Two geometry tests that list
+`/tmp` (`test_the_pdf_is_opened_from_one_temporary_file_that_is_gone_afterwards`, `…removed_when_the_stage_fails[render]`) failed twice
+while another lane's pytest ran the same stages in the host's shared `/tmp`; with a private `TMPDIR` the whole file passes (20).
+
+## 6. Mutations (one textual change, the named test file, restored after)
+
+| Mutation | Fails |
+|---|---|
+| `bundle_envelope`: `if uncuttable_image_block(...)` → `if False and …` | `test_a_subpixel_image_block_is_refused_at_the_upload` |
+| `crop_geometry`: no skip of a page whose box disagrees | `test_a_block_that_is_tiny_on_a_page_that_cuts_no_crop_is_admitted` |
+| `crop_geometry`: `_round_up` rounds down; canvas ceiling `* 2` | `test_cannot_cut_flips_at_the_very_same_box_as_plan_crop`; the seeded sweep |
+| `pdf_reader`: no exchange of width and height for a quarter turn | `test_the_page_size_the_reader_reports_is_the_one_the_stage_reads[… -90]` |
+| `envelope`: the stage reader's refusal ignored | `test_the_envelope_refuses_what_the_run_could_not_read[an unknown filter]` |
+| `stage_reader`: no content-stream decode; no PDFium count check; no pypdf/pdfplumber count check | the matching case of `test_the_envelope_refuses_what_the_run_could_not_read` (3 mutations, 3 failures) |
+| `bundle_members`: `Zl`/`Zp` dropped; the four fillers dropped | `test_no_control_or_format_character_reaches_the_display_name` |
+| `crop_budget`: `>` → `>=`; bytes not counted; every role counted | the unit tests, and `test_a_budget_of_exactly_the_crops_…` over the real stage |
+| `executor`: the stage handed `stage_store._store` | `test_each_deterministic_stage_is_handed_the_crop_byte_budget` |
+| `temporaries`: no age test; mtime only; name pattern `.*`; no regular-file test; no walk into subdirectories; no owner test | one case each of `test_stale_temporaries.py` |
+| `runs.public`, `workers.__main__`: the sweep call removed | `test_serving_start_sweeps_temporaries.py` |
+| `jobs.repository`: any last stage named; none named; detail dropped; named for an uncertain provider effect | `test_repeated_kill_names_the_stage.py` (4 mutations, 4 failures). Widening `a.state = 'lost'` to `IN ('lost','created')` survives: no Attempt is `created` at that point (equivalent). |
+
+## 7. Debt rows (the integrator owns `DEBT_REGISTER.md`)
+
+| Debt | Status | Check |
+|---|---|---|
+| `D-159` | **closed** at the upload | `rg -n "uncuttable_image_block" src/auditmanager/ingest/bundle_envelope.py`; `pytest tests/integration/ingest/test_uncuttable_image_block.py` |
+| `D-160` | **narrowed** (section 4.1) | `rg -n "_STAGE_READER" src/auditmanager/ingest/envelope.py`; `pytest tests/integration/ingest/test_run_readers_agree.py` |
+| `D-169` | **closed** (the budget stays 3; section 4.3) | `pytest tests/integration/jobs/test_repeated_kill_names_the_stage.py` |
+| `D-170` | **closed** for the worker and the serving API process and the three exact names (section 4.4) | `pytest tests/unit/jobs/test_stale_temporaries.py tests/unit/runs/test_serving_start_sweeps_temporaries.py` |
+| `D-177` | **closed**: crop byte budget and name scrub (section 4.5) | `rg -n "MAX_CROP_BYTES" src/auditmanager/runs/crop_budget.py`; `pytest tests/unit/runs/test_crop_byte_budget.py tests/integration/runs/test_crop_byte_budget_is_wired.py` |
+
+## 8. Containment
+
+Changed paths are all inside the grant: `src/auditmanager/ingest/**`, `jobs/**`, `runs/**`, `workers/__main__.py`,
+`tests/unit/{jobs,runs}/**`, `tests/integration/{ingest,jobs,runs,analysis/geometry}/**`, this file. **Untouched:** `contracts/**`,
+`db/migrations/**`, `web/**`, `pyproject.toml`, `uv.lock`, `src/auditmanager/analysis/**`, `src/auditmanager/bootstrap/**`,
+`src/auditmanager/documents/**`, `tests/e2e/**`, `CURRENT_STATE.md`, `DEBT_REGISTER.md`, every ref and tag; nothing pushed.
+`git diff --name-only 3a90f5b9..HEAD` is the proof.
