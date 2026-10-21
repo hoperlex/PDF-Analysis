@@ -51,6 +51,7 @@ import { fileURLToPath } from 'node:url';
 import { withColdBrowser } from './cdp.mjs';
 import { runWritePhase } from './write.mjs';
 import { openSession } from './session.mjs';
+import { provisionAccounts } from './accounts.mjs';
 import { measureWidth, widthFindings } from './width.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -61,6 +62,11 @@ function parseArgs(argv) {
     manifest: null,
     out: null,
     phase: process.env.E2E_PC01_PHASE ?? 'all',
+    // Working on one step or one route. A run that used either is PARTIAL: it checked less
+    // than the manifest declares, so it can find a defect but can never be a pass.
+    steps: null,
+    routes: null,
+    seed: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
@@ -68,6 +74,9 @@ function parseArgs(argv) {
     else if (flag === '--manifest') args.manifest = argv[++i];
     else if (flag === '--out') args.out = argv[++i];
     else if (flag === '--phase') args.phase = argv[++i];
+    else if (flag === '--steps') args.steps = argv[++i].split(',').filter(Boolean);
+    else if (flag === '--routes') args.routes = argv[++i].split(',').filter(Boolean);
+    else if (flag === '--seed') args.seed = argv[++i];
     else {
       console.error(`e2e:pc01: unknown argument '${flag}'`);
       process.exit(2);
@@ -120,9 +129,17 @@ function fill(template, captured, samples = {}) {
   });
 }
 
-/** An API expectation, made concrete: `GET /bff/v1/projects/prj_.../documents`. */
-function concreteApi(expectation, captured) {
-  return `${expectation.method} ${API_PREFIX}${fill(expectation.path, captured)}`;
+/**
+ * An API expectation, made concrete: `GET /bff/v1/projects/prj_.../documents`.
+ *
+ * `constants` are a route's own declared path values that are members of an enumeration the
+ * contract publishes (`section_code: "AR"`) and not identities of anything: a screen that
+ * opens on the analysed section calls `/sections/AR/specification` whatever the stand holds,
+ * and no earlier route can hand the walk a section it did not look up. An identifier is
+ * never declared here; it is captured from a link the application rendered.
+ */
+function concreteApi(expectation, captured, constants = {}) {
+  return `${expectation.method} ${API_PREFIX}${fill(expectation.path, { ...constants, ...captured })}`;
 }
 
 /** `GET /bff/v1/findings/fnd_01.../decisions` -> `GET /bff/v1/findings/{id}/decisions`. */
@@ -133,6 +150,11 @@ function shapeOf(call) {
 const failures = [];
 const records = [];
 const captured = {};
+// Identifiers an earlier run captured, for working on one step or route. Never read in a
+// full run, and a run that read them says it is partial.
+const SEED = args.seed === null ? {} : JSON.parse(readFileSync(resolve(args.seed), 'utf8'));
+Object.assign(captured, SEED);
+const PARTIAL = args.steps !== null || args.routes !== null || args.seed !== null;
 
 function fail(route, message) {
   failures.push(`${route}: ${message}`);
@@ -207,6 +229,29 @@ if (!session.ok) {
   process.exit(1);
 }
 
+// ---- the other accounts --------------------------------------------------------------
+// A refusal by role needs a session that holds only that role. They are made through the
+// application's own screens and cost three browsers each, so a read-only run skips them.
+let accounts = { sessions: {}, record: { ran: false, why: 'phase: read' } };
+const ACCOUNT_SEED = {};
+if (PHASE !== 'read' && manifest.accounts !== undefined) {
+  console.log(`accounts: ${manifest.accounts.roster.map((a) => a.name).join(', ')}`);
+  const made = await provisionAccounts({
+    origin: ORIGIN,
+    manifest,
+    adminCookies: SESSION_COOKIES,
+    nonce: STAMP.replace(/\D/g, '').slice(-14),
+  });
+  accounts = { sessions: made.sessions, record: { ran: true, ...made.record } };
+  failures.push(...made.failures);
+  // The accounts' identities are what the dispatcher's selects are addressed by, and they
+  // are produced by the registration screens, not typed into the manifest.
+  for (const account of made.record.accounts) {
+    if (account.userUid) ACCOUNT_SEED[`${account.name}_user_uid`] = account.userUid;
+  }
+  console.log('');
+}
+
 // ---- the write half ----------------------------------------------------------------
 let write = null;
 if (PHASE === 'read') {
@@ -226,7 +271,10 @@ if (PHASE === 'read') {
     repositoryRoot: REPOSITORY_ROOT,
     stamp: STAMP,
     cookies: SESSION_COOKIES,
+    sessions: accounts.sessions,
     viewport: VIEWPORT,
+    only: args.steps,
+    seed: { ...SEED, ...ACCOUNT_SEED },
   });
   failures.push(...write.failures);
   if (write.stopped !== null) {
@@ -244,6 +292,7 @@ if (PHASE === 'write') {
   console.log('phase: write only -- the read walk was NOT run.');
 }
 for (const route of PHASE === 'write' ? [] : manifest.routes) {
+  if (args.routes !== null && !args.routes.includes(route.name)) continue;
   const url = ORIGIN + fill(route.path, captured, route.sample_identifiers ?? {});
 
   const record = await withColdBrowser(async (page) => {
@@ -388,7 +437,7 @@ for (const route of PHASE === 'write' ? [] : manifest.routes) {
     );
   }
 
-  const required = (route.expects_api ?? []).map((e) => concreteApi(e, captured));
+  const required = (route.expects_api ?? []).map((e) => concreteApi(e, captured, route.constants ?? {}));
   // An optional call may name an identifier this walk never captured -- the review screen
   // opens a *finding*, and no earlier route hands out a finding uid. Optional calls are
   // therefore matched by shape, with every identifier segment collapsed to `{id}`.
@@ -467,7 +516,7 @@ for (const route of PHASE === 'write' ? [] : manifest.routes) {
 
 // Pushed BEFORE the envelope is written, not after: an envelope that is missing the one
 // finding that says the walk stopped early is the same impoverishment `D-5` is about.
-if (PHASE !== 'write' && records.length < manifest.routes.length) {
+if (PHASE !== 'write' && args.routes === null && records.length < manifest.routes.length) {
   failures.push(
     `only ${records.length} of ${manifest.routes.length} routes were reached; ` +
       'an unfinished walk is not a pass',
@@ -485,6 +534,8 @@ const envelopePath = writeEnvelope(
       // applies to `Authorization`.
       session: { opened: true, ...session.record },
       viewport: VIEWPORT,
+      partial: PARTIAL,
+      accounts: accounts.record,
       write:
         write === null
           ? { ran: false, why: PHASE === 'read' ? 'phase: read' : 'no write section' }
@@ -518,6 +569,14 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`  - ${f}`);
   console.error(`\nEvery request, status, header and body is in ${envelopePath}.`);
   process.exit(1);
+}
+
+if (PARTIAL) {
+  console.log(
+    'e2e:pc01 PARTIAL -- no finding, but this run used --steps, --routes or --seed, so it ' +
+      'checked less than manifest.json declares. It is not a pass: exit 3.',
+  );
+  process.exit(3);
 }
 
 console.log('e2e:pc01 OK');

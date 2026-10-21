@@ -25,12 +25,58 @@
  * This waits on the attribute the run screen's own poller writes into the DOM, under a
  * bound the manifest states. Hitting the bound is a finding with every reading attached and
  * exit 1 -- never a skip, never a pass.
+ *
+ * ## `BETA-LIVE-JOURNEY-01`: the night window's screens, and refusals
+ *
+ * The four steps above are still the first four. The steps after them walk the screens the
+ * 2026-10-20 night window added, and each screen has a negative case, so the vocabulary
+ * grew by exactly what those needed -- and every addition is read by the same two
+ * checkers (`tests/e2e/test_pc01_journey_conformance.py` and this file):
+ *
+ *   `as`                   which signed-in session performs the step. `admin` (the journey's
+ *                          own account, holding both roles) unless the manifest's
+ *                          `accounts` roster names another: an expert without `admin`, an
+ *                          administrator without `expert`. A refusal by ROLE needs a session
+ *                          that holds the role the screen refuses.
+ *   `select`, `goto`,      three more things a user does: choose from a list, move to another
+ *   `wait_for`             address, wait for a marker the screen draws.
+ *   `click.times`          press the same control again before the page has answered -- a
+ *                          second identical submit.
+ *   `expects_api[].refusal`  a declared refusal: the call is EXPECTED to answer `expect_status`
+ *                          (and `expect_error_code`) and is exempt from the rule that any
+ *                          `>= 400` on the seam is a finding. Nothing else is: an undeclared
+ *                          `409` still reddens the step.
+ *   `expects_api[].count`  how many times the browser made it. `1` after two presses is the
+ *                          proof that a second identical submit sent nothing.
+ *   `expects_not_called`   calls the browser must NOT make: a refusal made by the browser
+ *                          before a byte is sent is exactly the absence of a request.
+ *   `expects_present`      markers the screen must draw (with the words that must be in them).
+ *   `captures`             several captures per step, including from a response body.
+ *   `expects_download`     what a download answered: type, disposition, first bytes, and
+ *                          that no CSV cell starts with a character a spreadsheet would run.
+ *
+ * ## Which red step stops the walk
+ *
+ * The first four steps keep the original rule: the first red step stops the half, because
+ * what they capture is what the next one addresses. A manifest that sets
+ * `write.on_red: "continue_if_captured"` instead stops only the steps that NEED something
+ * the red step failed to capture -- a step whose address or request path names a value no
+ * earlier step produced is reported as not reached, never as passed -- so one defect does
+ * not hide the screens that do not depend on it.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 import { withColdBrowser } from './cdp.mjs';
+
+/** The `{name}` placeholders a template mentions, in order of appearance. */
+export function templateNames(template) {
+  return typeof template === 'string'
+    ? [...template.matchAll(/\{([a-z_]+)\}/g)].map((m) => m[1])
+    : [];
+}
 
 /** `{project_uid}` -> the captured value, or a hard failure naming what is missing. */
 function fill(template, captured) {
@@ -44,6 +90,49 @@ function fill(template, captured) {
     }
     return value;
   });
+}
+
+/**
+ * Every captured name a step's addresses, requests and controls mention.
+ *
+ * A step's `bind` renames what a template variable means inside it: `{version_uid}` in a
+ * step that works on the set's second version is the `second_version_uid` an earlier step
+ * captured, while the address and the contract path keep the names the route and the
+ * contract give them (so the gate can still compare them). A call may carry its own `bind`
+ * -- the comparison page is the second version's, and the call it makes is addressed by the
+ * first.
+ */
+export function namesNeededBy(step) {
+  const names = new Set(step.needs ?? []);
+  const take = (value, local = null) =>
+    templateNames(value).forEach((name) => {
+      const wanted = (local ?? {})[name] ?? (step.bind ?? {})[name] ?? name;
+      // A constant is a member of an enumeration the step declares, not something captured.
+      if (!(wanted in (step.constants ?? {}))) names.add(wanted);
+    });
+  take(step.at);
+  for (const key of ['expects_api', 'expects_api_after_terminal', 'expects_not_called']) {
+    for (const call of step[key] ?? []) take(call.path, call.bind);
+  }
+  for (const action of step.actions ?? []) {
+    for (const key of ['selector', 'value', 'text', 'to', 'option_text', 'option_value', 'label']) {
+      take(action[key]);
+    }
+  }
+  for (const present of step.expects_present ?? []) {
+    take(present.selector);
+    take(present.text_contains);
+  }
+  for (const selector of step.forbids_rendered ?? []) take(selector);
+  for (const absent of step.expects_absent ?? []) {
+    take(absent.selector);
+    take(absent.text);
+  }
+  // What the step captures itself is not something it needs from an earlier step.
+  for (const capture of [step.capture, ...(step.captures ?? [])]) {
+    for (const produced of capture?.as ?? []) names.delete(produced);
+  }
+  return [...names];
 }
 
 /** `a.b.c` over a decoded JSON body. Absent is `undefined`, which is never a match. */
@@ -66,11 +155,64 @@ function decodeJson(text) {
 }
 
 /**
+ * The cells of a CSV document (RFC 4180: quoted fields, doubled quotes, CRLF or LF rows).
+ * A byte-order mark is skipped. Enough of a parser to ask "what does each cell start with".
+ */
+export function csvCells(text) {
+  const source = text.startsWith('﻿') ? text.slice(1) : text;
+  const cells = [];
+  let cell = '';
+  let quoted = false;
+  let started = false;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    if (quoted) {
+      if (ch === '"' && source[i + 1] === '"') {
+        cell += '"';
+        i += 1;
+      } else if (ch === '"') {
+        quoted = false;
+      } else {
+        cell += ch;
+      }
+    } else if (ch === '"' && !started) {
+      quoted = true;
+      started = true;
+    } else if (ch === ',' || ch === '\n' || ch === '\r') {
+      cells.push(cell);
+      cell = '';
+      started = false;
+      if (ch === '\r' && source[i + 1] === '\n') i += 1;
+    } else {
+      cell += ch;
+      started = true;
+    }
+  }
+  if (started || cell !== '') cells.push(cell);
+  return cells;
+}
+
+/** A cell a spreadsheet would read as a formula: first non-space character `= + - @`, tab or CR. */
+export function formulaLikeCells(cells) {
+  return cells.filter((cell) => /^[ ]*[=+\-@\t\r]/.test(cell));
+}
+
+/** The concrete path of a declared call, or a hard failure naming the missing capture. */
+function concretePath(expectation, captured) {
+  return fill(expectation.path, captured);
+}
+
+/**
  * Drive the write half.
  *
  * Returns the step records, the findings, and what it captured. It throws only when the
  * browser itself cannot be driven -- everything the *application* got wrong comes back as
  * a finding, so the envelope is written and the other steps still report.
+ *
+ * `sessions` maps a session name to the cookies that session carries; `cookies` is the
+ * journey's own account and stays as the default for steps that name no `as`. `only` (a
+ * list of step names) and `seed` (identifiers an earlier run captured) exist for working on
+ * one step; a run that used them is partial, and the caller says so.
  */
 export async function runWritePhase({
   origin,
@@ -78,15 +220,19 @@ export async function runWritePhase({
   repositoryRoot,
   stamp,
   cookies = [],
+  sessions = {},
   viewport = null,
+  only = null,
+  seed = {},
 }) {
   const spec = manifest.write;
   const ID = manifest.identifier_pattern;
   const API_PREFIX = manifest.api_prefix;
+  const continueIfCaptured = spec.on_red === 'continue_if_captured';
 
   const failures = [];
   const records = [];
-  const captured = {};
+  const captured = { ...seed };
   const fail = (step, message) => failures.push(`${step}: ${message}`);
 
   const fixture = resolve(repositoryRoot, spec.fixture);
@@ -98,21 +244,70 @@ export async function runWritePhase({
   }
   const fixtureBytes = readFileSync(fixture).length;
 
+  const sessionsByName = { admin: cookies, ...sessions };
+  let stopped = null;
+  let firstRed = null;
+
   for (const step of spec.steps) {
-    const url = origin + fill(step.at, captured);
+    if (only !== null && !only.includes(step.name)) continue;
+
+    const sessionName = step.as ?? 'admin';
+    const sessionCookies = sessionsByName[sessionName];
     const record = {
       name: step.name,
+      as: sessionName,
       at: step.at,
-      url,
+      url: null,
       actions: [],
       capturedHere: null,
       awaitTerminal: null,
       timingsMs: {},
     };
     records.push(record);
+
+    // ---- a step whose inputs no earlier step produced is not reached, not passed ------
+    const missing = namesNeededBy(step).filter((name) => captured[name] === undefined);
+    if (missing.length > 0) {
+      record.verdict = 'NOT REACHED';
+      record.missingCaptures = missing;
+      fail(
+        step.name,
+        `not reached: it needs ${missing.map((n) => `{${n}}`).join(', ')}, which no earlier ` +
+          `step captured${firstRed === null ? '' : ` (the first red step was '${firstRed}')`}`,
+      );
+      console.log(`NOT ${step.name.padEnd(28)} needs ${missing.join(', ')}`);
+      stopped = stopped ?? step.name;
+      continue;
+    }
+    if (sessionCookies === undefined) {
+      record.verdict = 'NOT REACHED';
+      fail(
+        step.name,
+        `not reached: it runs as '${sessionName}', and no such session was opened ` +
+          `(sessions: ${Object.keys(sessionsByName).join(', ')})`,
+      );
+      console.log(`NOT ${step.name.padEnd(28)} no session '${sessionName}'`);
+      stopped = stopped ?? step.name;
+      continue;
+    }
+
+    // What a template variable means in this step: the captured value of the same name,
+    // unless the step (or the call) binds it to another captured name.
+    const scope = (local = null) => {
+      const view = { ...step.constants, ...captured };
+      for (const bind of [step.bind, local]) {
+        for (const [name, from] of Object.entries(bind ?? {})) view[name] = captured[from];
+      }
+      return view;
+    };
+
+    const url = origin + fill(step.at, scope());
+    record.url = url;
     const t0 = Date.now();
 
     let ok = true;
+    let downloadDir = null;
+    const downloaded = new Map();
     try {
       await withColdBrowser(async (page) => {
         // `D-92`: every step of the write half POSTs, and the BFF answers 401 without a
@@ -127,49 +322,19 @@ export async function runWritePhase({
         }
         record.landedOn = await page.location();
         record.navigateTimingsMs = page.timingsMs;
-
-        // ---- press the application's own controls --------------------------------
-        for (const action of step.actions) {
-          const started = Date.now();
-          const entry = { ...action, tookMs: null, result: null };
-          record.actions.push(entry);
-          if (action.do === 'fill') {
-            entry.value = action.value.replaceAll('%STAMP%', stamp);
-            entry.result = await page.fill(action.selector, entry.value, {
-              text: action.text ?? null,
-            });
-          } else if (action.do === 'click') {
-            entry.result = await page.click(action.selector, { text: action.text ?? null });
-          } else if (action.do === 'attach_file') {
-            if (action.fixture !== true) {
-              throw new Error(`step '${step.name}': attach_file with no fixture`);
-            }
-            entry.path = fixture;
-            entry.result = await page.attachFile(action.selector, fixture, {
-              text: action.text ?? null,
-            });
-            if (entry.result.size !== fixtureBytes) {
-              fail(
-                step.name,
-                `the browser attached ${entry.result.size} bytes but ${spec.fixture} is ` +
-                  `${fixtureBytes} bytes on disk`,
-              );
-            }
-          } else {
-            throw new Error(`step '${step.name}': unknown action '${action.do}'`);
-          }
-          entry.tookMs = Date.now() - started;
+        if ((step.expects_download ?? []).length > 0) {
+          downloadDir = mkdtempSync(join(tmpdir(), 'e2e-pc01-downloads-'));
+          await page.allowDownloads(downloadDir);
         }
 
-        record.timingsMs.settleAfterActions = await page.settle();
-
         // ---- what the step captures, from what the application did ----------------
-        if (step.capture) {
-          const capture = step.capture;
+        // `when: "before_actions"` reads the screen as it loaded (the finding it opens on,
+        // whose address the step's own call then carries); the rest read what the actions did.
+        const runCapture = async (capture) => {
           let waited;
           if (capture.kind === 'attribute') {
             const expression = `(() => {
-              const el = document.querySelector(${JSON.stringify(capture.selector)});
+              const el = document.querySelector(${JSON.stringify(fill(capture.selector, scope()))});
               return el === null ? null : el.getAttribute(${JSON.stringify(capture.attribute)});
             })()`;
             waited = await page.waitFor(expression, {
@@ -187,10 +352,51 @@ export async function runWritePhase({
               boundMs: capture.bound_ms,
               what: `the address to become ${capture.pattern}`,
             });
+          } else if (capture.kind === 'response') {
+            // The value is in a response body the browser already received: wait (bounded)
+            // until the exchange is there and its field matches, reading the exchanges the
+            // page recorded rather than anything the screen chose to draw.
+            const call = (step.expects_api ?? []).find((c) => c.operationId === capture.of);
+            if (call === undefined) {
+              throw new Error(`step '${step.name}': capture of '${capture.of}' names no expects_api entry`);
+            }
+            const want = `${call.method} ${API_PREFIX}${concretePath(call, scope(call.bind))}`;
+            const t = Date.now();
+            let value = null;
+            const readings = [];
+            for (;;) {
+              await page.settle({ settleMs: 300 });
+              const hit = page
+                .exchanges()
+                .filter((e) => {
+                  try {
+                    return `${e.method} ${new URL(e.url).pathname}` === want;
+                  } catch {
+                    return false;
+                  }
+                })
+                .map((e) => atJsonPath(decodeJson(e.responseBody) ?? {}, capture.json_path))
+                .find((v) => v !== undefined && v !== null);
+              if (hit !== undefined) {
+                value = hit;
+                break;
+              }
+              readings.push({ atMs: Date.now() - t, seen: 'no matching exchange with that field yet' });
+              if (Date.now() - t >= capture.bound_ms) break;
+              await new Promise((r) => setTimeout(r, 400));
+            }
+            waited = {
+              ok: value !== null,
+              value,
+              waitedMs: Date.now() - t,
+              boundMs: capture.bound_ms,
+              readings,
+              what: `${capture.of} response ${capture.json_path}`,
+            };
           } else {
             throw new Error(`step '${step.name}': unknown capture kind '${capture.kind}'`);
           }
-          record.capture = { ...capture, ...waited };
+          record.capture = { ...(record.capture ?? {}), [capture.as.join('+')]: { ...capture, ...waited } };
           if (!waited.ok) {
             ok = false;
             fail(
@@ -215,16 +421,113 @@ export async function runWritePhase({
               );
             } else {
               const values = hit.slice(1);
-              record.capturedHere = {};
+              record.capturedHere = record.capturedHere ?? {};
               capture.as.forEach((name, i) => {
                 captured[name] = values[i];
                 record.capturedHere[name] = values[i];
               });
               // The address changed, so the next screen is loading: let it, and keep its
               // traffic in this step's envelope rather than losing it between steps.
-              record.timingsMs.settleAfterCapture = await page.settle();
+              if (capture.kind !== 'response') {
+                record.timingsMs.settleAfterCapture = await page.settle();
+              }
             }
           }
+        };
+        const captureSpecs = [step.capture, ...(step.captures ?? [])].filter(Boolean);
+        for (const capture of captureSpecs.filter((c) => c.when === 'before_actions')) {
+          await runCapture(capture);
+        }
+
+        // ---- press the application's own controls --------------------------------
+        for (const action of step.actions ?? []) {
+          const started = Date.now();
+          const entry = { ...action, tookMs: null, result: null };
+          record.actions.push(entry);
+          const text = action.text === undefined ? null : fill(action.text, scope());
+          const selector = action.selector === undefined ? undefined : fill(action.selector, scope());
+          if (action.do === 'fill') {
+            entry.value = fill(action.value.replaceAll('%STAMP%', stamp), scope());
+            entry.result = await page.fill(selector, entry.value, {
+              text,
+              label: action.label ?? null,
+              tag: action.tag ?? 'input',
+              index: action.index ?? 0,
+            });
+          } else if (action.do === 'click') {
+            entry.result = await page.click(selector, { text, times: action.times ?? 1 });
+          } else if (action.do === 'select') {
+            const optionText =
+              action.option_text === undefined
+                ? null
+                : fill(action.option_text.replaceAll('%STAMP%', stamp), scope());
+            const optionValue =
+              action.option_value === undefined ? null : fill(action.option_value, scope());
+            entry.result = await page.select(selector, {
+              label: action.label ?? null,
+              index: action.index ?? 0,
+              optionText,
+              optionValue,
+            });
+          } else if (action.do === 'attach_file') {
+            const path =
+              action.fixture === true ? fixture : resolve(repositoryRoot, String(action.fixture));
+            if (action.fixture === undefined || action.fixture === false) {
+              throw new Error(`step '${step.name}': attach_file with no fixture`);
+            }
+            if (!existsSync(path)) {
+              throw new Error(`step '${step.name}': the fixture ${action.fixture} is not on disk`);
+            }
+            const bytes = readFileSync(path).length;
+            entry.path = path;
+            entry.result = await page.attachFile(selector, path, { text });
+            if (entry.result.size !== bytes) {
+              fail(
+                step.name,
+                `the browser attached ${entry.result.size} bytes but ${action.fixture === true ? spec.fixture : action.fixture} is ` +
+                  `${bytes} bytes on disk`,
+              );
+            }
+          } else if (action.do === 'goto') {
+            const to = origin + fill(action.to, scope());
+            entry.to = to;
+            await page.goto(to);
+            entry.result = await page.location();
+          } else if (action.do === 'wait_for') {
+            const wantedText = action.text_contains === undefined ? null : fill(action.text_contains, scope());
+            const expression = `(() => {
+              const els = Array.from(document.querySelectorAll(${JSON.stringify(selector)}));
+              const wanted = ${JSON.stringify(wantedText)};
+              const hit = wanted === null ? els[0] : els.find((e) => (e.innerText ?? '').includes(wanted));
+              return hit === undefined ? null : (hit.innerText ?? '').trim().slice(0, 200) || true;
+            })()`;
+            const waited = await page.waitFor(expression, {
+              boundMs: action.bound_ms,
+              what: `${selector}${wantedText === null ? '' : ` containing ${JSON.stringify(wantedText)}`}`,
+            });
+            entry.result = { ok: waited.ok, waitedMs: waited.waitedMs };
+            if (!waited.ok) {
+              ok = false;
+              fail(
+                step.name,
+                `after ${waited.waitedMs} ms (bound ${waited.boundMs} ms) the screen never ` +
+                  `offered ${waited.what}. Readings: ` +
+                  `${waited.readings.map((r) => `${r.atMs}ms ${r.seen}`).join(' | ') || '(none)'}`,
+              );
+            }
+          } else {
+            throw new Error(`step '${step.name}': unknown action '${action.do}'`);
+          }
+          entry.tookMs = Date.now() - started;
+          // A control that opens another view (a tab, a panel) needs the page to draw it
+          // before the next action can find anything in it.
+          if (action.settle === true) await page.settle();
+        }
+
+        record.timingsMs.settleAfterActions = await page.settle();
+
+        for (const capture of captureSpecs.filter((c) => c.when !== 'before_actions')) {
+          await runCapture(capture);
         }
 
         // ---- wait on the app's own state, under a stated bound --------------------
@@ -283,7 +586,61 @@ export async function runWritePhase({
           }
         }
 
+        // ---- markers the screen must draw -----------------------------------------
+        record.present = [];
+        for (const present of step.expects_present ?? []) {
+          const selector = fill(present.selector, scope());
+          const wantedText = present.text_contains === undefined ? null : fill(present.text_contains, scope());
+          const min = present.min_count ?? 1;
+          const matcher = present.text_matches ?? null;
+          const expression = `(() => {
+            const els = Array.from(document.querySelectorAll(${JSON.stringify(selector)}));
+            const wanted = ${JSON.stringify(wantedText)};
+            const pattern = ${JSON.stringify(matcher)} === null ? null : new RegExp(${JSON.stringify(matcher)});
+            const hits = els
+              .filter((e) => wanted === null || (e.innerText ?? '').includes(wanted))
+              .filter((e) => pattern === null || pattern.test((e.innerText ?? '').trim()));
+            return hits.length >= ${Number(min)} ? hits.length : null;
+          })()`;
+          const waited = await page.waitFor(expression, {
+            boundMs: present.bound_ms ?? 10000,
+            what: `${selector}${wantedText === null ? '' : ` containing ${JSON.stringify(wantedText)}`}${matcher === null ? '' : ` matching /${matcher}/`}`,
+          });
+          record.present.push({ selector, text_contains: wantedText, ok: waited.ok, count: waited.value });
+          if (!waited.ok) {
+            ok = false;
+            const text = await page.evaluate(
+              "document.body ? document.body.innerText.replace(/\\n{3,}/g, '\\n\\n').slice(0, 600) : ''",
+            );
+            fail(
+              step.name,
+              `the screen did not draw ${waited.what} (at least ${min}) within ` +
+                `${waited.boundMs} ms. It rendered: ${JSON.stringify(text)}`,
+            );
+          }
+        }
+
+        // ---- the files a download left ----------------------------------------------
+        // The browser must still be alive while it writes them, so they are collected here
+        // and judged below, once the exchanges are in hand.
+        if (downloadDir !== null) {
+          const wanted = (step.expects_download ?? []).length;
+          const began = Date.now();
+          const finished = () =>
+            readdirSync(downloadDir).filter((name) => !/\.(crdownload|tmp)$/.test(name) && !name.startsWith('.'));
+          while (finished().length < wanted && Date.now() - began < 20000) {
+            await new Promise((resolve) => setTimeout(resolve, 300));
+          }
+          // A finished file can still be growing for an instant after it appears.
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          for (const name of finished()) {
+            downloaded.set(name, readFileSync(join(downloadDir, name)));
+          }
+          record.downloadedFiles = [...downloaded].map(([name, bytes]) => ({ name, bytes: bytes.length }));
+        }
+
         // ---- the envelope ---------------------------------------------------------
+        record.timingsMs.settleBeforeEnvelope = await page.settle();
         record.bodyText = await page.evaluate(
           "document.body ? document.body.innerText.replace(/\\n{3,}/g, '\\n\\n') : ''",
         );
@@ -292,21 +649,44 @@ export async function runWritePhase({
         record.consoleErrors = page.consoleErrors();
         record.pageErrors = page.pageErrors();
 
+        // ---- what the screen must NOT offer ---------------------------------------
+        // `expects_absent` is `forbids_rendered` for a control named by its words: the same
+        // selector can match a control the role may use and one it may not.
+        for (const absent of step.expects_absent ?? []) {
+          const selector = fill(absent.selector, scope());
+          const wantedText = absent.text === undefined ? null : fill(absent.text, scope());
+          const found = await page.evaluate(`(() => {
+            const wanted = ${JSON.stringify(wantedText)};
+            const hit = Array.from(document.querySelectorAll(${JSON.stringify(selector)}))
+              .find((e) => wanted === null || (e.innerText ?? e.value ?? '').trim() === wanted);
+            return hit === undefined ? null : (hit.innerText ?? hit.outerHTML).trim().slice(0, 200);
+          })()`);
+          if (found !== null) {
+            ok = false;
+            fail(
+              step.name,
+              `the screen offered ${selector}${wantedText === null ? '' : ` “${wantedText}”`}, which this ` +
+                `step declares must be absent: ${JSON.stringify(found)}`,
+            );
+          }
+        }
+
         // ---- what the screen rendered afterwards ----------------------------------
         for (const selector of step.forbids_rendered ?? []) {
+          const concrete = fill(selector, scope());
           const present = await page.evaluate(`(() => {
-            const el = document.querySelector(${JSON.stringify(selector)});
+            const el = document.querySelector(${JSON.stringify(concrete)});
             return el === null ? null : (el.innerText ?? el.outerHTML).trim().slice(0, 300);
           })()`);
           if (present !== null) {
             ok = false;
             fail(
               step.name,
-              `the screen rendered ${selector}, which this step forbids: ${JSON.stringify(present)}`,
+              `the screen rendered ${concrete}, which this step forbids: ${JSON.stringify(present)}`,
             );
           }
         }
-      }, { cookies, viewport });
+      }, { cookies: sessionCookies, viewport });
     } catch (error) {
       // The browser could not be driven through this step. That is a finding about the
       // application or the origin, not a reason to report nothing.
@@ -317,6 +697,7 @@ export async function runWritePhase({
     }
 
     record.timingsMs.total = Date.now() - t0;
+    if (downloadDir !== null) rmSync(downloadDir, { recursive: true, force: true });
 
     // `D-16`, measured per step rather than claimed: this step opened in a profile holding
     // nothing but the cookies the journey explicitly handed it. A jar with anything else
@@ -324,7 +705,7 @@ export async function runWritePhase({
     // process per step and the one this file must not spend.
     if (Array.isArray(record.startedWith)) {
       const startedWith = [...record.startedWith].sort();
-      const handed = cookies.map((c) => c.name).sort();
+      const handed = sessionCookies.map((c) => c.name).sort();
       if (startedWith.join(',') !== handed.join(',')) {
         ok = false;
         fail(
@@ -346,22 +727,34 @@ export async function runWritePhase({
     });
     record.observedApi = api.map((e) => `${e.method} ${new URL(e.url).pathname} -> ${e.status}`);
 
-    const findExchange = (method, path) => {
+    const findAll = (method, path) => {
       const want = `${method} ${API_PREFIX}${path}`;
-      return api.find((e) => `${e.method} ${new URL(e.url).pathname}` === want) ?? null;
+      return api.filter((e) => `${e.method} ${new URL(e.url).pathname}` === want);
     };
+    const findExchange = (method, path) => findAll(method, path)[0] ?? null;
 
+    /** Declared refusals: (method, concrete path, status) the step expects the seam to answer. */
+    const declaredRefusals = [];
     const byOperation = new Map();
     for (const expectation of step.expects_api ?? []) {
       let concrete;
       try {
-        concrete = fill(expectation.path, captured);
+        concrete = concretePath(expectation, scope(expectation.bind));
       } catch (error) {
         fail(step.name, error.message);
         continue;
       }
-      const exchange = findExchange(expectation.method, concrete);
+      const matching = findAll(expectation.method, concrete);
+      // For a refusal the exchange that carries the declared status is the one the
+      // expectation is about; otherwise the first call of the operation is.
+      const exchange =
+        expectation.refusal === true
+          ? (matching.find((e) => e.status === expectation.expect_status) ?? matching[0] ?? null)
+          : (matching[0] ?? null);
       byOperation.set(expectation.operationId, exchange);
+      if (expectation.refusal === true) {
+        declaredRefusals.push({ method: expectation.method, path: concrete, status: expectation.expect_status });
+      }
       if (exchange === null) {
         ok = false;
         fail(
@@ -382,20 +775,86 @@ export async function runWritePhase({
             `body: ${JSON.stringify((exchange.responseBody ?? '').slice(0, 400))}`,
         );
       }
-    }
-
-    // `D-5` in one line: a call on the seam that answered an error, whatever the screen
-    // then chose to render. This is what the 2026-09-16 harness saw and could not keep.
-    for (const exchange of api) {
-      if (typeof exchange.status === 'number' && exchange.status >= 400) {
+      if (expectation.expect_error_code !== undefined) {
+        const body = decodeJson(exchange.responseBody);
+        const got = body === undefined ? undefined : body.error_code;
+        if (got !== expectation.expect_error_code) {
+          ok = false;
+          fail(
+            step.name,
+            `${expectation.operationId} answered error_code ${JSON.stringify(got)} and this ` +
+              `step declares ${JSON.stringify(expectation.expect_error_code)}: ` +
+              `${JSON.stringify((exchange.responseBody ?? '').slice(0, 300))}`,
+          );
+        }
+      }
+      if (expectation.count !== undefined && matching.length !== expectation.count) {
         ok = false;
         fail(
           step.name,
-          `${exchange.method} ${new URL(exchange.url).pathname} answered ${exchange.status}. ` +
-            `correlation-id: ${exchange.responseHeaders?.['x-correlation-id'] ?? '(none)'}; ` +
-            `body: ${JSON.stringify((exchange.responseBody ?? '').slice(0, 400))}`,
+          `${expectation.operationId} was sent ${matching.length} time(s) and this step ` +
+            `declares ${expectation.count}: ${matching.map((e) => `${e.status}`).join(', ') || '(none)'}`,
         );
       }
+      if (expectation.max_count !== undefined && matching.length > expectation.max_count) {
+        ok = false;
+        fail(
+          step.name,
+          `${expectation.operationId} was sent ${matching.length} time(s) and this step ` +
+            `declares at most ${expectation.max_count}: ${matching.map((e) => `${e.status}`).join(', ')}`,
+        );
+      }
+      // A second identical submit may reach the server (the page cannot always stop it);
+      // what it must not do is change anything, so every answer must name the same thing.
+      for (const path of expectation.same_response_at ?? []) {
+        const values = matching.map((e) => atJsonPath(decodeJson(e.responseBody) ?? {}, path));
+        if (new Set(values.map((v) => JSON.stringify(v))).size > 1) {
+          ok = false;
+          fail(
+            step.name,
+            `${expectation.operationId} was sent ${matching.length} time(s) and the answers ` +
+              `disagree on ${path}: ${values.map((v) => JSON.stringify(v)).join(' | ')}`,
+          );
+        }
+      }
+    }
+
+    for (const absent of step.expects_not_called ?? []) {
+      let concrete;
+      try {
+        concrete = concretePath(absent, scope(absent.bind));
+      } catch (error) {
+        fail(step.name, error.message);
+        continue;
+      }
+      const made = findAll(absent.method, concrete);
+      if (made.length > 0) {
+        ok = false;
+        fail(
+          step.name,
+          `${absent.method} ${API_PREFIX}${concrete} must not be sent by this step (${absent.why ?? 'declared absent'}) ` +
+            `but the browser sent it ${made.length} time(s): ${made.map((e) => e.status).join(', ')}`,
+        );
+      }
+    }
+
+    // `D-5` in one line: a call on the seam that answered an error, whatever the screen
+    // then chose to render. This is what the 2026-09-16 harness saw and could not keep. A
+    // refusal the step DECLARES (same method, same path, same status) is the one exception.
+    for (const exchange of api) {
+      if (typeof exchange.status !== 'number' || exchange.status < 400) continue;
+      const path = new URL(exchange.url).pathname;
+      const declared = declaredRefusals.some(
+        (r) => `${r.method} ${API_PREFIX}${r.path}` === `${exchange.method} ${path}` && r.status === exchange.status,
+      );
+      if (declared) continue;
+      ok = false;
+      fail(
+        step.name,
+        `${exchange.method} ${path} answered ${exchange.status}. ` +
+          `correlation-id: ${exchange.responseHeaders?.['x-correlation-id'] ?? '(none)'}; ` +
+          `body: ${JSON.stringify((exchange.responseBody ?? '').slice(0, 400))}`,
+      );
     }
 
     for (const check of step.expects_request ?? []) {
@@ -444,6 +903,30 @@ export async function runWritePhase({
             `and this step declares ${JSON.stringify(check.equals)}`,
         );
       }
+      if (check.not_equals !== undefined && value === check.not_equals) {
+        ok = false;
+        fail(
+          step.name,
+          `${check.of}'s response has ${check.json_path} = ${JSON.stringify(value)}, ` +
+            `which this step declares it must not be`,
+        );
+      }
+      if (check.at_least !== undefined && !(typeof value === 'number' && value >= check.at_least)) {
+        ok = false;
+        fail(
+          step.name,
+          `${check.of}'s response has ${check.json_path} = ${JSON.stringify(value)}, ` +
+            `which is not a number of at least ${check.at_least}`,
+        );
+      }
+      if (check.nonempty_array === true && !(Array.isArray(value) && value.length > 0)) {
+        ok = false;
+        fail(
+          step.name,
+          `${check.of}'s response has ${check.json_path} = ${JSON.stringify(value)?.slice(0, 120)}, ` +
+            `which is not a non-empty array`,
+        );
+      }
       if (check.matches !== undefined) {
         const pattern = new RegExp(check.matches.replaceAll('%ID%', ID));
         if (typeof value !== 'string' || !pattern.test(value)) {
@@ -457,10 +940,96 @@ export async function runWritePhase({
       }
     }
 
+    // ---- what a download answered ------------------------------------------------
+    // The status and headers are the exchange's; the BYTES are the file the browser saved,
+    // because the protocol does not give a download's body to `Network.getResponseBody`.
+    record.downloads = [];
+    for (const check of step.expects_download ?? []) {
+      const exchange = byOperation.get(check.of) ?? null;
+      const summary = { of: check.of, ok: true };
+      record.downloads.push(summary);
+      if (exchange === null) {
+        ok = false;
+        summary.ok = false;
+        fail(step.name, `declares a download of ${check.of} but the browser did not make that call`);
+        continue;
+      }
+      const type = exchange.responseHeaders?.['content-type'] ?? '';
+      const disposition = exchange.responseHeaders?.['content-disposition'] ?? '';
+      const named = /filename="?([^";]+)"?/.exec(disposition);
+      // The file the browser saved is named by the page (`<id>-proposals.csv`), not by the
+      // response's disposition (`<id>.csv`): the response names the file by its extension,
+      // and the one saved file with that extension -- or, among several, the one that starts
+      // with the response's name -- is the download.
+      const dot = named === null ? -1 : named[1].lastIndexOf('.');
+      const stem = named === null ? '' : dot < 0 ? named[1] : named[1].slice(0, dot);
+      const extension = named === null || dot < 0 ? '' : named[1].slice(dot);
+      const sameKind = [...downloaded.keys()].filter((name) => extension !== '' && name.endsWith(extension));
+      const savedAs =
+        named === null
+          ? undefined
+          : downloaded.has(named[1])
+            ? named[1]
+            : sameKind.length === 1
+              ? sameKind[0]
+              : sameKind.find((name) => name.startsWith(stem));
+      const bytes = savedAs === undefined ? undefined : downloaded.get(savedAs);
+      summary.contentType = type;
+      summary.contentDisposition = disposition;
+      summary.fileName = savedAs ?? null;
+      summary.fileBytes = bytes === undefined ? null : bytes.length;
+      const problems = [];
+      if (bytes === undefined) {
+        problems.push(
+          `the browser saved no file named ${JSON.stringify(named === null ? '(no filename in the disposition)' : named[1])}; ` +
+            `it saved ${JSON.stringify([...downloaded.keys()])}`,
+        );
+      }
+      const body = bytes === undefined ? '' : /^text\/|json/.test(type) ? bytes.toString('utf8') : bytes.toString('latin1');
+      summary.bodyChars = body.length;
+      if (check.content_type_starts_with && !type.startsWith(check.content_type_starts_with)) {
+        problems.push(`content-type is '${type}', declared '${check.content_type_starts_with}...'`);
+      }
+      if (check.content_disposition_contains && !disposition.includes(check.content_disposition_contains)) {
+        problems.push(`content-disposition is '${disposition}', declared to contain '${check.content_disposition_contains}'`);
+      }
+      if (bytes !== undefined && check.body_starts_with !== undefined && !body.startsWith(check.body_starts_with)) {
+        problems.push(`the file starts ${JSON.stringify(body.slice(0, 12))}, declared ${JSON.stringify(check.body_starts_with)}`);
+      }
+      for (const needle of bytes === undefined ? [] : check.body_contains ?? []) {
+        if (!body.includes(needle)) problems.push(`the file does not contain ${JSON.stringify(needle)}`);
+      }
+      if (bytes !== undefined && check.csv_columns !== undefined) {
+        const header = body.replace(/^\ufeff/, '').split(/\r?\n/, 1)[0] ?? '';
+        const columns = csvCells(`${header}\n`).length;
+        summary.csvColumns = columns;
+        if (columns !== check.csv_columns) {
+          problems.push(`the CSV header has ${columns} column(s), declared ${check.csv_columns}`);
+        }
+      }
+      if (bytes !== undefined && check.csv_no_formula_cells === true) {
+        const cells = csvCells(body);
+        const formulas = formulaLikeCells(cells);
+        summary.csvCells = cells.length;
+        summary.formulaLikeCells = formulas.slice(0, 5);
+        if (formulas.length > 0) {
+          problems.push(
+            `${formulas.length} CSV cell(s) start with a formula character: ` +
+              `${JSON.stringify(formulas.slice(0, 3))}`,
+          );
+        }
+      }
+      if (problems.length > 0) {
+        ok = false;
+        summary.ok = false;
+        fail(step.name, `${check.of} download: ${problems.join('; ')}`);
+      }
+    }
+
     for (const expectation of step.expects_api_after_terminal ?? []) {
       let concrete;
       try {
-        concrete = fill(expectation.path, captured);
+        concrete = concretePath(expectation, scope(expectation.bind));
       } catch (error) {
         fail(step.name, error.message);
         continue;
@@ -510,22 +1079,25 @@ export async function runWritePhase({
 
     record.verdict = ok ? 'ok' : 'RED';
     console.log(
-      `${ok ? 'ok  ' : 'RED '}${step.name.padEnd(16)} ` +
-        `api=${record.observedApi.length} ` +
+      `${ok ? 'ok  ' : 'RED '}${step.name.padEnd(28)} ` +
+        `as=${sessionName} api=${record.observedApi.length} ` +
         `${record.capturedHere ? JSON.stringify(record.capturedHere) : ''} ` +
         `${record.awaitTerminal ? `terminal=${record.awaitTerminal.reached} in ${record.awaitTerminal.waitedMs}ms/${record.awaitTerminal.boundMs}ms` : ''}`,
     );
 
-    // A step that did not capture what the next step addresses makes every step after it
-    // meaningless rather than red. Stop and say so -- the same rule as the read walk.
     if (!ok) {
-      console.error(
-        `\ne2e:pc01: stopping the write half at '${step.name}'. ` +
-          `The steps after it were NOT checked.`,
-      );
-      return { records, failures, captured, fixture, stopped: step.name };
+      firstRed = firstRed ?? step.name;
+      if (!continueIfCaptured) {
+        // The original rule: what a red step failed to capture is what the next step
+        // addresses, so nothing after it is meaningful.
+        console.error(
+          `\ne2e:pc01: stopping the write half at '${step.name}'. ` +
+            `The steps after it were NOT checked.`,
+        );
+        return { records, failures, captured, fixture, stopped: step.name };
+      }
     }
   }
 
-  return { records, failures, captured, fixture, stopped: null };
+  return { records, failures, captured, fixture, stopped };
 }

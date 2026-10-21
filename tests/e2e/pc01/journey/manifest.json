@@ -254,7 +254,13 @@
         "W59-VERSION-COMPARE-01 put the version comparison above the run comparison. It reads",
         "the version (`getDocumentVersion`) and its set's versions (`listVersions`) on mount in",
         "every state; `compareDocumentVersions` is asked only when the set has another version,",
-        "so it is optional here: the journey's set has one version."
+        "so it is optional here: a set with one version asks nothing more.",
+        "",
+        "BETA-LIVE-JOURNEY-01. The version comparison also reads the signed-in account (`getMe`)",
+        "on mount, in every state, to decide whether «Перенести решение» is offered (an account",
+        "without `expert` sees a sentence instead of the button). The first live run after the",
+        "night window found it undeclared. The write half (`compare-versions`, `carry-over`)",
+        "drives the comparison itself once the set has more than one version."
       ],
       "expects_api": [
         {
@@ -271,6 +277,11 @@
           "method": "GET",
           "path": "/documents/{document_uid}/versions",
           "operationId": "listVersions"
+        },
+        {
+          "method": "GET",
+          "path": "/me",
+          "operationId": "getMe"
         }
       ],
       "optional_api": [
@@ -385,6 +396,7 @@
           "operationId": "listRegistrations",
           "$why_optional": "only a session holding `admin` reads the pending-request count"
         },
+        {"method": "GET", "path": "/assignments", "operationId": "listAssignments", "$why_optional": "only a session holding `expert` reads its own open work for «Мои задачи» (W61-DISPATCHER-01); the walk lands on the home page, which `root` declares the same way"},
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": null
@@ -494,14 +506,20 @@
       "name": "optimisation",
       "path": "/optimisation",
       "page_module": "web/src/app/optimisation/page.tsx",
+      "redirects_to": "/projects",
       "$comment": [
-        "Оптимизация -- front-end preparation under R-23's addendum. W43-PREP.",
-        "",
-        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
-        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this",
-        "entry gains operations and the assertion starts carrying weight."
+        "Оптимизация -- since W60-OPT-PROPOSALS-01 the top-level screen is a pointer and",
+        "not a destination: it says that optimisation now lives on the project's «Оптимизация»",
+        "tab and replaces itself with the projects list (`OPTIMISATION_MOVED_TO`). So the walk",
+        "lands on `/projects` and the calls declared are that list's. This entry said",
+        "`expects_api: []` (\"a RoutePlaceholder that calls nothing\") until the first live run",
+        "after the night window, which found a call it did not declare; the screens that hold",
+        "the work are walked where they are: the project's tab by the write half's `optimisation-*`",
+        "steps, the section's Form-7 by `section-optimisation`."
       ],
-      "expects_api": [],
+      "expects_api": [
+        {"method": "GET", "path": "/projects", "operationId": "listProjects"}
+      ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
@@ -619,8 +637,13 @@
         "Оптимизация разделов (R-66; W63-SECTION-FORM7-01 graduated it from the honest stub)",
         "reads the combined Form-7 specification of the opening section once on a cold route:",
         "the analysed section (АР), every project, the first page of rows. Read-only: the screen",
-        "emits no write, and choosing a section, a project or a search is a later, clicked read."
+        "emits no write, and choosing a section, a project or a search is a later, clicked read.",
+        "",
+        "`constants` declares the path value the route's call carries: a member of the section",
+        "enumeration the contract publishes, not an identity. Without it the read walk threw on",
+        "this route (`route needs {section_code}`) and every route after it went unwalked."
       ],
+      "constants": {"section_code": "AR"},
       "expects_api": [
         {"method": "GET", "path": "/sections/{section_code}/specification", "operationId": "getSectionSpecification"}
       ],
@@ -819,6 +842,7 @@
     }
   ],
   "write": {
+    "on_red": "continue_if_captured",
     "$comment": [
       "The WRITE half of the journey. `D-30`, and before it `D-5`.",
       "",
@@ -843,7 +867,20 @@
       "",
       "`%STAMP%` is replaced with the run's UTC timestamp. The app mints its idempotency key",
       "from the typed name, so a fixed name would make every run the same command and the",
-      "second run of the day would assert nothing about creation."
+      "second run of the day would assert nothing about creation.",
+      "",
+      "BETA-LIVE-JOURNEY-01. After the first four steps (project, upload, classify, run) come the",
+      "steps for the screens the night window of 2026-10-20 added -- the next version of a set,",
+      "the version and П→Р comparisons and the carried decision, «Нормы», «Настройки анализа»,",
+      "«Диспетчер» and «Мои задачи», the project's «Оптимизация» tab (price list, vendor lists,",
+      "«Спецификация и цены», «Предложения») and «Оптимизация разделов» -- each with the case",
+      "that must be refused: a role the screen refuses, an input it refuses, or a second identical",
+      "submit that must change nothing. `as` names the session that performs a step (`admin` is the",
+      "journey's own account, holding both roles; the others are the `accounts` roster). `bind`",
+      "renames what a template variable means inside a step, so a step that works on the set's",
+      "second version still names its route and its contract path the way they are written.",
+      "`on_red: continue_if_captured` stops only the steps whose inputs a red step failed to",
+      "produce; a step that was not reached is a finding, never a pass."
     ],
     "fixture": "fixtures/synthetic/ar/bundles/ar_baseline.zip",
     "steps": [
@@ -1113,8 +1150,2560 @@
         "forbids_rendered": [
           "[data-run-failure]"
         ]
+      },
+      {
+        "name": "record-decision",
+        "at": "/projects/{project_uid}/runs/{run_id}/review",
+        "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/review/page.tsx",
+        "control_module": "web/src/widgets/decision-panel/ui/decision-panel.tsx",
+        "$comment": [
+          "The expert's verdict on the first finding of the first run. Not a night-window screen: it",
+          "is the precondition of the carried decision below (a decision can only be carried from a",
+          "finding that has one), and it is the one write the review screen offers an expert."
+        ],
+        "captures": [
+          {
+            "kind": "attribute",
+            "selector": "article[data-finding-uid]",
+            "attribute": "data-finding-uid",
+            "as": [
+              "finding_uid"
+            ],
+            "matches": "^(fnd_%ID%)$",
+            "bound_ms": 30000,
+            "when": "before_actions",
+            "$why": "the finding the screen opens on; the decision's address carries it"
+          }
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-intent=\"accept\"]"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/findings/{finding_uid}/decisions",
+            "operationId": "appendDecision",
+            "expect_status": 201
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "appendDecision",
+            "json_path": "event.event_type",
+            "equals": "accept"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-event-type=\"accept\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[role=\"alert\"]"
+        ],
+        "screen": "run-review",
+        "case": "action"
+      },
+      {
+        "name": "refuse-version-upload",
+        "at": "/projects/{project_uid}/documents/{document_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/documents/[document_uid]/page.tsx",
+        "control_module": "web/src/features/upload-document/ui/upload-document-version-form.tsx",
+        "$comment": [
+          "A bare PDF is not a portal bundle. The browser refuses it before a byte is sent, so the",
+          "refusal is the ABSENCE of a request plus the sentence the form prints; the server's own",
+          "refusal is held by tests/integration/api/test_multipart_rules.py."
+        ],
+        "actions": [
+          {
+            "do": "attach_file",
+            "selector": "#upload-version-file",
+            "fixture": "fixtures/synthetic/ar/ar_baseline.pdf"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-precheck-problem=\"not_zip\"]",
+            "text_contains": "не является ZIP-архивом"
+          },
+          {
+            "selector": "button[type=\"submit\"][disabled]",
+            "text_contains": "Загрузить новую версию"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions",
+            "why": "a bare PDF is refused by the browser"
+          }
+        ],
+        "screen": "version-upload",
+        "case": "refused"
+      },
+      {
+        "name": "upload-next-version",
+        "at": "/projects/{project_uid}/documents/{document_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/documents/[document_uid]/page.tsx",
+        "control_module": "web/src/features/upload-document/ui/upload-document-version-form.tsx",
+        "$comment": [
+          "W59-VERSION-UPLOAD-01. The next version of the set: the same bundle again, as a second",
+          "version. The new version inherits nothing, so the screen leads to its stage-and-section",
+          "panel; the address is captured from where the application took the reader."
+        ],
+        "actions": [
+          {
+            "do": "attach_file",
+            "selector": "#upload-version-file",
+            "fixture": true
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Загрузить новую версию"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions",
+            "operationId": "uploadDocumentVersion",
+            "expect_status": 201
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "uploadDocumentVersion",
+            "content_type_starts_with": "multipart/form-data",
+            "body_contains": [
+              "name=\"file\"",
+              "ar_baseline.zip",
+              "application/zip"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "uploadDocumentVersion",
+            "json_path": "version_uid",
+            "matches": "^ver_%ID%$"
+          },
+          {
+            "of": "uploadDocumentVersion",
+            "json_path": "version_ordinal",
+            "equals": 2
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "pattern": "^/projects/(prj_%ID%)/versions/(ver_%ID%)$",
+          "as": [
+            "project_uid",
+            "second_version_uid"
+          ],
+          "bound_ms": 30000,
+          "$why": "on success the screen leads to the new version"
+        },
+        "forbids_rendered": [
+          "[data-upload-failure]",
+          "[data-precheck-problem]"
+        ],
+        "screen": "version-upload",
+        "case": "action"
+      },
+      {
+        "name": "refuse-classification-for-admin-only",
+        "as": "admin_only",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/widgets/version-classification/ui/version-classification.tsx",
+        "bind": {
+          "version_uid": "second_version_uid",
+          "run_id": "second_run_id"
+        },
+        "$comment": [
+          "A role the screen refuses. An administrator without `expert` reads the version and is told",
+          "that only an expert confirms a section: no form, no button, no request."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review",
+            "operationId": "getVersionSectionReview",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-classification-state=\"read-only\"]",
+            "text_contains": "Раздел ещё не подтверждён экспертом"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-classification-form]",
+          "button[data-classification-confirm]"
+        ],
+        "expects_not_called": [
+          {
+            "method": "PUT",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+            "why": "an administrator without `expert` is shown no form"
+          }
+        ],
+        "screen": "version-classification",
+        "case": "refused"
+      },
+      {
+        "name": "refuse-classification-incomplete",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/classify-version/ui/classify-version-form.tsx",
+        "bind": {
+          "version_uid": "second_version_uid",
+          "run_id": "second_run_id"
+        },
+        "$comment": [
+          "An input the form refuses: a stage without a section. «Подтвердить раздел» stays disabled",
+          "until both are chosen, and nothing is sent."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "input[data-stage-choice=\"P\"]"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "button[data-classification-confirm][disabled]",
+            "text_contains": "Подтвердить раздел"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "PUT",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+            "why": "a stage without a section is not a classification"
+          }
+        ],
+        "screen": "version-classification",
+        "case": "refused"
+      },
+      {
+        "name": "classify-second-version",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/classify-version/ui/classify-version-form.tsx",
+        "bind": {
+          "version_uid": "second_version_uid",
+          "run_id": "second_run_id"
+        },
+        "$comment": [
+          "The expert confirms the second version's stage and section, pressing the button twice. One",
+          "request is sent (the form's single-flight gate), and the panel switches to the confirmed",
+          "classification. A second identical submit changes nothing."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "input[data-stage-choice=\"P\"]"
+          },
+          {
+            "do": "click",
+            "selector": "input[data-section-choice=\"AR\"]"
+          },
+          {
+            "do": "click",
+            "selector": "button[data-classification-confirm]",
+            "text": "Подтвердить раздел",
+            "times": 2
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+            "operationId": "classifyDocumentVersion",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "version_uid",
+            "matches": "^ver_%ID%$"
+          },
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "project_stage",
+            "equals": "P"
+          },
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "section_code",
+            "equals": "AR"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-classification-state=\"confirmed\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-classification-failure]",
+          "[data-classification-conflict]"
+        ],
+        "screen": "version-classification",
+        "case": "action"
+      },
+      {
+        "name": "start-second-run",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
+        "bind": {
+          "version_uid": "second_version_uid",
+          "run_id": "second_run_id"
+        },
+        "$comment": [
+          "A run on the second version, so the two versions have findings to be compared."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "button",
+            "text": "Запустить прогон"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs",
+            "operationId": "startRun",
+            "expect_status": 202
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "startRun",
+            "json_path": "run_id",
+            "matches": "^run_%ID%$"
+          },
+          {
+            "of": "startRun",
+            "json_path": "state",
+            "equals": "queued"
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "pattern": "^/projects/(prj_%ID%)/runs/(run_%ID%)$",
+          "as": [
+            "project_uid",
+            "second_run_id"
+          ],
+          "bound_ms": 30000
+        },
+        "await_terminal": {
+          "outcome_selector": "[data-run-outcome]",
+          "outcome_attribute": "data-run-outcome",
+          "non_terminal_value": "in_flight",
+          "accept": [
+            "published",
+            "partial"
+          ],
+          "activity_selector": "[data-run-activity]",
+          "activity_attribute": "data-run-activity",
+          "activity_when_final": "stopped",
+          "bound_ms": 150000,
+          "poll_ms": 500
+        },
+        "expects_api_after_terminal": [
+          {
+            "method": "GET",
+            "path": "/runs/{run_id}",
+            "operationId": "getRunStatus",
+            "bind": {
+              "run_id": "second_run_id"
+            }
+          }
+        ],
+        "forbids_rendered": [
+          "[data-run-failure]"
+        ],
+        "screen": "version-run",
+        "case": "action"
+      },
+      {
+        "name": "compare-versions-read-only",
+        "as": "admin_only",
+        "at": "/projects/{project_uid}/versions/{version_uid}/comparison",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/comparison/page.tsx",
+        "control_module": "web/src/widgets/version-comparison/ui/version-comparison.tsx",
+        "bind": {
+          "version_uid": "second_version_uid",
+          "run_id": "second_run_id"
+        },
+        "$comment": [
+          "W59-VERSION-COMPARE-01. The second version against the first: sheet pairs, line differences",
+          "and the proposed finding matches. An administrator without `expert` reads all of it and is",
+          "offered no «Перенести решение» -- a sentence stands in the button's place.",
+          "The call is addressed by the OLDER version (the source); the page by the newer one."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison",
+            "operationId": "compareDocumentVersions",
+            "expect_status": 200,
+            "bind": {
+              "version_uid": "version_uid"
+            }
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "compareDocumentVersions",
+            "json_path": "outcome",
+            "equals": "compared"
+          },
+          {
+            "of": "compareDocumentVersions",
+            "json_path": "mode",
+            "equals": "version"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-comparison-outcome=\"compared\"]"
+          },
+          {
+            "selector": "[data-sheet-status]",
+            "min_count": 1
+          },
+          {
+            "selector": "[data-proposal-kind=\"unchanged\"]",
+            "min_count": 1
+          },
+          {
+            "selector": "[data-carryover-state=\"read-only\"]",
+            "min_count": 1
+          }
+        ],
+        "forbids_rendered": [
+          "[data-carryover-state=\"offered\"]"
+        ],
+        "screen": "version-comparison",
+        "case": "refused"
+      },
+      {
+        "name": "carry-over-decision",
+        "at": "/projects/{project_uid}/versions/{version_uid}/comparison",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/comparison/page.tsx",
+        "control_module": "web/src/features/carry-over-decision/ui/carry-over-decision.tsx",
+        "bind": {
+          "version_uid": "second_version_uid",
+          "run_id": "second_run_id"
+        },
+        "$comment": [
+          "W59-DECISION-CARRYOVER-01. On a «Без изменений» row whose older finding carries the expert's",
+          "verdict, the expert carries it to the newer finding: «Перенести решение», then the",
+          "confirmation, pressed twice. One request is sent and the newer finding receives one new decision."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-carryover-state=\"offered\"] button",
+            "text": "Перенести решение",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-carryover-state=\"confirming\"] button",
+            "text": "Подтвердить перенос",
+            "times": 2
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison",
+            "operationId": "compareDocumentVersions",
+            "expect_status": 200,
+            "bind": {
+              "version_uid": "version_uid"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers",
+            "operationId": "carryOverDecision",
+            "expect_status": 201,
+            "count": 1,
+            "bind": {
+              "version_uid": "version_uid"
+            }
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "carryOverDecision",
+            "json_path": "replayed",
+            "equals": false
+          },
+          {
+            "of": "carryOverDecision",
+            "json_path": "event.event_type",
+            "equals": "accept"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-carryover-state=\"carried\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-carryover-failure]"
+        ],
+        "screen": "version-comparison",
+        "case": "action"
+      },
+      {
+        "name": "carry-over-is-not-offered-again",
+        "at": "/projects/{project_uid}/versions/{version_uid}/comparison",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/comparison/page.tsx",
+        "control_module": "web/src/features/carry-over-decision/ui/carry-over-decision.tsx",
+        "bind": {
+          "version_uid": "second_version_uid",
+          "run_id": "second_run_id"
+        },
+        "$comment": [
+          "The newer finding now has a decision, so the same row offers nothing: the carried decision",
+          "is a fact the next read of the comparison sees, and a second carry has nothing to carry."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison",
+            "operationId": "compareDocumentVersions",
+            "expect_status": 200,
+            "bind": {
+              "version_uid": "version_uid"
+            }
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-proposal-kind=\"unchanged\"]",
+            "min_count": 1
+          }
+        ],
+        "forbids_rendered": [
+          "[data-carryover-state=\"offered\"]"
+        ],
+        "screen": "version-comparison",
+        "case": "refused"
+      },
+      {
+        "name": "upload-third-version",
+        "at": "/projects/{project_uid}/documents/{document_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/documents/[document_uid]/page.tsx",
+        "control_module": "web/src/features/upload-document/ui/upload-document-version-form.tsx",
+        "$comment": [
+          "A third version, to be confirmed as a working-documentation (Р) set."
+        ],
+        "actions": [
+          {
+            "do": "attach_file",
+            "selector": "#upload-version-file",
+            "fixture": true
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Загрузить новую версию"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions",
+            "operationId": "uploadDocumentVersion",
+            "expect_status": 201
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "uploadDocumentVersion",
+            "json_path": "version_uid",
+            "matches": "^ver_%ID%$"
+          },
+          {
+            "of": "uploadDocumentVersion",
+            "json_path": "version_ordinal",
+            "equals": 3
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "pattern": "^/projects/(prj_%ID%)/versions/(ver_%ID%)$",
+          "as": [
+            "project_uid",
+            "third_version_uid"
+          ],
+          "bound_ms": 30000
+        },
+        "forbids_rendered": [
+          "[data-upload-failure]",
+          "[data-precheck-problem]"
+        ],
+        "screen": "version-upload",
+        "case": "action"
+      },
+      {
+        "name": "classify-third-version",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/classify-version/ui/classify-version-form.tsx",
+        "bind": {
+          "version_uid": "third_version_uid",
+          "run_id": "third_run_id"
+        },
+        "$comment": [
+          "Stage Р, section АР: the working-documentation successor of the design (П) set."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "input[data-stage-choice=\"R\"]"
+          },
+          {
+            "do": "click",
+            "selector": "input[data-section-choice=\"AR\"]"
+          },
+          {
+            "do": "click",
+            "selector": "button[data-classification-confirm]",
+            "text": "Подтвердить раздел"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+            "operationId": "classifyDocumentVersion",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "project_stage",
+            "equals": "R"
+          },
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "section_code",
+            "equals": "AR"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-classification-state=\"confirmed\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-classification-failure]",
+          "[data-classification-conflict]"
+        ],
+        "screen": "version-classification",
+        "case": "action"
+      },
+      {
+        "name": "start-third-run",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
+        "bind": {
+          "version_uid": "third_version_uid",
+          "run_id": "third_run_id"
+        },
+        "$comment": [
+          "A run on the Р version: every version of the set has findings, and the newest has a run."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "button",
+            "text": "Запустить прогон"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs",
+            "operationId": "startRun",
+            "expect_status": 202
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "startRun",
+            "json_path": "state",
+            "equals": "queued"
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "pattern": "^/projects/(prj_%ID%)/runs/(run_%ID%)$",
+          "as": [
+            "project_uid",
+            "third_run_id"
+          ],
+          "bound_ms": 30000
+        },
+        "await_terminal": {
+          "outcome_selector": "[data-run-outcome]",
+          "outcome_attribute": "data-run-outcome",
+          "non_terminal_value": "in_flight",
+          "accept": [
+            "published",
+            "partial"
+          ],
+          "activity_selector": "[data-run-activity]",
+          "activity_attribute": "data-run-activity",
+          "activity_when_final": "stopped",
+          "bound_ms": 150000,
+          "poll_ms": 500
+        },
+        "forbids_rendered": [
+          "[data-run-failure]"
+        ],
+        "screen": "version-run",
+        "case": "action"
+      },
+      {
+        "name": "compare-stages-refused-without-the-switch",
+        "at": "/projects/{project_uid}/versions/{version_uid}/comparison",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/comparison/page.tsx",
+        "control_module": "web/src/widgets/version-comparison/ui/version-comparison.tsx",
+        "bind": {
+          "version_uid": "third_version_uid",
+          "run_id": "third_run_id"
+        },
+        "$comment": [
+          "A П version and a Р version are not an ordinary pair: the version comparison refuses them",
+          "with a reason that names the switch «Стадии П → Р», and offers the switch."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison",
+            "operationId": "compareDocumentVersions",
+            "expect_status": 200,
+            "bind": {
+              "version_uid": "second_version_uid"
+            }
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "compareDocumentVersions",
+            "json_path": "outcome",
+            "equals": "refused"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-comparison-outcome=\"refused\"]"
+          },
+          {
+            "selector": "[data-version-comparison] input[type=\"checkbox\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-comparison-outcome=\"compared\"]"
+        ],
+        "screen": "stage-comparison",
+        "case": "refused"
+      },
+      {
+        "name": "compare-stages-p-to-r",
+        "at": "/projects/{project_uid}/versions/{version_uid}/comparison",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/comparison/page.tsx",
+        "control_module": "web/src/widgets/version-comparison/ui/version-comparison.tsx",
+        "bind": {
+          "version_uid": "third_version_uid",
+          "run_id": "third_run_id"
+        },
+        "$comment": [
+          "W62. With the switch on, the П set is compared with its Р successor."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-version-comparison] input[type=\"checkbox\"]",
+            "settle": true
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison",
+            "operationId": "compareDocumentVersions",
+            "expect_status": 200,
+            "bind": {
+              "version_uid": "second_version_uid"
+            }
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-comparison-mode=\"stage\"][data-comparison-outcome=\"compared\"]"
+          },
+          {
+            "selector": "[data-sheet-status]",
+            "min_count": 1
+          }
+        ],
+        "screen": "stage-comparison",
+        "case": "action"
+      },
+      {
+        "name": "analysis-settings-lists-the-profiles",
+        "at": "/analysis-settings",
+        "page_module": "web/src/app/analysis-settings/page.tsx",
+        "control_module": "web/src/widgets/analysis-profile-table/ui/analysis-profile-table.tsx",
+        "$comment": [
+          "W59-ANALYSIS-SETTINGS-01. The profile registry, read only: fifteen sections, the profile",
+          "each runs with, and the sections that have none. The screen offers nothing to change --",
+          "no form, no field, no select -- and says so."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/analysis/profiles",
+            "operationId": "listAnalysisProfiles",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "listAnalysisProfiles",
+            "json_path": "items",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "tr[data-section]",
+            "min_count": 15
+          },
+          {
+            "selector": "tr[data-section=\"AR\"]"
+          },
+          {
+            "selector": "[data-profile-status]",
+            "min_count": 1
+          },
+          {
+            "selector": "tr[data-profile=\"none\"]",
+            "min_count": 1
+          }
+        ],
+        "forbids_rendered": [
+          ".am-page__body input",
+          ".am-page__body textarea",
+          ".am-page__body select",
+          ".am-page__body form"
+        ],
+        "screen": "analysis-settings",
+        "case": "action"
+      },
+      {
+        "name": "analysis-settings-for-an-expert",
+        "as": "expert_only",
+        "at": "/analysis-settings",
+        "page_module": "web/src/app/analysis-settings/page.tsx",
+        "control_module": "web/src/widgets/analysis-profile-table/ui/analysis-profile-table.tsx",
+        "$comment": [
+          "The same read by an account that is not an administrator: any one role reads the registry."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/analysis/profiles",
+            "operationId": "listAnalysisProfiles",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "tr[data-section]",
+            "min_count": 15
+          }
+        ],
+        "forbids_rendered": [
+          ".am-page__body input",
+          ".am-page__body form"
+        ],
+        "screen": "analysis-settings",
+        "case": "refused"
+      },
+      {
+        "name": "assign-work",
+        "at": "/dispatcher",
+        "page_module": "web/src/app/dispatcher/page.tsx",
+        "control_module": "web/src/features/create-assignment/ui/create-assignment-form.tsx",
+        "$comment": [
+          "W61-DISPATCHER-01. An administrator gives one document of the project to the expert",
+          "(`expert_only`): project, document, expert, a note, «Назначить» -- pressed twice. The same",
+          "assignment is stored once, and the screen says it was created.",
+          "Options are chosen by value (the project and user identities the journey itself made), not",
+          "by name: earlier runs left projects and accounts with the same names on a stand."
+        ],
+        "actions": [
+          {
+            "do": "select",
+            "selector": "form[data-create-assignment]",
+            "label": "Проект",
+            "option_value": "{project_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "form[data-create-assignment] option[value=\"{document_uid}\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "form[data-create-assignment]",
+            "label": "Документ (необязательно)",
+            "option_value": "{document_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "form[data-create-assignment] option[value=\"{expert_only_user_uid}\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "form[data-create-assignment]",
+            "label": "Эксперт",
+            "option_value": "{expert_only_user_uid}"
+          },
+          {
+            "do": "fill",
+            "selector": "form[data-create-assignment]",
+            "value": "Проверить разделы АР %STAMP%",
+            "label": "Комментарий (необязательно)",
+            "tag": "textarea"
+          },
+          {
+            "do": "click",
+            "selector": "[data-create-assignment-submit]",
+            "text": "Назначить",
+            "times": 2
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/assignments",
+            "operationId": "createAssignment",
+            "expect_status": 200,
+            "max_count": 2,
+            "same_response_at": [
+              "assignment_uid"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "createAssignment",
+            "json_path": "assignment_uid",
+            "matches": "^asg_%ID%$"
+          },
+          {
+            "of": "createAssignment",
+            "json_path": "status",
+            "equals": "assigned"
+          }
+        ],
+        "captures": [
+          {
+            "kind": "response",
+            "of": "createAssignment",
+            "json_path": "assignment_uid",
+            "as": [
+              "assignment_uid"
+            ],
+            "matches": "^(asg_%ID%)$",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-create-assignment-done]",
+            "text_contains": "Назначение создано."
+          }
+        ],
+        "forbids_rendered": [
+          "[data-create-assignment-failure]"
+        ],
+        "screen": "dispatcher",
+        "case": "action"
+      },
+      {
+        "name": "dispatcher-admin-cannot-take-the-work",
+        "as": "admin_only",
+        "at": "/dispatcher",
+        "page_module": "web/src/app/dispatcher/page.tsx",
+        "control_module": "web/src/widgets/assignment-board/ui/assignment-board.tsx",
+        "$comment": [
+          "A role the screen refuses a move to. An administrator who is not the assignee may",
+          "reassign or cancel the work and is offered neither «Взять в работу» nor «Вернуть» --",
+          "those are the assignee's."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/assignments",
+            "operationId": "listAssignments",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/me",
+            "operationId": "getMe",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"]"
+          },
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"reassigned\"]"
+          },
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"cancelled\"]"
+          },
+          {
+            "selector": "[data-create-assignment]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"started\"]",
+          "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"returned\"]",
+          "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"completed\"]"
+        ],
+        "screen": "dispatcher",
+        "case": "refused"
+      },
+      {
+        "name": "dispatcher-expert-sees-only-the-own-work",
+        "as": "expert_only",
+        "at": "/dispatcher",
+        "page_module": "web/src/app/dispatcher/page.tsx",
+        "control_module": "web/src/widgets/assignment-board/ui/assignment-board.tsx",
+        "$comment": [
+          "A role the screen refuses a form to. The expert sees «Мои назначения», the assignee's own",
+          "moves, and NO creation form: assigning is an administrator's act."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/assignments",
+            "operationId": "listAssignments",
+            "expect_status": 200
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "GET",
+            "path": "/users",
+            "why": "only an administrator reads the experts a creation names"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-dispatcher-list]"
+          },
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"]"
+          },
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"started\"]"
+          },
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"returned\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-dispatcher-create]",
+          "form[data-create-assignment]",
+          "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"reassigned\"]"
+        ],
+        "screen": "dispatcher",
+        "case": "refused"
+      },
+      {
+        "name": "my-tasks-return-needs-a-reason",
+        "as": "expert_only",
+        "at": "/",
+        "page_module": "web/src/app/page.tsx",
+        "control_module": "web/src/widgets/my-tasks/ui/my-tasks.tsx",
+        "$comment": [
+          "«Мои задачи» on the home screen. «Вернуть» opens a form whose reason is required; pressing",
+          "its button with the reason empty sends nothing, and the assignment stays as it was."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-my-task=\"{assignment_uid}\"] [data-assignment-move=\"returned\"]",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-assignment-draft=\"returned\"] button[type=\"submit\"]",
+            "text": "Вернуть"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/assignments",
+            "operationId": "listAssignments",
+            "expect_status": 200
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/assignments/{assignment_uid}/transitions",
+            "why": "a return needs a reason"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-assignment-draft=\"returned\"]"
+          },
+          {
+            "selector": "[data-my-task=\"{assignment_uid}\"]",
+            "text_contains": "Назначено"
+          }
+        ],
+        "screen": "my-tasks",
+        "case": "refused"
+      },
+      {
+        "name": "my-tasks-take-the-work",
+        "as": "expert_only",
+        "at": "/",
+        "page_module": "web/src/app/page.tsx",
+        "control_module": "web/src/widgets/my-tasks/ui/my-tasks.tsx",
+        "$comment": [
+          "The assignee takes the work from «Мои задачи»; it is now in progress and offers to be completed."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-my-task=\"{assignment_uid}\"] [data-assignment-move=\"started\"]"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/assignments/{assignment_uid}/transitions",
+            "operationId": "transitionAssignment",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "transitionAssignment",
+            "json_path": "status",
+            "equals": "in_progress"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-my-task=\"{assignment_uid}\"]",
+            "text_contains": "В работе"
+          },
+          {
+            "selector": "[data-my-task=\"{assignment_uid}\"] [data-assignment-move=\"completed\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-assignment-move-failure]"
+        ],
+        "screen": "my-tasks",
+        "case": "action"
+      },
+      {
+        "name": "my-tasks-complete-the-work",
+        "as": "expert_only",
+        "at": "/",
+        "page_module": "web/src/app/page.tsx",
+        "control_module": "web/src/widgets/my-tasks/ui/my-tasks.tsx",
+        "$comment": [
+          "The assignee completes it, pressing twice. Completed work leaves «Мои задачи» (it lists",
+          "open work only)."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-my-task=\"{assignment_uid}\"] [data-assignment-move=\"completed\"]",
+            "times": 2
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/assignments/{assignment_uid}/transitions",
+            "operationId": "transitionAssignment",
+            "expect_status": 200,
+            "max_count": 2,
+            "same_response_at": [
+              "status"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "transitionAssignment",
+            "json_path": "status",
+            "equals": "done"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-my-task=\"{assignment_uid}\"]",
+          "[data-assignment-move-failure]"
+        ],
+        "screen": "my-tasks",
+        "case": "action"
+      },
+      {
+        "name": "dispatcher-shows-the-finished-work",
+        "at": "/dispatcher",
+        "page_module": "web/src/app/dispatcher/page.tsx",
+        "control_module": "web/src/widgets/assignment-board/ui/assignment-board.tsx",
+        "$comment": [
+          "The administrator sees the work finished, with no move left on it, and its history:",
+          "assigned, taken, completed -- append-only events, each with its author."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-assignment-history-toggle=\"{assignment_uid}\"]",
+            "settle": true
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/assignments",
+            "operationId": "listAssignments",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"]",
+            "text_contains": "Выполнено"
+          },
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"]",
+            "text_contains": "Взято в работу"
+          },
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"]",
+            "text_contains": "Назначено"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-assignment=\"{assignment_uid}\"] [data-assignment-move]"
+        ],
+        "screen": "dispatcher",
+        "case": "action"
+      },
+      {
+        "name": "price-list-is-an-experts-act",
+        "as": "admin_only",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/widgets/project-optimisation/ui/price-list-panel.tsx",
+        "$comment": [
+          "W60-PRICE-LIST-01. «Оптимизация» is a tab of the project. An administrator without `expert`",
+          "reads the price lists and is told that an expert uploads one: no form, no file field."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/price-lists",
+            "operationId": "listPriceListRevisions",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-price-list-panel]",
+            "text_contains": "Прайс-лист загружает эксперт."
+          }
+        ],
+        "forbids_rendered": [
+          "[data-price-list-upload]",
+          "#price-list-file"
+        ],
+        "screen": "price-lists",
+        "case": "refused"
+      },
+      {
+        "name": "price-list-empty-file-refused",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/upload-price-list/ui/upload-price-list-form.tsx",
+        "$comment": [
+          "An input the form refuses: an empty file. The browser says so and the button stays",
+          "disabled; nothing is sent."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "#price-list-file",
+            "fixture": "tests/e2e/pc01/journey/fixtures/optimisation/empty.csv"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": ".am-form__problem",
+            "text_contains": "Файл пуст."
+          },
+          {
+            "selector": "[data-price-list-upload] button[type=\"submit\"][disabled]",
+            "text_contains": "Загрузить прайс-лист"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/price-lists",
+            "why": "an empty file is refused by the browser"
+          }
+        ],
+        "screen": "price-lists",
+        "case": "refused"
+      },
+      {
+        "name": "price-list-without-columns-refused",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/upload-price-list/ui/upload-price-list-form.tsx",
+        "$comment": [
+          "A file the server refuses: a table with no name, unit or price column is not a price list.",
+          "Nothing is stored; the form states the refusal and offers the retry."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "#price-list-file",
+            "fixture": "tests/e2e/pc01/journey/fixtures/optimisation/no-columns.csv"
+          },
+          {
+            "do": "click",
+            "selector": "[data-price-list-upload] button[type=\"submit\"]",
+            "text": "Загрузить прайс-лист"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/price-lists",
+            "operationId": "uploadPriceList",
+            "expect_status": 422,
+            "expect_error_code": "validation_failed",
+            "refusal": true,
+            "count": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": ".am-state",
+            "text_contains": "Прайс-лист не загружен."
+          }
+        ],
+        "forbids_rendered": [
+          "[data-price-list-stored]"
+        ],
+        "screen": "price-lists",
+        "case": "refused"
+      },
+      {
+        "name": "specification-needs-a-price-list",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/widgets/specification-prices/ui/specification-prices-section.tsx",
+        "$comment": [
+          "W60-OPT-MATCH-01, before any price list exists in this project: the answer is a STATE, not an error and",
+          "not a guess -- `price_list_missing` -- and the screen says that no price can be shown without one."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents/{document_uid}/specification-prices",
+            "operationId": "getSpecificationPrices",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "getSpecificationPrices",
+            "json_path": "state",
+            "equals": "price_list_missing"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-spec-state=\"price_list_missing\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-spec-state=\"ready\"]",
+          "[data-spec-price]",
+          "[data-spec-amount]"
+        ],
+        "screen": "specification-prices",
+        "case": "refused"
+      },
+      {
+        "name": "price-list-upload",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/upload-price-list/ui/upload-price-list-form.tsx",
+        "$comment": [
+          "The expert uploads the project's price list (CSV, RUB by default) and presses twice. One revision",
+          "is stored -- both answers name the same one -- with the parse report: positions accepted, the row",
+          "without a price skipped and listed. Cells that begin with `=`, `+`, `-` or `@` are stored as text."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "#price-list-file",
+            "fixture": "tests/e2e/pc01/journey/fixtures/optimisation/prices.csv"
+          },
+          {
+            "do": "select",
+            "selector": "#price-list-currency",
+            "option_text": "рубль"
+          },
+          {
+            "do": "click",
+            "selector": "[data-price-list-upload] button[type=\"submit\"]",
+            "text": "Загрузить прайс-лист",
+            "times": 2
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/price-lists",
+            "operationId": "uploadPriceList",
+            "expect_status": 201,
+            "max_count": 2,
+            "same_response_at": [
+              "price_list_id",
+              "revision_number"
+            ]
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "uploadPriceList",
+            "content_type_starts_with": "multipart/form-data",
+            "body_contains": [
+              "name=\"file\"",
+              "prices.csv"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "uploadPriceList",
+            "json_path": "price_list_id",
+            "matches": "^prl_%ID%$"
+          },
+          {
+            "of": "uploadPriceList",
+            "json_path": "accepted_row_count",
+            "at_least": 4
+          }
+        ],
+        "captures": [
+          {
+            "kind": "response",
+            "of": "uploadPriceList",
+            "json_path": "price_list_id",
+            "as": [
+              "price_list_id"
+            ],
+            "matches": "^(prl_%ID%)$",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-price-list-stored]"
+          },
+          {
+            "selector": "[data-price-list-revisions] tbody tr",
+            "min_count": 1
+          },
+          {
+            "selector": "[data-price-list-positions]"
+          },
+          {
+            "selector": "[data-skipped-row]",
+            "min_count": 1
+          }
+        ],
+        "forbids_rendered": [
+          ".am-state--error"
+        ],
+        "screen": "price-lists",
+        "case": "action"
+      },
+      {
+        "name": "specification-and-prices",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/widgets/specification-prices/ui/specification-prices-section.tsx",
+        "$comment": [
+          "W60-OPT-MATCH-01. «Спецификация и цены» for the АР set: the specification read from the run's saved",
+          "text and matched to the price list. The baseline bundle has no specification table, so the honest",
+          "answer is `ready` with no row, no total and nothing excluded -- not an invented price."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents/{document_uid}/specification-prices",
+            "operationId": "getSpecificationPrices",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "getSpecificationPrices",
+            "json_path": "state",
+            "equals": "ready"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-specification-prices]"
+          },
+          {
+            "selector": "[data-spec-state=\"ready\"]"
+          },
+          {
+            "selector": "[data-spec-summary]"
+          }
+        ],
+        "screen": "specification-prices",
+        "case": "action"
+      },
+      {
+        "name": "vendor-list-global-is-an-administrators-act",
+        "as": "expert_only",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/widgets/project-optimisation/ui/vendor-lists-panel.tsx",
+        "$comment": [
+          "A role the screen refuses a control to. An expert may set the PROJECT's vendor list and is",
+          "offered no button for the global one."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/vendor-lists",
+            "operationId": "getEffectiveVendorLists",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-vendor-lists]"
+          },
+          {
+            "selector": "tr[data-vendor-section=\"AR\"] button",
+            "text_contains": "Изменить список проекта"
+          }
+        ],
+        "expects_absent": [
+          {
+            "selector": "tr[data-vendor-section=\"AR\"] button",
+            "text": "Изменить общий список"
+          }
+        ],
+        "screen": "vendor-lists",
+        "case": "refused"
+      },
+      {
+        "name": "vendor-list-entry-needs-a-vendor",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/set-vendor-list/ui/vendor-list-editor.tsx",
+        "$comment": [
+          "An input the editor refuses: a row with no vendor. The editor says so and «Сохранить список»",
+          "stays disabled; nothing is sent."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-vendor-section=\"AR\"] button",
+            "text": "Изменить общий список",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-vendor-list-editor] button",
+            "text": "Добавить запись"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": ".am-form__problem",
+            "text_contains": "В каждой записи нужен поставщик."
+          },
+          {
+            "selector": "[data-vendor-list-editor] button[type=\"submit\"][disabled]",
+            "text_contains": "Сохранить список"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "PUT",
+            "path": "/vendor-lists/{section_code}",
+            "why": "a row without a vendor"
+          }
+        ],
+        "constants": {
+          "section_code": "AR"
+        },
+        "screen": "vendor-lists",
+        "case": "refused"
+      },
+      {
+        "name": "vendor-list-global",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/set-vendor-list/ui/vendor-list-editor.tsx",
+        "constants": {
+          "section_code": "AR"
+        },
+        "$comment": [
+          "The administrator sets the GLOBAL vendor list for АР: one row, vendor and note. It is a new revision",
+          "of the list every project without its own inherits."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-vendor-section=\"AR\"] button",
+            "text": "Изменить общий список",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-vendor-list-editor] button",
+            "text": "Добавить запись"
+          },
+          {
+            "do": "fill",
+            "selector": "[data-vendor-list-editor]",
+            "value": "ООО Ромашка",
+            "label": "Поставщик",
+            "index": -1
+          },
+          {
+            "do": "fill",
+            "selector": "[data-vendor-list-editor]",
+            "value": "Металлические щиты",
+            "label": "Материал или оборудование",
+            "index": -1
+          },
+          {
+            "do": "click",
+            "selector": "[data-vendor-list-editor] button[type=\"submit\"]",
+            "text": "Сохранить список"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/vendor-lists/{section_code}",
+            "operationId": "setGlobalVendorList",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "setGlobalVendorList",
+            "json_path": "entries",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "tr[data-vendor-section=\"AR\"]",
+            "text_contains": "ООО Ромашка",
+            "text_is_data": true
+          }
+        ],
+        "screen": "vendor-lists",
+        "case": "action"
+      },
+      {
+        "name": "vendor-list-project",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/set-vendor-list/ui/vendor-list-editor.tsx",
+        "constants": {
+          "section_code": "AR"
+        },
+        "$comment": [
+          "The expert (here the journey's account) sets the PROJECT's list for АР, which then wins over the global",
+          "one for this project."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-vendor-section=\"AR\"] button",
+            "text": "Изменить список проекта",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-vendor-list-editor] button",
+            "text": "Добавить запись"
+          },
+          {
+            "do": "fill",
+            "selector": "[data-vendor-list-editor]",
+            "value": "ИП Лютиков",
+            "label": "Поставщик",
+            "index": -1
+          },
+          {
+            "do": "click",
+            "selector": "[data-vendor-list-editor] button[type=\"submit\"]",
+            "text": "Сохранить список"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/projects/{project_uid}/vendor-lists/{section_code}",
+            "operationId": "setProjectVendorList",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "tr[data-vendor-section=\"AR\"][data-vendor-source=\"project\"]",
+            "text_contains": "ИП Лютиков",
+            "text_is_data": true
+          }
+        ],
+        "screen": "vendor-lists",
+        "case": "action"
+      },
+      {
+        "name": "optimisation-pass-is-an-experts-act",
+        "as": "admin_only",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/start-optimisation-pass/ui/start-optimisation-pass.tsx",
+        "$comment": [
+          "An administrator without `expert` reads passes and decisions and is told that an expert starts a pass."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-start-pass=\"readonly\"]",
+            "text_contains": "Запустить проход может эксперт."
+          }
+        ],
+        "expects_absent": [
+          {
+            "selector": "[data-start-pass] button",
+            "text": "Запустить проход"
+          }
+        ],
+        "screen": "optimisation-passes",
+        "case": "refused"
+      },
+      {
+        "name": "optimisation-pass",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/start-optimisation-pass/ui/start-optimisation-pass.tsx",
+        "$comment": [
+          "W60-OPT-PROPOSALS-01. The expert starts a pass for the АР set, pressing twice: one pass is stored. The",
+          "baseline bundle's specification has no row, so the pass honestly holds no proposal."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-start-pass] button",
+            "text": "Запустить проход",
+            "times": 2
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/optimisation-passes",
+            "operationId": "startOptimisationPass",
+            "expect_status": 201,
+            "max_count": 2,
+            "same_response_at": [
+              "optimisation_pass_id"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "startOptimisationPass",
+            "json_path": "optimisation_pass_id",
+            "matches": "^opp_%ID%$"
+          },
+          {
+            "of": "startOptimisationPass",
+            "json_path": "proposal_count",
+            "equals": 0
+          }
+        ],
+        "captures": [
+          {
+            "kind": "response",
+            "of": "startOptimisationPass",
+            "json_path": "optimisation_pass_id",
+            "as": [
+              "optimisation_pass_id"
+            ],
+            "matches": "^(opp_%ID%)$",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-pass-count]"
+          },
+          {
+            "selector": "[data-proposals-export]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-start-pass] .am-state--error"
+        ],
+        "screen": "optimisation-passes",
+        "case": "action"
+      },
+      {
+        "name": "proposals-csv",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/widgets/optimisation-proposals/ui/optimisation-proposals.tsx",
+        "$comment": [
+          "The pass's proposals as CSV: BOM, 42 columns, and no cell that begins with a character a spreadsheet",
+          "would run as a formula. With no proposal the file is the header alone."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposals-export] button",
+            "text": "Выгрузить CSV предложений"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/optimisation-passes/{optimisation_pass_id}/export.csv",
+            "operationId": "exportOptimisationProposalsCsv",
+            "expect_status": 200
+          }
+        ],
+        "expects_download": [
+          {
+            "of": "exportOptimisationProposalsCsv",
+            "content_type_starts_with": "text/csv",
+            "content_disposition_contains": ".csv",
+            "body_starts_with": "\ufeff",
+            "csv_columns": 42,
+            "csv_no_formula_cells": true
+          }
+        ],
+        "screen": "optimisation-passes",
+        "case": "action"
+      },
+      {
+        "name": "norms-snapshots-offer-only-what-qualifies",
+        "at": "/norms",
+        "page_module": "web/src/app/norms/page.tsx",
+        "control_module": "web/src/widgets/norm-snapshots/ui/norm-snapshots.tsx",
+        "$comment": [
+          "W55A-SEAL-01. The administrator sees every snapshot. One that qualifies (built, every PDF bound) is offered",
+          "«Сделать текущим»; one that does not says why and has no button. Needs `seed_norms.py` on the lane."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/norms/snapshots",
+            "operationId": "listNormSnapshots",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/norms/snapshots/events",
+            "operationId": "listNormSnapshotEvents",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "li[data-norm-snapshot-qualified=\"true\"] button",
+            "text_contains": "Сделать текущим"
+          },
+          {
+            "selector": "li[data-norm-snapshot-qualified=\"false\"]",
+            "text_contains": "Нельзя сделать текущим"
+          }
+        ],
+        "expects_absent": [
+          {
+            "selector": "li[data-norm-snapshot-qualified=\"false\"] button"
+          }
+        ],
+        "screen": "norms-designation",
+        "case": "refused"
+      },
+      {
+        "name": "norms-designation-is-an-administrators-act",
+        "as": "expert_only",
+        "at": "/norms",
+        "page_module": "web/src/app/norms/page.tsx",
+        "control_module": "web/src/widgets/norm-snapshots/ui/norm-snapshots.tsx",
+        "$comment": [
+          "An expert reads the snapshots and is offered no designation and no designation history."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/norms/snapshots",
+            "operationId": "listNormSnapshots",
+            "expect_status": 200
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "GET",
+            "path": "/norms/snapshots/events",
+            "why": "the history is an administrator's read"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-norm-view]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-norms-administration]",
+          "[data-norms-intent]",
+          "li[data-norm-snapshot]"
+        ],
+        "expects_absent": [
+          {
+            "selector": "button",
+            "text": "Сделать текущим"
+          }
+        ],
+        "screen": "norms-designation",
+        "case": "refused"
+      },
+      {
+        "name": "norms-designate-the-current-snapshot",
+        "at": "/norms",
+        "page_module": "web/src/app/norms/page.tsx",
+        "control_module": "web/src/widgets/norm-snapshots/ui/norm-snapshots.tsx",
+        "$comment": [
+          "setCurrentNormSnapshot. «Сделать текущим», then the confirmation, pressed twice: the designation is a",
+          "compare-and-set and happens once. The screen then says the snapshot is current."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "li[data-norm-snapshot-qualified=\"true\"][data-norm-snapshot-current=\"false\"] button",
+            "text": "Сделать текущим",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-norms-intent] button:first-of-type",
+            "times": 2
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/norms/snapshots/current",
+            "operationId": "setCurrentNormSnapshot",
+            "expect_status": 200,
+            "max_count": 2
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-norm-current=\"current\"]"
+          },
+          {
+            "selector": "li[data-norm-snapshot-current=\"true\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-norms-designation-failure]"
+        ],
+        "screen": "norms-designation",
+        "case": "action"
+      },
+      {
+        "name": "norms-search",
+        "at": "/norms?q=%D1%8D%D0%B2%D0%B0%D0%BA%D1%83%D0%B0%D1%86%D0%B8%D0%BE%D0%BD%D0%BD%D1%8B%D0%B5%20%D0%B2%D1%8B%D1%85%D0%BE%D0%B4%D1%8B",
+        "route": "/norms",
+        "page_module": "web/src/app/norms/page.tsx",
+        "control_module": "web/src/widgets/norm-search/ui/norm-search.tsx",
+        "$comment": [
+          "«Нормы», search: «эвакуационные выходы» over the current snapshot. Each hit names its document, clause",
+          "and page and shows the matched fragment."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/norms/search",
+            "operationId": "searchNorms",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "searchNorms",
+            "json_path": "items",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-norm-hit]",
+            "min_count": 2
+          },
+          {
+            "selector": "[data-norm-fragment]",
+            "min_count": 2
+          }
+        ],
+        "screen": "norms-search",
+        "case": "action"
+      },
+      {
+        "name": "norms-search-needs-a-query",
+        "as": "expert_only",
+        "at": "/norms",
+        "page_module": "web/src/app/norms/page.tsx",
+        "control_module": "web/src/widgets/norm-search/ui/norm-search.tsx",
+        "$comment": [
+          "An input the form refuses: an empty query. The field is required, so nothing is sent."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "form[role=\"search\"] button[type=\"submit\"]",
+            "text": "Найти"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "GET",
+            "path": "/norms/search",
+            "why": "an empty query is refused by the form"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "#norms-query"
+          }
+        ],
+        "screen": "norms-search",
+        "case": "refused"
+      },
+      {
+        "name": "norms-catalogue",
+        "at": "/norms?view=catalogue",
+        "route": "/norms",
+        "page_module": "web/src/app/norms/page.tsx",
+        "control_module": "web/src/widgets/norm-catalogue/ui/norm-catalogue.tsx",
+        "$comment": [
+          "W57B. The catalogue of the current snapshot with its derived designations; a filter that matches",
+          "nothing says so instead of showing an empty table."
+        ],
+        "captures": [
+          {
+            "kind": "attribute",
+            "selector": "tr[data-norm-document]",
+            "attribute": "data-norm-document",
+            "as": [
+              "norm_document_id"
+            ],
+            "matches": "^(ndoc_%ID%)$",
+            "bound_ms": 30000,
+            "$why": "the first document of the catalogue, for the document step"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/norm-documents",
+            "operationId": "listNormDocuments",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "tr[data-norm-document]",
+            "min_count": 3
+          },
+          {
+            "selector": "tr[data-norm-document]",
+            "text_contains": "СП 54.13330.2022",
+            "text_is_data": true
+          }
+        ],
+        "screen": "norms-catalogue",
+        "case": "action"
+      },
+      {
+        "name": "norms-catalogue-filter",
+        "at": "/norms?view=catalogue",
+        "route": "/norms",
+        "page_module": "web/src/app/norms/page.tsx",
+        "control_module": "web/src/widgets/norm-catalogue/ui/norm-catalogue.tsx",
+        "$comment": [
+          "The catalogue narrowed by a designation, then by something that matches nothing."
+        ],
+        "actions": [
+          {
+            "do": "fill",
+            "selector": "#norms-catalogue-query",
+            "value": "54.13330"
+          },
+          {
+            "do": "click",
+            "selector": "form[role=\"search\"] button[type=\"submit\"]",
+            "text": "Показать",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-norm-document]",
+            "text_contains": "СП 54.13330.2022",
+            "text_is_data": true,
+            "bound_ms": 15000
+          },
+          {
+            "do": "fill",
+            "selector": "#norms-catalogue-query",
+            "value": "несуществующееобозначение"
+          },
+          {
+            "do": "click",
+            "selector": "form[role=\"search\"] button[type=\"submit\"]",
+            "text": "Показать",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": ".am-state",
+            "text_contains": "Под этот отбор документов нет",
+            "bound_ms": 15000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/norm-documents",
+            "operationId": "listNormDocuments",
+            "expect_status": 200
+          }
+        ],
+        "expects_absent": [
+          {
+            "selector": "tr[data-norm-document]"
+          }
+        ],
+        "screen": "norms-catalogue",
+        "case": "refused"
+      },
+      {
+        "name": "run-export-is-an-experts-act",
+        "as": "admin_only",
+        "at": "/projects/{project_uid}/runs/{run_id}/review",
+        "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/review/page.tsx",
+        "control_module": "web/src/widgets/export-panel/ui/export-panel.tsx",
+        "$comment": [
+          "A role the API refuses. The export panel is drawn for every reader; an administrator without `expert`",
+          "who presses the button is refused with `permission_denied` and the panel says so. No file is produced."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-intent=\"export\"]",
+            "settle": true
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/runs/{run_id}/export.csv",
+            "operationId": "exportRunCsv",
+            "expect_status": 403,
+            "expect_error_code": "permission_denied",
+            "refusal": true,
+            "count": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": ".am-state--error",
+            "min_count": 1
+          }
+        ],
+        "screen": "run-exports",
+        "case": "refused"
+      },
+      {
+        "name": "run-exports",
+        "at": "/projects/{project_uid}/runs/{run_id}/review",
+        "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/review/page.tsx",
+        "control_module": "web/src/widgets/export-panel/ui/export-panel.tsx",
+        "$comment": [
+          "The run's findings as CSV and as Excel, from the review screen."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-intent=\"export\"]",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-intent=\"export-xlsx\"]",
+            "settle": true
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/runs/{run_id}/export.csv",
+            "operationId": "exportRunCsv",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/runs/{run_id}/export.xlsx",
+            "operationId": "exportRunXlsx",
+            "expect_status": 200
+          }
+        ],
+        "expects_download": [
+          {
+            "of": "exportRunCsv",
+            "content_type_starts_with": "text/csv",
+            "body_starts_with": "\ufeff"
+          },
+          {
+            "of": "exportRunXlsx",
+            "content_type_starts_with": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "body_starts_with": "PK",
+            "body_contains": [
+              "xl/workbook.xml"
+            ]
+          }
+        ],
+        "screen": "run-exports",
+        "case": "action"
+      },
+      {
+        "name": "section-form7",
+        "at": "/section-optimisation",
+        "page_module": "web/src/app/section-optimisation/page.tsx",
+        "control_module": "web/src/widgets/section-specification/ui/section-specification-section.tsx",
+        "constants": {
+          "section_code": "AR"
+        },
+        "$comment": [
+          "W63-SECTION-FORM7-01. The combined Form-7 specification of the АР section across projects: our project",
+          "is a member (its current version is confirmed АР), every project keeps its own rows and totals.",
+          "A search that matches nothing says so; nothing on the screen writes."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/sections/{section_code}/specification",
+            "operationId": "getSectionSpecification",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-section-specification]"
+          },
+          {
+            "selector": "[data-section-project=\"{project_uid}\"]"
+          }
+        ],
+        "actions": [
+          {
+            "do": "fill",
+            "selector": "#section-specification-query",
+            "value": "несуществующаястрока"
+          },
+          {
+            "do": "click",
+            "selector": "form[aria-label=\"Отбор строк раздела\"] button[type=\"submit\"]",
+            "text": "Найти",
+            "settle": true
+          }
+        ],
+        "forbids_rendered": [
+          "[data-section-failure]"
+        ],
+        "screen": "section-form7",
+        "case": "action"
+      },
+      {
+        "name": "section-form7-without-members",
+        "as": "expert_only",
+        "at": "/section-optimisation",
+        "page_module": "web/src/app/section-optimisation/page.tsx",
+        "control_module": "web/src/widgets/section-specification/ui/section-specification-section.tsx",
+        "constants": {
+          "section_code": "KJ"
+        },
+        "$comment": [
+          "A section no project has confirmed a version in: the screen says there is nothing, it does not fail."
+        ],
+        "actions": [
+          {
+            "do": "select",
+            "selector": "#section-specification-section",
+            "option_value": "KJ"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/sections/{section_code}/specification",
+            "operationId": "getSectionSpecification",
+            "expect_status": 200
+          }
+        ],
+        "forbids_rendered": [
+          "[data-section-failure]",
+          "[data-section-project]"
+        ],
+        "screen": "section-form7",
+        "case": "refused"
+      },
+      {
+        "name": "dashboard-sections-panel",
+        "at": "/dashboard",
+        "page_module": "web/src/app/dashboard/page.tsx",
+        "control_module": "web/src/widgets/dashboard/ui/sections-panel.tsx",
+        "$comment": [
+          "The dashboard's section panel counts the sets by the section an expert CONFIRMED for the current",
+          "version (D-180). The journey's set is confirmed АР, so АР counts at least one."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/dashboard",
+            "operationId": "getDashboardSummary",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-panel=\"per-section-breakdown\"] li[data-section=\"AR\"] strong",
+            "text_matches": "^[1-9][0-9]*$"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-panel-fault]"
+        ],
+        "screen": "dashboard-sections",
+        "case": "action",
+        "no_negative_case": "a read-only panel: it takes no input and offers no control, and every role that can open the dashboard reads the same counts; its refusal (an incomplete breakdown) is `data-panel-fault`, forbidden above"
       }
     ]
+  },
+  "accounts": {
+    "$comment": [
+      "BETA-LIVE-JOURNEY-01. The accounts a refusal by role needs, made the way a person gets one:",
+      "the applicant fills the registration form in a cold browser, the journey's administrator",
+      "approves the request choosing the roles, the applicant signs in (`accounts.mjs`).",
+      "",
+      "The journey's own account holds BOTH roles (the seeded administrator is also an expert), so",
+      "as that account no control is ever refused for a missing role. `expert_only` is refused what",
+      "is an administrator's -- assigning work, the global vendor list -- and `admin_only` is",
+      "refused what is an expert's -- confirming a section, starting a pass, carrying a decision.",
+      "The screens draw no control for the role that cannot use it, and the API refuses the",
+      "request anyway; the steps check the first, the integration suites check the second.",
+      "",
+      "No password is declared here or anywhere in this repository: each is random per run, typed",
+      "into the form, used for one sign-in and never written to the envelope or to stdout."
+    ],
+    "roster": [
+      {"name": "expert_only", "roles": ["expert"], "last": "Экспертов", "first": "Иван", "middle": "Журналович"},
+      {"name": "admin_only", "roles": ["admin"], "last": "Администраторов", "first": "Пётр", "middle": "Журналович"}
+    ],
+    "register": {
+      "at": "/register",
+      "page_module": "web/src/app/register/page.tsx",
+      "control_module": "web/src/features/register/ui/register-form.tsx",
+      "fields": {
+        "last": "#register-last",
+        "first": "#register-first",
+        "middle": "#register-middle",
+        "login": "#register-email",
+        "password": "#register-password",
+        "confirm": "#register-confirm"
+      },
+      "submit": {"selector": "form button[type=\"submit\"]", "text": "Отправить заявку"},
+      "lands_on": "/register/submitted",
+      "exchange": "/bff/v1/registration",
+      "exchange_status": 303,
+      "operation": {"method": "POST", "path": "/registrations", "operationId": "submitRegistration"}
+    },
+    "decide": {
+      "at": "/admin/registrations",
+      "page_module": "web/src/app/admin/registrations/page.tsx",
+      "control_module": "web/src/features/decide-registration/ui/registration-decision-controls.tsx",
+      "queue_marker": "[data-pending-total]",
+      "row": "li[data-registration-status=\"pending\"]",
+      "request_id_from": "textarea[id^=\"reject-\"]",
+      "request_id_prefix": "reject-",
+      "row_by_id": "li:has(#reject-%REQUEST%)",
+      "role_labels": {"expert": "Эксперт", "admin": "Администратор"},
+      "approve": {
+        "selector": "button[type=\"submit\"]",
+        "text": "Одобрить заявку",
+        "expect_status": 200,
+        "operation": {"method": "POST", "path": "/registrations/{request_id}/approve", "operationId": "approveRegistration"}
+      },
+      "pager_next": {"selector": "button", "text": "Дальше"},
+      "page_bound": 25
+    }
   },
   "identity": {
     "$comment": [
