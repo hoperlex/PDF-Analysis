@@ -10,7 +10,7 @@ import pytest
 
 from scripts.recovery import synthetic_drill_runner as runner
 from scripts.recovery.isolated_restore_drill import IsolatedRestoreDrillEvidence
-from scripts.recovery.schema_coverage import FINGERPRINTED_TABLES, RestoredSchemaAudit
+from scripts.recovery.schema_coverage import FINGERPRINTED_TABLES, HEAD, RestoredSchemaAudit
 from scripts.recovery.synthetic_drill_fixture import prepare_synthetic_copy
 from scripts.recovery.target_blob_readback import TargetBlobReadback
 from scripts.recovery.target_object_restore import TargetObjectRestore
@@ -276,8 +276,9 @@ def test_a_copy_at_another_head_is_refused_before_any_service(
 ) -> None:
     copy_dir, mirror = _copy(tmp_path)
     record = copy_dir / "record.json"
-    record.write_bytes(record.read_bytes().replace(b"0028_classification_corrections",
-                                                    b"0023_norm_citations"))
+    # follow the single pin: the record carries `HEAD`, and `0023` is never it
+    assert record.read_bytes().count(HEAD.encode()) == 1
+    record.write_bytes(record.read_bytes().replace(HEAD.encode(), b"0023_norm_citations"))
     monkeypatch.setattr(runner, "require_pg17_tools", lambda _: None)
     monkeypatch.setattr(runner, "_object_client", lambda _: pytest.fail("S3 opened"))
     with pytest.raises(runner.SyntheticDrillRefused, match="declared head"):
