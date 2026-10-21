@@ -38,6 +38,9 @@ cost is a function of the shape, so four shapes are built (``D185_SCENARIO``):
 ``flat_price``
     Contrived: half the list at one price, all names alike, and the rows are the other half, so
     every row has one equal-price group of ten thousand analogs to order.
+``long_overlap`` and ``wide_vocabulary``
+    Contrived: 60-token names (about 400 bytes, what the 10 MiB file cap allows at 20 000 rows) drawn
+    from 200 tokens, or from as many tokens as there are positions; the rows are the dearest.
 ``overlap_dissimilar``
     Contrived: every name draws six words from slots of twenty, so nearly every pair shares a word
     and almost none reaches the threshold, and the rows are the dearest positions, whose cheaper
@@ -119,6 +122,11 @@ def _names(scenario: str) -> tuple[list[str], list[str | None], list[str], list[
         names = [f"Профиль вариант {i}" for i in range(POSITIONS)]
         half = POSITIONS // 2
         return names, nothing, [names[half + (k % half)] for k in range(ROWS)], nothing
+    if scenario in ("long_overlap", "wide_vocabulary"):
+        rnd = random.Random(7)
+        vocabulary = [f"w{n}" for n in range(200 if scenario == "long_overlap" else POSITIONS)]
+        names = [f"Профиль {i}n " + " ".join(rnd.sample(vocabulary, 60)) for i in range(POSITIONS)]
+        return names, nothing, [names[POSITIONS - 1 - k] for k in range(ROWS)], nothing
     if scenario == "overlap_dissimilar":
         rnd = random.Random(7)
         names = [
@@ -134,7 +142,8 @@ def _price_list(scenario: str) -> bytes:
     rnd = random.Random(20261021)
     lines = ["Код;Наименование;Марка;Ед. изм.;Цена;Валюта;Поставщик"]
     for index in range(POSITIONS):
-        if scenario == "overlap_dissimilar":  # the dearest positions are the rows': the longest prefixes
+        if scenario in ("overlap_dissimilar", "long_overlap", "wide_vocabulary"):
+            # the dearest positions are the rows': the longest prefixes
             price = f"{index + 1}"
         elif scenario == "flat_price":  # half the list at one price; the rows are the other half
             price = "1" if index < POSITIONS // 2 else str(2 + index)
