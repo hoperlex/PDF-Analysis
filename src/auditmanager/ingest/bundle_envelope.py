@@ -14,9 +14,13 @@ the order that keeps a refusal attributable to one rule:
    one header of the same type, and the markdown has no header for any other block -- a STAMP
    block has none (``results_blocks_mismatch``);
 4. the block list describes as many pages as the PDF has (``blocks_page_count``);
-5. every page has an embedded text layer **or** at least one portal block of any type
+5. every IMAGE block can be cut as a crop of its page (``blocks_json_invalid``,
+   `RUN-ROBUSTNESS-01`, D-159): the run fails *whole* on a block whose crop it cannot position
+   (`R-121`), so the refusal that `R-121` registered a debt for is made here, where the PDF's
+   page sizes and the raster are both at hand (:mod:`auditmanager.ingest.crop_geometry`);
+6. every page has an embedded text layer **or** at least one portal block of any type
    (``every_page_has_extractable_text``, field ``page_text``);
-6. the stamp audit, when there is one, is JSON (``stamp_audit_invalid``).
+7. the stamp audit, when there is one, is JSON (``stamp_audit_invalid``).
 
 **OCR is always marked.** A page that rests on a portal block has recognised text, kept as
 its own artifact; nothing here merges it into a text layer, and the three counts below keep the
@@ -61,6 +65,7 @@ from .bundle_archive import (
     ExtractedBundle,
     refuse,
 )
+from .crop_geometry import uncuttable_image_block
 from .envelope import TEXTLESS_PAGE_CHARACTERS, inspect_pdf, page_text_refusal
 
 __all__ = [
@@ -398,6 +403,13 @@ def admit_bundle(bundle: ExtractedBundle) -> BundleAdmission:
 
     if len(document["pages"]) != pdf.page_count:
         raise refuse("blocks_page_count")
+
+    if uncuttable_image_block(document, pdf.page_geometry):
+        raise refuse(
+            "blocks_json_invalid",
+            "A page raster or an IMAGE block of the portal block list cannot be placed on its "
+            "page, so the run could not cut its crops.",
+        )
 
     blocks = document["blocks"]
     with_block = {int(b["page_index"]) for b in blocks}
