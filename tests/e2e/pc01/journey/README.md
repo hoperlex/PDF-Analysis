@@ -295,7 +295,8 @@ run state named is one `RunState` publishes.
 `prove_the_guard_can_fail.py` beside this file mutates the **real** `manifest.json` ten
 ways and asserts ten reds — because the controls inside the guard are pure functions over
 synthetic data, and that leaves "is the check actually wired to the real tree" unproven.
-Measured 2026-09-19: ten mutations, ten reds.
+Measured 2026-09-19: ten mutations, ten reds. Re-measured 2026-10-21
+(`BETA-LIVE-JOURNEY-01`): 76 mutations (the night window's added), 76 reds; the ten originals now address steps by name.
 
 **The cost, stated, and narrowed rather than closed:** that guard checks *addressing* and
 *existence*, not *behaviour*. A screen whose route, calls and handles are all unchanged but
@@ -389,7 +390,7 @@ On Chrome 154 the first cookie-store access of a fresh profile (`Storage.getCook
 desktop keyring for the key it encrypts cookies with and waited for a keyring that is not there.
 `--password-store=basic` (in `cdp.mjs`) makes it 3 ms and a browser launch 0.3 s. Every browser
 is still a new process with its own throwaway profile, so the property is untouched; the walk of
-29 routes and the 85 write steps below now take **about four minutes** on this host.
+29 routes and the 86 write steps below now take **about five minutes** on this host.
 
 `E2E_PC01_SETTLE_TIMEOUT_MS` (default 10000) bounds the wait for a screen to go quiet. The
 run screen polls and never goes quiet; the bound is what ends that wait, and whatever the

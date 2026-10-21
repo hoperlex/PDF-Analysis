@@ -2,7 +2,7 @@
 
 **Base:** `origin/dev` `06591a52`, then a real merge of `508d7ba1` (the integrator's addendum: docs only).
 **Branch:** `agent/beta-live-journey-01`, worktree `.local/worktrees/beta-live-journey`.
-**Tip:** __TIP__.
+**Tested tree:** `f44bd935` (every figure below); the commit after it is this report, docs only.
 **Task:** `docs/program/tasks/BETA-LIVE-JOURNEY-01.md`; the integrator's addendum orders items (1)–(6) of
 `docs/program/BETA-MATRIX-01.md` §B12, `D-180` and `tests/e2e/pc01/qa_w50/r66.mjs`.
 **Status:** the journey walks every screen the night window added and the destinations the matrix listed,
@@ -13,10 +13,12 @@ each with a case it must refuse, and runs green on this lane's own stack. Record
 ```
 E2E_PC01_LOGIN=<administrator> E2E_PC01_PASSWORD=<password> E2E_PC01_CHROME=<chrome-for-testing 154> \
   npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:61322 --phase all \
-  --out .local/evidence/__RUN__
+  --out /root/projects/PDF-Analysis/.local/worktrees/beta-live-journey/.local/evidence/final-2
 ```
 
-__RUNRESULT__
+Measured 2026-10-21 12:27–12:32 +05 on `f44bd935`: **exit `0`**, `write steps checked: 86/86`, `routes checked: 29/29`,
+`e2e:pc01 OK`, 115 `ok` lines, **5 min 05 s** (`real 5m4.8s`). `--phase core` on the same tree: exit `0`, 4 write steps and 29 routes, 59 s.
+The run is repeatable: before this one the whole write half passed on four earlier trees with only the findings listed below.
 
 Stack (staggered per the common brief; `free -m` available ≥ 6 GB, load < 3 at every start): PostgreSQL 57700 and
 MinIO 61300/61301 from `make up`; the API from `infra/deploy/serve.py` on 61320 with `EXECUTION_ROLE=api`, a worker
@@ -24,8 +26,8 @@ MinIO 61300/61301 from `make up`; the API from `infra/deploy/serve.py` on 61320 
 by PID; `AUDITMANAGER_PROVIDER_MODE=recorded`. The administrator's seeded password was changed (R-50) and its profile
 completed before the first run.
 
-The envelope is `__ENVELOPE__` (the lane's untracked `.local`): the sign-in, the accounts the journey made,
-85 steps with every exchange, request body (passwords scrubbed) and response body, the saved export files'
+The envelope is ``/root/projects/PDF-Analysis/.local/worktrees/beta-live-journey/.local/evidence/final-2/journey.json` (94 MB, 3 727 exchanges)` (the lane's untracked `.local`): the sign-in, the accounts the journey made,
+86 write steps with every exchange, request body (passwords scrubbed) and response body, the saved export files'
 facts, and the 29 routes.
 
 ## What was walked, and what each screen refused
@@ -111,7 +113,7 @@ that vendor with an apostrophe in front (`csv_no_formula_cells` over every cell,
 
 ## What changed
 
-* `tests/e2e/pc01/journey/`: `manifest.json` (85 write steps, `accounts`, route `constants`), `write.mjs` (select / goto / wait / secrets,
+* `tests/e2e/pc01/journey/`: `manifest.json` (86 write steps, `accounts`, route `constants`), `write.mjs` (select / goto / wait / secrets,
   refusals and counts, saved-file downloads, binding, the spend guard), `cdp.mjs` (`select`, `click.times`, label-addressed fields,
   downloads, the keyring flag), `journey.mjs` (`--phase core`, `--steps`/`--routes`/`--seed` partial runs that exit 3, lazy accounts, secret
   scrubbing), `accounts.mjs`, `seed_norms.py`, `build_specification_bundle.py` + `fixtures/optimisation/*`, `write.test.mjs`,
@@ -120,7 +122,7 @@ that vendor with an apostrophe in front (`csv_no_formula_cells` over every cell,
 * `tests/e2e/test_pc01_journey_conformance.py` — **outside the letter of `allowed_paths`** (`tests/e2e/pc01/**`, `tests/contract/**`), but it is the
   conformance file the task names as required and it goes red on any manifest change; edited in place: the new vocabulary, the dataflow of
   captured identifiers, session and secret names, constants against contract enumerations, screen × case coverage, the specification bundle's
-  builder, the norms seed's refusal, the spend guard. 114 tests, 109 before this lane.
+  builder, the norms seed's refusal, the spend guard. 115 tests now.
 * `web/src/features/{carry-over-decision,upload-price-list}`, `web/src/widgets/version-comparison` and three vitest files (the three repairs).
 
 No contract, migration, dependency, lock file, `web/FRONTEND_LOCK.json`, `web/openapi`, provider root, global style or `CURRENT_STATE.md` was touched
@@ -134,11 +136,42 @@ filed under the specification bundle's request checksum, with the baseline's own
 
 ## Checks (light acceptance, `AGENTS.md` §8; the complete gate was not run, `R-135`)
 
-__CHECKS__
+Run on the exact tree `f44bd935` unless a line says otherwise; a host disk-full window at 11:31 (see Risks) preceded every line below.
+
+| command | result |
+|---|---|
+| `npm --prefix web run e2e:pc01 -- --origin http://127.0.0.1:61322 --phase all --out …/final-2` | exit **0**, 86/86 write steps, 29/29 routes (above) |
+| `… --phase core` | exit 0, 4 + 29, 59 s |
+| a partial run that has seen no run (`--steps record-decision,queue-pause-dispatch,…`) | exit 1 «night-window steps … provider mode unknown, not 'recorded'»; no account made, nothing started |
+| `git diff --check` | exit 0 |
+| `npm --prefix web run lint -- --quiet`, `npm --prefix web run typecheck` | exit 0, exit 0 |
+| `npx vitest run` in `web/` (all) | 161 files, **2 354 tests passed** (no `web/src` change after it) |
+| `.venv/bin/python -m pytest tests/e2e/test_pc01_journey_conformance.py` | 115 passed |
+| `node --test tests/e2e/pc01/journey/write.test.mjs` | 4 passed |
+| `python3 tests/e2e/pc01/journey/prove_the_guard_can_fail.py` | 76 mutations, **76 red**, 0 green, exit 0 |
+| `QA_W50_ACCOUNTS=… node tests/e2e/pc01/qa_w50/r66.mjs --origin http://127.0.0.1:61322` | `R-66 OK` (19 failures before the repair) |
+| `.venv/bin/python -m pytest tests/contract` | 1 089 passed, **82 failed, 126 errors** — all in `test_cp00_candidate.py`, `test_cp00_final_state.py`, `test_validate_bootstrap.py`, **the same 82 + 126 on a detached checkout of `508d7ba1`** with the same interpreter: this environment's checkpoint/git-layout tests, not this lane's. The installed recording (an untracked file) had to be removed first: `test_alpha_acceptance_command.py` refuses a tree with one |
+
+Skipped, stated: the complete `make gate` (`R-135`), the Python integration suites (no `src/` file changed), the manual acceptance, any live provider
+call, the stand.
 
 ## Mutations (every new guard shown failing)
 
-__MUTATIONS__
+* **The manifest's guard, against the real manifest**: `prove_the_guard_can_fail.py` rewrites `manifest.json` 76 ways (an unknown session, a template no
+  earlier step produced, a constant outside the contract's enumeration, a refusal expecting an unpublished error code, a door of the web tier that is a
+  contract operation, a relabelled button, a renamed marker, a missing fixture, an unbounded wait, a read-only precondition that presses a control, a
+  screen with its refusal removed, no step deciding a proposal …) and asserts 76 reds. **Three of my first mutations were vacuous as written** — «Assign» is
+  a substring of `assignmentFailure`, so the handle check could not see the relabel (`D-61`'s class, caught by this very run), a second label likewise,
+  and removing one of two steps left the operation declared by the other — and were rewritten until red. The ten original mutations addressed steps by position
+  and had been mutating the wrong step since `classify-version` joined the half; now by name.
+* **`write.mjs` pure functions** (`write.test.mjs`): `nightWindowMayRun` always true → red; the CSV formula check without `@` → red; JSON password bodies left
+  unredacted → red; `bind` ignored when computing what a step needs → red (four mutations, four reds).
+* **`r66.mjs`**: «Диспетчер» renamed in the expected menu → 2 failures; `/optimisation` expected at the wrong address for an account with no role → 1 failure.
+* **The three web repairs**: each vitest case run against the pre-repair file: *called 1 times, but got 2 times* (twice) and *expected … to contain
+  'data-carryover-state="carried"'*.
+* **The specification bundle**: a flipped byte → `--check` exits 1 «differs»; the norms seed with an `auditmanager_alpha` database → exit 1 «refusing to write»,
+  with a lane-shaped name it gets past the refusal (conformance controls).
+* **The spend guard in the live journey**: shown refusing above (exit 1, nothing made or started).
 
 ## Risks and limits
 
