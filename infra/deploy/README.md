@@ -34,6 +34,7 @@ down`. This is the deployed stack.
 | `proxy/tls/` | where the certificate and its private key go **on the host**. Contents ignored whole |
 | `deploy.sh` | `PA-01` criterion 1 — bring this clone up, and refuse to call it deployed until the stack has answered |
 | `reset.sh` | `T-5` — the guarded wipe, and the restore of its own dump |
+| `purge-product-data.sh` | `STAND-PURGE-TOOL-01` — delete the stand's product data (projects, documents, runs, findings, decisions, price lists, their objects) and **keep the accounts and the norm corpus**; dumps and verifies first. `docs/program/STAND-PURGE-TOOL-01.md` |
 | `verify-deployed.sh` | `D-27` — is the stack in front of you this tree? |
 | `reload-proxy.sh` | `D-27` — the step after a rebuild that everyone forgets |
 | `object_attrs.py` | the third part of a dump: each object's S3 attributes |
@@ -548,6 +549,16 @@ hand: a restore that refuses blocks the legitimate one at the moment it is neede
 which is after a failure. Neither command's status can turn a completed restore into a
 non-zero exit; what a failure of either buys is a named block on the screen and the exact
 command to type.
+
+**The wipe that keeps the accounts and the corpus — `STAND-PURGE-TOOL-01`.** `reset.sh` drops the schema, so it also drops the
+imported normative corpus and the accounts. To remove only the generated test data, `purge-product-data.sh --database <db> --bucket
+<bucket> --dry-run` prints, with exact counts, which tables are truncated (the 29 product tables), which are never written (accounts,
+registration requests, release notes, lookup data, every `norm*` table), which rows of `audit_event`, `command_record` and `blob` go, and
+which objects would be deleted by exact key; `--yes-purge-product-data` then stops the worker, writes and verifies a dump in
+`reset.sh`'s layout (so `reset.sh --restore` applies), purges in one transaction that rolls back if any kept row's count or digest
+differs, deletes the product objects only after the commit, and starts the worker again. It refuses, naming it, a table nobody classified
+(`product_purge.py` classifies from `schema_coverage.py`), and a run or job that is executing (`--allow-running`); exit `3` is a refusal
+and `4` a failure, and after a commit `--finish-objects <dump directory>` completes a half-done object deletion. Read the document before the first run.
 
 ## Is the deployed stack this repository? — `D-27`
 
