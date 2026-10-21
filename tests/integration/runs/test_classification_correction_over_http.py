@@ -463,7 +463,12 @@ class TestRuns:
         assert first.status_code == 202, first.content
         assert first.json()["analysis_profile_id"] == REGISTRY.section_profiles()["TX"][0]
         assert _correct(client, token, path, "R", "KJ", REASON, 1).status_code == 201
-        second = client.post(f"/runs/{world.source}/reaudit", headers=_headers(token, _key()))
+        # one re-audit of a source at a time: the first is still open, so a second source run of
+        # the same version is the one re-audited after the correction
+        with sessions() as session:
+            second_source = _terminal_run(session, world.seeded, world.reaudit)
+            session.commit()
+        second = client.post(f"/runs/{second_source}/reaudit", headers=_headers(token, _key()))
         assert second.status_code == 202, second.content
         assert second.json()["analysis_profile_id"] == REGISTRY.section_profiles()["KJ"][0]
         with sessions() as session:
