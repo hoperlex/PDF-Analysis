@@ -21,6 +21,11 @@ an explicit ``norms_snapshot_id`` that has been current at least once; otherwise
 ``statement_timeout`` (``AUDITMANAGER_NORMS_SEARCH_TIMEOUT_MS``); a cancelled statement is
 ``validation_failed`` (``constraint: norms_search_too_broad``), never an empty or partial page.
 
+At most :data:`.capacity.MAX_CONCURRENT_SEARCHES` searches hold a connection at once in one
+process; the next is refused before it takes one, as ``dependency_unavailable``
+(``dependency: norms_search_capacity``), so a burst of broad queries cannot hold the API's
+whole pool for the length of the timeout (`D-158`).
+
 Before any statement, a ``q`` holding a control character (other than tab, line feed and
 carriage return) or with nothing to search for is ``validation_failed`` on ``q``
 (``format``): a NUL cannot be bound, and a blank text would sort a whole snapshot
@@ -49,6 +54,7 @@ from ..current_snapshot import (
     current_snapshot,
     has_been_current,
 )
+from .capacity import SEARCH_BULKHEAD, SearchBulkhead
 from .cursor import (
     DesignationPosition,
     ParagraphPosition,
@@ -330,26 +336,34 @@ def search(
     cursor: str | None,
     limit: int,
     timeout_ms: int,
+    bulkhead: SearchBulkhead | None = None,
 ) -> PageOf:
-    """One page of hits; see the module docstring."""
+    """One page of hits; see the module docstring.
+
+    ``bulkhead`` is the process's (:data:`.capacity.SEARCH_BULKHEAD`) unless a caller names
+    another -- a test that saturates a smaller one. The slot is taken after the cheap
+    refusals that need no connection and before the first statement, which is the first
+    thing to check a connection out of the pool.
+    """
     if timeout_ms <= 0:  # pragma: no cover - settings refuse it first
         raise ValueError("the norms search timeout must be positive")
     if unsearchable(q):
         raise _unsearchable()
     parsed = parse_query(q)
-    try:
-        session.execute(_SET_TIMEOUT, {"timeout": str(int(timeout_ms))})
-        snapshot = resolve_scope(session, norms_snapshot_id)
-        binding = query_binding(q, snapshot)
-        after = (
-            None if cursor is None
-            else decode_search_cursor(cursor, binding=binding, ranked=parsed.ranked)
-        )
-        rows = _search_rows(session, parsed, snapshot, after, limit)
-    except OperationalError as exc:
-        if _cancelled(exc):
-            raise _too_broad() from None
-        raise
+    with (SEARCH_BULKHEAD if bulkhead is None else bulkhead).admit():
+        try:
+            session.execute(_SET_TIMEOUT, {"timeout": str(int(timeout_ms))})
+            snapshot = resolve_scope(session, norms_snapshot_id)
+            binding = query_binding(q, snapshot)
+            after = (
+                None if cursor is None
+                else decode_search_cursor(cursor, binding=binding, ranked=parsed.ranked)
+            )
+            rows = _search_rows(session, parsed, snapshot, after, limit)
+        except OperationalError as exc:
+            if _cancelled(exc):
+                raise _too_broad() from None
+            raise
 
     has_more = len(rows) > limit
     rows = rows[:limit]

@@ -168,6 +168,7 @@ import binascii
 import hashlib
 import hmac
 import json
+import threading
 import time
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -197,6 +198,7 @@ __all__ = [
     "AccountStandings",
     "CurrentSubject",
     "IssuedCredential",
+    "RevocationNotices",
     "Subject",
     "TokenSigner",
     "bearer_scheme",
@@ -840,6 +842,97 @@ class TokenSigner:
         return hmac.new(self._key, signed.encode("utf-8"), hashlib.sha256).digest()
 
 
+#: `D-176`. The most (user, epoch) pairs one :class:`RevocationNotices` remembers. A pair is
+#: only ever added for a credential this deployment signed and the account then refused, so the
+#: figure bounds memory against a revoked holder, not against the open internet.
+REVOCATION_NOTICES_CAPACITY: Final[int] = 4096
+
+
+class RevocationNotices:
+    """What the seam has already learned about credentials the accounts refuse (`D-176`).
+
+    The upload front door (:class:`~auditmanager.api.routers.multipart.BodyCapMiddleware`) checks
+    a signature and an expiry and **no database**, so a credential the account has since revoked
+    -- a stale ``token_epoch``, an archived or deleted account -- passes it for up to
+    :data:`TOKEN_LIFETIME_SECONDS` and has its body read before the seam says no. This is a
+    short-lived, in-process memory the front door can consult without a read: the seam notes a
+    ``(user_uid, token_epoch)`` pair here the moment the account's standing refuses it, and
+    the precheck refuses the same pair afterwards.
+
+    **A negative memory only, and never the authority.** It can make the front door refuse; it
+    cannot make anything admitted. The seam still reads the row for every request the front
+    door lets through, so a pair that is missing here (never presented to the seam, evicted,
+    or noted by another process) costs only what it cost before: one body read, then the
+    seam's ``401``. What it buys is every attempt after the first, per pair, per process.
+
+    **Why a pair is safe to remember until the credential's own expiry.** A refused pair is
+    dead for good: epochs only rise (``token_epoch = token_epoch + 1``), an archive and a
+    restore each leave a credential minted under the earlier epoch behind, and a deleted
+    account's ``user_uid`` is never issued again. The seam therefore notes only those cases --
+    no such account, an archived one, or an account whose epoch is *above* the credential's --
+    and not an epoch *below* it, which would be a restored database and not a revocation.
+    Entries live one credential lifetime, which is at least as long as any credential they
+    name can still be signed and unexpired.
+
+    **One instance per application**, shared by that application's seam and its precheck, and
+    passed to both (``notices=``). It is deliberately not module state: tests and tools build
+    several applications over several databases in one process, and clones of one migrated
+    template share their seeded account's ``user_uid`` and epoch, so a process-wide memory
+    would carry one database's revocation into another's.
+
+    The clock is monotonic and injectable for the same reason ``now`` is a parameter of
+    :meth:`TokenSigner.verify`: a test states the time instead of sleeping.
+    """
+
+    __slots__ = ("_capacity", "_clock", "_entries", "_lock", "_ttl")
+
+    def __init__(
+        self,
+        *,
+        ttl_seconds: int = TOKEN_LIFETIME_SECONDS,
+        capacity: int = REVOCATION_NOTICES_CAPACITY,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        if ttl_seconds < 1 or capacity < 1:
+            raise ValueError("a revocation memory needs a positive lifetime and capacity")
+        self._ttl = ttl_seconds
+        self._capacity = capacity
+        self._clock = clock
+        self._entries: dict[tuple[str, int], float] = {}
+        self._lock = threading.Lock()
+
+    def note(self, user_uid: str, token_epoch: int) -> None:
+        """Remember that credentials of ``user_uid`` minted under ``token_epoch`` are refused."""
+        now = self._clock()
+        key = (user_uid, token_epoch)
+        with self._lock:
+            self._entries.pop(key, None)  # re-noting refreshes the entry's place and expiry
+            if len(self._entries) >= self._capacity:
+                for stale in [k for k, expires in self._entries.items() if expires <= now]:
+                    del self._entries[stale]
+            while len(self._entries) >= self._capacity:
+                # Still full of live entries: forget the oldest. Forgetting only costs the
+                # front door its shortcut for that pair; the seam still refuses it.
+                del self._entries[next(iter(self._entries))]
+            self._entries[key] = now + self._ttl
+
+    def is_revoked(self, user_uid: str, token_epoch: int) -> bool:
+        now = self._clock()
+        key = (user_uid, token_epoch)
+        with self._lock:
+            expires = self._entries.get(key)
+            if expires is None:
+                return False
+            if expires <= now:
+                del self._entries[key]
+                return False
+            return True
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._entries)
+
+
 def build_signer(environ: Mapping[str, str]) -> TokenSigner | None:
     """The signer this environment configures, or ``None`` when it configures none.
 
@@ -856,7 +949,9 @@ def build_signer(environ: Mapping[str, str]) -> TokenSigner | None:
         return None
 
 
-def build_credential_precheck(environ: Mapping[str, str]) -> Callable[[str], bool]:
+def build_credential_precheck(
+    environ: Mapping[str, str], *, notices: RevocationNotices | None = None
+) -> Callable[[str], bool]:
     """The seam's cheap half, for the transport in front of the seam (`W55B-FIX`, X-3).
 
     True for a credential this environment's key signed, in this module's format, that has
@@ -868,11 +963,21 @@ def build_credential_precheck(environ: Mapping[str, str]) -> Callable[[str], boo
     ``BodyCapMiddleware`` uses it to refuse an upload before its body is read: FastAPI parses
     a form before it solves the seam, so without it a caller with no credential had 251 MiB
     read and an upload slot held before the ``401`` (`W55B-QA-01` QA-1).
+
+    ``notices`` (`D-176`) is the application's :class:`RevocationNotices`, the same object its
+    seam was built with: a credential whose pair the seam has already seen refused is refused
+    here too, with no database read. ``None`` -- the default -- is the signature and expiry
+    alone, as before.
     """
     signer = build_signer(environ)
 
     def signed_and_unexpired(presented: str) -> bool:
-        return signer is not None and signer.verify(presented) is not None
+        if signer is None:
+            return False
+        subject = signer.verify(presented)
+        if subject is None:
+            return False
+        return notices is None or not notices.is_revoked(subject.user_uid, subject.token_epoch)
 
     return signed_and_unexpired
 
@@ -891,7 +996,10 @@ def _operation_of(request: Request) -> str | None:
 
 
 def build_authorization_dependency(
-    environ: Mapping[str, str], *, standings: AccountStandings | None = None
+    environ: Mapping[str, str],
+    *,
+    standings: AccountStandings | None = None,
+    notices: RevocationNotices | None = None,
 ) -> object:
     """The dependency that guards the surface, closed over this environment's signer.
 
@@ -909,6 +1017,11 @@ def build_authorization_dependency(
     -- the same bargain the module note already strikes for a missing deployment secret.
     ``create_documentation_app`` is the caller that passes none, and it can serve no request
     anyway. It was called ``epochs`` until `R-50` widened what it answers.
+
+    ``notices`` (`D-176`) is where this seam reports a credential its accounts refuse, for the
+    precheck built with the same object (:func:`build_credential_precheck`). It only ever
+    receives; the seam's own decision never reads it. ``None`` -- the default -- reports
+    nothing.
     """
     signer = build_signer(environ)
 
@@ -968,6 +1081,15 @@ def build_authorization_dependency(
             or standing.archived
             or standing.token_epoch != subject.token_epoch
         ):
+            # `D-176`: tell the front door, so the next upload under this credential is
+            # refused before its body. Only a refusal that cannot turn into an acceptance
+            # is reported: an epoch *below* the credential's is not one (see the class).
+            if notices is not None and (
+                standing is None
+                or standing.archived
+                or standing.token_epoch > subject.token_epoch
+            ):
+                notices.note(subject.user_uid, subject.token_epoch)
             raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
         # 2. `R-50`, and the order matters: a revoked credential on a default password is
         #    refused as revoked, because "this deployment does not accept this credential"

@@ -49,6 +49,7 @@ from auditmanager.access.models import (
 )
 from auditmanager.access.passwords import hash_password
 from auditmanager.access.policy import enforce_password_policy
+from auditmanager.access.queue_lock import login_has_pending_request, take_queue_lock
 from auditmanager.access.references import restricting_references
 from auditmanager.access.repository import _PUBLIC_COLUMNS, _record
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -355,12 +356,17 @@ class AccountRepository:
         a missing e-mail on a legacy login; ``not_found`` for no such active account;
         ``validation_failed`` on ``login`` when the profile is already complete (the login is
         writable only while it is not); ``conflict`` with ``conflict_reason: login_taken``
-        when another active account holds that e-mail.
+        when another active account holds that e-mail, or a pending registration request
+        does (`D-147`).
         """
         last = normalize_person_name(last_name, field="last_name", required=True)
         first = normalize_person_name(first_name, field="first_name", required=True)
         middle = normalize_person_name(middle_name, field="middle_name", required=False)
 
+        # `D-147`: the registration queue's lock first, before the account's row lock (the one
+        # lock order, :mod:`auditmanager.access.queue_lock`). Completing a profile can give
+        # this account a login a pending request holds, or one a submit is about to file.
+        take_queue_lock(session)
         current = self._lock(session, user_uid)
         if current is None or current.archived:
             raise DomainError(ErrorCode.NOT_FOUND, message="no such active account")
@@ -380,6 +386,12 @@ class AccountRepository:
             login = current.login
         else:
             login = normalize_email(email)
+
+        # A login this account does not hold yet, and a pending request does, would give one
+        # login to an account and a request that can then never be approved. Refused as
+        # ``login_taken``: the e-mail is claimed, and the claim is the earlier one.
+        if login != current.login and login_has_pending_request(session, login):
+            raise login_taken()
 
         try:
             with session.begin_nested():
@@ -511,8 +523,12 @@ class AccountRepository:
 
     def restore_account(self, session: Session, *, actor_uid: str, user_uid: str) -> UserRecord:
         """Return an archived account to active. ``conflict`` (``login_taken``) when an
-        active account took its login meanwhile; ``state_transition_not_allowed``
+        active account took its login meanwhile, or a pending registration request holds it
+        (`D-147`); ``state_transition_not_allowed``
         (``active -> active``) when it is not archived. Raises ``token_epoch``."""
+        # `D-147`: the queue lock first, so a submit for this login cannot interleave with the
+        # restore (the lock order of :mod:`auditmanager.access.queue_lock`).
+        take_queue_lock(session)
         current = self._lock(session, user_uid)
         if current is None:
             raise _no_such_account()
@@ -521,7 +537,7 @@ class AccountRepository:
         taken = session.execute(
             _LOGIN_HELD_BY_ANOTHER_ACTIVE, {"login": current.login, "user_uid": user_uid}
         ).scalar_one()
-        if taken:
+        if taken or login_has_pending_request(session, current.login):
             raise login_taken()
         try:
             with session.begin_nested():
