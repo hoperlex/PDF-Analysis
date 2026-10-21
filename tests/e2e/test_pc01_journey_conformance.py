@@ -89,6 +89,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -3163,3 +3164,28 @@ def test_the_norms_seed_refuses_a_database_that_is_not_a_lanes() -> None:
         env={"DATABASE_URL": "postgresql+psycopg://u:p@127.0.0.1:1/auditmanager_beta_live_journey"},
     )
     assert "refusing to write" not in lane.stderr and lane.returncode != 0
+
+
+def test_the_journey_will_not_spend_or_change_an_origin_it_was_not_told_it_may() -> None:
+    """`--phase all` makes accounts, pauses dispatch and starts further runs: only where it is free.
+
+    The pure rule is tested by `write.test.mjs` (`node --test`), run here so that a gate which
+    cannot run a browser still runs it; the wiring is read in the two files that carry it.
+    """
+    node = shutil.which("node")
+    assert node is not None, "node is required: the journey is a node program"
+    ran = subprocess.run(
+        [node, "--test", str(JOURNEY_DIR / "write.test.mjs")],
+        cwd=REPOSITORY_ROOT, capture_output=True, text=True, timeout=120,
+    )
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    write = _require(JOURNEY_DIR / "write.mjs").read_text(encoding="utf-8")
+    assert "nightWindowMayRun({ providerMode, allowSpend })" in write
+    assert "if (step.screen !== undefined) {" in write
+    journey = _require(JOURNEY).read_text(encoding="utf-8")
+    assert "'--allow-spend'" in journey and "E2E_PC01_ALLOW_SPEND" in journey
+    assert "step.screen === undefined" in journey, "--phase core must be the steps without a screen"
+    verify = _require(JOURNEY_DIR / "verify-acceptance.mjs").read_text(encoding="utf-8")
+    assert "step.screen === undefined" in verify, (
+        "the stand's acceptance verdict must count what a core walk declares"
+    )

@@ -136,6 +136,17 @@ export function namesNeededBy(step) {
   return [...names];
 }
 
+/**
+ * Whether the night-window steps may run against an origin, given what its provider reported.
+ *
+ * They start further runs, make accounts and change the origin's queue and norms snapshot. On
+ * an origin that bills per run, or whose provider mode no earlier run has reported, that is not
+ * done unasked (`--allow-spend`); `recorded` costs nothing and is the one mode that is.
+ */
+export function nightWindowMayRun({ providerMode, allowSpend }) {
+  return allowSpend === true || providerMode === 'recorded';
+}
+
 /** `a.b.c` over a decoded JSON body. Absent is `undefined`, which is never a match. */
 function atJsonPath(value, path) {
   let here = value;
@@ -239,6 +250,8 @@ export async function runWritePhase({
   viewport = null,
   only = null,
   seed = {},
+  allowSpend = false,
+  provision = null,
 }) {
   const spec = manifest.write;
   const ID = manifest.identifier_pattern;
@@ -250,8 +263,10 @@ export async function runWritePhase({
   const captured = { ...seed };
   // A password the journey typed (`secrets`) must reach neither a finding nor the envelope: a
   // message that quotes what a control read back, or a body the browser sent, is scrubbed here.
-  const secretValues = Object.values(secrets).filter((v) => typeof v === 'string' && v.length > 0);
-  const scrub = (text) => secretValues.reduce((t, v) => t.split(v).join('(redacted)'), String(text));
+  const scrub = (text) =>
+    Object.values(secrets)
+      .filter((v) => typeof v === 'string' && v.length > 0)
+      .reduce((t, v) => t.split(v).join('(redacted)'), String(text));
   const fail = (step, message) => failures.push(`${step}: ${scrub(message)}`);
 
   const fixture = resolve(repositoryRoot, spec.fixture);
@@ -266,6 +281,12 @@ export async function runWritePhase({
   const sessionsByName = { admin: cookies, ...sessions };
   let stopped = null;
   let firstRed = null;
+  // What the origin's provider mode was, as the run screen's own poll reported it. The night
+  // window starts further runs; on an origin that bills per run that is money, so a step that
+  // starts one waits for the provider mode to be known to be `recorded` or for `--allow-spend`.
+  let providerMode = null;
+  let nightRefused = false;
+  let accountsMade = false;
 
   for (const step of spec.steps) {
     if (only !== null && !only.includes(step.name)) continue;
@@ -297,6 +318,37 @@ export async function runWritePhase({
       console.log(`NOT ${step.name.padEnd(28)} needs ${missing.join(', ')}`);
       stopped = stopped ?? step.name;
       continue;
+    }
+    // ---- the night window runs only where it costs nothing ----------------------------
+    // Its steps make accounts, pause dispatch, designate a norms snapshot and start further
+    // runs. On an origin that bills per run, or whose provider mode is not known, that is not a
+    // thing to do unasked: the first such step says so ONCE and the rest are not reached.
+    if (step.screen !== undefined) {
+      if (!nightWindowMayRun({ providerMode, allowSpend })) {
+        if (!nightRefused) {
+          nightRefused = true;
+          fail(
+            step.name,
+            `not reached: the night-window steps start further runs, make accounts and change the ` +
+              `origin's queue, and this origin's provider mode is ` +
+              `${providerMode === null ? 'not known (no earlier run reported it)' : `'${providerMode}'`}, ` +
+              `not 'recorded'. Walk such an origin with --phase core, or pass --allow-spend ` +
+              `(E2E_PC01_ALLOW_SPEND=1) to say the cost and the changes are accepted. ` +
+              `Every night-window step after this one is not reached for the same reason`,
+          );
+          console.log(`NOT night-window steps -- provider mode ${providerMode ?? 'unknown'}, not 'recorded'`);
+        }
+        record.verdict = 'NOT REACHED';
+        stopped = stopped ?? step.name;
+        continue;
+      }
+      if (!accountsMade && provision !== null) {
+        accountsMade = true;
+        const made = await provision();
+        Object.assign(sessionsByName, made.sessions);
+        Object.assign(captured, made.seed);
+        for (const message of made.failures) failures.push(message);
+      }
     }
     if (sessionCookies === undefined) {
       record.verdict = 'NOT REACHED';
@@ -1153,6 +1205,10 @@ export async function runWritePhase({
       );
     }
 
+    for (const exchange of exchanges) {
+      const mode = atJsonPath(decodeJson(exchange.responseBody) ?? {}, 'provider_mode');
+      if (typeof mode === 'string' && /\/runs\/run_/.test(String(exchange.url))) providerMode = mode;
+    }
     record.verdict = ok ? 'ok' : 'RED';
     console.log(
       `${ok ? 'ok  ' : 'RED '}${step.name.padEnd(28)} ` +

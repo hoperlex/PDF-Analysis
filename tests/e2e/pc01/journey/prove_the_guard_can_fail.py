@@ -221,10 +221,10 @@ mutations = [
    lambda m: step(m, 'assign-work')['actions'][-1].__setitem__('selector', '[data-create-assign-submit]'),
    "test_every_control_the_write_half_presses_still_exists_in_the_application"),
   ("relabel «Назначить»",
-   lambda m: step(m, 'assign-work')['actions'][-1].__setitem__('text', 'Assign'),
+   lambda m: step(m, 'assign-work')['actions'][-1].__setitem__('text', 'Dispatch the work'),
    "test_every_control_the_write_half_presses_still_exists_in_the_application"),
   ("relabel the select the expert is chosen in",
-   lambda m: step(m, 'assign-work')['actions'][4].__setitem__('label', 'Assignee'),
+   lambda m: step(m, 'assign-work')['actions'][4].__setitem__('label', 'Zzz field'),
    "test_every_control_the_write_half_presses_still_exists_in_the_application"),
   ("expect a marker the dispatcher no longer draws",
    lambda m: step(m, 'dispatcher-expert-sees-only-the-own-work')['expects_present'].append(
@@ -276,7 +276,7 @@ mutations = [
    lambda m: step(m, 'sign-out').__setitem__('expects_location', 'login'),
    "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
   ("never decide an optimisation proposal",
-   lambda m: without_steps(m, lambda x: x['name'] == 'proposal-accept'),
+   lambda m: without_steps(m, lambda x: x['name'] in ('proposal-accept', 'proposal-revise')),
    "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
   ("capture the proposal under another name",
    lambda m: step(m, 'proposal-revise-needs-a-comment')['captures'][0].__setitem__('as', ['proposal']),
@@ -300,7 +300,10 @@ mutations = [
 
 
 ok = True
+only = sys.argv[1:]   # a label fragment per argument: run just those mutations
 for label, mutate, test in mutations:
+    if only and not any(fragment in label for fragment in only):
+        continue
     m = json.loads(orig)
     mutate(m)
     M.write_text(json.dumps(m, indent=2) + "\n")

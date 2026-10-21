@@ -37,6 +37,13 @@
  * default is `all`: a phase that is skipped is printed and recorded as skipped, because a
  * partial green that does not say so is `D-23` in a different costume.
  *
+ * **`--phase core` is the journey as it stood before the night window** (`BETA-LIVE-JOURNEY-01`):
+ * the original write steps (project, upload, classify, run) and the read walk, with none of the
+ * steps that make accounts, pause dispatch, designate a norms snapshot or start further runs.
+ * `all` is everything. A published stand that spends money per run is walked with `core`;
+ * `all` refuses to start a further run on an origin whose provider mode is not `recorded`
+ * unless it is told `--allow-spend`.
+ *
  * **Order: write first, then read.** The read walk discovers every identifier by following
  * the links the pages render and is handed nothing, so it is not coupled to what the write
  * half just made -- but running the write half first means the origin has, at minimum, one
@@ -68,6 +75,7 @@ function parseArgs(argv) {
     steps: null,
     routes: null,
     seed: null,
+    allowSpend: process.env.E2E_PC01_ALLOW_SPEND === '1',
   };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
@@ -78,13 +86,14 @@ function parseArgs(argv) {
     else if (flag === '--steps') args.steps = argv[++i].split(',').filter(Boolean);
     else if (flag === '--routes') args.routes = argv[++i].split(',').filter(Boolean);
     else if (flag === '--seed') args.seed = argv[++i];
+    else if (flag === '--allow-spend') args.allowSpend = true;
     else {
       console.error(`e2e:pc01: unknown argument '${flag}'`);
       process.exit(2);
     }
   }
-  if (!['read', 'write', 'all'].includes(args.phase)) {
-    console.error(`e2e:pc01: --phase must be read, write or all (got '${args.phase}')`);
+  if (!['read', 'write', 'all', 'core'].includes(args.phase)) {
+    console.error(`e2e:pc01: --phase must be read, write, all or core (got '${args.phase}')`);
     process.exit(2);
   }
   return args;
@@ -162,6 +171,10 @@ function fail(route, message) {
 }
 
 const PHASE = args.phase;
+// The night window's steps carry a `screen`; the original four do not. `core` walks the latter.
+const WRITE_STEPS = (manifest.write?.steps ?? []).filter(
+  (step) => PHASE !== 'core' || step.screen === undefined,
+);
 const REPOSITORY_ROOT = resolve(HERE, '..', '..', '..', '..');
 const STAMP = new Date().toISOString().replace(/[:.]/g, '-');
 
@@ -242,10 +255,11 @@ if (!session.ok) {
 
 // ---- the other accounts --------------------------------------------------------------
 // A refusal by role needs a session that holds only that role. They are made through the
-// application's own screens and cost three browsers each, so a read-only run skips them.
-let accounts = { sessions: {}, record: { ran: false, why: 'phase: read' } };
-const ACCOUNT_SEED = {};
-if (PHASE !== 'read' && manifest.accounts !== undefined) {
+// application's own screens and cost three browsers each, so a read-only run skips them -- and
+// so does a `core` run, and a run against an origin that is not known to be free to write to
+// (`write.mjs` asks for them only once the first run has said the provider is `recorded`).
+let accounts = { sessions: {}, record: { ran: false, why: 'not yet needed' } };
+const provisionOnDemand = async () => {
   console.log(`accounts: ${manifest.accounts.roster.map((a) => a.name).join(', ')}`);
   const made = await provisionAccounts({
     origin: ORIGIN,
@@ -255,14 +269,15 @@ if (PHASE !== 'read' && manifest.accounts !== undefined) {
   });
   accounts = { sessions: made.sessions, record: { ran: true, ...made.record } };
   Object.assign(SECRETS, made.passwords);
-  failures.push(...made.failures);
   // The accounts' identities are what the dispatcher's selects are addressed by, and they
   // are produced by the registration screens, not typed into the manifest.
+  const seed = {};
   for (const account of made.record.accounts) {
-    if (account.userUid) ACCOUNT_SEED[`${account.name}_user_uid`] = account.userUid;
+    if (account.userUid) seed[`${account.name}_user_uid`] = account.userUid;
   }
   console.log('');
-}
+  return { sessions: made.sessions, seed, failures: made.failures };
+};
 
 // ---- the write half ----------------------------------------------------------------
 let write = null;
@@ -276,7 +291,7 @@ if (PHASE === 'read') {
       'all -- which is exactly what D-30 says the read half cannot catch',
   );
 } else {
-  console.log(`write half: ${manifest.write.steps.length} step(s), fixture ${manifest.write.fixture}\n`);
+  console.log(`write half: ${WRITE_STEPS.length} step(s), fixture ${manifest.write.fixture}\n`);
   write = await runWritePhase({
     origin: ORIGIN,
     manifest,
@@ -286,14 +301,16 @@ if (PHASE === 'read') {
     sessions: accounts.sessions,
     secrets: SECRETS,
     viewport: VIEWPORT,
-    only: args.steps,
-    seed: { ...SEED, ...ACCOUNT_SEED },
+    only: args.steps ?? (PHASE === 'core' ? WRITE_STEPS.map((step) => step.name) : null),
+    seed: SEED,
+    allowSpend: args.allowSpend,
+    provision: (PHASE === 'all' || PHASE === 'write') && manifest.accounts !== undefined ? provisionOnDemand : null,
   });
   failures.push(...write.failures);
   if (write.stopped !== null) {
     failures.push(
       `write: the write half stopped at '${write.stopped}'; ` +
-        `${write.records.length} of ${manifest.write.steps.length} step(s) were checked, ` +
+        `${write.records.length} of ${WRITE_STEPS.length} step(s) were checked, ` +
         'and an unfinished write half is not a pass',
     );
   }
@@ -556,7 +573,7 @@ const envelopePath = writeEnvelope(
               ran: true,
               fixture: write.fixture,
               stepsChecked: write.records.length,
-              stepsDeclared: manifest.write.steps.length,
+              stepsDeclared: WRITE_STEPS.length,
               stoppedAt: write.stopped,
               captured: write.captured,
               steps: write.records,
@@ -571,7 +588,7 @@ const envelopePath = writeEnvelope(
 
 console.log(`\nenvelope: ${envelopePath}`);
 console.log(
-  `write steps checked: ${write === null ? 'not run' : `${write.records.length}/${manifest.write.steps.length}`}`,
+  `write steps checked: ${write === null ? 'not run' : `${write.records.length}/${WRITE_STEPS.length}`}`,
 );
 console.log(
   `routes checked: ${PHASE === 'write' ? 'not run' : `${records.length}/${manifest.routes.length}`}`,
