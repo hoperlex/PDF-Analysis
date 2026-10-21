@@ -259,10 +259,18 @@ class _Keyed:
 
 
 class _PriceIndex:
-    """Positions indexed by their code/mark first token and by every name key."""
+    """Positions indexed by their code/mark tokens and by every name key.
+
+    A code is looked up by its whole token sequence, under its first token: a row that names
+    a token shared by thousands of codes (``ПК`` in ``ПК 60-12-8``) asks one dictionary per
+    distinct length of those codes, not each of the thousands (`D-185`: the pass runs inside
+    the request).
+    """
 
     def __init__(self, positions: Sequence[PriceListPositionRecord]) -> None:
-        self.codes: dict[str, list[_Keyed]] = {}
+        self.codes: dict[str, dict[tuple[str, ...], list[_Keyed]]] = {}
+        #: The distinct token counts of the codes that open with a token, ascending.
+        self.code_lengths: dict[str, tuple[int, ...]] = {}
         self.names: dict[str, list[PriceListPositionRecord]] = {}
         #: Name keys with the vendor's legal form dropped, for positions whose vendor has one.
         self.loose_names: dict[str, list[PriceListPositionRecord]] = {}
@@ -270,7 +278,9 @@ class _PriceIndex:
             for basis, value in ((BASIS_CODE, position.code), (BASIS_MARK, position.mark)):
                 tokens = _specific_code(value)
                 if tokens is not None:
-                    self.codes.setdefault(tokens[0], []).append(_Keyed(tokens, position, basis))
+                    self.codes.setdefault(tokens[0], {}).setdefault(tokens, []).append(
+                        _Keyed(tokens, position, basis)
+                    )
             for key in _name_keys(position):
                 bucket = self.names.setdefault(key, [])
                 if not bucket or bucket[-1] is not position:
@@ -279,17 +289,26 @@ class _PriceIndex:
                 bucket = self.loose_names.setdefault(key, [])
                 if not bucket or bucket[-1] is not position:
                     bucket.append(position)
+        self.code_lengths = {
+            first: tuple(sorted({len(tokens) for tokens in table}))
+            for first, table in self.codes.items()
+        }
 
     def by_code(self, text: str) -> list[tuple[PriceListPositionRecord, str]]:
         tokens = _code_tokens(text)
         found: dict[str, tuple[PriceListPositionRecord, str]] = {}
         for start, token in enumerate(tokens):
-            for keyed in self.codes.get(token, ()):
-                if tokens[start : start + len(keyed.tokens)] != keyed.tokens:
-                    continue
-                identity = keyed.position.price_list_position_id
-                if identity not in found or keyed.basis == BASIS_CODE:
-                    found[identity] = (keyed.position, keyed.basis)
+            table = self.codes.get(token)
+            if table is None:
+                continue
+            for length in self.code_lengths[token]:
+                window = tokens[start : start + length]
+                if len(window) < length:
+                    break
+                for keyed in table.get(window, ()):
+                    identity = keyed.position.price_list_position_id
+                    if identity not in found or keyed.basis == BASIS_CODE:
+                        found[identity] = (keyed.position, keyed.basis)
         return sorted(found.values(), key=lambda pair: pair[0].row_number)
 
     def by_name(self, row: SpecificationRow) -> list[PriceListPositionRecord]:
