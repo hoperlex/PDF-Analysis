@@ -144,9 +144,10 @@ def test_authored_shape_and_form() -> None:
     # W53-INT-CLOSE under R-86; 0.5.0 by W54-RELNOTES-01; 0.5.1 by the owner-requested interface
     # polish of 2026-10-13 (version history, sign-in, user filters); 0.6.0 by W55B-RELNOTES-01
     # (W55b released as 0.6.0 under R-123), revised once for W55B-NOTES-JUDGE's edits E2, E4-E6;
-    # 0.7.0 by RELEASE-0-7-0-RECORD-01 (the owner's own merge of dev into main, R-141e).
+    # 0.7.0 by RELEASE-0-7-0-RECORD-01 (the owner's own merge of dev into main, R-141e), revised once
+    # for the independent judge's edits.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
-        "0.7.0": 1, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1, "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
+        "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1, "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
     assert [entry["version"] for _, entry in entries] == ["0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0", "0.3.0", "0.2.0"]
