@@ -487,7 +487,8 @@
         "nothing, so those calls are declared OPTIONAL below with the choice that makes each,",
         "which also puts every one of them through the contract check. The tab's sentence",
         "before a bundle's first run is «Блоки портала появятся после первого запуска анализа",
-        "этой версии.». It is written here for a reader and checked by nothing in this file:",
+        "этой версии, который дойдёт до разметки страниц.» (and «У этой версии нет комплекта портала.»",
+        "for a version with no bundle). It is written here for a reader and checked by nothing in this file:",
         "a route entry carries no sentence key and the cold walk never chooses a version. It is",
         "pinned by `web/tests/unit/blocks/portal-states.test.ts` and rendered by the language",
         "guard's `BLOCKS_SHAPES`."
