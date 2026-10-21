@@ -9,7 +9,8 @@ inputs ``MAX_DATA_ROWS`` and ``MAX_SPECIFICATION_ROWS`` allow; ``POSITIONS`` and
 environment shrink them), the wall and CPU time of the three pure stages of
 :func:`~auditmanager.optimisation.proposals.commands.start_optimisation_pass` -- the extraction of the
 specification from its text layer, the matching of its rows to the price list, and the generation of
-the proposals -- and the process's peak resident set so far. The database, the object store and the
+the proposals -- and the process's peak resident set so far, then a digest of every proposal (ordinal, row, both
+positions, bases, similarity, saving, rationale) so that two trees can be compared. The database, the object store and the
 HTTP layer are not in it; ``tests/integration/optimisation/proposals/measure_worst_case_pass.py``
 measures the whole request, with the same scenarios.
 
@@ -22,6 +23,7 @@ each match exactly one of its positions.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import random
 import resource
@@ -152,6 +154,16 @@ def main() -> None:
         f"matched={generated.rows_matched} proposals={len(generated.proposals)} peak={_peak_mib():.0f}MiB",
         flush=True,
     )
+    # What came out, as one number, so two trees (``git archive <rev> src contracts`` into a
+    # directory on PYTHONPATH) can be compared on an input too large to compare by eye.
+    digest = hashlib.sha256()
+    for draft in generated.proposals:
+        digest.update(repr((
+            draft.ordinal, draft.row.row_id, draft.matched.price_list_position_id, draft.matched_basis,
+            draft.proposed.price_list_position_id, draft.analog_basis, str(draft.similarity),
+            str(draft.saving), draft.rationale,
+        )).encode())
+    print(f"digest:   {digest.hexdigest()[:16]} of {len(generated.proposals)} proposals", flush=True)
 
 
 if __name__ == "__main__":
