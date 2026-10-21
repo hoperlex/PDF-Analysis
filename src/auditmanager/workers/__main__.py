@@ -35,6 +35,7 @@ _log = logging.getLogger("auditmanager.workers")
 
 def serve(environ: Mapping[str, str]) -> int:
     from auditmanager.bootstrap.public import ConfigurationError, build_worker_runtime
+    from auditmanager.jobs.public import sweep_stale_temporaries
     from auditmanager.workers.service import WorkerService
 
     try:
@@ -42,6 +43,11 @@ def serve(environ: Mapping[str, str]) -> int:
     except ConfigurationError as failure:
         print(f"auditmanager-worker: refusing to start: {failure}", file=sys.stderr)
         return 2
+
+    # `RUN-ROBUSTNESS-01` (D-170): the temporary PDFs a killed predecessor's stages left in
+    # this container's /tmp. Only the exact stage prefixes, only files older than the attempt
+    # watchdog; never raises.
+    sweep_stale_temporaries()
 
     service = WorkerService(
         engine=runtime.engine,

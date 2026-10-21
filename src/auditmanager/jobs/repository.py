@@ -72,6 +72,21 @@ _EXPIRED_LEASES = text(
     "AND l.attempt_id = :force_attempt_id)) "
     "ORDER BY j.run_id, l.lease_id LIMIT 100"
 )
+#: `RUN-ROBUSTNESS-01` (D-169). For each Attempt of a Job that was lost, the stage the Run had
+#: started last while that Attempt held authority: ``stage.started`` is journalled and committed
+#: before a deterministic stage runs (`runs.executor`), so a worker killed inside a stage leaves
+#: that stage as the newest start of its Attempt's window. ``NULL`` when the Attempt started no
+#: stage (killed before the first one).
+_LOST_ATTEMPT_STAGES = text(
+    "SELECT a.attempt_id, ("
+    "SELECT e.payload ->> 'stage_id' FROM audit_event e "
+    "WHERE e.event_type = 'stage.started' AND e.aggregate_id = :run_id "
+    "AND e.occurred_at >= a.created_at "
+    "AND (a.terminal_at IS NULL OR e.occurred_at <= a.terminal_at) "
+    "ORDER BY e.sequence_no DESC LIMIT 1) AS stage_id "
+    "FROM attempt a WHERE a.job_id = :job_id AND a.state = 'lost' "
+    "ORDER BY a.created_at, a.attempt_id"
+)
 _ENSURE_CONTROL = text(
     "INSERT INTO execution_control (singleton, paused) VALUES (true, false) "
     "ON CONFLICT (singleton) DO NOTHING"
@@ -571,6 +586,13 @@ class JobRepository:
                     interrupted_reason=(
                         "provider_outcome_unknown" if ambiguous else "attempt_budget_exhausted"
                     ),
+                    # D-169: an exhausted budget names the stage that killed the worker again
+                    # and again; an uncertain provider effect keeps the cause it always had.
+                    terminal_detail=(
+                        None if ambiguous else self._repeated_kill_detail(
+                            session, run_id=run_id, job_id=str(candidate["job_id"]),
+                        )
+                    ),
                 )
             else:
                 if state == "running":
@@ -584,6 +606,30 @@ class JobRepository:
                 self.wake_workers(session)
             recovered += 1
         return recovered
+
+    @staticmethod
+    def _repeated_kill_detail(
+        session: Session, *, run_id: str, job_id: str
+    ) -> dict[str, str] | None:
+        """``{"stage_id": ...}`` when the last two lost Attempts died in the same stage.
+
+        `RUN-ROBUSTNESS-01`, D-169. A worker killed for memory is resumed (nothing it did can
+        have spent a provider call) and the same pages kill the next one, so the third loss
+        dead-letters a Job whose Run then said ``analysis_failed`` and nothing more. Two lost
+        Attempts in a row inside the same stage is the signature of an input that kills its
+        worker; it is named with the ``stage_id`` detail the code ``analysis_failed`` already
+        declares safe. Attempts lost in different stages, or before any stage, are restarts and
+        not an input: no stage is named, as before -- a stage the worker merely happened to be
+        in is not a cause.
+        """
+        stages = [
+            row["stage_id"] for row in session.execute(
+                _LOST_ATTEMPT_STAGES, {"run_id": run_id, "job_id": job_id}
+            ).mappings().all()
+        ]
+        if len(stages) >= 2 and stages[-1] is not None and stages[-1] == stages[-2]:
+            return {"stage_id": str(stages[-1])}
+        return None
 
     def start_execution(self, session: Session, *, run_id: str) -> AttemptAuthority:
         """Claim the Run's Job with a new current Attempt, Lease and token.

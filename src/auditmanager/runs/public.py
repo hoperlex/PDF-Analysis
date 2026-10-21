@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Any, Mapping
+
 from sqlalchemy.orm import Session
 
+from auditmanager.jobs.public import sweep_stale_temporaries
 from auditmanager.runs.carrier import (
     DurableCarrier,
     ReclaimingCarrier,
@@ -42,17 +45,29 @@ def start_serving_carrier(carrier: RunCarrier) -> None:
     Other carrier implementations have no serving scheduler to start.
     """
     if isinstance(carrier, (DurableCarrier, ReclaimingCarrier)):
+        # `RUN-ROBUSTNESS-01` (D-170): a serving process that starts is the moment a killed
+        # predecessor's temporary PDFs and bundle directories can be reclaimed. Never raises.
+        sweep_stale_temporaries()
         carrier.start()
 
 
 def fail_reclaimed_run(
-    session: Session, *, run_id: str, from_state: str, interrupted_reason: str
+    session: Session,
+    *,
+    run_id: str,
+    from_state: str,
+    interrupted_reason: str,
+    terminal_detail: Mapping[str, Any] | None = None,
 ) -> None:
     """Record the Run terminal chosen after Job recovery fences a lost Attempt.
 
     The Job boundary decides whether the prior provider effect is ambiguous or the
     Attempt budget is exhausted. The Run boundary owns its declared failed edge and
     terminal reason; both writes remain in the caller's recovery transaction.
+
+    ``terminal_detail`` is what the Job boundary could establish about the loss
+    (`RUN-ROBUSTNESS-01`, D-169: the stage a worker was killed in again and again). It is
+    screened against the keys ``analysis_failed`` declares safe by the repository.
     """
     RunRepository().terminate(
         session,
@@ -60,6 +75,7 @@ def fail_reclaimed_run(
         from_state=from_state,
         to_state="failed",
         terminal_reason=ErrorCode.ANALYSIS_FAILED.value,
+        terminal_detail=terminal_detail,
         interrupted_reason=interrupted_reason,
     )
 
