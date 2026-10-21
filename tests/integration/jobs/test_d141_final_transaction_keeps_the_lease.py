@@ -8,11 +8,21 @@ waited its 2 s lock timeout and failed, so a gate that ran past the lease margin
 lease expire under a run that had already paid for its model call; ``finish_execution``
 then found the lease stale and the run was lost as ``provider_outcome_unknown``.
 
-The lease is shortened to 2 s and the heartbeat to 0.25 s, through the same two knobs the
-production code reads, and the evidence gate is made to take 4 s -- twice the lease. A
-reclaimer on another connection sweeps every 0.2 s throughout. The run must publish under
-its one Attempt. Revert the commit in ``runs/executor.py`` and this fails: the heartbeat is
-blocked, the lease expires, and ``finish_execution`` refuses the stale Attempt.
+The lease is shortened to 8 s and the heartbeat to 0.25 s, through the same two knobs the
+production code reads, and the evidence gate is made to take 12 s -- half as long again as the
+lease. A reclaimer on another connection sweeps every 0.2 s throughout. The run must publish
+under its one Attempt. Revert the commit in ``runs/executor.py`` and this fails: the heartbeat
+is blocked, the lease expires, and ``finish_execution`` refuses the stale Attempt.
+
+**The margin (`D-190`).** The lease is stamped on PostgreSQL's clock (``statement_timestamp()``
+at the claim and at every extension), so there is no clock to drive from here: the two knobs are
+the whole of the margin. A host stall that keeps the heartbeat thread from running for longer
+than ``LEASE_SECONDS - HEARTBEAT_SECONDS`` lets the lease expire under the run, and the reclaimer
+takes it. At 2 s and 0.25 s that tolerance was 1.75 s, and one stall of that size in a 2.5 h
+battery (gate `59a1be91`) failed this file once; three isolated reruns and the whole
+``tests/integration/jobs`` directory passed. At 8 s it is 7.75 s, more than four times as long,
+and the gate is still long enough that a heartbeat that never ran shows: the lease would end
+4 s before the gate does.
 
 The reclaimer counts **only this run's lease** (`W55A-FIX`; `W55A-FIX-DB.md` §4.1). Other
 suites leave runs ``running`` under a 60 s lease (the W48 crash cases), and one expiring
@@ -39,8 +49,13 @@ from auditmanager.runs import execute_run, start_audit_run
 from auditmanager.runs.commands import cancel_audit_run
 from auditmanager.shared.identity import IdempotencyKey
 
-GATE_SECONDS = 4.0
-LEASE_SECONDS = 2.0
+GATE_SECONDS = 12.0
+LEASE_SECONDS = 8.0
+HEARTBEAT_SECONDS = 0.25
+#: How long the heartbeat thread may be kept from running before the lease ends under the run.
+STALL_TOLERANCE_SECONDS = LEASE_SECONDS - HEARTBEAT_SECONDS
+#: The stall that failed the complete battery: it was longer than the old 1.75 s tolerance.
+OBSERVED_STALL_SECONDS = 1.75
 
 
 @contextmanager
@@ -66,12 +81,24 @@ def _foreign_leases_parked(sessions) -> Iterator[None]:
             cleanup.commit()
 
 
+def test_the_margin_outlasts_the_stall_that_failed_the_battery_and_the_gate_outlasts_the_lease() -> None:
+    """`D-190`: the two numbers above cannot be narrowed back without this reddening.
+
+    A tolerance of three times the observed stall, and a gate that runs at least two seconds past
+    the lease, so a heartbeat that does not run is still seen by the reclaimer before the gate
+    ends. Both are about the parameters, not about the code under test; the test below is what
+    the code answers.
+    """
+    assert STALL_TOLERANCE_SECONDS >= 3 * OBSERVED_STALL_SECONDS, STALL_TOLERANCE_SECONDS
+    assert GATE_SECONDS >= LEASE_SECONDS + 2.0, (GATE_SECONDS, LEASE_SECONDS)
+
+
 def test_a_final_transaction_longer_than_the_lease_is_not_reclaimed(
     sessions, blob_store, helpers, recorded_adapter, provider_config, monkeypatch,
     quiet_queue,
 ) -> None:
     monkeypatch.setattr(JobRepository, "lease_seconds", LEASE_SECONDS)
-    monkeypatch.setattr(lease_module, "HEARTBEAT_SECONDS", 0.25)
+    monkeypatch.setattr(lease_module, "HEARTBEAT_SECONDS", HEARTBEAT_SECONDS)
     original_gate = executor_module._run_evidence_gate
     gate_ran = threading.Event()
 
