@@ -33,19 +33,38 @@ export interface UploadPriceListCommand {
   readonly idempotencyKey: string;
 }
 
+/**
+ * Uploads in flight, by their idempotency key. `BETA-LIVE-JOURNEY-01`: the live journey pressed
+ * «Загрузить прайс-лист» twice before the page had re-rendered and measured TWO `POST`s under
+ * one key; the second reached the server while the first was still executing and was answered
+ * `409 idempotency_key_in_progress`, which the form -- showing the latest answer -- rendered as
+ * «Прайс-лист не загружен» over a revision that had in fact been stored. A key is one intent
+ * (it changes with the file and the currency), so a press that finds its key in flight joins
+ * the request already sent and shows that answer. A module-level table and not a hook's ref:
+ * the key is unique per intent, so nothing is shared that should not be.
+ */
+const inFlight = new Map<string, Promise<PriceListRevision>>();
+
 export function useUploadPriceList() {
   const queryClient = useQueryClient();
 
   return useMutation<PriceListRevision, unknown, UploadPriceListCommand>({
-    mutationFn: async ({ projectUid, file, defaultCurrency, idempotencyKey }) => {
+    mutationFn: ({ projectUid, file, defaultCurrency, idempotencyKey }) => {
+      const held = inFlight.get(idempotencyKey);
+      if (held !== undefined) return held;
       const body: UploadPriceListRequest =
         defaultCurrency === null ? { file } : { file, default_currency: defaultCurrency };
-      const response = await uploadPriceList({
+      const sent: Promise<PriceListRevision> = uploadPriceList({
         path: { project_uid: projectUid },
         body,
         idempotencyKey,
-      });
-      return response.data;
+      })
+        .then((response) => response.data)
+        .finally(() => {
+          if (inFlight.get(idempotencyKey) === sent) inFlight.delete(idempotencyKey);
+        });
+      inFlight.set(idempotencyKey, sent);
+      return sent;
     },
     onSuccess: (revision) => {
       void queryClient.invalidateQueries({

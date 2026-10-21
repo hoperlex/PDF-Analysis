@@ -295,7 +295,8 @@ run state named is one `RunState` publishes.
 `prove_the_guard_can_fail.py` beside this file mutates the **real** `manifest.json` ten
 ways and asserts ten reds — because the controls inside the guard are pure functions over
 synthetic data, and that leaves "is the check actually wired to the real tree" unproven.
-Measured 2026-09-19: ten mutations, ten reds.
+Measured 2026-09-19: ten mutations, ten reds. Re-measured 2026-10-21
+(`BETA-LIVE-JOURNEY-01`): 76 mutations (the night window's added), 76 reds; the ten originals now address steps by name.
 
 **The cost, stated, and narrowed rather than closed:** that guard checks *addressing* and
 *existence*, not *behaviour*. A screen whose route, calls and handles are all unchanged but
@@ -378,10 +379,18 @@ written and is 22 now, and it changes whenever `web/src/app` gains a screen — 
 is exactly what `test_the_journey_walks_every_screen_the_application_offers` reddens on.
 The seconds are a property of this host under whatever else it was running.
 
-Almost all of that is **browser startup**: in a warm browser the same navigation takes
+Almost all of that was **browser startup**: in a warm browser the same navigation takes
 16 ms, against 3.8–25 s for the first navigation in a fresh process. One process per route
 is what makes these cold loads, so the cost *is* the property. Reusing one browser would
 make the suite roughly ten times faster and would stop it being able to find `D-16`.
+
+**Superseded 2026-10-21 (`BETA-LIVE-JOURNEY-01`): the 25 s was a keyring, not a cold load.**
+On Chrome 154 the first cookie-store access of a fresh profile (`Storage.getCookies`, which
+`recordStartingJar` makes before the first navigation) took 25 s, because the browser asked the
+desktop keyring for the key it encrypts cookies with and waited for a keyring that is not there.
+`--password-store=basic` (in `cdp.mjs`) makes it 3 ms and a browser launch 0.3 s. Every browser
+is still a new process with its own throwaway profile, so the property is untouched; the walk of
+29 routes and the 86 write steps below now take **about five minutes** on this host.
 
 `E2E_PC01_SETTLE_TIMEOUT_MS` (default 10000) bounds the wait for a screen to go quiet. The
 run screen polls and never goes quiet; the bound is what ends that wait, and whatever the
@@ -456,3 +465,98 @@ would allocate it. `manifest.json` declares the set twice (`generated: true` on 
 ```
 node tests/e2e/pc01/journey/refusals.mjs --origin http://127.0.0.1:PORT
 ```
+
+## The night window's screens, and what a refusal is here (`BETA-LIVE-JOURNEY-01`)
+
+The first four write steps (project, upload, classify, run) were the whole write half until the
+night window of 2026-10-20 added the screens `docs/program/BETA-MATRIX-01.md` §B12 lists as never
+walked live. The steps after them walk every one of those screens on a stack the journey is
+allowed to write to, and **each screen has a case it must refuse**: a role the screen refuses a
+control, an input it refuses, or a second identical submit that must change nothing. A step carries
+`screen` (the screen it belongs to) and `case` (`action` or `refused`); the gate checks that every
+night screen has both, or says why it has no refusal (`no_negative_case`).
+
+| screen | action | refused |
+|---|---|---|
+| stage and section | confirm АР/П, pressed twice: one `PUT` | admin-only sees a sentence and no form; a stage without a section is a disabled button |
+| next version | upload a bundle as version 2 and 3 | a bare PDF is refused by the browser, nothing sent |
+| comparison, П→Р, carried decision | compare, carry a verdict (confirmation pressed twice: one `POST`) | admin-only gets the read-only sentence; П against Р is refused without the switch; a carried row offers nothing again |
+| «Настройки анализа» | the fifteen sections and their profiles | no form, no field, no select |
+| «Диспетчер», «Мои задачи» | assign (twice), take, complete | admin-only cannot take the work; an expert sees no creation form; a return needs a reason |
+| price lists | upload a CSV (twice), read the parse report | admin-only sees no upload; an empty file; a table with no columns (422) |
+| vendor lists | the global list (administrator), the project list | an expert is offered no global button; a row with no vendor |
+| «Спецификация и цены» | three rows read, matched, priced | `price_list_missing` before any list |
+| «Предложения» | a pass (twice), accept, revise, history, CSV | admin-only starts nothing and decides nothing; «На доработку» needs a comment |
+| «Оптимизация разделов», dashboard | the АР section across projects; the section panel | a section with no members |
+| «Нормы» | designate a snapshot, search, catalogue + filter | an unqualified snapshot has no button; an expert has no designation; an empty query |
+| exports | a run's CSV and Excel (the saved file is read) | admin-only is refused `permission_denied` |
+| «Очередь», «Исполнители» | pause, a waiting run, priority, cancel, re-audit, resume; worker intake off and on | an expert has no priority or pause; 500 is out of range |
+| account | profile, password change, sign-out, version history | a surname is required; mismatch and wrong current password; the old pass is refused after a change |
+| «Пользователи» | archive, restore, reset password | a repeat that differs |
+
+### What the stack needs
+
+* **A worker beside the API.** The queue and worker steps need a registered worker: run the API
+  with `EXECUTION_ROLE=api` and `python -m auditmanager.workers serve` (`EXECUTION_ROLE=worker`, no
+  deployment secret). With `EXECUTION_ROLE=all` the Исполнители list is honestly empty and the step
+  that reads it fails.
+* **A norms snapshot to designate.** `PYTHONPATH=src .venv/bin/python
+  tests/e2e/pc01/journey/seed_norms.py` writes, by SQL, one qualified and one unqualified synthetic
+  snapshot into the lane's database (it refuses a database whose name lacks `journey` or `lane`).
+  Run it before each journey: each run designates one.
+* **A recording for the specification bundle.** The recorded provider replays a reply by the
+  checksum of the request, and a different document is a different checksum. `PYTHONPATH=src
+  .venv/bin/python tests/e2e/pc01/journey/build_specification_bundle.py --install-recording` files
+  the baseline's own reply under the specification bundle's checksum in
+  `fixtures/recorded/text_analysis/`. **That is an untracked file in a tracked directory**; without
+  it `start-specification-run` reports a run that did not publish. The committed bundle
+  (`fixtures/optimisation/ar_specification.zip`) is the baseline's eight pages plus one with a
+  three-row specification, and `--check` rebuilds it and compares it.
+* **A real browser** (`E2E_PC01_CHROME`) and the administrator's credential, as before.
+
+### What it makes, and what it never records
+
+`accounts.mjs` registers an expert-only and an administrator-only account through the registration
+and approval screens and signs them in: a refusal by role needs a session that holds only that
+role, and the journey's own account holds both. Each password is random per run. Passwords the steps
+type are named by `secret` in the manifest, never by value; the typed value, what the control read
+back, request bodies on the tier's own doors and every occurrence of a secret are scrubbed from the
+envelope and from findings (`grep -c 'Aq9!\|Zq7!' journey.json` is `0`).
+
+### Reading the files an export saves
+
+An export is a download, and the protocol does not give a download's body to
+`Network.getResponseBody` (the first live run read `''` for three exports whose headers said 200,
+`text/csv`, 4404 bytes). `expects_download` therefore points the browser's downloads at a
+throwaway directory (`Browser.setDownloadBehavior`) and reads the saved file: its first bytes (the
+BOM, `PK`), its CSV header width, and that no cell begins with `=`, `+`, `-` or `@`.
+
+### Where it will not run
+
+`--phase core` is the journey as it stood before the night window: the four original write steps and the
+29 routes, none of the steps that make accounts, pause dispatch, designate a snapshot or start further runs.
+`--phase all` is everything, and **refuses the night window's steps on an origin whose provider mode is not
+`recorded`** (the mode the first run's own poll reports): it says so once, loudly, before making an account
+or starting a run, and exits 1. `--allow-spend` (or `E2E_PC01_ALLOW_SPEND=1`) says the cost and the changes
+are accepted. A step that only reads (`reads_only`, checked: no controls, no write) runs first on any origin.
+`make alpha-acceptance` calls `--phase all`; for a published stand switch its call to `--phase core`
+(`verify-acceptance.mjs` counts what the phase declares).
+
+### Working on one step
+
+`--steps a,b`, `--routes x,y` and `--seed <file of captured identifiers>` run part of the
+manifest. Such a run can find a defect and can never be a pass: it prints `PARTIAL` and exits **3**.
+`write.on_red: continue_if_captured` lets one red step stop only the steps whose inputs it failed to
+produce; a step that was not reached is a finding, never a pass.
+
+### What is not reachable here, stated
+
+* The norms document view with a PDF page (`/norms/document?id=…&page=N`): the seeded snapshot's PDFs
+  are bound by rows and have no object in the store, so the page would show a store error that is the
+  seed's, not the screen's.
+* The recorded model answers the baseline's text only (and the specification bundle's, by the
+  installed recording). Other sections' profiles are proven by their own recordings elsewhere.
+* A norms catalogue «Excel» is the run export above; the catalogue itself has no workbook.
+* The vendor-list `vendor_list_missing` refusal of a pass is global state (a list, once set for the
+  section, stays), so it cannot be asserted repeatably on a lane; `tests/integration/optimisation`
+  holds it.
