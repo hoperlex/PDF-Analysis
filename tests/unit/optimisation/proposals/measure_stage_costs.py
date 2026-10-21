@@ -16,7 +16,7 @@ measures the whole request, with the same scenarios.
 The scenarios are shapes of one input, because the bounds fix its size and not its shape and the cost
 is a function of the shape (see ``docs/program/API-FOLLOWUPS-01.md``): ``catalogue``,
 ``one_head_similar``, ``one_head_dissimilar``, ``two_words``, ``common_code_token``, ``rich`` and the
-contrived ``overlap_dissimilar`` and ``flat_price``. A scenario names a price list and the descriptions of the rows that
+contrived ``overlap_dissimilar``, ``long_overlap`` and ``flat_price``. A scenario names a price list and the descriptions of the rows that
 each match exactly one of its positions.
 """
 
@@ -109,6 +109,14 @@ def _scenario(kind: str, rnd: random.Random) -> tuple[list[PriceListPositionReco
             for i in range(POSITIONS)
         ]
         return positions, [names[half + (k % half)] for k in range(ROWS)]
+    if kind == "long_overlap":
+        # Contrived, and the dearest the search can be made: 60-word names (about 400 bytes, what the
+        # 10 MiB cap allows at 20 000 rows) drawn from 200 words, so every pair shares words and none
+        # comes near the threshold, and the rows are the dearest positions.
+        vocabulary = [f"слово{n}" for n in range(200)]
+        names = [f"Профиль {i}n " + " ".join(rnd.sample(vocabulary, 60)) for i in range(POSITIONS)]
+        positions = [_position(i, name=names[i], price=Decimal(i + 1), rnd=rnd) for i in range(POSITIONS)]
+        return positions, [names[POSITIONS - 1 - k] for k in range(ROWS)]
     raise SystemExit(f"unknown scenario {kind!r}")
 
 
