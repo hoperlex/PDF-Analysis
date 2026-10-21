@@ -1,4 +1,6 @@
-"""The run stages' half of the upload envelope, run as a process of its own (`RUN-ROBUSTNESS-01`, D-160).
+"""The run stages' half of the upload envelope, run as a process of its own.
+
+`RUN-ROBUSTNESS-01`, D-160.
 
 :func:`auditmanager.ingest.envelope.inspect_pdf` reads a PDF with ``pypdfium2``
 (:mod:`auditmanager.ingest.pdf_reader`). The run does not: ``source_preparation`` opens the

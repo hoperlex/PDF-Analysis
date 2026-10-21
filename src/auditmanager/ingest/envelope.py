@@ -92,7 +92,10 @@ so a rejection is attributable to a rule rather than to a coincidence of two:
    (`W55B-FIX`, X-1); reading the document within the reader's limits
    (``pdf_reader_limits``);
 8. every page yields extractable text (``require_text``), or the pages are counted for the bundle
-   envelope, which decides the text rule with the portal's blocks in hand.
+   envelope, which decides the text rule with the portal's blocks in hand;
+9. the run's own readers read the document: ``pypdf`` opens it, ``pdfplumber`` opens it and its
+   content streams decode, and the page counts agree with PDFium's (``parseable_pdf``;
+   `RUN-ROBUSTNESS-01`, D-160).
 
 A file extension is deliberately **not** a rule. It is a presentation value and a caller
 controls it; the magic bytes and the parser decide what the content is, which is the

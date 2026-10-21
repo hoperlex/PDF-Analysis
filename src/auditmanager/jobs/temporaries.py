@@ -1,4 +1,6 @@
-"""Temporaries a killed process left behind, reclaimed when the next one starts (`RUN-ROBUSTNESS-01`, D-170).
+"""Temporaries a killed process left behind, reclaimed when the next one starts.
+
+`RUN-ROBUSTNESS-01`, D-170.
 
 Three places write a large temporary file or directory and remove it with a context manager:
 
@@ -149,8 +151,11 @@ def sweep_stale_temporaries(
     for entry in listing:
         name = entry.name
         try:
-            wanted = FILE_NAME if FILE_NAME.match(name) else DIRECTORY_NAME if DIRECTORY_NAME.match(name) else None
-            if wanted is None:
+            if FILE_NAME.match(name):
+                wanted = FILE_NAME
+            elif DIRECTORY_NAME.match(name):
+                wanted = DIRECTORY_NAME
+            else:
                 continue
             status = entry.stat(follow_symlinks=False)
             if status.st_uid != owner:
@@ -180,4 +185,6 @@ def sweep_stale_temporaries(
             "reclaimed %d stale temporar%s (%d bytes) left by killed processes",
             len(removed), "y" if len(removed) == 1 else "ies", freed,
         )
-    return SweepReport(removed=tuple(sorted(removed)), bytes_freed=freed, failed=tuple(sorted(failed)))
+    return SweepReport(
+        removed=tuple(sorted(removed)), bytes_freed=freed, failed=tuple(sorted(failed))
+    )
