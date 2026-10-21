@@ -8,14 +8,14 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { ErrorCode, ErrorEnvelope } from '@/shared/api';
-import { ApiError, TransportError, UnrecognizedApiError } from '@/shared/api';
+import type { ErrorCode, ErrorEnvelope, FetchLike } from '@/shared/api';
+import { ApiError, TransportError, UnrecognizedApiError, uploadDocument } from '@/shared/api';
 import {
+  PC01_UPLOAD_ENVELOPE,
   UPLOAD_CONSTRAINTS_STATED,
   classifyUploadFailure,
   uploadConstraintSentence,
 } from '@/entities/document-version';
-import { uploadRuleSentence } from '@/entities/document-version/model/upload-failure';
 
 function envelope(
   code: ErrorCode,
@@ -279,11 +279,112 @@ describe('every constraint the panel can be shown has a sentence (W55B-FIX, Y-4)
   it.each(['non_empty', 'plain_base_name', 'blocks_count', 'pdf_page_content', 'pdf_document_content', 'pdf_reader_limits'])(
     '%s is a Russian sentence on the panel, not a bare token',
     (constraint) => {
-      const sentence = uploadRuleSentence(constraint);
+      const sentence = uploadConstraintSentence(constraint);
       expect(sentence).not.toBeNull();
       expect(sentence).toMatch(/^[А-ЯЁ].*[а-яё]\.$/u);
       const failure = classifyUploadFailure(apiError(422, 'validation_failed', false, { constraint, field: 'content' }));
       expect(failure.detail).toContain(sentence ?? '');
     },
   );
+});
+
+/**
+ * `WEB-FOLLOWUPS-01`: a refusal that never came from the API.
+ *
+ * A real user choosing an 8.6 MiB bundle on the deployed stand was told «HTTP 413: тело ответа
+ * не является конвертом ошибки по контракту. Было ли что-нибудь опубликовано, неизвестно;
+ * повтор под тем же ключом безопасен.» The 413 was the host's TLS terminator refusing the body
+ * (nginx's default 1 MiB), an HTML page and not an `ErrorEnvelope`; the sentence was an
+ * operator's note about the transport, and its second half was false: the file was refused
+ * before anything could be stored, and sending it again is refused again.
+ */
+describe('a refusal from the web server in front of the API says so (WEB-FOLLOWUPS-01)', () => {
+  const NOT_AN_ENVELOPE = 'тело ответа не является конвертом ошибки по контракту.';
+  const RETRY_SAFE = 'повтор под тем же ключом безопасен';
+
+  const edge = (status: number) =>
+    classifyUploadFailure(new TransportError(`HTTP ${status}: ${NOT_AN_ENVELOPE}`, { status }));
+
+  it('reads a 413 as a refusal before the API and states the product limit from the envelope constant', () => {
+    const failure = edge(413);
+    expect(failure.kind).toBe('edge_too_large');
+    expect(failure.presentation).toBe('error');
+    expect(failure.errorCode).toBeNull();
+    expect(failure.retryable).toBe(false);
+    expect(failure.detail).toContain('Сервер отклонил файл как слишком большой ещё до API');
+    expect(failure.detail).toContain('ограничение веб-сервера');
+    expect(failure.detail).toContain('Ничего не сохранено');
+    expect(failure.detail).toContain(`Лимит продукта — ${PC01_UPLOAD_ENVELOPE.maxBytesLabel}`);
+    expect(failure.detail).toContain('обратитесь к администратору стенда');
+  });
+
+  it('keeps the transport note and the retry-safety sentence out of a 413: nothing was stored, a resend is refused again', () => {
+    const failure = edge(413);
+    expect(failure.detail).not.toContain(NOT_AN_ENVELOPE);
+    expect(failure.detail).not.toContain('HTTP');
+    expect(failure.detail).not.toContain(RETRY_SAFE);
+    expect(failure.detail).not.toContain('неизвестно');
+  });
+
+  it.each([502, 503, 504])('reads a %i from the web server as an unanswered upload, whose retry is safe', (status) => {
+    const failure = edge(status);
+    expect(failure.kind).toBe('edge_unavailable');
+    expect(failure.retryable).toBe(false);
+    expect(failure.detail).toContain('Веб-сервер');
+    expect(failure.detail).toContain(`код ${status}`);
+    expect(failure.detail).not.toContain(NOT_AN_ENVELOPE);
+    expect(failure.detail).not.toContain('HTTP');
+    // True here, and only here: the upload may have reached the API, and the key is the
+    // API's proof that a second send is the same command.
+    expect(failure.detail).toContain('Было ли что-нибудь опубликовано, неизвестно');
+    expect(failure.detail).toContain(RETRY_SAFE);
+  });
+
+  it('words each of the three differently, because each means something different', () => {
+    const details = [502, 503, 504].map((status) => edge(status).detail);
+    expect(new Set(details).size).toBe(3);
+  });
+
+  it('leaves every other transport failure as it was', () => {
+    for (const other of [
+      new TransportError('Запрос uploadDocument не дошёл до API.', { retryable: true }),
+      new TransportError(`HTTP 500: ${NOT_AN_ENVELOPE}`, { status: 500 }),
+      new TransportError(`HTTP 404: ${NOT_AN_ENVELOPE}`, { status: 404 }),
+    ]) {
+      const failure = classifyUploadFailure(other);
+      expect(failure.kind).toBe('transport');
+      expect(failure.title).toBe('Загрузка не дошла до API.');
+      expect(failure.detail).toContain(other.message);
+      expect(failure.detail).toContain(RETRY_SAFE);
+    }
+  });
+
+  it('does not touch an envelope: a 413 the API itself sent keeps its code', () => {
+    const failure = classifyUploadFailure(apiError(413, 'validation_failed', false, { constraint: 'max_bytes' }));
+    expect(failure.kind).toBe('unsupported_input');
+    expect(failure.errorCode).toBe('validation_failed');
+  });
+
+  it('is what a user gets from the transport: an HTML 413 page through uploadDocument', async () => {
+    const fetch: FetchLike = () =>
+      Promise.resolve(
+        new Response('<html><body><h1>413 Request Entity Too Large</h1></body></html>', {
+          status: 413,
+          headers: { 'Content-Type': 'text/html' },
+        }),
+      );
+    const thrown = await uploadDocument(
+      {
+        path: { project_uid: 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B' },
+        body: { file: new Blob(['x'], { type: 'application/zip' }) },
+        idempotencyKey: 'key-edge-413',
+      },
+      { baseUrl: 'https://api.test/v1', fetch },
+    ).catch((error: unknown) => error);
+    expect(thrown).toBeInstanceOf(TransportError);
+    const failure = classifyUploadFailure(thrown);
+    expect(failure.kind).toBe('edge_too_large');
+    expect(failure.detail).toContain('ещё до API');
+    expect(failure.detail).not.toContain('конвертом');
+  });
 });

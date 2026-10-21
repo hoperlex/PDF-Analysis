@@ -21,8 +21,7 @@ import {
   precheckUploadFile,
   uploadConstraintSentence,
 } from '@/entities/document-version';
-import { UPLOAD_CONSTRAINTS_ADDED, uploadRuleSentence } from '@/entities/document-version/model/upload-failure';
-import { CONTRACT_PATH, REPO_ROOT, readJson, readText } from '../../guards/lib/repo';
+import { CONTRACT_PATH, REPO_ROOT, WEB_ROOT, readJson, readText, repoRelative, walkFiles } from '../../guards/lib/repo';
 import { join } from 'node:path';
 
 const contract = readText(CONTRACT_PATH);
@@ -220,30 +219,27 @@ describe('every constraint a refused upload can carry has its own Russian senten
   });
 
   it('has a sentence for each of them and for the PDF member constraints, as the panel shows it', () => {
-    // `uploadRuleSentence` is what the upload panel prints: the envelope's own table first
-    // (`uploadConstraintSentence`), then the constraints `W55B-FIX` registered beside it.
+    // `uploadConstraintSentence` is what the upload panel prints, for every constraint: since
+    // `D-173` it is the only table, so the six `W55B-FIX` registered after the first
+    // nineteen are in it like the rest.
     for (const constraint of [...BUNDLE_CONSTRAINTS, ...PDF_MEMBER_CONSTRAINTS]) {
-      expect([...UPLOAD_CONSTRAINTS_STATED, ...UPLOAD_CONSTRAINTS_ADDED], constraint).toContain(constraint);
-      const sentence = uploadRuleSentence(constraint);
+      expect(UPLOAD_CONSTRAINTS_STATED, constraint).toContain(constraint);
+      const sentence = uploadConstraintSentence(constraint);
       expect(sentence, constraint).not.toBeNull();
       expect(/[а-яА-ЯёЁ]/u.test(sentence ?? ''), constraint).toBe(true);
     }
   });
 
   it('gives no two constraints the same sentence', () => {
-    const sentences = [...UPLOAD_CONSTRAINTS_STATED, ...UPLOAD_CONSTRAINTS_ADDED].map((constraint) =>
-      uploadRuleSentence(constraint),
-    );
+    const sentences = UPLOAD_CONSTRAINTS_STATED.map((constraint) => uploadConstraintSentence(constraint));
     expect(new Set(sentences).size).toBe(sentences.length);
   });
 
-  it('adds nothing the envelope already states, and says nothing for an unknown name', () => {
-    for (const constraint of UPLOAD_CONSTRAINTS_ADDED) {
-      expect(uploadConstraintSentence(constraint), constraint).toBeNull();
-    }
-    expect(uploadRuleSentence('a_constraint_nobody_registered')).toBeNull();
-    expect(uploadRuleSentence('__proto__')).toBeNull();
-    expect(uploadRuleSentence(undefined)).toBeNull();
+  it('states exactly the constraints the contract registers, and nothing for an unknown name', () => {
+    expect([...UPLOAD_CONSTRAINTS_STATED].sort()).toEqual([...BUNDLE_CONSTRAINTS, ...PDF_MEMBER_CONSTRAINTS].sort());
+    expect(uploadConstraintSentence('a_constraint_nobody_registered')).toBeNull();
+    expect(uploadConstraintSentence('__proto__')).toBeNull();
+    expect(uploadConstraintSentence(undefined)).toBeNull();
   });
 
   it('states the page and size rules in the envelope numbers, not in numbers typed twice', () => {
@@ -278,5 +274,81 @@ describe('every constraint a refused upload can carry has its own Russian senten
         expect(sentence, `${constraint}: ${invented}`).not.toContain(invented);
       }
     }
+  });
+});
+
+/**
+ * `D-173` (`WEB-FOLLOWUPS-01`): the rule sentences of an upload live in ONE table.
+ *
+ * They lived in two -- `upload-envelope.ts` held the bundle's and the PDF member's, and
+ * `upload-failure.ts` held six more `W55B-FIX` had registered beside it because the repairing
+ * lane's grant did not reach the first file. Two tables is how one rule gets two wordings, and
+ * how a constraint added to one is silently missing from the other. This reads the source, not
+ * the exports: an export list is satisfied by a second table behind a re-export, and that is
+ * the shape the next duplicate would take.
+ */
+describe('the upload rule sentences have one owner (D-173)', () => {
+  const OWNER = 'web/src/entities/document-version/model/upload-envelope.ts';
+  // `uploadPriceList` is another operation with its own file constraints (`non_empty` there is
+  // «Файл пуст.», a price list's rule, not a bundle's). It is exempt by name, and the exemption
+  // is itself asserted below so that it cannot outlive the table it excuses.
+  const OTHER_OPERATION = 'web/src/entities/price-list/';
+  const everything = walkFiles(join(WEB_ROOT, 'src'), (path) => /\.tsx?$/.test(path)).map((path) => ({
+    path: repoRelative(path),
+    text: readText(path),
+  }));
+  const sources = everything.filter((source) => !source.path.startsWith(OTHER_OPERATION));
+  const registered = [...new Set([...UPLOAD_CONSTRAINTS_STATED, ...BUNDLE_CONSTRAINTS, ...PDF_MEMBER_CONSTRAINTS])];
+
+  it('reads the sources it claims to read', () => {
+    // A scan that found nothing would pass everything below.
+    expect(sources.length).toBeGreaterThan(200);
+    expect(sources.map((source) => source.path)).toContain(OWNER);
+    expect(registered.length).toBeGreaterThanOrEqual(BUNDLE_CONSTRAINTS.length + PDF_MEMBER_CONSTRAINTS.length);
+  });
+
+  it('exempts only a table that exists and says something else', () => {
+    const priceList = everything.filter((source) => source.path.startsWith(OTHER_OPERATION));
+    const keyed = priceList.filter((source) => /^\s*non_empty\s*:/m.test(source.text));
+    expect(keyed.length, 'the exemption excuses nothing: delete it').toBeGreaterThan(0);
+    for (const source of keyed) {
+      expect(source.text, source.path).not.toContain(uploadConstraintSentence('non_empty') ?? 'no sentence');
+    }
+  });
+
+  /** An object key spelled as `name:` at the start of a line, quoted or not. */
+  const keyPattern = (constraint: string) => new RegExp(`^\\s*['"]?${constraint}['"]?\\s*:`, 'm');
+
+  it('keys every registered constraint in exactly one file, and that file is the owner', () => {
+    const stray = registered
+      .map((constraint) => ({
+        constraint,
+        files: sources.filter((source) => keyPattern(constraint).test(source.text)).map((source) => source.path),
+      }))
+      .filter((entry) => entry.files.length !== 1 || entry.files[0] !== OWNER)
+      .map((entry) => `${entry.constraint}: ${entry.files.join(', ') || 'nowhere'}`);
+    expect(stray).toEqual([]);
+  });
+
+  it('states every sentence once in all of web/src', () => {
+    // The page and size sentences are built from the envelope's numbers and are not literals;
+    // every other sentence is, and a copy of it anywhere is a second wording waiting to drift.
+    const copies = registered
+      .map((constraint) => ({ constraint, sentence: uploadConstraintSentence(constraint) ?? '' }))
+      .filter((entry) => entry.sentence !== '')
+      .map((entry) => ({
+        constraint: entry.constraint,
+        files: sources.filter((source) => source.text.includes(entry.sentence)).map((source) => source.path),
+      }))
+      .filter((entry) => entry.files.length !== 1)
+      .map((entry) => `${entry.constraint}: ${entry.files.join(', ') || 'nowhere'}`);
+    expect(copies).toEqual([]);
+  });
+
+  it('can fail: a second table keyed by a registered constraint is seen, a mention of the name is not', () => {
+    const secondTable = "const MORE: Record<string, string> = {\n  non_empty: 'Пустое значение.',\n  'plain_base_name': 'Имя.',\n};\n";
+    expect(keyPattern('non_empty').test(secondTable)).toBe(true);
+    expect(keyPattern('plain_base_name').test(secondTable)).toBe(true);
+    expect(keyPattern('non_empty').test("expect(sentence('non_empty')).toBe(x);")).toBe(false);
   });
 });

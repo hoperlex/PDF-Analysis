@@ -29,44 +29,7 @@ import {
   catalogMessage,
 } from '@/shared/api';
 
-import { uploadConstraintSentence } from './upload-envelope';
-
-/**
- * The constraints an upload can be refused with that `uploadConstraintSentence` does not state
- * (`W55B-FIX`): the three the PDF member and the upload's name always had (`W55B-JUDGE-Y` Y-4)
- * and the four `W55B-FIX` added (the block ceilings, X-4; the PDF reader's bounds, X-1). Each
- * is registered in `contracts/domain/v1/error-codes.json`'s catalogue note. Kept beside the
- * classifier because `upload-envelope.ts`, where `uploadConstraintSentence` keeps the others,
- * was outside the repairing lane's grant; moving these into that table is a one-table edit.
- */
-const UPLOAD_CONSTRAINT_SENTENCES_ADDED: Readonly<Record<string, string>> = {
-  non_empty: 'Пустое значение там, где оно обязательно: PDF в комплекте пуст или у загружаемого файла нет имени.',
-  plain_base_name:
-    'Имя загружаемого файла должно быть простым именем файла — без каталогов, без «..» и без управляющих символов.',
-  blocks_count:
-    'В файле блоков портала больше блоков, чем принимается: не больше 100 на странице, 3000 во всём комплекте и 1000 блоков изображений.',
-  pdf_page_content:
-    'На одной из страниц PDF больше графических элементов или символов текста, чем принимается при загрузке.',
-  pdf_document_content:
-    'В PDF в целом больше графических элементов или символов текста, чем принимается при загрузке.',
-  pdf_reader_limits: 'Чтение PDF потребовало больше памяти или времени, чем допускается при загрузке.',
-};
-
-/** The constraint names {@link uploadRuleSentence} states beyond `uploadConstraintSentence`. */
-export const UPLOAD_CONSTRAINTS_ADDED: readonly string[] = Object.keys(UPLOAD_CONSTRAINT_SENTENCES_ADDED);
-
-/**
- * The sentence the upload panel shows for a `details.constraint`: the envelope's own, or one
- * of {@link UPLOAD_CONSTRAINTS_ADDED}, or `null` -- in which case the constraint's name alone
- * is shown, never a guessed cause.
- */
-export function uploadRuleSentence(constraint: unknown): string | null {
-  const stated = uploadConstraintSentence(constraint);
-  if (stated !== null || typeof constraint !== 'string') return stated;
-  return Object.hasOwn(UPLOAD_CONSTRAINT_SENTENCES_ADDED, constraint)
-    ? (UPLOAD_CONSTRAINT_SENTENCES_ADDED[constraint] ?? null)
-    : null;
-}
+import { PC01_UPLOAD_ENVELOPE, uploadConstraintSentence } from './upload-envelope';
 
 /** `details.dependency` of the upload gate's busy refusal (`error-codes.json`). */
 const UPLOAD_CAPACITY = 'upload_capacity';
@@ -85,6 +48,8 @@ export type UploadFailureKind =
   | 'conflict'
   | 'server_error'
   | 'unrecognized'
+  | 'edge_too_large'
+  | 'edge_unavailable'
   | 'transport'
   | 'unknown';
 
@@ -132,7 +97,7 @@ function fromApiError(error: ApiError): UploadFailure {
     case 'validation_failed': {
       // The rule the server named, in a sentence a reviewer reads. A constraint this
       // client has no sentence for is shown by name only, never by a guessed cause.
-      const rule = uploadRuleSentence(error.details['constraint']);
+      const rule = uploadConstraintSentence(error.details['constraint']);
       return {
         ...base,
         kind: 'unsupported_input',
@@ -262,6 +227,63 @@ function fromApiError(error: ApiError): UploadFailure {
   }
 }
 
+/** The second half of every transport failure whose outcome the browser cannot see. */
+const OUTCOME_UNKNOWN_SENTENCE =
+  'Было ли что-нибудь опубликовано, неизвестно; повтор под тем же ключом безопасен.';
+
+/**
+ * The wording of an answer that came from the web server in front of the API and not from the
+ * API (`WEB-FOLLOWUPS-01`). Such an answer is an HTML page or a bare JSON body, never an
+ * `ErrorEnvelope`, so the transport can only say "the body is not an envelope" -- a note for
+ * an operator. A user who chose an 8.6 MiB bundle on the deployed stand read exactly that
+ * under a 413 from the host's TLS terminator (nginx's default 1 MiB), followed by a claim that
+ * a resend under the same key is safe. It is safe, and it is pointless: the file was refused
+ * before anything could be stored, and the same file is refused again.
+ *
+ * - `413` is the web server's own size limit. Nothing reached the API, so nothing was stored,
+ *   and the sentence names the product's limit from the envelope constant -- the limit the
+ *   user can act on is the administrator's.
+ * - `502`, `503` and `504` are the web server not getting an answer from the API. The upload
+ *   may have reached it (a `504` is a server that stopped waiting, not one that stopped
+ *   working), so the outcome is unknown and the key is the proof that a resend is the same
+ *   command: the one place the retry-safety sentence is true.
+ *
+ * Every other status, and a failure with none, keeps the generic transport state.
+ */
+function webServerAnswer(status: number | null): Pick<UploadFailure, 'kind' | 'title' | 'detail'> | null {
+  switch (status) {
+    case 413:
+      return {
+        kind: 'edge_too_large',
+        title: 'Веб-сервер отклонил файл.',
+        detail:
+          'Сервер отклонил файл как слишком большой ещё до API (ограничение веб-сервера). ' +
+          'Ничего не сохранено. ' +
+          `Лимит продукта — ${PC01_UPLOAD_ENVELOPE.maxBytesLabel}; обратитесь к администратору стенда.`,
+      };
+    case 502:
+      return {
+        kind: 'edge_unavailable',
+        title: 'Веб-сервер не получил ответа от API.',
+        detail: `Веб-сервер не смог получить от API пригодный ответ (код 502). ${OUTCOME_UNKNOWN_SENTENCE}`,
+      };
+    case 503:
+      return {
+        kind: 'edge_unavailable',
+        title: 'Веб-сервер не получил ответа от API.',
+        detail: `Веб-сервер сообщил, что API сейчас недоступен (код 503). ${OUTCOME_UNKNOWN_SENTENCE}`,
+      };
+    case 504:
+      return {
+        kind: 'edge_unavailable',
+        title: 'Веб-сервер не получил ответа от API.',
+        detail: `Веб-сервер не дождался ответа API (код 504). ${OUTCOME_UNKNOWN_SENTENCE}`,
+      };
+    default:
+      return null;
+  }
+}
+
 /**
  * Classify anything thrown by `uploadDocument`.
  *
@@ -287,13 +309,21 @@ export function classifyUploadFailure(error: unknown): UploadFailure {
   }
 
   if (error instanceof TransportError) {
+    const web = webServerAnswer(error.status);
+    if (web !== null) {
+      return {
+        ...web,
+        presentation: 'error',
+        correlationId: error.correlationId,
+        retryable: error.retryable,
+        errorCode: null,
+      };
+    }
     return {
       kind: 'transport',
       presentation: 'error',
       title: 'Загрузка не дошла до API.',
-      detail:
-        `${error.message} Было ли что-нибудь опубликовано, неизвестно; повтор под тем же ` +
-        'ключом безопасен.',
+      detail: `${error.message} ${OUTCOME_UNKNOWN_SENTENCE}`,
       correlationId: error.correlationId,
       retryable: error.retryable,
       errorCode: null,
