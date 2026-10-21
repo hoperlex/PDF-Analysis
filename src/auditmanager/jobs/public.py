@@ -15,6 +15,7 @@ from auditmanager.jobs.repository import (
     UnresolvedProviderEffect,
 )
 from auditmanager.jobs.lease import start_for_current_thread, stop_for_current_thread
+from auditmanager.jobs.temporaries import SweepReport, sweep_stale_temporaries
 
 
 def start_attempt_lease_heartbeat(session: Session, authority: AttemptAuthority) -> None:
@@ -32,10 +33,12 @@ __all__ = [
     "ExecutionNotClaimed",
     "JobRepository",
     "SettledProviderEffect",
+    "SweepReport",
     "UnresolvedProviderEffect",
     "append_execution_event",
     "set_execution_paused",
     "set_job_priority",
     "start_attempt_lease_heartbeat",
     "stop_attempt_lease_heartbeat",
+    "sweep_stale_temporaries",
 ]
