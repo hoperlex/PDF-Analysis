@@ -15,8 +15,8 @@ those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
 The development API surface is **73 paths / 83 operations / 242 schemas**,
-the error catalogue has **25** codes, the migration head is
-**`0028_classification_corrections`**, and `VERSION` is `0.7.0`. `origin/main`
+the error catalogue has **27** codes, the migration head is
+**`0029_routing_refusal_codes`**, and `VERSION` is `0.7.0`. `origin/main`
 carries this tree since the owner's own merge (`R-141e`, no gate) under `VERSION`
 `0.6.0`; `0.7.0` is the prepared record (`RELEASE-0-7-0-RECORD-01.md`), not yet
 pushed or tagged. The last tagged release is `v0.6.0`. For the current deployment,
