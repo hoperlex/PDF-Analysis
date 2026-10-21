@@ -404,3 +404,16 @@ class TestAFailedStageReportsItsCode:
         assert all(s.get("error_code") for s in failed), (
             f"a failed stage published no error_code: {failed}"
         )
+
+
+def test_the_composed_product_version_reports_the_sealed_contract_version(app: Composed) -> None:
+    """`BETA-CONTRACT-SEAL-01`: ``getProductVersion`` read through the composed adapter says ``1.0.0``.
+
+    The literal is written here and not read from the catalog the adapter reads it from: the
+    adapter takes ``contract_version`` from the domain error catalog at start-up, so a seal
+    that moved the document and left the catalog behind would answer a different version from
+    the one the served OpenAPI declares.
+    """
+    status, body = call(app, "GET", "/system/version")
+    assert status == 200, body
+    assert body["contract_version"] == "1.0.0", body
