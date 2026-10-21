@@ -885,6 +885,36 @@
     "fixture": "fixtures/synthetic/ar/bundles/ar_baseline.zip",
     "steps": [
       {
+        "name": "queue-dispatch-is-open",
+        "at": "/queue",
+        "page_module": "web/src/app/queue/page.tsx",
+        "control_module": "web/src/_pages/queue/ui/queue-page.tsx",
+        "$comment": [
+          "A precondition, first on purpose. The queue steps below pause the lane's dispatch and resume it; a lane",
+          "left paused by an interrupted earlier run would make the first run below wait out its bound. This step",
+          "says so by name before that happens."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/execution/queue",
+            "operationId": "listExecutionQueue",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "button",
+            "text_contains": "Приостановить выдачу"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-execution-paused]"
+        ],
+        "screen": "queue",
+        "case": "refused"
+      },
+      {
         "name": "create-project",
         "at": "/projects",
         "page_module": "web/src/app/projects/page.tsx",
@@ -2433,6 +2463,180 @@
         "case": "action"
       },
       {
+        "name": "upload-specification-set",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
+        "$comment": [
+          "A second АР set in the project, whose text carries a specification table (`build_specification_bundle.py`):",
+          "the baseline's eight pages plus a ninth with three Form-7 rows. The first set has no table, so a pass over it",
+          "honestly holds no proposal; this one can."
+        ],
+        "actions": [
+          {
+            "do": "attach_file",
+            "selector": "#upload-file",
+            "fixture": "tests/e2e/pc01/journey/fixtures/optimisation/ar_specification.zip"
+          },
+          {
+            "do": "fill",
+            "selector": "#upload-title",
+            "value": "Спецификация АР %STAMP%"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Загрузить"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "uploadDocument",
+            "expect_status": 201
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "uploadDocument",
+            "json_path": "page_count",
+            "equals": 9
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "pattern": "^/projects/(prj_%ID%)/versions/(ver_%ID%)$",
+          "as": [
+            "project_uid",
+            "spec_version_uid"
+          ],
+          "bound_ms": 30000
+        },
+        "captures": [
+          {
+            "kind": "response",
+            "of": "uploadDocument",
+            "json_path": "document_uid",
+            "as": [
+              "spec_document_uid"
+            ],
+            "matches": "^(doc_%ID%)$",
+            "bound_ms": 30000
+          }
+        ],
+        "forbids_rendered": [
+          "[data-upload-failure]",
+          "[data-precheck-problem]"
+        ],
+        "screen": "version-upload",
+        "case": "action"
+      },
+      {
+        "name": "classify-specification-set",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/classify-version/ui/classify-version-form.tsx",
+        "bind": {
+          "version_uid": "spec_version_uid",
+          "document_uid": "spec_document_uid"
+        },
+        "actions": [
+          {
+            "do": "click",
+            "selector": "input[data-stage-choice=\"P\"]"
+          },
+          {
+            "do": "click",
+            "selector": "input[data-section-choice=\"AR\"]"
+          },
+          {
+            "do": "click",
+            "selector": "button[data-classification-confirm]",
+            "text": "Подтвердить раздел"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+            "operationId": "classifyDocumentVersion",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-classification-state=\"confirmed\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-classification-failure]"
+        ],
+        "$comment": [
+          "The specification set is confirmed as АР (stage П), so «Оптимизация» offers it."
+        ],
+        "screen": "version-classification",
+        "case": "action"
+      },
+      {
+        "name": "start-specification-run",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
+        "bind": {
+          "version_uid": "spec_version_uid",
+          "document_uid": "spec_document_uid"
+        },
+        "$comment": [
+          "A run over the specification set. It publishes only if the recording for this document is installed",
+          "(`build_specification_bundle.py --install-recording`): otherwise the recorded adapter refuses it as",
+          "`recording_missing` and this step says the run did not publish."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "button",
+            "text": "Запустить прогон"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs",
+            "operationId": "startRun",
+            "expect_status": 202
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "pattern": "^/projects/(prj_%ID%)/runs/(run_%ID%)$",
+          "as": [
+            "project_uid",
+            "spec_run_id"
+          ],
+          "bound_ms": 30000
+        },
+        "await_terminal": {
+          "outcome_selector": "[data-run-outcome]",
+          "outcome_attribute": "data-run-outcome",
+          "non_terminal_value": "in_flight",
+          "accept": [
+            "published",
+            "partial"
+          ],
+          "activity_selector": "[data-run-activity]",
+          "activity_attribute": "data-run-activity",
+          "activity_when_final": "stopped",
+          "bound_ms": 150000,
+          "poll_ms": 500
+        },
+        "forbids_rendered": [
+          "[data-run-failure]"
+        ],
+        "screen": "version-run",
+        "case": "action"
+      },
+      {
         "name": "price-list-is-an-experts-act",
         "as": "admin_only",
         "at": "/projects/{project_uid}",
@@ -2578,6 +2782,16 @@
             "selector": "nav[data-project-tabs] button",
             "text": "Оптимизация",
             "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-spec-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-spec-chooser]",
+            "option_value": "{document_uid}"
           }
         ],
         "expects_api": [
@@ -2717,9 +2931,9 @@
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/widgets/specification-prices/ui/specification-prices-section.tsx",
         "$comment": [
-          "W60-OPT-MATCH-01. «Спецификация и цены» for the АР set: the specification read from the run's saved",
-          "text and matched to the price list. The baseline bundle has no specification table, so the honest",
-          "answer is `ready` with no row, no total and nothing excluded -- not an invented price."
+          "W60-OPT-MATCH-01. «Спецификация и цены» for the specification set: its three rows read from the run's saved",
+          "text and matched to the price list. Both priced rows are counted in RUB; the metre-cubed row is a row too,",
+          "matched and counted. (The baseline set, with no table, answers `ready` with no row and no total.)"
         ],
         "actions": [
           {
@@ -2727,6 +2941,16 @@
             "selector": "nav[data-project-tabs] button",
             "text": "Оптимизация",
             "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-spec-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-spec-chooser]",
+            "option_value": "{spec_document_uid}"
           }
         ],
         "expects_api": [
@@ -2734,7 +2958,10 @@
             "method": "GET",
             "path": "/projects/{project_uid}/documents/{document_uid}/specification-prices",
             "operationId": "getSpecificationPrices",
-            "expect_status": 200
+            "expect_status": 200,
+            "bind": {
+              "document_uid": "spec_document_uid"
+            }
           }
         ],
         "expects_response": [
@@ -2742,6 +2969,11 @@
             "of": "getSpecificationPrices",
             "json_path": "state",
             "equals": "ready"
+          },
+          {
+            "of": "getSpecificationPrices",
+            "json_path": "rows.total",
+            "equals": 3
           }
         ],
         "expects_present": [
@@ -2752,7 +2984,19 @@
             "selector": "[data-spec-state=\"ready\"]"
           },
           {
-            "selector": "[data-spec-summary]"
+            "selector": "[data-spec-row]",
+            "min_count": 3
+          },
+          {
+            "selector": "[data-spec-status=\"matched\"]",
+            "min_count": 3
+          },
+          {
+            "selector": "[data-spec-counted=\"yes\"]",
+            "min_count": 3
+          },
+          {
+            "selector": "[data-spec-total=\"RUB\"]"
           }
         ],
         "screen": "specification-prices",
@@ -2968,6 +3212,18 @@
           },
           {
             "do": "click",
+            "selector": "[data-vendor-list-editor] button",
+            "text": "Добавить запись"
+          },
+          {
+            "do": "fill",
+            "selector": "[data-vendor-list-editor]",
+            "value": "=HYPERLINK(\"http://example.invalid/x\",\"щит\")",
+            "label": "Поставщик",
+            "index": -1
+          },
+          {
+            "do": "click",
             "selector": "[data-vendor-list-editor] button[type=\"submit\"]",
             "text": "Сохранить список"
           }
@@ -3029,8 +3285,9 @@
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/start-optimisation-pass/ui/start-optimisation-pass.tsx",
         "$comment": [
-          "W60-OPT-PROPOSALS-01. The expert starts a pass for the АР set, pressing twice: one pass is stored. The",
-          "baseline bundle's specification has no row, so the pass honestly holds no proposal."
+          "W60-OPT-PROPOSALS-01. The expert starts a pass for the specification set, pressing twice: one pass is stored.",
+          "The first row has a cheaper analog in the price list (МЩ-2) from a vendor on the project's list, so the pass",
+          "holds a proposal; the vendor's name begins with `=`, which is data and not a formula."
         ],
         "actions": [
           {
@@ -3038,6 +3295,16 @@
             "selector": "nav[data-project-tabs] button",
             "text": "Оптимизация",
             "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-proposal-set-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-proposal-set-chooser]",
+            "option_value": "{spec_document_uid}"
           },
           {
             "do": "click",
@@ -3055,7 +3322,10 @@
             "max_count": 2,
             "same_response_at": [
               "optimisation_pass_id"
-            ]
+            ],
+            "bind": {
+              "document_uid": "spec_document_uid"
+            }
           }
         ],
         "expects_response": [
@@ -3067,7 +3337,7 @@
           {
             "of": "startOptimisationPass",
             "json_path": "proposal_count",
-            "equals": 0
+            "at_least": 1
           }
         ],
         "captures": [
@@ -3088,6 +3358,10 @@
           },
           {
             "selector": "[data-proposals-export]"
+          },
+          {
+            "selector": "[data-proposal]",
+            "min_count": 1
           }
         ],
         "forbids_rendered": [
@@ -3097,13 +3371,25 @@
         "case": "action"
       },
       {
-        "name": "proposals-csv",
+        "name": "proposal-revise-needs-a-comment",
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
-        "control_module": "web/src/widgets/optimisation-proposals/ui/optimisation-proposals.tsx",
+        "control_module": "web/src/features/decide-optimisation-proposal/ui/proposal-decision-form.tsx",
         "$comment": [
-          "The pass's proposals as CSV: BOM, 42 columns, and no cell that begins with a character a spreadsheet",
-          "would run as a formula. With no proposal the file is the header alone."
+          "An input the form refuses: «На доработку» without a comment. The button is disabled and the hint says why;",
+          "nothing is sent."
+        ],
+        "captures": [
+          {
+            "kind": "attribute",
+            "selector": "[data-proposal]",
+            "attribute": "data-proposal",
+            "as": [
+              "optimisation_proposal_id"
+            ],
+            "matches": "^(opr_%ID%)$",
+            "bound_ms": 30000
+          }
         ],
         "actions": [
           {
@@ -3111,6 +3397,265 @@
             "selector": "nav[data-project-tabs] button",
             "text": "Оптимизация",
             "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-proposal-set-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-proposal-set-chooser]",
+            "option_value": "{spec_document_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposal]",
+            "bound_ms": 15000
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-proposal-decision] button[disabled]",
+            "text_contains": "На доработку"
+          },
+          {
+            "selector": "[data-revise-hint]"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/optimisation-proposals/{optimisation_proposal_id}/decisions",
+            "why": "a revise without a comment"
+          }
+        ],
+        "screen": "optimisation-proposals",
+        "case": "refused"
+      },
+      {
+        "name": "proposal-accept",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/decide-optimisation-proposal/ui/proposal-decision-form.tsx",
+        "$comment": [
+          "The expert accepts the proposal, pressing twice: one decision is stored (the second press finds the button",
+          "already disabled, or replays the same answer). The card then shows the accepted verdict and the same",
+          "button is disabled -- a second identical decision cannot be made."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-proposal-set-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-proposal-set-chooser]",
+            "option_value": "{spec_document_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposal]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposal-decision] button",
+            "text": "Принять",
+            "times": 2
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/optimisation-proposals/{optimisation_proposal_id}/decisions",
+            "operationId": "decideOptimisationProposal",
+            "expect_status": 201,
+            "max_count": 2,
+            "same_response_at": [
+              "decision.proposal_decision_id"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "decideOptimisationProposal",
+            "json_path": "decision.verdict",
+            "equals": "accept"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-proposal][data-decision=\"accept\"]"
+          },
+          {
+            "selector": "[data-proposal-decision] button[disabled]",
+            "text_contains": "Принять"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-proposal-decision] .am-state--error"
+        ],
+        "screen": "optimisation-proposals",
+        "case": "action"
+      },
+      {
+        "name": "proposal-revise",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/decide-optimisation-proposal/ui/proposal-decision-form.tsx",
+        "$comment": [
+          "The expert changes their mind: «На доработку» with a comment. Decisions are appended, never edited: the",
+          "history holds both, newest current."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-proposal-set-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-proposal-set-chooser]",
+            "option_value": "{spec_document_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposal]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "fill",
+            "selector": "textarea[id^=\"decision-comment-\"]",
+            "value": "Проверить по другому поставщику"
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposal-decision] button",
+            "text": "На доработку"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposal][data-decision=\"revise\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposal] button",
+            "text": "История решений",
+            "settle": true
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/optimisation-proposals/{optimisation_proposal_id}/decisions",
+            "operationId": "decideOptimisationProposal",
+            "expect_status": 201,
+            "count": 1
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "decideOptimisationProposal",
+            "json_path": "decision.verdict",
+            "equals": "revise"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-proposal-history=\"2\"]"
+          }
+        ],
+        "screen": "optimisation-proposals",
+        "case": "action"
+      },
+      {
+        "name": "proposal-decision-is-an-experts-act",
+        "as": "admin_only",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/widgets/optimisation-proposals/ui/optimisation-proposals.tsx",
+        "$comment": [
+          "An administrator without `expert` reads the proposals and their decisions and is offered no decision control."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-proposal-set-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-proposal-set-chooser]",
+            "option_value": "{spec_document_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposal]",
+            "bound_ms": 15000
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-proposal][data-decision=\"revise\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-proposal-decision]"
+        ],
+        "screen": "optimisation-proposals",
+        "case": "refused"
+      },
+      {
+        "name": "proposals-csv",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/widgets/optimisation-proposals/ui/optimisation-proposals.tsx",
+        "$comment": [
+          "The pass's proposals as CSV: BOM, 42 columns, and no cell that begins with a character a spreadsheet would",
+          "run as a formula. The vendor whose name begins with `=` is IN the file, with an apostrophe in front of it."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-proposal-set-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-proposal-set-chooser]",
+            "option_value": "{spec_document_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposals-export]",
+            "bound_ms": 15000
           },
           {
             "do": "click",
@@ -3133,10 +3678,13 @@
             "content_disposition_contains": ".csv",
             "body_starts_with": "\ufeff",
             "csv_columns": 42,
-            "csv_no_formula_cells": true
+            "csv_no_formula_cells": true,
+            "body_contains": [
+              "'=HYPERLINK"
+            ]
           }
         ],
-        "screen": "optimisation-passes",
+        "screen": "optimisation-proposals",
         "case": "action"
       },
       {
@@ -3644,6 +4192,1080 @@
         "screen": "dashboard-sections",
         "case": "action",
         "no_negative_case": "a read-only panel: it takes no input and offers no control, and every role that can open the dashboard reads the same counts; its refusal (an incomplete breakdown) is `data-panel-fault`, forbidden above"
+      },
+      {
+        "name": "queue-pause-dispatch",
+        "at": "/queue",
+        "page_module": "web/src/app/queue/page.tsx",
+        "control_module": "web/src/_pages/queue/ui/queue-page.tsx",
+        "$comment": [
+          "W53/W54 execution controls. The administrator pauses the issue of jobs (a confirmation first); the",
+          "queue says so, and the button becomes «Возобновить выдачу»."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "button",
+            "text": "Приостановить выдачу",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-execution-intent=\"pause\"] button:first-of-type"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/execution/dispatch",
+            "operationId": "setExecutionPaused",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-execution-paused]"
+          },
+          {
+            "selector": "button",
+            "text_contains": "Возобновить выдачу"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-execution-action-failure]"
+        ],
+        "screen": "queue",
+        "case": "action"
+      },
+      {
+        "name": "queue-start-a-run-while-paused",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
+        "bind": {
+          "version_uid": "third_version_uid"
+        },
+        "$comment": [
+          "With dispatch paused a run is accepted and waits: it is queued and no worker takes it."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "button",
+            "text": "Запустить прогон"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs",
+            "operationId": "startRun",
+            "expect_status": 202
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "startRun",
+            "json_path": "state",
+            "equals": "queued"
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "pattern": "^/projects/(prj_%ID%)/runs/(run_%ID%)$",
+          "as": [
+            "project_uid",
+            "queued_run_id"
+          ],
+          "bound_ms": 30000
+        },
+        "expects_present": [
+          {
+            "selector": "[data-run-outcome=\"in_flight\"]"
+          }
+        ],
+        "screen": "version-run",
+        "case": "action"
+      },
+      {
+        "name": "queue-lists-the-waiting-run",
+        "as": "expert_only",
+        "at": "/queue",
+        "page_module": "web/src/app/queue/page.tsx",
+        "control_module": "web/src/widgets/execution-queue/ui/execution-queue.tsx",
+        "$comment": [
+          "The waiting run is in the queue, ahead of the finished ones. An expert may cancel it and is offered neither the",
+          "priority field nor the pause: those are an administrator's."
+        ],
+        "captures": [
+          {
+            "kind": "text",
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) > p > code",
+            "as": [
+              "job_id"
+            ],
+            "matches": "^(job_%ID%)$",
+            "bound_ms": 30000,
+            "$why": "the job's identity, printed as words; the priority command's address carries it"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/execution/queue",
+            "operationId": "listExecutionQueue",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"])",
+            "text_contains": "Ожидает"
+          },
+          {
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) button",
+            "text_contains": "Отменить прогон"
+          }
+        ],
+        "expects_absent": [
+          {
+            "selector": "input[name=\"priority\"]"
+          },
+          {
+            "selector": "button",
+            "text": "Приостановить выдачу"
+          },
+          {
+            "selector": "button",
+            "text": "Возобновить выдачу"
+          }
+        ],
+        "screen": "queue",
+        "case": "refused"
+      },
+      {
+        "name": "queue-priority-out-of-range-refused",
+        "at": "/queue",
+        "page_module": "web/src/app/queue/page.tsx",
+        "control_module": "web/src/widgets/execution-queue/ui/execution-queue.tsx",
+        "$comment": [
+          "An input the field refuses: a priority of 500 (the range is -100..100). Nothing is sent."
+        ],
+        "actions": [
+          {
+            "do": "fill",
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) input[name=\"priority\"]",
+            "value": "500"
+          },
+          {
+            "do": "click",
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) button[type=\"submit\"]",
+            "text": "Изменить"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "PUT",
+            "path": "/execution/queue/{job_id}/priority",
+            "why": "500 is outside -100..100"
+          }
+        ],
+        "expects_absent": [
+          {
+            "selector": "[data-execution-intent]"
+          }
+        ],
+        "screen": "queue",
+        "case": "refused"
+      },
+      {
+        "name": "queue-change-priority",
+        "at": "/queue",
+        "page_module": "web/src/app/queue/page.tsx",
+        "control_module": "web/src/widgets/execution-queue/ui/execution-queue.tsx",
+        "$comment": [
+          "The administrator raises the waiting job's priority to 7 (confirmation first); the row says so."
+        ],
+        "actions": [
+          {
+            "do": "fill",
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) input[name=\"priority\"]",
+            "value": "7"
+          },
+          {
+            "do": "click",
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) button[type=\"submit\"]",
+            "text": "Изменить",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-execution-intent=\"priority\"] button:first-of-type"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/execution/queue/{job_id}/priority",
+            "operationId": "setJobPriority",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) span",
+            "text_matches": "^Приоритет: 7$"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-execution-action-failure]"
+        ],
+        "screen": "queue",
+        "case": "action"
+      },
+      {
+        "name": "queue-cancel-the-waiting-run",
+        "as": "expert_only",
+        "at": "/queue",
+        "page_module": "web/src/app/queue/page.tsx",
+        "control_module": "web/src/widgets/execution-queue/ui/execution-queue.tsx",
+        "$comment": [
+          "An expert cancels the waiting run (confirmation first). The row now offers a re-audit instead."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) button",
+            "text": "Отменить прогон",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-execution-intent=\"cancel\"] button:first-of-type"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/{run_id}/cancel",
+            "operationId": "cancelRun",
+            "expect_status": 200,
+            "count": 1,
+            "bind": {
+              "run_id": "queued_run_id"
+            }
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "p",
+            "text_contains": "Команда выполнена."
+          }
+        ],
+        "forbids_rendered": [
+          "[data-execution-action-failure]"
+        ],
+        "screen": "queue",
+        "case": "action"
+      },
+      {
+        "name": "queue-reaudit-the-cancelled-run",
+        "as": "expert_only",
+        "at": "/queue",
+        "page_module": "web/src/app/queue/page.tsx",
+        "control_module": "web/src/widgets/execution-queue/ui/execution-queue.tsx",
+        "$comment": [
+          "A re-audit of the cancelled run starts a new run of the same version (accepted, 202); the queue links to it."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) button",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-execution-intent=\"reaudit\"] button:first-of-type"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/{run_id}/reaudit",
+            "operationId": "reauditRun",
+            "expect_status": 202,
+            "count": 1,
+            "bind": {
+              "run_id": "queued_run_id"
+            }
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "reauditRun",
+            "json_path": "run_id",
+            "matches": "^run_%ID%$"
+          }
+        ],
+        "captures": [
+          {
+            "kind": "response",
+            "of": "reauditRun",
+            "json_path": "run_id",
+            "as": [
+              "reaudit_run_id"
+            ],
+            "matches": "^(run_%ID%)$",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "p > a",
+            "text_matches": "^Открыть прогон {reaudit_run_id}$"
+          }
+        ],
+        "screen": "queue",
+        "case": "action"
+      },
+      {
+        "name": "queue-resume-dispatch",
+        "at": "/queue",
+        "page_module": "web/src/app/queue/page.tsx",
+        "control_module": "web/src/_pages/queue/ui/queue-page.tsx",
+        "$comment": [
+          "Dispatch resumes (confirmation first); the paused notice goes and the waiting re-audit is taken by a worker."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-execution-paused] + button",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-execution-intent=\"pause\"] button:first-of-type"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/execution/dispatch",
+            "operationId": "setExecutionPaused",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "button",
+            "text_contains": "Приостановить выдачу"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-execution-paused]",
+          "[data-execution-action-failure]"
+        ],
+        "screen": "queue",
+        "case": "action"
+      },
+      {
+        "name": "workers-list-the-worker",
+        "at": "/workers",
+        "page_module": "web/src/app/workers/page.tsx",
+        "control_module": "web/src/widgets/worker-list/ui/worker-list.tsx",
+        "$comment": [
+          "Исполнители. The lane runs one worker beside the API (EXECUTION_ROLE=worker); it is registered, active and takes new work."
+        ],
+        "captures": [
+          {
+            "kind": "text",
+            "selector": "ol[data-worker-group=\"active\"] > li > p > code",
+            "as": [
+              "worker_id"
+            ],
+            "matches": "^(wrk_%ID%)$",
+            "bound_ms": 30000,
+            "$why": "the active worker's identity, printed as words"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/execution/workers",
+            "operationId": "listWorkers",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "ol[data-worker-group=\"active\"] > li[data-worker-intake=\"on\"]"
+          }
+        ],
+        "screen": "workers",
+        "case": "action"
+      },
+      {
+        "name": "worker-intake-is-an-administrators-act",
+        "as": "expert_only",
+        "at": "/workers",
+        "page_module": "web/src/app/workers/page.tsx",
+        "control_module": "web/src/widgets/worker-list/ui/worker-list.tsx",
+        "$comment": [
+          "An expert reads the workers and is offered no switch."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/execution/workers",
+            "operationId": "listWorkers",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "ol[data-worker-group=\"active\"] > li"
+          }
+        ],
+        "expects_absent": [
+          {
+            "selector": "li button",
+            "text": "Не брать новые"
+          },
+          {
+            "selector": "li button",
+            "text": "Разрешить"
+          }
+        ],
+        "screen": "workers",
+        "case": "refused"
+      },
+      {
+        "name": "worker-stops-taking-new-work",
+        "at": "/workers",
+        "page_module": "web/src/app/workers/page.tsx",
+        "control_module": "web/src/_pages/workers/ui/workers-page.tsx",
+        "$comment": [
+          "The administrator stops the worker taking new jobs (confirmation first); its row says intake is off."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "ol[data-worker-group=\"active\"] > li button",
+            "text": "Не брать новые",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-workers-intent=\"stop\"] button:first-of-type"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/execution/workers/{worker_id}/intake",
+            "operationId": "setWorkerIntake",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "ol[data-worker-group=\"active\"] > li[data-worker-intake=\"off\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-workers-action-failure]"
+        ],
+        "screen": "workers",
+        "case": "action"
+      },
+      {
+        "name": "worker-takes-new-work-again",
+        "at": "/workers",
+        "page_module": "web/src/app/workers/page.tsx",
+        "control_module": "web/src/_pages/workers/ui/workers-page.tsx",
+        "$comment": [
+          "And allows it again, so the lane's runs are taken."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "ol[data-worker-group=\"active\"] > li button",
+            "text": "Разрешить",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-workers-intent=\"allow\"] button:first-of-type"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/execution/workers/{worker_id}/intake",
+            "operationId": "setWorkerIntake",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "ol[data-worker-group=\"active\"] > li[data-worker-intake=\"on\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-workers-action-failure]"
+        ],
+        "screen": "workers",
+        "case": "action"
+      },
+      {
+        "name": "profile-needs-a-surname",
+        "as": "expert_only",
+        "at": "/account",
+        "page_module": "web/src/app/account/page.tsx",
+        "control_module": "web/src/features/edit-profile/ui/edit-profile-form.tsx",
+        "$comment": [
+          "Профиль. An input the form refuses: the surname is required. Cleared, the save button sends nothing."
+        ],
+        "actions": [
+          {
+            "do": "fill",
+            "selector": "#profile-last",
+            "value": ""
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Сохранить профиль"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "PATCH",
+            "path": "/me",
+            "why": "a profile without a surname"
+          }
+        ],
+        "screen": "account-profile",
+        "case": "refused"
+      },
+      {
+        "name": "profile-update",
+        "as": "expert_only",
+        "at": "/account",
+        "page_module": "web/src/app/account/page.tsx",
+        "control_module": "web/src/features/edit-profile/ui/edit-profile-form.tsx",
+        "$comment": [
+          "The account's own names are saved (here the patronymic); the screen says so."
+        ],
+        "actions": [
+          {
+            "do": "fill",
+            "selector": "#profile-middle",
+            "value": "Проверяемович"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Сохранить профиль"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PATCH",
+            "path": "/me",
+            "operationId": "updateMyProfile",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "updateMyProfile",
+            "json_path": "middle_name",
+            "equals": "Проверяемович"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[role=\"status\"]",
+            "text_contains": "Профиль сохранён."
+          }
+        ],
+        "forbids_rendered": [
+          "[data-profile-failure]"
+        ],
+        "screen": "account-profile",
+        "case": "action"
+      },
+      {
+        "name": "password-confirmation-must-match",
+        "as": "admin_only",
+        "at": "/account/password",
+        "page_module": "web/src/app/account/password/page.tsx",
+        "control_module": "web/src/features/change-password/ui/change-password-form.tsx",
+        "$comment": [
+          "Сменить пароль. A new password and a repeat that differ are refused by the web tier: it redirects with",
+          "`outcome=mismatch` and sends nothing on to the accounts service. (The account is the administrator-only",
+          "one: changing a password ends the passes issued under the old one, and the expert's session is still needed.)"
+        ],
+        "actions": [
+          {
+            "do": "fill",
+            "selector": "#change-password-current",
+            "secret": "admin_only_password"
+          },
+          {
+            "do": "fill",
+            "selector": "#change-password-new",
+            "secret": "admin_only_new_password"
+          },
+          {
+            "do": "fill",
+            "selector": "#change-password-confirm",
+            "secret": "admin_only_wrong_password"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Сменить пароль"
+          }
+        ],
+        "expects_bff": [
+          {
+            "method": "POST",
+            "path": "/session/password",
+            "expect_status": 303,
+            "redirect_contains": "outcome=mismatch",
+            "count": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-change-password-outcome=\"mismatch\"]"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/auth/password",
+            "why": "the tier refuses a mismatch before the API"
+          }
+        ],
+        "screen": "account-password",
+        "case": "refused"
+      },
+      {
+        "name": "password-current-must-be-right",
+        "as": "admin_only",
+        "at": "/account/password",
+        "page_module": "web/src/app/account/password/page.tsx",
+        "control_module": "web/src/features/change-password/ui/change-password-form.tsx",
+        "$comment": [
+          "The wrong current password changes nothing: `outcome=credentials`, no pass is revoked."
+        ],
+        "actions": [
+          {
+            "do": "fill",
+            "selector": "#change-password-current",
+            "secret": "admin_only_wrong_password"
+          },
+          {
+            "do": "fill",
+            "selector": "#change-password-new",
+            "secret": "admin_only_new_password"
+          },
+          {
+            "do": "fill",
+            "selector": "#change-password-confirm",
+            "secret": "admin_only_new_password"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Сменить пароль"
+          }
+        ],
+        "expects_bff": [
+          {
+            "method": "POST",
+            "path": "/session/password",
+            "expect_status": 303,
+            "redirect_contains": "outcome=credentials",
+            "count": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-change-password-outcome=\"credentials\"]"
+          }
+        ],
+        "screen": "account-password",
+        "case": "refused"
+      },
+      {
+        "name": "password-change",
+        "as": "admin_only",
+        "at": "/account/password",
+        "page_module": "web/src/app/account/password/page.tsx",
+        "control_module": "web/src/features/change-password/ui/change-password-form.tsx",
+        "$comment": [
+          "The password is changed. Every pass issued under the old one is revoked and THIS browser continues on a new",
+          "one: the same browser opens the profile afterwards."
+        ],
+        "actions": [
+          {
+            "do": "fill",
+            "selector": "#change-password-current",
+            "secret": "admin_only_password"
+          },
+          {
+            "do": "fill",
+            "selector": "#change-password-new",
+            "secret": "admin_only_new_password"
+          },
+          {
+            "do": "fill",
+            "selector": "#change-password-confirm",
+            "secret": "admin_only_new_password"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Сменить пароль",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-change-password-outcome=\"changed\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "goto",
+            "to": "/account"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-account-profile-complete=\"true\"]",
+            "bound_ms": 15000
+          }
+        ],
+        "expects_bff": [
+          {
+            "method": "POST",
+            "path": "/session/password",
+            "expect_status": 303,
+            "redirect_contains": "outcome=changed",
+            "count": 1
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/me",
+            "operationId": "getMe",
+            "expect_status": 200
+          }
+        ],
+        "expects_location": "/account",
+        "screen": "account-password",
+        "case": "action"
+      },
+      {
+        "name": "old-pass-is-refused-after-the-password-change",
+        "as": "admin_only",
+        "at": "/account",
+        "page_module": "web/src/app/account/page.tsx",
+        "control_module": "web/src/features/edit-profile/ui/edit-profile-form.tsx",
+        "$comment": [
+          "Everything issued under the old password stopped being accepted at once: the cookie this account signed in",
+          "with opens nothing, and the browser is sent to sign in."
+        ],
+        "expects_location": "/login",
+        "expects_not_called": [
+          {
+            "method": "GET",
+            "path": "/me",
+            "why": "the pass was revoked"
+          }
+        ],
+        "screen": "account-password",
+        "case": "refused"
+      },
+      {
+        "name": "user-password-reset-must-match",
+        "at": "/admin/users/{user_uid}",
+        "page_module": "web/src/app/admin/users/[user_uid]/page.tsx",
+        "control_module": "web/src/features/manage-user/ui/manage-user-controls.tsx",
+        "bind": {
+          "user_uid": "admin_only_user_uid"
+        },
+        "$comment": [
+          "Пользователи. An input the form refuses: a temporary password and its repeat that differ. Nothing is sent."
+        ],
+        "actions": [
+          {
+            "do": "fill",
+            "selector": "#user-password",
+            "secret": "admin_only_temp_password"
+          },
+          {
+            "do": "fill",
+            "selector": "#user-password-confirm",
+            "secret": "admin_only_temp_mismatch"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Сбросить пароль"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/users/{user_uid}/password",
+            "why": "the repeat differs"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-user-failure=\"password_mismatch\"]"
+          }
+        ],
+        "screen": "user-management",
+        "case": "refused"
+      },
+      {
+        "name": "user-archive",
+        "at": "/admin/users/{user_uid}",
+        "page_module": "web/src/app/admin/users/[user_uid]/page.tsx",
+        "control_module": "web/src/features/manage-user/ui/manage-user-controls.tsx",
+        "bind": {
+          "user_uid": "admin_only_user_uid"
+        },
+        "$comment": [
+          "The administrator archives the administrator-only account (confirmation first); the card says archived."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "button",
+            "text": "Архивировать учётную запись",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[role=\"group\"][aria-label=\"Подтверждение архивирования\"] button:first-of-type"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/users/{user_uid}/archive",
+            "operationId": "archiveUser",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-user-state=\"archived\"]"
+          },
+          {
+            "selector": "button",
+            "text_contains": "Восстановить учётную запись"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-user-failure]"
+        ],
+        "screen": "user-management",
+        "case": "action"
+      },
+      {
+        "name": "user-restore",
+        "at": "/admin/users/{user_uid}",
+        "page_module": "web/src/app/admin/users/[user_uid]/page.tsx",
+        "control_module": "web/src/features/manage-user/ui/manage-user-controls.tsx",
+        "bind": {
+          "user_uid": "admin_only_user_uid"
+        },
+        "$comment": [
+          "And restores it; the card says active again."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "button",
+            "text": "Восстановить учётную запись"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/users/{user_uid}/restore",
+            "operationId": "restoreUser",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-user-state=\"active\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-user-failure]"
+        ],
+        "screen": "user-management",
+        "case": "action"
+      },
+      {
+        "name": "user-password-reset",
+        "at": "/admin/users/{user_uid}",
+        "page_module": "web/src/app/admin/users/[user_uid]/page.tsx",
+        "control_module": "web/src/features/manage-user/ui/manage-user-controls.tsx",
+        "bind": {
+          "user_uid": "admin_only_user_uid"
+        },
+        "$comment": [
+          "The administrator sets a temporary password for the account (it must be changed at the next sign-in). The",
+          "value is typed and never recorded; the screen says it was reset."
+        ],
+        "actions": [
+          {
+            "do": "fill",
+            "selector": "#user-password",
+            "secret": "admin_only_temp_password"
+          },
+          {
+            "do": "fill",
+            "selector": "#user-password-confirm",
+            "secret": "admin_only_temp_password"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Сбросить пароль"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/users/{user_uid}/password",
+            "operationId": "resetUserPassword",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "forbids_rendered": [
+          "[data-user-failure]"
+        ],
+        "screen": "user-management",
+        "case": "action"
+      },
+      {
+        "name": "release-history-panel",
+        "at": "/account",
+        "page_module": "web/src/app/account/page.tsx",
+        "control_module": "web/src/_app/account-menu.tsx",
+        "$comment": [
+          "История версий, from the account menu: a dialog with what changed in each release."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-account-menu] button[aria-haspopup=\"menu\"]",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[role=\"menuitem\"]",
+            "text": "История версий",
+            "settle": true
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/releases",
+            "operationId": "listReleases",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[role=\"dialog\"][aria-label=\"История версий\"]"
+          },
+          {
+            "selector": "[data-version-history] h2",
+            "text_contains": "История версий"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-version-history] .am-state--error"
+        ],
+        "screen": "release-history",
+        "case": "action",
+        "no_negative_case": "the history is read by every complete account whose password is not the shipped one; an account that is not complete cannot be made without leaving it for good, and the API answers the read for any role"
+      },
+      {
+        "name": "sign-out",
+        "as": "expert_only",
+        "at": "/account",
+        "page_module": "web/src/app/account/page.tsx",
+        "control_module": "web/src/_app/account-menu.tsx",
+        "$comment": [
+          "Выйти, from the account menu: a POST to the tier's own door; the answer is a redirect to the sign-in screen."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-account-menu] button[aria-haspopup=\"menu\"]",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[role=\"menuitem\"]",
+            "text": "Выйти"
+          }
+        ],
+        "expects_bff": [
+          {
+            "method": "POST",
+            "path": "/session/end",
+            "expect_status": 303,
+            "redirect_contains": "/login",
+            "count": 1
+          }
+        ],
+        "expects_location": "/login",
+        "screen": "sign-out",
+        "case": "action"
+      },
+      {
+        "name": "signed-out-session-is-gone",
+        "as": "expert_only",
+        "at": "/account",
+        "page_module": "web/src/app/account/page.tsx",
+        "control_module": "web/src/features/edit-profile/ui/edit-profile-form.tsx",
+        "$comment": [
+          "The pass that was just closed opens nothing: the same cookie, a protected screen, and the browser is sent to sign in."
+        ],
+        "expects_location": "/login",
+        "expects_not_called": [
+          {
+            "method": "GET",
+            "path": "/me",
+            "why": "the session no longer exists"
+          }
+        ],
+        "screen": "sign-out",
+        "case": "refused"
       }
     ]
   },
@@ -3662,6 +5284,12 @@
       "",
       "No password is declared here or anywhere in this repository: each is random per run, typed",
       "into the form, used for one sign-in and never written to the envelope or to stdout."
+    ],
+    "generated_secrets": [
+      "admin_only_new_password",
+      "admin_only_wrong_password",
+      "admin_only_temp_password",
+      "admin_only_temp_mismatch"
     ],
     "roster": [
       {"name": "expert_only", "roles": ["expert"], "last": "Экспертов", "first": "Иван", "middle": "Журналович"},

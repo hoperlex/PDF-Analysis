@@ -111,7 +111,7 @@ export function namesNeededBy(step) {
       if (!(wanted in (step.constants ?? {}))) names.add(wanted);
     });
   take(step.at);
-  for (const key of ['expects_api', 'expects_api_after_terminal', 'expects_not_called']) {
+  for (const key of ['expects_api', 'expects_api_after_terminal', 'expects_not_called', 'expects_bff']) {
     for (const call of step[key] ?? []) take(call.path, call.bind);
   }
   for (const action of step.actions ?? []) {
@@ -122,6 +122,7 @@ export function namesNeededBy(step) {
   for (const present of step.expects_present ?? []) {
     take(present.selector);
     take(present.text_contains);
+    take(present.text_matches);
   }
   for (const selector of step.forbids_rendered ?? []) take(selector);
   for (const absent of step.expects_absent ?? []) {
@@ -203,6 +204,19 @@ function concretePath(expectation, captured) {
 }
 
 /**
+ * An exchange as the envelope may keep it: a request body that carries a password is
+ * replaced. Form posts (`/bff/v1/session/password`, `/session`) and JSON bodies
+ * (`temporary_password`, `new_password`) are both covered by what they are called.
+ */
+export function redactedExchange(exchange) {
+  const body = exchange.requestBody;
+  if (typeof body !== 'string' || body.length === 0) return exchange;
+  let clean = body.replace(/(^|&)([a-z_]*password[a-z_]*)=[^&]*/gi, '$1$2=(redacted)');
+  clean = clean.replace(/"([a-z_]*password[a-z_]*)"\s*:\s*"(?:[^"\\]|\\.)*"/gi, '"$1":"(redacted)"');
+  return clean === body ? exchange : { ...exchange, requestBody: clean };
+}
+
+/**
  * Drive the write half.
  *
  * Returns the step records, the findings, and what it captured. It throws only when the
@@ -221,6 +235,7 @@ export async function runWritePhase({
   stamp,
   cookies = [],
   sessions = {},
+  secrets = {},
   viewport = null,
   only = null,
   seed = {},
@@ -233,7 +248,11 @@ export async function runWritePhase({
   const failures = [];
   const records = [];
   const captured = { ...seed };
-  const fail = (step, message) => failures.push(`${step}: ${message}`);
+  // A password the journey typed (`secrets`) must reach neither a finding nor the envelope: a
+  // message that quotes what a control read back, or a body the browser sent, is scrubbed here.
+  const secretValues = Object.values(secrets).filter((v) => typeof v === 'string' && v.length > 0);
+  const scrub = (text) => secretValues.reduce((t, v) => t.split(v).join('(redacted)'), String(text));
+  const fail = (step, message) => failures.push(`${step}: ${scrub(message)}`);
 
   const fixture = resolve(repositoryRoot, spec.fixture);
   if (!existsSync(fixture)) {
@@ -341,6 +360,17 @@ export async function runWritePhase({
               boundMs: capture.bound_ms,
               what: `${capture.selector}[${capture.attribute}]`,
             });
+          } else if (capture.kind === 'text') {
+            // A value the screen prints as words (a job's identity in the queue) and gives no
+            // attribute: its text, found by selector, read when the whole text matches.
+            const expression = `(() => {
+              const el = document.querySelector(${JSON.stringify(fill(capture.selector, scope()))});
+              return el === null ? null : (el.innerText ?? '').trim() || null;
+            })()`;
+            waited = await page.waitFor(expression, {
+              boundMs: capture.bound_ms,
+              what: `the text of ${capture.selector}`,
+            });
           } else if (capture.kind === 'location') {
             const pattern = capture.pattern.replaceAll('%ID%', ID);
             const expression = `(() => {
@@ -447,13 +477,27 @@ export async function runWritePhase({
           const text = action.text === undefined ? null : fill(action.text, scope());
           const selector = action.selector === undefined ? undefined : fill(action.selector, scope());
           if (action.do === 'fill') {
-            entry.value = fill(action.value.replaceAll('%STAMP%', stamp), scope());
-            entry.result = await page.fill(selector, entry.value, {
-              text,
-              label: action.label ?? null,
-              tag: action.tag ?? 'input',
-              index: action.index ?? 0,
-            });
+            // `secret` names a password the journey holds in memory; the value typed is never
+            // recorded, and neither is what the control read back.
+            const typed =
+              action.secret === undefined
+                ? fill(action.value.replaceAll('%STAMP%', stamp), scope())
+                : secrets[action.secret];
+            if (typed === undefined) {
+              throw new Error(`step '${step.name}': no secret named '${action.secret}'`);
+            }
+            entry.value = action.secret === undefined ? typed : `(secret ${action.secret})`;
+            try {
+              entry.result = await page.fill(selector, typed, {
+                text,
+                label: action.label ?? null,
+                tag: action.tag ?? 'input',
+                index: action.index ?? 0,
+              });
+            } catch (error) {
+              throw new Error(scrub(error.message));
+            }
+            if (action.secret !== undefined) entry.result = '(secret)';
           } else if (action.do === 'click') {
             entry.result = await page.click(selector, { text, times: action.times ?? 1 });
           } else if (action.do === 'select') {
@@ -592,7 +636,7 @@ export async function runWritePhase({
           const selector = fill(present.selector, scope());
           const wantedText = present.text_contains === undefined ? null : fill(present.text_contains, scope());
           const min = present.min_count ?? 1;
-          const matcher = present.text_matches ?? null;
+          const matcher = present.text_matches === undefined ? null : fill(present.text_matches, scope());
           const expression = `(() => {
             const els = Array.from(document.querySelectorAll(${JSON.stringify(selector)}));
             const wanted = ${JSON.stringify(wantedText)};
@@ -645,7 +689,7 @@ export async function runWritePhase({
           "document.body ? document.body.innerText.replace(/\\n{3,}/g, '\\n\\n') : ''",
         );
         record.finalLocation = await page.location();
-        record.exchanges = page.exchanges();
+        record.exchanges = page.exchanges().map(redactedExchange);
         record.consoleErrors = page.consoleErrors();
         record.pageErrors = page.pageErrors();
 
@@ -835,6 +879,38 @@ export async function runWritePhase({
           `${absent.method} ${API_PREFIX}${concrete} must not be sent by this step (${absent.why ?? 'declared absent'}) ` +
             `but the browser sent it ${made.length} time(s): ${made.map((e) => e.status).join(', ')}`,
         );
+      }
+    }
+
+    // The tier's own doors (`/session`, `/session/end`, `/session/password`) are no operation
+    // of the contract: the browser posts a form and the tier answers a redirect. They are
+    // declared apart from `expects_api`, with the status and, for a redirect, where it leads.
+    for (const door of step.expects_bff ?? []) {
+      const made = findAll(door.method, concretePath(door, scope(door.bind)));
+      if (made.length === 0) {
+        ok = false;
+        fail(step.name, `declares ${door.method} ${API_PREFIX}${door.path} but the browser did not make it. It made: ${record.observedApi.join(' | ') || '(no API call at all)'}`);
+        continue;
+      }
+      const hit = made.find((e) => e.status === door.expect_status) ?? made[0];
+      if (hit.status !== door.expect_status) {
+        ok = false;
+        fail(step.name, `${door.method} ${API_PREFIX}${door.path} answered ${hit.status} and this step declares ${door.expect_status}`);
+      }
+      if (door.redirect_contains !== undefined && !String(hit.redirectedTo ?? '').includes(door.redirect_contains)) {
+        ok = false;
+        fail(step.name, `${door.method} ${API_PREFIX}${door.path} redirected to ${JSON.stringify(hit.redirectedTo)}, not to something containing ${JSON.stringify(door.redirect_contains)}`);
+      }
+      if (door.count !== undefined && made.length !== door.count) {
+        ok = false;
+        fail(step.name, `${door.method} ${API_PREFIX}${door.path} was sent ${made.length} time(s) and this step declares ${door.count}`);
+      }
+    }
+    if (step.expects_location !== undefined) {
+      const where = String(record.finalLocation ?? '');
+      if (!where.startsWith(step.expects_location)) {
+        ok = false;
+        fail(step.name, `the browser ended at ${JSON.stringify(where)} and this step declares an address starting ${JSON.stringify(step.expects_location)}`);
       }
     }
 

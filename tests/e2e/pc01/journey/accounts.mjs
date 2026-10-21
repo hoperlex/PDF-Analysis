@@ -166,6 +166,8 @@ export async function provisionAccounts({ origin, manifest, adminCookies, nonce 
   const sessions = {};
   const failures = [];
   const secrets = [];
+  // Held in memory for the steps that must type an account's own password; never recorded.
+  const passwords = {};
   const record = { accounts: [] };
 
   for (const entry of spec.roster) {
@@ -196,6 +198,7 @@ export async function provisionAccounts({ origin, manifest, adminCookies, nonce 
         throw new Error(`the approved account could not sign in: ${opened.failures.join('; ')}`);
       }
       sessions[entry.name] = opened.cookies;
+      passwords[`${entry.name}_password`] = password;
       row.stages.push('signed in');
       console.log(`account: ${entry.name} [${entry.roles.join(', ')}] registered, approved, signed in`);
     } catch (error) {
@@ -204,5 +207,5 @@ export async function provisionAccounts({ origin, manifest, adminCookies, nonce 
       console.error(`account: ${entry.name} FAILED: ${row.failure}`);
     }
   }
-  return { sessions, record, failures };
+  return { sessions, record, failures, passwords };
 }

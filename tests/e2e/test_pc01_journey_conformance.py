@@ -2437,7 +2437,7 @@ def test_control_a_refusal_drive_that_lost_its_session_is_detected() -> None:
 # --------------------------------------------------------------------------------------
 
 ACTION_KINDS = frozenset({"fill", "click", "select", "attach_file", "goto", "wait_for"})
-CAPTURE_KINDS = frozenset({"attribute", "location", "response"})
+CAPTURE_KINDS = frozenset({"attribute", "location", "response", "text"})
 FIRST_FOUR = ("create-project", "upload-document", "classify-version", "start-run")
 #: What the first four steps capture, which every later step may use.
 FIRST_FOUR_PRODUCE = frozenset({"project_uid", "version_uid", "document_uid", "run_id"})
@@ -2457,12 +2457,20 @@ NIGHT_SCREENS = (
     "vendor-lists",
     "specification-prices",
     "optimisation-passes",
+    "optimisation-proposals",
     "section-form7",
     "dashboard-sections",
     "norms-designation",
     "norms-search",
     "norms-catalogue",
     "run-exports",
+    "queue",
+    "workers",
+    "account-profile",
+    "account-password",
+    "user-management",
+    "release-history",
+    "sign-out",
 )
 
 #: Operations the write half must perform at least once, because each is a thing the matrix
@@ -2479,6 +2487,7 @@ NIGHT_OPERATIONS = (
     "setProjectVendorList",
     "getSpecificationPrices",
     "startOptimisationPass",
+    "decideOptimisationProposal",
     "exportOptimisationProposalsCsv",
     "getSectionSpecification",
     "getDashboardSummary",
@@ -2488,6 +2497,17 @@ NIGHT_OPERATIONS = (
     "setCurrentNormSnapshot",
     "exportRunCsv",
     "exportRunXlsx",
+    "setExecutionPaused",
+    "setJobPriority",
+    "cancelRun",
+    "reauditRun",
+    "listWorkers",
+    "setWorkerIntake",
+    "updateMyProfile",
+    "resetUserPassword",
+    "archiveUser",
+    "restoreUser",
+    "listReleases",
 )
 
 _TEMPLATE = re.compile(r"\{([a-z_]+)\}")
@@ -2511,7 +2531,7 @@ def _step_templates(step: dict) -> list[tuple[str, dict | None]]:
     found: list[tuple[str, dict | None]] = []
     for name in _templates(step.get("at")):
         found.append((name, None))
-    for key in ("expects_api", "expects_api_after_terminal", "expects_not_called"):
+    for key in ("expects_api", "expects_api_after_terminal", "expects_not_called", "expects_bff"):
         for call in step.get(key) or ():
             for name in _templates(call.get("path")):
                 found.append((name, call.get("bind")))
@@ -2520,7 +2540,11 @@ def _step_templates(step: dict) -> list[tuple[str, dict | None]]:
             for name in _templates(action.get(key)):
                 found.append((name, None))
     for present in step.get("expects_present") or ():
-        for name in _templates(present.get("selector")) + _templates(present.get("text_contains")):
+        for name in (
+            _templates(present.get("selector"))
+            + _templates(present.get("text_contains"))
+            + _templates(present.get("text_matches"))
+        ):
             found.append((name, None))
     for selector in step.get("forbids_rendered") or ():
         for name in _templates(selector):
@@ -2564,6 +2588,9 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
     contract_by_id = {operation_id: (method, path) for method, path, operation_id in contract_ops}
     contract_paths = {(method, path) for method, path, _ in contract_ops}
 
+    secrets_provided = {f"{name}_password" for name in roster} | set(
+        (manifest.get("accounts") or {}).get("generated_secrets") or ()
+    )
     produced: set[str] = set(FIRST_FOUR_PRODUCE) | {f"{name}_user_uid" for name in roster}
     for index, step in enumerate(steps):
         label = step["name"]
@@ -2585,8 +2612,10 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
             if kind not in ACTION_KINDS:
                 findings.append(f"{label}: unknown action '{kind}'")
                 continue
-            if kind == "fill" and "value" not in action:
-                findings.append(f"{label}: a fill with no value")
+            if kind == "fill" and ("value" in action) == ("secret" in action):
+                findings.append(f"{label}: a fill names exactly one of value and secret")
+            if kind == "fill" and "secret" in action and action["secret"] not in secrets_provided:
+                findings.append(f"{label}: a fill names the secret {action['secret']!r}, which no account or generated secret provides")
             if kind in ("fill", "click", "select", "attach_file", "wait_for") and "selector" not in action:
                 findings.append(f"{label}: a {kind} with no selector")
             if kind == "click" and action.get("times", 1) not in (1, 2, 3):
@@ -2652,6 +2681,18 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
                     f"{label}: expects {absent['method']} {absent['path']} NOT to be called, "
                     "but that is no operation of the contract"
                 )
+
+        # ---- the web tier's own doors and where a step ends -------------------------
+        for door in step.get("expects_bff") or ():
+            if (door["method"].upper(), door["path"]) in contract_paths:
+                findings.append(
+                    f"{label}: {door['method']} {door['path']} is declared a door of the web tier but it is an "
+                    "operation of the contract; declare it in expects_api"
+                )
+            if not (isinstance(door.get("expect_status"), int) and 200 <= door["expect_status"] < 400):
+                findings.append(f"{label}: a door of the web tier answers a redirect or success, not {door.get('expect_status')!r}")
+        if "expects_location" in step and not str(step["expects_location"]).startswith("/"):
+            findings.append(f"{label}: expects_location must be an address starting with /")
 
         # ---- constants, bind and the flow of identifiers ---------------------------
         constants = step.get("constants") or {}
@@ -3040,3 +3081,85 @@ def test_control_a_route_constant_outside_its_enumeration_is_detected(openapi: d
     assert "AR" in _path_parameter_enum(openapi, route, "section_code")
     assert "ZZ" not in _path_parameter_enum(openapi, route, "section_code")
     assert _path_parameter_enum(openapi, route, "project_uid") is None
+
+
+# ---- the stack preparations the night-window steps need (BETA-LIVE-JOURNEY-01) -----------
+
+
+def _run_tool(*argv: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    environment = {**os.environ, "PYTHONPATH": str(REPOSITORY_ROOT / "src"), **(env or {})}
+    return subprocess.run(
+        [sys.executable, *argv], cwd=REPOSITORY_ROOT, env=environment,
+        capture_output=True, text=True, timeout=300,
+    )
+
+
+def test_the_specification_bundle_is_what_its_builder_builds() -> None:
+    """The committed bundle holds the table the price steps price, and the builder reproduces it.
+
+    `--check` builds the bundle again, compares it byte for byte with the committed one, and
+    computes the request checksum its recording is filed under -- after reproducing the
+    baseline's own checksum as a control, so a moved prompt is a red here and not a run that
+    quietly cannot replay.
+    """
+    tool = JOURNEY_DIR / "build_specification_bundle.py"
+    answer = _run_tool(str(_require(tool)), "--check")
+    assert answer.returncode == 0, answer.stdout + answer.stderr
+    assert "specification bundle OK" in answer.stdout
+
+
+def test_the_specification_bundle_check_can_fail(tmp_path: Path) -> None:
+    """A bundle that is not what the builder builds is refused, so `--check` is not a smile."""
+    tool = _require(JOURNEY_DIR / "build_specification_bundle.py")
+    bundle = JOURNEY_DIR / "fixtures" / "optimisation" / "ar_specification.zip"
+    original = bundle.read_bytes()
+    try:
+        bundle.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
+        answer = _run_tool(str(tool), "--check")
+    finally:
+        bundle.write_bytes(original)
+    assert answer.returncode == 1 and "differs" in answer.stderr
+    assert bundle.read_bytes() == original
+
+
+def test_the_specification_text_is_a_table_the_matcher_prices_and_the_prices_hold_an_analog() -> None:
+    """The three rows the bundle declares are read, and МЩ-1 has a cheaper analog in the list."""
+    sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
+    from auditmanager.optimisation.specification import extract_specification
+
+    sys.path.insert(0, str(JOURNEY_DIR))
+    import build_specification_bundle as builder
+
+    page = "\n".join(text for text, _ in builder.SPEC_LINES)
+    rows = extract_specification(
+        version_uid="ver_01M2545JSD15ETSNNV904XA001", pages={9: page}
+    ).rows
+    assert [(r.position, r.name, r.unit, r.quantity_text) for r in rows] == [
+        ("1", "Металлический щит МЩ-1", "шт", "2"),
+        ("2", "Дверь стальная ДС-1", "шт", "1"),
+        ("3", "Утеплитель минераловатный", "м3", "12,5"),
+    ]
+    prices = (JOURNEY_DIR / "fixtures" / "optimisation" / "prices.csv").read_text(encoding="utf-8")
+    cells = [line.split(";") for line in prices.splitlines()[1:]]
+    by_name = {c[0]: float(c[2].replace(",", ".")) for c in cells if c[2]}
+    assert by_name["Металлический щит МЩ-2"] < by_name["Металлический щит МЩ-1"]
+    # The analog's vendor is the one the project's vendor list is given, and it is ONE cell:
+    # a `;` inside it would split the row, which is how the first version of this fixture
+    # silently lost its analog.
+    vendor_row = next(c for c in cells if c[0] == "Металлический щит МЩ-2")
+    assert len(vendor_row) == len(prices.splitlines()[0].split(";"))
+    assert vendor_row[4].startswith("=")
+
+
+def test_the_norms_seed_refuses_a_database_that_is_not_a_lanes() -> None:
+    tool = _require(JOURNEY_DIR / "seed_norms.py")
+    refused = _run_tool(
+        str(tool), env={"DATABASE_URL": "postgresql+psycopg://u:p@127.0.0.1:1/auditmanager_alpha"}
+    )
+    assert refused.returncode == 1 and "refusing to write" in refused.stderr
+    # The control: a lane-shaped name gets past the refusal and fails only for want of a server.
+    lane = _run_tool(
+        str(tool), "--check",
+        env={"DATABASE_URL": "postgresql+psycopg://u:p@127.0.0.1:1/auditmanager_beta_live_journey"},
+    )
+    assert "refusing to write" not in lane.stderr and lane.returncode != 0

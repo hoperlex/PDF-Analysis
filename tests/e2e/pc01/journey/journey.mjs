@@ -44,6 +44,7 @@
  * walk needs and used to have to assume.
  */
 
+import { randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -164,11 +165,21 @@ const PHASE = args.phase;
 const REPOSITORY_ROOT = resolve(HERE, '..', '..', '..', '..');
 const STAMP = new Date().toISOString().replace(/[:.]/g, '-');
 
+// Passwords the steps type: each account's own (kept in memory by `accounts.mjs`) and the
+// ones the manifest asks to be generated (`accounts.generated_secrets`: a new password, a wrong
+// one). All random per run, none written anywhere; every one is scrubbed from the envelope.
+const SECRETS = {};
+for (const name of manifest.accounts?.generated_secrets ?? []) {
+  SECRETS[name] = `Zq7!${randomBytes(18).toString('hex')}`;
+}
+
 /** Where the envelope goes, whatever happens after this point. */
 function writeEnvelope(body) {
   mkdirSync(OUT_DIR, { recursive: true });
   const at = join(OUT_DIR, 'journey.json');
-  writeFileSync(at, JSON.stringify(body, null, 2));
+  let text = JSON.stringify(body, null, 2);
+  for (const value of Object.values(SECRETS)) text = text.split(value).join('(redacted)');
+  writeFileSync(at, text);
   return at;
 }
 
@@ -243,6 +254,7 @@ if (PHASE !== 'read' && manifest.accounts !== undefined) {
     nonce: STAMP.replace(/\D/g, '').slice(-14),
   });
   accounts = { sessions: made.sessions, record: { ran: true, ...made.record } };
+  Object.assign(SECRETS, made.passwords);
   failures.push(...made.failures);
   // The accounts' identities are what the dispatcher's selects are addressed by, and they
   // are produced by the registration screens, not typed into the manifest.
@@ -272,6 +284,7 @@ if (PHASE === 'read') {
     stamp: STAMP,
     cookies: SESSION_COOKIES,
     sessions: accounts.sessions,
+    secrets: SECRETS,
     viewport: VIEWPORT,
     only: args.steps,
     seed: { ...SEED, ...ACCOUNT_SEED },
