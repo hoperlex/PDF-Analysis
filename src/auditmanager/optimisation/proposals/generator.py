@@ -35,6 +35,19 @@ first), then similarity descending, then source row, then position identity, and
 pass-wide ``ordinal`` numbers the drafts in that order and is a display order, never an
 identity.
 
+**How they are found** (`D-185`: the pass runs inside the request, so its cost is a bound on
+the request). The order above is lexicographic with the unit price first, so the search does
+not need every qualifying position: it needs the cheapest ones. A bucket holds only the
+positions whose vendor is on the list, ordered by unit price; a row looks at the strictly
+cheaper prefix of its bucket (rules 1 and 4 at once) one equal-price group at a time, and
+stops after the first group that completes :data:`MAX_PROPOSALS_PER_ROW` -- the groups after
+it are dearer, and inside a group the order is similarity, source row, identity. The result
+is exactly what examining every position, sorting and cutting would give
+(``tests/unit/optimisation/proposals/test_generator_search.py`` holds the two equal on seeded
+inputs built to collide); only the work differs. Rows matched to the same position share one
+search. The worst case that remains is a row whose cheaper prefix is long and holds nothing
+that qualifies: a scan of that prefix, bounded by 20 000 positions per row.
+
 **The money rule** (``ROADMAP-TO-BETA.md`` §10.1 A-4/A-5). Both prices come from price-list
 positions of the pass's revision and nowhere else. The saving is
 ``(current − proposed) × quantity``, exact and never rounded, and **only** when the row's
@@ -47,6 +60,8 @@ bypassed this module would still be refused.
 from __future__ import annotations
 
 import re
+from array import array
+from bisect import bisect_left
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from decimal import ROUND_DOWN, Decimal
@@ -223,7 +238,12 @@ class GeneratorOutcome:
 
 @dataclass(frozen=True, slots=True)
 class _Keyed:
-    """One position with the keys the rules compare, computed once per pass."""
+    """One position with the keys the rules compare, computed once per pass.
+
+    ``rest`` is the name's words without its head word and ``size`` the count of all of them:
+    two positions of one bucket share the head word, so what they may share beyond it is
+    ``rest`` (see :func:`_analogs`).
+    """
 
     position: PriceListPositionRecord
     unit: str | None
@@ -231,6 +251,8 @@ class _Keyed:
     head: str | None
     words: frozenset[str]
     family: str | None
+    rest: frozenset[str]
+    size: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,28 +264,66 @@ class _Candidate:
 
 def _keyed(position: PriceListPositionRecord) -> _Keyed:
     words = _words(position.name)
+    head = next((word for word in words if any(ch.isalpha() for ch in word)), None)
+    word_set = frozenset(words)
     return _Keyed(
         position=position,
         unit=unit_key(position.unit),
         vendor=vendor_key(position.vendor),
-        head=next((word for word in words if any(ch.isalpha() for ch in word)), None),
-        words=frozenset(words),
+        head=head,
+        words=word_set,
         family=code_family(position),
+        rest=word_set - {head},
+        size=len(word_set),
     )
 
 
-class _Index:
-    """Positions bucketed by (unit, currency, head word): only a bucket can hold an analog."""
+class _Bucket:
+    """The candidates of one (unit, currency, head word), ordered by unit price (then source row).
 
-    def __init__(self, positions: Sequence[PriceListPositionRecord]) -> None:
+    A *rank* is a position's index in that order. Besides the order the bucket keeps, per word
+    and per code family, the ascending ranks of the positions that carry it, and the ranks of
+    the one- and two-word names: the three ways a position can qualify against a matched one
+    (see :func:`_analogs`) without being met by walking the whole prefix.
+    """
+
+    __slots__ = ("families", "items", "prices", "short", "words")
+
+    def __init__(self, items: list[_Keyed]) -> None:
+        # ``sorted`` is stable and ``items`` arrive in source-row order, so equal prices keep it.
+        self.items = sorted(items, key=lambda keyed: keyed.position.unit_price)
+        self.prices = [keyed.position.unit_price for keyed in self.items]
+        self.words: dict[str, array[int]] = {}
+        self.families: dict[str, array[int]] = {}
+        self.short: tuple[array[int], array[int]] = (array("I"), array("I"))
+        for rank, keyed in enumerate(self.items):
+            for word in keyed.rest:
+                self.words.setdefault(word, array("I")).append(rank)
+            if keyed.family is not None:
+                self.families.setdefault(keyed.family, array("I")).append(rank)
+            if keyed.size <= 2:
+                self.short[keyed.size - 1].append(rank)
+
+
+class _Index:
+    """Every position keyed, and the ones that can be an analog bucketed.
+
+    Only a position that has a head word and a vendor on the effective list can ever be
+    proposed (rules 5 and 6), so only those are in a bucket; every position is in ``keyed``,
+    because a *matched* position need not be one of them.
+    """
+
+    def __init__(self, positions: Sequence[PriceListPositionRecord], allowed: frozenset[str]) -> None:
         self.keyed: dict[str, _Keyed] = {}
-        self.buckets: dict[tuple[str | None, str, str], list[_Keyed]] = {}
+        grouped: dict[tuple[str | None, str, str], list[_Keyed]] = {}
         for position in sorted(positions, key=lambda item: item.row_number):
             keyed = _keyed(position)
             self.keyed[position.price_list_position_id] = keyed
-            if keyed.head is not None:
-                bucket = (keyed.unit, position.currency, keyed.head)
-                self.buckets.setdefault(bucket, []).append(keyed)
+            if keyed.head is not None and keyed.vendor is not None and keyed.vendor in allowed:
+                grouped.setdefault((keyed.unit, position.currency, keyed.head), []).append(keyed)
+        self.buckets: dict[tuple[str | None, str, str], _Bucket] = {
+            bucket: _Bucket(items) for bucket, items in grouped.items()
+        }
 
     def of(self, position: PriceListPositionRecord) -> _Keyed:
         return self.keyed.get(position.price_list_position_id) or _keyed(position)
@@ -286,35 +346,92 @@ def _same_kind(matched: _Keyed, other: _Keyed) -> _Candidate | None:
     return None
 
 
-def _analogs(matched: _Keyed, index: _Index, vendors: frozenset[str]) -> list[_Candidate]:
-    """Rules 1-6 over the matched position's bucket, ordered, at most N."""
+#: A row is searched through the word and family lists only when they hold at most this share
+#: of the strictly cheaper prefix; above it the walk of the prefix is the cheaper way.
+_LISTS_PAY_BELOW: Final[int] = 4
+
+
+def _qualifying_ranks(matched: _Keyed, bucket: _Bucket, end: int) -> list[int] | None:
+    """The ranks below ``end`` that can qualify against ``matched``, ascending; ``None`` if many.
+
+    A position other than the matched one reaches the threshold in only three ways, and each
+    has a list: it is of the matched position's **code family**; it **shares a word** with it
+    besides the head word (the head word is in every name of the bucket, so a pair that shares
+    nothing else has one common word of ``size + other.size``, which is at least 1/2 only when
+    that sum is two or three); or the two names are so short that **sharing the head word
+    alone** is enough -- ``size`` 1 against one or two words, ``size`` 2 against one. The union
+    of those lists is a superset of what qualifies and every member is still judged by
+    :func:`_same_kind`. ``None`` when the lists together are not small against the prefix.
+    """
+    lists: list[array[int]] = []
+    if matched.family is not None:
+        lists.append(bucket.families.get(matched.family, array("I")))
+    lists.extend(bucket.words[word] for word in matched.rest if word in bucket.words)
+    if matched.size == 1:
+        lists.extend(bucket.short)
+    elif matched.size == 2:
+        lists.append(bucket.short[0])
+    reach = [(ranks, bisect_left(ranks, end)) for ranks in lists]
+    if sum(count for _, count in reach) * _LISTS_PAY_BELOW >= end:
+        return None
+    return sorted({rank for ranks, count in reach for rank in ranks[:count]})
+
+
+def _analogs(matched: _Keyed, index: _Index) -> list[_Candidate]:
+    """Rules 1-6 over the cheaper prefix of the matched position's bucket, ordered, at most N."""
     current = matched.position
     if matched.head is None:
         return []
+    bucket = index.buckets.get((matched.unit, current.currency, matched.head))
+    if bucket is None:
+        return []
+    items, prices = bucket.items, bucket.prices
+    # Rule 4 and rule 1 at once: strictly cheaper, so never the matched position itself.
+    end = bisect_left(prices, current.unit_price)
+    ranks = _qualifying_ranks(matched, bucket, end) if end else []
+    walk: Iterable[int] = range(end) if ranks is None else ranks
+    family = matched.family
     found: list[_Candidate] = []
-    for other in index.buckets.get((matched.unit, current.currency, matched.head), ()):
-        position = other.position
-        if (
-            position.price_list_position_id == current.price_list_position_id
-            or other.unit != matched.unit
-            or position.currency != current.currency
-            or not position.unit_price < current.unit_price
-            or other.vendor is None
-            or other.vendor not in vendors
-        ):
-            continue
+    group: list[_Candidate] = []
+    group_price: Decimal | None = None
+    for rank in walk:
+        if prices[rank] != group_price:
+            # A dearer price begins: the group before it is complete, and when it completed
+            # the N places nothing dearer can displace it.
+            if group:
+                found.extend(_ordered(group))
+                group = []
+                if len(found) >= MAX_PROPOSALS_PER_ROW:
+                    return found[:MAX_PROPOSALS_PER_ROW]
+            group_price = prices[rank]
+        other = items[rank]
+        # The common refusal, in integers and without building anything: not of the same code
+        # family, and the name similarity below the threshold. The two names share the head
+        # word and ``len(rest & rest)`` more, so the similarity ``shared / (size + other.size
+        # - shared)`` is at least 1/2 exactly when ``3 * shared >= size + other.size``.
+        if family is None or family != other.family:
+            if matched.rest.isdisjoint(other.rest):
+                if matched.size + other.size > 3:
+                    continue
+            elif 3 * (1 + len(matched.rest & other.rest)) < matched.size + other.size:
+                continue
         candidate = _same_kind(matched, other)
         if candidate is not None:
-            found.append(candidate)
-    found.sort(
+            group.append(candidate)
+    found.extend(_ordered(group))
+    return found[:MAX_PROPOSALS_PER_ROW]
+
+
+def _ordered(group: list[_Candidate]) -> list[_Candidate]:
+    """One equal-price group in the order of the rule: similarity, then source row, then identity."""
+    return sorted(
+        group,
         key=lambda item: (
-            item.position.unit_price,
             -item.similarity,
             item.position.row_number,
             item.position.price_list_position_id,
-        )
+        ),
     )
-    return found[:MAX_PROPOSALS_PER_ROW]
 
 
 def _in_bounds(row: SpecificationRow) -> bool:
@@ -377,7 +494,8 @@ def generate_cheaper_analogs(
     a matched position that is not among them is a caller error (``ValueError``).
     """
     allowed = frozenset(key for key in (vendor_key(vendor) for vendor in vendors) if key)
-    index = _Index(positions)
+    index = _Index(positions, allowed)
+    searched: dict[str, list[_Candidate]] = {}
     drafts: list[ProposalDraft] = []
     matched_rows = with_proposals = without_analog = out_of_bounds = 0
     for match in matches:
@@ -391,7 +509,11 @@ def generate_cheaper_analogs(
             out_of_bounds += 1
             continue
         matched = index.of(position)
-        analogs = _analogs(matched, index, allowed) if allowed else []
+        analogs = searched.get(position.price_list_position_id)
+        if analogs is None:
+            analogs = searched[position.price_list_position_id] = (
+                _analogs(matched, index) if allowed else []
+            )
         if not analogs:
             without_analog += 1
             continue

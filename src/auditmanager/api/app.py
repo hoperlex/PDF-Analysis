@@ -48,7 +48,11 @@ from auditmanager.api.routers import (
     declare_correlation_id,
     install_exception_handlers,
 )
-from auditmanager.api.security import build_authorization_dependency, build_credential_precheck
+from auditmanager.api.security import (
+    RevocationNotices,
+    build_authorization_dependency,
+    build_credential_precheck,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -424,6 +428,12 @@ def _assemble(
     behind its six ports: it must not reconcile, because there is no database to reconcile
     against, and it cannot serve a request anyway.
     """
+    # `D-176`. One revocation memory per assembled application, shared by its seam (which
+    # fills it when an account refuses a credential) and by the upload door (which consults
+    # it, with no database read). Created here and not at module level: two applications
+    # built in one process -- over two databases whose clones share a seeded account's uid
+    # and epoch -- must not share what either has learned.
+    notices = RevocationNotices()
     app = _ContractApplication(
         title=_TITLE,
         description=_DESCRIPTION,
@@ -454,7 +464,7 @@ def _assemble(
             # the dependency refuses every guarded request rather than admitting it, which
             # is the same rule the module already applies to a missing deployment secret.
             build_authorization_dependency(
-                environ, standings=getattr(router, "credentials", None)
+                environ, standings=getattr(router, "credentials", None), notices=notices
             ),
         ],
         # A model with a default would otherwise be emitted twice, as `X-Input` and
@@ -494,13 +504,14 @@ def _assemble(
     # route keeps `MAX_BODY`. `W55B-FIX` (X-3): the upload route is refused here, before
     # its slot and its body, unless it carries a credential this environment signed and
     # that has not expired -- the seam's cheap half, built from the same environment; the
-    # seam itself still runs after.
+    # seam itself still runs after. `D-176`: and, once the seam has refused a (user, epoch)
+    # pair, not that pair either -- the `notices` the seam fills and this door reads.
     app.add_middleware(
         BodyCapMiddleware,
         limit=MAX_BODY,
         upload_limit=UPLOAD_MAX_BODY,
         max_concurrent_uploads=MAX_CONCURRENT_UPLOADS,
-        verify_credential=build_credential_precheck(environ),
+        verify_credential=build_credential_precheck(environ, notices=notices),
     )
     app.add_middleware(FailureEnvelopeMiddleware)
     app.add_middleware(CorrelationMiddleware)
