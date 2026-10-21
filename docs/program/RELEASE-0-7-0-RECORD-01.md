@@ -188,3 +188,27 @@ Slices `W57B-NORMS-CATALOGUE-XLSX-01`, `NORMS-DISPLAY-DESIGNATION-01`, `NORM-REF
 
 `git diff --name-only 829117d3 HEAD` lists the files under "Changed files" and nothing else: no `src/**`, `web/**`, `contracts/**`,
 migration, dependency file, other note file, ref, tag or stand.
+
+## Addendum (2026-10-21, after the owner's pull request #3)
+
+The owner merged `dev` into `main` again (`48c8e34ccd08a58ae61cbd09ecdba49066a5ad46`, parents `829117d3` and `3c62533b`;
+workflow run `39571427597`, success, reported by the integrator and not re-read here). `VERSION` on `main` is `0.7.0`
+and `release-notes/0.7.0.json` is the revision 2 written above, so **the record reached `main` through the owner's merge,
+not through the fast-forward `dfae803b`** this report names in its instructions.
+
+What the tree on `main` has beyond `dfae803b`, measured with `git diff dfae803b 48c8e34c`: 90 files; contracts, migrations,
+release notes and `VERSION` identical (surface still 73/83/242, head `0028`, 25 error codes); `src` 9 files, `infra` 5,
+`web/src` 9, `fixtures` 9, `scripts` 8, `tests` 41. In `RELEASES.md` this changed three statements, each corrected there:
+the row's `build_id` (`bbbab3c0dfb856a39`, from `git archive` of the SHA), the proxy bullet (it is no longer "throttle lines
+unchanged": the credential exchange is throttled and the two upload locations ask for a credential before the body is read),
+and the compose line (comments only differ from `v0.6.0`, not "no change").
+
+What was **re-read** against the notes: the matcher still returns a price and an amount only for an unambiguous row (the new code
+makes a vendor's legal form optional when comparing names, and still compares two different legal forms as different); the two
+web repairs touch the carried-decision display and the price-list upload's double press, not a sentence of an item. What was
+**not** re-run: any test (the web tests changed by the repairs, and the containers-backed suites of the four slices, are the
+lane reports'). The notes do not mention the hardening slices, which is deliberate: none of them is a user-facing claim.
+
+Still owed for the row: `infra/deploy/verify-deployed.sh` on the host for `48c8e34c`, then the tag `v0.7.0` on that SHA after
+the owner agrees, then one docs-only commit that fills the `pending` cell (a docs-only push to `main` needs the owner's
+instruction naming its SHA).
