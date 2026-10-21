@@ -392,46 +392,53 @@ def _analogs(matched: _Keyed, index: _Index) -> list[_Candidate]:
     walk: Iterable[int] = range(end) if ranks is None else ranks
     family = matched.family
     found: list[_Candidate] = []
-    group: list[_Candidate] = []
+    #: The best places of the group being read, best first: (shared words, union size, position).
+    top: list[tuple[int, int, _Keyed]] = []
+    places = MAX_PROPOSALS_PER_ROW
     group_price: Decimal | None = None
     for rank in walk:
         if prices[rank] != group_price:
             # A dearer price begins: the group before it is complete, and when it completed
             # the N places nothing dearer can displace it.
-            if group:
-                found.extend(_ordered(group))
-                group = []
-                if len(found) >= MAX_PROPOSALS_PER_ROW:
+            if top:
+                found.extend(_judged(matched, top))
+                top = []
+                places = MAX_PROPOSALS_PER_ROW - len(found)
+                if places <= 0:
                     return found[:MAX_PROPOSALS_PER_ROW]
             group_price = prices[rank]
         other = items[rank]
-        # The common refusal, in integers and without building anything: not of the same code
-        # family, and the name similarity below the threshold. The two names share the head
-        # word and ``len(rest & rest)`` more, so the similarity ``shared / (size + other.size
-        # - shared)`` is at least 1/2 exactly when ``3 * shared >= size + other.size``.
-        if family is None or family != other.family:
-            if matched.rest.isdisjoint(other.rest):
-                if matched.size + other.size > 3:
-                    continue
-            elif 3 * (1 + len(matched.rest & other.rest)) < matched.size + other.size:
-                continue
-        candidate = _same_kind(matched, other)
-        if candidate is not None:
-            group.append(candidate)
-    found.extend(_ordered(group))
+        # Rule 6 in integers, without building anything. The two names share the head word
+        # and ``len(rest & rest)`` more, so their similarity ``shared / union`` is at least
+        # 1/2 exactly when ``2 * shared >= union``. A position of the code family is an analog
+        # whatever the similarity, but it is ordered by it all the same.
+        shared = 1 if matched.rest.isdisjoint(other.rest) else 1 + len(matched.rest & other.rest)
+        union = matched.size + other.size - shared
+        if 2 * shared < union and (family is None or family != other.family):
+            continue
+        # Ordered by similarity, then by source row: within a price the walk meets the rows in
+        # ascending order, so an equal similarity never displaces an earlier arrival, and
+        # ``shared / union`` is compared by cross-multiplication, exactly.
+        if len(top) == places and shared * top[-1][1] <= top[-1][0] * union:
+            continue
+        at = len(top)
+        while at and shared * top[at - 1][1] > top[at - 1][0] * union:
+            at -= 1
+        top.insert(at, (shared, union, other))
+        del top[places:]
+    found.extend(_judged(matched, top))
     return found[:MAX_PROPOSALS_PER_ROW]
 
 
-def _ordered(group: list[_Candidate]) -> list[_Candidate]:
-    """One equal-price group in the order of the rule: similarity, then source row, then identity."""
-    return sorted(
-        group,
-        key=lambda item: (
-            -item.similarity,
-            item.position.row_number,
-            item.position.price_list_position_id,
-        ),
-    )
+def _judged(matched: _Keyed, top: list[tuple[int, int, _Keyed]]) -> list[_Candidate]:
+    """The places of one equal-price group as candidates, judged by :func:`_same_kind`."""
+    judged: list[_Candidate] = []
+    for _, _, other in top:
+        candidate = _same_kind(matched, other)
+        if candidate is None:  # pragma: no cover - the integer test above is the same rule
+            raise AssertionError("a position admitted as an analog is not of the same kind")
+        judged.append(candidate)
+    return judged
 
 
 def _in_bounds(row: SpecificationRow) -> bool:

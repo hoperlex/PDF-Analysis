@@ -307,6 +307,36 @@ def test_a_row_whose_cheaper_prefix_holds_nothing_in_common_is_not_walked(
     assert full_scan(dearest, positions, frozenset(vendor_key(v) for v in LISTED)) == []
 
 
+def _flat_case(seed: int) -> tuple[tuple[PriceListPositionRecord, ...], list[SpecificationRow], tuple[str, ...]]:
+    """Equal-price groups of dozens of positions with every similarity from 1/2 to 1 and ties among them."""
+    rnd = random.Random(20_000 + seed)
+    vocabulary = tuple(f"сл{n}" for n in range(6))
+    cheap = [
+        _position(
+            index,
+            " ".join(("профиль", str(index % 3), *rnd.sample(vocabulary, rnd.randint(1, 4)))),
+            rnd.choice(("1", "1.0", "2")),
+            code=rnd.choice((None, None, None, f"КФ{rnd.randint(1, 2)} {index}")),
+        )
+        for index in range(rnd.randint(30, 90))
+    ]
+    dear = [
+        _position(1000 + n, " ".join(("профиль", f"x{n}", *rnd.sample(vocabulary, rnd.randint(1, 4)))), "50",
+                  code=rnd.choice((None, f"КФ{rnd.randint(1, 2)} {n}")))
+        for n in range(8)
+    ]
+    positions = (*cheap, *dear)
+    return positions, [_row(position.name, line) for line, position in enumerate(dear, start=1)], ("Промет",)
+
+
+def test_the_proposals_are_those_of_the_full_scan_when_a_price_group_is_wider_than_the_cut_off() -> None:
+    total = 0
+    for seed in range(120):
+        positions, rows, vendors = _flat_case(seed)
+        total += _compare(positions, rows, vendors)
+    assert total > 600, total
+
+
 # -- the work does not grow with the cheaper positions ------------------------------------------
 
 
@@ -332,4 +362,32 @@ def test_a_row_whose_cheapest_analogs_qualify_builds_no_more_candidates_than_it_
     assert built["count"] <= MAX_PROPOSALS_PER_ROW, (
         f"{built['count']} candidates were built for a row that keeps {MAX_PROPOSALS_PER_ROW}: "
         "the search no longer stops after the cheapest analogs"
+    )
+
+
+def test_an_equal_price_group_of_two_thousand_analogs_builds_no_more_candidates_than_it_keeps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The rows of a flat price list: one price, two thousand names alike. The group is read once and
+    only the places it can fill are judged; the group is not turned into two thousand candidates."""
+    built = {"count": 0}
+    original = generator._Candidate
+
+    def counting(*arguments, **keywords):
+        built["count"] += 1
+        return original(*arguments, **keywords)
+
+    monkeypatch.setattr(generator, "_Candidate", counting)
+    current = _position(0, "Профиль вариант 0", "5")
+    flat = [_position(index, f"Профиль вариант {index}", "1") for index in range(1, 2001)]
+    positions = (current, *flat)
+    matches = match_specification([_row("Профиль вариант 0", 1)], positions).matches
+
+    outcome = generate_cheaper_analogs(matches, positions, LISTED)
+
+    # Equal similarity throughout, so the places go to the earliest source rows.
+    assert [draft.proposed.row_number for draft in outcome.proposals] == [2, 3, 4]
+    assert built["count"] <= MAX_PROPOSALS_PER_ROW, (
+        f"{built['count']} candidates were built from one equal-price group for a row that keeps "
+        f"{MAX_PROPOSALS_PER_ROW}"
     )
