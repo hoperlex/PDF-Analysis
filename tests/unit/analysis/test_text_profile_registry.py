@@ -15,6 +15,7 @@ import pytest
 
 from auditmanager.analysis.text.profile import AR_TEXT_PROFILE, resolve_profile
 from auditmanager.analysis.text.profile_registry import (
+    AUTHORED_SECTIONS,
     PACKAGE_FORMAT,
     PACKAGES_ROOT,
     SECTION_CODES,
@@ -177,10 +178,125 @@ def test_the_tree_registers_without_error_and_without_an_ar_package() -> None:
     registry = load_text_profile_registry()
     assert registry.entries["AR"].profile is AR_TEXT_PROFILE
     assert not (PACKAGES_ROOT / "ar").exists()
-    assert "PB" not in registry.entries, "PB has no profile; a PB version is refused at run start"
     for code, entry in registry.entries.items():
         if code == "AR":
             continue
         assert entry.package == code.lower() and entry.status in {"draft", "reviewed"}
         text = (PACKAGES_ROOT / entry.package / "system_prompt.md").read_text(encoding="utf-8")
         assert entry.profile.prompt_bundle.system_prompt == text.removesuffix("\n")
+
+
+def test_the_tree_registers_all_fifteen_sections_pb_included() -> None:
+    """`PB-PROFILE-01`: fire safety is routed to a profile of its own, not refused."""
+    registry = load_text_profile_registry()
+    assert set(registry.entries) == SECTION_CODES and len(registry.entries) == 15
+    assert registry.executable_sections() == SECTION_CODES
+    entry = registry.entries["PB"]
+    assert entry.status == "draft", "no expert review exists: the status says so"
+    assert entry.source is None and entry.package == "pb"
+    assert entry.title_ru == "Пожарная безопасность"
+    assert entry.profile.discipline == "PB"
+    assert "«Пожарная безопасность» (ПБ)" in entry.profile.prompt_bundle.system_prompt
+    assert (PACKAGES_ROOT / "pb" / "open_questions.md").read_text(encoding="utf-8").strip()
+
+
+def test_pb_never_shares_an_identity_with_another_section() -> None:
+    """A ПБ version never runs under another section's profile, nor another under ПБ."""
+    registry = load_text_profile_registry()
+    table = registry.section_profiles()
+    pb_profile, pb_bundle = table["PB"]
+    others = {code: pair for code, pair in table.items() if code != "PB"}
+    assert all(pair != table["PB"] for pair in others.values())
+    assert all(pair[0] != pb_profile and pair[1] != pb_bundle for pair in others.values())
+    assert registry.resolve(pb_profile, pb_bundle) is registry.entries["PB"].profile
+    for code, (profile, bundle) in others.items():
+        assert registry.resolve(profile, bundle).discipline != "PB", code
+        with pytest.raises(TextProfileUnavailable):
+            registry.resolve(pb_profile, bundle)  # PB's profile with another section's bundle
+        with pytest.raises(TextProfileUnavailable):
+            registry.resolve(profile, pb_bundle)
+
+
+# --- authored packages: no legacy source, declared (PB-PROFILE-01) -------------------------
+
+QUESTIONS = "1. Вопрос эксперту.\n"
+
+
+def _authored_profile(**overrides: Any) -> dict[str, Any]:
+    document = _profile("PB", analysis_profile_id="ap_01M5AXG1K82P9BCJ1NRYSTC2NB",
+                        prompt_bundle_id="pb_01M5AXG1K8EDTH597XY32Z696B", source=None)
+    document.update(overrides)
+    return document
+
+
+def _authored(root: Path, profile: dict[str, Any] | None = None, questions: str | None = QUESTIONS) -> Path:
+    path = _package(root, "pb", _authored_profile() if profile is None else profile)
+    if questions is not None:
+        (path / "open_questions.md").write_text(questions, encoding="utf-8")
+    return path
+
+
+def test_the_authored_sections_are_exactly_pb() -> None:
+    assert AUTHORED_SECTIONS == frozenset({"PB"})
+    assert AUTHORED_SECTIONS <= SECTION_CODES
+
+
+def test_an_authored_package_with_a_null_source_and_its_questions_loads(tmp_path: Path) -> None:
+    _authored(tmp_path)
+    registry = load_text_profile_registry(tmp_path)
+    entry = registry.entries["PB"]
+    assert entry.source is None and entry.status == "draft" and entry.package == "pb"
+    assert entry.profile.discipline == "PB" and entry.profile.prompt_bundle.system_prompt == PROMPT
+    assert registry.executable_sections() == {"AR", "PB"}
+    assert registry.resolve("ap_01M5AXG1K82P9BCJ1NRYSTC2NB", "pb_01M5AXG1K8EDTH597XY32Z696B") is entry.profile
+
+
+@pytest.mark.parametrize(
+    ("builder", "reason"),
+    [
+        pytest.param(
+            lambda root: _authored(root, _authored_profile(source=_profile("PB")["source"])),
+            "source_declared_for_authored_section", id="authored section with a source",
+        ),
+        pytest.param(
+            lambda root: _authored(root, questions=None),
+            "open_questions_missing", id="authored package without questions",
+        ),
+        pytest.param(
+            lambda root: _authored(root, questions=" \n\n"),
+            "open_questions_empty", id="authored package with blank questions",
+        ),
+        pytest.param(
+            lambda root: _package(root, "kj", _profile("KJ", source=None)),
+            "source_invalid", id="legacy section declaring no source",
+        ),
+    ],
+)
+def test_authored_declarations_are_checked_both_ways(
+    tmp_path: Path, builder: Any, reason: str
+) -> None:
+    builder(tmp_path)
+    with pytest.raises(TextProfileLoadError, match=reason):
+        load_text_profile_registry(tmp_path)
+
+
+def test_a_legacy_package_may_not_carry_the_authored_questions_file(tmp_path: Path) -> None:
+    path = _package(tmp_path, "kj", _profile("KJ"))
+    (path / "open_questions.md").write_text(QUESTIONS, encoding="utf-8")
+    with pytest.raises(TextProfileLoadError, match="package_files_invalid"):
+        load_text_profile_registry(tmp_path)
+
+
+def test_a_missing_source_key_is_not_a_declaration(tmp_path: Path) -> None:
+    profile = _authored_profile()
+    del profile["source"]
+    _authored(tmp_path, profile)
+    with pytest.raises(TextProfileLoadError, match="profile_keys_invalid"):
+        load_text_profile_registry(tmp_path)
+
+
+def test_an_authored_package_refuses_a_stray_file(tmp_path: Path) -> None:
+    path = _authored(tmp_path)
+    (path / "notes.txt").write_text("x", encoding="utf-8")
+    with pytest.raises(TextProfileLoadError, match="package_files_invalid"):
+        load_text_profile_registry(tmp_path)

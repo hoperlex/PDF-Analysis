@@ -8,12 +8,14 @@ before and after that registry lands.
 
 What it pins:
 
-* exactly the thirteen sections with legacy source material have a package, AR and PB
-  have none, and no section code is duplicated or outside the 15-code catalogue;
+* exactly the thirteen sections with legacy source material have a legacy package, PB
+  (`PB-PROFILE-01`) has the one authored package, AR has none, and no section code is
+  duplicated or outside the 15-code catalogue;
 * identities are fresh, parse as their contract types and are unique;
-* every profile is ``draft`` and its legacy source files are hash-pinned, both against
-  the already-catalogued candidate metadata and, when the legacy repository is on this
-  host, against the blob at the recorded commit;
+* every profile is ``draft``; each legacy profile's source files are hash-pinned, both
+  against the already-catalogued candidate metadata and, when the legacy repository is on
+  this host, against the blob at the recorded commit; the authored profile declares
+  ``"source": null`` and carries ``open_questions.md`` instead;
 * every system prompt keeps v1's question, its two categories and its output contract
   byte-for-byte, and names no category or machine field beyond v1's.
 """
@@ -42,7 +44,8 @@ LEGACY = Path(os.environ.get("AUDITMANAGER_LEGACY_PROMPTS_REPO", "/root/projects
 EXPECTED_SECTIONS = frozenset(
     {"AI", "PS", "POS", "TX", "KJ", "KM", "OV", "VK", "PT", "EOM", "SS", "ITP", "GP"}
 )
-NO_PACKAGE = frozenset({"AR", "PB"})
+AUTHORED_SECTIONS = frozenset({"PB"})
+NO_PACKAGE = frozenset({"AR"})
 PROFILE_KEYS = frozenset(
     {
         "format",
@@ -74,6 +77,23 @@ def _packages() -> list[tuple[Path, dict[str, Any]]]:
         if manifest.is_file():
             found.append((directory, json.loads(manifest.read_text("utf-8"))))
     return found
+
+
+def _legacy_packages() -> list[tuple[Path, dict[str, Any]]]:
+    """The packages ported from the legacy repository: every one except the authored."""
+    return [
+        (directory, manifest)
+        for directory, manifest in _packages()
+        if manifest.get("section_code") not in AUTHORED_SECTIONS
+    ]
+
+
+def _authored_packages() -> list[tuple[Path, dict[str, Any]]]:
+    return [
+        (directory, manifest)
+        for directory, manifest in _packages()
+        if manifest.get("section_code") in AUTHORED_SECTIONS
+    ]
 
 
 def _v1_block(start: str, end: str) -> str:
@@ -120,17 +140,23 @@ def test_the_v1_contract_anchors_this_suite_reads_exist() -> None:
     assert {"observations", "category", "finding_text", "recommendation_text", "evidence", "quote", "page_number"} <= SCHEMA_FIELDS
 
 
-def test_exactly_the_thirteen_legacy_sections_have_a_package() -> None:
+def test_exactly_the_thirteen_legacy_sections_and_pb_have_a_package() -> None:
     codes = [manifest.get("section_code") for _, manifest in _packages()]
     assert len(codes) == len(set(codes)), f"duplicate section_code across packages: {sorted(codes)}"
-    assert set(codes) == EXPECTED_SECTIONS
+    assert set(codes) == EXPECTED_SECTIONS | AUTHORED_SECTIONS
     assert not NO_PACKAGE & set(codes)
+    assert {manifest["section_code"] for _, manifest in _legacy_packages()} == EXPECTED_SECTIONS
+    assert {manifest["section_code"] for _, manifest in _authored_packages()} == AUTHORED_SECTIONS
     catalogue = _catalogue()
     assert len(catalogue) == 15
-    assert EXPECTED_SECTIONS | NO_PACKAGE == set(catalogue)
+    assert EXPECTED_SECTIONS | AUTHORED_SECTIONS | NO_PACKAGE == set(catalogue)
     for code in EXPECTED_SECTIONS:
         assert (PROFILES / code.lower() / "profile.json").is_file(), code
         assert (PROFILES / code.lower() / "system_prompt.md").is_file(), code
+        assert not (PROFILES / code.lower() / "open_questions.md").exists(), code
+    for code in AUTHORED_SECTIONS:
+        for name in ("profile.json", "system_prompt.md", "open_questions.md"):
+            assert (PROFILES / code.lower() / name).is_file(), (code, name)
     for code in NO_PACKAGE:
         assert not (PROFILES / code.lower() / "profile.json").exists(), code
         assert not (PROFILES / code.lower() / "system_prompt.md").exists(), code
@@ -138,7 +164,7 @@ def test_exactly_the_thirteen_legacy_sections_have_a_package() -> None:
 
 def test_every_profile_manifest_has_the_text_profile_1_shape() -> None:
     catalogue = _catalogue()
-    for directory, manifest in _packages():
+    for directory, manifest in _legacy_packages():
         code = manifest["section_code"]
         assert set(manifest) == PROFILE_KEYS, directory.name
         assert manifest["format"] == "text-profile/1", code
@@ -160,8 +186,20 @@ def test_every_profile_manifest_has_the_text_profile_1_shape() -> None:
         assert {f"prompts/disciplines/{code}/{name}" for name in ("role.md", "checklist.md")} <= set(paths), code
 
 
-def test_all_packages_name_one_legacy_commit() -> None:
-    assert len({manifest["source"]["commit"] for _, manifest in _packages()}) == 1
+def test_the_authored_profile_declares_no_source_and_is_a_draft() -> None:
+    catalogue = _catalogue()
+    (directory, manifest), = _authored_packages()
+    assert manifest["section_code"] == "PB" and directory.name == "pb"
+    assert set(manifest) == PROFILE_KEYS, "the key set is the legacy one: source is declared null"
+    assert manifest["source"] is None
+    assert manifest["format"] == "text-profile/1"
+    assert manifest["profile_version"] == "1.0.0"
+    assert manifest["status"] == "draft"
+    assert manifest["title_ru"] == catalogue["PB"] == "Пожарная безопасность"
+
+
+def test_all_legacy_packages_name_one_legacy_commit() -> None:
+    assert len({manifest["source"]["commit"] for _, manifest in _legacy_packages()}) == 1
 
 
 def test_identities_parse_are_fresh_and_unique() -> None:
@@ -171,7 +209,7 @@ def test_identities_parse_are_fresh_and_unique() -> None:
         profile_ids.append(str(AnalysisProfileId.parse(manifest["analysis_profile_id"])))
         bundle_ids.append(str(PromptBundleId.parse(manifest["prompt_bundle_id"])))
     ours = profile_ids + bundle_ids
-    assert len(ours) == len(set(ours)) == 2 * len(EXPECTED_SECTIONS)
+    assert len(ours) == len(set(ours)) == 2 * len(EXPECTED_SECTIONS | AUTHORED_SECTIONS)
     assert str(PROMPT_BUNDLE_ID) not in ours
     # No identity literal anywhere else in the source tree (AR v1, AR v2/v3, fixtures in
     # code) may be reused by a package.
@@ -187,7 +225,7 @@ def test_source_hashes_agree_with_the_catalogued_candidate_metadata() -> None:
         entry["code"]: entry["source_sha256"]
         for entry in json.loads(CANDIDATES.read_text("utf-8"))["sections"]
     }
-    for _, manifest in _packages():
+    for _, manifest in _legacy_packages():
         code = manifest["section_code"]
         for entry in manifest["source"]["files"]:
             name = entry["path"].rsplit("/", 1)[1]
@@ -198,7 +236,7 @@ def test_source_files_exist_at_the_recorded_legacy_commit() -> None:
     if not (LEGACY / ".git").exists():
         pytest.skip(f"legacy repository {LEGACY} is not on this host; hash-at-commit check skipped")
     checked = 0
-    for _, manifest in _packages():
+    for _, manifest in _legacy_packages():
         commit = manifest["source"]["commit"]
         for entry in manifest["source"]["files"]:
             blob = subprocess.run(
@@ -237,3 +275,51 @@ def test_every_system_prompt_keeps_the_v1_question_categories_and_output_contrac
         stray = set(SNAKE_TOKEN.findall(body)) - ALLOWED_SNAKE_TOKENS
         assert not stray, (code, sorted(stray))
         assert "```" not in body and "{" not in body, code
+
+
+# --- the authored profile (PB-PROFILE-01) -------------------------------------------------
+
+#: The only numbers the authored prompt may carry besides its numbered conditions: the two norm
+#: identifiers it names as families the model must NOT check against.
+ALLOWED_PB_NUMBERS = frozenset({"123", "13130"})
+#: The areas the task names for fire safety, each by a phrase that occurs in exactly one hint
+#: bullet (whitespace-normalised), so dropping a bullet cannot be hidden by a word used elsewhere.
+PB_AREAS = {
+    "evacuation": "число, ширина в свету и расположение эвакуационных выходов",
+    "fire resistance": "предел огнестойкости и класс пожарной опасности одной и той же строительной",
+    "fire compartments": "границы, площадь и число этажей одного и того же пожарного отсека",
+    "fire-fighting access": "ширина проезда для пожарной техники",
+    "smoke control": "одной и той же системы противодымной защиты",
+}
+
+
+def _pb_prompt() -> str:
+    return (PROFILES / "pb" / "system_prompt.md").read_text("utf-8")
+
+
+def test_the_pb_prompt_covers_each_named_fire_safety_area() -> None:
+    hints = _pb_prompt().split("Где в документе раздела ПБ", 1)[1].split("Прежде чем сообщить", 1)[0]
+    hints = " ".join(hints.split())
+    for area, marker in PB_AREAS.items():
+        assert hints.count(marker) == 1, area
+
+
+def test_the_pb_prompt_invents_no_requirement_number() -> None:
+    """No clause, limit or class threshold: the only numerals are the two norm identifiers."""
+    body = re.sub(r"(?m)^\s*[1-5]\. ", "", _pb_prompt())
+    found = set(re.findall(r"\d+", body))
+    assert found == ALLOWED_PB_NUMBERS, sorted(found)
+    # And the identifiers appear only as families the model is told not to check.
+    for sentence in re.findall(r"Ты НЕ проверяешь[^.]*\.", " ".join(body.split())):
+        assert "123-ФЗ" in sentence and "13130" in sentence
+    assert body.count("123") == 1 and body.count("13130") == 1
+
+
+def test_pb_open_questions_are_listed_in_the_package() -> None:
+    text = (PROFILES / "pb" / "open_questions.md").read_text("utf-8")
+    questions = re.findall(r"(?m)^\d+\. ", text)
+    assert len(questions) >= 8, "the package must list the expert's open questions"
+    assert [int(n.rstrip(". ")) for n in questions] == list(range(1, len(questions) + 1))
+    # Honest about what the profile is: a draft without expert review, evidence or recordings.
+    assert "`draft`" in text and "D-178" in text
+    assert "\r" not in text and text.endswith("\n")
