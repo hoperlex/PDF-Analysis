@@ -1662,3 +1662,17 @@ carries the evidence the first answer rests on).
 | `R-141a` | Publish to `origin/main` the exact commit `59a1be91e0886393e90d2181c2a7f8728fca2ed7` (fast-forward from `ec3ebf07`). The owner accepts, for this publication, the `R-125` completion recorded in `NIGHT-1020-GATE-0-7-0-01.md` (static and foundation green; first phase of the battery 6950 passed, 2 reds explained by the host and passed on whole-directory reruns; every other directory green on that SHA) in place of a literal `GATE OK`. This is the direct instruction `AGENTS.md` section 6 asks for, and it names no other SHA: any later change needs a new instruction. |
 | `R-141b` | The stand's test data is wiped before the push (`R-140`): the operator runs `infra/deploy/reset.sh` on the stand host (`--dry-run` first), never the integrator session. The push waits for the operator's confirmation that the wipe finished. |
 | `R-141c` | The first beta is a **closed beta on test data**. Accepted criteria: `B1`, `B2`, `B4`, `B6` (local drill), `B7`, `B8`, `B9`, `B12`. Explicitly deferred by the owner, with no weakening of their text: `B3`, `B5` (quality and real-document acceptance on a live model whose gateway is not confirmed), `B10` (expert smoke sessions), `B11` (decisions on retained client data). No real client document is uploaded to a closed-beta stand. Deferral means these four criteria are not claimed, not that they are waived for a later beta or for 1.0. |
+
+## 3.42 — `R-142`, record 0.7.0 after the owner's own merge; norms on the stand after the release (owner, 2026-10-21)
+
+After the owner merged `dev` into `main` himself (`R-141e`: pull request #2, `829117d3`, `VERSION` still
+`0.6.0`) he asked the integrator session in Russian, quoted: «Нормативная база должна быть на проде,
+релиз пусть и ручной нужно записать. + описание релиза для UI». The session put four questions by
+direct poll on 2026-10-21; the answers below are the options the owner selected.
+
+| Ruling | Substance |
+| --- | --- |
+| `R-142a` | The stand holds only generated test data (the premise of `R-110`, `R-140` and `R-141c`). The norms bundle may therefore be imported under the test-data waiver of `STAND-NORMS-IMPORT-RUNBOOK-01.md` (`copy attest --test-data`, no dump). If a real client document was uploaded anyway, the import stops. |
+| `R-142b` | The 0.7.0 record is a commit on top of `829117d3` (`VERSION`, `release-notes/0.7.0.json`, `RELEASES.md` row, records) and is checked by light acceptance: the release-notes tests, `tests/contract` and the documentation guards, not a literal `GATE OK`. It is shown to the owner with its exact SHA, and nothing is pushed to `origin/main` until the owner names that SHA (`AGENTS.md` section 6); this poll does not name it. |
+| `R-142c` | Order: the release first (push of the named SHA, workflow, `infra/deploy/verify-deployed.sh`, tag `v0.7.0`), then the norms import window the same day. The runbook forbids a deploy while an import record is open and requires a verified deployment before the import. |
+| `R-142d` | The stand has no inbound or copy key installed, so the transfer cannot start. The integrator prepares the key-install steps for the owner (`DEPLOYMENT_RUNBOOK.md` sections 11 and 13); the window, who designates the snapshot and the capacity check remain open until the owner names them. |

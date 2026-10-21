@@ -16,11 +16,11 @@ those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 
 The development API surface is **73 paths / 83 operations / 242 schemas**,
 the error catalogue has **25** codes, the migration head is
-**`0028_classification_corrections`**, and `VERSION` is `0.6.0`. These are checkout
-facts; the release tree has its own frozen 47/54/123 surface and
-`0021_portal_bundles` head. For the current deployment, run
-`infra/deploy/verify-deployed.sh`; this document is no substitute for that
-probe.
+**`0028_classification_corrections`**, and `VERSION` is `0.7.0`. `origin/main`
+carries this tree since the owner's own merge (`R-141e`, no gate) under `VERSION`
+`0.6.0`; `0.7.0` is the prepared record (`RELEASE-0-7-0-RECORD-01.md`), not yet
+pushed or tagged. The last tagged release is `v0.6.0`. For the current deployment,
+run `infra/deploy/verify-deployed.sh`; this document is no substitute for that probe.
 
 ## Normative corpus (W54)
 
