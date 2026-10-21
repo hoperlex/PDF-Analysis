@@ -132,7 +132,10 @@ the `document.section` CHECK by `PS` (`0011` keeps legacy's fourteen as history)
 `document_version_classification_correction` (revision 2, 3, ... with the correcting expert and a
 reason; revision 1 is the unchanged original) and the views `version_classification_revision`
 (the history) and `version_classification_current` (the latest revision, which every classification
-read uses).
+read uses). `BETA-CONTRACT-SEAL-01` adds `0029_routing_refusal_codes`: the four stored-error
+`CHECK`s (`command_record`, `audit_run`, `model_call`, `provider_call_effect`) admit the two
+run-routing codes `version_classification_required` and `section_profile_unavailable` (`D-179`);
+no table, column or row changes, and the downgrade refuses while a row carries either code.
 
 ### 3.1 Tables
 
@@ -1196,7 +1199,14 @@ guard. Neither error contains the supplied or stored token.
 `authentication_required` and `permission_denied` — PC-01 has no authentication and no
 role model. They stay in the closed enum; no route emits them.
 
-`required_norm_unavailable` — no norms snapshot is pinned.
+`required_norm_unavailable` — no norms snapshot is pinned, or a run's pinned analysis profile pair
+is not registered in the deployment (`reference_kind: analysis_profile`, raised by the executor).
+
+`version_classification_required` and `section_profile_unavailable` (`BETA-CONTRACT-SEAL-01`,
+`D-179`) — `startRun` and `reauditRun` refuse a version with no expert-confirmed stage and section,
+and a confirmed section with no registered text profile, each with its own code and no details,
+before the idempotency key is claimed; a draft reported both as `required_norm_unavailable` with
+`reference_kind` `version_classification` / `analysis_profile`.
 
 `unsupported_contract_version` — the surface carries one contract version.
 

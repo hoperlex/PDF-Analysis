@@ -13,7 +13,7 @@
  *
  * **1. It is keyed on the whole catalog, and the reason is what constrains the field.**
  * `transport.ts`'s `decodeFailure` constructs an `ApiError` exactly when `isErrorCode()`
- * passes, and `isErrorCode` tests membership of `ERROR_CODE_VALUES` — the whole 25-code
+ * passes, and `isErrorCode` tests membership of `ERROR_CODE_VALUES` — the whole 27-code
  * catalog. It does **not** test `PC01_ERROR_CODES`. Every classifier that consumes this
  * map has a `default:` arm that fires for any code it has no branch for, and seven catalog
  * codes are outside `PC01_ERROR_CODES` — `unsupported_contract_version`,
@@ -126,6 +126,14 @@ const CATALOG_MESSAGES: Readonly<Record<ErrorCode, string>> = {
     'Авторитетный источник, от которого зависит работа, — снимок норм, набор промптов ' +
     'или профиль анализа — не удаётся разрешить в неизменяемую версионированную запись. ' +
     'Неверсионированный, частичный или замещающий источник вместо него не используется.',
+  version_classification_required:
+    'У версии нет подтверждённых экспертом стадии и раздела, поэтому профиль анализа выбрать ' +
+    'нельзя. Профиль не угадывается и профиль АР вместо него не подставляется. Прогон не ' +
+    'создан; сначала подтвердите стадию и раздел версии.',
+  section_profile_unavailable:
+    'Для подтверждённого раздела версии нет зарегистрированного профиля анализа. Профиль ' +
+    'другого раздела вместо него не подставляется. Прогон не создан и станет возможен, когда ' +
+    'профиль раздела появится.',
   analysis_input_invalid:
     'Переданный пакет анализа или объявленный вход этапа неприемлем. Семантика ' +
     'конкретных полей этапа принадлежит контракту анализа; этот код — её внешне видимое ' +

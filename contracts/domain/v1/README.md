@@ -1,14 +1,18 @@
-# Domain contract v1 — candidate `1.0.0-draft.1`, revision 13
+# Domain contract v1 — candidate `1.0.0-draft.1`, revision 18
 
 Owner lane: [W0-DOM-01](../../../docs/program/tasks/W0-DOM-01.md) (domain contract
 owner); the additive norm-identity amendment is owned by
 [NORM-ID-01](../../../docs/program/tasks/NORM-ID-01.md). Status: **candidate draft —
 working-tree amendment, not frozen, not ratified.** Every
 catalog in this directory declares `contract_version` `1.0.0-draft.1`,
-`candidate_revision` `13`, `status` `draft_candidate` and `frozen` `false`, and the three
-family schemas pin `candidate_revision` `const: 13` to match. Revision 13 adds the
-fail-closed `model_identity_mismatch` code for the recorded-only W56a seal;
-identity and state-machine members do not change.
+`candidate_revision` `18`, `status` `draft_candidate` and `frozen` `false`, and the three
+family schemas pin `candidate_revision` `const: 18` to match. Revision 13 added the
+fail-closed `model_identity_mismatch` code for the recorded-only W56a seal; revisions 14 to
+17 moved the identity register with the later waves; revision 18 (`BETA-CONTRACT-SEAL-01`
+phase A, `D-179`) adds the two codes `version_classification_required` and
+`section_profile_unavailable`, see
+[What changed in revision 18](#what-changed-in-revision-18-and-what-breaks-for-a-reader-of-revision-17).
+Identity and state-machine members do not change.
 
 This family defines three primitives that every other bounded context depends on:
 opaque identity, durable lifecycle and the externally visible failure shape. It is a
@@ -95,7 +99,7 @@ beside the identities and not among them. No machine, state or product identity 
 | [identifiers.schema.json](identifiers.schema.json) | Shape of the identity catalog |
 | [state-machines.json](state-machines.json) | Eight closed lifecycles, guards, terminal semantics, run-creation rule, optional-branch policy, projections |
 | [state-machines.schema.json](state-machines.schema.json) | Shape of the lifecycle catalog |
-| [error-codes.json](error-codes.json) | 23 typed codes, categories, envelope declaration, detail-safety and internal-mapping rules |
+| [error-codes.json](error-codes.json) | 27 typed codes, categories, envelope declaration, detail-safety and internal-mapping rules |
 | [error-codes.schema.json](error-codes.schema.json) | Shape of the error catalog |
 | [error-envelope.schema.json](error-envelope.schema.json) | The externally visible failure envelope |
 | [examples/error-envelope.example.json](examples/error-envelope.example.json) | Valid envelope (`stale_attempt`) |
@@ -451,7 +455,7 @@ appended a new decision event.
 
 ## Errors
 
-24 codes across 10 categories. Each code declares `http`, `retryable`, `category`, a
+27 codes across 10 categories. Each code declares `http`, `retryable`, `category`, a
 `summary`, its `safe_detail_keys` and its inventory evidence.
 
 The envelope is:
@@ -760,6 +764,23 @@ assumption.
   - `attempt` gains the `lost` terminal, distinct from `superseded`;
   - the error envelope gains required `contract_version` and required `retryable`;
   - two identifiers are added: `lease_id` (`lse`) and `command_id` (`cmd`).
+
+### What changed in revision 18, and what breaks for a reader of revision 17
+
+Revision 18 is written by `BETA-CONTRACT-SEAL-01` phase A, under `D-179` and the integrator's
+closed-beta seal decision, with migration `0029_routing_refusal_codes`.
+
+| Change | Consumer impact |
+|---|---|
+| New code `version_classification_required` (`422`, not retryable, category `policy`, no detail keys) | **Changed behaviour of a draft.** `startRun` and `reauditRun` answered a version with no expert-confirmed stage and section with `required_norm_unavailable` and `details.reference_kind: version_classification`; they now answer this code and carry no details. |
+| New code `section_profile_unavailable` (`422`, not retryable, category `dependency`, no detail keys) | **Changed behaviour of a draft.** The same operations answered a confirmed section with no registered text profile with `required_norm_unavailable` and `reference_kind: analysis_profile`; they now answer this code. |
+| `required_norm_unavailable` keeps `reference_kind: analysis_profile` for the executor's refusal of a run's pinned profile pair that the deployment does not register (both identities in the details) | **Unchanged.** It names a pair a run already pinned, not a routing decision. |
+| The stored-error vocabulary (the four `CHECK`s of `command_record`, `audit_run`, `model_call` and `provider_call_effect`) gains both codes | **Additive.** Both refusals precede the idempotency key's claim and write nothing today; the vocabulary admits them so that no later path has to widen it again. |
+| `candidate_revision` `17` → `18` in all three catalogs and the three schema `const` pins | Readers pinning the candidate revision must move. |
+
+The error catalog goes from twenty-five to twenty-seven codes; no identity, machine, state,
+transition or guard changes. `contract_version` remains `1.0.0-draft.1` and `frozen` remains
+`false` in this revision.
 
 ### What changed in revision 12, and what breaks for a reader of revision 11
 

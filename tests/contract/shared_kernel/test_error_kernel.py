@@ -31,8 +31,12 @@ class TheEnumIsExactlyTheCatalog(unittest.TestCase):
     def test_member_set_equals_the_catalog_key_set(self) -> None:
         self.assertEqual(frozenset(c.value for c in ErrorCode), frozenset(RAW["codes"]))
 
-    def test_there_are_twenty_five(self) -> None:
-        """Twenty-five since `W56A-SEAL-01` (commit `bcd5ad26`, candidate revision 13) added
+    def test_there_are_twenty_seven(self) -> None:
+        """Twenty-seven since `BETA-CONTRACT-SEAL-01` (`D-179`) added `version_classification_required`
+        and `section_profile_unavailable`, the dedicated answers of the two run-start routing
+        refusals that used to reuse `required_norm_unavailable`.
+
+        The twenty-fifth came with `W56A-SEAL-01` (commit `bcd5ad26`, candidate revision 13) added
         `model_identity_mismatch`, the fail-closed refusal of a provider response whose model
         identity differs from the configured and pinned model (`R-133`).
 
@@ -47,9 +51,10 @@ class TheEnumIsExactlyTheCatalog(unittest.TestCase):
 
         Mutation: add or remove one code in the catalogue and the enum together -> the count
         differs from this pin and this test reddens (`GATE-FIX-CONTRACT-01` replayed it by
-        restoring the stale pin, 24, against the 25-code tree).
+        restoring the stale pin, 24, against the 25-code tree). `BETA-CONTRACT-SEAL-01` moved the
+        pin to 27 with the two run-routing codes.
         """
-        self.assertEqual(len(list(ErrorCode)), 25)
+        self.assertEqual(len(list(ErrorCode)), 27)
 
     def test_contract_version_is_read_not_restated(self) -> None:
         self.assertEqual(CONTRACT_VERSION, RAW["contract_version"])

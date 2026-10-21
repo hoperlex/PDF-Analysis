@@ -104,7 +104,7 @@ from what the previous step's *screen* produced.
 
 `classify-version` exists because `W59-SECTION-SEAL-01` routes a run from the version's
 expert-confirmed stage and section: an unclassified version is refused with
-`422 required_norm_unavailable` (`reference_kind: version_classification`) before any run
+`422 version_classification_required` before any run
 exists, so a journey that went straight from the upload to **Start run** would stop at
 `start-run` with a refusal (`W59-SECTION-UI-01`). The read walk's `version` route declares the
 panel's `getVersionSectionReview` read for the same reason.

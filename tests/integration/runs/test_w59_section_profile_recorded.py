@@ -12,8 +12,8 @@ directory -- each case below runs on the lane's own PostgreSQL and MinIO:
   ``published``; the text stage's persisted metrics carry X's prompt-bundle and profile
   hashes and the request key of X's recording, and the published findings are exactly the
   observations of X's recording, under X's pair, in ``recorded`` mode;
-* ``PB`` is refused at run start (``required_norm_unavailable``, ``analysis_profile``) and
-  an unclassified version too (``version_classification``); neither writes a run;
+* ``PB`` is refused at run start (``section_profile_unavailable``) and
+  an unclassified version is refused with ``version_classification_required``; neither writes a run;
 * the АИ recording does not answer a ПЗ run: over the АИ directory alone the run ends
   ``failed`` with ``recording_missing``, and the АИ file filed under the ПЗ key ends it
   with ``recording_key_mismatch``; no finding is published either way.
@@ -145,8 +145,8 @@ def test_a_pb_version_is_refused_at_run_start_without_a_substitute(
     _classify(session, seeded, "PB")
     with pytest.raises(DomainError) as refused:
         _start(session, seeded, new_key("w59-section-recorded-PB"))
-    assert refused.value.code is ErrorCode.REQUIRED_NORM_UNAVAILABLE
-    assert refused.value.detail_fields["reference_kind"] == "analysis_profile"
+    assert refused.value.code is ErrorCode.SECTION_PROFILE_UNAVAILABLE
+    assert refused.value.detail_fields == {}
     assert _runs_of(session, seeded.version_uid) == 0
 
 
@@ -155,8 +155,8 @@ def test_an_unclassified_version_is_refused_at_run_start(
 ) -> None:
     with pytest.raises(DomainError) as refused:
         _start(session, seeded, new_key("w59-section-recorded-unclassified"))
-    assert refused.value.code is ErrorCode.REQUIRED_NORM_UNAVAILABLE
-    assert refused.value.detail_fields["reference_kind"] == "version_classification"
+    assert refused.value.code is ErrorCode.VERSION_CLASSIFICATION_REQUIRED
+    assert refused.value.detail_fields == {}
     assert _runs_of(session, seeded.version_uid) == 0
 
 
