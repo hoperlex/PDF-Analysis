@@ -213,4 +213,3 @@ restored. All nine are killed.
 | 7 | `entities/norm-reference/model/presentation.ts` | `const hidden = occurrenceCount - anchors.length;` -> `0` | the places test («и ещё N») |
 | 8 | `widgets/norm-references/ui/norm-references-answer.tsx` | `routes.normDocument(documentId)` -> a fixed id | the row test: the link points at the matched norm only |
 | 9 | `tests/unit/styles/screens.ts` | the census no longer renders `NormReferencesAnswer` | `contrast.test.ts`: names the unreached colour-bearing rules |
-
