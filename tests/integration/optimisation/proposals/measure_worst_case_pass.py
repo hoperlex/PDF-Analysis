@@ -24,13 +24,21 @@ cost is a function of the shape, so four shapes are built (``D185_SCENARIO``):
     real price list looks like, at the maximum size.
 ``one_head_similar``
     One head word, one unit, one currency; every name differs from every other by one word, so
-    every pair is an analog. The generator's candidate list for a row is the whole cheaper half.
+    every pair is an analog. The candidate list of a row is the whole cheaper half.
 ``one_head_dissimilar``
-    The same bucket, but no pair is similar enough: the generator scans the cheaper half of the
-    price list for every row and proposes nothing.
+    The same bucket, but no pair is similar enough: nothing is ever proposed.
+``two_words``
+    ``Профиль 17``: names that differ by one number each and share only the head word.
 ``common_code_token``
     Every code opens with the same token (``ПК``) and every row names it, so the matcher's code
-    index returns the whole price list for every row.
+    index holds the whole price list under one key.
+``rich``
+    Every field present and long (code, mark, a 300-character name): what the 10 MiB file cap
+    allows at 20 000 rows, and the heaviest index the matcher builds.
+``overlap_dissimilar``
+    Contrived: every name draws six words from slots of twenty, so nearly every pair shares a word
+    and almost none reaches the threshold, and the rows are the dearest positions, whose cheaper
+    prefix is the longest. The residual worst case of the search.
 
 Each repetition changes the vendor list's notes, which changes the pass's pinned inputs and so
 makes the server compute a fresh pass instead of answering the stored one.
@@ -78,31 +86,54 @@ HEADER = (
 )
 
 
-def _names(scenario: str) -> tuple[list[str], list[str | None], list[str]]:
-    """Position names, position codes, and the description each specification row carries."""
+def _names(scenario: str) -> tuple[list[str], list[str | None], list[str], list[str | None]]:
+    """Position names, codes and marks, and the description each specification row carries."""
+    nothing: list[str | None] = [None] * POSITIONS
     if scenario == "catalogue":
         names = [f"Материал{i % 200} тип {i}" for i in range(POSITIONS)]
-        return names, [None] * POSITIONS, [names[(2 * k) % POSITIONS] for k in range(ROWS)]
+        return names, nothing, [names[(2 * k) % POSITIONS] for k in range(ROWS)], nothing
     if scenario == "one_head_similar":
         names = [f"Профиль вариант {i}" for i in range(POSITIONS)]
-        return names, [None] * POSITIONS, [names[(2 * k) % POSITIONS] for k in range(ROWS)]
+        return names, nothing, [names[(2 * k) % POSITIONS] for k in range(ROWS)], nothing
     if scenario == "one_head_dissimilar":
         names = [f"Профиль {i}x{(i * 7919) % 10007} z{i % 977} q{(i * 31) % 4999}" for i in range(POSITIONS)]
-        return names, [None] * POSITIONS, [names[(2 * k) % POSITIONS] for k in range(ROWS)]
+        return names, nothing, [names[(2 * k) % POSITIONS] for k in range(ROWS)], nothing
+    if scenario == "two_words":
+        names = [f"Профиль {i}" for i in range(POSITIONS)]
+        return names, nothing, [names[(2 * k) % POSITIONS] for k in range(ROWS)], nothing
     if scenario == "common_code_token":
         names = [f"Плита {i}" for i in range(POSITIONS)]
         codes: list[str | None] = [f"ПК {10000 + i}" for i in range(POSITIONS)]
-        return names, codes, [f"Плита ПК {10000 + (2 * k) % POSITIONS}" for k in range(ROWS)]
+        return names, codes, [f"Плита ПК {10000 + (2 * k) % POSITIONS}" for k in range(ROWS)], nothing
+    if scenario == "rich":
+        filler = " ".join(f"слово{w}" for w in range(30))
+        names = [f"Изделие {i} {filler} типоразмер {i % 97}" for i in range(POSITIONS)]
+        codes = [f"АБВ {20000 + i}" for i in range(POSITIONS)]
+        marks: list[str | None] = [f"МК-{i}" for i in range(POSITIONS)]
+        return names, codes, [names[(2 * k) % POSITIONS] for k in range(ROWS)], marks
+    if scenario == "overlap_dissimilar":
+        rnd = random.Random(7)
+        names = [
+            f"Профиль {i}n " + " ".join(f"с{slot}в{rnd.randrange(20)}" for slot in range(6))
+            for i in range(POSITIONS)
+        ]
+        return names, nothing, [names[POSITIONS - 1 - k] for k in range(ROWS)], nothing
     raise AssertionError(f"unknown D185_SCENARIO {scenario!r}")
 
 
 def _price_list(scenario: str) -> bytes:
-    names, codes, _ = _names(scenario)
+    names, codes, _, marks = _names(scenario)
     rnd = random.Random(20261021)
     lines = ["Код;Наименование;Марка;Ед. изм.;Цена;Валюта;Поставщик"]
     for index in range(POSITIONS):
-        price = f"{rnd.randint(1000, 900000) / 100:.2f}".replace(".", ",")
-        lines.append(f"{codes[index] or ''};{names[index]};;шт;{price};RUB;{VENDORS[rnd.randrange(len(VENDORS))]}")
+        if scenario == "overlap_dissimilar":  # the dearest positions are the rows': the longest prefixes
+            price = f"{index + 1}"
+        else:
+            price = f"{rnd.randint(1000, 900000) / 100:.2f}".replace(".", ",")
+        lines.append(
+            f"{codes[index] or ''};{names[index]};{marks[index] or ''};шт;{price};RUB;"
+            f"{VENDORS[rnd.randrange(len(VENDORS))]}"
+        )
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 
