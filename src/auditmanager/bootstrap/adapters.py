@@ -1032,6 +1032,23 @@ class RunAdapter(_SessionHolder):
             dependency="norm_verification_reader",
         )
 
+    def get_run_norm_references(self, *, run_id: str) -> models.RunNormReferences:
+        """`NORM-REFS-RUN-01`. The norms the run's saved text cites, against its snapshot.
+
+        The runs context owns the rule (``runs.public.read_run_norm_references``: the run, its
+        version, the saved text, the pinned snapshot's catalogue and the unchanged W57b
+        resolver); this adapter owns only the port it needs -- the saved text, read as the
+        comparison reads it (:class:`_AnalysisReader`) -- and the mapping into the frozen
+        ``RunNormReferences``. One session holds every read and nothing is written.
+        """
+        from auditmanager.runs.public import read_run_norm_references
+
+        reader = _RunSavedText(self._blob_store)
+        answer = self._read(
+            lambda session: read_run_norm_references(session, run_id=run_id, reader=reader)
+        )
+        return models.RunNormReferences.model_validate(_norm_references_view(answer))
+
     def run_exists(self, *, run_id: str) -> bool:
         """`D-74`. One row of ``audit_run``, and nothing else.
 
@@ -3089,6 +3106,88 @@ class _SpecificationTextReader:
         if text is None:
             return None
         return SavedPageText(text.run_id, text.text_layer_sha256, dict(text.pages))
+
+
+class _RunSavedText:
+    """The runs context's ``SavedRunTextReader`` over the comparison's run reader."""
+
+    def __init__(self, blob_store: Any) -> None:
+        self._analyses = _AnalysisReader(blob_store)
+
+    def saved_page_text(
+        self, session: Session, *, run_id: str, version_uid: str, page_count: int
+    ) -> Any:
+        from types import SimpleNamespace
+
+        from auditmanager.runs.public import SavedRunPageText
+
+        text = self._analyses.saved_page_text(
+            session,
+            run_id=run_id,
+            version=SimpleNamespace(version_uid=version_uid, page_count=page_count),
+        )
+        if text is None:
+            return None
+        return SavedRunPageText(text.run_id, text.text_layer_sha256, dict(text.pages))
+
+
+def _norm_references_view(answer: Any) -> dict[str, Any]:
+    """The listing as the frozen ``RunNormReferences``: a property that does not apply is absent,
+    never ``null``."""
+    view: dict[str, Any] = {
+        "run_id": answer.run_id,
+        "version_uid": answer.version_uid,
+        "state": answer.state,
+        "page_count": answer.page_count,
+    }
+    if answer.norms_snapshot_id is not None:
+        view["norms_snapshot_id"] = answer.norms_snapshot_id
+    if answer.text_layer_sha256 is not None:
+        view["text_layer_sha256"] = answer.text_layer_sha256
+    model = answer.references
+    if model is None:
+        return view
+    items: list[dict[str, Any]] = []
+    for item in model.items:
+        shown: dict[str, Any] = {
+            "cited": item.cited,
+            "outcome": item.outcome,
+            "occurrence_count": item.occurrence_count,
+            "anchors": [
+                {
+                    "page_number": anchor.page_number,
+                    "char_start": anchor.char_start,
+                    "char_end": anchor.char_end,
+                    "quote": anchor.quote,
+                }
+                for anchor in item.anchors
+            ],
+        }
+        if item.matched_document_id is not None:
+            shown["matched_norm_document_id"] = item.matched_document_id
+            shown["matched_designation"] = item.matched_designation
+        if item.matched_title is not None:
+            shown["matched_title"] = item.matched_title
+        items.append(shown)
+    unrecognised: list[dict[str, Any]] = []
+    for document in model.unrecognised:
+        shown = {
+            "norm_document_id": document.document_id,
+            "slug": document.slug,
+            "designation": document.designation,
+        }
+        if document.title is not None:
+            shown["title"] = document.title
+        unrecognised.append(shown)
+    view.update(
+        snapshot_document_count=model.snapshot_document_count,
+        counts=dict(model.counts),
+        occurrence_count=model.occurrence_count,
+        unread_pages=list(model.unread_pages),
+        items=items,
+        unrecognised=unrecognised,
+    )
+    return view
 
 
 def _price_list_ref_view(revision: Any, position_count: int | None) -> dict[str, Any]:

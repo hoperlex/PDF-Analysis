@@ -1,0 +1,84 @@
+/* «Нормативные ссылки» (`NORM-REFS-RUN-01`). Consumes the global tokens only. */
+
+.section {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.heading {
+  margin: 1rem 0 0.5rem;
+}
+
+.rule {
+  margin: 0 0 0.75rem;
+  color: var(--am-ink-muted);
+}
+
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.details {
+  margin: 0.75rem 0;
+}
+
+.details summary {
+  cursor: pointer;
+}
+
+.list {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+
+.legend {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+}
+
+.legend dt {
+  font-weight: 600;
+}
+
+.legend dd {
+  margin: 0;
+  color: var(--am-ink-muted);
+}
+
+.frame {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cell {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--am-line-soft);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}

@@ -272,6 +272,8 @@ GUARDED = (
     ),
     # `W63-SECTION-FORM7-01`. A section's combined Form-7 specification, read-only.
     ("getSectionSpecification", "GET", "/sections/AR/specification"),
+    # `NORM-REFS-RUN-01`. The norms a run's saved text cites, read-only.
+    ("getRunNormReferences", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/norm-references"),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the

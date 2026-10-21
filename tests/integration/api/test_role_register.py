@@ -173,6 +173,8 @@ SAMPLES: dict[str, tuple[str, str]] = {
     ),
     # `W63-SECTION-FORM7-01`. A section's combined specification across projects (any role).
     "getSectionSpecification": ("GET", "/sections/AR/specification"),
+    # `NORM-REFS-RUN-01`. The norms a run's saved text cites (any role).
+    "getRunNormReferences": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/norm-references"),
     "getFinding": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
     "appendDecision": ("POST", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
     "listDecisionHistory": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
@@ -245,6 +247,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "getSpecificationPrices": _ANY_ROLE,
     # `W63-SECTION-FORM7-01`: a section's combined specification is a product read.
     "getSectionSpecification": _ANY_ROLE,
+    # `NORM-REFS-RUN-01`: the run's cited norms are a product read.
+    "getRunNormReferences": _ANY_ROLE,
     "listRunFindings": _ANY_ROLE,
     "getFinding": _ANY_ROLE,
     "listDecisionHistory": _ANY_ROLE,

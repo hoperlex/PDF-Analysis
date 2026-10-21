@@ -70,6 +70,7 @@ import type {
   RunStateCount,
   RunStatus,
   SectionReview,
+  RunNormReferences,
   SpecificationPrices,
   StageId,
   StageStatus,
@@ -101,6 +102,7 @@ import { CarryOverDecisionView } from '@/features/carry-over-decision';
 import { VersionClassification, VersionClassificationView } from '@/widgets/version-classification';
 import { ProjectStructureView } from '@/widgets/project-sections';
 import { SpecificationPricesAnswer, SpecificationPricesSection } from '@/widgets/specification-prices';
+import { NormReferencesAnswer, NormReferencesSection } from '@/widgets/norm-references';
 import { SPECIFICATION_ROW_LIMIT } from '@/entities/specification-price';
 import { SectionSpecificationAnswer, SectionSpecificationSection } from '@/widgets/section-specification';
 import { SECTION_ROW_LIMIT } from '@/entities/section-specification';
@@ -646,6 +648,45 @@ const specificationAnswer = (over: Partial<SpecificationPrices> = {}): Specifica
       },
     ],
   },
+  ...over,
+});
+/**
+ * `NORM-REFS-RUN-01`. One answer of «Нормативные ссылки», every value Cyrillic, an identifier or
+ * a contract enum: a citation of each of the five outcomes (one of them kept at ten of twelve
+ * occurrences), a page with no text layer, and a corpus document whose designation is not read.
+ */
+const NORM_DOC_A = 'ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+const NORM_DOC_B = 'ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8G';
+const normAnchor = (page: number) => ({ page_number: page, char_start: 10, char_end: 26, quote: 'СП 54.13330.2011' });
+const normReferencesAnswer = (over: Partial<RunNormReferences> = {}): RunNormReferences => ({
+  run_id: RUN_ID,
+  version_uid: VERSION_UID,
+  state: 'ready',
+  page_count: 12,
+  norms_snapshot_id: 'ns_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+  text_layer_sha256: SHA,
+  snapshot_document_count: 674,
+  counts: { in_corpus: 1, newer_edition: 1, older_edition_only: 1, not_in_corpus: 1, not_recognised: 1 },
+  occurrence_count: 15,
+  unread_pages: [2, 5],
+  items: [
+    {
+      cited: 'СП 54.13330.2022', outcome: 'in_corpus', occurrence_count: 1, anchors: [normAnchor(3)],
+      matched_norm_document_id: NORM_DOC_A, matched_designation: 'СП 54.13330.2022', matched_title: 'Свод правил. Здания жилые',
+    },
+    {
+      cited: 'СП 54.13330.2011', outcome: 'newer_edition', occurrence_count: 12,
+      anchors: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(normAnchor),
+      matched_norm_document_id: NORM_DOC_B, matched_designation: 'СП 54.13330.2024',
+    },
+    {
+      cited: 'ГОСТ 21.101-2021', outcome: 'older_edition_only', occurrence_count: 1, anchors: [normAnchor(4)],
+      matched_norm_document_id: NORM_DOC_A, matched_designation: 'ГОСТ 21.101-2020',
+    },
+    { cited: 'ГОСТ Р 99999-2020', outcome: 'not_in_corpus', occurrence_count: 1, anchors: [normAnchor(5)] },
+    { cited: 'СП 54.13330', outcome: 'not_recognised', occurrence_count: 1, anchors: [normAnchor(6)] },
+  ],
+  unrecognised: [{ norm_document_id: NORM_DOC_B, slug: 'МДС_12-24_2006', designation: 'МДС 12-24.2006', title: 'Устройство обычных' }],
   ...over,
 });
 const SPECIFICATION_STOPPED = {
@@ -2448,6 +2489,39 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         }),
     }),
   ),
+  /*
+   * `NORM-REFS-RUN-01`. «Нормативные ссылки» is a section of the run page's progress widget for a
+   * finished run: its container pending and refused, and the answer in every state it can carry.
+   */
+  { name: 'norm-references-section', make: () => createElement(NormReferencesSection, { runId: RUN_ID }) },
+  {
+    name: 'norm-references-section-ready',
+    make: () => createElement(NormReferencesSection, { runId: RUN_ID }),
+    seedClient: (client) => client.setQueryData(queryKeys.runs.normReferences(RUN_ID), normReferencesAnswer()),
+  },
+  {
+    name: 'norm-references-refused',
+    make: () => createElement(NormReferencesSection, { runId: RUN_ID }),
+    seedClient: (client) => seedError(client, queryKeys.runs.normReferences(RUN_ID), apiError(503, 'dependency_unavailable')),
+  },
+  { name: 'norm-references-ready', make: () => createElement(NormReferencesAnswer, { answer: normReferencesAnswer() }) },
+  {
+    name: 'norm-references-ready-empty',
+    make: () =>
+      createElement(NormReferencesAnswer, {
+        answer: normReferencesAnswer({
+          counts: { in_corpus: 0, newer_edition: 0, older_edition_only: 0, not_in_corpus: 0, not_recognised: 0 },
+          occurrence_count: 0, unread_pages: [], items: [], unrecognised: [],
+        }),
+      }),
+  },
+  ...(['snapshot_not_pinned', 'text_unavailable', 'too_many_citations'] as const).map((state) => ({
+    name: `norm-references-${state}`,
+    make: () =>
+      createElement(NormReferencesAnswer, {
+        answer: { run_id: RUN_ID, version_uid: VERSION_UID, state, page_count: 12 },
+      }),
+  })),
   /*
    * `W63-SECTION-FORM7-01`. «Оптимизация разделов» is the whole of `/section-optimisation`, whose
    * route-derived screen is its read pending; its own read refused, and the answer in every

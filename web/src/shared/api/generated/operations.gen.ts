@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 b4b7b9fc67f80ae2a9dc0a12abeab442b5a2f06bc7434294261492566036224f
+ *   sha256 7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -96,6 +96,7 @@ import type {
   ReleaseList,
   ResetUserPasswordRequest,
   RunId,
+  RunNormReferences,
   RunStatus,
   RunStatusPage,
   SectionReview,
@@ -151,6 +152,7 @@ export const OPERATION_IDS = [
   'getMe',
   'getNormDocument',
   'getProductVersion',
+  'getRunNormReferences',
   'getRunNormVerification',
   'getRunStatus',
   'getSectionSpecification',
@@ -792,6 +794,29 @@ export type GetProductVersionInput = {
 
 /** Success body of `getProductVersion` (`application/json`, HTTP 200). */
 export type GetProductVersionResult = ProductVersion;
+
+// ------------------------------------------------------------------------------------
+// getRunNormReferences - GET /runs/{run_id}/norm-references
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Run Norm References
+ *
+ * «Нормативные ссылки»: the normative documents (СП, ГОСТ, СНиП, СанПиН, ВСН, federal laws and government acts) cited in the run's saved text, each resolved against the norms snapshot the run pinned as `in_corpus`, `newer_edition`, `older_edition_only` (the corpus holds only an earlier edition than the one cited), `not_in_corpus` or `not_recognised`, with the pages each occurs on and the corpus document it points at. Computed per request by the same resolver the W57b rule uses; publishes no finding, proposes no severity and calls no model. A precondition that does not hold is `state` (`snapshot_not_pinned`, `text_unavailable`, `too_many_citations`), never an empty list; the corpus documents whose designation the parser cannot read are listed as `unrecognised`; pages without a text layer are `unread_pages`. An unknown run is `404`. Any one role, `role:admin|expert`.
+ */
+export type GetRunNormReferencesInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/norm-references`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getRunNormReferences` (`application/json`, HTTP 200). */
+export type GetRunNormReferencesResult = RunNormReferences;
 
 // ------------------------------------------------------------------------------------
 // getRunNormVerification - GET /runs/{run_id}/norm-verification
@@ -2702,6 +2727,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 500, 503],
     tags: ['releases'],
+  },
+  getRunNormReferences: {
+    operationId: 'getRunNormReferences',
+    method: 'GET',
+    path: '/runs/{run_id}/norm-references',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['runs'],
   },
   getRunNormVerification: {
     operationId: 'getRunNormVerification',

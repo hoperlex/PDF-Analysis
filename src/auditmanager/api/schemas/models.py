@@ -137,6 +137,11 @@ __all__ = [
     "NormObservationCitationPartition",
     "NormFindingVerification",
     "NormVerificationReport",
+    "NormReferenceCounts",
+    "NormReferenceAnchor",
+    "NormReferenceItem",
+    "NormReferenceUnrecognised",
+    "RunNormReferences",
     "NormParagraphKind",
     "NormTextReliability",
     "NormBuildState",
@@ -1437,6 +1442,125 @@ class NormVerificationReport(_Object):
     ]
     textless_pages: list[Annotated[int, Field(ge=1)]]
     error_code: ErrorCode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+# --- the norms a run's text cites (`NORM-REFS-RUN-01`) ----------------------------------------
+#
+# «Нормативные ссылки» on the run page: the normative documents the run's saved text cites,
+# each resolved against the norms snapshot the run pinned. Computed per request and read-only:
+# no finding is published, no severity is proposed and no model is called. The five outcomes are
+# the resolver's (`W57-PLAN.md` B3.3): ``in_corpus``, ``newer_edition``, ``older_edition_only``
+# (the corpus holds only an earlier edition than the one cited), ``not_in_corpus`` and
+# ``not_recognised`` (the citation could not be read as a designation). The state and the
+# outcome are inline closed sets, not component schemas: nothing else uses them.
+
+_NormReferenceState = Literal["ready", "snapshot_not_pinned", "text_unavailable", "too_many_citations"]
+_NormReferenceOutcome = Literal[
+    "in_corpus", "newer_edition", "older_edition_only", "not_in_corpus", "not_recognised"
+]
+
+
+class NormReferenceCounts(_Object):
+    """Distinct cited designations per outcome; every outcome is present, zeros written."""
+
+    in_corpus: Annotated[int, Field(ge=0)]
+    newer_edition: Annotated[int, Field(ge=0)]
+    older_edition_only: Annotated[int, Field(ge=0)]
+    not_in_corpus: Annotated[int, Field(ge=0)]
+    not_recognised: Annotated[int, Field(ge=0)]
+
+
+class NormReferenceAnchor(_Object):
+    """One occurrence of a citation: the PDF page and the offsets inside that page's text."""
+
+    page_number: Annotated[int, Field(ge=1, le=500)]
+    char_start: Annotated[int, Field(ge=0)]
+    char_end: Annotated[int, Field(ge=1)]
+    quote: Annotated[str, Field(min_length=1, max_length=300)]
+
+
+class NormReferenceItem(_Object):
+    """One distinct cited designation and what the pinned snapshot holds for it.
+
+    ``anchors`` keeps at most ten occurrences in reading order; ``occurrence_count`` is the
+    true number. The ``matched_*`` properties name the corpus document the outcome points at
+    (the same edition, the newer one, or the newest earlier one) and are absent exactly for
+    ``not_in_corpus`` and ``not_recognised``. ``matched_designation`` and ``matched_title`` are
+    derived for display from the stored file name and are never identities.
+    """
+
+    cited: Annotated[str, Field(min_length=1, max_length=300)]
+    outcome: _NormReferenceOutcome
+    occurrence_count: Annotated[int, Field(ge=1)]
+    anchors: Annotated[list[NormReferenceAnchor], Field(min_length=1, max_length=10)]
+    matched_norm_document_id: NormDocumentId = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    matched_designation: Annotated[str, Field(min_length=1, max_length=500)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    matched_title: Annotated[str, Field(min_length=1, max_length=1000)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+
+
+class NormReferenceUnrecognised(_Object):
+    """A document of the pinned snapshot whose designation the parser cannot read.
+
+    Such a document can never be matched by a citation, so the list is explicit rather than
+    inferred. ``slug`` is the stored file name without ``.pdf``; ``designation`` and ``title``
+    are derived for display from it.
+    """
+
+    norm_document_id: NormDocumentId
+    slug: Annotated[str, Field(min_length=1, max_length=500)]
+    designation: Annotated[str, Field(min_length=1, max_length=500)]
+    title: Annotated[str, Field(min_length=1, max_length=1000)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+
+
+class RunNormReferences(_Object):
+    """The norms a run's text cites, or the explicit reason that cannot be said.
+
+    ``state`` is ``ready`` when the list was computed; ``snapshot_not_pinned`` when the run
+    pinned no norms snapshot (none was current when it was created); ``text_unavailable`` when
+    it has no saved text layer; ``too_many_citations`` when the text cites more than one answer
+    carries (over 1000 distinct designations, or one longer than 300 characters). Everything
+    after ``text_layer_sha256`` is
+    present exactly when ``state`` is ``ready``. ``unread_pages`` are pages with no text layer,
+    on which no citation can be found; ``occurrence_count`` counts every occurrence, not only
+    the anchors kept.
+    """
+
+    run_id: RunId
+    version_uid: VersionUid
+    state: _NormReferenceState
+    page_count: Annotated[int, Field(ge=1, le=500)]
+    norms_snapshot_id: NormsSnapshotId = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    text_layer_sha256: Sha256 = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    snapshot_document_count: Annotated[int, Field(ge=1)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    counts: NormReferenceCounts = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    occurrence_count: Annotated[int, Field(ge=0)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    unread_pages: Annotated[list[Annotated[int, Field(ge=1, le=500)]], Field(max_length=500)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    items: Annotated[list[NormReferenceItem], Field(max_length=1000)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    unrecognised: Annotated[list[NormReferenceUnrecognised], Field(max_length=20000)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
 
 
 class FindingPage(_Object):

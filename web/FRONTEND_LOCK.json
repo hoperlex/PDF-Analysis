@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "b4b7b9fc67f80ae2a9dc0a12abeab442b5a2f06bc7434294261492566036224f",
-    "content_commit": "c90d52f3",
-    "content_commit_subject": "CLASSIFICATION-CORRECTION-01 API reseal on integration base c90d52f3",
-    "dispatch_named_commit": "c90d52f3",
-    "commit_note": "CLASSIFICATION-CORRECTION-01 adds an expert's append-only correction of a version's classification: correctVersionClassification (POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections, expert only, 201; body project_stage, section_code, reason, expected_revision) and two schemas (CorrectVersionClassificationRequest, VersionClassificationRevision). VersionClassification gains the required revision and SectionReview gains revisions, the history. No error code is added and contract_version does not move. Paths 71 -> 72, operations 81 -> 82, schemas 235 -> 237.",
+    "sha256": "7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c",
+    "content_commit": "c9469558",
+    "content_commit_subject": "NORM-REFS-RUN-01 API reseal on integration base c9469558",
+    "dispatch_named_commit": "c9469558",
+    "commit_note": "NORM-REFS-RUN-01 adds the norms a run's saved text cites, checked against the norms snapshot the run pinned: getRunNormReferences (GET /runs/{run_id}/norm-references, any one role) and five schemas (RunNormReferences, NormReferenceCounts, NormReferenceItem, NormReferenceAnchor, NormReferenceUnrecognised): each distinct cited designation is one of in_corpus, newer_edition, older_edition_only, not_in_corpus or not_recognised, with the pages it occurs on and the corpus document it points at; a precondition that does not hold is one state (snapshot_not_pinned, text_unavailable, too_many_citations), never an empty list; the corpus documents whose designation the parser cannot read are listed; no finding, no severity, no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 72,
-    "operations": 82,
-    "component_schemas": 237,
+    "paths": 73,
+    "operations": 83,
+    "component_schemas": 242,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "b4b7b9fc67f80ae2a9dc0a12abeab442b5a2f06bc7434294261492566036224f",
+    "snapshot_sha256": "7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "131208f4a1cfe3ebf6202a7d4d907781cb7927b4f28e873958b9799052de2401",
-      "index.ts": "72c762637bfedf250b3beccfc9a23b0fec0dd172a1e8d89f5d0ff78df96b6213",
-      "operations.gen.ts": "c38502dc41421246690c4c514bb7eb0d6392a943381e0637e4d99830c984a9c0",
-      "types.gen.ts": "6cd6749d339e7822df490c065bad12f9e38a72da529d74e7f3319e9ce9d34763"
+      "client.gen.ts": "3e3fa5db7a4e64b871152e2c410d63b2272356dbceec2a1277385948b30f05f2",
+      "index.ts": "a875b898fc39a0b5991011d3c4e2543a330c7b21d15a3335728098a03e24b156",
+      "operations.gen.ts": "c105dc4296af83c3e7fbe31e557424b0f6aba8ac59f7bd68599056210802f638",
+      "types.gen.ts": "17a390d7c274c484e757efeb95e27665a3760a10ba12f47052213272714fcafd"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

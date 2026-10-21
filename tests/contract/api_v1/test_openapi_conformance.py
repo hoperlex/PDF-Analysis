@@ -555,7 +555,8 @@ class TestN1ComponentReferenceResolution:
         # section's combined specification, and the unknown `project_uid` filter is `404` too.
         # `CLASSIFICATION-CORRECTION-01` adds one: the correction addresses a version through its
         # document and project like the classification it corrects.
-        assert len(report) == 57, report
+        # `NORM-REFS-RUN-01` adds one: an unknown run has no norm references.
+        assert len(report) == 58, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

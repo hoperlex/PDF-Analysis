@@ -53,8 +53,10 @@
 import Link from 'next/link';
 
 import type { RunStatus } from '@/shared/api';
+import { isTerminalRunState } from '@/shared/api';
 import { formatInstant, routes } from '@/shared/lib';
 import { RunWorkerLine, runHoldsLease, runWorker, useWorkerLookup } from '@/entities/execution';
+import { NormReferencesSection } from '@/widgets/norm-references';
 import {
   ErrorState,
   LoadingState,
@@ -384,6 +386,11 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
           }
         />
       )}
+
+      {/* `NORM-REFS-RUN-01`: the norms the stored run's text cites. Only once the run has stopped;
+          while it is in flight its text layer may not exist yet, and «нет текстового слоя»
+          would be a claim about a run that has not got that far. */}
+      {isTerminalRunState(status.state) ? <NormReferencesSection runId={status.run_id} /> : null}
 
       <h2>Показание окончательное?</h2>
       <p className={styles.activity} data-run-activity={animating && polling ? 'polling' : 'stopped'}>

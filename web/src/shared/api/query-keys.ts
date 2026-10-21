@@ -399,6 +399,13 @@ export const queryKeys = {
       ['runs', 'list', versionUid, { cursor, limit }] as const,
     findings: (runId: RunId, filters: FindingListFilters = {}) =>
       ['runs', 'findings', runId, filters] as const,
+    /**
+     * `getRunNormReferences` (`NORM-REFS-RUN-01`): the norms one run's saved text cites,
+     * checked against the snapshot that run pinned. Under `runs` so that
+     * `queryKeys.runs.all()` — which `startRun` reaches for — also drops it; it is a function
+     * of the run's saved text and pinned snapshot, both fixed once the run is stored.
+     */
+    normReferences: (runId: RunId) => ['runs', 'norm-references', runId] as const,
   },
   findings: {
     all: () => ['findings'] as const,

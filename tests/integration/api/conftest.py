@@ -841,6 +841,18 @@ class SeamRunAdapter:
             ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_verification_reader"
         )
 
+    def get_run_norm_references(self, *, run_id: str) -> Any:
+        """`NORM-REFS-RUN-01`. This stand-in holds no saved text and no snapshot catalogue.
+
+        An unknown run is ``404`` as for every run read; a known one cannot be listed here,
+        and says which dependency is missing rather than answering an empty list.
+        """
+        if not self.run_exists(run_id=run_id):
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="AuditRun")
+        raise DomainError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_references_reader"
+        )
+
     def run_exists(self, *, run_id: str) -> bool:
         """`D-74`. One row, no stages, no cost -- the stand-in's own narrow read.
 

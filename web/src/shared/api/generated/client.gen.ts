@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 b4b7b9fc67f80ae2a9dc0a12abeab442b5a2f06bc7434294261492566036224f
+ *   sha256 7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -64,6 +64,8 @@ import type {
   GetNormDocumentResult,
   GetProductVersionInput,
   GetProductVersionResult,
+  GetRunNormReferencesInput,
+  GetRunNormReferencesResult,
   GetRunNormVerificationInput,
   GetRunNormVerificationResult,
   GetRunStatusInput,
@@ -459,6 +461,18 @@ export function getProductVersion(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetProductVersionResult>> {
   return request<GetProductVersionResult>(OPERATIONS.getProductVersion, input, options);
+}
+
+/**
+ * Get Run Norm References
+ *
+ * `GET /runs/{run_id}/norm-references`.
+ */
+export function getRunNormReferences(
+  input: GetRunNormReferencesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetRunNormReferencesResult>> {
+  return request<GetRunNormReferencesResult>(OPERATIONS.getRunNormReferences, input, options);
 }
 
 /**
@@ -1197,6 +1211,7 @@ export const apiClient = {
   getMe,
   getNormDocument,
   getProductVersion,
+  getRunNormReferences,
   getRunNormVerification,
   getRunStatus,
   getSectionSpecification,

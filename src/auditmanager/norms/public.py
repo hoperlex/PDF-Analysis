@@ -134,6 +134,18 @@ from auditmanager.norms.references.pipeline import (
     ReferencePipelineResult,
     run_reference_pipeline,
 )
+from auditmanager.norms.references.read_model import (  # NORM-REFS-RUN-01
+    CitationAnchor,
+    CitedNorm,
+    ReferenceReadModel,
+    TooManyCitations,
+    UnrecognisedSlug,
+    build_reference_read_model,
+)
+from auditmanager.norms.references.resolution import ReferenceRefused  # NORM-REFS-RUN-01
+from auditmanager.norms.references.snapshot_catalogue import (  # NORM-REFS-RUN-01
+    read_snapshot_catalogue,
+)
 from auditmanager.norms.repair import (  # W54-REPAIR-01
     LEDGER_VERSION,
     RepairLedger,
@@ -212,6 +224,8 @@ __all__ = [
     "BundleRefused",
     "Checkpoint",
     "ChunkingRefused",
+    "CitationAnchor",
+    "CitedNorm",
     "CorpusLoadResult",
     "CatalogueEntry",
     "CatalogueInputRefused",
@@ -254,6 +268,8 @@ __all__ = [
     "RepairLedger",
     "RepairOutcome",
     "ReferencePipelineResult",
+    "ReferenceReadModel",
+    "ReferenceRefused",
     "RoleShape",
     "SnapshotEvent",
     "SnapshotImportConflict",
@@ -264,10 +280,13 @@ __all__ = [
     "Stand",
     "StoredEmbeddingBuild",
     "TextReliability",
+    "TooManyCitations",
+    "UnrecognisedSlug",
     "VerifiedCatalogueInput",
     "admit",
     "binding_digest",
     "blob_id_for",
+    "build_reference_read_model",
     "compute_fingerprint",
     "current_snapshot",
     "decode_event_cursor",
@@ -290,6 +309,7 @@ __all__ = [
     "parse_manifest",
     "publish_bindings",
     "qualification",
+    "read_snapshot_catalogue",
     "reference_pages_from_text_layer",
     "repaired_snapshot",
     "report",
