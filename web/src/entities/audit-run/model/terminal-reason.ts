@@ -118,6 +118,16 @@ const CATALOG_SENTENCES: Readonly<Record<ErrorCode, string>> = {
     'Нормативный источник, от которого зависит прогон, не удалось разрешить в неизменяемую ' +
     'версионированную запись. Неверсионированный, частичный или замещающий источник вместо ' +
     'него не использовался.',
+  // `BETA-CONTRACT-SEAL-01` (`D-179`). The two routing refusals of `startRun` and `reauditRun`:
+  // both precede the run's creation, so no run ends with either code. The sentences restate the
+  // catalog summaries, for the reason `analysis_input_budget_exceeded` below gives.
+  version_classification_required:
+    'У версии не было подтверждённых экспертом стадии и раздела, поэтому профиль анализа ' +
+    'нельзя было выбрать. Такой прогон не создаётся, поэтому завершиться этим кодом прогон ' +
+    'не может.',
+  section_profile_unavailable:
+    'У подтверждённого раздела версии не было зарегистрированного профиля анализа. Такой ' +
+    'прогон не создаётся, поэтому завершиться этим кодом прогон не может.',
   analysis_input_invalid:
     'Переданный пакет анализа или объявленный вход этапа оказались неприемлемыми. Показание ' +
     'не фиксирует конкретное поле; таблица этапов ниже показывает, на каком этапе это было.',

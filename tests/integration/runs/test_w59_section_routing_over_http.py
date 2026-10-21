@@ -17,9 +17,9 @@ Cases (the decision's tests 3-5 and the task's failure list):
   even when its document has the legacy ``section`` ``AR``;
 * the review lists all fifteen choices, marks ``executable`` exactly as the registry does and
   never pre-selects;
-* ``startRun`` on an unclassified version is ``422 required_norm_unavailable``
-  (``reference_kind: version_classification``) and leaves no run and no command record; on a
-  ``PB`` version the same code with ``reference_kind: analysis_profile``; on a ``KJ`` version
+* ``startRun`` on an unclassified version is ``422 version_classification_required`` (no details;
+  ``BETA-CONTRACT-SEAL-01``, ``D-179``) and leaves no run and no command record; on a
+  ``PB`` version ``422 section_profile_unavailable``; on a ``KJ`` version
   the run pins the ``KJ`` package's profile and bundle, and an ``AR`` version pins the v1 pair;
 * a replay of an accepted key answers the run it created; a re-audit routes from the version's
   classification now, and an older run keeps the profile it pinned.
@@ -256,12 +256,12 @@ def _count(sessions: sessionmaker[Session], sql: str, **params: Any) -> int:
         return int(session.execute(text(sql), params).scalar_one())
 
 
-def _assert_unroutable(answer: Any, kind: str) -> None:
+def _assert_unroutable(answer: Any, code: str) -> None:
     assert answer.status_code == 422, answer.content
     body = answer.json()
-    assert body["error_code"] == "required_norm_unavailable"
+    assert body["error_code"] == code
     assert body["retryable"] is False
-    assert body["details"] == {"reference_kind": kind}
+    assert "details" not in body, "a routing refusal carries no details (BETA-CONTRACT-SEAL-01)"
 
 
 class TestClassify:
@@ -400,7 +400,7 @@ class TestRunStart:
         token, _ = _expert()
         key = _key()
         before = _count(sessions, "SELECT count(*) FROM audit_run WHERE version_uid = :v", v=world.unclassified)
-        _assert_unroutable(_start(client, token, world.unclassified, key), "version_classification")
+        _assert_unroutable(_start(client, token, world.unclassified, key), "version_classification_required")
         assert _count(sessions, "SELECT count(*) FROM audit_run WHERE version_uid = :v", v=world.unclassified) == before
         assert _count(sessions, "SELECT count(*) FROM command_record WHERE idempotency_key = :k", k=key) == 0
         assert carrier.submitted == []
@@ -412,7 +412,7 @@ class TestRunStart:
         token, _ = _expert()
         assert _classify(client, token, _version_path(world, world.pb), "P", "PB").status_code == 200
         key = _key()
-        _assert_unroutable(_start(client, token, world.pb, key), "analysis_profile")
+        _assert_unroutable(_start(client, token, world.pb, key), "section_profile_unavailable")
         assert _count(sessions, "SELECT count(*) FROM audit_run WHERE version_uid = :v", v=world.pb) == 0
         assert _count(sessions, "SELECT count(*) FROM command_record WHERE idempotency_key = :k", k=key) == 0
         assert carrier.submitted == []
@@ -451,7 +451,7 @@ class TestReaudit:
         client, carrier = _client(sessions, blob_store)
         token, _ = _expert()
         refused = client.post(f"/runs/{world.source}/reaudit", headers=_headers(token, _key()))
-        _assert_unroutable(refused, "version_classification")
+        _assert_unroutable(refused, "version_classification_required")
         _classify(client, token, _version_path(world, world.reaudit), "R", "TX")
         accepted = client.post(f"/runs/{world.source}/reaudit", headers=_headers(token, _key()))
         assert accepted.status_code == 202, accepted.content

@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.errors",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 17,
-  "revision_note": "Candidate revision 17 by W60-OPT-PROPOSALS-01. No error-code change; registers the optimisation-pass conflict reasons and the proposal-decision constraints, and the domain family moves with the new opp_, opr_ and opd_ identities.",
+  "candidate_revision": 18,
+  "revision_note": "Candidate revision 18 by BETA-CONTRACT-SEAL-01 phase A (D-179). Adds version_classification_required and section_profile_unavailable, the dedicated codes of the two run-start routing refusals that reused required_norm_unavailable with reference_kind version_classification and analysis_profile. No identifier or machine changes; the domain family moves with the catalogue.",
   "status": "draft_candidate",
   "frozen": false,
   "envelope": {
@@ -345,7 +345,37 @@
       ],
       "notes": [
         "reference_kind (W55A-SEAL-01, R-112, R-113, CD-19) names which authoritative reference could not be resolved. Values registered for the norms operations: norms_snapshot (no norms snapshot is current, or an explicitly named snapshot has never been current, so text search has nothing it may read; W57 uses the same value when a run that reads norms finds no usable snapshot), norm_embedding_build (a snapshot named for designation as current has no complete bge-m3-dense-v1 build over its reliability-aware chunks) and norm_source (a snapshot named for designation, or a norm document whose PDF is requested, lacks a confirmed custody binding of the source PDF). W57 adds norm_retrieval_set. It is an enum-like classifier and never raw input; norms_snapshot_id may accompany it.",
-        "reference_kind, run routing (W59-SECTION-SEAL-01): startRun and reauditRun resolve the AnalysisProfile from the version's persisted expert classification through the section-keyed text-profile registry and never substitute AR. version_classification: the version has no persisted project stage and section (or the stored pair is not internally consistent), so no profile can be selected; an expert classifies it with classifyDocumentVersion. analysis_profile: the confirmed section has no registered executable text profile (analysis_profile_id is then absent). Both precede the idempotency key's claim, so nothing is written."
+        "reference_kind analysis_profile (W59-SECTION-SEAL-01; BETA-CONTRACT-SEAL-01 keeps it for one case only): the run's pinned analysis_profile_id and prompt_bundle_id pair is not registered in this deployment. The executor refuses it before any stage runs, with both identities in the details, and no other profile is substituted. The two refusals of run routing, which precede the idempotency key's claim and write nothing, are not this code since BETA-CONTRACT-SEAL-01 (D-179): startRun and reauditRun answer version_classification_required for a version with no expert-confirmed stage and section and section_profile_unavailable for a confirmed section with no registered text profile. An old client that read required_norm_unavailable with reference_kind version_classification or analysis_profile for those two cases reads the new codes instead; the contract was a draft."
+      ]
+    },
+    "version_classification_required": {
+      "http": 422,
+      "retryable": false,
+      "category": "policy",
+      "summary": "A run or re-audit cannot start because the version has no expert-confirmed project stage and section, or its stored pair is not internally consistent, so no analysis profile can be selected. The profile is never guessed and the AR profile is never substituted.",
+      "safe_detail_keys": [],
+      "evidence": [
+        "D-179",
+        "W59-SECTION-SEAL-01",
+        "BETA-CONTRACT-SEAL-01"
+      ],
+      "notes": [
+        "Answered by startRun and reauditRun after the version is read and before the Idempotency-Key is claimed, so nothing is written: no command record, run, job or event. An expert confirms the version's stage and section with classifyDocumentVersion; the same request can then be sent. retryable is false because repeating the request unchanged is refused again until the classification exists. BETA-CONTRACT-SEAL-01 gives this refusal its own code (D-179); a draft of this contract reported it as required_norm_unavailable with reference_kind version_classification."
+      ]
+    },
+    "section_profile_unavailable": {
+      "http": 422,
+      "retryable": false,
+      "category": "dependency",
+      "summary": "A run or re-audit cannot start because the version's expert-confirmed section has no registered executable text profile. No other section's profile is substituted.",
+      "safe_detail_keys": [],
+      "evidence": [
+        "D-179",
+        "W59-SECTION-SEAL-01",
+        "BETA-CONTRACT-SEAL-01"
+      ],
+      "notes": [
+        "Answered by startRun and reauditRun after the version is read and before the Idempotency-Key is claimed, so nothing is written. The section is a confirmed one (a section with no profile package, such as PB, or a package the registry refused); the request is refused again until a profile for it is registered in the deployment. retryable is false for that reason. BETA-CONTRACT-SEAL-01 gives this refusal its own code (D-179); a draft of this contract reported it as required_norm_unavailable with reference_kind analysis_profile and no analysis_profile_id. A pinned pair that a deployment no longer registers, found when the executor loads a run's profile, stays required_norm_unavailable with reference_kind analysis_profile."
       ]
     },
     "analysis_input_invalid": {

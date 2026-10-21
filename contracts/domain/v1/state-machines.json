@@ -2,8 +2,8 @@
   "contract": "auditmanager.domain.state-machines",
   "contract_version": "1.0.0-draft.1",
   "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 17,
-  "revision_note": "Candidate revision 17 by W60-OPT-PROPOSALS-01. No machine or transition change; domain family moves with the new opp_, opr_ and opd_ identities.",
+  "candidate_revision": 18,
+  "revision_note": "Candidate revision 18 by BETA-CONTRACT-SEAL-01 phase A. No machine or transition change; domain family moves with the two new error codes.",
   "status": "draft_candidate",
   "frozen": false,
   "rules": [

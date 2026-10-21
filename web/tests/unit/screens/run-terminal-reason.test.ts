@@ -68,6 +68,8 @@ const MUST_SAY: Readonly<Record<ErrorCode, string>> = {
   dependency_credential_refused: 'отвергла учётные данные этого развёртывания',
   staged_upload_lost: 'больше не содержало байты, подготовленные загрузкой',
   required_norm_unavailable: 'не удалось разрешить в неизменяемую',
+  version_classification_required: 'не было подтверждённых экспертом стадии и раздела',
+  section_profile_unavailable: 'не было зарегистрированного профиля анализа',
   analysis_input_invalid: 'объявленный вход этапа оказались неприемлемыми',
   analysis_failed: 'завершился в терминальном состоянии отказа',
   partial_result_not_publishable: 'запросили то, что требует прогона без неё',

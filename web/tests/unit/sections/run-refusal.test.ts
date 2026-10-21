@@ -3,10 +3,12 @@
  *
  * Since `W59-SECTION-SEAL-01` `startRun` and `reauditRun` route the analysis profile from the
  * version's confirmed classification and refuse before any run exists:
- * `422 required_norm_unavailable` with `reference_kind` `version_classification` (nothing is
- * confirmed) or `analysis_profile` (the confirmed section has no profile). The control must
- * say which, link to the version's stage-and-section panel, and offer neither a retry nor
- * another section — in particular never the АР profile it used to apply to everything.
+ * `422 version_classification_required` (nothing is confirmed) or `422 section_profile_unavailable`
+ * (the confirmed section has no profile). Until `BETA-CONTRACT-SEAL-01` (`D-179`) both were
+ * `required_norm_unavailable`, told apart by `reference_kind`; that reading is gone and a test
+ * below keeps it gone. The control must say which, link to the version's stage-and-section
+ * panel, and offer neither a retry nor another section — in particular never the АР profile it
+ * used to apply to everything.
  */
 
 import { createElement } from 'react';
@@ -39,9 +41,8 @@ import { StartRunControl } from '@/features/start-run';
 
 import { PROJECT_UID, VERSION_UID, apiError } from './fixtures';
 
-const unclassified = () =>
-  apiError(422, 'required_norm_unavailable', { reference_kind: 'version_classification' });
-const noProfile = () => apiError(422, 'required_norm_unavailable', { reference_kind: 'analysis_profile' });
+const unclassified = () => apiError(422, 'version_classification_required');
+const noProfile = () => apiError(422, 'section_profile_unavailable');
 
 function control(error: unknown): string {
   settled.error = error;
@@ -70,7 +71,7 @@ describe('the substitute detector can fail', () => {
   });
 });
 
-describe('the two routing refusals are told apart by reference_kind', () => {
+describe('the two routing refusals are told apart by their catalog codes', () => {
   it('an unclassified version', () => {
     const failure = classifyRunFailure(unclassified());
     expect(failure.kind).toBe('version_unclassified');
@@ -88,14 +89,21 @@ describe('the two routing refusals are told apart by reference_kind', () => {
     expect(failure.detail).toContain('не зарегистрирован');
   });
 
-  it('any other reference_kind is the catalog sentence, not one of these two', () => {
-    const failure = classifyRunFailure(
-      apiError(422, 'required_norm_unavailable', { reference_kind: 'norm_retrieval_set' }),
-    );
-    expect(failure.kind).toBe('reference_unavailable');
-    expect(failure.detail).toBe(catalogMessage('required_norm_unavailable'));
-    expect(routingRefusal({ reference_kind: 'norm_retrieval_set' })).toBeNull();
-    expect(routingRefusal({})).toBeNull();
+  it('required_norm_unavailable is the catalog sentence, whatever its reference_kind', () => {
+    // `analysis_profile` is the executor's refusal of a pinned pair the deployment does not
+    // register; `version_classification` was a draft's name for the unclassified version. Neither
+    // is a routing refusal any more, so neither may borrow the section sentences or the link.
+    for (const referenceKind of ['norm_retrieval_set', 'analysis_profile', 'version_classification']) {
+      const failure = classifyRunFailure(
+        apiError(422, 'required_norm_unavailable', { reference_kind: referenceKind }),
+      );
+      expect(failure.kind, referenceKind).toBe('reference_unavailable');
+      expect(failure.detail, referenceKind).toBe(catalogMessage('required_norm_unavailable'));
+    }
+    expect(routingRefusal('required_norm_unavailable')).toBeNull();
+    expect(routingRefusal('analysis_input_invalid')).toBeNull();
+    expect(routingRefusal('version_classification_required')).toBe(VERSION_UNCLASSIFIED_REFUSAL);
+    expect(routingRefusal('section_profile_unavailable')).toBe(SECTION_PROFILE_UNAVAILABLE_REFUSAL);
   });
 
   it('neither is offered as retryable, and neither offers another profile', () => {
@@ -151,11 +159,13 @@ describe('the queue’s re-audit says the same thing', () => {
     expect(offersASubstitute(second.detail)).toBe(false);
   });
 
-  it('keeps the catalog sentence for any other required_norm_unavailable', () => {
-    const other = executionFailure(
-      apiError(422, 'required_norm_unavailable', { reference_kind: 'norm_retrieval_set' }),
-      true,
-    );
-    expect(other.detail).toBe(catalogMessage('required_norm_unavailable'));
+  it('keeps the catalog sentence for any required_norm_unavailable', () => {
+    for (const referenceKind of ['norm_retrieval_set', 'analysis_profile', 'version_classification']) {
+      const other = executionFailure(
+        apiError(422, 'required_norm_unavailable', { reference_kind: referenceKind }),
+        true,
+      );
+      expect(other.detail, referenceKind).toBe(catalogMessage('required_norm_unavailable'));
+    }
   });
 });
