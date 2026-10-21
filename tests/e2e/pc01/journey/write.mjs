@@ -323,7 +323,7 @@ export async function runWritePhase({
     // Its steps make accounts, pause dispatch, designate a norms snapshot and start further
     // runs. On an origin that bills per run, or whose provider mode is not known, that is not a
     // thing to do unasked: the first such step says so ONCE and the rest are not reached.
-    if (step.screen !== undefined) {
+    if (step.screen !== undefined && step.reads_only !== true) {
       if (!nightWindowMayRun({ providerMode, allowSpend })) {
         if (!nightRefused) {
           nightRefused = true;

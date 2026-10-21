@@ -530,6 +530,17 @@ An export is a download, and the protocol does not give a download's body to
 throwaway directory (`Browser.setDownloadBehavior`) and reads the saved file: its first bytes (the
 BOM, `PK`), its CSV header width, and that no cell begins with `=`, `+`, `-` or `@`.
 
+### Where it will not run
+
+`--phase core` is the journey as it stood before the night window: the four original write steps and the
+29 routes, none of the steps that make accounts, pause dispatch, designate a snapshot or start further runs.
+`--phase all` is everything, and **refuses the night window's steps on an origin whose provider mode is not
+`recorded`** (the mode the first run's own poll reports): it says so once, loudly, before making an account
+or starting a run, and exits 1. `--allow-spend` (or `E2E_PC01_ALLOW_SPEND=1`) says the cost and the changes
+are accepted. A step that only reads (`reads_only`, checked: no controls, no write) runs first on any origin.
+`make alpha-acceptance` calls `--phase all`; for a published stand switch its call to `--phase core`
+(`verify-acceptance.mjs` counts what the phase declares).
+
 ### Working on one step
 
 `--steps a,b`, `--routes x,y` and `--seed <file of captured identifiers>` run part of the

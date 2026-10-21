@@ -2683,6 +2683,18 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
                     "but that is no operation of the contract"
                 )
 
+        # ---- a step that says it only reads must do nothing else ----------------------
+        if step.get("reads_only") is True:
+            writes = [
+                call["operationId"] for call in step.get("expects_api") or ()
+                if call["method"].upper() != "GET"
+            ]
+            if step.get("actions") or writes:
+                findings.append(
+                    f"{label}: says it only reads, and presses {len(step.get('actions') or [])} control(s) / "
+                    f"declares writes {writes}; the spend guard lets a read-only step run first"
+                )
+
         # ---- the web tier's own doors and where a step ends -------------------------
         for door in step.get("expects_bff") or ():
             if (door["method"].upper(), door["path"]) in contract_paths:
@@ -3181,7 +3193,7 @@ def test_the_journey_will_not_spend_or_change_an_origin_it_was_not_told_it_may()
     assert ran.returncode == 0, ran.stdout + ran.stderr
     write = _require(JOURNEY_DIR / "write.mjs").read_text(encoding="utf-8")
     assert "nightWindowMayRun({ providerMode, allowSpend })" in write
-    assert "if (step.screen !== undefined) {" in write
+    assert "if (step.screen !== undefined && step.reads_only !== true) {" in write
     journey = _require(JOURNEY).read_text(encoding="utf-8")
     assert "'--allow-spend'" in journey and "E2E_PC01_ALLOW_SPEND" in journey
     assert "step.screen === undefined" in journey, "--phase core must be the steps without a screen"
@@ -3189,3 +3201,13 @@ def test_the_journey_will_not_spend_or_change_an_origin_it_was_not_told_it_may()
     assert "step.screen === undefined" in verify, (
         "the stand's acceptance verdict must count what a core walk declares"
     )
+
+
+def test_control_a_step_that_claims_to_only_read_but_presses_a_control_is_detected() -> None:
+    reading = _night_step(reads_only=True)
+    assert not any("only reads" in f for f in _only_step_findings(reading))
+    pressing = _night_step(reads_only=True, actions=[{"do": "click", "selector": "button"}])
+    assert any("only reads" in f for f in _only_step_findings(pressing))
+    writing = _night_step(reads_only=True, expects_api=[
+        {"method": "PUT", "path": "/assignments", "operationId": "createAssignment", "expect_status": 200}])
+    assert any("only reads" in f for f in _only_step_findings(writing))

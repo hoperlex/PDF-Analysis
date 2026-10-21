@@ -889,6 +889,7 @@
         "at": "/queue",
         "page_module": "web/src/app/queue/page.tsx",
         "control_module": "web/src/_pages/queue/ui/queue-page.tsx",
+        "reads_only": true,
         "$comment": [
           "A precondition, first on purpose. The queue steps below pause the lane's dispatch and resume it; a lane",
           "left paused by an interrupted earlier run would make the first run below wait out its bound. This step",
