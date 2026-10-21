@@ -21,7 +21,7 @@ class _RecordingReleases:
 
     def get_product_version(self) -> ProductVersion:
         return ProductVersion(
-            product_version="0.3.0", build_id="b0123456789abcdef", contract_version="1.0.0-draft.1"
+            product_version="0.3.0", build_id="b0123456789abcdef", contract_version="1.0.0"
         )
 
     def list_releases(self, *, user_uid: str) -> ReleaseList:
@@ -50,7 +50,7 @@ def test_admin_without_expert_reads_release_surface_and_marks_only_itself(
     assert json.loads(version.body) == {
         "product_version": "0.3.0",
         "build_id": "b0123456789abcdef",
-        "contract_version": "1.0.0-draft.1",
+        "contract_version": "1.0.0",
     }
     listed = surface.send("GET", "/releases", credential=credential)
     assert listed.status == 200

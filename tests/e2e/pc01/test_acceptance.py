@@ -1342,6 +1342,6 @@ def test_c10_every_failure_leaves_the_edge_as_one_typed_envelope(client: Client)
             "correlation_id",
             "retryable",
         }, payload
-        assert payload["contract_version"] == "1.0.0-draft.1"
+        assert payload["contract_version"] == "1.0.0"
         assert isinstance(payload["retryable"], bool)
         assert answer.header("X-Correlation-Id") == payload["correlation_id"]

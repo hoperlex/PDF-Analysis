@@ -44,8 +44,8 @@
     ],
     "body": {
       "kind": "text",
-      "length": 326,
-      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"validation_failed\", \"message\": \"The upload payload does not begin with a PDF header, so it is not a PDF whatever its name says.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"content\", \"constraint\": \"pdf_magic_bytes\"}}",
+      "length": 318,
+      "text": "{\"contract_version\": \"1.0.0\", \"error_code\": \"validation_failed\", \"message\": \"The upload payload does not begin with a PDF header, so it is not a PDF whatever its name says.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"content\", \"constraint\": \"pdf_magic_bytes\"}}",
       "note": ""
     }
   },

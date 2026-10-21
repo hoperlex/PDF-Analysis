@@ -71,7 +71,7 @@ def version_server():
             self.answer(state["version_status"], {
                 "product_version": (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
                 "build_id": state["build_id"],
-                "contract_version": "1.0.0-draft.1",
+                "contract_version": "1.0.0",
             })
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)

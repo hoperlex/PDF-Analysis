@@ -44,8 +44,8 @@
     ],
     "body": {
       "kind": "text",
-      "length": 356,
-      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"idempotency_key_reuse\", \"message\": \"The idempotency key was already used with a different payload fingerprint. Nothing was created or changed and no duplicate aggregate exists.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"command_type\": \"create_project\"}}",
+      "length": 348,
+      "text": "{\"contract_version\": \"1.0.0\", \"error_code\": \"idempotency_key_reuse\", \"message\": \"The idempotency key was already used with a different payload fingerprint. Nothing was created or changed and no duplicate aggregate exists.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"command_type\": \"create_project\"}}",
       "note": ""
     }
   },

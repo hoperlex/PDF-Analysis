@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "44f3925535113a48f2468f4edbdbd9fca726027f34ce77cea18b1faf68931f3e",
-    "content_commit": "2161d505",
-    "content_commit_subject": "BETA-CONTRACT-SEAL-01 phase A on origin/dev 2161d505",
-    "dispatch_named_commit": "2161d505",
-    "commit_note": "BETA-CONTRACT-SEAL-01 phase A (D-179) adds two error codes, version_classification_required and section_profile_unavailable, the dedicated answers of the run-start routing refusals that reused required_norm_unavailable; the ErrorCode enum has 27 members. No path, operation or schema is added; contract_version does not move.",
+    "sha256": "741f29f9b0c9341cdf0631f0f65e462c7788945dd21002aa33afc54af7076eb8",
+    "content_commit": "c7d5f483",
+    "content_commit_subject": "BETA-CONTRACT-SEAL-01 phase B on agent/beta-contract-seal-01 c7d5f483",
+    "dispatch_named_commit": "c7d5f483",
+    "commit_note": "BETA-CONTRACT-SEAL-01 phase B seals the contract at 1.0.0: info.version and the ErrorEnvelope const move from 1.0.0-draft.1 to 1.0.0 together with the domain, analysis and events families, the domain error catalog is frozen at 27 codes, and the prose of D-151 and D-161 is corrected. No path, operation, schema or error code is added (73/83/242).",
     "openapi_version": "3.1.0",
-    "info_version": "1.0.0-draft.1",
+    "info_version": "1.0.0",
     "paths": 73,
     "operations": 83,
     "component_schemas": 242,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "44f3925535113a48f2468f4edbdbd9fca726027f34ce77cea18b1faf68931f3e",
+    "snapshot_sha256": "741f29f9b0c9341cdf0631f0f65e462c7788945dd21002aa33afc54af7076eb8",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "68f7675af5683d1a6ee5056cc3e4e9dc0f64a1d7e20ddd89eb7d6bf0ed0d50c3",
-      "index.ts": "00d0112fdaf7aa946fa71c35cb76100bf9e0c811a589772bc7ce15168b26d821",
-      "operations.gen.ts": "18a391b90ed9b19e43795e187869e89d278a9e8b9fb81850814e639dcac0f2dd",
-      "types.gen.ts": "8e184bb93e1b4f7d127c99d01f83234981943936d0380055cddc322025bf2536"
+      "client.gen.ts": "71a67466a71e828cd13a19791e5fcabe7701a2a974fe8e9e91a23c21ec2ca47d",
+      "index.ts": "46d8e2db4692ed7bef829f853be386dc75161cbd4ad33a150e65f2c3269cad6c",
+      "operations.gen.ts": "d940d76bb1003691bf9913e39b92b2e8daac2873b4d78f6d9809f10cee0927f4",
+      "types.gen.ts": "14672b7dc8926d1564a2b44efb93c6c6b6b6c73adf77e070d40b5a7a56c21eaf"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

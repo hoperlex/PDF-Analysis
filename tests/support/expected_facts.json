@@ -669,5 +669,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0029_routing_refusal_codes",
-  "contract_version": "1.0.0-draft.1"
+  "contract_version": "1.0.0"
 }

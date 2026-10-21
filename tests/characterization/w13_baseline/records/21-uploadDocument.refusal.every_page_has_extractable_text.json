@@ -44,8 +44,8 @@
     ],
     "body": {
       "kind": "text",
-      "length": 359,
-      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"validation_failed\", \"message\": \"At least one page carries no extractable embedded text. This prototype never substitutes OCR for a text layer.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"page_text\", \"constraint\": \"every_page_has_extractable_text\"}}",
+      "length": 351,
+      "text": "{\"contract_version\": \"1.0.0\", \"error_code\": \"validation_failed\", \"message\": \"At least one page carries no extractable embedded text. This prototype never substitutes OCR for a text layer.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"page_text\", \"constraint\": \"every_page_has_extractable_text\"}}",
       "note": ""
     }
   },

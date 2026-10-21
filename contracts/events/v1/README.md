@@ -7,7 +7,7 @@ Durable business/security audit events and integration outbox events have explic
 ## Envelope contract version
 
 - Canonical key: `contract_version`, declared once in the root `properties` of `event-envelope.schema.json` and listed in the root `required`.
-- Candidate value: the string `1.0.0-draft.1`, the same unreleased candidate the domain and analysis families declare. The key is typed `string` and pinned with `const`.
+- Value: the string `1.0.0` since `BETA-CONTRACT-SEAL-01`, the same sealed version the domain and analysis families declare (it was `1.0.0-draft.1` while the families were candidates). The key is typed `string` and pinned with `const`.
 - Rejected old form: `"schema_version": 1`. The key is removed from the root `required` and from the root `properties`; the root keeps `additionalProperties: false`, so an envelope still carrying `schema_version` fails closed instead of being silently accepted. There is no alias, shim or coercion, and the old key is never read as a fallback.
 - The old form could not express this candidate at all: `schema_version` was pinned to the integer `1`, and an integer has no representation for a draft-candidate version such as `1.0.0-draft.1`. Retyping the envelope version to a string is therefore part of the same change, not a separate one.
 - Consumers read the envelope version from `contract_version` as a string. An envelope carrying `schema_version`, with or without a valid `contract_version`, is rejected.

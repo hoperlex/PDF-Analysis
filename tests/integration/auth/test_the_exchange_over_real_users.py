@@ -170,7 +170,7 @@ def test_every_refusal_is_the_same_refusal(
     envelope = response.json()
     assert envelope["error_code"] == "authentication_required", envelope
     assert envelope["retryable"] is False, envelope
-    assert envelope["contract_version"] == "1.0.0-draft.1", envelope
+    assert envelope["contract_version"] == "1.0.0", envelope
     assert response.headers["X-Correlation-Id"]
     # The envelope is the catalog's, not a story about what went wrong.
     assert user.login not in response.text, response.text

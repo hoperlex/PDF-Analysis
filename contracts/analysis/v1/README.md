@@ -1,7 +1,9 @@
-# Analysis contract v1 — candidate `1.0.0-draft.1`
+# Analysis contract v1 — `1.0.0`
 
-Owner lane: `W0-ANA-01` (analysis contract owner). Status: **candidate draft, not frozen.**
-Every artifact in this directory declares `contract_version` `1.0.0-draft.1`.
+Owner lane: `W0-ANA-01` (analysis contract owner). Status: **sealed at `1.0.0` for the closed beta**
+(`BETA-CONTRACT-SEAL-01`, together with the domain and events families; the report is
+[`BETA-CONTRACT-SEAL-01.md`](../../../docs/program/BETA-CONTRACT-SEAL-01.md)). Every artifact in
+this directory declares `contract_version` `1.0.0`; the draft it replaces is `1.0.0-draft.1`.
 
 The control plane schedules work by immutable package references. The engine returns a
 result package. The control plane validates schema, checksums, the attempt-authority
@@ -524,9 +526,13 @@ Any change to StageResult is made in the standalone file first and then re-bundl
   `idempotency_scope: new_idempotency_key` on `RC-01`, `RC-03` and `RC-04` stands as the
   owner confirmed it.
 - Unknown registry version, unknown `stage_id` and unknown package version fail closed.
-- This draft is **not frozen**. Before freeze, this task's path may simply be reverted.
-  After freeze, changes follow the version-bump and freeze-break procedure in
-  [../../../docs/program/waves/W0.2_architecture_domain_contract.md](../../../docs/program/waves/W0.2_architecture_domain_contract.md).
+- This contract was a draft until `BETA-CONTRACT-SEAL-01`, which moved every artifact from
+  `1.0.0-draft.1` to `1.0.0` without changing a stage, a role, a schema member or a rule. Since the
+  seal, changes follow the version-bump and freeze-break procedure in
+  [../../../docs/program/VERSIONING_AND_FREEZE_POLICY.md](../../../docs/program/VERSIONING_AND_FREEZE_POLICY.md)
+  (the original procedure is
+  [../../../docs/program/waves/W0.2_architecture_domain_contract.md](../../../docs/program/waves/W0.2_architecture_domain_contract.md)):
+  an optional addition is a minor version, a removal, a rename or a change of meaning a major one.
 
 ## Owner decisions
 
@@ -608,8 +614,9 @@ and cannot be quietly absorbed here.
 | project-optimization stages and results | **OPT contract owner**, `contracts/optimization/v1/**`, task `W5-OPT-01` | `parts_outside_this_lane` — named, not encoded; the terminal semantics of the four `optimization*` names left this boundary with `PD-05`/`XS-11` |
 | `AuditRun`/`Jobs` as **consumer** | **domain (DOM) lane**, `contracts/domain/v1/**` | `parts_outside_this_lane` — the inbound expectation "failure of the optional optimization branch yields an explicit `partial`, never a full success" is recorded verbatim as somebody else's rule, and no analysis schema restates it as its own |
 
-No freeze is declared by this lane, and consumers must not treat this draft as frozen
-until the W0.2 integrator records acceptance.
+This lane declared no freeze when it wrote this table; the freeze came later and is the
+integrator's (`BETA-CONTRACT-SEAL-01`, `1.0.0`). The rows above still say which parts belong to
+another owner.
 
 ## Gates
 
@@ -714,7 +721,7 @@ def keys(o,req=False):
 for p in sorted(glob.glob('contracts/analysis/v1/*.json'))+sorted(glob.glob('contracts/analysis/v1/examples/*.json')):
     d=json.loads(Path(p).read_text())
     assert 'version' not in d and 'schema_version' not in d, p
-    assert d.get('contract_version')=='1.0.0-draft.1', p
+    assert d.get('contract_version')=='1.0.0', p
     if p.endswith('.schema.json'):
         pr=d.get('properties',{})
         assert 'contract_version' in pr and 'version' not in pr and 'schema_version' not in pr, p
