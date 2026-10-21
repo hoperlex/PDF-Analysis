@@ -243,17 +243,20 @@ class _Keyed:
 
     ``rest`` is the name's words without its head word and ``size`` the count of all of them:
     two positions of one bucket share the head word, so what they may share beyond it is
-    ``rest`` (see :func:`_analogs`).
+    ``rest`` (see :func:`_analogs`). The whole set is made only for the few positions judged.
     """
 
     position: PriceListPositionRecord
     unit: str | None
     vendor: str | None
     head: str | None
-    words: frozenset[str]
     family: str | None
     rest: frozenset[str]
     size: int
+
+    @property
+    def words(self) -> frozenset[str]:
+        return self.rest if self.head is None else self.rest | {self.head}
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,7 +275,6 @@ def _keyed(position: PriceListPositionRecord) -> _Keyed:
         unit=unit_key(position.unit),
         vendor=vendor_key(position.vendor),
         head=head,
-        words=word_set,
         family=code_family(position),
         rest=word_set - {head},
         size=len(word_set),
