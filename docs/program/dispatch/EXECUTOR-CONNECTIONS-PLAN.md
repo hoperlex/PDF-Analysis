@@ -1,0 +1,419 @@
+# EXECUTOR-CONNECTIONS-PLAN — executor connections configured in the UI (`R-143`)
+
+**Status:** plan for the integrator, written by planning session `pdf-analysis-15` on
+2026-10-22 from `origin/dev` `7cb317b0`. It changes no runtime behaviour. Owner rulings:
+`R-143a`–`R-143e` (`OWNER_RULINGS_2026-09-17.md` §3.43). The integrator is
+`pdf-analysis-87 [98580e]`. It cuts the slots: contract, migration head, root lockfile,
+composition root and `infra/**`.
+
+## 1. What the owner asked for, and what exists today
+
+The owner asked for executor connections that an administrator manages entirely in the UI:
+
+- the model proxy (address and key replaced in the UI);
+- SSH;
+- a Claude Code session in VSCode;
+- a machine reached over a VPN for recognition.
+
+The answers are in `R-143`.
+
+At `7cb317b0` none of this exists:
+
+- **The provider is fixed per process at startup.** `bootstrap/composition.py` `_build_provider`
+  (~392-440) builds exactly one `ModelAdapter`, from environment variables read by
+  `bootstrap/settings.py` (:28-31, :88-90). `analysis/text/config.py` (:28-31) reads them a
+  second time, and `norms/__main__.py` (:121-123) a third.
+- **The credential lives only on the stand host.** `provider.env` is written by the owner and
+  loaded by the `api` and `worker` services (`infra/deploy/compose.server.yml:222`, `:273`).
+- **The database holds no URL, key or connection, and nothing is encrypted.** `cryptography`
+  50.0.1 is already in `uv.lock`, but only transitively through `pdfminer-six`.
+- **«Исполнители» (`/workers`) lists local `worker` processes and nothing else.** It shows
+  each worker's heartbeat and an admin's intake switch: `listWorkers` and `setWorkerIntake`.
+  The contract has no provider or connection operation.
+- **«Диспетчер» already uses the word «исполнитель» for a human expert.**
+- **Remote execution is excluded in three places:**
+  - `ADR-0002` (W54 addendum) keeps remote workers out of scope;
+  - `runs/scope.py:63` lists remote execution as an absent capability. That stays true for
+    the worker under `R-143c`; `EXEC-PULL-01` amends the wording and does not remove the
+    entry;
+  - `ROADMAP-TO-BETA.md` places remote workers after 1.0.
+
+## 2. The model: process, connection, assignment
+
+Three nouns, kept apart on purpose.
+
+- **Process** («Процесс»). A local `worker` of the same release on the stand, exactly as
+  `R-105` defines it: the only writer of Job/Attempt/Lease and of every metadata row. It is
+  unchanged by this plan, apart from the source of its provider.
+- **Connection** («Подключение»). Where a process sends model work. It is a durable record
+  `exc_<ULID>` with immutable **revisions** (`excr_<ULID>`) holding the non-secret
+  settings, and write-only **secrets** held encrypted. A remote party behind a connection
+  receives a task payload and returns an answer. It never reaches PostgreSQL or S3
+  (`R-143c`).
+- **Assignment** («Назначение»). Which connection serves which kind of model work, with an
+  optional standby that only an administrator configures. Every use of the standby is
+  journaled; there is no implicit fallback (`AGENTS.md` §4).
+  - **When the standby is used.** Only at run start, and only when the primary's current
+    revision has no `ok` probe on its current secret, or the primary is archived. The run
+    freezes whichever revision was chosen, and the run event records the reason «резервное
+    подключение». A failure in the middle of a run never switches connections; the
+    run's own retry policy applies.
+
+SSH and VPN are **transports**, not executors. What decides the design is who opens the
+connection:
+
+| Direction | Kinds | Reachability requirement |
+| --- | --- | --- |
+| stand → executor | `http_api` (transport `direct`, `vpn` or `ssh_tunnel`), `ssh_command` | the executor must be reachable from the stand's `worker` container |
+| executor → stand | `pull` (client `claude_code_session` or `agent`) | the stand's public HTTPS origin only; works from behind NAT and from a laptop |
+
+### 2.1 Connection kinds
+
+| Kind | Settings (revision, non-secret) | Secret | Owner's case it serves |
+| --- | --- | --- | --- |
+| `http_api` | `api_flavour` (`openai_chat`, `anthropic_messages`), `base_url` (the `R-67` rule: origin-only → `/api/v1/chat/completions`, with path → `<base>/chat/completions`), the pin id and the gateway model name (§3), `transport` (`direct`, `vpn`, `ssh_tunnel` + SSH endpoint), timeout, max parallel calls, billing (`metered` at the pin's rates, or `not_metered`), `allow_client_documents` | API key, bound to the address (§4.1) | proxy `/api/v1` or `/agent/v1`, OpenRouter, Anthropic; a model on a VPN or SSH-tunnelled machine (Ollama, vLLM) |
+| `ssh_command` | host, port, user, pinned host-key fingerprint, profile (`claude_code_headless` or `custom_command`; a fixed token, with no command text: the remote forced command decides what runs), timeout, billing, `allow_client_documents` | SSH private key, generated by the application and bound to host:port; only the public half is shown, and it is stored as public material | headless `claude -p --output-format json` on a remote machine, authenticated with an API key (T-8); a recognition script |
+| `pull` | client (`claude_code_session`, `agent`), declared model, answer deadline, max claimed tasks, billing, `allow_client_documents` | runner tokens (stored hashed, shown once) | a VSCode Claude Code session; an agent on a recognition machine |
+
+`vpn` is a label on `http_api`. The tunnel itself is host configuration (`R-143a`), and the
+application only shows whether the worker container reaches the address.
+
+### 2.2 Kinds of model work (assignment keys)
+
+The assignment key is the stage vocabulary (`STAGE_IDS`, migration `0002:102-112`).
+**Today exactly one run stage calls a model: `text_analysis`** (`analysis/text/stage.py:323`).
+The pipeline sends no image: the crop and recognised-region readers are unserved
+(`runs/geometry_crop_input.py:1-5`, `runs/recognised_region_input.py:1-6`). The only vision
+call in the tree is norms re-recognition, an offline CLI outside Jobs
+(`norms/__main__.py:182-197`).
+
+So the plan opens with one key, `text_analysis`. A recognition machine (`R-143a`) can serve
+`text_analysis` from the first pull or SSH slice. A recognition key is added by the first
+stage that sends images (W56b, not yet approved), in that stage's own slice. A key without a
+configured, probed connection is refused at run start with `dependency_unavailable`,
+`dependency: executor_route_missing`. It never falls
+back to `provider.env`.
+
+## 3. The seam: where a connection plugs in
+
+Surveyed on `7cb317b0`; every line reference below is from that tree.
+
+- **Today's path.** `_build_provider` builds one adapter per process, and the same object
+  is threaded down to the call:
+  1. the worker closure (`composition.py:138-152`), or `RunAdapter` (`bootstrap/adapters.py:847-848`, `:969-988`);
+  2. `run_to_terminal` (`runs/carrier.py:385-430`);
+  3. `_execute_run_body(adapter, provider_config)` (`runs/executor.py:749-800`);
+  4. `_run_text_analysis_stage` (`executor.py:513-645`);
+  5. `adapter.complete(request)` (`analysis/text/stage.py:323`).
+
+  Retries reuse the adapter inside one Attempt (`executor.py:584-628`).
+- **The new seam is a resolver.** `_build_provider` returns a resolver instead of an
+  adapter:
+  - with source `environment`, the resolver returns today's adapter, unchanged;
+  - with source `database`, it returns the adapter of the run's frozen connection revision.
+
+  The revision is frozen **at run start**: `start_run` (`adapters.py:879-911`) already
+  stamps the provider mode. It resolves the `text_analysis` assignment to a revision and
+  stores it on the run, in a new nullable column. The input budget (`settings.py:280-281`)
+  is then computed from that revision's pinned model, not from the startup `model_id`.
+  Every Attempt and retry of the run uses the same revision. A key rotated meanwhile is
+  picked up, because a secret is not part of a revision.
+
+  The recorded AR v2 path keeps a concrete `RecordedAdapter` (`recorded_response.py:54-56`).
+  The mode cross-check (`executor.py:883-892`) stays.
+- **Call rows record the connection.** `model_call` and `provider_call_effect` gain a
+  nullable `connection_revision_id`, set at `prepare`. The immutability triggers do not
+  change, because the column is written at insert. `provider="anthropic"` is hard-coded
+  today (`executor.py:352`); it is kept for `environment` and set from the revision's
+  `api_flavour` for `database`.
+- **Two defects the plan fixes rather than plugs into.** Both are part of `EXEC-HTTP-01`,
+  and each gets a debt row until it lands.
+  1. **`R-133` is not enforced on the run path.** `ModelResponse` (`adapter.py:55-87`) has
+     no reported model, and the proxy parser ignores `document["model"]`
+     (`proxy.py:415-458`). `model_identity_mismatch` is declared (`shared/errors/codes.py:48`)
+     but never raised. Only `tools/provider/identity_probe.py` and the norms repair runner
+     check identity.
+     - Fix: `ModelResponse` gains `reported_model` and `stage.py` compares it with the
+       revision's pinned model, fail closed. A response without a reported model is a
+       mismatch, never a pass.
+  2. **The recorded model identity can differ from the model actually requested.**
+     `model_call.model_identity` is `AUDITMANAGER_MODEL_ID` (`executor.py:353`), while the
+     proxy is sent `PROXY_LLM_MODEL`, by default the stub `proxy` (`proxy.py:184`,
+     `settings.py:304`).
+     - Fix: in `database` mode the revision supplies both values: the **pin id** (tariffs,
+       budget) and the **gateway model name** (sent in the request and compared with the
+       reported `model`). The stub is refused. This is the open half of `D-133`.
+     - The gateway name is never derived from the pin id, because the probe tool already
+       keeps the two apart (`tools/provider/identity_probe.py:67-112`). It is confirmed
+       when a probe reports it. The same probe compares the reported cost with the pin's
+       rates within ±20 % (`model_rate_mismatch`).
+     - Under source `environment` the expected name is `PROXY_LLM_MODEL`. With the stub
+       `proxy` no model was selected, so the stage fails closed with
+       `model_identity_mismatch`. The stored stage error message names
+       `model_not_selected`, because that code's safe detail keys are only `run_id` and
+       `stage_id`.
+     - **This changes stand behaviour.** Before `EXEC-HTTP-01` is deployed, the operator
+       sets an explicit `PROXY_LLM_MODEL`, which is the stand repair in progress on
+       2026-10-22.
+- **Long waits.**
+  - One Job is one run, and an Attempt runs the whole run (`executor.py:55-63`). The lease
+    is 60 s with a 20 s heartbeat (`jobs/lease.py:19`). `ATTEMPT_WATCHDOG_SECONDS = 900`
+    (`lease.py:20`, counted from the Attempt's start, `lease.py:40-48`) bounds the whole
+    run. The worker has `slots=1` (`composition.py:161`), and a drain lasts 270 s
+    (`workers/__main__.py:28`).
+  - **A `pull` or `ssh_command` answer therefore waits inside the Attempt.**
+    - The effective deadline is
+      `min(revision answer deadline, watchdog remaining − 60 s margin)`; the revision
+      default is 600 s.
+    - An expired wait raises `ProxyDispatchError` (exported by `analysis/public.py`)
+      with `dependency_unavailable` and `retry_safe=False`. The dispatch class tells the
+      cases apart:
+      - a `pull` task **never claimed** is not-sent, `dependency: no_executor_online`,
+        and the stage records a not-processed effect;
+      - a claimed task, or an `ssh_command` already started, is outcome-unknown. The
+        model may have run and, for an API key, spent.
+
+      The deadline comes from an `AttemptContext` that `EXEC-HTTP-01` passes to the
+      adapter. It is not retried three times over, because a plain `DomainError`
+      would be marked `provider_effect_uncertain` (`stage.py:333-341`).
+    - While the answer is awaited, the single slot is busy and the queue waits too. That
+      is acceptable for a closed beta, and the UI says so.
+  - A deploy during a wait ends as `provider_outcome_unknown`, as a proxy call does today.
+  - **Parking** an Attempt while a remote session thinks would release the slot and resume
+    from a `response_received` effect. It needs a change to the reclaim rule
+    (`jobs/repository.py:486-608`) and is recorded as a follow-up row, not built here.
+- **Admin commands follow `set_worker_intake`** (`workers/commands.py:16-55`):
+  1. a role check;
+  2. `CommandRepository.begin` with an idempotency key and a payload fingerprint;
+  3. the mutation;
+  4. `append_execution_event` (new keys go into the payload allowlist,
+     `jobs/events.py:17-22`; no secret is ever in a payload);
+  5. `ledger.succeed`.
+
+  New identifier prefixes go into `shared/identity/ids.py` and
+  `contracts/domain/v1/identifiers.json`. New admin operations go into `OPERATION_ROLES`
+  (`api/security.py:314-438`), checked by `tests/integration/api/test_role_register.py`.
+- **Readers that move.** `settings.py`, `analysis/text/config.py` and `composition.py` move
+  in `EXEC-HTTP-01`. `infra/deploy/readiness.sh` (:215-310) and
+  `compose.server.yml` (:209-223, :266-274) also move there. `norms/__main__.py`,
+  `tools/provider/identity_probe.py` and the rehearsal and recovery scripts keep their
+  environment variables; they are offline tools.
+
+## 4. Security (`R-143b`, `R-29`, `EXPOSURE-REVIEW-01.md`)
+
+### 4.1 Storage and keys
+
+- **Envelope encryption with a key ring.** `provider.env` on the stand host holds a ring of
+  X25519 key pairs:
+  - `AUDITMANAGER_SECRETS_KEYS` (`kid:private-key-base64`, comma-separated);
+  - `AUDITMANAGER_SECRETS_ACTIVE_KID`.
+
+  Each secret is sealed to the active public key: ephemeral X25519, HKDF-SHA256, then
+  AES-256-GCM. The associated data is
+  `secret_id|connection_id|purpose|kid|destination`. The destination is the whole
+  route the secret travels: `transport|ssh_endpoint|origin`. Concretely it is
+  `direct||scheme://host:port` or `vpn||scheme://host:port` for `http_api`,
+  `ssh_tunnel|host:port|scheme://host:port` for a tunnelled `http_api` (so a changed
+  SSH endpoint unbinds the key even when the tunnelled origin stays
+  `http://localhost:11434`), and `ssh_command|host:port|` for SSH.
+  - The ciphertext cannot be moved to another row.
+  - **A key opens only for the destination it was entered for.** A revision that changes
+    the destination leaves the current secret `secret_unreadable` for it, and the key must
+    be pasted again. A stolen admin session or `api` therefore cannot send a stored key to
+    a new address (T-1, T-4).
+
+  The library is `cryptography`, already locked at 50.0.1; it becomes a direct dependency.
+  Runner tokens are not sealed. They are stored as one-way SHA-256 hashes of a
+  high-entropy value and shown once. This is stronger than `R-143b`'s "encrypted" and is
+  recorded as a refinement of it.
+- **Only the worker can decrypt.** The `api` process receives **public keys only**
+  (`AUDITMANAGER_SECRETS_PUBLIC_KEYS`). It encrypts on write and can never decrypt. The
+  `worker` holds the private ring and is the only process that uses a secret. This narrows
+  `R-143b`'s choice of no password re-entry: a stolen admin session or a compromised `api`
+  process can *replace* a secret but cannot *read* one.
+- **Probes run on the worker.** «Проверить» enqueues a probe that the worker executes, so the
+  test goes over the same network path as real calls: the container egress, the VPN route,
+  the SSH tunnel. Today the `api` container also receives the full `provider.env`; slice
+  `EXEC-HTTP-01` removes that.
+- **Rotation of a provider key** writes a new secret row and marks the old one replaced. It
+  does not create a new revision, so runs in flight keep working.
+- **Rotation of the master key:**
+  1. add a pair to the ring and switch the active kid;
+  2. run `python -m auditmanager.executors rewrap` on the worker, which re-seals every
+     current secret;
+  3. remove the old pair.
+
+  A secret whose kid is missing from the ring is in the typed state `secret_unreadable`.
+  It is shown in the UI and refused at use, and never skipped silently.
+- **Write-only.** No operation, event, log line or export returns a secret. The UI shows
+  the purpose, when it was set and by whom, and the last four characters, stored in clear
+  at write time by the `api`. It shows no hash or fingerprint of the bare secret.
+  - The `api` holds no private key, so it cannot compute a keyed fingerprint.
+  - An unkeyed hash would invite an offline guess.
+
+### 4.2 Logs, events, backup and restore
+
+- **Logs and errors.** Adapters never place request headers or a key into an exception or
+  a log. Provider error bodies are truncated and scrubbed before they are stored. The
+  catalogue's ban on `api_key`, `authorization`, `credential` and `secret` as detail keys
+  (`contracts/domain/v1/error-codes.json:34-60`) stays.
+- **A sentinel test covers the whole path:** set → probe → call → failure → event →
+  `GET` → `pg_dump` text. It asserts the sentinel occurs nowhere in clear, the same pattern
+  as `D-42` and `D-103`.
+- **Backup and restore.** A database dump carries ciphertext and public metadata only. The
+  ring is not in PostgreSQL or S3, and the recovery tooling (`scripts/recovery/**`,
+  `infra/deploy/reset.sh`, the stand-copy scripts) never reads `provider.env`. A restore
+  onto another host therefore yields connections in `secret_unreadable` until the operator
+  installs the ring or an administrator re-enters each key. **A restore drill can never
+  make a paid call.** A test proves that a restored dump cannot decrypt.
+- **Product purge.** `scripts/recovery/product_purge.py` (`:77-114`) classifies every table
+  as PRODUCT or KEEP. It stops on an unclassified table, command type or event type.
+  - `executor_task` is PRODUCT.
+  - Connections, revisions, secrets, probes, route events and runner tokens are KEEP:
+    they are configuration, like accounts.
+  - Each slice that adds a table, command type or event type classifies it there.
+
+### 4.3 Threats and their treatment
+
+| ID | Threat | Treatment |
+| --- | --- | --- |
+| T-1 | A stolen admin session redirects a connection to an attacker's address, to exfiltrate documents or to spend the stored key (`R-143b` accepted the weaker option) | Spending the stored key is closed: a key opens only for its own destination (§4.1). Document exfiltration needs the attacker to paste a key of their own, and is treated as follows. Every change is an audit event with actor and time. «Исполнители» and the dashboard show a notice of connection changes in the last 7 days. A new revision is unusable until a probe passes. `allow_client_documents` defaults to false (closed beta on test data, `R-141c`). The optional host allowlist `AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` in `provider.env` is enforced by the worker and owned by `EXEC-HTTP-01`. **Recommended before `EXEC-HTTP-01` reaches the stand: close `D-191` E-2** (session cookie without `Secure`, no HSTS); it is the cheapest route to a stolen session. |
+| T-2 | A stolen runner token reads task payloads (documents) and submits forged answers | One token per connection; expiry (default 30 days); revocation; last seen at and address shown. Answers are validated against the same output schema as `http_api`, and the `R-133` identity is checked. A model answer is never the expert's decision (`AGENTS.md` §4). |
+| T-3 | A leaked database dump | Ciphertext, plus each secret's last four characters (§4.2). |
+| T-4 | A compromised `api` process | It holds public keys only. It cannot read a secret, and it cannot redirect one, because the destination is bound (§4.1). It can replace a secret with one of its own, which is T-1's remaining case. |
+| T-9 | Server-side request forgery: a connection address that points the worker at `postgres`, `s3`, `api`, loopback or link-local metadata | The worker refuses those destinations by default: compose service names, loopback, link-local and the compose network. A private range is accepted only with `transport: vpn` or `ssh_tunnel`. A probe returns a scrubbed outcome, never a body. Owned by `EXEC-HTTP-01`. |
+| T-5 | A compromised `worker` process | Full secret access. This is inherent: the worker makes the calls. It has no `ports:` (`ADR-0002` addendum). |
+| T-6 | A stolen stand SSH key opens the remote machine | The key is generated per connection. The runbook installs it with `restrict,command="…"` in `authorized_keys` under a dedicated low-privilege user. The host key is pinned (no TOFU in the call path). |
+| T-7 | Prompt injection: an untrusted document instructs a Claude Code session that has shell and file tools on the owner's machine | Both Claude Code profiles run with **no built-in tool**. The headless profile runs `claude -p --tools "" --disallowedTools "mcp__*" --output-format json --model <pinned>`: `--tools ""` disables every built-in tool, and `--tools` does not cover MCP tools, so they are removed separately (Claude Code CLI reference). The session profile runs in a dedicated, empty workspace shipped in `tools/executor-runner/`. Its `.claude/settings.json` denies every built-in tool, so only the bridge's MCP tools remain; that is a permission rule, not a request made in the skill's prose. Two conditions make it effective. VSCode does not write the project-trust flag, so the README makes the operator trust the workspace once from the CLI. The manual check then tries Bash and Read and must see both denied. Closed beta on test data limits the exposure today; the restriction is built now, not at 1.0. |
+| T-8 | A subscription used as a product backend | Anthropic's Claude Code legal page ("Authentication and credential use") says: "Developers building products or services that interact with Claude's capabilities, including those using the Agent SDK, should use API key authentication … Anthropic does not permit third-party developers … to route requests through Free, Pro, or Max plan credentials on behalf of their users." **So the headless profile authenticates with an API key** (`ANTHROPIC_API_KEY` on the remote machine, or `--bare`, which reads no OAuth credential). It is `metered` at the pin's rates. The VSCode session profile is the owner's own interactive session under his own login. Whether it may serve run tasks for other users of the stand is the owner's call (plan §8). Unmetered runs show «не тарифицируется», never $0. |
+
+## 5. Rulings that stay in force
+
+- **`R-133` (fail closed).** Every kind reports a model identity:
+  - `http_api`: the `model` field of the HTTP response;
+  - `ssh_command`: the `claude -p` output. The documentation confirms a per-model
+    breakdown in the JSON output and the model in the `system/init` message of
+    `stream-json`, but not the exact JSON key, so `EXEC-SSH-01` captures the installed
+    version's keys before it writes the parser;
+  - `pull`: the model the runner declares on submit.
+
+  A model other than the revision's gateway name is the typed failure
+  `model_identity_mismatch`, and nothing from that answer is published. A declared model
+  is an assertion, not evidence, so every call row records `identity_basis`: `reported` or
+  `declared`. The UI shows «модель заявлена исполнителем» for the second.
+- **Models are chosen from the pinned set.** The UI picks a model from
+  `docs/program/P02_LOCK.json`, read through `ProviderLock.model()` (`analysis/text/lock.py:69-83`).
+  The lock pins `claude-opus-5` and `claude-sonnet-5` today. A revision with an unpinned
+  model is refused (`model_not_pinned`). Adding a pin stays a change to the lock, which
+  `W56A-MODEL-PIN-01` owns (stopped, `R-133`/`R-136`). `R-136`'s identity probe becomes the
+  connection probe.
+- **Tariffs are never guessed (`R-133`).** A `metered` revision takes its rates from the
+  pin (`ModelPin.cost_usd`, `lock.py:31-58`). A reported cost still wins, as it does today
+  (`analysis/text/cost.py:120-124`). The UI enters no tariffs.
+- **`R-29` clause 1 (spending).** The run cost ceiling stays. Subscription connections have
+  no per-call cost and are recorded as unmetered rather than zero. The contract's
+  `CostBasis` (`measured`, `estimated`) and the CHECK `ck_model_call_cost_basis`
+  (migration `0004`) gain `unmetered`:
+  - `EXEC-SEAL-01` widens the enum and the CHECK;
+  - `EXEC-HTTP-01` makes the meter (`cost.py:120-124`) and `stage.py:411` write it for a
+    `not_metered` revision instead of charging the pin estimate;
+  - `EXEC-PULL-01` consumes it.
+- **`R-135`.** Code first, bounded checks per slice, no paid live call in a lane.
+  `R-141c`: closed beta on test data.
+
+## 6. Moving from `provider.env`
+
+- **An explicit switch.** `AUDITMANAGER_PROVIDER_SOURCE` takes `environment` or `database`
+  and is set in `alpha.env`. The default stays `environment` until an operator switches it.
+  - **Source `environment`** keeps today's run path, with two deliberate changes from
+    `EXEC-HTTP-01`. `R-133` is enforced, so the stand needs an explicit `PROXY_LLM_MODEL`
+    (§3). And `EXECUTION_ROLE=api` no longer demands provider credentials: the `api` makes
+    no model call when a separate worker runs, and it stops loading `provider.env`.
+    `settings.py:253-278` currently demands them for every role, in the proxy branch and
+    the live branch. Both demands are skipped for role `api` and for source `database`.
+  - **Source `database`** requires `AUDITMANAGER_PROVIDER_MODE=live`, without the
+    environment key that mode demands today (see above). Every connection is a
+    live transport, and `proxy` remains a name of the environment source only. It refuses
+    to start if `PROXY_LLM_*` or `ANTHROPIC_API_KEY` is still set: one source of truth,
+    never two. Each run's adapter is resolved from the route and the connection tables
+    and frozen at run start (§3).
+  - **`recorded`** ignores the source and is unchanged for tests and CI.
+
+  The switch back to `environment` is the rollback.
+- **Import.** `python -m auditmanager.executors import-env`, run once on the worker, creates
+  one `http_api` connection from today's `PROXY_LLM_*`, together with its sealed key and a
+  `text_analysis` assignment. The operator then removes the variables and switches the
+  source.
+- **The norms paid-repair CLI** keeps reading `PROXY_LLM_*`. It is an offline tool; moving
+  it is a later, separate row.
+
+## 7. Slices, in order
+
+`CODE-FIRST-TO-BETA.md` §2.1 applies:
+
+- every slice is vertical (a role reaches the result), except the one enabling seal;
+- one freeze, one task file and one record per slice.
+
+§2.2 also applies: at most one or two lanes while the host condition holds. Shared slots
+(the contract, the migration head, the root lockfile, the composition root, `infra/**`)
+have one owner at a time, and the integrator hands each one over in the order below.
+
+| # | Task | Kind | Result a role can reach | Hotspots it owns | Can run beside |
+| --- | --- | --- | --- | --- | --- |
+| 0 | `EXEC-RULE-01` | docs | `R-143` recorded (this branch) | — | — |
+| 1 | `EXEC-ADR-01` | docs | `ADR-0002` addendum replaces "remote workers out of scope" for model work; pointers in `ROADMAP-TO-BETA.md` and `CODE-FIRST-TO-BETA.md` | `docs/architecture/adr/ADR-0002-*`, the two plan files | `EXEC-SEAL-01` |
+| 2 | `EXEC-SEAL-01` | enabling | contract and migration `0030` for connections, revisions, secrets (with public material for SSH keys and `generateExecutorSshKey`), probes and routes of all three kinds; nullable `connection_revision_id` and `identity_basis` on `model_call` and `provider_call_effect`, and the frozen revision on the run; `CostBasis` gains `unmetered`; `cryptography` as a direct dependency; the sealing module with destination-bound associated data and the key-ring loaders; product-purge classification; no behaviour switch | contract, migration head `0030`, `pyproject.toml` + `uv.lock`, surface-count prose pins | `EXEC-ADR-01` |
+| 3 | `EXEC-HTTP-01` | vertical | an admin creates an `http_api` connection in «Исполнители → Подключения», sets the key and assigns `text_analysis`; «Проверить» runs on the worker and names IP refused, key refused, model or rate mismatch, timeout or unreachable; with source `database` a run freezes the revision at start, and its calls go through it and record it; `R-133` enforced on the run path (`reported_model`, fail closed); unmetered cost basis; destination rules (T-9); `import-env`; the `api` holds public keys only and no longer loads `provider.env` | composition root, `analysis/text/**`, `runs/**`, `jobs/repository.py` (call-row inserts), `infra/deploy/compose.server.yml` + env examples + `readiness.sh` | — |
+| 4 | `EXEC-PULL-01` | vertical | an admin issues a runner token; «Проверить» on a `pull` connection posts a synthetic task that a runner must answer; a VSCode Claude Code session connects through the stdio MCP bridge and the workspace in `tools/executor-runner/`, takes the `text_analysis` task of a run and answers within the deadline (§3, long waits); the run completes with the session-declared model (`identity_basis: declared`) and «не тарифицируется» | contract (runner operations), migration `0031` (`executor_task`, `executor_runner_token`), the runner throttle in `nginx.conf` and `tls-server.conf`, `runs/scope.py` wording | — |
+| 5 | `EXEC-AGENT-01` | vertical | the same channel served by an unattended agent (`tools/executor-runner/agent.py`) that runs a configured local command or a local OpenAI-compatible model, proven by a second process on this host | — | — |
+| 6 | `EXEC-SSH-01` | vertical | `ssh_command` with the `claude_code_headless` (API key) and `custom_command` profiles, and `http_api` over `ssh_tunnel`; the key pair is generated in the UI and the host key confirmed in the UI; proven against an `sshd` test container | `infra/deploy/Dockerfile.api` (`openssh-client`) | — |
+| 7 | `EXEC-VPN-01` | infra + runbook | WireGuard on the stand host (template, runbook, a reach probe from the worker container); in the app it is an `http_api` with `transport: vpn` | `infra/deploy/wireguard/**` | — |
+
+`EXEC-AGENT-01`, `EXEC-SSH-01` and `EXEC-VPN-01` all edit `src/auditmanager/executors/**`,
+the connections widget, the runbook and the executors test directories. They run **one
+after the other** (`AGENTS.md` §3). Only `EXEC-ADR-01` runs beside another slice.
+
+**What is provable without the stand.**
+
+- `EXEC-SEAL-01`, `EXEC-HTTP-01`, `EXEC-PULL-01`, `EXEC-AGENT-01` and `EXEC-SSH-01` are
+  provable on a lane: a fake OpenAI-compatible server, a second local process as the agent,
+  an `sshd` container, the stdio MCP bridge driven by a scripted client. A real Claude Code
+  session against a lane stand is a manual check recorded in the slice report. No paid call
+  is made (`R-135`).
+- `EXEC-VPN-01` is provable only on the stand with a real peer. The lane delivers the
+  template, the runbook and the probe, checked by `wg-quick strip`/syntax and a shell test
+  of the probe. The tunnel itself is the operator's act on the host (`R-29` clause 2 is
+  covered by `R-143a`).
+
+**Checks per slice** follow `AGENTS.md` §8 under `R-135`.
+
+- Each task names its contract guard files instead of the whole contract battery.
+- `EXEC-SEAL-01` touches `pyproject.toml`/`uv.lock`, `contracts/**` and `db/migrations/**`
+  (§8 case 3), and `EXEC-HTTP-01`, `EXEC-PULL-01` and `EXEC-SSH-01` touch `infra/**`.
+  `R-135` forbids a complete local gate during the code series, so for each of these slices
+  the integrator decides whether it takes a complete gate in a window or carries the
+  deferral into the final beta gate. The plan names it here so the decision is recorded,
+  not implied.
+
+**At freeze the integrator writes three things into each task file:**
+
+- the exact `- base commit: `<40-hex>``, the form `scripts/task_handoff.py:70` requires;
+- the `## Lane resources` of every task that starts PostgreSQL or S3;
+- `CURRENT_STATE.md`'s prose counts, which stay the integrator's.
+
+## 8. Open owner notes (none blocks the code)
+
+- **Terminology.** The `EXEC-HTTP-01` UI calls the tabs «Подключения», «Процессы» and
+  «Назначения» under «Исполнители». The word «исполнитель» on «Диспетчер» is renamed to
+  «ответственный» in the same slice, unless the owner objects.
+- **T-1.** Closing `D-191` E-2 before the stand gets UI-managed keys is recommended, not
+  ruled.
+- **T-8.** The headless profile uses an API key (T-8 quotes the terms). Whether the
+  owner's own VSCode session, signed in with his subscription, may answer run tasks for
+  other users of the stand is his decision. The code is the same either way.
+- **Pins for session models.** A Claude Code session or `claude -p` reports the model it
+  ran on. If that model is not pinned in `P02_LOCK.json` (only `claude-opus-5` and
+  `claude-sonnet-5` today), `R-133` refuses the answer. Before `EXEC-PULL-01`'s manual
+  check, either the session is set to a pinned model, or the integrator hands the lock
+  slot to a pin change. That pin is an owner decision while `W56A-MODEL-PIN-01` is
+  stopped.
