@@ -20,8 +20,8 @@ The flow has five steps.
    the cost is recorded as unmetered and shown as «не тарифицируется».
 
 If no session claims the task before the revision's answer deadline (capped below the
-900 s Attempt watchdog), the call fails as `dependency_unavailable` with reason
-`no_executor_online`. It never moves to another connection unless an administrator
+900 s Attempt watchdog), the call fails as `dependency_unavailable` with
+`dependency: no_executor_online`. It never moves to another connection unless an administrator
 configured a standby.
 
 ## Depends on
@@ -153,10 +153,13 @@ The following stay closed:
 3. **The pull adapter (worker).**
    - `complete()` inserts the task, NOTIFYs, and waits with LISTEN plus a poll, until
      answered or the deadline.
-   - The deadline is `min(revision deadline, watchdog remaining − 60 s)`.
-   - On expiry it raises `ProxyDispatchError` (from `analysis/public.py`):
-     `dependency_unavailable`, reason `no_executor_online`, a not-sent dispatch class,
-     `retry_safe=False` (plan §3).
+   - The deadline is `min(revision deadline, watchdog remaining − 60 s)`, computed from
+     `EXEC-HTTP-01`'s `AttemptContext`; this slice edits no `runs/**`.
+   - On expiry it raises `ProxyDispatchError` (from `analysis/public.py`) with
+     `dependency_unavailable` and `retry_safe=False` (plan §3). The dispatch class
+     depends on the task:
+     - a task **never claimed** is not-sent, `dependency: no_executor_online`;
+     - a task claimed but not answered is outcome-unknown: the model may have run.
    - Call rows get `identity_basis: declared`.
    - **«Проверить»** for a `pull` revision posts a synthetic task. A runner must claim it
      within 120 s and answer a fixed echo while declaring the revision's model.
@@ -165,7 +168,7 @@ The following stay closed:
    - Its `ModelResponse` carries the declared model, so `R-133` applies unchanged.
    - The answer is validated against the same output schema as `http_api`.
    - Cost is `None`, with `cost_basis` unmetered as the run shows it.
-4. **nginx** (`nginx.conf:284-293`, `tls-server.conf:120-144`; guarded by
+4. **nginx** (`nginx.conf:284-293`, `tls-server.conf:117-131`; guarded by
    `tests/contract/test_proxy_rate_limits.py:559`).
    - **No new `location`.** Add a `map` key and a dedicated zone, then a `limit_req`
      line inside the existing `location /api/v1/` in **both** files, as the

@@ -23,10 +23,8 @@ lane does not run it.
 
 ## Depends on
 
-- `EXEC-HTTP-01` — merged.
-- It may run beside `EXEC-AGENT-01` or `EXEC-SSH-01` only if that lane leaves
-  `executors/__main__.py` alone and the integrator has recorded one lane's measured peak
-  (plan §7, `CODE-FIRST-TO-BETA.md` §2.2). Otherwise it runs after them.
+- `EXEC-SSH-01` — merged. VPN shares the widget, the runbook, the test directories and
+  `executors/__main__.py` with `EXEC-AGENT-01` and `EXEC-SSH-01`, so it runs last.
 
 ## Frozen inputs
 

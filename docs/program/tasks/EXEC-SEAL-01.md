@@ -118,6 +118,14 @@ source stays `environment`. This is the plan's one enabling slice
 - `web/openapi/**`
 - `web/FRONTEND_LOCK.json`
 - `web/src/shared/api/**`
+- `web/src/shared/ui/run-state-badge.tsx`
+- `web/src/entities/audit-run/model/run-presentation.ts`
+- `web/src/entities/audit-run/model/run-comparison.ts`
+- `web/src/widgets/run-progress/ui/run-progress.tsx`
+- `web/src/widgets/dashboard/ui/run-activity-panel.tsx`
+- `web/src/widgets/stage-comparison/ui/stage-comparison.tsx`
+- `src/auditmanager/analysis/public.py`
+- `src/auditmanager/analysis/text/lock.py`
 - `web/tests/**`
 - `docs/manual-tests/PC-01_prototype.md`
 - `docs/program/CONTRACT_PIN_REGISTRY.md`
@@ -125,10 +133,14 @@ source stays `environment`. This is the plan's one enabling slice
 
 ## Forbidden hotspots
 
-`src/auditmanager/runs/**`, `src/auditmanager/analysis/**`, `src/auditmanager/workers/**`
-(the run path and the worker belong to `EXEC-HTTP-01`). Also forbidden:
+`src/auditmanager/runs/**`, `src/auditmanager/analysis/**` (except an export-only
+`pinned_models()` in `analysis/text/lock.py` and its export in `analysis/public.py`) and
+`src/auditmanager/workers/**`. The run path and the worker belong to `EXEC-HTTP-01`. Also
+forbidden:
 
-- `web/src/**` outside `shared/api` and the one surface-count comment in the BFF route;
+- `web/src/**` outside `shared/api`, the one surface-count comment in the BFF route, and
+  the six `CostBasis` consumers granted above (a type widening and the caption
+  «не тарифицируется» only);
 - `infra/**` outside the two env examples, and outside the surface-count prose in
   `infra/deploy/README.md`, `serve.py` and `nginx.conf` (comments only; no directive
   changes);
@@ -144,8 +156,17 @@ No run-path change, no UI and no probe execution. No runner tokens or tasks: tho
 to `EXEC-PULL-01` and migration `0031`. SSH key generation *is* sealed here (`generateExecutorSshKey`, below); running SSH is
 `EXEC-SSH-01`. No new
 error code unless step 0 shows that no existing code can carry the meaning; prefer
-`validation_failed`, `conflict`, `permission_denied` and `dependency_unavailable`, with a
-typed `reason` detail. No paid call.
+`validation_failed`, `conflict`, `permission_denied` and `dependency_unavailable`.
+Refusal details use only each code's existing `safe_detail_keys`
+(`contracts/domain/v1/error-codes.json`), so there is no new `reason` key:
+
+- `validation_failed` uses `field` and `constraint`, for example `constraint:
+  model_not_pinned`;
+- `conflict` uses `conflict_reason`;
+- `dependency_unavailable` uses `dependency`, for example `dependency:
+  executor_route_missing`, `no_executor_online` or `secret_unreadable`.
+
+No paid call.
 
 ## Work
 
@@ -175,7 +196,9 @@ typed `reason` detail. No paid call.
    - `executor_probe` (state and outcome vocabulary: `requested`, `ok`, `ip_refused`,
      `credential_refused`, `model_mismatch`, `rate_mismatch`, `timeout`, `unreachable`,
      `protocol_error`, `secret_unreadable`, `host_key_unpinned`, `host_key_changed`,
-     `no_runner_online`);
+     `no_runner_online`, `destination_refused`, `kind_not_served`, `no_worker`);
+   - the `ssh_command` revision and the SSH transport carry `host_key`, the full public
+     key line written into `UserKnownHostsFile`; the fingerprint shown is derived from it;
    - `executor_route_event`, append-only, with a current view;
    - nullable `connection_revision_id` and `identity_basis` (`reported`, `declared`) on
      `model_call` and `provider_call_effect`;
@@ -183,7 +206,10 @@ typed `reason` detail. No paid call.
      (`0002:1289`, replaced in `0017:34-36`), so a column set at insert passes. Add the
      new column to that trigger's frozen list the way `0017` does, so it actually
      freezes;
-   - `CostBasis` and `ck_model_call_cost_basis` (`0004`) gain `unmetered` (plan §5);
+   - `CostBasis` and `ck_model_call_cost_basis` (`0004`) gain `unmetered` (plan §5). The
+     six web consumers (`run-state-badge.tsx:128`, `run-presentation.ts:431-445` and the
+     three widgets that index the label map) gain the case, with the caption
+     «не тарифицируется». The run-level aggregate rule belongs to `EXEC-HTTP-01`;
    - `scripts/recovery/product_purge.py` and `schema_coverage.py` classify every new
      table, command type and event type. Every `executor_*` table is KEEP; `executor_task`
      arrives in `0031`, as PRODUCT.
@@ -202,13 +228,21 @@ typed `reason` detail. No paid call.
      half to the connection's `host:port` and stores the public half as
      `public_material`. The response returns only the public half and the
      `authorized_keys` line;
-   - `listExecutorRoutes` and `setExecutorRoute`.
+   - `listExecutorRoutes` and `setExecutorRoute`. The route body is `work_kind`,
+     `primary_connection_id` and an optional `standby_connection_id`.
+   - `listExecutorConnections` also returns `pinned_models`: each pin id with its rates,
+     from `ProviderLock` through the export-only `pinned_models()`. A revision is
+     validated against the same function, so the UI select and the refusal cannot
+     disagree.
 
    The final names are fixed here and reported. Writes go to admin in `OPERATION_ROLES`
    (`api/security.py`); reads go to any role, with the secret fields absent by schema.
-4. **Settings.** Add `AUDITMANAGER_SECRETS_PUBLIC_KEYS` (for the `api`),
-   `AUDITMANAGER_SECRETS_KEYS` and `AUDITMANAGER_SECRETS_ACTIVE_KID` (worker only), and
-   document them in the two env examples. `setExecutorSecret` without public keys is a
+4. **Settings.** Add three variables and document them in the two env examples:
+   - `AUDITMANAGER_SECRETS_PUBLIC_KEYS` (`kid:public-key`), for the `api` and the
+     worker;
+   - `AUDITMANAGER_SECRETS_ACTIVE_KID`, for both, so that the `api` knows which public
+     key to seal to;
+   - `AUDITMANAGER_SECRETS_KEYS`, the private ring, for the worker only. `setExecutorSecret` without public keys is a
    typed refusal; it never stores plaintext.
 5. **The sentinel test** (plan §4.2). A sentinel key set through the API must not occur in
    any of these:
@@ -230,7 +264,10 @@ placement, the commands with exit status, and what was deferred under `R-135`).
 ## Required tests
 
 - command: `python3 -m pytest -q tests/contract/api_v1 tests/contract/program tests/contract/domain_p02` plus every contract file the step-0 probe names (container-free; `R-135` forbids the whole battery)
-- expected: all passed.
+- expected: all passed except the `CURRENT_STATE.md` prose-count assertion of
+  `test_doc_prose_facts.py`. That file is the integrator's (precedent:
+  `NORM-REFS-RUN-01.md`), and the report quotes the one failing assertion, which the
+  integrator closes in the merge.
 - command: `python3 -m pytest -q tests/integration/recovery -k "purge or schema_coverage"` on the lane's own containers
 - expected: the classification of every new table, command type and event type passes.
 - command: `python3 -m pytest -q tests/unit/executors tests/integration/executors tests/integration/db/test_downgrade_chain_round_trip.py` on the lane's own containers
@@ -247,8 +284,12 @@ placement, the commands with exit status, and what was deferred under `R-135`).
 After merge, `EXEC-HTTP-01` can rely on the following:
 
 - the tables and operations above;
-- `executors.public` exposing `resolve_route(work_kind)`, `open_secret(secret_id)` (worker
-  only), `record_probe_result(...)` and `current_revision(connection_id)`;
+- `executors.public` exposing `resolve_route(work_kind)`, `record_probe_result(...)`,
+  `current_revision(connection_id)` and `pinned_models()`;
+- **`open_secret(secret_id, destination)`**, worker only. The caller recomputes the
+  destination from the revision it is about to call, and the associated data is built from
+  that argument, never from the row. The row's `destination` column is informational. A
+  test revises a connection's address and expects `secret_unreadable` for the old secret;
 - `connection_revision_id` columns that are writable at insert.
 
 The integrator hands the composition-root slot to `EXEC-HTTP-01` after this merge.

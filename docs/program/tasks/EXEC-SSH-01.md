@@ -35,7 +35,7 @@ command. Then «Проверить» runs.
 
 ## Frozen inputs
 
-- base commit: `origin/dev` at the integrator's freeze, after `EXEC-HTTP-01`;
+- base commit: `origin/dev` at the integrator's freeze, after `EXEC-AGENT-01`;
 - `generateExecutorSshKey` and `executor_secret.public_material`, as `EXEC-SEAL-01`
   sealed them. This task changes no contract or migration;
 - plan §2.1 (`ssh_command`; the `ssh_tunnel` transport), §4.3 T-6, T-7, T-8, §5

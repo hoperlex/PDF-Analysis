@@ -90,7 +90,8 @@ call in the tree is norms re-recognition, an offline CLI outside Jobs
 So the plan opens with one key, `text_analysis`. A recognition machine (`R-143a`) can serve
 `text_analysis` from the first pull or SSH slice. A recognition key is added by the first
 stage that sends images (W56b, not yet approved), in that stage's own slice. A key without a
-configured, probed connection is refused at run start with a typed reason. It never falls
+configured, probed connection is refused at run start with `dependency_unavailable`,
+`dependency: executor_route_missing`. It never falls
 back to `provider.env`.
 
 ## 3. The seam: where a connection plugs in
@@ -148,7 +149,9 @@ Surveyed on `7cb317b0`; every line reference below is from that tree.
        rates within ±20 % (`model_rate_mismatch`).
      - Under source `environment` the expected name is `PROXY_LLM_MODEL`. With the stub
        `proxy` no model was selected, so the stage fails closed with
-       `model_identity_mismatch`, reason `model_not_selected`.
+       `model_identity_mismatch`. The stored stage error message names
+       `model_not_selected`, because that code's safe detail keys are only `run_id` and
+       `stage_id`.
      - **This changes stand behaviour.** Before `EXEC-HTTP-01` is deployed, the operator
        sets an explicit `PROXY_LLM_MODEL`, which is the stand repair in progress on
        2026-10-22.
@@ -162,10 +165,16 @@ Surveyed on `7cb317b0`; every line reference below is from that tree.
     - The effective deadline is
       `min(revision answer deadline, watchdog remaining − 60 s margin)`; the revision
       default is 600 s.
-    - An expired wait raises `ProxyDispatchError` (exported by `analysis/public.py`):
-      `dependency_unavailable`, reason `no_executor_online`, with a not-sent dispatch class
-      and `retry_safe=False`. So the stage records a not-processed effect, not an
-      ambiguous one. It is not retried three times over, because a plain `DomainError`
+    - An expired wait raises `ProxyDispatchError` (exported by `analysis/public.py`)
+      with `dependency_unavailable` and `retry_safe=False`. The dispatch class tells the
+      cases apart:
+      - a `pull` task **never claimed** is not-sent, `dependency: no_executor_online`,
+        and the stage records a not-processed effect;
+      - a claimed task, or an `ssh_command` already started, is outcome-unknown. The
+        model may have run and, for an API key, spent.
+
+      The deadline comes from an `AttemptContext` that `EXEC-HTTP-01` passes to the
+      adapter. It is not retried three times over, because a plain `DomainError`
       would be marked `provider_effect_uncertain` (`stage.py:333-341`).
     - While the answer is awaited, the single slot is busy and the queue waits too. That
       is acceptable for a closed beta, and the UI says so.
@@ -316,9 +325,10 @@ Surveyed on `7cb317b0`; every line reference below is from that tree.
     `EXEC-HTTP-01`. `R-133` is enforced, so the stand needs an explicit `PROXY_LLM_MODEL`
     (§3). And `EXECUTION_ROLE=api` no longer demands provider credentials: the `api` makes
     no model call when a separate worker runs, and it stops loading `provider.env`.
-    `settings.py:249-260` currently demands them for every role, and that branch is
-    narrowed to `all` and `worker`.
-  - **Source `database`** requires `AUDITMANAGER_PROVIDER_MODE=live`. Every connection is a
+    `settings.py:253-278` currently demands them for every role, in the proxy branch and
+    the live branch. Both demands are skipped for role `api` and for source `database`.
+  - **Source `database`** requires `AUDITMANAGER_PROVIDER_MODE=live`, without the
+    environment key that mode demands today (see above). Every connection is a
     live transport, and `proxy` remains a name of the environment source only. It refuses
     to start if `PROXY_LLM_*` or `ANTHROPIC_API_KEY` is still set: one source of truth,
     never two. Each run's adapter is resolved from the route and the connection tables
@@ -353,13 +363,11 @@ have one owner at a time, and the integrator hands each one over in the order be
 | 4 | `EXEC-PULL-01` | vertical | an admin issues a runner token; «Проверить» on a `pull` connection posts a synthetic task that a runner must answer; a VSCode Claude Code session connects through the stdio MCP bridge and the workspace in `tools/executor-runner/`, takes the `text_analysis` task of a run and answers within the deadline (§3, long waits); the run completes with the session-declared model (`identity_basis: declared`) and «не тарифицируется» | contract (runner operations), migration `0031` (`executor_task`, `executor_runner_token`), the runner throttle in `nginx.conf` and `tls-server.conf`, `runs/scope.py` wording | — |
 | 5 | `EXEC-AGENT-01` | vertical | the same channel served by an unattended agent (`tools/executor-runner/agent.py`) that runs a configured local command or a local OpenAI-compatible model, proven by a second process on this host | — | — |
 | 6 | `EXEC-SSH-01` | vertical | `ssh_command` with the `claude_code_headless` (API key) and `custom_command` profiles, and `http_api` over `ssh_tunnel`; the key pair is generated in the UI and the host key confirmed in the UI; proven against an `sshd` test container | `infra/deploy/Dockerfile.api` (`openssh-client`) | — |
-| 7 | `EXEC-VPN-01` | infra + runbook | WireGuard on the stand host (template, runbook, a reach probe from the worker container); in the app it is an `http_api` with `transport: vpn` | `infra/deploy/wireguard/**` | `EXEC-AGENT-01` or `EXEC-SSH-01` |
+| 7 | `EXEC-VPN-01` | infra + runbook | WireGuard on the stand host (template, runbook, a reach probe from the worker container); in the app it is an `http_api` with `transport: vpn` | `infra/deploy/wireguard/**` | — |
 
-`EXEC-AGENT-01` and `EXEC-SSH-01` both edit `src/auditmanager/executors/**`,
-`tools/executor-runner/**`, the connections widget and the runbook, so they run **one after
-the other** (`AGENTS.md` §3). `EXEC-VPN-01` shares only `executors/` with them. If it runs
-beside one of them, it takes `executors/reach.py` alone, and the integrator first records
-the measured peak of one lane (§2.2).
+`EXEC-AGENT-01`, `EXEC-SSH-01` and `EXEC-VPN-01` all edit `src/auditmanager/executors/**`,
+the connections widget, the runbook and the executors test directories. They run **one
+after the other** (`AGENTS.md` §3). Only `EXEC-ADR-01` runs beside another slice.
 
 **What is provable without the stand.**
 

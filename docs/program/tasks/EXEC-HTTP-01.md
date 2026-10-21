@@ -49,7 +49,7 @@ connection. The `api` container no longer receives the private material. The wor
 - totality_query: not_applicable
 
 An unconfigured route is refused by `startRun` and `reauditRun` with `dependency_unavailable`
-(503, already declared on both) and reason `executor_route_missing`. No contract change is
+(503, already declared on both) and the safe detail `dependency: executor_route_missing`. No contract change is
 needed.
 
 The secret form uses the existing credentialed forward. If it cannot carry a native form
@@ -101,6 +101,9 @@ post and a new BFF door is needed, stop: a new door is an enumerated change
 - `src/auditmanager/runs/**`
 - `src/auditmanager/workers/**`
 - `src/auditmanager/jobs/repository.py`
+- `src/auditmanager/jobs/lease.py`
+- `src/auditmanager/jobs/public.py`
+- `src/auditmanager/jobs/events.py`
 - `scripts/recovery/product_purge.py`
 - `src/auditmanager/bootstrap/**`
 - `src/auditmanager/api/**`
@@ -148,7 +151,8 @@ post and a new BFF door is needed, stop: a new door is an enumerated change
 ## Non-goals
 
 - No `pull`, `ssh_command` or `ssh_tunnel` behaviour: those kinds can be created but are
-  refused at «Проверить» and at route time with reason `kind_not_yet_served`.
+  refused at «Проверить» with the probe outcome `kind_not_served`, and at route time with
+  `validation_failed`, `constraint: kind_not_served`.
 - No parking of Attempts.
 - No move of the norms CLI, and no tariff entry.
 - No paid call: every test uses a local fake OpenAI-compatible server, and the Anthropic
@@ -158,13 +162,20 @@ post and a new BFF door is needed, stop: a new door is an enumerated change
 
 1. **The resolver seam** (plan §3): `_build_provider` returns a resolver.
    - With source `environment` the run path is today's, apart from two deliberate changes
-     (plan §6). `R-133` is enforced, and `EXECUTION_ROLE=api` no longer demands provider
-     credentials, because `settings.py:249-260` is narrowed to `all` and `worker`. The
+     (plan §6). `R-133` is enforced. Both credential demands in `settings.py:253-278`, the
+     proxy branch and the live branch, are skipped for `EXECUTION_ROLE=api` and for
+     source `database`. The
      existing composition tests prove the rest unchanged.
    - With source `database`, `AUDITMANAGER_PROVIDER_MODE` must be `live`.
    - With source `database`, `start_run` freezes the route's revision and the input budget
      follows that revision's pinned model.
-   - The worker opens the secret per Attempt.
+   - The worker opens the secret per Attempt, with `open_secret(secret_id, destination)`
+     recomputing the destination from the frozen revision.
+   - **`AttemptContext`** carries `run_id`, `attempt_id`, the effect or call id,
+     `started_monotonic` and the watchdog seconds. It is built where the heartbeat starts
+     (`executor.py:935`) and passed to the adapter factory. `jobs/public.py` exports
+     `ATTEMPT_WATCHDOG_SECONDS` (`lease.py:20`). `EXEC-PULL-01` relies on it for the
+     deadline and the task's references, so no later slice edits `runs/**`.
    - `jobs/repository.py` `prepare_provider_call` (`:814`) and the two inserts (`:141`,
      `:218`) take `connection_revision_id` and `identity_basis`.
    - A standby is used only at run start, as plan §2 says, and is journaled.
@@ -175,9 +186,11 @@ post and a new BFF door is needed, stop: a new door is an enumerated change
    - the pin id, which gives tariffs and the budget;
    - the gateway model name, which is sent and compared.
 
-   `stage.py` compares the reported model with the gateway name. Under `environment` the
-   expected value is `PROXY_LLM_MODEL`; with the stub `proxy` the stage fails closed with
-   reason `model_not_selected`. A mismatch, or no reported model, is
+   `stage.py` compares the reported model with the gateway name. The check applies only
+   to provider mode `live`: a `recorded` response is a replayed fixture, and `recorded` is
+   the default mode (`alpha.env.example:219`). Under `environment` the
+   expected value is `PROXY_LLM_MODEL`; with the stub `proxy` the stage fails closed, and its
+   stored error message names `model_not_selected` (the envelope carries only the code's `safe_detail_keys`; such a word goes into the stored stage error message). A mismatch, or no reported model, is
    `model_identity_mismatch`: the stage fails and nothing is published.
 
    The identity and rate check becomes `executors/identity.py`. It is ported from
@@ -197,12 +210,15 @@ post and a new BFF door is needed, stop: a new door is an enumerated change
      connect.
    - It stores a scrubbed, truncated detail.
    - Only a revision with an `ok` probe on its current secret can be routed or used.
-   - A probe still `requested` after 120 s becomes `timeout` with reason `no_worker`.
+   - A probe still `requested` after 120 s gets the outcome `no_worker`.
      A draining worker takes no new probes.
    - Destination rules (plan T-9) are enforced in the probe and in the call:
      - refused by default: compose service names, loopback, link-local and the compose
        network;
      - a private range is accepted only for `transport: vpn`;
+     - for `transport: ssh_tunnel` the rule applies to the SSH endpoint. The tunnel
+       target is resolved on the remote host, so a remote `localhost` (Ollama) is
+       allowed;
      - an optional `AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` narrows further.
 4. **UI.**
    - Tabs in `/workers`.
@@ -217,6 +233,12 @@ post and a new BFF door is needed, stop: a new door is an enumerated change
 5. **`import-env` and infra.**
    - `import-env` is idempotent: a second run is a no-op that names the existing
      connection.
+   - `rewrap` re-seals every current secret to the active kid by inserting new rows
+     (`executor_secret` is immutable). Each new row keeps its destination, and a test
+     shows the call still opens after a rewrap.
+   - The run-level cost rule: when every call is unmetered, the basis is `unmetered`
+     with a null `cost_micros`; when unmetered and metered calls mix, the basis is
+     `estimated` (`cost.py:76`, `runs/repository.py:161`).
    - `compose.server.yml`: the `api` service stops loading `provider.env` and receives
      `AUDITMANAGER_SECRETS_PUBLIC_KEYS`.
    - `readiness.sh` checks the source, the ring and the public keys.
@@ -262,8 +284,8 @@ preview (the `cdp.mjs` route).
 
 - A rotation mid-run is picked up at the next Attempt.
 - A revision archived after a run froze it still serves that run.
-- `secret_unreadable` refuses the call as `dependency_credential_refused` with reason
-  `secret_unreadable`.
+- `secret_unreadable` refuses the call as `dependency_credential_refused`; the stored
+  stage error message names `secret_unreadable`.
 - A probe never logs a header.
 - An expert sees connections without secrets and without the controls.
 - No silent fallback: a standby is used only if configured, and each use is an event plus
