@@ -225,10 +225,11 @@ Read for ideas, not merged (it was built for head `0016` and a one-time migratio
 * A `running` job left by a crashed worker blocks the purge until its lease is resolved or `--allow-running` is given.
 * Objects named by no row (a staged upload nobody references, a stray) are neither deleted nor listed beyond a count.
 * The bucket must be unversioned. The tool deletes keys, it does not purge versions.
-* `schema_coverage.HEAD` is `0028_classification_corrections` while the alembic head is `0029_routing_refusal_codes`: at `origin/dev`
-  `ef3c348a` **25 of the 30 tests in `tests/integration/recovery/test_schema_coverage.py` fail** (`migration head differs`), independent
-  of this lane. Changing `HEAD = "0029_routing_refusal_codes"` in `scripts/recovery/schema_coverage.py` makes all 30 pass (measured; the
-  line was not committed here, the lane's rule is additive-only in `scripts/recovery/`). `product_purge` does not read `HEAD`.
+* `schema_coverage.HEAD` was `0028_classification_corrections` while the alembic head is `0029_routing_refusal_codes`: at `origin/dev`
+  `ef3c348a` 26 recovery tests failed with `migration head differs`, independent of this tool. The second commit of this branch moves the
+  pin to `0029_routing_refusal_codes` (migration `0029` only widens four stored-error CHECKs: measured on a migrated lane database, 55 tables,
+  4 views, 72 triggers, 7 sequences, constraints `c=445 f=111 p=54 t=8 u=39`, 153 indexes, 0 unvalidated, all equal to the declaration) and makes
+  `test_synthetic_drill_runner` follow the single pin instead of a literal. `product_purge` does not read `HEAD`.
 
 ## 9. Tests (all against the lane's real PostgreSQL and MinIO unless stated)
 
