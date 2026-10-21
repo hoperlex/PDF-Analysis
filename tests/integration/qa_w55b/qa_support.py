@@ -228,6 +228,8 @@ class ApiControl:
         self.current: ServedApi | None = None
         self.log_directory = Path(tempfile.mkdtemp(prefix="w55b-qa-api-"))
         self.peaks: list[tuple[str | None, int]] = []
+        self._parked: list[tuple[str, Any]] | None = None
+        self._engine: Engine | None = None
 
     def ensure(self, ceiling: str | None = None) -> ServedApi:
         """A served application at ``ceiling`` (``None``: the default, unset), started if needed."""
@@ -310,6 +312,46 @@ class ApiControl:
         if self.current is not None:
             self._terminate(self.current)
             self.current = None
+
+    def park_foreign_queue(self, engine: Engine) -> None:
+        """Keep every Job another suite left ``queued`` out of the served child's reach (`GATE-REPAIR-02`).
+
+        The child is the in-process claimant of ``EXECUTION_ROLE=all``: it claims **any** queued
+        run in the shared lane database, not only the runs these probes start. A run another
+        directory left queued is then executed (or, when its pinned profile is not one this
+        deployment registers, failed as ``analysis_failed``) while a probe is counting rows, and
+        the probes' global counts (``blob``, ``document_version``) move under it. The Jobs are
+        given an ``available_at`` in 2099 and get their own back in :meth:`close`; only the Jobs
+        that exist when this is called are touched, so the probes' own runs are not. The same
+        step ``tests/integration/jobs/conftest.py``'s ``quiet_queue`` takes for its workers.
+        """
+        if self._parked is not None:
+            return
+        with Session(engine) as session:
+            rows = session.execute(text(
+                "SELECT job_id, available_at FROM job WHERE state = 'queued' FOR UPDATE"
+            )).all()
+            session.execute(text(
+                "UPDATE job SET available_at = timestamptz '2099-01-01' WHERE state = 'queued'"
+            ))
+            session.commit()
+        self._parked = [(str(job_id), available_at) for job_id, available_at in rows]
+        self._engine = engine
+
+    def close(self) -> None:
+        """Stop the child and give the parked Jobs back. Safe to call twice."""
+        self.stop()
+        parked, self._parked = self._parked, None
+        if not parked:
+            return
+        assert self._engine is not None
+        with Session(self._engine) as session:
+            for job_id, available_at in parked:
+                session.execute(text(
+                    "UPDATE job SET available_at = :available_at "
+                    "WHERE job_id = :job_id AND state = 'queued'"
+                ), {"job_id": job_id, "available_at": available_at})
+            session.commit()
 
 
 # ---------------------------------------------------------------------------------------
