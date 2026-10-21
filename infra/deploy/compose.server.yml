@@ -341,9 +341,14 @@ services:
     # BOUND TO 127.0.0.1 BY DEFAULT, ruled by the owner 2026-09-22 closing `D-49`.
     #
     # This line used to read `"${ALPHA_HTTP_PORT}:8080"` with no interface, which binds
-    # `0.0.0.0`. That was measured, not supposed: `GET http://<host public ip>:31500/bff/v1/projects`
-    # answered **200**, and `/bff/v1` serves every operation of this surface — writes included — with
-    # no credential, because the BFF adds it server-side. `ufw` was not in the way and could
+    # `0.0.0.0`. That was measured, not supposed: on 2026-09-22 `GET http://<host public ip>:31500/bff/v1/projects`
+    # answered **200**, because `/bff/v1` then served every operation of this surface — writes
+    # included — to anyone, the BFF adding the credential server-side. **THAT IS HISTORY AND IS NOT
+    # TODAY'S BEHAVIOUR:** since wave 34 the BFF forwards a credential only for a live session
+    # cookie and answers `401 authentication_required` to everyone else
+    # (`web/src/app/bff/v1/[...path]/route.ts`), and since `R-31` `/api/v1/openapi.json` answers
+    # `401` too; `docs/program/EXPOSURE-REVIEW-01.md` `E-8` re-measured both. The loopback default
+    # stays, as the second line of defence it always was. `ufw` was not in the way and could
     # not be: a Docker-published port never reaches ufw's `INPUT` chain, since Docker writes
     # its own `nat/DOCKER` and `filter/DOCKER` rules, which are traversed first. `ufw status`
     # said one port was open while this one answered the world.

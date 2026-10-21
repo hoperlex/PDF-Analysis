@@ -327,7 +327,11 @@ class TestTheRedirectStaysOnThisOrigin:
         for path in self.CONFIGS:
             lines = directives(path.read_text())
             host = [line for line in lines if line.startswith("proxy_set_header Host ")]
-            assert host == ["proxy_set_header Host $http_host;"], (path.name, host)
+            # One at server level, and one in each of the two internal credential locations
+            # (`HARDEN-AUTH-EDGE-01`): a location that declares any `proxy_set_header` drops
+            # the inherited ones, so those two repeat the server's four. Every one of them is
+            # the same line, and none is the port-stripped `$host`.
+            assert host == ["proxy_set_header Host $http_host;"] * 3, (path.name, host)
 
     def test_no_configuration_forwards_the_port_stripped_host(self) -> None:
         """Stated as its own case rather than inferred from the one above, because

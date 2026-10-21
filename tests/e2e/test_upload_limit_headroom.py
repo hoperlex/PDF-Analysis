@@ -88,6 +88,14 @@ UPLOAD_LOCATIONS = (
     "location ~ ^/bff/v1/projects/[^/]+/documents(?:/[^/]+/versions)?$ {",
 )
 SERVER_SCOPE = "server {"
+#: `HARDEN-AUTH-EDGE-01`. The two INTERNAL locations an upload location asks for the caller's
+#: credential before it reads the body. A subrequest shares the request's headers, and nginx
+#: compares the DECLARED length with the cap of the location it enters, so each must carry a
+#: cap at least as large as the upload cap or the check answers 413 and the upload a 500.
+CREDENTIAL_LOCATIONS = (
+    "location = /_edge/credential/api {",
+    "location = /_edge/credential/web {",
+)
 
 #: nginx's own size suffixes. No suffix is bytes; `k`, `m` and `g` are binary, which is
 #: why a `260m` cap and a `250 MiB` pre-check are comparable at all.
@@ -252,7 +260,11 @@ def nginx_limits(conf: str) -> tuple[int, dict[str, int]]:
             f"expected exactly one server-wide `client_max_body_size`, found {len(default)}. "
             "More than one means the cap of an ordinary route depends on which block serves it."
         )
-    stray = [scope for scope, _ in caps if scope != SERVER_SCOPE and scope not in UPLOAD_LOCATIONS]
+    stray = [
+        scope
+        for scope, _ in caps
+        if scope != SERVER_SCOPE and scope not in UPLOAD_LOCATIONS and scope not in CREDENTIAL_LOCATIONS
+    ]
     if stray:
         raise AssertionError(
             f"`client_max_body_size` is set in {stray}, which is neither the server nor an "
@@ -272,6 +284,18 @@ def nginx_limits(conf: str) -> tuple[int, dict[str, int]]:
                 "effective cap there is ambiguous."
             )
         uploads[location] = values[0]
+    declared = " ".join(uncommented(conf).split())
+    for location in CREDENTIAL_LOCATIONS:
+        if location not in declared:
+            continue
+        values = [value for scope, value in caps if scope == location]
+        if len(values) != 1 or values[0] < max(uploads.values()):
+            raise AssertionError(
+                f"`{location}` must set `client_max_body_size` once, to at least the upload "
+                f"cap {max(uploads.values())}; it sets {values}. The credential check is a "
+                "subrequest that re-reads the declared length against this cap, and a smaller "
+                "one answers 413 to the check and 500 to every legitimate upload."
+            )
     return default[0], uploads
 
 
@@ -548,6 +572,33 @@ def test_control_a_raised_application_cap_is_detected() -> None:
 def test_control_a_lowered_application_cap_is_detected() -> None:
     api = _API_LIKE.replace("251 * 1024 * 1024", "25 * 1024 * 1024")
     assert headroom_problems(*_chain(api=api))
+
+
+_CREDENTIAL_LIKE = """
+    location = /_edge/credential/api {
+        internal;
+        client_max_body_size 260m;
+        proxy_pass http://api:8000/me;
+    }
+"""
+
+
+def test_control_the_credential_locations_are_part_of_the_chain() -> None:
+    """`HARDEN-AUTH-EDGE-01`: a credential location is allowed, and only with the upload cap."""
+    with_credential = _CONF_LIKE.replace("    location ~ ^/bff", _CREDENTIAL_LIKE + "\n    location ~ ^/bff", 1)
+    assert with_credential != _CONF_LIKE
+    assert nginx_limits(with_credential) == nginx_limits(_CONF_LIKE)
+    for broken in (
+        with_credential.replace("client_max_body_size 260m;\n        proxy_pass http://api:8000/me;",
+                                "proxy_pass http://api:8000/me;"),
+        with_credential.replace("client_max_body_size 260m;\n        proxy_pass http://api:8000/me;",
+                                "client_max_body_size 32m;\n        proxy_pass http://api:8000/me;"),
+        with_credential.replace("client_max_body_size 260m;\n        proxy_pass http://api:8000/me;",
+                                "client_max_body_size 260m;\n        client_max_body_size 260m;\n        proxy_pass http://api:8000/me;"),
+    ):
+        assert broken != with_credential
+        with pytest.raises(AssertionError):
+            nginx_limits(broken)
 
 
 def test_control_a_lowered_nginx_upload_cap_is_detected() -> None:

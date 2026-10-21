@@ -951,8 +951,9 @@ echo
 echo "-- the published port answers --"
 # The one published port, asked the way a browser would ask. `T-2` puts the API at
 # `/api/v1` and the proxy strips the prefix, so `/api/v1/openapi.json` reaches the
-# application's own root and needs no credential -- `T-3` and the contract's `servers`
-# entry between them are why this particular path is the one to ask for.
+# application's own root, where since `R-31` it answers `401` to a caller that presents none
+# (the guard below demands exactly that) -- `T-3` and the contract's `servers` entry between
+# them are why this particular path is the one to ask for.
 #
 # 502, 503 and 504 are separated from everything else because they are the specific shape
 # of the failure above: nginx holding an upstream that is no longer there. A deploy that
