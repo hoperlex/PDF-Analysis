@@ -28,6 +28,7 @@ from auditmanager.storage import S3StorageSettings, StorageError
 from scripts.recovery import synthetic_drill_seed as seed
 from scripts.recovery.blob_reference_audit import audit_blob_references
 from scripts.recovery.schema_coverage import audit_restored_schema
+from scripts.recovery.synthetic_drill_compare import probe_guards
 
 _LANE_NAMES = (
     "FOUNDATION_INSTANCE", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_PORT",
@@ -135,3 +136,56 @@ def test_a_lane_that_already_holds_a_project_is_refused(
     _, _, values = seeded_lane
     with pytest.raises(seed.SeedRefused, match="already holds a project"):
         seed.seed_source_lane(values)
+
+
+_ADDED_AFTER_0023 = frozenset((
+    "document_version_classification", "document_version_classification_correction",
+    "work_assignment", "work_assignment_event",
+    "price_list_revision", "price_list_position", "vendor_list_revision", "vendor_list_entry",
+    "optimisation_pass", "optimisation_proposal", "optimisation_proposal_decision",
+))
+
+
+def test_the_guard_probe_is_refused_everywhere_and_notices_a_dead_or_narrowed_trigger(
+    seeded_lane: tuple[dict[str, Any], DatabaseSettings, dict[str, str]],
+) -> None:
+    """On the seeded lane every table `0024`-`0028` added is populated, so the probe can bite."""
+    _, database, _ = seeded_lane
+    engine = create_database_engine(database)
+    try:
+        def counts() -> dict[str, int]:
+            with engine.connect() as connection:
+                return {name: connection.execute(text(f"SELECT count(*) FROM {name}")).scalar_one()
+                        for name in sorted(_ADDED_AFTER_0023)}
+
+        before = counts()
+        report = probe_guards(engine)
+        assert counts() == before, "the probe must leave no trace"
+        probed = {item["table"] for item in report if item["result"] != "empty"}
+        assert _ADDED_AFTER_0023 <= probed, sorted(_ADDED_AFTER_0023 - probed)
+        assert {item["result"] for item in report if item["result"] != "empty"} <= {"AM002", "AM003"}
+
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "ALTER TABLE price_list_revision DISABLE TRIGGER trg_price_list_revision_immutable")
+        disabled = probe_guards(engine)
+        # The update is accepted. The delete still "raises", but it is the child rows' foreign key
+        # (23503) and not the guard: asserting the guard's own SQLSTATE is what tells them apart.
+        assert {item["operation"]: item["result"] for item in disabled
+                if item["table"] == "price_list_revision"} == {"update": "ACCEPTED", "delete": "23503"}
+        assert counts() == before, "an accepted probe write must still be rolled back"
+
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "ALTER TABLE price_list_revision ENABLE TRIGGER trg_price_list_revision_immutable")
+            connection.exec_driver_sql(
+                "DROP TRIGGER trg_work_assignment_event_immutable ON work_assignment_event")
+            connection.exec_driver_sql(
+                "CREATE TRIGGER trg_work_assignment_event_immutable BEFORE DELETE ON "
+                "work_assignment_event FOR EACH ROW EXECUTE FUNCTION am_immutable_row()")
+        narrowed = probe_guards(engine)
+        outcome = {item["operation"]: item["result"] for item in narrowed
+                   if item["table"] == "work_assignment_event"}
+        assert outcome == {"update": "ACCEPTED", "delete": "AM003"}
+    finally:
+        engine.dispose()

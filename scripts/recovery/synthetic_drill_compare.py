@@ -13,8 +13,14 @@ side by side, and reports every difference in:
   enabled state, function bodies, view definitions, sequence positions and extensions;
 * every object of the two buckets, by key, size and the SHA-256 of the bytes actually read.
 
-Both sides must be loopback services the operator owns. Nothing is written. A difference is
-a finding, never repaired here.
+Both sides must be loopback services the operator owns. The comparison writes nothing. A
+difference is a finding, never repaired here.
+
+``probe_guards`` goes one step past "the trigger exists": on the restored TARGET only, inside
+one transaction that is always rolled back, it tries to UPDATE and to DELETE one real row of
+every populated table that carries an immutable or append-only guard, and requires the guard's
+own SQLSTATE each time. A restore that kept a trigger's name but lost its event set, or left it
+disabled, is caught by the shape digests; one whose trigger does not fire is caught here.
 """
 
 from __future__ import annotations
@@ -115,6 +121,61 @@ def database_profile(engine: Engine) -> dict[str, Any]:
     return profile
 
 
+#: The SQLSTATEs of ``am_append_only`` (``AM002``) and ``am_immutable_row`` (``AM003``).
+_GUARD_SQLSTATES = ("AM002", "AM003")
+_GUARDS = text("""
+    SELECT DISTINCT c.relname AS name, p.proname AS guard, c.relname COLLATE "C" AS sort_key
+      FROM pg_catalog.pg_trigger t
+      JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
+      JOIN pg_catalog.pg_proc p ON p.oid = t.tgfoid
+     WHERE NOT t.tgisinternal AND c.relnamespace = 'public'::regnamespace
+       AND p.proname IN ('am_immutable_row', 'am_append_only', 'am_guard_release_append_only')
+     ORDER BY sort_key, guard
+""")
+
+
+def probe_guards(engine: Engine) -> list[dict[str, Any]]:
+    """Try to UPDATE and DELETE one row of each populated guarded table; the guard must refuse.
+
+    Always rolled back. Run it on the restored TARGET, never on a source anyone still needs.
+    A table with no row proves nothing and is reported as ``empty``, not as refused.
+    """
+    from sqlalchemy.exc import DBAPIError
+
+    report: list[dict[str, Any]] = []
+    with engine.connect() as connection:
+        try:
+            for row in connection.execute(_GUARDS).mappings().all():
+                name = row["name"]
+                if not _IDENT.fullmatch(name):
+                    raise ValueError(f"table name {name!r} is not a plain identifier")
+                first = connection.execute(text(
+                    "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' "
+                    "AND table_name = :t AND is_generated = 'NEVER' AND is_identity = 'NO' "
+                    "ORDER BY ordinal_position LIMIT 1"), {"t": name}).scalar_one()
+                one = f'ctid = (SELECT ctid FROM public."{name}" LIMIT 1)'
+                if not connection.execute(text(f'SELECT EXISTS (SELECT 1 FROM public."{name}")')).scalar_one():
+                    report.append({"table": name, "guard": row["guard"], "result": "empty"})
+                    continue
+                for operation, statement in (
+                    ("update", f'UPDATE public."{name}" SET "{first}" = "{first}" WHERE {one}'),
+                    ("delete", f'DELETE FROM public."{name}" WHERE {one}'),
+                ):
+                    nested = connection.begin_nested()
+                    try:
+                        connection.execute(text(statement))
+                        outcome = "ACCEPTED"
+                    except DBAPIError as error:
+                        outcome = str(getattr(error.orig, "sqlstate", "") or "error")
+                    finally:
+                        nested.rollback()
+                    report.append({"table": name, "guard": row["guard"], "operation": operation,
+                                   "result": outcome})
+        finally:
+            connection.rollback()
+    return report
+
+
 def bucket_profile(client: Any, bucket: str) -> dict[str, list[Any]]:
     """``key -> [size, sha256 of the bytes read]`` for every object of the bucket."""
     keys: list[tuple[str, int]] = []
@@ -185,6 +246,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-env", type=Path, required=True)
     parser.add_argument("--target-env", type=Path, required=True)
+    parser.add_argument("--probe-target-guards", action="store_true",
+                        help="also try to UPDATE/DELETE a row of every guarded table of the TARGET "
+                             "(rolled back); the guards must refuse")
     args = parser.parse_args(argv)
     source, target = _env(args.source_env), _env(args.target_env)
     if (source["DATABASE_URL"], source["S3_BUCKET"]) == (target["DATABASE_URL"], target["S3_BUCKET"]):
@@ -204,7 +268,23 @@ def main(argv: list[str] | None = None) -> int:
     for profile in profiles:
         del profile["database"]["informational"]
     found = differences(profiles[0], profiles[1])
+    probe: list[dict[str, Any]] = []
+    if args.probe_target_guards:
+        engine = create_engine(target["DATABASE_URL"])
+        try:
+            probe = probe_guards(engine)
+        finally:
+            engine.dispose()
+        found += [f"/guard_probe/{item['table']}/{item.get('operation', '-')}: {item['result']}"
+                  for item in probe if item["result"] not in (*_GUARD_SQLSTATES, "empty")]
     summary = {
+        "guard_probe": {
+            "tables": len({item["table"] for item in probe}),
+            "refused": sum(item["result"] in _GUARD_SQLSTATES for item in probe),
+            "empty_tables": sorted(item["table"] for item in probe if item["result"] == "empty"),
+            "accepted_or_other": [item for item in probe
+                                  if item["result"] not in (*_GUARD_SQLSTATES, "empty")],
+        } if args.probe_target_guards else None,
         "informational": informational,
         "tables": len(profiles[0]["database"]["tables"]),
         "table_rows": sum(count for count, _ in profiles[0]["database"]["tables"].values()),
