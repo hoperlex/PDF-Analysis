@@ -23,6 +23,26 @@ from tests.integration.analysis.test_ar_v2_recorded_artifact import (
 )
 
 
+_STAGE_REGISTRY_CONTRACT = (
+    Path(__file__).resolve().parents[3]
+    / "contracts" / "analysis" / "v1" / "stage-registry.json"
+)
+# text_analysis was sealed at 1.0.0 until W57A-SEAL-01B moved it to 1.1.0.
+_RETIRED_TEXT_STAGE_VERSION = "1.0.0"
+
+
+def _stage_version(stage_id: str) -> str:
+    """The version the sealed stage-registry contract declares today.
+
+    Read from the contract file itself, not from the registry object the code
+    under test consults, and never written out by hand: a reseal then moves
+    this test with the contract instead of leaving a stale pin behind.
+    """
+    document = json.loads(_STAGE_REGISTRY_CONTRACT.read_text(encoding="utf-8"))
+    versions = {entry["stage_id"]: entry["stage_version"] for entry in document["stages"]}
+    return versions[stage_id]
+
+
 def _ref(role: str, payload: bytes) -> ArtifactRef:
     digest = sha256_hex(payload)
     return ArtifactRef(
@@ -51,11 +71,11 @@ def _case(tmp_path: Path, *, ocr_only: bool = False):
     merge_payload = canonical_bytes(replay.finished.merge.artifact)
     merge_ref = _ref("findings.merged", merge_payload)
     text_result = StageResult(
-        "text_analysis", "1.0.0", StageStatus.SUCCEEDED, (text_ref,),
+        "text_analysis", _stage_version("text_analysis"), StageStatus.SUCCEEDED, (text_ref,),
         {"provider_mode": "recorded", "model_call_count": 1},
     )
     merge_result = StageResult(
-        "finding_merge", "1.0.0", StageStatus.SUCCEEDED, (merge_ref,),
+        "finding_merge", _stage_version("finding_merge"), StageStatus.SUCCEEDED, (merge_ref,),
         {"text_artifact_sha256": text_ref.sha256,
          "observation_count": len(replay.finished.grounding.accepted),
          "group_count": len(replay.finished.merge.artifact["groups"])},
@@ -155,19 +175,23 @@ def test_saved_plan_retains_two_merged_members_and_rejected_gap(tmp_path: Path) 
     assert plan.rejected[0].proposal_ordinal == 1
 
 
-@pytest.mark.parametrize("field,value", [
-    ("run_id", "run_01M2545JSD15ETSNNV904X991K"),
-    ("version_uid", "ver_01M2545JSD15ETSNNV904X991K"),
-    ("model_call_id", "mc_01M2545JSD15ETSNNV904X991K"),
-    ("model_id", "fixture/other-model"),
-    ("request_sha256", "0" * 64),
-    ("response_sha256", "0" * 64),
-    ("source_binding_sha256", "0" * 64),
+@pytest.mark.parametrize("field,value,reason", [
+    ("run_id", "run_01M2545JSD15ETSNNV904X991K", "saved_text_observations_invalid"),
+    ("version_uid", "ver_01M2545JSD15ETSNNV904X991K", "saved_text_observations_invalid"),
+    ("model_call_id", "mc_01M2545JSD15ETSNNV904X991K", "saved_call_or_source_binding_invalid"),
+    ("model_id", "fixture/other-model", "saved_call_or_source_binding_invalid"),
+    ("request_sha256", "0" * 64, "saved_call_or_source_binding_invalid"),
+    ("response_sha256", "0" * 64, "saved_call_or_source_binding_invalid"),
+    ("source_binding_sha256", "0" * 64, "saved_call_or_source_binding_invalid"),
 ])
-def test_wrong_run_version_or_call_fact_is_refused(tmp_path: Path, field: str, value: str) -> None:
+def test_wrong_run_version_or_call_fact_is_refused(
+    tmp_path: Path, field: str, value: str, reason: str,
+) -> None:
     store, arguments = _case(tmp_path)
     arguments[field] = value
-    with pytest.raises(SavedRecordedPlanError):
+    # The reason is part of the claim: a bare SavedRecordedPlanError also matches
+    # a refusal at an earlier gate (a stale stage_version once did exactly that).
+    with pytest.raises(SavedRecordedPlanError, match=f"^{reason}$"):
         plan_recorded_saved_publication(store, **arguments)
 
 
@@ -230,6 +254,20 @@ def test_wrong_stage_and_metric_are_refused_before_publication(tmp_path: Path) -
     )
     with pytest.raises(SavedRecordedPlanError, match="saved_merge_metrics_invalid"):
         plan_recorded_saved_publication(store, **arguments)
+
+
+def test_text_stage_saved_under_the_retired_version_is_refused(tmp_path: Path) -> None:
+    # The pin this file carried until the gate of 43670efc: a text stage recorded
+    # under the version it had before W57A-SEAL-01B is not the stage the registry
+    # now declares, so its evidence is refused before any Blob is read.
+    assert _stage_version("text_analysis") != _RETIRED_TEXT_STAGE_VERSION
+    store, arguments = _case(tmp_path)
+    arguments["text_result"] = replace(
+        arguments["text_result"], stage_version=_RETIRED_TEXT_STAGE_VERSION,
+    )
+    with pytest.raises(SavedRecordedPlanError, match="^saved_stage_result_invalid$"):
+        plan_recorded_saved_publication(store, **arguments)
+    assert store.reads == []
 
 
 def test_merge_byte_digest_and_canonical_form_are_required(tmp_path: Path) -> None:

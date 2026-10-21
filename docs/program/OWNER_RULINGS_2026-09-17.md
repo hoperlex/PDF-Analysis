@@ -1638,3 +1638,13 @@ session, Russian): «задача продвинуться как можно д�
 | Ruling | Substance |
 | --- | --- |
 | `R-139` | For this window the code-first order of `CODE-FIRST-TO-BETA.md` §2 is reordered by function, not by block: the W59 section seal, section profiles, normative-corpus serving (references, citations, import) and storage-structure slices may be frozen and integrated before W56b and W58-code close. W58 DEBT-CODE, analytical reviews, plan-judging rounds, refactoring and governance-only slices move to the debt register untouched. No owner poll is asked during the window; the integrator records each assumption it makes in the slice's task file. Checks stay bounded under `R-135` (no full gate); publication goes to `origin/dev` only; `origin/main`, tags, the stand and paid provider calls are out of scope. The W59 SECTION-SEAL prerequisites in `W59-SECTION-IDENTITY-DECISION-01.md` other than W56b/W58-code close still apply. |
+
+## 3.40 — `R-140`, the stand holds only test data; a wipe before the 0.7.0 migration is allowed (owner, 2026-10-20)
+
+In the session of 2026-10-20 the owner stated (Russian, quoted): «на стенде только тестовые данные,
+для безопасности и отсутствия несоответствий можно очистить данные на всякий случай перед
+миграцией». This re-confirms the factual premise of `R-110` for the 0.7.0 publication.
+
+| Ruling | Substance |
+| --- | --- |
+| `R-140` | The deployed stand holds only generated test data (`R-109`/`R-110` premise confirmed on 2026-10-20). The migrating publication of 0.7.0 therefore runs without the one-off copy (`R-88`/`R-93`) and without the `R-92` window. The owner permits, as a precaution against inconsistencies, a guarded wipe of the stand's data before the migration (`infra/deploy/reset.sh`: verified dump first, then database, bucket and session register); the wipe is optional and is run on the stand host by the operator, never by the integrator session. A wipe removes accounts as well: the seeded `admin` returns with the forced first password change, other accounts must be registered again. This ruling does not authorize `origin/main`: AGENTS.md §6 still requires the owner's separate direct instruction naming the exact SHA. |
