@@ -14,7 +14,7 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **72 paths / 82 operations / 237 schemas**,
+The development API surface is **73 paths / 83 operations / 242 schemas**,
 the error catalogue has **25** codes, the migration head is
 **`0028_classification_corrections`**, and `VERSION` is `0.6.0`. These are checkout
 facts; the release tree has its own frozen 47/54/123 surface and
@@ -75,6 +75,10 @@ for the `R-139` night window of 2026-10-20, `NIGHT-1020-INT-01.md`.
   without a profile; the project screen groups documents by section.
   «Настройки анализа» lists the profiles (`listAnalysisProfiles`); АИ, ПЗ,
   ПОС and ТХ are proven in recorded mode with synthetic recordings only.
+- **Run references.** A stopped run's page ends with «Нормативные ссылки»
+  (`getRunNormReferences`): the standards cited in the run's saved text, each
+  resolved against the snapshot the run pinned into five outcomes; no finding,
+  no model call, no migration.
 - **Versions.** An expert corrects a confirmed classification by an append-only
   revision with a reason (`correctVersionClassification`, migration 0028); the
   original confirmation is never changed. `uploadDocumentVersion` adds the next version to a set;
