@@ -19,6 +19,8 @@ from behind NAT and needs no VPN and no open port on the machine.
 ## Depends on
 
 - `EXEC-PULL-01` — merged (the runner API, the task table, tokens).
+- It runs **before `EXEC-SSH-01`, not beside it**: both edit `executors/**`,
+  `tools/executor-runner/**`, the connections widget and the runbook (`AGENTS.md` §3).
 
 ## Frozen inputs
 

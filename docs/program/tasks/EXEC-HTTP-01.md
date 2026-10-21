@@ -48,9 +48,13 @@ connection. The `api` container no longer receives the private material. The wor
 - enumerator_owner: not_applicable
 - totality_query: not_applicable
 
-If `startRun` or `reauditRun` needs a newly declared error response to refuse an
-unconfigured route, stop and ask: the integrator hands over the contract slot and this
-section becomes `yes` by addendum.
+An unconfigured route is refused by `startRun` and `reauditRun` with `dependency_unavailable`
+(503, already declared on both) and reason `executor_route_missing`. No contract change is
+needed.
+
+The secret form uses the existing credentialed forward. If it cannot carry a native form
+post and a new BFF door is needed, stop: a new door is an enumerated change
+(`EXPOSURE-REVIEW-01.md` lists the doors), and the integrator amends this section.
 
 ## Captured premise evidence
 
@@ -96,6 +100,8 @@ section becomes `yes` by addendum.
 - `src/auditmanager/analysis/text/**`
 - `src/auditmanager/runs/**`
 - `src/auditmanager/workers/**`
+- `src/auditmanager/jobs/repository.py`
+- `scripts/recovery/product_purge.py`
 - `src/auditmanager/bootstrap/**`
 - `src/auditmanager/api/**`
 - `infra/deploy/compose.server.yml`
@@ -108,6 +114,8 @@ section becomes `yes` by addendum.
 - `tests/unit/executors/**`
 - `tests/integration/analysis_text/**`
 - `tests/integration/runs/**`
+- `tests/integration/jobs/**`
+- `tests/integration/recovery/**`
 - `tests/integration/workers/**`
 - `tests/integration/composition/**`
 - `tests/integration/api/**`
@@ -149,19 +157,38 @@ section becomes `yes` by addendum.
 ## Work
 
 1. **The resolver seam** (plan §3): `_build_provider` returns a resolver.
-   - With source `environment` the behaviour is byte-for-byte today's, proven by the
-     existing composition tests unchanged.
+   - With source `environment` the run path is today's, apart from two deliberate changes
+     (plan §6). `R-133` is enforced, and `EXECUTION_ROLE=api` no longer demands provider
+     credentials, because `settings.py:249-260` is narrowed to `all` and `worker`. The
+     existing composition tests prove the rest unchanged.
+   - With source `database`, `AUDITMANAGER_PROVIDER_MODE` must be `live`.
    - With source `database`, `start_run` freezes the route's revision and the input budget
      follows that revision's pinned model.
    - The worker opens the secret per Attempt.
+   - `jobs/repository.py` `prepare_provider_call` (`:814`) and the two inserts (`:141`,
+     `:218`) take `connection_revision_id` and `identity_basis`.
+   - A standby is used only at run start, as plan §2 says, and is journaled.
    - The source switch refuses to start if `PROXY_LLM_*` or `ANTHROPIC_API_KEY` is set
      while the source is `database`.
-2. **`R-133`.** Add `ModelResponse.reported_model`, filled by both adapters. `stage.py`
-   compares it with the frozen revision's model, or with `AUDITMANAGER_MODEL_ID` under
-   `environment`. A mismatch, or no reported model, is `model_identity_mismatch`: the stage
-   fails and nothing is published. Under `environment` the proxy stub `proxy` is reported
-   as what it is. If that breaks today's stand configuration, record it as an explicit
-   refusal and report it; never pass it silently.
+2. **`R-133`.** Add `ModelResponse.reported_model`, filled by both adapters. A revision
+   carries two fields, and neither is derived from the other (plan §3):
+   - the pin id, which gives tariffs and the budget;
+   - the gateway model name, which is sent and compared.
+
+   `stage.py` compares the reported model with the gateway name. Under `environment` the
+   expected value is `PROXY_LLM_MODEL`; with the stub `proxy` the stage fails closed with
+   reason `model_not_selected`. A mismatch, or no reported model, is
+   `model_identity_mismatch`: the stage fails and nothing is published.
+
+   The identity and rate check becomes `executors/identity.py`. It is ported from
+   `tools/provider/identity_probe.py:67-112`; `tools/` is not imported, because the image
+   does not copy it. The rate check (±20 %) applies only to a `metered` revision whose
+   gateway reports a cost. Without a reported cost it is recorded as `not_reported`, not
+   failed, so Ollama, vLLM and the Anthropic SDK can pass.
+
+   The meter (`cost.py`) and `stage.py:411` write cost basis `unmetered` for a
+   `not_metered` revision. The integration notes must tell the operator to set an
+   explicit `PROXY_LLM_MODEL` before this reaches the stand.
 3. **Probes on the worker.**
    - The worker service picks up `executor_probe` rows in state `requested`, through
      LISTEN or a poll.
@@ -170,6 +197,13 @@ section becomes `yes` by addendum.
      connect.
    - It stores a scrubbed, truncated detail.
    - Only a revision with an `ok` probe on its current secret can be routed or used.
+   - A probe still `requested` after 120 s becomes `timeout` with reason `no_worker`.
+     A draining worker takes no new probes.
+   - Destination rules (plan T-9) are enforced in the probe and in the call:
+     - refused by default: compose service names, loopback, link-local and the compose
+       network;
+     - a private range is accepted only for `transport: vpn`;
+     - an optional `AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` narrows further.
 4. **UI.**
    - Tabs in `/workers`.
    - Forms in the house style (no form library).
@@ -199,9 +233,9 @@ preview (the `cdp.mjs` route).
 
 ## Required tests
 
-- command: `python3 -m pytest -q tests/contract` (container-free)
+- command: `python3 -m pytest -q tests/contract/api_v1 tests/contract/program` plus the contract guards the changed files are pinned by (container-free; `R-135`)
 - expected: all passed.
-- command: `python3 -m pytest -q tests/unit/executors tests/integration/executors tests/integration/analysis_text tests/integration/runs/test_full_chain.py tests/integration/workers tests/integration/composition` on the lane's own containers
+- command: `python3 -m pytest -q tests/unit/executors tests/integration/executors tests/integration/analysis_text tests/integration/runs/test_full_chain.py tests/integration/jobs tests/integration/workers tests/integration/composition` on the lane's own containers
 - expected: all passed. These include a run through a fake HTTP connection, a mismatch
   run, an `ip_refused`/`credential_refused` probe pair, a source-switch refusal and the
   `environment` regression.
@@ -216,8 +250,13 @@ preview (the `cdp.mjs` route).
 - `EXEC-PULL-01` and `EXEC-SSH-01` plug a new kind into the resolver by registering an
   adapter factory for the kind in `executors`; nothing else in the run path changes for
   them.
-- The default source stays `environment` until the operator imports and switches, so
-  merging changes no stand behaviour.
+- The default source stays `environment` until the operator imports and switches.
+- **Merging still changes stand behaviour in two ways** (plan §6):
+  - runs fail closed unless `PROXY_LLM_MODEL` is explicit and matches what the gateway
+    reports;
+  - the `api` no longer reads `provider.env`.
+
+  The integration notes give the operator's order: set the model, deploy, verify one run.
 
 ## Failure/idempotency/security cases
 

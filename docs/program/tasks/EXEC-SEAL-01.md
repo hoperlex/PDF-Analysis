@@ -97,6 +97,15 @@ source stays `environment`. This is the plan's one enabling slice
 - `src/auditmanager/shared/errors/**`
 - `src/auditmanager/jobs/events.py`
 - `scripts/recovery/schema_coverage.py`
+- `scripts/recovery/product_purge.py`
+- `tests/integration/recovery/**`
+- `infra/deploy/README.md`
+- `infra/deploy/serve.py`
+- `infra/deploy/proxy/nginx.conf`
+- `web/src/app/bff/v1/[...path]/route.ts`
+- `web/docs/PC01_UI_SEAM.md`
+- `docs/program/ALPHA_ROADMAP.md`
+- `docs/program/P02_SEAMS.md`
 - `infra/deploy/env/alpha.env.example`
 - `infra/deploy/env/provider.env.example`
 - `tests/support/**`
@@ -119,8 +128,10 @@ source stays `environment`. This is the plan's one enabling slice
 `src/auditmanager/runs/**`, `src/auditmanager/analysis/**`, `src/auditmanager/workers/**`
 (the run path and the worker belong to `EXEC-HTTP-01`). Also forbidden:
 
-- `web/src/**` outside `shared/api`;
-- `infra/**` outside the two env examples;
+- `web/src/**` outside `shared/api` and the one surface-count comment in the BFF route;
+- `infra/**` outside the two env examples, and outside the surface-count prose in
+  `infra/deploy/README.md`, `serve.py` and `nginx.conf` (comments only; no directive
+  changes);
 - `web/package.json` and `web/package-lock.json`;
 - `CURRENT_STATE.md`, `DEBT_REGISTER.md`, refs, tags and the stand.
 
@@ -130,8 +141,8 @@ who grants it as a one-line addendum. It is not edited first.
 ## Non-goals
 
 No run-path change, no UI and no probe execution. No runner tokens or tasks: those belong
-to `EXEC-PULL-01` and migration `0031`. No SSH key generation: that is `EXEC-SSH-01`, whose
-`ssh_command` revisions here carry only the host, user and pinned host-key fields. No new
+to `EXEC-PULL-01` and migration `0031`. SSH key generation *is* sealed here (`generateExecutorSshKey`, below); running SSH is
+`EXEC-SSH-01`. No new
 error code unless step 0 shows that no existing code can carry the meaning; prefer
 `validation_failed`, `conflict`, `permission_denied` and `dependency_unavailable`, with a
 typed `reason` detail. No paid call.
@@ -143,9 +154,12 @@ typed `reason` detail. No paid call.
    every file that fails. Report that list before the real work; it is the pin sweep.
 1. **New bounded context `src/auditmanager/executors/`:**
    - `model.py` (kinds, settings validation per kind, the route vocabulary `text_analysis`);
-   - `sealing.py` (X25519 + HKDF-SHA256 + AES-256-GCM, with associated data
-     `secret_id|connection_id|purpose|kid`, a key ring, a public-only loader for the `api`,
-     a private loader for the worker, and a keyed fingerprint);
+   - `sealing.py`: X25519 + HKDF-SHA256 + AES-256-GCM. The associated data is
+     `secret_id|connection_id|purpose|kid|destination`. The destination is the
+     normalised `scheme://host:port` for `http_api`, or `host:port` for SSH (plan §4.1).
+     The module also holds a key ring, a public-only loader for the `api` and a private
+     loader for the worker. There is no fingerprint; the API stores and returns only
+     `last4`;
    - `repository.py` (the only writer of the new tables);
    - `commands.py`, following `workers/commands.py`: role check, command ledger, event,
      `succeed`;
@@ -153,15 +167,26 @@ typed `reason` detail. No paid call.
 2. **Migration `0030`:**
    - `executor_connection` (`exc_<ULID>`);
    - `executor_connection_revision` (`excr_<ULID>`, immutable);
-   - `executor_secret` (only `replaced_at` is mutable; ciphertext as `bytea`; `kid`,
-     `last4`, `fingerprint`);
+   - `executor_secret`: only `replaced_at` is mutable. The ciphertext is `bytea`, and the
+     row carries `kid`, `destination` and `last4`, plus nullable `public_material` for
+     the public half of a generated SSH key;
+   - `executor_connection_revision` carries the pin id and the gateway model name as
+     separate fields (plan §3), neither derived from the other;
    - `executor_probe` (state and outcome vocabulary: `requested`, `ok`, `ip_refused`,
-     `credential_refused`, `model_mismatch`, `timeout`, `unreachable`, `protocol_error`,
-     `secret_unreadable`);
+     `credential_refused`, `model_mismatch`, `rate_mismatch`, `timeout`, `unreachable`,
+     `protocol_error`, `secret_unreadable`, `host_key_unpinned`, `host_key_changed`,
+     `no_runner_online`);
    - `executor_route_event`, append-only, with a current view;
-   - nullable `connection_revision_id` on `model_call`, `provider_call_effect` and the run.
-     Choose `audit_run` or `job` by which freeze trigger lets it be set at insert, and
-     record the choice.
+   - nullable `connection_revision_id` and `identity_basis` (`reported`, `declared`) on
+     `model_call` and `provider_call_effect`;
+   - the frozen revision on the run. `trg_audit_run_frozen_guard` is BEFORE UPDATE only
+     (`0002:1289`, replaced in `0017:34-36`), so a column set at insert passes. Add the
+     new column to that trigger's frozen list the way `0017` does, so it actually
+     freezes;
+   - `CostBasis` and `ck_model_call_cost_basis` (`0004`) gain `unmetered` (plan §5);
+   - `scripts/recovery/product_purge.py` and `schema_coverage.py` classify every new
+     table, command type and event type. Every `executor_*` table is KEEP; `executor_task`
+     arrives in `0031`, as PRODUCT.
 
    Upgrade and downgrade are tested; downgrade refuses once data exists, as `0019` does.
    Identifier prefixes are checked against `contracts/domain/v1/identifiers.json` for
@@ -173,6 +198,10 @@ typed `reason` detail. No paid call.
    - `setExecutorSecret`, which takes a body, returns metadata only, and never has a GET
      counterpart;
    - `requestExecutorProbe`;
+   - `generateExecutorSshKey`. The `api` generates an ed25519 pair, seals the private
+     half to the connection's `host:port` and stores the public half as
+     `public_material`. The response returns only the public half and the
+     `authorized_keys` line;
    - `listExecutorRoutes` and `setExecutorRoute`.
 
    The final names are fixed here and reported. Writes go to admin in `OPERATION_ROLES`
@@ -200,8 +229,10 @@ placement, the commands with exit status, and what was deferred under `R-135`).
 
 ## Required tests
 
-- command: `python3 -m pytest -q tests/contract` (container-free)
+- command: `python3 -m pytest -q tests/contract/api_v1 tests/contract/program tests/contract/domain_p02` plus every contract file the step-0 probe names (container-free; `R-135` forbids the whole battery)
 - expected: all passed.
+- command: `python3 -m pytest -q tests/integration/recovery -k "purge or schema_coverage"` on the lane's own containers
+- expected: the classification of every new table, command type and event type passes.
 - command: `python3 -m pytest -q tests/unit/executors tests/integration/executors tests/integration/db/test_downgrade_chain_round_trip.py` on the lane's own containers
 - expected: all passed; the upgrade from `0029` and the downgrade to `0029` on an empty
   database are both shown.

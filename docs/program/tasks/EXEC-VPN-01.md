@@ -24,6 +24,9 @@ lane does not run it.
 ## Depends on
 
 - `EXEC-HTTP-01` — merged.
+- It may run beside `EXEC-AGENT-01` or `EXEC-SSH-01` only if that lane leaves
+  `executors/__main__.py` alone and the integrator has recorded one lane's measured peak
+  (plan §7, `CODE-FIRST-TO-BETA.md` §2.2). Otherwise it runs after them.
 
 ## Frozen inputs
 
@@ -59,7 +62,8 @@ lane does not run it.
 ## Allowed paths
 
 - `infra/deploy/wireguard/**`
-- `src/auditmanager/executors/**`
+- `src/auditmanager/executors/reach.py`
+- `src/auditmanager/executors/__main__.py`
 - `tests/unit/executors/**`
 - `tests/integration/executors/**`
 - `web/src/widgets/executor-connections/**`

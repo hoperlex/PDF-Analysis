@@ -30,14 +30,14 @@ command. Then «Проверить» runs.
 ## Depends on
 
 - `EXEC-HTTP-01` — merged (the resolver seam and probes on the worker).
-- It may run beside `EXEC-AGENT-01`; the two share no hotspot.
+- `EXEC-AGENT-01` — merged. The two share `executors/**`, `tools/executor-runner/**`, the
+  connections widget and the runbook, so they run one after the other.
 
 ## Frozen inputs
 
 - base commit: `origin/dev` at the integrator's freeze, after `EXEC-HTTP-01`;
-- the contract slot for one additive operation, `generateExecutorSshKey`, if
-  `EXEC-SEAL-01` did not seal it; the integrator hands the slot over or rules it into a
-  revision field;
+- `generateExecutorSshKey` and `executor_secret.public_material`, as `EXEC-SEAL-01`
+  sealed them. This task changes no contract or migration;
 - plan §2.1 (`ssh_command`; the `ssh_tunnel` transport), §4.3 T-6, T-7, T-8, §5
   (`R-133` for `ssh_command`);
 - Claude Code CLI reference and headless docs (`code.claude.com/docs/en/cli-reference`,
@@ -54,9 +54,6 @@ command. Then «Проверить» runs.
 - enumerator_path: not_applicable
 - enumerator_owner: not_applicable
 - totality_query: not_applicable
-
-If `generateExecutorSshKey` is added here, the integrator amends this section to `yes`
-with `tests/support/expected_facts.json` before dispatch.
 
 ## Captured premise evidence
 
@@ -91,8 +88,7 @@ with `tests/support/expected_facts.json` before dispatch.
 
 ## Forbidden hotspots
 
-- `contracts/**`, `db/migrations/**` and the generated client, unless the integrator
-  hands over the slot for `generateExecutorSshKey`.
+- `contracts/**`, `db/migrations/**` and the generated client.
 - Dependency and lock files: the worker uses the OpenSSH client binary through
   `subprocess`; there is no `paramiko` or `asyncssh`.
 - `infra/deploy/compose.server.yml`.
@@ -116,8 +112,11 @@ with `tests/support/expected_facts.json` before dispatch.
    `system/init`. Never infer the model.
 1. **`Dockerfile.api`.** Install `openssh-client`, and record the image-size delta.
 2. **Executor code.**
-   - Key generation: `cryptography` ed25519, with the private half sealed through
-     `EXEC-SEAL-01`'s sealing.
+   - Key generation is `EXEC-SEAL-01`'s. This task uses the sealed private half, bound
+     to `host:port`, and never generates a key itself.
+   - Revisions carry a profile token only, never command text: the forced command on
+     the remote machine decides what runs, so a stolen admin session cannot choose a
+     command.
    - Host-key scan and pin: the scan runs only in the probe, never in the call path.
    - The command runner: `ssh -i <tmpfs 0600 file> -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=<pinned file> -p <port> <user>@<host>`.
      The key file is unlinked after the call. There is a timeout, stdout and stderr are

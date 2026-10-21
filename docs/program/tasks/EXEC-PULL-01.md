@@ -71,9 +71,19 @@ configured a standby.
 - `src/auditmanager/bootstrap/**`
 - `src/auditmanager/jobs/events.py`
 - `src/auditmanager/runs/scope.py`
+- `tests/integration/runs/test_w53c_exec_closure.py`
+- `scripts/recovery/product_purge.py`
+- `tests/integration/recovery/**`
 - `src/auditmanager/shared/identity/**`
 - `scripts/recovery/schema_coverage.py`
 - `infra/deploy/proxy/nginx.conf`
+- `infra/deploy/proxy/tls-server.conf`
+- `infra/deploy/README.md`
+- `infra/deploy/serve.py`
+- `web/src/app/bff/v1/[...path]/route.ts`
+- `web/docs/PC01_UI_SEAM.md`
+- `docs/program/ALPHA_ROADMAP.md`
+- `docs/program/P02_SEAMS.md`
 - `tools/executor-runner/**`
 - `tests/support/**`
 - `tests/contract/**`
@@ -104,7 +114,8 @@ The following stay closed:
 - the screen registry;
 - `src/auditmanager/analysis/**`: the pull adapter implements the existing
   `ModelAdapter` protocol inside `executors`;
-- `src/auditmanager/jobs/repository.py`: no parking, so the reclaim rule does not change;
+- the reclaim rule in `src/auditmanager/jobs/repository.py` (`:486-608`): there is no
+  parking, so it does not change;
 - `CURRENT_STATE.md`, `DEBT_REGISTER.md`, refs, tags and the stand.
 
 ## Non-goals
@@ -122,7 +133,12 @@ The following stay closed:
      `revoked_at`, `last_seen_at`, `last_seen_address`;
    - `executor_task`: `ext_<ULID>`, connection, revision, run, Attempt and effect
      references, the request payload, state `open → claimed → answered | expired |
-     cancelled`, claim lease, answer, declared model, and declared tokens if any.
+     cancelled`, claim lease, `deadline_at`, answer, declared model, and declared tokens
+     if any.
+     - It is PRODUCT in `product_purge.py`.
+     - The payload and the answer are cleared 7 days after the task becomes terminal.
+     - A claim joins the current Attempt and `deadline_at`, so a dead Attempt's task is
+       never served.
 2. **The runner API on the `api` process**, authenticated by a runner token as its own
    principal type in `api/security.py` (never a user session):
    - `claimExecutorTask`: a long poll of 25 s or less, returning the system prompt, the
@@ -137,13 +153,26 @@ The following stay closed:
 3. **The pull adapter (worker).**
    - `complete()` inserts the task, NOTIFYs, and waits with LISTEN plus a poll, until
      answered or the deadline.
+   - The deadline is `min(revision deadline, watchdog remaining − 60 s)`.
+   - On expiry it raises `ProxyDispatchError` (from `analysis/public.py`):
+     `dependency_unavailable`, reason `no_executor_online`, a not-sent dispatch class,
+     `retry_safe=False` (plan §3).
+   - Call rows get `identity_basis: declared`.
+   - **«Проверить»** for a `pull` revision posts a synthetic task. A runner must claim it
+     within 120 s and answer a fixed echo while declaring the revision's model.
+     Otherwise the outcome is `no_runner_online`. Only an `ok` probe lets the
+     connection be routed (`EXEC-HTTP-01`'s rule).
    - Its `ModelResponse` carries the declared model, so `R-133` applies unchanged.
    - The answer is validated against the same output schema as `http_api`.
    - Cost is `None`, with `cost_basis` unmetered as the run shows it.
-4. **nginx.**
-   - A `location` for the runner paths, with a per-address throttle in the style of the
-     `token_exchange` zone.
-   - The body size is bounded to the task size.
+4. **nginx** (`nginx.conf:284-293`, `tls-server.conf:120-144`; guarded by
+   `tests/contract/test_proxy_rate_limits.py:559`).
+   - **No new `location`.** Add a `map` key and a dedicated zone, then a `limit_req`
+     line inside the existing `location /api/v1/` in **both** files, as the
+     `token_exchange` zone is done.
+   - Size the rate for the long-poll cadence: one 25 s claim, plus extend and submit
+     calls, per runner. The existing 6 r/m zones are far too tight. Show the chosen rate
+     against a scripted runner.
    - No `auth_request` user-session gate, because the token is the credential.
 5. **`tools/executor-runner/`.**
    - `mcp_bridge.py`: a stdio MCP server using the standard library only, with tools
@@ -160,8 +189,10 @@ The following stay closed:
        docs.
      - The scope is `local`.
      - The README says the token lands in `~/.claude.json` in clear.
-6. **`runs/scope.py`.** Remote execution leaves the absent-capability list, and its test
-   moves with it.
+6. **`runs/scope.py:63`.** The entry stays: the worker is still local, and there is no
+   JobPackage or ResultPackage transport. Amend its wording to name the runner channel,
+   which carries model calls only (`R-143c`), and keep
+   `tests/integration/runs/test_w53c_exec_closure.py:279` green.
 7. **UI.**
    - Issue a token: the token is shown once with a copy button, and the screen warns that
      it will not be shown again.
@@ -180,7 +211,7 @@ report says so explicitly.
 
 ## Required tests
 
-- command: `python3 -m pytest -q tests/contract` (container-free)
+- command: `python3 -m pytest -q tests/contract/api_v1 tests/contract/program tests/contract/test_proxy_rate_limits.py` plus the contract files the reseal moves (container-free; `R-135`)
 - expected: all passed.
 - command: `python3 -m pytest -q tests/unit/executors tests/integration/executors tests/integration/composition` on the lane's own containers
 - expected: all passed. The tests must include:
@@ -191,7 +222,7 @@ report says so explicitly.
   - a token of another connection cannot claim;
   - a forged answer that violates the schema is refused;
   - the sentinel token never appears in responses, events or logs.
-- command: `python3 -m pytest -q tests/integration/composition/test_proxy_rate_limits.py tests/contract/test_proxy_rate_limits.py` (where present) for the new nginx location
+- command: `python3 -m pytest -q tests/integration/runs/test_w53c_exec_closure.py tests/integration/recovery -k "purge or exec_closure"`
 - expected: green. `infra/**`, contract and migration are `AGENTS.md` §8 case 3; the
   integrator records the gate decision under `R-135`.
 

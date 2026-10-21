@@ -81,8 +81,8 @@ report `docs/program/EXEC-ADR-01.md`.
 
 ## Integration contract
 
-Documentation only. Executed as a Haiku subagent (`R-143e`, a minor task) and merged by the
-integrator. It may merge beside `EXEC-SEAL-01`, because the two share no path.
+Documentation only. Executed as a Sonnet subagent: architecture wording is not a minor task
+under `R-143e`. Merged by the integrator. It may merge beside `EXEC-SEAL-01`, because the two share no path.
 
 ## Failure/idempotency/security cases
 
