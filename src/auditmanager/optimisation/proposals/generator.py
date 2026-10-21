@@ -62,6 +62,7 @@ from __future__ import annotations
 import re
 from array import array
 from bisect import bisect_left
+from heapq import nlargest
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from decimal import ROUND_DOWN, Decimal
@@ -278,6 +279,11 @@ def _keyed(position: PriceListPositionRecord) -> _Keyed:
     )
 
 
+#: How many words of a bucket get a bit of their own in the names' masks (see :class:`_Bucket`).
+#: The most frequent ones do: they are the words two names are likely to share.
+_MASK_WORDS: Final[int] = 4096
+
+
 class _Bucket:
     """The candidates of one (unit, currency, head word), ordered by unit price (then source row).
 
@@ -285,9 +291,15 @@ class _Bucket:
     and per code family, the ascending ranks of the positions that carry it, and the ranks of
     the one- and two-word names: the three ways a position can qualify against a matched one
     (see :func:`_analogs`) without being met by walking the whole prefix.
+
+    It also keeps, for every name, the words besides the head word as a **mask** -- one bit for
+    each of the :data:`_MASK_WORDS` most frequent words of the bucket -- and the rarer ones as a
+    set. How many words two names share is then ``popcount(mask & mask)`` plus the size of the
+    intersection of two small sets, exactly, instead of the intersection of two sets of sixty
+    words for every pair a long list of long names makes the walk visit.
     """
 
-    __slots__ = ("families", "items", "prices", "short", "words")
+    __slots__ = ("bits", "extras", "families", "items", "masks", "prices", "short", "words")
 
     def __init__(self, items: list[_Keyed]) -> None:
         # ``sorted`` is stable and ``items`` arrive in source-row order, so equal prices keep it.
@@ -303,6 +315,29 @@ class _Bucket:
                 self.families.setdefault(keyed.family, array("I")).append(rank)
             if keyed.size <= 2:
                 self.short[keyed.size - 1].append(rank)
+        frequent = nlargest(_MASK_WORDS, self.words, key=lambda word: len(self.words[word]))
+        self.bits: dict[str, int] = {word: 1 << place for place, word in enumerate(frequent)}
+        self.masks: list[int] = []
+        self.extras: list[frozenset[str]] = []
+        for keyed in self.items:
+            mask, extra = self.signature(keyed.rest)
+            self.masks.append(mask)
+            self.extras.append(extra)
+
+    def signature(self, rest: frozenset[str]) -> tuple[int, frozenset[str]]:
+        """The mask of the words of ``rest`` that have a bit, and the words of the bucket that do not.
+
+        A word that no name of the bucket carries cannot be shared with one, so it is in neither.
+        """
+        mask = 0
+        extra: list[str] = []
+        for word in rest:
+            bit = self.bits.get(word)
+            if bit is not None:
+                mask |= bit
+            elif word in self.words:
+                extra.append(word)
+        return mask, frozenset(extra)
 
 
 class _Index:
@@ -385,7 +420,8 @@ def _analogs(matched: _Keyed, index: _Index) -> list[_Candidate]:
     bucket = index.buckets.get((matched.unit, current.currency, matched.head))
     if bucket is None:
         return []
-    items, prices = bucket.items, bucket.prices
+    items, prices, masks, extras = bucket.items, bucket.prices, bucket.masks, bucket.extras
+    mask, extra = bucket.signature(matched.rest)
     # Rule 4 and rule 1 at once: strictly cheaper, so never the matched position itself.
     end = bisect_left(prices, current.unit_price)
     ranks = _qualifying_ranks(matched, bucket, end) if end else []
@@ -409,10 +445,12 @@ def _analogs(matched: _Keyed, index: _Index) -> list[_Candidate]:
             group_price = prices[rank]
         other = items[rank]
         # Rule 6 in integers, without building anything. The two names share the head word
-        # and ``len(rest & rest)`` more, so their similarity ``shared / union`` is at least
-        # 1/2 exactly when ``2 * shared >= union``. A position of the code family is an analog
+        # and the words their masks and sets share, so their similarity ``shared / union`` is at
+        # least 1/2 exactly when ``2 * shared >= union``. A position of the code family is an analog
         # whatever the similarity, but it is ordered by it all the same.
-        shared = 1 if matched.rest.isdisjoint(other.rest) else 1 + len(matched.rest & other.rest)
+        shared = 1 + (mask & masks[rank]).bit_count()
+        if extra and extras[rank]:
+            shared += len(extra & extras[rank])
         union = matched.size + other.size - shared
         if 2 * shared < union and (family is None or family != other.family):
             continue

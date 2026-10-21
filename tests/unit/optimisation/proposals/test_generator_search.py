@@ -337,6 +337,27 @@ def test_the_proposals_are_those_of_the_full_scan_when_a_price_group_is_wider_th
     assert total > 600, total
 
 
+@pytest.mark.parametrize("mask_words", [2, 0], ids=["two words have a bit", "no word has a bit"])
+def test_the_proposals_are_those_of_the_full_scan_whatever_words_the_masks_cover(
+    monkeypatch: pytest.MonkeyPatch, mask_words: int
+) -> None:
+    """The names' masks cover the most frequent words of a bucket and the rest are compared as sets.
+    With almost no word covered nearly all of every comparison is the set half; with all of them
+    covered, none is (the other tests). Both must give the full scan's answer."""
+    monkeypatch.setattr(generator, "_MASK_WORDS", mask_words)
+    total = 0
+    for seed in range(400):
+        positions, rows, vendors = _random_case(seed)
+        total += _compare(positions, rows, vendors)
+    for seed in range(20):
+        positions, rows, vendors = _wide_case(seed)
+        total += _compare(positions, rows, vendors)
+    for seed in range(40):
+        positions, rows, vendors = _flat_case(seed)
+        total += _compare(positions, rows, vendors)
+    assert total > 1000, total
+
+
 # -- the work does not grow with the cheaper positions ------------------------------------------
 
 
