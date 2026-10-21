@@ -110,6 +110,53 @@ curl -s -o /dev/null -w '%{http_code}\n' http://<this host's own ip>:<port>/bff/
 
 The second must fail to connect. On this host it printed `200` before the fix and `000` after.
 
+### Behind a host nginx — the client address (`REAL-IP-EDGE-01`)
+
+**Applies only if a nginx on the host terminates TLS and passes to the published port**
+(`proxy_pass http://127.0.0.1:<ALPHA_HTTP_PORT>`), which is how the stand is served. Without this
+step the stack is correct and safe, but every per-address throttle — sign-up, the sign-in token
+exchange (`POST /api/v1/auth/token`) and the web tier's guest bucket — is **one bucket for all
+visitors**, because the proxy container sees every connection from the compose network's
+gateway (`D-144`, `D-191` `E-3`). The mechanism and the measurement are in
+`infra/deploy/README.md`, "The client address"; what an operator does is this.
+
+1. **Host nginx**, in the `location` that passes to the stack, this line — written by the host,
+   never forwarded from the client:
+
+   ```
+   proxy_set_header X-Forwarded-For $remote_addr;
+   ```
+
+   (`$proxy_add_x_forwarded_for` is also safe; **no `X-Forwarded-For` line at all is not**: the
+   client then chooses its own bucket.) Reload the host nginx.
+2. **Read the address the stack sees the host from**, before changing anything:
+   `docker network inspect <ALPHA_INSTANCE>-net --format '{{(index .IPAM.Config 0).Gateway}}'`,
+   and cross-check the first field of `docker logs <ALPHA_INSTANCE>-proxy-1 --tail 5` after one
+   request through the host nginx. They must agree.
+3. **`alpha.env`**: `ALPHA_TRUSTED_PROXY_CIDRS=<that address>/32`. A comma/space list is accepted;
+   `0.0.0.0/0`, host names and anything that is not an IPv4/IPv6 address or CIDR are refused by
+   `deploy.sh` before it builds (guard `trusted-proxies-well-formed`).
+4. **Deploy as usual** (`infra/deploy/deploy.sh`). The changed environment recreates the `proxy`
+   container. Read `docker logs <ALPHA_INSTANCE>-proxy-1 2>&1 | grep trusted-proxies` — it must say
+   `1 peer(s) trusted`, or `is empty` if you meant to leave it off — and run the twelve-request
+   check in the README: no `429`.
+5. **Rollback**: delete the line (or leave it empty) and deploy again; the proxy is back to counting
+   the TCP peer, with nothing to undo in the images.
+
+**What is trusted, and what is not.** The proxy believes `X-Forwarded-For` **only** from a peer in
+the list, and from it only the rightmost address that is not itself in the list; a client cannot
+write its way to another bucket, from any peer. Everything on the host that can open
+`127.0.0.1:<ALPHA_HTTP_PORT>` is such a peer, an SSH-tunnelled operator included; they may name an
+address for the throttles and for nothing else. If the gateway changes (network recreated), the
+list stops matching and the stack **falls back to the shared bucket, never to believing a client**:
+re-read step 2 after any `down` that removed the network.
+
+**UNVERIFIED** (the stand is not reachable from the lane that wrote this): the stand's network
+name and gateway; its host nginx's actual `proxy_set_header` lines; whether its Docker runs with
+the userland proxy disabled (the source address seen by the container was measured only with the
+default); and that no CDN or load balancer sits in front of the host nginx (if one does, the host
+nginx's `$remote_addr` is that device and the host needs real-IP handling of its own first).
+
 ### Disk
 
 **Measured on 2026-09-21 by `W26-HOST`, on a cold cache, before the repository-owned

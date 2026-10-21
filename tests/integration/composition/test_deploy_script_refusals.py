@@ -300,6 +300,7 @@ def _stage(
     with_engine: bool = True,
     with_example: bool = True,
     dockerfiles: bool = True,
+    with_trust_script: bool = False,
 ) -> Path:
     """A clone-shaped directory: `<repo>/infra/deploy/deploy.sh` and what it reads.
 
@@ -328,6 +329,11 @@ def _stage(
     if with_example:
         (deploy / "env").mkdir(exist_ok=True)
         (deploy / "env/alpha.env.example").write_text(_example_text(), encoding="utf-8")
+    if with_trust_script:
+        # `REAL-IP-EDGE-01`: `trusted-proxies-well-formed` asks the real script, in `--check` mode,
+        # and only for a non-empty `ALPHA_TRUSTED_PROXY_CIDRS`; no other case sets one.
+        (deploy / "proxy").mkdir(exist_ok=True)
+        shutil.copy2(DEPLOY.parent / "proxy/trusted-proxies.sh", deploy / "proxy/trusted-proxies.sh")
 
     # `D-38`: it exits 0 as before AND leaves a mark, because the thing that went wrong
     # was an ORDER -- the guard that names the cause ran after this script and therefore
@@ -444,6 +450,12 @@ def _before_docker_cases(tmp_path: Path, port: int) -> dict[str, tuple[Path, tup
     d103 = tmp_path / "d103.env"
     d103.write_text(_d103_env_text(port), encoding="utf-8")
 
+    # `REAL-IP-EDGE-01`: a trust list that would let any client name its own address.
+    everyone = tmp_path / "trust-everyone.env"
+    everyone.write_text(
+        _env_text(EDITED_SECRETS, port=port) + "ALPHA_TRUSTED_PROXY_CIDRS=0.0.0.0/0\n", encoding="utf-8"
+    )
+
     return {
         "known-options": (
             _stage(tmp_path / "known"), ("--dryrun",), good,
@@ -464,6 +476,10 @@ def _before_docker_cases(tmp_path: Path, port: int) -> dict[str, tuple[Path, tup
         "derived-secrets-coherent": (
             _stage(tmp_path / "d103"), (), d103,
             "must carry the same",
+        ),
+        "trusted-proxies-well-formed": (
+            _stage(tmp_path / "trust", with_trust_script=True), (), everyone,
+            "is not a list the proxy will accept",
         ),
         "compose-file-present": (
             _stage(tmp_path / "compose", with_compose=False), (), good,
@@ -487,6 +503,7 @@ BEFORE_DOCKER = (
     "instance-configured",
     "placeholder-secrets",
     "derived-secrets-coherent",
+    "trusted-proxies-well-formed",
     "compose-file-present",
     "execution-role-declared",
     "build-context-complete",
@@ -514,6 +531,7 @@ class TestTheGuardsThatRefuseBeforeDockerIsTouched:
         # The mutant is staged the same way its intact case was, so the only difference
         # between the two runs is the deleted block.
         staging = {
+            "trusted-proxies-well-formed": {"with_trust_script": True},
             "compose-file-present": {"with_compose": False},
             "execution-role-declared": {
                 "compose_text": _compose_without("EXECUTION_ROLE: worker"),
@@ -526,6 +544,58 @@ class TestTheGuardsThatRefuseBeforeDockerIsTouched:
             f"the {guard} guard was deleted and the refusal happened anyway, so this case "
             "was never testing that guard"
         )
+
+
+class TestTheTrustListIsCheckedBeforeAnythingIsBuilt:
+    """`REAL-IP-EDGE-01`. `ALPHA_TRUSTED_PROXY_CIDRS` is pasted into the proxy's configuration when
+    its container starts, and a value that script refuses stops the only published port. The
+    guard asks the same script, in `--check` mode, before the first `docker` call."""
+
+    @staticmethod
+    def _env(tmp_path: Path, port: int, value: str | None) -> Path:
+        env_file = tmp_path / "trust.env"
+        extra = "" if value is None else f"ALPHA_TRUSTED_PROXY_CIDRS={value}\n"
+        env_file.write_text(_env_text(EDITED_SECRETS, port=port) + extra, encoding="utf-8")
+        return env_file
+
+    @pytest.mark.parametrize(
+        ("value", "entry"),
+        [
+            ("0.0.0.0/0", "0.0.0.0/0"),
+            ("proxy.example.org", "proxy.example.org"),
+            ("172.29.0.1/32, 10.0.0.0/33", "10.0.0.0/33"),
+            ("172.29.0.1;", "172.29.0.1;"),
+        ],
+    )
+    def test_a_value_the_proxy_would_refuse_is_refused_here_first(
+        self, value: str, entry: str, tmp_path: Path, free_port: int
+    ) -> None:
+        script = _stage(tmp_path / "bad", with_trust_script=True)
+        completed, log = _run(script, tmp_path=tmp_path, env_file=self._env(tmp_path, free_port, value))
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "is not a list the proxy will accept" in completed.stderr, completed.stderr
+        assert f"holds '{entry}'" in completed.stderr, completed.stderr
+        assert not log.exists(), f"refused, but only after running docker: {log.read_text()}"
+
+    @pytest.mark.parametrize("value", [None, "", "172.29.0.1/32", "172.29.0.1, 10.0.0.0/8 fd00::/8"])
+    def test_a_value_the_proxy_accepts_is_not_refused_here(
+        self, value: str | None, tmp_path: Path, free_port: int
+    ) -> None:
+        """The control. Empty and absent need no script at all (the stage has none)."""
+        script = _stage(tmp_path / "good", with_trust_script=value not in (None, ""))
+        completed, _ = _run(script, tmp_path=tmp_path, env_file=self._env(tmp_path, free_port, value))
+        assert "is not a list the proxy will accept" not in completed.stderr, completed.stderr
+        assert "cannot be checked" not in completed.stderr, completed.stderr
+
+    def test_a_value_that_cannot_be_checked_is_refused_rather_than_passed(
+        self, tmp_path: Path, free_port: int
+    ) -> None:
+        script = _stage(tmp_path / "unchecked", with_trust_script=False)
+        env_file = self._env(tmp_path, free_port, "172.29.0.1/32")
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "cannot be checked" in completed.stderr, completed.stderr
+        assert not log.exists()
 
 
 class TestD103TheThreeDerivedValues:
@@ -1134,11 +1204,12 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     :class:`TestTheExecutionRoleIsDeclaredLiterally`, and 20 since `W54-STAND-COPY-01` added
     the five stand-copy guards, covered in :class:`TestNoDeployWhileACopyOrAnImportIsOpen`,
     and 21 since `W54-FIX-SHELL` added `stand-dirs-searchable` (`W54-JUDGE-A` F1), covered
-    there too.
+    there too, and 22 since `REAL-IP-EDGE-01` added `trusted-proxies-well-formed`, covered above
+    and in :class:`TestTheTrustListIsCheckedBeforeAnythingIsBuilt`.
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", DEPLOY.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 21, markers
+    assert len(markers) == 22, markers
     covered = set(BEFORE_DOCKER) | set(STAND_GUARDS) | {
         "port-not-foreign",
         "images-built",

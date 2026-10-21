@@ -335,6 +335,18 @@ services:
         condition: service_healthy
     volumes:
       - ./proxy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # `REAL-IP-EDGE-01`. Runs before nginx starts and turns the value below into
+      # `conf.d/trusted-proxies.conf`, or into nothing. See `proxy/trusted-proxies.sh`.
+      - ./proxy/trusted-proxies.sh:/docker-entrypoint.d/26-trusted-proxies.sh:ro
+    environment:
+      # Which peers may tell the proxy who the client is, through `X-Forwarded-For`. EMPTY
+      # BY DEFAULT, and empty trusts nobody: the header is ignored and every request is
+      # counted under the peer that connected -- the behaviour before this line existed.
+      # A list of CIDRs (comma or space separated) is for a host whose TLS terminator is
+      # another nginx in front of this one; `infra/deploy/README.md`, "The client address",
+      # says which value and what the terminator must send. A CIDR is not a secret, so
+      # `docker compose config` printing it is harmless.
+      ALPHA_TRUSTED_PROXY_CIDRS: ${ALPHA_TRUSTED_PROXY_CIDRS:-}
     # THE ONE PUBLISHED PORT. `T-2`: one origin, the web app at `/` and the API at
     # `/api/v1`, so there is no cross-origin surface at all.
     #
