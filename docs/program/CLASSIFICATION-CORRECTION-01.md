@@ -2,10 +2,141 @@
 
 **Base:** `f290f7b7` (`origin/dev` `f6a16a88` plus the frozen task files; surface 71 paths / 81
 operations / 235 schemas, 25 API error codes, migration head `0027_optimisation_proposals`),
-branch `agent/class-correction-01`, isolated worktree `class-correction`. **Status:** phase A
-(static, container-free) complete; phase B (migration `0028`, repointed reads, the command, the
-reseal, the screen) waits for the integrator's "go phase B from <sha>". Development candidate
-under `R-135`: no full gate, no live journey, no push, merge into another branch or tag.
+branch `agent/class-correction-01`, isolated worktree `class-correction`. **Status:** phases A and B
+complete. Phase B started from the integrator's "go phase B from `c90d52f3`" (a real merge) and
+merged `origin/dev` `06591a52` and `508d7ba1` (documents only) before hand-back. After this
+slice: **72 paths / 82 operations / 237 schemas**, API error codes 25, migration head
+**`0028_classification_corrections`**. Development candidate under `R-135`: no full gate, no
+live journey, no push, merge into another branch or tag.
+
+## Phase B — result
+
+An expert corrects a version's confirmed stage and/or section with a reason through
+`correctVersionClassification` (`POST …/versions/{version_uid}/classification/corrections`,
+`201`, expert only). The correction is an append-only revision (migration `0028`); the current
+classification is the latest revision, derived by the view `version_classification_current`;
+every read of a classification — the three version selects, `get_classification`, the two section
+views of `SECTION-READ-MODEL-01`, the dashboard breakdown, the `0027` optimisation-pass trigger —
+goes through it; runs keep the profile they pinned; the version screen shows the revision, the
+history and, for an expert, «Исправить». Decisions D1–D9 of section 3 were followed as written
+(D10 as the integrator changed it: no separate dashboard commit).
+
+### What changed
+
+| area | files |
+|---|---|
+| domain | `sections/correction.py` (phase A), `sections/classification.py` (`correct_document_version_classification`, `ReviewFacts.revisions`, the classify message), `sections/public.py` |
+| documents | `documents/repository.py` (the repointed reads, `lock_classification`, `list_classification_revisions`, `insert_correction`), `models.py` (`VersionClassificationRecord.revision`, `ClassificationRevisionRecord`, equality), `public.py`, `__init__.py` |
+| dashboard | `dashboard/repository.py` (the breakdown reads the current view) |
+| database | `db/migrations/versions/20261020_0028_classification_corrections.py`, `access/references.py` |
+| API | `api/schemas/models.py`, `api/routers/sections.py`, `ports.py`, `api/security.py`, `bootstrap/adapters.py`, surface prose in `api/app.py`, `health.py`, `routers/{__init__,declarations,errors}.py`, `api/README.md` |
+| contract | `contracts/api/v1/openapi.json` (spliced as text in its own style, `info.description` gains a reseal paragraph), `contracts/domain/v1/error-codes.json` (notes only: the two `conflict_reason`s and the new `validation_failed` constraints) |
+| web | `web/openapi/openapi.json` (byte-identical), `web/src/shared/api/generated/**` and `web/FRONTEND_LOCK.json` (re-derived), `entities/document-version` (`model/classification.ts`, `ui/classification-history.tsx`), the new feature `features/correct-version-classification`, `widgets/version-classification`, `app/bff/v1/[...path]/route.ts` and `shared/api/authorization.ts` (surface prose) |
+| pins and prose | `tests/support/expected_facts.json`, the registers and counts in `tests/contract/**` (including the two mutation lines of `test_surface_counts_in_prose.py`), `tests/integration/api/**`, `tests/integration/db/**` (inventory, lifecycle, shape, chain), `docs/program/{P02_SEAMS,ALPHA_ROADMAP}.md`, `docs/manual-tests/PC-01_prototype.md`, `infra/deploy/**` prose |
+
+### Read sites, as found on the merged tree (replaces the phase A table for the SQL readers)
+
+`grep -rn document_version_classification src db/migrations` on the tree after the merge of
+`c90d52f3`: eight readers and one writer, all now on the current view except the writer.
+
+| # | site | now |
+|---|---|---|
+| 1 | `documents/repository.py` `_SELECT_VERSION` | `version_classification_current`, plus `c.revision` |
+| 2 | `_LIST_DOCUMENTS` | same |
+| 3 | `_LIST_VERSIONS` | same |
+| 4 | `_SELECT_CLASSIFICATION` (`get_classification`) | same; feeds the comparison adapter and the classify command |
+| 5 | `_LIST_SECTION_MEMBERS` (`list_current_versions_in_section`, `SECTION-READ-MODEL-01`) | same |
+| 6 | `_LIST_UNCLASSIFIED_CURRENT` (`list_unclassified_current_versions`) | same; the set of unclassified current versions is identical under either relation (a correction needs a confirmation), so no test can tell the two apart and none is claimed |
+| 7 | `dashboard/repository.py` `_DOCUMENTS_BY_SECTION` | same |
+| 8 | function `am_check_optimisation_pass_scope` (`0027`) | `CREATE OR REPLACE` in `0028`; the downgrade restores `0027`'s body (held equal by a test) |
+| – | `_INSERT_CLASSIFICATION` | the writer of revision 1, unchanged table; `RETURNING … 1 AS revision` |
+| – | `count_projects` | reads `project` only, not the classification; nothing to repoint |
+
+The consumers of 5.B/5.C of phase A follow without a line of their own: run start and re-audit
+(proved over HTTP: a run started before the correction keeps its pin, the replay of its key answers
+it, a later start and a re-audit route from the corrected section), the comparison pair guard, the
+Form-7 and priced-specification sets, and the version record's equality (a correction between two
+reads of a version no longer looks like a changed version).
+
+### Migration `0028_classification_corrections`, measured
+
+Fresh upgrade on the lane's PostgreSQL 17 + pgvector stack; deltas against the `0027` seal, and the
+whole of the difference shown to be `0028`'s by the chain test (downgrading `0028` restores the
+`0027` inventory row for row). columns +20 → 606, relations +3 → 66, constraints +9 → 657, indexes
++1 → 153, triggers +2 → 72, functions +1 → 31 (and `am_check_optimisation_pass_scope` redefined),
+views +2 → 4; extensions, sequences, policies and the state topology unchanged. The pins in
+`test_schema_invariant_inventory.py` were rewritten from this measurement, not from the
+prediction in section 7 (which it equalled).
+
+### Checks run (lane stack: PostgreSQL 57670, MinIO 61270/61271, database `auditmanager_class_correction`)
+
+| command (from the worktree root) | result |
+|---|---|
+| `pytest tests/unit tests/integration/sections tests/integration/documents/test_version_record_equality.py tests/contract` | 1888 passed; 210 not passed, all environment: `test_cp00_candidate` (48 failed, 126 errors), `test_validate_bootstrap` (21), `test_cp00_final_state` (3) — the CP-00 families need a git sandbox that a worktree is not (`D-187`) — and 2 in `test_doc_prose_facts`, whose only findings are `docs/program/CURRENT_STATE.md` naming head `0027` and `71/81/235` (the integrator's file) |
+| `pytest tests/integration/db` | 534 passed, 1 failed before the reseal (the inventory pins, as expected); after rewriting them from the measurement `test_schema_invariant_inventory.py` passes (2); includes `test_classification_corrections_migration.py` (8), the chain/round-trip test of `GATE-FIX-DB-01` and `test_accounts_migration.py` |
+| `pytest tests/integration/documents tests/integration/dashboard` + the inventory file | 53 passed (the current-classification reads, the command, two-session concurrency) |
+| `pytest tests/integration/runs` | 413 passed (includes `test_classification_correction_over_http.py`, 11) |
+| `pytest tests/integration/api` / `composition` / `comparison` / `optimisation` / `ingest` / `sections` / `decisions` / `access` | 624 / 809 (3 skipped) / 150 / 91 / 649 / 80 / 89 / 239 passed |
+| `pytest tests/characterization/w13_baseline` | 67 passed (4 failed before the records moved: 02b, 13, 32, 33) |
+| `npm --prefix web ci`; `npm run api:verify`; `npm run typecheck`; `npm run lint -- --quiet` | exit 0 each; `api:verify` OK, 82 operations, contract SHA-256 `b4b7b9fc…6224f` |
+| `vitest run tests/guards tests/contract tests/unit/{sections,comparison,optimisation-proposals,specification-prices,optimisation,section-specification,journey,screens,api,projects,shell,styles}` | 85 files, 1350 passed (rendered-language guard, contrast census, frontend lock, dashboard-invalidation map, journey conformance among them) |
+| `git diff --check` | clean |
+
+Not run, by `R-135`: a full gate, the live journey (`e2e:pc01` — it has no correction step), a paid
+provider call.
+
+### Mutation probes (each applied to the committed file, the named tests run, the file restored)
+
+Phase A's 34 (section 4) still hold. Phase B adds 16 Python probes (all killed) and 15 web probes
+(all killed); the probe set is the table, applied one at a time by a throw-away script that asserts
+each quoted text occurs exactly once.
+
+| id | mutation | first failing test |
+|---|---|---|
+| B01 | `_SELECT_VERSION` reads `document_version_classification` | `test_every_version_read_projects_the_latest_revision` |
+| B02 | `_LIST_DOCUMENTS` reads it | same |
+| B03 | `_LIST_VERSIONS` reads it | same |
+| B04 | `get_classification` reads it (`1 AS revision`) | same |
+| B05 | `_LIST_SECTION_MEMBERS` reads it | `test_the_section_views_and_the_dashboard_follow_a_correction` |
+| B06 | the dashboard breakdown reads it | `test_a_confirmed_code_missing_from_the_vocabulary_is_refused_not_dropped` (and the documents test) |
+| B07 | the command does not lock | `TestConcurrentCorrections::test_two_experts_looking_at_the_same_revision_the_loser_conflicts` |
+| B08 | the review drops `revisions` | `test_an_expert_corrects_and_the_review_shows_the_new_revision_and_the_history` |
+| B09 | the correction answers `200` on the wire | same |
+| B17 | the correction is declared `200` in the served document | `test_the_served_document_conforms_to_the_frozen_contract` |
+| B10 | the role register lets any role correct | `test_the_registers_are_the_ruled_ones` |
+| B11 | the installed scope function keeps reading the original table | `test_populated_0027_upgrades_and_every_current_classification_is_its_original` |
+| B12 | the chain trigger admits a no-op | `test_the_chain_is_a_property_of_the_table` |
+| B13 | the current view takes the oldest correction | `test_a_correction_is_a_new_revision_and_the_current_view_follows_it` |
+| B14 | the chain trigger admits a gap | `test_the_chain_is_a_property_of_the_table` |
+| B15 | the corrector is not a registered account reference | `test_the_reference_register_equals_the_schema_foreign_keys_to_app_user` |
+| W01–W15 | everyone may correct; each of the five invalidations dropped (optimisation, dashboard, comparisons, projects, and the stale read-back); the reason not trimmed; `expected_revision + 1`; the letter-or-digit rule dropped; an unchanged pair accepted; history oldest first; an administrator offered the control; the history not drawn; a revision's reason hidden; stale read as unchanged | all in `classification-correction.test.ts`: W01, W12, W13 «an administrator alone is offered nothing…»; W02–W05 «on success tells every read that shows a classification»; W06, W07 «sends one POST with the reason trimmed…»; W08 «holds the button while the reason is blank…»; W09 «holds the button while the pair equals the current one…»; W10 «on a stale or unclassified refusal, reads the stored classification back»; W11, W15 «lists every revision newest first…»; W14 «maps each server answer to its kind» |
+
+(B09 first survived: the decorator's `status_code` is documentation, the wire status is
+`json_response(201, …)`; the probe was re-aimed at the wire, and the decorator's value is the
+subject of B17.)
+
+### Edits outside the task's allowed paths, by the integrator's instruction
+
+* `tests/characterization/w13_baseline/**` (records 02b, 13, 32, 33; `journey.py`; the test file;
+  the README) — the four records gain one inserted property, pinned by digest; 02b gains an
+  exception block (`D-182`), 13/32/33 gain `D-182` and one sentence. The integrator's message
+  after the gate window: "Characterization records 02b/13/32/33 need `revision: 1` … fix what they
+  show".
+* `tests/integration/dashboard/test_section_breakdown.py` — the fake session matched the SQL by
+  the old table name; it follows the current view (the integrator's ruling that the dashboard
+  query is repointed "with tests").
+
+### For the integrator
+
+* `docs/program/CURRENT_STATE.md` (not touched): surface **72/82/237**, head
+  **`0028_classification_corrections`**, error codes 25.
+* `docs/program/DEBT_REGISTER.md` (not touched): `D-182` is resolved by this slice; `D-180` was
+  already closed by `SECTION-READ-MODEL-01`; new candidates are in section 11 (a run's pin names no
+  classification revision; the live journey has no correction step).
+* `NORM-REFS-RUN-01` reseals in parallel and merges after this: its numbers must be re-derived on
+  top of this base (72/82/237), never copied; the generated artifacts and every surface-count
+  prose line are derived from the merged contract by the commands in section 10.
+
 
 ## Phase A — result
 
@@ -300,7 +431,7 @@ lock on the hot path for no reachable inconsistency).
 | purge of a corrector account | `409 account_referenced` | phase B register test |
 | LLM / AI | never writes a classification; no raw comparison evidence is touched | by construction: the module has no import beyond the sections catalogue |
 
-## 10. Phase B plan, in order
+## 10. Phase B plan, in order (executed; the result is at the top)
 
 1. merge the commit the integrator names (real merge); `git merge-base --is-ancestor`;
 2. `0028` + `access/references.py` + migration tests (upgrade on a populated `0027`, AM003/AM001,
@@ -337,7 +468,9 @@ rendered-language guard, journey conformance. No full gate, no live journey.
 * **The Form-7 section view and the dashboard follow corrections** only once their queries read the current view (phase B step 6); until then a corrected version would still count under its original section.
 * **The downgrade is lossy by nature** (it logs the count); it never touches the original rows.
 
-## 12. Hotspot proof (phase A)
+## 12. Hotspot proof
+
+### Phase A
 
 Changed paths: `src/auditmanager/sections/correction.py`, `src/auditmanager/sections/public.py`,
 `src/auditmanager/documents/models.py`, `tests/unit/sections/…`, `tests/integration/documents/…`
@@ -358,3 +491,25 @@ merged tree for every `document_version_classification` join again — the list 
 the phase A base, not the final inventory — and repoints the dashboard repository query and those
 three `documents` queries to `version_classification_current`, with tests. Rows 7 and the step list
 above are marked accordingly. Nothing else in this report changes.
+
+## Hotspot proof (phase B)
+
+Checked on the final tree with `git diff --name-only c90d52f3 HEAD` against each forbidden hotspot
+of the task file, minus what came in through the two merges of `origin/dev` (documents only).
+
+* dependency and lock files (`pyproject.toml`, `uv.lock`, `requirements/**`, `web/package.json`,
+  `web/package-lock.json`): not touched; `web/FRONTEND_LOCK.json` is the contract's own
+  re-derivation, in the task's allowed paths;
+* `web/src/_app/providers.tsx` and global styles (`globals.css`): not touched; the two new style
+  files are CSS modules of their own components;
+* other contexts' internals: `dashboard/repository.py` is changed for one relation name on the
+  owner's instruction (the dashboard query is repointed), `comparison/**`, `optimisation/**` and
+  `runs/**` are not touched — they read the classification through `documents`;
+* the stored original confirmations: `document_version_classification` is read by `0028` and its
+  `0024` trigger still refuses UPDATE and DELETE (proved in the migration test, which also tries
+  both); no statement of this slice updates or deletes one;
+* `docs/program/CURRENT_STATE.md`, `docs/program/DEBT_REGISTER.md`: not touched by this branch's
+  own commits (the register moved only through the integrator's merged commits);
+* refs, tags, the stand: no ref or tag was created, nothing was pushed, no stand command ran;
+* migrations `0001`…`0027`: not touched (`test_downgrade_chain_round_trip.py` pins their upgrade
+  text by digest and passes); this task added `0028` only.
