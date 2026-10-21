@@ -139,8 +139,9 @@ source stays `environment`. This is the plan's one enabling slice
 forbidden:
 
 - `web/src/**` outside `shared/api`, the one surface-count comment in the BFF route, and
-  the six `CostBasis` consumers granted above (a type widening and the caption
-  «не тарифицируется» only);
+  the six `CostBasis` consumers granted above. For those, only the `unmetered` case is
+  allowed: the type widening, the caption, the suppressed figure and zero paragraph, and
+  null comparability;
 - `infra/**` outside the two env examples, and outside the surface-count prose in
   `infra/deploy/README.md`, `serve.py` and `nginx.conf` (comments only; no directive
   changes);
@@ -206,12 +207,13 @@ No paid call.
      - `requested_at`, `requested_by`, `started_at`, `finished_at`.
 
      `getExecutorConnection` returns each revision's latest probe and the last 10 probes.
-     The worker's sweep turns a probe that is still `requested`, never `running`, into
-     `no_worker` after 120 s; a `running` probe ends by its own kind's timeout.
-   - `executor_probe` outcome vocabulary: `requested`, `ok`, `ip_refused`,
+     The sweep runs in the `api`'s probe request and read path, so it fires with no worker
+     up: a probe still `requested` (never `running`) becomes `no_worker` after 120 s. A
+     `running` probe ends by its own kind's timeout.
+   - the `executor_probe` outcome vocabulary: `ok`, `ip_refused`,
      `credential_refused`, `model_mismatch`, `rate_mismatch`, `timeout`, `unreachable`,
      `protocol_error`, `secret_unreadable`, `host_key_unpinned`, `host_key_changed`,
-     `no_runner_online`, `destination_refused`, `kind_not_served`, `no_worker`);
+     `no_runner_online`, `destination_refused`, `kind_not_served`, `no_worker`;
    - the `ssh_command` revision and the SSH transport carry `host_key`, the full public
      key line written into `UserKnownHostsFile`; the fingerprint shown is derived from it;
    - `executor_route_event`, append-only, with a current view;
@@ -224,8 +226,13 @@ No paid call.
    - `CostBasis` and `ck_model_call_cost_basis` (`0004`) gain `unmetered` (plan §5). The
      six web consumers (`run-state-badge.tsx:128`, `run-presentation.ts:431-445` and the
      three widgets that index the label map) gain the case, with the caption
-     «не тарифицируется». `runCost` (`run-presentation.ts:406`) maps `unmetered` to that
-     caption, not to `unrecognized` and not to `absent`. The run-level aggregate rule
+     «не тарифицируется». `runCost` (`run-presentation.ts:406`) maps `unmetered` to its
+     own kind, not to `reported`, `unrecognized` or `absent`. For that kind:
+     - `run-progress.tsx` shows only the caption. It skips the figure (`:246`) and the
+       «сообщённый ноль» paragraph (`:268-274`), with a unit test beside the existing
+       `data-run-cost-zero` one;
+     - `comparableCostMicros` (`run-comparison.ts:125`) returns null, so an unmetered
+       run is never compared as a real zero. The run-level aggregate rule
      belongs to `EXEC-HTTP-01`;
    - `scripts/recovery/product_purge.py` and `schema_coverage.py` classify every new
      table, command type and event type. Every `executor_*` table is KEEP; `executor_task`

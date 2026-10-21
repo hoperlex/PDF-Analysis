@@ -216,7 +216,8 @@ rewritten.
      connect.
    - It stores a scrubbed, truncated detail.
    - Only a revision with an `ok` probe on its current secret can be routed or used.
-   - A probe still `requested` after 120 s gets the outcome `no_worker`.
+   - A probe still `requested` after 120 s gets the outcome `no_worker`, from the `api`'s
+     sweep that `EXEC-SEAL-01` builds.
      A draining worker takes no new probes.
    - Destination rules (plan T-9) are enforced in the probe and in the call:
      - refused by default: compose service names, loopback, link-local and the compose
