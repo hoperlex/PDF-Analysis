@@ -1,5 +1,9 @@
 """Opt-in operator CLI for one real isolated synthetic W58 DB+Blob drill.
 
+`RECOVERY-REBASE-01`: the drill is no longer a one-Blob drill at head `0023`. It runs at the
+declared head (``schema_coverage.HEAD``) with every object of the source bucket, and it
+reports the restored schema audit beside the Blob evidence.
+
 The CLI creates no database, bucket or Docker service. The operator owns a
 fresh disposable PostgreSQL 17 database, an empty separate MinIO bucket and
 the frozen synthetic copy built by ``synthetic_drill_fixture``. Running this
@@ -33,6 +37,7 @@ from scripts.recovery.isolated_postgres_restore import (
 from scripts.recovery.isolated_restore_drill import IsolatedRestoreDrillEvidence, run_isolated_restore_drill
 from scripts.recovery.offline_restore_audit import _read_copy_metadata
 from scripts.recovery.offline_restore_preflight import verify_offline_restore_inputs
+from scripts.recovery.schema_coverage import HEAD
 
 _NAMES = frozenset({
     "FOUNDATION_INSTANCE", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD",
@@ -209,9 +214,9 @@ def run_synthetic_drill(
     record = json.loads(_read_copy_metadata(copy_dir)[0])
     if not record["instance"].startswith("auditmanager-w58-synthetic-source-") \
             or record["instance"] == config.instance or record["real_data_marker"] is not False \
-            or record["migration_head"] != "0023_norm_citations" \
-            or record["inventory"]["count"] != 1:
-        raise SyntheticDrillRefused("copy is not the one-Blob synthetic source")
+            or record["migration_head"] != HEAD or record["inventory"]["count"] < 1:
+        raise SyntheticDrillRefused("copy is not a synthetic source at the declared head with Blobs")
+    expected_objects = record["inventory"]["count"]
     client = _object_client(config.storage)
     _empty_bucket(client, config.storage.bucket)
     store = S3BlobStore(config.storage)
@@ -235,9 +240,11 @@ def run_synthetic_drill(
             else:
                 os.environ["PATH"] = old_path
             engine.dispose()
-    if dict(evidence.source_counts).get("input_manifest_entry") != 1 \
-            or evidence.target_objects.count != 1 or evidence.target_blobs.count != 1 \
-            or evidence.target_objects.bytes_read != evidence.target_blobs.bytes_read:
+    if dict(evidence.source_counts).get("input_manifest_entry", 0) < 1 \
+            or evidence.target_blobs.count < 1 \
+            or evidence.target_objects.count != expected_objects \
+            or evidence.target_objects.count < evidence.target_blobs.count \
+            or evidence.target_objects.bytes_read < evidence.target_blobs.bytes_read:
         raise SyntheticDrillRefused("positive referenced-Blob target evidence is incomplete")
     return evidence
 
@@ -258,12 +265,17 @@ def main(argv: list[str] | None = None) -> int:
         parser.exit(3, f"REFUSED: {type(exc).__name__}; preserve target for inspection\n")
     print(json.dumps({
         "record_sha256": evidence.record_sha256, "dump_sha256": evidence.dump_sha256,
+        "source_counts": dict(evidence.source_counts),
+        "schema": {
+            "tables": evidence.schema.tables, "views": evidence.schema.views,
+            "triggers": evidence.schema.triggers, "guarded_tables": evidence.schema.guarded_tables,
+            "sequences": {name: [last, highest] for name, last, highest in evidence.schema.sequences},
+        },
         "target_objects": evidence.target_objects.count,
         "target_object_bytes": evidence.target_objects.bytes_read,
         "target_blobs": evidence.target_blobs.count,
         "target_blob_bytes": evidence.target_blobs.bytes_read,
         "target_blob_facts_sha256": evidence.target_blobs.facts_sha256,
-        "source_manifest_entries": dict(evidence.source_counts)["input_manifest_entry"],
         "synthetic_isolated_drill": True,
     }, sort_keys=True))
     return 0

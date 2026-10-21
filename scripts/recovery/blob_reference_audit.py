@@ -15,8 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auditmanager.storage.public import derive_blob_id
-
-_HEAD = "0023_norm_citations"
+from scripts.recovery.schema_coverage import HEAD as _HEAD
 _BLOB_ID = re.compile(r"blob_[0-9A-HJKMNP-TV-Z]{26}\Z")
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -28,6 +27,8 @@ _SOURCES = frozenset({
     ("public", "norm_custody_binding", "blob_id"),
     ("public", "norm_retrieval_set", "set_blob_id"),
     ("public", "norm_retrieval_set", "catalogue_blob_id"),
+    # `0026_price_lists`: a price-list revision is bound to its uploaded file's Blob.
+    ("public", "price_list_revision", "blob_id"),
 })
 _CATALOG_EXPECTED = _SOURCES | {("public", "blob", "blob_id")}
 
@@ -81,6 +82,10 @@ _RETRIEVAL_SETS = text("""
            catalogue_blob_id, catalogue_size_bytes, observed_catalogue_sha256
       FROM public.norm_retrieval_set
      ORDER BY norm_retrieval_set_id COLLATE "C"
+""")
+_PRICE_LISTS = text("""
+    SELECT price_list_id AS owner_id, blob_id, sha256, size_bytes, media_type
+      FROM public.price_list_revision ORDER BY price_list_id COLLATE "C"
 """)
 
 
@@ -242,6 +247,14 @@ def audit_blob_references(session: Session) -> BlobReferenceAudit:
             ):
                 raise BlobReferenceAuditRefused(f"verified retrieval set {role} Blob facts differ")
     counts.append(("norm_retrieval_set", len(retrieval_sets)))
+
+    price_lists = _rows(session, _PRICE_LISTS)
+    for row in price_lists:
+        source = "price_list_revision"
+        actual = _require_available(blobs, row["blob_id"], source)
+        if _declared_fact(row, source=source) != actual:
+            raise BlobReferenceAuditRefused(f"{source} facts differ for {row['blob_id']}")
+    counts.append(("price_list_revision", len(price_lists)))
 
     return BlobReferenceAudit(tuple(counts), tuple(sorted(available, key=lambda fact: fact.blob_id)))
 

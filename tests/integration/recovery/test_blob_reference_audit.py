@@ -7,6 +7,7 @@ from copy import deepcopy
 import pytest
 
 from auditmanager.storage.public import derive_blob_id
+from scripts.recovery.schema_coverage import HEAD
 from scripts.recovery.blob_reference_audit import (
     BlobFact,
     BlobReferenceAuditRefused,
@@ -17,7 +18,7 @@ _CATALOG = [
     {"schema_name": "public", "table_name": table, "column_name": "blob_id"}
     for table in (
         "blob", "input_manifest_entry", "analysis_artifact_publication",
-        "norm_custody_admission", "norm_custody_binding",
+        "norm_custody_admission", "norm_custody_binding", "price_list_revision",
     )
 ]
 _CATALOG.extend([
@@ -59,6 +60,8 @@ class _Session:
             key = "bindings"
         elif "FROM public.norm_retrieval_set" in sql:
             key = "retrieval_sets"
+        elif "FROM public.price_list_revision" in sql:
+            key = "price_lists"
         else:
             raise AssertionError(f"unexpected SQL: {sql}")
         return _Rows(self.data[key])
@@ -68,7 +71,7 @@ def _data() -> dict[str, list[dict[str, object]]]:
     sha = "a" * 64
     blob_id = str(derive_blob_id(sha256=sha, size=13))
     return {
-        "version": [{"version_num": "0023_norm_citations"}],
+        "version": [{"version_num": HEAD}],
         "catalog": deepcopy(_CATALOG),
         "blob": [{
             "blob_id": blob_id, "state": "available", "sha256": sha,
@@ -89,6 +92,10 @@ def _data() -> dict[str, list[dict[str, object]]]:
         }],
         "bindings": [{"owner_id": "nbd_one", "admission_id": "nad_one", "blob_id": blob_id}],
         "retrieval_sets": [],
+        "price_lists": [{
+            "owner_id": "prl_one", "blob_id": blob_id, "sha256": sha,
+            "size_bytes": 13, "media_type": "application/pdf",
+        }],
     }
 
 
@@ -123,17 +130,17 @@ def test_healthy_database_returns_all_available_blob_facts_and_reads_only() -> N
     assert result.source_counts == (
         ("input_manifest_entry", 1), ("analysis_artifact_publication", 1),
         ("norm_custody_admission", 1), ("norm_custody_binding", 1),
-        ("norm_retrieval_set", 0),
+        ("norm_retrieval_set", 0), ("price_list_revision", 1),
     )
     assert audit_blob_references(session) == result  # type: ignore[arg-type]
     assert data == session.data
-    assert len(session.statements) == 16
+    assert len(session.statements) == 18  # two audits x nine SELECTs
 
 
 def test_verified_retrieval_set_reads_both_0023_blob_columns() -> None:
     data = _data_with_verified_set()
     result = audit_blob_references(_Session(data))  # type: ignore[arg-type]
-    assert result.source_counts[-1] == ("norm_retrieval_set", 1)
+    assert result.source_counts[-2] == ("norm_retrieval_set", 1)
     assert {fact.blob_id for fact in result.available_blobs} == {
         row["blob_id"] for row in data["blob"]
     }
@@ -171,11 +178,19 @@ def test_rejected_set_has_no_blob_references() -> None:
     row = data["retrieval_sets"][0]
     row.update(state="rejected", set_blob_id=None, set_size_bytes=None,
                catalogue_blob_id=None, catalogue_size_bytes=None)
-    assert audit_blob_references(_Session(data)).source_counts[-1] == (  # type: ignore[arg-type]
+    assert audit_blob_references(_Session(data)).source_counts[-2] == (  # type: ignore[arg-type]
         "norm_retrieval_set", 1,
     )
     row["catalogue_blob_id"] = data["blob"][2]["blob_id"]
     with pytest.raises(BlobReferenceAuditRefused, match="rejected retrieval set"):
+        audit_blob_references(_Session(data))  # type: ignore[arg-type]
+
+
+def test_price_list_revision_is_a_declared_blob_reference_source() -> None:
+    """`0026_price_lists` added a Blob reference; the catalog check must know it by name."""
+    data = _data()
+    data["catalog"] = [row for row in data["catalog"] if row["table_name"] != "price_list_revision"]
+    with pytest.raises(BlobReferenceAuditRefused, match="price_list_revision"):
         audit_blob_references(_Session(data))  # type: ignore[arg-type]
 
 
@@ -195,9 +210,16 @@ def test_schema_catalog_is_an_exact_closed_set(catalog_change: str) -> None:
     assert len(session.statements) == 2
 
 
+def test_the_0023_head_is_no_longer_accepted() -> None:
+    data = _data()
+    data["version"] = [{"version_num": "0023_norm_citations"}]
+    with pytest.raises(BlobReferenceAuditRefused, match="migration head"):
+        audit_blob_references(_Session(data))  # type: ignore[arg-type]
+
+
 def test_wrong_migration_head_refuses_before_reading_sources() -> None:
     data = _data()
-    data["version"] = [{"version_num": "0023_future"}]
+    data["version"] = [{"version_num": "0029_future"}]
     session = _Session(data)
     with pytest.raises(BlobReferenceAuditRefused, match="migration head"):
         audit_blob_references(session)  # type: ignore[arg-type]
@@ -212,6 +234,11 @@ def test_wrong_migration_head_refuses_before_reading_sources() -> None:
     ("admission_missing", "norm_custody_admission names an unavailable"),
     ("admission_facts", "confirmed custody facts differ"),
     ("binding_wrong", "custody binding lacks matching confirmed admission"),
+    ("price_list_missing", "price_list_revision names an unavailable"),
+    ("price_list_unavailable", "price_list_revision names an unavailable"),
+    ("price_list_digest", "disagrees with content identity"),
+    ("price_list_size", "disagrees with content identity"),
+    ("price_list_media", "price_list_revision facts differ"),
 ))
 def test_broken_references_refuse(change: str, reason: str) -> None:
     data = _data()
@@ -232,6 +259,18 @@ def test_broken_references_refuse(change: str, reason: str) -> None:
         data["artifacts"].clear()
     elif change == "admission_facts":
         data["admissions"][0]["media_type"] = "text/plain"
+    elif change == "price_list_missing":
+        data["price_lists"][0]["blob_id"] = "blob_" + "0" * 26
+    elif change == "price_list_unavailable":
+        data["blob"][0]["state"] = "verifying"
+        for name in ("manifest", "artifacts", "admissions", "bindings"):
+            data[name].clear()
+    elif change == "price_list_digest":
+        data["price_lists"][0]["sha256"] = "b" * 64
+    elif change == "price_list_size":
+        data["price_lists"][0]["size_bytes"] = 14
+    elif change == "price_list_media":
+        data["price_lists"][0]["media_type"] = "text/csv"
     else:
         data["bindings"][0]["admission_id"] = "nad_missing"
     assert blob_id is not None
@@ -245,6 +284,7 @@ def test_pending_and_rejected_admissions_need_no_published_object() -> None:
     data["artifacts"].clear()
     data["bindings"].clear()
     data["admissions"][0]["state"] = "pending"
+    data["price_lists"].clear()
     data["blob"].clear()
     result = audit_blob_references(_Session(data))  # type: ignore[arg-type]
     assert result.available_blobs == ()
@@ -259,6 +299,7 @@ def test_unsettled_artifact_can_hold_incomplete_temporary_blob() -> None:
     data["manifest"].clear()
     data["bindings"].clear()
     data["admissions"].clear()
+    data["price_lists"].clear()
     data["artifacts"][0]["state"] = "abandoned"
     data["blob"][0].update(state="temporary", sha256=None, size_bytes=None, media_type=None)
     assert audit_blob_references(_Session(data)).available_blobs == ()  # type: ignore[arg-type]

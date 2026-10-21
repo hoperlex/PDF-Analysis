@@ -10,6 +10,7 @@ import pytest
 
 from scripts.recovery import synthetic_drill_runner as runner
 from scripts.recovery.isolated_restore_drill import IsolatedRestoreDrillEvidence
+from scripts.recovery.schema_coverage import FINGERPRINTED_TABLES, RestoredSchemaAudit
 from scripts.recovery.synthetic_drill_fixture import prepare_synthetic_copy
 from scripts.recovery.target_blob_readback import TargetBlobReadback
 from scripts.recovery.target_object_restore import TargetObjectRestore
@@ -43,19 +44,23 @@ def _env(tmp_path: Path, *, bucket: str = "auditmanager-w58-synthetic-target-01"
     return path
 
 
-def _copy(tmp_path: Path) -> tuple[Path, Path]:
+_SCHEMA = RestoredSchemaAudit(55, 4, 72, 31, ())
+
+
+def _copy(tmp_path: Path, *, payloads: tuple[bytes, ...] = (b"positive Blob",)) -> tuple[Path, Path]:
     paths = []
+    lines = "".join(f"{name}|1|{'a' * 64}\n" for name in sorted(FINGERPRINTED_TABLES))
     for name, data in (
         ("dump.input", b"PGDMP\x00synthetic-only"),
-        ("fingerprint.lines", f"blob|1|{'a' * 64}\n".encode("ascii")),
-        ("payload.bin", b"positive Blob"),
+        ("fingerprint.lines", lines.encode("ascii")),
+        *((f"payload{index}.bin", payload) for index, payload in enumerate(payloads)),
     ):
         path = tmp_path / name
         path.write_bytes(data)
         path.chmod(0o600)
         paths.append(path)
     copy_dir, mirror, _ = prepare_synthetic_copy(
-        dump_path=paths[0], fingerprint_lines_path=paths[1], payload_path=paths[2],
+        dump_path=paths[0], fingerprint_lines_path=paths[1], payload_paths=tuple(paths[2:]),
         output_root=tmp_path / "copy", stamp="20261016T120000Z",
         instance="auditmanager-w58-synthetic-source-01", tree_sha="a" * 40,
     )
@@ -158,7 +163,7 @@ def test_bridge_passes_one_target_to_coordinator_and_requires_positive_readback(
     digest = hashlib.sha256(b"copy").hexdigest()
     evidence = IsolatedRestoreDrillEvidence(
         record_sha256=digest, dump_sha256=digest,
-        source_counts=(("input_manifest_entry", 1),),
+        source_counts=(("input_manifest_entry", 1),), schema=_SCHEMA,
         target_objects=TargetObjectRestore(1, len(b"positive Blob"), digest),
         target_blobs=TargetBlobReadback(1, len(b"positive Blob"), digest),
     )
@@ -186,7 +191,7 @@ def test_bridge_passes_one_target_to_coordinator_and_requires_positive_readback(
 
     def no_blob(**_: object) -> IsolatedRestoreDrillEvidence:
         return IsolatedRestoreDrillEvidence(
-            record_sha256=digest, dump_sha256=digest, source_counts=(),
+            record_sha256=digest, dump_sha256=digest, source_counts=(), schema=_SCHEMA,
             target_objects=TargetObjectRestore(1, len(b"positive Blob"), digest),
             target_blobs=TargetBlobReadback(0, 0, digest),
         )
@@ -200,7 +205,7 @@ def test_bridge_passes_one_target_to_coordinator_and_requires_positive_readback(
 
     def no_reference(**_: object) -> IsolatedRestoreDrillEvidence:
         return IsolatedRestoreDrillEvidence(
-            record_sha256=digest, dump_sha256=digest,
+            record_sha256=digest, dump_sha256=digest, schema=_SCHEMA,
             source_counts=(("input_manifest_entry", 0),),
             target_objects=TargetObjectRestore(1, len(b"positive Blob"), digest),
             target_blobs=TargetBlobReadback(1, len(b"positive Blob"), digest),
@@ -210,5 +215,73 @@ def test_bridge_passes_one_target_to_coordinator_and_requires_positive_readback(
     with pytest.raises(runner.SyntheticDrillRefused, match="positive referenced-Blob"):
         runner.run_synthetic_drill(
             copy_dir=copy_dir, objects_root=mirror, target_env=env,
+            pg17_bin=Path("/usr/lib/postgresql/17/bin"),
+        )
+
+
+def _evidence(objects: int, blobs: int, *, object_bytes: int, blob_bytes: int,
+              references: int = 1) -> IsolatedRestoreDrillEvidence:
+    digest = hashlib.sha256(b"copy").hexdigest()
+    return IsolatedRestoreDrillEvidence(
+        record_sha256=digest, dump_sha256=digest, schema=_SCHEMA,
+        source_counts=(("input_manifest_entry", references), ("price_list_revision", 1)),
+        target_objects=TargetObjectRestore(objects, object_bytes, digest),
+        target_blobs=TargetBlobReadback(blobs, blob_bytes, digest),
+    )
+
+
+def _drive(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, evidence: IsolatedRestoreDrillEvidence,
+           *, payloads: tuple[bytes, ...]) -> IsolatedRestoreDrillEvidence:
+    copy_dir, mirror = _copy(tmp_path, payloads=payloads)
+
+    class Engine:
+        def dispose(self) -> None:
+            pass
+
+    monkeypatch.setattr(runner, "require_pg17_tools", lambda _: None)
+    monkeypatch.setattr(runner, "_object_client", lambda _: _Client(nonempty=False))
+    monkeypatch.setattr(runner, "S3BlobStore", lambda _: object())
+    monkeypatch.setattr(runner, "create_database_engine", lambda _: Engine())
+    monkeypatch.setattr(runner, "run_isolated_restore_drill", lambda **_: evidence)
+    return runner.run_synthetic_drill(
+        copy_dir=copy_dir, objects_root=mirror, target_env=_env(tmp_path),
+        pg17_bin=Path("/usr/lib/postgresql/17/bin"),
+    )
+
+
+def test_a_many_blob_copy_needs_every_sealed_object_restored_and_every_blob_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payloads = (b"source pdf", b"text layer", b"crop")
+    sizes = sum(map(len, payloads))
+    good = _evidence(3, 3, object_bytes=sizes, blob_bytes=sizes)
+    (tmp_path / "ok").mkdir()
+    assert _drive(tmp_path / "ok", monkeypatch, good, payloads=payloads) == good
+
+    refused = {
+        "an-object-was-not-restored": _evidence(2, 2, object_bytes=sizes, blob_bytes=sizes),
+        "an-unsealed-object-appeared": _evidence(4, 3, object_bytes=sizes, blob_bytes=sizes),
+        "fewer-objects-than-available-blobs": _evidence(3, 4, object_bytes=sizes, blob_bytes=sizes),
+        "fewer-bytes-than-the-blobs": _evidence(3, 3, object_bytes=sizes - 1, blob_bytes=sizes),
+        "no-manifest-reference": _evidence(3, 3, object_bytes=sizes, blob_bytes=sizes, references=0),
+    }
+    for name, evidence in refused.items():
+        (tmp_path / name).mkdir()
+        with pytest.raises(runner.SyntheticDrillRefused, match="positive referenced-Blob"):
+            _drive(tmp_path / name, monkeypatch, evidence, payloads=payloads)
+
+
+def test_a_copy_at_another_head_is_refused_before_any_service(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    copy_dir, mirror = _copy(tmp_path)
+    record = copy_dir / "record.json"
+    record.write_bytes(record.read_bytes().replace(b"0028_classification_corrections",
+                                                    b"0023_norm_citations"))
+    monkeypatch.setattr(runner, "require_pg17_tools", lambda _: None)
+    monkeypatch.setattr(runner, "_object_client", lambda _: pytest.fail("S3 opened"))
+    with pytest.raises(runner.SyntheticDrillRefused, match="declared head"):
+        runner.run_synthetic_drill(
+            copy_dir=copy_dir, objects_root=mirror, target_env=_env(tmp_path),
             pg17_bin=Path("/usr/lib/postgresql/17/bin"),
         )
