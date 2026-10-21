@@ -57,9 +57,14 @@ _TOOLS_FIXTURES = str(REPOSITORY_ROOT / "tools" / "fixtures")
 if _TOOLS_FIXTURES not in sys.path:
     sys.path.insert(0, _TOOLS_FIXTURES)
 
-#: The QA lane's API ports (`W55B-QA-01` brief). Overridable so the integrator can rerun the
-#: probes on another free pair without editing this file.
-API_PORT = int(os.environ.get("W55B_QA_API_PORT", "57500"))
+#: The QA lane's default API port pair (`D-189`). It sits **below** the kernel's ephemeral range
+#: (`/proc/sys/net/ipv4/ip_local_port_range`, 32768-60999 here): inside it the kernel hands the
+#: same numbers out as client source ports, and on a busy host a connect to an unused port in the
+#: range can connect to *itself* (TCP simultaneous open, ``127.0.0.1:57500 -> 127.0.0.1:57500``),
+#: after which the child cannot bind ("address already in use"). Overridable so the integrator can
+#: rerun the probes on another free pair without editing this file.
+DEFAULT_API_PORT = 28500
+API_PORT = int(os.environ.get("W55B_QA_API_PORT", str(DEFAULT_API_PORT)))
 HEALTH_PORT = int(os.environ.get("W55B_QA_HEALTH_PORT", str(API_PORT + 1)))
 HOST = "127.0.0.1"
 
@@ -127,9 +132,44 @@ def lane_environment() -> dict[str, str]:
 
 
 def _port_is_free(port: int) -> bool:
+    """True when this process can bind ``port`` the way the served application does (`D-189`).
+
+    The probe **binds**; it does not connect. A connect only learns that nothing *listens* on
+    the port, which is also true of a socket that holds the port without listening and of a
+    connection that connected to itself, and ``serve.py`` cannot bind in either case.
+    ``SO_REUSEADDR`` is set because ``uvicorn`` sets it: a port whose only occupant is a
+    ``TIME_WAIT`` leftover of the previous child (the harness restarts the child at each
+    ceiling) is free to the server, and a probe stricter than the server would refuse a start
+    the server can make.
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-        probe.settimeout(0.5)
-        return probe.connect_ex((HOST, port)) != 0
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind((HOST, port))
+        except OSError:
+            return False
+        return True
+
+
+def _api_answers() -> bool:
+    """True when the API port answers an HTTP request, with any status.
+
+    ``serve.py`` starts the health plane on a thread and then the API in the main thread, so
+    ``/readyz`` answers about 25 ms before the API port is bound (12 of 12 starts measured in
+    `GATE-REPAIR-01`; the harness polls every 0.5 s, so about one start in twenty read "ready"
+    in that window and the first call got ``ConnectionRefusedError``). Readiness is therefore
+    both planes. An HTTP answer, not a bare connect: a connection that connected to itself
+    "accepts" and then answers with the request line it sent, which is not a status line.
+    """
+    connection = http.client.HTTPConnection(HOST, API_PORT, timeout=2)
+    try:
+        connection.request("GET", "/")
+        connection.getresponse().read()
+        return True
+    except (OSError, http.client.HTTPException):
+        return False
+    finally:
+        connection.close()
 
 
 def _child_environment(ceiling: str | None) -> dict[str, str]:
@@ -220,7 +260,7 @@ class ApiControl:
                 connection.request("GET", "/readyz")
                 ready = connection.getresponse().status == 200
                 connection.close()
-                if ready:
+                if ready and _api_answers():
                     self.current = served
                     return served
             except OSError:
