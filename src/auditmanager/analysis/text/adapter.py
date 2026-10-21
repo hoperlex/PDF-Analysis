@@ -67,6 +67,12 @@ class ModelResponse:
     #: is selectable, so no fixed rate table can cover it - a measurement must beat an
     #: estimate whenever one exists.
     reported_cost_usd: float | None = None
+    #: The model name the transport's reply itself carries, exactly as it arrived, or ``None``
+    #: when the adapter reads none (the recorded and the direct provider adapters) or the
+    #: reply named none. It is evidence for the identity check in ``proxy.py`` (``R-133``) and
+    #: nothing else: it is not part of ``response_sha256``, so a recorded replay and a proxied
+    #: answer to the same question keep one checksum, and it never decides a configured model.
+    model: str | None = None
 
     @property
     def response_sha256(self) -> str:
