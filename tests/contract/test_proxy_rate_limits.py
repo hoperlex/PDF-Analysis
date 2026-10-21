@@ -2,7 +2,9 @@
 
 `W49-PLAN.md` section 3.5: `/api/v1/` is public behind nginx, so the edge limits
 `POST /api/v1/registrations` and `POST /api/v1/registrations/status` per client address and
-answers the excess with the catalog's `rate_limited` envelope; the `web` service is told
+answers the excess with the catalog's `rate_limited` envelope. `HARDEN-AUTH-EDGE-01`
+(`EXPOSURE-REVIEW-01` `E-4`, `D-192`) adds the credential exchange, `POST /api/v1/auth/token`,
+to the same edge, in a zone of its own so the two budgets cannot spend each other. The `web` service is told
 it runs behind that proxy (`AUDITMANAGER_BEHIND_PROXY`), so the web tier may key its own
 guest bucket on the `X-Real-IP` the proxy sets.
 
@@ -11,16 +13,22 @@ guest bucket on the `X-Real-IP` the proxy sets.
 exists -- and the flag lives in `compose.server.yml`. Any one of the three can lose its line
 while the other two still look right, so each is read and each is checked:
 
-* the `map` and the `limit_req_zone` are http-level, declared **once**, in `nginx.conf`, and
-  never in `tls-server.conf` (a second declaration stops nginx from starting);
-* the map keys exactly the registration calls the frozen OpenAPI document names, by
+* the two `map`s and their two `limit_req_zone`s are http-level, declared **once**, in
+  `nginx.conf`, and never in `tls-server.conf` (a second declaration stops nginx from
+  starting);
+* each map keys exactly the calls the frozen OpenAPI document names for its zone -- the two
+  registration calls for `guest_registration`, `issueToken` for `token_exchange` -- by
   method and by the full served path, and nothing else -- no regex key, no prefix;
 * both server bodies throttle inside the existing `location /api/v1/` and in the one other
   API location there is -- `W55B-STREAM-01`'s upload location, which a regex match takes out
-  of the prefix location and which therefore repeats the same three lines -- and nowhere
+  of the prefix location and which therefore repeats the same throttle lines -- and nowhere
   else, with no other `/api/v1` location;
 * the two upload locations (`/api/v1/projects/*/documents` and `/bff/v1/projects/*/documents`,
-  each also matching `.../documents/*/versions` since `W59-VERSION-UPLOAD-01`) are the only places `client_max_body_size` is raised, to `260m`, with the explicit timeouts
+  each also matching `.../documents/*/versions` since `W59-VERSION-UPLOAD-01`) are the only
+  places `client_max_body_size` is raised, to `260m` -- except the two internal credential
+  locations `HARDEN-AUTH-EDGE-01` added, which repeat that cap because a subrequest re-checks
+  the declared length (`tests/integration/composition/test_edge_credential_gate.py` holds
+  everything else about them) -- with the explicit timeouts
   the plan fixes, the `rewrite` and the URI-less `proxy_pass` the API one needs, and neither
   declares a header of its own (that would drop the server's security headers);
 * the named location both bodies send a 429 to returns JSON whose `error_code`,
@@ -68,6 +76,13 @@ CODE = "rate_limited"
 #: The operations the plan throttles, by `operationId`. Their method and path are read out of
 #: the frozen document, so the expected map keys are not written down here a second time.
 THROTTLED_OPERATIONS = frozenset({"submitRegistration", "readRegistrationStatus"})
+#: `HARDEN-AUTH-EDGE-01`. The credential exchange has a zone of its own.
+EXCHANGE_OPERATIONS = frozenset({"issueToken"})
+#: zone name -> the operations whose full served path the zone's map keys on.
+ZONES: dict[str, frozenset[str]] = {
+    "guest_registration": THROTTLED_OPERATIONS,
+    "token_exchange": EXCHANGE_OPERATIONS,
+}
 MAP_HEADER = re.compile(r'^map "\$request_method:\$uri" (\$\w+) \{$')
 ZONE_LINE = re.compile(r"^limit_req_zone (\$\w+) zone=(\w+):\d+[km] rate=\d+r/[sm];$")
 LIMIT_LINE = re.compile(r"^limit_req zone=(\w+) burst=\d+( nodelay)?;$")
@@ -83,6 +98,8 @@ API_LOCATIONS = frozenset(
 #: What the two upload locations say about size and time, and the default beside them.
 UPLOAD_BODY_CAP = "client_max_body_size 260m;"
 DEFAULT_BODY_CAP = "client_max_body_size 32m;"
+#: The two internal credential locations repeat the upload cap (see the module note).
+CREDENTIAL_LOCATIONS = ("location = /_edge/credential/api {", "location = /_edge/credential/web {")
 UPLOAD_TIMEOUTS = ("client_body_timeout 120s;", "proxy_read_timeout 300s;")
 UPLOAD_REWRITE = "rewrite ^/api/v1/(.*)$ /$1 break;"
 HEADER_DIRECTIVES = ("add_header ", "proxy_set_header ")
@@ -191,7 +208,7 @@ def _schema() -> dict[str, Any]:
     return json.loads(ENVELOPE_SCHEMA.read_text(encoding="utf-8"))
 
 
-def expected_map_keys() -> dict[str, str]:
+def expected_map_keys(operations: frozenset[str] = THROTTLED_OPERATIONS) -> dict[str, str]:
     """`METHOD:/api/v1<path>` for each throttled operation, read out of the frozen document."""
     document = json.loads(OPENAPI.read_text(encoding="utf-8"))
     base = document["servers"][0]["url"]
@@ -199,9 +216,9 @@ def expected_map_keys() -> dict[str, str]:
         f"{method.upper()}:{base}{path}": CLIENT_ADDRESS
         for path, item in document["paths"].items()
         for method, operation in item.items()
-        if isinstance(operation, dict) and operation.get("operationId") in THROTTLED_OPERATIONS
+        if isinstance(operation, dict) and operation.get("operationId") in operations
     }
-    assert len(keys) == len(THROTTLED_OPERATIONS), (
+    assert len(keys) == len(operations), (
         f"the frozen document no longer names every throttled operation: {sorted(keys)}"
     )
     return keys
@@ -213,34 +230,45 @@ def expected_map_keys() -> dict[str, str]:
 
 
 def declaration_problems(plain: str, tls: str) -> list[str]:
-    """The map and the zone: once, at http level, in the always-loaded file, keyed exactly."""
+    """The maps and the zones: once each, at http level, in the always-loaded file, keyed exactly."""
     problems: list[str] = []
     lines = statements(plain)
     maps = [line for line in lines if line.startswith("map ")]
     zones = [line for line in lines if line.startswith("limit_req_zone ")]
     outer = top_level(lines)
-    if len(maps) != 1 or maps[0] not in outer:
-        return [f"nginx.conf must declare exactly one map, at http level: {maps}"]
-    if len(zones) != 1 or zones[0] not in outer:
-        return [f"nginx.conf must declare exactly one limit_req_zone, at http level: {zones}"]
-    header = MAP_HEADER.match(_norm(maps[0]))
-    zone = ZONE_LINE.match(_norm(zones[0]))
-    if header is None:
-        problems.append(f'the map is not keyed by "$request_method:$uri": {maps[0]!r}')
-    if zone is None:
-        problems.append(f"the limit_req_zone is not the expected shape: {zones[0]!r}")
-    if header and zone and zone.group(1) != header.group(1):
-        problems.append(
-            f"the zone counts {zone.group(1)} but the map yields {header.group(1)}"
-        )
-    (inner,) = blocks(lines, _norm(maps[0]))
-    entries = _map_entries(inner)
-    wanted = {"default": "", **expected_map_keys()}
-    if entries != wanted:
-        problems.append(
-            "the map must yield the client address for exactly the registration calls and "
-            f"the empty string otherwise; it reads {entries}, expected {wanted}"
-        )
+    if len(maps) != len(ZONES) or any(line not in outer for line in maps):
+        return [f"nginx.conf must declare exactly {len(ZONES)} maps, at http level: {maps}"]
+    if len(zones) != len(ZONES) or any(line not in outer for line in zones):
+        return [f"nginx.conf must declare exactly {len(ZONES)} limit_req_zones, at http level: {zones}"]
+    by_name: dict[str, tuple[str, str]] = {}
+    for zone_line in zones:
+        zone = ZONE_LINE.match(_norm(zone_line))
+        if zone is None:
+            problems.append(f"the limit_req_zone is not the expected shape: {zone_line!r}")
+            continue
+        by_name[zone.group(2)] = (zone.group(1), zone_line)
+    if sorted(by_name) != sorted(ZONES):
+        return problems + [f"the zones must be exactly {sorted(ZONES)}: {sorted(by_name)}"]
+    for name, operations in ZONES.items():
+        variable, _ = by_name[name]
+        keyed = [line for line in maps if (m := MAP_HEADER.match(_norm(line))) and m.group(1) == variable]
+        if len(keyed) != 1:
+            problems.append(
+                f'zone {name} counts {variable}, which must be yielded by exactly one map keyed by '
+                f'"$request_method:$uri": {keyed}'
+            )
+            continue
+        (inner,) = blocks(lines, _norm(keyed[0]))
+        entries = _map_entries(inner)
+        wanted = {"default": "", **expected_map_keys(operations)}
+        if entries != wanted:
+            problems.append(
+                f"the {name} map must yield the client address for exactly its own calls and "
+                f"the empty string otherwise; it reads {entries}, expected {wanted}"
+            )
+    for line in maps:
+        if MAP_HEADER.match(_norm(line)) is None:
+            problems.append(f'a map is not keyed by "$request_method:$uri": {line!r}')
     for line in statements(tls):
         if line.startswith(("map ", "limit_req_zone ")):
             problems.append(
@@ -250,16 +278,18 @@ def declaration_problems(plain: str, tls: str) -> list[str]:
     return problems
 
 
-def zone_name(plain: str) -> str | None:
+def zone_names(plain: str) -> list[str]:
+    """The declared zones, in file order."""
+    names: list[str] = []
     for line in statements(plain):
         match = ZONE_LINE.match(_norm(line))
         if match:
-            return match.group(2)
-    return None
+            names.append(match.group(2))
+    return names
 
 
-def throttle_problems(name: str, config: str, zone: str | None, status: int) -> list[str]:
-    """One server body: the limit inside the one `location /api/v1/`, and nowhere else."""
+def throttle_problems(name: str, config: str, zones: list[str], status: int) -> list[str]:
+    """One server body: the limits inside the one `location /api/v1/`, and nowhere else."""
     problems: list[str] = []
     lines = statements(config)
     api = [_norm(line) for line in lines if line.startswith("location") and "/api/v1" in line]
@@ -272,12 +302,19 @@ def throttle_problems(name: str, config: str, zone: str | None, status: int) -> 
         return problems + [f"{name}: expected one `location /api/v1/` block, found {len(prefixed)}"]
     inner = [_norm(line) for line in prefixed[0]]
     limits = [line for line in inner if line.startswith("limit_req ")]
-    if len(limits) != 1:
-        problems.append(f"{name}: `location /api/v1/` carries {len(limits)} limit_req lines")
-    else:
-        match = LIMIT_LINE.match(limits[0])
-        if match is None or match.group(1) != zone:
-            problems.append(f"{name}: {limits[0]!r} does not use the declared zone {zone!r}")
+    if len(limits) != len(zones):
+        problems.append(
+            f"{name}: `location /api/v1/` carries {len(limits)} limit_req lines, one per zone "
+            f"{zones} is expected"
+        )
+    used: list[str | None] = []
+    for line in limits:
+        match = LIMIT_LINE.match(line)
+        used.append(match.group(1) if match else None)
+        if match is None or match.group(1) not in zones:
+            problems.append(f"{name}: {line!r} does not use a declared zone {zones!r}")
+    if sorted(zone for zone in used if zone) != sorted(zones):
+        problems.append(f"{name}: `location /api/v1/` limits zones {used}, expected each of {zones}")
     for needed in (f"limit_req_status {status};", f"error_page {status} = {NAMED_LOCATION};"):
         if needed not in inner:
             problems.append(f"{name}: `location /api/v1/` lacks {needed!r}")
@@ -287,7 +324,9 @@ def throttle_problems(name: str, config: str, zone: str | None, status: int) -> 
             f"{name}: expected one `{UPLOAD_API_LOCATION}` block, found {len(uploads)}"
         ]
     upload_inner = [_norm(line) for line in uploads[0]]
-    for prefix in ("limit_req ", "limit_req_status ", "error_page "):
+    # `error_page 429` and not every `error_page`: the upload locations also answer a 401 of
+    # their own (`HARDEN-AUTH-EDGE-01`, held by test_edge_credential_gate.py).
+    for prefix in ("limit_req ", "limit_req_status ", f"error_page {status} "):
         everywhere = [line for line in lines if line.startswith(prefix)]
         inside = [line for line in inner if line.startswith(prefix)]
         inside_upload = [line for line in upload_inner if line.startswith(prefix)]
@@ -311,11 +350,16 @@ def upload_location_problems(name: str, config: str) -> list[str]:
     lines = statements(config)
     normalised = [_norm(line) for line in lines]
     caps = [line for line in normalised if line.startswith("client_max_body_size ")]
-    if sorted(caps) != sorted([DEFAULT_BODY_CAP, UPLOAD_BODY_CAP, UPLOAD_BODY_CAP]):
+    if sorted(caps) != sorted([DEFAULT_BODY_CAP] + [UPLOAD_BODY_CAP] * 4):
         problems.append(
             f"{name}: `client_max_body_size` must be 32m once at server level and 260m in "
-            f"the two upload locations and nowhere else: {caps}"
+            f"the two upload locations and the two credential locations beside them, and "
+            f"nowhere else: {caps}"
         )
+    for credential in CREDENTIAL_LOCATIONS:
+        held = blocks(lines, credential)
+        if len(held) != 1 or [_norm(x) for x in held[0] if x.startswith("client_max_body_size ")] != [UPLOAD_BODY_CAP]:
+            problems.append(f"{name}: `{credential}` must hold exactly the upload cap {UPLOAD_BODY_CAP!r}")
     server_level = top_level(blocks(lines, "server {")[0])
     if DEFAULT_BODY_CAP not in [_norm(line) for line in server_level]:
         problems.append(f"{name}: the server-wide default is no longer {DEFAULT_BODY_CAP!r}")
@@ -359,11 +403,13 @@ def upload_location_problems(name: str, config: str) -> list[str]:
     return problems
 
 
-def envelope_of(name: str, config: str) -> tuple[list[str], int | None, dict[str, Any] | None]:
+def envelope_of(
+    name: str, config: str, location: str = NAMED_LOCATION
+) -> tuple[list[str], int | None, dict[str, Any] | None]:
     """The status and the parsed body the named location returns, or why there are none."""
-    named = blocks(statements(config), f"location {NAMED_LOCATION} {{")
+    named = blocks(statements(config), f"location {location} {{")
     if len(named) != 1:
-        return [f"{name}: expected one `location {NAMED_LOCATION}`, found {len(named)}"], None, None
+        return [f"{name}: expected one `location {location}`, found {len(named)}"], None, None
     problems: list[str] = []
     if "default_type application/json;" not in [_norm(line) for line in named[0]]:
         problems.append(f"{name}: {NAMED_LOCATION} does not answer as application/json")
@@ -487,10 +533,10 @@ def _texts() -> dict[str, str]:
 def all_problems(texts: dict[str, str]) -> list[str]:
     plain, tls = texts["nginx.conf"], texts["tls-server.conf"]
     status = _catalog()["codes"][CODE]["http"]
-    zone = zone_name(plain)
+    zones = zone_names(plain)
     problems = declaration_problems(plain, tls)
     for name in ("nginx.conf", "tls-server.conf"):
-        problems += throttle_problems(name, texts[name], zone, status)
+        problems += throttle_problems(name, texts[name], zones, status)
         problems += upload_location_problems(name, texts[name])
         problems += envelope_problems(name, texts[name])
     for header in (UPLOAD_API_LOCATION, UPLOAD_BFF_LOCATION):
@@ -512,10 +558,10 @@ def test_the_map_and_the_zone_are_declared_once_in_the_file_nginx_always_loads()
 @pytest.mark.parametrize("name", ["nginx.conf", "tls-server.conf"])
 def test_the_server_body_throttles_inside_the_one_api_location(name: str) -> None:
     texts = _texts()
-    zone = zone_name(texts["nginx.conf"])
-    assert zone is not None
+    zones = zone_names(texts["nginx.conf"])
+    assert sorted(zones) == sorted(ZONES)
     status = _catalog()["codes"][CODE]["http"]
-    assert throttle_problems(name, texts[name], zone, status) == []
+    assert throttle_problems(name, texts[name], zones, status) == []
 
 
 @pytest.mark.parametrize("name", ["nginx.conf", "tls-server.conf"])
@@ -567,6 +613,10 @@ def test_the_envelope_validates_against_the_envelope_schema() -> None:
         problems, _, payload = envelope_of(name, texts[name])
         assert problems == [] and payload is not None, problems
         payloads[name] = payload
+    for name in ("nginx.conf", "tls-server.conf"):
+        problems, _, payload = envelope_of(name, texts[name], "@authentication_required")
+        assert problems == [] and payload is not None, problems
+        payloads[f"{name} authentication_required"] = payload
     payloads["control: retryable false"] = {**payloads["nginx.conf"], "retryable": False}
     completed = subprocess.run(
         [str(GOVERNANCE_PYTHON), "-c", _VALIDATE],
@@ -578,6 +628,8 @@ def test_the_envelope_validates_against_the_envelope_schema() -> None:
     assert completed.returncode == 0, completed.stderr
     verdicts = json.loads(completed.stdout)
     assert verdicts["nginx.conf"] == [] and verdicts["tls-server.conf"] == [], verdicts
+    for name in ("nginx.conf", "tls-server.conf"):
+        assert verdicts[f"{name} authentication_required"] == [], verdicts
     assert verdicts["control: retryable false"], (
         "the validator accepted a retryable the schema pins"
     )
@@ -675,26 +727,71 @@ MUTATIONS = [
     (
         "the api upload location forgets the proxy_redirect",
         "nginx.conf",
-        "        proxy_pass http://api:8000;\n        proxy_redirect ~^(https?://[^/]+)/(.*)$ $1/api/v1/$2;\n        limit_req zone=guest_registration burst=10 nodelay;\n        limit_req_status 429;\n        error_page 429 = @rate_limited;\n    }\n\n    location ~ ^/bff",
-        "        proxy_pass http://api:8000;\n        limit_req zone=guest_registration burst=10 nodelay;\n        limit_req_status 429;\n        error_page 429 = @rate_limited;\n    }\n\n    location ~ ^/bff",
+        "        proxy_pass http://api:8000;\n        proxy_redirect ~^(https?://[^/]+)/(.*)$ $1/api/v1/$2;\n        limit_req zone=guest_registration",
+        "        proxy_pass http://api:8000;\n        limit_req zone=guest_registration",
     ),
     (
         "the api upload location forgets the throttle",
         "tls-server.conf",
-        "        proxy_pass http://api:8000;\n        proxy_redirect ~^(https?://[^/]+)/(.*)$ $1/api/v1/$2;\n        limit_req zone=guest_registration burst=10 nodelay;\n        limit_req_status 429;\n        error_page 429 = @rate_limited;\n    }\n\n    location ~ ^/bff",
-        "        proxy_pass http://api:8000;\n        proxy_redirect ~^(https?://[^/]+)/(.*)$ $1/api/v1/$2;\n    }\n\n    location ~ ^/bff",
+        "        limit_req zone=guest_registration burst=10 nodelay;\n        limit_req zone=token_exchange burst=10 nodelay;\n"
+        "        limit_req_status 429;\n        error_page 429 = @rate_limited;\n        # The credential",
+        "        # The credential",
+    ),
+    (
+        "the api upload location forgets the exchange throttle",
+        "nginx.conf",
+        "        limit_req zone=token_exchange burst=10 nodelay;\n        limit_req_status 429;\n        error_page 429 = @rate_limited;\n        # The credential",
+        "        limit_req_status 429;\n        error_page 429 = @rate_limited;\n        # The credential",
+    ),
+    (
+        "the prefix location forgets the exchange throttle",
+        "tls-server.conf",
+        "        limit_req zone=token_exchange burst=10 nodelay;\n        limit_req_status 429;\n        error_page 429 = @rate_limited;\n    }\n\n    # The two upload locations",
+        "        limit_req_status 429;\n        error_page 429 = @rate_limited;\n    }\n\n    # The two upload locations",
+    ),
+    (
+        "the exchange map widened to every post",
+        "nginx.conf",
+        '    "POST:/api/v1/auth/token"    $binary_remote_addr;\n',
+        '    "POST:/api/v1/auth/token"    $binary_remote_addr;\n    "~^POST:"                    $binary_remote_addr;\n',
+    ),
+    (
+        "the exchange map no longer names the exchange",
+        "nginx.conf",
+        '"POST:/api/v1/auth/token"    $binary_remote_addr;',
+        '"POST:/api/v1/auth/tokens"   $binary_remote_addr;',
+    ),
+    (
+        "the exchange zone declared again in tls-server.conf",
+        "tls-server.conf",
+        "server {\n",
+        "limit_req_zone $token_exchange_client zone=token_exchange:1m rate=6r/m;\nserver {\n",
+    ),
+    (
+        "the exchange zone counts the registration map",
+        "nginx.conf",
+        "limit_req_zone $token_exchange_client zone=token_exchange:1m",
+        "limit_req_zone $guest_registration_client zone=token_exchange:1m",
     ),
     (
         "an upload location that adds a header of its own",
         "nginx.conf",
-        "        client_body_timeout 120s;\n        proxy_read_timeout 300s;\n        proxy_pass http://web:3000;\n",
-        "        client_body_timeout 120s;\n        proxy_read_timeout 300s;\n        add_header Cache-Control \"no-store\" always;\n        proxy_pass http://web:3000;\n",
+        "        auth_request /_edge/credential/web;\n        error_page 401 = @authentication_required;\n        proxy_pass http://web:3000;\n",
+        "        auth_request /_edge/credential/web;\n        error_page 401 = @authentication_required;\n"
+        "        add_header Cache-Control \"no-store\" always;\n        proxy_pass http://web:3000;\n",
     ),
     (
         "an upload location that sets a header of its own",
         "tls-server.conf",
-        "        client_body_timeout 120s;\n        proxy_read_timeout 300s;\n        proxy_pass http://web:3000;\n",
-        "        client_body_timeout 120s;\n        proxy_read_timeout 300s;\n        proxy_set_header Host $host;\n        proxy_pass http://web:3000;\n",
+        "        auth_request /_edge/credential/web;\n        error_page 401 = @authentication_required;\n        proxy_pass http://web:3000;\n",
+        "        auth_request /_edge/credential/web;\n        error_page 401 = @authentication_required;\n"
+        "        proxy_set_header Host $host;\n        proxy_pass http://web:3000;\n",
+    ),
+    (
+        "a credential location loses the upload cap",
+        "nginx.conf",
+        "        internal;\n        client_max_body_size 260m;\n        proxy_pass http://web:3000/bff/v1/me;",
+        "        internal;\n        proxy_pass http://web:3000/bff/v1/me;",
     ),
     (
         "the upload location widened to a prefix",
@@ -736,8 +833,8 @@ MUTATIONS = [
     (
         "the correlation id a fixed literal",
         "nginx.conf",
-        '"correlation_id":"$request_id"',
-        '"correlation_id":"edge"',
+        '"correlation_id":"$request_id","retryable":true}',
+        '"correlation_id":"edge","retryable":true}',
     ),
     (
         "the envelope gains a detail",
@@ -748,8 +845,8 @@ MUTATIONS = [
     (
         "the envelope served as nginx's default type",
         "nginx.conf",
-        "        default_type application/json;\n",
-        "",
+        "    location @rate_limited {\n        default_type application/json;\n",
+        "    location @rate_limited {\n",
     ),
     (
         "the compose flag dropped",

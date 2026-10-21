@@ -73,11 +73,14 @@ ssh -L 31500:127.0.0.1:31500 <host>        # then open http://127.0.0.1:31500 lo
 ```
 
 **Why the default is loopback, measured rather than assumed.** The compose file used to
-publish with no interface at all, which binds `0.0.0.0`. On this host the stand answered
-**`200`** on its **public** address, at `/bff/v1` — which serves **every operation of this
-surface**, **writes included**, with no credential, because the browser deliberately holds no secret and
-the BFF route adds it server-side. The origin is unauthenticated *by design*; nothing but the
-network was keeping anyone out.
+publish with no interface at all, which binds `0.0.0.0`. On 2026-09-22 this host's stand
+answered **`200`** on its **public** address, at `/bff/v1` — which then served **every operation
+of this surface**, **writes included**, to anyone, because the browser deliberately holds no secret
+and the BFF route added the credential server-side. Nothing but the network was keeping anyone out.
+**That is history, not today's behaviour:** since wave 34 the BFF forwards a credential only for a
+live session cookie and answers **`401`** to every other caller, and `/api/v1/openapi.json` answers
+**`401`** since `R-31` (re-measured in `EXPOSURE-REVIEW-01.md` `E-8`). The loopback default below
+stays as the second line of defence.
 
 **`ufw` was not keeping anyone out either, and structurally could not.** `ufw status` reported
 a single open port while this one answered the world, because **a Docker-published port never
