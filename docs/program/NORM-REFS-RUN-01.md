@@ -1,8 +1,7 @@
 # NORM-REFS-RUN-01 — the run page lists the project's cited norms against the corpus
 
-**Status:** DRAFT. Phase A is complete and merged-ready; phase B is written and committed, with the
-checks that need a quiet host (the contrast census, the focused PostgreSQL suites, the quoted phase
-B mutations) listed as *pending* until the gate window closes.
+**Status:** complete (phases A and B), on top of `origin/dev` `282dfaa7` which carries
+`CLASSIFICATION-CORRECTION-01` (migration `0028`, surface 72/82/237). Not pushed.
 
 ## Result
 
@@ -109,9 +108,9 @@ uses it.
 
 `GET /runs/{run_id}/norm-references`, `getRunNormReferences`, tag `runs`, any one role
 (`role:admin|expert`, like `getRunStatus`); responses 200 `RunNormReferences` and the 401, 403, 404,
-500 and 503 envelope, no 422 (a malformed run identity is `404` by design). Surface on the
-`c90d52f3` base: **72 paths / 82 operations / 240 schemas** (+1 / +1 / +5), no error code, no
-migration, `contract_version` unchanged.
+500 and 503 envelope, no 422 (a malformed run identity is `404` by design). Surface: **73 paths / 83 operations / 242 schemas**, which is
+`CLASSIFICATION-CORRECTION-01`'s 72/82/237 plus this task's +1 / +1 / +5. No error code, no
+migration (`UPGRADE_SURFACE_DIGESTS[0028]` untouched), `contract_version` unchanged.
 
 Five schemas: `RunNormReferences`, `NormReferenceCounts`, `NormReferenceItem`, `NormReferenceAnchor`,
 `NormReferenceUnrecognised`. The state and the outcome are inline closed sets, not component schemas.
@@ -166,22 +165,37 @@ the list is one sentence.
   are ignored by every official target and are red in this lane for reasons that predate it (a frozen
   stage-registry digest; no `jsonschema` in the runtime interpreter).
 
-## Phase B checks (on `3a9c72d7`, the merge of `origin/dev` 06591a52, committed tree)
+## Re-derivation on top of the correction slice
+
+`CLASSIFICATION-CORRECTION-01` merged first. The merge of `origin/dev` conflicted in the contract and
+its mirror, the generated client, the frontend lock, three prose-bearing sources, the roadmap triple
+and two contract tests. None was hand-merged:
+
+- the contract, its mirror and the generated client took the correction slice's text; my five
+  schemas and the path were spliced on top again (`73 / 242`, byte-identical copies), the client
+  regenerated (`api:generate`, `api:verify` OK, 83 operations);
+- the frontend lock's digests, counts and content commit (`c9469558`) were recomputed, and the
+  expected facts re-derived (nothing to add: the auto-merge was right);
+- every surface-count prose line was re-measured by the guard's own list (73 paths, 83 operations,
+  242 schemas); the 422 narrative in `api/app.py` now names both slices (`Sixty-one` operations with
+  their own 422, `Fifteen` that cannot); the two mutation lines of `test_surface_counts_in_prose.py`
+  and the dangling-reference count (now 58: both slices add one) follow the new numbers;
+- the host's disk reached 0 MiB during one `npm ci`; I deleted `web/node_modules` and installed again
+  from scratch, regenerated, and confirmed the lock digests did not move.
+
+## Final checks (on the merged, committed tree)
 
 | Command | Result |
 | --- | --- |
-| `npm --prefix web ci` | 184 packages |
-| `npm --prefix web run typecheck`, `npm --prefix web run lint -- --quiet` | clean |
-| `npm --prefix web run api:verify` | OK, 82 operations (on the pre-merge tree; the generated files are unchanged by the merge) |
-| `vitest run tests/unit/styles tests/unit/norm-references` | 84 passed (the contrast census reaches every new rule; the mount test is in this set) |
-| `vitest run tests/unit/screens tests/guards tests/contract` | 756 passed (rendered-language guard, frontend lock, lazy boundary, drift) |
-| `pytest tests/contract` with the three official `--ignore` flags | 940 passed, 1 failed: `test_doc_prose_facts` states 71/81/235 only in `docs/program/CURRENT_STATE.md`, which is the integrator's and was not edited |
-| container-free: `test_norm_references_surface.py`, `tests/unit/norms/references`, `tests/integration/runs/test_reference_norm_references*.py`, `test_reference_pipeline.py`, `test_reference_resolution.py`, `tests/contract/architecture` | 170 passed |
-| PostgreSQL, own containers (postgres 57680), `test_reference_norm_references_db.py` + `test_snapshot_catalogue_db.py` | 21 passed |
-| PostgreSQL, same containers, the suites whose literals this task moved: `test_role_register.py`, `test_authorization.py`, `test_an_absent_parent_is_not_an_empty_page.py`, `test_every_port_implementation_is_whole.py`, `test_served_document_and_health_plane.py`, `test_router_answers.py` | all passed (the absent-parent sweep drives the new route to `404 not_found` for an absent run) |
+| `npm --prefix web ci` (twice, the first lost to the full disk), `api:verify` | OK, 83 operations |
+| `typecheck`, `lint --quiet` | clean |
+| `vitest run tests/unit/styles tests/unit/norm-references tests/unit/screens tests/unit/sections tests/guards tests/contract` | 925 passed in 53 files |
+| `pytest tests/contract`, three official `--ignore` flags | 940 passed, 1 failed: `test_doc_prose_facts` reads `docs/program/CURRENT_STATE.md` at 72/82/237; that file is the integrator's and moves to 73/83/242 on integration |
+| container-free: `test_norm_references_surface.py`, `tests/unit/norms/references`, `tests/integration/runs/test_reference_norm_references*.py` | 123 passed |
+| PostgreSQL on my own containers at migration head `0028`: `test_reference_norm_references_db.py`, `test_snapshot_catalogue_db.py`, `test_role_register.py`, `test_authorization.py` | 81 passed |
+| same containers: the absent-parent sweep, port completeness, router answers, served document and health plane | 61 passed, 1 skipped (the sweep drives the new route to `404 not_found` for an absent run; `EXPECTED_ADDRESSED` stays 31 because the correction operation is a write) |
 
-The stack was brought up once for those runs (free memory and load measured first), then `make down`
-and both lane volumes removed.
+The stack was brought up once, then `make down` and both lane volumes removed.
 
 ## Phase B mutation proofs
 
