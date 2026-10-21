@@ -326,6 +326,32 @@ case "$PRESERVE_IDENTITY" in
 esac
 # <<< guard: identity-policy-known
 
+# >>> guard: trusted-proxies-well-formed
+# `REAL-IP-EDGE-01`. `ALPHA_TRUSTED_PROXY_CIDRS` is pasted, entry by entry, into the proxy's
+# configuration by `proxy/trusted-proxies.sh` when the container starts, and that script
+# refuses a value it does not accept -- by stopping the container, which is the only published
+# port. This asks the SAME script, in its `--check` mode and on the host, before anything is
+# built, so a typo is a sentence here and not a proxy that will not start after the images
+# are rebuilt. The rules live in that one script; they are not restated.
+#
+# Empty or absent is accepted without asking: it means "trust nobody", which is the default and
+# the behaviour before this variable existed. A NON-empty value that cannot be checked because
+# the script is missing is refused rather than passed: an unverifiable trust list is not a
+# verified one.
+TRUSTED_PROXIES="$(configured ALPHA_TRUSTED_PROXY_CIDRS)"
+if [ -n "$TRUSTED_PROXIES" ]; then
+    if [ ! -r "$HERE/proxy/trusted-proxies.sh" ]; then
+        refuse "$HERE/proxy/trusted-proxies.sh is missing, so ALPHA_TRUSTED_PROXY_CIDRS cannot be checked." \
+               "The proxy container mounts that file; without it the stack cannot be created."
+    fi
+    if ! TRUSTED_WHY="$(ALPHA_TRUSTED_PROXY_CIDRS="$TRUSTED_PROXIES" sh "$HERE/proxy/trusted-proxies.sh" --check 2>&1)"; then
+        refuse "ALPHA_TRUSTED_PROXY_CIDRS in $ENV_FILE is not a list the proxy will accept." \
+               "$TRUSTED_WHY" \
+               "Empty or absent trusts nobody, which is the default. Nothing was built and nothing was started."
+    fi
+fi
+# <<< guard: trusted-proxies-well-formed
+
 # >>> guard: placeholder-secrets
 # THE EXAMPLE FILE'S OWN VALUES, REFUSED BY IDENTITY RATHER THAN BY PATTERN. `cp` the
 # example and forget to edit it and you get a reachable stack whose database password is in
