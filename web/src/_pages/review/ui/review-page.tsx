@@ -218,6 +218,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
 
               <LazyEvidenceViewer
                 observation={detail.observation}
+                mergedObservations={detail.merged_observations}
                 activePage={activePage ?? 1}
                 onPageChange={(page) => {
                   setSelection((current) => selectPage(current ?? resolved, page));
@@ -233,8 +234,14 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
               <DecisionPanel
                 currentVerdict={verdict.result?.current_verdict ?? detail.current_verdict}
                 observationId={detail.observation.finding_observation_id as FindingObservationId}
-                onAccept={(observationId) => {
-                  verdict.record('accept', observationId);
+                proposedSeverity={detail.observation.proposed_severity}
+                decidedSeverity={detail.decided_severity}
+                severityRefusal={verdict.refusal}
+                onAccept={(observationId, decided) => {
+                  verdict.record('accept', observationId, {
+                    proposed: detail.observation.proposed_severity,
+                    decided,
+                  });
                 }}
                 onReject={(observationId) => {
                   verdict.record('reject', observationId);
