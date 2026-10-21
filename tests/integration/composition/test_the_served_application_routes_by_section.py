@@ -26,6 +26,7 @@ import pytest
 
 from auditmanager.analysis.text import profile_registry as registry_module
 from auditmanager.analysis.text.profile_registry import (
+    SECTION_CODES,
     TextProfileLoadError,
     TextProfileRegistry,
     load_text_profile_registry,
@@ -111,7 +112,15 @@ def test_start_run_passes_the_section_table_and_no_profile(served: Any) -> None:
     kwargs = seen.value.kwargs
     assert "analysis_profile_id" not in kwargs and "prompt_bundle_id" not in kwargs
     assert dict(kwargs["section_profiles"]) == _registry_table()
-    assert "PB" not in kwargs["section_profiles"]
+    # `PB-PROFILE-01`: fire safety has a draft profile of its own, so the table covers all fifteen
+    # sections and PB's pair is its own, not another section's.
+    assert set(kwargs["section_profiles"]) == SECTION_CODES
+    pb_entry = load_text_profile_registry().entries["PB"]
+    pb = tuple(kwargs["section_profiles"]["PB"])
+    assert pb == (pb_entry.analysis_profile_id, pb_entry.prompt_bundle_id)
+    assert all(
+        tuple(pair) != pb for code, pair in kwargs["section_profiles"].items() if code != "PB"
+    )
 
 
 def test_reaudit_passes_the_section_table_and_no_profile(served: Any) -> None:
@@ -133,6 +142,7 @@ def test_the_executor_and_the_section_port_get_the_registry(served: Any) -> None
     assert isinstance(getattr(resolve, "__self__", None), TextProfileRegistry)
     assert resolve.__func__ is TextProfileRegistry.resolve
     assert built["sections"]._executable == load_text_profile_registry().executable_sections()
+    assert "PB" in built["sections"]._executable, "PB-PROFILE-01: fire safety is executable"
 
 
 def test_the_worker_runs_claimed_runs_with_the_registry(monkeypatch: pytest.MonkeyPatch) -> None:

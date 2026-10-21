@@ -4,8 +4,9 @@ The shipped ``SectionAdapter``, ``RunAdapter`` and ``ExecutionAdapter`` behind t
 ``build_router`` and the real ASGI app, driven through ``starlette``'s test client with real
 bearer credentials for real accounts, against the lane's own PostgreSQL and MinIO. The
 section table is the **real** text-profile registry (AR from the v1 constants plus every
-``text-profile/1`` package in the tree), so the refusal for a section without a profile is
-proved on the section that genuinely has none (``PB``).
+``text-profile/1`` package in the tree). ``PB`` (`PB-PROFILE-01`) now has a draft profile, so the
+refusal for a section without one is proved on a registry built without that section
+(``WITHOUT_PB``), through the same adapters and the same routes.
 
 Cases (the decision's tests 3-5 and the task's failure list):
 
@@ -19,7 +20,9 @@ Cases (the decision's tests 3-5 and the task's failure list):
   never pre-selects;
 * ``startRun`` on an unclassified version is ``422 version_classification_required`` (no details;
   ``BETA-CONTRACT-SEAL-01``, ``D-179``) and leaves no run and no command record; on a
-  ``PB`` version ``422 section_profile_unavailable``; on a ``KJ`` version
+  version whose section the registry lacks ``422 section_profile_unavailable``; on a ``PB`` version
+  the run pins the ``PB`` package's own profile and bundle (it is only started here: nothing is
+  executed, and its recorded replay is `SECTION-RECORDINGS-01`'s); on a ``KJ`` version
   the run pins the ``KJ`` package's profile and bundle, and an ``AR`` version pins the v1 pair;
 * a replay of an accepted key answers the run it created; a re-audit routes from the version's
   classification now, and an older run keeps the profile it pinned.
@@ -43,7 +46,10 @@ from starlette.testclient import TestClient
 from auditmanager.access.accounts import AccountRepository as AccountAccessRepository
 from auditmanager.access.repository import UserRepository as UserAccessRepository
 from auditmanager.analysis.text.profile import AR_TEXT_PROFILE
-from auditmanager.analysis.text.profile_registry import load_text_profile_registry
+from auditmanager.analysis.text.profile_registry import (
+    TextProfileRegistry,
+    load_text_profile_registry,
+)
 from auditmanager.api.app import create_asgi_app
 from auditmanager.api.routers import build_router
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
@@ -61,6 +67,10 @@ from auditmanager.shared.identity import DocumentUid, ProjectUid, RunId, Version
 
 SECRET = "w59-section-routing-http-token"
 REGISTRY = load_text_profile_registry()
+#: The registry as it stood while PB had no profile: the seam for "a section with no profile".
+WITHOUT_PB = TextProfileRegistry(
+    entry for code, entry in REGISTRY.entries.items() if code != "PB"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -190,13 +200,15 @@ def _admin_only(sessions: sessionmaker[Session]) -> str:
     ).token
 
 
-def _client(sessions: sessionmaker[Session], blob_store: Any) -> tuple[TestClient, _Carrier]:
+def _client(
+    sessions: sessionmaker[Session], blob_store: Any, registry: TextProfileRegistry = REGISTRY
+) -> tuple[TestClient, _Carrier]:
     carrier = _Carrier()
     run_adapter = RunAdapter(
         sessions, blob_store=None, adapter=None, provider_config=None, provider_mode="recorded",
         analysis_profile_id=str(AR_TEXT_PROFILE.analysis_profile_id),
         prompt_bundle_id=str(AR_TEXT_PROFILE.prompt_bundle.prompt_bundle_id), carrier=carrier,
-        section_profiles=REGISTRY.section_profiles(), text_profiles=REGISTRY.resolve,
+        section_profiles=registry.section_profiles(), text_profiles=registry.resolve,
     )
     signer = build_signer({API_TOKEN_VARIABLE: SECRET})
     assert signer is not None
@@ -212,7 +224,7 @@ def _client(sessions: sessionmaker[Session], blob_store: Any) -> tuple[TestClien
         ),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         sections=SectionAdapter(
-            sessions, blob_store=blob_store, executable_sections=REGISTRY.executable_sections()
+            sessions, blob_store=blob_store, executable_sections=registry.executable_sections()
         ),
     )
     app = create_asgi_app(environ={API_TOKEN_VARIABLE: SECRET}, application=_Built(router, carrier, sessions))  # type: ignore[arg-type]
@@ -366,7 +378,9 @@ class TestReview:
         )
         executable = {option["section_code"] for option in review["options"] if option["executable"]}
         assert executable == set(REGISTRY.executable_sections())
-        assert "PB" not in executable and {"AR", "KJ"} <= executable
+        assert {"AR", "KJ", "PB"} <= executable and len(executable) == 15, (
+            "`PB-PROFILE-01`: every section has a registered profile, fire safety included"
+        )
         assert review["recognised_text_consulted"] is False
         suggested = {
             option["section_code"]: option["suggestion"]
@@ -378,6 +392,19 @@ class TestReview:
         after = client.get(f"{path}/section-review", headers=_headers(token)).json()
         assert after["classification"]["section_code"] == "KJ"
         assert after["options"] == review["options"]
+
+    def test_a_registry_without_pb_marks_it_not_executable(
+        self, sessions, blob_store, world
+    ) -> None:
+        """The review reports the registry it was built with, so dropping PB's profile shows."""
+        client, _ = _client(sessions, blob_store, WITHOUT_PB)
+        token, _ = _expert()
+        review = client.get(
+            f"{_version_path(world, world.kj)}/section-review", headers=_headers(token)
+        ).json()
+        executable = {option["section_code"] for option in review["options"] if option["executable"]}
+        assert executable == set(WITHOUT_PB.executable_sections())
+        assert "PB" not in executable and len(executable) == 14
 
     def test_admin_may_read_a_review(self, sessions, blob_store, world) -> None:
         client, _ = _client(sessions, blob_store)
@@ -408,7 +435,8 @@ class TestRunStart:
     def test_a_section_without_a_profile_is_refused_without_an_ar_fallback(
         self, sessions, blob_store, world
     ) -> None:
-        client, carrier = _client(sessions, blob_store)
+        """The refusal is unchanged; its seam is a registry built without PB (`PB-PROFILE-01`)."""
+        client, carrier = _client(sessions, blob_store, WITHOUT_PB)
         token, _ = _expert()
         assert _classify(client, token, _version_path(world, world.pb), "P", "PB").status_code == 200
         key = _key()
@@ -416,6 +444,42 @@ class TestRunStart:
         assert _count(sessions, "SELECT count(*) FROM audit_run WHERE version_uid = :v", v=world.pb) == 0
         assert _count(sessions, "SELECT count(*) FROM command_record WHERE idempotency_key = :k", k=key) == 0
         assert carrier.submitted == []
+
+    def test_a_pb_version_pins_the_pb_profile_and_no_other_sections(
+        self, sessions, blob_store, world
+    ) -> None:
+        """`PB-PROFILE-01`: ПБ is routed to its own draft profile, not refused and not an AR fallback.
+
+        The run is created and handed to the (recording) carrier; nothing executes here, so what
+        is asserted is the pin. Its recorded replay is `SECTION-RECORDINGS-01`'s.
+        """
+        client, carrier = _client(sessions, blob_store)
+        token, _ = _expert()
+        assert _classify(client, token, _version_path(world, world.pb), "P", "PB").status_code == 200
+        key = _key()
+        accepted = _start(client, token, world.pb, key)
+        assert accepted.status_code == 202, accepted.content
+        run = accepted.json()
+        table = REGISTRY.section_profiles()
+        pb_profile, pb_bundle = table["PB"]
+        assert (run["analysis_profile_id"], run["prompt_bundle_id"]) == (pb_profile, pb_bundle)
+        assert pb_profile != str(AR_TEXT_PROFILE.analysis_profile_id)
+        assert all(pair != table["PB"] for code, pair in table.items() if code != "PB")
+        assert _count(sessions, "SELECT count(*) FROM audit_run WHERE version_uid = :v", v=world.pb) == 1
+        assert len(carrier.submitted) == 1
+        replay = _start(client, token, world.pb, key)
+        assert replay.status_code == 202 and replay.json()["run_id"] == run["run_id"]
+        assert len(carrier.submitted) == 1
+
+    def test_another_section_never_pins_the_pb_profile(self, sessions, blob_store, world) -> None:
+        client, _ = _client(sessions, blob_store)
+        token, _ = _expert()
+        _classify(client, token, _version_path(world, world.kj), "R", "KJ")
+        accepted = _start(client, token, world.kj, _key())
+        assert accepted.status_code == 202, accepted.content
+        pb_profile, pb_bundle = REGISTRY.section_profiles()["PB"]
+        assert accepted.json()["analysis_profile_id"] != pb_profile
+        assert accepted.json()["prompt_bundle_id"] != pb_bundle
 
     def test_a_classified_version_pins_its_sections_profile_and_a_replay_answers_it(
         self, sessions, blob_store, world

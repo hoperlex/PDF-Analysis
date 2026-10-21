@@ -189,7 +189,13 @@ const version = (): DocumentVersion => ({
 
 /**
  * `W59-SECTION-UI-01`. One version's section review: unconfirmed, one section suggested with
- * evidence, one without a profile — so the expert's form renders every part it has.
+ * evidence — so the expert's form renders every part it has.
+ *
+ * `PB-PROFILE-01`: every section has a registered profile now (ПБ has a draft one), so the API's
+ * answer marks all fifteen options executable and so does this fixture.
+ * `sectionReviewWithoutProfile` is the other answer the contract allows, from a server whose
+ * registry lacks `UNPROFILED`'s profile: it keeps the census reaching the «профиль анализа
+ * недоступен» states without naming a real section that is in fact profile-less.
  */
 const sectionReview = (over: Partial<SectionReview> = {}): SectionReview => ({
   version_uid: VERSION_UID,
@@ -199,7 +205,7 @@ const sectionReview = (over: Partial<SectionReview> = {}): SectionReview => ({
   options: PROJECT_SECTION_VALUES.map((code) => ({
     section_code: code,
     name: code,
-    executable: code !== 'PB',
+    executable: true,
     suggestion:
       code === 'AR'
         ? { score: 5, filename_patterns: ['АР'], text_keywords: ['фасад'], name_in_text: true }
@@ -208,10 +214,24 @@ const sectionReview = (over: Partial<SectionReview> = {}): SectionReview => ({
   ...over,
 });
 
+/** A section the stand's registry is imagined to lack; any of the fifteen could be, ГП stands for it. */
+const UNPROFILED = 'GP' as const;
+
+const sectionReviewWithoutProfile = (over: Partial<SectionReview> = {}): SectionReview => {
+  const review = sectionReview(over);
+  return {
+    ...review,
+    options: review.options.map((option) => ({
+      ...option,
+      executable: option.section_code !== UNPROFILED,
+    })),
+  };
+};
+
 const CONFIRMED = {
   version_uid: VERSION_UID,
   project_stage: 'R' as const,
-  section_code: 'PB' as const,
+  section_code: UNPROFILED,
   confirmed_at: '2026-10-20T08:00:00Z',
   confirmed_by_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
   revision: 1,
@@ -662,8 +682,20 @@ export function screens(): Screen[] {
           },
         },
       },
-      { section_code: 'PB', section_name: 'Пожарная безопасность', profile: null },
+      {
+        // `PB-PROFILE-01`: an authored draft profile, with no legacy source (like AR's, which has none).
+        section_code: 'PB', section_name: 'Пожарная безопасность',
+        profile: {
+          analysis_profile_id: 'ap_01M5G4NZVKNZJYH722M0SXXP3X', prompt_bundle_id: 'pb_01M5G4NZVKHM9GP4EH22JACW2X',
+          profile_version: '1.0.0', status: 'draft', prompt_bundle_sha256: SHA, content_sha256: SHA, source: null,
+        },
+      },
     ],
+  })));
+  // The contract still allows a section with no registered profile (`profile: null`); no section
+  // is one in the shipped registry any more, so the state is rendered for the imagined `UNPROFILED`.
+  add('AnalysisProfileTable one section without a profile', render(createElement(AnalysisProfileTable, {
+    items: [{ section_code: UNPROFILED, section_name: 'Генеральный план', profile: null }],
   })));
   // `W60-PRICE-LIST-01`: the «Оптимизация» tab loaded (revisions, a positions page with its
   // report, the fifteen vendor lists), and every other shape its widgets have.
@@ -999,7 +1031,7 @@ export function screens(): Screen[] {
       at(
         createElement(VersionClassificationView, {
           address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
-          review: sectionReview({ classification: CONFIRMED }),
+          review: sectionReviewWithoutProfile({ classification: CONFIRMED }),
           roles: ['expert'],
           conflict: true,
           onConflict: () => undefined,
@@ -1032,7 +1064,7 @@ export function screens(): Screen[] {
         at(
           createElement(VersionClassificationView, {
             address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
-            review: sectionReview({ classification: CORRECTED, revisions: HISTORY }),
+            review: sectionReviewWithoutProfile({ classification: CORRECTED, revisions: HISTORY }),
             roles: ['expert'],
             conflict: false,
             onConflict: () => undefined,
@@ -1065,9 +1097,9 @@ export function screens(): Screen[] {
       'ClassifyVersionFormView refused',
       at(
         createElement(ClassifyVersionFormView, {
-          review: sectionReview(),
+          review: sectionReviewWithoutProfile(),
           stage: 'P',
-          section: 'PB',
+          section: UNPROFILED,
           pending: false,
           failure: { kind: 'not_permitted', detail: CLASSIFY_NOT_PERMITTED_DETAIL, correlationId: 'cid', retryable: false },
           onStage: () => undefined,
