@@ -16,7 +16,9 @@ those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 
 The development API surface is **73 paths / 83 operations / 242 schemas**,
 the error catalogue has **27** codes, the migration head is
-**`0029_routing_refusal_codes`**, and `VERSION` is `0.7.0`. `origin/main`
+**`0029_routing_refusal_codes`**, `VERSION` is `0.7.0`, and the contract and the
+error catalogue are sealed at `1.0.0` on dev (`BETA-CONTRACT-SEAL-01`; main still serves
+`1.0.0-draft.1`). `origin/main`
 carries `0.7.0` since the owner's merge of pull request #3 (`48c8e34c`, no gate; `RELEASES.md`
 has the row and the record). Host verification and the `v0.7.0` tag are owed. The last tagged
 release is `v0.6.0`. For the current deployment, run `infra/deploy/verify-deployed.sh`; this
