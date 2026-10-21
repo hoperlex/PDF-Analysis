@@ -33,7 +33,7 @@
       "const": "1.0.0-draft.0"
     },
     "candidate_revision": {
-      "const": 12,
+      "const": 17,
       "description": "Review round of this unreleased candidate. It is pinned here so the candidate cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned for a released version."
     },
     "revision_note": {
@@ -210,6 +210,7 @@
         "idempotency_key_reuse",
         "idempotency_key_stale",
         "internal_error",
+        "model_identity_mismatch",
         "not_found",
         "partial_result_not_publishable",
         "permission_denied",
@@ -221,7 +222,7 @@
         "unsupported_contract_version",
         "validation_failed"
       ],
-      "minProperties": 22,
+      "minProperties": 25,
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_]{2,63}$"
       },
@@ -336,7 +337,8 @@
             }
           }
         }
-      }
+      },
+      "maxProperties": 25
     },
     "open_owner_decisions": {
       "type": "array",

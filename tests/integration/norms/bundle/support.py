@@ -208,7 +208,7 @@ def synthetic_rows(
                     block_ref=block_id,
                     char_offset=0,
                     char_length=len(text),
-                    kind="clause",
+                    kind="body",
                     clause_number=None,
                     text=text,
                     text_reliability=(

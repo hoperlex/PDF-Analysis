@@ -133,7 +133,7 @@ def test_decision_ledger_is_append_only_and_projects_the_latest(composed_run, se
     assert current_verdict(session, str(rejected.finding_uid)).current_verdict == "rejected"
 
 
-def test_csv_is_five_rows_of_seventeen_columns_and_stable(composed_run, session):
+def test_csv_is_five_rows_of_nineteen_columns_and_stable(composed_run, session):
     from auditmanager.exports import COLUMNS, export_run_csv
 
     first = export_run_csv(session, composed_run["run_id"])
@@ -148,7 +148,7 @@ def test_csv_is_five_rows_of_seventeen_columns_and_stable(composed_run, session)
     rows = [row for row in rows if row]
     header, data = rows[0], rows[1:]
     assert tuple(header) == tuple(COLUMNS)
-    assert len(header) == 17
+    assert len(header) == 19
     assert len(data) == 5, f"expected 5 data rows, got {len(data)}"
 
     position = {name: index for index, name in enumerate(header)}

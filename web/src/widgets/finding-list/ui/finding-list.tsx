@@ -21,7 +21,7 @@ import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import type { FindingGroup } from '@/entities/finding';
 import { countGrouped } from '@/entities/finding';
-import { VerdictBadge } from '@/entities/expert-decision';
+import { CATEGORY_LABELS, VerdictBadge } from '@/entities/expert-decision';
 import { declaredPages } from '@/entities/finding-observation';
 
 /** A finding that was admitted and then found structurally impossible. */
@@ -42,14 +42,7 @@ export interface FindingListProps {
 
 /** Category labels. The contract value is what the row carries; this is only the heading. */
 function categoryHeading(category: FindingCategory): string {
-  switch (category) {
-    case 'internal_contradiction':
-      return 'Внутреннее противоречие';
-    case 'explicit_placeholder':
-      return 'Явный пропуск';
-    default:
-      return category;
-  }
+  return CATEGORY_LABELS[category];
 }
 
 export function FindingList({

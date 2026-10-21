@@ -44,6 +44,12 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "createProject": ("POST", "/projects"),
     "listProjects": ("GET", "/projects"),
     "uploadDocument": ("POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents"),
+    # `W59-VERSION-UPLOAD-01`. The next version of a document, addressed through its project.
+    "uploadDocumentVersion": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions",
+    ),
     "listDocuments": ("GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents"),
     "getDocumentVersion": ("GET", "/versions/ver_01M2545JSD15ETSNNV904X991J"),
     "streamDocumentVersionContent": ("GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/content"),
@@ -52,6 +58,9 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "listVersions": ("GET", "/documents/doc_01M2545JSD15ETSNNV904X991H/versions"),
     "startRun": ("POST", "/runs"),
     "getRunStatus": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K"),
+    "getRunNormVerification": (
+        "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/norm-verification"
+    ),
     "listExecutionQueue": ("GET", "/execution/queue"),
     "listExecutionJournal": ("GET", "/execution/journal"),
     "cancelRun": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/cancel"),
@@ -76,8 +85,96 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "GET",
         "/versions/ver_01M2545JSD15ETSNNV904X991J/portal-blocks/blk_00000000000000000000000000000000/crop",
     ),
+    # `W59-SECTION-SEAL-01`. The classification (expert) and the section review (any role),
+    # addressed through the version's document and project. The empty body is refused by
+    # the classification's own body model.
+    "classifyDocumentVersion": (
+        "PUT",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/classification",
+    ),
+    # `CLASSIFICATION-CORRECTION-01`. The correction is an expert's write on the same chain.
+    "correctVersionClassification": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/classification/corrections",
+    ),
+    "getVersionSectionReview": (
+        "GET",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/section-review",
+    ),
+    # `W59-VERSION-COMPARE-01`. Two versions of one set compared (any role), addressed the
+    # same way; the required ``target_version_uid`` is given so only the role decides.
+    "compareDocumentVersions": (
+        "GET",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
+        "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
+    ),
+    # `W59-DECISION-CARRYOVER-01`. The expert's carryover of a decision, addressed the same
+    # way; the missing body is refused by the body model only after the role decided.
+    "carryOverDecision": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/carryovers",
+    ),
+    # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry (any role); no parameter.
+    "listAnalysisProfiles": ("GET", "/analysis/profiles"),
+    # `W61-DISPATCHER-01`. «Диспетчер»: creating (admin) and listing, reading and moving
+    # (any one role) an assignment. The empty body is refused by the body models.
+    "createAssignment": ("POST", "/assignments"),
+    "listAssignments": ("GET", "/assignments"),
+    "getAssignment": ("GET", "/assignments/asg_01M2545JSD15ETSNNV904X991W"),
+    "transitionAssignment": ("POST", "/assignments/asg_01M2545JSD15ETSNNV904X991W/transitions"),
+    # `W60-PRICE-LIST-01`. Price lists and vendor lists; the writes' missing bodies are refused
+    # by their models only after the role decided.
+    "uploadPriceList": ("POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/price-lists"),
+    "listPriceListRevisions": ("GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/price-lists"),
+    "listPriceListPositions": ("GET", "/price-lists/prl_01M2545JSD15ETSNNV904X991N/positions"),
+    "getEffectiveVendorLists": ("GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists"),
+    "setGlobalVendorList": ("PUT", "/vendor-lists/EOM"),
+    "setProjectVendorList": ("PUT", "/projects/prj_01M2545JSD15ETSNNV904X991F/vendor-lists/EOM"),
+    # `W60-OPT-PROPOSALS-01`. Passes, proposals and decisions; the writes' missing bodies are
+    # refused by their models only after the role decided.
+    "startOptimisationPass": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991G"
+        "/optimisation-passes",
+    ),
+    "listOptimisationPasses": ("GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/optimisation-passes"),
+    "listOptimisationProposals": (
+        "GET",
+        "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/proposals",
+    ),
+    "decideOptimisationProposal": (
+        "POST",
+        "/optimisation-proposals/opr_01M2545JSD15ETSNNV904X991N/decisions",
+    ),
+    "listProposalDecisions": (
+        "GET",
+        "/optimisation-proposals/opr_01M2545JSD15ETSNNV904X991N/decisions",
+    ),
+    "exportOptimisationProposalsCsv": (
+        "GET",
+        "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/export.csv",
+    ),
     "listRunFindings": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     "exportRunCsv": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.csv"),
+    # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook (expert, as the CSV) and the norms
+    # catalogue (any role).
+    "exportRunXlsx": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/export.xlsx"),
+    "listNormDocuments": ("GET", "/norm-documents"),
+    # `W60-OPT-MATCH-01`. The priced specification of a document set (any role).
+    "getSpecificationPrices": (
+        "GET",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/specification-prices",
+    ),
+    # `W63-SECTION-FORM7-01`. A section's combined specification across projects (any role).
+    "getSectionSpecification": ("GET", "/sections/AR/specification"),
+    # `NORM-REFS-RUN-01`. The norms a run's saved text cites (any role).
+    "getRunNormReferences": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K/norm-references"),
     "getFinding": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
     "appendDecision": ("POST", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
     "listDecisionHistory": ("GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
@@ -122,6 +219,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "listVersions": _ANY_ROLE,
     "listRuns": _ANY_ROLE,
     "getRunStatus": _ANY_ROLE,
+    "getRunNormVerification": _ANY_ROLE,
     "listExecutionQueue": _ANY_ROLE,
     "listExecutionJournal": _ANY_ROLE,
     "listWorkers": _ANY_ROLE,
@@ -132,6 +230,25 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "listNormSnapshots": _ANY_ROLE,
     "listVersionPortalBlocks": _ANY_ROLE,
     "streamVersionPortalBlockCrop": _ANY_ROLE,
+    # `W59-SECTION-SEAL-01`: the section review is a product read.
+    "getVersionSectionReview": _ANY_ROLE,
+    # `W59-VERSION-COMPARE-01`: the version comparison is a product read.
+    "compareDocumentVersions": _ANY_ROLE,
+    # `W59-ANALYSIS-SETTINGS-01`: the analysis-profile registry is a product read.
+    "listAnalysisProfiles": _ANY_ROLE,
+    "listNormDocuments": _ANY_ROLE,
+    "exportRunXlsx": _EXPERT,
+    # `W61-DISPATCHER-01`: the dispatcher's reads and moves at the seam; the dispatch context
+    # decides who reads which assignment and who makes which move.
+    "listAssignments": _ANY_ROLE,
+    "getAssignment": _ANY_ROLE,
+    "transitionAssignment": _ANY_ROLE,
+    # `W60-OPT-MATCH-01`: the priced specification is a product read.
+    "getSpecificationPrices": _ANY_ROLE,
+    # `W63-SECTION-FORM7-01`: a section's combined specification is a product read.
+    "getSectionSpecification": _ANY_ROLE,
+    # `NORM-REFS-RUN-01`: the run's cited norms are a product read.
+    "getRunNormReferences": _ANY_ROLE,
     "listRunFindings": _ANY_ROLE,
     "getFinding": _ANY_ROLE,
     "listDecisionHistory": _ANY_ROLE,
@@ -145,11 +262,37 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "changePassword": _ANY,
     "createProject": _EXPERT,
     "uploadDocument": _EXPERT,
+    # `W59-VERSION-UPLOAD-01`: the next version takes exactly the first upload's roles.
+    "uploadDocumentVersion": _EXPERT,
     "startRun": _EXPERT,
+    # `W59-SECTION-SEAL-01`: only an expert confirms a section; admin alone does not.
+    "classifyDocumentVersion": _EXPERT,
+    # `CLASSIFICATION-CORRECTION-01`: only an expert corrects a classification; admin alone does not.
+    "correctVersionClassification": _EXPERT,
     "cancelRun": frozenset({"expert", "admin"}),
     "reauditRun": frozenset({"expert", "admin"}),
     "appendDecision": _EXPERT,
+    # `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict; admin alone does not.
+    "carryOverDecision": _EXPERT,
+    # `W60-PRICE-LIST-01`: an expert uploads a price list and overrides a project's vendor
+    # list; the global vendor list is an administrator's; any one role reads.
+    "uploadPriceList": _EXPERT,
+    "setProjectVendorList": _EXPERT,
+    "setGlobalVendorList": _ADMIN,
+    "listPriceListRevisions": _ANY_ROLE,
+    "listPriceListPositions": _ANY_ROLE,
+    "getEffectiveVendorLists": _ANY_ROLE,
+    # `W60-OPT-PROPOSALS-01`: an expert starts a pass and decides its proposals (an
+    # administrator alone reads and does not decide, R-60); any one role reads and exports.
+    "startOptimisationPass": _EXPERT,
+    "decideOptimisationProposal": _EXPERT,
+    "listOptimisationPasses": _ANY_ROLE,
+    "listOptimisationProposals": _ANY_ROLE,
+    "listProposalDecisions": _ANY_ROLE,
+    "exportOptimisationProposalsCsv": _ANY_ROLE,
     "exportRunCsv": _EXPERT,
+    # `W61-DISPATCHER-01`: assigning work is an administrator's act (R-60).
+    "createAssignment": _ADMIN,
     "listRegistrations": _ADMIN,
     "approveRegistration": _ADMIN,
     "rejectRegistration": _ADMIN,

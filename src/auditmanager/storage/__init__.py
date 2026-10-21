@@ -3,7 +3,8 @@
 Public surface. Everything a consumer needs is re-exported here; everything
 else in this package is an implementation detail. In particular
 ``_object_layout`` -- the module that knows what an object key looks like -- is
-not exported and is imported by the adapter alone.
+not exported. The S3 adapter uses it, and ``storage.public`` delegates to it
+only for the recovery-scoped canonical key resolver.
 
     from auditmanager.storage import S3BlobStore, S3StorageSettings
 
@@ -17,8 +18,10 @@ not exported and is imported by the adapter alone.
     )
     assert store.read(blob.blob_id) == pdf_bytes
 
-``blob.blob_id`` is the only thing a consumer keeps. There is no accessor for a
-bucket, a key, a URL or a path anywhere on this surface.
+``blob.blob_id`` is the only thing a product consumer keeps. This package root
+does not export a bucket, key, URL or path. The recovery-only resolver in
+``storage.public`` returns a transport locator for an isolated restore audit;
+it does not make an object key a business identity.
 """
 
 from __future__ import annotations

@@ -3,14 +3,15 @@
  * frame.
  *
  * `OWNER_RULINGS_2026-09-17.md` §3.22: **Работа** — Проекты `/projects`, Дашборд `/dashboard`,
- * «Оптимизация разделов» `/section-optimisation` (stub); **Знания** — База знаний
+ * «Оптимизация разделов» `/section-optimisation`; **Знания** — База знаний
  * `/knowledge-base`, Блоки `/blocks`, «Нормы» `/norms` (stub); **Система** — Журнал выполнения
  * `/logs`, Исполнители `/workers`, «Настройки анализа» `/analysis-settings` (stub), «Очередь»
  * `/queue`; `/optimisation` leaves the menu and stays a registered, reachable screen
- * (group `hidden`). W53 built `/logs` and `/queue`, and `W55A-WEB-NORMS` built `/norms`; the
- * remaining two R-66 stubs still use `RoutePlaceholder`, say they are not implemented, show no
- * digit and invent no data. Access remains `session`, roles `any-role`. `/norms` keeps its
- * ruled place in the menu, asserted by `RULING` below and by the case after `STUBS`.
+ * (group `hidden`). W53 built `/logs` and `/queue`, `W55A-WEB-NORMS` built `/norms`,
+ * `W59-ANALYSIS-SETTINGS-01` built `/analysis-settings` and `W63-SECTION-FORM7-01` built
+ * `/section-optimisation`: no R-66 stub is left. Access remains `session`, roles `any-role`, and
+ * every graduated screen keeps its ruled place in the menu, asserted by `RULING` below and by
+ * the cases that follow it.
  *
  * The expectation below is typed from the ruling, not read from the registry, and the menu is
  * read three ways: the data the frame builds (`buildNavigation`), and the two rendered states of
@@ -23,7 +24,6 @@
  * Written by QA from the plan, without the lane reports.
  */
 
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { createElement, isValidElement } from 'react';
@@ -40,7 +40,6 @@ import { OptimisationPage } from '@/_pages/optimisation';
 import type { SessionAccount } from '@/app/bff/session/store';
 import { forgetEverySession, openSession } from '@/app/bff/session/store';
 import { SCREEN_REGISTRY, screenAt } from '@/shared/config';
-import { RoutePlaceholder } from '@/shared/ui';
 
 const jar = vi.hoisted(() => ({ value: null as string | null }));
 
@@ -59,6 +58,8 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
       ['/projects', 'Проекты'],
       ['/dashboard', 'Дашборд'],
       ['/section-optimisation', 'Оптимизация разделов'],
+      // `W61-DISPATCHER-01` (roadmap Q-2) adds «Диспетчер» at the end of «Работа».
+      ['/dispatcher', 'Диспетчер'],
     ],
   },
   {
@@ -78,15 +79,6 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
       ['/queue', 'Очередь'],
     ],
   },
-];
-
-/**
- * The two remaining stubs of `R-66`, each with the group the ruling puts it in. `/norms` left
- * this list in `W55A-WEB-NORMS`: it is a built screen now, held below as one.
- */
-const STUBS: readonly { readonly address: string; readonly label: string; readonly group: string }[] = [
-  { address: '/section-optimisation', label: 'Оптимизация разделов', group: 'work' },
-  { address: '/analysis-settings', label: 'Настройки анализа', group: 'system' },
 ];
 
 const COMPLETE: SessionAccount = {
@@ -208,13 +200,13 @@ describe('R-66: /optimisation is in no menu group, registered in hidden, and ope
   });
 });
 
-// -------------------------------------------------------------------------------- the stubs
+// ------------------------------------------------------------------- the graduated screens
 
 const fetchSpy = vi.fn(async () => {
-  throw new Error('a stub made a network call');
+  throw new Error('a guarded route made a network call');
 });
 
-describe('R-66: each of the two remaining stubs is an honest RoutePlaceholder', () => {
+describe('R-66: the stubs have graduated, and each keeps its ruled row and place', () => {
   beforeEach(() => {
     forgetEverySession();
     jar.value = openSession(COMPLETE, 'qa-credential', 3600);
@@ -224,69 +216,6 @@ describe('R-66: each of the two remaining stubs is an honest RoutePlaceholder', 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
-
-  for (const stub of STUBS) {
-    describe(stub.address, () => {
-      it('is registered session / any-role, in the ruled group, in the menu, under the ruled label', () => {
-        expect(screenAt(stub.address)).toEqual({
-          address: stub.address,
-          label: stub.label,
-          group: stub.group,
-          access: 'session',
-          roles: 'any-role',
-          inMenu: true,
-        });
-      });
-
-      it('renders RoutePlaceholder for its own address, says it is not implemented, shows no digit, calls nothing', async () => {
-        const module = (await import(/* @vite-ignore */ join(WEB_ROOT, 'src', 'app', stub.address.slice(1), 'page.tsx'))) as {
-          default: (props: unknown) => Promise<ReactElement>;
-        };
-        const routed = await module.default({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
-        // The route renders a page component, and that component renders RoutePlaceholder itself.
-        const page = (routed.type as (props: object) => ReactElement)(routed.props as object);
-        expect(page.type, `${stub.address} does not render RoutePlaceholder`).toBe(RoutePlaceholder);
-        expect((page.props as { route?: unknown }).route).toBe(stub.address);
-
-        const client = newClient();
-        const markup = renderScreen(client, routed);
-        const text = [...markup.matchAll(/>([^<>]+)</g)].map((m) => (m[1] ?? '').trim()).filter(Boolean).join(' ');
-        expect(markup).toContain(`data-route="${stub.address}"`);
-        // It says it is not implemented: the placeholder's own two sentences.
-        expect(text).toContain('Раздел пока недоступен');
-        expect(text).toContain('Этот раздел ещё не готов.');
-        expect(text).toContain(stub.label);
-        // No digit anywhere the reader sees.
-        expect(text.match(/\d/g), `${stub.address} shows a digit: ${text}`).toBeNull();
-        // It invents no data: no request made, no query opened, no list or table drawn.
-        expect(fetchSpy).not.toHaveBeenCalled();
-        expect(client.getQueryCache().getAll()).toEqual([]);
-        expect(markup).not.toMatch(/<(table|ul|ol|li|dl)\b/);
-      });
-
-      it('its source asks nothing of the API', () => {
-        const pageModule = readFileSync(
-          join(WEB_ROOT, 'src', '_pages', stub.address.slice(1), 'ui', `${stub.address.slice(1)}-page.tsx`),
-          'utf8',
-        );
-        expect(pageModule).not.toMatch(/from '@\/shared\/api|useQuery|fetch\(/);
-      });
-
-      it('a guest is sent to sign in, carrying it in next', async () => {
-        jar.value = null;
-        const module = (await import(/* @vite-ignore */ join(WEB_ROOT, 'src', 'app', stub.address.slice(1), 'page.tsx'))) as {
-          default: (props: unknown) => Promise<unknown>;
-        };
-        let location: string | null = null;
-        try {
-          await module.default({ params: Promise.resolve({}), searchParams: Promise.resolve({ from: 'menu' }) });
-        } catch (thrown) {
-          location = String((thrown as { digest?: unknown }).digest ?? '').split(';')[2] ?? null;
-        }
-        expect(location).toBe(`/login?next=${encodeURIComponent(`${stub.address}?from=menu`)}`);
-      });
-    });
-  }
 
   it('/norms graduated (W55A-WEB-NORMS): its ruled row and place are kept, and it reads the snapshot list', async () => {
     expect(screenAt('/norms')).toEqual({
@@ -309,7 +238,67 @@ describe('R-66: each of the two remaining stubs is an honest RoutePlaceholder', 
     expect(client.getQueryCache().getAll().map((query) => query.queryKey[1])).toEqual(['snapshots']);
   });
 
-  it('all R-66 menu addresses remain registered after stubs graduate', () => {
+  it('/analysis-settings graduated (W59-ANALYSIS-SETTINGS-01): its ruled row and place are kept, and it reads the profile registry', async () => {
+    expect(screenAt('/analysis-settings')).toEqual({
+      address: '/analysis-settings',
+      label: 'Настройки анализа',
+      group: 'system',
+      access: 'session',
+      roles: 'any-role',
+      inMenu: true,
+    });
+    const module = (await import(/* @vite-ignore */ join(WEB_ROOT, 'src', 'app', 'analysis-settings', 'page.tsx'))) as {
+      default: (props: unknown) => Promise<ReactElement>;
+    };
+    const routed = await module.default({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
+    const client = newClient();
+    const markup = renderScreen(client, routed);
+    expect(markup).not.toContain('Раздел пока недоступен');
+    expect(markup).not.toContain('data-route="/analysis-settings"');
+    // One read: the registry, under its own key.
+    expect(client.getQueryCache().getAll().map((query) => query.queryKey)).toEqual([['analysis', 'profiles']]);
+  });
+
+  it('/section-optimisation graduated (W63-SECTION-FORM7-01): its ruled row and place are kept, and it reads the AR section', async () => {
+    expect(screenAt('/section-optimisation')).toEqual({
+      address: '/section-optimisation',
+      label: 'Оптимизация разделов',
+      group: 'work',
+      access: 'session',
+      roles: 'any-role',
+      inMenu: true,
+    });
+    const module = (await import(/* @vite-ignore */ join(WEB_ROOT, 'src', 'app', 'section-optimisation', 'page.tsx'))) as {
+      default: (props: unknown) => Promise<ReactElement>;
+    };
+    const routed = await module.default({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
+    const client = newClient();
+    const markup = renderScreen(client, routed);
+    expect(markup).not.toContain('Раздел пока недоступен');
+    expect(markup).not.toContain('data-route="/section-optimisation"');
+    // One read, under its own key: the analysed section, unfiltered, first page.
+    const keys = client.getQueryCache().getAll().map((query) => query.queryKey);
+    expect(keys).toHaveLength(1);
+    expect(keys[0]?.slice(0, 3)).toEqual(['optimisation', 'section-specification', 'AR']);
+    expect(keys[0]?.[3]).toEqual({ projectUid: null, q: null, offset: 0, limit: 50 });
+  });
+
+  it('/section-optimisation: a guest is sent to sign in, carrying it in next', async () => {
+    jar.value = null;
+    const module = (await import(/* @vite-ignore */ join(WEB_ROOT, 'src', 'app', 'section-optimisation', 'page.tsx'))) as {
+      default: (props: unknown) => Promise<unknown>;
+    };
+    let location: string | null = null;
+    try {
+      await module.default({ params: Promise.resolve({}), searchParams: Promise.resolve({ from: 'menu' }) });
+    } catch (thrown) {
+      location = String((thrown as { digest?: unknown }).digest ?? '').split(';')[2] ?? null;
+    }
+    expect(location).toBe(`/login?next=${encodeURIComponent('/section-optimisation?from=menu')}`);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('all R-66 menu addresses remain registered after the stubs graduated', () => {
     const menuRows = SCREEN_REGISTRY.filter((row) => row.inMenu && !['home', 'admin'].includes(row.group)).map((row) => row.address);
     expect(menuRows.sort()).toEqual(RULING.flatMap((group) => group.items.map(([address]) => address)).sort());
   });

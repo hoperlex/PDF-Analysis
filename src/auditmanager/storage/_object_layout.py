@@ -2,7 +2,9 @@
 
 This module is the *only* place in the repository that knows how a ``blob_id``
 or an upload token becomes an S3 object key. It is underscore-prefixed, absent
-from the package's ``__all__``, and imported by ``s3.py`` and by nothing else.
+from the package's ``__all__``, and imported by ``s3.py`` plus the narrow
+``storage.public`` recovery resolver. Product code must still use opaque Blob
+IDs and must not import this module.
 
 ``FF-01`` section 2 item 4: "A blob is addressed in business code by opaque
 ``blob_id``; bucket/key remain adapter details." ``identifiers.json`` says the

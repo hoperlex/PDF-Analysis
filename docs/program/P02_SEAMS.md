@@ -118,6 +118,21 @@ current norms snapshot and its append-only history, `norm_paragraph.text_tsv` an
 `norm_document.designation_tokens`). `W55B-SEAL-01` owns `0021_portal_bundles` (the
 portal-bundle page ceiling of 500 and three nullable text-count columns on
 `document_version`).
+`W56A-SEAL-01` adds `0022_findings_v2`: seven categories, optional severity,
+canonical observation identity and the fail-closed model identity code. The
+default v1 profile remains unchanged. `W57A-SEAL-01A` adds
+`0023_norm_citations`: an `nrs_` retrieval set, two R-76 artifact custody
+roles, a frozen optional Run pin and a transaction-checked citation partition.
+The v3 API and executor are separate serial work; this migration changes no
+served profile. `W59-SECTION-SEAL-01` adds `0024_version_classification`: one
+append-only, expert-confirmed project stage (`P`/`R`) and section per version in
+`document_version_classification`, outside the immutable version row, and widens
+the `document.section` CHECK by `PS` (`0011` keeps legacy's fourteen as history).
+`CLASSIFICATION-CORRECTION-01` adds `0028_classification_corrections`: the append-only
+`document_version_classification_correction` (revision 2, 3, ... with the correcting expert and a
+reason; revision 1 is the unchanged original) and the views `version_classification_revision`
+(the history) and `version_classification_current` (the latest revision, which every classification
+read uses).
 
 ### 3.1 Tables
 
@@ -140,11 +155,13 @@ portal-bundle page ceiling of 500 and three nullable text-count columns on
 | `worker` | `worker_id` | registry row; only `heartbeat_at` and `intake_enabled` change |
 | `norm_custody_admission` | `norm_custody_admission_id` | custody intent and outbox; inserted `pending`; `pending → confirmed \| poisoned \| rejected`, `poisoned → pending \| rejected`; never deleted |
 | `norm_custody_binding` | `norm_custody_binding_id`; one per confirmed admission | **immutable after insert**; insert needs a confirmed admission, its verified Blob and the target |
+| `norm_retrieval_set` | `norm_retrieval_set_id` (`nrs_`) | **immutable after insert**; `verified` needs exact expected/observed digests and two confirmed artifact bindings |
 | `norm_repair_call` | `norm_repair_call_id` (its own idempotency scope) | inserted `prepared`; `prepared → response_received → completed`, `prepared → not_processed \| outcome_unknown`; never deleted |
 | `norm_current_snapshot` | one row (`singleton`) | the current norms snapshot; every insert or change names its own history event; never deleted (no unset) |
 | `norm_current_snapshot_event` | `event_id` (`evt`) | **immutable after insert**: the append-only history of the current snapshot (actor, from, to, time) |
 | `finding` | `finding_uid` | mutable |
 | `finding_observation` | `finding_observation_id` | **immutable after insert** |
+| `finding_observation_norm_citation` | `(finding_observation_id, citation_ordinal)` | **immutable after insert**; deferred count and CITE-stage proof bind each partition to the Run's verified set |
 | `finding_evidence` | `(finding_observation_id, evidence_ordinal)` | **immutable after insert** |
 | `expert_decision_event` | `decision_id` | **append-only: no UPDATE, no DELETE** |
 | `audit_event` | `audit_event_id` | **append-only: no UPDATE, no DELETE** |
@@ -251,8 +268,9 @@ guess.
 | `geometry.block_index` | `B2` `page_geometry_extraction` | `B2` `document_context_build`, `B4` grounding gate | 4.4 |
 | `geometry.page_crops` | `B2` `page_geometry_extraction` | `B6` `listVersionPortalBlocks`; `block_analysis` is W56 (`OD-04` flipped by `W55B-SEAL-01`) | 4.5 |
 | `context.document_graph` | `B2` `document_context_build` | `B3` `text_analysis` | 4.6 |
-| `analysis.text_observations` | `B3` `text_analysis` | `B4` grounding gate | 4.7 |
-| `prepared.recognised_text` | `B2` `source_preparation` | `B6` `listVersionPortalBlocks`; no analysis stage (`R-117`) | 4.8 |
+| `analysis.text_observations` | `B3` `text_analysis` | `B4` grounding gate; W56a merge after grounding | 4.7 |
+| `prepared.recognised_text` | `B2` `source_preparation` | `B6` `listVersionPortalBlocks`; optional marked context for W56a text analysis on text-less pages only | 4.8 |
+| `findings.merged` | `B4` v2 deterministic `finding_merge` (implementation follows SEAL) | `B4` v2 finding publication | 4.11 |
 | `geometry.portal_blocks` | `B2` `page_geometry_extraction` | `B6` `listVersionPortalBlocks`; `block_analysis` is W56 | 4.9 |
 | `geometry.crop_image` | `B2` `page_geometry_extraction` | `B6` `streamVersionPortalBlockCrop` | 4.10 |
 
@@ -578,7 +596,9 @@ a version without a portal bundle, and `source_preparation` succeeds without it.
 * One entry per TEXT or IMAGE block the markdown holds (a STAMP block is only in the block
   list). A TEXT body is `kind: recognised_text` with `quote_source: recognised`; an IMAGE body
   is `kind: portal_description`, shown as «описание портала — в анализе не используется» and
-  never an input of any analysis stage (`R-117`).
+  never an input of any analysis stage (`R-117`). For the future W56a v2 profile,
+  recognised TEXT entries alone may enter `text_analysis` as marked context on
+  pages in `document_version.textless_pages`; they remain non-citable (`R-134`).
 * `flags` is a lowercase snake_case list of quality signals: mixed-script words, Latin/Cyrillic
   homoglyphs, CJK characters, doubled list markers and the norms degeneracy signals. Engineering
   designations (`1.A`, `B25`, `A500C`, `REI 150`) are exempt by a pinned pattern.
@@ -645,6 +665,31 @@ per run**, one for each crop in §4.5, content-addressed (an equal crop is the s
 referenced only from the manifest. It carries no `artifact_role` root field because there is no
 root; the registry declares it so that the blob role is a known one.
 
+### 4.11 `findings.merged` (sealed for W56a)
+
+The future deterministic merge stage emits a versioned JSON artifact: each
+group names every contributing grounded observation ordinal, its canonical
+ordinal, and the merge-rule version. Two observations link only in the same
+category, by overlapping evidence spans on one page or equal NFC/case-folded,
+whitespace-collapsed quotes of at least 20 characters on one page. Groups are
+connected components; the canonical member has the earliest page/span, then
+the lowest ordinal. No member or raw evidence is deleted. The SEAL declares
+this role; `W56A-MERGE-01` implements it later.
+
+```json
+{
+  "artifact_role": "findings.merged",
+  "artifact_version": "1.0.0",
+  "groups": [
+    {
+      "observation_ordinals": [1, 2],
+      "canonical_ordinal": 1,
+      "merge_rule_version": "1.0.0"
+    }
+  ]
+}
+```
+
 ## 5. Finding, observation, evidence and decision shapes
 
 ### 5.1 The grounding rule
@@ -665,16 +710,24 @@ finding anywhere, and it appears in no finding query and in no CSV row. The data
 enforces the pairing, so this is not something a query has to remember.
 
 `ungrounded_reason` is one of: `quotation_absent`, `quotation_on_different_page`,
-`span_outside_page`, `span_outside_block`, `span_length_mismatch`.
+`span_outside_page`, `span_outside_block`, `span_length_mismatch`,
+`quote_in_recognised_text`. The last means the candidate quote exists only
+in marked recognised context, never in the PDF text layer; it cannot ground
+a published finding.
 
 ### 5.2 Identity allocation
 
-* `finding_uid` — a fresh one per published observation, per run. PC-01 does **no**
+* `finding_uid` — a fresh one per published observation in v1, or per merged
+  group in v2, per run. PC-01 does **no**
   cross-run matching and **no** decision carryover. Two runs over the same document
   produce two disjoint sets of `finding_uid`.
 * `finding_observation_id` — immutable, bound to exactly one `run_id`. A rerun
   creates new observations and never rewrites or removes earlier ones. The database
   refuses UPDATE and DELETE.
+* `finding.canonical_observation_id` — nullable until v2 publication wires the
+  merge stage. Migration 0022 backfills the one legacy observation per finding;
+  its composite foreign key requires the chosen observation to belong to the
+  same finding. A decision on a non-canonical member is refused.
 
 ### 5.3 The decision ledger
 
@@ -687,6 +740,7 @@ Append-only. Every event is a new `decision_id`. Nothing is ever updated.
 | `finding_observation_id` | the observation the expert actually reviewed |
 | `event_type` | `accept`, `reject`, `comment`; `revoke` declared, no PC-01 producer |
 | `verdict` | `accepted` for accept, `rejected` for reject, `pending` for revoke, `null` for comment |
+| `severity` | optional v2 decided value from the five-level enum, only on `accept`; the database refuses it on every other event |
 | `comment` | required for `comment`, optional on any other type |
 | `author_label` | **Since wave 42 (`R-37`): the reviewer's display name**, derived server-side from the authenticated credential and never from a request body; an account that has chosen no name falls back to its login, and the fallback is queryable rather than silent. Authorizes nothing. `OD-12`'s single configured label is gone — `P04` cannot measure whose judgement was whose when every judgement carries one name. **The sealed contract now says this too** (`D-86`, closed in wave 42), so this row is a restatement and not a second authority |
 | `command_id` | at most one event per command record, enforced by a unique index |
@@ -704,6 +758,7 @@ it; none recomputes it.
 | Column | Rule |
 |---|---|
 | `current_verdict` | the `verdict` of the most recent verdict-bearing event; `pending` when there is none |
+| `decided_severity` | severity of the latest verdict-bearing event only when that event is `accept`; null after reject or revoke |
 | `latest_verdict_decision_id` | that event's identity, or null |
 | `latest_comment` | the `comment` of the most recent event carrying one, whatever its `event_type` |
 | `latest_decision_id` | the most recent event of **any** type |
@@ -718,8 +773,9 @@ expert appended a new event.
 
 ## 6. The CSV column contract — `OD-11`
 
-Seventeen columns, in this order. This is the frozen list; `B5` produces it and `B8`
-downloads it.
+Nineteen columns, in this order. The first seventeen retain the frozen OD-11
+order; W56a appends the two severity columns under §A3.2. `B5` produces this
+list and `B8` downloads it.
 
 | # | Column | Source |
 |---|---|---|
@@ -740,13 +796,17 @@ downloads it.
 | 15 | `latest_comment` | `finding_current_verdict.latest_comment` |
 | 16 | `latest_decision_id` | `finding_current_verdict.latest_decision_id` |
 | 17 | `decision_recorded_at` | `finding_current_verdict.decision_recorded_at` |
+| 18 | `severity` | `finding_current_verdict.decided_severity` — latest accepted expert decision, otherwise empty |
+| 19 | `severity_proposed` | canonical `finding_observation.proposed_severity` — model proposal, not an expert decision |
 
 **Bytes.** UTF-8 with a byte-order mark; comma delimiter; CRLF line ending; RFC 4180
 quoting. The BOM is there because the intended reader opens the file in Excel, which
 otherwise mis-decodes Cyrillic.
 
 **Granularity.** One row per evidence item. A finding with three quotations produces
-three rows sharing columns 1–11 and 14–17.
+three rows sharing columns 1–11 and 14–19. When the finding has a canonical
+observation, only its evidence items are exported; the legacy null-canonical
+path retains the pre-merge single-observation behavior.
 
 **Sort key.** `(finding_uid, finding_observation_id, evidence_ordinal)`, ascending, on
 the opaque identifiers. `evidence_ordinal` is not itself a column; it orders the rows
@@ -771,7 +831,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Fifty-four operations, sealed. `A5` generates the typed client from this document; `B6`
+Eighty-three operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -790,6 +850,85 @@ registry's `listWorkers` and `setWorkerIntake` on 2026-10-12 (stubs answering
 operations on 2026-10-12 under `R-112` and `R-113` (stubs answering `dependency_unavailable`
 until `W55A-SEARCH-01`). `W55B-SEAL-01` added the two portal-block reads on 2026-10-13 under
 `R-116` and `R-119` (stubs answering `dependency_unavailable` until `W55B-GEOMETRY-01`).
+`W57A-SEAL-01B` added the refusing `getRunNormVerification`. `W59-SECTION-SEAL-01` added
+`classifyDocumentVersion` and `getVersionSectionReview` on 2026-10-20: a version's
+expert-confirmed project stage and section, persisted by `0024_version_classification`, which
+`startRun` and `reauditRun` now route the analysis profile from. `CLASSIFICATION-CORRECTION-01`
+added `correctVersionClassification`: an expert's append-only correction (a numbered revision
+with a reason, `0028_classification_corrections`); the current classification is the latest
+revision and every read of it goes through `version_classification_current`. `W59-VERSION-COMPARE-01`
+added `compareDocumentVersions` on 2026-10-20: a read-only comparison of two versions of one
+set with the same confirmed section and either the same stage (`mode=version`) or a `P`
+source and an `R` target (`mode=stage`, the W62 П/Р slice), whose sheet pairs and finding
+matches are proposals and whose refusals are answers with a closed reason, never a
+relabelled pair; a path naming no version of the document is `404`.
+`W59-ANALYSIS-SETTINGS-01` added `listAnalysisProfiles` on 2026-10-20: the section-keyed
+text-profile registry run start routes through, read-only, as fifteen sections in the
+project-structure order, each with its profile (identities, version, status, hashes, legacy
+source) or `null`.
+`W59-VERSION-UPLOAD-01` added `uploadDocumentVersion` on 2026-10-20: one portal bundle, under `uploadDocument`'s
+envelope and custody, published as the next immutable version of an existing document, which
+becomes its current version and inherits no title, section or classification; a document of
+another project is `404`.
+`W59-DECISION-CARRYOVER-01` added `carryOverDecision` on 2026-10-20: an expert confirms
+carrying one source decision to the target finding the recomputed comparison proposes as
+`unchanged`, and the decision ledger appends one `accept` or `reject` event on the target,
+authored by that expert, whose comment records the carried-from finding, decision and
+versions; the comparison's `findings.carryover_candidates` lists what could be carried, and
+nothing is carried without the confirmation.
+`W57B-NORMS-CATALOGUE-XLSX-01` added `listNormDocuments` and `exportRunXlsx` on 2026-10-20:
+the current norms snapshot's documents as a catalogue with display names derived from the
+stored file names (any one role), and the run's W57b Excel workbook with `exportRunCsv`'s
+states and role.
+`W61-DISPATCHER-01` added the four «Диспетчер» operations on 2026-10-20 under roadmap Q-2:
+`createAssignment` (`admin`), `listAssignments`, `getAssignment` and `transitionAssignment`,
+over `0025_work_assignments`' immutable assignment and its append-only event history; the
+status is the latest event's projection and the `work_assignment` machine is decided by
+`auditmanager.dispatch`.
+`W60-PRICE-LIST-01` added six `optimisation` operations on 2026-10-20: `uploadPriceList` stores
+a project's CSV or XLSX price list (at most 10 MiB, `expert`, keyed) as an immutable revision
+bound to its file, with parsed positions and a deterministic parse report in which every data
+row is accepted or skipped with a reason; `listPriceListRevisions` and `listPriceListPositions`
+read them; `getEffectiveVendorLists` answers the fifteen sections' vendor lists for a project;
+`setGlobalVendorList` (`admin`) and `setProjectVendorList` (`expert`, `list` or `inherit`)
+append versioned revisions, refusing a stale `expected_vendor_list_id`
+(`conflict_reason: vendor_list_changed`). No operation answers a total, a proposal or a price a
+price list does not state; migration `0026_price_lists` stores them.
+`W60-OPT-MATCH-01` added `getSpecificationPrices` on 2026-10-20: «Спецификация и цены», the
+specification rows of a document set's current `AR`-classified version, read deterministically
+from its newest published run's saved text and matched to the project's current price list;
+a price and an amount only on a row matched to one position in the same unit with a numeric
+quantity, totals per currency over those rows only; a precondition that does not hold is one
+`state`, and a set outside the project is `404`. Read-only, any one role.
+`W60-OPT-PROPOSALS-01` added six more `optimisation` operations on 2026-10-20, the «Предложения»
+of «Оптимизация проекта»: `startOptimisationPass` (`expert`, keyed) pins a document set's
+current AR version, its newest published run, the current price-list revision and the effective
+AR vendor list and stores the deterministic `cheaper_analog` proposals, refusing an unmet
+precondition as `conflict` with its `conflict_reason` and writing nothing; `listOptimisationPasses`,
+`listOptimisationProposals` and `listProposalDecisions` read them (any one role) with counts by
+decision; `decideOptimisationProposal` (`expert`, keyed) appends an accept, reject or revise
+decision and never changes an earlier one; `exportOptimisationProposalsCsv` is the
+formula-escaped CSV of one pass. A proposal is a separate entity beside findings: no operation
+here reads or changes a finding, and a saving is stated only where a price-list position and a
+numeric quantity state it. Migration `0027_optimisation_proposals` stores them.
+`W63-SECTION-FORM7-01` added `getSectionSpecification` on 2026-10-20: «Оптимизация разделов»,
+the Form-7 rows of every project whose document set's current version an expert confirmed in
+a section, each row priced from its own project's current price list. The section code is a
+filter, not an identity: every row names its project, set, version, page, sheet and line span,
+rows are never merged across projects, totals exist per project and currency only and there
+is no section total; a current version nobody classified is listed as excluded, one confirmed
+in another section never appears; a bound is a `200` with `state: section_too_large`, a
+section code outside the fifteen and an unknown `project_uid` filter are `404`. Read-only,
+any one role.
+
+`NORM-REFS-RUN-01` added `getRunNormReferences` on 2026-10-20: «Нормативные ссылки» on the run
+page, the normative documents the run's saved text cites, each resolved against the norms
+snapshot the run pinned as `in_corpus`, `newer_edition`, `older_edition_only`, `not_in_corpus`
+or `not_recognised`, with the pages it occurs on and the corpus document it points at. Computed
+per request by the W57b resolver; no finding, no severity, no model. A run that pinned no
+snapshot, has no saved text layer or cites more than one answer carries is a `200` with a
+`state`, never an empty list; the corpus documents whose designation the parser cannot read
+are listed; an unknown run is `404`. Read-only, any one role.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -810,6 +949,7 @@ could.
 | `createProject` | `POST /projects` |
 | `listProjects` | `GET /projects` |
 | `uploadDocument` | `POST /projects/{project_uid}/documents` |
+| `uploadDocumentVersion` | `POST /projects/{project_uid}/documents/{document_uid}/versions` |
 | `getDocumentVersion` | `GET /versions/{version_uid}` |
 | `streamDocumentVersionContent` | `GET /versions/{version_uid}/content` |
 | `startRun` | `POST /runs` |
@@ -819,6 +959,7 @@ could.
 | `appendDecision` | `POST /findings/{finding_uid}/decisions` |
 | `listDecisionHistory` | `GET /findings/{finding_uid}/decisions` |
 | `exportRunCsv` | `GET /runs/{run_id}/export.csv` |
+| `exportRunXlsx` | `GET /runs/{run_id}/export.xlsx` |
 | `issueToken` | `POST /auth/token` |
 | `listDocuments` | `GET /projects/{project_uid}/documents` |
 | `listVersions` | `GET /documents/{document_uid}/versions` |
@@ -853,6 +994,7 @@ could.
 | `listWorkers` | `GET /execution/workers` |
 | `setWorkerIntake` | `PUT /execution/workers/{worker_id}/intake` |
 | `searchNorms` | `GET /norms/search` |
+| `listNormDocuments` | `GET /norm-documents` |
 | `getNormDocument` | `GET /norm-documents/{norm_document_id}` |
 | `listNormParagraphs` | `GET /norm-documents/{norm_document_id}/paragraphs` |
 | `streamNormDocumentContent` | `GET /norm-documents/{norm_document_id}/content` |
@@ -861,12 +1003,47 @@ could.
 | `setCurrentNormSnapshot` | `PUT /norms/snapshots/current` |
 | `listVersionPortalBlocks` | `GET /versions/{version_uid}/portal-blocks` |
 | `streamVersionPortalBlockCrop` | `GET /versions/{version_uid}/portal-blocks/{portal_block_id}/crop` |
+| `getRunNormVerification` | `GET /runs/{run_id}/norm-verification` |
+| `classifyDocumentVersion` | `PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification` |
+| `correctVersionClassification` | `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections` |
+| `getVersionSectionReview` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review` |
+| `compareDocumentVersions` | `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison` |
+| `listAnalysisProfiles` | `GET /analysis/profiles` |
+| `carryOverDecision` | `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers` |
+| `createAssignment` | `POST /assignments` |
+| `listAssignments` | `GET /assignments` |
+| `getAssignment` | `GET /assignments/{assignment_uid}` |
+| `transitionAssignment` | `POST /assignments/{assignment_uid}/transitions` |
+| `uploadPriceList` | `POST /projects/{project_uid}/price-lists` |
+| `listPriceListRevisions` | `GET /projects/{project_uid}/price-lists` |
+| `listPriceListPositions` | `GET /price-lists/{price_list_id}/positions` |
+| `getEffectiveVendorLists` | `GET /projects/{project_uid}/vendor-lists` |
+| `setGlobalVendorList` | `PUT /vendor-lists/{section_code}` |
+| `setProjectVendorList` | `PUT /projects/{project_uid}/vendor-lists/{section_code}` |
+| `getSpecificationPrices` | `GET /projects/{project_uid}/documents/{document_uid}/specification-prices` |
+| `startOptimisationPass` | `POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes` |
+| `listOptimisationPasses` | `GET /projects/{project_uid}/optimisation-passes` |
+| `listOptimisationProposals` | `GET /optimisation-passes/{optimisation_pass_id}/proposals` |
+| `decideOptimisationProposal` | `POST /optimisation-proposals/{optimisation_proposal_id}/decisions` |
+| `listProposalDecisions` | `GET /optimisation-proposals/{optimisation_proposal_id}/decisions` |
+| `exportOptimisationProposalsCsv` | `GET /optimisation-passes/{optimisation_pass_id}/export.csv` |
+| `getSectionSpecification` | `GET /sections/{section_code}/specification` |
+| `getRunNormReferences` | `GET /runs/{run_id}/norm-references` |
 
 Rules that hold across the whole surface:
 
 * the writes that take a required `Idempotency-Key` header are `createProject`,
-  `uploadDocument`, `startRun`, `appendDecision`, `approveRegistration`, `cancelRun`,
-  `reauditRun`, `setJobPriority`, `setExecutionPaused` and `setWorkerIntake`, and no others.
+  `uploadDocument`, `uploadDocumentVersion`, `startRun`, `appendDecision`,
+  `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
+  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`,
+  `uploadPriceList`, `startOptimisationPass` and `decideOptimisationProposal`, and no others. A repeat of the decision carryover under another key
+  that names the same pair and decision answers the event already carried (`replayed: true`)
+  and appends nothing.
+  `setGlobalVendorList` and `setProjectVendorList` take no key: a repeat of the latest
+  revision's entries writes nothing and answers it, and a writer that read an older revision
+  is refused by `expected_vendor_list_id` (`conflict_reason: vendor_list_changed`).
+  A new key over exactly the inputs of a stored optimisation pass answers that pass and
+  writes nothing; every decision under a new key is a new appended event.
   The key is passed through to the owning command handler and never re-derived in the
   router: an identical repeat replays the first answer, and another payload under the same
   key is `idempotency_key_reuse`. The other writes take no key. What a repeat of each does
@@ -892,6 +1069,24 @@ Rules that hold across the whole surface:
     a repeat whose target is already current answers the current designation as a replay
     and writes no history row, and a repeat after another designation is `conflict` with
     `conflict_reason: stale_current_snapshot`;
+  * `classifyDocumentVersion` (`W59-SECTION-SEAL-01`) writes one row per version: an exact
+    repeat answers the stored classification with its first confirmer, and a repeat with a
+    different stage or section is `conflict` with `conflict_reason:
+    version_already_classified`;
+  * `correctVersionClassification` (`CLASSIFICATION-CORRECTION-01`) appends a numbered
+    revision and is a compare-and-set on `expected_revision`: an exact repeat (same expert,
+    values, reason and `expected_revision`) answers the stored revision and writes nothing, a
+    stale `expected_revision` is `conflict` with `conflict_reason:
+    classification_revision_stale`, an unclassified version is `conflict` with
+    `conflict_reason: version_not_classified`, and a pair equal to the current
+    classification is `validation_failed`;
+  * `createAssignment` (`W61-DISPATCHER-01`) keeps one open assignment per scope: an exact
+    repeat (same assignee and note) answers the open assignment, and any other creation on
+    that scope is `conflict` with `conflict_reason: assignment_open`;
+  * `transitionAssignment` (`W61-DISPATCHER-01`): a repeat equal to the latest event (same
+    kind, reason and new assignee) answers the assignment unchanged and appends nothing; any
+    other move the `work_assignment` machine does not declare from the current state is
+    `state_transition_not_allowed`;
 * every response carries `X-Correlation-Id`;
 * every non-2xx body is the `ErrorEnvelope`, with `retryable` pinned to the catalog
   value for the reported code;

@@ -80,8 +80,13 @@ def _auth() -> dict[str, str]:
     return {"Authorization": f"Bearer {static_token()}"}
 
 
-def _publish_a_version(app: TestClient, tag: str) -> str:
-    """One project, one uploaded document, no run. Returns the version_uid."""
+def _publish_a_version(app: TestClient, tag: str, *, classify: bool = False) -> str:
+    """One project, one uploaded document, no run. Returns the version_uid.
+
+    ``classify`` (`W59-SECTION-SEAL-01`): run start routes from the version's expert
+    classification and refuses an unclassified version, so a case that runs classifies the
+    AR baseline first; it then routes to the v1 AR profile.
+    """
     answer = app.post(
         "/projects",
         headers=_auth() | {IDEMPOTENCY_HEADER: f"{tag}-prj", "Content-Type": "application/json"},
@@ -109,7 +114,16 @@ def _publish_a_version(app: TestClient, tag: str) -> str:
         content=head + BASELINE_BUNDLE.read_bytes() + tail,
     )
     assert answer.status_code == 201, answer.content
-    return answer.json()["version_uid"]
+    version = answer.json()
+    if classify:
+        classified = app.put(
+            f"/projects/{project_uid}/documents/{version['document_uid']}/versions/"
+            f"{version['version_uid']}/classification",
+            headers=_auth() | {"Content-Type": "application/json"},
+            content=json.dumps({"project_stage": "R", "section_code": "AR"}).encode("utf-8"),
+        )
+        assert classified.status_code == 200, classified.content
+    return version["version_uid"]
 
 
 def test_an_unknown_version_is_refused_not_answered_empty(app: TestClient) -> None:
@@ -159,7 +173,7 @@ def test_an_unknown_version_is_refused_by_both_portal_reads(app: TestClient) -> 
 
 def test_a_published_run_flips_the_status_and_fills_the_blocks(app: TestClient) -> None:
     tag = f"prod-{uuid.uuid4().hex[:8]}"
-    version_uid = _publish_a_version(app, tag)
+    version_uid = _publish_a_version(app, tag, classify=True)
 
     answer = app.post(
         "/runs",
@@ -191,7 +205,7 @@ def test_a_published_run_serves_the_portal_blocks_and_their_crops(app: TestClien
     import hashlib
 
     tag = f"portal-{uuid.uuid4().hex[:8]}"
-    version_uid = _publish_a_version(app, tag)
+    version_uid = _publish_a_version(app, tag, classify=True)
     answer = app.post(
         "/runs",
         headers=_auth() | {IDEMPOTENCY_HEADER: f"{tag}-run", "Content-Type": "application/json"},

@@ -4,7 +4,19 @@
   "purpose": "every published version of one document, newest first. Through the twelve operations a document has exactly one version -- `uploadDocument` declares no `document_uid` -- so the one row here is `version_ordinal: 1`, and that is a fact about the surface rather than about this document",
   "captured_through": "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()",
   "pre_authorization": "Captured after the T-6 seam landed. Every request here presents the configured bearer credential and is answered. No record here exercises a caller's rights, so none pins 401 or 403.",
-  "exception": null,
+  "exception": {
+    "debt": [
+      "D-181",
+      "D-182"
+    ],
+    "ruling": "OWNER_RULINGS_2026-09-17.md section 3.39, R-139 -- the night development window in which the W59 section seal was frozen and integrated. Its contract commit a23433ed added the optional `classification` property to the sealed `DocumentVersion`, and bd08e03c gave it a producer",
+    "status": "taken",
+    "decided_by": "bd08e03c",
+    "decided_by_subject": "W59-SECTION-SEAL-01: persist classifications and route runs by section",
+    "decided_on": "2026-10-20",
+    "permitted_change": "Before bd08e03c no `DocumentVersion` body carried a classification, and none could: there was no operation to confirm one. Since then `startRun` refuses an unclassified version, so W59-SEAL-FOLLOWUP-01 added case 02b, which classifies case 02's version as project stage `P`, section `AR`, by the account the journey presents. Every read that returns that version now ends its body with `classification`, appended after `display_title` because `document_version_body` emits it last: an object of five properties -- `version_uid`, `project_stage` (`P`), `section_code` (`AR`), `confirmed_by_user_uid` and `confirmed_at` -- holding the same five values case 02b answered, the version and the confirmer tokenised by exact value and `confirmed_at` under its declared timestamp name. **No property was renamed, removed, re-typed or reordered and no status or header moved**; removing that one property restores the pre-move body byte for byte, which `test_the_three_version_records_moved_by_the_classification_and_nothing_else` asserts by digest. `additionalProperties: false` on `DocumentVersion` is satisfied because `classification` is a name the sealed document declares. This is the whole of the permitted change; the record is compared byte for byte against the new expectation like every other. `CLASSIFICATION-CORRECTION-01` (`f290f7b7`, 2026-10-21) then added a sixth property to that object, `revision` (`1`, the original confirmation), after `confirmed_at`: see the `D-182` row and `test_the_four_classification_records_moved_by_the_revision_and_nothing_else`.",
+    "everything_else": "Every other difference in this directory is a failure of the wave, whatever argument accompanies it."
+  },
   "unordered": null,
   "request": {
     "method": "GET",
@@ -36,8 +48,8 @@
     ],
     "body": {
       "kind": "text",
-      "length": 1118,
-      "text": "{\"items\": [{\"version_uid\": \"{{version_uid}}\", \"document_uid\": \"{{document_uid}}\", \"project_uid\": \"{{project_uid}}\", \"version_ordinal\": 1, \"media_type\": \"application/pdf\", \"byte_size\": 58978, \"sha256\": \"6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f\", \"page_count\": 8, \"published_at\": \"{{ts_5}}\", \"input_manifest\": [{\"role\": \"source.document\", \"sha256\": \"6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f\", \"size_bytes\": 58978, \"media_type\": \"application/pdf\"}, {\"role\": \"source.markdown\", \"sha256\": \"f6d16038d371cb3130a1b0df0a096fcfadb1e547c9ee73e6df4eb425166eb0cf\", \"size_bytes\": 12774, \"media_type\": \"text/markdown\"}, {\"role\": \"source.stamp_audit\", \"sha256\": \"04f207e8b5d622d45589dc1eb5b86aed0aafc8fbb0fa317e85b0e838c6c70373\", \"size_bytes\": 3806, \"media_type\": \"application/json\"}, {\"role\": \"source.structured_companion\", \"sha256\": \"33188e53dd3fbe12186b6f1903e79d57af6421f92be8766c9994c09a8e68a9e0\", \"size_bytes\": 6974, \"media_type\": \"application/json\"}], \"display_title\": \"AR baseline\"}], \"page\": {\"next_cursor\": null}}",
+      "length": 1337,
+      "text": "{\"items\": [{\"version_uid\": \"{{version_uid}}\", \"document_uid\": \"{{document_uid}}\", \"project_uid\": \"{{project_uid}}\", \"version_ordinal\": 1, \"media_type\": \"application/pdf\", \"byte_size\": 58978, \"sha256\": \"6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f\", \"page_count\": 8, \"published_at\": \"{{ts_5}}\", \"input_manifest\": [{\"role\": \"source.document\", \"sha256\": \"6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f\", \"size_bytes\": 58978, \"media_type\": \"application/pdf\"}, {\"role\": \"source.markdown\", \"sha256\": \"f6d16038d371cb3130a1b0df0a096fcfadb1e547c9ee73e6df4eb425166eb0cf\", \"size_bytes\": 12774, \"media_type\": \"text/markdown\"}, {\"role\": \"source.stamp_audit\", \"sha256\": \"04f207e8b5d622d45589dc1eb5b86aed0aafc8fbb0fa317e85b0e838c6c70373\", \"size_bytes\": 3806, \"media_type\": \"application/json\"}, {\"role\": \"source.structured_companion\", \"sha256\": \"33188e53dd3fbe12186b6f1903e79d57af6421f92be8766c9994c09a8e68a9e0\", \"size_bytes\": 6974, \"media_type\": \"application/json\"}], \"display_title\": \"AR baseline\", \"classification\": {\"version_uid\": \"{{version_uid}}\", \"project_stage\": \"P\", \"section_code\": \"AR\", \"confirmed_by_user_uid\": \"{{user_uid}}\", \"confirmed_at\": \"{{ts_6}}\", \"revision\": 1}}], \"page\": {\"next_cursor\": null}}",
       "note": ""
     }
   },
@@ -48,6 +60,8 @@
     "{{project_uid}}": "the identity case 01 allocated",
     "{{session_tag}}": "this capture run's tag, carried by every idempotency key",
     "{{ts_5}}": "a timestamp the database stamped, read from the declared field 'published_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{ts_6}}": "a timestamp the database stamped, read from the declared field 'confirmed_at' and checked against the pinned format ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$",
+    "{{user_uid}}": "the account this journey provisions and presents, which case 02b's classification names as its confirmer",
     "{{version_uid}}": "the identity case 02 allocated"
   }
 }

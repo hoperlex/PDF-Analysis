@@ -1,13 +1,14 @@
-# Domain contract v1 — candidate `1.0.0-draft.1`, revision 12
+# Domain contract v1 — candidate `1.0.0-draft.1`, revision 13
 
 Owner lane: [W0-DOM-01](../../../docs/program/tasks/W0-DOM-01.md) (domain contract
 owner); the additive norm-identity amendment is owned by
 [NORM-ID-01](../../../docs/program/tasks/NORM-ID-01.md). Status: **candidate draft —
 working-tree amendment, not frozen, not ratified.** Every
 catalog in this directory declares `contract_version` `1.0.0-draft.1`,
-`candidate_revision` `12`, `status` `draft_candidate` and `frozen` `false`, and the three
-family schemas pin `candidate_revision` `const: 12` to match: see
-[What changed in revision 12](#what-changed-in-revision-12-and-what-breaks-for-a-reader-of-revision-11).
+`candidate_revision` `13`, `status` `draft_candidate` and `frozen` `false`, and the three
+family schemas pin `candidate_revision` `const: 13` to match. Revision 13 adds the
+fail-closed `model_identity_mismatch` code for the recorded-only W56a seal;
+identity and state-machine members do not change.
 
 This family defines three primitives that every other bounded context depends on:
 opaque identity, durable lifecycle and the externally visible failure shape. It is a

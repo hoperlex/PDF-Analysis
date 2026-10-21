@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482
+ *   sha256 7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -26,16 +26,36 @@ import type {
   ArchiveUserResult,
   CancelRunInput,
   CancelRunResult,
+  CarryOverDecisionInput,
+  CarryOverDecisionResult,
   ChangePasswordInput,
   ChangePasswordResult,
+  ClassifyDocumentVersionInput,
+  ClassifyDocumentVersionResult,
+  CompareDocumentVersionsInput,
+  CompareDocumentVersionsResult,
+  CorrectVersionClassificationInput,
+  CorrectVersionClassificationResult,
+  CreateAssignmentInput,
+  CreateAssignmentResult,
   CreateProjectInput,
   CreateProjectResult,
+  DecideOptimisationProposalInput,
+  DecideOptimisationProposalResult,
+  ExportOptimisationProposalsCsvInput,
+  ExportOptimisationProposalsCsvResult,
   ExportRunCsvInput,
   ExportRunCsvResult,
+  ExportRunXlsxInput,
+  ExportRunXlsxResult,
+  GetAssignmentInput,
+  GetAssignmentResult,
   GetDashboardSummaryInput,
   GetDashboardSummaryResult,
   GetDocumentVersionInput,
   GetDocumentVersionResult,
+  GetEffectiveVendorListsInput,
+  GetEffectiveVendorListsResult,
   GetFindingInput,
   GetFindingResult,
   GetMeInput,
@@ -44,14 +64,28 @@ import type {
   GetNormDocumentResult,
   GetProductVersionInput,
   GetProductVersionResult,
+  GetRunNormReferencesInput,
+  GetRunNormReferencesResult,
+  GetRunNormVerificationInput,
+  GetRunNormVerificationResult,
   GetRunStatusInput,
   GetRunStatusResult,
+  GetSectionSpecificationInput,
+  GetSectionSpecificationResult,
+  GetSpecificationPricesInput,
+  GetSpecificationPricesResult,
   GetUserInput,
   GetUserResult,
   GetVersionBlocksInput,
   GetVersionBlocksResult,
+  GetVersionSectionReviewInput,
+  GetVersionSectionReviewResult,
   IssueTokenInput,
   IssueTokenResult,
+  ListAnalysisProfilesInput,
+  ListAnalysisProfilesResult,
+  ListAssignmentsInput,
+  ListAssignmentsResult,
   ListDecisionHistoryInput,
   ListDecisionHistoryResult,
   ListDecisionsInput,
@@ -62,14 +96,26 @@ import type {
   ListExecutionJournalResult,
   ListExecutionQueueInput,
   ListExecutionQueueResult,
+  ListNormDocumentsInput,
+  ListNormDocumentsResult,
   ListNormParagraphsInput,
   ListNormParagraphsResult,
   ListNormSnapshotEventsInput,
   ListNormSnapshotEventsResult,
   ListNormSnapshotsInput,
   ListNormSnapshotsResult,
+  ListOptimisationPassesInput,
+  ListOptimisationPassesResult,
+  ListOptimisationProposalsInput,
+  ListOptimisationProposalsResult,
+  ListPriceListPositionsInput,
+  ListPriceListPositionsResult,
+  ListPriceListRevisionsInput,
+  ListPriceListRevisionsResult,
   ListProjectsInput,
   ListProjectsResult,
+  ListProposalDecisionsInput,
+  ListProposalDecisionsResult,
   ListRegistrationsInput,
   ListRegistrationsResult,
   ListReleasesInput,
@@ -106,10 +152,16 @@ import type {
   SetCurrentNormSnapshotResult,
   SetExecutionPausedInput,
   SetExecutionPausedResult,
+  SetGlobalVendorListInput,
+  SetGlobalVendorListResult,
   SetJobPriorityInput,
   SetJobPriorityResult,
+  SetProjectVendorListInput,
+  SetProjectVendorListResult,
   SetWorkerIntakeInput,
   SetWorkerIntakeResult,
+  StartOptimisationPassInput,
+  StartOptimisationPassResult,
   StartRunInput,
   StartRunResult,
   StreamDocumentVersionContentInput,
@@ -120,12 +172,18 @@ import type {
   StreamVersionPortalBlockCropResult,
   SubmitRegistrationInput,
   SubmitRegistrationResult,
+  TransitionAssignmentInput,
+  TransitionAssignmentResult,
   UpdateMyProfileInput,
   UpdateMyProfileResult,
   UpdateUserInput,
   UpdateUserResult,
   UploadDocumentInput,
   UploadDocumentResult,
+  UploadDocumentVersionInput,
+  UploadDocumentVersionResult,
+  UploadPriceListInput,
+  UploadPriceListResult,
 } from './operations.gen';
 import { OPERATIONS } from './operations.gen';
 
@@ -178,6 +236,18 @@ export function cancelRun(
 }
 
 /**
+ * Carry Over Decision
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers` - a write; carries a required Idempotency-Key.
+ */
+export function carryOverDecision(
+  input: CarryOverDecisionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CarryOverDecisionResult>> {
+  return request<CarryOverDecisionResult>(OPERATIONS.carryOverDecision, input, options);
+}
+
+/**
  * Change the signed-in account's password and revoke its old credentials.
  *
  * `POST /auth/password`.
@@ -187,6 +257,54 @@ export function changePassword(
   options?: RequestOptions,
 ): Promise<ApiResponse<ChangePasswordResult>> {
   return request<ChangePasswordResult>(OPERATIONS.changePassword, input, options);
+}
+
+/**
+ * Classify Document Version
+ *
+ * `PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification`.
+ */
+export function classifyDocumentVersion(
+  input: ClassifyDocumentVersionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ClassifyDocumentVersionResult>> {
+  return request<ClassifyDocumentVersionResult>(OPERATIONS.classifyDocumentVersion, input, options);
+}
+
+/**
+ * Compare Document Versions
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison`.
+ */
+export function compareDocumentVersions(
+  input: CompareDocumentVersionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CompareDocumentVersionsResult>> {
+  return request<CompareDocumentVersionsResult>(OPERATIONS.compareDocumentVersions, input, options);
+}
+
+/**
+ * Correct Version Classification
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections`.
+ */
+export function correctVersionClassification(
+  input: CorrectVersionClassificationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CorrectVersionClassificationResult>> {
+  return request<CorrectVersionClassificationResult>(OPERATIONS.correctVersionClassification, input, options);
+}
+
+/**
+ * Assign a project, or one document of it, to an expert.
+ *
+ * `POST /assignments`.
+ */
+export function createAssignment(
+  input: CreateAssignmentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateAssignmentResult>> {
+  return request<CreateAssignmentResult>(OPERATIONS.createAssignment, input, options);
 }
 
 /**
@@ -202,6 +320,30 @@ export function createProject(
 }
 
 /**
+ * Decide Optimisation Proposal
+ *
+ * `POST /optimisation-proposals/{optimisation_proposal_id}/decisions` - a write; carries a required Idempotency-Key.
+ */
+export function decideOptimisationProposal(
+  input: DecideOptimisationProposalInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<DecideOptimisationProposalResult>> {
+  return request<DecideOptimisationProposalResult>(OPERATIONS.decideOptimisationProposal, input, options);
+}
+
+/**
+ * Export Optimisation Proposals Csv
+ *
+ * `GET /optimisation-passes/{optimisation_pass_id}/export.csv`.
+ */
+export function exportOptimisationProposalsCsv(
+  input: ExportOptimisationProposalsCsvInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ExportOptimisationProposalsCsvResult>> {
+  return request<ExportOptimisationProposalsCsvResult>(OPERATIONS.exportOptimisationProposalsCsv, input, options);
+}
+
+/**
  * Download the CSV for one run.
  *
  * `GET /runs/{run_id}/export.csv`.
@@ -211,6 +353,30 @@ export function exportRunCsv(
   options?: RequestOptions,
 ): Promise<ApiResponse<ExportRunCsvResult>> {
   return request<ExportRunCsvResult>(OPERATIONS.exportRunCsv, input, options);
+}
+
+/**
+ * Download the Excel workbook for one run.
+ *
+ * `GET /runs/{run_id}/export.xlsx`.
+ */
+export function exportRunXlsx(
+  input: ExportRunXlsxInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ExportRunXlsxResult>> {
+  return request<ExportRunXlsxResult>(OPERATIONS.exportRunXlsx, input, options);
+}
+
+/**
+ * Read one assignment with its history.
+ *
+ * `GET /assignments/{assignment_uid}`.
+ */
+export function getAssignment(
+  input: GetAssignmentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetAssignmentResult>> {
+  return request<GetAssignmentResult>(OPERATIONS.getAssignment, input, options);
 }
 
 /**
@@ -235,6 +401,18 @@ export function getDocumentVersion(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetDocumentVersionResult>> {
   return request<GetDocumentVersionResult>(OPERATIONS.getDocumentVersion, input, options);
+}
+
+/**
+ * Get Effective Vendor Lists
+ *
+ * `GET /projects/{project_uid}/vendor-lists`.
+ */
+export function getEffectiveVendorLists(
+  input: GetEffectiveVendorListsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetEffectiveVendorListsResult>> {
+  return request<GetEffectiveVendorListsResult>(OPERATIONS.getEffectiveVendorLists, input, options);
 }
 
 /**
@@ -286,6 +464,30 @@ export function getProductVersion(
 }
 
 /**
+ * Get Run Norm References
+ *
+ * `GET /runs/{run_id}/norm-references`.
+ */
+export function getRunNormReferences(
+  input: GetRunNormReferencesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetRunNormReferencesResult>> {
+  return request<GetRunNormReferencesResult>(OPERATIONS.getRunNormReferences, input, options);
+}
+
+/**
+ * Get Run Norm Verification
+ *
+ * `GET /runs/{run_id}/norm-verification`.
+ */
+export function getRunNormVerification(
+  input: GetRunNormVerificationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetRunNormVerificationResult>> {
+  return request<GetRunNormVerificationResult>(OPERATIONS.getRunNormVerification, input, options);
+}
+
+/**
  * Read run state and per-stage state.
  *
  * `GET /runs/{run_id}`.
@@ -295,6 +497,30 @@ export function getRunStatus(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetRunStatusResult>> {
   return request<GetRunStatusResult>(OPERATIONS.getRunStatus, input, options);
+}
+
+/**
+ * Get Section Specification
+ *
+ * `GET /sections/{section_code}/specification`.
+ */
+export function getSectionSpecification(
+  input: GetSectionSpecificationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetSectionSpecificationResult>> {
+  return request<GetSectionSpecificationResult>(OPERATIONS.getSectionSpecification, input, options);
+}
+
+/**
+ * Get Specification Prices
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/specification-prices`.
+ */
+export function getSpecificationPrices(
+  input: GetSpecificationPricesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetSpecificationPricesResult>> {
+  return request<GetSpecificationPricesResult>(OPERATIONS.getSpecificationPrices, input, options);
 }
 
 /**
@@ -322,6 +548,18 @@ export function getVersionBlocks(
 }
 
 /**
+ * Get Version Section Review
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review`.
+ */
+export function getVersionSectionReview(
+  input: GetVersionSectionReviewInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetVersionSectionReviewResult>> {
+  return request<GetVersionSectionReviewResult>(OPERATIONS.getVersionSectionReview, input, options);
+}
+
+/**
  * Exchange a login and a password for a bearer credential.
  *
  * `POST /auth/token`.
@@ -331,6 +569,30 @@ export function issueToken(
   options?: RequestOptions,
 ): Promise<ApiResponse<IssueTokenResult>> {
   return request<IssueTokenResult>(OPERATIONS.issueToken, input, options);
+}
+
+/**
+ * List the analysis profile of every section.
+ *
+ * `GET /analysis/profiles`.
+ */
+export function listAnalysisProfiles(
+  input: ListAnalysisProfilesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListAnalysisProfilesResult>> {
+  return request<ListAnalysisProfilesResult>(OPERATIONS.listAnalysisProfiles, input, options);
+}
+
+/**
+ * List assignments.
+ *
+ * `GET /assignments`.
+ */
+export function listAssignments(
+  input: ListAssignmentsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListAssignmentsResult>> {
+  return request<ListAssignmentsResult>(OPERATIONS.listAssignments, input, options);
 }
 
 /**
@@ -394,6 +656,18 @@ export function listExecutionQueue(
 }
 
 /**
+ * List Norm Documents
+ *
+ * `GET /norm-documents`.
+ */
+export function listNormDocuments(
+  input: ListNormDocumentsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListNormDocumentsResult>> {
+  return request<ListNormDocumentsResult>(OPERATIONS.listNormDocuments, input, options);
+}
+
+/**
  * List Norm Paragraphs
  *
  * `GET /norm-documents/{norm_document_id}/paragraphs`.
@@ -430,6 +704,54 @@ export function listNormSnapshots(
 }
 
 /**
+ * List Optimisation Passes
+ *
+ * `GET /projects/{project_uid}/optimisation-passes`.
+ */
+export function listOptimisationPasses(
+  input: ListOptimisationPassesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListOptimisationPassesResult>> {
+  return request<ListOptimisationPassesResult>(OPERATIONS.listOptimisationPasses, input, options);
+}
+
+/**
+ * List Optimisation Proposals
+ *
+ * `GET /optimisation-passes/{optimisation_pass_id}/proposals`.
+ */
+export function listOptimisationProposals(
+  input: ListOptimisationProposalsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListOptimisationProposalsResult>> {
+  return request<ListOptimisationProposalsResult>(OPERATIONS.listOptimisationProposals, input, options);
+}
+
+/**
+ * List Price List Positions
+ *
+ * `GET /price-lists/{price_list_id}/positions`.
+ */
+export function listPriceListPositions(
+  input: ListPriceListPositionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListPriceListPositionsResult>> {
+  return request<ListPriceListPositionsResult>(OPERATIONS.listPriceListPositions, input, options);
+}
+
+/**
+ * List Price List Revisions
+ *
+ * `GET /projects/{project_uid}/price-lists`.
+ */
+export function listPriceListRevisions(
+  input: ListPriceListRevisionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListPriceListRevisionsResult>> {
+  return request<ListPriceListRevisionsResult>(OPERATIONS.listPriceListRevisions, input, options);
+}
+
+/**
  * List projects, newest first.
  *
  * `GET /projects`.
@@ -439,6 +761,18 @@ export function listProjects(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListProjectsResult>> {
   return request<ListProjectsResult>(OPERATIONS.listProjects, input, options);
+}
+
+/**
+ * List Proposal Decisions
+ *
+ * `GET /optimisation-proposals/{optimisation_proposal_id}/decisions`.
+ */
+export function listProposalDecisions(
+  input: ListProposalDecisionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListProposalDecisionsResult>> {
+  return request<ListProposalDecisionsResult>(OPERATIONS.listProposalDecisions, input, options);
 }
 
 /**
@@ -658,6 +992,18 @@ export function setExecutionPaused(
 }
 
 /**
+ * Set Global Vendor List
+ *
+ * `PUT /vendor-lists/{section_code}`.
+ */
+export function setGlobalVendorList(
+  input: SetGlobalVendorListInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetGlobalVendorListResult>> {
+  return request<SetGlobalVendorListResult>(OPERATIONS.setGlobalVendorList, input, options);
+}
+
+/**
  * Set Priority
  *
  * `PUT /execution/queue/{job_id}/priority` - a write; carries a required Idempotency-Key.
@@ -670,6 +1016,18 @@ export function setJobPriority(
 }
 
 /**
+ * Set Project Vendor List
+ *
+ * `PUT /projects/{project_uid}/vendor-lists/{section_code}`.
+ */
+export function setProjectVendorList(
+  input: SetProjectVendorListInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetProjectVendorListResult>> {
+  return request<SetProjectVendorListResult>(OPERATIONS.setProjectVendorList, input, options);
+}
+
+/**
  * Set Worker Intake
  *
  * `PUT /execution/workers/{worker_id}/intake` - a write; carries a required Idempotency-Key.
@@ -679,6 +1037,18 @@ export function setWorkerIntake(
   options?: RequestOptions,
 ): Promise<ApiResponse<SetWorkerIntakeResult>> {
   return request<SetWorkerIntakeResult>(OPERATIONS.setWorkerIntake, input, options);
+}
+
+/**
+ * Start Optimisation Pass
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes` - a write; carries a required Idempotency-Key.
+ */
+export function startOptimisationPass(
+  input: StartOptimisationPassInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartOptimisationPassResult>> {
+  return request<StartOptimisationPassResult>(OPERATIONS.startOptimisationPass, input, options);
 }
 
 /**
@@ -742,6 +1112,18 @@ export function submitRegistration(
 }
 
 /**
+ * Move an assignment: start, complete, return, reassign or cancel it.
+ *
+ * `POST /assignments/{assignment_uid}/transitions`.
+ */
+export function transitionAssignment(
+  input: TransitionAssignmentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<TransitionAssignmentResult>> {
+  return request<TransitionAssignmentResult>(OPERATIONS.transitionAssignment, input, options);
+}
+
+/**
  * Set the signed-in account's names, and complete its profile.
  *
  * `PATCH /me`.
@@ -778,6 +1160,30 @@ export function uploadDocument(
 }
 
 /**
+ * Upload one portal bundle as the next immutable version of an existing document.
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/versions` - a write; carries a required Idempotency-Key.
+ */
+export function uploadDocumentVersion(
+  input: UploadDocumentVersionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UploadDocumentVersionResult>> {
+  return request<UploadDocumentVersionResult>(OPERATIONS.uploadDocumentVersion, input, options);
+}
+
+/**
+ * Upload Price List
+ *
+ * `POST /projects/{project_uid}/price-lists` - a write; carries a required Idempotency-Key.
+ */
+export function uploadPriceList(
+  input: UploadPriceListInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UploadPriceListResult>> {
+  return request<UploadPriceListResult>(OPERATIONS.uploadPriceList, input, options);
+}
+
+/**
  * The whole client as one object, for a consumer that would rather inject it than
  * import each function. The named exports above are the ordinary way in.
  */
@@ -786,28 +1192,51 @@ export const apiClient = {
   approveRegistration,
   archiveUser,
   cancelRun,
+  carryOverDecision,
   changePassword,
+  classifyDocumentVersion,
+  compareDocumentVersions,
+  correctVersionClassification,
+  createAssignment,
   createProject,
+  decideOptimisationProposal,
+  exportOptimisationProposalsCsv,
   exportRunCsv,
+  exportRunXlsx,
+  getAssignment,
   getDashboardSummary,
   getDocumentVersion,
+  getEffectiveVendorLists,
   getFinding,
   getMe,
   getNormDocument,
   getProductVersion,
+  getRunNormReferences,
+  getRunNormVerification,
   getRunStatus,
+  getSectionSpecification,
+  getSpecificationPrices,
   getUser,
   getVersionBlocks,
+  getVersionSectionReview,
   issueToken,
+  listAnalysisProfiles,
+  listAssignments,
   listDecisionHistory,
   listDecisions,
   listDocuments,
   listExecutionJournal,
   listExecutionQueue,
+  listNormDocuments,
   listNormParagraphs,
   listNormSnapshotEvents,
   listNormSnapshots,
+  listOptimisationPasses,
+  listOptimisationProposals,
+  listPriceListPositions,
+  listPriceListRevisions,
   listProjects,
+  listProposalDecisions,
   listRegistrations,
   listReleases,
   listRunFindings,
@@ -826,14 +1255,20 @@ export const apiClient = {
   searchNorms,
   setCurrentNormSnapshot,
   setExecutionPaused,
+  setGlobalVendorList,
   setJobPriority,
+  setProjectVendorList,
   setWorkerIntake,
+  startOptimisationPass,
   startRun,
   streamDocumentVersionContent,
   streamNormDocumentContent,
   streamVersionPortalBlockCrop,
   submitRegistration,
+  transitionAssignment,
   updateMyProfile,
   updateUser,
   uploadDocument,
+  uploadDocumentVersion,
+  uploadPriceList,
 } as const;

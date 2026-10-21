@@ -24,7 +24,10 @@ from auditmanager.api.routers import Router, build_router
 from auditmanager.api.security import TokenSigner, derive_signing_key
 from auditmanager.bootstrap.adapters import (
     AccountAdapter,
+    AnalysisProfileAdapter,
     BlockAdapter,
+    ComparisonAdapter,
+    DispatchAdapter,
     CredentialAdapter,
     CsvExportAdapter,
     DashboardAdapter,
@@ -34,14 +37,21 @@ from auditmanager.bootstrap.adapters import (
     FindingAdapter,
     NormContentAdapter,
     NormsSearchAdapter,
+    OptimisationAdapter,
+    OptimisationProposalAdapter,
     ProjectAdapter,
     RegistrationAdapter,
     ReleasesAdapter,
     RunAdapter,
+    SectionAdapter,
+    SectionSpecificationAdapter,
+    SpecificationPricesAdapter,
+    XlsxExportAdapter,
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.runs.public import DurableCarrier, ReclaimingCarrier, run_to_terminal
+from auditmanager.sections.public import SECTION_CODES, section_names
 from auditmanager.releases.public import (
     ReleaseRepository, compute_build_id, read_product_version,
 )
@@ -126,6 +136,9 @@ def build_worker_runtime(
         )
     )
     model_adapter, provider_config, _profile_id, _bundle_id = _build_provider(resolved, env)
+    # `W59-SECTION-SEAL-01`. The worker runs each claimed run with the profile it pinned,
+    # resolved through the same registry the application routes with.
+    text_profiles = load_text_profiles()
 
     def execute(run_id: str, worker_id: str) -> None:
         run_to_terminal(
@@ -135,6 +148,7 @@ def build_worker_runtime(
             adapter=model_adapter,
             provider_config=provider_config,
             worker_id=worker_id,
+            text_profiles=text_profiles.resolve,
         )
 
     return WorkerRuntime(
@@ -199,6 +213,11 @@ def build_application(
     )
 
     model_adapter, provider_config, profile_id, bundle_id = _build_provider(resolved, env)
+    # `W59-SECTION-SEAL-01`. The section-keyed text-profile registry: AR from the v1
+    # constants plus every `text-profile/1` package. Loaded once; a bad package refuses the
+    # start rather than serving a partial table. Run start routes through its table, the
+    # executor resolves pinned profiles through it, and the review reports its sections.
+    text_profiles = load_text_profiles()
 
     ingest = IngestService(store, session_factory=sessions)
 
@@ -253,6 +272,11 @@ def build_application(
         # `W55B-BUDGET-01`: derived once by `settings.load` from the model and the ceiling, and
         # refused there when it cannot hold the AR document set. Always passed, never None.
         input_budget_characters=resolved.input_budget_characters,
+        # `W59-SECTION-SEAL-01`. Always both: a served run start routes from the version's
+        # persisted classification, never from the configured AR pair above, and a served
+        # run executes its pinned profile. ``test_the_served_application_routes_by_section``.
+        section_profiles=text_profiles.section_profiles(),
+        text_profiles=text_profiles.resolve,
     )
     if isinstance(carrier, DurableCarrier):
         carrier.configure_runner(run_adapter._job)
@@ -289,6 +313,41 @@ def build_application(
         # statement timeout; the norm PDF through its confirmed binding from the same store.
         norms=NormsSearchAdapter(sessions, timeout_ms=resolved.norms_search_timeout_ms),
         norm_content=NormContentAdapter(sessions, blob_store=store),
+        # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook: the same session factory, and the
+        # version's portal companion read from the same store.
+        xlsx_exports=XlsxExportAdapter(sessions, blob_store=store),
+        # `W59-SECTION-SEAL-01`. Classification and review over the same sessions and store;
+        # `executable` is the registry's own section set.
+        sections=SectionAdapter(
+            sessions,
+            blob_store=store,
+            executable_sections=text_profiles.executable_sections(),
+        ),
+        # `W59-VERSION-COMPARE-01`. Two versions of one set compared, read-only, over the
+        # same sessions and store: classifications from the documents projection, the
+        # section catalogue from `sections.public`, text layers held to their recorded
+        # digests.
+        comparisons=ComparisonAdapter(
+            sessions, blob_store=store, section_codes=SECTION_CODES,
+        ),
+        # `W59-ANALYSIS-SETTINGS-01`. The same registry run start routes through, listed
+        # read-only for «Настройки анализа», named from the reviewed section catalogue.
+        analysis_profiles=AnalysisProfileAdapter(text_profiles, section_names=section_names()),
+        # `W61-DISPATCHER-01`. «Диспетчер» over the same session factory; the role set
+        # and the people's labels are read through `access` in each transaction.
+        dispatch=DispatchAdapter(sessions),
+        # `W60-PRICE-LIST-01`. Project price lists (the uploaded file kept as a Blob in the
+        # same store) and vendor lists, over the same sessions.
+        optimisation=OptimisationAdapter(sessions, blob_store=store),
+        # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's
+        # current price list; the saved text layers are read as the comparison reads them.
+        specification_prices=SpecificationPricesAdapter(sessions, blob_store=store),
+        # `W60-OPT-PROPOSALS-01`. The optimisation passes, their proposals and the experts'
+        # decisions over the same sessions; the saved text layers are read as the comparison
+        # reads them.
+        optimisation_proposals=OptimisationProposalAdapter(sessions, blob_store=store),
+        # `W63-SECTION-FORM7-01`. The same saved-text port, a section's rows across projects.
+        section_specifications=SectionSpecificationAdapter(sessions, blob_store=store),
     )
     return Application(
         router=router,
@@ -298,6 +357,27 @@ def build_application(
         carrier=carrier,
         execution_role=resolved.execution_role,
     )
+
+
+def load_text_profiles() -> Any:
+    """The section-keyed text-profile registry, or a start-up refusal (`W59-SECTION-SEAL-01`).
+
+    ``analysis.text`` publishes no registry factory through ``analysis.public``; the
+    composition root assembles from the module that defines it, as ``_build_provider`` does
+    for the adapters.
+    """
+    from auditmanager.analysis.text.profile_registry import (
+        TextProfileLoadError,
+        load_text_profile_registry,
+    )
+
+    try:
+        return load_text_profile_registry()
+    except TextProfileLoadError as exc:
+        raise ConfigurationError(
+            f"the text-profile packages cannot be registered ({exc}); the application "
+            "refuses to start rather than route runs through a partial registry"
+        ) from exc
 
 
 def _provenance_mode(transport: str) -> str:

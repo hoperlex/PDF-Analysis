@@ -57,6 +57,7 @@ __all__ = [
     "CsvExportPort",
     "DashboardPort",
     "DecisionPort",
+    "DispatchPort",
     "DocumentPort",
     "FindingPort",
     "NormContentPort",
@@ -66,7 +67,15 @@ __all__ = [
     "ReleasesPort",
     "RunPort",
     "ExecutionPort",
+    "SectionPort",
+    "ComparisonPort",
+    "AnalysisProfilePort",
+    "OptimisationPort",
+    "SectionSpecificationPort",
+    "SpecificationPricesPort",
+    "OptimisationProposalPort",
     "UploadedDocument",
+    "XlsxExportPort",
 ]
 
 
@@ -150,8 +159,8 @@ class ProjectPort(Protocol):
 
 @runtime_checkable
 class DocumentPort(Protocol):
-    """``uploadDocument``, ``getDocumentVersion``, ``streamDocumentVersionContent``,
-    ``listDocuments`` and ``listVersions``."""
+    """``uploadDocument``, ``uploadDocumentVersion``, ``getDocumentVersion``,
+    ``streamDocumentVersionContent``, ``listDocuments`` and ``listVersions``."""
 
     def upload_document(
         self,
@@ -173,10 +182,28 @@ class DocumentPort(Protocol):
         the cost is visible in the one place that pays it, not hidden in the signature. It
         neither closes the handle nor keeps it after returning.
 
-        ``section`` is one of `R-40`'s fourteen project-section codes, or ``None`` when
+        ``section`` is one of `R-40`'s fifteen project-section codes, or ``None`` when
         the caller does not supply one -- optional here for the same reason
         ``display_title`` is: the frozen ``UploadDocumentRequest.section`` is not
         required, and this port does not invent a value the caller never gave it.
+        """
+
+    def upload_document_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        content: BinaryIO,
+        source_filename: str,
+        idempotency_key: str,
+    ) -> UploadedDocument:
+        """Publish one portal bundle as the next immutable version of an existing document.
+
+        `W59-VERSION-UPLOAD-01`. The same handle contract and envelope as
+        :meth:`upload_document`. The document must exist and belong to ``project_uid``
+        (``not_found`` naming ``Document`` otherwise, an unknown project naming
+        ``Project``); the version takes the document's next ordinal and becomes its current
+        version; it takes no title and no section, and starts unclassified.
         """
 
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
@@ -316,16 +343,77 @@ class DashboardPort(Protocol):
         """The whole deployment's operational shape, right now: all four panels.
 
         **Absent is not empty.** Every member of ``Verdict`` and ``RunState`` appears in
-        its panel even at a count of zero, every one of the fourteen frozen project
+        its panel even at a count of zero, every one of the fifteen current project
         sections appears in ``section_breakdown`` even with no documents, and the
         documents nobody has classified yet are their own row rather than a rounding
-        error folded into one of the fourteen.
+        error folded into one of the fifteen.
+        """
+
+
+@runtime_checkable
+class SectionPort(Protocol):
+    """``classifyDocumentVersion``, ``correctVersionClassification`` and
+    ``getVersionSectionReview``. `W59-SECTION-SEAL-01`, `CLASSIFICATION-CORRECTION-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    Each operation addresses a version through its document and project: a version that does
+    not belong to the named document, or a document outside the named project, is
+    ``not_found`` exactly as an unknown identity is.
+    """
+
+    def classify_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        version_uid: str,
+        project_stage: str,
+        section_code: str,
+        user_uid: str,
+    ) -> models.VersionClassification:
+        """Persist an expert's stage and section for one version, or answer the stored one.
+
+        The actor's role set is read from the account in the same transaction: ``expert``
+        is required and ``admin`` alone is refused (``permission_denied``). An exact repeat
+        answers the stored row, first confirmer kept; a different stage or section is
+        ``conflict`` with ``conflict_reason: version_already_classified`` and changes
+        nothing.
+        """
+
+    def correct_classification(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        version_uid: str,
+        project_stage: str,
+        section_code: str,
+        reason: str,
+        expected_revision: int,
+        user_uid: str,
+    ) -> models.VersionClassification:
+        """Append an expert's correction of the version's stage and/or section.
+
+        `CLASSIFICATION-CORRECTION-01`. ``expert`` is required (``admin`` alone is
+        ``permission_denied``). The answer is the revision written, or the stored revision an
+        exact repeat (same expert, values, reason and ``expected_revision``) created. A stale
+        ``expected_revision`` is ``conflict`` (``classification_revision_stale``), an
+        unclassified version ``conflict`` (``version_not_classified``), a correction equal to
+        the current classification ``validation_failed``. Nothing is ever overwritten.
+        """
+
+    def get_section_review(
+        self, *, project_uid: str, document_uid: str, version_uid: str
+    ) -> models.SectionReview:
+        """All fifteen choices with display evidence and the current classification.
+
+        Display only: no suggestion confirms a section or authorizes a run.
         """
 
 
 @runtime_checkable
 class RunPort(Protocol):
-    """``startRun``, ``getRunStatus`` and ``listRuns``. Produced by ``B5``.
+    """Run status and the W57a refusing normative report seam. Produced by ``B5``.
 
     The success terminal is ``published``; an implementation that reported
     ``succeeded`` would be reporting a ``StageResult`` status on the wrong aggregate.
@@ -347,6 +435,19 @@ class RunPort(Protocol):
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         """Current run state and per-stage state."""
+
+    def get_norm_verification(self, *, run_id: str) -> models.NormVerificationReport:
+        """Verified v3 report only. Until CITE supplies its reader, typed refusal."""
+
+    def get_run_norm_references(self, *, run_id: str) -> models.RunNormReferences:
+        """The norms the run's saved text cites, each against the run's pinned snapshot.
+
+        `NORM-REFS-RUN-01`. Computed per request, read-only, deterministic: no finding, no
+        severity, no model. A run that pinned no snapshot, has no saved text layer or cites
+        more than one answer carries is a ``state`` in the answer, never an empty list; an
+        unknown run is ``not_found``; a stored fact that contradicts its own constraints is
+        ``internal_error``.
+        """
 
     def run_exists(self, *, run_id: str) -> bool:
         """Is there such a run? `D-74`.
@@ -440,6 +541,7 @@ class DecisionPort(Protocol):
         finding_uid: str,
         finding_observation_id: str,
         event_type: str,
+        severity: str | None,
         comment: str | None,
         idempotency_key: str,
         author_label: str,
@@ -467,6 +569,10 @@ class DecisionPort(Protocol):
         the ledger persists beside the label (`expert_decision_event.author_user_uid`) so
         "no decisions by this account" is a query and not a guess from a display string.
         It has no default either, here or in the ledger.
+
+        ``severity`` is optional in the wire contract and must be passed explicitly.
+        Until W56A-DECIDE-01 owns the ledger write, the adapter refuses a non-null
+        value instead of silently dropping the expert's decision.
         """
 
     def decision_history(self, *, finding_uid: str) -> Sequence[DecisionEventView]:
@@ -508,7 +614,7 @@ class CsvExportPort(Protocol):
     """``exportRunCsv``. Produced by ``B5``.
 
     The router adds nothing to what this returns: no rendering, no column list, no
-    policy. ``P02_SEAMS.md`` section 6 freezes the seventeen columns, the byte
+    policy. ``P02_SEAMS.md`` section 6 declares the nineteen columns, the byte
     conventions and the export policy, and the discriminator is the frozen
     ``terminal_semantics.publishes_result`` flag rather than a hand-written state list.
     """
@@ -522,6 +628,23 @@ class CsvExportPort(Protocol):
         the ``run_state`` column. ``partial_result_not_publishable`` is never emitted.
         Nothing is created, so a repeat returns byte-identical bytes.
         """
+
+
+@runtime_checkable
+class XlsxExportPort(Protocol):
+    """``exportRunXlsx`` (`W57B-NORMS-CATALOGUE-XLSX-01`).
+
+    The router adds nothing to the bytes: the workbook's layout and every refusal belong to
+    ``auditmanager.exports.export_run_xlsx``. The refusals are ``exportRunCsv``'s first --
+    ``not_found`` and ``state_transition_not_allowed`` decided on the run row before
+    anything else is read -- then ``storage_integrity_error`` (``role:
+    source.structured_companion``) for a version without verifiable sheet labels and
+    ``required_norm_unavailable`` (``reference_kind: norm_retrieval_set``) for citations
+    that do not verify. Nothing is created, so a repeat returns byte-identical bytes.
+    """
+
+    def export_run_xlsx(self, *, run_id: str, principal_id: str) -> bytes:
+        """The workbook bytes for one run, for the principal the seam admitted."""
 
 
 @runtime_checkable
@@ -757,6 +880,15 @@ class NormsSearchPort(Protocol):
     def get_document(self, *, norm_document_id: str) -> models.NormDocument:
         """One norm document; ``not_found`` for an identity that names nothing."""
 
+    def list_catalogue(
+        self, *, q: str | None, kind: str | None, cursor: str | None, limit: int
+    ) -> models.NormCatalogueEntryPage:
+        """``listNormDocuments`` (`W57B-NORMS-CATALOGUE-XLSX-01`): the current snapshot's
+        documents with display names, filtered by text and kind, in designation order; no
+        current snapshot is ``required_norm_unavailable`` (``reference_kind:
+        norms_snapshot``); a ``q`` or ``kind`` with nothing to filter by, or a foreign
+        cursor, is ``validation_failed``."""
+
     def list_paragraphs(
         self, *, norm_document_id: str, cursor: str | None, limit: int
     ) -> models.NormParagraphPage:
@@ -795,3 +927,291 @@ class NormContentPort(Protocol):
         self, *, norm_document_id: str, byte_range: ByteRange | None
     ) -> StreamedContent:
         """The document's source PDF, whole or one window, opened before returning."""
+
+
+@runtime_checkable
+class ComparisonPort(Protocol):
+    """``compareDocumentVersions`` and ``carryOverDecision``. `W59-VERSION-COMPARE-01`,
+    `W59-DECISION-CARRYOVER-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    The comparison is always a ``VersionComparison``: a pair the comparison rule does not
+    admit is ``outcome: refused`` with one closed reason, never an error envelope and never
+    a relabelled pair, and the read writes nothing. The one write is the expert-confirmed
+    carryover of one source decision to the matched target finding, appended to the
+    decision ledger after the comparison is recomputed.
+    """
+
+    def compare_versions(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        mode: str,
+        diff_offset: int,
+        diff_limit: int,
+    ) -> models.VersionComparison:
+        """The comparison of the two named versions, or why they are not compared."""
+
+    def carry_over_decision(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_finding_uid: str,
+        target_finding_uid: str,
+        source_decision_id: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.CarryOverDecisionResponse:
+        """Carry the confirmed source decision to the target finding, or refuse.
+
+        The expert role is read from the account in the confirming transaction; ``admin``
+        alone is ``permission_denied``. A pair the recomputed comparison no longer proposes,
+        a source decision that is no longer current, a target that already has an event and
+        a severity the target cannot hold are each ``conflict`` with a ``conflict_reason``.
+        """
+
+@runtime_checkable
+class AnalysisProfilePort(Protocol):
+    """``listAnalysisProfiles``. `W59-ANALYSIS-SETTINGS-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    The answer is the composition root's sealed text-profile registry, the one run start
+    routes through: all fifteen sections in the project-structure order, each with its
+    registered profile or ``null``. Nothing behind this port writes, and nothing edits a
+    profile or its status.
+    """
+
+    def list_analysis_profiles(self) -> models.AnalysisProfileList:
+        """Every section and its registered text profile, or ``null`` when none is."""
+
+
+@runtime_checkable
+class SpecificationPricesPort(Protocol):
+    """``getSpecificationPrices``. `W60-OPT-MATCH-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    The answer is always a ``SpecificationPrices``: a precondition that does not hold (an
+    unclassified or non-AR version, no price list, no published run, no saved text, too many
+    rows) is its explicit ``state``, never an error envelope and never an empty table. An
+    unknown project or a set outside it is ``404``. Nothing behind this port writes.
+    """
+
+    def get_specification_prices(
+        self, *, project_uid: str, document_uid: str, offset: int, limit: int, user_uid: str
+    ) -> models.SpecificationPrices:
+        """The priced specification of the set's current AR version, or its state."""
+
+
+@runtime_checkable
+class SectionSpecificationPort(Protocol):
+    """``getSectionSpecification``. `W63-SECTION-FORM7-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives. The
+    answer is always a ``SectionSpecification``: a bound that stops it (``section_too_large``)
+    and a set without a run or a saved text are states in the answer, never an error envelope
+    and never an empty table. An unknown ``project_uid`` filter is ``404``. Nothing behind
+    this port writes.
+    """
+
+    def get_section_specification(
+        self,
+        *,
+        section_code: str,
+        project_uid: str | None,
+        query: str | None,
+        offset: int,
+        limit: int,
+        user_uid: str,
+    ) -> models.SectionSpecification:
+        """The section's combined specification of current versions, priced per project."""
+
+
+class DispatchPort(Protocol):
+    """The four «Диспетчер» operations. `W61-DISPATCHER-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    Every method reads the acting account's role set in its own transaction; the seam's role
+    register is only the outer door (``admin`` for creation, any one role otherwise).
+    """
+
+    def create_assignment(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str | None,
+        assignee_user_uid: str,
+        note: str | None,
+        user_uid: str,
+    ) -> models.Assignment:
+        """Create one assignment, or answer the open one this request repeats exactly.
+
+        ``admin`` only; the assignee must be an active ``expert`` (``validation_failed``,
+        ``constraint: active_expert_required``); the document must belong to the project
+        (``not_found``); another open assignment on the same scope is ``conflict`` with
+        ``conflict_reason: assignment_open``.
+        """
+
+    def list_assignments(
+        self, *, user_uid: str, mine: bool, status: str | None, project_uid: str | None
+    ) -> Sequence[models.Assignment]:
+        """Every assignment the caller may read, newest first, narrowed by the filters.
+
+        An administrator reads all (``mine`` narrows to their own); an expert always reads
+        only the assignments currently given to them.
+        """
+
+    def get_assignment(self, *, assignment_uid: str, user_uid: str) -> models.AssignmentDetail:
+        """One assignment and its history; ``not_found`` when absent or not visible."""
+
+    def transition_assignment(
+        self,
+        *,
+        assignment_uid: str,
+        kind: str,
+        reason: str | None,
+        new_assignee_user_uid: str | None,
+        user_uid: str,
+    ) -> models.Assignment:
+        """Append one event, answer an exact repeat unchanged, or refuse.
+
+        ``started``/``completed``/``returned`` by the current assignee holding ``expert``
+        (``permission_denied``, ``required_capability: assignment:assignee`` otherwise);
+        ``reassigned``/``cancelled`` by ``admin``; a move the table does not allow is
+        ``state_transition_not_allowed`` (``machine: work_assignment``).
+        """
+
+
+@runtime_checkable
+class OptimisationPort(Protocol):
+    """The six «Оптимизация проекта» operations. `W60-PRICE-LIST-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    Behind it: ``auditmanager.optimisation``. Every write reads the actor's role set in its
+    own transaction (``expert`` uploads a price list and overrides a project's vendor list;
+    ``admin`` keeps the global vendor list); every read needs any one role. No method here
+    computes a total, a proposal or a price that a price list does not state.
+    """
+
+    def upload_price_list(
+        self,
+        *,
+        project_uid: str,
+        content: BinaryIO,
+        source_filename: str,
+        default_currency: str | None,
+        idempotency_key: str,
+        user_uid: str,
+    ) -> models.PriceListRevision:
+        """Store one price list as the project's newest revision, or answer the exact repeat."""
+
+    def list_price_list_revisions(
+        self, *, project_uid: str, user_uid: str
+    ) -> models.PriceListRevisionList:
+        """Every revision of the project's price list, newest first."""
+
+    def list_price_list_positions(
+        self, *, price_list_id: str, offset: int, limit: int, user_uid: str
+    ) -> models.PriceListPositionPage:
+        """One page of a revision's positions with the revision and its parse report."""
+
+    def get_effective_vendor_lists(
+        self, *, project_uid: str, user_uid: str
+    ) -> models.EffectiveVendorLists:
+        """All fifteen sections' vendor lists as they apply to the project."""
+
+    def set_global_vendor_list(
+        self,
+        *,
+        section_code: str,
+        entries: Sequence[models.VendorListEntry],
+        expected_vendor_list_id: str | None,
+        expect_current: bool,
+        user_uid: str,
+    ) -> models.VendorListRevision:
+        """Append a global revision, or answer the latest unchanged on an exact repeat."""
+
+    def set_project_vendor_list(
+        self,
+        *,
+        project_uid: str,
+        section_code: str,
+        mode: str,
+        entries: Sequence[models.VendorListEntry],
+        expected_vendor_list_id: str | None,
+        expect_current: bool,
+        user_uid: str,
+    ) -> models.SectionVendorList:
+        """Append a project revision (or none on a repeat) and answer the section's state."""
+
+
+@runtime_checkable
+class OptimisationProposalPort(Protocol):
+    """The six «Предложения» operations. `W60-OPT-PROPOSALS-01`.
+
+    A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
+    Behind it: ``auditmanager.optimisation.proposals``. Every method reads the actor's role
+    set in its own transaction (``expert`` starts a pass and decides a proposal -- an account
+    holding only ``admin`` does neither; any one role reads and exports). Nothing here is a
+    finding, reads a finding or changes one; no money figure exists that a price-list
+    position does not state.
+    """
+
+    def start_optimisation_pass(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        idempotency_key: str,
+        user_uid: str,
+    ) -> models.OptimisationPass:
+        """Start the pass for the document set's current AR version, answer the stored pass
+        with exactly these inputs, or refuse with the first unmet precondition."""
+
+    def list_optimisation_passes(
+        self, *, project_uid: str, document_uid: str | None, limit: int, user_uid: str
+    ) -> models.OptimisationPassList:
+        """The project's passes, newest first, each with its counts by decision."""
+
+    def list_optimisation_proposals(
+        self,
+        *,
+        optimisation_pass_id: str,
+        decision: str | None,
+        offset: int,
+        limit: int,
+        user_uid: str,
+    ) -> models.OptimisationProposalPage:
+        """One page of a pass's proposals with each one's current decision."""
+
+    def decide_optimisation_proposal(
+        self,
+        *,
+        optimisation_proposal_id: str,
+        verdict: str,
+        comment: str | None,
+        idempotency_key: str,
+        user_uid: str,
+    ) -> models.ProposalDecisionResult:
+        """Append one decision, or answer the one stored under the key."""
+
+    def list_proposal_decisions(
+        self, *, optimisation_proposal_id: str, user_uid: str
+    ) -> models.ProposalDecisionList:
+        """Every decision of one proposal, oldest first."""
+
+    def export_optimisation_proposals_csv(
+        self, *, optimisation_pass_id: str, user_uid: str
+    ) -> bytes:
+        """The pass's proposals as the formula-escaped CSV bytes."""

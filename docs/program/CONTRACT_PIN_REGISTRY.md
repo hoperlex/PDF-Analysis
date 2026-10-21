@@ -158,7 +158,7 @@ inventory until the registry and the owning change move together.
       "pin_id": "error-migration-domain-count",
       "family": "error_catalog",
       "path": "tests/contract/domain_p02/test_contract_vocabulary.py",
-      "needle": "assert len(migration_module.ERROR_CODES) == FACTS.stored_error_codes",
+      "needle": "assert len(head._NEW_ERROR_CODES) == FACTS.stored_error_codes",
       "event": "Domain error-catalog addition or removal"
     },
     {

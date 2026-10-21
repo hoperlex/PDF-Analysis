@@ -79,7 +79,7 @@ EXPECTED_SHA256 = "6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd
 EXPECTED_PAGE_COUNT = 8
 EXPECTED_FINDING_COUNT = 3
 EXPECTED_CSV_ROWS = 5
-EXPECTED_CSV_COLUMNS = 17
+EXPECTED_CSV_COLUMNS = 19
 EXPECTED_STAGES = frozenset(
     {
         "document_context_build",
@@ -179,6 +179,22 @@ def journey(client: Client) -> Journey:
     )
     content = answer.body
     ranged = client.stream_content(version["version_uid"], byte_range="bytes=0-1023")
+
+    # `W59-SECTION-SEAL-01`: run start routes from the version's expert classification and
+    # refuses an unclassified version, so the baseline is classified as AR first. The repeat
+    # is a replay of the same row, which a re-run of the session-scoped journey also sends.
+    answer = client.classify_version(
+        project_uid=project["project_uid"],
+        document_uid=version["document_uid"],
+        version_uid=version["version_uid"],
+    )
+    assert answer.status == 200, _blocked(
+        "classifyDocumentVersion",
+        answer,
+        "src/auditmanager/bootstrap/adapters.py and src/auditmanager/sections/",
+        "The expert's classification of the uploaded baseline was refused, so run start "
+        "would refuse the unclassified version.",
+    )
 
     answer = client.start_run(version_uid=version["version_uid"], key=key("run"))
     assert answer.status == 202, _blocked(
@@ -458,7 +474,14 @@ def test_c3_the_surface_declares_no_operation_that_can_mutate_a_version(
     ``/execution``, and `W54-SEAL-01` the worker intake switch
     (``PUT /execution/workers/{worker_id}/intake``), and `W55A-SEAL-01` the current norms
     snapshot's designation (``PUT /norms/snapshots/current``). The set is pinned exactly, so another is a decision someone
-    has to make here, and none of them may address a document or a version.
+    has to make here, and none of them may address a document or a version -- with one
+    reasoned exception.
+
+    `W59-SECTION-SEAL-01`'s ``classifyDocumentVersion`` (``PUT .../versions/{version_uid}/
+    classification``) addresses a version and changes **nothing in it**: the classification
+    is a separate, append-only row (``document_version_classification``), written once and
+    never updated, and the version's bytes, manifest and row stay immutable. It is the one
+    path allowed under ``/versions``, and the version itself still admits no mutating method.
     """
     mutating = {
         route.operation_id: route.path
@@ -474,9 +497,14 @@ def test_c3_the_surface_declares_no_operation_that_can_mutate_a_version(
         "setExecutionPaused",
         "setWorkerIntake",
         "setCurrentNormSnapshot",
+        "classifyDocumentVersion",
     }, mutating
+    assert mutating["classifyDocumentVersion"].endswith("/versions/{version_uid}/classification")
     assert not [
-        path for path in mutating.values() if "/versions" in path or "/documents" in path
+        path
+        for operation, path in mutating.items()
+        if operation != "classifyDocumentVersion"
+        and ("/versions" in path or "/documents" in path)
     ], mutating
     # Addressed at the version that really exists, so a 404 here can only mean "no such
     # route" and never "no such resource" -- which is the whole point of the assertion.
@@ -518,9 +546,21 @@ def test_c3_a_second_upload_publishes_a_new_identity_and_leaves_the_first_untouc
     assert second["sha256"] == EXPECTED_SHA256
     assert second["version_ordinal"] == 1
 
+    # `W59-SECTION-SEAL-01`: a new version starts unclassified.
+    assert "classification" not in second
+
     reread = client.get_version(journey.version_uid)
     assert reread.status == 200
-    assert reread.json == journey.version_read, (
+    # The journey classified the first version after reading it, so the re-read carries
+    # that classification (a separate append-only row) and is otherwise byte-for-byte the
+    # first read: the version itself did not move.
+    reread_body = dict(reread.json)
+    classification = reread_body.pop("classification", None)
+    assert classification is not None, reread.json
+    assert (classification["version_uid"], classification["section_code"]) == (
+        journey.version_uid, "AR",
+    )
+    assert reread_body == journey.version_read, (
         "publishing a second version changed the first one"
     )
 

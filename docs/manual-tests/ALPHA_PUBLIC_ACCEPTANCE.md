@@ -220,10 +220,18 @@ knowledge base displays the current verdicts.
 On the review screen click «Скачать <run_id>-findings.csv» (Download).
 
 **PASS:** the file downloads; UTF-8 includes a BOM; the first row has exactly
-17 columns; each row represents one evidence item; `run_id`,
+19 columns; each row represents one evidence item; `run_id`,
 `provider_mode`, pages, quotations, and current verdicts agree with the
 screen. Downloading again without new decisions produces byte-identical
 content.
+
+Then click «Скачать Excel» beside it (`W57B-NORMS-CATALOGUE-XLSX-01`).
+
+**PASS:** `<run_id>-findings.xlsx` downloads and opens with the sheets «Сводка» and
+«Замечания»; «Замечания» has one row per finding with its «Лист/стр.» from the portal
+bundle; downloading again without new decisions produces byte-identical content. A
+version without a verifiable portal block list is refused with a message on the panel,
+never answered with an empty file.
 
 ### A08 — second run and comparison
 
@@ -241,7 +249,12 @@ number equals the routes in `tests/e2e/pc01/journey/manifest.json`:
 
 1. `/` — home, including the administrator's pending-registration count;
 2. `/projects`;
-3. project;
+3. project — and its «Оптимизация» tab (`W60-PRICE-LIST-01`): as an expert upload a CSV or
+   Excel price list (a row with «по запросу» as its price is listed as skipped, not priced);
+   the revision list marks the newest one current, the positions show the exact prices in the
+   stated currency with the report of how the file was read; the vendor lists name, per section,
+   whether the project's list, the general list or none applies, and only an administrator is
+   offered «Изменить общий список»;
 4. document;
 5. version;
 6. version comparison;
@@ -258,9 +271,17 @@ number equals the routes in `tests/e2e/pc01/journey/manifest.json`:
 16. `/dashboard`;
 17. `/403`;
 18. `/account`;
-19. `/section-optimisation`;
+19. `/section-optimisation` — «Оптимизация разделов» opens on АР; the section picker lists the
+    fifteen sections in the project-structure order; each project of the section is a panel with
+    its sets, its price list (or «нет прайс-листа») and its own totals per currency — there is no
+    total for the section; the rows carry the project, set, version, sheet and page; a project
+    without a price list shows rows with a dash instead of a price; the project filter and the
+    search narrow the rows and never a project's totals; a version nobody classified is listed
+    under «Текущие версии без подтверждённого раздела»;
 20. `/norms`;
-21. `/analysis-settings`;
+21. `/analysis-settings` — fifteen sections in the project-structure order, read-only: АР
+    «встроенный», the drafts «черновик, требует экспертной проверки», ПБ «профиль не создан»;
+    «Подробнее» shows the identities, both hashes and the legacy source;
 22. `/queue`;
 23. `/register` in a separate private window;
 24. `/register/submitted` after submitting a test registration;

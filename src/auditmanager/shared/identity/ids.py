@@ -1,7 +1,7 @@
 """Opaque, prefixed identifier value types.
 
-Source of truth: ``contracts/domain/v1/identifiers.json`` (read-only for this
-session). Every entity declared there gets exactly one type here, carrying exactly
+Source of truth: ``contracts/domain/v1/identifiers.json``. Every entity
+declared there gets exactly one type here, carrying exactly
 the contract prefix. ``tests/contract/domain_p02/test_identifier_catalog.py``
 asserts the two sets are equal in both directions, so a catalog entry that gains a
 type here without a contract entry, or the reverse, is a test failure rather than a
@@ -241,6 +241,43 @@ class NormParagraphId(OpaqueId, prefix="npar", entity="NormParagraph"):
     """Identity of one immutable canonical normative paragraph."""
 
 
+class NormRetrievalSetId(OpaqueId, prefix="nrs", entity="NormRetrievalSet"):
+    """Identity of one snapshot-bound normative retrieval set and catalogue."""
+
+
+class PriceListId(OpaqueId, prefix="prl", entity="PriceList"):
+    """Identity of one uploaded price-list revision of a project (`W60-PRICE-LIST-01`).
+
+    Minted by ``auditmanager.optimisation`` since migration ``0026_price_lists``. Never
+    derived from the project, the revision number, the file name or its checksum.
+    """
+
+
+class PriceListPositionId(OpaqueId, prefix="prp", entity="PriceListPosition"):
+    """Identity of one parsed position of one price-list revision; never its row number."""
+
+
+class VendorListId(OpaqueId, prefix="vnl", entity="VendorList"):
+    """Identity of one immutable vendor-list revision of a section, global or of a project."""
+
+
+class OptimisationPassId(OpaqueId, prefix="opp", entity="OptimisationPass"):
+    """Identity of one optimisation pass over a document set's AR version (`W60-OPT-PROPOSALS-01`).
+
+    Minted by ``auditmanager.optimisation.proposals`` since migration
+    ``0027_optimisation_proposals``. Never derived from the version, the run or the time it
+    started.
+    """
+
+
+class OptimisationProposalId(OpaqueId, prefix="opr", entity="OptimisationProposal"):
+    """Identity of one proposal of one pass; never its ordinal or its specification row."""
+
+
+class ProposalDecisionId(OpaqueId, prefix="opd", entity="ProposalDecision"):
+    """Identity of one appended expert decision on a proposal; never its ``seq``."""
+
+
 class NormCustodyAdmissionId(OpaqueId, prefix="nad", entity="NormCustodyAdmission"):
     """Identity of one custody intent and its outbox row (`R-76`, migration ``0018``).
 
@@ -302,6 +339,14 @@ class RegistrationRequestId(OpaqueId, prefix="reg", entity="RegistrationRequest"
     """Identity of one registration request (``request_id``). `W49-SEAL-01` moved ``reg`` here.
 
     Minted by ``auditmanager.access.registrations`` since migration ``0015``.
+    """
+
+
+class AssignmentUid(OpaqueId, prefix="asg", entity="WorkAssignment"):
+    """Identity of one work assignment of the dispatcher (`W61-DISPATCHER-01`).
+
+    Minted by ``auditmanager.dispatch``; never derived from the project, the document, the
+    assignee or a position in a list. Its history events are ``AuditEventId`` (``evt_``).
     """
 
 

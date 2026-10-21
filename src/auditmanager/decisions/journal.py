@@ -58,6 +58,7 @@ _JOURNAL = text(
         e.finding_observation_id,
         e.event_type,
         e.verdict,
+        e.severity,
         e.comment,
         e.author_label,
         e.author_user_uid,
@@ -109,6 +110,7 @@ class JournalEntry:
     finding_text: str
     current_verdict: str
     decision_event_count: int
+    severity: str | None = None
 
 
 def decision_journal(
@@ -150,6 +152,7 @@ def decision_journal(
             finding_observation_id=row["finding_observation_id"],
             event_type=row["event_type"],
             verdict=row["verdict"],
+            severity=row["severity"],
             comment=row["comment"],
             author_label=row["author_label"],
             author_user_uid=row["author_user_uid"],

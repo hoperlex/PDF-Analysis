@@ -19,7 +19,7 @@ in the schema references one with a foreign key.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Final
 
@@ -38,11 +38,13 @@ __all__ = [
     "ROLE_SOURCE_MARKDOWN",
     "ROLE_SOURCE_STAMP_AUDIT",
     "ROLE_SOURCE_STRUCTURED_COMPANION",
+    "CurrentVersionPlacementRecord",
     "DocumentVersionRecord",
     "ManifestEntry",
     "ProjectListingRecord",
     "ProjectRecord",
     "UploadOutcome",
+    "VersionClassificationRecord",
 ]
 
 #: The blob role, in ``auditmanager.storage``'s namespace. Validated by
@@ -183,6 +185,75 @@ class ManifestEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class VersionClassificationRecord:
+    """One version's **current** expert-confirmed project stage and section.
+
+    `W59-SECTION-SEAL-01` stored the original confirmation in
+    ``document_version_classification`` (``0024``), outside the immutable ``document_version``
+    row and with the same no-UPDATE/no-DELETE guarantee. `CLASSIFICATION-CORRECTION-01`
+    (``0028``) lets an expert correct it by appending revisions; this record is what the view
+    ``version_classification_current`` derives: the latest revision, ``revision`` 1 while the
+    version has no correction. ``confirmed_by_user_uid`` and ``confirmed_at`` are those of
+    **that revision** -- who stands behind these values. It is a fact about exactly one
+    ``version_uid``: never inherited by a newer version, never derived from ``document.section``,
+    a file name or a suggestion.
+    """
+
+    version_uid: VersionUid
+    project_stage: str
+    section_code: str
+    confirmed_by_user_uid: str
+    confirmed_at: datetime
+    revision: int = 1
+
+
+@dataclass(frozen=True, slots=True)
+class ClassificationRevisionRecord:
+    """`CLASSIFICATION-CORRECTION-01`. One numbered entry of a version's classification history.
+
+    Revision 1 is the original confirmation (``reason`` ``None``); revisions 2.. are the
+    append-only corrections, each with the expert who made it and why.
+    """
+
+    version_uid: VersionUid
+    revision: int
+    project_stage: str
+    section_code: str
+    actor_user_uid: str
+    reason: str | None
+    decided_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class CurrentVersionPlacementRecord:
+    """`SECTION-READ-MODEL-01`. A document set's **current** version and where it is placed.
+
+    The narrow row the section views read -- «Оптимизация разделов» finds its member sets and
+    its unclassified ones through it -- so a caller asks «which sets' current versions are
+    confirmed in section X» without walking every project's ``listDocuments``. It carries the
+    set's address (project, document, version), the three display facts the view prints
+    (title, ordinal, page count) and the placement itself; it carries no manifest and no
+    blob handle.
+
+    ``project_stage`` and ``section_code`` are the **current version's** current classification
+    (``version_classification_current``, the latest revision since `CLASSIFICATION-CORRECTION-01`):
+    both set, or both ``None`` while no expert has classified that version. They are never read
+    from the legacy ``document.section``, from an older version of the set or from a file name,
+    and ``version_ordinal`` is a display value, never a key (foundation invariant 3).
+    """
+
+    project_uid: ProjectUid
+    project_name: str
+    document_uid: DocumentUid
+    display_title: str
+    version_uid: VersionUid
+    version_ordinal: int
+    page_count: int
+    project_stage: str | None
+    section_code: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class DocumentVersionRecord:
     """One published, immutable version and its complete input manifest.
 
@@ -206,11 +277,12 @@ class DocumentVersionRecord:
     #: resolves a version by it, and `source_filename` stays withheld because a filename is
     #: named in foundation invariant 3 and a display title is not.
     display_title: str
-    #: `R-40`. One of legacy's fourteen project sections (`D-56`), or ``None`` when the
-    #: document has not been classified. Lives on the document, like ``display_title`` --
+    #: `R-40`. One of the fifteen project sections (legacy's fourteen, `D-56`, and ``PS``),
+    #: or ``None`` when the document has not been classified. Lives on the document, like ``display_title`` --
     #: it is a fact about what the document *is*, not about which published revision of
     #: its bytes this record describes -- and is set once, at upload, never rewritten.
-    #: ``None`` is a real answer and is never defaulted to one of the fourteen codes.
+    #: ``None`` is a real answer and is never defaulted to one of the codes. It is not the
+    #: version's classification below and never routes a run.
     section: str | None
     media_type: str
     byte_size: int
@@ -231,6 +303,16 @@ class DocumentVersionRecord:
     text_character_count: int | None = None
     textless_pages: tuple[int, ...] | None = None
     recognised_character_count: int | None = None
+    #: `W59-SECTION-SEAL-01`. The version's persisted classification, or ``None`` while no
+    #: expert has classified it. Run start routes the analysis profile from this field only.
+    #:
+    #: `CLASSIFICATION-CORRECTION-01`: the **current** classification, which an expert may
+    #: correct at any time -- unlike every other field here, which is immutable. So it is not
+    #: part of the record's equality: the run input readers re-read a version after reading
+    #: its bytes and refuse ``version_changed_during_*_read`` when the two records differ, and
+    #: a correction that commits in that window must not fail a run that is pinned to the
+    #: profile it started with.
+    classification: VersionClassificationRecord | None = field(default=None, compare=False)
 
     def entry(self, role: str) -> ManifestEntry:
         """The manifest entry for one role.

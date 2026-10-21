@@ -40,6 +40,16 @@ const CATEGORY_CHOICES: readonly CategoryChoice[] = [
   'all',
   'internal_contradiction',
   'explicit_placeholder',
+  'dimensions',
+  'layout',
+  'facade',
+  'roof',
+  'documentation',
+  'evacuation',
+  'fire_safety',
+  'accessibility',
+  'insulation',
+  'sound',
 ];
 
 /**

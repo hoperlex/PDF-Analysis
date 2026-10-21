@@ -19,11 +19,19 @@ compared instead is the sorted list of the sequence's byte slices -- a permutati
 nothing else, is erased -- plus the ordering *rule* the system does promise, asserted
 against the live response by :func:`test_the_published_findings_come_back_ascending_by_
 finding_uid` and its CSV twin.
+
+W56a added two CSV severity columns after the historical seventeen. Record 12
+remains unchanged; a digest-checked in-memory projection adds two empty v1
+cells per data row before applying the original O1 byte comparison.
 """
 
 from __future__ import annotations
 
+import base64
+import csv
+import hashlib
 import importlib.util
+import io
 import json
 import sys
 from pathlib import Path
@@ -57,16 +65,78 @@ STATIC_TOKEN = "w13-baseline-static-token"
 
 RECORD_FILES = sorted(journey.RECORDS.glob("*.json"))
 
-#: The frozen document's fifteen operationIds, written out rather than read from the
-#: contract: this suite's job is to notice a surface that changed, and an expectation
-#: computed from a file the change could also touch would not.
+# Record 12 is immutable wave-13 evidence. W56a appended two CSV columns; the
+# comparison below projects only those empty v1 cells in memory. These literals
+# are deliberately independent of the current serializer and seam document.
+_HISTORICAL_CSV_HEADER = (
+    b"project_uid,document_uid,version_uid,run_id,run_state,provider_mode,"
+    b"finding_uid,finding_observation_id,category,finding_text,"
+    b"recommendation_text,evidence_page,evidence_quote,current_verdict,"
+    b"latest_comment,latest_decision_id,decision_recorded_at"
+)
+_HISTORICAL_CSV_SHA256 = (
+    "b5c11af33e6e1886ebbdb9ffe2bd58e0149b1b6206beba3d05704ab371ba9422"
+)
+_APPENDED_CSV_HEADER = b",severity,severity_proposed"
+
+
+def _csv_compat_expected(expected: dict[str, Any]) -> dict[str, Any]:
+    """Project record 12's old bytes to the current, empty-severity v1 CSV.
+
+    The pinned source body remains untouched. A fixed digest and shape checks
+    keep this narrow exception from masking a changed legacy CSV cell.
+    """
+    if expected.get("case") != "12-exportRunCsv.success":
+        raise ValueError("CSV compatibility applies only to record 12")
+    body = expected["response"]["body"]
+    if body.get("kind") != "base64":
+        raise ValueError("record 12 must contain base64 CSV bytes")
+    if body.get("length") != 4409:
+        raise ValueError("record 12 pre-token CSV length changed")
+    raw = base64.b64decode(body["base64"], validate=True)
+    if hashlib.sha256(raw).hexdigest() != _HISTORICAL_CSV_SHA256:
+        raise ValueError("record 12 historical CSV bytes changed")
+    if not raw.startswith(b"\xef\xbb\xbf") or not raw.endswith(b"\r\n"):
+        raise ValueError("record 12 lost its BOM or final CRLF")
+    lines = raw[3:].split(b"\r\n")
+    if len(lines) != 7 or lines[-1] != b"" or lines[0] != _HISTORICAL_CSV_HEADER:
+        raise ValueError("record 12 is not its pinned header and five data rows")
+    parsed = list(csv.reader(io.StringIO(raw[3:].decode("utf-8"), newline="")))
+    if len(parsed) != 6 or any(len(row) != 17 for row in parsed):
+        raise ValueError("record 12 is not a 17-column, five-row CSV")
+
+    projected = (
+        b"\xef\xbb\xbf"
+        + lines[0]
+        + _APPENDED_CSV_HEADER
+        + b"\r\n"
+        + b"\r\n".join(line + b",," for line in lines[1:-1])
+        + b"\r\n"
+    )
+    out = json.loads(json.dumps(expected))
+    out["response"]["body"]["base64"] = base64.b64encode(projected).decode("ascii")
+    # The record's length describes the original body before token substitution.
+    out["response"]["body"]["length"] += len(projected) - len(raw)
+    return out
+
+#: The operationIds this corpus covers, written out rather than read from the contract:
+#: this suite's job is to notice a surface that changed, and an expectation computed from a
+#: file the change could also touch would not.
 #:
 #: **`W18-SEAL` moved it from twelve to fifteen** under owner ruling `R-5`. Adding an
 #: operation adds a case and a record; it is not a permitted *change* to any record and
 #: carries no exception block. What changed here is the count, not the rule: every one of
 #: the fifteen still has to be covered by at least one record.
-FIFTEEN_OPERATIONS = (
+#:
+#: **`W59-SEAL-FOLLOWUP-01` moved it from fifteen to sixteen** with case 02b,
+#: ``classifyDocumentVersion``: since `W59-SECTION-SEAL-01` (`R-139`) ``startRun`` refuses
+#: a version no expert has classified, so the journey cannot reach case 03 without it. The
+#: rule is W18-SEAL's: a new case and a new record, no exception block. The served surface
+#: has more operations than these sixteen; the list is what this corpus records, and the
+#: assertion is that every one of them is covered and nothing else is named.
+SIXTEEN_OPERATIONS = (
     "appendDecision",
+    "classifyDocumentVersion",
     "createProject",
     "exportRunCsv",
     "getDocumentVersion",
@@ -107,16 +177,16 @@ def test_the_record_set_and_the_journey_agree(exchanges: dict[str, Any]) -> None
     assert recorded, "the baseline is empty"
 
 
-def test_every_one_of_the_fifteen_operations_is_covered() -> None:
+def test_every_one_of_the_sixteen_operations_is_covered() -> None:
     covered = set()
     for path in RECORD_FILES:
         operation = json.loads(path.read_text(encoding="utf-8"))["operation"]
         if operation is not None:
             covered.add(operation)
-    assert covered == set(FIFTEEN_OPERATIONS), (
-        f"operations with no record: {sorted(set(FIFTEEN_OPERATIONS) - covered)}; "
+    assert covered == set(SIXTEEN_OPERATIONS), (
+        f"operations with no record: {sorted(set(SIXTEEN_OPERATIONS) - covered)}; "
         f"records naming an operation the contract does not declare: "
-        f"{sorted(covered - set(FIFTEEN_OPERATIONS))}"
+        f"{sorted(covered - set(SIXTEEN_OPERATIONS))}"
     )
 
 
@@ -185,16 +255,40 @@ NON_TERMINAL_RUN_STATES = ("created", "queued", "running", "validating")
 #: (`2894951`) and its `permitted_change`, and
 #: :func:`test_the_two_author_records_moved_by_the_label_and_nothing_else` asserts the move
 #: is that label and nothing else.
+#:
+#: **`W59-SEAL-FOLLOWUP-01` added the tenth, eleventh and twelfth entries**, records 13, 32
+#: and 33, under `D-181`. They are one change seen three times. Since `W59-SECTION-SEAL-01`
+#: (`bd08e03c`, `R-139`), ``startRun`` refuses an unclassified version, so case 02b now
+#: classifies the journey's version. Every read that returns a ``DocumentVersion`` projects
+#: the stored classification, and these are the three records that read the version after
+#: case 02b. Each body moved by one appended property, ``classification``, and nothing else,
+#: and :func:`test_the_three_version_records_moved_by_the_classification_and_nothing_else`
+#: asserts that by digest against the bodies as they stood at ``77aa55bd``.
+#:
+#: **The `W59-SEAL-FOLLOWUP-01` follow-up (finding F-1) lengthened four entries and added a
+#: thirteenth**, at the integrator's instruction. Records 04-07 and 34 stopped reproducing
+#: in the same measurement for a reason unrelated to the classification: `56efead4`
+#: (`W57A-SEAL-01B`) moved the ``text_analysis`` ``stage_version`` to ``1.1.0``, and no run
+#: of this corpus had read a finished run since. Each body moved by that one value.
+#: :func:`test_the_five_run_records_moved_by_the_text_stage_version_and_nothing_else`
+#: asserts it by digest. The debt named is `D-181`, the register row whose resolution this
+#: performs; no row names the drift itself, and the blocks say so. Record 03 is an accepted
+#: run with no stages and does not move.
 PERMITTED_EXCEPTIONS = {
+    "02b-classifyDocumentVersion.success": ("D-182",),
     "03-startRun.success": ("D-19", "D-21", "D-20"),
-    "04-startRun.replay": ("D-19", "D-21"),
-    "05-startRun.replay_with_normalised_property": ("D-19", "D-21"),
-    "06-getRunStatus.success": ("D-19", "D-21"),
-    "07-getRunStatus.correlation_supplied": ("D-19", "D-21"),
+    "04-startRun.replay": ("D-19", "D-21", "D-181"),
+    "05-startRun.replay_with_normalised_property": ("D-19", "D-21", "D-181"),
+    "06-getRunStatus.success": ("D-19", "D-21", "D-181"),
+    "07-getRunStatus.correlation_supplied": ("D-19", "D-21", "D-181"),
     "10-appendDecision.success": ("D-78",),
     "11-listDecisionHistory.success": ("D-78",),
+    "13-getDocumentVersion.success": ("D-181", "D-182"),
     "16-listProjects.success": ("D-16",),
     "31-streamDocumentVersionContent.storage_credential_refused": ("D-7",),
+    "32-listDocuments.success": ("D-181", "D-182"),
+    "33-listVersions.success": ("D-181", "D-182"),
+    "34-listRuns.success": ("D-181",),
 }
 
 
@@ -240,6 +334,16 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     complete profile, whose name form outranks its login (`R-55`). The blocks cite that
     decision and the move is asserted by digest in
     ``test_the_two_author_records_moved_by_the_label_and_nothing_else``.
+
+    `D-181` is records 13, 32 and 33: the classification case 02b makes, projected onto
+    every ``DocumentVersion`` read of that version (`W59-SECTION-SEAL-01`, under `R-139`,
+    whose contract commit declared the property). The move is asserted by digest in
+    ``test_the_three_version_records_moved_by_the_classification_and_nothing_else``.
+
+    `D-181` is also the third debt of records 04-07 and the only one of record 34: the
+    ``text_analysis`` ``stage_version`` `56efead4` moved to ``1.1.0``, first measured when
+    `W59-SEAL-FOLLOWUP-01` brought the journey past case 03 again. Asserted by digest in
+    ``test_the_five_run_records_moved_by_the_text_stage_version_and_nothing_else``.
     """
     marked = {
         path.stem: json.loads(path.read_text(encoding="utf-8"))["exception"]
@@ -266,6 +370,13 @@ def test_exactly_the_named_records_are_marked_as_permitted_exceptions() -> None:
     # `R-5` explicitly did not, which is why `W18-SEAL` left this field unfilled; citing
     # it here would be citing an authority that was declined.
     assert "R-10" in exceptions["16-listProjects.success"]["ruling"]
+    # And the three `D-181` records of the classification cite the window that froze the
+    # seal that declared and filled `DocumentVersion.classification`; the five of the stage
+    # version cite the commit that moved it.
+    for case in _PRE_CLASSIFICATION_VERSION_BODIES:
+        assert "R-139" in exceptions[case]["ruling"], case
+    for case in _PRE_TEXT_STAGE_VERSION_BODIES:
+        assert exceptions[case]["decided_by"] == "56efead4", case
 
 
 #: `W49-SEAL-01`. The SHA-256 of records 10 and 11's body text as captured before the seal
@@ -301,6 +412,159 @@ def test_the_two_author_records_moved_by_the_label_and_nothing_else() -> None:
             f"{case} moved by more than its author label"
         )
         assert "W49-SEAL-01" in record["exception"]["permitted_change"], case
+
+
+#: `W59-SEAL-FOLLOWUP-01`. The SHA-256 of records 13, 32 and 33's body text as committed at
+#: ``77aa55bd``, before case 02b classified the version. Read from the record files at that
+#: commit (``git show 77aa55bd:<record>``), never from the files now: an expectation computed
+#: from the files it checks could not report that something besides the classification moved.
+#: 32 and 33 share a digest because their pages were already byte-identical: one row, the same
+#: version, and an exhausted cursor.
+_PRE_CLASSIFICATION_VERSION_BODIES = {
+    "13-getDocumentVersion.success": (
+        "57e3a695ec6c4e86166d7f16683a7a90f38a9cc6f65f7b2b74b3bdea9e389b6a"
+    ),
+    "32-listDocuments.success": (
+        "fdbbe47e3c437cffd126b0721d7b5d8b71cfd35e23312d2ffc7c811a7ed41edf"
+    ),
+    "33-listVersions.success": (
+        "fdbbe47e3c437cffd126b0721d7b5d8b71cfd35e23312d2ffc7c811a7ed41edf"
+    ),
+}
+
+#: The one property each of the three bodies gained, exactly as a tokenised record spells it:
+#: the classification case 02b asked for (stage ``P``, section ``AR``), the version and the
+#: confirmer by exact value, ``confirmed_at`` under its declared timestamp name and, since
+#: `CLASSIFICATION-CORRECTION-01`, the ``revision`` (``1``: the original confirmation). It is
+#: written out here and is not read from the journey or from case 02b's record.
+_APPENDED_CLASSIFICATION = (
+    ', "classification": {"version_uid": "{{version_uid}}", "project_stage": "P", '
+    '"section_code": "AR", "confirmed_by_user_uid": "{{user_uid}}", "confirmed_at": '
+    '"{{ts_6}}", "revision": 1}'
+)
+
+
+def test_the_three_version_records_moved_by_the_classification_and_nothing_else() -> None:
+    """The re-capture is asserted rather than just made. Take the appended classification
+    out and each body is the previous capture's again, digest for digest.
+
+    `W49-SEAL-01`'s method, and for its reason: a record rewritten wholesale pins whatever
+    the server said. What this pins is the *difference*. It is one property appended where
+    ``document_version_body`` emits it, after ``display_title``, and it must sit at the end
+    of the version object, never somewhere inside it.
+    """
+    for case, digest in _PRE_CLASSIFICATION_VERSION_BODIES.items():
+        record = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+        text = record["response"]["body"]["text"]
+        assert text.count(_APPENDED_CLASSIFICATION) == 1, case
+        assert f'"display_title": "AR baseline"{_APPENDED_CLASSIFICATION}}}' in text, (
+            f"{case}: the classification is not the last property of the version"
+        )
+        restored = text.replace(_APPENDED_CLASSIFICATION, "")
+        assert hashlib.sha256(restored.encode("utf-8")).hexdigest() == digest, (
+            f"{case} moved by more than its appended classification"
+        )
+        assert record["exception"]["debt"] == ["D-181", "D-182"], case
+        assert "W59-SEAL-FOLLOWUP-01" in record["exception"]["permitted_change"], case
+        for token in ("{{ts_6}}", "{{user_uid}}"):
+            assert token in record["tokens"], (case, token)
+
+
+#: `CLASSIFICATION-CORRECTION-01`. The SHA-256 of the four classification-bearing records' body
+#: text as committed before the classification gained its ``revision`` (``git show
+#: 4d5ae509:<record>``'s ``response.body.text``, i.e. the lane's tip before this move), never
+#: read from the files now: an expectation computed from the files it checks could not report
+#: that something besides the ``revision`` moved. 32 and 33 share a digest for the reason the
+#: pre-classification ones do.
+_PRE_REVISION_BODIES = {
+    "02b-classifyDocumentVersion.success": (
+        "297ce59b12330e1464511409789aed47acb408ba3b44ec0287514349eb666f9f"
+    ),
+    "13-getDocumentVersion.success": (
+        "293c4564911d5d17cdb4e3b011f9bcd3788593c0bb2efebd81b72ed6ff89f3f5"
+    ),
+    "32-listDocuments.success": (
+        "6bf20cc177c7f898852c9d3bf8e8d6b04aca39dfacdbdb37e297f90f84708497"
+    ),
+    "33-listVersions.success": (
+        "6bf20cc177c7f898852c9d3bf8e8d6b04aca39dfacdbdb37e297f90f84708497"
+    ),
+}
+
+
+def test_the_four_classification_records_moved_by_the_revision_and_nothing_else() -> None:
+    """Take the one appended property out and each body is the previous capture's again.
+
+    The method of the two digest tests above, and for their reason: a re-capture pins whatever
+    the server said, so what is pinned is the *difference* -- ``, "revision": 1`` appended to
+    the ``classification`` object, after ``confirmed_at``, where the model emits it last.
+    """
+    appended = ', "revision": 1'
+    for case, digest in _PRE_REVISION_BODIES.items():
+        record = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+        text = record["response"]["body"]["text"]
+        assert text.count(appended) == 1, case
+        stamp = "{{ts_5}}" if case.startswith("02b") else "{{ts_6}}"
+        assert '"confirmed_at": "' + stamp + '"' + appended + "}" in text, (
+            f"{case}: the revision is not the last property of the classification"
+        )
+        restored = text.replace(appended, "")
+        assert hashlib.sha256(restored.encode("utf-8")).hexdigest() == digest, (
+            f"{case} moved by more than its revision"
+        )
+        assert "D-182" in record["exception"]["debt"], case
+        assert "CLASSIFICATION-CORRECTION-01" in record["exception"]["permitted_change"], case
+        assert record["exception"]["decided_by"] in ("f290f7b7", "bd08e03c"), case
+
+
+#: `W59-SEAL-FOLLOWUP-01`, finding F-1. The SHA-256 of records 04-07 and 34's body text as
+#: committed at ``77aa55bd`` (unchanged there since long before `56efead4`), read with
+#: ``git show 77aa55bd:<record>`` and never from the files now. 04-07 share a digest: two
+#: replays and two reads of the same finished run, which is the claim records 04 and 05 make.
+_PRE_TEXT_STAGE_VERSION_BODIES = {
+    "04-startRun.replay": (
+        "5ce9a0f515ba8bb2c12ef486039dd2d4d6c00aacd32a36a915476764eadfa204"
+    ),
+    "05-startRun.replay_with_normalised_property": (
+        "5ce9a0f515ba8bb2c12ef486039dd2d4d6c00aacd32a36a915476764eadfa204"
+    ),
+    "06-getRunStatus.success": (
+        "5ce9a0f515ba8bb2c12ef486039dd2d4d6c00aacd32a36a915476764eadfa204"
+    ),
+    "07-getRunStatus.correlation_supplied": (
+        "5ce9a0f515ba8bb2c12ef486039dd2d4d6c00aacd32a36a915476764eadfa204"
+    ),
+    "34-listRuns.success": (
+        "046762b234806df848eb1f0bcb4a3e268023a84a275e85b8a0a52b248e8dbd94"
+    ),
+}
+
+#: The one stage whose version moved, as a record spells it before and after. Written out;
+#: not read from ``analysis/text/stage.py`` or from the stage registry.
+_TEXT_STAGE_BEFORE = '"stage_id": "text_analysis", "status": "succeeded", "stage_version": "1.0.0"'
+_TEXT_STAGE_AFTER = '"stage_id": "text_analysis", "status": "succeeded", "stage_version": "1.1.0"'
+
+
+def test_the_five_run_records_moved_by_the_text_stage_version_and_nothing_else() -> None:
+    """Restore ``1.0.0`` in the one ``text_analysis`` stage and each body is the
+    ``77aa55bd`` capture again, digest for digest.
+
+    The other three stages each still say ``1.0.0`` -- a re-capture that had moved one of
+    them, or a second ``text_analysis`` entry, fails the count or the digest.
+    """
+    for case, digest in _PRE_TEXT_STAGE_VERSION_BODIES.items():
+        record = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+        text = record["response"]["body"]["text"]
+        assert text.count(_TEXT_STAGE_AFTER) == 1, case
+        assert _TEXT_STAGE_BEFORE not in text, case
+        assert text.count('"stage_version": "1.0.0"') == 3, f"{case}: another stage moved"
+        restored = text.replace(_TEXT_STAGE_AFTER, _TEXT_STAGE_BEFORE)
+        assert hashlib.sha256(restored.encode("utf-8")).hexdigest() == digest, (
+            f"{case} moved by more than the text stage's version"
+        )
+        assert record["exception"]["debt"][-1] == "D-181", case
+        assert record["exception"]["decided_by"] == "56efead4", case
+        assert "W59-SEAL-FOLLOWUP-01" in record["exception"]["permitted_change"], case
 
 
 #: The four `RunStatus` records that report a **finished** run. Record 03 was the fifth
@@ -482,6 +746,8 @@ def test_the_authorization_era_check_can_fail() -> None:
 @pytest.mark.parametrize("path", RECORD_FILES, ids=lambda p: p.stem)
 def test_the_response_reproduces_the_record(path: Path, exchanges: dict[str, Any]) -> None:
     expected = json.loads(path.read_text(encoding="utf-8"))
+    if expected["case"] == "12-exportRunCsv.success":
+        expected = _csv_compat_expected(expected)
     exchange = exchanges[expected["case"]]
     found = journey.differences(exchange, expected)
     assert not found, (
@@ -545,7 +811,7 @@ def test_the_comparison_reddens_on_a_planted_difference(exchanges: dict[str, Any
     )
 
     csv_path = journey.RECORDS / "12-exportRunCsv.success.json"
-    csv_expected = json.loads(csv_path.read_text(encoding="utf-8"))
+    csv_expected = _csv_compat_expected(json.loads(csv_path.read_text(encoding="utf-8")))
     csv_exchange = exchanges[csv_expected["case"]]
     assert not journey.differences(csv_exchange, csv_expected)
     import base64
@@ -663,7 +929,69 @@ def _rebuilt(
 
 
 def _load(case: str) -> dict[str, Any]:
-    return json.loads(journey.record_path(case).read_text(encoding="utf-8"))
+    expected = json.loads(journey.record_path(case).read_text(encoding="utf-8"))
+    if case == "12-exportRunCsv.success":
+        return _csv_compat_expected(expected)
+    return expected
+
+
+def test_csv_compat_projection_preserves_legacy_bytes_and_reddens_on_mutations() -> None:
+    historical = json.loads(
+        journey.record_path("12-exportRunCsv.success").read_text(encoding="utf-8")
+    )
+    original = json.loads(json.dumps(historical))
+    current = _csv_compat_expected(historical)
+    old = _body_bytes(historical)
+    new = _body_bytes(current)
+    old_lines = old.split(b"\r\n")
+    new_lines = new.split(b"\r\n")
+
+    assert historical == original, "the historical record was mutated in memory"
+    assert current["response"]["body"]["length"] == 4446
+    assert len(new) - len(old) == 37
+    assert new_lines[0] == old_lines[0] + _APPENDED_CSV_HEADER
+    assert len(old_lines) == len(new_lines) == 7
+    assert new_lines[1:-1] == [line + b",," for line in old_lines[1:-1]]
+    assert new_lines[-1] == old_lines[-1] == b""
+    parsed = list(csv.reader(io.StringIO(new.decode("utf-8-sig"), newline="")))
+    assert [len(row) for row in parsed] == [19] * 6
+    assert all(row[-2:] == ["", ""] for row in parsed[1:])
+
+    declaration = current["unordered"]
+    assert not journey._unordered_differences(new, new, declaration)
+    assert b"accepted" in new
+    assert b",,\r\n" in new
+    for changed in (
+        new[3:],  # missing BOM
+        new.replace(b"\r\n", b"\n"),
+        new.replace(b"accepted", b"rejected", 1),
+        new.replace(b",,\r\n", b",critical,\r\n", 1),
+        new.replace(b",,\r\n", b",,critical\r\n", 1),
+        new.replace(b",,\r\n", b",,,\r\n", 1),
+        old,  # silently omitting both new columns
+    ):
+        assert journey._unordered_differences(new, changed, declaration), (
+            "CSV compatibility comparison hid a changed byte"
+        )
+
+
+def test_csv_compat_refuses_a_changed_historical_record() -> None:
+    historical = json.loads(
+        journey.record_path("12-exportRunCsv.success").read_text(encoding="utf-8")
+    )
+    old = _body_bytes(historical)
+    with pytest.raises(ValueError, match="only to record 12"):
+        _csv_compat_expected({**historical, "case": "08-listRunFindings.success"})
+    with pytest.raises(ValueError, match="historical CSV bytes changed"):
+        _csv_compat_expected(
+            _with_body(historical, old.replace(b"accepted", b"rejected", 1))
+        )
+    with pytest.raises(ValueError, match="historical CSV bytes changed"):
+        _csv_compat_expected(
+            _with_body(historical, old.replace(b"\r\n", b"\n", 1))
+        )
+    with pytest.raises(ValueError, match="pre-token CSV length changed"):
+        _csv_compat_expected(_csv_compat_expected(historical))
 
 
 def _marked(element: bytes, sequence: str) -> bytes:

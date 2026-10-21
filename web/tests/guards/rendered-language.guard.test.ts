@@ -69,20 +69,44 @@ import type {
   RunActivity,
   RunStateCount,
   RunStatus,
+  SectionReview,
+  RunNormReferences,
+  SpecificationPrices,
   StageId,
   StageStatus,
+  VersionClassification as VersionClassificationRecord,
+  Assignment,
+  AssignmentDetail,
+  VersionComparison,
 } from '@/shared/api';
 import { RUN_STATE_VALUES } from '@/shared/api';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { USER_PAGE_LIMIT } from '@/entities/user';
+import { ASSIGNMENT_PAGE_LIMIT } from '@/entities/assignment';
 import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
 import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import {
+  ALREADY_CLASSIFIED_DETAIL, CARRYOVER_CONFLICT_TEXT, CARRYOVER_NOT_PERMITTED_DETAIL,
+  CLASSIFY_NOT_PERMITTED_DETAIL, COMPARISON_DIFF_LIMIT, CORRECTION_NOT_CLASSIFIED_DETAIL,
+  CORRECTION_NOT_PERMITTED_DETAIL, CORRECTION_REASON_DETAIL, CORRECTION_STALE_DETAIL,
+  CORRECTION_UNCHANGED_DETAIL,
   DOCUMENT_PAGE_LIMIT, UPLOAD_CONSTRAINTS_STATED, UPLOAD_ENVELOPE_RULES, VERSION_PAGE_LIMIT, classifyUploadFailure,
   precheckProblemMessage,
 } from '@/entities/document-version';
 import { UPLOAD_CONSTRAINTS_ADDED } from '@/entities/document-version/model/upload-failure';
-import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
+import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS, PROJECT_STRUCTURE_ORDER, projectSectionOf } from '@/entities/project';
+import type { AnalysisProfileListItem, CarryoverCandidate, VersionClassificationRevision } from '@/shared/api';
+import { ClassifyVersionFormView } from '@/features/classify-version';
+import { CorrectVersionClassificationFormView } from '@/features/correct-version-classification';
+import { CarryOverDecisionView } from '@/features/carry-over-decision';
+import { VersionClassification, VersionClassificationView } from '@/widgets/version-classification';
+import { ProjectStructureView } from '@/widgets/project-sections';
+import { SpecificationPricesAnswer, SpecificationPricesSection } from '@/widgets/specification-prices';
+import { NormReferencesAnswer, NormReferencesSection } from '@/widgets/norm-references';
+import { SPECIFICATION_ROW_LIMIT } from '@/entities/specification-price';
+import { SectionSpecificationAnswer, SectionSpecificationSection } from '@/widgets/section-specification';
+import { SECTION_ROW_LIMIT } from '@/entities/section-specification';
+import { SECTION_NO_ROWS, sectionAnswer, sectionKey, sectionPagedAnswer } from '../unit/section-specification/fixtures';
 import { AppFrame } from '@/_app';
 import { accountMenuProps } from '@/_app/account-menu';
 import { UpdateBannerView, WhatsNewView } from '@/_app/release-notices';
@@ -102,6 +126,8 @@ import type { RegistrationRequest } from '@/shared/api';
 import { RegistrationQueue } from '@/widgets/registration-queue';
 import { VersionHistoryView } from '@/widgets/version-history';
 import { UserCard } from '@/widgets/user-card';
+import { AssignmentHistory } from '@/widgets/assignment-board';
+import { MY_TASKS_LIMIT } from '@/widgets/my-tasks';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
@@ -113,9 +139,13 @@ import type { ExecutionWorker } from '@/shared/api';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { RECENT_PROJECT_LIMIT } from '@/widgets/home-tiles';
-import { NORM_EVENT_PAGE_LIMIT, NORM_PARAGRAPH_PAGE_LIMIT, NORM_SEARCH_PAGE_LIMIT, NORM_SNAPSHOT_LIMIT } from '@/entities/norms';
+import {
+  NORM_CATALOGUE_PAGE_LIMIT, NORM_EVENT_PAGE_LIMIT, NORM_PARAGRAPH_PAGE_LIMIT, NORM_SEARCH_PAGE_LIMIT,
+  NORM_SNAPSHOT_LIMIT,
+} from '@/entities/norms';
 import { NormsPage } from '@/_pages/norms';
 import { NormSearchResults } from '@/widgets/norm-search';
+import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormParagraphList, NormPdf } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { VersionBlockViews } from '@/_pages/blocks';
@@ -125,13 +155,16 @@ import {
   BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, notProducedPage, portalPage,
 } from '../unit/blocks/fixtures';
 import {
-  NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_QUERY, NORM_SNAPSHOTS, normDocument,
+  NORM_CATALOGUE_PAGE, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_QUERY, NORM_SNAPSHOTS,
+  normDocument,
 } from '../unit/norms/fixtures';
 
 import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles } from './lib/repo';
 import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
 import { newClient, renderScreen, seedError } from '../unit/screens/harness';
+import { optimisationShapes } from '../unit/optimisation/fixtures';
+import { proposalShapes } from '../unit/optimisation-proposals/fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
 import {
   ADMIN_AND_EXPERT,
@@ -164,7 +197,7 @@ export function contractEnums(): ReadonlySet<string> {
 }
 
 /**
- * The seventeen CSV column names, parsed out of the seam document that freezes them.
+ * The nineteen CSV column names, parsed out of the seam document that freezes them.
  *
  * `OD-11` freezes them in `docs/program/P02_SEAMS.md` §6, and
  * `web/tests/contract/csv-columns.contract.test.ts` already ties that table,
@@ -268,6 +301,7 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
   // ------------------------------------------------------------------------------------
   { word: 'PDF', why: 'The document format, and the only one this application accepts. A proper noun in Russian too ("PDF-документ"). `application/pdf` is matched separately as a media type.' },
   { word: 'CSV', why: 'The export format. RFC 4180 names it, no contract here does, and Russian technical writing does not translate it.' },
+  { word: 'Excel', why: 'The spreadsheet application the run\'s workbook is made for (`exportRunXlsx`, «Скачать Excel» in `W57-PLAN.md` section B3.7). A product name; Russian writing does not translate it, and no contract here defines the word.' },
   { word: 'ZIP', why: 'The archive format of the portal bundle, the only upload this application accepts (`W55B-INGEST-01`). A proper noun in Russian technical writing ("ZIP-архив"); the container format is fixed by PKWARE\'s APPNOTE, and no contract here defines the word. `application/zip` is matched separately as a media type, and a member\'s name such as `_blocks.json` as a filename.' },
   { word: 'API', why: 'The name of the seam the screens talk to. Universal in Russian technical writing; nothing in `contracts/` defines the word itself.' },
   { word: 'RFC', why: 'The IETF document series, cited by number beside the CSV escaping rule. A citation, not a label.' },
@@ -484,6 +518,207 @@ const version = (over: Partial<DocumentVersion> = {}): DocumentVersion => ({
   ...over,
 });
 
+/**
+ * `W59-SECTION-UI-01`. A version's stage-and-section classification and its review, with
+ * Cyrillic evidence: the patterns and keywords are the server's own words, so a Latin one
+ * left on a screen would be chrome the application wrote.
+ */
+const classification = (
+  over: Partial<VersionClassificationRecord> = {},
+): VersionClassificationRecord => ({
+  version_uid: VERSION_UID,
+  project_stage: 'P',
+  section_code: 'AR',
+  confirmed_at: '2026-10-20T08:00:00Z',
+  confirmed_by_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+  revision: 1,
+  ...over,
+});
+
+/**
+ * `CLASSIFICATION-CORRECTION-01`. A classification's history: the original confirmation and two
+ * corrections with the experts' own reasons (Cyrillic, one with a line break), and the Russian
+ * sentence of each refusal the correction form can show.
+ */
+const CLASSIFICATION_HISTORY: VersionClassificationRevision[] = [
+  { revision: 1, project_stage: 'P', section_code: 'AR', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', at: '2026-10-20T08:00:00Z', reason: null },
+  { revision: 2, project_stage: 'R', section_code: 'KJ', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8G', at: '2026-10-21T09:30:00Z', reason: 'Раздел определён по штампу листа неверно,\nэто конструкции железобетонные.' },
+];
+const CORRECTION_DETAILS = {
+  stale: CORRECTION_STALE_DETAIL,
+  not_classified: CORRECTION_NOT_CLASSIFIED_DETAIL,
+  unchanged: CORRECTION_UNCHANGED_DETAIL,
+  reason: CORRECTION_REASON_DETAIL,
+  not_permitted: CORRECTION_NOT_PERMITTED_DETAIL,
+} as const;
+
+/**
+ * `W60-OPT-MATCH-01`. One answer of «Спецификация и цены», every value Cyrillic, an identifier
+ * or a contract enum. `ready` carries a row of each status, two currencies, every exclusion,
+ * a skipped line and a second page; the other states carry the facts read before they stop.
+ */
+const SPEC_POSITION = 'prp_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+const specificationAnswer = (over: Partial<SpecificationPrices> = {}): SpecificationPrices => ({
+  project_uid: PROJECT_UID,
+  document_uid: DOCUMENT_UID,
+  version_uid: VERSION_UID,
+  version_ordinal: 2,
+  page_count: 30,
+  state: 'ready',
+  project_stage: 'R',
+  section_code: 'AR',
+  price_list: {
+    price_list_id: 'prl_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+    revision_number: 3,
+    source_filename: 'Прайс проекта',
+    uploaded_at: '2026-10-20T08:00:00Z',
+    default_currency: 'RUB',
+    position_count: 120,
+  },
+  run_id: RUN_ID,
+  text_layer_sha256: SHA,
+  extraction: {
+    algorithm: 'specification-text-v1',
+    table_count: 2,
+    row_count: 120,
+    skipped_count: 1,
+    skipped_by_reason: {
+      table_header_ambiguous: 0, text_before_first_row: 0, continuation_limit: 0,
+      anchor_ambiguous: 0, position_missing: 1, name_missing: 0, column_numbering: 0,
+      rows_over_limit: 0,
+    },
+    skipped: [{ page_number: 14, line: 298, reason: 'position_missing', excerpt: 'План на отметке 2 Металлический щит 12' }],
+    tables: [],
+  },
+  matching: {
+    algorithm: 'price-match-v1',
+    counts: { matched: 3, ambiguous: 1, unmatched: 116 },
+    totals: [
+      { currency: 'EUR', amount: '2550', row_count: 1 },
+      { currency: 'RUB', amount: '502006.5', row_count: 2 },
+    ],
+    excluded: {
+      no_position: 110, unit_mismatch: 4, row_unit_missing: 2, ambiguous: 1, quantity_not_numeric: 1,
+    },
+  },
+  rows: {
+    offset: SPECIFICATION_ROW_LIMIT,
+    limit: SPECIFICATION_ROW_LIMIT,
+    total: 120,
+    next_offset: SPECIFICATION_ROW_LIMIT * 2,
+    items: [
+      {
+        row_id: `sr-${'a'.repeat(32)}`, page_number: 14, sheet_label: '10', line_start: 297, line_end: 298,
+        table_ordinal: 1, group: 'Изделия', position: '1', name: 'Металлический щит МЩ-1',
+        unit_text: 'шт.', unit: 'шт', quantity_text: '12', quantity: '12', quantity_issue: null,
+        mass_text: '45,5', note: 'по месту', status: 'matched', reason: null, basis: 'name',
+        price_position: {
+          price_list_position_id: SPEC_POSITION, row_number: 7, code: 'К-1', name: 'Мет. щит МЩ-1',
+          mark: 'МЩ-1', unit: 'шт', unit_price: '15000', currency: 'RUB', vendor: 'Завод',
+        },
+        candidate_position_ids: [SPEC_POSITION], candidate_count: 1, amount: '180000', excluded_reason: null,
+      },
+      {
+        row_id: `sr-${'b'.repeat(32)}`, page_number: 15, sheet_label: null, line_start: 4, line_end: 4,
+        table_ordinal: 2, group: null, position: '2', name: 'Лента монтажная',
+        unit_text: 'компл.', unit: 'компл', quantity_text: '1 250', quantity: null, quantity_issue: 'ambiguous',
+        mass_text: null, note: null, status: 'matched', reason: null, basis: 'mark',
+        price_position: {
+          price_list_position_id: SPEC_POSITION, row_number: 8, code: null, name: 'Лента',
+          mark: null, unit: 'компл', unit_price: '450', currency: 'RUB', vendor: null,
+        },
+        candidate_position_ids: [SPEC_POSITION], candidate_count: 1, amount: null,
+        excluded_reason: 'quantity_not_numeric',
+      },
+      {
+        row_id: `sr-${'c'.repeat(32)}`, page_number: 15, sheet_label: null, line_start: 5, line_end: 5,
+        table_ordinal: 2, group: null, position: '3', name: 'Пена монтажная',
+        unit_text: 'шт', unit: 'шт', quantity_text: '-', quantity: null, quantity_issue: 'not_numeric',
+        mass_text: null, note: null, status: 'ambiguous', reason: 'several_positions', basis: null,
+        price_position: null, candidate_position_ids: [SPEC_POSITION, SPEC_POSITION], candidate_count: 2,
+        amount: null, excluded_reason: 'ambiguous',
+      },
+      {
+        row_id: `sr-${'d'.repeat(32)}`, page_number: 15, sheet_label: null, line_start: 6, line_end: 6,
+        table_ordinal: 2, group: null, position: null, name: 'Профиль направляющий',
+        unit_text: 'п. м', unit: 'п.м', quantity_text: '120', quantity: '120', quantity_issue: null,
+        mass_text: null, note: null, status: 'unmatched', reason: 'unit_mismatch', basis: null,
+        price_position: null, candidate_position_ids: [SPEC_POSITION], candidate_count: 1,
+        amount: null, excluded_reason: 'unit_mismatch',
+      },
+    ],
+  },
+  ...over,
+});
+/**
+ * `NORM-REFS-RUN-01`. One answer of «Нормативные ссылки», every value Cyrillic, an identifier or
+ * a contract enum: a citation of each of the five outcomes (one of them kept at ten of twelve
+ * occurrences), a page with no text layer, and a corpus document whose designation is not read.
+ */
+const NORM_DOC_A = 'ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+const NORM_DOC_B = 'ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8G';
+const normAnchor = (page: number) => ({ page_number: page, char_start: 10, char_end: 26, quote: 'СП 54.13330.2011' });
+const normReferencesAnswer = (over: Partial<RunNormReferences> = {}): RunNormReferences => ({
+  run_id: RUN_ID,
+  version_uid: VERSION_UID,
+  state: 'ready',
+  page_count: 12,
+  norms_snapshot_id: 'ns_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+  text_layer_sha256: SHA,
+  snapshot_document_count: 674,
+  counts: { in_corpus: 1, newer_edition: 1, older_edition_only: 1, not_in_corpus: 1, not_recognised: 1 },
+  occurrence_count: 15,
+  unread_pages: [2, 5],
+  items: [
+    {
+      cited: 'СП 54.13330.2022', outcome: 'in_corpus', occurrence_count: 1, anchors: [normAnchor(3)],
+      matched_norm_document_id: NORM_DOC_A, matched_designation: 'СП 54.13330.2022', matched_title: 'Свод правил. Здания жилые',
+    },
+    {
+      cited: 'СП 54.13330.2011', outcome: 'newer_edition', occurrence_count: 12,
+      anchors: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(normAnchor),
+      matched_norm_document_id: NORM_DOC_B, matched_designation: 'СП 54.13330.2024',
+    },
+    {
+      cited: 'ГОСТ 21.101-2021', outcome: 'older_edition_only', occurrence_count: 1, anchors: [normAnchor(4)],
+      matched_norm_document_id: NORM_DOC_A, matched_designation: 'ГОСТ 21.101-2020',
+    },
+    { cited: 'ГОСТ Р 99999-2020', outcome: 'not_in_corpus', occurrence_count: 1, anchors: [normAnchor(5)] },
+    { cited: 'СП 54.13330', outcome: 'not_recognised', occurrence_count: 1, anchors: [normAnchor(6)] },
+  ],
+  unrecognised: [{ norm_document_id: NORM_DOC_B, slug: 'МДС_12-24_2006', designation: 'МДС 12-24.2006', title: 'Устройство обычных' }],
+  ...over,
+});
+const SPECIFICATION_STOPPED = {
+  matching: null, rows: null, extraction: null, run_id: null, text_layer_sha256: null,
+} as const;
+const specificationSets = (client: Client): void => {
+  client.setQueryData(KEYS.documents, {
+    items: [version({ display_title: 'Архитектурные решения', classification: classification({ project_stage: 'R' }) })],
+    page: { next_cursor: null },
+  });
+};
+
+const sectionReview = (over: Partial<SectionReview> = {}): SectionReview => ({
+  version_uid: VERSION_UID,
+  classification: null,
+  revisions: [],
+  recognised_text_consulted: true,
+  options: PROJECT_SECTIONS.map((section) => ({
+    section_code: section.code,
+    name: section.name,
+    // One section without a registered profile, so the mark renders.
+    executable: section.code !== 'PB',
+    suggestion:
+      section.code === 'AR'
+        ? { score: 7, filename_patterns: ['АР'], text_keywords: ['поэтажный план'], name_in_text: true }
+        : section.code === 'KJ'
+          ? { score: 2, filename_patterns: ['КЖ'], text_keywords: [], name_in_text: false }
+          : null,
+  })),
+  ...over,
+});
+
 /*
  * ALL NINE stage ids, and each with a DIFFERENT stage status.
  *
@@ -630,6 +865,18 @@ const FINDINGS: readonly Finding[] = [
     latest_decision_id: `dec_${ULID}`,
     decision_recorded_at: '2026-09-10T09:00:00.000Z',
   }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}F`, category: 'dimensions' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}G`, category: 'layout' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}H`, category: 'facade' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}J`, category: 'roof' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}K`, category: 'documentation' }),
+  // `W59-SECTION-UI-01`: the five categories `W57A-SEAL-01B` added to the contract were
+  // rendered by no state, and the coverage case below was red on the lane's base for it.
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}M`, category: 'fire_safety' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}N`, category: 'evacuation' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}P`, category: 'accessibility' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}Q`, category: 'insulation' }),
+  finding({ finding_uid: `${FINDING_UID.slice(0, -1)}R`, category: 'sound' }),
 ];
 
 /** One decision event per `Verdict`, for the same reason the findings are four. */
@@ -735,6 +982,34 @@ function dashboardSummary(over: Partial<DashboardSummary> = {}): DashboardSummar
   };
 }
 
+/**
+ * `W59-ANALYSIS-SETTINGS-01`: the registry «Настройки анализа» lists. AR builtin with no
+ * source, ПБ with no profile, every other section a draft ported from a Cyrillic-named
+ * repository — server data, seeded Cyrillic so that anything Latin left is chrome.
+ */
+const ANALYSIS_PROFILES: readonly AnalysisProfileListItem[] = PROJECT_STRUCTURE_ORDER.map((code, index) => {
+  const digit = (index % 10).toString();
+  const section = projectSectionOf(code);
+  if (code === 'PB') return { section_code: code, section_name: section.name, profile: null };
+  return {
+    section_code: code,
+    section_name: section.name,
+    profile: {
+      analysis_profile_id: `ap_01J9ZQ8K7NHVXW3T2R5M6P4Q8${digit}`,
+      prompt_bundle_id: `pb_01J9ZQ8K7NHVXW3T2R5M6P4Q8${digit}`,
+      profile_version: '1.0.0',
+      status: code === 'AR' ? 'builtin' : code === 'PS' ? 'reviewed' : 'draft',
+      prompt_bundle_sha256: digit.repeat(64),
+      content_sha256: 'a'.repeat(63) + digit,
+      source: code === 'AR' ? null : {
+        repository: 'прежняя-система',
+        commit: 'b'.repeat(40),
+        files: [{ path: `prompts/disciplines/${code}/role.md`, sha256: 'c'.repeat(64) }],
+      },
+    },
+  };
+});
+
 /** `W54-WORKERS-WEB`: one registered worker per sealed state, the first holding a run. */
 const WORKERS: readonly ExecutionWorker[] = [
   {
@@ -760,6 +1035,8 @@ const KEYS = {
   documents: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT),
   versions: queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT),
   version: queryKeys.versions.detail(VERSION_UID),
+  // `W59-SECTION-UI-01`: the version screen's stage-and-section panel.
+  sectionReview: queryKeys.versions.sectionReview(VERSION_UID),
   content: queryKeys.versions.content(VERSION_UID),
   runs: queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT),
   run: queryKeys.runs.detail(RUN_ID),
@@ -771,6 +1048,8 @@ const KEYS = {
   executionJournal: queryKeys.execution.journal(),
   // `W54-WORKERS-WEB`: the «Исполнители» screen's first page.
   workers: queryKeys.execution.workers(undefined, WORKER_PAGE_LIMIT),
+  // `W59-ANALYSIS-SETTINGS-01`: «Настройки анализа», the registry's fifteen rows.
+  analysisProfiles: queryKeys.analysis.profiles(),
   dashboardSummary: queryKeys.dashboard.summary(),
   // The home page's own two reads (`W50-HOME-01`), seeded by `W50-SHELL-FRAME` so the recent
   // list and the administrator's tile render loaded rather than pending in every state.
@@ -787,6 +1066,14 @@ const KEYS = {
   normSearch: queryKeys.norms.search(NORM_QUERY, undefined, NORM_SEARCH_PAGE_LIMIT),
   normDocument: queryKeys.norms.document(NORM_DOCUMENT_ID),
   normParagraphs: queryKeys.norms.paragraphs(NORM_DOCUMENT_ID, undefined, NORM_PARAGRAPH_PAGE_LIMIT),
+  // `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue's first page with no filter.
+  normCatalogue: queryKeys.norms.catalogue(undefined, undefined, undefined, NORM_CATALOGUE_PAGE_LIMIT),
+  // `W61-DISPATCHER-01`: «Диспетчер»'s first page, the home screen's «Мои задачи», and one
+  // assignment's history.
+  assignments: queryKeys.assignments.list({ limit: ASSIGNMENT_PAGE_LIMIT }),
+  myTasks: queryKeys.assignments.list({ mine: true, limit: MY_TASKS_LIMIT }),
+  // The history's assignment is the returned one, `C` in `ASSIGNMENTS` below.
+  assignment: queryKeys.assignments.detail(`asg_${'01J9ZQ8K7NHVXW3T2R5M6P4Q8'}C`),
 } as const;
 
 /**
@@ -814,6 +1101,8 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.documents, { items: [version()], page });
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.version, version());
+  // Unconfirmed, so the expert's seed draws the form and the reader's seed its sentence.
+  client.setQueryData(KEYS.sectionReview, sectionReview());
   client.setQueryData(KEYS.runs, { items: [run(runOverrides)], page });
   client.setQueryData(KEYS.run, run(runOverrides));
   client.setQueryData(KEYS.findings, { items: FINDINGS, page });
@@ -890,6 +1179,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   });
   // One worker per state, so every row shape and the collapsed offline group render.
   client.setQueryData(KEYS.workers, { items: WORKERS, page });
+  client.setQueryData(KEYS.analysisProfiles, { items: ANALYSIS_PROFILES });
   // A current snapshot and the three ways another one can stand; two designations; two hits;
   // a document with a heading, a body paragraph and an unreliable table row.
   client.setQueryData(KEYS.normSnapshots, { items: NORM_SNAPSHOTS, page });
@@ -897,6 +1187,10 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.normSearch, { items: NORM_HITS, page });
   client.setQueryData(KEYS.normDocument, normDocument());
   client.setQueryData(KEYS.normParagraphs, { items: NORM_PARAGRAPHS, page, source_attribution: 'consultant_plus' });
+  client.setQueryData(KEYS.normCatalogue, NORM_CATALOGUE_PAGE);
+  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
+  client.setQueryData(KEYS.myTasks, { items: [...ASSIGNMENTS], page });
+  client.setQueryData(KEYS.assignment, ASSIGNMENT_DETAIL);
   return client;
 }
 
@@ -965,6 +1259,8 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.normSearch, { items: [], page });
   client.setQueryData(KEYS.normDocument, normDocument({ unreliable_paragraph_count: 0, paragraph_count: 0 }));
   client.setQueryData(KEYS.normParagraphs, { items: [], page, source_attribution: 'consultant_plus' });
+  client.setQueryData(KEYS.assignments, { items: [], page });
+  client.setQueryData(KEYS.myTasks, { items: [], page });
   client.setQueryData(
     KEYS.dashboardSummary,
     dashboardSummary({
@@ -1005,6 +1301,7 @@ function pagedClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.runs, { items: [run()], page });
   client.setQueryData(KEYS.journal, { items: [record()], page });
+  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
   return client;
 }
 
@@ -1094,6 +1391,137 @@ function without(status: RunStatus, fields: readonly (keyof RunStatus)[]): RunSt
  * `review-page.tsx` reading `.data.items` off a bare model. That is `D-57` seen from
  * inside a test, and it is the second time this file's own machinery has produced it.
  */
+/**
+ * `W59-VERSION-COMPARE-01`. The version in scope and a NEWER version of the same set, both
+ * confirmed (П then Р, one section, so the «Стадии П → Р» switch is offered), with the
+ * comparison of the pair seeded as given -- or not at all, which is its loading branch.
+ *
+ * Every value the comparison carries is Cyrillic, an identifier, a digest or a contract
+ * enum, for the reason the file header gives: anything Latin left on screen is chrome.
+ */
+const NEWER_VERSION_UID = `ver_${ULID.slice(0, -1)}C`;
+
+function comparisonBody(over: Partial<VersionComparison> = {}): VersionComparison {
+  const finding = (uid: string, text: string, page: number) => ({
+    finding_uid: `fnd_${ULID.slice(0, -1)}${uid}`,
+    category: 'layout' as const,
+    finding_text: text,
+    page_numbers: [page],
+  });
+  return {
+    project_uid: PROJECT_UID,
+    document_uid: DOCUMENT_UID,
+    source_version_uid: VERSION_UID,
+    target_version_uid: NEWER_VERSION_UID,
+    mode: 'version',
+    outcome: 'compared',
+    refusal: null,
+    source: {
+      version_uid: VERSION_UID, version_ordinal: 1, page_count: 4, sha256: SHA,
+      project_stage: 'P', section_code: 'AR', run_id: RUN_ID, text_layer_sha256: SHA,
+    },
+    target: {
+      version_uid: NEWER_VERSION_UID, version_ordinal: 2, page_count: 4, sha256: SHA,
+      project_stage: 'P', section_code: 'AR', run_id: `run_${ULID.slice(0, -1)}C`,
+      text_layer_sha256: SHA,
+    },
+    comparison_sha256: SHA,
+    sheets: [
+      { status: 'unchanged', source_page_number: 1, target_page_number: 1, pairing_basis: 'exact_text',
+        similarity_permille: 1000, shared_line_count: null, suggestion_sha256: SHA, textless: false },
+      { status: 'changed', source_page_number: 2, target_page_number: 2, pairing_basis: 'similar_text',
+        similarity_permille: 870, shared_line_count: 12, suggestion_sha256: SHA, textless: false },
+      { status: 'removed', source_page_number: 3, target_page_number: null, pairing_basis: null,
+        similarity_permille: null, shared_line_count: null, suggestion_sha256: null, textless: true },
+      { status: 'added', source_page_number: null, target_page_number: 3, pairing_basis: null,
+        similarity_permille: null, shared_line_count: null, suggestion_sha256: null, textless: false },
+      { status: 'removed', source_page_number: 4, target_page_number: null, pairing_basis: null,
+        similarity_permille: null, shared_line_count: null, suggestion_sha256: null, textless: false },
+    ],
+    sheet_diffs: {
+      offset: 0, limit: COMPARISON_DIFF_LIMIT, total: 13, next_offset: 2,
+      items: [
+        { status: 'changed', source_page_number: 2, target_page_number: 2, outcome: 'computed',
+          too_large_reason: null, source_line_count: 3, target_line_count: 3, added_line_count: 1,
+          removed_line_count: 1, evidence_sha256: SHA,
+          hunks: [
+            { tag: 'equal', source_start: 0, source_end: 2, target_start: 0, target_end: 2,
+              source_lines: [], target_lines: [] },
+            { tag: 'replace', source_start: 2, source_end: 3, target_start: 2, target_end: 3,
+              source_lines: ['Стена 200\n'], target_lines: ['Стена 250\n'] },
+          ] },
+        { status: 'added', source_page_number: null, target_page_number: 3, outcome: 'too_large',
+          too_large_reason: 'target_text_too_many_lines', source_line_count: null,
+          target_line_count: null, added_line_count: null, removed_line_count: null,
+          evidence_sha256: null, hunks: [] },
+      ],
+    },
+    findings: {
+      status: 'compared', unavailable_reason: null, source_finding_count: 3, target_finding_count: 2,
+      proposals: [
+        { kind: 'unchanged', basis: 'exact_issue_and_quotes', proposal_sha256: SHA,
+          source_finding: finding('1', 'Нет дверного проёма', 1),
+          target_finding: finding('2', 'Нет дверного проёма', 1) },
+        { kind: 'probably_fixed', basis: 'quotes_absent_from_paired_sheets', proposal_sha256: null,
+          source_finding: finding('3', 'Толщина стены не совпадает', 2), target_finding: null },
+        { kind: 'undetermined', basis: 'evidence_sheet_unpaired', proposal_sha256: null,
+          source_finding: finding('4', 'Узел не указан', 4), target_finding: null },
+        { kind: 'new', basis: 'no_exact_source_match', proposal_sha256: null,
+          source_finding: null, target_finding: finding('5', 'Цвет фасада не согласован', 3) },
+      ],
+      // `W59-DECISION-CARRYOVER-01`: the unchanged pair is a candidate, so the expert's
+      // «Перенести решение» renders in this pass.
+      carryover_candidates: [CARRYOVER_CANDIDATE],
+    },
+    ...over,
+  };
+}
+
+/** `W59-DECISION-CARRYOVER-01`. The decision on the unchanged pair's older finding. */
+const CARRYOVER_CANDIDATE: CarryoverCandidate = {
+  proposal_sha256: SHA,
+  source_finding_uid: `fnd_${ULID.slice(0, -1)}1`,
+  target_finding_uid: `fnd_${ULID.slice(0, -1)}2`,
+  source_decision: {
+    decision_id: `dec_${ULID}`,
+    verdict: 'accepted',
+    severity: 'critical',
+    comment: 'Проём действительно не показан.',
+    author_label: 'Иванова Е. В.',
+    recorded_at: '2026-10-20T08:00:00Z',
+  },
+};
+
+function twoVersionClient(
+  loaded: (over?: Partial<RunStatus>) => Client,
+  comparison: VersionComparison | null,
+): Client {
+  const client = loaded();
+  const page = { next_cursor: null } as { next_cursor: null };
+  const older = version({ classification: classification({ project_stage: 'P' }) });
+  const newer = version({
+    version_uid: NEWER_VERSION_UID,
+    version_ordinal: 2,
+    classification: classification({ version_uid: NEWER_VERSION_UID, project_stage: 'R' }),
+  });
+  client.setQueryData(KEYS.version, older);
+  client.setQueryData(KEYS.versions, { items: [newer, older], page });
+  if (comparison !== null) {
+    client.setQueryData(
+      queryKeys.versions.comparison(VERSION_UID, NEWER_VERSION_UID, 'version', 0, COMPARISON_DIFF_LIMIT),
+      comparison,
+    );
+  }
+  return client;
+}
+
+/** The version is answered and its set's version list is not: the list's loading branch. */
+function versionsPendingClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
+  const client = loaded();
+  client.removeQueries({ queryKey: KEYS.versions, exact: true });
+  return client;
+}
+
 function twoRunClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
   const client = loaded();
   const page = { next_cursor: null } as { next_cursor: null };
@@ -1206,6 +1634,56 @@ const ADMIN_USER_ACCOUNT: Account = {
   profile_complete: true,
   roles: ['admin', 'expert'],
   user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+};
+
+/**
+ * `W61-DISPATCHER-01`: one assignment per status, so every status label, every move the two
+ * roles are offered, a note, a reason, a document title and a project-wide row render. The
+ * first two are the seeded account's own (`KEYS.account`), so the assignee's moves render on
+ * the dispatcher's screen too; the rest belong to another expert.
+ */
+function assignment(letter: string, status: Assignment['status'], over: Partial<Assignment> = {}): Assignment {
+  return {
+    assignment_uid: `asg_${'01J9ZQ8K7NHVXW3T2R5M6P4Q8'}${letter}`,
+    project_uid: PROJECT_UID,
+    project_name: 'Договор поставки',
+    document_uid: null,
+    document_title: null,
+    assignee_user_uid: ADMIN_USER_ACCOUNT.user_uid,
+    assignee_label: ADMIN_USER_ACCOUNT.display_label,
+    created_by_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C',
+    created_by_label: 'Начальникова Е. В.',
+    note: null,
+    status,
+    status_reason: null,
+    created_at: '2026-10-20T08:00:00Z',
+    updated_at: '2026-10-20T09:00:00Z',
+    ...over,
+  };
+}
+
+const ASSIGNMENTS: readonly Assignment[] = [
+  assignment('A', 'assigned', { note: 'Проверить армирование до пятницы' }),
+  assignment('B', 'in_progress', { document_uid: DOCUMENT_UID, document_title: 'Пояснительная записка' }),
+  assignment('C', 'returned', {
+    assignee_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D',
+    assignee_label: 'Экспертова Д. Д.',
+    status_reason: 'Раздел не мой',
+  }),
+  assignment('D', 'done', { assignee_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', assignee_label: 'Экспертова Д. Д.' }),
+  assignment('E', 'cancelled', { status_reason: 'Проект закрыт' }),
+];
+
+const ASSIGNMENT_DETAIL: AssignmentDetail = {
+  assignment: ASSIGNMENTS[2] as Assignment,
+  history: [
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', kind: 'assigned', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', actor_label: 'Начальникова Е. В.', reason: null, new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:00:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', kind: 'started', actor_user_uid: ADMIN_USER_ACCOUNT.user_uid, actor_label: ADMIN_USER_ACCOUNT.display_label, reason: null, new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:10:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', kind: 'reassigned', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', actor_label: 'Начальникова Е. В.', reason: 'Отпуск', new_assignee_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', new_assignee_label: 'Экспертова Д. Д.', occurred_at: '2026-10-20T08:20:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', kind: 'returned', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', actor_label: 'Экспертова Д. Д.', reason: 'Раздел не мой', new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:30:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8E', kind: 'completed', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', actor_label: 'Экспертова Д. Д.', reason: null, new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:40:00Z' },
+    { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', kind: 'cancelled', actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', actor_label: 'Начальникова Е. В.', reason: 'Проект закрыт', new_assignee_user_uid: null, new_assignee_label: null, occurred_at: '2026-10-20T08:50:00Z' },
+  ],
 };
 
 const QUEUE_REQUEST: RegistrationRequest = {
@@ -1344,6 +1822,10 @@ const BLOCKS_SHAPES: readonly ScreenCase[] = [
 ];
 
 const EXTRA_SHAPES: readonly ScreenCase[] = [
+  // `W60-PRICE-LIST-01`: the project's «Оптимизация» tab in every branch its widgets have.
+  ...optimisationShapes(),
+  // `W60-OPT-PROPOSALS-01`: «Предложения» in every branch its widget, features and entity have.
+  ...proposalShapes(),
   {
     name: 'update-banner',
     make: () => createElement(UpdateBannerView, { onUpdate: () => undefined, onLater: () => undefined }),
@@ -1620,6 +2102,45 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       'required_norm_unavailable', { reference_kind: 'norms_snapshot' },
     )),
   },
+  /*
+   * `W57B-NORMS-CATALOGUE-XLSX-01`. The catalogue view of «Нормы»: loaded, refused, failed
+   * and pending, and the table's empty pages.
+   */
+  {
+    name: 'norms-catalogue-loaded',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+  },
+  {
+    name: 'norms-catalogue-refused',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+    seedClient: (client: Client) => seedError(client, KEYS.normCatalogue, normsRefusal(
+      'validation_failed', { field: 'q', constraint: 'format' },
+    )),
+  },
+  {
+    name: 'norms-catalogue-failed',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+    seedClient: (client: Client) => seedError(client, KEYS.normCatalogue, normsRefusal(
+      'dependency_unavailable', {},
+    )),
+  },
+  {
+    name: 'norms-catalogue-pending',
+    make: () => createElement(NormsPage, { roles: ['expert'], catalogue: { q: null, kind: null } }),
+    seedClient: (client: Client) => { client.removeQueries({ queryKey: KEYS.normCatalogue }); },
+  },
+  {
+    name: 'norm-catalogue-nothing-kept',
+    make: () => createElement(NormCatalogueTable, { items: [], total: 0, filtered: true, onFirst: null, onNext: null }),
+  },
+  {
+    name: 'norm-catalogue-empty-snapshot',
+    make: () => createElement(NormCatalogueTable, { items: [], total: 0, filtered: false, onFirst: null, onNext: null }),
+  },
+  {
+    name: 'norm-catalogue-empty-later-page',
+    make: () => createElement(NormCatalogueTable, { items: [], total: 3, filtered: false, onFirst: () => {}, onNext: null }),
+  },
   {
     name: 'norm-search-nothing-found',
     make: () => createElement(NormSearchResults, { items: [], onFirst: null, onNext: null }),
@@ -1715,6 +2236,417 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       }),
   },
   ...BLOCKS_SHAPES,
+  /*
+   * `W59-SECTION-UI-01`. The stage-and-section panel's shapes an address does not select:
+   * the confirmed classification (with a section that has no profile, and after the
+   * reader's own confirmation was refused with `409`), the expert's form in flight and
+   * refused (`409`, `403`), a review that could not be read, and the project structure with
+   * documents confirmed under both stages. Each is a branch chosen by a settled mutation or
+   * by a review this matrix's shared seeds keep unconfirmed.
+   */
+  {
+    name: 'version-classification-confirmed',
+    make: () =>
+      createElement(VersionClassificationView, {
+        address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
+        review: sectionReview({ classification: classification({ project_stage: 'R', section_code: 'PB' }) }),
+        roles: ['expert'],
+        conflict: true,
+        onConflict: () => undefined,
+      }),
+  },
+  /*
+   * `CLASSIFICATION-CORRECTION-01`. The confirmed panel after a correction (revision, history
+   * with reasons, the «Исправить» control), with the correction form open, and the form in
+   * flight and refused in every way a reader can be shown.
+   */
+  ...([false, true] as const).map((correcting) => ({
+    name: `version-classification-corrected${correcting ? '-correcting' : ''}`,
+    make: () =>
+      createElement(VersionClassificationView, {
+        address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
+        review: sectionReview({
+          classification: classification({
+            project_stage: 'R',
+            section_code: 'KJ',
+            revision: 2,
+          }),
+          revisions: CLASSIFICATION_HISTORY,
+        }),
+        roles: ['expert'],
+        conflict: false,
+        onConflict: () => undefined,
+        correcting,
+        onCorrecting: () => undefined,
+      }),
+  })),
+  {
+    name: 'correct-version-classification-form-pending',
+    make: () =>
+      createElement(CorrectVersionClassificationFormView, {
+        review: sectionReview(),
+        current: classification({ project_stage: 'R', section_code: 'KJ', revision: 2 }),
+        stage: 'P',
+        section: 'KJ',
+        reason: 'Лист относится к проектной документации',
+        pending: true,
+        failure: null,
+        onStage: () => undefined,
+        onSection: () => undefined,
+        onReason: () => undefined,
+        onSubmit: () => undefined,
+        onCancel: () => undefined,
+      }),
+  },
+  ...(['stale', 'not_classified', 'unchanged', 'reason', 'not_permitted'] as const).map((kind) => ({
+    name: `correct-version-classification-form-${kind}`,
+    make: () =>
+      createElement(CorrectVersionClassificationFormView, {
+        review: sectionReview(),
+        current: classification({ project_stage: 'R', section_code: 'KJ', revision: 2 }),
+        stage: 'P',
+        section: 'AR',
+        reason: kind === 'reason' ? '...' : 'Лист относится к проектной документации',
+        pending: false,
+        failure: {
+          kind,
+          detail: CORRECTION_DETAILS[kind],
+          correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100',
+          retryable: false,
+        },
+        onStage: () => undefined,
+        onSection: () => undefined,
+        onReason: () => undefined,
+        onSubmit: () => undefined,
+        onCancel: () => undefined,
+      }),
+  })),
+  {
+    name: 'classify-version-form-pending',
+    make: () =>
+      createElement(ClassifyVersionFormView, {
+        review: sectionReview({ recognised_text_consulted: false }),
+        stage: 'R',
+        section: 'PB',
+        pending: true,
+        failure: null,
+        onStage: () => undefined,
+        onSection: () => undefined,
+        onConfirm: () => undefined,
+      }),
+  },
+  ...(['already_classified', 'not_permitted'] as const).map((kind) => ({
+    name: `classify-version-form-${kind}`,
+    make: () =>
+      createElement(ClassifyVersionFormView, {
+        review: sectionReview({
+          options: sectionReview().options.map((option) => ({ ...option, suggestion: null })),
+        }),
+        stage: 'P',
+        section: 'AR',
+        pending: false,
+        failure: {
+          kind,
+          detail: kind === 'already_classified' ? ALREADY_CLASSIFIED_DETAIL : CLASSIFY_NOT_PERMITTED_DETAIL,
+          correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100',
+          retryable: false,
+        },
+        onStage: () => undefined,
+        onSection: () => undefined,
+        onConfirm: () => undefined,
+      }),
+  })),
+  /*
+   * `W59-DECISION-CARRYOVER-01`. «Перенести решение»: the confirmation (with a severity and a
+   * comment), in flight, carried, already carried, and every refusal a reader can be shown.
+   */
+  ...([false, true] as const).map((pending) => ({
+    name: `carry-over-decision-confirming${pending ? '-pending' : ''}`,
+    make: () =>
+      createElement(CarryOverDecisionView, {
+        candidate: CARRYOVER_CANDIDATE,
+        target: { finding_uid: CARRYOVER_CANDIDATE.target_finding_uid, category: 'layout',
+          finding_text: 'Нет дверного проёма', page_numbers: [1] },
+        confirming: true,
+        pending,
+        result: null,
+        failure: null,
+        onOpen: () => undefined,
+        onConfirm: () => undefined,
+        onCancel: () => undefined,
+      }),
+  })),
+  ...([false, true] as const).map((replayed) => ({
+    name: `carry-over-decision-${replayed ? 'replayed' : 'carried'}`,
+    make: () =>
+      createElement(CarryOverDecisionView, {
+        candidate: CARRYOVER_CANDIDATE,
+        target: { finding_uid: CARRYOVER_CANDIDATE.target_finding_uid, category: 'layout',
+          finding_text: 'Нет дверного проёма', page_numbers: [1] },
+        confirming: false,
+        pending: false,
+        result: {
+          event: {
+            decision_id: `dec_${ULID.slice(0, -1)}9`, finding_uid: CARRYOVER_CANDIDATE.target_finding_uid,
+            finding_observation_id: `fobs_${ULID}`, event_type: 'accept', verdict: 'accepted',
+            severity: 'critical', comment: 'Решение перенесено из версии 1.', author_label: 'Иванова Е. В.',
+            recorded_at: '2026-10-20T09:00:00Z',
+          },
+          current_verdict: 'accepted',
+          replayed,
+          source_finding_uid: CARRYOVER_CANDIDATE.source_finding_uid,
+          source_decision_id: CARRYOVER_CANDIDATE.source_decision.decision_id,
+          source_version_uid: VERSION_UID,
+          source_version_ordinal: 1,
+          target_version_uid: NEWER_VERSION_UID,
+          mode: 'version',
+        },
+        failure: null,
+        onOpen: () => undefined,
+        onConfirm: () => undefined,
+        onCancel: () => undefined,
+      }),
+  })),
+  ...([
+    ...(Object.keys(CARRYOVER_CONFLICT_TEXT) as (keyof typeof CARRYOVER_CONFLICT_TEXT)[]).map(
+      (kind) => ({ kind, detail: CARRYOVER_CONFLICT_TEXT[kind] }),
+    ),
+    { kind: 'not_permitted' as const, detail: CARRYOVER_NOT_PERMITTED_DETAIL },
+  ]).map(({ kind, detail }) => ({
+    name: `carry-over-decision-${kind}`,
+    make: () =>
+      createElement(CarryOverDecisionView, {
+        candidate: CARRYOVER_CANDIDATE,
+        target: { finding_uid: CARRYOVER_CANDIDATE.target_finding_uid, category: 'layout',
+          finding_text: 'Нет дверного проёма', page_numbers: [1] },
+        confirming: false,
+        pending: false,
+        result: null,
+        failure: { kind, detail, correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false },
+        onOpen: () => undefined,
+        onConfirm: () => undefined,
+        onCancel: () => undefined,
+      }),
+  })),
+  /*
+   * `W60-OPT-MATCH-01`. «Спецификация и цены» is a widget the «Оптимизация» tab mounts, so no
+   * address selects it yet: its container in every documents state (pending, no АР set,
+   * refused), its own read pending and refused, and the answer in every state it can carry.
+   */
+  { name: 'specification-prices-section', make: () => createElement(SpecificationPricesSection, { projectUid: PROJECT_UID }) },
+  {
+    name: 'specification-prices-pending',
+    make: () => createElement(SpecificationPricesSection, { projectUid: PROJECT_UID }),
+    seedClient: specificationSets,
+  },
+  {
+    name: 'specification-prices-refused',
+    make: () => createElement(SpecificationPricesSection, { projectUid: PROJECT_UID }),
+    seedClient: (client) => {
+      specificationSets(client);
+      seedError(
+        client,
+        queryKeys.optimisation.specificationPrices(PROJECT_UID, DOCUMENT_UID, 0, SPECIFICATION_ROW_LIMIT),
+        apiError(503, 'dependency_unavailable'),
+      );
+    },
+  },
+  {
+    name: 'specification-prices-ready',
+    make: () => createElement(SpecificationPricesAnswer, { answer: specificationAnswer(), onPage: () => undefined }),
+  },
+  {
+    name: 'specification-prices-ready-empty',
+    make: () =>
+      createElement(SpecificationPricesAnswer, {
+        answer: specificationAnswer({
+          extraction: { ...specificationAnswer().extraction!, table_count: 0, row_count: 0, skipped_count: 0, skipped: [] },
+          matching: {
+            algorithm: 'price-match-v1',
+            counts: { matched: 0, ambiguous: 0, unmatched: 0 },
+            totals: [],
+            excluded: { no_position: 0, unit_mismatch: 0, row_unit_missing: 0, ambiguous: 0, quantity_not_numeric: 0 },
+          },
+          rows: { offset: 0, limit: SPECIFICATION_ROW_LIMIT, total: 0, next_offset: null, items: [] },
+        }),
+        onPage: () => undefined,
+      }),
+  },
+  ...(['version_unclassified', 'section_not_ar', 'price_list_missing', 'analysis_missing', 'text_unavailable', 'specification_too_large'] as const).map(
+    (state) => ({
+      name: `specification-prices-${state}`,
+      make: () =>
+        createElement(SpecificationPricesAnswer, {
+          answer: specificationAnswer({
+            ...SPECIFICATION_STOPPED,
+            state,
+            ...(state === 'version_unclassified' ? { project_stage: null, section_code: null, price_list: null } : {}),
+            ...(state === 'section_not_ar' ? { section_code: 'KJ', price_list: null } : {}),
+            ...(state === 'price_list_missing' ? { price_list: null } : {}),
+            ...(state === 'text_unavailable' ? { run_id: RUN_ID } : {}),
+          }),
+          onPage: null,
+        }),
+    }),
+  ),
+  /*
+   * `NORM-REFS-RUN-01`. «Нормативные ссылки» is a section of the run page's progress widget for a
+   * finished run: its container pending and refused, and the answer in every state it can carry.
+   */
+  { name: 'norm-references-section', make: () => createElement(NormReferencesSection, { runId: RUN_ID }) },
+  {
+    name: 'norm-references-section-ready',
+    make: () => createElement(NormReferencesSection, { runId: RUN_ID }),
+    seedClient: (client) => client.setQueryData(queryKeys.runs.normReferences(RUN_ID), normReferencesAnswer()),
+  },
+  {
+    name: 'norm-references-refused',
+    make: () => createElement(NormReferencesSection, { runId: RUN_ID }),
+    seedClient: (client) => seedError(client, queryKeys.runs.normReferences(RUN_ID), apiError(503, 'dependency_unavailable')),
+  },
+  { name: 'norm-references-ready', make: () => createElement(NormReferencesAnswer, { answer: normReferencesAnswer() }) },
+  {
+    name: 'norm-references-ready-empty',
+    make: () =>
+      createElement(NormReferencesAnswer, {
+        answer: normReferencesAnswer({
+          counts: { in_corpus: 0, newer_edition: 0, older_edition_only: 0, not_in_corpus: 0, not_recognised: 0 },
+          occurrence_count: 0, unread_pages: [], items: [], unrecognised: [],
+        }),
+      }),
+  },
+  ...(['snapshot_not_pinned', 'text_unavailable', 'too_many_citations'] as const).map((state) => ({
+    name: `norm-references-${state}`,
+    make: () =>
+      createElement(NormReferencesAnswer, {
+        answer: { run_id: RUN_ID, version_uid: VERSION_UID, state, page_count: 12 },
+      }),
+  })),
+  /*
+   * `W63-SECTION-FORM7-01`. «Оптимизация разделов» is the whole of `/section-optimisation`, whose
+   * route-derived screen is its read pending; its own read refused, and the answer in every
+   * shape it can carry, are rendered here through the widget's parts.
+   */
+  { name: 'section-specification-section', make: () => createElement(SectionSpecificationSection) },
+  {
+    name: 'section-specification-refused',
+    make: () => createElement(SectionSpecificationSection),
+    seedClient: (client) => seedError(client, sectionKey(), apiError(503, 'dependency_unavailable')),
+  },
+  {
+    name: 'section-specification-ready',
+    make: () => createElement(SectionSpecificationAnswer, { answer: sectionAnswer(), onPage: () => undefined, onSelectProject: () => undefined }),
+  },
+  {
+    name: 'section-specification-paged',
+    make: () => createElement(SectionSpecificationAnswer, { answer: sectionPagedAnswer(), onPage: () => undefined, onSelectProject: () => undefined }),
+  },
+  {
+    name: 'section-specification-narrowed',
+    make: () =>
+      createElement(SectionSpecificationAnswer, {
+        answer: sectionAnswer({
+          project_filter: PROJECT_UID as never, excluded: [], excluded_count: 0, source_count: 4, row_count: 4,
+          projects: [sectionAnswer().projects[0]!],
+          rows: { ...sectionAnswer().rows!, offset: 0, total: 4, next_offset: null, items: sectionAnswer().rows!.items.slice(0, 4) },
+        }),
+        onPage: null,
+        onSelectProject: null,
+      }),
+  },
+  {
+    name: 'section-specification-searched-nothing',
+    make: () =>
+      createElement(SectionSpecificationAnswer, {
+        answer: sectionAnswer({
+          query: 'ёлочка',
+          rows: { offset: 0, limit: SECTION_ROW_LIMIT, total: 0, next_offset: null, items: [] },
+        }),
+        onPage: () => undefined,
+        onSelectProject: () => undefined,
+      }),
+  },
+  {
+    name: 'section-specification-no-rows',
+    make: () =>
+      createElement(SectionSpecificationAnswer, {
+        answer: sectionAnswer({ row_count: 0, rows: { offset: 0, limit: SECTION_ROW_LIMIT, total: 0, next_offset: null, items: [] } }),
+        onPage: () => undefined,
+        onSelectProject: () => undefined,
+      }),
+  },
+  {
+    name: 'section-specification-empty',
+    make: () =>
+      createElement(SectionSpecificationAnswer, {
+        answer: sectionAnswer({
+          projects: [], excluded: [], excluded_count: 0, source_count: 0, row_count: 0,
+          rows: { offset: 0, limit: SECTION_ROW_LIMIT, total: 0, next_offset: null, items: [] },
+        }),
+        onPage: () => undefined,
+        onSelectProject: () => undefined,
+      }),
+  },
+  {
+    name: 'section-specification-empty-project',
+    make: () =>
+      createElement(SectionSpecificationAnswer, {
+        answer: sectionAnswer({
+          project_filter: PROJECT_UID as never, projects: [], excluded: [], excluded_count: 0, source_count: 0, row_count: 0,
+          rows: { offset: 0, limit: SECTION_ROW_LIMIT, total: 0, next_offset: null, items: [] },
+        }),
+        onPage: null,
+        onSelectProject: null,
+      }),
+  },
+  ...(['projects', 'sources', 'rows'] as const).map((reason) => ({
+    name: `section-specification-too-large-${reason}`,
+    make: () =>
+      createElement(SectionSpecificationAnswer, {
+        answer: sectionAnswer({
+          ...SECTION_NO_ROWS,
+          state: 'section_too_large',
+          limit_reason: reason,
+          ...(reason === 'projects' ? { projects: [], excluded: [], excluded_count: 0, source_count: 0 } : {
+            projects: sectionAnswer().projects.map((item) => ({
+              ...item, price_state: 'not_read' as const, price_list: null, matching: null, row_count: 0,
+              sources: item.sources.map((source) => ({
+                ...source, state: 'not_read' as const, run_id: null, text_layer_sha256: null, row_count: null,
+                table_count: null, skipped_by_reason: null,
+              })),
+            })),
+          }),
+        }),
+        onPage: null,
+        onSelectProject: () => undefined,
+      }),
+  })),
+  {
+    name: 'version-classification-read-failed',
+    make: () =>
+      createElement(VersionClassification, {
+        address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
+        roles: ['expert'],
+      }),
+    seedClient: (client) => seedError(client, KEYS.sectionReview, apiError(503, 'dependency_unavailable')),
+  },
+  {
+    name: 'project-structure-classified',
+    make: () =>
+      createElement(ProjectStructureView, {
+        projectUid: PROJECT_UID,
+        items: [
+          version({ classification: classification() }),
+          version({
+            document_uid: `doc_${ULID.slice(0, -1)}C`,
+            version_uid: `ver_${ULID.slice(0, -1)}C`,
+            classification: classification({ project_stage: 'R', section_code: 'KJ' }),
+          }),
+          version({ document_uid: `doc_${ULID.slice(0, -1)}D`, version_uid: `ver_${ULID.slice(0, -1)}D` }),
+        ],
+        hasNextPage: true,
+      }),
+  },
 ];
 
 const SCREENS: readonly ScreenCase[] = [
@@ -1804,6 +2736,16 @@ export const CACHE_STATES: readonly {
    * seeded run, the way `empty`, `refused` and `paged` do.
    */
   { state: 'two-runs', run: null },
+  /*
+   * `W59-VERSION-COMPARE-01`. The version comparison's four static branches: the set's
+   * version list in flight, two versions with the comparison in flight, the comparison
+   * answered (every sheet status, a diff page with a too-large sheet and a next page, every
+   * finding proposal kind) and the comparison refused. See `twoVersionClient`.
+   */
+  { state: 'versions-pending', run: null },
+  { state: 'two-versions', run: null },
+  { state: 'two-versions-compared', run: null },
+  { state: 'two-versions-refused', run: null },
 ];
 
 export function renderedScreens(): readonly { readonly where: string; readonly markup: string }[] {
@@ -1838,7 +2780,25 @@ function renderEveryScreen(): readonly { readonly where: string; readonly markup
                   ? pagedClient(loaded)
                   : state === 'two-runs'
                     ? twoRunClient(loaded)
-                    : loaded(overrides ?? {});
+                    : state === 'versions-pending'
+                      ? versionsPendingClient(loaded)
+                      : state === 'two-versions'
+                        ? twoVersionClient(loaded, null)
+                        : state === 'two-versions-compared'
+                          ? twoVersionClient(loaded, comparisonBody())
+                          : state === 'two-versions-refused'
+                            ? twoVersionClient(
+                                loaded,
+                                comparisonBody({
+                                  outcome: 'refused',
+                                  refusal: { reason: 'project_stage_mismatch', side: null },
+                                  comparison_sha256: null,
+                                  sheets: [],
+                                  sheet_diffs: null,
+                                  findings: null,
+                                }),
+                              )
+                            : loaded(overrides ?? {});
       screen.seedClient?.(client);
       out.push({ where: `${screen.name} (${state})`, markup: renderScreen(client, screen.make()) });
     }
@@ -1850,6 +2810,16 @@ function renderEveryScreen(): readonly { readonly where: string; readonly markup
   const userClient = loadedClient();
   userClient.setQueryData(KEYS.user, badAccount);
   out.push({ where: 'user-card (invalid data)', markup: renderScreen(userClient, createElement(UserCard, { userUid: badAccount.user_uid })) });
+  /*
+   * `W61-DISPATCHER-01`: an assignment's history opens only when its row's «История» is
+   * pressed, which one static render cannot do — so the widget is rendered on its own, in
+   * the three states a cache can hold: in flight, answered and failed.
+   */
+  const historyOf = (client: Client) =>
+    renderScreen(client, createElement(AssignmentHistory, { assignmentUid: ASSIGNMENT_DETAIL.assignment.assignment_uid }));
+  out.push({ where: 'assignment-history (cold)', markup: historyOf(newClient()) });
+  out.push({ where: 'assignment-history (loaded)', markup: historyOf(loadedClient()) });
+  out.push({ where: 'assignment-history (failed)', markup: historyOf(failedClient()) });
   /*
    * The review screen with its detail and history still in flight, appended once.
    *
@@ -1955,6 +2925,10 @@ const TRANSLATED_SCHEMAS = [
   // by «Блоки» in Russian (`entities/block`'s vocabulary) with the value in a `data-` attribute.
   'PortalBlockType',
   'PortalGeometryState',
+  // `W59-SECTION-UI-01`: a version's stage and section, said as «Стадия: П» and «Архитектурные
+  // решения (АР)» with the contract value in a `data-` attribute. The Latin code is never text.
+  'ProjectStage',
+  'ProjectSection',
 ] as const;
 
 function translatedVocabulary(): ReadonlySet<string> {
@@ -2008,7 +2982,7 @@ describe('the guard reads a contract rather than a list of words', () => {
     }
     // The two derivations that are not openapi enums, asserted as relationships so a
     // parser that silently returned nothing is red rather than merely permissive.
-    expect(csvColumnNames().size, 'OD-11 freezes seventeen CSV columns').toBe(17);
+    expect(csvColumnNames().size, 'OD-11 and W56a declare nineteen CSV columns').toBe(19);
     expect(csvColumnNames().has('finding_uid')).toBe(true);
     expect(manifestRoles().has('source.document'), 'the stage registry declares it').toBe(true);
 
@@ -2181,7 +3155,10 @@ describe('the guard renders the screens it claims to render', () => {
     // a vacuity check stops checking. `W30-LISTS` ruled against hard-coded counts two waves
     // ago and this was one of them.
     expect(screens.length).toBe(
-      SCREENS.length * CACHE_STATES.length + 3 + malformedVariants(IDENTITIES).length,
+      // `+ 3`: the account and user-card invalid-data shapes and the review's detail-pending
+      // one; `+ 3` more since `W61-DISPATCHER-01`: an assignment's history, cold, loaded
+      // and failed.
+      SCREENS.length * CACHE_STATES.length + 6 + malformedVariants(IDENTITIES).length,
     );
     // The derived half is non-trivial too: a route walk that returned nothing would leave
     // this file rendering only the shapes below the derivation and still satisfy the
@@ -2332,6 +3309,16 @@ const SCHEMA_MARKERS: readonly {
     schema: 'PortalBlockType',
     attribute: 'data-portal-block-type',
     why: '`widgets/portal-blocks/ui/portal-block-card.tsx`, one per block, its type said as Текст / Изображение / Штамп.',
+  },
+  {
+    schema: 'ProjectStage',
+    attribute: 'data-project-stage',
+    why: '`entities/document-version/ui/classification-badges.tsx`, the stage badge on the version screen, every version row and the project structure.',
+  },
+  {
+    schema: 'ProjectSection',
+    attribute: 'data-section-group',
+    why: "`widgets/project-sections/ui/project-sections.tsx`, one group per section of the project structure, every one of the fifteen present even when empty.",
   },
   {
     schema: 'PortalGeometryState',
@@ -2681,6 +3668,14 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
   {
+    label: 'Действие не выполнено.',
+    why: '«Диспетчер» and «Мои задачи» show this only after the transitionAssignment mutation settles with a failure. One static render cannot press a move button or seed the mutation observer through a query cache.',
+  },
+  {
+    label: 'Назначение не создано.',
+    why: 'The dispatcher\'s creation form shows this only after the createAssignment mutation settles with a failure. One static render cannot submit the form or seed the mutation observer through a query cache.',
+  },
+  {
     label: 'Команда отклонена',
     why: 'QueuePage can show this only after a command mutation settles with a typed refusal. The static harness cannot fire its confirmation or seed the mutation observer through a query cache.',
   },
@@ -2731,7 +3726,8 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
   {
     label: 'Загрузка: загружаемый файл…',
     why:
-      '`upload-document-form.tsx`, while the upload is in flight; same mechanism as the ' +
+      '`upload-outcome.tsx`, under either upload form while the upload is in flight (the ' +
+      'first version or, `W59-VERSION-UPLOAD-01`, the next one); same mechanism as the ' +
       'new project, and the same reason no seed reaches it. The words it carries are ' +
       'judged by `no branch label carries English, reachable or not`. `D-82`.',
   },

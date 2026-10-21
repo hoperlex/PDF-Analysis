@@ -145,6 +145,45 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             # `W55B-SEAL-01`: the portal-block listing takes a cursor and a limit. The crop read
             # takes only path identities and declares none.
             "listVersionPortalBlocks",
+            # `W59-SECTION-SEAL-01`: the classification takes a body. The section review
+            # takes only path identities and declares none.
+            "classifyDocumentVersion",
+            # `CLASSIFICATION-CORRECTION-01`: the correction takes a body.
+            "correctVersionClassification",
+            # `W59-VERSION-COMPARE-01`: a required target version and bounded paging.
+            "compareDocumentVersions",
+            # `W59-VERSION-UPLOAD-01`: the next version takes a multipart body.
+            "uploadDocumentVersion",
+            # `W59-DECISION-CARRYOVER-01`: the carryover takes a closed body.
+            "carryOverDecision",
+            # `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue's filters and paging, and the
+            # workbook's source refusals (`storage_integrity_error`, `required_norm_unavailable`).
+            "listNormDocuments",
+            "exportRunXlsx",
+            # `W61-DISPATCHER-01`: a creation and a move take bodies, the listing filters and
+            # pages. Reading one assignment takes only its path identity and declares none.
+            "createAssignment",
+            "listAssignments",
+            "transitionAssignment",
+            # `W60-PRICE-LIST-01`: a multipart upload, a paged read, two closed bodies, and
+            # two reads whose project identity is pattern-checked.
+            "uploadPriceList",
+            "listPriceListRevisions",
+            "listPriceListPositions",
+            "getEffectiveVendorLists",
+            "setGlobalVendorList",
+            "setProjectVendorList",
+            # `W60-OPT-MATCH-01`: the priced specification's bounded paging.
+            "getSpecificationPrices",
+            # `W60-OPT-PROPOSALS-01`: a keyed start, a project read with filters, a paged
+            # read and a keyed decision with a closed body. The decision history and the CSV
+            # take a pattern-checked path identity only and declare no 422.
+            "startOptimisationPass",
+            "listOptimisationPasses",
+            "listOptimisationProposals",
+            "decideOptimisationProposal",
+            # `W63-SECTION-FORM7-01`: a path code, filters and paging.
+            "getSectionSpecification",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

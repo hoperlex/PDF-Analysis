@@ -1,35 +1,48 @@
+'use client';
+
 /**
- * `/optimisation` — tuning models and stages, prepared and not built.
+ * `/optimisation` — the retired tuning stub, now a pointer to where project optimisation is.
  *
- * `R-23`'s addendum rules optimisation wanted and the preparation allowed now.
+ * `R-66` kept this address registered and reachable, out of the menu, until project
+ * optimisation became a project tab (`ROADMAP-TO-BETA.md` §10.1 A-6). `W60-OPT-PROPOSALS-01`
+ * completes that tab — price lists and vendor lists (`W60-PRICE-LIST-01`) and the proposals
+ * with the experts' decisions — so this address no longer has a screen of its own: it sends
+ * the browser to the projects list, where each project's «Оптимизация» tab is, and says so
+ * while it does. A bookmark keeps working; nothing is promised that is not already there.
  *
- * The promise is bounded by `docs/program/W43-PREP.md` note 2, and it names the two
- * things that are actually in the way rather than saying "not implemented":
- *
- *   - **nothing is settable.** `StartRunRequest` has exactly two properties —
- *     `version_uid` and `provider_mode` — under `additionalProperties: false`. A run's
- *     profile and prompt bundle are readable on `RunStatus` and are chosen by the
- *     deployment, not by a caller;
- *   - **there is no section to tune per.** No section field exists anywhere in the data;
- *     `D-56` measured that, `R-25` rules the dashboard's section structure rendered
- *     without counts for the same reason, and the project-sections screen already says
- *     plainly that sections are navigation.
- *
- * The screen deliberately does not say how many stages there are. One analysis stage
- * among four scheduled is a true sentence today and a false one the week a stage is
- * added, and `OPERATING_CONSTRAINTS.md` §4.7 is about exactly that kind of sentence
- * outliving what it describes. The count lives in `W43-PREP.md`, where a command sits
- * next to it.
+ * The redirect is the screen's only behaviour. It is made on the client, after the route's
+ * guard has let the session in, so a guest still goes to sign in first and comes back here.
  */
 
-import { RoutePlaceholder } from '@/shared/ui';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+
+import { PageShell } from '@/shared/ui';
+import { routes } from '@/shared/lib';
+
+/** Where the retired address sends the browser. */
+export const OPTIMISATION_MOVED_TO = routes.projects();
 
 export function OptimisationPage() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(OPTIMISATION_MOVED_TO);
+  }, [router]);
+
   return (
-    <RoutePlaceholder
-      screen="Оптимизация"
-      route="/optimisation"
-      promise="Здесь будет настройка анализа: какие модели и стадии применяются к документу и к разделу. Пока запуск прогона принимает только версию документа и режим работы с провайдером, а раздел документа нигде не хранится, поэтому выбирать здесь нечего."
-    />
+    <PageShell title="Оптимизация" subtitle="Раздел перенесён в проект">
+      <div className="am-state am-state--neutral" role="status" data-optimisation-moved="">
+        <p className="am-state__title">Оптимизация теперь на вкладке проекта.</p>
+        <div className="am-state__detail">
+          Откройте проект и перейдите на вкладку «Оптимизация»: там прайс-лист проекта, вендор-листы
+          по разделам и предложения по более дешёвым аналогам с решениями экспертов. Открываю
+          список проектов.
+        </div>
+        <div className="am-state__action">
+          <Link href={OPTIMISATION_MOVED_TO}>Перейти к проектам</Link>
+        </div>
+      </div>
+    </PageShell>
   );
 }

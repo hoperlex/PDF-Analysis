@@ -33,11 +33,30 @@
  * belongs to a section — that claim would now be checkable in principle, and is simply not
  * one this product's own flow ever makes true.
  *
+ * **`W59-SECTION-SEAL-01`: fifteen, not fourteen.** The contract's `ProjectSection` gained
+ * `PS` (the explanatory note, «Пояснительная записка»), distinct from `PB` (fire safety).
+ * Legacy's fourteen keep their order and `PS` follows them, exactly as the backend's
+ * `dashboard.repository.PROJECT_SECTIONS` does. A version now also carries an
+ * expert-confirmed `classification` (stage and section) that run start routes on; whether a
+ * section can run is the API's `SectionReviewOption.executable`, not the `analysed` flag
+ * below, which still describes the original AR-only text prompt.
+ *
  * Counting per section is no longer absent: `getDashboardSummary` counts published
  * documents, per section, including the unclassified bucket every product upload falls
  * into today. A section *picker* on the upload form — the only way a reviewer could change
  * that bucket — is a feature and remains out of scope (`D-107`).
+ *
+ * **`W59-SECTION-UI-01`: names and order are the owner's, not this module's.** The names are
+ * the legacy ones the owner chose in poll answer `S-3` and that the backend's suggestion
+ * catalogue carries (`src/auditmanager/sections/suggestion_patterns.json`); a unit test reads
+ * that file and holds every name here to it. {@link PROJECT_SECTIONS} keeps legacy's order,
+ * because the dashboard's breakdown is keyed on it. The project structure — a project's
+ * documents grouped by the section an expert confirmed for their current version — follows
+ * the order of poll answer `S-5` instead: АР, then the cheap profiles first
+ * ({@link PROJECT_STRUCTURE_ORDER}).
  */
+
+import type { ProjectSection as ContractProjectSection } from '@/shared/api';
 
 /** A section code, exactly as the legacy application spells it. Never shown to a user. */
 export type ProjectSectionCode =
@@ -54,7 +73,8 @@ export type ProjectSectionCode =
   | 'ITP'
   | 'GP'
   | 'TX'
-  | 'POS';
+  | 'POS'
+  | 'PS';
 
 export interface ProjectSection {
   /**
@@ -81,24 +101,86 @@ export const ANALYSED_SECTION_CODE: ProjectSectionCode = 'AR';
 
 export const PROJECT_SECTIONS: readonly ProjectSection[] = [
   { code: 'AR', abbr: 'АР', name: 'Архитектурные решения', analysed: true },
-  { code: 'AI', abbr: 'АИ', name: 'Интерьеры', analysed: false },
+  { code: 'AI', abbr: 'АИ', name: 'Архитектурные решения (интерьер)', analysed: false },
   { code: 'KM', abbr: 'КМ', name: 'Конструкции металлические', analysed: false },
   { code: 'KJ', abbr: 'КЖ', name: 'Конструкции железобетонные', analysed: false },
-  { code: 'OV', abbr: 'ОВ', name: 'Отопление и вентиляция', analysed: false },
-  { code: 'EOM', abbr: 'ЭОМ', name: 'Электрооборудование и электроосвещение', analysed: false },
+  { code: 'OV', abbr: 'ОВ', name: 'Отопление, вентиляция и кондиционирование', analysed: false },
+  { code: 'EOM', abbr: 'ЭОМ', name: 'Электроснабжение и электрооборудование', analysed: false },
   { code: 'VK', abbr: 'ВК', name: 'Водоснабжение и канализация', analysed: false },
-  { code: 'PT', abbr: 'ПТ', name: 'Пожаротушение', analysed: false },
+  { code: 'PT', abbr: 'ПТ', name: 'Противопожарный водопровод', analysed: false },
   { code: 'PB', abbr: 'ПБ', name: 'Пожарная безопасность', analysed: false },
   { code: 'SS', abbr: 'СС', name: 'Слаботочные системы', analysed: false },
   { code: 'ITP', abbr: 'ИТП', name: 'Индивидуальный тепловой пункт', analysed: false },
   { code: 'GP', abbr: 'ГП', name: 'Генеральный план', analysed: false },
   { code: 'TX', abbr: 'ТХ', name: 'Технологические решения', analysed: false },
-  { code: 'POS', abbr: 'ПОС', name: 'Организация строительства', analysed: false },
+  { code: 'POS', abbr: 'ПОС', name: 'Проект организации строительства', analysed: false },
+  { code: 'PS', abbr: 'ПЗ', name: 'Пояснительная записка', analysed: false },
+];
+
+/**
+ * Compile-time proof that this module's codes are exactly the contract's fifteen: a code the
+ * contract gains or drops stops this line type-checking in either direction.
+ */
+type SameSet<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const _sectionCodesAreTheContracts: SameSet<ProjectSectionCode, ContractProjectSection> = true;
+void _sectionCodesAreTheContracts;
+
+/**
+ * The order of the project structure: poll answer `S-5`, «cheap first» after АР —
+ * АИ → ПЗ, ПОС, ТХ → КЖ, КМ → ОВ, ВК, ПТ → ЭОМ, СС, ИТП → ГП → ПБ.
+ */
+export const PROJECT_STRUCTURE_ORDER: readonly ProjectSectionCode[] = [
+  'AR',
+  'AI',
+  'PS',
+  'POS',
+  'TX',
+  'KJ',
+  'KM',
+  'OV',
+  'VK',
+  'PT',
+  'EOM',
+  'SS',
+  'ITP',
+  'GP',
+  'PB',
 ];
 
 /** The section carrying `code`, or `null` when nothing does. Never a silent default. */
 export function findProjectSection(code: string): ProjectSection | null {
   return PROJECT_SECTIONS.find((section) => section.code === code) ?? null;
+}
+
+/** A code outside this module's fifteen. A defect in this build, never a label to guess. */
+export class UnknownProjectSectionError extends Error {
+  readonly code: string;
+
+  constructor(code: string) {
+    super(`Раздел проекта: код ${code} вне каталога этой версии приложения.`);
+    this.name = 'UnknownProjectSectionError';
+    this.code = code;
+  }
+}
+
+/**
+ * The section carrying a contract code. Total over the type, and a unit test proves every
+ * one of the fifteen resolves; a code outside them throws rather than rendering a guess.
+ */
+export function projectSectionOf(code: ProjectSectionCode): ProjectSection {
+  const section = findProjectSection(code);
+  if (section === null) throw new UnknownProjectSectionError(code);
+  return section;
+}
+
+/** The fifteen sections in the project structure's order (`S-5`). */
+export function sectionsInStructureOrder(): readonly ProjectSection[] {
+  return PROJECT_STRUCTURE_ORDER.map(projectSectionOf);
+}
+
+/** A code's position in the project structure's order (`S-5`), for sorting. */
+export function structureRank(code: ProjectSectionCode): number {
+  return PROJECT_STRUCTURE_ORDER.indexOf(code);
 }
 
 /**

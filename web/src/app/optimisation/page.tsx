@@ -1,5 +1,6 @@
 /**
- * `/optimisation` — the route file for the tuning section.
+ * `/optimisation` — the route file for the retired tuning stub (`W60-OPT-PROPOSALS-01`: the
+ * page now points to the project's «Оптимизация» tab and redirects to the projects list).
  *
  * Delegation-only: the route decides nothing.
  *

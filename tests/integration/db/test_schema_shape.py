@@ -58,6 +58,28 @@ IMMUTABLE_TABLES = {
     # `0020_norms_search`: the current snapshot's history is append-only (R-113). The
     # current row itself moves, so its own guard refuses DELETE and an unrecorded change.
     "norm_current_snapshot_event",
+    "norm_retrieval_set",
+    "finding_observation_norm_citation",
+    # `0024_version_classification`: the first expert classification stands (``AM003``).
+    "document_version_classification",
+    # `0025_work_assignments`: an assignment header and its append-only history; the
+    # status is derived from the history (view ``work_assignment_current``), never updated.
+    "work_assignment",
+    "work_assignment_event",
+    # `0026_price_lists`: an uploaded price list, its positions, and each vendor-list
+    # revision with its entries are written once; the current one is a query.
+    "price_list_revision",
+    "price_list_position",
+    "vendor_list_revision",
+    "vendor_list_entry",
+    # `0027_optimisation_proposals`: a pass and its proposals are written once; each expert
+    # decision is an appended row, and the current decision is a query.
+    "optimisation_pass",
+    "optimisation_proposal",
+    "optimisation_proposal_decision",
+    # `0028_classification_corrections`: a correction is appended once and never changed; the
+    # original confirmation above is revision 1 and the current classification is a view.
+    "document_version_classification_correction",
 }
 
 
@@ -241,9 +263,13 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "norms_snapshot_id": "ns",
         "norm_document_id": "ndoc",
         "norm_paragraph_id": "npar",
+        "norm_retrieval_set_id": "nrs",
+        "set_blob_id": "blob",
+        "catalogue_blob_id": "blob",
         "model_call_id": "mc",
         "finding_uid": "fnd",
         "finding_observation_id": "fobs",
+        "canonical_observation_id": "fobs",
         "decision_id": "dec",
         "audit_event_id": "evt",
         "job_id": "job",
@@ -261,6 +287,33 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "from_snapshot_id": "ns",
         "to_snapshot_id": "ns",
         "actor_user_uid": "usr",
+        # `W59-SECTION-SEAL-01`, migration 0024: the classification's confirmer.
+        "confirmed_by_user_uid": "usr",
+        # `W61-DISPATCHER-01`, migration 0025: the assignment's people.
+        "assignee_user_uid": "usr",
+        "created_by_user_uid": "usr",
+        "new_assignee_user_uid": "usr",
+        "assignment_uid": "asg",
+        # `W60-PRICE-LIST-01`, migration 0026: a price list's uploader, a vendor list's author.
+        "uploaded_by_user_uid": "usr",
+        "set_by_user_uid": "usr",
+        # `W60-PRICE-LIST-01` phase B contracted the three optimisation identities.
+        "price_list_id": "prl",
+        "price_list_position_id": "prp",
+        "vendor_list_id": "vnl",
+        # `W60-OPT-PROPOSALS-01`, migration 0027: the expert who started a pass (a decision's
+        # actor is ``actor_user_uid`` above).
+        "started_by_user_uid": "usr",
+        # `CLASSIFICATION-CORRECTION-01`, migration 0028: the expert who corrected a version's
+        # classification.
+        "corrected_by_user_uid": "usr",
+        # `W60-OPT-PROPOSALS-01` phase B contracted the three proposal identities; the two
+        # position columns of a proposal hold ``prp``.
+        "optimisation_pass_id": "opp",
+        "optimisation_proposal_id": "opr",
+        "proposal_decision_id": "opd",
+        "matched_position_id": "prp",
+        "proposed_position_id": "prp",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

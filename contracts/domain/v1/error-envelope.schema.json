@@ -40,6 +40,7 @@
         "partial_result_not_publishable",
         "cost_budget_exceeded",
         "analysis_input_budget_exceeded",
+        "model_identity_mismatch",
         "stale_attempt",
         "execution_token_invalid",
         "rate_limited",
@@ -487,6 +488,25 @@
         "properties": {
           "error_code": {
             "const": "analysis_input_budget_exceeded"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "model_identity_mismatch"
           }
         },
         "required": [

@@ -20,8 +20,9 @@ from sqlalchemy.exc import DBAPIError
 
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
+from tests.support.expected_facts import FACTS
 
-HEAD = "0021_portal_bundles"
+HEAD = FACTS.migration_head  # the tree's head, from tests/support/expected_facts.json
 PREVIOUS = "0020_norms_search"
 MIGRATION = Path(__file__).resolve().parents[3] / "db/migrations/versions/20261013_0021_portal_bundles.py"
 DIGEST = "a" * 64

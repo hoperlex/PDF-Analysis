@@ -113,7 +113,9 @@ describe('each route delegates to its screen and to no other', () => {
   it('/projects/{project_uid} passes the project address through, unparsed', async () => {
     const element = await ProjectRoute({ params: Promise.resolve({ project_uid: A_PROJECT }), ...NO_QUERY });
     expect(element.type).toBe(ProjectDetailPage);
-    expect(element.props).toEqual({ projectUid: A_PROJECT });
+    // `W60-PRICE-LIST-01`: and the session's roles, which decide which controls the
+    // «Оптимизация» tab draws.
+    expect(element.props).toEqual({ projectUid: A_PROJECT, roles: [...SIGNED_IN.roles] });
   });
 
   it('/projects/{project_uid}/runs/{run_id} passes both, and does not cross them', async () => {
@@ -149,7 +151,13 @@ describe('each route delegates to its screen and to no other', () => {
       ...NO_QUERY,
     });
     expect(element.type).toBe(VersionDetailPage);
-    expect(element.props).toEqual({ projectUid: A_PROJECT, versionUid: A_VERSION });
+    // `W59-SECTION-UI-01`: and the session's roles, which decide whether the stage-and-section
+    // panel draws the expert's form or a read-only sentence.
+    expect(element.props).toEqual({
+      projectUid: A_PROJECT,
+      versionUid: A_VERSION,
+      roles: [...SIGNED_IN.roles],
+    });
   });
 
   it('.../comparison passes both to the comparison screen, and does not cross them', async () => {
@@ -174,14 +182,22 @@ describe('each route delegates to its screen and to no other', () => {
   it('/norms hands the screen the session roles and the search the address carries (W55A-WEB-NORMS)', async () => {
     const plain = await NormsRoute({ searchParams: Promise.resolve({}) });
     expect(plain.type).toBe(NormsPage);
-    expect(plain.props).toEqual({ roles: ['expert'], query: null });
+    expect(plain.props).toEqual({ roles: ['expert'], query: null, catalogue: null });
     const searched = await NormsRoute({ searchParams: Promise.resolve({ q: '  СП 54 п. 5.1 ' }) });
-    expect(searched.props).toEqual({ roles: ['expert'], query: 'СП 54 п. 5.1' });
+    expect(searched.props).toEqual({ roles: ['expert'], query: 'СП 54 п. 5.1', catalogue: null });
     // A blank search is no search, and a repeated parameter is not read as one.
-    expect((await NormsRoute({ searchParams: Promise.resolve({ q: '   ' }) })).props).toEqual({ roles: ['expert'], query: null });
-    expect((await NormsRoute({ searchParams: Promise.resolve({ q: ['а', 'б'] }) })).props).toEqual({ roles: ['expert'], query: null });
+    expect((await NormsRoute({ searchParams: Promise.resolve({ q: '   ' }) })).props).toEqual({ roles: ['expert'], query: null, catalogue: null });
+    expect((await NormsRoute({ searchParams: Promise.resolve({ q: ['а', 'б'] }) })).props).toEqual({ roles: ['expert'], query: null, catalogue: null });
     jar.value = openSession({ ...SIGNED_IN, roles: ['admin'] }, 'a-credential', 3600);
-    expect((await NormsRoute({ searchParams: Promise.resolve({}) })).props).toEqual({ roles: ['admin'], query: null });
+    expect((await NormsRoute({ searchParams: Promise.resolve({}) })).props).toEqual({ roles: ['admin'], query: null, catalogue: null });
+    // `W57B-NORMS-CATALOGUE-XLSX-01`: `?view=catalogue` opens the catalogue with its own
+    // filters, trimmed, a blank one being none; any other view is the search.
+    expect((await NormsRoute({ searchParams: Promise.resolve({ view: 'catalogue', cq: ' СП 54 ', kind: 'СП' }) })).props)
+      .toEqual({ roles: ['admin'], query: null, catalogue: { q: 'СП 54', kind: 'СП' } });
+    expect((await NormsRoute({ searchParams: Promise.resolve({ view: 'catalogue', cq: '  ' }) })).props)
+      .toEqual({ roles: ['admin'], query: null, catalogue: { q: null, kind: null } });
+    expect((await NormsRoute({ searchParams: Promise.resolve({ view: 'другое', cq: 'СП' }) })).props)
+      .toEqual({ roles: ['admin'], query: null, catalogue: null });
   });
 
   it('/norms/document delegates the document identity and the page, unparsed beyond their shape', async () => {
@@ -643,6 +659,9 @@ describe('every screen address is built once and matches a route file on disk', 
       project: routes.project(PROJECT_UID),
       document: routes.document(PROJECT_UID, DOCUMENT_UID),
       version: routes.version(PROJECT_UID, VERSION_UID),
+      // `W59-SECTION-UI-01`: an unclassified document in the project structure opens its
+      // version at the stage-and-section panel, and so does the run control's refusal.
+      versionClassification: routes.versionClassification(PROJECT_UID, VERSION_UID),
       comparison: routes.comparison(PROJECT_UID, VERSION_UID),
       run: routes.run(PROJECT_UID, RUN_ID),
       review: routes.review(PROJECT_UID, RUN_ID),

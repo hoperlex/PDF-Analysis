@@ -73,6 +73,7 @@ const MUST_SAY: Readonly<Record<ErrorCode, string>> = {
   partial_result_not_publishable: 'запросили то, что требует прогона без неё',
   cost_budget_exceeded: 'бюджет стоимости или токенов для этого прогона исчерпан',
   analysis_input_budget_exceeded: 'больше бюджета входа анализа',
+  model_identity_mismatch: 'Модель в ответе провайдера не совпала',
   stale_attempt: 'больше не является для неё публикующей инстанцией',
   execution_token_invalid: 'отсутствовал, был искажён или не был',
   rate_limited: 'Прогон таким кодом завершиться не может',

@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482
+ *   sha256 7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,32 +17,58 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482';
+export const CONTRACT_DIGEST = '7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
   'Account',
   'AccountPage',
   'AnalysisProfileId',
+  'AnalysisProfileList',
+  'AnalysisProfileListItem',
+  'AnalysisProfileSource',
+  'AnalysisProfileSourceFile',
+  'AnalysisProfileStatus',
+  'AnalysisProfileSummary',
   'AppendDecisionRequest',
   'AppendDecisionResponse',
   'ApproveRegistrationRequest',
+  'Assignment',
+  'AssignmentDetail',
+  'AssignmentEvent',
+  'AssignmentEventKind',
+  'AssignmentPage',
+  'AssignmentStatus',
+  'AssignmentTransitionKind',
+  'AssignmentUid',
   'BlockGeometry',
+  'CarryOverDecisionRequest',
+  'CarryOverDecisionResponse',
+  'CarryoverCandidate',
+  'CarryoverSourceDecision',
   'ChangePasswordRequest',
+  'ClassifyDocumentVersionRequest',
+  'ComparedVersion',
+  'ComparisonRefusal',
+  'CorrectVersionClassificationRequest',
   'CorrelationId',
   'CostBasis',
+  'CreateAssignmentRequest',
   'CreateProjectRequest',
   'Cursor',
   'DashboardSummary',
+  'DecideOptimisationProposalRequest',
   'DecisionEvent',
   'DecisionEventPage',
   'DecisionEventType',
   'DecisionId',
   'DecisionRecord',
   'DecisionRecordPage',
+  'DiffHunk',
   'DocumentUid',
   'DocumentVersion',
   'DocumentVersionPage',
+  'EffectiveVendorLists',
   'ErrorCode',
   'ErrorEnvelope',
   'Evidence',
@@ -55,10 +81,13 @@ export const SCHEMA_NAMES = [
   'ExecutionWorkerPage',
   'Finding',
   'FindingCategory',
+  'FindingComparison',
   'FindingDetail',
+  'FindingMatchProposal',
   'FindingObservation',
   'FindingObservationId',
   'FindingPage',
+  'FindingRef',
   'FindingUid',
   'IdempotencyKey',
   'InputManifestEntry',
@@ -68,15 +97,27 @@ export const SCHEMA_NAMES = [
   'MarkReleaseNotesReadRequest',
   'ModelCallId',
   'NormBuildState',
+  'NormCatalogueEntry',
+  'NormCatalogueEntryPage',
+  'NormCitation',
+  'NormCitationState',
   'NormCurrentSnapshot',
   'NormDocument',
   'NormDocumentId',
+  'NormFindingVerification',
   'NormFragment',
   'NormHighlight',
+  'NormKindCount',
+  'NormObservationCitationPartition',
   'NormParagraph',
   'NormParagraphId',
   'NormParagraphKind',
   'NormParagraphPage',
+  'NormReferenceAnchor',
+  'NormReferenceCounts',
+  'NormReferenceItem',
+  'NormReferenceUnrecognised',
+  'NormRetrievalSetId',
   'NormSearchHit',
   'NormSearchPage',
   'NormSnapshot',
@@ -85,8 +126,16 @@ export const SCHEMA_NAMES = [
   'NormSnapshotPage',
   'NormSourceAttribution',
   'NormTextReliability',
+  'NormVerificationReport',
   'NormsSnapshotId',
   'ObservationProvenance',
+  'OptimisationPass',
+  'OptimisationPassId',
+  'OptimisationPassList',
+  'OptimisationProposal',
+  'OptimisationProposalId',
+  'OptimisationProposalPage',
+  'OptimisationProposalType',
   'PageInfo',
   'PersonNames',
   'PortalBlock',
@@ -96,13 +145,40 @@ export const SCHEMA_NAMES = [
   'PortalCrop',
   'PortalGeometryState',
   'PortalRecognisedText',
+  'PriceListAmbiguousColumn',
+  'PriceListColumn',
+  'PriceListCurrencySource',
+  'PriceListCurrencySourceCount',
+  'PriceListField',
+  'PriceListFormat',
+  'PriceListId',
+  'PriceListParseReport',
+  'PriceListPosition',
+  'PriceListPositionId',
+  'PriceListPositionPage',
+  'PriceListReasonCount',
+  'PriceListRevision',
+  'PriceListRevisionList',
+  'PriceListRowNote',
+  'PriceListRowReason',
   'ProductVersion',
   'Project',
   'ProjectDocumentCount',
   'ProjectPage',
   'ProjectSection',
+  'ProjectStage',
   'ProjectUid',
   'PromptBundleId',
+  'ProposalAnalogBasis',
+  'ProposalDecision',
+  'ProposalDecisionCounts',
+  'ProposalDecisionId',
+  'ProposalDecisionList',
+  'ProposalDecisionResult',
+  'ProposalDecisionState',
+  'ProposalMatchBasis',
+  'ProposalPosition',
+  'ProposalVerdict',
   'ProviderMode',
   'RegistrationRequest',
   'RegistrationRequestId',
@@ -119,28 +195,71 @@ export const SCHEMA_NAMES = [
   'RunActivity',
   'RunActivitySpend',
   'RunId',
+  'RunNormReferences',
   'RunState',
   'RunStateCount',
   'RunStatus',
   'RunStatusPage',
   'SectionDocumentCount',
+  'SectionReview',
+  'SectionReviewOption',
+  'SectionSpecification',
+  'SectionSpecificationExcludedVersion',
+  'SectionSpecificationProject',
+  'SectionSpecificationRow',
+  'SectionSpecificationRowPage',
+  'SectionSpecificationSource',
+  'SectionSuggestion',
+  'SectionVendorList',
   'SetCurrentNormSnapshotRequest',
   'SetExecutionPausedRequest',
+  'SetGlobalVendorListRequest',
   'SetJobPriorityRequest',
+  'SetProjectVendorListRequest',
   'SetWorkerIntakeRequest',
+  'Severity',
   'Sha256',
+  'SheetDiff',
+  'SheetDiffPage',
+  'SheetPairing',
+  'SpecificationCurrencyTotal',
+  'SpecificationExclusionCounts',
+  'SpecificationExtractionSummary',
+  'SpecificationMatchCounts',
+  'SpecificationMatching',
+  'SpecificationPriceListRef',
+  'SpecificationPricePosition',
+  'SpecificationPriceRow',
+  'SpecificationPrices',
+  'SpecificationRowPage',
+  'SpecificationSkipCounts',
+  'SpecificationSkippedLine',
+  'SpecificationTable',
   'StageId',
   'StageState',
   'StageStatus',
   'StartRunRequest',
   'SubmitRegistrationRequest',
+  'TransitionAssignmentRequest',
+  'UngroundedReason',
   'UpdateMyProfileRequest',
   'UpdateUserRequest',
   'UploadDocumentRequest',
+  'UploadDocumentVersionRequest',
+  'UploadPriceListRequest',
   'UserUid',
+  'VendorListEntry',
+  'VendorListId',
+  'VendorListMode',
+  'VendorListRevision',
+  'VendorListScope',
+  'VendorListSource',
   'Verdict',
   'VerdictCount',
   'VersionBlockIndex',
+  'VersionClassification',
+  'VersionClassificationRevision',
+  'VersionComparison',
   'VersionUid',
   'WorkerId',
   'WorkerState',
@@ -179,12 +298,65 @@ export type AnalysisProfileId = string;
 /** The contract pattern for `AnalysisProfileId`. Anchored; use with `new RegExp()`. */
 export const ANALYSIS_PROFILE_ID_PATTERN = "^ap_[0-9A-HJKMNP-TV-Z]{26}$";
 
+/** All fifteen sections, in the project-structure order, each with its profile or ``null``. */
+export type AnalysisProfileList = {
+  items: Array<AnalysisProfileListItem>;
+};
+
+/** One section and its registered profile, or ``null`` when none is registered. */
+export type AnalysisProfileListItem = {
+  profile: AnalysisProfileSummary | null;
+  section_code: ProjectSection;
+  section_name: string;
+};
+
+/** The legacy repository, commit and files a package's prompt was ported from. */
+export type AnalysisProfileSource = {
+  commit: string;
+  files: Array<AnalysisProfileSourceFile>;
+  repository: string;
+};
+
+/** One legacy file a package's prompt was ported from, with its SHA-256. */
+export type AnalysisProfileSourceFile = {
+  path: string;
+  sha256: Sha256;
+};
+
+/**
+ * `W59-ANALYSIS-SETTINGS-01`. Where a registered text profile stands.
+ *
+ * ``builtin``: AR's v1 profile, written in this repository. ``draft``: a package ported from
+ * the legacy prompts and not yet reviewed by an expert. ``reviewed``: a package an expert has
+ * reviewed. Every status is executable; the status is recorded, never hidden.
+ */
+export const ANALYSIS_PROFILE_STATUS_VALUES = [
+  'builtin',
+  'draft',
+  'reviewed',
+] as const;
+
+/** AnalysisProfileStatus - the closed value set above. */
+export type AnalysisProfileStatus = (typeof ANALYSIS_PROFILE_STATUS_VALUES)[number];
+
+/** One registered text profile: its identities, version, status and content hashes. */
+export type AnalysisProfileSummary = {
+  analysis_profile_id: AnalysisProfileId;
+  content_sha256: Sha256;
+  profile_version: string;
+  prompt_bundle_id: PromptBundleId;
+  prompt_bundle_sha256: Sha256;
+  source: AnalysisProfileSource | null;
+  status: AnalysisProfileStatus;
+};
+
 export type AppendDecisionRequest = {
   /** Required for `comment`; optional on any other event type. */
   comment?: string | null;
   event_type: DecisionEventType;
   /** The observation the expert actually reviewed. A verdict is recorded against the evidence in front of the reviewer, not against whatever the newest run later produced. */
   finding_observation_id: FindingObservationId;
+  severity?: Severity;
 };
 
 export type AppendDecisionResponse = {
@@ -196,6 +368,95 @@ export type ApproveRegistrationRequest = {
   /** The roles the new account receives: at least one. */
   roles: Array<Role>;
 };
+
+/** `W61-DISPATCHER-01`. One assignment as it now stands. */
+export type Assignment = {
+  assignee_label: string;
+  assignee_user_uid: UserUid;
+  assignment_uid: AssignmentUid;
+  created_at: string;
+  created_by_label: string;
+  created_by_user_uid: UserUid;
+  document_title: string | null;
+  document_uid: DocumentUid | null;
+  note: string | null;
+  project_name: string;
+  project_uid: ProjectUid;
+  status: AssignmentStatus;
+  status_reason: string | null;
+  updated_at: string;
+};
+
+/** `W61-DISPATCHER-01`. One assignment and its whole history, oldest event first. */
+export type AssignmentDetail = {
+  assignment: Assignment;
+  history: Array<AssignmentEvent>;
+};
+
+/** `W61-DISPATCHER-01`. One recorded event; never changed. */
+export type AssignmentEvent = {
+  actor_label: string;
+  actor_user_uid: UserUid;
+  event_id: string;
+  kind: AssignmentEventKind;
+  new_assignee_label: string | null;
+  new_assignee_user_uid: UserUid | null;
+  occurred_at: string;
+  reason: string | null;
+};
+
+/** `W61-DISPATCHER-01`. One event of an assignment's append-only history. */
+export const ASSIGNMENT_EVENT_KIND_VALUES = [
+  'assigned',
+  'started',
+  'completed',
+  'returned',
+  'reassigned',
+  'cancelled',
+] as const;
+
+/** AssignmentEventKind - the closed value set above. */
+export type AssignmentEventKind = (typeof ASSIGNMENT_EVENT_KIND_VALUES)[number];
+
+export type AssignmentPage = {
+  items: Array<Assignment>;
+  page: PageInfo;
+};
+
+/**
+ * `W61-DISPATCHER-01`. An assignment's status, derived from its latest event.
+ *
+ * ``assigned`` (after ``assigned`` or ``reassigned``), ``in_progress`` (``started``),
+ * ``done`` (``completed``), ``returned`` and ``cancelled``. ``done`` and ``cancelled`` are
+ * terminal.
+ */
+export const ASSIGNMENT_STATUS_VALUES = [
+  'assigned',
+  'in_progress',
+  'done',
+  'returned',
+  'cancelled',
+] as const;
+
+/** AssignmentStatus - the closed value set above. */
+export type AssignmentStatus = (typeof ASSIGNMENT_STATUS_VALUES)[number];
+
+/** `W61-DISPATCHER-01`. The events a transition may append: every kind but ``assigned``. */
+export const ASSIGNMENT_TRANSITION_KIND_VALUES = [
+  'started',
+  'completed',
+  'returned',
+  'reassigned',
+  'cancelled',
+] as const;
+
+/** AssignmentTransitionKind - the closed value set above. */
+export type AssignmentTransitionKind = (typeof ASSIGNMENT_TRANSITION_KIND_VALUES)[number];
+
+export type AssignmentUid = string;
+
+/** The contract pattern for `AssignmentUid`. Anchored; use with `new RegExp()`. */
+export const ASSIGNMENT_UID_PATTERN = "^asg_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /** One derived block, one extracted text line. `block_id` is an anchor inside this artifact -- it matches `Evidence.block_id`'s pattern -- and is never a contract identifier. */
 export type BlockGeometry = {
@@ -217,11 +478,108 @@ export type BlockGeometry = {
   page_number: number;
 };
 
+/**
+ * `W59-DECISION-CARRYOVER-01`. One expert confirmation of one proposed pair.
+ *
+ * The path names the source (older) version; the comparison is recomputed with these
+ * values when the confirmation arrives. ``source_decision_id`` is the decision the expert
+ * was shown: if the source's current verdict has moved on, nothing is carried.
+ */
+export type CarryOverDecisionRequest = {
+  mode: "version" | "stage";
+  source_decision_id: DecisionId;
+  source_finding_uid: FindingUid;
+  source_run_id?: RunId;
+  target_finding_uid: FindingUid;
+  target_run_id?: RunId;
+  target_version_uid: VersionUid;
+};
+
+/**
+ * `W59-DECISION-CARRYOVER-01`. The carried event on the target finding and where it
+ * came from. ``replayed`` is true when the target already carried exactly this event (an
+ * exact repeat): nothing was appended and the first confirmation stands.
+ */
+export type CarryOverDecisionResponse = {
+  current_verdict: Verdict;
+  event: DecisionEvent;
+  mode: "version" | "stage";
+  replayed: boolean;
+  source_decision_id: DecisionId;
+  source_finding_uid: FindingUid;
+  source_version_ordinal: number;
+  source_version_uid: VersionUid;
+  target_version_uid: VersionUid;
+};
+
+/**
+ * `W59-DECISION-CARRYOVER-01`. An ``unchanged`` proposal whose source finding carries an
+ * expert decision and whose target finding has no decision event yet. Listing it carries
+ * nothing: only ``carryOverDecision``, confirmed by an expert, does.
+ */
+export type CarryoverCandidate = {
+  proposal_sha256: Sha256;
+  source_decision: CarryoverSourceDecision;
+  source_finding_uid: FindingUid;
+  target_finding_uid: FindingUid;
+};
+
+/**
+ * `W59-DECISION-CARRYOVER-01`. The source finding's current verdict-bearing event, as
+ * the confirming expert is shown it before «Перенести решение».
+ */
+export type CarryoverSourceDecision = {
+  author_label: string;
+  comment: string | null;
+  decision_id: DecisionId;
+  recorded_at: string;
+  severity: Severity | null;
+  verdict: "accepted" | "rejected";
+};
+
 export type ChangePasswordRequest = {
   /** The password the account holds now, proved before anything is changed. It appears in no response body, no error detail and no diagnostic record. A value that is not this account's is `authentication_required` -- the same refusal a missing credential gets, because 'this deployment does not accept this' is one fact. */
   current_password: string;
   /** The password the account will hold. The bounds are mechanical. The deployment enforces a password policy on this operation — a refusal is `validation_failed` and names the rule in `message` — and that policy is not declared here, because it is the deployment's and may differ between them. No history and no expiry are enforced. A value equal to `current_password` is `validation_failed`, because a change that changes nothing would report a password as changed when it was not. */
   new_password: string;
+};
+
+/** `W59-SECTION-SEAL-01`. An expert's explicit stage and section for one version. */
+export type ClassifyDocumentVersionRequest = {
+  project_stage: ProjectStage;
+  section_code: ProjectSection;
+};
+
+/** One side of a comparison, as far as it was established before any refusal. */
+export type ComparedVersion = {
+  page_count: number;
+  project_stage: ProjectStage | null;
+  run_id: RunId | null;
+  section_code: ProjectSection | null;
+  sha256: Sha256;
+  text_layer_sha256: Sha256 | null;
+  version_ordinal: number;
+  version_uid: VersionUid;
+};
+
+/** Why two versions are not compared; ``side`` when the reason is one side's. */
+export type ComparisonRefusal = {
+  reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "text_unavailable" | "text_too_large";
+  side: "source" | "target" | null;
+};
+
+/**
+ * `CLASSIFICATION-CORRECTION-01`. An expert's correction of one version's classification.
+ *
+ * The full target pair, why, and the revision the caller was looking at
+ * (``expected_revision``): the optimistic-concurrency token that also makes an exact retry
+ * safe. At least one of the two values must differ from the current classification.
+ */
+export type CorrectVersionClassificationRequest = {
+  expected_revision: number;
+  project_stage: ProjectStage;
+  reason: string;
+  section_code: ProjectSection;
 };
 
 /** Not an entity identity. Never a foreign key and authorizes nothing. */
@@ -239,6 +597,14 @@ export const COST_BASIS_VALUES = [
 /** CostBasis - the closed value set above. */
 export type CostBasis = (typeof COST_BASIS_VALUES)[number];
 
+/** `W61-DISPATCHER-01`. Give a project, or one document of it, to an active expert. */
+export type CreateAssignmentRequest = {
+  assignee_user_uid: UserUid;
+  document_uid?: DocumentUid;
+  note?: string;
+  project_uid: ProjectUid;
+};
+
 export type CreateProjectRequest = {
   /** Display label. Not unique and not an identity. */
   name: string;
@@ -255,6 +621,15 @@ export type DashboardSummary = {
   section_breakdown: Array<SectionDocumentCount>;
 };
 
+/**
+ * `W60-OPT-PROPOSALS-01`. An expert's verdict on a proposal, with a comment that
+ * ``revise`` requires.
+ */
+export type DecideOptimisationProposalRequest = {
+  comment?: string;
+  verdict: ProposalVerdict;
+};
+
 /** One appended event. Never updated and never removed. */
 export type DecisionEvent = {
   /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
@@ -265,6 +640,7 @@ export type DecisionEvent = {
   finding_observation_id: FindingObservationId;
   finding_uid: FindingUid;
   recorded_at: string;
+  severity?: Severity;
   /** The verdict this event carries, or null for a comment. */
   verdict?: Verdict | null;
 };
@@ -308,6 +684,7 @@ export type DecisionRecord = {
   project_uid: ProjectUid;
   recorded_at: string;
   run_id: RunId;
+  severity?: Severity;
   /** The verdict this event carries, or null for a comment. */
   verdict?: Verdict | null;
 };
@@ -315,6 +692,20 @@ export type DecisionRecord = {
 export type DecisionRecordPage = {
   items: Array<DecisionRecord>;
   page: PageInfo;
+};
+
+/**
+ * One span of a raw line diff; 0-based line indices, end exclusive. An ``equal`` span
+ * carries its ranges and no lines.
+ */
+export type DiffHunk = {
+  source_end: number;
+  source_lines: Array<string>;
+  source_start: number;
+  tag: "equal" | "insert" | "delete" | "replace";
+  target_end: number;
+  target_lines: Array<string>;
+  target_start: number;
 };
 
 export type DocumentUid = string;
@@ -325,6 +716,8 @@ export const DOCUMENT_UID_PATTERN = "^doc_[0-9A-HJKMNP-TV-Z]{26}$";
 /** A published, immutable input state. There is no endpoint that modifies one. */
 export type DocumentVersion = {
   byte_size: number;
+  /** `W59-SECTION-SEAL-01`. The version's persisted, expert-confirmed project stage and section; absent while no expert has classified this version. Never inherited from another version, the document's `section`, a file name or a suggestion. */
+  classification?: VersionClassification;
   display_title?: string;
   document_uid: DocumentUid;
   input_manifest: Array<InputManifestEntry>;
@@ -332,7 +725,7 @@ export type DocumentVersion = {
   page_count: number;
   project_uid: ProjectUid;
   published_at: string;
-  /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
+  /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
   sha256: Sha256;
   /** The uploaded file name, for display. Never an identity. */
@@ -345,6 +738,12 @@ export type DocumentVersion = {
 export type DocumentVersionPage = {
   items: Array<DocumentVersion>;
   page: PageInfo;
+};
+
+/** All fifteen sections' vendor lists as they apply to one project, in section order. */
+export type EffectiveVendorLists = {
+  items: Array<SectionVendorList>;
+  project_uid: ProjectUid;
 };
 
 /** Exactly the key set of contracts/domain/v1/error-codes.json. */
@@ -369,6 +768,7 @@ export const ERROR_CODE_VALUES = [
   'partial_result_not_publishable',
   'cost_budget_exceeded',
   'analysis_input_budget_exceeded',
+  'model_identity_mismatch',
   'stale_attempt',
   'execution_token_invalid',
   'rate_limited',
@@ -461,38 +861,82 @@ export type ExecutionWorkerPage = {
 export type Finding = {
   category: FindingCategory;
   current_verdict: Verdict;
+  decided_severity?: Severity;
   decision_recorded_at?: string | null;
   finding_uid: FindingUid;
   latest_decision_id?: DecisionId | null;
+  merged_observations?: Array<FindingObservation>;
+  /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. On Finding and FindingDetail this mirrors the canonical observation. */
+  norm_citations?: Array<NormCitation>;
   observation: FindingObservation;
   project_uid: ProjectUid;
+  /** Deterministically grounded normative requirement; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
+  required_value?: string;
   run_id: RunId;
+  /** Document value grounded in the project evidence; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
+  stated_value?: string;
   version_uid: VersionUid;
 };
 
-/** The only two questions PC-01 answers. */
+/** Closed finding categories: seven prior categories and five v3 normative categories. */
 export const FINDING_CATEGORY_VALUES = [
   'internal_contradiction',
   'explicit_placeholder',
+  'dimensions',
+  'layout',
+  'facade',
+  'roof',
+  'documentation',
+  'evacuation',
+  'fire_safety',
+  'accessibility',
+  'insulation',
+  'sound',
 ] as const;
 
 /** FindingCategory - the closed value set above. */
 export type FindingCategory = (typeof FINDING_CATEGORY_VALUES)[number];
 
+export type FindingComparison = {
+  carryover_candidates: Array<CarryoverCandidate>;
+  proposals: Array<FindingMatchProposal>;
+  source_finding_count: number;
+  status: "compared" | "unavailable";
+  target_finding_count: number;
+  unavailable_reason: "findings_over_limit" | null;
+};
+
 /** One finding with its full current-verdict projection. Restates `Finding` rather than composing it with `allOf`: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `Finding` would reject the two properties the sibling branch adds. Both shapes stay closed, and tests/contract/api_v1 asserts this property set stays `Finding`'s plus exactly `latest_comment` and `decision_event_count`. */
 export type FindingDetail = {
   category: FindingCategory;
   current_verdict: Verdict;
+  decided_severity?: Severity;
   decision_event_count?: number;
   decision_recorded_at?: string | null;
   finding_uid: FindingUid;
   /** The comment of the most recent event carrying one, whatever its type. */
   latest_comment?: string | null;
   latest_decision_id?: DecisionId | null;
+  merged_observations?: Array<FindingObservation>;
+  /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. On Finding and FindingDetail this mirrors the canonical observation. */
+  norm_citations?: Array<NormCitation>;
   observation: FindingObservation;
   project_uid: ProjectUid;
+  /** Deterministically grounded normative requirement; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
+  required_value?: string;
   run_id: RunId;
+  /** Document value grounded in the project evidence; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
+  stated_value?: string;
   version_uid: VersionUid;
+};
+
+/** A proposed label for a finding of either run; never a decision or a carryover. */
+export type FindingMatchProposal = {
+  basis: "exact_issue_and_quotes" | "quotes_absent_from_paired_sheets" | "quote_still_on_paired_sheet" | "evidence_sheet_unpaired" | "evidence_over_limit" | "no_exact_source_match";
+  kind: "unchanged" | "probably_fixed" | "undetermined" | "new";
+  proposal_sha256: Sha256 | null;
+  source_finding: FindingRef | null;
+  target_finding: FindingRef | null;
 };
 
 export type FindingObservation = {
@@ -500,9 +944,16 @@ export type FindingObservation = {
   evidence: Array<Evidence>;
   finding_observation_id: FindingObservationId;
   finding_text: string;
+  /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. */
+  norm_citations?: Array<NormCitation>;
+  proposed_severity?: Severity;
   provenance: ObservationProvenance;
   recommendation_text: string;
+  /** Deterministically grounded normative requirement; absent for legacy and nonnormative observations. */
+  required_value?: string;
   run_id: RunId;
+  /** Document value grounded in the project evidence; absent for legacy and nonnormative observations. */
+  stated_value?: string;
 };
 
 /** Immutable evidence emitted by exactly one run. */
@@ -514,6 +965,13 @@ export const FINDING_OBSERVATION_ID_PATTERN = "^fobs_[0-9A-HJKMNP-TV-Z]{26}$";
 export type FindingPage = {
   items: Array<Finding>;
   page: PageInfo;
+};
+
+export type FindingRef = {
+  category: FindingCategory;
+  finding_text: string;
+  finding_uid: FindingUid;
+  page_numbers: Array<number>;
 };
 
 /** Durable semantic issue identity, carrying expert history across reruns. */
@@ -577,6 +1035,58 @@ export const NORM_BUILD_STATE_VALUES = [
 /** NormBuildState - the closed value set above. */
 export type NormBuildState = (typeof NORM_BUILD_STATE_VALUES)[number];
 
+/**
+ * One document of the current snapshot as the catalogue lists it
+ * (`W57B-NORMS-CATALOGUE-XLSX-01`). ``designation`` and ``title`` are derived for display
+ * from the stored file name and are never identities; ``title`` is null when the name
+ * carries nothing after the designation. ``kind`` is the stored document type verbatim.
+ */
+export type NormCatalogueEntry = {
+  content_available: boolean;
+  designation: string;
+  kind: string;
+  norm_document_id: NormDocumentId;
+  page_count: number;
+  paragraph_count: number;
+  source_attribution: NormSourceAttribution;
+  title: string | null;
+};
+
+/**
+ * One page of the catalogue; ``total`` counts the documents the filters keep and
+ * ``kinds`` lists every kind of the snapshot with its document count.
+ */
+export type NormCatalogueEntryPage = {
+  items: Array<NormCatalogueEntry>;
+  kinds: Array<NormKindCount>;
+  norms_snapshot_id: NormsSnapshotId;
+  page: PageInfo;
+  total: number;
+};
+
+/** One persisted, verified citation to a labelled paragraph in the run-pinned snapshot and retrieval set. A rebound preserves the cited label and identifies the one matching paragraph. Never inferred from a display designation. */
+export type NormCitation = {
+  clause_number: string | null;
+  designation: string;
+  norm_document_id: NormDocumentId;
+  norm_paragraph_id: NormParagraphId;
+  norms_snapshot_id: NormsSnapshotId;
+  page_label: number;
+  quote: string;
+  source_attribution: NormSourceAttribution;
+  state: NormCitationState;
+  title: string;
+};
+
+/** NormCitationState. */
+export const NORM_CITATION_STATE_VALUES = [
+  'verified',
+  'rebound',
+] as const;
+
+/** NormCitationState - the closed value set above. */
+export type NormCitationState = (typeof NORM_CITATION_STATE_VALUES)[number];
+
 export type NormCurrentSnapshot = {
   designated_at: string;
   designated_by: UserUid;
@@ -606,6 +1116,13 @@ export type NormDocumentId = string;
 /** The contract pattern for `NormDocumentId`. Anchored; use with `new RegExp()`. */
 export const NORM_DOCUMENT_ID_PATTERN = "^ndoc_[0-9A-HJKMNP-TV-Z]{26}$";
 
+/** Citation partitions of one published finding; canonical and member observations are proved separately. */
+export type NormFindingVerification = {
+  canonical: NormObservationCitationPartition;
+  finding_uid: FindingUid;
+  merged_observations: Array<NormObservationCitationPartition>;
+};
+
 /**
  * `NORM-Q01`. A plain-text excerpt of the canonical paragraph text, with the matched
  * spans as offsets rather than markup.
@@ -619,6 +1136,20 @@ export type NormFragment = {
 export type NormHighlight = {
   char_end: number;
   char_start: number;
+};
+
+export type NormKindCount = {
+  document_count: number;
+  kind: string;
+};
+
+/** One canonical or merged observation with its independently certified citation partition. A zero partition is explicit, never inferred from an empty SQL result. */
+export type NormObservationCitationPartition = {
+  finding_observation_id: FindingObservationId;
+  /** A certified v3 citation partition. An empty array means the CITE gate completed and persisted a checked count of zero; absence on v1/v2 means no certification, never zero. */
+  norm_citations: Array<NormCitation>;
+  required_value?: string;
+  stated_value?: string;
 };
 
 export type NormParagraph = {
@@ -653,6 +1184,48 @@ export type NormParagraphPage = {
   page: PageInfo;
   source_attribution: NormSourceAttribution;
 };
+
+/** One occurrence of a citation: the PDF page and the offsets inside that page's text. */
+export type NormReferenceAnchor = {
+  char_end: number;
+  char_start: number;
+  page_number: number;
+  quote: string;
+};
+
+/** Distinct cited designations per outcome; every outcome is present, zeros written. */
+export type NormReferenceCounts = {
+  in_corpus: number;
+  newer_edition: number;
+  not_in_corpus: number;
+  not_recognised: number;
+  older_edition_only: number;
+};
+
+/** One distinct cited designation and what the pinned snapshot holds for it. `anchors` keeps at most ten occurrences in reading order; `occurrence_count` is the true number. The `matched_*` properties name the corpus document the outcome points at (the same edition, the newer one, or the newest earlier one) and are absent exactly for `not_in_corpus` and `not_recognised`. `matched_designation` and `matched_title` are derived for display from the stored file name and are never identities. */
+export type NormReferenceItem = {
+  anchors: Array<NormReferenceAnchor>;
+  cited: string;
+  matched_designation?: string;
+  matched_norm_document_id?: NormDocumentId;
+  matched_title?: string;
+  occurrence_count: number;
+  outcome: "in_corpus" | "newer_edition" | "older_edition_only" | "not_in_corpus" | "not_recognised";
+};
+
+/** A document of the pinned snapshot whose designation the parser cannot read. Such a document can never be matched by a citation, so the list is explicit rather than inferred. `slug` is the stored file name without `.pdf`; `designation` and `title` are derived for display from it. */
+export type NormReferenceUnrecognised = {
+  designation: string;
+  norm_document_id: NormDocumentId;
+  slug: string;
+  title?: string;
+};
+
+/** Verified immutable retrieval-set identity; never a display label or corpus filename. */
+export type NormRetrievalSetId = string;
+
+/** The contract pattern for `NormRetrievalSetId`. Anchored; use with `new RegExp()`. */
+export const NORM_RETRIEVAL_SET_ID_PATTERN = "^nrs_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /** One reliable canonical paragraph of the searched snapshot. */
 export type NormSearchHit = {
@@ -734,6 +1307,20 @@ export const NORM_TEXT_RELIABILITY_VALUES = [
 /** NormTextReliability - the closed value set above. */
 export type NormTextReliability = (typeof NORM_TEXT_RELIABILITY_VALUES)[number];
 
+/** Read-time report for a v3 run only. A v1/v2 run is not found. A partial v3 run still reports its typed stage error; no unverified or uncertified partition is exposed. textless_pages is context only and never citation evidence. */
+export type NormVerificationReport = {
+  error_code?: ErrorCode;
+  findings: Array<NormFindingVerification>;
+  norm_retrieval_set_id: NormRetrievalSetId;
+  norms_snapshot_id: NormsSnapshotId;
+  run_id: RunId;
+  status: "complete" | "partial";
+  textless_pages: Array<number>;
+  withheld_by_reason: {
+    [key: string]: number;
+  };
+};
+
 export type NormsSnapshotId = string;
 
 /** The contract pattern for `NormsSnapshotId`. Anchored; use with `new RegExp()`. */
@@ -748,6 +1335,118 @@ export type ObservationProvenance = {
   provider_mode: ProviderMode;
   stage_id: StageId;
 };
+
+/**
+ * One optimisation pass, pinned to everything it read: the version, its published run
+ * and that run's text layer, the price-list revision and the vendor-list revision (global
+ * or the project's own, ``vendor_list_source``), and the three algorithm versions.
+ */
+export type OptimisationPass = {
+  decision_counts: ProposalDecisionCounts;
+  document_uid: DocumentUid;
+  extraction_algorithm: string;
+  generator_version: string;
+  match_algorithm: string;
+  matched_row_count: number;
+  optimisation_pass_id: OptimisationPassId;
+  price_list_id: PriceListId;
+  project_uid: ProjectUid;
+  proposal_count: number;
+  proposed_row_count: number;
+  run_id: RunId;
+  specification_row_count: number;
+  started_at: string;
+  started_by_label: string;
+  started_by_user_uid: UserUid;
+  text_layer_sha256: Sha256;
+  vendor_list_id: VendorListId;
+  vendor_list_source: VendorListScope;
+  version_uid: VersionUid;
+};
+
+export type OptimisationPassId = string;
+
+/** The contract pattern for `OptimisationPassId`. Anchored; use with `new RegExp()`. */
+export const OPTIMISATION_PASS_ID_PATTERN = "^opp_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** A project's passes, newest first. */
+export type OptimisationPassList = {
+  items: Array<OptimisationPass>;
+};
+
+/**
+ * One proposal: a specification row matched to ``matched_position`` and a cheaper
+ * ``proposed_position`` of the same price-list revision, in the same unit and currency,
+ * from a vendor on the pass's vendor list.
+ *
+ * ``row_text`` is the description as the saved text layer shows it (name, mark, code and
+ * manufacturer cells run together); page, sheet and lines say where it is. Both unit prices
+ * are the positions' stored prices. ``saving`` is ``(current_unit_price −
+ * proposed_unit_price) × quantity`` and is ``null`` -- never ``0`` -- when ``quantity`` is
+ * ``null`` because the row's quantity text is not a plain number. ``ordinal`` is a display
+ * order inside the pass, never an identity.
+ */
+export type OptimisationProposal = {
+  analog_basis: ProposalAnalogBasis;
+  currency: string;
+  current_decision: ProposalDecision | null;
+  current_unit_price: string;
+  current_verdict: ProposalDecisionState;
+  line_end: number;
+  line_start: number;
+  matched_basis: ProposalMatchBasis;
+  matched_position: ProposalPosition;
+  name_similarity: string;
+  optimisation_pass_id: OptimisationPassId;
+  optimisation_proposal_id: OptimisationProposalId;
+  ordinal: number;
+  page_number: number;
+  proposal_type: OptimisationProposalType;
+  proposed_position: ProposalPosition;
+  proposed_unit_price: string;
+  proposed_vendor: string;
+  quantity: string | null;
+  quantity_text: string | null;
+  rationale: string;
+  row_position: string | null;
+  row_text: string;
+  saving: string | null;
+  sheet_label: string | null;
+  spec_row_key: string;
+  table_ordinal: number;
+  unit: string;
+};
+
+export type OptimisationProposalId = string;
+
+/** The contract pattern for `OptimisationProposalId`. Anchored; use with `new RegExp()`. */
+export const OPTIMISATION_PROPOSAL_ID_PATTERN = "^opr_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * One page of a pass's proposals in ordinal order. ``total`` counts the proposals the
+ * ``decision`` filter admits; the pass's ``decision_counts`` count all of them.
+ */
+export type OptimisationProposalPage = {
+  decision: ProposalDecisionState | null;
+  items: Array<OptimisationProposal>;
+  limit: number;
+  next_offset: number | null;
+  offset: number;
+  optimisation_pass: OptimisationPass;
+  total: number;
+};
+
+/**
+ * The kind of a proposal. Only the deterministic one exists: a cheaper position of the
+ * same price list. The legacy ``faster_install``, ``simpler_design`` and ``lifecycle`` need
+ * judgement and wait for the model-assisted slice.
+ */
+export const OPTIMISATION_PROPOSAL_TYPE_VALUES = [
+  'cheaper_analog',
+] as const;
+
+/** OptimisationProposalType - the closed value set above. */
+export type OptimisationProposalType = (typeof OPTIMISATION_PROPOSAL_TYPE_VALUES)[number];
 
 export type PageInfo = {
   /** Token for the next page, or null when this is the last page. */
@@ -828,6 +1527,187 @@ export type PortalRecognisedText = {
   text: string;
 };
 
+/** An optional field two or more columns could be: none of them was read. */
+export type PriceListAmbiguousColumn = {
+  field: PriceListField;
+  headers: Array<string>;
+};
+
+/** One header column mapped to a field: its 1-based position and its header text. */
+export type PriceListColumn = {
+  column: number;
+  field: PriceListField;
+  header: string;
+};
+
+/** Where an accepted row's currency came from: its cell, the price header, the default. */
+export const PRICE_LIST_CURRENCY_SOURCE_VALUES = [
+  'column',
+  'price_header',
+  'default',
+] as const;
+
+/** PriceListCurrencySource - the closed value set above. */
+export type PriceListCurrencySource = (typeof PRICE_LIST_CURRENCY_SOURCE_VALUES)[number];
+
+export type PriceListCurrencySourceCount = {
+  count: number;
+  source: PriceListCurrencySource;
+};
+
+/** A position field a header column was mapped to. */
+export const PRICE_LIST_FIELD_VALUES = [
+  'name',
+  'unit',
+  'unit_price',
+  'code',
+  'mark',
+  'currency',
+  'vendor',
+  'section',
+] as const;
+
+/** PriceListField - the closed value set above. */
+export type PriceListField = (typeof PRICE_LIST_FIELD_VALUES)[number];
+
+/** The uploaded file's format, recognised by its bytes and never by its name. */
+export const PRICE_LIST_FORMAT_VALUES = [
+  'csv',
+  'xlsx',
+] as const;
+
+/** PriceListFormat - the closed value set above. */
+export type PriceListFormat = (typeof PRICE_LIST_FORMAT_VALUES)[number];
+
+export type PriceListId = string;
+
+/** The contract pattern for `PriceListId`. Anchored; use with `new RegExp()`. */
+export const PRICE_LIST_ID_PATTERN = "^prl_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * How one file was read: deterministic, so the same bytes always report the same.
+ *
+ * ``skipped`` and ``warnings`` list at most the first 1000 rows each;
+ * ``skipped_by_reason`` and ``warnings_by_reason`` always count every one.
+ */
+export type PriceListParseReport = {
+  accepted_rows: number;
+  ambiguous_columns: Array<PriceListAmbiguousColumn>;
+  blank_rows: number;
+  columns: Array<PriceListColumn>;
+  currency_sources: Array<PriceListCurrencySourceCount>;
+  data_rows: number;
+  default_currency: string | null;
+  delimiter: ";" | "\t" | "," | null;
+  encoding: "utf-8" | "utf-8-sig" | "utf-16" | "cp1251" | null;
+  format: PriceListFormat;
+  header_row: number;
+  ignored_columns: Array<string>;
+  preamble_rows: number;
+  price_header_currency: string | null;
+  report_version: 1;
+  sheet: string | null;
+  skipped: Array<PriceListRowNote>;
+  skipped_by_reason: Array<PriceListReasonCount>;
+  skipped_listed_in_full: boolean;
+  skipped_rows: number;
+  warnings: Array<PriceListRowNote>;
+  warnings_by_reason: Array<PriceListReasonCount>;
+};
+
+/** One parsed position. ``row_number`` is its source row, never an identity. */
+export type PriceListPosition = {
+  code: string | null;
+  currency: string;
+  mark: string | null;
+  name: string;
+  price_list_position_id: PriceListPositionId;
+  row_number: number;
+  section_code: ProjectSection | null;
+  unit: string;
+  unit_price: string;
+  vendor: string | null;
+};
+
+export type PriceListPositionId = string;
+
+/** The contract pattern for `PriceListPositionId`. Anchored; use with `new RegExp()`. */
+export const PRICE_LIST_POSITION_ID_PATTERN = "^prp_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** One page of a revision's positions in source-row order, with the revision's report. */
+export type PriceListPositionPage = {
+  items: Array<PriceListPosition>;
+  limit: number;
+  next_offset: number | null;
+  offset: number;
+  parse_report: PriceListParseReport;
+  revision: PriceListRevision;
+  total: number;
+};
+
+export type PriceListReasonCount = {
+  count: number;
+  reason: PriceListRowReason;
+};
+
+/**
+ * One uploaded price list of a project: an immutable revision; the highest is current.
+ *
+ * ``revision_number`` orders a project's revisions for display and is never an identity;
+ * ``source_filename`` is the uploaded file's name, display only.
+ */
+export type PriceListRevision = {
+  accepted_row_count: number;
+  data_row_count: number;
+  default_currency: string | null;
+  is_current: boolean;
+  media_type: "text/csv" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  price_list_id: PriceListId;
+  project_uid: ProjectUid;
+  revision_number: number;
+  sha256: Sha256;
+  size_bytes: number;
+  skipped_row_count: number;
+  source_filename: string;
+  source_format: PriceListFormat;
+  uploaded_at: string;
+  uploaded_by_user_uid: UserUid;
+};
+
+/** Every price-list revision of one project, newest first; the first one is current. */
+export type PriceListRevisionList = {
+  items: Array<PriceListRevision>;
+};
+
+/** One source row (as the spreadsheet numbers it) and why it is reported. */
+export type PriceListRowNote = {
+  reason: PriceListRowReason;
+  row: number;
+};
+
+/**
+ * Why a data row was skipped (the first ten), or a warning on an accepted row (the last).
+ *
+ * A skipped row is never repaired: a price that is not a plain number, not positive, finer
+ * than six decimals or not below 10^14 is reported, never guessed or rounded.
+ */
+export const PRICE_LIST_ROW_REASON_VALUES = [
+  'name_missing',
+  'unit_missing',
+  'price_missing',
+  'price_not_a_number',
+  'price_not_positive',
+  'price_precision',
+  'price_too_large',
+  'currency_missing',
+  'currency_unrecognised',
+  'value_too_long',
+  'section_unrecognised',
+] as const;
+
+/** PriceListRowReason - the closed value set above. */
+export type PriceListRowReason = (typeof PRICE_LIST_ROW_REASON_VALUES)[number];
+
 /** The running product version from VERSION, its content-derived build identifier, and the unchanged API contract version. */
 export type ProductVersion = {
   build_id: string;
@@ -854,7 +1734,7 @@ export type ProjectPage = {
   page: PageInfo;
 };
 
-/** Legacy's fourteen project sections (`D-56`, `R-40`). A document with no section is not a fifteenth member of this enum -- it is `UploadDocumentRequest.section` or `DocumentVersion.section` absent, which is a different, equally real fact. */
+/** The fifteen project sections: legacy's fourteen (`D-56`, `R-40`), kept by migration `0011_document_section` as the historical record, and `PS` (the explanatory note, distinct from `PB`, fire safety), added by `W59-SECTION-SEAL-01`. A document or version with no section is not a sixteenth member of this enum -- the property is absent, which is a different, equally real fact. */
 export const PROJECT_SECTION_VALUES = [
   'AR',
   'AI',
@@ -870,10 +1750,26 @@ export const PROJECT_SECTION_VALUES = [
   'GP',
   'TX',
   'POS',
+  'PS',
 ] as const;
 
 /** ProjectSection - the closed value set above. */
 export type ProjectSection = (typeof PROJECT_SECTION_VALUES)[number];
+
+/**
+ * `W59-SECTION-SEAL-01`. The explicit project stage of one version.
+ *
+ * ``P`` (design documentation) or ``R`` (working documentation). Bound to the version, never
+ * inferred from a file name, and never the analysis ``stage_id``, which is why the property
+ * that carries it is named ``project_stage``.
+ */
+export const PROJECT_STAGE_VALUES = [
+  'P',
+  'R',
+] as const;
+
+/** ProjectStage - the closed value set above. */
+export type ProjectStage = (typeof PROJECT_STAGE_VALUES)[number];
 
 /** Opaque project identity. */
 export type ProjectUid = string;
@@ -885,6 +1781,107 @@ export type PromptBundleId = string;
 
 /** The contract pattern for `PromptBundleId`. Anchored; use with `new RegExp()`. */
 export const PROMPT_BUNDLE_ID_PATTERN = "^pb_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * Why the proposed position is the same kind of product: one code family (the leading
+ * letters of the code or mark, ``ПК 60-12-8`` ~ ``ПК 63-15-8``), or at least half of the
+ * words of the two names in common.
+ */
+export const PROPOSAL_ANALOG_BASIS_VALUES = [
+  'code_family',
+  'name_similarity',
+] as const;
+
+/** ProposalAnalogBasis - the closed value set above. */
+export type ProposalAnalogBasis = (typeof PROPOSAL_ANALOG_BASIS_VALUES)[number];
+
+/** One appended expert decision. Never changed; the proposal's latest one is current. */
+export type ProposalDecision = {
+  actor_label: string;
+  actor_user_uid: UserUid;
+  comment: string | null;
+  decided_at: string;
+  optimisation_proposal_id: OptimisationProposalId;
+  proposal_decision_id: ProposalDecisionId;
+  verdict: ProposalVerdict;
+};
+
+/**
+ * How many of a pass's proposals stand in each decision state; the four sum to the
+ * pass's ``proposal_count``. These are the proposals' own counts, never finding counts.
+ */
+export type ProposalDecisionCounts = {
+  accept: number;
+  pending: number;
+  reject: number;
+  revise: number;
+};
+
+export type ProposalDecisionId = string;
+
+/** The contract pattern for `ProposalDecisionId`. Anchored; use with `new RegExp()`. */
+export const PROPOSAL_DECISION_ID_PATTERN = "^opd_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** Every decision of one proposal, oldest first; the last is current. */
+export type ProposalDecisionList = {
+  items: Array<ProposalDecision>;
+};
+
+/** The decision appended (or replayed) and the proposal as it now stands. */
+export type ProposalDecisionResult = {
+  decision: ProposalDecision;
+  proposal: OptimisationProposal;
+};
+
+/**
+ * A proposal's current decision: its latest verdict, or ``pending`` when nobody decided.
+ * Also the ``decision`` filter of ``listOptimisationProposals``.
+ */
+export const PROPOSAL_DECISION_STATE_VALUES = [
+  'pending',
+  'accept',
+  'reject',
+  'revise',
+] as const;
+
+/** ProposalDecisionState - the closed value set above. */
+export type ProposalDecisionState = (typeof PROPOSAL_DECISION_STATE_VALUES)[number];
+
+/** How the specification row was matched to its current price-list position. */
+export const PROPOSAL_MATCH_BASIS_VALUES = [
+  'code',
+  'mark',
+  'name',
+] as const;
+
+/** ProposalMatchBasis - the closed value set above. */
+export type ProposalMatchBasis = (typeof PROPOSAL_MATCH_BASIS_VALUES)[number];
+
+/**
+ * A price-list position a proposal names. ``row_number`` is its source row, never an
+ * identity.
+ */
+export type ProposalPosition = {
+  code: string | null;
+  mark: string | null;
+  name: string;
+  price_list_position_id: PriceListPositionId;
+  row_number: number;
+  vendor: string | null;
+};
+
+/**
+ * An expert's verdict on a proposal. ``revise`` says the analog is right in principle
+ * and the proposal needs changing; its comment is required.
+ */
+export const PROPOSAL_VERDICT_VALUES = [
+  'accept',
+  'reject',
+  'revise',
+] as const;
+
+/** ProposalVerdict - the closed value set above. */
+export type ProposalVerdict = (typeof PROPOSAL_VERDICT_VALUES)[number];
 
 /** Whether the model call was made live or replayed from a recording. Visible in the UI and in the CSV, because a recorded run is not evidence of a live one. */
 export const PROVIDER_MODE_VALUES = [
@@ -1018,6 +2015,22 @@ export type RunId = string;
 /** The contract pattern for `RunId`. Anchored; use with `new RegExp()`. */
 export const RUN_ID_PATTERN = "^run_[0-9A-HJKMNP-TV-Z]{26}$";
 
+/** The norms a run's text cites, or the explicit reason that cannot be said. `state` is `ready` when the list was computed; `snapshot_not_pinned` when the run pinned no norms snapshot (none was current when it was created); `text_unavailable` when it has no saved text layer; `too_many_citations` when the text cites more than one answer carries (over 1000 distinct designations, or one longer than 300 characters). Everything after `text_layer_sha256` is present exactly when `state` is `ready`. `unread_pages` are pages with no text layer, on which no citation can be found; `occurrence_count` counts every occurrence, not only the anchors kept. */
+export type RunNormReferences = {
+  counts?: NormReferenceCounts;
+  items?: Array<NormReferenceItem>;
+  norms_snapshot_id?: NormsSnapshotId;
+  occurrence_count?: number;
+  page_count: number;
+  run_id: RunId;
+  snapshot_document_count?: number;
+  state: "ready" | "snapshot_not_pinned" | "text_unavailable" | "too_many_citations";
+  text_layer_sha256?: Sha256;
+  unread_pages?: Array<number>;
+  unrecognised?: Array<NormReferenceUnrecognised>;
+  version_uid: VersionUid;
+};
+
 /** The audit_run states of contracts/domain/v1/state-machines.json. The success terminal is `published`; there is no `succeeded` run state. `created` is transient and rarely observed by a client. `cancelled` is declared by the contract and is unreachable in PC-01, which has no cancel command. */
 export const RUN_STATE_VALUES = [
   'created',
@@ -1053,6 +2066,8 @@ export type RunStatus = {
   interrupted_reason?: string | null;
   /** How many provider calls `cost_micros` sums. Published rather than left to be inferred: a reader who cannot see it cannot tell a run answered first time from one that was retried, and the two spent differently. Present exactly when `cost_micros` is. */
   model_call_count?: number;
+  /** The verified retrieval set frozen for this v3 run; absent for v1/v2. It must belong to norms_snapshot_id. */
+  norm_retrieval_set_id?: NormRetrievalSetId;
   /** W55A-SEAL-01 (R-113, CD-6): the norms snapshot this run pinned when it was created -- the current snapshot at that moment. Absent while no snapshot is current, which until W57 is the expected state of every run. */
   norms_snapshot_id?: NormsSnapshotId;
   project_uid: ProjectUid;
@@ -1068,6 +2083,8 @@ export type RunStatus = {
   terminal_detail?: {
     [key: string]: string | number | boolean | null;
   };
+  /** Caller-safe typed stage failure message; absent on v1 and on runs without a typed failure. Never contains a proxy body, URL, credential, prompt or model payload. */
+  terminal_message?: string;
   /** The catalog code a `failed` run terminated with. Null otherwise. */
   terminal_reason?: ErrorCode | null;
   version_uid: VersionUid;
@@ -1078,11 +2095,171 @@ export type RunStatusPage = {
   page: PageInfo;
 };
 
-/** How many published documents carry one project section (`R-40`, `D-56`). `section` absent means this row is the unclassified bucket, not a fifteenth section. Every one of the fourteen frozen codes is present even at `document_count: 0`. */
+/** How many published documents carry one project section (`R-40`, `D-56`). `section` absent means this row is the unclassified bucket, not a sixteenth section. Every one of the fifteen current codes is present even at `document_count: 0`. */
 export type SectionDocumentCount = {
   document_count: number;
-  /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
+  /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
+};
+
+/** All fifteen choices for one version, the current classification or ``null``. */
+export type SectionReview = {
+  classification: VersionClassification | null;
+  options: Array<SectionReviewOption>;
+  recognised_text_consulted: boolean;
+  revisions: Array<VersionClassificationRevision>;
+  version_uid: VersionUid;
+};
+
+export type SectionReviewOption = {
+  executable: boolean;
+  name: string;
+  section_code: ProjectSection;
+  suggestion: SectionSuggestion | null;
+};
+
+/**
+ * The combined Form-7 specification of one section, project by project.
+ *
+ * ``state`` is ``ready`` or ``section_too_large`` with ``limit_reason`` naming the bound that
+ * stopped it (``projects`` scanned, member ``sources`` read, ``rows`` held); then the
+ * membership is still listed with every set ``not_read`` and ``rows`` is ``null`` -- narrowing
+ * to one project (``project_filter``) is the way in. ``excluded`` lists the current versions
+ * nobody classified (the first 200; ``excluded_count`` is complete). ``row_count`` counts
+ * every row in scope and ``rows.total`` the rows the text search keeps. There is no section
+ * total: the totals live in each project's ``matching``.
+ */
+export type SectionSpecification = {
+  excluded: Array<SectionSpecificationExcludedVersion>;
+  excluded_count: number;
+  extraction_algorithm: "specification-text-v1";
+  limit_reason: "projects" | "sources" | "rows" | null;
+  match_algorithm: "price-match-v1";
+  project_filter: ProjectUid | null;
+  projects: Array<SectionSpecificationProject>;
+  query: string | null;
+  row_count: number;
+  rows: SectionSpecificationRowPage | null;
+  section_code: ProjectSection;
+  source_count: number;
+  state: "ready" | "section_too_large";
+};
+
+/** A current version that cannot be placed in a section yet: nobody classified it. */
+export type SectionSpecificationExcludedVersion = {
+  display_title: string;
+  document_uid: DocumentUid;
+  project_name: string;
+  project_uid: ProjectUid;
+  reason: "version_unclassified";
+  version_ordinal: number;
+  version_uid: VersionUid;
+};
+
+/**
+ * One project with member sets: its price list, its sets and its own totals.
+ *
+ * ``price_state`` is ``priced`` (the current price-list revision was read), ``price_list_missing``
+ * (none uploaded: the rows are served without any match and no figure) or ``not_read`` (over a
+ * bound). ``matching`` covers this project's rows only and is ``null`` unless ``priced``; its
+ * totals are per currency and never mixed with another project's.
+ */
+export type SectionSpecificationProject = {
+  matching: SpecificationMatching | null;
+  name: string;
+  price_list: SpecificationPriceListRef | null;
+  price_state: "priced" | "price_list_missing" | "not_read";
+  project_uid: ProjectUid;
+  row_count: number;
+  sources: Array<SectionSpecificationSource>;
+};
+
+/**
+ * One Form-7 row with its full address and, where the project has a price list, its match.
+ *
+ * ``price_status`` is the match (``matched``, ``ambiguous``, ``unmatched``) or
+ * ``price_list_missing`` when the row's project has no price list: then every match field is
+ * empty and no price or amount exists. ``amount`` only when the row counts in its project's
+ * total for its currency.
+ */
+export type SectionSpecificationRow = {
+  amount: string | null;
+  basis: "code" | "mark" | "name" | null;
+  candidate_count: number;
+  candidate_position_ids: Array<PriceListPositionId>;
+  document_uid: DocumentUid;
+  excluded_reason: "no_position" | "unit_mismatch" | "row_unit_missing" | "ambiguous" | "quantity_not_numeric" | null;
+  group: string | null;
+  line_end: number;
+  line_start: number;
+  mass_text: string | null;
+  name: string;
+  note: string | null;
+  page_number: number;
+  position: string | null;
+  price_position: SpecificationPricePosition | null;
+  price_status: "matched" | "ambiguous" | "unmatched" | "price_list_missing";
+  project_uid: ProjectUid;
+  quantity: string | null;
+  quantity_issue: "not_numeric" | "ambiguous" | null;
+  quantity_text: string | null;
+  reason: "no_position" | "unit_mismatch" | "row_unit_missing" | "several_positions" | null;
+  row_id: string;
+  sheet_label: string | null;
+  table_ordinal: number;
+  unit: "шт" | "м" | "м2" | "м3" | "кг" | "т" | "компл" | "п.м" | null;
+  unit_text: string | null;
+  version_uid: VersionUid;
+};
+
+/** One page of the rows that survive the text search; the counts cover every row. */
+export type SectionSpecificationRowPage = {
+  items: Array<SectionSpecificationRow>;
+  limit: number;
+  next_offset: number | null;
+  offset: number;
+  total: number;
+};
+
+/**
+ * One document set whose current version is confirmed in the section, and how far it read.
+ *
+ * ``state`` is ``ready`` when the saved text was read and the rows extracted;
+ * ``analysis_missing`` (no published run) and ``text_unavailable`` (a run without a saved
+ * text layer) name what is missing; ``specification_too_large`` is the extractor's own row
+ * bound; ``not_read`` is a set the answer did not read because it is over a bound
+ * (``SectionSpecification.limit_reason``). The extraction facts are ``null`` until read.
+ */
+export type SectionSpecificationSource = {
+  display_title: string;
+  document_uid: DocumentUid;
+  page_count: number;
+  project_stage: ProjectStage;
+  row_count: number | null;
+  run_id: RunId | null;
+  skipped_by_reason: SpecificationSkipCounts | null;
+  state: "ready" | "analysis_missing" | "text_unavailable" | "specification_too_large" | "not_read";
+  table_count: number | null;
+  text_layer_sha256: Sha256 | null;
+  version_ordinal: number;
+  version_uid: VersionUid;
+};
+
+/** Display evidence for one section: never a confirmation and never a route. */
+export type SectionSuggestion = {
+  filename_patterns: Array<string>;
+  name_in_text: boolean;
+  score: number;
+  text_keywords: Array<string>;
+};
+
+/** One section's vendor list as it applies to a project, with both scopes' latest. */
+export type SectionVendorList = {
+  effective: VendorListRevision | null;
+  global_revision: VendorListRevision | null;
+  project_revision: VendorListRevision | null;
+  section_code: ProjectSection;
+  source: VendorListSource;
 };
 
 /**
@@ -1098,19 +2275,246 @@ export type SetExecutionPausedRequest = {
   paused: boolean;
 };
 
+/**
+ * `W60-PRICE-LIST-01`. A section's global vendor list, as a whole new revision.
+ *
+ * ``expected_vendor_list_id``, when present, is the revision the caller read (``null``:
+ * there was none); a different latest revision is ``conflict`` and nothing is written.
+ */
+export type SetGlobalVendorListRequest = {
+  entries: Array<VendorListEntry>;
+  expected_vendor_list_id?: VendorListId | null;
+};
+
 export type SetJobPriorityRequest = {
   priority: number;
+};
+
+/**
+ * `W60-PRICE-LIST-01`. A project's own vendor list for a section, or its removal.
+ *
+ * ``mode: inherit`` takes ``entries: []`` and removes the override. ``expected_vendor_list_id``
+ * as for :class:`SetGlobalVendorListRequest`, for this project's revisions.
+ */
+export type SetProjectVendorListRequest = {
+  entries: Array<VendorListEntry>;
+  expected_vendor_list_id?: VendorListId | null;
+  mode: VendorListMode;
 };
 
 export type SetWorkerIntakeRequest = {
   enabled: boolean;
 };
 
+/** Severity. */
+export const SEVERITY_VALUES = [
+  'critical',
+  'economic',
+  'operational',
+  'recommendation',
+  'check_adjacent',
+] as const;
+
+/** Severity - the closed value set above. */
+export type Severity = (typeof SEVERITY_VALUES)[number];
+
 /** A verification value, never an identity. */
 export type Sha256 = string;
 
 /** The contract pattern for `Sha256`. Anchored; use with `new RegExp()`. */
 export const SHA256_PATTERN = "^[0-9a-f]{64}$";
+
+export type SheetDiff = {
+  added_line_count: number | null;
+  evidence_sha256: Sha256 | null;
+  hunks: Array<DiffHunk>;
+  outcome: "computed" | "too_large";
+  removed_line_count: number | null;
+  source_line_count: number | null;
+  source_page_number: number | null;
+  status: "changed" | "removed" | "added";
+  target_line_count: number | null;
+  target_page_number: number | null;
+  too_large_reason: "source_text_too_large" | "source_text_too_many_lines" | "target_text_too_large" | "target_text_too_many_lines" | "text_not_utf8_encodable" | null;
+};
+
+/** One page of the sheets with text differences; ``next_offset`` is null on the last. */
+export type SheetDiffPage = {
+  items: Array<SheetDiff>;
+  limit: number;
+  next_offset: number | null;
+  offset: number;
+  total: number;
+};
+
+/** One sheet of either version and its proposed counterpart, if any. */
+export type SheetPairing = {
+  pairing_basis: "exact_text" | "similar_text" | null;
+  shared_line_count: number | null;
+  similarity_permille: number | null;
+  source_page_number: number | null;
+  status: "unchanged" | "changed" | "removed" | "added";
+  suggestion_sha256: Sha256 | null;
+  target_page_number: number | null;
+  textless: boolean;
+};
+
+/** The exact sum of the amounts in one currency; never converted, never rounded. */
+export type SpecificationCurrencyTotal = {
+  amount: string;
+  currency: string;
+  row_count: number;
+};
+
+/** Rows left out of every total, by the one reason each carries. */
+export type SpecificationExclusionCounts = {
+  ambiguous: number;
+  no_position: number;
+  quantity_not_numeric: number;
+  row_unit_missing: number;
+  unit_mismatch: number;
+};
+
+/** What the extractor found: counts complete, listings capped at 200 each. */
+export type SpecificationExtractionSummary = {
+  algorithm: "specification-text-v1";
+  row_count: number;
+  skipped: Array<SpecificationSkippedLine>;
+  skipped_by_reason: SpecificationSkipCounts;
+  skipped_count: number;
+  table_count: number;
+  tables: Array<SpecificationTable>;
+};
+
+export type SpecificationMatchCounts = {
+  ambiguous: number;
+  matched: number;
+  unmatched: number;
+};
+
+/** Every row's match counted, the totals per currency and what they leave out. */
+export type SpecificationMatching = {
+  algorithm: "price-match-v1";
+  counts: SpecificationMatchCounts;
+  excluded: SpecificationExclusionCounts;
+  totals: Array<SpecificationCurrencyTotal>;
+};
+
+/** The price-list revision the rows were matched against: the project's current one. */
+export type SpecificationPriceListRef = {
+  default_currency: string | null;
+  position_count: number;
+  price_list_id: PriceListId;
+  revision_number: number;
+  source_filename: string;
+  uploaded_at: string;
+};
+
+/** The one price-list position a row is matched to, as the price list states it. */
+export type SpecificationPricePosition = {
+  code: string | null;
+  currency: string;
+  mark: string | null;
+  name: string;
+  price_list_position_id: PriceListPositionId;
+  row_number: number;
+  unit: string;
+  unit_price: string;
+  vendor: string | null;
+};
+
+/** One specification row and its match. ``amount`` only when it counts in a total. */
+export type SpecificationPriceRow = {
+  amount: string | null;
+  basis: "code" | "mark" | "name" | null;
+  candidate_count: number;
+  candidate_position_ids: Array<PriceListPositionId>;
+  excluded_reason: "no_position" | "unit_mismatch" | "row_unit_missing" | "ambiguous" | "quantity_not_numeric" | null;
+  group: string | null;
+  line_end: number;
+  line_start: number;
+  mass_text: string | null;
+  name: string;
+  note: string | null;
+  page_number: number;
+  position: string | null;
+  price_position: SpecificationPricePosition | null;
+  quantity: string | null;
+  quantity_issue: "not_numeric" | "ambiguous" | null;
+  quantity_text: string | null;
+  reason: "no_position" | "unit_mismatch" | "row_unit_missing" | "several_positions" | null;
+  row_id: string;
+  sheet_label: string | null;
+  status: "matched" | "ambiguous" | "unmatched";
+  table_ordinal: number;
+  unit: "шт" | "м" | "м2" | "м3" | "кг" | "т" | "компл" | "п.м" | null;
+  unit_text: string | null;
+};
+
+/**
+ * The priced specification of a set's current AR version, or the state that stops it.
+ *
+ * The states are checked in order -- ``version_unclassified``, ``section_not_ar``,
+ * ``price_list_missing``, ``analysis_missing``, ``text_unavailable``,
+ * ``specification_too_large`` -- and each answer carries the facts read before it stopped.
+ */
+export type SpecificationPrices = {
+  document_uid: DocumentUid;
+  extraction: SpecificationExtractionSummary | null;
+  matching: SpecificationMatching | null;
+  page_count: number;
+  price_list: SpecificationPriceListRef | null;
+  project_stage: ProjectStage | null;
+  project_uid: ProjectUid;
+  rows: SpecificationRowPage | null;
+  run_id: RunId | null;
+  section_code: ProjectSection | null;
+  state: "ready" | "version_unclassified" | "section_not_ar" | "price_list_missing" | "analysis_missing" | "text_unavailable" | "specification_too_large";
+  text_layer_sha256: Sha256 | null;
+  version_ordinal: number;
+  version_uid: VersionUid;
+};
+
+/** One page of the rows; the counts and totals always cover every row. */
+export type SpecificationRowPage = {
+  items: Array<SpecificationPriceRow>;
+  limit: number;
+  next_offset: number | null;
+  offset: number;
+  total: number;
+};
+
+/** Lines inside detected tables that became neither a row nor part of one, by reason. */
+export type SpecificationSkipCounts = {
+  anchor_ambiguous: number;
+  column_numbering: number;
+  continuation_limit: number;
+  name_missing: number;
+  position_missing: number;
+  rows_over_limit: number;
+  table_header_ambiguous: number;
+  text_before_first_row: number;
+};
+
+/** One skipped line: where it is, why, and the start of its text. */
+export type SpecificationSkippedLine = {
+  excerpt: string;
+  line: number;
+  page_number: number;
+  reason: "table_header_ambiguous" | "text_before_first_row" | "continuation_limit" | "anchor_ambiguous" | "position_missing" | "name_missing" | "column_numbering" | "rows_over_limit";
+};
+
+/** One detected specification table: its header lines and the Form-7 columns it names. */
+export type SpecificationTable = {
+  columns: Array<("position" | "name" | "type_mark" | "code" | "manufacturer" | "unit" | "quantity" | "mass" | "note")>;
+  header_line_end: number;
+  header_line_start: number;
+  implicit_unit: "шт" | "м" | "м2" | "м3" | "кг" | "т" | "компл" | "п.м" | null;
+  ordinal: number;
+  page_number: number;
+  row_count: number;
+  status: "parsed" | "header_ambiguous";
+};
 
 /** A canonical stage identity from contracts/analysis/v1/stage-registry.json. PC-01 schedules the first four. */
 export const STAGE_ID_VALUES = [
@@ -1167,6 +2571,32 @@ export type SubmitRegistrationRequest = {
   password: string;
 };
 
+/** `W61-DISPATCHER-01`. One move along an assignment's history. */
+export type TransitionAssignmentRequest = {
+  kind: AssignmentTransitionKind;
+  new_assignee_user_uid?: UserUid;
+  reason?: string;
+};
+
+/** Closed deterministic observation-withholding reasons; a withheld item is never a published finding. */
+export const UNGROUNDED_REASON_VALUES = [
+  'quotation_absent',
+  'quotation_on_different_page',
+  'span_outside_page',
+  'span_outside_block',
+  'span_length_mismatch',
+  'quote_in_recognised_text',
+  'norm_label_unknown',
+  'norm_quote_too_short',
+  'norm_quote_ambiguous',
+  'norm_quote_absent',
+  'norm_value_not_in_quote',
+  'stated_value_not_in_evidence',
+] as const;
+
+/** UngroundedReason - the closed value set above. */
+export type UngroundedReason = (typeof UNGROUNDED_REASON_VALUES)[number];
+
 /** The signed-in account's own names, and -- while its profile is incomplete -- the e-mail address that becomes its login. 1-60 characters of letters, separated by single spaces, hyphens or apostrophes, with no word mixing Cyrillic and Latin letters. Surrounding whitespace and invisible characters are removed before the rule is applied. */
 export type UpdateMyProfileRequest = {
   /** Required to complete a profile whose login is not yet an e-mail address; it becomes the login in the same write that stores the names. A complete profile's login is fixed: an `email` other than the current login is `validation_failed` with `details.field: login`. */
@@ -1189,8 +2619,26 @@ export type UploadDocumentRequest = {
   display_title?: string;
   /** One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. At most 250 MiB; the PDF at most 500 pages. */
   file: Blob;
-  /** One of legacy's fourteen project sections, or absent when the document has not been classified. */
+  /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
+};
+
+/** The next version of an existing document: one portal bundle and nothing else. There is no title and no section, because a further version takes neither; an undeclared part is refused like any other. */
+export type UploadDocumentVersionRequest = {
+  /** One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. At most 250 MiB; the PDF at most 500 pages. */
+  file: Blob;
+};
+
+/**
+ * `W60-PRICE-LIST-01`. The multipart body of ``uploadPriceList``.
+ *
+ * ``file`` is the price list (CSV, or an XLSX whose first sheet is read), at most 10 MiB;
+ * ``default_currency`` applies to rows whose currency neither their own cell nor the price
+ * column's header names.
+ */
+export type UploadPriceListRequest = {
+  default_currency?: string;
+  file: Blob;
 };
 
 /** Opaque account identity. An e-mail address is the sign-in identifier and a unique key among active accounts; this is the identity every reference names. */
@@ -1198,6 +2646,62 @@ export type UserUid = string;
 
 /** The contract pattern for `UserUid`. Anchored; use with `new RegExp()`. */
 export const USER_UID_PATTERN = "^usr_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** One entry: the material or equipment group it covers, the allowed vendor, a note. */
+export type VendorListEntry = {
+  material?: string | null;
+  note?: string | null;
+  vendor: string;
+};
+
+export type VendorListId = string;
+
+/** The contract pattern for `VendorListId`. Anchored; use with `new RegExp()`. */
+export const VENDOR_LIST_ID_PATTERN = "^vnl_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * ``list``: these entries apply (none at all is an explicit "no restriction").
+ * ``inherit``: a project revision that removes the override; the global list applies.
+ */
+export const VENDOR_LIST_MODE_VALUES = [
+  'list',
+  'inherit',
+] as const;
+
+/** VendorListMode - the closed value set above. */
+export type VendorListMode = (typeof VENDOR_LIST_MODE_VALUES)[number];
+
+/** One immutable revision of a section's vendor list, global or of one project. */
+export type VendorListRevision = {
+  entries: Array<VendorListEntry>;
+  mode: VendorListMode;
+  project_uid: ProjectUid | null;
+  revision_number: number;
+  scope: VendorListScope;
+  section_code: ProjectSection;
+  set_at: string;
+  set_by_user_uid: UserUid;
+  vendor_list_id: VendorListId;
+};
+
+/** VendorListScope. */
+export const VENDOR_LIST_SCOPE_VALUES = [
+  'global',
+  'project',
+] as const;
+
+/** VendorListScope - the closed value set above. */
+export type VendorListScope = (typeof VENDOR_LIST_SCOPE_VALUES)[number];
+
+/** Which revision applies to a project's section: its own list, the global one, or none. */
+export const VENDOR_LIST_SOURCE_VALUES = [
+  'project',
+  'global',
+  'none',
+] as const;
+
+/** VendorListSource - the closed value set above. */
+export type VendorListSource = (typeof VENDOR_LIST_SOURCE_VALUES)[number];
 
 /** The current projected verdict. `pending` when the ledger holds no verdict-bearing event, and after a revocation. `needs_manual_review` is declared for the closed union and has no PC-01 producer. */
 export const VERDICT_VALUES = [
@@ -1228,6 +2732,57 @@ export type VersionBlockIndex = {
   /** Binds this block index to the exact prepared text layer its spans index. Null exactly when `status` is `not_produced`. */
   text_layer_sha256: Sha256 | null;
   version_uid: VersionUid;
+};
+
+/**
+ * `W59-SECTION-SEAL-01`. The persisted, expert-confirmed classification of one version.
+ *
+ * The original confirmation is stored once (``0024_version_classification``) and never
+ * changed. `CLASSIFICATION-CORRECTION-01` (``0028_classification_corrections``): an expert
+ * may append corrections, each a numbered ``revision`` (1 is the original); this is the
+ * latest revision, or, in the answer to a correction retried after someone corrected again,
+ * the revision that request created. ``confirmed_by_user_uid`` and ``confirmed_at`` are those
+ * of **that revision** -- who stands behind these values.
+ */
+export type VersionClassification = {
+  confirmed_at: string;
+  confirmed_by_user_uid: UserUid;
+  project_stage: ProjectStage;
+  revision: number;
+  section_code: ProjectSection;
+  version_uid: VersionUid;
+};
+
+/**
+ * `CLASSIFICATION-CORRECTION-01`. One entry of a version's classification history.
+ *
+ * Revision 1 is the original expert confirmation (``reason`` is ``null``); revisions 2..
+ * are the corrections, each with the expert who made it, when, and why. Never changed.
+ */
+export type VersionClassificationRevision = {
+  actor_user_uid: UserUid;
+  at: string;
+  project_stage: ProjectStage;
+  reason: string | null;
+  revision: number;
+  section_code: ProjectSection;
+};
+
+/** Two versions of one set compared, or the explicit reason they are not. */
+export type VersionComparison = {
+  comparison_sha256: Sha256 | null;
+  document_uid: DocumentUid;
+  findings: FindingComparison | null;
+  mode: "version" | "stage";
+  outcome: "compared" | "refused";
+  project_uid: ProjectUid;
+  refusal: ComparisonRefusal | null;
+  sheet_diffs: SheetDiffPage | null;
+  sheets: Array<SheetPairing>;
+  source: ComparedVersion | null;
+  source_version_uid: VersionUid;
+  target: ComparedVersion | null;
+  target_version_uid: VersionUid;
 };
 
 export type VersionUid = string;

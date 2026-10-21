@@ -107,7 +107,7 @@ def test_csv_resolves_every_row_back_to_the_journey(corpus_journey, session):
     header = next(reader)
     rows = [r for r in reader if r]
     assert tuple(header) == tuple(COLUMNS)
-    assert len(header) == 17
+    assert len(header) == 19
 
     index = {name: position for position, name in enumerate(header)}
     for row in rows:

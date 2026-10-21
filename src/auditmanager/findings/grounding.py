@@ -11,7 +11,8 @@ resolves on all three checks of P02 §5.1:
    ``geometry.block_index``.
 
 An item failing any check rejects the whole observation from the finding list. It is
-retained only as a diagnostic, and the reason is one of exactly five values.
+retained only as a diagnostic. This v1 evidence gate emits five reasons; the closed
+0023 vocabulary also covers recognised-text and later normative citation refusals.
 
 Why the gate is deterministic and takes no model input beyond the artifact: everything
 downstream — expert usefulness rates, evidence-location correctness, the whole P04 field
@@ -46,13 +47,20 @@ from auditmanager.findings.artifacts import (
 
 
 class UngroundedReason(str, Enum):
-    """The closed diagnostic vocabulary of P02 §5.1. Exactly five values."""
+    """The 0023 diagnostic vocabulary; this gate still emits its original five."""
 
     QUOTATION_ABSENT = "quotation_absent"
     QUOTATION_ON_DIFFERENT_PAGE = "quotation_on_different_page"
     SPAN_OUTSIDE_PAGE = "span_outside_page"
     SPAN_OUTSIDE_BLOCK = "span_outside_block"
     SPAN_LENGTH_MISMATCH = "span_length_mismatch"
+    QUOTE_IN_RECOGNISED_TEXT = "quote_in_recognised_text"
+    NORM_LABEL_UNKNOWN = "norm_label_unknown"
+    NORM_QUOTE_TOO_SHORT = "norm_quote_too_short"
+    NORM_QUOTE_AMBIGUOUS = "norm_quote_ambiguous"
+    NORM_QUOTE_ABSENT = "norm_quote_absent"
+    NORM_VALUE_NOT_IN_QUOTE = "norm_value_not_in_quote"
+    STATED_VALUE_NOT_IN_EVIDENCE = "stated_value_not_in_evidence"
 
 
 #: Restated as a frozen set so a caller can assert closure without importing the enum's

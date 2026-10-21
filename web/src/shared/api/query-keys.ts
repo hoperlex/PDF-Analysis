@@ -6,7 +6,7 @@
  * owner, and `web/docs/PC01_UI_SEAM.md` records which Gate B session uses which.
  *
  * Rules:
- *   - every key starts with one of the eleven root namespaces below;
+ *   - every key starts with one of the fourteen root namespaces below;
  *   - a key is built by calling a function here, never by writing an array literal;
  *   - invalidation targets a prefix — `queryKeys.runs.all()` invalidates every run key;
  *   - a key filled by more than one site carries its value type, as a `DataTag`. See
@@ -37,10 +37,17 @@
 import type { DataTag } from '@tanstack/react-query';
 
 import type {
+  AssignmentStatus,
+  AssignmentUid,
   DocumentUid,
+  PriceListId,
   FindingCategory,
   NormDocumentId,
+  OptimisationPassId,
+  OptimisationProposalId,
+  ProposalDecisionState,
   FindingUid,
+  ProjectSection,
   ProjectUid,
   RegistrationStatus,
   RunId,
@@ -51,15 +58,26 @@ import type {
 } from './generated/types.gen';
 
 /**
- * The eleven root namespaces. Nothing else is a legal first key segment.
+ * The fourteen root namespaces. Nothing else is a legal first key segment.
  *
  * `account`, `users` and `registrations` entered together, once, in `W50-REGISTRY-01`
  * (`W50-PLAN.md` §3.6): the signed-in account, the administrator's account list and the
  * registration requests. Later lanes add key factories inside them and no new root.
  *
+ * `assignments` entered once, in `W61-DISPATCHER-01`: the dispatcher's work assignments belong
+ * to no single project read (a list spans every project), and one move changes the list, the
+ * assignment's detail and the home screen's «Мои задачи» at once.
+ *
  * `norms` entered once, in `W55A-WEB-NORMS` (`W55-PLAN.md` §A4 Stage B item 4, which names
  * the namespace): the normative corpus belongs to no project, run or finding, and one
  * designation of the current snapshot changes every answer under it at once.
+ *
+ * `analysis` entered once, in `W59-ANALYSIS-SETTINGS-01`: the analysis-profile registry
+ * belongs to no project, run, version or execution.
+ *
+ * `optimisation` entered once, in `W60-PRICE-LIST-01`: a project's price-list revisions and
+ * their positions, and the vendor lists — whose global half belongs to no project, so one
+ * administrator's change moves what every project's «Оптимизация» tab reads.
  */
 export const QUERY_NAMESPACES = [
   'projects',
@@ -73,6 +91,9 @@ export const QUERY_NAMESPACES = [
   'releases',
   'execution',
   'norms',
+  'analysis',
+  'assignments',
+  'optimisation',
 ] as const;
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
@@ -99,6 +120,23 @@ export interface RegistrationListFilters {
   readonly limit?: number;
 }
 
+/** Filters that make a page of `getSectionSpecification` a distinct cache entry. */
+export interface SectionSpecificationFilters {
+  readonly projectUid?: ProjectUid | null;
+  readonly q?: string | null;
+  readonly offset?: number;
+  readonly limit?: number;
+}
+
+/** Filters that make a page of `listAssignments` a distinct cache entry. */
+export interface AssignmentListFilters {
+  readonly mine?: boolean;
+  readonly status?: AssignmentStatus;
+  readonly project_uid?: ProjectUid;
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
 /** Filters that make a finding list a distinct cache entry. */
 export interface FindingListFilters {
   readonly category?: FindingCategory;
@@ -108,6 +146,102 @@ export interface FindingListFilters {
 }
 
 export const queryKeys = {
+  /**
+   * «Оптимизация» on the project screen (`W60-PRICE-LIST-01`). `priceLists` holds
+   * `listPriceListRevisions` for one project; `positions` one page of
+   * `listPriceListPositions` (the page is in the key, so two pages never share an entry);
+   * `vendorLists` the prefix of every project's `getEffectiveVendorLists`, because a change
+   * of the GLOBAL list moves all of them at once. An upload invalidates the project's
+   * `priceLists`; either vendor-list write invalidates `vendorLists()`. Nothing here is a
+   * number the dashboard reads.
+   */
+  optimisation: {
+    all: () => ['optimisation'] as const,
+    priceLists: (projectUid: ProjectUid) => ['optimisation', 'price-lists', projectUid] as const,
+    positions: (priceListId: PriceListId, offset: number, limit: number) =>
+      ['optimisation', 'positions', priceListId, { offset, limit }] as const,
+    vendorLists: () => ['optimisation', 'vendor-lists'] as const,
+    projectVendorLists: (projectUid: ProjectUid) =>
+      ['optimisation', 'vendor-lists', projectUid] as const,
+    /**
+     * One page of `getSpecificationPrices` (`W60-OPT-MATCH-01`): a document set's AR
+     * specification priced from the project's current price list. The project's price list
+     * decides every price, so an upload invalidates {@link specificationPricesAll} for the
+     * project — every set and page, whatever a screen holds.
+     */
+    specificationPrices: (
+      projectUid: ProjectUid,
+      documentUid: DocumentUid,
+      offset?: number,
+      limit?: number,
+    ) => ['optimisation', 'specification-prices', projectUid, documentUid, { offset, limit }] as const,
+    /** Every set and page of {@link specificationPrices} for one project, as a prefix. */
+    specificationPricesAll: (projectUid: ProjectUid) =>
+      ['optimisation', 'specification-prices', projectUid] as const,
+    /**
+     * «Предложения» (`W60-OPT-PROPOSALS-01`). `passes` holds `listOptimisationPasses` for one
+     * project and, optionally, one document set; `proposals` one page of
+     * `listOptimisationProposals` (the page and the decision filter are in the key);
+     * `proposalDecisions` one proposal's history. Starting a pass invalidates the project's
+     * `passes`; a decision invalidates the pass's `proposalsOf` prefix, every project's
+     * `passes` (the counts by decision are on the pass) and the proposal's history.
+     */
+    passes: (projectUid: ProjectUid, documentUid: DocumentUid | null) =>
+      ['optimisation', 'passes', projectUid, documentUid] as const,
+    allPasses: () => ['optimisation', 'passes'] as const,
+    proposalsOf: (passId: OptimisationPassId) => ['optimisation', 'proposals', passId] as const,
+    proposals: (
+      passId: OptimisationPassId,
+      decision: ProposalDecisionState | null,
+      offset: number,
+      limit: number,
+    ) => ['optimisation', 'proposals', passId, { decision, offset, limit }] as const,
+    proposalDecisions: (proposalId: OptimisationProposalId) =>
+      ['optimisation', 'proposal-decisions', proposalId] as const,
+    /**
+     * One page of `getSectionSpecification` (`W63-SECTION-FORM7-01`): a section's combined
+     * Form-7 specification across projects. The section is a filter, the project filter and
+     * the search text are part of the answer, so each is part of the key. Any project's
+     * price list decides prices in it, and the upload command belongs to another slice, so the
+     * read is never served from a cache: `staleTime: 0` re-reads it on every mount.
+     */
+    sectionSpecification: (
+      sectionCode: ProjectSection,
+      filter: SectionSpecificationFilters = {},
+    ) =>
+      [
+        'optimisation',
+        'section-specification',
+        sectionCode,
+        {
+          projectUid: filter.projectUid ?? null,
+          q: filter.q ?? null,
+          offset: filter.offset ?? 0,
+          limit: filter.limit ?? null,
+        },
+      ] as const,
+  },
+  /**
+   * «Настройки анализа» (`W59-ANALYSIS-SETTINGS-01`): `listAnalysisProfiles`, the text-profile
+   * registry the server routes runs through. A root of its own, entered once by that task:
+   * the registry belongs to no project, run, version or execution, and it changes only when
+   * the server is redeployed — no action on this client writes it, so nothing invalidates it.
+   */
+  analysis: {
+    all: () => ['analysis'] as const,
+    profiles: () => ['analysis', 'profiles'] as const,
+  },
+  /**
+   * «Диспетчер» (`W61-DISPATCHER-01`). One root, because every command — a creation or a
+   * move — changes what more than one key answers: the list's row (status, assignee), the
+   * detail's history and the home screen's «Мои задачи». Each command invalidates
+   * `assignments.all()`.
+   */
+  assignments: {
+    all: () => ['assignments'] as const,
+    list: (filters: AssignmentListFilters = {}) => ['assignments', 'list', filters] as const,
+    detail: (assignmentUid: AssignmentUid) => ['assignments', 'detail', assignmentUid] as const,
+  },
   /**
    * The «Нормы» screens (`W55A-WEB-NORMS`). One root, because `setCurrentNormSnapshot`
    * changes what every key under it answers: the snapshot list's `current` flag, the
@@ -123,6 +257,9 @@ export const queryKeys = {
     events: (cursor?: string, limit?: number) => ['norms', 'events', { cursor, limit }] as const,
     search: (q: string, cursor?: string, limit?: number) =>
       ['norms', 'search', { q, cursor, limit }] as const,
+    /** One page of the catalogue (`W57B-NORMS-CATALOGUE-XLSX-01`), keyed by its filters and cursor. */
+    catalogue: (q?: string, kind?: string, cursor?: string, limit?: number) =>
+      ['norms', 'catalogue', { q, kind, cursor, limit }] as const,
     document: (normDocumentId: NormDocumentId) => ['norms', 'document', normDocumentId] as const,
     paragraphs: (normDocumentId: NormDocumentId, cursor?: string, limit?: number) =>
       ['norms', 'paragraphs', normDocumentId, { cursor, limit }] as const,
@@ -170,6 +307,12 @@ export const queryKeys = {
     list: (documentUid: DocumentUid, cursor?: string, limit?: number) =>
       ['versions', 'list', documentUid, { cursor, limit }] as const,
     /**
+     * Every page of `listVersions` for one document, as a prefix of {@link list}
+     * (`W59-VERSION-UPLOAD-01`). `uploadDocumentVersion` puts a new first row on every page
+     * boundary of that list, so it invalidates all of them, whatever cursor a screen holds.
+     */
+    lists: (documentUid: DocumentUid) => ['versions', 'list', documentUid] as const,
+    /**
      * `getVersionBlocks`. `W45-BLOCKS`.
      *
      * Under `versions` and not under a fifth root namespace, for the same reason
@@ -190,6 +333,44 @@ export const queryKeys = {
      */
     portalBlocks: (versionUid: VersionUid, limit: number) =>
       ['versions', 'portal-blocks', versionUid, { limit }] as const,
+    /**
+     * `getVersionSectionReview` for one version (`W59-SECTION-UI-01`): the fifteen section
+     * choices, their suggestion evidence, whether each has an analysis profile, and the
+     * persisted stage-and-section classification or `null`.
+     *
+     * Under `versions` beside `detail`, because the classification is a property of the
+     * version: `classifyDocumentVersion` changes this answer and the version's own
+     * `classification` field together, and one root reaches both. A distinct third segment,
+     * so re-reading the review never refetches the manifest, the text-line index or the PDF.
+     */
+    sectionReview: (versionUid: VersionUid) => ['versions', 'section-review', versionUid] as const,
+    /**
+     * `compareDocumentVersions` for one ordered pair (`W59-VERSION-COMPARE-01`): the older
+     * (source) and newer (target) version of one set, the comparison mode and one page of
+     * line differences. Under `versions`, because a comparison is computed from two
+     * versions and their classifications and nothing else is its parent; classifying either
+     * version or publishing a run changes the answer, and `versions.all()` reaches it.
+     */
+    /**
+     * Every comparison answer, whatever the pair, mode or page (`W59-DECISION-CARRYOVER-01`):
+     * a carried decision changes the pair's `carryover_candidates`, and the prefix reaches
+     * every page and mode of it without naming them.
+     */
+    comparisons: () => ['versions', 'comparison'] as const,
+    comparison: (
+      sourceVersionUid: VersionUid,
+      targetVersionUid: VersionUid,
+      mode: 'version' | 'stage',
+      diffOffset: number,
+      diffLimit: number,
+    ) =>
+      [
+        'versions',
+        'comparison',
+        sourceVersionUid,
+        targetVersionUid,
+        { mode, diffOffset, diffLimit },
+      ] as const,
   },
   runs: {
     all: () => ['runs'] as const,
@@ -218,6 +399,13 @@ export const queryKeys = {
       ['runs', 'list', versionUid, { cursor, limit }] as const,
     findings: (runId: RunId, filters: FindingListFilters = {}) =>
       ['runs', 'findings', runId, filters] as const,
+    /**
+     * `getRunNormReferences` (`NORM-REFS-RUN-01`): the norms one run's saved text cites,
+     * checked against the snapshot that run pinned. Under `runs` so that
+     * `queryKeys.runs.all()` — which `startRun` reaches for — also drops it; it is a function
+     * of the run's saved text and pinned snapshot, both fixed once the run is stored.
+     */
+    normReferences: (runId: RunId) => ['runs', 'norm-references', runId] as const,
   },
   findings: {
     all: () => ['findings'] as const,

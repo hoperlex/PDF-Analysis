@@ -141,6 +141,7 @@
           "operationId": "listRegistrations",
           "$why_optional": "only a session holding `admin` reads the pending-request count"
         },
+        {"method": "GET", "path": "/assignments", "operationId": "listAssignments", "$why_optional": "only a session holding `expert` reads its own open work for «Мои задачи» (W61-DISPATCHER-01)"},
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "PUT", "path": "/me/release-notes", "operationId": "markReleaseNotesRead", "$why_optional": "only when What’s New is dismissed"}
       ],
@@ -217,6 +218,12 @@
           "method": "GET",
           "path": "/versions/{version_uid}",
           "operationId": "getDocumentVersion"
+        },
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review",
+          "operationId": "getVersionSectionReview",
+          "$why": "W59-SECTION-UI-01: the stage-and-section panel reads the review once the version has answered, in every state the version has -- confirmed, unconfirmed, expert or not -- at the address the version's own body names. The walk reaches this version from the document it captured, so {document_uid} is that version's document."
         }
       ],
       "optional_api": [
@@ -242,17 +249,33 @@
         "",
         "`expects_api` names one operation and that is a claim, not a floor. The screen calls",
         "`listRuns` on mount in EVERY state it has -- two runs, one run, and none -- so the",
-        "assertion holds whatever the stand contains, which is what makes it worth asserting."
+        "assertion holds whatever the stand contains, which is what makes it worth asserting.",
+        "",
+        "W59-VERSION-COMPARE-01 put the version comparison above the run comparison. It reads",
+        "the version (`getDocumentVersion`) and its set's versions (`listVersions`) on mount in",
+        "every state; `compareDocumentVersions` is asked only when the set has another version,",
+        "so it is optional here: the journey's set has one version."
       ],
       "expects_api": [
         {
           "method": "GET",
           "path": "/versions/{version_uid}/runs",
           "operationId": "listRuns"
+        },
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}",
+          "operationId": "getDocumentVersion"
+        },
+        {
+          "method": "GET",
+          "path": "/documents/{document_uid}/versions",
+          "operationId": "listVersions"
         }
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison", "operationId": "compareDocumentVersions", "$why_optional": "asked only when the set has another published version; the journey's set has one"}
       ],
       "follow": null
     },
@@ -593,13 +616,14 @@
       "path": "/section-optimisation",
       "page_module": "web/src/app/section-optimisation/page.tsx",
       "$comment": [
-        "Оптимизация разделов -- an honest stub on its way, R-66 (W50-REGISTRY-01).",
-        "",
-        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
-        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this entry",
-        "gains operations and the assertion starts carrying weight."
+        "Оптимизация разделов (R-66; W63-SECTION-FORM7-01 graduated it from the honest stub)",
+        "reads the combined Form-7 specification of the opening section once on a cold route:",
+        "the analysed section (АР), every project, the first page of rows. Read-only: the screen",
+        "emits no write, and choosing a section, a project or a search is a later, clicked read."
       ],
-      "expects_api": [],
+      "expects_api": [
+        {"method": "GET", "path": "/sections/{section_code}/specification", "operationId": "getSectionSpecification"}
+      ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
@@ -651,13 +675,13 @@
       "path": "/analysis-settings",
       "page_module": "web/src/app/analysis-settings/page.tsx",
       "$comment": [
-        "Настройки анализа -- an honest stub on its way, R-66 (W50-REGISTRY-01).",
-        "",
-        "`expects_api` is EMPTY and that is the claim, not an omission: this screen is a",
-        "`RoutePlaceholder` and calls nothing at all. The day its vertical lands, this entry",
-        "gains operations and the assertion starts carrying weight."
+        "Настройки анализа (R-66; W59-ANALYSIS-SETTINGS-01 graduated it from the honest stub)",
+        "reads the analysis-profile registry once on a cold route: the fifteen sections and",
+        "the profile each runs with. Read-only: the screen emits no write."
       ],
-      "expects_api": [],
+      "expects_api": [
+        {"method": "GET", "path": "/analysis/profiles", "operationId": "listAnalysisProfiles"}
+      ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
@@ -677,6 +701,27 @@
       ],
       "optional_api": [
         {"method": "GET", "path": "/execution/workers", "operationId": "listWorkers", "$why_optional": "read only while a listed job is leased or running, to name the worker holding its run (W54-WORKERS-WEB)"},
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
+      "follow": null
+    },
+    {
+      "name": "dispatcher",
+      "path": "/dispatcher",
+      "page_module": "web/src/app/dispatcher/page.tsx",
+      "$comment": [
+        "«Диспетчер» (W61-DISPATCHER-01, roadmap Q-2) reads the assignments the session may see and the signed-in account,",
+        "whose identity decides which rows carry the assignee's moves. An administrator also reads the active experts",
+        "for the creation form and a reassignment, and the projects it may assign. Commands require explicit user intent",
+        "and are not emitted by this read journey."
+      ],
+      "expects_api": [
+        {"method": "GET", "path": "/assignments", "operationId": "listAssignments"},
+        {"method": "GET", "path": "/me", "operationId": "getMe"}
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/users", "operationId": "listUsers", "$why_optional": "only a session holding `admin` reads the experts a creation or a reassignment may name"},
+        {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "only a session holding `admin` reads the projects of the creation form"},
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
       ],
       "follow": null
@@ -918,6 +963,78 @@
         "forbids_rendered": [
           "[data-upload-failure]",
           "[data-precheck-problem]"
+        ]
+      },
+      {
+        "name": "classify-version",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/classify-version/ui/classify-version-form.tsx",
+        "$comment": [
+          "W59-SECTION-UI-01. Since W59-SECTION-SEAL-01 a run is routed from the version's",
+          "expert-confirmed stage and section, and an unclassified version is refused with",
+          "422 required_norm_unavailable (reference_kind: version_classification) before any run",
+          "exists. So the journey confirms one, the way a user does: on the version screen it has",
+          "just landed on, it chooses the stage П (design documentation) and the section АР -- the",
+          "fixture is the AR baseline bundle -- and presses the panel's own confirm button.",
+          "",
+          "The capture is the confirmed panel's document identity, which the PUT's path needs and",
+          "no earlier write step captured; the response must echo the stage and section chosen."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "input[data-stage-choice=\"P\"]"
+          },
+          {
+            "do": "click",
+            "selector": "input[data-section-choice=\"AR\"]"
+          },
+          {
+            "do": "click",
+            "selector": "button[data-classification-confirm]",
+            "text": "Подтвердить раздел"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+            "operationId": "classifyDocumentVersion",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "version_uid",
+            "matches": "^ver_%ID%$"
+          },
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "project_stage",
+            "equals": "P"
+          },
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "section_code",
+            "equals": "AR"
+          }
+        ],
+        "capture": {
+          "kind": "attribute",
+          "$why": "the panel switches to the confirmed classification, which carries the version's document identity",
+          "selector": "[data-classified-document]",
+          "attribute": "data-classified-document",
+          "as": [
+            "document_uid"
+          ],
+          "matches": "^(doc_%ID%)$",
+          "bound_ms": 30000
+        },
+        "forbids_rendered": [
+          "[data-classification-failure]",
+          "[data-classification-conflict]"
         ]
       },
       {

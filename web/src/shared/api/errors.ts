@@ -2,7 +2,7 @@
  * The typed failure surface of the API client.
  *
  * The contract has exactly one failure shape — the `ErrorEnvelope` — and one closed
- * twenty-four-code catalog. This module turns a non-2xx response into one of three things
+ * twenty-five-code catalog. This module turns a non-2xx response into one of three things
  * and never into anything else:
  *
  *   - `ApiError`            the body was a valid envelope carrying a catalog code;

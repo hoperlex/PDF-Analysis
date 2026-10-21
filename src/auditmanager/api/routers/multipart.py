@@ -87,7 +87,7 @@ UPLOAD_RETRY_AFTER_SECONDS: Final[int] = 5
 #: The parts ``uploadDocument``'s form parser reads (`W55B-FIX`, X-3), where Starlette's own
 #: defaults are a thousand files and a thousand text fields of a MiB each, held in memory. The
 #: operation declares one file part (``file``) and two text parts (``display_title``, at most
-#: 400 characters, and ``section``, a name of fourteen). Two files and four text parts let a
+#: 400 characters, and ``section``, a name of fifteen). Two files and four text parts let a
 #: repeated or undeclared part reach the strict pass below, which names it (``unique_part``,
 #: ``additionalProperties``); one more is the parser's ``readable_multipart``. A text part of
 #: 16 KiB is ten times the longest title in UTF-8.
@@ -95,10 +95,15 @@ UPLOAD_FORM_MAX_FILES: Final[int] = 2
 UPLOAD_FORM_MAX_FIELDS: Final[int] = 4
 UPLOAD_FORM_MAX_PART_BYTES: Final[int] = 16 * 1024
 
-#: ``POST /projects/{project_uid}/documents`` as the application serves it -- the proxy has
-#: already removed ``/api/v1``. Matched whole, never as a prefix, so no other route (and not
-#: ``GET`` of the same collection) gets the upload cap or takes an upload slot.
-_UPLOAD_ROUTE: Final[re.Pattern[str]] = re.compile(r"^/projects/[^/]+/documents$")
+#: ``POST /projects/{project_uid}/documents`` (``uploadDocument``) and, `W59-VERSION-UPLOAD-01`,
+#: ``POST /projects/{project_uid}/documents/{document_uid}/versions`` (``uploadDocumentVersion``)
+#: as the application serves them -- the proxy has already removed ``/api/v1``. Matched whole,
+#: never as a prefix, so no other route (not ``GET`` of the same collection, and not the
+#: classification, section-review or comparison routes under a version) gets the upload cap or
+#: takes an upload slot. Both uploads share the one pool of ``MAX_CONCURRENT_UPLOADS`` slots.
+_UPLOAD_ROUTE: Final[re.Pattern[str]] = re.compile(
+    r"^/projects/[^/]+/documents(?:/[^/]+/versions)?$"
+)
 
 #: ``records/22-uploadDocument.refusal.max_bytes.json``, byte for byte.
 _UPLOAD_TOO_LARGE: Final[str] = "The upload exceeds the maximum accepted size."
@@ -430,7 +435,7 @@ class _BoundedFormRequest(Request):
 
 
 class UploadRoute(APIRoute):
-    """``uploadDocument``'s route: the operation's handler, given a :class:`_BoundedFormRequest`.
+    """``uploadDocument``'s and ``uploadDocumentVersion``'s route: the operation's handler, given a :class:`_BoundedFormRequest`.
 
     FastAPI's own way to give one route another request class; the route is declared with it
     (``documents.py``), so no other operation's parsing changes.

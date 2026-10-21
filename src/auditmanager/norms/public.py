@@ -7,6 +7,19 @@ here in plan §6's order (REPAIR, SNAPSHOT, EMBED, BUNDLE); nothing outside
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from auditmanager.analysis.public import TextLayer
+    from auditmanager.norms.references.observation_plan import ReferencePage
+
+from auditmanager.norms.citation_prep import (
+    GroundedNormCitation,
+    NormCitation,
+    NormLabelBinding,
+    NormParagraph,
+    ground_norm_observation,
+)
 from auditmanager.norms.bundle import (  # W54-BUNDLE-01
     FINGERPRINT_ALGORITHM,
     MANIFEST_FORMAT,
@@ -21,6 +34,14 @@ from auditmanager.norms.bundle import (  # W54-BUNDLE-01
     requeue_bundle,
     verify_bundle,
 )
+from auditmanager.norms.catalogue import (  # W57B-NORMS-CATALOGUE-XLSX-01
+    CatalogueEntry,
+    CataloguePage,
+    DisplayName,
+    KindCount,
+    display_name,
+)
+from auditmanager.norms.catalogue import list_documents as list_norm_catalogue  # W57B-NORMS-CATALOGUE-XLSX-01
 from auditmanager.norms.chunking import (  # W54-SNAPSHOT-01
     RELIABLE_CHUNKING_PROFILE_VERSION,
     ChunkingRefused,
@@ -31,6 +52,8 @@ from auditmanager.norms.custody import (
     D143_REASON,
     MAX_ATTEMPTS,
     NORM_SOURCE,
+    NORM_RETRIEVAL_SET,
+    NORM_CATALOGUE,
     RETRY_DELAYS_SECONDS,
     ROLE_SHAPES,
     Admission,
@@ -102,6 +125,27 @@ from auditmanager.norms.loader import (  # W54-SNAPSHOT-01
     load_corpus,
 )
 from auditmanager.norms.model import TextReliability  # W54-SNAPSHOT-01
+from auditmanager.norms.references.catalogue_input import (
+    CatalogueInputRefused,
+    VerifiedCatalogueInput,
+    load_verified_catalogue,
+)
+from auditmanager.norms.references.pipeline import (
+    ReferencePipelineResult,
+    run_reference_pipeline,
+)
+from auditmanager.norms.references.read_model import (  # NORM-REFS-RUN-01
+    CitationAnchor,
+    CitedNorm,
+    ReferenceReadModel,
+    TooManyCitations,
+    UnrecognisedSlug,
+    build_reference_read_model,
+)
+from auditmanager.norms.references.resolution import ReferenceRefused  # NORM-REFS-RUN-01
+from auditmanager.norms.references.snapshot_catalogue import (  # NORM-REFS-RUN-01
+    read_snapshot_catalogue,
+)
 from auditmanager.norms.repair import (  # W54-REPAIR-01
     LEDGER_VERSION,
     RepairLedger,
@@ -135,6 +179,20 @@ from auditmanager.norms.snapshot import (  # W54-SNAPSHOT-01
     row_digest,
 )
 
+
+def reference_pages_from_text_layer(
+    *, text_layer: TextLayer, version_uid: str, page_count: int
+) -> tuple[ReferencePage, ...]:
+    """Expose the pure bridge without a public-facade import cycle."""
+    from auditmanager.norms.references.text_pages import (
+        reference_pages_from_text_layer as bridge,
+    )
+
+    return bridge(
+        text_layer=text_layer, version_uid=version_uid, page_count=page_count,
+    )
+
+
 __all__ = [
     "ADMIT_COMMAND_TYPE",
     "D143_MESSAGE",
@@ -144,10 +202,13 @@ __all__ = [
     "EMBED_TEXTS_REQUEST_FORMAT",
     "EMBED_TEXTS_RESPONSE_FORMAT",
     "FINGERPRINT_ALGORITHM",
+    "GroundedNormCitation",
     "LEDGER_VERSION",
     "MANIFEST_FORMAT",
     "MAX_ATTEMPTS",
     "NORM_SOURCE",
+    "NORM_RETRIEVAL_SET",
+    "NORM_CATALOGUE",
     "RELIABLE_CHUNKING_PROFILE_VERSION",
     "RETRY_DELAYS_SECONDS",
     "ROLE_SHAPES",
@@ -163,7 +224,12 @@ __all__ = [
     "BundleRefused",
     "Checkpoint",
     "ChunkingRefused",
+    "CitationAnchor",
+    "CitedNorm",
     "CorpusLoadResult",
+    "CatalogueEntry",
+    "CatalogueInputRefused",
+    "CataloguePage",
     "CurrentSnapshot",
     "CustodyDispatcher",
     "CustodyIncident",
@@ -180,22 +246,30 @@ __all__ = [
     "DispatchReport",
     "DispatchResult",
     "DispatchStep",
+    "DisplayName",
     "DocumentRow",
     "EmbeddingSetDigest",
     "EventPosition",
     "IncidentKind",
+    "KindCount",
     "Manifest",
     "ManifestIndex",
     "NearestEmbedding",
     "NormEmbeddingConflict",
     "NormEmbeddingRepository",
     "NormEmbeddingScanShort",
+    "NormCitation",
+    "NormLabelBinding",
+    "NormParagraph",
     "NormsProjectionConflict",
     "ParagraphRow",
     "Qualification",
     "RejectedBlob",
     "RepairLedger",
     "RepairOutcome",
+    "ReferencePipelineResult",
+    "ReferenceReadModel",
+    "ReferenceRefused",
     "RoleShape",
     "SnapshotEvent",
     "SnapshotImportConflict",
@@ -206,33 +280,44 @@ __all__ = [
     "Stand",
     "StoredEmbeddingBuild",
     "TextReliability",
+    "TooManyCitations",
+    "UnrecognisedSlug",
+    "VerifiedCatalogueInput",
     "admit",
     "binding_digest",
     "blob_id_for",
+    "build_reference_read_model",
     "compute_fingerprint",
     "current_snapshot",
     "decode_event_cursor",
+    "display_name",
     "encode_event_cursor",
     "export_bundle",
     "get_norm_document",
+    "ground_norm_observation",
     "has_been_current",
     "import_bundle",
     "import_snapshot",
     "inspect_degeneracy",
+    "list_norm_catalogue",
     "list_norm_paragraphs",
     "list_norm_snapshots",
     "list_snapshot_events",
+    "load_verified_catalogue",
     "load_corpus",
     "norm_pdf_binding",
     "parse_manifest",
     "publish_bindings",
     "qualification",
+    "read_snapshot_catalogue",
+    "reference_pages_from_text_layer",
     "repaired_snapshot",
     "report",
     "report_bundle",
     "requeue",
     "requeue_bundle",
     "row_digest",
+    "run_reference_pipeline",
     "search_norms",
     "set_current_snapshot",
     "verify_bundle",

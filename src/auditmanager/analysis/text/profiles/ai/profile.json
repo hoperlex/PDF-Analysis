@@ -1,0 +1,35 @@
+{
+  "format": "text-profile/1",
+  "section_code": "AI",
+  "analysis_profile_id": "ap_01M5AXG1K03864N3KSY4AM9P10",
+  "prompt_bundle_id": "pb_01M5AXG1K095VZEZ6BHYM6W9QV",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "title_ru": "Архитектурные решения (интерьер)",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "16ba8e5d23e4782550e79355002fde1365f682b7",
+    "files": [
+      {
+        "path": "prompts/disciplines/AI/role.md",
+        "sha256": "189b4d80aa2669e073b564323c77670b6116255ac9ca8741d5e885725f449f0d"
+      },
+      {
+        "path": "prompts/disciplines/AI/checklist.md",
+        "sha256": "3834f9d05d42d67b000fa97e9acaaed7fe312487bca74ef346f22f568a9db743"
+      },
+      {
+        "path": "prompts/disciplines/AI/drawing_types.md",
+        "sha256": "222a05aafc2a3f5eb6ec95afed033715daf12ca9dd760e6f8807a26b19b897de"
+      },
+      {
+        "path": "prompts/disciplines/AI/project_params.md",
+        "sha256": "4e793ef3c1ea30f97387d91ed584447542c9d2aeaa3411f11588bc6ffce2961e"
+      },
+      {
+        "path": "prompts/disciplines/AI/finding_categories.md",
+        "sha256": "70d3e0e5c4556583141dd41b9220a4c4917d8c12c541e810a802ac03f1f02946"
+      }
+    ]
+  }
+}

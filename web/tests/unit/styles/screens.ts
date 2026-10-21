@@ -40,7 +40,12 @@ import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
+import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
+import { SpecificationPricesAnswer } from '@/widgets/specification-prices';
+import { NormReferencesAnswer } from '@/widgets/norm-references';
+import { SectionSpecificationAnswer } from '@/widgets/section-specification';
 import { NormSearchResults } from '@/widgets/norm-search';
+import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { ExportPanel } from '@/widgets/export-panel';
@@ -52,6 +57,10 @@ import { UploadPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
 import { CropFigureView } from '@/widgets/portal-blocks';
 import { VersionBlockViews } from '@/_pages/blocks';
+import { ClassifyVersionFormView } from '@/features/classify-version';
+import { CorrectVersionClassificationFormView } from '@/features/correct-version-classification';
+import { ProjectStructureView } from '@/widgets/project-sections';
+import { VersionClassificationView } from '@/widgets/version-classification';
 import { portalBlocksQueryOptions } from '@/entities/block';
 import type {
   DecisionEvent,
@@ -62,17 +71,21 @@ import type {
   RunState,
   RunStatus,
 } from '@/shared/api';
-import type { DocumentVersion, Project } from '@/shared/api';
+import type { DocumentVersion, Project, SectionReview } from '@/shared/api';
 import type { Account } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
-import { ApiError, queryKeys } from '@/shared/api';
+import { ApiError, PROJECT_SECTION_VALUES, queryKeys } from '@/shared/api';
 import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, Menu, avatarColourIndex } from '@/shared/ui';
 import type { DisclosureProps, MenuProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
 import { groupByCategory } from '@/entities/finding';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
-import { DOCUMENT_PAGE_LIMIT, VERSION_PAGE_LIMIT } from '@/entities/document-version';
+import {
+  CLASSIFY_NOT_PERMITTED_DETAIL,
+  DOCUMENT_PAGE_LIMIT,
+  VERSION_PAGE_LIMIT,
+} from '@/entities/document-version';
 import type { StageRow } from '@/entities/audit-run';
 import { RUN_PAGE_LIMIT, StageTable } from '@/entities/audit-run';
 
@@ -94,10 +107,15 @@ import {
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
 import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
 import {
-  NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS, normDocument,
+  NORM_CATALOGUE_ITEMS, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS,
+  normDocument,
 } from '../norms/fixtures';
 
 import { BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, portalPage } from '../blocks/fixtures';
+
+import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixtures';
+import { proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
+import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
 
 import type { Screen } from './contrast';
 
@@ -170,6 +188,36 @@ const version = (): DocumentVersion => ({
 });
 
 /**
+ * `W59-SECTION-UI-01`. One version's section review: unconfirmed, one section suggested with
+ * evidence, one without a profile — so the expert's form renders every part it has.
+ */
+const sectionReview = (over: Partial<SectionReview> = {}): SectionReview => ({
+  version_uid: VERSION_UID,
+  classification: null,
+  revisions: [],
+  recognised_text_consulted: false,
+  options: PROJECT_SECTION_VALUES.map((code) => ({
+    section_code: code,
+    name: code,
+    executable: code !== 'PB',
+    suggestion:
+      code === 'AR'
+        ? { score: 5, filename_patterns: ['АР'], text_keywords: ['фасад'], name_in_text: true }
+        : null,
+  })),
+  ...over,
+});
+
+const CONFIRMED = {
+  version_uid: VERSION_UID,
+  project_stage: 'R' as const,
+  section_code: 'PB' as const,
+  confirmed_at: '2026-10-20T08:00:00Z',
+  confirmed_by_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+  revision: 1,
+};
+
+/**
  * A client whose four lists have ROWS IN THEM, and a next page.
  *
  * Every list in this census was cold, so `li.am-state` -- the class every project row and
@@ -186,6 +234,7 @@ function populatedClient() {
   client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), { items: [version()], page });
   client.setQueryData(queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT), { items: [version()], page });
   client.setQueryData(queryKeys.versions.detail(VERSION_UID), version());
+  client.setQueryData(queryKeys.versions.sectionReview(VERSION_UID), sectionReview());
   client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), { items: [runStatus({ run_id: RUN_ID })], page });
   // `diagnostic_observation_count` on purpose: the review header's diagnostics sentence
   // renders only above zero, and every fixture in this file left it at the default.
@@ -491,6 +540,159 @@ export function screens(): Screen[] {
     workerOf: () => ({ kind: 'held' as const, workerId: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A' }),
     onCancel: noop, onReaudit: noop, onPriority: noop, onNext: null, onPrevious: null,
   })));
+  // `W59-ANALYSIS-SETTINGS-01`: «Настройки анализа» — a builtin profile, a draft with its
+  // legacy source, and a section with no profile, so every row shape is censused.
+  // `W60-OPT-MATCH-01`: «Спецификация и цены» — a row of each status (three badge tones), a
+  // counted amount beside dashes, the totals panel on its tint, and a state that stops it.
+  {
+    const position = 'prp_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+    const base = {
+      page_number: 14, sheet_label: '10', line_start: 3, line_end: 3, table_ordinal: 1, group: null,
+      unit_text: 'шт', unit: 'шт' as const, quantity_text: '12', quantity: '12', quantity_issue: null,
+      mass_text: null, note: null, basis: null, reason: null, price_position: null,
+      candidate_position_ids: [position], candidate_count: 1, amount: null, excluded_reason: null,
+    };
+    const ready = {
+      project_uid: PROJECT_UID, document_uid: DOCUMENT_UID, version_uid: VERSION_UID, version_ordinal: 1,
+      page_count: 8, state: 'ready' as const, project_stage: 'R' as const, section_code: 'AR' as const,
+      price_list: {
+        price_list_id: 'prl_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', revision_number: 1, source_filename: 'Прайс',
+        uploaded_at: '2026-10-20T08:00:00Z', default_currency: 'RUB', position_count: 3,
+      },
+      run_id: RUN_ID, text_layer_sha256: SHA,
+      extraction: {
+        algorithm: 'specification-text-v1' as const, table_count: 1, row_count: 3, skipped_count: 0,
+        skipped_by_reason: {
+          table_header_ambiguous: 0, text_before_first_row: 0, continuation_limit: 0, anchor_ambiguous: 0,
+          position_missing: 0, name_missing: 0, column_numbering: 0, rows_over_limit: 0,
+        },
+        skipped: [], tables: [],
+      },
+      matching: {
+        algorithm: 'price-match-v1' as const, counts: { matched: 1, ambiguous: 1, unmatched: 1 },
+        totals: [{ currency: 'RUB', amount: '180000', row_count: 1 }],
+        excluded: { no_position: 1, unit_mismatch: 0, row_unit_missing: 0, ambiguous: 1, quantity_not_numeric: 0 },
+      },
+      rows: {
+        offset: 0, limit: 50, total: 3, next_offset: null,
+        items: [
+          { ...base, row_id: `sr-${'a'.repeat(32)}`, group: 'Изделия', position: '1', name: 'Металлический щит', status: 'matched' as const,
+            basis: 'name' as const, amount: '180000', price_position: {
+              price_list_position_id: position, row_number: 1, code: null, name: 'Металлический щит', mark: null,
+              unit: 'шт', unit_price: '15000', currency: 'RUB', vendor: null,
+            } },
+          { ...base, row_id: `sr-${'b'.repeat(32)}`, position: '2', name: 'Пена монтажная', status: 'ambiguous' as const,
+            reason: 'several_positions' as const, candidate_count: 2, excluded_reason: 'ambiguous' as const },
+          { ...base, row_id: `sr-${'c'.repeat(32)}`, position: '3', name: 'Профиль', status: 'unmatched' as const,
+            reason: 'no_position' as const, candidate_position_ids: [], candidate_count: 0, excluded_reason: 'no_position' as const },
+        ],
+      },
+    };
+    add('SpecificationPricesAnswer ready', render(createElement(SpecificationPricesAnswer, { answer: ready, onPage: noop })));
+    add('SpecificationPricesAnswer stopped', render(createElement(SpecificationPricesAnswer, {
+      answer: { ...ready, state: 'price_list_missing' as const, price_list: null, run_id: null, text_layer_sha256: null,
+        extraction: null, matching: null, rows: null },
+      onPage: null,
+    })));
+  }
+  // `NORM-REFS-RUN-01`: «Нормативные ссылки» — a citation of each of the five outcomes (an ok,
+  // two degraded and two inert badge tones), the pages with no text layer, the legend, a corpus
+  // document whose designation is not read, and a state that stops the list.
+  {
+    const documentA = 'ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+    const anchor = (page: number) => ({ page_number: page, char_start: 10, char_end: 26, quote: 'СП 54.13330.2011' });
+    const answer = {
+      run_id: RUN_ID, version_uid: VERSION_UID, state: 'ready' as const, page_count: 8,
+      norms_snapshot_id: 'ns_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', text_layer_sha256: SHA, snapshot_document_count: 674,
+      counts: { in_corpus: 1, newer_edition: 1, older_edition_only: 1, not_in_corpus: 1, not_recognised: 1 },
+      occurrence_count: 5, unread_pages: [2],
+      items: [
+        { cited: 'СП 54.13330.2022', outcome: 'in_corpus' as const, occurrence_count: 1, anchors: [anchor(3)],
+          matched_norm_document_id: documentA, matched_designation: 'СП 54.13330.2022', matched_title: 'Свод правил' },
+        { cited: 'СП 54.13330.2011', outcome: 'newer_edition' as const, occurrence_count: 1, anchors: [anchor(1)],
+          matched_norm_document_id: documentA, matched_designation: 'СП 54.13330.2024' },
+        { cited: 'ГОСТ 21.101-2021', outcome: 'older_edition_only' as const, occurrence_count: 1, anchors: [anchor(4)],
+          matched_norm_document_id: documentA, matched_designation: 'ГОСТ 21.101-2020' },
+        { cited: 'ГОСТ Р 99999-2020', outcome: 'not_in_corpus' as const, occurrence_count: 1, anchors: [anchor(5)] },
+        { cited: 'СП 54.13330', outcome: 'not_recognised' as const, occurrence_count: 1, anchors: [anchor(6)] },
+      ],
+      unrecognised: [{ norm_document_id: documentA, slug: 'МДС_12-24_2006', designation: 'МДС 12-24.2006', title: 'Устройство обычных' }],
+    };
+    add('NormReferencesAnswer ready', render(createElement(NormReferencesAnswer, { answer })));
+    add('NormReferencesAnswer stopped', render(createElement(NormReferencesAnswer, {
+      answer: { run_id: RUN_ID, version_uid: VERSION_UID, state: 'text_unavailable' as const, page_count: 8 },
+    })));
+  }
+  // `W63-SECTION-FORM7-01`: «Оптимизация разделов» — a priced project beside one with no price
+  // list, rows of every status (three badge tones), a counted amount beside dashes, the totals
+  // per project, an excluded version, and the bound that stops the read.
+  add('SectionSpecificationAnswer ready', render(createElement(SectionSpecificationAnswer, {
+    answer: sectionAnswer(), onPage: noop, onSelectProject: noop,
+  })));
+  add('SectionSpecificationAnswer too large', render(createElement(SectionSpecificationAnswer, {
+    answer: sectionAnswer({
+      ...SECTION_NO_ROWS, state: 'section_too_large', limit_reason: 'sources',
+      projects: sectionAnswer().projects.map((item) => ({
+        ...item, price_state: 'not_read' as const, price_list: null, matching: null, row_count: 0,
+        sources: item.sources.map((source) => ({
+          ...source, state: 'not_read' as const, run_id: null, text_layer_sha256: null, row_count: null,
+          table_count: null, skipped_by_reason: null,
+        })),
+      })),
+    }),
+    onPage: null, onSelectProject: noop,
+  })));
+  add('AnalysisProfileTable loaded', render(createElement(AnalysisProfileTable, {
+    items: [
+      {
+        section_code: 'AR', section_name: 'Архитектурные решения',
+        profile: {
+          analysis_profile_id: 'ap_01M25P3TH08VVTTGJRXYBZZ7RP', prompt_bundle_id: 'pb_01M25P3TH0PDQYVKTRQFEM0CYS',
+          profile_version: '1.0.0', status: 'builtin', prompt_bundle_sha256: SHA, content_sha256: SHA, source: null,
+        },
+      },
+      {
+        section_code: 'PS', section_name: 'Пояснительная записка',
+        profile: {
+          analysis_profile_id: 'ap_01M5AXG1K22R027A33VTKZ468P', prompt_bundle_id: 'pb_01M5AXG1K2JQQH7R4ACTBW8974',
+          profile_version: '1.0.0', status: 'draft', prompt_bundle_sha256: SHA, content_sha256: SHA,
+          source: {
+            repository: 'прежняя-система', commit: 'b'.repeat(40),
+            files: [{ path: 'prompts/disciplines/PS/role.md', sha256: SHA }],
+          },
+        },
+      },
+      { section_code: 'PB', section_name: 'Пожарная безопасность', profile: null },
+    ],
+  })));
+  // `W60-PRICE-LIST-01`: the «Оптимизация» tab loaded (revisions, a positions page with its
+  // report, the fifteen vendor lists), and every other shape its widgets have.
+  {
+    const client = newClient();
+    seedLoadedOptimisation(client);
+    const loaded = optimisationShapes().find((shape) => shape.name === 'optimisation-loaded');
+    if (loaded !== undefined) add('ProjectOptimisation loaded', renderScreen(client, loaded.make()));
+  }
+  for (const shape of optimisationShapes()) {
+    if (shape.name === 'optimisation-loaded') continue;
+    const client = newClient();
+    shape.seedClient?.(client);
+    add(`ProjectOptimisation ${shape.name}`, renderScreen(client, shape.make()));
+  }
+  // `W60-OPT-PROPOSALS-01`: «Предложения» loaded (a set chooser, two passes, proposals in
+  // several decision states) and every other shape its widget, features and entity have.
+  {
+    const client = newClient();
+    seedLoadedProposals(client);
+    const loaded = proposalShapes().find((shape) => shape.name === 'proposals-loaded');
+    if (loaded !== undefined) add('OptimisationProposals loaded', renderScreen(client, loaded.make()));
+  }
+  for (const shape of proposalShapes()) {
+    if (shape.name === 'proposals-loaded') continue;
+    const client = newClient();
+    shape.seedClient?.(client);
+    add(`OptimisationProposals ${shape.name}`, renderScreen(client, shape.make()));
+  }
   // The worker registry: one row per state, the offline one in the collapsed group, and an
   // administrator's intake switch on each.
   add('WorkerList loaded', withRouter(createElement(WorkerList, {
@@ -581,6 +783,10 @@ export function screens(): Screen[] {
   })));
   add('NormSnapshotHistory loaded', withRouter(createElement(NormSnapshotHistory, {
     items: NORM_EVENTS, onFirst: null, onNext: noop,
+  })));
+  // `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue table with its two rows and ruled lines.
+  add('NormCatalogueTable loaded', withRouter(createElement(NormCatalogueTable, {
+    items: NORM_CATALOGUE_ITEMS, total: 2, filtered: false, onFirst: null, onNext: noop,
   })));
 
   // The finding list, with a row SELECTED — `aria-current='true'` is the only place
@@ -765,7 +971,111 @@ export function screens(): Screen[] {
     add('VersionList loaded', at(createElement(VersionList, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID })));
     add('RunList loaded', at(createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
     add('ProjectsPage loaded', at(createElement(ProjectsPage, {})));
-    add('VersionDetailPage loaded', at(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+    add('VersionDetailPage loaded', at(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] })));
+    // `W59-SECTION-UI-01`: the project structure with a classified and an unclassified
+    // document, the confirmed panel with a profile-less section after a refused
+    // confirmation, and the form carrying a refusal.
+    add(
+      'ProjectStructureView loaded',
+      at(
+        createElement(ProjectStructureView, {
+          projectUid: PROJECT_UID,
+          items: [
+            {
+              ...version(),
+              document_uid: `${DOCUMENT_UID.slice(0, -1)}C`,
+              version_uid: `${VERSION_UID.slice(0, -1)}C`,
+              classification: { ...CONFIRMED, version_uid: `${VERSION_UID.slice(0, -1)}C` },
+            },
+            // Unclassified, so its row links to the version's stage-and-section panel.
+            version(),
+          ],
+          hasNextPage: true,
+        }),
+      ),
+    );
+    add(
+      'VersionClassificationView confirmed',
+      at(
+        createElement(VersionClassificationView, {
+          address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
+          review: sectionReview({ classification: CONFIRMED }),
+          roles: ['expert'],
+          conflict: true,
+          onConflict: () => undefined,
+        }),
+      ),
+    );
+    // `CLASSIFICATION-CORRECTION-01`: the corrected panel with its history and the open form.
+    const CORRECTED = { ...CONFIRMED, revision: 2 };
+    const HISTORY = [
+      {
+        revision: 1,
+        project_stage: 'P' as const,
+        section_code: 'AR' as const,
+        actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+        at: '2026-10-20T08:00:00Z',
+        reason: null,
+      },
+      {
+        revision: 2,
+        project_stage: CONFIRMED.project_stage,
+        section_code: CONFIRMED.section_code,
+        actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+        at: '2026-10-21T09:30:00Z',
+        reason: 'Раздел определён по штампу листа неверно.',
+      },
+    ];
+    for (const correcting of [false, true]) {
+      add(
+        `VersionClassificationView corrected${correcting ? ' correcting' : ''}`,
+        at(
+          createElement(VersionClassificationView, {
+            address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
+            review: sectionReview({ classification: CORRECTED, revisions: HISTORY }),
+            roles: ['expert'],
+            conflict: false,
+            onConflict: () => undefined,
+            correcting,
+            onCorrecting: () => undefined,
+          }),
+        ),
+      );
+    }
+    add(
+      'CorrectVersionClassificationFormView refused',
+      at(
+        createElement(CorrectVersionClassificationFormView, {
+          review: sectionReview(),
+          current: CORRECTED,
+          stage: 'P',
+          section: 'AR',
+          reason: '...',
+          pending: false,
+          failure: { kind: 'stale', detail: 'Классификацию уже изменили.', correlationId: 'cid', retryable: false },
+          onStage: () => undefined,
+          onSection: () => undefined,
+          onReason: () => undefined,
+          onSubmit: () => undefined,
+          onCancel: () => undefined,
+        }),
+      ),
+    );
+    add(
+      'ClassifyVersionFormView refused',
+      at(
+        createElement(ClassifyVersionFormView, {
+          review: sectionReview(),
+          stage: 'P',
+          section: 'PB',
+          pending: false,
+          failure: { kind: 'not_permitted', detail: CLASSIFY_NOT_PERMITTED_DETAIL, correlationId: 'cid', retryable: false },
+          onStage: () => undefined,
+          onSection: () => undefined,
+          onConfirm: () => undefined,
+        }),
+      ),
+    );
   }
 
   /*

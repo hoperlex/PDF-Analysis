@@ -11,6 +11,24 @@ from auditmanager.runs.carrier import (
     run_to_terminal,
 )
 from auditmanager.runs.reconciliation import reconcile_at_startup
+from auditmanager.runs.reference_pipeline import (
+    STATE_READY as NORM_REFERENCES_READY,  # NORM-REFS-RUN-01
+    STATE_SNAPSHOT_NOT_PINNED as NORM_REFERENCES_SNAPSHOT_NOT_PINNED,
+    STATE_TEXT_UNAVAILABLE as NORM_REFERENCES_TEXT_UNAVAILABLE,
+    STATE_TOO_MANY_CITATIONS as NORM_REFERENCES_TOO_MANY_CITATIONS,
+    STATES as NORM_REFERENCES_STATES,
+    ReferenceRunPins,
+    RunNormReferences,
+    RunReferenceReport,
+    SavedRunPageText,
+    SavedRunTextReader,
+    read_run_norm_references,
+    read_run_references,
+)
+from auditmanager.runs.geometry_crop_item_input import (
+    SavedImageCropItemInput,
+    load_saved_image_crop_item,
+)
 from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import ErrorCode
 
@@ -48,9 +66,23 @@ def fail_reclaimed_run(
 
 __all__ = [
     "DurableCarrier",
+    "NORM_REFERENCES_READY",
+    "NORM_REFERENCES_SNAPSHOT_NOT_PINNED",
+    "NORM_REFERENCES_STATES",
+    "NORM_REFERENCES_TEXT_UNAVAILABLE",
+    "NORM_REFERENCES_TOO_MANY_CITATIONS",
     "ReclaimingCarrier",
+    "ReferenceRunPins",
+    "RunNormReferences",
+    "RunReferenceReport",
+    "SavedImageCropItemInput",
+    "SavedRunPageText",
+    "SavedRunTextReader",
     "fail_reclaimed_run",
     "reconcile_at_startup",
+    "read_run_norm_references",
+    "read_run_references",
+    "load_saved_image_crop_item",
     "run_to_terminal",
     "start_serving_carrier",
 ]

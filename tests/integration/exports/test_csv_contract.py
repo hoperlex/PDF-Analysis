@@ -1,4 +1,4 @@
-"""The frozen seventeen-column CSV, asserted against a real run's real rows.
+"""The OD-11 CSV with W56a severity columns, against a real run's rows.
 
 Every assertion here is about bytes or about resolution:
 
@@ -9,7 +9,7 @@ Every assertion here is about bytes or about resolution:
 
 The rows come from executing the chain, never from hand-built fixtures. A CSV checked
 against invented rows would prove the serializer correct and prove nothing about whether
-the seventeen columns are wired to the right sources — which is the half of this contract
+the nineteen columns are wired to the right sources — which is the half of this contract
 that can actually be got wrong.
 """
 
@@ -80,7 +80,7 @@ def test_the_header_is_the_frozen_column_list_in_order(
     )
     header, _ = _parse(export.content)
     assert header == list(COLUMNS)
-    assert len(header) == 17
+    assert len(header) == 19
 
 
 def test_the_bytes_are_utf8_with_a_bom_and_crlf_endings(
@@ -232,7 +232,7 @@ def test_rows_are_sorted_by_the_frozen_sort_key(
 def test_a_finding_with_several_quotations_produces_one_row_per_quotation(
     session: Session, seeded, blob_store, recorded_adapter, provider_config, new_key
 ):
-    """§6 granularity: columns 1-11 and 14-17 repeat; 12 and 13 vary."""
+    """§6 granularity: columns 1-11 and 14-19 repeat; 12 and 13 vary."""
     started, _, export = _run_and_export(
         session, seeded, blob_store, recorded_adapter, provider_config, new_key("granularity")
     )

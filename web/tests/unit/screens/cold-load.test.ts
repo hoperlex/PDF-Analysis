@@ -138,7 +138,12 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
     const markup = withRouter(client, createElement(ProjectDetailPage, { projectUid: PROJECT_UID }));
 
     expect(markup).toContain(VERSION_UID);
-    expect(markup).toContain(`href="${routes.version(PROJECT_UID, VERSION_UID)}"`);
+    // `W59-SECTION-UI-01`: an unclassified document opens its version at the
+    // stage-and-section panel; the address is still the version's own.
+    expect(markup).toContain(`href="${routes.versionClassification(PROJECT_UID, VERSION_UID)}"`);
+    expect(routes.versionClassification(PROJECT_UID, VERSION_UID).startsWith(
+      routes.version(PROJECT_UID, VERSION_UID),
+    )).toBe(true);
     expect(markup).toContain(`href="${routes.document(PROJECT_UID, DOCUMENT_UID)}"`);
     expect(markup).toContain('data-document-count="1"');
   });
@@ -183,7 +188,7 @@ describe('the project screen asks the server on a cold load (D-16)', () => {
 
 describe('the version screen asks the server on a cold load (D-16)', () => {
   const screen = (client: Client, versionUid = VERSION_UID, projectUid = PROJECT_UID) =>
-    withRouter(client, createElement(VersionDetailPage, { projectUid, versionUid }));
+    withRouter(client, createElement(VersionDetailPage, { projectUid, versionUid, roles: ['expert'] }));
 
   it('files two pending reads: the version itself and its runs', () => {
     const client = newClient();
@@ -283,7 +288,7 @@ describe('the document screen asks the server on a cold load (D-16)', () => {
     expect(markup).toContain('data-version-count="1"');
   });
 
-  it('says why one version is what this transport can produce, rather than looking empty', () => {
+  it('says every version stays addressable and the newest is current, rather than looking empty', () => {
     const client = newClient();
     client.setQueryData(VERSIONS_KEY, versionPage([version()]));
     const markup = screen(client);
@@ -296,8 +301,13 @@ describe('the document screen asks the server on a cold load (D-16)', () => {
     // shape `R-18` forbids and the rendered-language ratchet had recorded. The CLAIM is
     // what this case is about and the claim is unchanged, so it is asserted here rather
     // than the transport's spelling of it.
-    expect(markup).toContain('каждая загрузка заводит новый документ');
-    expect(markup).toContain('ничего из загруженного не потеряно');
+    //
+    // W59-VERSION-UPLOAD-01: further versions are uploaded on the document screen now, so
+    // the old claim ("every upload starts a new document") became false and was replaced by
+    // the one that holds for every row.
+    expect(markup).not.toContain('каждая загрузка заводит новый документ');
+    expect(markup).toContain('Каждая версия неизменяема и остаётся адресуемой');
+    expect(markup).toContain('новая версия становится текущей');
   });
 
   it('distinguishes an unknown document from a document with no version', () => {

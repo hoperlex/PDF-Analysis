@@ -20,6 +20,9 @@ import pytest
 
 from auditmanager.norms.custody import service as custody_service
 from auditmanager.norms.custody.errors import d143_refusal
+from auditmanager.norms.custody.roles import (
+    NORM_CATALOGUE, NORM_RETRIEVAL_SET, require_anchor, require_target, shape_of,
+)
 from auditmanager.norms.public import (
     D143_REASON,
     MAX_ATTEMPTS,
@@ -37,7 +40,7 @@ from auditmanager.norms.public import (
     binding_digest,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import NormDocumentId
+from auditmanager.shared.identity import NormDocumentId, NormRetrievalSetId
 from auditmanager.storage import (
     StorageBucketMissingError,
     StorageCredentialRefusedError,
@@ -46,15 +49,16 @@ from auditmanager.storage import (
 )
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
-MIGRATION = REPOSITORY_ROOT / "db/migrations/versions/20261012_0018_norm_custody.py"
+MIGRATION = REPOSITORY_ROOT / "db/migrations/versions/20261016_0023_norm_citations.py"
+BASE_MIGRATION = REPOSITORY_ROOT / "db/migrations/versions/20261012_0018_norm_custody.py"
 #: ``ck_norm_custody_admission_failure``: the classifier every ``last_failure`` must match.
 CLASSIFIER = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
 DOCUMENT = str(NormDocumentId.new())
 SHA = "a" * 64
 
 
-def _migration():
-    spec = importlib.util.spec_from_file_location("w54_custody_migration_0018", MIGRATION)
+def _migration(path: Path = MIGRATION):
+    spec = importlib.util.spec_from_file_location(f"custody_migration_{path.stem}", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -63,6 +67,7 @@ def _migration():
 
 def test_the_role_table_mirrors_the_migrations_role_shape_check() -> None:
     migration = _migration()
+    base_migration = _migration(BASE_MIGRATION)
     arms = re.findall(
         r"role = '([a-z_]+)' AND target_kind = '([a-z_]+)' "
         r"AND target_id ~ '\^([a-z]+)_[^']*' AND anchor_kind IN \(([^)]*)\)",
@@ -78,10 +83,24 @@ def test_the_role_table_mirrors_the_migrations_role_shape_check() -> None:
         for role, shape in ROLE_SHAPES.items()
     }
     assert implemented == declared
-    assert tuple(state.value for state in AdmissionState) == migration.ADMISSION_STATES
-    assert MAX_ATTEMPTS == migration.ADMISSION_MAX_ATTEMPTS
+    assert tuple(state.value for state in AdmissionState) == base_migration.ADMISSION_STATES
+    assert MAX_ATTEMPTS == base_migration.ADMISSION_MAX_ATTEMPTS
     assert len(RETRY_DELAYS_SECONDS) == MAX_ATTEMPTS - 1
     assert RETRY_DELAYS_SECONDS[0] == 30 and RETRY_DELAYS_SECONDS[-1] == 2 * 3600
+
+
+@pytest.mark.parametrize("role", (NORM_RETRIEVAL_SET, NORM_CATALOGUE))
+def test_0023_artifact_roles_require_an_nrs_target_and_artifact_anchor(role: str) -> None:
+    shape = shape_of(role)
+    set_id = str(NormRetrievalSetId.new())
+    assert require_target(shape, set_id) == set_id
+    require_anchor(shape, "artifact", role)
+    with pytest.raises(CustodyRefused) as bad_target:
+        require_target(shape, DOCUMENT)
+    assert bad_target.value.reason == "target_id_malformed"
+    with pytest.raises(CustodyRefused) as bad_anchor:
+        require_anchor(shape, "pdf", role)
+    assert bad_anchor.value.reason == "anchor_kind_unknown"
 
 
 class ExplodingSession:
@@ -108,7 +127,7 @@ def _manifest(request: AdmissionRequest, content: DeclaredContent | None = None)
 @pytest.mark.parametrize(
     ("request_overrides", "manifest_content", "reason"),
     (
-        ({"role": "norm_retrieval_set"}, None, "unknown_role"),
+        ({"role": "unregistered_role"}, None, "unknown_role"),
         ({"target_id": "doc_not_a_norm_document"}, None, "target_id_malformed"),
         ({"anchor_kind": "page"}, None, "anchor_kind_unknown"),
         ({"anchor": ""}, None, "anchor_malformed"),

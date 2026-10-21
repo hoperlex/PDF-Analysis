@@ -96,6 +96,15 @@ def test_every_declared_operation_is_reachable(
         "norm_document_id": "ndoc_01M2545JSD15ETSNNV904X991V",
         # `W55B-SEAL-01`: an external identifier, not a prefix-ULID.
         "portal_block_id": "blk_0123456789abcdef0123456789abcdef",
+        # `W61-DISPATCHER-01`.
+        "assignment_uid": "asg_01M2545JSD15ETSNNV904X991W",
+        # `W60-PRICE-LIST-01`: a price-list revision, and a vendor list's section slot (one
+        # of the fifteen codes, a closed vocabulary rather than an identity).
+        "price_list_id": "prl_01M2545JSD15ETSNNV904X991W",
+        "section_code": "EOM",
+        # `W60-OPT-PROPOSALS-01`: a pass and one of its proposals.
+        "optimisation_pass_id": "opp_01M2545JSD15ETSNNV904X991W",
+        "optimisation_proposal_id": "opr_01M2545JSD15ETSNNV904X991W",
     }
     for operation_id, method, template in sorted(declared_operations(openapi_document)):
         path = template

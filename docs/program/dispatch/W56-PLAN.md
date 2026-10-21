@@ -1,16 +1,39 @@
 # Wave 56 — split: W56a AR-2 on text; W56b drawings, long documents and the critic
 
+> **Development order, 2026-10-15:** `CODE-FIRST-TO-BETA.md` governs checks
+> and publication for code-first work. W56a/W56b retain their functional scope
+> and ownership boundaries; per-lane full gates, stand acceptance and `main`
+> release tasks below are deferred. The stopped W56a gateway probe is not a
+> passing model pin; use the recorded-only split described in the amendment
+> before issuing code grants.
+
+> **`R-135`/`R-136` dispatch amendment:** `W56A-FREEZE-01` remains a stopped
+> historical preflight. `W56A-DEV-FREEZE-01` may grant only recorded-only
+> `W56A-SEAL-01` and `W56A-GENERATOR-PREP-01` on a fresh exact dev base.
+> SEAL's grant excludes `docs/program/P02_LOCK.json`, including any inherited
+> W55b seal grant; GENERATOR owns only new synthetic corpus paths and no
+> `baseline.json` or recordings. `W56A-MODEL-PIN-01` is the sole lock owner
+> after the two-gateway pass. PROVIDER, live recordings and activation wait
+> for that pin. W56a code-only closure uses `R-135` checks; its full gate and
+> stand/main acts are deferred. This amendment takes precedence over older
+> A4 task text below where the timing or path grant differs.
+
 **Status:** revision 3 (final), 2026-10-06 — after the second judging round (`reviews/W56-PLAN-JUDGING.md`;
 both judges ACCEPT-WITH-FIXES, no third round) and the owner's answer H-10 (the critic moves to W56b). Written by the planning session on local branch
 `plan/roadmap-to-beta`. Two rounds at most (`R-V4`).
 **Controlling answers:** `ROADMAP-TO-BETA.md` §10.1 (A-6…A-8), §10.13 (G-3, G-7, G-8, G-11) and §10.14
-(H-1…H-10). Research: `reviews/W56-RESEARCH.md`. `R-Z1`…`R-Z6` are placeholders; `W56A-RULE-01` takes
-the next free numbers.
+(H-1…H-10). Research: `reviews/W56-RESEARCH.md`. `W56A-RULE-01` records those answers as
+`R-129`…`R-134` on its W55b candidate base; the integrator checks numbering again before merge.
 **The wave is two waves (H-1).** Part A (W56a) is planned here in full and is dispatchable after
 `W55B-INT-CLOSE`. Part B's original scope is retained below for history; `W56B-PLAN.md` (from the unadopted
 2026-10-08 layer, `ROADMAP-TO-BETA.md` §10.16 K-4: preserved, not reviewed or adopted) is a draft of its
 pre-freeze planning graph. It becomes dispatchable only after the W54/W55 vision probe,
 W57b close and its own owner rulings/freeze.
+**2026-10-14 owner amendment:** `W56A-RULE-01` may record the already-given decisions during
+W55b acceptance. Freeze and implementation remain behind `W55B-INT-CLOSE`. `R-124` replaces
+W56a's QA/two-judge/notes-judge sequence with one whole-wave judge and FIX; `R-126` defers
+backend database suites to the final gate. `R-102` continues to put one full gate on the final
+candidate, not on individual lanes. The task requirements below are read under these rulings.
 **Releases:** W56a `v0.7.0`, W56b `v0.9.0`. *Amended 2026-10-07 (owner's answer I-12, `ROADMAP-TO-BETA.md`
 §10.15):* W57a (`v0.8.0`) and W57b (`v0.8.1`) follow W56a, and W56b follows W57b; W56b's own plan bases on
 W57b's close.
@@ -52,7 +75,7 @@ optional property or a new enum value.
 | a `finding` table; `finding_observation.finding_uid` already allows many observations per finding, with `grounded = (finding_uid IS NOT NULL)`; queries count observations, return the newest observation by uid, and admit a decision on any observation of the finding; observation ids are allocated in publication | `0002:887-960`; `findings/queries.py:22-40, 75-81, 205-259`; `findings/publication.py:157` |
 | the verdict projection is the DB view `finding_current_verdict`, and Python must not hold a second copy | `0002:1198-1235`; `decisions/projection.py:1-20` |
 | profile v1 and bundle ids pinned in 58 files; `resolve_profile` refuses any other id; recordings keyed by request checksum, read from `fixtures/recorded/text_analysis` only | `analysis/text/profile.py:30-85`; `text/recorded.py:52-56` |
-| categories: two values in the contract, two DB CHECKs, `models.py`, `CATEGORY_LABELS: Record<FindingCategory,string>`, the finding list, and the rendered-language guard's seeds | `0002:899, 945`; `knowledge-base.tsx:49`; `finding-list.tsx:44-52`; `rendered-language.guard.test.ts:1359-1367, 1704-1724` |
+| categories: two values in the contract, two DB CHECKs, `models.py`, `CATEGORY_LABELS: Record<FindingCategory,string>` in the expert-decision entity, the knowledge-base page's category filter, the finding list, and the rendered-language guard's seeds | `0002:899, 945`; `web/src/entities/expert-decision/model/category-labels.ts:20`; `web/src/_pages/knowledge-base/ui/knowledge-base-page.tsx:60-62`; `finding-list.tsx:44-52`; `rendered-language.guard.test.ts:1359-1367, 1704-1724` |
 | decisions: `appendDecision` (`event_type`, `finding_observation_id`, `comment`); no severity anywhere | `openapi.json`; `api/routers/decisions.py:88-99`; `bootstrap/adapters.py:708` |
 | CSV: 17 frozen columns pinned in eleven places (§A4 DECIDE) | `P02_SEAMS.md` §6; research; grants judge |
 | the proxy response's model is not read (`_from_openai_response`; `ModelResponse` has no model); `PROXY_LLM_MODEL` defaults to the stub `proxy`; the stand uses the agent gateway (`W48-PROXY-01`, `63cb3ca`) whose default model is not Claude | `text/proxy.py:20-48, 203-223`; `text/adapter.py:52-66`; `bootstrap/settings.py:167-176` |
@@ -201,11 +224,13 @@ severity choice on accepting, empty by default. Run page: the profile; a stage's
 
 ### A4. Tasks
 
-**`W56A-RULE-01`** (integrator): `R-Z1` v2 categories without norm compliance (H-2); `R-Z2` severity proposed
-by the model, decided by the expert, and the CSV's two appended columns (H-3, OD-11); `R-Z3` the
-deterministic merge rule (H-4); `R-Z4` the no-regression gate on recorded responses, beta thresholds at W58
-(H-5); `R-Z5` a model identity mismatch refuses (H-6); `R-Z6` recognised text as marked context for
-text-less pages only; the split, the critic in W56b and the live budget within `R-29` (H-1, H-7, H-9, H-10).
+**`W56A-RULE-01`** (integrator): `R-129` v2 categories without norm compliance (H-2);
+`R-130` severity proposed by the model, decided by the expert, and the CSV's two appended
+columns (H-3, OD-11); `R-131` the deterministic merge rule (H-4); `R-132` the no-regression
+gate on recorded responses, beta thresholds later (H-5); `R-133` a model identity mismatch
+refuses (H-6); `R-134` recognised text as marked context for text-less pages only, the split,
+the critic in W56b, the owner's in-product review and the live budget within `R-29`
+(H-1, H-7…H-10). It also applies `R-124` and `R-126` to this plan and `AGENTS.md` §8.
 
 **`W56A-FREEZE-01`** (integrator): standard form, plus — the per-gateway identity probe (§A3.5; a stop
 per gateway); `W48-PROXY-01` merged forward; `D-133`'s state; migration `0022_findings_v2` (the number
@@ -226,7 +251,8 @@ tolerance; the spend ledger opened; `git grep -n` for the predecessor version re
   `ck_audit_run_terminal_reason`, `ck_model_call_error_code`, `ck_provider_effect_error_code` — widened for
   each new stored code); one entry per new code in `src/auditmanager/shared/errors/{codes,catalog}.py`,
   `web/src/shared/api/catalog-message.ts`, `web/src/entities/audit-run/model/terminal-reason.ts`; the label
-  records — `web/src/widgets/knowledge-base/ui/knowledge-base.tsx` (`CATEGORY_LABELS`),
+  records — `web/src/entities/expert-decision/model/category-labels.ts` (`CATEGORY_LABELS`;
+  SEAL owns the exhaustive enum-to-label map, not the knowledge-base filter),
   `web/src/widgets/finding-list/ui/finding-list.tsx`, a new `web/src/entities/finding/model/severity-labels.ts`
   — and the `CACHE_STATES` seeds in `web/tests/guards/rendered-language.guard.test.ts`; `P02_LOCK.json`
   (gateway model names); `P02_SEAMS.md` §4 subsections for `findings.merged` and the recognised input;
@@ -241,7 +267,9 @@ tolerance; the spend ledger opened; `git grep -n` for the predecessor version re
   (its producer cell in the register's designator form, `test_seam_register.py:17,130`),
   `docs/program/W56A-SEAL-01.md` and every path `pin_sweep.py` prints. Required: fresh upgrade; upgrade from W55b's head with rows (canonical
   backfill checked); refused downgrade; v1 responses byte-identical (records 03–11 unchanged, new
-  properties absent); `make gate`.
+  properties absent). Under `R-102`/`R-126`, this lane authors the upgrade and backfill
+  tests but does not run a database suite or a per-lane `make gate`; the final merged-candidate
+  gate runs them.
 - **`W56A-GENERATOR-01`** (§A3.6, after SEAL) — `tools/fixtures/seeded/**` (new), `fixtures/evaluation/ar_v2/**`
   (new; corpus and manifests), `tests/contract/fixtures_seeded/**` (new), `docs/program/W56A-GENERATOR-01.md`.
   Required: byte-stable regeneration; a mutation self-test per seeded issue and control.
@@ -303,8 +331,12 @@ tolerance; the spend ledger opened; `git grep -n` for the predecessor version re
    any-member matching and the over-merge report; the live mode's cap honoured; gate time measured; spend
    recorded.
 6. **`W56A-WEB-01`** (§A3.9) — `web/src/widgets/{finding-list,decision-panel,decision-history,knowledge-base,run-progress}/**`,
-   `web/src/entities/{finding,finding-observation,expert-decision,audit-run}/**`, `web/src/features/record-verdict/**`,
-   `web/src/_pages/{review,run,knowledge-base}/**`, `web/tests/unit/{review,run,decisions,widgets}/**`,
+   `web/src/entities/{finding,finding-observation,expert-decision,audit-run}/**` except
+   `web/src/entities/expert-decision/model/category-labels.ts` (SEAL's label map),
+   `web/src/features/record-verdict/**`,
+   `web/src/_pages/{review,run,knowledge-base}/**` (including the knowledge-base category filter
+   in `web/src/_pages/knowledge-base/ui/knowledge-base-page.tsx`, consuming SEAL's label map),
+   `web/tests/unit/{review,run,decisions,widgets}/**`,
    `web/tests/unit/screens/knowledge-base.test.ts`, `web/tests/guards/{prepared-sections,rendered-language}.guard.test.ts`
    (entries), `web/tests/unit/styles/screens.ts`, `tests/e2e/pc01/journey/manifest.json` (entries),
    `docs/program/W56A-WEB-01.md`.
@@ -315,10 +347,15 @@ Allowed: `scripts/rehearsal/w56a/**` (no surface-count phrases), `docs/program/W
 **`W56A-RELNOTES-01`:** `release-notes/0.7.0.json`, `release-notes/dictionary.json`, `VERSION`, the
 freeze's predecessor-version hits (`R-86`), `docs/program/W56A-RELNOTES-01.md`.
 
-**Stage D:** `W56A-QA-01`; `W56A-JUDGE-X` (prompt injection from document and recognised text; severity by a
-non-expert and with a non-accept event; a decision on a non-canonical observation; the setting; a doctored
-recording); `W56A-JUDGE-Y` (lineage observation → group → finding → decision; ALR-05 for `analysis.profiles`
-and `tools.evaluation`; v1 byte-identity; the gate's vacuity); `W56A-NOTES-JUDGE`; `W56A-FIX`.
+**Stage D (`R-124`):** one `W56A-JUDGE-01` reads the merged whole-wave diff after the last
+lane and challenges prompt injection from document and recognised text; severity by a non-expert
+or with a non-accept event; a decision on a non-canonical observation; the profile setting; a
+doctored recording; lineage observation → group → finding → decision; ALR-05 for
+`analysis.profiles` and `tools.evaluation`; v1 byte-identity; and the gate's vacuity.
+`W56A-FIX` addresses that judge's findings. There is no W56a QA lane, second judge,
+cross-examination, notes judge or recheck round. Release notes still receive the required
+contract and product checks in their own lane; the periodic debt-and-quality wave retains the
+independent review set of `R-124`.
 
 **`W56A-INT-CLOSE`** — register: norm checklist items for W57 (consumer `W57A-MAP-01`; insolation items marked after beta, K-2); consolidation of the corpus builders; merged
 members in the export (W57); the memory-peak summary (G-12). **`W56A-INT-MAIN-01`** on the owner's
@@ -336,7 +373,7 @@ release rule (`R-86`, §8.4), its predecessor read from the actual `VERSION`, no
 
 | Hotspot / path family | Owner | Parallel writer |
 | --- | --- | --- |
-| `contracts/**`, migration `0022`, `api/**` but router bodies and `app.py`, generated client, facts file, error-code entries, label records, `P02_LOCK.json` | SEAL (A) | none |
+| `contracts/**`, migration `0022`, `api/**` but router bodies and `app.py`, generated client, facts file, error-code entries, label records including `web/src/entities/expert-decision/model/category-labels.ts`, `P02_LOCK.json` | SEAL (A) | none |
 | `tools/fixtures/seeded/**`, `fixtures/evaluation/ar_v2/**` (corpus) | GENERATOR (A) | none |
 | `analysis/text/{proxy,live,adapter,config,lock}.py` | PROVIDER (B1) | none |
 | `analysis/profiles/**`, other `analysis/text/*`, `runs/{repository,commands,scope}.py`, `provider.env.example`, readiness | PROFILES (B2) | none |
@@ -352,12 +389,14 @@ release rule (`R-86`, §8.4), its predecessor read from the actual `VERSION`, no
 | `exports/**`, the CSV pins, record 12 | DECIDE (B4) | none |
 | `rendered-language.guard.test.ts` | SEAL (seeds) → DECIDE (column count) → WEB (entries) | none at once |
 | `tools/evaluation/**`, `tests/evaluation/**`, v2 recordings, baseline, spend ledger | HARNESS (B5) | none |
-| web files of §A3.9 | WEB (B6) | none |
+| web files of §A3.9 except SEAL's `web/src/entities/expert-decision/model/category-labels.ts` | WEB (B6) | none |
+| `web/src/_pages/knowledge-base/ui/knowledge-base-page.tsx` category filter (consumes SEAL's `CATEGORY_LABELS`) | WEB (B6) | none |
 | integrator-only files, refs, tags, the stand, `.local/**` | integrator | none |
 
 ### A6. Estimate (W56a)
 
-Freeze 2.5 (two-gateway probe); SEAL 5.5; GENERATOR 5.0; PROVIDER 3.5; PROFILES 6.5; MERGE 5.5; DECIDE 4.0;
+This is the pre-`R-124` estimate; `W56A-FREEZE-01` re-estimates the revised review and check
+sequence instead of silently carrying this figure forward. Freeze 2.5 (two-gateway probe); SEAL 5.5; GENERATOR 5.0; PROVIDER 3.5; PROFILES 6.5; MERGE 5.5; DECIDE 4.0;
 HARNESS with recording 5.0; WEB 4.5; merges 5.0; rehearsal 1.5; release notes 0.5; judging 2.5; FIX 4.0;
 gate 0.5; close with the memory summary 1.5 — 57.5 h, plus **a contingency of 4.5 h** shown on its own (W55
 grew from 51 to 87 h through judging) — **≈ 62 h**, P50 ≈ 11.75 working days; **plan on P80 ≈ 15.75**.

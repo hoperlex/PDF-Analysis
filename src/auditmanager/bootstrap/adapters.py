@@ -41,7 +41,11 @@ from auditmanager.api.schemas.dashboard import (
     SectionDocumentCountView,
     VerdictCountView,
 )
-from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
+from auditmanager.api.schemas.decisions import (
+    DecisionEventView,
+    DecisionRecordView,
+    decision_event_body,
+)
 from auditmanager.api.schemas.documents import DocumentVersionView, ManifestEntryView
 from auditmanager.api.schemas.findings import (
     EvidenceView,
@@ -211,6 +215,14 @@ class ExecutionAdapter(_SessionHolder):
 
         profile, bundle, mode = self._runs.current_configuration()
         budget = self._runs.input_budget_characters
+        # `W59-SECTION-SEAL-01`: a routed deployment routes the re-audit from the version's
+        # persisted classification now; the configured AR pair is then not passed at all.
+        routes = self._runs.section_profiles
+        explicit: dict[str, Any] = (
+            {"analysis_profile_id": profile, "prompt_bundle_id": bundle}
+            if routes is None
+            else {"section_profiles": routes}
+        )
 
         def write(session: Session) -> tuple[str, bool, RunStatusView]:
             # `R-82`: the new run records the configuration this deployment executes,
@@ -222,8 +234,8 @@ class ExecutionAdapter(_SessionHolder):
             result = reaudit_run(session, source_run_id=run_id,
                                  roles=self._roles(session, user_uid),
                                  idempotency_key=idempotency_key,
-                                 analysis_profile_id=profile, prompt_bundle_id=bundle,
-                                 provider_mode=mode, input_budget_characters=budget)
+                                 provider_mode=mode, input_budget_characters=budget,
+                                 **explicit)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
         new_id, replayed, view = self._write(write)
         if not replayed:
@@ -452,6 +464,7 @@ def _version_view(record: Any) -> DocumentVersionView:
         media_type=record.media_type,
         display_title=record.display_title,
         section=record.section,
+        classification=_classification_view(record.classification),
         input_manifest=tuple(
             ManifestEntryView(
                 role=e.role,
@@ -462,6 +475,194 @@ def _version_view(record: Any) -> DocumentVersionView:
             for e in record.manifest
         ),
     )
+
+
+def _classification_view(record: Any) -> models.VersionClassification | None:
+    """`W59-SECTION-SEAL-01`. The persisted classification in the frozen shape, or ``None``."""
+    if record is None:
+        return None
+    return models.VersionClassification(
+        version_uid=str(record.version_uid),
+        project_stage=models.ProjectStage(record.project_stage),
+        section_code=models.ProjectSection(record.section_code),
+        confirmed_by_user_uid=record.confirmed_by_user_uid,
+        confirmed_at=record.confirmed_at,
+        revision=record.revision,
+    )
+
+
+def _revision_view(record: Any) -> models.VersionClassificationRevision:
+    """`CLASSIFICATION-CORRECTION-01`. One history entry in the frozen shape."""
+    return models.VersionClassificationRevision(
+        revision=record.revision,
+        project_stage=models.ProjectStage(record.project_stage),
+        section_code=models.ProjectSection(record.section_code),
+        actor_user_uid=record.actor_user_uid,
+        at=record.decided_at,
+        reason=record.reason,
+    )
+
+
+class SectionAdapter(_SessionHolder):
+    """`W59-SECTION-SEAL-01`. A version's classification and its fifteen-choice review.
+
+    Thin like every adapter here: the command and the review live in
+    ``auditmanager.sections``; this opens the session, reads the actor's role set inside it,
+    reads the recognised-text evidence from the store **outside** it, and maps the result
+    into the frozen shapes. ``executable_sections`` is the registry's sealed set, the same
+    one run start routes through, so ``executable`` cannot disagree with what a run does.
+    """
+
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        *,
+        blob_store: Any,
+        executable_sections: frozenset[str],
+    ) -> None:
+        super().__init__(session_factory)
+        self._blob_store = blob_store
+        self._executable = frozenset(executable_sections)
+
+    def classify_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        version_uid: str,
+        project_stage: str,
+        section_code: str,
+        user_uid: str,
+    ) -> models.VersionClassification:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.sections.public import classify_document_version
+
+        def work(session: Session) -> models.VersionClassification:
+            stored = classify_document_version(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                version_uid=version_uid,
+                project_stage=project_stage,
+                section_code=section_code,
+                actor_uid=user_uid,
+                # Read in this transaction (the decision's authorization rule): the request
+                # register checked the role before the route; this is the command's own check.
+                actor_roles=AccountRepository().roles_of(session, user_uid),
+            )
+            view = _classification_view(stored)
+            assert view is not None
+            return view
+
+        return self._write(work)
+
+    def correct_classification(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        version_uid: str,
+        project_stage: str,
+        section_code: str,
+        reason: str,
+        expected_revision: int,
+        user_uid: str,
+    ) -> models.VersionClassification:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.sections.public import correct_document_version_classification
+
+        def work(session: Session) -> models.VersionClassification:
+            stored = correct_document_version_classification(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                version_uid=version_uid,
+                project_stage=project_stage,
+                section_code=section_code,
+                reason=reason,
+                expected_revision=expected_revision,
+                actor_uid=user_uid,
+                # Read in this transaction, after the version's classification is locked by
+                # the command: the register checked the role before the route, this is the
+                # command's own check.
+                actor_roles=AccountRepository().roles_of(session, user_uid),
+            )
+            view = _classification_view(stored)
+            assert view is not None
+            return view
+
+        return self._write(work)
+
+    def get_section_review(
+        self, *, project_uid: str, document_uid: str, version_uid: str
+    ) -> models.SectionReview:
+        from auditmanager.sections.public import build_section_review, read_section_review
+
+        facts = self._read(
+            lambda session: read_section_review(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                version_uid=version_uid,
+            )
+        )
+        text = None if facts.markdown is None else self._recognised_text(facts.markdown)
+        packet = build_section_review(facts, recognised_text=text)
+        return models.SectionReview(
+            version_uid=packet.version_uid,
+            classification=_classification_view(facts.classification),
+            revisions=[_revision_view(entry) for entry in facts.revisions],
+            recognised_text_consulted=text is not None,
+            options=[
+                models.SectionReviewOption(
+                    section_code=models.ProjectSection(option.code),
+                    name=option.name,
+                    executable=option.code in self._executable,
+                    suggestion=(
+                        None
+                        if option.suggestion is None
+                        else models.SectionSuggestion(
+                            score=option.suggestion.score,
+                            filename_patterns=list(option.suggestion.filename_patterns),
+                            text_keywords=list(option.suggestion.text_keywords),
+                            name_in_text=option.suggestion.name_in_text,
+                        )
+                    ),
+                )
+                for option in packet.options
+            ],
+        )
+
+    def _recognised_text(self, entry: Any) -> str:
+        """The markdown member's text, held to the manifest's SHA-256 and size."""
+        from auditmanager.ingest import domain_error_from_storage
+        from auditmanager.storage.public import BlobNotFoundError, StorageError
+
+        try:
+            chunks = self._blob_store.open_stream(
+                entry.blob_id, expected_sha256=entry.sha256, expected_size=entry.size_bytes
+            )
+            try:
+                payload = b"".join(chunks)
+            finally:
+                close = getattr(chunks, "close", None)
+                if close is not None:
+                    close()
+        except BlobNotFoundError:
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                blob_id=str(entry.blob_id),
+                role=entry.role,
+                expected_sha256=entry.sha256,
+            ) from None
+        except StorageError as exc:
+            raise domain_error_from_storage(exc, blob_id=str(entry.blob_id), role=entry.role) from None
+        try:
+            return payload.decode("utf-8")
+        except UnicodeDecodeError:
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR, blob_id=str(entry.blob_id), role=entry.role
+            ) from None
 
 
 class DocumentAdapter:
@@ -506,6 +707,33 @@ class DocumentAdapter:
             display_title=display_title,
             idempotency_key=IdempotencyKey(idempotency_key),
             section=section,
+        )
+        return _Uploaded(
+            _version_view(outcome.version), bool(getattr(outcome, "replayed", False))
+        )
+
+    def upload_document_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        content: BinaryIO,
+        source_filename: str,
+        idempotency_key: str,
+    ) -> Any:
+        """`W59-VERSION-UPLOAD-01`: the next version, through the same bundle entry.
+
+        ``IngestService.upload_next_version`` is ``upload_bundle`` with the document named, so
+        the handle travels exactly as in :meth:`upload_document` and nothing here reads it.
+        """
+        from auditmanager.shared.identity import DocumentUid, IdempotencyKey, ProjectUid
+
+        outcome = self._service.upload_next_version(
+            project_uid=ProjectUid.parse(project_uid),
+            document_uid=DocumentUid.parse(document_uid),
+            content=content,
+            source_filename=source_filename or "upload.zip",
+            idempotency_key=IdempotencyKey(idempotency_key),
         )
         return _Uploaded(
             _version_view(outcome.version), bool(getattr(outcome, "replayed", False))
@@ -604,8 +832,17 @@ class RunAdapter(_SessionHolder):
         prompt_bundle_id: str,
         carrier: Any,
         input_budget_characters: int | None = None,
+        section_profiles: Mapping[str, tuple[str, str]] | None = None,
+        text_profiles: Any = None,
     ) -> None:
         super().__init__(session_factory)
+        # `W59-SECTION-SEAL-01`. The sealed section -> (profile, bundle) table run start and
+        # re-audit route through, and the registry resolver the executor runs a run's pinned
+        # profile with. The composition root always passes both
+        # (``test_the_served_application_routes_by_section``); ``None`` keeps the many tests
+        # that build a bare adapter on the explicit configured pair.
+        self._section_profiles = section_profiles
+        self._text_profiles = text_profiles
         self._blob_store = blob_store
         self._model_adapter = adapter
         self._provider_config = provider_config
@@ -650,12 +887,19 @@ class RunAdapter(_SessionHolder):
 
         from auditmanager.runs import RunRepository
 
+        # `W59-SECTION-SEAL-01`: routed from the version's persisted classification when the
+        # deployment has a section table; the configured pair is then not passed at all.
+        profile_source: dict[str, Any] = (
+            {"analysis_profile_id": self._profile, "prompt_bundle_id": self._bundle}
+            if self._section_profiles is None
+            else {"section_profiles": self._section_profiles}
+        )
+
         def work(session: Session) -> Any:
             started = start_audit_run(
                 session,
                 version_uid=version_uid,
-                analysis_profile_id=self._profile,
-                prompt_bundle_id=self._bundle,
+                **profile_source,
                 # The configured mode, never a caller-supplied one. execute_run refuses a
                 # run whose declared mode disagrees with the adapter it is given, and the
                 # composition root is the one place that knows both - so passing the
@@ -738,6 +982,7 @@ class RunAdapter(_SessionHolder):
                 blob_store=self._blob_store,
                 adapter=self._model_adapter,
                 provider_config=self._provider_config,
+                text_profiles=self._text_profiles,
             )
 
         return job
@@ -750,6 +995,16 @@ class RunAdapter(_SessionHolder):
         re-audit faces exactly the budget a start does -- today's, not the source run's.
         """
         return self._input_budget_characters
+
+    @property
+    def section_profiles(self) -> Mapping[str, tuple[str, str]] | None:
+        """The sealed section route table, or ``None`` for an unrouted test wiring."""
+        return self._section_profiles
+
+    @property
+    def text_profiles(self) -> Any:
+        """The registry resolver the executor runs a pinned profile with, or ``None``."""
+        return self._text_profiles
 
     def current_configuration(self) -> tuple[str, str, str]:
         """The analysis profile, prompt bundle and provider mode a new run receives.
@@ -765,6 +1020,34 @@ class RunAdapter(_SessionHolder):
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._read(lambda session: _run_status_view(session, run_id))
+
+    def get_norm_verification(self, *, run_id: str) -> models.NormVerificationReport:
+        """Refuse until a reader proves the 0023 partition and the pinned set.
+
+        An empty citation SELECT is not a certificate of zero. CITE will replace this
+        seam after it checks stage success and every canonical/member partition.
+        """
+        raise DomainError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE,
+            dependency="norm_verification_reader",
+        )
+
+    def get_run_norm_references(self, *, run_id: str) -> models.RunNormReferences:
+        """`NORM-REFS-RUN-01`. The norms the run's saved text cites, against its snapshot.
+
+        The runs context owns the rule (``runs.public.read_run_norm_references``: the run, its
+        version, the saved text, the pinned snapshot's catalogue and the unchanged W57b
+        resolver); this adapter owns only the port it needs -- the saved text, read as the
+        comparison reads it (:class:`_AnalysisReader`) -- and the mapping into the frozen
+        ``RunNormReferences``. One session holds every read and nothing is written.
+        """
+        from auditmanager.runs.public import read_run_norm_references
+
+        reader = _RunSavedText(self._blob_store)
+        answer = self._read(
+            lambda session: read_run_norm_references(session, run_id=run_id, reader=reader)
+        )
+        return models.RunNormReferences.model_validate(_norm_references_view(answer))
 
     def run_exists(self, *, run_id: str) -> bool:
         """`D-74`. One row of ``audit_run``, and nothing else.
@@ -890,6 +1173,7 @@ def _finding_view(row: Any, evidence: Sequence[Any], verdict: Any) -> FindingVie
         run_id=row.run_id,
         category=row.category,
         current_verdict=getattr(verdict, "current_verdict", "pending"),
+        decided_severity=getattr(verdict, "decided_severity", None),
         latest_decision_id=getattr(verdict, "latest_decision_id", None),
         decision_recorded_at=getattr(verdict, "decision_recorded_at", None),
         observation=ObservationView(
@@ -1351,6 +1635,7 @@ class DecisionAdapter(_SessionHolder):
         finding_uid: str,
         finding_observation_id: str,
         event_type: str,
+        severity: str | None = None,
         idempotency_key: str,
         author_label: str,
         author_user_uid: str,
@@ -1373,6 +1658,7 @@ class DecisionAdapter(_SessionHolder):
                 finding_uid=finding_uid,
                 finding_observation_id=finding_observation_id,
                 event_type=event_type,
+                severity=severity,
                 idempotency_key=idempotency_key,
                 comment=comment,
                 author_label=author_label,
@@ -1430,6 +1716,7 @@ def _record_view(entry: Any) -> DecisionRecordView:
         current_verdict=entry.current_verdict,
         decision_event_count=entry.decision_event_count,
         verdict=entry.verdict,
+        severity=entry.severity,
         comment=entry.comment,
     )
 
@@ -1443,6 +1730,7 @@ def _event_view(event: Any) -> DecisionEventView:
         author_label=event.author_label,
         recorded_at=event.recorded_at,
         verdict=event.verdict,
+        severity=event.severity,
         comment=event.comment,
     )
 
@@ -1467,6 +1755,61 @@ class CsvExportAdapter(_SessionHolder):
         from auditmanager.exports import export_run_csv
 
         return self._read(lambda s: export_run_csv(s, run_id).content)
+
+
+class XlsxExportAdapter(_SessionHolder):
+    """``exportRunXlsx`` (`W57B-NORMS-CATALOGUE-XLSX-01`).
+
+    One read transaction for the whole workbook: the run, its sheet labels, its findings and
+    its citations are read in the same session. The role decision is the seam's
+    (``OPERATION_ROLES["exportRunXlsx"]``) and is stated to the use case as such; the Blob
+    reader reads the version's portal companion from the same store as every other read
+    here, with storage failures typed as ``IngestService`` types them; the citation reader is
+    W57a's verified one, injected because the export context may not import it.
+    """
+
+    def __init__(self, sessions: sessionmaker[Session], *, blob_store: Any) -> None:
+        super().__init__(sessions)
+        self._blob_store = blob_store
+
+    def _read_blob(self, blob_id: str) -> bytes:
+        from auditmanager.documents.public import MANIFEST_ROLE_STRUCTURED_COMPANION
+        from auditmanager.ingest import domain_error_from_storage
+        from auditmanager.storage.public import BlobId, BlobNotFoundError, StorageError
+
+        try:
+            return self._blob_store.read(BlobId(blob_id))
+        except BlobNotFoundError:
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                blob_id=blob_id,
+                role=MANIFEST_ROLE_STRUCTURED_COMPANION,
+            ) from None
+        except StorageError as exc:
+            raise domain_error_from_storage(
+                exc, blob_id=blob_id, role=MANIFEST_ROLE_STRUCTURED_COMPANION
+            ) from None
+
+    def export_run_xlsx(self, *, run_id: str, principal_id: str) -> bytes:
+        from auditmanager.exports import ExportAuthorization, export_run_xlsx
+        from auditmanager.findings.citation_reader import read_verified_citations
+
+        authorization = ExportAuthorization(
+            run_id=run_id,
+            principal_id=principal_id,
+            operation="exportRunXlsx",
+            decision="allow",
+            decision_ref="api.security.OPERATION_ROLES[exportRunXlsx]",
+        )
+        return self._read(
+            lambda s: export_run_xlsx(
+                s,
+                run_id,
+                authorization=authorization,
+                read_blob=self._read_blob,
+                read_citations=read_verified_citations,
+            ).content
+        )
 
 
 class DashboardAdapter(_SessionHolder):
@@ -2050,6 +2393,39 @@ class NormsSearchAdapter(_SessionHolder):
             page=models.PageInfo(next_cursor=page.next_cursor),
         )
 
+    def list_catalogue(
+        self, *, q: str | None, kind: str | None, cursor: str | None, limit: int
+    ) -> models.NormCatalogueEntryPage:
+        from auditmanager.norms.public import list_norm_catalogue
+
+        page = self._read(
+            lambda session: list_norm_catalogue(
+                session, q=q, kind=kind, cursor=cursor, limit=limit
+            )
+        )
+        return models.NormCatalogueEntryPage(
+            norms_snapshot_id=page.norms_snapshot_id,
+            items=[
+                models.NormCatalogueEntry(
+                    norm_document_id=item.norm_document_id,
+                    designation=item.designation,
+                    title=item.title,
+                    kind=item.kind,
+                    page_count=item.page_count,
+                    paragraph_count=item.paragraph_count,
+                    content_available=item.content_available,
+                    source_attribution=models.NormSourceAttribution(item.source_attribution),
+                )
+                for item in page.items
+            ],
+            page=models.PageInfo(next_cursor=page.next_cursor),
+            total=page.total,
+            kinds=[
+                models.NormKindCount(kind=kind_count.kind, document_count=kind_count.document_count)
+                for kind_count in page.kinds
+            ],
+        )
+
     def get_document(self, *, norm_document_id: str) -> models.NormDocument:
         from auditmanager.norms.public import get_norm_document
 
@@ -2278,3 +2654,1644 @@ def _typed_norm_chunks(chunks: Any, blob_id: str) -> Any:
         raise domain_error_from_storage(exc, blob_id=blob_id, role=NORM_SOURCE) from None
     finally:
         chunks.close()
+
+
+class AnalysisProfileAdapter:
+    """``listAnalysisProfiles`` (`W59-ANALYSIS-SETTINGS-01`).
+
+    The composition root's sealed text-profile registry -- the one run start routes through
+    and the executor resolves pinned profiles from -- mapped once, at construction, into the
+    frozen ``AnalysisProfileList``: the fifteen sections in the project-structure order
+    (``PROJECT_STRUCTURE_ORDER``), each named from the reviewed section catalogue and carrying
+    its registered profile or ``null``. Built once because the registry is immutable for the
+    life of the process; a section the catalogue cannot name fails start-up, not a request.
+    No session and no store: nothing here reads the database or writes anything.
+    """
+
+    __slots__ = ("_listing",)
+
+    def __init__(self, registry: Any, *, section_names: Mapping[str, str]) -> None:
+        from auditmanager.analysis.text.profile_registry import PROJECT_STRUCTURE_ORDER
+
+        items: list[models.AnalysisProfileListItem] = []
+        for code in PROJECT_STRUCTURE_ORDER:
+            entry = registry.entries.get(code)
+            items.append(
+                models.AnalysisProfileListItem(
+                    section_code=models.ProjectSection(code),
+                    section_name=section_names[code],
+                    profile=None if entry is None else _profile_summary(entry),
+                )
+            )
+        self._listing = models.AnalysisProfileList(items=items)
+
+    def list_analysis_profiles(self) -> models.AnalysisProfileList:
+        return self._listing
+
+
+def _profile_summary(entry: Any) -> models.AnalysisProfileSummary:
+    """One registry entry as the frozen summary. ``source`` is ``None`` for builtin AR."""
+    profile = entry.profile
+    source = entry.source
+    return models.AnalysisProfileSummary(
+        analysis_profile_id=entry.analysis_profile_id,
+        prompt_bundle_id=entry.prompt_bundle_id,
+        profile_version=profile.profile_version,
+        status=models.AnalysisProfileStatus(entry.status),
+        prompt_bundle_sha256=profile.prompt_bundle.content_sha256,
+        content_sha256=profile.content_sha256,
+        source=None if source is None else models.AnalysisProfileSource(
+            repository=source.repository,
+            commit=source.commit,
+            files=[
+                models.AnalysisProfileSourceFile(path=item.path, sha256=item.sha256)
+                for item in source.files
+            ],
+        ),
+    )
+
+
+class ComparisonAdapter(_SessionHolder):
+    """``compareDocumentVersions`` (`W59-VERSION-COMPARE-01`).
+
+    The comparison context owns the rule (``comparison.public.VersionComparisonService``);
+    this adapter owns only the two port implementations it needs and the mapping into the
+    frozen ``VersionComparison``. **The path is proved first** (``get_version_in``): an
+    unknown project, a document of another project or a source version of another document
+    is ``404 not_found`` exactly as for every other addressed read (`D-67`); only then is the
+    target judged, and a target the rule does not admit is an answer with a closed reason.
+    One session holds every read -- the path chain, the version pair, both
+    classifications, the runs, the stage rows -- and each text layer is read from the store
+    with the SHA-256 and size its ``stage_result`` recorded, then checked as canonical
+    ``prepared.text_layer`` for exactly that version and page count. A missing or differing
+    blob is ``storage_integrity_error``, never an empty page; a run whose
+    ``source_preparation`` did not succeed has no text and the service refuses
+    ``text_unavailable``.
+    """
+
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        *,
+        blob_store: Any,
+        section_codes: frozenset[str],
+    ) -> None:
+        from auditmanager.comparison.public import VersionComparisonService
+
+        super().__init__(session_factory)
+        self._blob_store = blob_store
+        self._service = VersionComparisonService(
+            classifications=_ClassificationReader(),
+            analyses=_AnalysisReader(blob_store),
+            section_codes=section_codes,
+        )
+
+    def compare_versions(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        mode: str,
+        diff_offset: int,
+        diff_limit: int,
+    ) -> models.VersionComparison:
+        from auditmanager.comparison.public import (
+            ComparisonIntegrityError,
+            ComparisonRequest,
+            ComparisonRequestInvalid,
+        )
+
+        request = ComparisonRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            target_version_uid=target_version_uid,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+            diff_offset=diff_offset,
+            diff_limit=diff_limit,
+            mode=mode,
+        )
+        from auditmanager.documents.public import DocumentRepository
+        from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
+
+        from auditmanager.comparison.public import carryover_candidates
+
+        def work(session: Session) -> Any:
+            DocumentRepository().get_version_in(
+                session,
+                project_uid=ProjectUid.parse(project_uid),
+                document_uid=DocumentUid.parse(document_uid),
+                version_uid=VersionUid.parse(source_version_uid),
+            )
+            result = self._service.compare(session, request)
+            # `W59-DECISION-CARRYOVER-01`: what an expert could carry, read in the same
+            # session as the comparison it belongs to.
+            return result, carryover_candidates(session, result)
+
+        try:
+            result, candidates = self._read(work)
+        except ComparisonRequestInvalid as exc:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED, field=str(exc).removesuffix("_invalid"),
+                constraint="format",
+            ) from None
+        except ComparisonIntegrityError as exc:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="the stored comparison inputs contradict their own constraints",
+            ) from exc
+        return models.VersionComparison.model_validate(_comparison_view(result, candidates))
+
+    def carry_over_decision(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_finding_uid: str,
+        target_finding_uid: str,
+        source_decision_id: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.CarryOverDecisionResponse:
+        """`W59-DECISION-CARRYOVER-01`. One write transaction: the actor's roles, the path,
+        the recomputed comparison and the ledger append (``comparison.public``)."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.comparison.public import (
+            CarryoverRequest,
+            ComparisonIntegrityError,
+            ComparisonRequestInvalid,
+            DecisionCarryoverService,
+        )
+
+        request = CarryoverRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            target_version_uid=target_version_uid,
+            source_finding_uid=source_finding_uid,
+            target_finding_uid=target_finding_uid,
+            source_decision_id=source_decision_id,
+            mode=mode,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+        )
+        service = DecisionCarryoverService(comparisons=self._service)
+
+        def work(session: Session) -> Any:
+            return service.carry_over(
+                session,
+                request,
+                actor_uid=author_user_uid,
+                actor_label=author_label,
+                # Read in this transaction: the request register checked the role before
+                # the route; this is the command's own check (`R-60`).
+                actor_roles=AccountRepository().roles_of(session, author_user_uid),
+                idempotency_key=idempotency_key,
+            )
+
+        try:
+            outcome = self._write(work)
+        except ComparisonRequestInvalid as exc:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED, field=str(exc).removesuffix("_invalid"),
+                constraint="format",
+            ) from None
+        except ComparisonIntegrityError as exc:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="the stored comparison inputs contradict their own constraints",
+            ) from exc
+        return models.CarryOverDecisionResponse(
+            event=models.DecisionEvent.model_validate(
+                decision_event_body(_event_view(outcome.event))
+            ),
+            current_verdict=models.Verdict(outcome.target_current_verdict),
+            replayed=outcome.replayed,
+            source_finding_uid=outcome.source_finding_uid,
+            source_decision_id=outcome.source_decision.decision_id,
+            source_version_uid=outcome.source_version_uid,
+            source_version_ordinal=outcome.source_version_ordinal,
+            target_version_uid=outcome.target_version_uid,
+            mode=outcome.mode,  # type: ignore[arg-type]
+        )
+
+
+class _ClassificationReader:
+    """The seal's persisted classification (``documents``), never an inferred one."""
+
+    def read_classification(self, session: Session, *, version_uid: str) -> Any:
+        from auditmanager.comparison.public import SuppliedVersionClassification
+        from auditmanager.documents.public import DocumentRepository
+        from auditmanager.shared.identity import VersionUid
+
+        stored = DocumentRepository().get_classification(session, VersionUid.parse(version_uid))
+        if stored is None:
+            return None
+        return SuppliedVersionClassification(
+            str(stored.version_uid), stored.project_stage, stored.section_code,
+        )
+
+
+class _AnalysisReader:
+    """Runs, saved text layers and published findings, for the comparison service."""
+
+    _SOURCE_STAGE = "source_preparation"
+
+    def __init__(self, blob_store: Any) -> None:
+        self._blob_store = blob_store
+
+    def runs_newest_first(self, session: Session, *, version_uid: str) -> Any:
+        from auditmanager.comparison.public import RunCandidate
+        from auditmanager.runs import RunRepository
+
+        return tuple(
+            RunCandidate(str(run.run_id), run.state)
+            for run in RunRepository().list_for_version(session, version_uid)
+        )
+
+    def saved_page_text(self, session: Session, *, run_id: str, version: Any) -> Any:
+        from auditmanager.analysis.public import (
+            ROLE_TEXT_LAYER,
+            ArtifactRef,
+            SuppliedTextSourceRefused,
+            check_supplied_text_layer_bytes,
+        )
+        from auditmanager.comparison.public import SavedPageText
+        from auditmanager.runs import RunRepository
+
+        stages = [
+            row for row in RunRepository().stage_results(session, run_id)
+            if row.stage_id == self._SOURCE_STAGE
+        ]
+        if len(stages) != 1 or stages[0].status != "succeeded":
+            return None
+        references = [a for a in stages[0].artifacts if a.get("role") == ROLE_TEXT_LAYER]
+        if len(references) != 1:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="a succeeded source preparation does not record exactly one text layer",
+            )
+        reference = references[0]
+        payload = _verified_artifact_bytes(self._blob_store, reference)
+        try:
+            layer = check_supplied_text_layer_bytes(
+                version_uid=version.version_uid,
+                expected_page_count=version.page_count,
+                text_layer_ref=ArtifactRef(**dict(reference)),
+                supplied_bytes=payload,
+            )
+        except (SuppliedTextSourceRefused, TypeError, ValueError):
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                blob_id=str(reference.get("blob_id")),
+                role=ROLE_TEXT_LAYER,
+                expected_sha256=str(reference.get("sha256")),
+            ) from None
+        return SavedPageText(
+            run_id, str(reference["sha256"]),
+            {page.page_number: page.text for page in layer.pages},
+        )
+
+    def published_findings(self, session: Session, *, run_id: str) -> Any:
+        from auditmanager.comparison.public import FindingEvidenceSnapshot, FindingSnapshot
+        from auditmanager.findings import published_finding_evidence, published_findings
+
+        evidence: dict[str, list[Any]] = {}
+        for item in published_finding_evidence(session, run_id):
+            evidence.setdefault(item.finding_observation_id, []).append(item)
+        return tuple(
+            FindingSnapshot(
+                row.finding_uid, row.finding_observation_id, row.category, row.finding_text,
+                tuple(
+                    FindingEvidenceSnapshot(item.page_number, item.quote)
+                    for item in sorted(
+                        evidence.get(row.finding_observation_id, ()),
+                        key=lambda item: item.evidence_ordinal,
+                    )
+                ),
+            )
+            for row in published_findings(session, run_id)
+        )
+
+
+def _verified_artifact_bytes(blob_store: Any, reference: Mapping[str, Any]) -> bytes:
+    """One artifact's bytes, held to the SHA-256 and size its stage row recorded."""
+    from auditmanager.ingest import domain_error_from_storage
+    from auditmanager.storage.public import BlobNotFoundError, StorageError, parse_blob_id
+
+    blob_id, role = str(reference["blob_id"]), str(reference["role"])
+    declared_sha256, declared_size = str(reference["sha256"]), int(reference["size_bytes"])
+    try:
+        chunks = blob_store.open_stream(
+            parse_blob_id(blob_id), expected_sha256=declared_sha256, expected_size=declared_size,
+        )
+        try:
+            return b"".join(chunks)
+        finally:
+            close = getattr(chunks, "close", None)
+            if close is not None:
+                close()
+    except BlobNotFoundError:
+        raise DomainError(
+            ErrorCode.STORAGE_INTEGRITY_ERROR,
+            blob_id=blob_id, role=role, expected_sha256=declared_sha256,
+        ) from None
+    except StorageError as exc:
+        raise domain_error_from_storage(exc, blob_id=blob_id, role=role) from None
+
+
+def _comparison_view(result: Any, candidates: Sequence[Any] = ()) -> dict[str, Any]:
+    """The read model as the frozen ``VersionComparison`` shape (field names are equal),
+    with `W59-DECISION-CARRYOVER-01`'s ``findings.carryover_candidates`` added."""
+    from dataclasses import asdict
+
+    view = asdict(result)
+    if view["findings"] is not None:
+        view["findings"]["carryover_candidates"] = [
+            {
+                "proposal_sha256": item.proposal_sha256,
+                "source_finding_uid": item.source_finding.finding_uid,
+                "target_finding_uid": item.target_finding.finding_uid,
+                "source_decision": asdict(item.source_decision),
+            }
+            for item in candidates
+        ]
+    return view
+
+
+# --- the priced specification (`W60-OPT-MATCH-01`) ------------------------------------------
+
+
+class SpecificationPricesAdapter(_SessionHolder):
+    """``getSpecificationPrices`` (`W60-OPT-MATCH-01`).
+
+    The optimisation context owns the rule (``optimisation.public.read_specification_prices``:
+    the path, the AR classification, the current price list, the newest published run, the
+    extraction, the matching and the money rule); this adapter owns only the port it needs --
+    the saved text -- and the mapping into the frozen ``SpecificationPrices``. One session
+    holds every read and the actor's role set is read from the account inside it. The text
+    layer is the one the comparison reads (:class:`_AnalysisReader`): the run's single
+    ``source_preparation`` artifact, held to the SHA-256 and size its stage row recorded and
+    checked as canonical ``prepared.text_layer`` for exactly this version and page count. A
+    missing or differing blob is ``storage_integrity_error``, never an empty page.
+    """
+
+    def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any) -> None:
+        super().__init__(session_factory)
+        self._reader = _SpecificationTextReader(blob_store)
+
+    def get_specification_prices(
+        self, *, project_uid: str, document_uid: str, offset: int, limit: int, user_uid: str
+    ) -> models.SpecificationPrices:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import read_specification_prices
+
+        def work(session: Session) -> Any:
+            return read_specification_prices(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                actor_roles=AccountRepository().roles_of(session, user_uid),
+                reader=self._reader,
+                offset=offset,
+                limit=limit,
+            )
+
+        return models.SpecificationPrices.model_validate(_specification_prices_view(self._read(work)))
+
+
+class _VersionPages:
+    """The two facts :meth:`_AnalysisReader.saved_page_text` reads from a version."""
+
+    __slots__ = ("page_count", "version_uid")
+
+    def __init__(self, version_uid: str, page_count: int) -> None:
+        self.version_uid = version_uid
+        self.page_count = page_count
+
+
+class _SpecificationTextReader:
+    """The optimisation context's ``SavedTextReader`` over the comparison's run reader."""
+
+    def __init__(self, blob_store: Any) -> None:
+        self._analyses = _AnalysisReader(blob_store)
+
+    def runs_newest_first(self, session: Session, *, version_uid: str) -> Any:
+        from auditmanager.optimisation.public import RunCandidate
+
+        return tuple(
+            RunCandidate(run.run_id, run.state)
+            for run in self._analyses.runs_newest_first(session, version_uid=version_uid)
+        )
+
+    def saved_page_text(
+        self, session: Session, *, run_id: str, version_uid: str, page_count: int
+    ) -> Any:
+        from auditmanager.optimisation.public import SavedPageText
+
+        text = self._analyses.saved_page_text(
+            session, run_id=run_id, version=_VersionPages(version_uid, page_count)
+        )
+        if text is None:
+            return None
+        return SavedPageText(text.run_id, text.text_layer_sha256, dict(text.pages))
+
+
+class _RunSavedText:
+    """The runs context's ``SavedRunTextReader`` over the comparison's run reader."""
+
+    def __init__(self, blob_store: Any) -> None:
+        self._analyses = _AnalysisReader(blob_store)
+
+    def saved_page_text(
+        self, session: Session, *, run_id: str, version_uid: str, page_count: int
+    ) -> Any:
+        from types import SimpleNamespace
+
+        from auditmanager.runs.public import SavedRunPageText
+
+        text = self._analyses.saved_page_text(
+            session,
+            run_id=run_id,
+            version=SimpleNamespace(version_uid=version_uid, page_count=page_count),
+        )
+        if text is None:
+            return None
+        return SavedRunPageText(text.run_id, text.text_layer_sha256, dict(text.pages))
+
+
+def _norm_references_view(answer: Any) -> dict[str, Any]:
+    """The listing as the frozen ``RunNormReferences``: a property that does not apply is absent,
+    never ``null``."""
+    view: dict[str, Any] = {
+        "run_id": answer.run_id,
+        "version_uid": answer.version_uid,
+        "state": answer.state,
+        "page_count": answer.page_count,
+    }
+    if answer.norms_snapshot_id is not None:
+        view["norms_snapshot_id"] = answer.norms_snapshot_id
+    if answer.text_layer_sha256 is not None:
+        view["text_layer_sha256"] = answer.text_layer_sha256
+    model = answer.references
+    if model is None:
+        return view
+    items: list[dict[str, Any]] = []
+    for item in model.items:
+        shown: dict[str, Any] = {
+            "cited": item.cited,
+            "outcome": item.outcome,
+            "occurrence_count": item.occurrence_count,
+            "anchors": [
+                {
+                    "page_number": anchor.page_number,
+                    "char_start": anchor.char_start,
+                    "char_end": anchor.char_end,
+                    "quote": anchor.quote,
+                }
+                for anchor in item.anchors
+            ],
+        }
+        if item.matched_document_id is not None:
+            shown["matched_norm_document_id"] = item.matched_document_id
+            shown["matched_designation"] = item.matched_designation
+        if item.matched_title is not None:
+            shown["matched_title"] = item.matched_title
+        items.append(shown)
+    unrecognised: list[dict[str, Any]] = []
+    for document in model.unrecognised:
+        shown = {
+            "norm_document_id": document.document_id,
+            "slug": document.slug,
+            "designation": document.designation,
+        }
+        if document.title is not None:
+            shown["title"] = document.title
+        unrecognised.append(shown)
+    view.update(
+        snapshot_document_count=model.snapshot_document_count,
+        counts=dict(model.counts),
+        occurrence_count=model.occurrence_count,
+        unread_pages=list(model.unread_pages),
+        items=items,
+        unrecognised=unrecognised,
+    )
+    return view
+
+
+def _price_list_ref_view(revision: Any, position_count: int | None) -> dict[str, Any]:
+    """The price-list revision a row was matched against, as ``SpecificationPriceListRef``."""
+    return {
+        "price_list_id": revision.price_list_id,
+        "revision_number": revision.revision_number,
+        "source_filename": revision.source_filename,
+        "uploaded_at": revision.uploaded_at,
+        "default_currency": revision.default_currency,
+        "position_count": position_count,
+    }
+
+
+def _price_position_view(position: Any) -> dict[str, Any]:
+    """The one position a row is matched to, as ``SpecificationPricePosition``."""
+    from auditmanager.optimisation.public import canonical_amount
+
+    return {
+        "price_list_position_id": position.price_list_position_id,
+        "row_number": position.row_number,
+        "code": position.code,
+        "name": position.name,
+        "mark": position.mark,
+        "unit": position.unit,
+        "unit_price": canonical_amount(position.unit_price),
+        "currency": position.currency,
+        "vendor": position.vendor,
+    }
+
+
+def _matching_view(
+    algorithm: str, status_counts: Any, totals: Any, excluded_by_reason: Any
+) -> dict[str, Any]:
+    """Counts, per-currency totals and exclusions as ``SpecificationMatching`` (zeros written)."""
+    from auditmanager.optimisation.public import EXCLUSION_REASONS, canonical_amount
+
+    return {
+        "algorithm": algorithm,
+        "counts": dict(status_counts),
+        "totals": [
+            {"currency": total.currency, "amount": canonical_amount(total.amount),
+             "row_count": total.row_count}
+            for total in totals
+        ],
+        "excluded": {reason: excluded_by_reason.get(reason, 0) for reason in EXCLUSION_REASONS},
+    }
+
+
+def _specification_prices_view(result: Any) -> dict[str, Any]:
+    """The optimisation read model as the frozen ``SpecificationPrices`` shape.
+
+    Every decimal (quantity, unit price, amount, total) becomes its exact plain text through
+    ``canonical_amount`` -- never a float, never rounded. The skip and exclusion counts are
+    written out for every declared reason, zero included.
+    """
+    from auditmanager.optimisation.public import SPECIFICATION_SKIP_REASONS, canonical_amount
+
+    def decimal(value: Any) -> str | None:
+        return None if value is None else canonical_amount(value)
+
+    price_list = (
+        None
+        if result.price_list is None
+        else _price_list_ref_view(result.price_list, result.position_count)
+    )
+    extraction = None
+    if result.extraction is not None:
+        found = result.extraction
+        extraction = {
+            "algorithm": found.algorithm,
+            "table_count": found.table_count,
+            "row_count": len(found.rows),
+            "skipped_count": found.skipped_count,
+            "skipped_by_reason": {
+                reason: found.skipped_by_reason.get(reason, 0)
+                for reason in SPECIFICATION_SKIP_REASONS
+            },
+            "skipped": [
+                {"page_number": item.page_number, "line": item.line, "reason": item.reason,
+                 "excerpt": item.excerpt}
+                for item in found.skipped
+            ],
+            "tables": [
+                {"ordinal": table.ordinal, "page_number": table.page_number,
+                 "header_line_start": table.header_line_start,
+                 "header_line_end": table.header_line_end, "columns": list(table.columns),
+                 "implicit_unit": table.implicit_unit, "status": table.status,
+                 "row_count": table.row_count}
+                for table in found.tables
+            ],
+        }
+    matching = None
+    if result.matching is not None:
+        outcome = result.matching
+        matching = _matching_view(
+            outcome.algorithm, outcome.status_counts, outcome.totals, outcome.excluded_by_reason
+        )
+    rows = None
+    if result.rows is not None:
+        page = result.rows
+        items = []
+        for match in page.items:
+            row, position = match.row, match.position
+            items.append({
+                "row_id": row.row_id,
+                "page_number": row.page_number,
+                "sheet_label": row.sheet_label,
+                "line_start": row.line_start,
+                "line_end": row.line_end,
+                "table_ordinal": row.table_ordinal,
+                "group": row.group,
+                "position": row.position,
+                "name": row.name,
+                "unit_text": row.unit_text,
+                "unit": row.unit,
+                "quantity_text": row.quantity_text,
+                "quantity": decimal(row.quantity),
+                "quantity_issue": row.quantity_issue,
+                "mass_text": row.mass_text,
+                "note": row.note,
+                "status": match.status,
+                "reason": match.reason,
+                "basis": match.basis,
+                "price_position": None if position is None else _price_position_view(position),
+                "candidate_position_ids": list(match.candidate_ids),
+                "candidate_count": match.candidate_count,
+                "amount": decimal(match.amount),
+                "excluded_reason": match.excluded_reason,
+            })
+        rows = {
+            "offset": page.offset,
+            "limit": page.limit,
+            "total": page.total,
+            "next_offset": page.next_offset,
+            "items": items,
+        }
+    return {
+        "project_uid": result.project_uid,
+        "document_uid": result.document_uid,
+        "version_uid": result.version_uid,
+        "version_ordinal": result.version_ordinal,
+        "page_count": result.page_count,
+        "state": result.state,
+        "project_stage": result.project_stage,
+        "section_code": result.section_code,
+        "price_list": price_list,
+        "run_id": result.run_id,
+        "text_layer_sha256": result.text_layer_sha256,
+        "extraction": extraction,
+        "matching": matching,
+        "rows": rows,
+    }
+
+
+# --- the section's combined specification (`W63-SECTION-FORM7-01`) --------------------------
+
+
+class SectionSpecificationAdapter(_SessionHolder):
+    """``getSectionSpecification`` (`W63-SECTION-FORM7-01`).
+
+    The optimisation context owns the rule (``optimisation.public.read_section_specification``:
+    membership by the current version's confirmed section, each project's own price list, the
+    newest published run's saved text, extraction, matching, the per-project totals, the
+    bounds); this adapter owns only what it needs from outside the context -- the saved-text
+    port, which is :class:`_SpecificationTextReader` exactly as ``getSpecificationPrices``
+    uses it -- and the mapping into the frozen ``SectionSpecification``. One session holds
+    every read and the actor's role set is read from the account inside it.
+    """
+
+    def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any) -> None:
+        super().__init__(session_factory)
+        self._reader = _SpecificationTextReader(blob_store)
+
+    def get_section_specification(
+        self,
+        *,
+        section_code: str,
+        project_uid: str | None,
+        query: str | None,
+        offset: int,
+        limit: int,
+        user_uid: str,
+    ) -> models.SectionSpecification:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import read_section_specification
+
+        def work(session: Session) -> Any:
+            return read_section_specification(
+                session,
+                section_code=section_code,
+                actor_roles=AccountRepository().roles_of(session, user_uid),
+                reader=self._reader,
+                project_uid=project_uid,
+                query=query,
+                offset=offset,
+                limit=limit,
+            )
+
+        return models.SectionSpecification.model_validate(
+            _section_specification_view(self._read(work))
+        )
+
+
+def _section_specification_view(result: Any) -> dict[str, Any]:
+    """The optimisation read model as the frozen ``SectionSpecification`` shape.
+
+    The price-list reference, the price position, the match counts, the per-currency totals
+    and the exclusion counts are the priced specification's own mappings; every decimal is its
+    exact plain text through ``canonical_amount``, never a float and never rounded. A project
+    has a ``matching`` only when its price list was read, and a source has its extraction facts
+    only when its text was read.
+    """
+    from auditmanager.optimisation.public import SPECIFICATION_SKIP_REASONS, canonical_amount
+
+    def decimal(value: Any) -> str | None:
+        return None if value is None else canonical_amount(value)
+
+    def source(item: Any) -> dict[str, Any]:
+        return {
+            "document_uid": item.document_uid,
+            "display_title": item.display_title,
+            "version_uid": item.version_uid,
+            "version_ordinal": item.version_ordinal,
+            "page_count": item.page_count,
+            "project_stage": item.project_stage,
+            "state": item.state,
+            "run_id": item.run_id,
+            "text_layer_sha256": item.text_layer_sha256,
+            "row_count": item.row_count,
+            "table_count": item.table_count,
+            "skipped_by_reason": None if item.table_count is None else {
+                reason: item.skipped_by_reason.get(reason, 0)
+                for reason in SPECIFICATION_SKIP_REASONS
+            },
+        }
+
+    def project(item: Any) -> dict[str, Any]:
+        return {
+            "project_uid": item.project_uid,
+            "name": item.project_name,
+            "price_state": item.price_state,
+            "price_list": None if item.price_list is None else _price_list_ref_view(
+                item.price_list, item.position_count
+            ),
+            "sources": [source(entry) for entry in item.sources],
+            "row_count": item.row_count,
+            "matching": None if item.price_state != "priced" else _matching_view(
+                result.match_algorithm, item.status_counts, item.totals, item.excluded_by_reason
+            ),
+        }
+
+    def row(item: Any) -> dict[str, Any]:
+        found, match = item.row, item.match
+        position = None if match is None else match.position
+        return {
+            "project_uid": item.project_uid,
+            "document_uid": item.document_uid,
+            "version_uid": item.version_uid,
+            "row_id": found.row_id,
+            "page_number": found.page_number,
+            "sheet_label": found.sheet_label,
+            "line_start": found.line_start,
+            "line_end": found.line_end,
+            "table_ordinal": found.table_ordinal,
+            "group": found.group,
+            "position": found.position,
+            "name": found.name,
+            "unit_text": found.unit_text,
+            "unit": found.unit,
+            "quantity_text": found.quantity_text,
+            "quantity": decimal(found.quantity),
+            "quantity_issue": found.quantity_issue,
+            "mass_text": found.mass_text,
+            "note": found.note,
+            "price_status": item.price_status,
+            "reason": None if match is None else match.reason,
+            "basis": None if match is None else match.basis,
+            "price_position": None if position is None else _price_position_view(position),
+            "candidate_position_ids": [] if match is None else list(match.candidate_ids),
+            "candidate_count": 0 if match is None else match.candidate_count,
+            "amount": None if match is None else decimal(match.amount),
+            "excluded_reason": None if match is None else match.excluded_reason,
+        }
+
+    rows = None
+    if result.rows is not None:
+        page = result.rows
+        rows = {
+            "offset": page.offset,
+            "limit": page.limit,
+            "total": page.total,
+            "next_offset": page.next_offset,
+            "items": [row(item) for item in page.items],
+        }
+    return {
+        "section_code": result.section_code,
+        "state": result.state,
+        "limit_reason": result.limit_reason,
+        "project_filter": result.project_filter,
+        "query": result.query,
+        "extraction_algorithm": result.extraction_algorithm,
+        "match_algorithm": result.match_algorithm,
+        "projects": [project(item) for item in result.projects],
+        "excluded": [
+            {
+                "project_uid": item.project_uid,
+                "project_name": item.project_name,
+                "document_uid": item.document_uid,
+                "display_title": item.display_title,
+                "version_uid": item.version_uid,
+                "version_ordinal": item.version_ordinal,
+                "reason": item.reason,
+            }
+            for item in result.excluded
+        ],
+        "excluded_count": result.excluded_count,
+        "source_count": result.source_count,
+        "row_count": result.row_count,
+        "rows": rows,
+    }
+
+
+# --------------------------------------------------------------------------------------
+# `W61-DISPATCHER-01`: the «Диспетчер» port, over `auditmanager.dispatch`.
+# --------------------------------------------------------------------------------------
+
+
+class DispatchAdapter(_SessionHolder):
+    """Thin like every adapter here: the commands, the rules and the reads live in
+    ``auditmanager.dispatch``; this opens the session, reads the actor's role set inside it,
+    resolves the people's display labels through ``access`` (`R-55`: the label is resolved in
+    one place, ``UserRecord.display_label``) and maps the records into the frozen shapes."""
+
+    def create_assignment(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str | None,
+        assignee_user_uid: str,
+        note: str | None,
+        user_uid: str,
+    ) -> models.Assignment:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import assign_work
+
+        def work(session: Session) -> models.Assignment:
+            accounts = AccountRepository()
+            record = assign_work(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                assignee_user_uid=assignee_user_uid,
+                note=note,
+                actor_uid=user_uid,
+                actor_roles=accounts.roles_of(session, user_uid),
+                accounts=accounts,
+            )
+            return _assignment_view(record, _Labels(session, accounts))
+
+        return self._write(work)
+
+    def list_assignments(
+        self, *, user_uid: str, mine: bool, status: str | None, project_uid: str | None
+    ) -> Sequence[models.Assignment]:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import list_assignments
+
+        def work(session: Session) -> list[models.Assignment]:
+            accounts = AccountRepository()
+            records = list_assignments(
+                session,
+                viewer_uid=user_uid,
+                viewer_roles=accounts.roles_of(session, user_uid),
+                mine=mine,
+                status=status,
+                project_uid=project_uid,
+            )
+            labels = _Labels(session, accounts)
+            return [_assignment_view(record, labels) for record in records]
+
+        return self._read(work)
+
+    def get_assignment(self, *, assignment_uid: str, user_uid: str) -> models.AssignmentDetail:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import get_assignment
+
+        def work(session: Session) -> models.AssignmentDetail:
+            accounts = AccountRepository()
+            detail = get_assignment(
+                session,
+                assignment_uid=assignment_uid,
+                viewer_uid=user_uid,
+                viewer_roles=accounts.roles_of(session, user_uid),
+            )
+            labels = _Labels(session, accounts)
+            return models.AssignmentDetail(
+                assignment=_assignment_view(detail.assignment, labels),
+                history=[_assignment_event_view(event, labels) for event in detail.history],
+            )
+
+        return self._read(work)
+
+    def transition_assignment(
+        self,
+        *,
+        assignment_uid: str,
+        kind: str,
+        reason: str | None,
+        new_assignee_user_uid: str | None,
+        user_uid: str,
+    ) -> models.Assignment:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import transition_assignment
+
+        def work(session: Session) -> models.Assignment:
+            accounts = AccountRepository()
+            record = transition_assignment(
+                session,
+                assignment_uid=assignment_uid,
+                kind=kind,
+                actor_uid=user_uid,
+                actor_roles=accounts.roles_of(session, user_uid),
+                reason=reason,
+                new_assignee_user_uid=new_assignee_user_uid,
+                accounts=accounts,
+            )
+            return _assignment_view(record, _Labels(session, accounts))
+
+        return self._write(work)
+
+
+class _Labels:
+    """Display labels of the accounts one answer names, each read once per session.
+
+    Every user identity here is a RESTRICT reference, so the account exists; a missing one
+    would be a fault, never a blank name.
+    """
+
+    __slots__ = ("_accounts", "_known", "_session")
+
+    def __init__(self, session: Session, accounts: Any) -> None:
+        self._session = session
+        self._accounts = accounts
+        self._known: dict[str, str] = {}
+
+    def of(self, user_uid: str) -> str:
+        label = self._known.get(user_uid)
+        if label is None:
+            account = self._accounts.get_account(self._session, user_uid)
+            if account is None:  # pragma: no cover - a RESTRICT reference names an account
+                raise DomainError(
+                    ErrorCode.INTERNAL_ERROR, message="an assignment names an unknown account"
+                )
+            label = account.record.display_label
+            self._known[user_uid] = label
+        return label
+
+
+def _assignment_view(record: Any, labels: _Labels) -> models.Assignment:
+    return models.Assignment(
+        assignment_uid=record.assignment_uid,
+        project_uid=record.project_uid,
+        project_name=record.project_name,
+        document_uid=record.document_uid,
+        document_title=record.document_title,
+        assignee_user_uid=record.assignee_user_uid,
+        assignee_label=labels.of(record.assignee_user_uid),
+        created_by_user_uid=record.created_by_user_uid,
+        created_by_label=labels.of(record.created_by_user_uid),
+        note=record.note,
+        status=models.AssignmentStatus(record.status),
+        status_reason=record.status_reason,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _assignment_event_view(event: Any, labels: _Labels) -> models.AssignmentEvent:
+    new_assignee = event.new_assignee_user_uid
+    return models.AssignmentEvent(
+        event_id=event.event_id,
+        kind=models.AssignmentEventKind(event.kind),
+        actor_user_uid=event.actor_user_uid,
+        actor_label=labels.of(event.actor_user_uid),
+        reason=event.reason,
+        new_assignee_user_uid=new_assignee,
+        new_assignee_label=None if new_assignee is None else labels.of(new_assignee),
+        occurred_at=event.occurred_at,
+    )
+
+
+class OptimisationAdapter(_SessionHolder):
+    """The six «Оптимизация проекта» operations (`W60-PRICE-LIST-01`).
+
+    Thin like every adapter here: ``auditmanager.optimisation`` owns the parser, the upload's
+    units of work (``PriceListUploads``), the vendor-list commands and the reads; this opens
+    a session, reads the actor's role set **inside it** for the commands and reads, and maps
+    the records into the frozen shapes. The stored parse report's maps become the contract's
+    ordered lists here, in the context's own canonical orders (fields, reasons, currency
+    sources) -- ``jsonb`` keeps no key order, so the order is never the stored one.
+    """
+
+    def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any) -> None:
+        from auditmanager.optimisation.public import PriceListUploads
+
+        super().__init__(session_factory)
+        self._uploads = PriceListUploads(blob_store, session_factory=session_factory)
+
+    @staticmethod
+    def _roles(session: Session, user_uid: str) -> frozenset[str]:
+        from auditmanager.access.public import AccountRepository
+
+        return AccountRepository().roles_of(session, user_uid)
+
+    def upload_price_list(
+        self,
+        *,
+        project_uid: str,
+        content: BinaryIO,
+        source_filename: str,
+        default_currency: str | None,
+        idempotency_key: str,
+        user_uid: str,
+    ) -> models.PriceListRevision:
+        outcome = self._uploads.upload(
+            project_uid=project_uid,
+            content=content,
+            source_filename=source_filename,
+            idempotency_key=idempotency_key,
+            actor_uid=user_uid,
+            default_currency=default_currency,
+        )
+        return _price_list_revision_view(outcome.revision)
+
+    def list_price_list_revisions(
+        self, *, project_uid: str, user_uid: str
+    ) -> models.PriceListRevisionList:
+        from auditmanager.optimisation.public import list_price_list_revisions
+
+        def read(session: Session) -> models.PriceListRevisionList:
+            records = list_price_list_revisions(
+                session, project_uid=project_uid, actor_roles=self._roles(session, user_uid)
+            )
+            return models.PriceListRevisionList(
+                items=[_price_list_revision_view(record) for record in records]
+            )
+
+        return self._read(read)
+
+    def list_price_list_positions(
+        self, *, price_list_id: str, offset: int, limit: int, user_uid: str
+    ) -> models.PriceListPositionPage:
+        from auditmanager.optimisation.public import list_price_list_positions
+
+        def read(session: Session) -> models.PriceListPositionPage:
+            page = list_price_list_positions(
+                session,
+                price_list_id=price_list_id,
+                actor_roles=self._roles(session, user_uid),
+                offset=offset,
+                limit=limit,
+            )
+            return models.PriceListPositionPage(
+                revision=_price_list_revision_view(page.revision),
+                parse_report=_parse_report_view(page.revision.parse_report),
+                items=[_price_list_position_view(position) for position in page.positions],
+                offset=page.offset,
+                limit=page.limit,
+                total=page.total,
+                next_offset=page.next_offset,
+            )
+
+        return self._read(read)
+
+    def get_effective_vendor_lists(
+        self, *, project_uid: str, user_uid: str
+    ) -> models.EffectiveVendorLists:
+        from auditmanager.optimisation.public import get_effective_vendor_lists
+
+        def read(session: Session) -> models.EffectiveVendorLists:
+            lists = get_effective_vendor_lists(
+                session, project_uid=project_uid, actor_roles=self._roles(session, user_uid)
+            )
+            return models.EffectiveVendorLists(
+                project_uid=project_uid, items=[_section_vendor_list_view(item) for item in lists]
+            )
+
+        return self._read(read)
+
+    def set_global_vendor_list(
+        self,
+        *,
+        section_code: str,
+        entries: Sequence[models.VendorListEntry],
+        expected_vendor_list_id: str | None,
+        expect_current: bool,
+        user_uid: str,
+    ) -> models.VendorListRevision:
+        from auditmanager.optimisation.public import set_global_vendor_list
+
+        def work(session: Session) -> models.VendorListRevision:
+            change = set_global_vendor_list(
+                session,
+                section_code=section_code,
+                entries=[_entry_input(entry) for entry in entries],
+                actor_uid=user_uid,
+                actor_roles=self._roles(session, user_uid),
+                expected_vendor_list_id=expected_vendor_list_id,
+                expect_current=expect_current,
+            )
+            if change.revision is None:  # pragma: no cover - a global set always has one
+                raise DomainError(ErrorCode.INTERNAL_ERROR)
+            return _vendor_list_revision_view(change.revision)
+
+        return self._write(work)
+
+    def set_project_vendor_list(
+        self,
+        *,
+        project_uid: str,
+        section_code: str,
+        mode: str,
+        entries: Sequence[models.VendorListEntry],
+        expected_vendor_list_id: str | None,
+        expect_current: bool,
+        user_uid: str,
+    ) -> models.SectionVendorList:
+        from auditmanager.optimisation.public import (
+            get_effective_vendor_lists,
+            set_project_vendor_list,
+        )
+
+        def work(session: Session) -> models.SectionVendorList:
+            roles = self._roles(session, user_uid)
+            set_project_vendor_list(
+                session,
+                project_uid=project_uid,
+                section_code=section_code,
+                mode=mode,
+                entries=[_entry_input(entry) for entry in entries],
+                actor_uid=user_uid,
+                actor_roles=roles,
+                expected_vendor_list_id=expected_vendor_list_id,
+                expect_current=expect_current,
+            )
+            for item in get_effective_vendor_lists(
+                session, project_uid=project_uid, actor_roles=roles
+            ):
+                if item.section_code == section_code:
+                    return _section_vendor_list_view(item)
+            raise DomainError(ErrorCode.INTERNAL_ERROR)  # pragma: no cover - fifteen always
+
+        return self._write(work)
+
+
+def _entry_input(entry: models.VendorListEntry) -> dict[str, Any]:
+    return {"material": entry.material, "vendor": entry.vendor, "note": entry.note}
+
+
+def _plain_decimal(value: Any) -> str:
+    """A stored ``numeric`` as the contract's exact plain decimal text: no exponent, no
+    trailing zero. Formatting only; the value was validated when it was stored."""
+    text = format(value.normalize(), "f")
+    return text
+
+
+def _price_list_revision_view(record: Any) -> models.PriceListRevision:
+    return models.PriceListRevision(
+        price_list_id=record.price_list_id,
+        project_uid=record.project_uid,
+        revision_number=record.revision_number,
+        is_current=record.is_current,
+        uploaded_by_user_uid=record.uploaded_by_user_uid,
+        uploaded_at=record.uploaded_at,
+        source_format=models.PriceListFormat(record.source_format),
+        source_filename=record.source_filename,
+        media_type=record.media_type,
+        size_bytes=record.size_bytes,
+        sha256=record.sha256,
+        default_currency=record.default_currency,
+        data_row_count=record.data_row_count,
+        accepted_row_count=record.accepted_row_count,
+        skipped_row_count=record.skipped_row_count,
+    )
+
+
+def _parse_report_view(report: Mapping[str, Any]) -> models.PriceListParseReport:
+    from auditmanager.optimisation.public import (
+        CURRENCY_SOURCES,
+        FIELD_ORDER,
+        SKIP_REASONS,
+        WARNING_REASONS,
+    )
+
+    columns = report.get("columns") or {}
+    ambiguous = report.get("ambiguous_columns") or {}
+    skipped_counts = report.get("skipped_by_reason") or {}
+    warning_counts = report.get("warnings_by_reason") or {}
+    sources = report.get("currency_sources") or {}
+    return models.PriceListParseReport(
+        report_version=report["report_version"],
+        format=models.PriceListFormat(report["format"]),
+        sheet=report.get("sheet"),
+        encoding=report.get("encoding"),
+        delimiter=report.get("delimiter"),
+        header_row=report["header_row"],
+        columns=[
+            models.PriceListColumn(
+                field=models.PriceListField(name),
+                column=columns[name]["column"],
+                header=columns[name]["header"],
+            )
+            for name in FIELD_ORDER
+            if name in columns
+        ],
+        ambiguous_columns=[
+            models.PriceListAmbiguousColumn(
+                field=models.PriceListField(name), headers=list(ambiguous[name])
+            )
+            for name in FIELD_ORDER
+            if name in ambiguous
+        ],
+        ignored_columns=list(report.get("ignored_columns") or []),
+        price_header_currency=report.get("price_header_currency"),
+        default_currency=report.get("default_currency"),
+        preamble_rows=report["preamble_rows"],
+        blank_rows=report["blank_rows"],
+        data_rows=report["data_rows"],
+        accepted_rows=report["accepted_rows"],
+        skipped_rows=report["skipped_rows"],
+        skipped_by_reason=[
+            models.PriceListReasonCount(
+                reason=models.PriceListRowReason(reason), count=skipped_counts[reason]
+            )
+            for reason in SKIP_REASONS
+            if reason in skipped_counts
+        ],
+        skipped=[
+            models.PriceListRowNote(row=item["row"], reason=models.PriceListRowReason(item["reason"]))
+            for item in report.get("skipped") or []
+        ],
+        skipped_listed_in_full=report["skipped_listed_in_full"],
+        warnings_by_reason=[
+            models.PriceListReasonCount(
+                reason=models.PriceListRowReason(reason), count=warning_counts[reason]
+            )
+            for reason in WARNING_REASONS
+            if reason in warning_counts
+        ],
+        warnings=[
+            models.PriceListRowNote(row=item["row"], reason=models.PriceListRowReason(item["reason"]))
+            for item in report.get("warnings") or []
+        ],
+        currency_sources=[
+            models.PriceListCurrencySourceCount(
+                source=models.PriceListCurrencySource(source), count=sources[source]
+            )
+            for source in CURRENCY_SOURCES
+            if source in sources
+        ],
+    )
+
+
+def _price_list_position_view(position: Any) -> models.PriceListPosition:
+    return models.PriceListPosition(
+        price_list_position_id=position.price_list_position_id,
+        row_number=position.row_number,
+        code=position.code,
+        name=position.name,
+        mark=position.mark,
+        unit=position.unit,
+        unit_price=_plain_decimal(position.unit_price),
+        currency=position.currency,
+        vendor=position.vendor,
+        section_code=None
+        if position.section_code is None
+        else models.ProjectSection(position.section_code),
+    )
+
+
+def _vendor_list_revision_view(record: Any) -> models.VendorListRevision:
+    return models.VendorListRevision(
+        vendor_list_id=record.vendor_list_id,
+        scope=models.VendorListScope(record.scope),
+        project_uid=record.project_uid,
+        section_code=models.ProjectSection(record.section_code),
+        mode=models.VendorListMode(record.mode),
+        revision_number=record.revision_number,
+        entries=[
+            models.VendorListEntry(material=entry.material, vendor=entry.vendor, note=entry.note)
+            for entry in record.entries
+        ],
+        set_by_user_uid=record.set_by_user_uid,
+        set_at=record.set_at,
+    )
+
+
+def _section_vendor_list_view(item: Any) -> models.SectionVendorList:
+    def view(record: Any) -> models.VendorListRevision | None:
+        return None if record is None else _vendor_list_revision_view(record)
+
+    return models.SectionVendorList(
+        section_code=models.ProjectSection(item.section_code),
+        source=models.VendorListSource(item.source),
+        effective=view(item.effective),
+        global_revision=view(item.global_revision),
+        project_revision=view(item.project_revision),
+    )
+
+
+# --------------------------------------------------------------------------------------
+# `W60-OPT-PROPOSALS-01`: the «Предложения» port, over `auditmanager.optimisation.proposals`.
+# --------------------------------------------------------------------------------------
+
+
+class OptimisationProposalAdapter(_SessionHolder):
+    """The six «Предложения» operations (`W60-OPT-PROPOSALS-01`).
+
+    Thin like every adapter here: ``auditmanager.optimisation`` owns the preconditions of a
+    pass, the generator, the exact repeats, the append-only decisions and the CSV bytes; this
+    opens a session, reads the actor's role set **inside it**, resolves the people's display
+    labels through ``access`` (`R-55`) and maps the records into the frozen shapes. The only
+    port a pass needs that the context does not own is the saved text of a run, supplied by
+    :class:`_ProposalTextReader` over the comparison's run reader: the run's single
+    ``source_preparation`` artifact, held to the digest and size its stage row recorded. A
+    missing or differing blob is ``storage_integrity_error``, never an empty page.
+    """
+
+    def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any) -> None:
+        super().__init__(session_factory)
+        self._reader = _ProposalTextReader(blob_store)
+
+    @staticmethod
+    def _roles(session: Session, user_uid: str) -> frozenset[str]:
+        from auditmanager.access.public import AccountRepository
+
+        return AccountRepository().roles_of(session, user_uid)
+
+    def start_optimisation_pass(
+        self, *, project_uid: str, document_uid: str, idempotency_key: str, user_uid: str
+    ) -> models.OptimisationPass:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import start_optimisation_pass
+
+        def work(session: Session) -> models.OptimisationPass:
+            accounts = AccountRepository()
+            started = start_optimisation_pass(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+                actor_roles=accounts.roles_of(session, user_uid),
+                reader=self._reader,
+            )
+            return _optimisation_pass_view(started.optimisation_pass, _Labels(session, accounts))
+
+        return self._write(work)
+
+    def list_optimisation_passes(
+        self, *, project_uid: str, document_uid: str | None, limit: int, user_uid: str
+    ) -> models.OptimisationPassList:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import list_optimisation_passes
+
+        def read(session: Session) -> models.OptimisationPassList:
+            accounts = AccountRepository()
+            records = list_optimisation_passes(
+                session,
+                project_uid=project_uid,
+                document_uid=document_uid,
+                limit=limit,
+                actor_roles=accounts.roles_of(session, user_uid),
+            )
+            labels = _Labels(session, accounts)
+            return models.OptimisationPassList(
+                items=[_optimisation_pass_view(record, labels) for record in records]
+            )
+
+        return self._read(read)
+
+    def list_optimisation_proposals(
+        self,
+        *,
+        optimisation_pass_id: str,
+        decision: str | None,
+        offset: int,
+        limit: int,
+        user_uid: str,
+    ) -> models.OptimisationProposalPage:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import list_optimisation_proposals
+
+        def read(session: Session) -> models.OptimisationProposalPage:
+            accounts = AccountRepository()
+            page = list_optimisation_proposals(
+                session,
+                optimisation_pass_id=optimisation_pass_id,
+                actor_roles=accounts.roles_of(session, user_uid),
+                decision=decision,
+                offset=offset,
+                limit=limit,
+            )
+            labels = _Labels(session, accounts)
+            return models.OptimisationProposalPage(
+                optimisation_pass=_optimisation_pass_view(page.optimisation_pass, labels),
+                decision=None if page.decision is None else models.ProposalDecisionState(page.decision),
+                items=[_optimisation_proposal_view(item, labels) for item in page.items],
+                offset=page.offset,
+                limit=page.limit,
+                total=page.total,
+                next_offset=page.next_offset,
+            )
+
+        return self._read(read)
+
+    def decide_optimisation_proposal(
+        self,
+        *,
+        optimisation_proposal_id: str,
+        verdict: str,
+        comment: str | None,
+        idempotency_key: str,
+        user_uid: str,
+    ) -> models.ProposalDecisionResult:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import decide_optimisation_proposal
+
+        def work(session: Session) -> models.ProposalDecisionResult:
+            accounts = AccountRepository()
+            decided = decide_optimisation_proposal(
+                session,
+                proposal_id=optimisation_proposal_id,
+                verdict=verdict,
+                comment=comment,
+                idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+                actor_roles=accounts.roles_of(session, user_uid),
+            )
+            labels = _Labels(session, accounts)
+            return models.ProposalDecisionResult(
+                decision=_proposal_decision_view(decided.decision, labels),
+                proposal=_optimisation_proposal_view(decided.proposal, labels),
+            )
+
+        return self._write(work)
+
+    def list_proposal_decisions(
+        self, *, optimisation_proposal_id: str, user_uid: str
+    ) -> models.ProposalDecisionList:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import list_proposal_decisions
+
+        def read(session: Session) -> models.ProposalDecisionList:
+            accounts = AccountRepository()
+            history = list_proposal_decisions(
+                session,
+                optimisation_proposal_id=optimisation_proposal_id,
+                actor_roles=accounts.roles_of(session, user_uid),
+            )
+            labels = _Labels(session, accounts)
+            return models.ProposalDecisionList(
+                items=[_proposal_decision_view(entry, labels) for entry in history]
+            )
+
+        return self._read(read)
+
+    def export_optimisation_proposals_csv(
+        self, *, optimisation_pass_id: str, user_uid: str
+    ) -> bytes:
+        from auditmanager.optimisation.public import export_optimisation_proposals_csv
+
+        def read(session: Session) -> bytes:
+            return export_optimisation_proposals_csv(
+                session,
+                optimisation_pass_id=optimisation_pass_id,
+                actor_roles=self._roles(session, user_uid),
+            ).content
+
+        return self._read(read)
+
+
+class _ProposalTextReader:
+    """The optimisation context's ``SavedTextReader`` over the comparison's run reader."""
+
+    def __init__(self, blob_store: Any) -> None:
+        self._analyses = _AnalysisReader(blob_store)
+
+    def runs_newest_first(self, session: Session, *, version_uid: str) -> Any:
+        from auditmanager.optimisation.public import RunCandidate
+
+        return tuple(
+            RunCandidate(run.run_id, run.state)
+            for run in self._analyses.runs_newest_first(session, version_uid=version_uid)
+        )
+
+    def saved_page_text(
+        self, session: Session, *, run_id: str, version_uid: str, page_count: int
+    ) -> Any:
+        from types import SimpleNamespace
+
+        from auditmanager.optimisation.public import SavedPageText
+
+        text = self._analyses.saved_page_text(
+            session,
+            run_id=run_id,
+            version=SimpleNamespace(version_uid=version_uid, page_count=page_count),
+        )
+        if text is None:
+            return None
+        return SavedPageText(text.run_id, text.text_layer_sha256, dict(text.pages))
+
+
+def _optimisation_pass_view(record: Any, labels: "_Labels") -> models.OptimisationPass:
+    counts = record.decision_counts
+    return models.OptimisationPass(
+        optimisation_pass_id=record.optimisation_pass_id,
+        project_uid=record.project_uid,
+        document_uid=record.document_uid,
+        version_uid=record.version_uid,
+        run_id=record.run_id,
+        text_layer_sha256=record.text_layer_sha256,
+        price_list_id=record.price_list_id,
+        vendor_list_id=record.vendor_list_id,
+        vendor_list_source=models.VendorListScope(record.vendor_list_source),
+        extraction_algorithm=record.extraction_algorithm,
+        match_algorithm=record.match_algorithm,
+        generator_version=record.generator_version,
+        specification_row_count=record.specification_row_count,
+        matched_row_count=record.matched_row_count,
+        proposed_row_count=record.proposed_row_count,
+        proposal_count=record.proposal_count,
+        decision_counts=models.ProposalDecisionCounts(
+            pending=counts["pending"],
+            accept=counts["accept"],
+            reject=counts["reject"],
+            revise=counts["revise"],
+        ),
+        started_by_user_uid=record.started_by_user_uid,
+        started_by_label=labels.of(record.started_by_user_uid),
+        started_at=record.started_at,
+    )
+
+
+def _proposal_decision_view(record: Any, labels: "_Labels") -> models.ProposalDecision:
+    return models.ProposalDecision(
+        proposal_decision_id=record.proposal_decision_id,
+        optimisation_proposal_id=record.optimisation_proposal_id,
+        verdict=models.ProposalVerdict(record.verdict),
+        comment=record.comment,
+        actor_user_uid=record.actor_user_uid,
+        actor_label=labels.of(record.actor_user_uid),
+        decided_at=record.decided_at,
+    )
+
+
+def _proposal_position_view(summary: Any) -> models.ProposalPosition:
+    return models.ProposalPosition(
+        price_list_position_id=summary.price_list_position_id,
+        row_number=summary.row_number,
+        code=summary.code,
+        name=summary.name,
+        mark=summary.mark,
+        vendor=summary.vendor,
+    )
+
+
+def _optional_decimal(value: Any) -> str | None:
+    return None if value is None else _plain_decimal(value)
+
+
+def _optimisation_proposal_view(record: Any, labels: "_Labels") -> models.OptimisationProposal:
+    """One stored proposal in the frozen shape; every decimal is its exact plain text and an
+    absent quantity or saving stays ``null`` -- never ``0``."""
+    return models.OptimisationProposal(
+        optimisation_proposal_id=record.optimisation_proposal_id,
+        optimisation_pass_id=record.optimisation_pass_id,
+        ordinal=record.ordinal,
+        proposal_type=models.OptimisationProposalType(record.proposal_type),
+        spec_row_key=record.spec_row_key,
+        page_number=record.page_number,
+        sheet_label=record.sheet_label,
+        line_start=record.line_start,
+        line_end=record.line_end,
+        table_ordinal=record.table_ordinal,
+        row_position=record.row_position,
+        row_text=record.row_text,
+        matched_position=_proposal_position_view(record.matched_position),
+        matched_basis=models.ProposalMatchBasis(record.matched_basis),
+        proposed_position=_proposal_position_view(record.proposed_position),
+        analog_basis=models.ProposalAnalogBasis(record.analog_basis),
+        name_similarity=_plain_decimal(record.name_similarity),
+        proposed_vendor=record.proposed_vendor,
+        unit=record.unit,
+        quantity=_optional_decimal(record.quantity),
+        quantity_text=record.quantity_text,
+        current_unit_price=_plain_decimal(record.current_unit_price),
+        proposed_unit_price=_plain_decimal(record.proposed_unit_price),
+        currency=record.currency,
+        saving=_optional_decimal(record.saving),
+        rationale=record.rationale,
+        current_verdict=models.ProposalDecisionState(record.current_verdict),
+        current_decision=None
+        if record.current_decision is None
+        else _proposal_decision_view(record.current_decision, labels),
+    )

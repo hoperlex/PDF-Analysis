@@ -1,0 +1,35 @@
+{
+  "format": "text-profile/1",
+  "section_code": "KJ",
+  "analysis_profile_id": "ap_01M5AXG1K82P9BCJ1NRYSTC2NY",
+  "prompt_bundle_id": "pb_01M5AXG1K8EDTH597XY32Z696Y",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "title_ru": "Конструкции железобетонные",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "16ba8e5d23e4782550e79355002fde1365f682b7",
+    "files": [
+      {
+        "path": "prompts/disciplines/KJ/role.md",
+        "sha256": "29004c6454798d53b5eb518b25990f39b223ce1b7b0b86c85aa723e85fe0f2af"
+      },
+      {
+        "path": "prompts/disciplines/KJ/checklist.md",
+        "sha256": "07ecdfce7696f16d004877117a58479edafca6f2fa8d81d530c6b20201b12801"
+      },
+      {
+        "path": "prompts/disciplines/KJ/drawing_types.md",
+        "sha256": "a50d6c11bcdd38e4678dbd380fda27869c27bfd718070600b15eed57b2761db8"
+      },
+      {
+        "path": "prompts/disciplines/KJ/project_params.md",
+        "sha256": "0a32c5a0eede3b3b69af0676a087220b30ad724a3dcfdee9b877e41fc7cdbafb"
+      },
+      {
+        "path": "prompts/disciplines/KJ/finding_categories.md",
+        "sha256": "9efdf059b322a51cbb5109e06190948cd30f6ea50e901c9d47d8a79ffbce48ee"
+      }
+    ]
+  }
+}

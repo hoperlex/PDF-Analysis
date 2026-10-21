@@ -33,6 +33,27 @@ EXPECTED_TABLES = {
     "norm_custody_admission",
     "norm_custody_binding",
     "norm_repair_call",
+    # `0023_norm_citations`: verified retrieval set and immutable partitions.
+    "norm_retrieval_set",
+    "finding_observation_norm_citation",
+    # `0024_version_classification`: one expert-confirmed stage and section per version.
+    "document_version_classification",
+    # `0025_work_assignments`: work given to experts and its append-only history.
+    "work_assignment",
+    "work_assignment_event",
+    # `0026_price_lists`: project price lists with their positions, and vendor lists.
+    "price_list_revision",
+    "price_list_position",
+    "vendor_list_revision",
+    "vendor_list_entry",
+    # `0027_optimisation_proposals`: optimisation passes, their proposals and the experts'
+    # append-only decisions on them.
+    "optimisation_pass",
+    "optimisation_proposal",
+    "optimisation_proposal_decision",
+    # `0028_classification_corrections`: an expert's append-only corrections of a version's
+    # stage and section (revision 2 and later; revision 1 is `document_version_classification`).
+    "document_version_classification_correction",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
@@ -68,7 +89,16 @@ EXPECTED_TABLES = {
     "stage_result",
 }
 
-EXPECTED_VIEWS = {"finding_current_verdict"}
+#: ``work_assignment_current`` (`0025_work_assignments`): each assignment's latest event and
+#: current assignee, derived from the history. `0028_classification_corrections` adds the
+#: classification's history (``version_classification_revision``) and its derived current
+#: revision (``version_classification_current``).
+EXPECTED_VIEWS = {
+    "finding_current_verdict",
+    "work_assignment_current",
+    "version_classification_revision",
+    "version_classification_current",
+}
 
 #: The alpha runner instantiates none of these aggregates. Their absence is a deliverable, so
 #: it is asserted rather than assumed.

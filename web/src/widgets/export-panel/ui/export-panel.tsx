@@ -3,11 +3,11 @@
 /** @jsxRuntime automatic */
 
 /**
- * Download the run's CSV.
+ * Download the run's CSV, and since `W57B-NORMS-CATALOGUE-XLSX-01` its Excel workbook.
  *
  * The column list is **consumed**, never restated: `CSV_COLUMNS` and `CSV_ENCODING` come
  * from `@/shared/api`, where `A5` froze them against `P02_SEAMS.md` §6 with a contract test.
- * A second copy of the seventeen columns in this file is how a UI ends up promising the
+ * A second copy of the nineteen columns in this file is how a UI ends up promising the
  * user a column the server stopped sending, so there is no literal column name anywhere
  * here — a renamed column changes what this panel displays, and the unit test beside it
  * goes red.
@@ -25,16 +25,25 @@
  * recorded run must never be presentable as a live one, and the CSV the user is about to
  * hand to someone else carries `provider_mode` as its own column — the screen should say so
  * before they do.
+ *
+ * «Скачать Excel» sits beside the CSV button, on the same exportability rule. The workbook is
+ * the server's (`exportRunXlsx`); this panel owns its own download (`useExportRunXlsx`) so
+ * every screen that shows the panel offers it, and says a refusal in words: a version
+ * without verifiable sheet labels and a run whose norm citations do not verify are refused
+ * by the server, never answered with an empty file.
  */
 
 import type { ProviderMode, RunId, RunState } from '@/shared/api';
 import {
+  ApiError,
   CSV_COLUMNS,
   CSV_ENCODING,
   RUN_STATE_VALUES,
   csvFileName,
   isExportableRunState,
 } from '@/shared/api';
+import { failureMessage } from '@/shared/api/failure-message';
+import { useExportRunXlsx } from '@/features/export-run';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, NotApplicableState, RunStateBadge, STATE_LABELS } from '@/shared/ui';
 
@@ -49,6 +58,51 @@ export interface ExportPanelProps {
 }
 
 const UNKNOWN_RUN_STATE_TITLE = 'Прогон содержит неизвестное состояние.';
+
+/** The workbook's own refusals, in words; the codes are the server's. */
+const XLSX_REFUSALS: Readonly<Record<string, string>> = {
+  storage_integrity_error:
+    'У версии нет проверяемой разметки листов портала, поэтому столбец «Лист/стр.» заполнить нечем — Excel не собран. CSV по-прежнему доступен.',
+  required_norm_unavailable:
+    'Цитаты норм этого прогона не проходят проверку по его набору норм — Excel без них не собирается. CSV по-прежнему доступен.',
+};
+
+/** What the panel says when the workbook was refused or failed. */
+export function xlsxFailure(error: unknown): ErrorStateProps {
+  if (error instanceof ApiError && XLSX_REFUSALS[error.errorCode] !== undefined) {
+    return {
+      title: 'Excel не выгружен',
+      detail: XLSX_REFUSALS[error.errorCode],
+      correlationId: error.correlationId,
+    };
+  }
+  const message = failureMessage(error);
+  return { title: 'Excel не выгружен', detail: message.detail, correlationId: message.correlationId };
+}
+
+/** «Скачать Excel» and its own outcome. */
+function XlsxDownload({ runId }: { readonly runId: RunId }) {
+  const exporter = useExportRunXlsx({ runId });
+  return (
+    <div data-export-format="xlsx">
+      <button
+        type="button"
+        className="am-button am-button--quiet"
+        data-intent="export-xlsx"
+        disabled={exporter.isPending}
+        onClick={exporter.download}
+      >
+        {exporter.isPending ? 'Готовлю Excel…' : 'Скачать Excel'}
+      </button>
+      {exporter.lastFileName !== null ? (
+        <p className="am-export__last" data-last-file={exporter.lastFileName}>
+          Скачан {exporter.lastFileName}
+        </p>
+      ) : null}
+      {exporter.error !== null ? <ErrorState {...xlsxFailure(exporter.error)} /> : null}
+    </div>
+  );
+}
 
 export function ExportPanel({
   runId,
@@ -90,8 +144,9 @@ export function ExportPanel({
           >
             {isPending === true ? 'Готовлю…' : `Скачать ${csvFileName(runId)}`}
           </button>
+          <XlsxDownload runId={runId} />
           {/*
-            `R-18` names the seventeen column names printed as a list — "documentation
+            `R-18` names the column names printed as a list — "documentation
             standing where an interface should be". They are still here, still taken from
             `CSV_COLUMNS` and still carrying `data-csv-column`, but behind the sentence
             that describes them. The summary is the sentence this panel already had; no

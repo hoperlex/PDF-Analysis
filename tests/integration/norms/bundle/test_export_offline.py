@@ -124,6 +124,29 @@ def test_copy_objects_copies_instead(tmp_path: Path, drop) -> None:
     assert os.stat(corpus / document.slug / "document.pdf").st_ino != os.stat(linked).st_ino
 
 
+def test_duplicate_digest_source_path_must_match_sums_before_a_second_slot(
+    tmp_path: Path, drop
+) -> None:
+    corpus, sums = drop
+    first, second = default_documents()
+    shared_block = "blk_" + "b" * 32
+    assert first.crops[shared_block] == second.pdf
+    rows = synthetic_rows()
+    earlier = min(rows.documents, key=lambda document: document.norm_document_id)
+    later_source = (
+        corpus / second.slug / "document.pdf"
+        if earlier.slug == first.slug
+        else corpus / first.slug / "crops" / f"{shared_block}.pdf"
+    )
+    later_source.write_bytes(b"%PDF-1.7 changed after sums\n")
+
+    with pytest.raises(BundleRefused) as refused:
+        write_bundle(_source(rows), corpus=corpus, drop_sums=sums,
+                     ledger=None, out=tmp_path / "out")
+    assert refused.value.reason == "drop_file_differs"
+    assert list((tmp_path / "out").iterdir()) == [], "a refused export left a directory"
+
+
 def test_an_equal_export_is_the_same_bundle(tmp_path: Path, drop) -> None:
     corpus, sums = drop
     source = _source(synthetic_rows())
@@ -185,6 +208,47 @@ def test_a_drop_that_is_not_its_sums_stops_the_export_and_leaves_nothing(
     with pytest.raises(BundleRefused, match=reason):
         write_bundle(_source(rows), corpus=corpus, drop_sums=sums, ledger=None, out=tmp_path / "out")
     assert list((tmp_path / "out").iterdir()) == [], "a refused export left a directory"
+
+
+@pytest.mark.parametrize("index_digest_updated", [False, True])
+def test_export_refuses_a_crop_removed_from_index_and_drop_but_still_in_sums(
+    tmp_path: Path, drop, index_digest_updated: bool
+) -> None:
+    corpus, sums = drop
+    index_path = corpus / "crops_index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    omitted = index.pop()
+    index_path.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+    (corpus / omitted["slug"] / "crops" / f"{omitted['block_id']}.pdf").unlink()
+    if index_digest_updated:
+        _rewrite_sums(sums, "crops_index.json", hashlib.sha256(index_path.read_bytes()).hexdigest())
+    assert omitted["block_id"] in sums.read_text(encoding="utf-8")
+
+    with pytest.raises(BundleRefused) as refused:
+        write_bundle(_source(synthetic_rows()), corpus=corpus, drop_sums=sums,
+                     ledger=None, out=tmp_path / "out")
+    assert refused.value.reason == ("drop_crops_differ" if index_digest_updated else "drop_file_differs")
+    assert not (tmp_path / "out").exists(), "a rejected index created export staging"
+
+
+@pytest.mark.parametrize("damage", ["modified", "unsummed"])
+def test_export_refuses_unbound_index_even_when_crop_paths_still_match(
+    tmp_path: Path, drop, damage: str
+) -> None:
+    corpus, sums = drop
+    index_path = corpus / "crops_index.json"
+    if damage == "modified":
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        index[0]["page_index"] = 99
+        index_path.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+    else:
+        _rewrite_sums(sums, "crops_index.json", None)
+
+    with pytest.raises(BundleRefused) as refused:
+        write_bundle(_source(synthetic_rows()), corpus=corpus, drop_sums=sums,
+                     ledger=None, out=tmp_path / "out")
+    assert refused.value.reason == ("drop_file_differs" if damage == "modified" else "drop_file_unsummed")
+    assert not (tmp_path / "out").exists(), "a rejected index created export staging"
 
 
 def test_a_repaired_snapshot_without_its_ledger_is_refused(tmp_path: Path, drop) -> None:

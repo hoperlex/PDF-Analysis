@@ -44,6 +44,7 @@ from auditmanager.api.routers.wire import WireResponse
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
+    "AGGREGATE_OF_OPERATION_PATH_PARAMETER",
     "AGGREGATE_OF_PATH_PARAMETER",
     "install_exception_handlers",
     "on_domain_error",
@@ -71,6 +72,21 @@ AGGREGATE_OF_PATH_PARAMETER: Final[Mapping[str, str]] = {
     # `W49-SEAL-01`. The entity names of `contracts/domain/v1/identifiers.json`.
     "user_uid": "User",
     "request_id": "RegistrationRequest",
+    # `W60-PRICE-LIST-01`. A price-list revision, and a vendor list's section slot: a code
+    # outside the fifteen addresses no vendor list, so it is `404` like a malformed identity.
+    "price_list_id": "PriceList",
+    "section_code": "VendorList",
+    # `W60-OPT-PROPOSALS-01`. A pass and a proposal.
+    "optimisation_pass_id": "OptimisationPass",
+    "optimisation_proposal_id": "OptimisationProposal",
+}
+
+#: A path parameter whose aggregate depends on the operation that reads it. `section_code`
+#: addresses a vendor list's section slot above, and a section's combined specification here
+#: (`W63-SECTION-FORM7-01`): a code outside the fifteen addresses neither, so it is `404`, but
+#: the aggregate it names is the operation's, never another operation's.
+AGGREGATE_OF_OPERATION_PATH_PARAMETER: Final[Mapping[tuple[str, str], str]] = {
+    ("getSectionSpecification", "section_code"): "SectionSpecification",
 }
 
 #: The contract's spelling of each header this surface reads, keyed by the lower-cased name
@@ -155,7 +171,7 @@ _ANALYSIS_INPUTS: Final[Mapping[tuple[str, str], str]] = {
 #: The enum vocabularies, written out, so a refusal names the values the contract declares
 #: rather than the ones a Python enum happens to carry today.
 _ENUM_VALUES: Final[Mapping[str, str]] = {
-    "category": "explicit_placeholder, internal_contradiction",
+    "category": "accessibility, dimensions, documentation, evacuation, explicit_placeholder, facade, fire_safety, insulation, internal_contradiction, layout, roof, sound",
     "verdict": "accepted, needs_manual_review, pending, rejected",
     "event_type": "accept, comment, reject, revoke",
     "provider_mode": "live, recorded",
@@ -308,7 +324,9 @@ def _refusal(
 
     if where == "path":
         # 404, and no `validation_failed`: see AGGREGATE_OF_PATH_PARAMETER.
-        aggregate = AGGREGATE_OF_PATH_PARAMETER.get(name)
+        aggregate = AGGREGATE_OF_OPERATION_PATH_PARAMETER.get(
+            (operation or "", name)
+        ) or AGGREGATE_OF_PATH_PARAMETER.get(name)
         if aggregate is None:
             return DomainError(ErrorCode.NOT_FOUND)
         return DomainError(ErrorCode.NOT_FOUND, aggregate_type=aggregate)

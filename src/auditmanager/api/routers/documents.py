@@ -135,6 +135,47 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
         route_class_override=UploadRoute,
     )
 
+    # `W59-VERSION-UPLOAD-01`: the next version of an existing document. Declared exactly as
+    # `uploadDocument` -- the same `UploadRoute` part bounds, the same strict multipart pass,
+    # the same handle handed to the port unread -- with the document in the path and a closed
+    # body that holds the bundle only. `BodyCapMiddleware` matches this path too, so it gets
+    # the upload body cap and takes an upload slot like `uploadDocument`.
+    def upload_document_version(
+        project_uid: Annotated[models.ProjectUid, Path()],
+        document_uid: Annotated[models.DocumentUid, Path()],
+        body: Annotated[models.UploadDocumentVersionRequest, Form(media_type=_MULTIPART)],
+        idempotency_key: RequiredIdempotencyKey,
+        checked: Annotated[CheckedUpload, Depends(require_a_strict_multipart_body)],
+    ) -> WireResponse:
+        del checked  # the strict pass is the point; this body has no title to decode
+        outcome = documents.upload_document_version(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            content=body.file.file,
+            source_filename=body.file.filename or "",
+            idempotency_key=idempotency_key,
+        )
+        return json_response(201, encode_json(document_version_body(outcome.version)))
+
+    router.add_api_route(
+        "/projects/{project_uid}/documents/{document_uid}/versions",
+        upload_document_version,
+        methods=["POST"],
+        operation_id="uploadDocumentVersion",
+        tags=["documents"],
+        status_code=201,
+        response_model=models.DocumentVersion,
+        openapi_extra=_MULTIPART_ENCODING,
+        responses={
+            **success(
+                201,
+                "The next version was published, or an identical upload replayed.",
+            ),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
+        },
+        route_class_override=UploadRoute,
+    )
+
     @router.get(
         "/projects/{project_uid}/documents",
         operation_id="listDocuments",

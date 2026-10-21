@@ -31,6 +31,93 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `CLASSIFICATION-CORRECTION-01` for ``0028_classification_corrections``, measured,
+#: not predicted: a fresh upgrade of the lane's PostgreSQL 17 + pgvector stack, whose per-family
+#: counts were taken against the 0027 seal below, and the whole of 0028 was shown to be the
+#: difference by ``test_downgrade_chain_round_trip.py`` (downgrading 0028 restores the 0027
+#: inventory row for row). Seven families moved, each by exactly the migration's DDL: columns +20
+#: -> 606 (``document_version_classification_correction`` 7, the view
+#: ``version_classification_revision`` 7, the view ``version_classification_current`` 6);
+#: relations +3 -> 66 (one table, two views); constraints +9 -> 657 (the correction table's
+#: primary key, two foreign keys and six CHECKs); indexes +1 -> 153 (its primary key's index);
+#: triggers +2 -> 72 (``trg_document_version_classification_correction_immutable`` and
+#: ``trg_document_version_classification_correction_chain``); functions +1 -> 31
+#: (``am_check_classification_correction_chain``), with ``am_check_optimisation_pass_scope``
+#: redefined -- same row, now reading ``version_classification_current``; views +2 -> 4.
+#: Extensions, sequences, policies and the state topology are identical to the 0027 seal.
+#: Resealed by `W60-OPT-PROPOSALS-01` for ``0027_optimisation_proposals``, measured, not
+#: predicted: two fresh databases on the lane's PostgreSQL 17 + pgvector stack, one upgraded to
+#: ``0026`` (whose inventory equalled the 0026 seal below in every family) and one to ``0027``,
+#: had every family's rows diffed. Every added row is this revision's and nothing was removed
+#: or redefined: columns +52 -> 586 (``optimisation_pass`` 18, ``optimisation_proposal`` 26,
+#: ``optimisation_proposal_decision`` 8); relations +3 -> 63 (three tables); constraints
+#: +66 -> 648 (``optimisation_pass``: primary key, the inputs' unique key, seven foreign keys,
+#: twelve CHECKs and the constraint trigger's row ``trg_optimisation_pass_has_proposals``;
+#: ``optimisation_proposal``: primary key, two unique pairs, three foreign keys, twenty-four
+#: CHECKs; ``optimisation_proposal_decision``: primary key, two unique keys, three foreign
+#: keys, eight CHECKs); indexes +11 -> 152 (the three primary keys, the five unique keys,
+#: ``ix_optimisation_pass_project``, ``ix_optimisation_pass_started_by`` and
+#: ``ix_optimisation_proposal_decision_actor``); triggers +6 -> 70 (three ``am_immutable_row``
+#: triggers, ``trg_optimisation_pass_scope``, ``trg_optimisation_proposal_prices`` and the
+#: deferred ``trg_optimisation_pass_has_proposals``); functions +3 -> 30
+#: (``am_check_optimisation_pass_scope``, ``am_check_optimisation_proposal_prices``,
+#: ``am_require_optimisation_proposals``). Views, extensions, sequences, policies and the
+#: state topology are identical to the 0026 seal.
+#: Resealed by `W60-PRICE-LIST-01` for ``0026_price_lists``, measured, not predicted: two
+#: fresh databases on the lane's PostgreSQL 17 + pgvector stack, one upgraded to ``0025``
+#: (whose inventory equalled the 0025 seal below in every family) and one to ``0026``, had
+#: every family's rows diffed. Every added row is this revision's and nothing was removed or
+#: redefined: columns +41 -> 534 (``price_list_revision`` 16, ``price_list_position`` 11,
+#: ``vendor_list_revision`` 9, ``vendor_list_entry`` 5); relations +4 -> 60 (four tables);
+#: constraints +56 -> 582 (``price_list_revision``: primary key, unique revision number, three
+#: foreign keys, fourteen CHECKs and the constraint trigger's row
+#: ``trg_price_list_revision_has_positions``; ``price_list_position``: primary key, unique row
+#: number, one foreign key, eleven CHECKs; ``vendor_list_revision``: primary key, the
+#: ``NULLS NOT DISTINCT`` unique revision number, two foreign keys, ten CHECKs and
+#: ``trg_vendor_list_revision_has_entries``; ``vendor_list_entry``: primary key, one foreign
+#: key, five CHECKs); indexes +9 -> 141 (the four primary keys, the three unique pairs,
+#: ``ix_price_list_revision_blob`` and ``ix_vendor_list_revision_set_by``); triggers +7 -> 64
+#: (four ``am_immutable_row`` triggers, ``trg_price_list_revision_blob_available`` and the two
+#: deferred constraint triggers); functions +3 -> 27 (``am_check_price_list_blob``,
+#: ``am_require_price_list_positions``, ``am_require_vendor_list_entries``). Views,
+#: extensions, sequences, policies and the state topology are identical to the 0025 seal.
+#: Resealed by `W61-DISPATCHER-01` for ``0025_work_assignments``, measured, not predicted:
+#: two fresh databases on the lane's PostgreSQL 17 + pgvector stack, one upgraded to ``0024``
+#: (whose inventory equalled the 0024 seal below in every family) and one to ``0025``, had
+#: every family's rows diffed. Every added row is this revision's and nothing was removed or
+#: redefined: columns +28 -> 493 (``work_assignment`` 7, ``work_assignment_event`` 8, the
+#: view ``work_assignment_current`` 13); relations +3 -> 56 (two tables, one view);
+#: constraints +27 -> 526 (``work_assignment``: primary key, four foreign keys, six CHECKs
+#: and the constraint trigger's row ``trg_work_assignment_has_assigned_event``;
+#: ``work_assignment_event``: primary key, ``uq_..._assignment_uid_seq``, three foreign keys
+#: and ten CHECKs); indexes +6 -> 132 (two primary keys, the unique ``seq`` pair,
+#: ``ix_work_assignment_scope``, ``ix_work_assignment_created`` and the partial
+#: ``ix_work_assignment_event_new_assignee``); triggers +3 -> 57 (the two
+#: ``am_immutable_row`` triggers and the deferred constraint trigger); functions +1 -> 24
+#: (``am_require_work_assignment_event``); views +1 -> 2. Extensions, sequences, policies
+#: and the state topology are identical to the 0024 seal (the ``work_assignment`` machine is
+#: decided by ``auditmanager.dispatch``; nothing is seeded into ``contract_state_transition``).
+#: Resealed by `W59-SECTION-SEAL-01` for ``0024_version_classification`` from a fresh
+#: upgrade on the lane's PostgreSQL 17 + pgvector stack. Against the 0023 seal below, five
+#: families moved and each by exactly the migration's DDL: columns +5 -> 465 (the five
+#: columns of ``document_version_classification``); relations +1 -> 53 (the table);
+#: constraints +7 -> 499 (its primary key, ``fk_..._version``, ``fk_..._confirmed_by`` and the
+#: four ``ck_document_version_classification_*`` checks), with ``ck_document_section``
+#: redefined from legacy's fourteen to the fifteen sections -- same row, new definition;
+#: indexes +1 -> 126 (the primary key's index); triggers +1 -> 54
+#: (``trg_document_version_classification_immutable``). Functions, views, extensions,
+#: sequences, policies and the state topology were observed identical to the 0023 seal.
+#: Resealed by `W57A-SEAL-01A` for ``0023_norm_citations`` from two disposable
+#: PostgreSQL 17 + pgvector 0.8.6 databases, one upgraded to published 0022 and
+#: one to 0023. Against the measured 0022 baseline: columns +34 (the retrieval
+#: set and citation tables, one Run pin and three observation fields);
+#: relations +2; constraints +33 (new table PK/FK/CHECKs, the Run pin, three
+#: observation checks, a forward CHECK for 0022's canonical observation ID,
+#: and three constraint triggers); indexes +3; triggers +7; functions +4
+#: (including the replacement custody guard's changed definition). The 0022
+#: severity view, extension, sequences, policies and state topology are
+#: unchanged. All newly named objects are in migration 0023; published 0022
+#: migration bytes remain untouched.
 #: Resealed by `W55B-SEAL-01` for ``0021_portal_bundles`` from a fresh upgrade on PostgreSQL 17 +
 #: pgvector 0.8.6 (the lane's own stack). Three families moved and each by exactly what the
 #: migration's DDL adds: columns +3 -> 422 (``document_version.text_character_count``,
@@ -100,13 +187,13 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (422, "fce7cf026dbe28de0258157f5495d83ac4ec8f5b68658a77fb01ad5d299dcd62"),
-    "relations": (50, "92a0ec6d035d72f0bb16e8ae867621a77a235a1c9a379237cf4aef2d28dd52de"),
-    "constraints": (454, "c2e81198ddeebe7e179b56041fd2a920f932ad93b0a7bdaed269d93fb5f968e4"),
-    "indexes": (121, "aa69f427e5b85d0d306931e4ecee46535c0a215b34799f58976bf789774a624e"),
-    "triggers": (46, "42bbe67057d87b17cb9a529f36147c08e1f9bcca49db16abb9227762f40d75ae"),
-    "functions": (19, "851f818fa7a1794404b24679fbafddeb1733876018f66e0738ab20beda705697"),
-    "views": (1, "099049415234da3d04583c58a693a68fda934f77e9eaf00b0d12e2542842734d"),
+    "columns": (606, "c91cfd648e0be2756288f49ddc30c0498e173a2bd0baa6597698901479b449f1"),
+    "relations": (66, "ab9583ece4619d4e3fe91db0138a3d3f2b92f4f325e4b4929495b14a7513aa45"),
+    "constraints": (657, "d8fb5c83e087d76d019e9544f8058ec66cdd62efd93cac5b7500456f6855293b"),
+    "indexes": (153, "d711d788b8705b85b60ac1ec2985f517fbbeb76550af4ddf768ed60b6278e6b9"),
+    "triggers": (72, "0b774f0595de5f670a36594fb286e3089fa11692d1e7379ad1cf9ea260fe8f14"),
+    "functions": (31, "62391d05e0e1c209227d158d95097c68ce2356ae5f096931dff6b2f69c72f4bd"),
+    "views": (4, "61b81f6732b6388cbc5f8ede9c5f7d1f9b3433f50e1f7b5ac252537585a3480f"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),
     "policies": (0, "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"),

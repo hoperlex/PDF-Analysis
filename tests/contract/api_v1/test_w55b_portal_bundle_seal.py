@@ -184,7 +184,9 @@ def test_portal_block_id_is_an_external_identifier_and_not_one_of_the_identities
     external = IDENTIFIERS["external_identifiers"]["portal_block_id"]
     assert external["prefix"] == "blk" and external["is_entity_identity"] is False
     assert external["pattern"] == "^blk_[0-9a-f]{32}$"
-    assert len(IDENTIFIERS["identifiers"]) == 32
+    # W57a adds nrs_ beside the external blk_; W61-DISPATCHER-01 asg_; W60-PRICE-LIST-01 prl_,
+    # prp_ and vnl_; W60-OPT-PROPOSALS-01 opp_, opr_ and opd_.
+    assert len(IDENTIFIERS["identifiers"]) == 40
 
 
 # --- the error catalog --------------------------------------------------------------------
@@ -196,7 +198,7 @@ def test_the_budget_refusal_is_a_422_that_is_never_retried_and_names_two_integer
     assert entry["safe_detail_keys"] == ["character_count", "budget_characters"]
     assert ErrorCode("analysis_input_budget_exceeded").http_status == 422
     assert "analysis_input_budget_exceeded" in CONTRACT["components"]["schemas"]["ErrorCode"]["enum"]
-    assert len(ERRORS["codes"]) == 24 == len(CONTRACT["components"]["schemas"]["ErrorCode"]["enum"])
+    assert len(ERRORS["codes"]) == 25 == len(CONTRACT["components"]["schemas"]["ErrorCode"]["enum"])
 
 
 @pytest.mark.parametrize("constraint", BUNDLE_CONSTRAINTS)

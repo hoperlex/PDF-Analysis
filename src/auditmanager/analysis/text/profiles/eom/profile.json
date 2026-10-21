@@ -1,0 +1,35 @@
+{
+  "format": "text-profile/1",
+  "section_code": "EOM",
+  "analysis_profile_id": "ap_01M5AXG1KKCKB70088QWAR8WD4",
+  "prompt_bundle_id": "pb_01M5AXG1KKNVF7G99H0BB166TW",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "title_ru": "Электроснабжение и электрооборудование",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "16ba8e5d23e4782550e79355002fde1365f682b7",
+    "files": [
+      {
+        "path": "prompts/disciplines/EOM/role.md",
+        "sha256": "949c503f0eca15b1fd99e29e3abcdaa801cbfd7481ed698e492f1cbcbaef53f0"
+      },
+      {
+        "path": "prompts/disciplines/EOM/checklist.md",
+        "sha256": "2835479eeb630d894349903ad601d3b6ce2cac1c05386f1a5601b58390d8664e"
+      },
+      {
+        "path": "prompts/disciplines/EOM/drawing_types.md",
+        "sha256": "4ccdc7c558465433e0f250114594fcb6b9b0a12dab0dc6f4a29fcf317a7574ed"
+      },
+      {
+        "path": "prompts/disciplines/EOM/project_params.md",
+        "sha256": "28506c8d3f9fc26addc6034f9529a5202229d49e0ec557f00c9832ca65a45c0b"
+      },
+      {
+        "path": "prompts/disciplines/EOM/finding_categories.md",
+        "sha256": "902fce3a4a4854dbb94bd86b042860d5ea2b0f8ad6d8ae8b85905498cf00475d"
+      }
+    ]
+  }
+}

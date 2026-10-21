@@ -23,11 +23,14 @@ from .models import (
     ROLE_SOURCE_MARKDOWN,
     ROLE_SOURCE_STAMP_AUDIT,
     ROLE_SOURCE_STRUCTURED_COMPANION,
+    ClassificationRevisionRecord,
+    CurrentVersionPlacementRecord,
     DocumentVersionRecord,
     ManifestEntry,
     ProjectListingRecord,
     ProjectRecord,
     UploadOutcome,
+    VersionClassificationRecord,
 )
 from .refusals import (
     SQLSTATE_APPEND_ONLY_VIOLATION,
@@ -39,10 +42,16 @@ from .refusals import (
     sqlstate_of,
     translate_database_refusal,
 )
-from .repository import MAX_DISPLAY_TITLE, MAX_PROJECT_NAME, DocumentRepository
+from .repository import (
+    MAX_DISPLAY_TITLE,
+    MAX_PLACEMENT_PAGE,
+    MAX_PROJECT_NAME,
+    DocumentRepository,
+)
 
 __all__ = [
     "MAX_DISPLAY_TITLE",
+    "MAX_PLACEMENT_PAGE",
     "MAX_PROJECT_NAME",
     "MANIFEST_ROLE_MARKDOWN",
     "MANIFEST_ROLE_SOURCE_DOCUMENT",
@@ -56,12 +65,15 @@ __all__ = [
     "SQLSTATE_IMMUTABLE_ROW_VIOLATION",
     "SQLSTATE_UNDECLARED_TRANSITION",
     "UNIQUE_VIOLATION",
+    "ClassificationRevisionRecord",
+    "CurrentVersionPlacementRecord",
     "DocumentRepository",
     "DocumentVersionRecord",
     "ManifestEntry",
     "ProjectListingRecord",
     "ProjectRecord",
     "UploadOutcome",
+    "VersionClassificationRecord",
     "constraint_name_of",
     "domain_error_for",
     "sqlstate_of",

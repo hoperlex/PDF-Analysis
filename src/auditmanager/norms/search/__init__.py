@@ -7,6 +7,12 @@ through ``auditmanager.norms.public`` only (ALR-05).
 from __future__ import annotations
 
 from .cursor import EventPosition, decode_event_cursor, encode_event_cursor
+from .display import (
+    DESIGNATION_MAX_CHARACTERS,
+    DisplayName,
+    display_name,
+    reader_designation,
+)
 from .fragment import Fragment
 from .query import DESIGNATION_TYPES, ParsedQuery, designation_of, fold, parse_query
 from .service import (
@@ -26,8 +32,10 @@ from .service import (
 )
 
 __all__ = [
+    "DESIGNATION_MAX_CHARACTERS",
     "DESIGNATION_TYPES",
     "SEARCH_WINDOW",
+    "DisplayName",
     "DocumentView",
     "EventPosition",
     "Fragment",
@@ -39,6 +47,7 @@ __all__ = [
     "SnapshotView",
     "decode_event_cursor",
     "designation_of",
+    "display_name",
     "encode_event_cursor",
     "fold",
     "get_document",
@@ -46,6 +55,7 @@ __all__ = [
     "list_snapshots",
     "parse_query",
     "pdf_binding",
+    "reader_designation",
     "resolve_scope",
     "search",
 ]

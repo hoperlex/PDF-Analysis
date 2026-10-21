@@ -1,4 +1,4 @@
-"""The sequential in-process executor: one run, four stages, one terminal.
+"""The sequential executor: four v1 stages or five explicit recorded v2 stages.
 
 This is the composition point of the whole prototype. Every module it drives already
 exists and is merged; nothing here reimplements any of them:
@@ -65,6 +65,7 @@ outbox delivery remain out of scope.
 
 from __future__ import annotations
 
+import re
 import time
 from functools import wraps
 from dataclasses import dataclass, field
@@ -91,6 +92,11 @@ from auditmanager.analysis.public import (
 from auditmanager.analysis.public import publish_artifact
 from auditmanager.analysis.public import (
     AR_TEXT_PROFILE,
+    AR_V2_RECORDED_BUNDLE_ID,
+    AR_V2_RECORDED_PROFILE_ID,
+    RecordedAdapter,
+    RecordedGenerationSettings,
+    RecordedProfileError,
     ARTIFACT_ROLE as ROLE_TEXT_OBSERVATIONS,
     CostMeter,
     ModelAdapter,
@@ -102,6 +108,7 @@ from auditmanager.analysis.public import (
     TextAnalysisOutcome,
     load_provider_config,
     run_text_analysis,
+    resolve_recorded_profile,
 )
 from auditmanager.analysis.public import TEXT_STAGE_VERSION
 from auditmanager.documents.public import DocumentRepository
@@ -134,7 +141,13 @@ from auditmanager.runs.retry import (
     not_attempted,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import ModelCallId, RunId, VersionUid
+from auditmanager.shared.identity import (
+    AnalysisProfileId,
+    ModelCallId,
+    PromptBundleId,
+    RunId,
+    VersionUid,
+)
 from auditmanager.storage.public import BlobStore, DurablePublicationStore
 from auditmanager.storage.public import BlobMetadataRepository
 from auditmanager.storage.public import BlobDeclaration, VerifiedBlob, parse_blob_id
@@ -174,9 +187,9 @@ class ExecutionResult:
     published_finding_count: int
     diagnostic_count: int
     gate_ran: bool
-    #: How many attempts the model stage took, and why a second one happened. The same
-    #: facts are persisted on the stage row, so a caller that keeps this object and a
-    #: reader who has only the database agree without either re-deriving the other.
+    #: How many attempts the model stage took, and why a second one happened.
+    #: v1 facts are persisted on the stage row; recorded v2 seals one model-call
+    #: count on its text stage and does not use the v1 retry ladder.
     model_attempts: AttemptSummary
 
     @property
@@ -201,6 +214,64 @@ class ExecutionResult:
     def is_publishable(self) -> bool:
         """Delegated to the gate's own definition; this module has no opinion."""
         return self.selection.is_publishable
+
+
+@dataclass(frozen=True, slots=True)
+class RecordedV2ExecutionIntent:
+    """A persisted run's identity after recorded-only preflight, without effects.
+
+    The explicit executor bridge uses the immutable recorded registration; normal
+    serving composition does not select or configure this profile yet.
+    """
+
+    run_id: str
+    analysis_profile_id: str
+    prompt_bundle_id: str
+
+
+def plan_recorded_v2_execution(
+    *,
+    run: RunRow,
+    adapter: ModelAdapter,
+    provider_config: ProviderConfig,
+    registered_profile_id: str,
+    registered_bundle_id: str,
+) -> RecordedV2ExecutionIntent:
+    """Check recorded v2 authority before any DB, blob or provider effect.
+
+    The caller must supply the profile and bundle from an independently pinned
+    registry. This helper cannot register a profile or prove a recording's
+    request checksum. The v1 ``execute_run`` path never calls it.
+    """
+    try:
+        AnalysisProfileId.parse(registered_profile_id)
+        PromptBundleId.parse(registered_bundle_id)
+        registered = resolve_recorded_profile(registered_profile_id, registered_bundle_id)
+    except (TypeError, ValueError, DomainError, RecordedProfileError):
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="a recorded AR v2 profile and prompt bundle must be registered and unchanged",
+        ) from None
+
+    v1_profile_id = str(AR_TEXT_PROFILE.analysis_profile_id)
+    if (
+        registered_profile_id == v1_profile_id
+        or run.analysis_profile_id != str(registered.analysis_profile_id)
+        or run.prompt_bundle_id != str(registered.prompt_bundle_id)
+        or run.provider_mode != ProviderMode.RECORDED.value
+        or provider_config.mode is not ProviderMode.RECORDED
+        or adapter.provider_mode is not ProviderMode.RECORDED
+        or run.state not in {INITIAL_STATE, "queued", "running"}
+    ):
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="recorded AR v2 execution requires a matching pinned run and adapter",
+        )
+    return RecordedV2ExecutionIntent(
+        run_id=run.run_id,
+        analysis_profile_id=str(registered.analysis_profile_id),
+        prompt_bundle_id=str(registered.prompt_bundle_id),
+    )
 
 
 @dataclass
@@ -451,8 +522,12 @@ def _run_text_analysis_stage(
     sleep: Sleep,
     clock: Clock,
     call_journal: ModelCallJournal,
+    profile: Any = AR_TEXT_PROFILE,
 ) -> tuple[StageResult, Mapping[str, Any] | None, AttemptSummary]:
     """Run ``text_analysis``, retrying transport failures, and publish its artifact.
+
+    ``profile`` is the run's pinned text profile, resolved before any effect
+    (`W59-SECTION-SEAL-01`): its prompt bundle is the one every attempt sends.
 
     Returns the stage result, the observations document, and the attempt tally.
 
@@ -522,7 +597,7 @@ def _run_text_analysis_stage(
             config=provider_config,
             document_graph=graph_document,
             block_index_document=block_index_document,
-            profile=AR_TEXT_PROFILE,
+            profile=profile,
             # One meter for the whole run, supplied by the caller above. Building it here
             # would give every attempt a fresh USD 1.00, which is precisely the reading of
             # OD-03 that a retry must not be able to buy.
@@ -646,6 +721,30 @@ def _run_evidence_gate(
     return True, publication
 
 
+#: `W59-SECTION-SEAL-01`. ``(analysis_profile_id, prompt_bundle_id) -> text profile``,
+#: raising ``LookupError`` for a pair it does not register. The composition root passes the
+#: section-keyed text-profile registry's ``resolve``. The profile is opaque here: it goes to
+#: ``run_text_analysis`` unread, which is why ``runs`` needs no import of its type.
+TextProfileResolver = Callable[[str, str], Any]
+
+
+def _pinned_text_profile(run: RunRow, resolve: TextProfileResolver) -> Any:
+    """The run's pinned text profile, or the refusal that fails the run before any effect."""
+    try:
+        return resolve(run.analysis_profile_id, run.prompt_bundle_id)
+    except LookupError:
+        raise DomainError(
+            ErrorCode.REQUIRED_NORM_UNAVAILABLE,
+            message=(
+                "the run's pinned analysis profile is not registered in this deployment; "
+                "no other profile is substituted"
+            ),
+            reference_kind="analysis_profile",
+            analysis_profile_id=run.analysis_profile_id,
+            prompt_bundle_id=run.prompt_bundle_id,
+        ) from None
+
+
 def _execute_run_body(
     session: Session,
     run_id: str,
@@ -663,8 +762,21 @@ def _execute_run_body(
     effect_checkpoint: EffectCheckpoint | None = None,
     jobs: JobRepository | None = None,
     blob_metadata: BlobMetadataRepository | None = None,
+    recorded_fixture_model_id: str | None = None,
+    recorded_generation_settings: RecordedGenerationSettings | None = None,
+    text_profiles: TextProfileResolver | None = None,
 ) -> ExecutionResult:
     """Drive one run from ``created`` to a terminal state.
+
+    ``text_profiles`` (`W59-SECTION-SEAL-01`) resolves the run's **pinned**
+    ``(analysis_profile_id, prompt_bundle_id)`` to the text profile the ``text_analysis``
+    stage runs with, so a section-routed run executes with its own prompt bundle. It is
+    called before any state change or effect; a pair it cannot resolve fails the run with
+    ``required_norm_unavailable`` (``reference_kind: analysis_profile``) and no stage runs.
+    The served application always passes the section-keyed registry
+    (``bootstrap/composition.py``). ``None`` is the in-process harness's unrouted mode,
+    which predates routing and runs the v1 AR profile as every run did before this seal;
+    no served path reaches it.
 
     The executor owns the authority and external-effect commits; the caller commits the
     final stage/result transaction on normal return. Every stage result is persisted as it
@@ -698,6 +810,49 @@ def _execute_run_body(
         meter.unpriced_contributions = max(meter.unpriced_contributions, 1)
 
     run = run_repo.get(session, run_id)
+    recorded_v2 = (
+        run.analysis_profile_id == str(AR_V2_RECORDED_PROFILE_ID)
+        or run.prompt_bundle_id == str(AR_V2_RECORDED_BUNDLE_ID)
+    )
+    if recorded_v2:
+        # A fixture is not a verified live model pin. Require the caller to name
+        # the offline replay and its exact request settings before any effect.
+        if (type(adapter) is not RecordedAdapter
+                or config.api_key is not None
+                or not isinstance(recorded_fixture_model_id, str)
+                or re.fullmatch(r"fixture/[a-z0-9][a-z0-9._-]{0,127}", recorded_fixture_model_id) is None
+                or not isinstance(recorded_generation_settings, RecordedGenerationSettings)):
+            raise DomainError(
+                ErrorCode.ANALYSIS_INPUT_INVALID,
+                message="recorded AR v2 requires explicit offline fixture inputs",
+            )
+        try:
+            RecordedGenerationSettings(
+                recorded_generation_settings.max_output_tokens,
+                recorded_generation_settings.effort,
+                recorded_generation_settings.thinking,
+            )
+        except ValueError:
+            raise DomainError(
+                ErrorCode.ANALYSIS_INPUT_INVALID,
+                message="recorded AR v2 generation settings are invalid",
+            ) from None
+        plan_recorded_v2_execution(
+            run=run, adapter=adapter, provider_config=config,
+            registered_profile_id=str(AR_V2_RECORDED_PROFILE_ID),
+            registered_bundle_id=str(AR_V2_RECORDED_BUNDLE_ID),
+        )
+    elif recorded_fixture_model_id is not None or recorded_generation_settings is not None:
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="recorded AR v2 fixture inputs require the persisted v2 profile",
+        )
+
+    text_profile = (
+        AR_TEXT_PROFILE
+        if recorded_v2 or text_profiles is None
+        else _pinned_text_profile(run, text_profiles)
+    )
 
     # The run declares a provider mode; the adapter *is* one. Nothing compared them, so a
     # run started with provider_mode="live" and executed entirely by the recorded adapter
@@ -854,6 +1009,55 @@ def _execute_run_body(
             halted = True
             break
 
+    if recorded_v2:
+        # The last deterministic _persist_and_bind holds the Lease lock until
+        # commit. The recorded text port reads source Blobs before its own
+        # stage_started commit; release that lock before the S3 read so the
+        # independent heartbeat is never blocked by source loading (D-141).
+        # The StageResult UPSERT and its artifact binding stay atomic here.
+        session.commit()
+        # These ports import the executor's publication helpers. Import only on
+        # the selected path, after the persisted profile has passed preflight.
+        from auditmanager.runs.recorded_v2_stage import run_recorded_v2_stage
+        from auditmanager.runs.recorded_v2_merge import run_recorded_v2_merge_stage
+        from auditmanager.runs.recorded_v2_publication import publish_recorded_v2_run
+
+        attempts = not_attempted(policy)
+        if not halted:
+            assert recorded_fixture_model_id is not None
+            assert recorded_generation_settings is not None
+            text_result = run_recorded_v2_stage(
+                session, authority=authority, blob_store=blob_store,
+                adapter=adapter, provider_config=config,
+                fixture_model_id=recorded_fixture_model_id,
+                settings=recorded_generation_settings,
+                runs=run_repo, jobs=job_repo, documents=document_repo,
+                blobs=blob_repo, clock=clock,
+            )
+            if text_result.status is not StageStatus.SUCCEEDED:
+                raise DomainError(
+                    ErrorCode.ANALYSIS_FAILED,
+                    message="recorded AR v2 text stage did not complete",
+                )
+            ledger = AttemptLedger(attempt_budget=1)
+            ledger.record(status="succeeded", error=None, waited_seconds=0.0)
+            attempts = ledger.close()
+            run_recorded_v2_merge_stage(
+                session, authority=authority, blob_store=blob_store,
+                runs=run_repo, jobs=job_repo, blobs=blob_repo, clock=clock,
+            )
+        gate = publish_recorded_v2_run(
+            session, authority=authority, blob_store=blob_store,
+            runs=run_repo, jobs=job_repo, documents=document_repo,
+        )
+        return ExecutionResult(
+            run_id=run_id, selection=gate.selection,
+            stage_statuses=dict(run_repo.stage_statuses(session, run_id)),
+            published_finding_count=gate.finding_count,
+            diagnostic_count=gate.rejected_count,
+            gate_ran=not halted, model_attempts=attempts,
+        )
+
     # -- the AI stage ---------------------------------------------------------
     # A halted chain never reaches the provider, so it has no attempts rather than one
     # failed attempt. The two are different claims and the tally says which.
@@ -884,6 +1088,7 @@ def _execute_run_body(
             call_journal=_DurableCallJournal(
                 session, job_repo, authority, effect_checkpoint
             ),
+            profile=text_profile,
         )
         _persist_and_bind(
             session,
@@ -990,6 +1195,9 @@ __all__ = [
     "Clock",
     "EffectCheckpoint",
     "ExecutionResult",
+    "RecordedV2ExecutionIntent",
     "Sleep",
+    "TextProfileResolver",
     "execute_run",
+    "plan_recorded_v2_execution",
 ]

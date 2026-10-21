@@ -7,12 +7,10 @@
  * client's: the ordinal is a display and ordering value, never an identity, and nothing
  * here sorts or renumbers.
  *
- * **This returns exactly one row today, and that is a property of the transport rather
- * than of the aggregate.** `uploadDocument` declares no `document_uid`, so every upload
- * through this surface starts a new document at ordinal 1. `IngestService.upload_single_pdf`
- * does take one and does publish a second version onto an existing document — measured by
- * `W18-SEAL` §2. So this is the read side of an aggregate whose write side can already
- * grow, and it is not written as if one row were the rule.
+ * **It is not written as if one row were the rule.** Until `W59-VERSION-UPLOAD-01` every
+ * upload through this surface started a new document at ordinal 1 (`W18-SEAL` §2); since
+ * then `uploadDocumentVersion` publishes further versions onto an existing document, and
+ * its success invalidates every page of this list (`queryKeys.versions.lists`).
  */
 
 import { useQuery } from '@tanstack/react-query';

@@ -1,12 +1,13 @@
-"""The portal's recognised text is never an input of analysis (`R-117`, `W55B-RECOGNISED-01`).
+"""Recognised text never supplies a PDF quote to analysis (`R-117`, W56a).
 
 Container-free. Two guards, each over an authority outside the package under test:
 
 * the source tree: no module of ``auditmanager.analysis.text`` -- the prompt path, the only
   code that sends text to a model -- imports ``auditmanager.analysis.recognised``, directly,
   relatively or by a literal dynamic import;
-* the frozen stage registry: no stage but ``source_preparation`` declares the markdown, and no
-  stage at all declares ``prepared.recognised_text``, as an input.
+* the frozen stage registry: only ``source_preparation`` declares the markdown,
+  while ``text_analysis`` may consume ``prepared.recognised_text`` as optional
+  marked context that cannot serve as quotation evidence.
 
 The text-layer half of the guarantee (the layer of a bundle is byte for byte the layer of its
 bare PDF) is in ``test_source_preparation_bundle.py``.
@@ -89,13 +90,19 @@ def test_the_scan_sees_each_way_a_module_could_import_the_package(tmp_path: Path
     assert offenders == {"direct.py", "dynamic.py", "relative.py"}
 
 
-def test_no_stage_but_source_preparation_reads_the_portal_markdown_or_its_artifact() -> None:
+def test_only_the_optional_text_context_reads_the_recognised_artifact() -> None:
     registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
     readers: dict[str, set[str]] = {}
+    recognised_input = None
     for stage in registry["stages"]:
         for declared in stage.get("required_inputs", ()):
             readers.setdefault(declared["role"], set()).add(stage["stage_id"])
+            if declared["role"] == "prepared.recognised_text":
+                recognised_input = declared
 
     assert readers.get("source.markdown") == {"source_preparation"}
-    assert "prepared.recognised_text" not in readers
+    assert readers.get("prepared.recognised_text") == {"text_analysis"}
+    assert recognised_input is not None
+    assert recognised_input["required"] is False
+    assert "never an evidence quotation source" in recognised_input["description"]
     assert "text_analysis" not in readers.get("source.structured_companion", set())

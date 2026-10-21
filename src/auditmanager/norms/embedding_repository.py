@@ -368,23 +368,25 @@ class NormEmbeddingRepository:
                     f"embedding build {snapshot_id}/{chunking_profile}/{embedding_profile} "
                     f"already exists with {actual!r}, requested {expected!r}"
                 )
-            return self._result(snapshot_id, chunking_profile, embedding_profile, expected, False)
-
-        self._session.execute(
-            _INSERT_BUILD,
-            parameters
-            | {
-                "chunk_count": expected[0],
-                "window_count": expected[1],
-                "embedding_set_sha256": expected[2],
-            },
-        )
-        read_back = self.stored_build_digest(snapshot_id, chunking_profile, embedding_profile)
-        if read_back != (expected[2], expected[0], expected[1]):
-            raise NormEmbeddingConflict(
-                f"the stored rows digest to {read_back!r}, the build computed {expected!r}"
+        else:
+            self._session.execute(
+                _INSERT_BUILD,
+                parameters
+                | {
+                    "chunk_count": expected[0],
+                    "window_count": expected[1],
+                    "embedding_set_sha256": expected[2],
+                },
             )
-        return self._result(snapshot_id, chunking_profile, embedding_profile, expected, True)
+        # The completion row alone does not prove that its windows still exist. In particular,
+        # a DELETE can leave that immutable row behind. Check the persisted rows on replay too.
+        read_back = self.stored_build_digest(snapshot_id, chunking_profile, embedding_profile)
+        expected_read_back = (expected[2], expected[0], expected[1])
+        if read_back != expected_read_back:
+            raise NormEmbeddingConflict(
+                f"the stored rows digest/counts are {read_back!r}, expected {expected_read_back!r}"
+            )
+        return self._result(snapshot_id, chunking_profile, embedding_profile, expected, stored is None)
 
     def _insert_group(
         self,

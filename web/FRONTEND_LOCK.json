@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482",
-    "content_commit": "7216d8b",
-    "content_commit_subject": "W55B-FREEZE-01 dispatch base; atomic reseal has no self-commit",
-    "dispatch_named_commit": "7216d8b",
-    "commit_note": "W55B-SEAL-01 adds listVersionPortalBlocks and streamVersionPortalBlockCrop (sealed stubs answering dependency_unavailable until W55B-GEOMETRY-01), seven schemas, the PortalBlockId path parameter, the portal-bundle upload description and encoding (a ZIP, 500 pages, 250 MiB) and the page_count ceiling of 500; the domain error catalog gains analysis_input_budget_exceeded (twenty-four codes) and contract_version is unchanged.",
+    "sha256": "7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c",
+    "content_commit": "c9469558",
+    "content_commit_subject": "NORM-REFS-RUN-01 API reseal on integration base c9469558",
+    "dispatch_named_commit": "c9469558",
+    "commit_note": "NORM-REFS-RUN-01 adds the norms a run's saved text cites, checked against the norms snapshot the run pinned: getRunNormReferences (GET /runs/{run_id}/norm-references, any one role) and five schemas (RunNormReferences, NormReferenceCounts, NormReferenceItem, NormReferenceAnchor, NormReferenceUnrecognised): each distinct cited designation is one of in_corpus, newer_edition, older_edition_only, not_in_corpus or not_recognised, with the pages it occurs on and the corpus document it points at; a precondition that does not hold is one state (snapshot_not_pinned, text_unavailable, too_many_citations), never an empty list; the corpus documents whose designation the parser cannot read are listed; no finding, no severity, no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 47,
-    "operations": 54,
-    "component_schemas": 123,
+    "paths": 73,
+    "operations": 83,
+    "component_schemas": 242,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482",
+    "snapshot_sha256": "7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "1df9d742d7b28ffbb8848d97216b265c7f50c21a8df32fead53f6ea92c85c522",
-      "index.ts": "27dd7beaf6e40843015b53bcd3e86ebea160433aafdab8339c775640dbd7a571",
-      "operations.gen.ts": "e12dd8910a08eba44d8c927cdcd310d6eb9188b58140a94ee2adced447a08708",
-      "types.gen.ts": "2682def53f7f080474197617ee47270b1ce7f0dd02f55d4b14a564b1f6eb5f88"
+      "client.gen.ts": "3e3fa5db7a4e64b871152e2c410d63b2272356dbceec2a1277385948b30f05f2",
+      "index.ts": "a875b898fc39a0b5991011d3c4e2543a330c7b21d15a3335728098a03e24b156",
+      "operations.gen.ts": "c105dc4296af83c3e7fbe31e557424b0f6aba8ac59f7bd68599056210802f638",
+      "types.gen.ts": "17a390d7c274c484e757efeb95e27665a3760a10ba12f47052213272714fcafd"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

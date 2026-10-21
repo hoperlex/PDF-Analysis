@@ -39,10 +39,11 @@ class DecisionEventView:
     recorded_at: datetime
     verdict: str | None = None
     comment: str | None = None
+    severity: str | None = None
 
 
 def decision_event_body(view: DecisionEventView) -> dict[str, Any]:
-    return {
+    body = {
         "decision_id": view.decision_id,
         "finding_uid": view.finding_uid,
         "finding_observation_id": view.finding_observation_id,
@@ -54,6 +55,9 @@ def decision_event_body(view: DecisionEventView) -> dict[str, Any]:
         "author_label": view.author_label,
         "recorded_at": timestamp(view.recorded_at),
     }
+    if view.severity is not None:
+        body["severity"] = view.severity
+    return body
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,11 +84,12 @@ class DecisionRecordView:
     decision_event_count: int
     verdict: str | None = None
     comment: str | None = None
+    severity: str | None = None
 
 
 def decision_record_body(view: DecisionRecordView) -> dict[str, Any]:
     """``DecisionRecord``: one journal entry, event and finding context together."""
-    return {
+    body = {
         "decision_id": view.decision_id,
         "finding_uid": view.finding_uid,
         "finding_observation_id": view.finding_observation_id,
@@ -102,6 +107,9 @@ def decision_record_body(view: DecisionRecordView) -> dict[str, Any]:
         "current_verdict": view.current_verdict,
         "decision_event_count": view.decision_event_count,
     }
+    if view.severity is not None:
+        body["severity"] = view.severity
+    return body
 
 
 def append_decision_body(view: DecisionEventView, current_verdict: str) -> dict[str, Any]:

@@ -1,0 +1,35 @@
+{
+  "format": "text-profile/1",
+  "section_code": "PS",
+  "analysis_profile_id": "ap_01M5AXG1K22R027A33VTKZ468P",
+  "prompt_bundle_id": "pb_01M5AXG1K2JQQH7R4ACTBW8974",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "title_ru": "Пояснительная записка",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "16ba8e5d23e4782550e79355002fde1365f682b7",
+    "files": [
+      {
+        "path": "prompts/disciplines/PS/role.md",
+        "sha256": "9999c2e3398db818d1b85941473db785b8b132558c95661c016ad845a437b7fa"
+      },
+      {
+        "path": "prompts/disciplines/PS/checklist.md",
+        "sha256": "c3dd8f7b7f84ecd23de8e353071b0f400ef9be4863de1c6b3691083ffeee9a93"
+      },
+      {
+        "path": "prompts/disciplines/PS/drawing_types.md",
+        "sha256": "bfbf147ce3449ee293f194430d1aafa91898036f09f3cf9fe250c3c41cbee7d4"
+      },
+      {
+        "path": "prompts/disciplines/PS/project_params.md",
+        "sha256": "eb8dcb54b22371673195d0985d8bca6ca4a01d152d590567abdddb7313376a51"
+      },
+      {
+        "path": "prompts/disciplines/PS/finding_categories.md",
+        "sha256": "60dfdf036131121a97477e7cd0630f89fdf36a56d7c3e93dbb6123bfe204d907"
+      }
+    ]
+  }
+}

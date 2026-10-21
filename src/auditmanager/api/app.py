@@ -80,7 +80,7 @@ __all__ = [
 #: So the four built-in routes are suppressed (``openapi_url=None`` and the three below it
 #: in :func:`_assemble`) and the same four routes are declared as ``APIRoute``s, which do
 #: carry the application's dependencies. They stay out of the document --
-#: ``include_in_schema=False`` -- because the contract declares forty-seven paths and these are
+#: ``include_in_schema=False`` -- because the contract declares seventy-three paths and these are
 #: not among them.
 OPENAPI_PATH: Final[str] = "/openapi.json"
 _DOCS_PATH: Final[str] = "/docs"
@@ -102,7 +102,7 @@ DOCUMENTATION_PATHS: Final[tuple[str, ...]] = (
 #: is the same string.
 _TITLE: Final[str] = "AuditManager API"
 _DESCRIPTION: Final[str] = (
-    "The fifty-four operations of the PC-01 surface. Every failure is one `ErrorEnvelope` "
+    "The eighty-three operations of the PC-01 surface. Every failure is one `ErrorEnvelope` "
     "carrying a catalog `error_code`, and every response carries `X-Correlation-Id`."
 )
 
@@ -151,7 +151,7 @@ def create_asgi_app(
     *,
     application: Application | None = None,
 ) -> FastAPI:
-    """The ASGI application: the fifty-four operations, the seam, and the four middlewares.
+    """The ASGI application: the eighty-three operations, the seam, and the four middlewares.
 
     ``application`` lets a caller that has already built one -- a test driving two
     applications in one process, for instance -- avoid building it twice. When it is omitted
@@ -165,7 +165,7 @@ def create_asgi_app(
 def create_documentation_app(environ: Mapping[str, str] | None = None) -> FastAPI:
     """The same application shape, with nothing wired behind the six ports.
 
-    The served document is a function of the fifty-four declarations and the 123 models and not
+    The served document is a function of the eighty-three declarations and the 242 models and not
     of what sits behind the ports, so this builds it without a database, an object store or
     a credential -- which is what lets the conformance gate read
     ``create_documentation_app().openapi()`` on any checkout. It **cannot serve a request**:
@@ -202,7 +202,7 @@ def _drop_the_422_this_surface_cannot_answer(document: dict[str, Any]) -> dict[s
     **Why this is not document surgery, and how you can tell.** `W13-CONF` measured that
     FastAPI's own 422 must be *displaced, not deleted*: declaring the contract's own
     ``422: {"model": ErrorEnvelope, ...}`` replaces it and keeps ``HTTPValidationError`` and
-    ``ValidationError`` out of ``components.schemas``. **Thirty-nine** of the fifty-four
+    ``ValidationError`` out of ``components.schemas``. **Sixty-one** of the eighty-three
     operations do exactly that -- measured from the contract, not recalled: this paragraph
     read *"Twelve of the seventeen"* until wave 39, and twelve plus the four below is
     sixteen, which was never the size of this surface. It was thirteen of seventeen before
@@ -211,23 +211,45 @@ def _drop_the_422_this_surface_cannot_answer(document: dict[str, Any]) -> dict[s
     operation joined the group below rather than this one growing. `W49-SEAL-01` added
     nine to it (every one of its operations with a body or a query) and five to the group
     below; `W55A-SEAL-01`'s norms operations joined it, except ``getNormDocument``, which
-    joined the group below.
-    **Eleven cannot**, because the contract declares no ``422`` for them:
+    joined the group below; `W59-SECTION-SEAL-01`'s ``classifyDocumentVersion`` joined it
+    and ``getVersionSectionReview`` joined the group below; `W59-VERSION-COMPARE-01`'s
+    ``compareDocumentVersions`` (a required query and paging bounds) joined it, and
+    `W59-ANALYSIS-SETTINGS-01`'s ``listAnalysisProfiles``, which takes no parameter at all,
+    joined the group below, and `W59-VERSION-UPLOAD-01`'s ``uploadDocumentVersion`` (a body)
+    joined it; `W59-DECISION-CARRYOVER-01`'s ``carryOverDecision`` (a closed body)
+    joined it too, and `W57B-NORMS-CATALOGUE-XLSX-01`'s ``listNormDocuments`` (filters
+    and paging) and ``exportRunXlsx`` (the workbook's source refusals) joined it, and so did
+    `W61-DISPATCHER-01`'s ``createAssignment``, ``listAssignments`` and
+    ``transitionAssignment``, while its ``getAssignment`` joined the group below, and
+    `W60-PRICE-LIST-01`'s six optimisation operations (a body, a query or a path identity
+    checked by pattern) all joined it, and
+    `W60-OPT-MATCH-01`'s ``getSpecificationPrices`` (paging bounds) joined it, and so did
+    `W60-OPT-PROPOSALS-01`'s ``startOptimisationPass``, ``listOptimisationPasses``,
+    ``listOptimisationProposals`` and ``decideOptimisationProposal`` (a body, a query or a paged
+    read), while its ``listProposalDecisions`` and ``exportOptimisationProposalsCsv`` joined the
+    group below, and
+    `W63-SECTION-FORM7-01`'s ``getSectionSpecification`` (a path code, filters and paging) joined
+    the first, and so did `CLASSIFICATION-CORRECTION-01`'s ``correctVersionClassification``
+    (a body), while `NORM-REFS-RUN-01`'s ``getRunNormReferences`` (a path identity and nothing
+    else) joined the group below.
+    **Fifteen cannot**, because the contract declares no ``422`` for them:
     ``getRunStatus``, ``getDocumentVersion``, ``getFinding``, ``exportRunCsv``,
     ``getVersionBlocks`` (`W45-BLOCKS`, the same shape as ``getDocumentVersion``),
     ``getUser``, ``archiveUser``, ``restoreUser`` and ``purgeUser`` (`W49-SEAL-01`: a path
-    identity and nothing else), and ``getDashboardSummary`` (`W46-SEAL`) and ``getMe``
-    (`W49-SEAL-01`), which take no parameter at all, so a fortiori nothing a 422 could
-    ever be about. FastAPI
+    identity and nothing else), ``getAssignment`` (`W61-DISPATCHER-01`, the same shape), ``listProposalDecisions`` and
+    ``exportOptimisationProposalsCsv`` (`W60-OPT-PROPOSALS-01`, a path identity and nothing else),
+    ``getRunNormReferences`` (`NORM-REFS-RUN-01`, the same shape), and
+    ``getDashboardSummary`` (`W46-SEAL`) and ``getMe`` (`W49-SEAL-01`), which take no
+    parameter at all, so a fortiori nothing a 422 could ever be about. FastAPI
     injects one anyway, for any operation with parameters, and there is no switch
     (``fastapi/openapi/utils.py:517-535`` -- the condition is on the *absence* of a declared
     422, ``4XX`` or ``default``).
 
-    Nine of the eleven take a path identity and the optional correlation header and nothing
+    Thirteen of the fifteen take a path identity and the optional correlation header and nothing
     else. A malformed path identity is ``404 not_found`` by design -- the frozen
     ``NotFound`` response says this surface "never reveals the existence of a resource
     the caller may not see" -- and the correlation header is declared but deliberately
-    not enforced. **So a 422 is unreachable on all nine, and FastAPI's claim that they
+    not enforced. **So a 422 is unreachable on all thirteen, and FastAPI's claim that they
     answer one is false.** What is removed here is a false statement about this
     application, not a difference from the contract, and the narrowness is what makes
     that checkable: an operation's 422 is removed only when the response object is
@@ -339,7 +361,7 @@ def _declare_the_documentation_routes(app: FastAPI) -> None:
     ``app.router.dependencies``, instead of a ``starlette.routing.Route``, which carries
     nothing.
 
-    ``include_in_schema=False`` on all four. The contract declares forty-seven paths and
+    ``include_in_schema=False`` on all four. The contract declares seventy-three paths and
     these are not among them; a documentation route that described itself would be a
     twenty-eighth.
 
@@ -436,7 +458,7 @@ def _assemble(
             ),
         ],
         # A model with a default would otherwise be emitted twice, as `X-Input` and
-        # `X-Output`. The 123 schema names are pinned by the contract and by the frontend's
+        # `X-Output`. The 242 schema names are pinned by the contract and by the frontend's
         # generated client, so the split is a conformance failure -- and the fix belongs
         # here, in the application, never in the gate's normalization. `W13-CONF` measured
         # it: `test_the_gate_catches_a_split_input_and_output_schema`.

@@ -19,6 +19,17 @@ rather than by a hand-written state list: ``published`` and ``partial`` export, 
 degraded state visible in column 5; a non-terminal run and the terminal ``failed`` are
 refused with ``state_transition_not_allowed``. PC-01 never emits
 ``partial_result_not_publishable``.
+
+The run's Excel export (`W57B-NORMS-CATALOGUE-XLSX-01`) uses the same discriminator and the
+same refusals, through the certified W57b chain:
+
+    from auditmanager.exports import ExportAuthorization, export_run_xlsx
+
+    export = export_run_xlsx(
+        session, run_id, authorization=authorization,
+        read_blob=read_blob, read_citations=read_citations,
+    )
+    export.content       # bytes: a deterministic, stored-ZIP workbook
 """
 
 from auditmanager.exports.policy import (
@@ -37,6 +48,8 @@ from auditmanager.exports.serializer import (
     row_values,
 )
 from auditmanager.exports.service import CsvExport, export_run_csv
+from auditmanager.exports.xlsx.package import ExportAuthorization
+from auditmanager.exports.xlsx.run_export import XlsxExport, export_run_xlsx
 
 __all__ = [
     "BOM",
@@ -44,11 +57,14 @@ __all__ = [
     "CONTENT_TYPE",
     "SORT_KEY",
     "CsvExport",
+    "ExportAuthorization",
     "ExportRow",
     "RunHeader",
+    "XlsxExport",
     "assert_exportable",
     "export_rows",
     "export_run_csv",
+    "export_run_xlsx",
     "exportable_states",
     "publishes_result",
     "publishes_result_by_state",

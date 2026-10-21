@@ -129,24 +129,19 @@ def test_pc01_stages_are_a_strict_narrowing(stage_registry_contract: dict) -> No
 
 # --- analysis.text.prompt.CATEGORIES -----------------------------------------------
 #
-# Not a narrowing at all: the prompt's two categories are the whole FindingCategory enum,
-# and the response schema the provider is held to is built from this tuple. A third
-# category in the contract that the prompt never asks for would be a category no run can
-# ever produce.
+# The v1 prompt remains two-category and byte-identical while W56A-SEAL-01
+# reserves five v2 values. The later PROFILES task owns the v2 prompt and
+# selection; this guard proves the v1 tuple is unchanged and remains declared.
 
 
-def test_the_prompts_categories_are_the_finding_category_enum(
+def test_the_v1_prompt_categories_remain_a_declared_subset(
     openapi_document: dict,
 ) -> None:
     from auditmanager.analysis.text.prompt import CATEGORIES
 
     declared = openapi_document["components"]["schemas"]["FindingCategory"]["enum"]
-    assert list(CATEGORIES) == list(declared), (
-        "analysis/text/prompt.py's CATEGORIES no longer matches the FindingCategory enum "
-        "of contracts/api/v1/openapi.json. The prompt's response schema is built from "
-        "this tuple, so a category the contract declares and the prompt omits is one no "
-        "run can produce."
-    )
+    assert list(CATEGORIES) == ["internal_contradiction", "explicit_placeholder"]
+    assert set(CATEGORIES) <= set(declared)
 
 
 # --- bootstrap.settings._DECLARED_MODES --------------------------------------------

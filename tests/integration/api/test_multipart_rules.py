@@ -540,6 +540,10 @@ class TestARefusalNeverEchoesWhatTheCallerSent:
 # ---------------------------------------------------------------------------------------
 
 UPLOAD_PATH = "/projects/prj_01ARZ3NDEKTSV4RRFFQ69G5FAV/documents"
+#: `W59-VERSION-UPLOAD-01`: ``uploadDocumentVersion``, the other route with the upload cap
+#: and an upload slot; and a path under one of its versions that must have neither.
+VERSION_UPLOAD_PATH = UPLOAD_PATH + "/doc_01ARZ3NDEKTSV4RRFFQ69G5FAW/versions"
+VERSION_COMPARISON_PATH = VERSION_UPLOAD_PATH + "/ver_01ARZ3NDEKTSV4RRFFQ69G5FAX/comparison"
 OTHER_PATH = "/projects"
 MULTIPART = f"multipart/form-data; boundary={BOUNDARY}".encode()
 JSON_TYPE = b"application/json"
@@ -709,6 +713,30 @@ class TestTheUploadGate:
 
         run(scenario())
 
+    def test_a_version_upload_shares_the_same_two_slots(self) -> None:
+        """`W59-VERSION-UPLOAD-01`: ``uploadDocumentVersion`` takes a slot from the same pool,
+        so one first upload and one version upload in flight refuse a third of either kind."""
+
+        async def scenario() -> None:
+            inner = HoldingApp()
+            app, gate = stack(inner)
+            first = asyncio.create_task(drive(app))
+            second = asyncio.create_task(drive(app, path=VERSION_UPLOAD_PATH))
+            await until(lambda: inner.entered == 2, "two uploads inside the application")
+
+            for path in (UPLOAD_PATH, VERSION_UPLOAD_PATH):
+                third = await drive(app, path=path, chunks=(b"y" * 1000,))
+                assert third.status == 503, path
+                assert third.envelope["details"] == {"dependency": "upload_capacity"}
+                assert third.receives == 0, "the refused upload's body was touched"
+            assert gate.gate.in_flight == 2
+
+            inner.release.set()
+            assert [(await first).status, (await second).status] == [204, 204]
+            assert gate.gate.in_flight == 0
+
+        run(scenario())
+
     def test_the_refusal_carries_retry_after_between_the_length_and_the_correlation_id(
         self,
     ) -> None:
@@ -795,6 +823,10 @@ class TestTheUploadGate:
                 "listing the same collection": {"method": "GET", "path": UPLOAD_PATH, "content_type": None},
                 "a longer path": {"path": UPLOAD_PATH + "/extra"},
                 "another method": {"method": "PUT"},
+                "listing a document's versions": {
+                    "method": "GET", "path": VERSION_UPLOAD_PATH, "content_type": None,
+                },
+                "a path under one version": {"path": VERSION_COMPARISON_PATH},
             }.items():
                 answer = await drive(app, **kwargs)
                 assert answer.status == 204, f"{label} was refused as busy: {answer.status}"
@@ -893,6 +925,12 @@ class TestEveryRouteHasItsOwnCap:
             (OTHER_PATH, UPLOAD_LIMIT, False),
             ("/runs", TRANSPORT_LIMIT + 1, False),
             (UPLOAD_PATH + "/", TRANSPORT_LIMIT + 1, False),
+            (VERSION_UPLOAD_PATH, UPLOAD_LIMIT, True),
+            (VERSION_UPLOAD_PATH, UPLOAD_LIMIT + 1, False),
+            (VERSION_UPLOAD_PATH, TRANSPORT_LIMIT + 1, True),
+            (VERSION_UPLOAD_PATH + "/", TRANSPORT_LIMIT + 1, False),
+            (VERSION_COMPARISON_PATH, TRANSPORT_LIMIT + 1, False),
+            (UPLOAD_PATH + "/doc_01ARZ3NDEKTSV4RRFFQ69G5FAW", TRANSPORT_LIMIT + 1, False),
         ],
     )
     def test_the_declared_length_is_judged_against_the_cap_of_the_route(

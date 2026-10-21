@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 8e1d0b23d2b3715934436a1b5dfc13172f57938df0accfa5b44fe06e2a4bd482
+ *   sha256 7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,19 +17,32 @@
 import type {
   Account,
   AccountPage,
+  AnalysisProfileList,
   AppendDecisionRequest,
   AppendDecisionResponse,
   ApproveRegistrationRequest,
+  Assignment,
+  AssignmentDetail,
+  AssignmentPage,
+  AssignmentStatus,
+  AssignmentUid,
+  CarryOverDecisionRequest,
+  CarryOverDecisionResponse,
   ChangePasswordRequest,
+  ClassifyDocumentVersionRequest,
+  CorrectVersionClassificationRequest,
   CorrelationId,
+  CreateAssignmentRequest,
   CreateProjectRequest,
   Cursor,
   DashboardSummary,
+  DecideOptimisationProposalRequest,
   DecisionEventPage,
   DecisionRecordPage,
   DocumentUid,
   DocumentVersion,
   DocumentVersionPage,
+  EffectiveVendorLists,
   ExecutionDispatchStatus,
   ExecutionJournalPage,
   ExecutionQueueItem,
@@ -45,6 +58,7 @@ import type {
   IssueTokenResponse,
   JobId,
   MarkReleaseNotesReadRequest,
+  NormCatalogueEntryPage,
   NormCurrentSnapshot,
   NormDocument,
   NormDocumentId,
@@ -52,13 +66,27 @@ import type {
   NormSearchPage,
   NormSnapshotEventPage,
   NormSnapshotPage,
+  NormVerificationReport,
   NormsSnapshotId,
+  OptimisationPass,
+  OptimisationPassId,
+  OptimisationPassList,
+  OptimisationProposalId,
+  OptimisationProposalPage,
   PortalBlockId,
   PortalBlockPage,
+  PriceListId,
+  PriceListPositionPage,
+  PriceListRevision,
+  PriceListRevisionList,
   ProductVersion,
   Project,
   ProjectPage,
+  ProjectSection,
   ProjectUid,
+  ProposalDecisionList,
+  ProposalDecisionResult,
+  ProposalDecisionState,
   RegistrationRequest,
   RegistrationRequestId,
   RegistrationRequestPage,
@@ -68,20 +96,33 @@ import type {
   ReleaseList,
   ResetUserPasswordRequest,
   RunId,
+  RunNormReferences,
   RunStatus,
   RunStatusPage,
+  SectionReview,
+  SectionSpecification,
+  SectionVendorList,
   SetCurrentNormSnapshotRequest,
   SetExecutionPausedRequest,
+  SetGlobalVendorListRequest,
   SetJobPriorityRequest,
+  SetProjectVendorListRequest,
   SetWorkerIntakeRequest,
+  SpecificationPrices,
   StartRunRequest,
   SubmitRegistrationRequest,
+  TransitionAssignmentRequest,
   UpdateMyProfileRequest,
   UpdateUserRequest,
   UploadDocumentRequest,
+  UploadDocumentVersionRequest,
+  UploadPriceListRequest,
   UserUid,
+  VendorListRevision,
   Verdict,
   VersionBlockIndex,
+  VersionClassification,
+  VersionComparison,
   VersionUid,
   WorkerId,
 } from './types.gen';
@@ -92,28 +133,51 @@ export const OPERATION_IDS = [
   'approveRegistration',
   'archiveUser',
   'cancelRun',
+  'carryOverDecision',
   'changePassword',
+  'classifyDocumentVersion',
+  'compareDocumentVersions',
+  'correctVersionClassification',
+  'createAssignment',
   'createProject',
+  'decideOptimisationProposal',
+  'exportOptimisationProposalsCsv',
   'exportRunCsv',
+  'exportRunXlsx',
+  'getAssignment',
   'getDashboardSummary',
   'getDocumentVersion',
+  'getEffectiveVendorLists',
   'getFinding',
   'getMe',
   'getNormDocument',
   'getProductVersion',
+  'getRunNormReferences',
+  'getRunNormVerification',
   'getRunStatus',
+  'getSectionSpecification',
+  'getSpecificationPrices',
   'getUser',
   'getVersionBlocks',
+  'getVersionSectionReview',
   'issueToken',
+  'listAnalysisProfiles',
+  'listAssignments',
   'listDecisionHistory',
   'listDecisions',
   'listDocuments',
   'listExecutionJournal',
   'listExecutionQueue',
+  'listNormDocuments',
   'listNormParagraphs',
   'listNormSnapshotEvents',
   'listNormSnapshots',
+  'listOptimisationPasses',
+  'listOptimisationProposals',
+  'listPriceListPositions',
+  'listPriceListRevisions',
   'listProjects',
+  'listProposalDecisions',
   'listRegistrations',
   'listReleases',
   'listRunFindings',
@@ -132,16 +196,22 @@ export const OPERATION_IDS = [
   'searchNorms',
   'setCurrentNormSnapshot',
   'setExecutionPaused',
+  'setGlobalVendorList',
   'setJobPriority',
+  'setProjectVendorList',
   'setWorkerIntake',
+  'startOptimisationPass',
   'startRun',
   'streamDocumentVersionContent',
   'streamNormDocumentContent',
   'streamVersionPortalBlockCrop',
   'submitRegistration',
+  'transitionAssignment',
   'updateMyProfile',
   'updateUser',
   'uploadDocument',
+  'uploadDocumentVersion',
+  'uploadPriceList',
 ] as const;
 
 /** The closed set of operations this client can perform. */
@@ -257,6 +327,38 @@ export type CancelRunInput = {
 export type CancelRunResult = RunStatus;
 
 // ------------------------------------------------------------------------------------
+// carryOverDecision - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers
+// ------------------------------------------------------------------------------------
+
+/**
+ * Carry Over Decision
+ *
+ * Carry one expert decision from a finding of the path's (older) version to the finding of `target_version_uid` that the comparison proposes as `unchanged`, on the calling expert's confirmation. The comparison is recomputed with the body's `mode` and runs when the confirmation arrives, and must still propose exactly this pair; the source finding's current verdict must still be the `source_decision_id` the expert was shown (`accepted` or `rejected`), and the target finding must have no decision event yet. The target receives one new `accept` or `reject` event authored by the caller, whose `comment` records the carried-from finding, decision and versions; a severity is carried with an accept or the carryover is refused, never dropped. Nothing else is written: the source finding and its decisions stay as they were. An exact repeat answers the event already carried, `replayed: true`, and keeps its first expert. A refusal is `conflict` with `conflict_reason` `carryover_pair_not_proposed`, `carryover_source_decision_not_current`, `carryover_target_already_decided` or `carryover_severity_not_carryable`. `expert` is required; `admin` alone is refused (`required_capability: role:expert`).
+ */
+export type CarryOverDecisionInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CarryOverDecisionRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `carryOverDecision` (`application/json`, HTTP 201). */
+export type CarryOverDecisionResult = CarryOverDecisionResponse;
+
+// ------------------------------------------------------------------------------------
 // changePassword - POST /auth/password
 // ------------------------------------------------------------------------------------
 
@@ -288,6 +390,119 @@ export type ChangePasswordInput = {
 export type ChangePasswordResult = IssueTokenResponse;
 
 // ------------------------------------------------------------------------------------
+// classifyDocumentVersion - PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification
+// ------------------------------------------------------------------------------------
+
+/**
+ * Classify Document Version
+ *
+ * Classify one version: its project stage (`P` or `R`) and one of the fifteen sections, confirmed by the calling expert. `expert` is required; `admin` alone is refused with `permission_denied` (`required_capability: role:expert`). The version must belong to the named document and the document to the named project, otherwise `not_found`. An exact repeat answers the stored row and keeps the first confirmer; a different stage or section is `conflict` with `conflict_reason: version_already_classified` and changes nothing -- to change an existing classification an expert uses `correctVersionClassification`, with a reason. A suggestion, a file name or the legacy document `section` is never a classification.
+ */
+export type ClassifyDocumentVersionInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ClassifyDocumentVersionRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `classifyDocumentVersion` (`application/json`, HTTP 200). */
+export type ClassifyDocumentVersionResult = VersionClassification;
+
+// ------------------------------------------------------------------------------------
+// compareDocumentVersions - GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison
+// ------------------------------------------------------------------------------------
+
+/**
+ * Compare Document Versions
+ *
+ * Compare two versions of one document set: the path names the older (source) version and `target_version_uid` the newer one. Both must be published versions of the named document in the named project with the same confirmed section and, with `mode=version` (the default), the same explicit project stage; with `mode=stage` the source must be classified `P` and the target `R` (design to working documentation of one set). Each needs a published run (the newest one, or the one `source_run_id` / `target_run_id` names). A path that names no such version is `404`; otherwise a pair the rule does not admit is `outcome: refused` with one `refusal.reason`, never relabelled. The answer carries proposed sheet pairs with their evidence, one page of raw line differences (`diff_offset`, `diff_limit`, `next_offset`) and proposed matches between the two runs' findings. Every pairing and match is a proposal; nothing is written. Any one role, `role:admin|expert`.
+ */
+export type CompareDocumentVersionsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Query string parameters. */
+  query: {
+    /** Sheets with text differences per answer. */
+    diff_limit?: number;
+    /** Position in the list of sheets with text differences. */
+    diff_offset?: number;
+    /** `version`: both versions carry the same project stage and section. `stage`: the source is classified `P`, the target `R`, with the same section. */
+    mode?: "version" | "stage";
+    source_run_id?: RunId;
+    target_run_id?: RunId;
+    /** The newer version of the same set; the path names the older one. */
+    target_version_uid: VersionUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `compareDocumentVersions` (`application/json`, HTTP 200). */
+export type CompareDocumentVersionsResult = VersionComparison;
+
+// ------------------------------------------------------------------------------------
+// correctVersionClassification - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections
+// ------------------------------------------------------------------------------------
+
+/**
+ * Correct Version Classification
+ *
+ * Correct one version's classification: append a new revision with the full target `project_stage` and `section_code`, a `reason` (1 to 2000 characters, with a letter or a digit) and the `expected_revision` the caller was looking at. `expert` is required; `admin` alone is refused with `permission_denied` (`required_capability: role:expert`). The version must belong to the named document and the document to the named project, otherwise `not_found`. Revision 1 is the original confirmation and is never changed; the current classification is the latest revision. An unclassified version is `conflict` with `conflict_reason: version_not_classified` -- classify it first. An `expected_revision` behind the current one is `conflict` with `conflict_reason: classification_revision_stale` and writes nothing, unless the request is an exact repeat (same expert, same values, same reason) of the revision after it, which answers that stored revision with `201` and writes nothing; one ahead of the current revision, a pair equal to the current classification (`constraint: differs_from_current`) and a blank, over-long or unprintable reason are `validation_failed`. Runs already started keep the analysis profile they pinned; a re-audit routes from the corrected classification. No `Idempotency-Key`: `expected_revision` is what makes a retry safe.
+ */
+export type CorrectVersionClassificationInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CorrectVersionClassificationRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `correctVersionClassification` (`application/json`, HTTP 201). */
+export type CorrectVersionClassificationResult = VersionClassification;
+
+// ------------------------------------------------------------------------------------
+// createAssignment - POST /assignments
+// ------------------------------------------------------------------------------------
+
+/**
+ * Assign a project, or one document of it, to an expert.
+ *
+ * Requires `admin`. Gives the named project, or one document of it (`document_uid`, which must belong to the project, otherwise `not_found`), to an active account holding `expert` (otherwise `validation_failed`, `constraint: active_expert_required`), with an optional note. The assignment starts `assigned` with its `assigned` event. One open assignment per scope: an exact repeat (same assignee and note) answers the open one, and any other creation there is `conflict` with `conflict_reason: assignment_open` -- reassign or cancel that one instead. No `Idempotency-Key`: the open-scope rule is what makes a repeat safe.
+ */
+export type CreateAssignmentInput = {
+  /** Request body, sent as `application/json`. */
+  body: CreateAssignmentRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `createAssignment` (`application/json`, HTTP 200). */
+export type CreateAssignmentResult = Assignment;
+
+// ------------------------------------------------------------------------------------
 // createProject - POST /projects
 // ------------------------------------------------------------------------------------
 
@@ -308,6 +523,59 @@ export type CreateProjectInput = {
 
 /** Success body of `createProject` (`application/json`, HTTP 201). */
 export type CreateProjectResult = Project;
+
+// ------------------------------------------------------------------------------------
+// decideOptimisationProposal - POST /optimisation-proposals/{optimisation_proposal_id}/decisions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Decide Optimisation Proposal
+ *
+ * Append an expert's decision on a proposal: `accept`, `reject` or `revise` (the comment is required for `revise`, at most 2000 characters). Decisions are only appended, never changed; the latest one is current, and any number may follow. `expert` is required (`admin` alone is `permission_denied`); an unknown proposal is `404`. An exact repeat of the `Idempotency-Key` answers the stored decision; the same key with another verdict, comment, proposal or caller is `409 idempotency_key_reuse`. The decision belongs to the proposal alone: no finding is read or changed.
+ */
+export type DecideOptimisationProposalInput = {
+  /** Path parameters, substituted into `/optimisation-proposals/{optimisation_proposal_id}/decisions`. */
+  path: {
+    optimisation_proposal_id: OptimisationProposalId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: DecideOptimisationProposalRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `decideOptimisationProposal` (`application/json`, HTTP 201). */
+export type DecideOptimisationProposalResult = ProposalDecisionResult;
+
+// ------------------------------------------------------------------------------------
+// exportOptimisationProposalsCsv - GET /optimisation-passes/{optimisation_pass_id}/export.csv
+// ------------------------------------------------------------------------------------
+
+/**
+ * Export Optimisation Proposals Csv
+ *
+ * Every proposal of the pass as a CSV file, one row each in ordinal order: the pass, the specification row's provenance, both positions, both exact unit prices, the saving (an empty cell when it is absent, never `0`) and the current decision. UTF-8 with a byte-order mark, CRLF line endings, RFC 4180 quoting; every cell that a spreadsheet would read as a formula is prefixed with an apostrophe. Computed on request from the stored rows; separate from the findings' CSV. An unknown pass is `404`. Any one role, `role:admin|expert`.
+ */
+export type ExportOptimisationProposalsCsvInput = {
+  /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/export.csv`. */
+  path: {
+    optimisation_pass_id: OptimisationPassId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `exportOptimisationProposalsCsv` (`text/csv`, HTTP 200). */
+export type ExportOptimisationProposalsCsvResult = Blob;
 
 // ------------------------------------------------------------------------------------
 // exportRunCsv - GET /runs/{run_id}/export.csv
@@ -335,6 +603,56 @@ export type ExportRunCsvInput = {
 
 /** Success body of `exportRunCsv` (`text/csv`, HTTP 200). */
 export type ExportRunCsvResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// exportRunXlsx - GET /runs/{run_id}/export.xlsx
+// ------------------------------------------------------------------------------------
+
+/**
+ * Download the Excel workbook for one run.
+ *
+ * Synchronous, like `exportRunCsv`, and with its states and role: nothing is created, there is no export resource or identity, and repeating the request returns byte-identical bytes. An unknown run is `404`; a run whose terminal does not declare `publishes_result: true` is `409 state_transition_not_allowed`, decided on the run before anything else is read. A `partial` run is exported.
+ *
+ * The workbook is the W57b layout (`docs/program/dispatch/W57-PLAN.md` section B3.5): «Сводка» with the run's identity and the counts by severity (decided, else proposed) and by category, and «Замечания» with one row per finding -- № | Лист/стр. | Категория | Замечание | Рекомендация | Серьёзность (решение эксперта) | Серьёзность (предложение модели) | Норма (документ, пункт) | Цитата нормы | Решение эксперта | Комментарий -- and a «также найдено» row per merged member. Standard-library writer, stored ZIP parts in a fixed order with fixed timestamps, inline strings, no formula; XML-forbidden characters become U+FFFD.
+ *
+ * «Лист/стр.» comes only from the version's verified portal companion: a version without one, or whose companion does not verify, is `422 storage_integrity_error` with `role: source.structured_companion`; a page number is never shown as a sheet label. The norm columns carry a finding's verified citations when the run has certified citation partitions, read through its pinned retrieval set; when they do not verify the answer is `422 required_norm_unavailable` with `reference_kind: norm_retrieval_set`, never a workbook without them. A run without citation partitions exports with the norm columns empty. Roles: `expert` (`role:expert`), as `exportRunCsv`. Added by W57B-NORMS-CATALOGUE-XLSX-01.
+ */
+export type ExportRunXlsxInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/export.xlsx`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `exportRunXlsx` (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, HTTP 200). */
+export type ExportRunXlsxResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// getAssignment - GET /assignments/{assignment_uid}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read one assignment with its history.
+ *
+ * Any one role. The assignment and every event of its append-only history, oldest first, each with its actor. An assignment the caller may not read -- an expert reading one that is not currently theirs -- is `not_found`.
+ */
+export type GetAssignmentInput = {
+  /** Path parameters, substituted into `/assignments/{assignment_uid}`. */
+  path: {
+    assignment_uid: AssignmentUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getAssignment` (`application/json`, HTTP 200). */
+export type GetAssignmentResult = AssignmentDetail;
 
 // ------------------------------------------------------------------------------------
 // getDashboardSummary - GET /dashboard
@@ -373,6 +691,29 @@ export type GetDocumentVersionInput = {
 
 /** Success body of `getDocumentVersion` (`application/json`, HTTP 200). */
 export type GetDocumentVersionResult = DocumentVersion;
+
+// ------------------------------------------------------------------------------------
+// getEffectiveVendorLists - GET /projects/{project_uid}/vendor-lists
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Effective Vendor Lists
+ *
+ * All fifteen sections' vendor lists as they apply to the project, in section order. For each: `source` `project` (the project's own latest revision, mode `list`), `global` (the administrator's latest) or `none`; the `effective` revision; and the latest revision of each scope. An unknown project is `404`. Any one role, `role:admin|expert`.
+ */
+export type GetEffectiveVendorListsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/vendor-lists`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getEffectiveVendorLists` (`application/json`, HTTP 200). */
+export type GetEffectiveVendorListsResult = EffectiveVendorLists;
 
 // ------------------------------------------------------------------------------------
 // getFinding - GET /findings/{finding_uid}
@@ -455,6 +796,52 @@ export type GetProductVersionInput = {
 export type GetProductVersionResult = ProductVersion;
 
 // ------------------------------------------------------------------------------------
+// getRunNormReferences - GET /runs/{run_id}/norm-references
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Run Norm References
+ *
+ * «Нормативные ссылки»: the normative documents (СП, ГОСТ, СНиП, СанПиН, ВСН, federal laws and government acts) cited in the run's saved text, each resolved against the norms snapshot the run pinned as `in_corpus`, `newer_edition`, `older_edition_only` (the corpus holds only an earlier edition than the one cited), `not_in_corpus` or `not_recognised`, with the pages each occurs on and the corpus document it points at. Computed per request by the same resolver the W57b rule uses; publishes no finding, proposes no severity and calls no model. A precondition that does not hold is `state` (`snapshot_not_pinned`, `text_unavailable`, `too_many_citations`), never an empty list; the corpus documents whose designation the parser cannot read are listed as `unrecognised`; pages without a text layer are `unread_pages`. An unknown run is `404`. Any one role, `role:admin|expert`.
+ */
+export type GetRunNormReferencesInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/norm-references`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getRunNormReferences` (`application/json`, HTTP 200). */
+export type GetRunNormReferencesResult = RunNormReferences;
+
+// ------------------------------------------------------------------------------------
+// getRunNormVerification - GET /runs/{run_id}/norm-verification
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Run Norm Verification
+ *
+ * Read a verified v3 normative report for a run. R-80: any one active expert or admin role; an empty role set is refused. A v1/v2 run answers not_found. Until the CITE verified reader is implemented, this endpoint answers typed 503 dependency_unavailable and exposes no unverified citation data (D-151).
+ */
+export type GetRunNormVerificationInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/norm-verification`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getRunNormVerification` (`application/json`, HTTP 200). */
+export type GetRunNormVerificationResult = NormVerificationReport;
+
+// ------------------------------------------------------------------------------------
 // getRunStatus - GET /runs/{run_id}
 // ------------------------------------------------------------------------------------
 
@@ -476,6 +863,70 @@ export type GetRunStatusInput = {
 
 /** Success body of `getRunStatus` (`application/json`, HTTP 200). */
 export type GetRunStatusResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
+// getSectionSpecification - GET /sections/{section_code}/specification
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Section Specification
+ *
+ * «Оптимизация разделов»: the Form-7 rows of every project whose document set's current version an expert confirmed in the section, each row priced from its own project's current price list as `matched`, `ambiguous` or `unmatched` with its reason (or `price_list_missing` when the project has none). The section code is a filter, not an identity: every row carries its project, document set, version, page, sheet and line span, rows are never merged across projects, and totals exist per project and per currency only -- there is no section total. A current version nobody classified is listed in `excluded`; one confirmed in another section never appears. `project_uid` narrows the answer to one project (an unknown one is `404`); `q` keeps the rows whose own text contains it and never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set without a published run or a saved text layer is its own `state`. Over a bound (projects scanned, member sets read, rows held) the answer is `200` with `state: section_too_large`, the bound in `limit_reason`, the membership listed and no rows; narrow to one project. A section code outside the fifteen is `404`. Nothing is written. Any one role, `role:admin|expert`.
+ */
+export type GetSectionSpecificationInput = {
+  /** Path parameters, substituted into `/sections/{section_code}/specification`. */
+  path: {
+    section_code: ProjectSection;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Specification rows per answer. */
+    limit?: number;
+    /** Position in the list of rows that survive the search. */
+    offset?: number;
+    project_uid?: ProjectUid;
+    /** Text a row's position, description, group, unit or note contains, ignoring case, `ё` and runs of spaces. Narrows the rows only, never a project's totals. */
+    q?: string;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getSectionSpecification` (`application/json`, HTTP 200). */
+export type GetSectionSpecificationResult = SectionSpecification;
+
+// ------------------------------------------------------------------------------------
+// getSpecificationPrices - GET /projects/{project_uid}/documents/{document_uid}/specification-prices
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Specification Prices
+ *
+ * «Спецификация и цены»: the specification rows of the document set's current version, read deterministically from its newest published run's saved text layer, each matched to the project's current price-list revision as `matched`, `ambiguous` or `unmatched` with its reason (code or mark first, then the normalised name, in the same unit; never a fuzzy guess). The version must be classified as section `AR`. A precondition that does not hold is `state` (`version_unclassified`, `section_not_ar`, `price_list_missing`, `analysis_missing`, `text_unavailable`, `specification_too_large`) with the facts read so far; a path naming no such set is `404`. A price and an amount appear only on a matched row with a numeric quantity; totals are per currency over those rows only, with every other row counted by its reason. Rows are paged (`offset`, `limit`, `next_offset`); counts and totals cover every row. Nothing is written. Any one role, `role:admin|expert`.
+ */
+export type GetSpecificationPricesInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/specification-prices`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Specification rows per answer. */
+    limit?: number;
+    /** Position in the list of specification rows. */
+    offset?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getSpecificationPrices` (`application/json`, HTTP 200). */
+export type GetSpecificationPricesResult = SpecificationPrices;
 
 // ------------------------------------------------------------------------------------
 // getUser - GET /users/{user_uid}
@@ -528,6 +979,31 @@ export type GetVersionBlocksInput = {
 export type GetVersionBlocksResult = VersionBlockIndex;
 
 // ------------------------------------------------------------------------------------
+// getVersionSectionReview - GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Version Section Review
+ *
+ * The fifteen section choices for one version, each with the suggestion evidence its file name and recognised text carry (or `null`) and whether a text profile is registered for it (`executable`), plus the persisted classification or `null`, and the classification's history (`revisions`, oldest first: the original confirmation, then each correction with its expert, time and reason). Display input only: nothing here confirms a section or starts a run. Any one role, `role:admin|expert`.
+ */
+export type GetVersionSectionReviewInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getVersionSectionReview` (`application/json`, HTTP 200). */
+export type GetVersionSectionReviewResult = SectionReview;
+
+// ------------------------------------------------------------------------------------
 // issueToken - POST /auth/token
 // ------------------------------------------------------------------------------------
 
@@ -551,6 +1027,54 @@ export type IssueTokenInput = {
 
 /** Success body of `issueToken` (`application/json`, HTTP 200). */
 export type IssueTokenResult = IssueTokenResponse;
+
+// ------------------------------------------------------------------------------------
+// listAnalysisProfiles - GET /analysis/profiles
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the analysis profile of every section.
+ *
+ * The analysis profiles the server routes runs through: all fifteen sections in the project-structure order, each with its registered text profile -- identities, version, status (`builtin`, `draft` or `reviewed`), prompt-bundle and profile hashes and the legacy source of a ported package -- or `null` when no profile is registered, which run start refuses. Read-only: no operation edits a profile or its status. Any one role, `role:admin|expert`.
+ */
+export type ListAnalysisProfilesInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listAnalysisProfiles` (`application/json`, HTTP 200). */
+export type ListAnalysisProfilesResult = AnalysisProfileList;
+
+// ------------------------------------------------------------------------------------
+// listAssignments - GET /assignments
+// ------------------------------------------------------------------------------------
+
+/**
+ * List assignments.
+ *
+ * Any one role. An administrator reads every assignment (`mine=true` narrows to the ones currently given to them); an expert reads only the assignments currently given to them, whatever `mine` says. `status` and `project_uid` narrow the list; newest first, ordered by `(created_at, assignment_uid)`.
+ */
+export type ListAssignmentsInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+    mine?: boolean;
+    project_uid?: ProjectUid;
+    status?: AssignmentStatus;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listAssignments` (`application/json`, HTTP 200). */
+export type ListAssignmentsResult = AssignmentPage;
 
 // ------------------------------------------------------------------------------------
 // listDecisionHistory - GET /findings/{finding_uid}/decisions
@@ -698,6 +1222,36 @@ export type ListExecutionQueueInput = {
 export type ListExecutionQueueResult = ExecutionQueuePage;
 
 // ------------------------------------------------------------------------------------
+// listNormDocuments - GET /norm-documents
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Norm Documents
+ *
+ * Every document of the current norms snapshot (R-112) as a catalogue, in designation order (natural, case- and homoglyph-folded), then title, then identity. `designation` and `title` are derived for display from the document's stored file name -- dates dotted, designation numbers dotted, a cut edition note closed or shown as `(ред. …)` -- and never alter or replace the stored rows; a name no rule can derive is shown as `getNormDocument` shows it, and `title` is null when the name carries nothing after the designation. `q` (1-200 characters) keeps documents whose designation or title contains it from the start of a word, folded the same way, and a `q` ending in a digit ends a number there; `kind` (1-100 characters) keeps documents whose stored kind equals it, and `kinds` lists every kind of the snapshot with its count. A `q` or `kind` holding a control character or nothing to filter by is `422 validation_failed` (`field` `q` or `kind`, `constraint: format`). The cursor is opaque and bound to `q`, `kind` and the snapshot; another listing refuses it. `total` counts the documents the filters keep. With no current snapshot the answer is `422 required_norm_unavailable` with `reference_kind: norms_snapshot`, never an empty page. Every row carries its `source_attribution` (NORM-Q04). Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Added by W57B-NORMS-CATALOGUE-XLSX-01.
+ */
+export type ListNormDocumentsInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** A document kind as the catalogue's `kinds` lists it, matched exactly. */
+    kind?: string;
+    /** Page size. */
+    limit?: number;
+    /** Text the designation or title contains from the start of a word. */
+    q?: string;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listNormDocuments` (`application/json`, HTTP 200). */
+export type ListNormDocumentsResult = NormCatalogueEntryPage;
+
+// ------------------------------------------------------------------------------------
 // listNormParagraphs - GET /norm-documents/{norm_document_id}/paragraphs
 // ------------------------------------------------------------------------------------
 
@@ -780,6 +1334,119 @@ export type ListNormSnapshotsInput = {
 export type ListNormSnapshotsResult = NormSnapshotPage;
 
 // ------------------------------------------------------------------------------------
+// listOptimisationPasses - GET /projects/{project_uid}/optimisation-passes
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Optimisation Passes
+ *
+ * The project's optimisation passes, newest first (at most `limit`, 100 by default), each with its counts by decision; `document_uid` narrows to one document set of the project. An unknown project or a set of another project is `404`. Any one role, `role:admin|expert`.
+ */
+export type ListOptimisationPassesInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/optimisation-passes`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    document_uid?: DocumentUid;
+    /** Passes per answer. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listOptimisationPasses` (`application/json`, HTTP 200). */
+export type ListOptimisationPassesResult = OptimisationPassList;
+
+// ------------------------------------------------------------------------------------
+// listOptimisationProposals - GET /optimisation-passes/{optimisation_pass_id}/proposals
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Optimisation Proposals
+ *
+ * One page of a pass's proposals in ordinal order (`offset`, `limit`, `next_offset`), each with its provenance in the specification, the matched and the proposed position, both exact unit prices, the saving where it is computable and its current decision. `decision` narrows to the proposals in one decision state (`pending` for none yet); the pass's `decision_counts` always count every proposal. An unknown pass is `404`. Any one role, `role:admin|expert`.
+ */
+export type ListOptimisationProposalsInput = {
+  /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/proposals`. */
+  path: {
+    optimisation_pass_id: OptimisationPassId;
+  };
+  /** Query string parameters. */
+  query?: {
+    decision?: ProposalDecisionState;
+    /** Proposals per answer. */
+    limit?: number;
+    /** Position in the pass's proposals, in ordinal order. */
+    offset?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listOptimisationProposals` (`application/json`, HTTP 200). */
+export type ListOptimisationProposalsResult = OptimisationProposalPage;
+
+// ------------------------------------------------------------------------------------
+// listPriceListPositions - GET /price-lists/{price_list_id}/positions
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Price List Positions
+ *
+ * One page of a price-list revision's positions in source-row order (`offset`, `limit`, `next_offset`), with the revision and its parse report. Each unit price is its exact decimal text. An unknown revision is `404`. Any one role, `role:admin|expert`.
+ */
+export type ListPriceListPositionsInput = {
+  /** Path parameters, substituted into `/price-lists/{price_list_id}/positions`. */
+  path: {
+    price_list_id: PriceListId;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Positions per answer. */
+    limit?: number;
+    /** Position in the revision's positions, in source-row order. */
+    offset?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listPriceListPositions` (`application/json`, HTTP 200). */
+export type ListPriceListPositionsResult = PriceListPositionPage;
+
+// ------------------------------------------------------------------------------------
+// listPriceListRevisions - GET /projects/{project_uid}/price-lists
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Price List Revisions
+ *
+ * Every price-list revision of the project, newest first, the first flagged `is_current`. An unknown project is `404`. Any one role, `role:admin|expert`.
+ */
+export type ListPriceListRevisionsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/price-lists`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listPriceListRevisions` (`application/json`, HTTP 200). */
+export type ListPriceListRevisionsResult = PriceListRevisionList;
+
+// ------------------------------------------------------------------------------------
 // listProjects - GET /projects
 // ------------------------------------------------------------------------------------
 
@@ -800,6 +1467,29 @@ export type ListProjectsInput = {
 
 /** Success body of `listProjects` (`application/json`, HTTP 200). */
 export type ListProjectsResult = ProjectPage;
+
+// ------------------------------------------------------------------------------------
+// listProposalDecisions - GET /optimisation-proposals/{optimisation_proposal_id}/decisions
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Proposal Decisions
+ *
+ * The proposal's whole append-only decision history, oldest first, each with its verdict, comment, author and time; the last one is current. An unknown proposal is `404`. Any one role, `role:admin|expert`.
+ */
+export type ListProposalDecisionsInput = {
+  /** Path parameters, substituted into `/optimisation-proposals/{optimisation_proposal_id}/decisions`. */
+  path: {
+    optimisation_proposal_id: OptimisationProposalId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listProposalDecisions` (`application/json`, HTTP 200). */
+export type ListProposalDecisionsResult = ProposalDecisionList;
 
 // ------------------------------------------------------------------------------------
 // listRegistrations - GET /registrations
@@ -1104,7 +1794,7 @@ export type ReadRegistrationStatusResult = RegistrationStatusResponse;
 /**
  * Reaudit Run
  *
- * A re-audit runs the same version on the current configuration (R-82), so it faces today's analysis input budget, not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118).
+ * A re-audit runs the same version on the current configuration (R-82), so it faces today's analysis input budget, not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version or a section with no registered text profile is `422 required_norm_unavailable` with `reference_kind` `version_classification` or `analysis_profile`.
  */
 export type ReauditRunInput = {
   /** Path parameters, substituted into `/runs/{run_id}/reaudit`. */
@@ -1234,7 +1924,7 @@ export type SearchNormsResult = NormSearchPage;
 /**
  * Set Current Norm Snapshot
  *
- * Designate a qualifying snapshot as the current one (R-113, G-6), which every new run and re-audit then pins. `expected_current` is the snapshot the caller believes is current (`null` for none); a stale belief is `409 conflict` with `conflict_reason: stale_current_snapshot`. An already-current target answers the current designation as a replay and writes no history row; any other change writes exactly one. A target that does not qualify is `422 required_norm_unavailable` with `reference_kind` `norm_embedding_build` (no complete build) or `norm_source` (a document's PDF has no confirmed binding); an unknown snapshot is `404`. There is no unset. No `Idempotency-Key`: the request is a compare-and-set on durable state. Roles: `admin` (`role:admin`). Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ * Designate a qualifying snapshot as the current one (R-113, G-6), which every new run and re-audit then pins. `expected_current` is the snapshot the caller believes is current (`null` for none); a stale belief is `409 conflict` with `conflict_reason: stale_current_snapshot`. An already-current target answers the current designation as a replay and writes no history row; any other change writes exactly one. A target that does not qualify is `422 required_norm_unavailable` with `reference_kind` `norm_embedding_build` (no complete build) or `norm_source` (a document's PDF has no confirmed binding); an unknown snapshot is `404`. There is no unset. No `Idempotency-Key`: the request is a compare-and-set on durable state. Roles: `admin` (`role:admin`). Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01. W57a may refuse a missing verified retrieval set as 422 required_norm_unavailable with reference_kind norm_retrieval_set; no substitute is selected.
  */
 export type SetCurrentNormSnapshotInput = {
   /** Request body, sent as `application/json`. */
@@ -1271,6 +1961,31 @@ export type SetExecutionPausedInput = {
 export type SetExecutionPausedResult = ExecutionDispatchStatus;
 
 // ------------------------------------------------------------------------------------
+// setGlobalVendorList - PUT /vendor-lists/{section_code}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Global Vendor List
+ *
+ * Set a section's global vendor list as a whole new immutable revision with its author and time; an empty list is an explicit "no restriction". An exact repeat of the latest revision writes nothing and answers it. With `expected_vendor_list_id` present (`null`: no revision was read), a different latest revision is `409 conflict` with `conflict_reason: vendor_list_changed` and nothing is written. A section code outside the fifteen addresses no vendor list and is `404`. `admin` is required (`required_capability: role:admin`).
+ */
+export type SetGlobalVendorListInput = {
+  /** Path parameters, substituted into `/vendor-lists/{section_code}`. */
+  path: {
+    section_code: ProjectSection;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetGlobalVendorListRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setGlobalVendorList` (`application/json`, HTTP 200). */
+export type SetGlobalVendorListResult = VendorListRevision;
+
+// ------------------------------------------------------------------------------------
 // setJobPriority - PUT /execution/queue/{job_id}/priority
 // ------------------------------------------------------------------------------------
 
@@ -1295,6 +2010,32 @@ export type SetJobPriorityInput = {
 
 /** Success body of `setJobPriority` (`application/json`, HTTP 200). */
 export type SetJobPriorityResult = ExecutionQueueItem;
+
+// ------------------------------------------------------------------------------------
+// setProjectVendorList - PUT /projects/{project_uid}/vendor-lists/{section_code}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Project Vendor List
+ *
+ * Set the project's own vendor list for a section (`mode: list`, possibly empty: no restriction for this project) or remove it (`mode: inherit`, `entries: []`), as a new immutable revision with its author and time; the answer is the section's state for the project afterwards. An exact repeat writes nothing; an `inherit` with no override in force writes nothing. Entries with `inherit` are `422` (`constraint: inherit_has_no_entries`); a stale `expected_vendor_list_id` is `409` (`conflict_reason: vendor_list_changed`). `expert` is required (`admin` alone is `permission_denied`); an unknown project is `404`.
+ */
+export type SetProjectVendorListInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/vendor-lists/{section_code}`. */
+  path: {
+    project_uid: ProjectUid;
+    section_code: ProjectSection;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetProjectVendorListRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setProjectVendorList` (`application/json`, HTTP 200). */
+export type SetProjectVendorListResult = SectionVendorList;
 
 // ------------------------------------------------------------------------------------
 // setWorkerIntake - PUT /execution/workers/{worker_id}/intake
@@ -1323,6 +2064,35 @@ export type SetWorkerIntakeInput = {
 export type SetWorkerIntakeResult = ExecutionWorker;
 
 // ------------------------------------------------------------------------------------
+// startOptimisationPass - POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes
+// ------------------------------------------------------------------------------------
+
+/**
+ * Start Optimisation Pass
+ *
+ * Start the optimisation pass of the document set's current AR version. The pass pins the version, its newest published run and that run's saved text layer, the project's current price-list revision and the effective AR vendor list (the project's own, else the administrator's), reads the specification, matches it against the price list and stores the deterministic proposals `cheaper_analog`: for a row matched to exactly one position, another position of the same revision in the same unit and currency, with a lower unit price, from a vendor on the list, of the same kind of product (at most three per row). The saving is `(current − proposed) × quantity` and is absent when the row's quantity is not a plain number. `expert` is required (`admin` alone is `permission_denied`). A precondition that is not met is `409 conflict` with `conflict_reason` `version_unclassified`, `section_not_ar`, `price_list_missing`, `analysis_missing`, `text_unavailable`, `specification_too_large` or `vendor_list_missing` and nothing is written, not even the key; an unknown project or a set of another project is `404`. An exact repeat of the `Idempotency-Key` answers the stored pass, the same key for another set or caller is `409 idempotency_key_reuse`, and a new key over exactly the same inputs answers the pass already stored instead of writing a second one.
+ */
+export type StartOptimisationPassInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/optimisation-passes`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `startOptimisationPass` (`application/json`, HTTP 201). */
+export type StartOptimisationPassResult = OptimisationPass;
+
+// ------------------------------------------------------------------------------------
 // startRun - POST /runs
 // ------------------------------------------------------------------------------------
 
@@ -1332,6 +2102,8 @@ export type SetWorkerIntakeResult = ExecutionWorker;
  * PD-03, in the subset PC-01 exercises. A new idempotency key creates a run. The same key with the same payload returns the existing run and creates nothing, whatever state that run is in, terminal included. The same key with a different payload returns `idempotency_key_reuse` and creates nothing. A new key over a terminal run creates a new run and leaves the terminal one exactly as it was: a terminal run is never reopened.
  *
  * A version whose recorded text is larger than the analysis input budget is refused up front with `422 analysis_input_budget_exceeded` and no run exists (R-118). A version published before the portal-bundle upload has no recorded count and is not refused by this rule.
+ *
+ * `W59-SECTION-SEAL-01`: the run's analysis profile is routed from the version's persisted classification through the section-keyed profile registry -- never from a file name, a suggestion or the document's legacy `section`, and never by an AR fallback. A version with no classification is refused with `422 required_norm_unavailable` and `details.reference_kind: version_classification`; a confirmed section with no registered text profile is refused with the same code and `reference_kind: analysis_profile`. Both refusals precede the key's claim, so nothing is written. An existing run keeps the profile it pinned.
  */
 export type StartRunInput = {
   /** Request body, sent as `application/json`. */
@@ -1452,6 +2224,31 @@ export type SubmitRegistrationInput = {
 export type SubmitRegistrationResult = RegistrationStatusResponse;
 
 // ------------------------------------------------------------------------------------
+// transitionAssignment - POST /assignments/{assignment_uid}/transitions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Move an assignment: start, complete, return, reassign or cancel it.
+ *
+ * Appends one event. `started`, `completed` and `returned` (with a `reason`) are the current assignee's, holding `expert` (an administrator who is not the assignee is `permission_denied`, `required_capability: assignment:assignee`); `reassigned` (with `new_assignee_user_uid`, an active expert) and `cancelled` (optional `reason`) are an administrator's. A request equal to the latest event answers the assignment unchanged; any other move the `work_assignment` machine does not declare is `state_transition_not_allowed`. An expert addressing an assignment that is not currently theirs gets `not_found`.
+ */
+export type TransitionAssignmentInput = {
+  /** Path parameters, substituted into `/assignments/{assignment_uid}/transitions`. */
+  path: {
+    assignment_uid: AssignmentUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: TransitionAssignmentRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `transitionAssignment` (`application/json`, HTTP 200). */
+export type TransitionAssignmentResult = Assignment;
+
+// ------------------------------------------------------------------------------------
 // updateMyProfile - PATCH /me
 // ------------------------------------------------------------------------------------
 
@@ -1536,6 +2333,71 @@ export type UploadDocumentInput = {
 export type UploadDocumentResult = DocumentVersion;
 
 // ------------------------------------------------------------------------------------
+// uploadDocumentVersion - POST /projects/{project_uid}/documents/{document_uid}/versions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Upload one portal bundle as the next immutable version of an existing document.
+ *
+ * The same ingest path as `uploadDocument`, into a document that already exists. The body is one portal bundle under exactly `uploadDocument`'s envelope (the same members, bounds, refusals and `constraint` details, a bare PDF refused with `portal_bundle_required`), and the same third-upload-in-flight refusal (`503 dependency_unavailable`, `details.dependency: upload_capacity`, `Retry-After`).
+ *
+ * The new version gets the document's next `version_ordinal` and becomes its current version; every older version, its classification, runs, findings and decisions are unchanged. It inherits nothing: it takes no display title (the document keeps its own) and no section, and its `classification` is absent until an expert confirms one with `classifyDocumentVersion`. Two uploads into one document at the same time get consecutive ordinals.
+ *
+ * An unknown project, an unknown document, or a document of another project is `404 not_found` (`details.aggregate_type` `Project` or `Document`), decided before the key is claimed or a byte is read into storage. The `Idempotency-Key` behaves as for `uploadDocument`: an exact repeat answers the version it created, and the same key with another document or another bundle is `409 idempotency_key_reuse`.
+ */
+export type UploadDocumentVersionInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `multipart/form-data`. */
+  body: UploadDocumentVersionRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `uploadDocumentVersion` (`application/json`, HTTP 201). */
+export type UploadDocumentVersionResult = DocumentVersion;
+
+// ------------------------------------------------------------------------------------
+// uploadPriceList - POST /projects/{project_uid}/price-lists
+// ------------------------------------------------------------------------------------
+
+/**
+ * Upload Price List
+ *
+ * Upload one price list of the project: a CSV (UTF-8 with or without a byte-order mark, UTF-16 with one, or Windows-1251; `;`, tab or `,` delimited) or an XLSX, whose first sheet is read; at most 10 MiB and 20 000 data rows. It becomes the project's newest immutable revision, bound to the stored file; earlier revisions stay readable. Every data row is accepted as a position or skipped with a reason in the revision's parse report; a price is read only from a plain number and is never guessed. `default_currency` applies to rows whose currency neither their own cell nor the price column's header names. A file that cannot be a price list is `422 validation_failed` with `field: content` and one `constraint`, and creates nothing. `expert` is required (`admin` alone is `permission_denied`); an unknown project is `404`. An exact repeat of the `Idempotency-Key` answers the stored revision; the same key with another file, file name, currency, project or caller is `409 idempotency_key_reuse`.
+ */
+export type UploadPriceListInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/price-lists`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `multipart/form-data`. */
+  body: UploadPriceListRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `uploadPriceList` (`application/json`, HTTP 201). */
+export type UploadPriceListResult = PriceListRevision;
+
+// ------------------------------------------------------------------------------------
 // Runtime descriptors
 // ------------------------------------------------------------------------------------
 
@@ -1600,6 +2462,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  carryOverDecision: {
+    operationId: 'carryOverDecision',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['decisions'],
+  },
   changePassword: {
     operationId: 'changePassword',
     method: 'POST',
@@ -1613,6 +2489,62 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['auth'],
+  },
+  classifyDocumentVersion: {
+    operationId: 'classifyDocumentVersion',
+    method: 'PUT',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
+  compareDocumentVersions: {
+    operationId: 'compareDocumentVersions',
+    method: 'GET',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: ['diff_limit', 'diff_offset', 'mode', 'source_run_id', 'target_run_id', 'target_version_uid'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['documents'],
+  },
+  correctVersionClassification: {
+    operationId: 'correctVersionClassification',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
+  createAssignment: {
+    operationId: 'createAssignment',
+    method: 'POST',
+    path: '/assignments',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['dispatch'],
   },
   createProject: {
     operationId: 'createProject',
@@ -1628,6 +2560,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 409, 422, 500, 503],
     tags: ['projects'],
   },
+  decideOptimisationProposal: {
+    operationId: 'decideOptimisationProposal',
+    method: 'POST',
+    path: '/optimisation-proposals/{optimisation_proposal_id}/decisions',
+    pathParams: ['optimisation_proposal_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['optimisation'],
+  },
+  exportOptimisationProposalsCsv: {
+    operationId: 'exportOptimisationProposalsCsv',
+    method: 'GET',
+    path: '/optimisation-passes/{optimisation_pass_id}/export.csv',
+    pathParams: ['optimisation_pass_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'text/csv',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['optimisation'],
+  },
   exportRunCsv: {
     operationId: 'exportRunCsv',
     method: 'GET',
@@ -1641,6 +2601,34 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['export'],
+  },
+  exportRunXlsx: {
+    operationId: 'exportRunXlsx',
+    method: 'GET',
+    path: '/runs/{run_id}/export.xlsx',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['export'],
+  },
+  getAssignment: {
+    operationId: 'getAssignment',
+    method: 'GET',
+    path: '/assignments/{assignment_uid}',
+    pathParams: ['assignment_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['dispatch'],
   },
   getDashboardSummary: {
     operationId: 'getDashboardSummary',
@@ -1669,6 +2657,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['documents'],
+  },
+  getEffectiveVendorLists: {
+    operationId: 'getEffectiveVendorLists',
+    method: 'GET',
+    path: '/projects/{project_uid}/vendor-lists',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
   },
   getFinding: {
     operationId: 'getFinding',
@@ -1726,6 +2728,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 500, 503],
     tags: ['releases'],
   },
+  getRunNormReferences: {
+    operationId: 'getRunNormReferences',
+    method: 'GET',
+    path: '/runs/{run_id}/norm-references',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['runs'],
+  },
+  getRunNormVerification: {
+    operationId: 'getRunNormVerification',
+    method: 'GET',
+    path: '/runs/{run_id}/norm-verification',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['runs'],
+  },
   getRunStatus: {
     operationId: 'getRunStatus',
     method: 'GET',
@@ -1739,6 +2769,34 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['runs'],
+  },
+  getSectionSpecification: {
+    operationId: 'getSectionSpecification',
+    method: 'GET',
+    path: '/sections/{section_code}/specification',
+    pathParams: ['section_code'],
+    queryParams: ['limit', 'offset', 'project_uid', 'q'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
+  },
+  getSpecificationPrices: {
+    operationId: 'getSpecificationPrices',
+    method: 'GET',
+    path: '/projects/{project_uid}/documents/{document_uid}/specification-prices',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: ['limit', 'offset'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
   },
   getUser: {
     operationId: 'getUser',
@@ -1768,6 +2826,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['documents'],
   },
+  getVersionSectionReview: {
+    operationId: 'getVersionSectionReview',
+    method: 'GET',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['documents'],
+  },
   issueToken: {
     operationId: 'issueToken',
     method: 'POST',
@@ -1781,6 +2853,34 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 422, 500, 503],
     tags: ['auth'],
+  },
+  listAnalysisProfiles: {
+    operationId: 'listAnalysisProfiles',
+    method: 'GET',
+    path: '/analysis/profiles',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['analysis'],
+  },
+  listAssignments: {
+    operationId: 'listAssignments',
+    method: 'GET',
+    path: '/assignments',
+    pathParams: [],
+    queryParams: ['cursor', 'limit', 'mine', 'project_uid', 'status'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['dispatch'],
   },
   listDecisionHistory: {
     operationId: 'listDecisionHistory',
@@ -1852,6 +2952,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['execution'],
   },
+  listNormDocuments: {
+    operationId: 'listNormDocuments',
+    method: 'GET',
+    path: '/norm-documents',
+    pathParams: [],
+    queryParams: ['cursor', 'kind', 'limit', 'q'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['norms'],
+  },
   listNormParagraphs: {
     operationId: 'listNormParagraphs',
     method: 'GET',
@@ -1894,6 +3008,62 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['norms'],
   },
+  listOptimisationPasses: {
+    operationId: 'listOptimisationPasses',
+    method: 'GET',
+    path: '/projects/{project_uid}/optimisation-passes',
+    pathParams: ['project_uid'],
+    queryParams: ['document_uid', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
+  },
+  listOptimisationProposals: {
+    operationId: 'listOptimisationProposals',
+    method: 'GET',
+    path: '/optimisation-passes/{optimisation_pass_id}/proposals',
+    pathParams: ['optimisation_pass_id'],
+    queryParams: ['decision', 'limit', 'offset'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
+  },
+  listPriceListPositions: {
+    operationId: 'listPriceListPositions',
+    method: 'GET',
+    path: '/price-lists/{price_list_id}/positions',
+    pathParams: ['price_list_id'],
+    queryParams: ['limit', 'offset'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
+  },
+  listPriceListRevisions: {
+    operationId: 'listPriceListRevisions',
+    method: 'GET',
+    path: '/projects/{project_uid}/price-lists',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['optimisation'],
+  },
   listProjects: {
     operationId: 'listProjects',
     method: 'GET',
@@ -1907,6 +3077,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['projects'],
+  },
+  listProposalDecisions: {
+    operationId: 'listProposalDecisions',
+    method: 'GET',
+    path: '/optimisation-proposals/{optimisation_proposal_id}/decisions',
+    pathParams: ['optimisation_proposal_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['optimisation'],
   },
   listRegistrations: {
     operationId: 'listRegistrations',
@@ -2160,6 +3344,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  setGlobalVendorList: {
+    operationId: 'setGlobalVendorList',
+    method: 'PUT',
+    path: '/vendor-lists/{section_code}',
+    pathParams: ['section_code'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['optimisation'],
+  },
   setJobPriority: {
     operationId: 'setJobPriority',
     method: 'PUT',
@@ -2174,6 +3372,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  setProjectVendorList: {
+    operationId: 'setProjectVendorList',
+    method: 'PUT',
+    path: '/projects/{project_uid}/vendor-lists/{section_code}',
+    pathParams: ['project_uid', 'section_code'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['optimisation'],
+  },
   setWorkerIntake: {
     operationId: 'setWorkerIntake',
     method: 'PUT',
@@ -2187,6 +3399,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  startOptimisationPass: {
+    operationId: 'startOptimisationPass',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/optimisation-passes',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['optimisation'],
   },
   startRun: {
     operationId: 'startRun',
@@ -2258,6 +3484,20 @@ export const OPERATIONS = {
     errorStatuses: [409, 422, 500, 503],
     tags: ['registrations'],
   },
+  transitionAssignment: {
+    operationId: 'transitionAssignment',
+    method: 'POST',
+    path: '/assignments/{assignment_uid}/transitions',
+    pathParams: ['assignment_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['dispatch'],
+  },
   updateMyProfile: {
     operationId: 'updateMyProfile',
     method: 'PATCH',
@@ -2299,5 +3539,33 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['documents'],
+  },
+  uploadDocumentVersion: {
+    operationId: 'uploadDocumentVersion',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'multipart/form-data',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
+  uploadPriceList: {
+    operationId: 'uploadPriceList',
+    method: 'POST',
+    path: '/projects/{project_uid}/price-lists',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'multipart/form-data',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['optimisation'],
   },
 } as const;

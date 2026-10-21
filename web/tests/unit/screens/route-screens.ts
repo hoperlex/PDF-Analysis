@@ -106,6 +106,7 @@ import { OptimisationPage } from '@/_pages/optimisation';
 import { ProjectDetailPage } from '@/_pages/project-detail';
 import { ProjectsPage } from '@/_pages/projects';
 import { QueuePage } from '@/_pages/queue';
+import { DispatcherPage } from '@/_pages/dispatcher';
 import { RegisterPage } from '@/_pages/register';
 import { RegisterSubmittedPage } from '@/_pages/register-submitted';
 import { ReviewPage } from '@/_pages/review';
@@ -435,6 +436,24 @@ export const SEEDS: readonly Seed[] = [
       createElement(VersionDetailPage, {
         projectUid: s['project_uid'] as string,
         versionUid: s['version_uid'] as string,
+        roles: ['expert'],
+      }),
+    discipline: { project_uid: 'refuses', version_uid: 'refuses' },
+  },
+  {
+    /*
+     * `W59-SECTION-UI-01`: the same address for a session without the expert role. The
+     * expert's seed above draws the stage-and-section form; an administrator alone is refused
+     * that write by the API, so the panel draws one read-only sentence instead, and without
+     * this seed the instruments would never read it.
+     */
+    address: '/projects/[project_uid]/versions/[version_uid]',
+    name: 'version-detail-reader',
+    make: (s) =>
+      createElement(VersionDetailPage, {
+        projectUid: s['project_uid'] as string,
+        versionUid: s['version_uid'] as string,
+        roles: ['admin'],
       }),
     discipline: { project_uid: 'refuses', version_uid: 'refuses' },
   },
@@ -454,6 +473,23 @@ export const SEEDS: readonly Seed[] = [
      * condition; keeping the import used and dropping only the branch was green.
      */
     discipline: { project_uid: 'refuses', version_uid: 'refuses' },
+  },
+  {
+    /*
+     * `W61-DISPATCHER-01`: «Диспетчер» for an administrator — the creation form and every
+     * assignment with the administrator's moves.
+     */
+    address: '/dispatcher',
+    name: 'dispatcher',
+    make: () => createElement(DispatcherPage, { roles: ['admin', 'expert'] }),
+    discipline: {},
+  },
+  {
+    // The same address for an expert alone: only the work given to them, no creation form.
+    address: '/dispatcher',
+    name: 'dispatcher-expert',
+    make: () => createElement(DispatcherPage, { roles: ['expert'] }),
+    discipline: {},
   },
   { address: '/queue', name: 'queue', make: () => createElement(QueuePage, {}), discipline: {} },
   {

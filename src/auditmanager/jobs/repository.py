@@ -178,6 +178,26 @@ _PROVIDER_FOR_COMPLETION = text(
      FOR UPDATE
     """
 )
+_EXISTING_RECORDED_STAGE_CALL = text(
+    "SELECT EXISTS ("
+    "SELECT 1 FROM provider_call_effect WHERE run_id = :run_id "
+    "AND stage_id = 'text_analysis' AND state NOT IN ('not_processed', 'abandoned') "
+    "UNION ALL SELECT 1 FROM model_call WHERE run_id = :run_id "
+    "AND stage_id = 'text_analysis'"
+    ")"
+)
+_RECORDED_COMPLETED_CALLS = text(
+    "SELECT m.model_call_id, m.model_identity, m.request_sha256, m.response_sha256, "
+    "m.provider, m.provider_mode, m.status, "
+    "e.job_id, e.stage_id AS effect_stage, e.state AS effect_state, "
+    "e.final_model_call_id, "
+    "e.provider AS effect_provider, e.provider_mode AS effect_mode, "
+    "e.model_identity AS effect_model, e.request_sha256 AS effect_request, "
+    "e.response_sha256 AS effect_response "
+    "FROM model_call m LEFT JOIN provider_call_effect e "
+    "ON e.run_id = m.run_id AND e.model_call_id = m.model_call_id "
+    "WHERE m.run_id = :run_id AND m.stage_id = 'text_analysis'"
+)
 _INSERT_MODEL_CALL = text(
     """
     INSERT INTO model_call (
@@ -315,6 +335,14 @@ class AttemptAuthority:
     attempt_id: str
     lease_id: str
     execution_token: str = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class RecordedCompletedCall:
+    model_call_id: str
+    model_id: str
+    request_sha256: str
+    response_sha256: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -771,6 +799,66 @@ class JobRepository:
         )
         return model_call_id
 
+    def require_recorded_stage_call_available(
+        self, session: Session, authority: AttemptAuthority
+    ) -> None:
+        """Fence a second recorded text call before its intent can be committed.
+
+        A completed call, a response awaiting completion, or an uncertain effect
+        blocks another replay for the same run. A proven ``not_processed`` or
+        reconciled ``abandoned`` effect does not fabricate a canonical call.
+        The current Attempt lock serialises this read with another claimant.
+        """
+        self.require_current(session, authority)
+        if session.execute(
+            _EXISTING_RECORDED_STAGE_CALL, {"run_id": authority.run_id}
+        ).scalar_one():
+            raise DomainError(
+                ErrorCode.CONFLICT,
+                message="a text analysis call already has durable evidence for this run",
+                aggregate_type="AuditRun",
+            )
+
+    def completed_recorded_call(
+        self, session: Session, *, run_id: str, job_id: str
+    ) -> RecordedCompletedCall:
+        """Read the sole completed recorded call for a saved text stage.
+
+        The call can belong to an earlier Attempt after lease recovery. It must
+        still belong to this Run and Job, with a completed effect and identical
+        immutable request/response facts. This read takes no Lease lock.
+        """
+        rows = session.execute(_RECORDED_COMPLETED_CALLS, {"run_id": run_id}).mappings().all()
+        if len(rows) != 1:
+            raise DomainError(
+                ErrorCode.ANALYSIS_INPUT_INVALID,
+                message="recorded text stage requires exactly one completed model call",
+            )
+        row = rows[0]
+        if (
+            row["job_id"] != job_id
+            or row["effect_stage"] != "text_analysis"
+            or row["effect_state"] != "completed"
+            or row["final_model_call_id"] != row["model_call_id"]
+            or row["provider"] != "anthropic"
+            or row["provider_mode"] != "recorded"
+            or row["status"] != "succeeded"
+            or row["effect_provider"] != row["provider"]
+            or row["effect_mode"] != row["provider_mode"]
+            or row["effect_model"] != row["model_identity"]
+            or row["effect_request"] != row["request_sha256"]
+            or row["effect_response"] != row["response_sha256"]
+            or row["response_sha256"] is None
+        ):
+            raise DomainError(
+                ErrorCode.ANALYSIS_INPUT_INVALID,
+                message="recorded call and completed effect do not agree",
+            )
+        return RecordedCompletedCall(
+            str(row["model_call_id"]), str(row["model_identity"]),
+            str(row["request_sha256"]), str(row["response_sha256"]),
+        )
+
     def record_provider_response(
         self,
         session: Session,
@@ -898,7 +986,10 @@ class JobRepository:
                 "input_tokens": call["input_tokens"],
                 "output_tokens": call["output_tokens"],
                 "latency_ms": call["latency_ms"],
-                "cost_micros": int(round(float(call["cost_usd"]) * 1_000_000)),
+                "cost_micros": (
+                    None if call["cost_usd"] is None
+                    else int(round(float(call["cost_usd"]) * 1_000_000))
+                ),
                 "cost_basis": call.get("cost_basis", "estimated"),
                 "status": call["status"],
                 "error_code": (

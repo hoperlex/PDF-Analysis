@@ -288,9 +288,11 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.versions.content(versionUid)` | `['versions','content',uid]` | `B8` |
 | `queryKeys.versions.blocks(versionUid)` | `['versions','blocks',uid]` | `W45-BLOCKS` |
 | `queryKeys.versions.portalBlocks(versionUid, limit)` | `['versions','portal-blocks',uid,{limit}]` | `W55B-WEB-BLOCKS` |
+| `queryKeys.versions.sectionReview(versionUid)` | `['versions','section-review',uid]` | `W59-SECTION-UI-01` |
 | `queryKeys.runs.all()` | `['runs']` | `B7` |
 | `queryKeys.runs.detail(runId)` | `['runs','detail',id]` | `B7` |
 | `queryKeys.runs.findings(runId, filters?)` | `['runs','findings',id,filters]` | `B8` |
+| `queryKeys.runs.normReferences(runId)` | `['runs','norm-references',id]` | `NORM-REFS-RUN-01` |
 | `queryKeys.findings.detail(findingUid)` | `['findings','detail',uid]` | `B8` |
 | `queryKeys.findings.decisions(findingUid)` | `['findings','decisions',uid]` | `B8` |
 | `queryKeys.dashboard.summary()` | `['dashboard','summary']` | `W46-WIRE` |
@@ -311,18 +313,45 @@ Build every key by calling `queryKeys.*`. Never write an array literal.
 | `queryKeys.norms.document(normDocumentId)` | `['norms','document',id]` | `W55A-WEB-NORMS` |
 | `queryKeys.norms.paragraphs(normDocumentId, cursor?, limit?)` | `['norms','paragraphs',id,{cursor,limit}]` | `W55A-WEB-NORMS` |
 | `queryKeys.norms.content(normDocumentId)` | `['norms','content',id]` | `W55A-WEB-NORMS` |
+| `queryKeys.analysis.all()` | `['analysis']` | `W59-ANALYSIS-SETTINGS-01` |
+| `queryKeys.analysis.profiles()` | `['analysis','profiles']` | `W59-ANALYSIS-SETTINGS-01` |
+| `queryKeys.assignments.all()` | `['assignments']` | `W61-DISPATCHER-01` |
+| `queryKeys.assignments.list(filters?)` | `['assignments','list',filters]` | `W61-DISPATCHER-01` |
+| `queryKeys.assignments.detail(assignmentUid)` | `['assignments','detail',uid]` | `W61-DISPATCHER-01` |
+| `queryKeys.optimisation.all()` | `['optimisation']` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.priceLists(projectUid)` | `['optimisation','price-lists',uid]` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.positions(priceListId, offset, limit)` | `['optimisation','positions',id,{offset,limit}]` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.vendorLists()` | `['optimisation','vendor-lists']` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.projectVendorLists(projectUid)` | `['optimisation','vendor-lists',uid]` | `W60-PRICE-LIST-01` |
+| `queryKeys.optimisation.specificationPrices(projectUid, documentUid, offset?, limit?)` | `['optimisation','specification-prices',projectUid,documentUid,{offset,limit}]` | `W60-OPT-MATCH-01` |
+| `queryKeys.optimisation.specificationPricesAll(projectUid)` | `['optimisation','specification-prices',projectUid]` | `W60-OPT-MATCH-01` |
+| `queryKeys.optimisation.passes(projectUid, documentUid)` | `['optimisation','passes',uid,docUid]` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.allPasses()` | `['optimisation','passes']` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.proposalsOf(passId)` | `['optimisation','proposals',id]` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.proposals(passId, decision, offset, limit)` | `['optimisation','proposals',id,{decision,offset,limit}]` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.proposalDecisions(proposalId)` | `['optimisation','proposal-decisions',id]` | `W60-OPT-PROPOSALS-01` |
+| `queryKeys.optimisation.sectionSpecification(sectionCode, {projectUid?, q?, offset?, limit?})` | `['optimisation','section-specification',sectionCode,{projectUid,q,offset,limit}]` | `W63-SECTION-FORM7-01` |
 
 `projects`, `versions`, `runs`, `findings`, `dashboard`, `account`, `users`, `registrations`,
-`releases`, `execution`, `norms` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
+`releases`, `execution`, `norms`, `analysis`, `assignments`, `optimisation` are the only legal first segments. The account, users and registration segments entered together in `W50-REGISTRY-01`: `account`
 is the signed-in account (`getMe`), `users` the administrator's view of the accounts, and
 `registrations` the requests awaiting or past a decision. A later lane adds key factories inside
 them and no new root.
+`assignments` entered once, in `W61-DISPATCHER-01`: «Диспетчер»'s work assignments, whose
+every command invalidates `queryKeys.assignments.all()` (the list, the detail and the home
+screen's «Мои задачи»).
 Invalidation targets a prefix: appending a decision invalidates
 `queryKeys.findings.decisions(uid)` and `queryKeys.findings.detail(uid)`, and — because the
 verdict projection appears in the finding list — `queryKeys.runs.findings(runId)` and
 `queryKeys.dashboard.summary()`. `queryKeys.dashboard.summary()` is also invalidated by
 `uploadDocument` and by `startRun`/a run reaching a terminal state — it is one read over the
 whole deployment, so more of the seam writes to it than to any other key here.
+`runs.normReferences` (`NORM-REFS-RUN-01`) holds `getRunNormReferences`: the norms a stopped run's
+saved text cites, checked against the snapshot that run pinned. It is filed under `runs` because it
+is a function of one run's stored text and pinned snapshot, both fixed once the run has stopped;
+`runs.all()` (which `startRun` and re-audit invalidate) drops it with the rest, and «Обновить» on
+the section re-reads it. The section is mounted by the run page only for a terminal run. Nothing on
+this key writes.
 W53 execution reads share the `execution` prefix: cancel/re-audit invalidate that prefix,
 `runs.all()` and the dashboard; priority/pause invalidate `execution`. A focused
 journal cursor includes its run id in the key so another run cannot reuse that page.
@@ -334,10 +363,46 @@ size is in the key so two readers asking different sizes never share pages. Both
 `versions` because a version's geometry is a property of the version, read from its latest
 run whose geometry stage succeeded, not of any one run; their third segments differ, so
 invalidating one never refetches the other.
+`versions.sectionReview` (`W59-SECTION-UI-01`) holds `getVersionSectionReview`: the fifteen
+section choices of one version and its persisted stage-and-section classification. A confirmed
+classification (`classifyDocumentVersion`) writes the answer into this key and into
+`versions.detail(uid)`, then invalidates this key, the document's first page of
+`versions.list`, `projects.all()` (the project screen groups documents by confirmed section)
+and `dashboard.summary()`; a `409 version_already_classified` invalidates this key and
+`versions.detail(uid)` so the stored classification is read back.
 `norms` entered in `W55A-WEB-NORMS` (the W55 plan names it): the normative corpus belongs to
 no project, run or finding. `setCurrentNormSnapshot` invalidates the whole `norms` prefix when
 it settles — a designation changes the snapshot list, the history and what search reads, and
 a stale refusal means the list must be read again. It changes nothing the dashboard reads.
+`analysis` entered in `W59-ANALYSIS-SETTINGS-01`: `analysis.profiles` holds
+`listAnalysisProfiles`, the text-profile registry the server routes runs through, which belongs
+to no project, run, version or execution. No action on this client writes it — the registry
+changes only when the server is redeployed — so nothing invalidates it; «Обновить» re-reads it.
+`optimisation` entered in `W60-PRICE-LIST-01`: the project screen's «Оптимизация» tab.
+`optimisation.priceLists(uid)` holds `listPriceListRevisions`; `optimisation.positions` one page of
+`listPriceListPositions` (the page is in the key); `optimisation.projectVendorLists(uid)` holds
+`getEffectiveVendorLists` under the prefix `optimisation.vendorLists()`. `uploadPriceList`
+invalidates the project's `priceLists` and — because the new revision decides every price —
+`optimisation.specificationPricesAll(uid)`, the prefix of `getSpecificationPrices` pages
+(`W60-OPT-MATCH-01`, «Спецификация и цены» on the same tab); `setProjectVendorList` and `setGlobalVendorList` invalidate
+the whole `vendorLists()` prefix, because a change of the general list moves every project's
+answer. None of them changes a number the dashboard reads.
+`optimisation.sectionSpecification(section, filters)` holds one page of `getSectionSpecification`
+(`W63-SECTION-FORM7-01`, «Оптимизация разделов»): the project filter, the search text and the
+offset are part of the key. It reads every project's price list, and `uploadPriceList` belongs to
+another slice, so nothing invalidates it; its query is declared with `staleTime: 0` and is asked
+again whenever the screen mounts, and «Обновить» re-reads it.
+
+`W60-OPT-PROPOSALS-01` adds «Предложения» to the same root: `optimisation.passes(uid, docUid)` holds
+`listOptimisationPasses` for one document set (each pass carries its counts by decision),
+`optimisation.proposals(...)` one page of `listOptimisationProposals` (the decision filter and the page
+are in the key) and `optimisation.proposalDecisions(id)` one proposal's history, read only when it is
+opened. `startOptimisationPass` invalidates every project's `passes` prefix and the new pass's
+proposals; `decideOptimisationProposal` invalidates the pass's `proposalsOf` prefix, the `passes`
+prefix (the counts by decision are on the pass) and the proposal's history. Both mint their
+`Idempotency-Key` per intent and drop it once the intent completes — a decision is appended on
+purpose, and a pass over changed inputs must not replay the old one. A proposal is not a finding:
+neither command invalidates a finding, a decision journal or the dashboard.
 
 There is **no global domain store.** The query client in `_app` is the only cache. PC-01's
 state lives on the server; a second copy of it in the browser is a second source of truth

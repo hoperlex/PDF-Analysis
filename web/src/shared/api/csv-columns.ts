@@ -1,7 +1,8 @@
 /**
  * The frozen CSV column contract — `OD-11`, `P02_SEAMS.md` section 6.
  *
- * Seventeen columns in this exact order. `B5` produces the file and `B8` downloads it;
+ * OD-11's seventeen columns plus W56a's two appended severity columns.
+ * `B5` produces the file and `B8` downloads it;
  * this constant exists so the download panel can say what the user is about to get, and
  * so a contract test can prove the frontend's idea of the column list has not drifted
  * from the seam document. Nothing here generates a CSV: the export endpoint is
@@ -13,7 +14,7 @@
  * otherwise mis-decodes Cyrillic.
  *
  * Granularity is one row per evidence item: a finding with three quotations produces
- * three rows sharing columns 1-11 and 14-17.
+ * three rows sharing the finding-level columns.
  */
 
 export const CSV_COLUMNS = [
@@ -34,6 +35,8 @@ export const CSV_COLUMNS = [
   'latest_comment',
   'latest_decision_id',
   'decision_recorded_at',
+  'severity',
+  'severity_proposed',
 ] as const;
 
 export type CsvColumn = (typeof CSV_COLUMNS)[number];

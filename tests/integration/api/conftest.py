@@ -451,6 +451,27 @@ class IngestDocumentAdapter:
         )
         return _Uploaded(version=uploaded.version, replayed=uploaded.replayed)
 
+    def upload_document_version(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        content: Any,
+        source_filename: str,
+        idempotency_key: str,
+    ) -> _Uploaded:
+        """`W59-VERSION-UPLOAD-01`. The shipped adapter's own body, as for the first upload."""
+        from auditmanager.bootstrap.adapters import DocumentAdapter
+
+        uploaded = DocumentAdapter(self._ingest).upload_document_version(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            content=content,
+            source_filename=source_filename,
+            idempotency_key=idempotency_key,
+        )
+        return _Uploaded(version=uploaded.version, replayed=uploaded.replayed)
+
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
         return self._view(self._ingest.get_version(VersionUid(version_uid)))
 
@@ -671,11 +692,14 @@ class LedgerDecisionAdapter:
         finding_uid: str,
         finding_observation_id: str,
         event_type: str,
+        severity: str | None = None,
         comment: str | None,
         idempotency_key: str,
         author_label: str,
         author_user_uid: str,
     ) -> _Appended:
+        if severity is not None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="v2_decision_ledger")
         # `D-78`. The author is part of the fingerprint, as it is in the shipped
         # `append_decision_under_key`: two reviewers presenting one idempotency key are two
         # different payloads, and answering the second with the first one's event would
@@ -811,6 +835,23 @@ class SeamRunAdapter:
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._view(run_id)
+
+    def get_norm_verification(self, *, run_id: str) -> Any:
+        raise DomainError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_verification_reader"
+        )
+
+    def get_run_norm_references(self, *, run_id: str) -> Any:
+        """`NORM-REFS-RUN-01`. This stand-in holds no saved text and no snapshot catalogue.
+
+        An unknown run is ``404`` as for every run read; a known one cannot be listed here,
+        and says which dependency is missing rather than answering an empty list.
+        """
+        if not self.run_exists(run_id=run_id):
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="AuditRun")
+        raise DomainError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_references_reader"
+        )
 
     def run_exists(self, *, run_id: str) -> bool:
         """`D-74`. One row, no stages, no cost -- the stand-in's own narrow read.

@@ -15,12 +15,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
 import type {
-  NormDocument, NormDocumentId, NormParagraphPage, NormSearchPage, NormSnapshotEventPage,
-  NormSnapshotPage,
+  NormCatalogueEntryPage, NormDocument, NormDocumentId, NormParagraphPage, NormSearchPage,
+  NormSnapshotEventPage, NormSnapshotPage,
 } from '@/shared/api';
 import {
-  getNormDocument, listNormParagraphs, listNormSnapshotEvents, listNormSnapshots, queryKeys,
-  searchNorms, streamNormDocumentContent,
+  getNormDocument, listNormDocuments, listNormParagraphs, listNormSnapshotEvents, listNormSnapshots,
+  queryKeys, searchNorms, streamNormDocumentContent,
 } from '@/shared/api';
 
 /**
@@ -32,6 +32,39 @@ export const NORM_SNAPSHOT_LIMIT = 200;
 export const NORM_EVENT_PAGE_LIMIT = 50;
 export const NORM_SEARCH_PAGE_LIMIT = 20;
 export const NORM_PARAGRAPH_PAGE_LIMIT = 200;
+export const NORM_CATALOGUE_PAGE_LIMIT = 50;
+
+/** The catalogue's two filters as the address carries them; `null` for none. */
+export interface NormCatalogueFilter {
+  readonly q: string | null;
+  readonly kind: string | null;
+}
+
+/**
+ * One page of `listNormDocuments` (`W57B-NORMS-CATALOGUE-XLSX-01`): the current snapshot's
+ * documents with display names, filtered and paged. An answer about one snapshot's immutable
+ * rows, so it keeps the application's default freshness, like a search page.
+ */
+export function normCatalogueQueryOptions(filter: NormCatalogueFilter, cursor: string | undefined, enabled: boolean) {
+  const q = filter.q ?? undefined;
+  const kind = filter.kind ?? undefined;
+  return {
+    queryKey: queryKeys.norms.catalogue(q, kind, cursor, NORM_CATALOGUE_PAGE_LIMIT),
+    queryFn: async () => (await listNormDocuments({
+      query: {
+        limit: NORM_CATALOGUE_PAGE_LIMIT,
+        ...(q === undefined ? {} : { q }),
+        ...(kind === undefined ? {} : { kind }),
+        ...(cursor === undefined ? {} : { cursor }),
+      },
+    })).data,
+    enabled,
+  } as const;
+}
+
+export function useNormCatalogue(filter: NormCatalogueFilter, cursor: string | undefined, enabled: boolean) {
+  return useQuery<NormCatalogueEntryPage>(normCatalogueQueryOptions(filter, cursor, enabled));
+}
 
 export function normSnapshotsQueryOptions() {
   return {

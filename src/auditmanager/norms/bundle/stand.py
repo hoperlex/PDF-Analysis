@@ -65,6 +65,8 @@ from ..custody import (
     report,
     requeue,
 )
+from ..embedding import vectors
+from ..embedding.digest import EmbeddingSetDigest
 from ..embedding_repository import NormEmbeddingConflict, NormEmbeddingRepository
 from ..loader import import_snapshot
 from ..repository import (
@@ -72,8 +74,9 @@ from ..repository import (
     NormsRepository,
     SnapshotImportConflict,
     SnapshotRowsInvalid,
+    validate_snapshot_rows,
 )
-from ..snapshot import SnapshotRow
+from ..snapshot import SnapshotRow, SnapshotRows
 from .contents import iter_build, read_rows
 from .copy_record import (
     CopyRecord,
@@ -172,6 +175,62 @@ def snapshot_facts(snapshot: SnapshotRow) -> SnapshotFacts:
     )
 
 
+def _require_source_pdf_slots(rows: SnapshotRows, manifest: Manifest) -> None:
+    """Every document row has exactly its own source-PDF custody anchor."""
+    expected = {(row.norm_document_id, row.source_document_ref) for row in rows.documents}
+    actual = {
+        (slot.target_id, slot.anchor)
+        for entry in manifest.files_of("object")
+        for slot in entry.slots
+        if slot.anchor_kind == "pdf"
+    }
+    if actual != expected:
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        raise BundleRefused(
+            "bundle_source_slots_invalid",
+            f"PDF custody slots differ from document rows ({len(missing)} missing, {len(extra)} extra; "
+            f"first missing {missing[:1]!r}, first extra {extra[:1]!r})",
+        )
+
+
+def _require_complete_build(directory: Path, rows: SnapshotRows, manifest: Manifest) -> None:
+    """Stream the verified build's portable facts before any custody side effect."""
+    assert manifest.build is not None
+    digest = EmbeddingSetDigest(
+        content_key=manifest.content_key,
+        chunking_profile=manifest.chunking_profile,
+        embedding_profile=manifest.build.embedding_profile,
+    )
+    document_refs = {document.source_document_ref for document in rows.documents}
+    previous: tuple[str, int] | None = None
+    chunks = 0
+    for chunk in iter_build(directory, [entry.path for entry in manifest.files_of("build")]):
+        if chunk.document_ref not in document_refs:
+            raise BundleRefused("bundle_build_invalid", f"chunk {chunk.key!r} names no document row")
+        if previous is not None and not chunk.key > previous:
+            raise BundleRefused(
+                "bundle_build_invalid",
+                f"chunk {chunk.key!r} is repeated or out of canonical order after {previous!r}",
+            )
+        previous = chunk.key
+        chunks += 1
+        for window in chunk.windows:
+            try:
+                vectors.require_unit(window.vector)
+                digest.add(chunk.document_ref, chunk.chunk_ordinal, window)
+            except (vectors.VectorRefused, ValueError) as exc:
+                raise BundleRefused("bundle_build_invalid", f"chunk {chunk.key!r}: {exc}") from exc
+    actual = (chunks, digest.windows, digest.hexdigest())
+    expected = (
+        manifest.build.chunk_count,
+        manifest.build.window_count,
+        manifest.build.embedding_set_sha256,
+    )
+    if actual != expected:
+        raise BundleRefused("bundle_build_invalid", f"build count/digest {actual!r} differs from {expected!r}")
+
+
 def _custody(session: Session, manifest: Manifest) -> CustodyReport:
     return report(session, role=NORM_SOURCE, targets=manifest.targets)
 
@@ -219,6 +278,12 @@ def import_bundle(
             "manifest_snapshot_differs",
             f"the manifest's snapshot facts {manifest.snapshot!r} are not the rows' {row_facts!r}",
         )
+    try:
+        validate_snapshot_rows(rows)
+    except SnapshotRowsInvalid as exc:
+        raise BundleRefused("bundle_rows_invalid", str(exc)) from exc
+    _require_source_pdf_slots(rows, manifest)
+    _require_complete_build(directory, rows, manifest)
     say(f"bundle: {manifest.content_key} verified ({len(manifest.files)} files"
         f"{', objects already discarded' if discarded else ''})")
 

@@ -22,10 +22,11 @@ revocation exists only where an authorized expert appended a new event.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 _CURRENT_VERDICT = text(
@@ -38,7 +39,8 @@ _CURRENT_VERDICT = text(
            latest_comment_decision_id,
            latest_decision_id,
            decision_recorded_at,
-           decision_event_count
+           decision_event_count,
+           decided_severity
     FROM finding_current_verdict
     WHERE finding_uid = :finding_uid
     """
@@ -46,7 +48,7 @@ _CURRENT_VERDICT = text(
 
 _RAW_STREAM = text(
     """
-    SELECT decision_id, event_type, verdict, comment, recorded_at
+    SELECT decision_id, event_type, verdict, severity, comment, recorded_at
     FROM expert_decision_event
     WHERE finding_uid = :finding_uid
     ORDER BY sequence_no
@@ -68,6 +70,7 @@ class CurrentVerdict:
     latest_decision_id: str | None
     decision_recorded_at: datetime | None
     decision_event_count: int
+    decided_severity: str | None = None
 
     def comparable(self) -> tuple:
         """The fields a rebuild can be compared on, without the timestamps that only
@@ -80,6 +83,7 @@ class CurrentVerdict:
             self.latest_comment_decision_id,
             self.latest_decision_id,
             self.decision_event_count,
+            self.decided_severity,
         )
 
 
@@ -91,8 +95,41 @@ def current_verdict(session: Session, finding_uid: str) -> CurrentVerdict | None
     missing row.
     """
     row = session.execute(_CURRENT_VERDICT, {"finding_uid": finding_uid}).mappings().first()
-    if row is None:
-        return None
+    return None if row is None else _verdict_from_row(row)
+
+
+_CURRENT_VERDICTS = text(
+    """
+    SELECT finding_uid,
+           current_verdict,
+           latest_verdict_decision_id,
+           latest_verdict_recorded_at,
+           latest_comment,
+           latest_comment_decision_id,
+           latest_decision_id,
+           decision_recorded_at,
+           decision_event_count,
+           decided_severity
+    FROM finding_current_verdict
+    WHERE finding_uid IN :finding_uids
+    """
+).bindparams(bindparam("finding_uids", expanding=True))
+
+
+def current_verdicts(session: Session, finding_uids: Sequence[str]) -> dict[str, CurrentVerdict]:
+    """The projection for a bounded batch of findings, keyed by ``finding_uid``.
+
+    The same view and the same row shape as :func:`current_verdict`, in one read; a
+    ``finding_uid`` no finding carries is absent from the answer, never ``pending``.
+    """
+    wanted = sorted({value for value in finding_uids if isinstance(value, str)})
+    if not wanted:
+        return {}
+    rows = session.execute(_CURRENT_VERDICTS, {"finding_uids": wanted}).mappings().all()
+    return {row["finding_uid"]: _verdict_from_row(row) for row in rows}
+
+
+def _verdict_from_row(row) -> CurrentVerdict:  # noqa: ANN001 - a SQLAlchemy RowMapping
     return CurrentVerdict(
         finding_uid=row["finding_uid"],
         current_verdict=row["current_verdict"],
@@ -102,6 +139,7 @@ def current_verdict(session: Session, finding_uid: str) -> CurrentVerdict | None
         latest_decision_id=row["latest_decision_id"],
         decision_recorded_at=row["decision_recorded_at"],
         decision_event_count=row["decision_event_count"],
+        decided_severity=row["decided_severity"],
     )
 
 
@@ -123,6 +161,7 @@ def rebuild_current_verdict(session: Session, finding_uid: str) -> CurrentVerdic
         return None
 
     verdict = "pending"
+    decided_severity: str | None = None
     latest_verdict_decision_id: str | None = None
     latest_comment: str | None = None
     latest_comment_decision_id: str | None = None
@@ -137,6 +176,7 @@ def rebuild_current_verdict(session: Session, finding_uid: str) -> CurrentVerdic
         if row["verdict"] is not None:
             verdict = row["verdict"]
             latest_verdict_decision_id = row["decision_id"]
+            decided_severity = row["severity"] if row["event_type"] == "accept" else None
         if row["comment"] is not None:
             latest_comment = row["comment"]
             latest_comment_decision_id = row["decision_id"]
@@ -150,4 +190,5 @@ def rebuild_current_verdict(session: Session, finding_uid: str) -> CurrentVerdic
         latest_decision_id=latest_decision_id,
         decision_recorded_at=decision_recorded_at,
         decision_event_count=count,
+        decided_severity=decided_severity,
     )

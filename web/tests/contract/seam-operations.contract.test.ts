@@ -84,7 +84,7 @@ describe('the seam operations', () => {
     expect(OPERATIONS.issueToken.requiresIdempotencyKey).toBe(false);
   });
 
-  it('requires an idempotency key on exactly the ten keyed writes', () => {
+  it('requires an idempotency key on exactly the fifteen keyed writes', () => {
     const writes = Object.values(OPERATIONS)
       .filter((op) => op.requiresIdempotencyKey)
       .map((op) => op.operationId)
@@ -95,14 +95,24 @@ describe('the seam operations', () => {
       'appendDecision',
       'approveRegistration',
       'cancelRun',
+      // `W59-DECISION-CARRYOVER-01`: the carryover appends a decision, keyed like `appendDecision`.
+      'carryOverDecision',
       'createProject',
+      // `W60-OPT-PROPOSALS-01`: a decision on a proposal is appended, keyed like `appendDecision`.
+      'decideOptimisationProposal',
       'reauditRun',
       'setExecutionPaused',
       'setJobPriority',
       // `W54-SEAL-01`: the worker intake switch is keyed like the other execution controls.
       'setWorkerIntake',
+      // `W60-OPT-PROPOSALS-01`: a pass stores a pass and its proposals, keyed like a run start.
+      'startOptimisationPass',
       'startRun',
       'uploadDocument',
+      // `W59-VERSION-UPLOAD-01`: the next version of a document is keyed like the first.
+      'uploadDocumentVersion',
+      // `W60-PRICE-LIST-01`: a price-list upload stores a file and a revision, keyed like an upload.
+      'uploadPriceList',
     ]);
   });
 

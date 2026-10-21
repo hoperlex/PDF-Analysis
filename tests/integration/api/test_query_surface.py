@@ -550,7 +550,7 @@ def _observations(page_two_start: int) -> list[dict[str, Any]]:
 
 
 class MixedRun:
-    """A published run carrying findings in both frozen categories."""
+    """A published run carrying findings in two of the twelve frozen categories."""
 
     def __init__(self, session: Session) -> None:
         self.run = PublishedRun(session, observations=_grounded_observations())
@@ -834,8 +834,14 @@ SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset({"listVersionPortalBloc
 #: The four norms listings, driven over the shipped ``NormsSearchAdapter`` on this suite's
 #: rollback-joined session (`W55A-PIN-01`).
 NORMS_QUERY_OPERATIONS: frozenset[str] = frozenset(
-    {"searchNorms", "listNormParagraphs", "listNormSnapshots", "listNormSnapshotEvents"}
+    {"searchNorms", "listNormParagraphs", "listNormSnapshots", "listNormSnapshotEvents",
+     # `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue, over the same adapter.
+     "listNormDocuments"}
 )
+
+#: The second document of the current snapshot, so the catalogue has two rows of two kinds
+#: (`W57B-NORMS-CATALOGUE-XLSX-01`); a real slug of the W54 snapshot.
+CATALOGUE_SECOND_SLUG = "ГОСТ_21_501-2018__Межгосударственный_стандарт__Система_прое"
 
 #: The words the seeded norms paragraphs carry. ``SEARCH_WORD`` (``здания``) stems to the
 #: lexeme every paragraph holds; ``NARROW_WORD`` is in one paragraph only.
@@ -918,6 +924,14 @@ def _seed_norms(session: Session) -> dict[str, Any]:
     designate(first)
     current, document = snapshot()
     designate(current)
+    session.execute(text(
+        "INSERT INTO norm_document (norm_document_id, norms_snapshot_id, "
+        "source_document_ref, slug, title, doc_type, source_attribution, pdf_page_count, "
+        "block_count, page_heading_count, recognised_characters, paragraph_count) "
+        "VALUES (:d, :s, 'query-surface-second', :slug, :title, 'ГОСТ', 'consultant_plus', "
+        "2, 2, 0, 100, 0)"
+    ), {"d": str(NormDocumentId.new()), "s": current, "slug": CATALOGUE_SECOND_SLUG,
+        "title": f"{CATALOGUE_SECOND_SLUG}.pdf"})
     return {"first": first, "current": current, "document": document}
 
 
@@ -1021,6 +1035,42 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listNormParagraphs": f"/norm-documents/{norms['document']}/paragraphs",
         "listNormSnapshots": "/norms/snapshots",
         "listNormSnapshotEvents": "/norms/snapshots/events",
+        # `W57B-NORMS-CATALOGUE-XLSX-01`. The current snapshot's two documents.
+        "listNormDocuments": "/norm-documents",
+        # `W61-DISPATCHER-01`. Driven by its own test below
+        # (`test_list_assignments_reads_every_query_parameter_it_declares`), over rows that
+        # test writes, because its filters are a role decision as much as a query one.
+        "listAssignments": "/assignments",
+        # `W60-OPT-MATCH-01`. Driven by its own test below
+        # (`test_specification_prices_reads_the_query_parameters_it_declares`): its rows come
+        # from a saved text layer, which this sweep has none of.
+        "getSpecificationPrices": (
+            f"/projects/{paged.project_uid}/documents/{paged.versioned_document_uid}"
+            "/specification-prices"
+        ),
+        # `W60-OPT-PROPOSALS-01`. Driven by their own test below
+        # (`test_optimisation_proposals_read_the_query_parameters_they_declare`): a pass's
+        # proposals come from a specification read, which this sweep has none of.
+        "listOptimisationPasses": f"/projects/{paged.project_uid}/optimisation-passes",
+        "listOptimisationProposals": (
+            "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/proposals"
+        ),
+        # `W63-SECTION-FORM7-01`. Driven by its own test below
+        # (`test_section_specification_reads_the_query_parameters_it_declares`): its rows come
+        # from saved text layers across projects, which this sweep has none of.
+        "getSectionSpecification": "/sections/AR/specification",
+        # `W59-VERSION-COMPARE-01`. Driven by its own test below
+        # (`test_compare_document_versions_reads_the_query_parameters_it_declares`): a
+        # comparison needs two published versions with saved text layers, which this sweep
+        # has none of, and its one required parameter is not a listing parameter.
+        "compareDocumentVersions": (
+            "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+            "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
+        ),
+        # `W60-PRICE-LIST-01`. Driven by its own test below
+        # (`test_price_list_positions_read_the_query_parameters_they_declare`): a revision's
+        # positions come from an uploaded price list, which this sweep has none of.
+        "listPriceListPositions": "/price-lists/prl_01M2545JSD15ETSNNV904X991N/positions",
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -1043,6 +1093,17 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listNormParagraphs": {"cursor", "limit"},
         "listNormSnapshots": {"cursor", "limit"},
         "listNormSnapshotEvents": {"cursor", "limit"},
+        "listNormDocuments": {"q", "kind", "cursor", "limit"},
+        "listAssignments": {"mine", "status", "project_uid", "cursor", "limit"},
+        "getSpecificationPrices": {"offset", "limit"},
+        "listOptimisationPasses": {"document_uid", "limit"},
+        "listOptimisationProposals": {"decision", "offset", "limit"},
+        "getSectionSpecification": {"project_uid", "q", "offset", "limit"},
+        "compareDocumentVersions": {
+            "target_version_uid", "source_run_id", "target_run_id", "mode", "diff_offset",
+            "diff_limit",
+        },
+        "listPriceListPositions": {"offset", "limit"},
     }, f"the contract's query surface moved: {declared}"
 
     accounts_and_requests = _seed_accounts_and_requests(session, shipped_router)
@@ -1100,6 +1161,13 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
     # the difference each one has to make. Literals, not derived: a case computed from the
     # response it is checking cannot tell you the response moved.
     categories = sorted({member.value for member in FindingCategory})
+    #: The two categories the fixture publishes findings in. The vocabulary has twelve
+    #: (`FindingCategory`), so ten of the values below select nothing: they are driven as
+    #: the empty counterpart, not skipped. Literals -- derived from the response they
+    #: check, a held set could not tell you the response moved -- and the premise they
+    #: rest on is asserted once the findings are listed, below.
+    held_categories = ("explicit_placeholder", "internal_contradiction")
+    assert set(held_categories) < set(categories)
     inert: dict[str, list[str]] = {}
 
     # `listDecisionHistory` pages a ledger, and a fresh finding's ledger is empty, so two
@@ -1139,6 +1207,10 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             "items"
         ]
     }
+    assert set(by_category.values()) == set(held_categories), (
+        "the fixture no longer publishes exactly the categories the category case below "
+        f"expects it to: {sorted(set(by_category.values()))}"
+    )
     first = mixed_run.findings[0]
     other = next(
         finding
@@ -1165,6 +1237,16 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
     assert appended.status == 201, appended.body
 
     for operation_id, names in declared.items():
+        if operation_id in (
+            "listAssignments",
+            "getSpecificationPrices",
+            "listOptimisationPasses",
+            "listOptimisationProposals",
+            "getSectionSpecification",
+            "compareDocumentVersions",
+            "listPriceListPositions",
+        ):
+            continue  # driven by its own test below
         target = targets[operation_id]
         # `searchNorms`' target already carries its required `q`.
         sep = "&" if "?" in target else "?"
@@ -1195,7 +1277,20 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         if "category" in names:
             for category in categories:
                 filtered = ok(get(surface, f"{target}{sep}category={category}&limit=200"))
-                if {item["category"] for item in filtered["items"]} != {category}:
+                carried = {item["category"] for item in filtered["items"]}
+                if category in held_categories:
+                    # A category the fixture holds: a non-empty page of exactly that category.
+                    changed = carried == {category}
+                else:
+                    # A category in the vocabulary that nothing here holds. The page carries
+                    # no other category -- an ignored filter returns the two held ones -- and
+                    # the run's own findings, which this test created and nothing else
+                    # writes to, are exactly empty. The deployment-wide journal may hold
+                    # committed residue of that category, so it is not asked to be empty.
+                    changed = carried <= {category} and (
+                        operation_id != "listRunFindings" or not filtered["items"]
+                    )
+                if not changed:
                     inert.setdefault(operation_id, []).append(f"category={category}")
 
         if "verdict" in names and operation_id != "listDecisions":
@@ -1241,7 +1336,21 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             if not accepted["items"] or carried != {"accepted"} or impossible["items"]:
                 inert.setdefault(operation_id, []).append("verdict")
 
-        if "q" in names:
+        if "q" in names and operation_id == "listNormDocuments":
+            # The catalogue's text filter keeps the document whose designation it starts.
+            kept = ok(get(surface, f"{target}{sep}q={quote('ГОСТ 21.501')}&limit=200"))
+            if [item["designation"] for item in kept["items"]] != ["ГОСТ 21.501-2018"]:
+                inert.setdefault(operation_id, []).append("q")
+
+        if "kind" in names:
+            # The kind filter keeps exactly that kind's rows.
+            kept = ok(get(surface, f"{target}{sep}kind={quote('СП')}&limit=200"))
+            if [item["kind"] for item in kept["items"]] != ["СП"] or len(
+                baseline["items"]
+            ) == len(kept["items"]):
+                inert.setdefault(operation_id, []).append("kind")
+
+        if "q" in names and operation_id == "searchNorms":
             # Another query is another answer: one paragraph instead of three.
             narrow = ok(get(surface, f"/norms/search?q={quote(NARROW_WORD)}&limit=200"))
             ids = [item["norm_paragraph_id"] for item in baseline["items"]]
@@ -1334,11 +1443,15 @@ def _seed_accounts_and_requests(session: Session, router: Surface) -> dict[str, 
 def test_the_filter_vocabularies_are_the_frozen_ones(contract: dict[str, Any]) -> None:
     """`category` and `verdict` take their values from the document, not from here."""
     schemas = contract["components"]["schemas"]
-    assert set(schemas["FindingCategory"]["enum"]) == {
-        member.value for member in FindingCategory
-    }
-    assert set(schemas["Verdict"]["enum"]) == {member.value for member in Verdict}
-    assert len(FindingCategory) == 2 and len(Verdict) == 4
+    for name, vocabulary in (("FindingCategory", FindingCategory), ("Verdict", Verdict)):
+        frozen = schemas[name]["enum"]
+        assert len(frozen) == len(set(frozen)), f"{name} repeats a value: {frozen}"
+        assert set(frozen) == {member.value for member in vocabulary}, name
+        # Counted against the document, not against a number written here: the document
+        # is the thing that is frozen, and a literal beside it is a second copy that goes
+        # stale when a wave extends the vocabulary (`FindingCategory` went from two values
+        # to twelve with the v3 normative categories and this line still said two).
+        assert len(vocabulary) == len(frozen), name
 
 
 def test_the_limit_bounds_are_the_frozen_ones(contract: dict[str, Any]) -> None:
@@ -1467,3 +1580,532 @@ def paged(session: Session) -> Catalogue:
     thing to drift.
     """
     return Catalogue(session)
+
+
+def test_list_assignments_reads_every_query_parameter_it_declares(
+    shipped_router: Surface, session: Session, session_factory: sessionmaker[Session]
+) -> None:
+    """`W61-DISPATCHER-01`: ``mine``, ``status``, ``project_uid``, ``cursor`` and ``limit``.
+
+    The same rule as the sweep above -- **supply the parameter and require the answer to
+    change** -- over assignments this test writes in its own rolled-back transaction: one
+    in progress for the caller in one project, one assigned to another expert in another.
+    The caller is given ``admin`` beside ``expert`` in the database (the dispatch context
+    reads the role set there), so ``mine`` is a narrowing it may lift.
+    """
+    import secrets
+
+    from auditmanager.access.public import AccountRepository, UserRepository
+    from auditmanager.api.routers.dispatch import build_dispatch_routes
+    from auditmanager.bootstrap.adapters import DispatchAdapter
+    from auditmanager.dispatch.public import assign_work, transition_assignment
+    from auditmanager.documents.public import DocumentRepository
+    from w13_api_driver import TEST_SUBJECT
+
+    caller = TEST_SUBJECT.user_uid
+    shipped_router.router.credentials.roles = frozenset({"expert", "admin"})
+    session.execute(
+        text(
+            "INSERT INTO app_user_role (user_uid, role) VALUES (:u, 'admin') "
+            "ON CONFLICT (user_uid, role) DO NOTHING"
+        ),
+        {"u": caller},
+    )
+    other = str(
+        UserRepository().create_user(
+            session, f"qs-assignee-{secrets.token_hex(4)}", "query-surface-password-3"
+        ).user_uid
+    )
+    AccountRepository().grant_role(session, user_uid=other, role="expert", granted_by=None)
+    documents = DocumentRepository()
+    first = str(documents.create_project(session, "Опросная площадка один").project_uid)
+    second = str(documents.create_project(session, "Опросная площадка два").project_uid)
+    roles = frozenset({"admin", "expert"})
+    mine = assign_work(
+        session, project_uid=first, document_uid=None, assignee_user_uid=caller, note=None,
+        actor_uid=caller, actor_roles=roles,
+    ).assignment_uid
+    theirs = assign_work(
+        session, project_uid=second, document_uid=None, assignee_user_uid=other, note=None,
+        actor_uid=caller, actor_roles=roles,
+    ).assignment_uid
+    transition_assignment(
+        session, assignment_uid=mine, kind="started", actor_uid=caller, actor_roles=roles
+    )
+    session.flush()
+
+    router = Router(credentials=shipped_router.router.credentials)
+    build_dispatch_routes(router, DispatchAdapter(session_factory))
+    surface = Surface(router)
+
+    def listed(query: str) -> list[dict[str, Any]]:
+        return ok(get(surface, f"/assignments?{query}"))["items"]
+
+    def ids(items: list[dict[str, Any]]) -> list[str]:
+        return [item["assignment_uid"] for item in items]
+
+    baseline = listed("limit=200")
+    assert {mine, theirs} <= set(ids(baseline)), ids(baseline)
+    inert: list[str] = []
+
+    limited = ok(get(surface, "/assignments?limit=1"))
+    if limited["items"] != baseline[:1]:
+        inert.append("limit")
+    resumed = listed(f"limit=1&cursor={limited['page']['next_cursor']}")
+    if resumed != baseline[1:2]:
+        inert.append("cursor")
+
+    own = listed("mine=true&limit=200")
+    if theirs in ids(own) or mine not in ids(own) or any(
+        item["assignee_user_uid"] != caller for item in own
+    ):
+        inert.append("mine")
+
+    progress = listed("status=in_progress&limit=200")
+    assigned = listed("status=assigned&limit=200")
+    if (
+        mine not in ids(progress)
+        or {item["status"] for item in progress} != {"in_progress"}
+        or theirs not in ids(assigned)
+        or mine in ids(assigned)
+    ):
+        inert.append("status")
+
+    scoped = listed(f"project_uid={first}&limit=200")
+    if ids(scoped) != [mine]:
+        inert.append("project_uid")
+
+    assert inert == [], f"listAssignments accepts and ignores: {inert}"
+    refused = get(surface, "/assignments?status=open")
+    assert refused.status == 422, refused.body
+
+
+def test_specification_prices_reads_the_query_parameters_it_declares(
+    shipped_router: Surface,
+) -> None:
+    """`W60-OPT-MATCH-01`: ``offset`` and ``limit`` reach the port, and only as declared.
+
+    The rule of the sweep above -- supply the parameter and require the answer to change --
+    over a port that answers what it was asked: its ``rows`` page echoes the ``offset`` and
+    ``limit`` it received. The priced rows themselves (paging over a real saved text layer,
+    totals that cover every row) are proved against PostgreSQL and MinIO in
+    ``tests/integration/optimisation/test_project_match.py``.
+    """
+    from auditmanager.api.routers.specification_prices import build_specification_price_routes
+    from auditmanager.api.schemas import models
+
+    class _Echo:
+        def __init__(self) -> None:
+            self.asked: list[tuple[int, int]] = []
+
+        def get_specification_prices(
+            self, *, project_uid: str, document_uid: str, offset: int, limit: int, user_uid: str
+        ) -> models.SpecificationPrices:
+            self.asked.append((offset, limit))
+            return models.SpecificationPrices.model_validate({
+                "project_uid": project_uid, "document_uid": document_uid,
+                "version_uid": "ver_01M2545JSD15ETSNNV904X991J", "version_ordinal": 1, "page_count": 1,
+                "state": "ready", "project_stage": "R", "section_code": "AR",
+                "price_list": None, "run_id": None, "text_layer_sha256": None,
+                "extraction": None, "matching": None,
+                "rows": {"offset": offset, "limit": limit, "total": 0, "next_offset": None, "items": []},
+            })
+
+    echo = _Echo()
+    router = Router(credentials=shipped_router.router.credentials)
+    build_specification_price_routes(router, echo)  # type: ignore[arg-type]
+    surface = Surface(router)
+    path = (
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/specification-prices"
+    )
+    inert: list[str] = []
+
+    bare = ok(get(surface, path))
+    if (bare["rows"]["offset"], bare["rows"]["limit"]) != (0, 50):
+        inert.append("defaults")
+    paged = ok(get(surface, f"{path}?offset=120&limit=7"))
+    if (paged["rows"]["offset"], paged["rows"]["limit"]) != (120, 7):
+        inert.append("offset/limit")
+    assert inert == [], f"getSpecificationPrices accepts and ignores: {inert}; asked {echo.asked}"
+    assert echo.asked == [(0, 50), (120, 7)]
+    before = len(echo.asked)
+    for query in ("offset=-1", "limit=0", "limit=201", "offset=x", "limit=x"):
+        refused = get(surface, f"{path}?{query}")
+        assert refused.status == 422, (query, refused.status, refused.body)
+    assert len(echo.asked) == before, "a refused request reached the port"
+
+
+def test_optimisation_proposals_read_the_query_parameters_they_declare(
+    shipped_router: Surface,
+) -> None:
+    """`W60-OPT-PROPOSALS-01`: ``document_uid``, ``limit``, ``decision`` and ``offset`` reach the
+    port, and only as declared.
+
+    The rule of the sweep above -- supply the parameter and require the answer to change --
+    over a port that records what it was asked. The proposals themselves (paging over stored
+    rows, the filter by current decision, counts that cover every proposal) are proved against
+    PostgreSQL in ``tests/integration/optimisation/proposals`` and over HTTP in
+    ``tests/integration/composition/test_optimisation_proposals_over_http.py``.
+    """
+    from auditmanager.api.routers.optimisation_proposals import build_optimisation_proposal_routes
+    from auditmanager.api.schemas import models
+
+    class _Echo:
+        def __init__(self) -> None:
+            self.passes: list[tuple[str | None, int]] = []
+            self.proposals: list[tuple[str | None, int, int]] = []
+
+        def list_optimisation_passes(
+            self, *, project_uid: str, document_uid: str | None, limit: int, user_uid: str
+        ) -> models.OptimisationPassList:
+            self.passes.append((document_uid, limit))
+            return models.OptimisationPassList(items=[])
+
+        def list_optimisation_proposals(
+            self, *, optimisation_pass_id: str, decision: str | None, offset: int, limit: int,
+            user_uid: str,
+        ) -> models.OptimisationProposalPage:
+            self.proposals.append((decision, offset, limit))
+            return models.OptimisationProposalPage.model_validate({
+                "optimisation_pass": {
+                    "optimisation_pass_id": optimisation_pass_id,
+                    "project_uid": "prj_01M2545JSD15ETSNNV904X991F",
+                    "document_uid": "doc_01M2545JSD15ETSNNV904X991H",
+                    "version_uid": "ver_01M2545JSD15ETSNNV904X991J",
+                    "run_id": "run_01M2545JSD15ETSNNV904X991K",
+                    "text_layer_sha256": "e" * 64,
+                    "price_list_id": "prl_01M2545JSD15ETSNNV904X991N",
+                    "vendor_list_id": "vnl_01M2545JSD15ETSNNV904X991N",
+                    "vendor_list_source": "global",
+                    "extraction_algorithm": "specification-text-v1",
+                    "match_algorithm": "price-match-v1",
+                    "generator_version": "cheaper-analog-v1",
+                    "specification_row_count": 0, "matched_row_count": 0,
+                    "proposed_row_count": 0, "proposal_count": 0,
+                    "decision_counts": {"pending": 0, "accept": 0, "reject": 0, "revise": 0},
+                    "started_by_user_uid": "usr_01M2545JSD15ETSNNV904X991F",
+                    "started_by_label": "Петрова А.",
+                    "started_at": "2026-10-20T09:00:00Z",
+                },
+                "decision": decision, "items": [], "offset": offset, "limit": limit,
+                "total": 0, "next_offset": None,
+            })
+
+    echo = _Echo()
+    router = Router(credentials=shipped_router.router.credentials)
+    build_optimisation_proposal_routes(router, echo)  # type: ignore[arg-type]
+    surface = Surface(router)
+    project = "/projects/prj_01M2545JSD15ETSNNV904X991F/optimisation-passes"
+    proposals = "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/proposals"
+    document = "doc_01M2545JSD15ETSNNV904X991H"
+    inert: list[str] = []
+
+    ok(get(surface, project))
+    ok(get(surface, f"{project}?document_uid={document}&limit=7"))
+    if echo.passes != [(None, 100), (document, 7)]:
+        inert.append("document_uid/limit")
+    bare = ok(get(surface, proposals))
+    if (bare["decision"], bare["offset"], bare["limit"]) != (None, 0, 50):
+        inert.append("defaults")
+    paged = ok(get(surface, f"{proposals}?decision=revise&offset=120&limit=7"))
+    if (paged["decision"], paged["offset"], paged["limit"]) != ("revise", 120, 7):
+        inert.append("decision/offset/limit")
+    assert inert == [], (
+        f"the optimisation proposals accept and ignore: {inert}; asked {echo.passes} {echo.proposals}"
+    )
+    assert echo.proposals == [(None, 0, 50), ("revise", 120, 7)]
+    before = (len(echo.passes), len(echo.proposals))
+    for query in ("limit=0", "limit=101", "document_uid=x"):
+        assert get(surface, f"{project}?{query}").status == 422, query
+    for query in ("offset=-1", "limit=0", "limit=201", "decision=accepted", "offset=x"):
+        assert get(surface, f"{proposals}?{query}").status == 422, query
+    assert (len(echo.passes), len(echo.proposals)) == before, "a refused request reached the port"
+
+
+def test_section_specification_reads_the_query_parameters_it_declares(
+    shipped_router: Surface,
+) -> None:
+    """`W63-SECTION-FORM7-01`: ``project_uid``, ``q``, ``offset`` and ``limit`` reach the port.
+
+    The rule of the sweep above -- supply the parameter and require the answer to change --
+    over a port that answers what it was asked: it echoes the section code, the project filter,
+    the search text and the page it received. The composition itself (membership across
+    projects, each row priced from its own project's list, totals per project, the bounds) is
+    proved against PostgreSQL and MinIO in
+    ``tests/integration/optimisation/test_section_specification.py``.
+    """
+    from auditmanager.api.routers.section_specification import build_section_specification_routes
+    from auditmanager.api.schemas import models
+
+    class _Echo:
+        def __init__(self) -> None:
+            self.asked: list[tuple[str, str | None, str | None, int, int]] = []
+
+        def get_section_specification(
+            self,
+            *,
+            section_code: str,
+            project_uid: str | None,
+            query: str | None,
+            offset: int,
+            limit: int,
+            user_uid: str,
+        ) -> models.SectionSpecification:
+            self.asked.append((section_code, project_uid, query, offset, limit))
+            return models.SectionSpecification.model_validate({
+                "section_code": section_code, "state": "ready", "limit_reason": None,
+                "project_filter": project_uid, "query": query,
+                "extraction_algorithm": "specification-text-v1",
+                "match_algorithm": "price-match-v1",
+                "projects": [], "excluded": [], "excluded_count": 0, "source_count": 0,
+                "row_count": 0,
+                "rows": {"offset": offset, "limit": limit, "total": 0, "next_offset": None, "items": []},
+            })
+
+    echo = _Echo()
+    router = Router(credentials=shipped_router.router.credentials)
+    build_section_specification_routes(router, echo)  # type: ignore[arg-type]
+    surface = Surface(router)
+    project = "prj_01M2545JSD15ETSNNV904X991F"
+    inert: list[str] = []
+
+    bare = ok(get(surface, "/sections/KJ/specification"))
+    if (bare["section_code"], bare["project_filter"], bare["query"]) != ("KJ", None, None):
+        inert.append("defaults")
+    if (bare["rows"]["offset"], bare["rows"]["limit"]) != (0, 50):
+        inert.append("paging defaults")
+    filtered = ok(get(surface, f"/sections/AR/specification?project_uid={project}&q=%D0%B4%D0%B2%D0%B5%D1%80%D1%8C&offset=120&limit=7"))
+    if filtered["project_filter"] != project:
+        inert.append("project_uid")
+    if filtered["query"] != "дверь":
+        inert.append("q")
+    if (filtered["rows"]["offset"], filtered["rows"]["limit"]) != (120, 7):
+        inert.append("offset/limit")
+    empty = ok(get(surface, "/sections/AR/specification?project_uid=&q="))
+    if (empty["project_filter"], empty["query"]) != (None, None):
+        inert.append("empty values are absent")
+    assert inert == [], f"getSectionSpecification accepts and ignores: {inert}; asked {echo.asked}"
+    assert echo.asked == [
+        ("KJ", None, None, 0, 50),
+        ("AR", project, "дверь", 120, 7),
+        ("AR", None, None, 0, 50),
+    ]
+    before = len(echo.asked)
+    for query in ("offset=-1", "limit=0", "limit=201", "offset=x", "limit=x", "project_uid=prj_bad",
+                  "q=" + "д" * 201):
+        refused = get(surface, f"/sections/AR/specification?{query}")
+        assert refused.status == 422, (query, refused.status, refused.body)
+    for code in ("XX", "ar", "АР"):
+        unknown = get(surface, f"/sections/{code}/specification")
+        assert unknown.status == 404, (code, unknown.status, unknown.body)
+        assert json.loads(unknown.body)["details"] == {"aggregate_type": "SectionSpecification"}
+    assert len(echo.asked) == before, "a refused request reached the port"
+
+
+def test_compare_document_versions_reads_the_query_parameters_it_declares(
+    shipped_router: Surface,
+) -> None:
+    """`W59-VERSION-COMPARE-01`: all six declared query parameters reach the port, as declared.
+
+    ``target_version_uid``, ``source_run_id``, ``target_run_id``, ``mode``, ``diff_offset`` and
+    ``diff_limit``. The rule of the sweep above -- supply the parameter and require the answer
+    to change -- over a port that answers what it was asked: its comparison names the target
+    version, the two runs and the mode it received, and its ``sheet_diffs`` page echoes the
+    ``diff_offset`` and ``diff_limit``. What the comparison computes (the pairing, the line
+    differences, the finding proposals, every refusal) is proved against PostgreSQL and MinIO in
+    ``tests/integration/composition/test_version_comparison_over_http.py``.
+    """
+    from auditmanager.api.routers.comparison import build_comparison_routes
+    from auditmanager.api.schemas import models
+
+    class _Echo:
+        def __init__(self) -> None:
+            self.asked: list[dict[str, Any]] = []
+
+        def compare_versions(
+            self,
+            *,
+            project_uid: str,
+            document_uid: str,
+            source_version_uid: str,
+            target_version_uid: str,
+            source_run_id: str | None,
+            target_run_id: str | None,
+            mode: str,
+            diff_offset: int,
+            diff_limit: int,
+        ) -> models.VersionComparison:
+            self.asked.append({
+                "target_version_uid": target_version_uid,
+                "source_run_id": source_run_id,
+                "target_run_id": target_run_id,
+                "mode": mode,
+                "diff_offset": diff_offset,
+                "diff_limit": diff_limit,
+            })
+
+            def side(version_uid: str, ordinal: int, run_id: str | None) -> dict[str, Any]:
+                return {
+                    "version_uid": version_uid, "version_ordinal": ordinal, "page_count": 1,
+                    "sha256": "a" * 64, "project_stage": "R", "section_code": "AR",
+                    "run_id": run_id, "text_layer_sha256": "b" * 64,
+                }
+
+            return models.VersionComparison.model_validate({
+                "project_uid": project_uid, "document_uid": document_uid,
+                "source_version_uid": source_version_uid,
+                "target_version_uid": target_version_uid,
+                "mode": mode, "outcome": "compared", "refusal": None,
+                "source": side(source_version_uid, 1, source_run_id),
+                "target": side(target_version_uid, 2, target_run_id),
+                "comparison_sha256": "c" * 64, "sheets": [],
+                "sheet_diffs": {
+                    "offset": diff_offset, "limit": diff_limit, "total": 0,
+                    "next_offset": None, "items": [],
+                },
+                "findings": {
+                    "status": "compared", "unavailable_reason": None,
+                    "source_finding_count": 0, "target_finding_count": 0,
+                    "proposals": [], "carryover_candidates": [],
+                },
+            })
+
+    echo = _Echo()
+    router = Router(credentials=shipped_router.router.credentials)
+    build_comparison_routes(router, echo)  # type: ignore[arg-type]
+    surface = Surface(router)
+    path = (
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison"
+    )
+    target = "ver_01M2545JSD15ETSNNV904X991K"
+    source_run = "run_01M2545JSD15ETSNNV904X991M"
+    target_run = "run_01M2545JSD15ETSNNV904X991N"
+    inert: list[str] = []
+
+    bare = ok(get(surface, f"{path}?target_version_uid={target}"))
+    if bare["target_version_uid"] != target or bare["target"]["version_uid"] != target:
+        inert.append("target_version_uid")
+    if bare["mode"] != "version":
+        inert.append("mode default")
+    if (bare["sheet_diffs"]["offset"], bare["sheet_diffs"]["limit"]) != (0, 10):
+        inert.append("diff paging defaults")
+    if (bare["source"]["run_id"], bare["target"]["run_id"]) != (None, None):
+        inert.append("run defaults")
+
+    query = (
+        f"target_version_uid={target}&source_run_id={source_run}&target_run_id={target_run}"
+        "&mode=stage&diff_offset=7&diff_limit=3"
+    )
+    asked = ok(get(surface, f"{path}?{query}"))
+    if asked["mode"] != "stage":
+        inert.append("mode")
+    if (asked["sheet_diffs"]["offset"], asked["sheet_diffs"]["limit"]) != (7, 3):
+        inert.append("diff_offset/diff_limit")
+    if asked["source"]["run_id"] != source_run:
+        inert.append("source_run_id")
+    if asked["target"]["run_id"] != target_run:
+        inert.append("target_run_id")
+    assert inert == [], f"compareDocumentVersions accepts and ignores: {inert}; asked {echo.asked}"
+    assert echo.asked == [
+        {"target_version_uid": target, "source_run_id": None, "target_run_id": None,
+         "mode": "version", "diff_offset": 0, "diff_limit": 10},
+        {"target_version_uid": target, "source_run_id": source_run,
+         "target_run_id": target_run, "mode": "stage", "diff_offset": 7, "diff_limit": 3},
+    ]
+
+    before = len(echo.asked)
+    refused_queries = (
+        "",  # the one required parameter is absent
+        "target_version_uid=",
+        "target_version_uid=ver_bad",
+        f"target_version_uid={target}&source_run_id=run_bad",
+        f"target_version_uid={target}&target_run_id=run_bad",
+        f"target_version_uid={target}&mode=Version",
+        f"target_version_uid={target}&mode=other",
+        f"target_version_uid={target}&diff_offset=-1",
+        f"target_version_uid={target}&diff_offset=x",
+        f"target_version_uid={target}&diff_limit=0",
+        f"target_version_uid={target}&diff_limit=26",
+        f"target_version_uid={target}&diff_limit=x",
+    )
+    for refused_query in refused_queries:
+        refused = get(surface, f"{path}?{refused_query}")
+        assert refused.status == 422, (refused_query, refused.status, refused.body)
+    assert len(echo.asked) == before, "a refused request reached the port"
+
+
+def test_price_list_positions_read_the_query_parameters_they_declare(
+    shipped_router: Surface,
+) -> None:
+    """`W60-PRICE-LIST-01`: ``offset`` and ``limit`` reach the port, and only as declared.
+
+    The rule of the sweep above -- supply the parameter and require the answer to change --
+    over a port that answers what it was asked: its page echoes the ``offset`` and ``limit`` it
+    received. The positions themselves (source-row order, exact decimal prices, the parse report)
+    are proved against PostgreSQL in ``tests/integration/optimisation`` and over HTTP in
+    ``tests/integration/composition/test_optimisation_over_http.py``.
+    """
+    from auditmanager.api.routers.optimisation import build_optimisation_routes
+    from auditmanager.api.schemas import models
+
+    class _Echo:
+        def __init__(self) -> None:
+            self.asked: list[tuple[str, int, int]] = []
+
+        def list_price_list_positions(
+            self, *, price_list_id: str, offset: int, limit: int, user_uid: str
+        ) -> models.PriceListPositionPage:
+            self.asked.append((price_list_id, offset, limit))
+            return models.PriceListPositionPage.model_validate({
+                "revision": {
+                    "price_list_id": price_list_id,
+                    "project_uid": "prj_01M2545JSD15ETSNNV904X991F",
+                    "revision_number": 1, "is_current": True,
+                    "uploaded_by_user_uid": "usr_01M2545JSD15ETSNNV904X991F",
+                    "uploaded_at": "2026-10-20T09:00:00Z", "source_format": "csv",
+                    "source_filename": "prices.csv", "media_type": "text/csv",
+                    "size_bytes": 64, "sha256": "d" * 64, "default_currency": "RUB",
+                    "data_row_count": 1, "accepted_row_count": 1, "skipped_row_count": 0,
+                },
+                "parse_report": {
+                    "report_version": 1, "format": "csv", "sheet": None, "encoding": "utf-8",
+                    "delimiter": ";", "header_row": 1,
+                    "columns": [
+                        {"field": "name", "column": 1, "header": "Наименование"},
+                        {"field": "unit", "column": 2, "header": "Ед."},
+                        {"field": "unit_price", "column": 3, "header": "Цена"},
+                    ],
+                    "ambiguous_columns": [], "ignored_columns": [],
+                    "price_header_currency": None, "default_currency": "RUB",
+                    "preamble_rows": 0, "blank_rows": 0, "data_rows": 1, "accepted_rows": 1,
+                    "skipped_rows": 0, "skipped_by_reason": [], "skipped": [],
+                    "skipped_listed_in_full": True, "warnings_by_reason": [], "warnings": [],
+                    "currency_sources": [{"source": "default", "count": 1}],
+                },
+                "items": [], "offset": offset, "limit": limit, "total": 1,
+                "next_offset": None,
+            })
+
+    echo = _Echo()
+    router = Router(credentials=shipped_router.router.credentials)
+    build_optimisation_routes(router, echo)  # type: ignore[arg-type]
+    surface = Surface(router)
+    price_list = "prl_01M2545JSD15ETSNNV904X991N"
+    path = f"/price-lists/{price_list}/positions"
+    inert: list[str] = []
+
+    bare = ok(get(surface, path))
+    if (bare["offset"], bare["limit"]) != (0, 100):
+        inert.append("defaults")
+    paged = ok(get(surface, f"{path}?offset=120&limit=7"))
+    if (paged["offset"], paged["limit"]) != (120, 7):
+        inert.append("offset/limit")
+    assert inert == [], f"listPriceListPositions accepts and ignores: {inert}; asked {echo.asked}"
+    assert echo.asked == [(price_list, 0, 100), (price_list, 120, 7)]
+    before = len(echo.asked)
+    for query in ("offset=-1", "limit=0", "limit=501", "offset=x", "limit=x"):
+        refused = get(surface, f"{path}?{query}")
+        assert refused.status == 422, (query, refused.status, refused.body)
+    assert len(echo.asked) == before, "a refused request reached the port"

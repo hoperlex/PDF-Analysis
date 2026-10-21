@@ -19,8 +19,13 @@ export type { ProjectSection, ProjectSectionCode } from './model/section';
 export {
   ANALYSED_SECTION_CODE,
   PROJECT_SECTIONS,
+  PROJECT_STRUCTURE_ORDER,
+  UnknownProjectSectionError,
   findProjectSection,
+  projectSectionOf,
   projectSectionTitle,
+  sectionsInStructureOrder,
+  structureRank,
 } from './model/section';
 
 export type { CreateProjectFailure, CreateProjectFailureKind } from './model/create-failure';

@@ -3,9 +3,16 @@
 ``auditmanager.analysis.text`` resolves every quotation against the text layer and drops
 what does not resolve **before** writing its artifact, recording a reason per anchor in
 ``anchors.py`` and then keeping only two integers. ``auditmanager.findings``' gate
-therefore never receives an unresolvable anchor, so no ``finding_observation`` row is ever
-written with ``grounded = false``, and the five-value ``ungrounded_reason`` vocabulary
-that ``P02_SEAMS.md`` §5.1 declares has no producer at all.
+therefore never receives an unresolvable anchor, so no ``finding_observation`` row of **this
+chain** (the AR text profile every journey run starts) is ever written with
+``grounded = false``, and the ``ungrounded_reason`` vocabulary that ``P02_SEAMS.md`` §5.1
+declares has no producer in it at all.
+
+The scope is the chain, not the database. ``auditmanager.findings.publication`` can write
+``grounded = false`` and other suites exercise it or seed such a row by hand to prove a
+refusal; the AR v2 and v3 recorded profiles (``W57a``) are separate chains with their own
+publication paths and tests. Those rows share this database in a full run and are not
+output of the chain under claim.
 
 The safety property holds, and holds twice over: the stage drops, and the gate would
 reject. What is lost is diagnostic: *which* quotation the model invented, on which page,
@@ -21,6 +28,8 @@ import json
 
 import pytest
 from sqlalchemy import text
+
+from auditmanager.analysis.text import AR_TEXT_PROFILE, AR_TEXT_PROMPT_BUNDLE
 
 
 @pytest.fixture(scope="module")
@@ -73,10 +82,41 @@ def test_nothing_ungrounded_is_published(ungrounded_run, session):
         assert reason is None
 
 
-def test_no_grounded_false_row_exists_anywhere(session):
-    """Not merely absent on this run: no producer for the column exists in the chain."""
+def test_no_grounded_false_row_exists_anywhere(ungrounded_run, session):
+    """Not merely absent on this run: no producer for the column exists in the chain.
+
+    "Anywhere" means every run of the AR text profile in the database -- every project,
+    every earlier test and variant of this suite -- and not only the module's own run. It
+    does not mean every row of the table: a ``grounded = false`` row of another profile is
+    not this chain's output (see the module docstring), and the database is shared. Taking
+    the whole table is what turned this green guard red in the first complete gate, on a row
+    that ``jobs/test_recorded_v2_publication_gate.py`` commits by hand for the AR v2 profile.
+
+    The fixture is requested so the test is true on its own and not by the luck of running
+    after a test that wrote something; the two scope assertions keep the narrowing from
+    emptying the claim.
+    """
+    scope = {
+        "ap": str(AR_TEXT_PROFILE.analysis_profile_id),
+        "pb": str(AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id),
+    }
+    own = session.execute(
+        text(
+            "SELECT count(*) FROM finding_observation "
+            "WHERE run_id = :r AND analysis_profile_id = :ap AND prompt_bundle_id = :pb"
+        ),
+        {"r": ungrounded_run["run_id"], **scope},
+    ).scalar_one()
+    assert own >= 1, (
+        "the profile scope does not select the rows this suite's own run wrote; the "
+        "assertion below would look at nothing"
+    )
     rows = session.execute(
-        text("SELECT DISTINCT grounded, ungrounded_reason FROM finding_observation")
+        text(
+            "SELECT DISTINCT grounded, ungrounded_reason FROM finding_observation "
+            "WHERE analysis_profile_id = :ap AND prompt_bundle_id = :pb"
+        ),
+        scope,
     ).all()
     assert rows, "no observations at all; this assertion would be vacuous"
     assert {(grounded, reason) for grounded, reason in rows} == {(True, None)}
@@ -90,7 +130,7 @@ def test_the_reason_vocabulary_is_declared_but_unproduced(ungrounded_run, sessio
     """
     from auditmanager.findings import UNGROUNDED_REASONS
 
-    assert len(UNGROUNDED_REASONS) == 5
+    assert len(UNGROUNDED_REASONS) == 12
 
     metrics = _text_analysis_metrics(session, ungrounded_run["run_id"])
     dropped = metrics["observations_dropped_unresolved"]

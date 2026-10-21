@@ -77,8 +77,42 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # (``searchNorms``, ``listNormSnapshots``, ``listNormSnapshotEvents``).
 # `W55B-SEAL-01` added two addressed GETs on `version_uid` (``listVersionPortalBlocks`` and
 # ``streamVersionPortalBlockCrop``), sealed stubs until `W55B-GEOMETRY-01` served them.
-EXPECTED_ADDRESSED = 17
-EXPECTED_UNADDRESSED = 14
+# `W57A-SEAL-01B` added ``getRunNormVerification`` on ``run_id``, a sealed stub (see
+# :data:`SEALED_STUB_ADDRESSED`; this register missed it until `W59-SECTION-SEAL-01`).
+# `W59-SECTION-SEAL-01` added ``getVersionSectionReview``, addressed through its version's
+# document and project, which answers ``404 not_found`` for any link that names nothing.
+# `W59-VERSION-COMPARE-01` added ``compareDocumentVersions`` the same way; its required
+# ``target_version_uid`` is supplied by :data:`REQUIRED_QUERY`, so the answer is about the path.
+# `W57B-NORMS-CATALOGUE-XLSX-01` added ``exportRunXlsx`` on ``run_id``: an absent run is
+# ``404 not_found``, as for ``exportRunCsv``.
+# `W61-DISPATCHER-01` added ``getAssignment`` on ``assignment_uid`` (``404`` for an identity that
+# names nothing, or an assignment the caller may not read) and ``listAssignments``, an
+# unaddressed collection.
+# `W60-PRICE-LIST-01` added three: ``listPriceListRevisions`` and ``getEffectiveVendorLists``
+# on ``project_uid`` and ``listPriceListPositions`` on ``price_list_id``.
+# With both, the addressed half is twenty-five.
+# `W60-OPT-MATCH-01` added ``getSpecificationPrices``, addressed through its document set's
+# project: an absent project or a set outside it is ``404 not_found``. Twenty-six.
+# `W60-OPT-PROPOSALS-01` added four: ``listOptimisationPasses`` on ``project_uid``, and
+# ``listOptimisationProposals``, ``listProposalDecisions`` and ``exportOptimisationProposalsCsv``
+# on a pass or a proposal identity. With all of them, the addressed half is thirty.
+# `NORM-REFS-RUN-01` added ``getRunNormReferences`` on ``run_id``: an absent run is
+# ``404 not_found`` (``AuditRun``), as for ``getRunStatus``. Thirty-one.
+EXPECTED_ADDRESSED = 31
+
+#: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
+#: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
+#: a true answer, but about the query and not about the path this sweep judges.
+REQUIRED_QUERY: dict[str, str] = {
+    "compareDocumentVersions": "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
+}
+# `W59-ANALYSIS-SETTINGS-01` added ``listAnalysisProfiles``, unaddressed: the registry's
+# fifteen rows, answered as ``items`` like a collection with no parent identity.
+# `W57B-NORMS-CATALOGUE-XLSX-01` added ``listNormDocuments``, unaddressed: see
+# :data:`CURRENT_SNAPSHOT_COLLECTIONS`.
+# With ``listAssignments`` (`W61-DISPATCHER-01`) and ``listNormDocuments`` the unaddressed half is
+# seventeen.
+EXPECTED_UNADDRESSED = 17
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -128,13 +162,31 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 #: the document, its paragraphs and its PDF alike.
 #: `W55B-SEAL-01` filled it again with the two portal-block reads; `W55B-GEOMETRY-01` serves
 #: them and empties it, and an absent `ver_` is now `404 not_found` for both.
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
+#: `W57A-SEAL-01B` sealed ``getRunNormVerification`` as a refusing stub (``503``,
+#: ``dependency: norm_verification_reader``) until the CITE reader; it belongs here.
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({"getRunNormVerification"})
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a
 #: page. Exempt from the page check and checked for that refusal instead
 #: (:func:`test_a_query_without_its_text_is_refused_and_never_a_page`).
 QUERY_OPERATIONS = frozenset({"searchNorms"})
+
+#: `W57B-NORMS-CATALOGUE-XLSX-01`. Collections scoped to the current norms snapshot: with
+#: none designated the answer is ``422 required_norm_unavailable`` (``reference_kind:
+#: norms_snapshot``), exactly as ``searchNorms`` answers, never an empty page; with one it is
+#: a page. Swept for one of those two answers and nothing else.
+CURRENT_SNAPSHOT_COLLECTIONS = frozenset({"listNormDocuments"})
+
+
+#: `W63-SECTION-FORM7-01`. ``getSectionSpecification`` is addressed by a *closed code*, not by a
+#: parent identity: ``{section_code}`` is one of the fifteen sections, a filter over every
+#: project's current versions, so there is no parent to be missing and the empty section is a
+#: true answer (``200``, no projects). It joins neither half of the rule above; it is swept for
+#: its own two refusals by :func:`test_a_section_filter_answers_the_section_and_refuses_what_names_nothing`:
+#: a ``project_uid`` filter that names nothing is ``404 not_found`` (``Project``), and a code
+#: outside the fifteen is ``404 not_found`` (``SectionSpecification``).
+SECTION_FILTER_OPERATIONS = frozenset({"getSectionSpecification"})
 
 
 def _prefixes() -> dict[str, str]:
@@ -228,7 +280,13 @@ def _get_routes(app: Composed) -> tuple[tuple[str, str], ...]:
 
 
 def _addressed(routes: tuple[tuple[str, str], ...]) -> tuple[tuple[str, str], ...]:
-    return tuple((op, path) for op, path in routes if "{" in path)
+    return tuple(
+        (op, path) for op, path in routes if "{" in path and op not in SECTION_FILTER_OPERATIONS
+    )
+
+
+def _section_filtered(routes: tuple[tuple[str, str], ...]) -> tuple[tuple[str, str], ...]:
+    return tuple((op, path) for op, path in routes if op in SECTION_FILTER_OPERATIONS)
 
 
 def _unaddressed(routes: tuple[tuple[str, str], ...]) -> tuple[tuple[str, str], ...]:
@@ -269,7 +327,7 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
         if operation_id in SEALED_STUB_ADDRESSED:
             continue
         path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
-        status, body = _get(app, path)
+        status, body = _get(app, path + REQUIRED_QUERY.get(operation_id, ""))
         code = body.get("error_code") if isinstance(body, dict) else None
         if (status, code) != (404, "not_found"):
             disagreements.append((operation_id, path, status, code))
@@ -277,6 +335,32 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
         "these operations answered something other than 404 not_found for an identity "
         f"that names nothing: {disagreements}"
     )
+
+
+def test_a_section_filter_answers_the_section_and_refuses_what_names_nothing(app: Composed) -> None:
+    """`W63-SECTION-FORM7-01`. The third kind of ``GET``: addressed by a code, not an identity.
+
+    Every code of the fifteen answers ``200`` -- an empty section is an answer, never a
+    ``404`` -- with the read's own shape (a state, its projects and the page of rows, or the
+    bound that stopped it); an unknown ``project_uid`` filter and a code outside the fifteen
+    are ``404 not_found`` naming the aggregate each addressed.
+    """
+    filtered = _section_filtered(_get_routes(app))
+    assert {operation_id for operation_id, _ in filtered} == SECTION_FILTER_OPERATIONS
+    for operation_id, template in filtered:
+        for code in ("AR", "PS"):
+            status, body = _get(app, template.replace("{section_code}", code))
+            assert status == 200, f"{operation_id} answered {status} for {code}: {body}"
+            assert isinstance(body, dict) and isinstance(body.get("projects"), list), body
+            assert body["section_code"] == code and body["state"] in ("ready", "section_too_large")
+            assert "items" not in body and "page" not in body, body
+        bare = template.replace("{section_code}", "AR")
+        status, body = _get(app, f"{bare}?project_uid={_absent_identity('project_uid')}")
+        assert (status, body.get("error_code")) == (404, "not_found"), (status, body)
+        assert body.get("details") == {"aggregate_type": "Project"}, body
+        status, body = _get(app, template.replace("{section_code}", "XX"))
+        assert (status, body.get("error_code")) == (404, "not_found"), (status, body)
+        assert body.get("details") == {"aggregate_type": "SectionSpecification"}, body
 
 
 def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None:
@@ -306,6 +390,10 @@ def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None
         ):
             continue
         status, body = _get(app, template)
+        if operation_id in CURRENT_SNAPSHOT_COLLECTIONS and status == 422:
+            assert isinstance(body, dict) and body.get("error_code") == "required_norm_unavailable"
+            assert body.get("details") == {"reference_kind": "norms_snapshot"}, body
+            continue
         assert status == 200, f"{operation_id} answered {status}: {body}"
         assert isinstance(body, dict) and isinstance(body.get("items"), list), (
             f"{operation_id} answered 200 without a page: {body}"

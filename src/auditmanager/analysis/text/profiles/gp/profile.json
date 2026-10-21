@@ -1,0 +1,35 @@
+{
+  "format": "text-profile/1",
+  "section_code": "GP",
+  "analysis_profile_id": "ap_01M5AXG1KSSZM53N2CBV6XX83E",
+  "prompt_bundle_id": "pb_01M5AXG1KSRDEWMP2WT3KNGWJ2",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "title_ru": "Генеральный план",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "16ba8e5d23e4782550e79355002fde1365f682b7",
+    "files": [
+      {
+        "path": "prompts/disciplines/GP/role.md",
+        "sha256": "3a5fdbafcca2b0ada0ad50d53145599b45c771bd3bfa95d1c157469d1b44bd0a"
+      },
+      {
+        "path": "prompts/disciplines/GP/checklist.md",
+        "sha256": "c6d42f648e73bde0e434efe54e6c544d3eaf181c594b27d76eb6041b7e1fc247"
+      },
+      {
+        "path": "prompts/disciplines/GP/drawing_types.md",
+        "sha256": "e382963ebbe0ce8b14e27e51fa9b914b8a6aa07ed643f1404f82c88ec08bf799"
+      },
+      {
+        "path": "prompts/disciplines/GP/project_params.md",
+        "sha256": "fe02d212adddc7dba97962328862428051951b1e2e32fc2d0b4ecf6d3e6caa93"
+      },
+      {
+        "path": "prompts/disciplines/GP/finding_categories.md",
+        "sha256": "0568f133ba2cc85e85078f6f2c949b1839dc0a015b674ce26a0d988704d2107d"
+      }
+    ]
+  }
+}

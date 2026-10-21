@@ -1,0 +1,881 @@
+{
+  "schema": "ar-v2-seeded/1",
+  "profile": "ar_v2",
+  "source": "synthetic",
+  "bundles": [
+    {
+      "id": "ar_v2_01",
+      "pdf": "bundles/ar_v2_01.pdf",
+      "portal_bundle": "bundles/ar_v2_01.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "4b0accd0b17594a5b1e9a3ebd0ae1a3ee36c657f0f0f4eb22bbb42814eb4642b",
+      "portal_bundle_sha256": "2722aadc0f9f26899a16c8a9dfe5f7c3db43500fd0d8090db69573282655d6bf"
+    },
+    {
+      "id": "ar_v2_02",
+      "pdf": "bundles/ar_v2_02.pdf",
+      "portal_bundle": "bundles/ar_v2_02.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "9236e76e3b33d7a4bd685b0a7cb63e0adb4b129ccb24c2ba74888cb5bf8337ad",
+      "portal_bundle_sha256": "42a7fe82aaba13b1735574bd3f79e005954e7b566a97e7a291a3dbf9a00777b9"
+    },
+    {
+      "id": "ar_v2_03",
+      "pdf": "bundles/ar_v2_03.pdf",
+      "portal_bundle": "bundles/ar_v2_03.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "5d454c9ba71924099494532fee604a325b29330c8ae61243259e5d3cdf09df34",
+      "portal_bundle_sha256": "d9816a2e0ff69f5ffb8923971c1c90bb83329fa2c1a2db2a4635c68ab16406d0"
+    },
+    {
+      "id": "ar_v2_04",
+      "pdf": "bundles/ar_v2_04.pdf",
+      "portal_bundle": "bundles/ar_v2_04.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "d7c01274d8531d9231f4b575f35ee2507660cd1a7ddc6edfa7893e9168655e30",
+      "portal_bundle_sha256": "bb87da55061c53a72ec898d9e61cb3b29b1d91bd669cdb28990321e443391010"
+    },
+    {
+      "id": "ar_v2_05",
+      "pdf": "bundles/ar_v2_05.pdf",
+      "portal_bundle": "bundles/ar_v2_05.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "f9b157f4a501adbc6a8d4873a829602492f16e8bdd2135ee391f913ff30bd700",
+      "portal_bundle_sha256": "d12da668565c248971690f493fda43adab9fa9127ca0bf4c1ad1bb2565b8fdbb"
+    },
+    {
+      "id": "ar_v2_06",
+      "pdf": "bundles/ar_v2_06.pdf",
+      "portal_bundle": "bundles/ar_v2_06.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "0ddf875351730d191c677bc211db739ace024c849c05ee7e0b7bbdf81decb598",
+      "portal_bundle_sha256": "f75c791b2de8bf4e031a166971976b1c7a25c7a8a46ded64e69cfcf5a2797a2b"
+    },
+    {
+      "id": "ar_v2_07",
+      "pdf": "bundles/ar_v2_07.pdf",
+      "portal_bundle": "bundles/ar_v2_07.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "54b0117e57ad81a6d550aad9aec6c2a5ff3b7ef3a986e289497007806a47c6e6",
+      "portal_bundle_sha256": "c3d6ccf79a5053d8b208e1e37817a2ea5d563589c8104f7c4ee647d59ead092b"
+    },
+    {
+      "id": "ar_v2_08",
+      "pdf": "bundles/ar_v2_08.pdf",
+      "portal_bundle": "bundles/ar_v2_08.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "e0319760acd80b7ff81a2c9f59e87cc82caf60a18c2886d2f4516cec5e359bf3",
+      "portal_bundle_sha256": "cf4271c42ef75ab24063c625d349c12cdc9e502c0a577c3423897ef0e30ef5b5"
+    },
+    {
+      "id": "ar_v2_09",
+      "pdf": "bundles/ar_v2_09.pdf",
+      "portal_bundle": "bundles/ar_v2_09.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "88c100f324b2d24784e7ba90f95136d40b5d35a280666c9631ad986d5fcde3b0",
+      "portal_bundle_sha256": "098b890458ebe444ad2bb45ce0195952ac718518ff48f526455c57711f114909"
+    },
+    {
+      "id": "ar_v2_10",
+      "pdf": "bundles/ar_v2_10.pdf",
+      "portal_bundle": "bundles/ar_v2_10.zip",
+      "page_count": 2,
+      "supplied_headers": [
+        "Лист АР-01",
+        "Лист АР-02"
+      ],
+      "pdf_sha256": "2ad4c2e5d5585cd68bbaded28043b3aeb35df7762982e6b6aea5ac11f96dd724",
+      "portal_bundle_sha256": "bad7d9217e196090a4fb4305f7af6ef20589dd3bfe593df8cb7d223ae436ec91"
+    }
+  ],
+  "issues": [
+    {
+      "id": "ic_area",
+      "bundle_id": "ar_v2_01",
+      "category": "internal_contradiction",
+      "archetype": "room_area",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План: помещение 101, площадь 18,0 м2."
+        },
+        {
+          "page": 2,
+          "quote": "Экспликация: помещение 101, площадь 21,0 м2."
+        }
+      ]
+    },
+    {
+      "id": "la_entrance",
+      "bundle_id": "ar_v2_01",
+      "category": "layout",
+      "archetype": "entrance_side",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Подпись плана: главный вход с востока."
+        },
+        {
+          "page": 2,
+          "quote": "Текст проекта: главный вход с запада."
+        }
+      ]
+    },
+    {
+      "id": "do_title",
+      "bundle_id": "ar_v2_01",
+      "category": "documentation",
+      "archetype": "sheet_title_mismatch",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Реестр: лист АР-02 План фасадов."
+        },
+        {
+          "page": 2,
+          "quote": "Заголовок листа АР-02: План помещений."
+        }
+      ]
+    },
+    {
+      "id": "in_thickness",
+      "bundle_id": "ar_v2_01",
+      "category": "insulation",
+      "archetype": "insulation_thickness",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость стен: толщина утеплителя стены НС-1 равна 150 мм."
+        },
+        {
+          "page": 2,
+          "quote": "Узел стены: толщина утеплителя стены НС-1 равна 100 мм."
+        }
+      ]
+    },
+    {
+      "id": "ic_date",
+      "bundle_id": "ar_v2_02",
+      "category": "internal_contradiction",
+      "archetype": "revision_date",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Лист АР-01: дата изменения 12.05.2026."
+        },
+        {
+          "page": 2,
+          "quote": "Лист АР-01: дата изменения 14.05.2026."
+        }
+      ]
+    },
+    {
+      "id": "la_placement",
+      "bundle_id": "ar_v2_02",
+      "category": "layout",
+      "archetype": "room_placement",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость 1 этажа: помещение 302 у северной стены."
+        },
+        {
+          "page": 2,
+          "quote": "Ведомость 1 этажа: помещение 302 у южной стены."
+        }
+      ]
+    },
+    {
+      "id": "ev_width",
+      "bundle_id": "ar_v2_02",
+      "category": "evacuation",
+      "archetype": "exit_width",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План эвакуации: ширина выхода Э-1 равна 1,20 м."
+        },
+        {
+          "page": 2,
+          "quote": "Ведомость выходов: ширина выхода Э-1 равна 0,80 м."
+        }
+      ]
+    },
+    {
+      "id": "in_material",
+      "bundle_id": "ar_v2_02",
+      "category": "insulation",
+      "archetype": "insulation_material",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость полов: утеплитель пола 1 этажа экструдированный пенополистирол."
+        },
+        {
+          "page": 2,
+          "quote": "Деталь пола: утеплитель пола 1 этажа минеральная вата."
+        }
+      ]
+    },
+    {
+      "id": "ic_use",
+      "bundle_id": "ar_v2_03",
+      "category": "internal_contradiction",
+      "archetype": "room_use",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Таблица помещений: номер 102, кухня."
+        },
+        {
+          "page": 2,
+          "quote": "Экспликация: номер 102, спальня."
+        }
+      ]
+    },
+    {
+      "id": "fa_material",
+      "bundle_id": "ar_v2_03",
+      "category": "facade",
+      "archetype": "facade_material",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Фасад северный: облицовка кирпич."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к северному фасаду: облицовка штукатурка."
+        }
+      ]
+    },
+    {
+      "id": "ev_route",
+      "bundle_id": "ar_v2_03",
+      "category": "evacuation",
+      "archetype": "route_length",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План 5 этажа: путь эвакуации из помещения 501 равен 25 м."
+        },
+        {
+          "page": 2,
+          "quote": "Схема эвакуации: путь эвакуации из помещения 501 равен 40 м."
+        }
+      ]
+    },
+    {
+      "id": "in_glazing",
+      "bundle_id": "ar_v2_03",
+      "category": "insulation",
+      "archetype": "glazing_chambers",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость окон: стеклопакет окна ОК-2 двухкамерный."
+        },
+        {
+          "page": 2,
+          "quote": "Узел окна: стеклопакет окна ОК-2 однокамерный."
+        }
+      ]
+    },
+    {
+      "id": "ph_note",
+      "bundle_id": "ar_v2_04",
+      "category": "explicit_placeholder",
+      "archetype": "active_note",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Действующее примечание: отделку лестницы уточнить."
+        }
+      ]
+    },
+    {
+      "id": "fa_windows",
+      "bundle_id": "ar_v2_04",
+      "category": "facade",
+      "archetype": "window_count",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость северного фасада: 8 окон."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к северному фасаду: 10 окон."
+        }
+      ]
+    },
+    {
+      "id": "ev_stairs",
+      "bundle_id": "ar_v2_04",
+      "category": "evacuation",
+      "archetype": "stair_count",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Пояснение к плану: со 2 этажа ведут 2 эвакуационные лестницы."
+        },
+        {
+          "page": 2,
+          "quote": "Схема эвакуации: со 2 этажа ведет 1 эвакуационная лестница."
+        }
+      ]
+    },
+    {
+      "id": "so_index",
+      "bundle_id": "ar_v2_04",
+      "category": "sound",
+      "archetype": "partition_sound_index",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость перегородок: индекс звукоизоляции перегородки ПГ-1 равен 52 дБ."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к плану: индекс звукоизоляции перегородки ПГ-1 равен 41 дБ."
+        }
+      ]
+    },
+    {
+      "id": "ph_cell",
+      "bundle_id": "ar_v2_05",
+      "category": "explicit_placeholder",
+      "archetype": "active_table_cell",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Действующая ведомость дверей: материал TBD."
+        }
+      ]
+    },
+    {
+      "id": "fa_colour",
+      "bundle_id": "ar_v2_05",
+      "category": "facade",
+      "archetype": "colour_code",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Фасад южный: цвет RAL 9010."
+        },
+        {
+          "page": 2,
+          "quote": "Ведомость отделки южного фасада: цвет RAL 7016."
+        }
+      ]
+    },
+    {
+      "id": "fs_rating",
+      "bundle_id": "ar_v2_05",
+      "category": "fire_safety",
+      "archetype": "partition_fire_rating",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость перегородок: перегородка ПР-1 имеет предел огнестойкости EI 45."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к плану: перегородка ПР-1 имеет предел огнестойкости EI 15."
+        }
+      ]
+    },
+    {
+      "id": "so_impact",
+      "bundle_id": "ar_v2_05",
+      "category": "sound",
+      "archetype": "impact_noise_level",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость перекрытий: уровень ударного шума под перекрытием Пк-1 равен 58 дБ."
+        },
+        {
+          "page": 2,
+          "quote": "Узел перекрытия: уровень ударного шума под перекрытием Пк-1 равен 70 дБ."
+        }
+      ]
+    },
+    {
+      "id": "ph_callout",
+      "bundle_id": "ar_v2_06",
+      "category": "explicit_placeholder",
+      "archetype": "active_callout",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Действующая выноска: узел примыкания не определено."
+        }
+      ]
+    },
+    {
+      "id": "ro_slope",
+      "bundle_id": "ar_v2_06",
+      "category": "roof",
+      "archetype": "roof_slope",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План кровли: уклон зоны А равен 2 процента."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к кровле: уклон зоны А равен 5 процентов."
+        }
+      ]
+    },
+    {
+      "id": "fs_door",
+      "bundle_id": "ar_v2_06",
+      "category": "fire_safety",
+      "archetype": "fire_door_type",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость дверей: дверь Д-05 противопожарная, тип EI 30."
+        },
+        {
+          "page": 2,
+          "quote": "Выноска: дверь Д-05 обычная, без предела огнестойкости."
+        }
+      ]
+    },
+    {
+      "id": "so_layer",
+      "bundle_id": "ar_v2_06",
+      "category": "sound",
+      "archetype": "sound_layer_thickness",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Узел перегородки ПГ-2: звукоизоляционный слой толщиной 50 мм."
+        },
+        {
+          "page": 2,
+          "quote": "Ведомость перегородок: звукоизоляционный слой перегородки ПГ-2 толщиной 30 мм."
+        }
+      ]
+    },
+    {
+      "id": "di_room",
+      "bundle_id": "ar_v2_07",
+      "category": "dimensions",
+      "archetype": "room_length",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План: длина помещения 201 равна 4,20 м."
+        },
+        {
+          "page": 2,
+          "quote": "Ведомость: длина помещения 201 равна 4,80 м."
+        }
+      ]
+    },
+    {
+      "id": "ro_drains",
+      "bundle_id": "ar_v2_07",
+      "category": "roof",
+      "archetype": "drain_count",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План кровли: воронок 4 штуки."
+        },
+        {
+          "page": 2,
+          "quote": "Ведомость кровли: воронок 6 штук."
+        }
+      ]
+    },
+    {
+      "id": "fs_class",
+      "bundle_id": "ar_v2_07",
+      "category": "fire_safety",
+      "archetype": "structural_fire_class",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Пояснение: класс конструктивной пожарной опасности здания С0."
+        },
+        {
+          "page": 2,
+          "quote": "Экспликация: класс конструктивной пожарной опасности здания С1."
+        }
+      ]
+    },
+    {
+      "id": "di_floor",
+      "bundle_id": "ar_v2_08",
+      "category": "dimensions",
+      "archetype": "floor_height",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Разрез: высота этажа 2 равна 3,30 м."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание: высота этажа 2 равна 3,60 м."
+        }
+      ]
+    },
+    {
+      "id": "ro_parapet",
+      "bundle_id": "ar_v2_08",
+      "category": "roof",
+      "archetype": "parapet_height",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Деталь кровли: парапет 600 мм."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к кровле: парапет 800 мм."
+        }
+      ]
+    },
+    {
+      "id": "ac_ramp",
+      "bundle_id": "ar_v2_08",
+      "category": "accessibility",
+      "archetype": "ramp_slope",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План входа: уклон пандуса ПН-1 равен 5 процентов."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к плану: уклон пандуса ПН-1 равен 10 процентов."
+        }
+      ]
+    },
+    {
+      "id": "di_door",
+      "bundle_id": "ar_v2_09",
+      "category": "dimensions",
+      "archetype": "door_width",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость: ширина двери Д-01 равна 900 мм."
+        },
+        {
+          "page": 2,
+          "quote": "Выноска: ширина двери Д-01 равна 800 мм."
+        }
+      ]
+    },
+    {
+      "id": "do_sheet",
+      "bundle_id": "ar_v2_09",
+      "category": "documentation",
+      "archetype": "promised_sheet_missing",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Реестр комплекта: лист АР-99 План кровли включен."
+        }
+      ],
+      "missing_content": "лист АР-99 План кровли"
+    },
+    {
+      "id": "ac_lift",
+      "bundle_id": "ar_v2_09",
+      "category": "accessibility",
+      "archetype": "lift_cabin_depth",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Ведомость лифтов: глубина кабины лифта Л-1 равна 2100 мм."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к плану: глубина кабины лифта Л-1 равна 1400 мм."
+        }
+      ]
+    },
+    {
+      "id": "la_adjacent",
+      "bundle_id": "ar_v2_10",
+      "category": "layout",
+      "archetype": "room_adjacency",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Легенда плана: помещение 301 граничит с коридором."
+        },
+        {
+          "page": 2,
+          "quote": "Примечание к плану: помещение 301 граничит с кладовой."
+        }
+      ]
+    },
+    {
+      "id": "do_section",
+      "bundle_id": "ar_v2_10",
+      "category": "documentation",
+      "archetype": "promised_section_missing",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Оглавление: раздел 4 Ведомость отделки включен."
+        }
+      ],
+      "missing_content": "раздел 4 Ведомость отделки"
+    },
+    {
+      "id": "ac_parking",
+      "bundle_id": "ar_v2_10",
+      "category": "accessibility",
+      "archetype": "accessible_parking",
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План участка: на стоянке выделено 4 места для маломобильных групп."
+        },
+        {
+          "page": 2,
+          "quote": "Пояснительная записка: на стоянке выделено 2 места для маломобильных групп."
+        }
+      ]
+    }
+  ],
+  "controls": [
+    {
+      "id": "control_area",
+      "bundle_id": "ar_v2_01",
+      "category": "internal_contradiction",
+      "archetype": "different_rooms",
+      "control_archetype": "near_miss",
+      "scope": "разные помещения",
+      "why_not_issue": "Площади относятся к разным помещениям.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Помещение 401 имеет 18,0 м2, помещение 402 имеет 21,0 м2."
+        }
+      ]
+    },
+    {
+      "id": "control_walls",
+      "bundle_id": "ar_v2_01",
+      "category": "insulation",
+      "archetype": "different_walls",
+      "control_archetype": "near_miss",
+      "scope": "разные стены",
+      "why_not_issue": "Толщины относятся к разным стенам.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Утеплитель стены НС-2 толщиной 150 мм; утеплитель стены НС-3 толщиной 100 мм."
+        }
+      ]
+    },
+    {
+      "id": "control_resolved",
+      "bundle_id": "ar_v2_02",
+      "category": "explicit_placeholder",
+      "archetype": "resolved_note",
+      "control_archetype": "near_miss",
+      "scope": "завершенное примечание",
+      "why_not_issue": "Фраза сообщает о выполненном уточнении.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Уточнение выполнено: отделка лестницы назначена."
+        }
+      ]
+    },
+    {
+      "id": "control_partitions",
+      "bundle_id": "ar_v2_02",
+      "category": "sound",
+      "archetype": "different_sound_partitions",
+      "control_archetype": "near_miss",
+      "scope": "разные перегородки",
+      "why_not_issue": "Индексы звукоизоляции относятся к разным перегородкам.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Перегородка ПГ-3 имеет индекс 52 дБ; перегородка ПГ-4 имеет индекс 41 дБ."
+        }
+      ]
+    },
+    {
+      "id": "control_units",
+      "bundle_id": "ar_v2_03",
+      "category": "dimensions",
+      "archetype": "equivalent_units",
+      "control_archetype": "near_miss",
+      "scope": "одна стена",
+      "why_not_issue": "Записи задают одну и ту же длину.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Длина стены 3,00 м равна 3000 мм."
+        }
+      ]
+    },
+    {
+      "id": "control_floors",
+      "bundle_id": "ar_v2_04",
+      "category": "layout",
+      "archetype": "different_floors",
+      "control_archetype": "near_miss",
+      "scope": "разные этажи",
+      "why_not_issue": "Два явно названных этажа могут различаться.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "План 1 этажа: кухня слева; план 2 этажа: кухня справа."
+        }
+      ]
+    },
+    {
+      "id": "control_facades",
+      "bundle_id": "ar_v2_05",
+      "category": "facade",
+      "archetype": "different_facades",
+      "control_archetype": "near_miss",
+      "scope": "разные фасады",
+      "why_not_issue": "Материалы относятся к разным фасадам.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Северный фасад кирпич; южный фасад штукатурка."
+        }
+      ]
+    },
+    {
+      "id": "control_zones",
+      "bundle_id": "ar_v2_06",
+      "category": "roof",
+      "archetype": "different_roof_zones",
+      "control_archetype": "near_miss",
+      "scope": "разные зоны",
+      "why_not_issue": "Уклоны относятся к разным названным зонам.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Кровля, зона А: уклон 2 процента; зона Б: 5 процентов."
+        }
+      ]
+    },
+    {
+      "id": "control_unpromised",
+      "bundle_id": "ar_v2_07",
+      "category": "documentation",
+      "archetype": "unpromised_sheet",
+      "control_archetype": "near_miss",
+      "scope": "комплект без обещания АР-99",
+      "why_not_issue": "Реестр не обещает отсутствующий лист АР-99.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Реестр содержит листы АР-01 и АР-02."
+        }
+      ]
+    },
+    {
+      "id": "control_exits",
+      "bundle_id": "ar_v2_08",
+      "category": "evacuation",
+      "archetype": "different_exits",
+      "control_archetype": "near_miss",
+      "scope": "разные выходы",
+      "why_not_issue": "Ширины относятся к разным выходам.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Выход Э-2 шириной 1,20 м на 1 этаже; выход Э-3 шириной 0,80 м в цоколе."
+        }
+      ]
+    },
+    {
+      "id": "control_ratings",
+      "bundle_id": "ar_v2_09",
+      "category": "fire_safety",
+      "archetype": "different_fire_partitions",
+      "control_archetype": "near_miss",
+      "scope": "разные перегородки",
+      "why_not_issue": "Пределы огнестойкости относятся к разным перегородкам.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Перегородка ПР-2 имеет предел EI 45; перегородка ПР-3 имеет предел EI 15."
+        }
+      ]
+    },
+    {
+      "id": "control_ramps",
+      "bundle_id": "ar_v2_10",
+      "category": "accessibility",
+      "archetype": "different_ramps",
+      "control_archetype": "near_miss",
+      "scope": "разные пандусы",
+      "why_not_issue": "Уклоны относятся к разным пандусам.",
+      "expected_finding": false,
+      "evidence": [
+        {
+          "page": 1,
+          "quote": "Пандус ПН-2 имеет уклон 5 процентов; пандус ПН-3 имеет уклон 8 процентов."
+        }
+      ]
+    }
+  ]
+}

@@ -202,6 +202,16 @@ def test_a_replay_inserts_nothing_and_a_different_replay_is_a_conflict() -> None
     assert len(session.windows) == stored
 
 
+def test_a_replay_refuses_a_completion_row_with_a_missing_stored_window() -> None:
+    session = FakeSession(CHUNKS[:2])
+    embeddings = _embeddings(CHUNKS[:2])
+    _ensure(session, embeddings)
+    session.windows.pop()  # A row can be deleted while the completion row remains.
+
+    with pytest.raises(NormEmbeddingConflict, match="stored rows digest/counts"):
+        _ensure(session, embeddings)
+
+
 def test_one_one_character_window_per_chunk_is_refused_before_anything_is_inserted() -> None:
     """`D-127`'s defect: the old check accepted any window inside the chunk's bounds."""
     session = FakeSession(CHUNKS)

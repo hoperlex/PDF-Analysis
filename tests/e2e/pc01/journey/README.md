@@ -7,9 +7,9 @@ E2E_PC01_LOGIN=<login> E2E_PC01_PASSWORD=<password> \
 
 A sign-in, two phases, one instrument, one envelope, one exit code.
 
-**The write half** creates a project, uploads the AR portal bundle (a ZIP) and starts a run — through the
-app's own controls, on the public origin — then waits for the run's terminal by reading
-what the run screen's own poller renders.
+**The write half** creates a project, uploads the AR portal bundle (a ZIP), confirms the uploaded
+version's stage and section (П, АР) and starts a run — through the app's own controls, on the public
+origin — then waits for the run's terminal by reading what the run screen's own poller renders.
 
 **The read walk** then visits every route declared in `manifest.json`, each in a cold browser, discovering every
 identifier by following links the pages render.
@@ -90,16 +90,24 @@ and any uncaught exception. All of it lands in `journey.json` under `--out` (def
 makes no `POST` at all, so **the journey as `W21-E2E` committed it would not have caught
 it.** `D-30` is that gap; this is it filled.
 
-Three steps, declared in `manifest.json` under `write`:
+Four steps, declared in `manifest.json` under `write`:
 
 | step | at | what a user does | what is asserted |
 |---|---|---|---|
 | `create-project` | `/projects` | types a name, presses **Create** | `POST /projects` → `201`, `project_uid` matches the identifier pattern, the screen states what it created, no alert |
 | `upload-document` | `/projects/{project_uid}` | chooses `fixtures/synthetic/ar/bundles/ar_baseline.zip`, presses **Upload** | `POST /projects/{uid}/documents` → `201`, sent as `multipart/form-data` with `name="file"`, `ar_baseline.zip` and `application/zip` on the wire, the screen navigates to the published version |
+| `classify-version` | `/projects/{project_uid}/versions/{version_uid}` | in «Стадия и раздел», chooses **П — проектная** and **АР**, presses **Подтвердить раздел** | `PUT /projects/{uid}/documents/{uid}/versions/{uid}/classification` → `200` echoing `project_stage: "P"` and `section_code: "AR"`, the panel switches to the confirmed classification and names the version's document (captured for the `PUT`'s path), no refusal and no conflict note |
 | `start-run` | `/projects/{project_uid}/versions/{version_uid}` | presses **Start run** | `POST /runs` → **`202`** with `state: "queued"`, the screen navigates to run progress, and the run reaches a terminal |
 
 Nothing is typed into a URL and no identifier is handed in: each step's address is built
 from what the previous step's *screen* produced.
+
+`classify-version` exists because `W59-SECTION-SEAL-01` routes a run from the version's
+expert-confirmed stage and section: an unclassified version is refused with
+`422 required_norm_unavailable` (`reference_kind: version_classification`) before any run
+exists, so a journey that went straight from the upload to **Start run** would stop at
+`start-run` with a refusal (`W59-SECTION-UI-01`). The read walk's `version` route declares the
+panel's `getVersionSectionReview` read for the same reason.
 
 ### The `202`, and waiting for the terminal without sleeping
 

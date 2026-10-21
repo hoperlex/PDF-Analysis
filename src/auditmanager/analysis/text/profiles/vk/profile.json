@@ -1,0 +1,35 @@
+{
+  "format": "text-profile/1",
+  "section_code": "VK",
+  "analysis_profile_id": "ap_01M5AXG1KF7NGNYMEFN97BW9ZN",
+  "prompt_bundle_id": "pb_01M5AXG1KFMA8QCKP6YM1K5M5W",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "title_ru": "Водоснабжение и канализация",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "16ba8e5d23e4782550e79355002fde1365f682b7",
+    "files": [
+      {
+        "path": "prompts/disciplines/VK/role.md",
+        "sha256": "5140872cd9a8be7e6ca091fcc95a11e54c665b5a93ae5004f93e1377b5927781"
+      },
+      {
+        "path": "prompts/disciplines/VK/checklist.md",
+        "sha256": "5bcccef4fbe706983b1f125dbdcded15d97ba697677eb8b07998da72147eabd1"
+      },
+      {
+        "path": "prompts/disciplines/VK/drawing_types.md",
+        "sha256": "b6e1ed44f153d0e3e61f25c17da7aff5bd5bdd917356e48b6a0336302e802a20"
+      },
+      {
+        "path": "prompts/disciplines/VK/project_params.md",
+        "sha256": "45c73d4b95b95da870598020fc4f747d8201adab0dde1d5d9e13cfb1b6905724"
+      },
+      {
+        "path": "prompts/disciplines/VK/finding_categories.md",
+        "sha256": "84f8c7bb03f58c603ae42c8e9286872142922e5bbeef84a27e1f47b6feff5977"
+      }
+    ]
+  }
+}

@@ -118,6 +118,61 @@ REQUIRED_OPERATIONS = {
     "listNormSnapshots",
     "listNormSnapshotEvents",
     "setCurrentNormSnapshot",
+    # `W57A-SEAL-01B`. The refusing normative report of a v3 run (`D-151`).
+    "getRunNormVerification",
+    # `W59-SECTION-SEAL-01`. A version's expert classification (stage and section) and its
+    # fifteen-choice review, addressed through the version's document and project.
+    "classifyDocumentVersion",
+    # `CLASSIFICATION-CORRECTION-01`. An expert's append-only correction of that classification.
+    "correctVersionClassification",
+    "getVersionSectionReview",
+    # `W59-VERSION-COMPARE-01`. Two versions of one set compared, read-only; a refusal is
+    # an answer with a closed reason, not an envelope.
+    "compareDocumentVersions",
+    # `W59-DECISION-CARRYOVER-01`. An expert-confirmed carryover of one decision to the
+    # matched finding of the next version: a keyed write to the decision ledger.
+    "carryOverDecision",
+    # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry run start routes through,
+    # read-only, for «Настройки анализа».
+    "listAnalysisProfiles",
+    # `W59-VERSION-UPLOAD-01`. The next version of an existing set: without it every
+    # upload starts a new document and a further version is unreachable from the product.
+    "uploadDocumentVersion",
+    # `W57B-NORMS-CATALOGUE-XLSX-01`. The current snapshot's documents as a catalogue for any
+    # role, and the run's Excel workbook with the CSV's states and role.
+    "listNormDocuments",
+    "exportRunXlsx",
+    # `W61-DISPATCHER-01`. «Диспетчер»: assign work to an expert, list and read assignments
+    # with their history, and move an assignment along the `work_assignment` machine.
+    "createAssignment",
+    "listAssignments",
+    "getAssignment",
+    "transitionAssignment",
+    # `W60-PRICE-LIST-01`. «Оптимизация проекта»'s stored inputs: a project's price-list
+    # revisions and positions, and each section's vendor list, global and per project.
+    "uploadPriceList",
+    "listPriceListRevisions",
+    "listPriceListPositions",
+    "getEffectiveVendorLists",
+    "setGlobalVendorList",
+    "setProjectVendorList",
+    # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's current
+    # price list, read-only, for «Спецификация и цены».
+    "getSpecificationPrices",
+    # `W60-OPT-PROPOSALS-01`. «Предложения»: the optimisation pass of a document set's AR
+    # version, its deterministic proposals, the experts' decisions on them and the CSV.
+    "startOptimisationPass",
+    "listOptimisationPasses",
+    "listOptimisationProposals",
+    "decideOptimisationProposal",
+    "listProposalDecisions",
+    "exportOptimisationProposalsCsv",
+    # `W63-SECTION-FORM7-01`. A section's combined Form-7 specification across projects,
+    # read-only, for «Оптимизация разделов».
+    "getSectionSpecification",
+    # `NORM-REFS-RUN-01`. The norms a run's saved text cites, checked against its pinned
+    # snapshot, read-only, for «Нормативные ссылки» on the run page.
+    "getRunNormReferences",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -139,6 +194,8 @@ OPERATIONS_WITH_NO_CREDENTIAL_TO_REFUSE = {"submitRegistration"}
 WRITE_OPERATIONS = {
     "createProject",
     "uploadDocument",
+    # `W59-VERSION-UPLOAD-01`: publishes a version, keyed exactly as `uploadDocument`.
+    "uploadDocumentVersion",
     "startRun",
     "appendDecision",
     "approveRegistration",
@@ -147,6 +204,16 @@ WRITE_OPERATIONS = {
     "setJobPriority",
     "setExecutionPaused",
     "setWorkerIntake",
+    # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
+    "carryOverDecision",
+    # `W60-PRICE-LIST-01`. Stores a file and a revision, keyed like `uploadDocument`. The two
+    # vendor-list writes are not keyed: an exact repeat writes nothing, and a stale writer is
+    # refused by `expected_vendor_list_id`.
+    "uploadPriceList",
+    # `W60-OPT-PROPOSALS-01`. Both append rows, so both are keyed: a pass is also found again
+    # by its inputs under a new key, and every decision under a new key is a new event.
+    "startOptimisationPass",
+    "decideOptimisationProposal",
 }
 
 PAGINATED_OPERATIONS = {
@@ -320,13 +387,46 @@ def test_every_path_parameter_is_required_and_pattern_bound(openapi_document: di
         assert schema["pattern"].endswith("$"), name
 
 
+#: `W60-PRICE-LIST-01`. Path parameters that are not identities and are allowed anyway, each
+#: with the closed contract enum it must resolve to. ``section_code`` addresses a vendor list's
+#: SLOT -- one of the fifteen sections, globally or within a project -- not a resource: every
+#: revision in that slot has its own ``vnl_`` identity. A closed vocabulary key is none of
+#: the non-identities this guard exists for (a file name, an ordinal, a sheet number, a
+#: checksum), and the second test below holds it to the enum, so a free-text key cannot
+#: borrow the exception.
+VOCABULARY_PATH_PARAMETERS: dict[str, str] = {"section_code": "#/components/schemas/ProjectSection"}
+
+
 def test_no_endpoint_addresses_a_resource_by_a_non_identity(openapi_document: dict) -> None:
     """No path keys on a file name, an ordinal, a sheet number or a checksum."""
     for path in openapi_document["paths"]:
         for parameter in re.findall(r"\{([^}]+)\}", path):
+            if parameter in VOCABULARY_PATH_PARAMETERS:
+                continue
             assert parameter.endswith(("_uid", "_id")), (
                 f"{path} addresses a resource by {parameter!r}, which is not an identity"
             )
+
+
+def test_a_vocabulary_path_parameter_is_its_closed_enum(openapi_document: dict) -> None:
+    seen = 0
+    for path, item in openapi_document["paths"].items():
+        for method, operation in item.items():
+            if method not in HTTP_METHODS:
+                continue
+            for parameter in [*item.get("parameters", []), *operation.get("parameters", [])]:
+                resolved = (
+                    _resolve(openapi_document, parameter["$ref"])
+                    if "$ref" in parameter
+                    else parameter
+                )
+                expected = VOCABULARY_PATH_PARAMETERS.get(resolved["name"])
+                if resolved["in"] != "path" or expected is None:
+                    continue
+                seen += 1
+                assert resolved["schema"] == {"$ref": expected}, f"{method.upper()} {path}"
+                assert "enum" in _resolve(openapi_document, expected), expected
+    assert seen >= 2, "no vocabulary path parameter was found; the exception is unused"
 
 
 # ---------------------------------------------------------------------------
@@ -453,7 +553,8 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
 #: rather than a drift nobody notices. Moves on a reseal that adds or removes every
 #: parameter, header and body an operation takes.
 INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
-    {"getDashboardSummary", "getMe", "getProductVersion", "listReleases"}
+    # `W59-ANALYSIS-SETTINGS-01` adds ``listAnalysisProfiles``: the registry takes no input.
+    {"getDashboardSummary", "getMe", "getProductVersion", "listReleases", "listAnalysisProfiles"}
 )
 
 

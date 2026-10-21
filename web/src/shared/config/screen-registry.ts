@@ -87,13 +87,17 @@ export interface ScreenEntry {
 /**
  * Every screen, in menu order within each group.
  *
- * `R-66`: **Работа** — Проекты, Дашборд, «Оптимизация разделов»; **Знания** — База знаний,
+ * `R-66`: **Работа** — Проекты, Дашборд, «Оптимизация разделов» (and «Диспетчер» since
+ * `W61-DISPATCHER-01`); **Знания** — База знаний,
  * Блоки, «Нормы»; **Система** — Журнал выполнения, Исполнители, «Настройки анализа»,
- * «Очередь». `/optimisation` left the menu and stays a registered, reachable screen in
- * `hidden` until project optimisation becomes a project tab. The four new sections were
+ * «Очередь». `/optimisation` left the menu and stayed a registered, reachable screen in
+ * `hidden` until project optimisation became a project tab; since `W60-OPT-PROPOSALS-01`
+ * completed that tab its route has no screen of its own and redirects to `/projects` (the row
+ * stays, because the route tree and the registry are held equal). The four new sections were
  * honest stubs, `session`/`any-role`; «Очередь» graduated in W53 and «Нормы» in
  * `W55A-WEB-NORMS`, which adds its document view `/norms/document` beside it (reached from a
- * search result, so out of the menu).
+ * search result, so out of the menu); «Оптимизация разделов» graduated in `W63-SECTION-FORM7-01`
+ * (`getSectionSpecification`) and keeps its row, group and place in the menu.
  *
  * `R-80`: every product screen is `any-role`; only home, the account's own screens and the
  * public ones stay `any`, so a role-less account sees its home page saying no role is
@@ -111,6 +115,19 @@ export const SCREEN_REGISTRY = [
   {
     address: '/section-optimisation',
     label: 'Оптимизация разделов',
+    group: 'work',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: true,
+  },
+  /*
+   * `W61-DISPATCHER-01` (roadmap Q-2): «Диспетчер». `any-role`, because both roles open it —
+   * an administrator assigns and oversees, an expert works on what is given to them — and the
+   * API decides what each reads and may do.
+   */
+  {
+    address: '/dispatcher',
+    label: 'Диспетчер',
     group: 'work',
     access: 'session',
     roles: 'any-role',

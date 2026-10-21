@@ -10,6 +10,7 @@ from auditmanager.access.references import ACCOUNT_REFERENCES
 from auditmanager.releases.public import canonical_semver_sort_key
 from auditmanager.shared.db.migrations import head_revision
 from tests.integration.db.conftest import MIGRATE_ARGV, run_foundation_command
+from tests.support.expected_facts import FACTS
 
 
 def _refused(engine: Engine, statement: str, **parameters: object) -> str:
@@ -23,7 +24,7 @@ def _refused(engine: Engine, statement: str, **parameters: object) -> str:
 def test_release_schema_is_the_single_head_and_mark_is_a_cascading_account_row(
     migrated_engine: Engine,
 ) -> None:
-    assert head_revision() == "0021_portal_bundles"
+    assert head_revision() == FACTS.migration_head
     assert any(
         reference.table == "account_release_mark"
         and reference.column == "user_uid"
@@ -155,6 +156,4 @@ def test_downgrade_is_only_allowed_before_release_history_exists(
     assert refused.returncode != 0
     assert "refusing to downgrade 0016_release_notes" in refused.stderr
     with migrated_engine.connect() as connection:
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0021_portal_bundles"
-        )
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == FACTS.migration_head

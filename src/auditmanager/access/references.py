@@ -2,7 +2,13 @@
 
 `W49-PLAN.md` §3.1. Purging an account is irreversible, so "nothing references it" cannot
 be a judgement made at the call site: it is this register, and every entry is a real
-foreign key to ``app_user(user_uid)`` created by migration ``0015``.
+foreign key to ``app_user(user_uid)`` created by migration ``0015`` or a later one
+(``0024_version_classification`` adds the classification's confirmer;
+``0025_work_assignments`` adds an assignment's first assignee and creator, and each of its
+events' actor and new assignee; ``0026_price_lists`` adds a price list's uploader and a
+vendor-list revision's author; ``0027_optimisation_proposals`` adds the expert who started an
+optimisation pass and the expert who decided an optimisation proposal;
+``0028_classification_corrections`` adds the expert who corrected a version's classification).
 
 Three kinds of entry, by what the database does when the account row is deleted:
 
@@ -64,6 +70,66 @@ ACCOUNT_REFERENCES: Final[tuple[AccountReference, ...]] = (
         "author_user_uid",
         "RESTRICT",
         "this account recorded an expert decision",
+    ),
+    AccountReference(
+        "document_version_classification",
+        "confirmed_by_user_uid",
+        "RESTRICT",
+        "this account confirmed a version's project stage and section (W59-SECTION-SEAL-01)",
+    ),
+    AccountReference(
+        "document_version_classification_correction",
+        "corrected_by_user_uid",
+        "RESTRICT",
+        "this account corrected a version's project stage or section (CLASSIFICATION-CORRECTION-01)",
+    ),
+    AccountReference(
+        "work_assignment",
+        "assignee_user_uid",
+        "RESTRICT",
+        "this account was given a piece of work (W61-DISPATCHER-01)",
+    ),
+    AccountReference(
+        "work_assignment",
+        "created_by_user_uid",
+        "RESTRICT",
+        "this account assigned a piece of work (W61-DISPATCHER-01)",
+    ),
+    AccountReference(
+        "work_assignment_event",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account moved an assignment along its history (W61-DISPATCHER-01)",
+    ),
+    AccountReference(
+        "work_assignment_event",
+        "new_assignee_user_uid",
+        "RESTRICT",
+        "this account was given a piece of work by reassignment (W61-DISPATCHER-01)",
+    ),
+    AccountReference(
+        "price_list_revision",
+        "uploaded_by_user_uid",
+        "RESTRICT",
+        "this account uploaded a project price list (W60-PRICE-LIST-01)",
+    ),
+    AccountReference(
+        "vendor_list_revision",
+        "set_by_user_uid",
+        "RESTRICT",
+        "this account changed a vendor list (W60-PRICE-LIST-01)",
+    ),
+    AccountReference(
+        "optimisation_pass",
+        "started_by_user_uid",
+        "RESTRICT",
+        "this account started an optimisation pass (W60-OPT-PROPOSALS-01)",
+    ),
+    AccountReference(
+        "optimisation_proposal_decision",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account decided an optimisation proposal (W60-OPT-PROPOSALS-01)",
     ),
     AccountReference(
         "registration_request",

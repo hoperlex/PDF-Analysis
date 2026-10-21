@@ -33,6 +33,7 @@ from auditmanager.shared.identity import (
     VersionUid,
 )
 from auditmanager.storage.models import derive_blob_id
+from tests.support.expected_facts import FACTS
 
 PDF_SHA = "c" * 64
 PDF_SIZE = 4096
@@ -196,7 +197,7 @@ def _refused(connection, statement: str, parameters: dict, *, sqlstate: str,
 
 def test_a_fresh_upgrade_creates_the_custody_tables_and_guards_inserts(migrated_engine: Engine) -> None:
     with migrated_engine.connect() as connection:
-        assert _head(connection) == "0021_portal_bundles"  # `W55B-SEAL-01` moved the head
+        assert _head(connection) == FACTS.migration_head
         for table in ("norm_custody_admission", "norm_custody_binding", "norm_repair_call"):
             assert connection.execute(text("SELECT to_regclass(:t)"), {"t": f"public.{table}"}).scalar_one()
         definitions = dict(connection.execute(text(
@@ -229,7 +230,7 @@ def test_a_populated_0017_upgrades_and_keeps_every_row(empty_database, foundatio
         upgraded = foundation_command(_alembic("upgrade", "head"), url)
         assert upgraded.returncode == 0, upgraded.describe()
         with engine.connect() as connection:
-            assert _head(connection) == "0021_portal_bundles"  # `W55B-SEAL-01` moved the head
+            assert _head(connection) == FACTS.migration_head
             assert connection.execute(text(
                 "SELECT unreliable_count FROM norms_snapshot WHERE norms_snapshot_id = :s"
             ), {"s": norms["snapshot"]}).scalar_one() == 0
@@ -248,7 +249,9 @@ def test_a_populated_0017_upgrades_and_keeps_every_row(empty_database, foundatio
 
 def test_retained_custody_data_refuses_the_0018_downgrade(empty_database, foundation_command) -> None:
     url = empty_database.url.render_as_string(hide_password=False)
-    up = foundation_command(_alembic("upgrade", "head"), url)
+    # Exercise 0018 itself. A later 0022 downgrade has its own view-shape
+    # limitation and must not decide whether the 0018 refusal works.
+    up = foundation_command(_alembic("upgrade", "0018_norm_custody"), url)
     assert up.returncode == 0, up.describe()
     engine = create_database_engine(empty_database)
     try:
@@ -256,8 +259,6 @@ def test_retained_custody_data_refuses_the_0018_downgrade(empty_database, founda
             norms = _seed_norms(connection)
             _admit(connection, target_id=norms["document"],
                    blob_id=str(derive_blob_id(sha256=PDF_SHA, size=PDF_SIZE)))
-        to_0018 = foundation_command(_alembic("downgrade", "0018_norm_custody"), url)
-        assert to_0018.returncode == 0, to_0018.describe()
         refused = foundation_command(_alembic("downgrade", "0017_execution_queue"), url)
         assert refused.returncode != 0
         assert "refusing to downgrade 0018_norm_custody" in refused.stderr
@@ -308,7 +309,7 @@ def test_an_empty_0018_downgrades_and_restores_the_update_only_guards(
     empty_database, foundation_command,
 ) -> None:
     url = empty_database.url.render_as_string(hide_password=False)
-    up = foundation_command(_alembic("upgrade", "head"), url)
+    up = foundation_command(_alembic("upgrade", "0018_norm_custody"), url)
     assert up.returncode == 0, up.describe()
     down = foundation_command(_alembic("downgrade", "0017_execution_queue"), url)
     assert down.returncode == 0, down.describe()
@@ -422,7 +423,7 @@ def test_a_bound_publication_is_never_abandoned(migrated_engine: Engine) -> None
 @pytest.mark.parametrize(
     ("override", "value"),
     [
-        ("role", "norm_retrieval_set"),
+        ("role", "unregistered_role"),
         ("role", "project_source"),
         ("target_kind", "norm_catalogue"),
         ("target_kind", "norms_snapshot"),

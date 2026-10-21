@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 47,
+    "path_count": 73,
     "operations": [
       [
         "POST",
@@ -17,6 +17,11 @@
         "POST",
         "/projects/{project_uid}/documents",
         "uploadDocument"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions",
+        "uploadDocumentVersion"
       ],
       [
         "GET",
@@ -272,6 +277,146 @@
         "PUT",
         "/norms/snapshots/current",
         "setCurrentNormSnapshot"
+      ],
+      [
+        "GET",
+        "/runs/{run_id}/norm-verification",
+        "getRunNormVerification"
+      ],
+      [
+        "PUT",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+        "classifyDocumentVersion"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections",
+        "correctVersionClassification"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review",
+        "getVersionSectionReview"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison",
+        "compareDocumentVersions"
+      ],
+      [
+        "GET",
+        "/analysis/profiles",
+        "listAnalysisProfiles"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers",
+        "carryOverDecision"
+      ],
+      [
+        "GET",
+        "/norm-documents",
+        "listNormDocuments"
+      ],
+      [
+        "GET",
+        "/runs/{run_id}/export.xlsx",
+        "exportRunXlsx"
+      ],
+      [
+        "POST",
+        "/assignments",
+        "createAssignment"
+      ],
+      [
+        "GET",
+        "/assignments",
+        "listAssignments"
+      ],
+      [
+        "GET",
+        "/assignments/{assignment_uid}",
+        "getAssignment"
+      ],
+      [
+        "POST",
+        "/assignments/{assignment_uid}/transitions",
+        "transitionAssignment"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/price-lists",
+        "uploadPriceList"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/price-lists",
+        "listPriceListRevisions"
+      ],
+      [
+        "GET",
+        "/price-lists/{price_list_id}/positions",
+        "listPriceListPositions"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/vendor-lists",
+        "getEffectiveVendorLists"
+      ],
+      [
+        "PUT",
+        "/vendor-lists/{section_code}",
+        "setGlobalVendorList"
+      ],
+      [
+        "PUT",
+        "/projects/{project_uid}/vendor-lists/{section_code}",
+        "setProjectVendorList"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/specification-prices",
+        "getSpecificationPrices"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/optimisation-passes",
+        "startOptimisationPass"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/optimisation-passes",
+        "listOptimisationPasses"
+      ],
+      [
+        "GET",
+        "/optimisation-passes/{optimisation_pass_id}/proposals",
+        "listOptimisationProposals"
+      ],
+      [
+        "POST",
+        "/optimisation-proposals/{optimisation_proposal_id}/decisions",
+        "decideOptimisationProposal"
+      ],
+      [
+        "GET",
+        "/optimisation-proposals/{optimisation_proposal_id}/decisions",
+        "listProposalDecisions"
+      ],
+      [
+        "GET",
+        "/optimisation-passes/{optimisation_pass_id}/export.csv",
+        "exportOptimisationProposalsCsv"
+      ],
+      [
+        "GET",
+        "/sections/{section_code}/specification",
+        "getSectionSpecification"
+      ],
+      [
+        "GET",
+        "/runs/{run_id}/norm-references",
+        "getRunNormReferences"
       ]
     ],
     "schema_names": [
@@ -347,6 +492,7 @@
       "UpdateMyProfileRequest",
       "UpdateUserRequest",
       "UploadDocumentRequest",
+      "UploadDocumentVersionRequest",
       "UserUid",
       "Verdict",
       "VerdictCount",
@@ -383,6 +529,9 @@
       "NormSearchHit",
       "NormSearchPage",
       "NormDocument",
+      "NormCatalogueEntry",
+      "NormKindCount",
+      "NormCatalogueEntryPage",
       "NormParagraph",
       "NormParagraphPage",
       "NormSnapshot",
@@ -397,13 +546,128 @@
       "PortalCrop",
       "PortalRecognisedText",
       "PortalBlock",
-      "PortalBlockPage"
+      "PortalBlockPage",
+      "Severity",
+      "NormRetrievalSetId",
+      "NormCitationState",
+      "NormCitation",
+      "UngroundedReason",
+      "NormObservationCitationPartition",
+      "NormFindingVerification",
+      "NormVerificationReport",
+      "ProjectStage",
+      "ClassifyDocumentVersionRequest",
+      "CorrectVersionClassificationRequest",
+      "VersionClassification",
+      "VersionClassificationRevision",
+      "SectionSuggestion",
+      "SectionReviewOption",
+      "SectionReview",
+      "ComparisonRefusal",
+      "ComparedVersion",
+      "SheetPairing",
+      "DiffHunk",
+      "SheetDiff",
+      "SheetDiffPage",
+      "FindingRef",
+      "FindingMatchProposal",
+      "FindingComparison",
+      "VersionComparison",
+      "AnalysisProfileStatus",
+      "AnalysisProfileSourceFile",
+      "AnalysisProfileSource",
+      "AnalysisProfileSummary",
+      "AnalysisProfileListItem",
+      "AnalysisProfileList",
+      "CarryoverSourceDecision",
+      "CarryoverCandidate",
+      "CarryOverDecisionRequest",
+      "CarryOverDecisionResponse",
+      "AssignmentUid",
+      "AssignmentStatus",
+      "AssignmentEventKind",
+      "AssignmentTransitionKind",
+      "CreateAssignmentRequest",
+      "TransitionAssignmentRequest",
+      "Assignment",
+      "AssignmentEvent",
+      "AssignmentDetail",
+      "AssignmentPage",
+      "PriceListId",
+      "PriceListPositionId",
+      "VendorListId",
+      "PriceListFormat",
+      "PriceListField",
+      "PriceListRowReason",
+      "PriceListCurrencySource",
+      "PriceListColumn",
+      "PriceListAmbiguousColumn",
+      "PriceListRowNote",
+      "PriceListReasonCount",
+      "PriceListCurrencySourceCount",
+      "PriceListParseReport",
+      "PriceListRevision",
+      "PriceListRevisionList",
+      "PriceListPosition",
+      "PriceListPositionPage",
+      "UploadPriceListRequest",
+      "VendorListMode",
+      "VendorListScope",
+      "VendorListSource",
+      "VendorListEntry",
+      "VendorListRevision",
+      "SectionVendorList",
+      "EffectiveVendorLists",
+      "SetGlobalVendorListRequest",
+      "SetProjectVendorListRequest",
+      "SpecificationPriceListRef",
+      "SpecificationSkipCounts",
+      "SpecificationSkippedLine",
+      "SpecificationTable",
+      "SpecificationExtractionSummary",
+      "SpecificationMatchCounts",
+      "SpecificationExclusionCounts",
+      "SpecificationCurrencyTotal",
+      "SpecificationMatching",
+      "SpecificationPricePosition",
+      "SpecificationPriceRow",
+      "SpecificationRowPage",
+      "SpecificationPrices",
+      "OptimisationPassId",
+      "OptimisationProposalId",
+      "ProposalDecisionId",
+      "OptimisationProposalType",
+      "ProposalMatchBasis",
+      "ProposalAnalogBasis",
+      "ProposalVerdict",
+      "ProposalDecisionState",
+      "ProposalDecisionCounts",
+      "OptimisationPass",
+      "OptimisationPassList",
+      "ProposalPosition",
+      "ProposalDecision",
+      "OptimisationProposal",
+      "OptimisationProposalPage",
+      "DecideOptimisationProposalRequest",
+      "ProposalDecisionResult",
+      "ProposalDecisionList",
+      "SectionSpecificationSource",
+      "SectionSpecificationProject",
+      "SectionSpecificationExcludedVersion",
+      "SectionSpecificationRow",
+      "SectionSpecificationRowPage",
+      "SectionSpecification",
+      "NormReferenceCounts",
+      "NormReferenceAnchor",
+      "NormReferenceItem",
+      "NormReferenceUnrecognised",
+      "RunNormReferences"
     ]
   },
   "error_catalog": {
-    "api_codes": 24,
-    "stored_vocabulary": 22
+    "api_codes": 25,
+    "stored_vocabulary": 23
   },
-  "migration_head": "0021_portal_bundles",
+  "migration_head": "0028_classification_corrections",
   "contract_version": "1.0.0-draft.1"
 }

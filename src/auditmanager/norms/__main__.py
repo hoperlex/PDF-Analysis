@@ -23,6 +23,11 @@ provider exists.
     ... repair ledger --corpus <drop> --journal-dir <dir> --out <ledger.json>
     ... repair status --journal-dir <dir>
 
+    # `R-137`: the same pages re-read in a Claude Code session instead of through the proxy
+    ... repair session-prepare --corpus <drop> --sums <SHA256SUMS> --session-dir <dir>
+    ... repair session-ledger --corpus <drop> --sums <SHA256SUMS> --session-dir <dir> \\
+        --model <session model> --transcribed-at <iso> --out <ledger.json>
+
 ``sample`` and ``full`` read ``DATABASE_URL`` (the promotion database) and the three
 ``PROXY_LLM_*`` values from the process environment. Exit status: 0 done, 2 refused before
 anything was spent, 3 stopped on a rule (the ceiling, the sample stop, a refused answer).
@@ -97,6 +102,12 @@ from auditmanager.norms.rerecognition import (
     RECOGNITION_SYSTEM_PROMPT,
     PageToRecognise,
     RecognisedPage,
+)
+from auditmanager.norms.session_repair import (
+    ReadsOutstanding,
+    SessionRefused,
+    prepare_session,
+    session_ledger,
 )
 
 #: `R-29`'s first stopping condition, kept for the legacy dry run's report only. The paid
@@ -683,6 +694,58 @@ def _command_ledger(args: argparse.Namespace, _environment: dict[str, str]) -> i
     return 0
 
 
+def _session_drop(args: argparse.Namespace) -> tuple[list[PageToRecognise], DropSums, str]:
+    """The pages, the checked sums and the base snapshot, as a session step must see them."""
+    pages = _pages(args.corpus)
+    sums = verify_crops_against_sums(args.corpus, pages, args.sums)
+    base = snapshot_of(args.corpus).snapshot_id
+    if args.base_snapshot and args.base_snapshot != base:
+        raise RunRefused(
+            f"the corpus is snapshot {base!r}, not the {args.base_snapshot!r} this run names"
+        )
+    return pages, sums, base
+
+
+def _command_session_prepare(args: argparse.Namespace, _environment: dict[str, str]) -> int:
+    pages, sums, base = _session_drop(args)
+    try:
+        document = prepare_session(
+            pages, directory=args.session_dir, base_snapshot=base,
+            drop_sums_sha256=sums.sha256, dpi=args.dpi,
+            render=lambda crop: render_crop_png(crop, dpi=args.dpi), now=_now(),
+        )
+    except SessionRefused as refused:
+        raise RunRefused(str(refused)) from None
+    print(json.dumps({"session": str(args.session_dir), "pages": len(document["pages"]),
+                      "base_snapshot": base, "drop_sums_sha256": sums.sha256,
+                      "prompt_sha256": document["prompt_sha256"]}, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _command_session_ledger(args: argparse.Namespace, _environment: dict[str, str]) -> int:
+    pages, sums, base = _session_drop(args)
+    try:
+        ledger = session_ledger(
+            pages, directory=args.session_dir, base_snapshot=base,
+            drop_sums_sha256=sums.sha256, model=args.model,
+            transcribed_at=args.transcribed_at, generated_at=_now(), dpi=args.dpi,
+            render=lambda crop: render_crop_png(crop, dpi=args.dpi),
+        )
+    except ReadsOutstanding as owed:
+        print(json.dumps({"stopped": owed.reason, "outstanding": [
+            {"document_slug": slug, "block_id": block, "read": read}
+            for slug, block, read in owed.outstanding
+        ]}, indent=2, ensure_ascii=False))
+        return EXIT_STOPPED
+    except SessionRefused as refused:
+        raise RunRefused(str(refused)) from None
+    _write_json_atomically(args.out, ledger_document(ledger, drop_sums_sha256=sums.sha256))
+    print(json.dumps({"ledger": str(args.out), "repairs": len(ledger.repairs),
+                      "applied": len(ledger.applied), "unreliable": ledger.unreliable_count,
+                      "unpriced_attempts": ledger.unpriced_attempts}, indent=2))
+    return 0
+
+
 def _command_status(
     args: argparse.Namespace,
     environment: dict[str, str],
@@ -754,6 +817,21 @@ def repair_parser() -> argparse.ArgumentParser:
 
     status = commands.add_parser("status", help="the journal against the database; no call")
     status.add_argument("--journal-dir", type=Path, default=DEFAULT_JOURNAL_DIR)
+
+    for name, help_text in (
+        ("session-prepare", "R-137: render the pages for a session's readers; no call"),
+        ("session-ledger", "R-137: the ledger the session's answers imply; no call"),
+    ):
+        session = commands.add_parser(name, help=help_text)
+        session.add_argument("--corpus", type=Path, required=True)
+        session.add_argument("--sums", type=Path, required=True, help="the operator's SHA256SUMS over the drop")
+        session.add_argument("--session-dir", type=Path, required=True)
+        session.add_argument("--base-snapshot", default="", help="refuse unless the corpus is this snapshot")
+        session.add_argument("--dpi", type=int, default=RENDER_DPI)
+        if name == "session-ledger":
+            session.add_argument("--model", required=True, help="the session model's exact identifier")
+            session.add_argument("--transcribed-at", required=True, help="when the answers were written (ISO 8601)")
+            session.add_argument("--out", type=Path, required=True)
     return parser
 
 
@@ -766,6 +844,10 @@ def repair_main(argv: list[str], environment: dict[str, str] | None = None) -> i
         return _command_run(args, source)
     if args.command == "ledger":
         return _command_ledger(args, source)
+    if args.command == "session-prepare":
+        return _command_session_prepare(args, source)
+    if args.command == "session-ledger":
+        return _command_session_ledger(args, source)
     return _command_status(args, source)
 
 

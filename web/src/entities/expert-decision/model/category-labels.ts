@@ -20,4 +20,14 @@ import type { FindingCategory } from '@/shared/api';
 export const CATEGORY_LABELS: Readonly<Record<FindingCategory, string>> = {
   internal_contradiction: 'Внутреннее противоречие',
   explicit_placeholder: 'Явный пропуск',
+  dimensions: 'Размеры помещений',
+  layout: 'Планировочные решения',
+  facade: 'Фасадные решения',
+  roof: 'Кровля',
+  documentation: 'Документация',
+  evacuation: 'Эвакуация',
+  fire_safety: 'Пожарная безопасность',
+  accessibility: 'Доступность',
+  insulation: 'Теплоизоляция',
+  sound: 'Звукоизоляция',
 };
