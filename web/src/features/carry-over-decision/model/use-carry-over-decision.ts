@@ -57,29 +57,53 @@ export function carryoverSignature(command: CarryOverDecisionCommand): string {
   ].join('|');
 }
 
+interface InFlight {
+  readonly signature: string;
+  readonly promise: Promise<CarryOverDecisionResponse>;
+}
+
 export function useCarryOverDecision() {
   const client = useQueryClient();
   const intentRef = useRef<IntentRecord | null>(null);
+  // `BETA-LIVE-JOURNEY-01`: the live journey pressed «Подтвердить перенос» twice before the
+  // page had re-rendered and measured TWO `POST`s, the second answered `replayed: true` --
+  // so the screen, which shows the latest answer, told the expert the decision "had already
+  // been carried earlier" over a carry they had just made. The server was right (one event);
+  // the browser was sending a second request for the same intent. A press that arrives while
+  // the same intent is in flight now joins the request already sent and shows its answer.
+  const flightRef = useRef<InFlight | null>(null);
+
+  const send = async (command: CarryOverDecisionCommand): Promise<CarryOverDecisionResponse> => {
+    const intent = resolveIntentKey(intentRef.current, carryoverSignature(command), newIdempotencyKey);
+    intentRef.current = intent;
+    const response = await carryOverDecision({
+      path: {
+        project_uid: command.projectUid,
+        document_uid: command.documentUid,
+        version_uid: command.sourceVersionUid,
+      },
+      body: {
+        target_version_uid: command.targetVersionUid,
+        mode: command.mode,
+        source_finding_uid: command.candidate.source_finding_uid,
+        target_finding_uid: command.candidate.target_finding_uid,
+        source_decision_id: command.candidate.source_decision.decision_id,
+      },
+      idempotencyKey: intent.idempotencyKey,
+    });
+    return response.data;
+  };
+
   return useMutation<CarryOverDecisionResponse, unknown, CarryOverDecisionCommand>({
-    mutationFn: async (command) => {
-      const intent = resolveIntentKey(intentRef.current, carryoverSignature(command), newIdempotencyKey);
-      intentRef.current = intent;
-      const response = await carryOverDecision({
-        path: {
-          project_uid: command.projectUid,
-          document_uid: command.documentUid,
-          version_uid: command.sourceVersionUid,
-        },
-        body: {
-          target_version_uid: command.targetVersionUid,
-          mode: command.mode,
-          source_finding_uid: command.candidate.source_finding_uid,
-          target_finding_uid: command.candidate.target_finding_uid,
-          source_decision_id: command.candidate.source_decision.decision_id,
-        },
-        idempotencyKey: intent.idempotencyKey,
+    mutationFn: (command) => {
+      const signature = carryoverSignature(command);
+      const held = flightRef.current;
+      if (held !== null && held.signature === signature) return held.promise;
+      const promise: Promise<CarryOverDecisionResponse> = send(command).finally(() => {
+        if (flightRef.current?.promise === promise) flightRef.current = null;
       });
-      return response.data;
+      flightRef.current = { signature, promise };
+      return promise;
     },
     retry: false,
     onSuccess: (_answer, command) => {
