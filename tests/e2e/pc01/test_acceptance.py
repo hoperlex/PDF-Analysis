@@ -482,6 +482,11 @@ def test_c3_the_surface_declares_no_operation_that_can_mutate_a_version(
     is a separate, append-only row (``document_version_classification``), written once and
     never updated, and the version's bytes, manifest and row stay immutable. It is the one
     path allowed under ``/versions``, and the version itself still admits no mutating method.
+
+    `W60-PRICE-LIST-01` adds the two vendor-list replacements: ``PUT /vendor-lists/{section_code}``
+    for the global list and ``PUT /projects/{project_uid}/vendor-lists/{section_code}`` for a
+    project's override. Each writes a new immutable revision of a list kept in the optimisation
+    context; neither addresses a document or a version.
     """
     mutating = {
         route.operation_id: route.path
@@ -498,6 +503,8 @@ def test_c3_the_surface_declares_no_operation_that_can_mutate_a_version(
         "setWorkerIntake",
         "setCurrentNormSnapshot",
         "classifyDocumentVersion",
+        "setGlobalVendorList",
+        "setProjectVendorList",
     }, mutating
     assert mutating["classifyDocumentVersion"].endswith("/versions/{version_uid}/classification")
     assert not [

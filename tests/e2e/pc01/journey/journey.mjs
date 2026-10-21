@@ -37,6 +37,13 @@
  * default is `all`: a phase that is skipped is printed and recorded as skipped, because a
  * partial green that does not say so is `D-23` in a different costume.
  *
+ * **`--phase core` is the journey as it stood before the night window** (`BETA-LIVE-JOURNEY-01`):
+ * the original write steps (project, upload, classify, run) and the read walk, with none of the
+ * steps that make accounts, pause dispatch, designate a norms snapshot or start further runs.
+ * `all` is everything. A published stand that spends money per run is walked with `core`;
+ * `all` refuses to start a further run on an origin whose provider mode is not `recorded`
+ * unless it is told `--allow-spend`.
+ *
  * **Order: write first, then read.** The read walk discovers every identifier by following
  * the links the pages render and is handed nothing, so it is not coupled to what the write
  * half just made -- but running the write half first means the origin has, at minimum, one
@@ -44,6 +51,7 @@
  * walk needs and used to have to assume.
  */
 
+import { randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -51,6 +59,7 @@ import { fileURLToPath } from 'node:url';
 import { withColdBrowser } from './cdp.mjs';
 import { runWritePhase } from './write.mjs';
 import { openSession } from './session.mjs';
+import { provisionAccounts } from './accounts.mjs';
 import { measureWidth, widthFindings } from './width.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -61,6 +70,12 @@ function parseArgs(argv) {
     manifest: null,
     out: null,
     phase: process.env.E2E_PC01_PHASE ?? 'all',
+    // Working on one step or one route. A run that used either is PARTIAL: it checked less
+    // than the manifest declares, so it can find a defect but can never be a pass.
+    steps: null,
+    routes: null,
+    seed: null,
+    allowSpend: process.env.E2E_PC01_ALLOW_SPEND === '1',
   };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
@@ -68,13 +83,17 @@ function parseArgs(argv) {
     else if (flag === '--manifest') args.manifest = argv[++i];
     else if (flag === '--out') args.out = argv[++i];
     else if (flag === '--phase') args.phase = argv[++i];
+    else if (flag === '--steps') args.steps = argv[++i].split(',').filter(Boolean);
+    else if (flag === '--routes') args.routes = argv[++i].split(',').filter(Boolean);
+    else if (flag === '--seed') args.seed = argv[++i];
+    else if (flag === '--allow-spend') args.allowSpend = true;
     else {
       console.error(`e2e:pc01: unknown argument '${flag}'`);
       process.exit(2);
     }
   }
-  if (!['read', 'write', 'all'].includes(args.phase)) {
-    console.error(`e2e:pc01: --phase must be read, write or all (got '${args.phase}')`);
+  if (!['read', 'write', 'all', 'core'].includes(args.phase)) {
+    console.error(`e2e:pc01: --phase must be read, write, all or core (got '${args.phase}')`);
     process.exit(2);
   }
   return args;
@@ -120,9 +139,17 @@ function fill(template, captured, samples = {}) {
   });
 }
 
-/** An API expectation, made concrete: `GET /bff/v1/projects/prj_.../documents`. */
-function concreteApi(expectation, captured) {
-  return `${expectation.method} ${API_PREFIX}${fill(expectation.path, captured)}`;
+/**
+ * An API expectation, made concrete: `GET /bff/v1/projects/prj_.../documents`.
+ *
+ * `constants` are a route's own declared path values that are members of an enumeration the
+ * contract publishes (`section_code: "AR"`) and not identities of anything: a screen that
+ * opens on the analysed section calls `/sections/AR/specification` whatever the stand holds,
+ * and no earlier route can hand the walk a section it did not look up. An identifier is
+ * never declared here; it is captured from a link the application rendered.
+ */
+function concreteApi(expectation, captured, constants = {}) {
+  return `${expectation.method} ${API_PREFIX}${fill(expectation.path, { ...constants, ...captured })}`;
 }
 
 /** `GET /bff/v1/findings/fnd_01.../decisions` -> `GET /bff/v1/findings/{id}/decisions`. */
@@ -133,20 +160,39 @@ function shapeOf(call) {
 const failures = [];
 const records = [];
 const captured = {};
+// Identifiers an earlier run captured, for working on one step or route. Never read in a
+// full run, and a run that read them says it is partial.
+const SEED = args.seed === null ? {} : JSON.parse(readFileSync(resolve(args.seed), 'utf8'));
+Object.assign(captured, SEED);
+const PARTIAL = args.steps !== null || args.routes !== null || args.seed !== null;
 
 function fail(route, message) {
   failures.push(`${route}: ${message}`);
 }
 
 const PHASE = args.phase;
+// The night window's steps carry a `screen`; the original four do not. `core` walks the latter.
+const WRITE_STEPS = (manifest.write?.steps ?? []).filter(
+  (step) => PHASE !== 'core' || step.screen === undefined,
+);
 const REPOSITORY_ROOT = resolve(HERE, '..', '..', '..', '..');
 const STAMP = new Date().toISOString().replace(/[:.]/g, '-');
+
+// Passwords the steps type: each account's own (kept in memory by `accounts.mjs`) and the
+// ones the manifest asks to be generated (`accounts.generated_secrets`: a new password, a wrong
+// one). All random per run, none written anywhere; every one is scrubbed from the envelope.
+const SECRETS = {};
+for (const name of manifest.accounts?.generated_secrets ?? []) {
+  SECRETS[name] = `Zq7!${randomBytes(18).toString('hex')}`;
+}
 
 /** Where the envelope goes, whatever happens after this point. */
 function writeEnvelope(body) {
   mkdirSync(OUT_DIR, { recursive: true });
   const at = join(OUT_DIR, 'journey.json');
-  writeFileSync(at, JSON.stringify(body, null, 2));
+  let text = JSON.stringify(body, null, 2);
+  for (const value of Object.values(SECRETS)) text = text.split(value).join('(redacted)');
+  writeFileSync(at, text);
   return at;
 }
 
@@ -207,6 +253,32 @@ if (!session.ok) {
   process.exit(1);
 }
 
+// ---- the other accounts --------------------------------------------------------------
+// A refusal by role needs a session that holds only that role. They are made through the
+// application's own screens and cost three browsers each, so a read-only run skips them -- and
+// so does a `core` run, and a run against an origin that is not known to be free to write to
+// (`write.mjs` asks for them only once the first run has said the provider is `recorded`).
+let accounts = { sessions: {}, record: { ran: false, why: 'not yet needed' } };
+const provisionOnDemand = async () => {
+  console.log(`accounts: ${manifest.accounts.roster.map((a) => a.name).join(', ')}`);
+  const made = await provisionAccounts({
+    origin: ORIGIN,
+    manifest,
+    adminCookies: SESSION_COOKIES,
+    nonce: STAMP.replace(/\D/g, '').slice(-14),
+  });
+  accounts = { sessions: made.sessions, record: { ran: true, ...made.record } };
+  Object.assign(SECRETS, made.passwords);
+  // The accounts' identities are what the dispatcher's selects are addressed by, and they
+  // are produced by the registration screens, not typed into the manifest.
+  const seed = {};
+  for (const account of made.record.accounts) {
+    if (account.userUid) seed[`${account.name}_user_uid`] = account.userUid;
+  }
+  console.log('');
+  return { sessions: made.sessions, seed, failures: made.failures };
+};
+
 // ---- the write half ----------------------------------------------------------------
 let write = null;
 if (PHASE === 'read') {
@@ -219,20 +291,26 @@ if (PHASE === 'read') {
       'all -- which is exactly what D-30 says the read half cannot catch',
   );
 } else {
-  console.log(`write half: ${manifest.write.steps.length} step(s), fixture ${manifest.write.fixture}\n`);
+  console.log(`write half: ${WRITE_STEPS.length} step(s), fixture ${manifest.write.fixture}\n`);
   write = await runWritePhase({
     origin: ORIGIN,
     manifest,
     repositoryRoot: REPOSITORY_ROOT,
     stamp: STAMP,
     cookies: SESSION_COOKIES,
+    sessions: accounts.sessions,
+    secrets: SECRETS,
     viewport: VIEWPORT,
+    only: args.steps ?? (PHASE === 'core' ? WRITE_STEPS.map((step) => step.name) : null),
+    seed: SEED,
+    allowSpend: args.allowSpend,
+    provision: (PHASE === 'all' || PHASE === 'write') && manifest.accounts !== undefined ? provisionOnDemand : null,
   });
   failures.push(...write.failures);
   if (write.stopped !== null) {
     failures.push(
       `write: the write half stopped at '${write.stopped}'; ` +
-        `${write.records.length} of ${manifest.write.steps.length} step(s) were checked, ` +
+        `${write.records.length} of ${WRITE_STEPS.length} step(s) were checked, ` +
         'and an unfinished write half is not a pass',
     );
   }
@@ -244,6 +322,7 @@ if (PHASE === 'write') {
   console.log('phase: write only -- the read walk was NOT run.');
 }
 for (const route of PHASE === 'write' ? [] : manifest.routes) {
+  if (args.routes !== null && !args.routes.includes(route.name)) continue;
   const url = ORIGIN + fill(route.path, captured, route.sample_identifiers ?? {});
 
   const record = await withColdBrowser(async (page) => {
@@ -388,7 +467,7 @@ for (const route of PHASE === 'write' ? [] : manifest.routes) {
     );
   }
 
-  const required = (route.expects_api ?? []).map((e) => concreteApi(e, captured));
+  const required = (route.expects_api ?? []).map((e) => concreteApi(e, captured, route.constants ?? {}));
   // An optional call may name an identifier this walk never captured -- the review screen
   // opens a *finding*, and no earlier route hands out a finding uid. Optional calls are
   // therefore matched by shape, with every identifier segment collapsed to `{id}`.
@@ -467,7 +546,7 @@ for (const route of PHASE === 'write' ? [] : manifest.routes) {
 
 // Pushed BEFORE the envelope is written, not after: an envelope that is missing the one
 // finding that says the walk stopped early is the same impoverishment `D-5` is about.
-if (PHASE !== 'write' && records.length < manifest.routes.length) {
+if (PHASE !== 'write' && args.routes === null && records.length < manifest.routes.length) {
   failures.push(
     `only ${records.length} of ${manifest.routes.length} routes were reached; ` +
       'an unfinished walk is not a pass',
@@ -485,6 +564,8 @@ const envelopePath = writeEnvelope(
       // applies to `Authorization`.
       session: { opened: true, ...session.record },
       viewport: VIEWPORT,
+      partial: PARTIAL,
+      accounts: accounts.record,
       write:
         write === null
           ? { ran: false, why: PHASE === 'read' ? 'phase: read' : 'no write section' }
@@ -492,7 +573,7 @@ const envelopePath = writeEnvelope(
               ran: true,
               fixture: write.fixture,
               stepsChecked: write.records.length,
-              stepsDeclared: manifest.write.steps.length,
+              stepsDeclared: WRITE_STEPS.length,
               stoppedAt: write.stopped,
               captured: write.captured,
               steps: write.records,
@@ -507,7 +588,7 @@ const envelopePath = writeEnvelope(
 
 console.log(`\nenvelope: ${envelopePath}`);
 console.log(
-  `write steps checked: ${write === null ? 'not run' : `${write.records.length}/${manifest.write.steps.length}`}`,
+  `write steps checked: ${write === null ? 'not run' : `${write.records.length}/${WRITE_STEPS.length}`}`,
 );
 console.log(
   `routes checked: ${PHASE === 'write' ? 'not run' : `${records.length}/${manifest.routes.length}`}`,
@@ -518,6 +599,14 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`  - ${f}`);
   console.error(`\nEvery request, status, header and body is in ${envelopePath}.`);
   process.exit(1);
+}
+
+if (PARTIAL) {
+  console.log(
+    'e2e:pc01 PARTIAL -- no finding, but this run used --steps, --routes or --seed, so it ' +
+      'checked less than manifest.json declares. It is not a pass: exit 3.',
+  );
+  process.exit(3);
 }
 
 console.log('e2e:pc01 OK');

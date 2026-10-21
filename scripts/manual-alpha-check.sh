@@ -391,7 +391,7 @@ if [[ "$MODE" == "automated" ]]; then
 
   set +e
   node "$REPO_ROOT/tests/e2e/pc01/journey/journey.mjs" \
-    --origin "$ORIGIN" --phase all --out "$JOURNEY_DIR" \
+    --origin "$ORIGIN" --phase core --out "$JOURNEY_DIR" \
     >"$EVIDENCE_DIR/journey.log" 2>&1
   JOURNEY_EXIT=$?
   set -e

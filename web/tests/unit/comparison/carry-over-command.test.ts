@@ -108,6 +108,37 @@ describe('the carryover command', () => {
     expect(carryoverSignature(other)).not.toBe(carryoverSignature(COMMAND));
   });
 
+  it('sends ONE request when the same intent is pressed twice before the first answer (BETA-LIVE-JOURNEY-01)', async () => {
+    // The live journey measured two POSTs for a double press, the second answered
+    // `replayed: true`; the screen shows the latest answer, so it said "already carried
+    // earlier" over a carry the expert had just made. Both presses must get the SAME answer.
+    let settle: (value: unknown) => void = () => undefined;
+    vi.mocked(carryOverDecision).mockImplementation(
+      () => new Promise((resolve) => { settle = resolve; }) as never,
+    );
+    const command = useCarryOverDecision() as unknown as Captured;
+    const first = command.mutationFn(COMMAND);
+    const second = command.mutationFn(COMMAND);
+    expect(carryOverDecision).toHaveBeenCalledTimes(1);
+    settle({ data: { replayed: false, marker: 'first' } });
+    await expect(first).resolves.toMatchObject({ replayed: false, marker: 'first' });
+    await expect(second).resolves.toMatchObject({ replayed: false, marker: 'first' });
+    // The gate reopens when the request settles: a later press is a new request.
+    vi.mocked(carryOverDecision).mockResolvedValue({ data: { replayed: true } } as never);
+    await command.mutationFn(COMMAND);
+    expect(carryOverDecision).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not join a request for another intent', async () => {
+    vi.mocked(carryOverDecision).mockImplementation(
+      () => new Promise(() => undefined) as never,
+    );
+    const command = useCarryOverDecision() as unknown as Captured;
+    void command.mutationFn(COMMAND);
+    void command.mutationFn({ ...COMMAND, mode: 'stage' as const });
+    expect(carryOverDecision).toHaveBeenCalledTimes(2);
+  });
+
   it('tells every comparison and the newer finding’s reads after a carryover', () => {
     const command = useCarryOverDecision() as unknown as Captured;
     command.onSuccess({ replayed: false } as CarryOverDecisionResponse, COMMAND);

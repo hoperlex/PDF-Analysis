@@ -27,11 +27,12 @@ def test_socket_guard_refuses_a_socket():
 def test_recorded_adapter_holds_no_client_and_no_credential(recorded_adapter):
     """There is no live path to fall back to, by construction rather than by policy.
 
-    ``RecordedAdapter`` declares ``__slots__`` holding exactly one directory. It has
+    ``RecordedAdapter`` declares ``__slots__`` holding only recording directories: the
+    primary one and the ordered tuple that profile-specific recordings extend. It has
     no client attribute and nowhere to put one, so "fall back to live on a miss" is
     not a branch a future edit can flip on - it would have to be written from nothing.
     """
-    assert RecordedAdapter.__slots__ == ("_directory",)
+    assert RecordedAdapter.__slots__ == ("_directory", "_directories")
     assert set(vars(recorded_adapter.__class__)) & {"_client", "api_key"} == set()
     assert recorded_adapter.provider_mode is ProviderMode.RECORDED
 

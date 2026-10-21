@@ -1,6 +1,7 @@
 """Registration requests: submit, decide, read the status (`W49-PLAN.md` §3.3, `R-56`).
 
-`W49-ACCESS-01c`. The only reader and writer of ``registration_request``. Shaped like
+`W49-ACCESS-01c`. The only reader and writer of ``registration_request`` (bar the one
+``EXISTS`` in :mod:`auditmanager.access.queue_lock`, `D-147`). Shaped like
 :mod:`auditmanager.access.repository`: explicit statements, the caller's session, and the
 credential columns read in exactly two named places -- :data:`_LOCK_FOR_DECISION` (approval
 moves the digest to the new account) and :data:`_SELECT_STATUS_CANDIDATE` (the status read
@@ -16,7 +17,8 @@ The lifecycle
   pending requests ``conflict`` (``queue_full``). The password is stored hashed until the
   decision. That ``login_taken`` and ``request_pending`` tell a submitter that a login is
   known is an accepted limitation the plan registers.
-* **Approve** runs in the caller's one transaction: the request is locked ``FOR UPDATE``,
+* **Approve** runs in the caller's one transaction: the queue lock is taken first (`D-147`:
+  a submit cannot interleave with it), the request is locked ``FOR UPDATE``,
   the account is created with the request's digest, its names and ``profile_completed_at =
   now()``, the chosen roles (at least one) are granted by the administrator, and the
   request is decided -- which nulls its password columns. Two concurrent approvals: the
@@ -77,6 +79,11 @@ from auditmanager.access.passwords import (
     verify_password,
 )
 from auditmanager.access.policy import enforce_password_policy
+from auditmanager.access.queue_lock import (
+    QUEUE_LOCK_KEY,
+    login_has_pending_request,
+    take_queue_lock,
+)
 from auditmanager.access.repository import (
     _NEXT_FAILED_SIGN_INS,
     _PUBLIC_COLUMNS,
@@ -110,10 +117,9 @@ REGISTRATION_DECIDED: Final[str] = "registration decided"
 
 _UNIQUE_VIOLATION: Final[str] = "23505"
 
-#: One key for the whole queue: submissions serialise on it for the length of their
-#: transaction, so "count, then insert" cannot be interleaved past the cap. Arbitrary, fixed,
-#: and spelled once ("REGQ").
-_QUEUE_LOCK_KEY: Final[int] = 0x52454751
+#: The queue's lock key, now spelled once in :mod:`auditmanager.access.queue_lock` (`D-147`):
+#: submissions, approvals, profile completions and restores all serialise on it.
+_QUEUE_LOCK_KEY: Final[int] = QUEUE_LOCK_KEY
 
 #: Control characters a reason may not carry. A line feed is allowed -- an administrator may
 #: write two sentences on two lines -- and nothing else below 0x20, nor DEL, nor C1.
@@ -179,10 +185,6 @@ _INSERT_REQUEST = text(
 
 _LOGIN_HELD_BY_AN_ACTIVE_ACCOUNT = text(
     "SELECT EXISTS (SELECT 1 FROM app_user WHERE login = :login AND archived_at IS NULL)"
-)
-_PENDING_FOR_LOGIN = text(
-    "SELECT EXISTS (SELECT 1 FROM registration_request "
-    "WHERE login = :login AND status = 'pending')"
 )
 _COUNT_PENDING = text("SELECT count(*) FROM registration_request WHERE status = 'pending'")
 
@@ -350,10 +352,10 @@ class RegistrationRepository:
             context=(email.split("@", 1)[0], last, first, middle),
         )
 
-        session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _QUEUE_LOCK_KEY})
+        take_queue_lock(session)
         if session.execute(_LOGIN_HELD_BY_AN_ACTIVE_ACCOUNT, {"login": email}).scalar_one():
             raise _conflict("login_taken", "an active account already holds this login")
-        if session.execute(_PENDING_FOR_LOGIN, {"login": email}).scalar_one():
+        if login_has_pending_request(session, email):
             raise _conflict("request_pending", "a request for this login is already pending")
         if int(session.execute(_COUNT_PENDING).scalar_one()) >= MAX_PENDING_REQUESTS:
             raise _conflict("queue_full", "too many registration requests are pending")
@@ -410,6 +412,11 @@ class RegistrationRepository:
                 field="roles",
             )
         RegistrationId.parse(request_id)
+        # `D-147`: the queue lock, before the request's row lock (the one lock order, see
+        # :mod:`auditmanager.access.queue_lock`). A submit that read "no account yet" while
+        # this approval was still uncommitted would otherwise go on to file a request for
+        # the login this approval is giving to an account: one nobody can approve.
+        take_queue_lock(session)
         row = session.execute(_LOCK_FOR_DECISION, {"request_id": request_id}).first()
         if row is None:
             raise _no_such_request()

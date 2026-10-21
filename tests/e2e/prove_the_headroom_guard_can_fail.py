@@ -97,10 +97,23 @@ def first_only(text: str, old: str, new: str) -> str:
 
 
 def last_only(text: str, old: str, new: str) -> str:
-    """Change the last occurrence: the second upload location, the /bff one."""
-    assert old in text, f"{old!r} is no longer in the file this prover mutates"
-    head, _, tail = text.rpartition(old)
-    return head + new + tail
+    """Change the first occurrence inside the /bff upload location, whatever follows it.
+
+    It used to be the last occurrence in the file. `HARDEN-AUTH-EDGE-01` added two internal
+    credential locations AFTER the upload ones, each with a cap of its own, so "last" would
+    now mutate the wrong block and report a red for the wrong reason.
+    """
+    marker = "location ~ ^/bff/v1/projects/"
+    head, found, tail = text.partition(marker)
+    assert found and old in tail, f"{old!r} is no longer in the /bff upload location this prover mutates"
+    return head + found + tail.replace(old, new, 1)
+
+
+def credential_cap(text: str, location: str, new: str) -> str:
+    """Change the cap of one internal credential location: the line after its `internal;`."""
+    anchor = f"    location = /_edge/credential/{location} {{\n        internal;\n        {REAL_UPLOAD_CAP}\n"
+    assert anchor in text, f"the {location} credential location no longer reads as this prover expects"
+    return text.replace(anchor, anchor.replace(REAL_UPLOAD_CAP + "\n", new), 1)
 
 
 def main() -> int:
@@ -169,6 +182,14 @@ def main() -> int:
         (
             "delete the cap of nginx.conf's /bff upload location (it takes the 32m default)",
             mutated(NGINX, last_only(texts[NGINX], f"        {REAL_UPLOAD_CAP}\n", "")),
+        ),
+        (
+            "lower nginx.conf's api credential location to the server default (32m)",
+            mutated(NGINX, credential_cap(texts[NGINX], "api", "client_max_body_size 32m;\n")),
+        ),
+        (
+            "delete tls-server.conf's web credential location cap (it takes the 32m default)",
+            mutated(TLS, credential_cap(texts[TLS], "web", "")),
         ),
         (
             "raise nginx's server-wide default instead of the two locations",

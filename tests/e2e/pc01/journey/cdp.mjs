@@ -218,6 +218,14 @@ export async function withColdBrowser(fn, { cookies = [], viewport = null } = {}
       '--no-default-browser-check',
       '--disable-background-networking',
       '--disable-extensions',
+      // `BETA-LIVE-JOURNEY-01`: measured 2026-10-21 on Chrome 154 on this host -- the first
+      // cookie-store access of a fresh profile (`Storage.getCookies`, which `recordStartingJar`
+      // makes before the first navigation) took 25 s, because the browser asked the desktop
+      // keyring for the key it encrypts cookies with and waited for a keyring that is not
+      // there. With the profile's own plain store it takes 3 ms. The profile is a throwaway
+      // directory the process deletes, so nothing is encrypted that mattered; this is the whole
+      // of "browser startup" the README measured at 3.8-25 s.
+      '--password-store=basic',
       'about:blank',
     ],
     { stdio: ['ignore', 'pipe', 'pipe'] },
@@ -318,6 +326,7 @@ export async function navigateCountingAttempts(send, url, record, options = {}) 
  */
 const KEPT_RESPONSE_HEADERS = [
   'content-type',
+  'content-disposition',
   'content-length',
   'cache-control',
   'location',
@@ -336,6 +345,31 @@ function pick(headers, names) {
     if (names.includes(lower)) out[lower] = value;
   }
   return out;
+}
+
+/**
+ * An expression that evaluates to the control a `<label>` names, or `null`.
+ *
+ * `scope` is a CSS selector for the region that holds the label (a form, a table row);
+ * `label` is the label's own text -- the text nodes that are its direct children, so the
+ * text of the control it wraps (an option's words, a typed value) never counts as part of
+ * the name; `tag` is the control's element name inside it. This is how a user names a
+ * field ("the one that says Поставщик"), and the only handle several of this application's
+ * fields have, since `web/src` gives them neither an id nor a marker. `index` picks among
+ * several labels with the same text in the scope (the vendor editor repeats its row); a negative
+ * index counts from the end, so `-1` is the row the step has just added.
+ */
+export function controlByLabelExpression(scope, label, tag, index = 0) {
+  return `(() => {
+    const root = document.querySelector(${JSON.stringify(scope)});
+    if (root === null) return null;
+    const own = (node) => Array.from(node.childNodes)
+      .filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
+    const wrappers = Array.from(root.querySelectorAll('label'))
+      .filter((l) => own(l) === ${JSON.stringify(label)} && l.querySelector(${JSON.stringify(tag)}) !== null);
+    const wrapper = wrappers.at(${Number(index)});
+    return wrapper === undefined ? null : wrapper.querySelector(${JSON.stringify(tag)});
+  })()`;
 }
 
 /** One attached page, recording every exchange it makes. */
@@ -685,8 +719,11 @@ class Page {
    * run` are both disabled while their mutation is pending, and pressing one in that state
    * and recording a pass is how a journey certifies nothing.
    */
-  async click(selector, { text = null } = {}) {
+  async click(selector, { text = null, times = 1 } = {}) {
     const what = `click ${selector}${text === null ? '' : ` [text=${JSON.stringify(text)}]`}`;
+    if (!Number.isInteger(times) || times < 1 || times > 3) {
+      throw new Error(`${what}: times must be 1, 2 or 3; got ${times}`);
+    }
     const found = await this.describe(selector, text);
     if (found === null) throw new Error(`${what}: no element matches it`);
     if (found.disabled) {
@@ -697,10 +734,81 @@ class Page {
     }
     const at = { x: found.box.x, y: found.box.y };
     await this.#send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...at, button: 'none', buttons: 0 });
-    await this.#send('Input.dispatchMouseEvent', { type: 'mousePressed', ...at, button: 'left', buttons: 1, clickCount: 1 });
-    await this.#send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...at, button: 'left', buttons: 0, clickCount: 1 });
+    // `times` > 1 is a user pressing the same control again before the page has answered:
+    // every press goes to the same coordinates with no re-reading of the control between
+    // them, because re-reading would find it `disabled` and refuse -- which is the
+    // property a second identical submit is supposed to be tested against, not avoided.
+    for (let press = 1; press <= times; press += 1) {
+      await this.#send('Input.dispatchMouseEvent', { type: 'mousePressed', ...at, button: 'left', buttons: 1, clickCount: press });
+      await this.#send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...at, button: 'left', buttons: 0, clickCount: press });
+    }
     this.#lastActivity = Date.now();
     return found;
+  }
+
+  /**
+   * Choose an option of a `<select>` by what the option says, and read the choice back.
+   *
+   * The control is named one of two ways: `selector` is the select itself, or `selector`
+   * is a scope (a form) and `label` is the text of the `<label>` that wraps the select --
+   * how a user names it ("the one that says Эксперт"), and the only handle several of
+   * this application's selects have, since `web/src` gives them neither an id nor a
+   * marker. The option is `optionText` (exact, trimmed) or `optionValue`.
+   *
+   * A native popup cannot be driven headless, so this sets the value the way the browser
+   * does after the user picks and dispatches the `change` event React listens to. The
+   * read-back is the same guard `fill` has: a controlled select that did not take the
+   * choice reads back its old value, and that is an error here rather than a request
+   * that never comes three steps later.
+   */
+  async select(selector, { label = null, index = 0, optionText = null, optionValue = null } = {}) {
+    const what = `select ${selector}${label === null ? '' : ` [label=${JSON.stringify(label)}]`}`;
+    if ((optionText === null) === (optionValue === null)) {
+      throw new Error(`${what}: name exactly one of optionText and optionValue`);
+    }
+    const control =
+      label === null
+        ? `document.querySelector(${JSON.stringify(selector)})`
+        : controlByLabelExpression(selector, label, 'select', index);
+    const chosen = await this.evaluate(`(() => {
+      const el = ${control};
+      if (el === null || el === undefined || el.tagName !== 'SELECT') return { found: false };
+      if (el.disabled) return { found: true, disabled: true };
+      const wantedText = ${JSON.stringify(optionText)};
+      const wantedValue = ${JSON.stringify(optionValue)};
+      const option = Array.from(el.options).find((o) =>
+        wantedText !== null ? o.text.trim() === wantedText : o.value === wantedValue);
+      if (option === undefined) {
+        return { found: true, disabled: false, option: false,
+          offered: Array.from(el.options).map((o) => o.text.trim()).slice(0, 40) };
+      }
+      el.scrollIntoView({ block: 'center' });
+      el.focus();
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+      setter.call(el, option.value);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return { found: true, disabled: false, option: true, value: option.value, text: option.text.trim() };
+    })()`);
+    if (!chosen.found) throw new Error(`${what}: no <select> matches it`);
+    if (chosen.disabled) throw new Error(`${what}: the select is disabled, so choosing would do nothing`);
+    if (chosen.option === false) {
+      throw new Error(
+        `${what}: no option says ${JSON.stringify(optionText ?? optionValue)}; it offers ` +
+          `${JSON.stringify(chosen.offered)}`,
+      );
+    }
+    // Let React re-render, then read the control back.
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const readBack = await this.evaluate(`(() => { const el = ${control}; return el === null ? null : el.value; })()`);
+    if (readBack !== chosen.value) {
+      throw new Error(
+        `${what}: chose ${JSON.stringify(chosen.text)} but the control reads ` +
+          `${JSON.stringify(readBack)} -- the application did not take the choice`,
+      );
+    }
+    this.#lastActivity = Date.now();
+    return { value: chosen.value, text: chosen.text };
   }
 
   /**
@@ -713,19 +821,30 @@ class Page {
    * read-back turns "the form was never filled" into a failure here, instead of into a
    * confusing absence of the request three steps later.
    */
-  async fill(selector, value, { text = null } = {}) {
-    const what = `fill ${selector}`;
+  async fill(selector, value, { text = null, label = null, tag = 'input', index = 0 } = {}) {
+    const what = `fill ${selector}${label === null ? '' : ` [label=${JSON.stringify(label)}]`}`;
+    // `label` makes `selector` a scope and names the field by the text of the label that
+    // wraps it, as `select` does; `tag` is `input` or `textarea`.
+    const control =
+      label === null ? Page.locator(selector, text) : controlByLabelExpression(selector, label, tag, index);
     const found = await this.evaluate(`(() => {
-      const el = ${Page.locator(selector, text)};
+      const el = ${control};
       if (el === null) return null;
+      el.scrollIntoView({ block: 'center' });
       el.focus();
       if (typeof el.select === 'function') el.select();
       return { tag: el.tagName, focused: document.activeElement === el };
     })()`);
     if (found === null) throw new Error(`${what}: no element matches it`);
     if (!found.focused) throw new Error(`${what}: the control refused focus`);
-    await this.#send('Input.insertText', { text: value });
-    const readBack = await this.evaluate(`(${Page.locator(selector, text)}).value`);
+    if (value === '') {
+      // `Input.insertText` of nothing selects nothing away: clear what `select()` marked.
+      await this.#send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 });
+      await this.#send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 });
+    } else {
+      await this.#send('Input.insertText', { text: value });
+    }
+    const readBack = await this.evaluate(`(${control}).value`);
     if (readBack !== value) {
       throw new Error(
         `${what}: typed ${JSON.stringify(value)} but the control reads ` +
@@ -865,6 +984,23 @@ class Page {
     if (!data) throw new Error(`Page.captureScreenshot returned no data for ${absolutePath}`);
     writeFileSync(absolutePath, Buffer.from(data, 'base64'));
     return absolutePath;
+  }
+
+  /**
+   * Let this browser save downloads into `directory`, and say when one starts.
+   *
+   * `BETA-LIVE-JOURNEY-01`. An export (`Content-Disposition: attachment`) is a download, and
+   * the protocol will not hand a download's body to `Network.getResponseBody`: the 2026-10-21
+   * run read `''` for three exports whose headers said 200, `text/csv` and 4404 bytes. What
+   * the user receives is the FILE, so the file is what is read -- by the caller, from
+   * `directory`, once the browser has finished writing it. The setting is the browser's, not
+   * the page's, and each cold browser has its own, so nothing leaks between steps.
+   */
+  async allowDownloads(directory) {
+    await this.#connection.send('Browser.setDownloadBehavior', {
+      behavior: 'allow',
+      downloadPath: directory,
+    });
   }
 
   /** Where the browser currently is. A `router.push` moves this without a navigation. */
