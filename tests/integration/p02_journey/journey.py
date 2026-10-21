@@ -151,6 +151,11 @@ P02_TABLES = (
     "optimisation_pass",
     "optimisation_proposal",
     "optimisation_proposal_decision",
+    # `0028_classification_corrections`. Append-only corrections of a version's classification
+    # (`CLASSIFICATION-CORRECTION-01`). A row appears only when an expert corrects a
+    # classification already confirmed; an upload and a run write none, so the count is expected
+    # unchanged across a replay. The two views the migration also creates are not base tables.
+    "document_version_classification_correction",
 )
 
 
