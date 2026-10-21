@@ -160,6 +160,10 @@ _SCHEMA_MUTATIONS = {
     "unregistered table": (
         ("CREATE TABLE zz_unregistered (id integer PRIMARY KEY)",), r"tables differ.*zz_unregistered",
     ),
+    "relation in another schema": (
+        ("CREATE SCHEMA zz_other", "CREATE TABLE zz_other.hidden (id integer PRIMARY KEY)"),
+        "outside schema public",
+    ),
     "dropped table": (("DROP TABLE vendor_list_entry CASCADE",), r"tables differ.*vendor_list_entry"),
     "unregistered view": (
         ("CREATE VIEW zz_view AS SELECT project_uid FROM project",), r"views differ.*zz_view",
