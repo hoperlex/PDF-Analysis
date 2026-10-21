@@ -14,9 +14,9 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **71 paths / 81 operations / 235 schemas**,
+The development API surface is **72 paths / 82 operations / 237 schemas**,
 the error catalogue has **25** codes, the migration head is
-**`0027_optimisation_proposals`**, and `VERSION` is `0.6.0`. These are checkout
+**`0028_classification_corrections`**, and `VERSION` is `0.6.0`. These are checkout
 facts; the release tree has its own frozen 47/54/123 surface and
 `0021_portal_bundles` head. For the current deployment, run
 `infra/deploy/verify-deployed.sh`; this document is no substitute for that
@@ -75,7 +75,9 @@ for the `R-139` night window of 2026-10-20, `NIGHT-1020-INT-01.md`.
   without a profile; the project screen groups documents by section.
   «Настройки анализа» lists the profiles (`listAnalysisProfiles`); АИ, ПЗ,
   ПОС and ТХ are proven in recorded mode with synthetic recordings only.
-- **Versions.** `uploadDocumentVersion` adds the next version to a set;
+- **Versions.** An expert corrects a confirmed classification by an append-only
+  revision with a reason (`correctVersionClassification`, migration 0028); the
+  original confirmation is never changed. `uploadDocumentVersion` adds the next version to a set;
   `compareDocumentVersions` serves the deterministic comparison (same stage
   and section) and the W62 П→Р comparison; `carryOverDecision` carries an
   expert decision onto an `unchanged` matched finding as a new event.

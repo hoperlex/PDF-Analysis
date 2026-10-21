@@ -390,6 +390,9 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # imply expert (the decision's authorization rule). The command re-reads the role
         # set in its own transaction.
         "classifyDocumentVersion": _EXPERT,
+        # `CLASSIFICATION-CORRECTION-01`. Only an expert corrects a classification; admin alone
+        # does not imply expert. The command re-reads the role set in its own transaction.
+        "correctVersionClassification": _EXPERT,
         "cancelRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "reauditRun": frozenset({ROLE_EXPERT, ROLE_ADMIN}),
         "appendDecision": _EXPERT,

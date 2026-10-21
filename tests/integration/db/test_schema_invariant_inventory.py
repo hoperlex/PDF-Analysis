@@ -31,6 +31,20 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `CLASSIFICATION-CORRECTION-01` for ``0028_classification_corrections``, measured,
+#: not predicted: a fresh upgrade of the lane's PostgreSQL 17 + pgvector stack, whose per-family
+#: counts were taken against the 0027 seal below, and the whole of 0028 was shown to be the
+#: difference by ``test_downgrade_chain_round_trip.py`` (downgrading 0028 restores the 0027
+#: inventory row for row). Seven families moved, each by exactly the migration's DDL: columns +20
+#: -> 606 (``document_version_classification_correction`` 7, the view
+#: ``version_classification_revision`` 7, the view ``version_classification_current`` 6);
+#: relations +3 -> 66 (one table, two views); constraints +9 -> 657 (the correction table's
+#: primary key, two foreign keys and six CHECKs); indexes +1 -> 153 (its primary key's index);
+#: triggers +2 -> 72 (``trg_document_version_classification_correction_immutable`` and
+#: ``trg_document_version_classification_correction_chain``); functions +1 -> 31
+#: (``am_check_classification_correction_chain``), with ``am_check_optimisation_pass_scope``
+#: redefined -- same row, now reading ``version_classification_current``; views +2 -> 4.
+#: Extensions, sequences, policies and the state topology are identical to the 0027 seal.
 #: Resealed by `W60-OPT-PROPOSALS-01` for ``0027_optimisation_proposals``, measured, not
 #: predicted: two fresh databases on the lane's PostgreSQL 17 + pgvector stack, one upgraded to
 #: ``0026`` (whose inventory equalled the 0026 seal below in every family) and one to ``0027``,
@@ -173,13 +187,13 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (586, "7e8474485910a1f731b4618d62bd71c7573ea05d70c1090dd73a51a4ea18e4b0"),
-    "relations": (63, "a663d3b6e4b4da790703591bac002cb57f071120e21f4e87281344130158e500"),
-    "constraints": (648, "fa5aaa1d737086aefb187f0f5aafc194ea8cb49e14565cdcbacf588668515cf1"),
-    "indexes": (152, "7471c42d3c831a4e34441b0d7fb2ffac5baadcda5e6854ffa1da812e5e62a927"),
-    "triggers": (70, "b34939bb0cf20e2d7a8b9d0a0edb482174fc1537bb3ee7501e25779e2d192e6f"),
-    "functions": (30, "105212f491441c3dc236606f639a07c02cec7a81f8b1be595af8cf2d4b6095ef"),
-    "views": (2, "caa1bb6a500a67cd406cf34f7fb6fe410811592659a0f527806c4b3c827fa65f"),
+    "columns": (606, "c91cfd648e0be2756288f49ddc30c0498e173a2bd0baa6597698901479b449f1"),
+    "relations": (66, "ab9583ece4619d4e3fe91db0138a3d3f2b92f4f325e4b4929495b14a7513aa45"),
+    "constraints": (657, "d8fb5c83e087d76d019e9544f8058ec66cdd62efd93cac5b7500456f6855293b"),
+    "indexes": (153, "d711d788b8705b85b60ac1ec2985f517fbbeb76550af4ddf768ed60b6278e6b9"),
+    "triggers": (72, "0b774f0595de5f670a36594fb286e3089fa11692d1e7379ad1cf9ea260fe8f14"),
+    "functions": (31, "62391d05e0e1c209227d158d95097c68ce2356ae5f096931dff6b2f69c72f4bd"),
+    "views": (4, "61b81f6732b6388cbc5f8ede9c5f7d1f9b3433f50e1f7b5ac252537585a3480f"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),
     "policies": (0, "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"),

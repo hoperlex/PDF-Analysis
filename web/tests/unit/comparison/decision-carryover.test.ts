@@ -53,7 +53,7 @@ function version(over: Partial<DocumentVersion>): DocumentVersion {
     published_at: '2026-10-20T08:00:00Z', input_manifest: [],
     classification: {
       version_uid: over.version_uid ?? OLDER, project_stage: 'P', section_code: 'AR',
-      confirmed_by_user_uid: `usr_${ULID}`, confirmed_at: '2026-10-20T08:00:00Z',
+      confirmed_by_user_uid: `usr_${ULID}`, confirmed_at: '2026-10-20T08:00:00Z', revision: 1,
     },
     ...over,
   };

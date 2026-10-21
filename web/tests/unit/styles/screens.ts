@@ -58,6 +58,7 @@ import { VersionList } from '@/widgets/version-list';
 import { CropFigureView } from '@/widgets/portal-blocks';
 import { VersionBlockViews } from '@/_pages/blocks';
 import { ClassifyVersionFormView } from '@/features/classify-version';
+import { CorrectVersionClassificationFormView } from '@/features/correct-version-classification';
 import { ProjectStructureView } from '@/widgets/project-sections';
 import { VersionClassificationView } from '@/widgets/version-classification';
 import { portalBlocksQueryOptions } from '@/entities/block';
@@ -193,6 +194,7 @@ const version = (): DocumentVersion => ({
 const sectionReview = (over: Partial<SectionReview> = {}): SectionReview => ({
   version_uid: VERSION_UID,
   classification: null,
+  revisions: [],
   recognised_text_consulted: false,
   options: PROJECT_SECTION_VALUES.map((code) => ({
     section_code: code,
@@ -212,6 +214,7 @@ const CONFIRMED = {
   section_code: 'PB' as const,
   confirmed_at: '2026-10-20T08:00:00Z',
   confirmed_by_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+  revision: 1,
 };
 
 /**
@@ -1000,6 +1003,61 @@ export function screens(): Screen[] {
           roles: ['expert'],
           conflict: true,
           onConflict: () => undefined,
+        }),
+      ),
+    );
+    // `CLASSIFICATION-CORRECTION-01`: the corrected panel with its history and the open form.
+    const CORRECTED = { ...CONFIRMED, revision: 2 };
+    const HISTORY = [
+      {
+        revision: 1,
+        project_stage: 'P' as const,
+        section_code: 'AR' as const,
+        actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+        at: '2026-10-20T08:00:00Z',
+        reason: null,
+      },
+      {
+        revision: 2,
+        project_stage: CONFIRMED.project_stage,
+        section_code: CONFIRMED.section_code,
+        actor_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+        at: '2026-10-21T09:30:00Z',
+        reason: 'Раздел определён по штампу листа неверно.',
+      },
+    ];
+    for (const correcting of [false, true]) {
+      add(
+        `VersionClassificationView corrected${correcting ? ' correcting' : ''}`,
+        at(
+          createElement(VersionClassificationView, {
+            address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
+            review: sectionReview({ classification: CORRECTED, revisions: HISTORY }),
+            roles: ['expert'],
+            conflict: false,
+            onConflict: () => undefined,
+            correcting,
+            onCorrecting: () => undefined,
+          }),
+        ),
+      );
+    }
+    add(
+      'CorrectVersionClassificationFormView refused',
+      at(
+        createElement(CorrectVersionClassificationFormView, {
+          review: sectionReview(),
+          current: CORRECTED,
+          stage: 'P',
+          section: 'AR',
+          reason: '...',
+          pending: false,
+          failure: { kind: 'stale', detail: 'Классификацию уже изменили.', correlationId: 'cid', retryable: false },
+          onStage: () => undefined,
+          onSection: () => undefined,
+          onReason: () => undefined,
+          onSubmit: () => undefined,
+          onCancel: () => undefined,
         }),
       ),
     );

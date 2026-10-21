@@ -1648,3 +1648,17 @@ In the session of 2026-10-20 the owner stated (Russian, quoted): «на стен
 | Ruling | Substance |
 | --- | --- |
 | `R-140` | The deployed stand holds only generated test data (`R-109`/`R-110` premise confirmed on 2026-10-20). The migrating publication of 0.7.0 therefore runs without the one-off copy (`R-88`/`R-93`) and without the `R-92` window. The owner permits, as a precaution against inconsistencies, a guarded wipe of the stand's data before the migration (`infra/deploy/reset.sh`: verified dump first, then database, bucket and session register); the wipe is optional and is run on the stand host by the operator, never by the integrator session. A wipe removes accounts as well: the seeded `admin` returns with the forced first password change, other accounts must be registered again. This ruling does not authorize `origin/main`: AGENTS.md §6 still requires the owner's separate direct instruction naming the exact SHA. |
+
+## 3.41 — `R-141`, publish the 0.7.0 candidate; wipe first; scope of a closed beta (owner, 2026-10-21)
+
+In the session of 2026-10-21 the owner instructed (Russian, quoted): «в ближайшие 8-12 часов задача
+запушить наконец в main 0.7.0 и максимально реализовать путь по роадмапу к бета, желательно
+отбросить побольше условностей, пренебречь парой проверок, так чтобы бета в каком то виде была
+принята уже завтра». The integrator then put three questions by direct poll (`NIGHT-1020-GATE-0-7-0-01.md`
+carries the evidence the first answer rests on).
+
+| Ruling | Substance |
+| --- | --- |
+| `R-141a` | Publish to `origin/main` the exact commit `59a1be91e0886393e90d2181c2a7f8728fca2ed7` (fast-forward from `ec3ebf07`). The owner accepts, for this publication, the `R-125` completion recorded in `NIGHT-1020-GATE-0-7-0-01.md` (static and foundation green; first phase of the battery 6950 passed, 2 reds explained by the host and passed on whole-directory reruns; every other directory green on that SHA) in place of a literal `GATE OK`. This is the direct instruction `AGENTS.md` section 6 asks for, and it names no other SHA: any later change needs a new instruction. |
+| `R-141b` | The stand's test data is wiped before the push (`R-140`): the operator runs `infra/deploy/reset.sh` on the stand host (`--dry-run` first), never the integrator session. The push waits for the operator's confirmation that the wipe finished. |
+| `R-141c` | The first beta is a **closed beta on test data**. Accepted criteria: `B1`, `B2`, `B4`, `B6` (local drill), `B7`, `B8`, `B9`, `B12`. Explicitly deferred by the owner, with no weakening of their text: `B3`, `B5` (quality and real-document acceptance on a live model whose gateway is not confirmed), `B10` (expert smoke sessions), `B11` (decisions on retained client data). No real client document is uploaded to a closed-beta stand. Deferral means these four criteria are not claimed, not that they are waived for a later beta or for 1.0. |

@@ -276,7 +276,9 @@ class TestClassify:
         body = first.json()
         assert set(body) == {
             "version_uid", "project_stage", "section_code", "confirmed_by_user_uid", "confirmed_at",
+            "revision",
         }
+        assert body["revision"] == 1
         assert (body["version_uid"], body["project_stage"], body["section_code"]) == (world.kj, "R", "KJ")
         assert body["confirmed_by_user_uid"] == user_uid
         repeat = _classify(client, token, path, "R", "KJ")

@@ -478,7 +478,7 @@ EXCEPTION_W20EXEC = {
 #: moved for an unrelated reason, `56efead4`'s ``stage_version``, under their own blocks
 #: (``EXCEPTION_W57ASEAL_RUN_STATUS``, ``EXCEPTION_W57ASEAL_LIST_RUNS``), not this one.
 EXCEPTION_W59SEAL = {
-    "debt": ["D-181"],
+    "debt": ["D-181", "D-182"],
     "ruling": (
         "OWNER_RULINGS_2026-09-17.md section 3.39, R-139 -- the night development window "
         "in which the W59 section seal was frozen and integrated. Its contract commit "
@@ -510,6 +510,47 @@ EXCEPTION_W59SEAL = {
         "because `classification` is a name the sealed document declares. This is the whole "
         "of the permitted change; the record is compared byte for byte against the new "
         "expectation like every other."
+        " `CLASSIFICATION-CORRECTION-01` (`f290f7b7`, 2026-10-21) then added a sixth property to "
+        "that object, `revision` (`1`, the original confirmation), after `confirmed_at`: see the "
+        "`D-182` row and "
+        "`test_the_four_classification_records_moved_by_the_revision_and_nothing_else`."
+    ),
+    "everything_else": (
+        "Every other difference in this directory is a failure of the wave, whatever "
+        "argument accompanies it."
+    ),
+}
+
+#: `CLASSIFICATION-CORRECTION-01`. Case 02b's own record: the classification it answers gained
+#: the required `revision`, so the record that was added without an exception block now carries one.
+EXCEPTION_CCORR = {
+    "debt": ["D-182"],
+    "ruling": (
+        "OWNER_RULINGS_2026-09-17.md section 3.39, R-139 and R-135 -- the night development "
+        "window and the code-first beta series in which the append-only correction of a "
+        "version's classification (`CLASSIFICATION-CORRECTION-01`) was frozen and integrated. "
+        "Its contract commit added the required `revision` to the sealed `VersionClassification`"
+    ),
+    "status": "taken",
+    "decided_by": "f290f7b7",
+    "decided_by_subject": (
+        "docs(tasks): freeze CLASSIFICATION-CORRECTION-01 and NORM-REFS-RUN-01 "
+        "(phase A static now)"
+    ),
+    "decided_on": "2026-10-21",
+    "permitted_change": (
+        "`CLASSIFICATION-CORRECTION-01` (migration `0028_classification_corrections`) lets an "
+        "expert correct a version's classification by appending numbered revisions, and "
+        "`VersionClassification` gained the required property `revision`: 1 is the original "
+        "confirmation this case makes, 2 and later are corrections. This record's body "
+        "therefore ends its `classification` object with `revision` (`1`), appended after "
+        "`confirmed_at` because the model emits it last. **No property was renamed, removed, "
+        "re-typed or reordered and no status or header moved**; removing that one property "
+        "restores the previous body byte for byte, which "
+        "`test_the_four_classification_records_moved_by_the_revision_and_nothing_else` asserts "
+        "by digest. `additionalProperties: false` is satisfied because `revision` is a name "
+        "the resealed document declares. This is the whole of the permitted change; the record "
+        "is compared byte for byte against the new expectation like every other."
     ),
     "everything_else": (
         "Every other difference in this directory is a failure of the wave, whatever "
@@ -1232,6 +1273,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
             "no Idempotency-Key, the operation declares none"
         ),
         tokens=t,
+        exception=EXCEPTION_CCORR,
     )
     classification = json_of(classified)
     assert classified.status == 200, (classified.status, classification)
@@ -1241,6 +1283,9 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     } == CLASSIFICATION_REQUEST, classification
     assert classification["confirmed_by_user_uid"] == presented_account_uid(), (
         "the classification names a confirmer other than the account this journey presents"
+    )
+    assert classification["revision"] == 1, (
+        "the first confirmation is revision 1 (`CLASSIFICATION-CORRECTION-01`)"
     )
     t.add("project_uid", project_uid, "the identity case 01 allocated")
     t.add("version_uid", version_uid, "the identity case 02 allocated")

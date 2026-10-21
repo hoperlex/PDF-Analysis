@@ -123,6 +123,8 @@ REQUIRED_OPERATIONS = {
     # `W59-SECTION-SEAL-01`. A version's expert classification (stage and section) and its
     # fifteen-choice review, addressed through the version's document and project.
     "classifyDocumentVersion",
+    # `CLASSIFICATION-CORRECTION-01`. An expert's append-only correction of that classification.
+    "correctVersionClassification",
     "getVersionSectionReview",
     # `W59-VERSION-COMPARE-01`. Two versions of one set compared, read-only; a refusal is
     # an answer with a closed reason, not an envelope.

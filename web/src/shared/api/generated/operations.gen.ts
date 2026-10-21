@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 686ebea7b2efaf4332127ac0245fb87b2775ccd6e38f49db6a06776df535e6e2
+ *   sha256 7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -30,6 +30,7 @@ import type {
   CarryOverDecisionResponse,
   ChangePasswordRequest,
   ClassifyDocumentVersionRequest,
+  CorrectVersionClassificationRequest,
   CorrelationId,
   CreateAssignmentRequest,
   CreateProjectRequest,
@@ -136,6 +137,7 @@ export const OPERATION_IDS = [
   'changePassword',
   'classifyDocumentVersion',
   'compareDocumentVersions',
+  'correctVersionClassification',
   'createAssignment',
   'createProject',
   'decideOptimisationProposal',
@@ -394,7 +396,7 @@ export type ChangePasswordResult = IssueTokenResponse;
 /**
  * Classify Document Version
  *
- * Classify one version: its project stage (`P` or `R`) and one of the fifteen sections, confirmed by the calling expert. `expert` is required; `admin` alone is refused with `permission_denied` (`required_capability: role:expert`). The version must belong to the named document and the document to the named project, otherwise `not_found`. An exact repeat answers the stored row and keeps the first confirmer; a different stage or section is `conflict` with `conflict_reason: version_already_classified` and changes nothing -- there is no correction workflow yet. A suggestion, a file name or the legacy document `section` is never a classification.
+ * Classify one version: its project stage (`P` or `R`) and one of the fifteen sections, confirmed by the calling expert. `expert` is required; `admin` alone is refused with `permission_denied` (`required_capability: role:expert`). The version must belong to the named document and the document to the named project, otherwise `not_found`. An exact repeat answers the stored row and keeps the first confirmer; a different stage or section is `conflict` with `conflict_reason: version_already_classified` and changes nothing -- to change an existing classification an expert uses `correctVersionClassification`, with a reason. A suggestion, a file name or the legacy document `section` is never a classification.
  */
 export type ClassifyDocumentVersionInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification`. */
@@ -451,6 +453,33 @@ export type CompareDocumentVersionsInput = {
 
 /** Success body of `compareDocumentVersions` (`application/json`, HTTP 200). */
 export type CompareDocumentVersionsResult = VersionComparison;
+
+// ------------------------------------------------------------------------------------
+// correctVersionClassification - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections
+// ------------------------------------------------------------------------------------
+
+/**
+ * Correct Version Classification
+ *
+ * Correct one version's classification: append a new revision with the full target `project_stage` and `section_code`, a `reason` (1 to 2000 characters, with a letter or a digit) and the `expected_revision` the caller was looking at. `expert` is required; `admin` alone is refused with `permission_denied` (`required_capability: role:expert`). The version must belong to the named document and the document to the named project, otherwise `not_found`. Revision 1 is the original confirmation and is never changed; the current classification is the latest revision. An unclassified version is `conflict` with `conflict_reason: version_not_classified` -- classify it first. An `expected_revision` behind the current one is `conflict` with `conflict_reason: classification_revision_stale` and writes nothing, unless the request is an exact repeat (same expert, same values, same reason) of the revision after it, which answers that stored revision with `201` and writes nothing; one ahead of the current revision, a pair equal to the current classification (`constraint: differs_from_current`) and a blank, over-long or unprintable reason are `validation_failed`. Runs already started keep the analysis profile they pinned; a re-audit routes from the corrected classification. No `Idempotency-Key`: `expected_revision` is what makes a retry safe.
+ */
+export type CorrectVersionClassificationInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CorrectVersionClassificationRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `correctVersionClassification` (`application/json`, HTTP 201). */
+export type CorrectVersionClassificationResult = VersionClassification;
 
 // ------------------------------------------------------------------------------------
 // createAssignment - POST /assignments
@@ -956,7 +985,7 @@ export type GetVersionBlocksResult = VersionBlockIndex;
 /**
  * Get Version Section Review
  *
- * The fifteen section choices for one version, each with the suggestion evidence its file name and recognised text carry (or `null`) and whether a text profile is registered for it (`executable`), plus the persisted classification or `null`. Display input only: nothing here confirms a section or starts a run. Any one role, `role:admin|expert`.
+ * The fifteen section choices for one version, each with the suggestion evidence its file name and recognised text carry (or `null`) and whether a text profile is registered for it (`executable`), plus the persisted classification or `null`, and the classification's history (`revisions`, oldest first: the original confirmation, then each correction with its expert, time and reason). Display input only: nothing here confirms a section or starts a run. Any one role, `role:admin|expert`.
  */
 export type GetVersionSectionReviewInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review`. */
@@ -2487,6 +2516,20 @@ export const OPERATIONS = {
     responseMediaType: 'application/json',
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['documents'],
+  },
+  correctVersionClassification: {
+    operationId: 'correctVersionClassification',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['documents'],
   },
   createAssignment: {

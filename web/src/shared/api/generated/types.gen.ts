@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 686ebea7b2efaf4332127ac0245fb87b2775ccd6e38f49db6a06776df535e6e2
+ *   sha256 7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0-draft.1';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '686ebea7b2efaf4332127ac0245fb87b2775ccd6e38f49db6a06776df535e6e2';
+export const CONTRACT_DIGEST = '7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -50,6 +50,7 @@ export const SCHEMA_NAMES = [
   'ClassifyDocumentVersionRequest',
   'ComparedVersion',
   'ComparisonRefusal',
+  'CorrectVersionClassificationRequest',
   'CorrelationId',
   'CostBasis',
   'CreateAssignmentRequest',
@@ -257,6 +258,7 @@ export const SCHEMA_NAMES = [
   'VerdictCount',
   'VersionBlockIndex',
   'VersionClassification',
+  'VersionClassificationRevision',
   'VersionComparison',
   'VersionUid',
   'WorkerId',
@@ -564,6 +566,20 @@ export type ComparedVersion = {
 export type ComparisonRefusal = {
   reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "text_unavailable" | "text_too_large";
   side: "source" | "target" | null;
+};
+
+/**
+ * `CLASSIFICATION-CORRECTION-01`. An expert's correction of one version's classification.
+ *
+ * The full target pair, why, and the revision the caller was looking at
+ * (``expected_revision``): the optimistic-concurrency token that also makes an exact retry
+ * safe. At least one of the two values must differ from the current classification.
+ */
+export type CorrectVersionClassificationRequest = {
+  expected_revision: number;
+  project_stage: ProjectStage;
+  reason: string;
+  section_code: ProjectSection;
 };
 
 /** Not an entity identity. Never a foreign key and authorizes nothing. */
@@ -2091,6 +2107,7 @@ export type SectionReview = {
   classification: VersionClassification | null;
   options: Array<SectionReviewOption>;
   recognised_text_consulted: boolean;
+  revisions: Array<VersionClassificationRevision>;
   version_uid: VersionUid;
 };
 
@@ -2720,15 +2737,35 @@ export type VersionBlockIndex = {
 /**
  * `W59-SECTION-SEAL-01`. The persisted, expert-confirmed classification of one version.
  *
- * Written once (``0024_version_classification``); an exact repeat keeps the first
- * confirmer and a different stage or section is refused, not overwritten.
+ * The original confirmation is stored once (``0024_version_classification``) and never
+ * changed. `CLASSIFICATION-CORRECTION-01` (``0028_classification_corrections``): an expert
+ * may append corrections, each a numbered ``revision`` (1 is the original); this is the
+ * latest revision, or, in the answer to a correction retried after someone corrected again,
+ * the revision that request created. ``confirmed_by_user_uid`` and ``confirmed_at`` are those
+ * of **that revision** -- who stands behind these values.
  */
 export type VersionClassification = {
   confirmed_at: string;
   confirmed_by_user_uid: UserUid;
   project_stage: ProjectStage;
+  revision: number;
   section_code: ProjectSection;
   version_uid: VersionUid;
+};
+
+/**
+ * `CLASSIFICATION-CORRECTION-01`. One entry of a version's classification history.
+ *
+ * Revision 1 is the original expert confirmation (``reason`` is ``null``); revisions 2..
+ * are the corrections, each with the expert who made it, when, and why. Never changed.
+ */
+export type VersionClassificationRevision = {
+  actor_user_uid: UserUid;
+  at: string;
+  project_stage: ProjectStage;
+  reason: string | null;
+  revision: number;
+  section_code: ProjectSection;
 };
 
 /** Two versions of one set compared, or the explicit reason they are not. */

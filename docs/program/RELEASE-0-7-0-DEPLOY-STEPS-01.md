@@ -42,14 +42,18 @@ stand is not left empty for long.
 
 ## Order
 
-1. (optional) wipe as above, on the host.
+1. (optional) wipe as above, on the host. **Then, at once and before the push, sign in as the
+   seeded `admin` (migration 0006 seeds `admin`/`password`, and sign-in is public) and change the
+   password** (`EXPOSURE-REVIEW-01.md` E-1); until that is done anyone who knows the published
+   pair owns the administrator account. `infra/deploy/readiness.sh` has a `default-credential`
+   check that names accounts still on a seeded password; run it after the change.
 2. Owner's direct instruction naming the exact SHA; integrator re-reads `origin/main`, proves a
    fast-forward, pushes that SHA (no later fix), follows the workflow run to completion.
 3. Operator: `infra/deploy/verify-deployed.sh` on the host for the same tree; public TLS probe.
 4. After deploy evidence is complete: tag `v0.7.0`, fill the `pending` cells of the `v0.7.0` row
    in `docs/program/RELEASES.md`, remove the «not deployed» wording in `RELEASES.md` and
    `CURRENT_STATE.md` (a documentation commit through `dev`).
-5. First sign-in: change the default password; an expert classifies a version before starting a
+5. An expert classifies a version before starting a
    run; the norms import window is scheduled separately.
 
 ## Rollback

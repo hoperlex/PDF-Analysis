@@ -7,7 +7,8 @@ foreign key to ``app_user(user_uid)`` created by migration ``0015`` or a later o
 ``0025_work_assignments`` adds an assignment's first assignee and creator, and each of its
 events' actor and new assignee; ``0026_price_lists`` adds a price list's uploader and a
 vendor-list revision's author; ``0027_optimisation_proposals`` adds the expert who started an
-optimisation pass and the expert who decided an optimisation proposal).
+optimisation pass and the expert who decided an optimisation proposal;
+``0028_classification_corrections`` adds the expert who corrected a version's classification).
 
 Three kinds of entry, by what the database does when the account row is deleted:
 
@@ -75,6 +76,12 @@ ACCOUNT_REFERENCES: Final[tuple[AccountReference, ...]] = (
         "confirmed_by_user_uid",
         "RESTRICT",
         "this account confirmed a version's project stage and section (W59-SECTION-SEAL-01)",
+    ),
+    AccountReference(
+        "document_version_classification_correction",
+        "corrected_by_user_uid",
+        "RESTRICT",
+        "this account corrected a version's project stage or section (CLASSIFICATION-CORRECTION-01)",
     ),
     AccountReference(
         "work_assignment",

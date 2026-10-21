@@ -56,6 +56,7 @@ __all__ = [
     "AppendDecisionRequest",
     "AppendDecisionResponse",
     "ClassifyDocumentVersionRequest",
+    "CorrectVersionClassificationRequest",
     "BlockGeometry",
     "CorrelationId",
     "CostBasis",
@@ -184,6 +185,7 @@ __all__ = [
     "Verdict",
     "VersionBlockIndex",
     "VersionClassification",
+    "VersionClassificationRevision",
     "ComparedVersion",
     "ComparisonRefusal",
     "DiffHunk",
@@ -713,11 +715,29 @@ class ClassifyDocumentVersionRequest(_Object):
     section_code: ProjectSection
 
 
+class CorrectVersionClassificationRequest(_Object):
+    """`CLASSIFICATION-CORRECTION-01`. An expert's correction of one version's classification.
+
+    The full target pair, why, and the revision the caller was looking at
+    (``expected_revision``): the optimistic-concurrency token that also makes an exact retry
+    safe. At least one of the two values must differ from the current classification.
+    """
+
+    project_stage: ProjectStage
+    section_code: ProjectSection
+    reason: Annotated[str, Field(min_length=1, max_length=2000)]
+    expected_revision: Annotated[int, Field(ge=1)]
+
+
 class VersionClassification(_Object):
     """`W59-SECTION-SEAL-01`. The persisted, expert-confirmed classification of one version.
 
-    Written once (``0024_version_classification``); an exact repeat keeps the first
-    confirmer and a different stage or section is refused, not overwritten.
+    The original confirmation is stored once (``0024_version_classification``) and never
+    changed. `CLASSIFICATION-CORRECTION-01` (``0028_classification_corrections``): an expert
+    may append corrections, each a numbered ``revision`` (1 is the original); this is the
+    latest revision, or, in the answer to a correction retried after someone corrected again,
+    the revision that request created. ``confirmed_by_user_uid`` and ``confirmed_at`` are those
+    of **that revision** -- who stands behind these values.
     """
 
     version_uid: VersionUid
@@ -725,6 +745,22 @@ class VersionClassification(_Object):
     section_code: ProjectSection
     confirmed_by_user_uid: UserUid
     confirmed_at: datetime
+    revision: Annotated[int, Field(ge=1)]
+
+
+class VersionClassificationRevision(_Object):
+    """`CLASSIFICATION-CORRECTION-01`. One entry of a version's classification history.
+
+    Revision 1 is the original expert confirmation (``reason`` is ``null``); revisions 2..
+    are the corrections, each with the expert who made it, when, and why. Never changed.
+    """
+
+    revision: Annotated[int, Field(ge=1)]
+    project_stage: ProjectStage
+    section_code: ProjectSection
+    actor_user_uid: UserUid
+    at: datetime
+    reason: Annotated[str, Field(min_length=1, max_length=2000)] | None
 
 
 class SectionSuggestion(_Object):
@@ -750,6 +786,9 @@ class SectionReview(_Object):
 
     version_uid: VersionUid
     classification: VersionClassification | None
+    #: `CLASSIFICATION-CORRECTION-01`. Every revision of the classification, oldest first
+    #: (revision 1 is the original confirmation); empty while the version is unclassified.
+    revisions: list[VersionClassificationRevision]
     #: Whether the version's recognised-text markdown was read as suggestion evidence.
     recognised_text_consulted: bool
     options: Annotated[list[SectionReviewOption], Field(min_length=15, max_length=15)]

@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "686ebea7b2efaf4332127ac0245fb87b2775ccd6e38f49db6a06776df535e6e2",
-    "content_commit": "c90d52f3",
-    "content_commit_subject": "NORM-REFS-RUN-01 API reseal on integration base c90d52f3",
-    "dispatch_named_commit": "c90d52f3",
+    "sha256": "7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c",
+    "content_commit": "c9469558",
+    "content_commit_subject": "NORM-REFS-RUN-01 API reseal on integration base c9469558",
+    "dispatch_named_commit": "c9469558",
     "commit_note": "NORM-REFS-RUN-01 adds the norms a run's saved text cites, checked against the norms snapshot the run pinned: getRunNormReferences (GET /runs/{run_id}/norm-references, any one role) and five schemas (RunNormReferences, NormReferenceCounts, NormReferenceItem, NormReferenceAnchor, NormReferenceUnrecognised): each distinct cited designation is one of in_corpus, newer_edition, older_edition_only, not_in_corpus or not_recognised, with the pages it occurs on and the corpus document it points at; a precondition that does not hold is one state (snapshot_not_pinned, text_unavailable, too_many_citations), never an empty list; the corpus documents whose designation the parser cannot read are listed; no finding, no severity, no error code is added.",
     "openapi_version": "3.1.0",
     "info_version": "1.0.0-draft.1",
-    "paths": 72,
-    "operations": 82,
-    "component_schemas": 240,
+    "paths": 73,
+    "operations": 83,
+    "component_schemas": 242,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "686ebea7b2efaf4332127ac0245fb87b2775ccd6e38f49db6a06776df535e6e2",
+    "snapshot_sha256": "7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "b7ceb85334147c4b56850110e6faea9091c390a1e1db451675986f99a7c2f348",
-      "index.ts": "1bc14000f3e320737e0eecd651a665de8a83d1db6b8c734550a67982de1b23f4",
-      "operations.gen.ts": "241497957e3173a0044e59a7c24c14553a1f35b78e538b667f2dcc8a810fb9a2",
-      "types.gen.ts": "c35cefd3804538122f43597616b0ee8de753c79196a9c5de7158ba5002579d4f"
+      "client.gen.ts": "3e3fa5db7a4e64b871152e2c410d63b2272356dbceec2a1277385948b30f05f2",
+      "index.ts": "a875b898fc39a0b5991011d3c4e2543a330c7b21d15a3335728098a03e24b156",
+      "operations.gen.ts": "c105dc4296af83c3e7fbe31e557424b0f6aba8ac59f7bd68599056210802f638",
+      "types.gen.ts": "17a390d7c274c484e757efeb95e27665a3760a10ba12f47052213272714fcafd"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
