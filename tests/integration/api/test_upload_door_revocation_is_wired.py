@@ -88,6 +88,18 @@ class _Documents:
         self.calls += 1
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Project")
 
+    def __getattr__(self, name: str) -> Any:  # pragma: no cover - never called
+        """Any other ``DocumentPort`` method is an operation this file never drives.
+
+        ``tests/integration/composition/test_every_port_implementation_is_whole.py`` (`D-74`)
+        reads every ``build_router(documents=...)`` in the tree and requires the class behind it
+        to carry the whole port, except a stand-in that answers to any attribute with a refusal
+        (a class with ``__getattr__`` "cannot be caught out by a missing method"). This stand-in
+        drives ``upload_document`` and nothing else, so it says so: a request that reaches another
+        operation fails loudly here instead of becoming an ``AttributeError`` behind a ``500``.
+        """
+        raise AssertionError(f"the D-176 wiring test does not drive DocumentPort.{name}")
+
 
 class _CountingCredentials:
     """The shipped credential adapter, plus a count of the account reads the seam makes."""
