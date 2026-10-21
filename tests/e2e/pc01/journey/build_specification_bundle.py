@@ -4,6 +4,7 @@
     python3 tests/e2e/pc01/journey/build_specification_bundle.py            # write the bundle
     python3 tests/e2e/pc01/journey/build_specification_bundle.py --check    # verify, write nothing
     python3 tests/e2e/pc01/journey/build_specification_bundle.py --install-recording
+    python3 tests/e2e/pc01/journey/build_specification_bundle.py --remove-recording
 
 `BETA-LIVE-JOURNEY-01`. «Оптимизация» prices the rows of an AR set's specification table and
 proposes cheaper analogs from a price list. The shipped baseline bundle
@@ -28,7 +29,9 @@ code `fixtures/recorded/text_analysis/build_fixtures.py` uses for the baseline -
 reproduces the baseline's own checksum first, as its control -- and writes the one file into
 the lane's worktree. **It is an untracked file in a tracked directory**: `git status` shows
 it, nothing commits it, and the journey's `start-specification-run` step is what says so
-when it is absent. The full gate does not run this journey.
+when it is absent. **Remove it (`--remove-recording`) before anything that wants a clean
+checkout** -- `tests/contract/test_alpha_acceptance_command.py` and the checkpoint tests refuse
+a tree with an untracked file. The full gate does not run this journey.
 
 Exit status: 0 done, 1 a check failed, 2 a usage or environment error.
 """
@@ -157,6 +160,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="verify the committed bundle, write nothing")
     parser.add_argument("--install-recording", action="store_true",
                         help="write the recording this bundle's run needs into the lane's worktree")
+    parser.add_argument("--remove-recording", action="store_true",
+                        help="remove that recording again (it is an untracked file in a tracked directory)")
     args = parser.parse_args(argv)
 
     fresh = build_bundle()
@@ -169,6 +174,19 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         key, _ = recording_for(fresh)
         print(f"specification bundle OK: {len(fresh)} bytes; request checksum {key}")
+        return 0
+    if args.remove_recording:
+        key, document = recording_for(BUNDLE_PATH.read_bytes() if BUNDLE_PATH.is_file() else fresh)
+        target = RECORDINGS / f"{key}.json"
+        rendered = json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        if not target.exists():
+            print(f"no recording to remove: {target.relative_to(REPO_ROOT)}")
+            return 0
+        if target.read_text(encoding="utf-8") != rendered:
+            print(f"{target} is not the file this tool writes; refusing to remove it", file=sys.stderr)
+            return 1
+        target.unlink()
+        print(f"removed {target.relative_to(REPO_ROOT)}")
         return 0
     if args.install_recording:
         committed = BUNDLE_PATH.read_bytes() if BUNDLE_PATH.is_file() else fresh
