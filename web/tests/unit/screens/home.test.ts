@@ -163,7 +163,7 @@ const RAW_MESSAGE = 'Сырое сообщение сервера, которо�
 
 function apiError(status: number, code: ErrorCode, retryable = false): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.0.0-draft.1',
+    contract_version: '1.0.0',
     error_code: code,
     message: RAW_MESSAGE,
     correlation_id: 'cid-home-1',

@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 44f3925535113a48f2468f4edbdbd9fca726027f34ce77cea18b1faf68931f3e
+ *   AuditManager PC-01 API 1.0.0 (OpenAPI 3.1.0)
+ *   sha256 741f29f9b0c9341cdf0631f0f65e462c7788945dd21002aa33afc54af7076eb8
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -1014,7 +1014,7 @@ export type GetVersionSectionReviewResult = SectionReview;
  *
  * **What this operation says about the credential it returns: nothing.** The response carries an opaque string and how long it stays valid. Its structure, what it encodes, and where the deployment got it are the deployment's own, are not described anywhere in this document, and are never parsed by a caller -- the same rule that keeps `bearerFormat` off `components.securitySchemes.bearerAuth`. A deployment that replaces a static string with something else changes no operation here.
  *
- * Nothing is created and nothing is changed, so there is no idempotency key: a repeat of the same exchange is a second exchange, not a replay of the first.
+ * Nothing is created and nothing is changed, so there is no idempotency key: a repeat of the same exchange is a second exchange, not a replay of the first. The edge in front of this surface counts the exchange per client address (six a minute, with a burst of ten) and answers `rate_limited` (`429`) itself, before the operation is reached; like the edge's own body-size refusal, that answer is not a response of the operation and is not declared here.
  */
 export type IssueTokenInput = {
   /** Request body, sent as `application/json`. */

@@ -48,8 +48,8 @@
     ],
     "body": {
       "kind": "text",
-      "length": 267,
-      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"validation_failed\", \"message\": \"The upload exceeds the maximum accepted size.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"file\", \"constraint\": \"max_bytes\"}}",
+      "length": 259,
+      "text": "{\"contract_version\": \"1.0.0\", \"error_code\": \"validation_failed\", \"message\": \"The upload exceeds the maximum accepted size.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"file\", \"constraint\": \"max_bytes\"}}",
       "note": ""
     }
   },

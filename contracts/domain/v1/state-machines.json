@@ -1,11 +1,11 @@
 {
   "contract": "auditmanager.domain.state-machines",
-  "contract_version": "1.0.0-draft.1",
-  "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 18,
-  "revision_note": "Candidate revision 18 by BETA-CONTRACT-SEAL-01 phase A. No machine or transition change; domain family moves with the two new error codes.",
-  "status": "draft_candidate",
-  "frozen": false,
+  "contract_version": "1.0.0",
+  "supersedes": "1.0.0-draft.1",
+  "candidate_revision": 19,
+  "revision_note": "Candidate revision 19 by BETA-CONTRACT-SEAL-01 phase B: the 1.0.0 seal of the closed-beta contract. The lifecycles are frozen as revision 18 left them; no machine or transition changes.",
+  "status": "frozen",
+  "frozen": true,
   "rules": [
     "A machine here is the single authoritative definition of its aggregate's lifecycle. Conflicting boolean flags never encode state.",
     "A transition that is not declared here is rejected with state_transition_not_allowed. There is no permissive default and no silent fallback.",

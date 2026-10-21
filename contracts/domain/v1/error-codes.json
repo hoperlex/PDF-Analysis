@@ -1,11 +1,11 @@
 {
   "contract": "auditmanager.domain.errors",
-  "contract_version": "1.0.0-draft.1",
-  "supersedes": "1.0.0-draft.0",
-  "candidate_revision": 18,
-  "revision_note": "Candidate revision 18 by BETA-CONTRACT-SEAL-01 phase A (D-179). Adds version_classification_required and section_profile_unavailable, the dedicated codes of the two run-start routing refusals that reused required_norm_unavailable with reference_kind version_classification and analysis_profile. No identifier or machine changes; the domain family moves with the catalogue.",
-  "status": "draft_candidate",
-  "frozen": false,
+  "contract_version": "1.0.0",
+  "supersedes": "1.0.0-draft.1",
+  "candidate_revision": 19,
+  "revision_note": "Candidate revision 19 by BETA-CONTRACT-SEAL-01 phase B: the 1.0.0 seal of the closed-beta contract. The catalogue is frozen at twenty-seven codes. rate_limited now also names the credential exchange the edge throttles. OPEN-RETENTION stays not_decided and the freeze declares no retention window. No code, identifier or machine changes.",
+  "status": "frozen",
+  "frozen": true,
   "envelope": {
     "required": [
       "contract_version",
@@ -515,8 +515,8 @@
         "W49-PLAN.md section 3.5"
       ],
       "notes": [
-        "Answered only by the edge in front of /api/v1 (the proxy's limit_req on POST /registrations and POST /registrations/status, W49-EDGE-01). The application itself never raises it and no column stores it, which is why the database's code vocabulary is the catalog minus this code.",
-        "The throttle is per client address and says nothing about any account or request, so the refusal carries no detail key: a key naming what was throttled would tell a stranger which login is under attack.",
+        "Answered only by the edge in front of /api/v1 (the proxy's limit_req on POST /registrations and POST /registrations/status, W49-EDGE-01, and, since HARDEN-AUTH-EDGE-01, on POST /auth/token, the credential exchange: its own zone, six a minute per client address with a burst of ten). The application itself never raises it and no column stores it, which is why the database's code vocabulary is the catalog minus this code.",
+        "The throttle is per client address and says nothing about any account or request, so the refusal carries no detail key: a key naming what was throttled would tell a stranger which login is under attack, whether the throttled call is a registration or the credential exchange.",
         "retryable is true because the same request succeeds once the window has passed; the status is 429 because the refusal is a rate, not a conflict with durable state."
       ]
     },
@@ -568,7 +568,7 @@
       "external_id": "U-04",
       "status": "not_decided",
       "statement": "idempotency_key_stale names the fail-closed outcome once a command record is unavailable. The retention window, legal-hold and tenant or identity-provider semantics that would decide when that happens are not declared by this contract.",
-      "gate": "Owner input U-04 (tenant model, identity provider, retention TTL matrix, legal-hold authority) recorded in docs/architecture/CP00_ARCHITECTURE_REVIEW.md section 11. It keeps ADR-0014 in proposed status. No numeric retention, TTL or legal-hold value may be declared by any lane before that input exists.",
+      "gate": "Owner input U-04 (tenant model, identity provider, retention TTL matrix, legal-hold authority) recorded in docs/architecture/CP00_ARCHITECTURE_REVIEW.md section 11. It keeps ADR-0014 in proposed status. No numeric retention, TTL or legal-hold value may be declared by any lane before that input exists. At the 1.0.0 freeze (BETA-CONTRACT-SEAL-01) this stays not_decided: the contract declares no retention window, TTL or legal-hold rule, and idempotency_key_stale names the fail-closed outcome without saying after how long it happens. Deciding one later is a compatible addition under VERSIONING_AND_FREEZE_POLICY.md (criterion B11 is deferred by R-141c).",
       "affects": [
         "idempotency_key_stale"
       ]

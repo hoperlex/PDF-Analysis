@@ -1105,8 +1105,10 @@ Rules that hold across the whole surface:
   `changePassword` raises that generation, which is how a credential already issued is taken
   back: see the same module. Who may take back whom is no longer an open vocabulary:
   `R-55` gives every account a role set drawn from `expert` and `admin`, and `R-60` decides
-  what each set reaches — product data is read by any active account with a complete
-  profile, product changes require `expert`, and account and registration-request
+  what each set reaches — product data is read by an active account with a complete
+  profile and at least one role (`R-80`; an account whose role set is empty is suspended and
+  reads only its own account, the product version and the release notes), product changes
+  require `expert`, and account and registration-request
   management require `admin` — per `operationId` in `OPERATION_ROLES` of the same module.
   So an administrator takes back another account's credentials through `archiveUser`,
   `resetUserPassword` or a change of its role set in `updateUser`, each of which raises the
@@ -1208,7 +1210,7 @@ and a confirmed section with no registered text profile, each with its own code 
 before the idempotency key is claimed; a draft reported both as `required_norm_unavailable` with
 `reference_kind` `version_classification` / `analysis_profile`.
 
-`unsupported_contract_version` — the surface carries one contract version.
+`unsupported_contract_version` — the surface carries one contract version, `1.0.0` since `BETA-CONTRACT-SEAL-01` (the domain, analysis and events families moved with it).
 
 ### 9.5 Deferred widenings, recorded so they are not rediscovered as bugs
 

@@ -40,8 +40,8 @@
     ],
     "body": {
       "kind": "text",
-      "length": 282,
-      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"validation_failed\", \"message\": \"This operation requires an Idempotency-Key header.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"Idempotency-Key\", \"constraint\": \"required\"}}",
+      "length": 274,
+      "text": "{\"contract_version\": \"1.0.0\", \"error_code\": \"validation_failed\", \"message\": \"This operation requires an Idempotency-Key header.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"Idempotency-Key\", \"constraint\": \"required\"}}",
       "note": ""
     }
   },
