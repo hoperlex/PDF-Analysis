@@ -71,6 +71,7 @@ from auditmanager.runs import InlineCarrier
 from auditmanager.storage import S3BlobStore
 
 from . import conftest as proposals
+from ..conftest import PASSWORD
 from .conftest import LAYER_SHA256, Reader, World, classify, global_vendors, upload
 
 SECRET = "d-185-measurement-deployment-secret"
@@ -223,7 +224,7 @@ def test_measure_one_start_optimisation_pass_at_the_bounds(
         raise_server_exceptions=False,
     )
     exchanged = client.post(
-        "/auth/token", json={"login": "anna@example.com", "password": proposals.PASSWORD}
+        "/auth/token", json={"login": "anna@example.com", "password": PASSWORD}
     )
     assert exchanged.status_code == 200, exchanged.text
     headers = {"Authorization": f"Bearer {exchanged.json()['token']}"}
