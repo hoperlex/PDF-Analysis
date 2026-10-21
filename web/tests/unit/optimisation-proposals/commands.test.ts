@@ -195,6 +195,67 @@ describe('deciding a proposal', () => {
     expect(keyOf(mock, 1)).not.toBe(keyOf(mock, 0));
   });
 
+  /**
+   * `WEB-FOLLOWUPS-01`: the live journey (`BETA-LIVE-JOURNEY-01`) pressed «Принять» twice before
+   * the page had re-rendered -- which is what disables the buttons -- and measured two identical
+   * `POST`s (both `201`, one decision id). The server was right; the browser sent the intent
+   * twice. A press that finds the same intent in flight sends nothing and shares the answer of
+   * the request already sent. One case per button, because each is its own handler.
+   */
+  describe.each([
+    ['accept', 'Принять', null],
+    ['reject', 'Отклонить', null],
+    ['revise', 'На доработку', 'Заменить марку.'],
+  ] as const)('a double press of %s («%s»)', (verdict, _label, comment) => {
+    const COMMAND: DecideOptimisationProposalCommand = { ...DECIDE, verdict, comment };
+
+    it('sends ONE request, and both presses get its answer', async () => {
+      let settle: (value: unknown) => void = () => undefined;
+      vi.mocked(decideOptimisationProposal).mockImplementation(
+        () => new Promise((resolve) => { settle = resolve; }) as never,
+      );
+      const hook = decideHook();
+      const first = hook.mutationFn(COMMAND);
+      const second = decideHook().mutationFn(COMMAND);
+      expect(vi.mocked(decideOptimisationProposal)).toHaveBeenCalledTimes(1);
+      const stored = { decision: decision(), proposal: proposal() };
+      settle({ data: stored });
+      await expect(first).resolves.toBe(stored);
+      await expect(second).resolves.toBe(stored);
+      expect(vi.mocked(decideOptimisationProposal)).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens the gate again when the request settles: a later press is a new command', async () => {
+      vi.mocked(decideOptimisationProposal).mockResolvedValue({ data: {} } as never);
+      await decideHook().mutationFn(COMMAND);
+      decideHook().onSuccess?.({ decision: decision(), proposal: proposal() }, COMMAND);
+      await decideHook().mutationFn(COMMAND);
+      expect(vi.mocked(decideOptimisationProposal)).toHaveBeenCalledTimes(2);
+    });
+
+    it('opens the gate after a refusal too, and the retry carries the same key', async () => {
+      vi.mocked(decideOptimisationProposal).mockRejectedValueOnce(new Error('lost answer'));
+      vi.mocked(decideOptimisationProposal).mockResolvedValue({ data: {} } as never);
+      const first = decideHook().mutationFn(COMMAND);
+      const second = decideHook().mutationFn(COMMAND);
+      await expect(first).rejects.toThrow('lost answer');
+      await expect(second).rejects.toThrow('lost answer');
+      expect(vi.mocked(decideOptimisationProposal)).toHaveBeenCalledTimes(1);
+      await decideHook().mutationFn(COMMAND);
+      const mock = vi.mocked(decideOptimisationProposal);
+      expect(mock).toHaveBeenCalledTimes(2);
+      expect(keyOf(mock, 1)).toBe(keyOf(mock, 0));
+    });
+  });
+
+  it('does not join a request for another intent: another verdict or comment is its own command', async () => {
+    vi.mocked(decideOptimisationProposal).mockImplementation(() => new Promise(() => undefined) as never);
+    void decideHook().mutationFn(DECIDE);
+    void decideHook().mutationFn({ ...DECIDE, verdict: 'reject' });
+    void decideHook().mutationFn({ ...DECIDE, comment: 'Другой комментарий.' });
+    expect(vi.mocked(decideOptimisationProposal)).toHaveBeenCalledTimes(3);
+  });
+
   it('has a signature that a comment containing the separator cannot collide', () => {
     const a = decisionSignature({ ...DECIDE, comment: 'x|accept' });
     const b = decisionSignature({ ...DECIDE, verdict: 'reject', comment: 'x|accept' });
