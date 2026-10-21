@@ -55,7 +55,7 @@ import { createElement } from 'react';
 import type { ReactElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { ApiError, queryKeys } from '@/shared/api';
+import { ApiError, TransportError, queryKeys } from '@/shared/api';
 import type {
   DashboardSummary,
   DecisionEvent,
@@ -93,7 +93,6 @@ import {
   DOCUMENT_PAGE_LIMIT, UPLOAD_CONSTRAINTS_STATED, UPLOAD_ENVELOPE_RULES, VERSION_PAGE_LIMIT, classifyUploadFailure,
   precheckProblemMessage,
 } from '@/entities/document-version';
-import { UPLOAD_CONSTRAINTS_ADDED } from '@/entities/document-version/model/upload-failure';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS, PROJECT_STRUCTURE_ORDER, projectSectionOf } from '@/entities/project';
 import type { AnalysisProfileListItem, CarryoverCandidate, VersionClassificationRevision } from '@/shared/api';
 import { ClassifyVersionFormView } from '@/features/classify-version';
@@ -3056,10 +3055,9 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     for (const problem of ['not_zip', 'too_large', 'empty_file'] as const) {
       rendered.push(precheckProblemMessage(problem));
     }
-    // `W55B-FIX`: the constraints the classifier states beyond the envelope's table.
+    // `D-173`: the envelope's one table, which since `WEB-FOLLOWUPS-01` holds `W55B-FIX`'s six too.
     for (const constraint of [
       ...UPLOAD_CONSTRAINTS_STATED,
-      ...UPLOAD_CONSTRAINTS_ADDED,
       '1 <= page_count <= 500',
       'byte_size <= 262144000',
     ]) {
@@ -3101,6 +3099,13 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         ),
       );
       rendered.push(busy.title, busy.detail);
+    }
+    // `WEB-FOLLOWUPS-01`: what the web server in front of the API said, in a user's words.
+    for (const status of [413, 502, 503, 504]) {
+      const edge = classifyUploadFailure(
+        new TransportError(`HTTP ${status}: тело ответа не является конвертом ошибки по контракту.`, { status }),
+      );
+      rendered.push(edge.title, edge.detail);
     }
     const offences = rendered
       .map((text) => ({ text, words: unexplainedLatin(text, VOCABULARY) }))
