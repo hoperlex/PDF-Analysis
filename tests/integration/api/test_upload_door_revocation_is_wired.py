@@ -280,6 +280,12 @@ def test_a_revoked_credentials_later_uploads_are_refused_before_the_body_and_wit
     admitted = _upload(served.app, held)
     assert (admitted.status, admitted.envelope["error_code"]) == (404, "not_found")
     assert served.documents.calls == 1 and admitted.body_reads >= 1
+    # So does the bystander's, twice: nothing the seam admits is ever written down.
+    for _ in range(2):
+        untouched = _upload(served.app, bystander)
+        assert (untouched.status, untouched.envelope["error_code"]) == (404, "not_found")
+        assert untouched.body_reads >= 1
+    assert served.documents.calls == 3
 
     REVOCATIONS[revoke](served, holder_uid, "holder@example.com")
     calls, reads, statements = served.documents.calls, served.credentials.standing_reads, len(served.statements)
@@ -311,6 +317,7 @@ def test_a_revoked_credentials_later_uploads_are_refused_before_the_body_and_wit
     still = _upload(served.app, bystander)
     assert (still.status, still.envelope["error_code"]) == (404, "not_found")
     assert still.body_reads >= 1 and served.documents.calls == calls + 1
+    assert _upload(served.app, bystander).body_reads >= 1 and served.documents.calls == calls + 2
 
 
 def test_a_later_generation_of_the_same_account_is_not_caught_by_the_old_entry(
