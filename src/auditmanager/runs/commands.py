@@ -74,10 +74,10 @@ composition root loaded from the text-profile registry -- and **no** profile or 
 own. ``start_audit_run`` and ``reaudit_run`` then read the version's **persisted**
 classification (``0024_version_classification``) in the run-creating transaction and route
 through :func:`auditmanager.sections.public.route_classified_version`: an unclassified
-version is ``required_norm_unavailable`` with ``reference_kind: version_classification``,
-a confirmed section with no registered profile the same code with ``reference_kind:
-analysis_profile``. There is no AR fallback: a suggestion, a file name and the legacy
-``document.section`` never reach this decision. Like the budget refusal, routing is
+version is ``version_classification_required``, a confirmed section with no registered
+profile ``section_profile_unavailable`` (`BETA-CONTRACT-SEAL-01`, `D-179`; both used to be
+``required_norm_unavailable`` told apart by ``reference_kind``). There is no AR fallback: a
+suggestion, a file name and the legacy ``document.section`` never reach this decision. Like the budget refusal, routing is
 decided after the version is read and **before** the key is claimed, so a refusal writes
 nothing; a key the ledger already knows replays the run it created, whose pinned profile is
 read back for the fingerprint rather than re-routed -- an existing run keeps its profile.

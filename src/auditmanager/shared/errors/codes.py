@@ -15,7 +15,7 @@ from auditmanager.shared.errors.catalog import CODES, UNKNOWN_INTERNAL_CODE
 
 
 class ErrorCode(str, Enum):
-    """Exactly the twenty-five codes of ``contracts/domain/v1/error-codes.json``."""
+    """Exactly the twenty-seven codes of ``contracts/domain/v1/error-codes.json``."""
 
     VALIDATION_FAILED = "validation_failed"
     NOT_FOUND = "not_found"
@@ -32,6 +32,12 @@ class ErrorCode(str, Enum):
     DEPENDENCY_CREDENTIAL_REFUSED = "dependency_credential_refused"
     STAGED_UPLOAD_LOST = "staged_upload_lost"
     REQUIRED_NORM_UNAVAILABLE = "required_norm_unavailable"
+    #: `BETA-CONTRACT-SEAL-01` (`D-179`). Answered by ``startRun`` and ``reauditRun`` before the
+    #: idempotency key is claimed: the version has no expert-confirmed stage and section.
+    VERSION_CLASSIFICATION_REQUIRED = "version_classification_required"
+    #: `BETA-CONTRACT-SEAL-01` (`D-179`). Answered by those operations at the same moment: the
+    #: confirmed section has no registered text profile.
+    SECTION_PROFILE_UNAVAILABLE = "section_profile_unavailable"
     ANALYSIS_INPUT_INVALID = "analysis_input_invalid"
     ANALYSIS_FAILED = "analysis_failed"
     PARTIAL_RESULT_NOT_PUBLISHABLE = "partial_result_not_publishable"

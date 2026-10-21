@@ -449,7 +449,8 @@ class TestRuns:
         assert _correct(client, token, path, "R", "PB", REASON, 1).status_code == 201
         refused = _start(client, token, world.pb, _key())
         assert refused.status_code == 422, refused.content
-        assert refused.json()["details"] == {"reference_kind": "analysis_profile"}
+        assert refused.json()["error_code"] == "section_profile_unavailable"
+        assert "details" not in refused.json()
         assert carrier.submitted == []
 
     def test_a_reaudit_routes_from_the_corrected_section_and_the_source_keeps_its_pin(

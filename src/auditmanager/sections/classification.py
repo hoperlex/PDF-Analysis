@@ -58,8 +58,6 @@ from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
 
 __all__ = [
     "CONFLICT_VERSION_ALREADY_CLASSIFIED",
-    "REFERENCE_KIND_ANALYSIS_PROFILE",
-    "REFERENCE_KIND_VERSION_CLASSIFICATION",
     "ClassifiedRoute",
     "ReviewFacts",
     "SECTION_CODES",
@@ -73,10 +71,6 @@ __all__ = [
 
 #: ``conflict`` detail: the version already holds a different stage or section.
 CONFLICT_VERSION_ALREADY_CLASSIFIED: Final[str] = "version_already_classified"
-#: ``required_norm_unavailable`` details: what could not be resolved at run start.
-REFERENCE_KIND_VERSION_CLASSIFICATION: Final[str] = "version_classification"
-REFERENCE_KIND_ANALYSIS_PROFILE: Final[str] = "analysis_profile"
-
 #: The fifteen section codes, from the one reviewed catalogue this package owns.
 SECTION_CODES: Final[frozenset[str]] = frozenset(entry.code for entry in _catalogue())
 
@@ -380,14 +374,14 @@ def route_classified_version(
     """Route a run from the version's persisted classification, or refuse.
 
     ``profiles`` is the sealed section-to-``(analysis_profile_id, prompt_bundle_id)`` table
-    the composition root loaded. Refusals are ``required_norm_unavailable``:
-    ``reference_kind: version_classification`` when the version has no (consistent) stage and
-    section, ``analysis_profile`` when the confirmed section has no registered profile.
-    There is no AR fallback: a missing route is a refusal, never a default.
+    the composition root loaded. Each refusal has its own code (`BETA-CONTRACT-SEAL-01`,
+    `D-179`): ``version_classification_required`` when the version has no (consistent) stage
+    and section, ``section_profile_unavailable`` when the confirmed section has no registered
+    profile. There is no AR fallback: a missing route is a refusal, never a default.
     """
     classification = version.classification
     if classification is None:
-        raise _unroutable(REFERENCE_KIND_VERSION_CLASSIFICATION)
+        raise _unroutable(ErrorCode.VERSION_CLASSIFICATION_REQUIRED)
     confirmation = ExpertSectionConfirmation(
         version_uid=str(classification.version_uid),
         code=classification.section_code,
@@ -402,12 +396,12 @@ def route_classified_version(
             available_profiles={code: pair[0] for code, pair in profiles.items()},
         )
     except SectionRouteUnavailable as refusal:
-        kind = (
-            REFERENCE_KIND_ANALYSIS_PROFILE
+        code = (
+            ErrorCode.SECTION_PROFILE_UNAVAILABLE
             if str(refusal) in _PROFILE_REASONS
-            else REFERENCE_KIND_VERSION_CLASSIFICATION
+            else ErrorCode.VERSION_CLASSIFICATION_REQUIRED
         )
-        raise _unroutable(kind) from None
+        raise _unroutable(code) from None
     analysis_profile_id, prompt_bundle_id = profiles[route.section_code]
     return ClassifiedRoute(
         route=route,
@@ -416,17 +410,15 @@ def route_classified_version(
     )
 
 
-def _unroutable(kind: str) -> DomainError:
+def _unroutable(code: ErrorCode) -> DomainError:
     message = (
         "this version has no expert classification (project stage and section), so no "
         "analysis profile can be selected; classify it first"
-        if kind == REFERENCE_KIND_VERSION_CLASSIFICATION
+        if code is ErrorCode.VERSION_CLASSIFICATION_REQUIRED
         else "the version's confirmed section has no registered text profile, so a run "
         "cannot start; no other section's profile is substituted"
     )
-    return DomainError(
-        ErrorCode.REQUIRED_NORM_UNAVAILABLE, message=message, reference_kind=kind
-    )
+    return DomainError(code, message=message)
 
 
 #: A reader of one manifest entry's bytes as text, supplied by the composition root.

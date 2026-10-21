@@ -665,9 +665,9 @@
     ]
   },
   "error_catalog": {
-    "api_codes": 25,
-    "stored_vocabulary": 23
+    "api_codes": 27,
+    "stored_vocabulary": 25
   },
-  "migration_head": "0028_classification_corrections",
+  "migration_head": "0029_routing_refusal_codes",
   "contract_version": "1.0.0-draft.1"
 }

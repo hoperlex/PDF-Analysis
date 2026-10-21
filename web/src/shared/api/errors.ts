@@ -2,7 +2,7 @@
  * The typed failure surface of the API client.
  *
  * The contract has exactly one failure shape — the `ErrorEnvelope` — and one closed
- * twenty-five-code catalog. This module turns a non-2xx response into one of three things
+ * twenty-seven-code catalog. This module turns a non-2xx response into one of three things
  * and never into anything else:
  *
  *   - `ApiError`            the body was a valid envelope carrying a catalog code;
@@ -63,6 +63,10 @@ export const PC01_ERROR_CODES = [
   'analysis_input_invalid',
   // `W55B-SEAL-01` (R-118): `startRun` and `reauditRun` refuse an over-budget version up front.
   'analysis_input_budget_exceeded',
+  // `BETA-CONTRACT-SEAL-01` (`D-179`): `startRun` and `reauditRun` refuse a version whose
+  // analysis profile cannot be routed, each cause with its own code.
+  'version_classification_required',
+  'section_profile_unavailable',
   'not_found',
   'authentication_required',
   'permission_denied',

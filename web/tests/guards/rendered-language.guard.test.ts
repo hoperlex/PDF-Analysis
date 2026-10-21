@@ -2669,6 +2669,14 @@ export const CACHE_STATES: readonly {
   { state: 'cold', run: null },
   { state: 'loaded', run: {} },
   { state: 'failed-run', run: { state: 'failed', terminal_reason: 'analysis_failed', published_finding_count: 0 } },
+  /*
+   * `BETA-CONTRACT-SEAL-01` (`D-179`). The two run-routing codes can name a stopped run's reason
+   * only if a later path stores one (the stored vocabulary admits them), and `terminal-reason.ts`
+   * has a sentence for each. A screen that renders that sentence is judged here like any other,
+   * so an English word in either one reddens the guard instead of waiting for a stored row.
+   */
+  { state: 'failed-run-unclassified', run: { state: 'failed', terminal_reason: 'version_classification_required', published_finding_count: 0 } },
+  { state: 'failed-run-no-profile', run: { state: 'failed', terminal_reason: 'section_profile_unavailable', published_finding_count: 0 } },
   { state: 'partial-run', run: { state: 'partial', degradation_set: ['text_analysis'] } },
   { state: 'running', run: { state: 'running', terminal_at: null, published_finding_count: 0 } },
   { state: 'refused', run: null },

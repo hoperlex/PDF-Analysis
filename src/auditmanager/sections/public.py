@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from auditmanager.sections.classification import (
     CONFLICT_VERSION_ALREADY_CLASSIFIED,
-    REFERENCE_KIND_ANALYSIS_PROFILE,
-    REFERENCE_KIND_VERSION_CLASSIFICATION,
     SECTION_CODES,
     ClassifiedRoute,
     RecognisedTextReader,
@@ -48,8 +46,6 @@ __all__ = [
     "CONFLICT_VERSION_NOT_CLASSIFIED",
     "MAX_REASON_LENGTH",
     "ORIGINAL_REVISION",
-    "REFERENCE_KIND_ANALYSIS_PROFILE",
-    "REFERENCE_KIND_VERSION_CLASSIFICATION",
     "SECTION_CODES",
     "ClassificationRevision",
     "ClassifiedRoute",

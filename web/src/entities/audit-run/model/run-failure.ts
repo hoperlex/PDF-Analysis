@@ -12,9 +12,10 @@
  * declared analysis inputs are not acceptable, the second says the request was malformed,
  * and collapsing them would hide which one the operator has to fix.
  *
- * `W59-SECTION-UI-01`: `required_norm_unavailable` is a refusal with no run behind it, and
- * the two kinds the section seal added — no confirmed classification, no profile for the
- * confirmed section — get their own sentences (`./routing-refusal.ts`). Neither offers the
+ * `W59-SECTION-UI-01`: the two refusals the section seal added — no confirmed classification,
+ * no profile for the confirmed section — have no run behind them and get their own sentences
+ * (`./routing-refusal.ts`). They are the catalog codes `version_classification_required` and
+ * `section_profile_unavailable` since `BETA-CONTRACT-SEAL-01` (`D-179`). Neither offers the
  * АР profile or any other section in its place.
  */
 
@@ -30,7 +31,11 @@ import {
 } from '@/shared/api';
 
 import { inputBudgetSentence } from './input-budget';
-import { routingRefusal } from './routing-refusal';
+import {
+  SECTION_PROFILE_UNAVAILABLE_REFUSAL,
+  VERSION_UNCLASSIFIED_REFUSAL,
+  type RoutingRefusal,
+} from './routing-refusal';
 
 export type RunFailureKind =
   | 'request_invalid'
@@ -78,6 +83,24 @@ function classifiers(
   return parts.length === 0 ? '' : ` (${parts.join(', ')})`;
 }
 
+/**
+ * A routing refusal (`./routing-refusal.ts`): refused before a run exists, and the same request
+ * is refused again until something changes outside it — so `unsupported`, the tone that offers
+ * no retry.
+ */
+function routed(
+  base: Pick<RunFailure, 'correlationId' | 'retryable' | 'errorCode'>,
+  refusal: RoutingRefusal,
+): RunFailure {
+  return {
+    ...base,
+    kind: refusal.kind,
+    presentation: 'unsupported',
+    title: refusal.title,
+    detail: refusal.detail,
+  };
+}
+
 function fromApiError(error: ApiError): RunFailure {
   const base = {
     correlationId: error.correlationId,
@@ -122,19 +145,13 @@ function fromApiError(error: ApiError): RunFailure {
           ' Повтор с тем же текстом получит тот же отказ.',
       };
     }
+    case 'version_classification_required':
+      return routed(base, VERSION_UNCLASSIFIED_REFUSAL);
+    case 'section_profile_unavailable':
+      return routed(base, SECTION_PROFILE_UNAVAILABLE_REFUSAL);
     case 'required_norm_unavailable': {
       // Refused before a run exists, and the same request is refused again until something
       // changes outside it — so `unsupported`, the tone that offers no retry.
-      const routing = routingRefusal(error.details);
-      if (routing !== null) {
-        return {
-          ...base,
-          kind: routing.kind,
-          presentation: 'unsupported',
-          title: routing.title,
-          detail: routing.detail,
-        };
-      }
       return {
         ...base,
         kind: 'reference_unavailable',

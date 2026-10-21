@@ -31,6 +31,16 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `BETA-CONTRACT-SEAL-01` for ``0029_routing_refusal_codes``, measured, not
+#: predicted: two fresh databases on the lane's PostgreSQL 17 + pgvector stack, one upgraded to
+#: ``0028`` (whose inventory equalled the 0028 seal below in every family) and one to ``0029``,
+#: had every family's rows diffed. One family moved and by exactly the migration's DDL:
+#: constraints stay 657 with no row added or removed, and four rows are redefined --
+#: ``ck_command_record_error_code``, ``ck_audit_run_terminal_reason``, ``ck_model_call_error_code``
+#: and ``ck_provider_effect_error_code`` -- each by the same two quoted codes,
+#: ``version_classification_required`` and ``section_profile_unavailable``, and by nothing else.
+#: Columns, relations, indexes, triggers, functions, views, extensions, sequences, policies and
+#: the state topology are identical to the 0028 seal.
 #: Resealed by `CLASSIFICATION-CORRECTION-01` for ``0028_classification_corrections``, measured,
 #: not predicted: a fresh upgrade of the lane's PostgreSQL 17 + pgvector stack, whose per-family
 #: counts were taken against the 0027 seal below, and the whole of 0028 was shown to be the
@@ -189,7 +199,7 @@ from sqlalchemy import Engine, text
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
     "columns": (606, "c91cfd648e0be2756288f49ddc30c0498e173a2bd0baa6597698901479b449f1"),
     "relations": (66, "ab9583ece4619d4e3fe91db0138a3d3f2b92f4f325e4b4929495b14a7513aa45"),
-    "constraints": (657, "d8fb5c83e087d76d019e9544f8058ec66cdd62efd93cac5b7500456f6855293b"),
+    "constraints": (657, "6fd8a81e1063f0fa33f6caae92ae028af23295164c3d6cd8e9f15a8a74fca9fe"),
     "indexes": (153, "d711d788b8705b85b60ac1ec2985f517fbbeb76550af4ddf768ed60b6278e6b9"),
     "triggers": (72, "0b774f0595de5f670a36594fb286e3089fa11692d1e7379ad1cf9ea260fe8f14"),
     "functions": (31, "62391d05e0e1c209227d158d95097c68ce2356ae5f096931dff6b2f69c72f4bd"),

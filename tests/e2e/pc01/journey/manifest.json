@@ -1041,7 +1041,7 @@
         "$comment": [
           "W59-SECTION-UI-01. Since W59-SECTION-SEAL-01 a run is routed from the version's",
           "expert-confirmed stage and section, and an unclassified version is refused with",
-          "422 required_norm_unavailable (reference_kind: version_classification) before any run",
+          "422 version_classification_required before any run",
           "exists. So the journey confirms one, the way a user does: on the version screen it has",
           "just landed on, it chooses the stage П (design documentation) and the section АР -- the",
           "fixture is the AR baseline bundle -- and presses the panel's own confirm button.",
