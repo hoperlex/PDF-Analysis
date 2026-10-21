@@ -260,17 +260,17 @@ built against the masks is unmeasured; only `cheaper_analog` exists and LLM prop
 ## 4. Checks
 
 All on this lane's stack (`auditmanager-api-followups`, ports 57780 / 61400 / 61401), one pytest process at a time, the tree
-committed before each run, pytest's own exit status (never a pipe's). The final-tip results are in the lane's hand-back message.
+committed before each run, pytest's own exit status (never a pipe's). Results are at the tip before this section was last edited (`28cab0e6`).
 
 | Command | Result |
 |---|---|
 | `git diff --check origin/dev..HEAD` | exit 0 |
-| `pytest tests/contract` with `--ignore` of `test_cp00_candidate.py`, `test_cp00_final_state.py`, `test_validate_bootstrap.py` | 983 passed at the first commit of this lane; rerun at the tip in the hand-back |
-| `pytest tests/unit/optimisation` | 328 passed |
+| `pytest tests/contract` with `--ignore` of `test_cp00_candidate.py`, `test_cp00_final_state.py`, `test_validate_bootstrap.py` | 983 passed, 19 283 subtests, exit 0 (1 min 17 s) |
+| `pytest tests/unit/optimisation` | 328 passed, exit 0 |
 | `pytest tests/integration/api` (upload door, authorization, surface, journey) | 658 passed (7 min 49 s), exit 0 |
-| `pytest tests/integration/optimisation` | 102 passed at the first commit; rerun at the tip in the hand-back |
+| `pytest tests/integration/optimisation` | 102 passed, exit 0 (1 min 25 s) |
 | `pytest tests/integration/access` | 246 passed, exit 0 |
-| the new `D-176` file, then each of W1 to W7 | 5 passed; each mutation fails it (section 2.3) |
+| the two upload-door files (`..._is_wired.py` and `test_upload_front_door_credentials.py`) | 26 passed, exit 0; each of W1 to W7 fails the first (section 2.3) |
 | the new generator and matcher files, then each of G1 to G17 and M1 to M3 | pass; each mutation fails one (section 3.5) |
 
 Skipped, by `AGENTS.md` section 8 and the lane's brief: the full gate, the e2e suites, the web battery, the stand.
