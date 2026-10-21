@@ -166,8 +166,37 @@ the list is one sentence.
   are ignored by every official target and are red in this lane for reasons that predate it (a frozen
   stage-registry digest; no `jsonschema` in the runtime interpreter).
 
-## Pending after the gate window
+## Phase B checks (on `3a9c72d7`, the merge of `origin/dev` 06591a52, committed tree)
 
-Contrast census (`tests/unit/styles`), `tests/unit/norm-references`, the focused PostgreSQL suite
-`tests/integration/runs/test_reference_norm_references_db.py`, the container-free
-`tests/integration/api/test_norm_references_surface.py`, and the quoted phase B mutations.
+| Command | Result |
+| --- | --- |
+| `npm --prefix web ci` | 184 packages |
+| `npm --prefix web run typecheck`, `npm --prefix web run lint -- --quiet` | clean |
+| `npm --prefix web run api:verify` | OK, 82 operations (on the pre-merge tree; the generated files are unchanged by the merge) |
+| `vitest run tests/unit/styles tests/unit/norm-references` | 84 passed (the contrast census reaches every new rule; the mount test is in this set) |
+| `vitest run tests/unit/screens tests/guards tests/contract` | 756 passed (rendered-language guard, frontend lock, lazy boundary, drift) |
+| `pytest tests/contract` with the three official `--ignore` flags | 940 passed, 1 failed: `test_doc_prose_facts` states 71/81/235 only in `docs/program/CURRENT_STATE.md`, which is the integrator's and was not edited |
+| container-free: `test_norm_references_surface.py`, `tests/unit/norms/references`, `tests/integration/runs/test_reference_norm_references*.py`, `test_reference_pipeline.py`, `test_reference_resolution.py`, `tests/contract/architecture` | 170 passed |
+| PostgreSQL, own containers (postgres 57680), `test_reference_norm_references_db.py` + `test_snapshot_catalogue_db.py` | 21 passed |
+| PostgreSQL, same containers, the suites whose literals this task moved: `test_role_register.py`, `test_authorization.py`, `test_an_absent_parent_is_not_an_empty_page.py`, `test_every_port_implementation_is_whole.py`, `test_served_document_and_health_plane.py`, `test_router_answers.py` | all passed (the absent-parent sweep drives the new route to `404 not_found` for an absent run) |
+
+The stack was brought up once for those runs (free memory and load measured first), then `make down`
+and both lane volumes removed.
+
+## Phase B mutation proofs
+
+Each row is one quoted mutation of a committed file, applied alone, the focused tests run, the file
+restored. All nine are killed.
+
+| # | File | Mutation | Killed by |
+| --- | --- | --- | --- |
+| 1 | `api/routers/runs.py` | `answer.model_dump(mode="json", exclude_unset=True)` -> `answer.model_dump(mode="json")` | `test_norm_references_surface.py`: a non-ready answer would carry `null` properties |
+| 2 | `bootstrap/adapters.py` | `if item.matched_title is not None: shown["matched_title"] = ...` -> unconditional assignment | `test_a_ready_answer_carries_every_property_and_validates` |
+| 3 | `api/security.py` | `"getRunNormReferences": _ANY_ROLE` -> `_EXPERT` | `test_the_operation_is_served_for_any_one_role_and_declares_no_422` |
+| 4 | `contracts/api/v1/openapi.json` | property `unread_pages` renamed in the contract only | `test_openapi_conformance_live.py`: the served document disagrees with the contract |
+| 5 | `entities/norm-reference/model/presentation.ts` | `not_in_corpus: 'нет в корпусе'` -> `'not in the corpus'` | the rendered-language guard (R-18) and the labels test |
+| 6 | `widgets/run-progress/ui/run-progress.tsx` | `isTerminalRunState(status.state) ? <NormReferencesSection/> : null` -> always | `run-progress-mount.test.ts`: a created run does not carry the section |
+| 7 | `entities/norm-reference/model/presentation.ts` | `const hidden = occurrenceCount - anchors.length;` -> `0` | the places test («и ещё N») |
+| 8 | `widgets/norm-references/ui/norm-references-answer.tsx` | `routes.normDocument(documentId)` -> a fixed id | the row test: the link points at the matched norm only |
+| 9 | `tests/unit/styles/screens.ts` | the census no longer renders `NormReferencesAnswer` | `contrast.test.ts`: names the unreached colour-bearing rules |
+
