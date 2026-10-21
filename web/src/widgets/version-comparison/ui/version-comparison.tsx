@@ -29,6 +29,7 @@
 import { useState } from 'react';
 
 import type {
+  CarryOverDecisionResponse,
   DiffHunk,
   DocumentUid,
   DocumentVersion,
@@ -62,7 +63,7 @@ import {
   useVersionList,
   versionLabel,
 } from '@/entities/document-version';
-import { CarryOverDecision } from '@/features/carry-over-decision';
+import { CarriedDecisionNote, CarryOverDecision } from '@/features/carry-over-decision';
 
 import styles from './version-comparison.module.css';
 
@@ -112,6 +113,10 @@ function SetComparison({
   const [chosenUid, setChosenUid] = useState<string | null>(null);
   const [stageMode, setStageMode] = useState(false);
   const [diffOffset, setDiffOffset] = useState(0);
+  // Answers of carries completed on this screen, by the newer finding that received the
+  // decision. The comparison is read again after a carry and then no longer lists the row as a
+  // candidate, so the row's own state -- «Решение перенесено» -- would vanish with it.
+  const [carried, setCarried] = useState<CarriedAnswers>({});
 
   const others = (list.data?.items ?? []).filter((item) => item.version_uid !== current.version_uid);
   const chosen = others.length === 0
@@ -204,6 +209,8 @@ function SetComparison({
           comparison={comparison.data}
           onPage={setDiffOffset}
           carry={mayCarry ? { projectUid, documentUid: current.document_uid } : null}
+          carried={carried}
+          onCarried={(answer) => setCarried((held) => ({ ...held, [answer.event.finding_uid]: answer }))}
         />
       )}
     </section>
@@ -227,14 +234,21 @@ interface CarryContext {
   readonly documentUid: DocumentUid;
 }
 
-function ComparisonResult({
+/** Completed carries by the finding that received the decision. */
+export type CarriedAnswers = Readonly<Record<string, CarryOverDecisionResponse>>;
+
+export function ComparisonResult({
   comparison,
   onPage,
   carry,
+  carried = {},
+  onCarried,
 }: {
   readonly comparison: Comparison;
   readonly onPage: (offset: number) => void;
   readonly carry: CarryContext | null;
+  readonly carried?: CarriedAnswers;
+  readonly onCarried?: (answer: CarryOverDecisionResponse) => void;
 }) {
   if (comparison.outcome === 'refused' || comparison.refusal !== null) {
     return (
@@ -268,7 +282,13 @@ function ComparisonResult({
         <SheetDiffs page={comparison.sheet_diffs} onPage={onPage} />
       )}
       {comparison.findings === null ? null : (
-        <FindingProposals findings={comparison.findings} comparison={comparison} carry={carry} />
+        <FindingProposals
+          findings={comparison.findings}
+          comparison={comparison}
+          carry={carry}
+          carried={carried}
+          onCarried={onCarried}
+        />
       )}
     </div>
   );
@@ -426,12 +446,18 @@ function CarryCell({
   proposal,
   comparison,
   carry,
+  carried,
+  onCarried,
 }: {
   readonly findings: NonNullable<Comparison['findings']>;
   readonly proposal: FindingMatchProposal;
   readonly comparison: Comparison;
   readonly carry: CarryContext | null;
+  readonly carried: CarriedAnswers;
+  readonly onCarried: ((answer: CarryOverDecisionResponse) => void) | undefined;
 }) {
+  const done = proposal.target_finding === null ? undefined : carried[proposal.target_finding.finding_uid];
+  if (done !== undefined) return <CarriedDecisionNote result={done} />;
   const candidate = carryoverCandidateOf(findings, proposal);
   if (candidate === null || proposal.target_finding === null) return <span>—</span>;
   if (carry === null) {
@@ -453,6 +479,7 @@ function CarryCell({
         candidate,
         targetRunId: comparison.target?.run_id ?? null,
       }}
+      onCarried={onCarried}
     />
   );
 }
@@ -461,10 +488,14 @@ function FindingProposals({
   findings,
   comparison,
   carry,
+  carried,
+  onCarried,
 }: {
   readonly findings: NonNullable<Comparison['findings']>;
   readonly comparison: Comparison;
   readonly carry: CarryContext | null;
+  readonly carried: CarriedAnswers;
+  readonly onCarried: ((answer: CarryOverDecisionResponse) => void) | undefined;
 }) {
   return (
     <>
@@ -504,6 +535,8 @@ function FindingProposals({
                       proposal={proposal}
                       comparison={comparison}
                       carry={carry}
+                      carried={carried}
+                      onCarried={onCarried}
                     />
                   </td>
                 </tr>

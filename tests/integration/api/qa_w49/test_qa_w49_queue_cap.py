@@ -14,6 +14,7 @@ from __future__ import annotations
 from sqlalchemy import Engine, text
 
 from auditmanager.access.passwords import hash_password
+from auditmanager.access.queue_lock import QUEUE_LOCK_KEY
 from auditmanager.shared.identity.ids import RegistrationRequestId
 
 from .qa_kit import (
@@ -120,8 +121,11 @@ def test_two_applications_racing_for_the_last_place_get_one(migrated_engine: Eng
     # what is asserted is the outcome, never the interleaving.
     answers, _forced = race(
         migrated_engine,
-        hold="SELECT pg_advisory_xact_lock(1380272977)",  # 0x52454751, the queue's own key
-        params={},
+        # The queue's own key, imported: this line used to spell it as the decimal 1380272977,
+        # which is 0x52454B51 and not 0x52454751 (1380271953), so the hold took a lock nothing
+        # waits on and the race was never forced (`D-147`).
+        hold="SELECT pg_advisory_xact_lock(:key)",
+        params={"key": QUEUE_LOCK_KEY},
         calls=[lambda: submit(left, first), lambda: submit(right, second)],
     )
     report = [(answer.status, answer.body) for answer in answers]

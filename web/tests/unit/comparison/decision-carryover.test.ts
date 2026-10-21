@@ -33,6 +33,7 @@ import {
 } from '@/entities/document-version';
 import { CarryOverDecisionView } from '@/features/carry-over-decision';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
+import { ComparisonResult } from '@/widgets/version-comparison';
 
 import { newClient, renderScreen } from '../screens/harness';
 
@@ -245,5 +246,45 @@ describe('the confirmation shows what would be carried and where', () => {
     expect(visible(markup)).toContain(CARRYOVER_CONFLICT_TEXT.carryover_target_already_decided);
     expect(visible(markup)).toContain('cid-carryover');
     expect(visible(markup)).toContain('Перенести решение');
+  });
+});
+
+describe('a carried decision stays on the screen after the comparison is read again (BETA-LIVE-JOURNEY-01)', () => {
+  // After a carry the comparison is asked again, and the server -- the newer finding now has a
+  // decision -- no longer lists the row as a candidate. The live journey carried a decision and
+  // found a «—» where the answer had been. The widget keeps the answer by the finding that
+  // received the decision and shows it in the row's place.
+  const answer = {
+    event: { decision_id: `dec_${ULID.slice(0, -1)}9`, finding_uid: TARGET_FINDING,
+      finding_observation_id: `fobs_${ULID}`, event_type: 'accept' as const, verdict: 'accepted' as const,
+      comment: 'Решение перенесено.', author_label: 'Иванова Е. В.', recorded_at: '2026-10-20T09:00:00Z' },
+    current_verdict: 'accepted' as const, replayed: false, source_finding_uid: SOURCE_FINDING,
+    source_decision_id: CANDIDATE.source_decision.decision_id, source_version_uid: OLDER,
+    source_version_ordinal: 1, target_version_uid: NEWER, mode: 'version' as const,
+  };
+
+  function after(carried: Record<string, typeof answer>): string {
+    // The comparison as it is read again: the same row, and no candidate.
+    return renderScreen(
+      newClient(),
+      createElement(ComparisonResult, {
+        comparison: compared([]),
+        onPage: () => undefined,
+        carry: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID },
+        carried,
+      }),
+    );
+  }
+
+  it('shows the answer in the row the candidate left', () => {
+    const markup = after({ [TARGET_FINDING]: answer });
+    expect(markup).toContain('data-carryover-state="carried"');
+    expect(visible(markup)).toContain('Решение перенесено: замечание более поздней версии — принято.');
+    expect(markup.match(/data-carryover-state="carried"/g)).toHaveLength(1);
+  });
+
+  it('shows nothing where nothing was carried', () => {
+    expect(after({})).not.toContain('data-carryover-state');
+    expect(after({ [OTHER_TARGET]: answer })).not.toContain('data-carryover-state');
   });
 });

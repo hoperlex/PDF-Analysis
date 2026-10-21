@@ -25,9 +25,28 @@ anchors that are unambiguous in plain text:
 * **Multi-line names.** A line without an anchor after a row continues that row's
   description (at most :data:`MAX_CONTINUATION_LINES`); a short group heading
   (``Оборудование``, ``Материалы``) labels the rows after it instead.
+* **Cells that wrap above their anchor line** (`SPEC-TABLE-RECORDING-01`). A cell centred
+  vertically puts its first lines *above* the line that carries the position, unit and
+  quantity. Those lines would continue the row above (or be reported as text before the first
+  row), so a row whose own fragment cannot open a name -- it does not begin with a capitalised
+  word (a lower-case word, a mark, an abbreviation, a size) -- takes the lines directly above
+  it back, up to and including the nearest line that opens a name (a capitalised word), at
+  most :data:`MAX_CONTINUATION_LINES` up. With no such line, or a fragment that can open a
+  name, nothing moves: the lines stay where they were.
+* **A table continued onto the next page without a repeated header.** The next page continues
+  the previous page's table when that table ran to the end of its page (its last row, then
+  nothing but the stamp), the page opens with nothing but column numbers, a group heading or a
+  «Продолжение» line before its first row, that row parses under the same header, and either
+  the position numbering goes on (the next integer) or the page says «Продолжение». Its rows
+  belong to the same table (same ordinal, ``DetectedTable.continued_on``). Anything else is
+  today's behaviour: the table ends with its page.
+* **Manufacturer.** When the header names a manufacturer column and the row's own fragment
+  holds a legal form (``ООО``, ``АО``…) after at least one word, the text from the legal form
+  to the end of the fragment is the row's ``manufacturer`` -- the last cell of the description,
+  by the Form-7 order. The type/mark and the code are *not* split: nothing in plain text
+  separates them from the name or from each other.
 * **End of a table.** A stamp line, ``Примечание``/a numbered note, the next header, more
   than :data:`MAX_UNANCHORED_RUN` lines in a row without an anchor, or the end of the page.
-  A table never continues onto another page.
 
 In a text layer the description holds the name **and** whatever type/mark, code and
 manufacturer cells the row has, in the Form-7 order -- they cannot be told apart without
@@ -48,13 +67,14 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Final
 
 __all__ = [
     "EXTRACTION_ALGORITHM",
     "FORM7_COLUMNS",
+    "LEGAL_FORMS",
     "MAX_CONTINUATION_LINES",
     "MAX_LISTED_SKIPS",
     "MAX_LISTED_TABLES",
@@ -75,6 +95,7 @@ __all__ = [
     "SpecificationRow",
     "canonical_unit",
     "extract_specification",
+    "strip_legal_form",
 ]
 
 EXTRACTION_ALGORITHM: Final[str] = "specification-text-v1"
@@ -188,6 +209,42 @@ def _words(text: str) -> str:
 
 def _compact(text: str) -> str:
     return re.sub(r"\s+", "", text.lower().replace("ё", "е"))
+
+
+#: Legal forms that open a manufacturer's name in a Form-7 cell (a closed list; ``OOO`` is the
+#: Latin spelling of the same letters).
+LEGAL_FORMS: Final[frozenset[str]] = frozenset({
+    "ООО", "OOO", "ОАО", "ЗАО", "ПАО", "АО", "ИП", "НПО", "НПП", "НПК", "НПФ", "ТОО", "ОДО",
+    "ЧП", "ФГУП", "ГУП", "МУП",
+})
+_QUOTES: Final[str] = "«»\"'„“”(),;:."
+
+
+def _is_legal_form(token: str) -> bool:
+    return token.strip(_QUOTES).upper() in LEGAL_FORMS
+
+
+def strip_legal_form(text: str) -> str:
+    """``text`` without a leading legal form (``ООО «Промет»`` -> ``«Промет»``)."""
+    tokens = text.split()
+    if len(tokens) >= 2 and _is_legal_form(tokens[0]):
+        return " ".join(tokens[1:])
+    return text
+
+
+def _manufacturer_of(fragment: str, header: _Header) -> str | None:
+    """The manufacturer cell of a row's own fragment: from a legal form to the fragment's end.
+
+    Only when the header names a manufacturer column, only after at least one word (the name
+    must remain), and only with something after the legal form. Otherwise ``None``.
+    """
+    if "manufacturer" not in header.columns:
+        return None
+    tokens = fragment.split()
+    for index in range(1, len(tokens) - 1):
+        if _is_legal_form(tokens[index]):
+            return " ".join(tokens[index:])
+    return None
 
 
 # --- headers and stamps -----------------------------------------------------------------
@@ -348,6 +405,9 @@ class SpecificationRow:
     (or the quantity header's unit, ``unit_source == "header"``). ``quantity`` is set only
     when ``quantity_text`` is one plain number; otherwise ``quantity_issue`` says why not.
     Lines are 1-based within the page, ``line_start``..``line_end`` inclusive.
+    ``manufacturer`` is the tail of the row's own fragment from a legal form on, when the
+    header has a manufacturer column and the text shows one (module note); ``name`` still
+    holds it, so nothing that reads ``name`` changes.
     """
 
     row_id: str
@@ -367,6 +427,7 @@ class SpecificationRow:
     quantity_issue: str | None
     mass_text: str | None
     note: str | None
+    manufacturer: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -389,6 +450,9 @@ class DetectedTable:
     implicit_unit: str | None
     status: str
     row_count: int
+    #: Pages after ``page_number`` on which the table's rows continue without a repeated
+    #: header (``row_count`` includes them). Empty for a table that ends with its page.
+    continued_on: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -413,11 +477,50 @@ class SpecificationExtraction:
 # --- extraction -------------------------------------------------------------------------
 
 
+@dataclass(slots=True)
+class _TableRecord:
+    """A listed table while its rows are still being read (a continuation adds to it)."""
+
+    ordinal: int
+    page_number: int
+    header_line_start: int
+    header_line_end: int
+    columns: tuple[str, ...]
+    implicit_unit: str | None
+    status: str
+    row_count: int
+    continued_on: list[int] = field(default_factory=list)
+
+    def freeze(self) -> DetectedTable:
+        return DetectedTable(
+            ordinal=self.ordinal,
+            page_number=self.page_number,
+            header_line_start=self.header_line_start,
+            header_line_end=self.header_line_end,
+            columns=self.columns,
+            implicit_unit=self.implicit_unit,
+            status=self.status,
+            row_count=self.row_count,
+            continued_on=tuple(self.continued_on),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _OpenTable:
+    """A table that ran to the end of its page: what a following page may continue."""
+
+    header: _Header
+    ordinal: int
+    page: int
+    last_position: str | None
+
+
 class _Collector:
     def __init__(self, version_uid: str) -> None:
         self.version_uid = version_uid
         self.rows: list[SpecificationRow] = []
-        self.tables: list[DetectedTable] = []
+        self.tables: list[_TableRecord] = []
+        self.records: dict[int, _TableRecord] = {}
         self.table_count = 0
         self.skipped: list[SkippedLine] = []
         self.by_reason: dict[str, int] = {}
@@ -448,7 +551,12 @@ class _Draft:
     quantity_issue: str | None
     mass_text: str | None
     note: str | None
-    continuations: int = 0
+    manufacturer: str | None = None
+    #: The line that carries the unit and quantity (``line_start`` is earlier when the name
+    #: wraps above it).
+    anchor_line: int = 0
+    #: Line numbers (1-based) of the unanchored lines appended to ``name_parts[1:]``.
+    continuation_lines: list[int] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -622,9 +730,101 @@ def _emit(collector: _Collector, page: int, sheet: str | None, ordinal: int, dra
             quantity_issue=draft.quantity_issue,
             mass_text=draft.mass_text,
             note=draft.note,
+            manufacturer=draft.manufacturer,
         )
     )
     return True
+
+
+# --- cells that wrap above their anchor line ---------------------------------------------
+
+#: Opening punctuation in front of a name's first word.
+_OPENING: Final[str] = "«\"'(["
+#: A name opens with a capitalised word: a capital and at least two lower-case letters.
+_NAME_OPENER: Final[re.Pattern[str]] = re.compile(r"[А-ЯЁA-Z][а-яёa-z]{2,}")
+
+
+def _starts_a_name(line: str) -> bool:
+    return _NAME_OPENER.match(line.strip().lstrip(_OPENING)) is not None
+
+
+def _cannot_start_name(fragment: str) -> bool:
+    """A row fragment (the text before its unit) that no name cell opens with.
+
+    A name cell opens with a capitalised word. A fragment that begins with anything else -- a
+    lower-case word, a mark (``ДПМ-01/60``, ``HIT-HY``), an abbreviation, a size -- is the
+    middle of a cell whose beginning is on an earlier line, or a name this rule cannot tell
+    from one; the lines above must then show where a cell begins (:func:`_above_count`).
+    """
+    return bool(fragment.strip()) and not _starts_a_name(fragment)
+
+
+def _above_count(texts: Sequence[str]) -> int:
+    """How many trailing lines of an unanchored run open the next row's name cell (0: none).
+
+    Scanning upward from the anchor line, the cell begins at the nearest line that opens a
+    name, at most :data:`MAX_CONTINUATION_LINES` lines up. Without such a line there is no
+    evidence where the cell begins, and nothing moves.
+    """
+    for count in range(1, min(len(texts), MAX_CONTINUATION_LINES) + 1):
+        if _starts_a_name(texts[-count]):
+            return count
+    return 0
+
+
+# --- a table continued onto the next page --------------------------------------------------
+
+_END_PAGE: Final[str] = "page"
+_END_STAMP: Final[str] = "stamp"
+_END_OTHER: Final[str] = "other"
+_MAX_LEAD_IN_LINES: Final[int] = 3
+_INTEGER_POSITION: Final[re.Pattern[str]] = re.compile(r"\d{1,3}")
+
+
+def _is_continuation_marker(line: str) -> bool:
+    return len(line.split()) <= 12 and "продолжение" in _compact(line)
+
+
+def _continues(carried: _OpenTable, position: str | None, marker: bool) -> bool:
+    """Whether a page's first row continues the carried table: a marker, or the next integer."""
+    if marker:
+        return True
+    last = carried.last_position
+    if "position" not in carried.header.columns or last is None or position is None:
+        return False
+    if _INTEGER_POSITION.fullmatch(last) is None or _INTEGER_POSITION.fullmatch(position) is None:
+        return False
+    return int(position) == int(last) + 1
+
+
+def _continuation_start(lines: Sequence[str], carried: _OpenTable) -> int | None:
+    """The index of the first row of a page that continues ``carried``, or ``None``.
+
+    Before that row the page may hold only column numbers, a group heading and a
+    «Продолжение» line (at most :data:`_MAX_LEAD_IN_LINES` of the last two). Any other text, a
+    stamp or a header of its own before the first row means this is not a plain continuation.
+    """
+    marker = False
+    seen = 0
+    for index, line in enumerate(lines):
+        tokens = line.split()
+        if not tokens:
+            continue
+        if _is_stamp(line):
+            return None
+        if _is_numbering(tokens):
+            continue
+        draft, _ = _parse_row(tokens, carried.header)
+        if draft is not None:
+            return index if _continues(carried, draft.position, marker) else None
+        seen += 1
+        if seen > _MAX_LEAD_IN_LINES:
+            return None
+        if _is_continuation_marker(line):
+            marker = True
+        elif not _is_group_heading(line):
+            return None
+    return None
 
 
 def _read_table(
@@ -635,21 +835,38 @@ def _read_table(
     header: _Header,
     header_start: int,
     body_start: int,
-) -> int:
-    """Read one table's rows; returns the index of the first line after the table."""
-    collector.table_count += 1
-    ordinal = collector.table_count
+    *,
+    resume: _OpenTable | None = None,
+) -> tuple[int, _OpenTable | None]:
+    """Read one table's rows; returns the index after the table and what the next page may continue.
+
+    ``resume`` is the table of the previous page this page continues: the rows join it (same
+    ordinal) and the header is the carried one.
+    """
+    if resume is None:
+        collector.table_count += 1
+        ordinal = collector.table_count
+    else:
+        ordinal = resume.ordinal
     rows_before = len(collector.rows)
     index = body_start
     current: _Draft | None = None
     group: str | None = None
     unanchored = 0
+    run_len = 0  # trailing continuation lines of ``current`` that touch the line being read
+    orphans: list[tuple[int, str]] = []  # unanchored lines before any row, not yet reported
+    ended = _END_PAGE
 
     def flush() -> None:
         nonlocal current
         if current is not None:
             _emit(collector, page, sheet, ordinal, current)
             current = None
+
+    def drain() -> None:
+        for orphan_line, orphan_text in orphans:
+            collector.skip(page, orphan_line, "text_before_first_row", orphan_text)
+        orphans.clear()
 
     while index < len(lines):
         line = lines[index]
@@ -658,41 +875,73 @@ def _read_table(
         if not tokens:
             index += 1
             continue
-        if _is_stamp(line) or _compact(line).startswith("примечани"):
+        if _is_stamp(line):
+            ended = _END_STAMP
             break
-        if _find_header(lines, index) is not None:
+        if _compact(line).startswith("примечани") or _find_header(lines, index) is not None:
+            ended = _END_OTHER
             break
         if header.ambiguous:
             collector.skip(page, number, "table_header_ambiguous", line)
             index += 1
             unanchored += 1
             if unanchored > MAX_UNANCHORED_RUN:
+                ended = _END_OTHER
                 break
             continue
         if _is_numbering(tokens):
+            drain()
+            run_len = 0
             collector.skip(page, number, "column_numbering", line)
             index += 1
             continue
         draft, refusal = _parse_row(tokens, header)
         if draft is not None:
+            fragment = draft.name_parts[0]
+            draft.manufacturer = _manufacturer_of(fragment, header)
+            draft.line_start = draft.line_end = draft.anchor_line = number
+            if _cannot_start_name(fragment):
+                if current is not None:
+                    count = _above_count(current.name_parts[len(current.name_parts) - run_len :])
+                    if count:
+                        draft.name_parts = [*current.name_parts[-count:], fragment]
+                        draft.line_start = current.continuation_lines[-count]
+                        del current.name_parts[-count:]
+                        del current.continuation_lines[-count:]
+                        current.line_end = (
+                            current.continuation_lines[-1]
+                            if current.continuation_lines else current.anchor_line
+                        )
+                else:
+                    count = _above_count([text for _, text in orphans])
+                    if count:
+                        draft.name_parts = [*(text for _, text in orphans[-count:]), fragment]
+                        draft.line_start = orphans[-count][0]
+                        del orphans[-count:]
+            drain()
             flush()
-            draft.line_start = draft.line_end = number
             draft.group = group
             current = draft
             unanchored = 0
+            run_len = 0
             index += 1
             continue
         if refusal == "position_missing":
             # A number at the end but no position: interleaved text or a wrapped name that
             # ends in a number. Reported; the open row stays open for its continuations.
+            drain()
+            run_len = 0
             collector.skip(page, number, refusal, line)
             unanchored += 1
             if unanchored > MAX_UNANCHORED_RUN:
+                ended = _END_OTHER
                 break
             index += 1
             continue
         if refusal is not None:
+            drain()
             flush()
+            run_len = 0
             collector.skip(page, number, refusal, line)
             unanchored = 0
             index += 1
@@ -700,23 +949,30 @@ def _read_table(
         # A line without an anchor: a note, a group heading, or a wrapped description.
         unanchored += 1
         if unanchored > MAX_UNANCHORED_RUN or _NOTE_START.match(line.strip()):
+            ended = _END_OTHER
             break
         if _is_group_heading(line):
+            drain()
             flush()
+            run_len = 0
             group = _words(line).rstrip(":")
         elif current is None:
-            collector.skip(page, number, "text_before_first_row", line)
-        elif current.continuations >= MAX_CONTINUATION_LINES:
+            orphans.append((number, line))
+        elif len(current.continuation_lines) >= MAX_CONTINUATION_LINES:
             collector.skip(page, number, "continuation_limit", line)
+            run_len = 0
         else:
             current.name_parts.append(line)
+            current.continuation_lines.append(number)
             current.line_end = number
-            current.continuations += 1
+            run_len += 1
         index += 1
+    drain()
     flush()
-    if len(collector.tables) < MAX_LISTED_TABLES:
-        collector.tables.append(
-            DetectedTable(
+    read = len(collector.rows) - rows_before
+    if resume is None:
+        if len(collector.tables) < MAX_LISTED_TABLES:
+            record = _TableRecord(
                 ordinal=ordinal,
                 page_number=page,
                 header_line_start=header_start + 1,
@@ -724,32 +980,90 @@ def _read_table(
                 columns=tuple(column for column in FORM7_COLUMNS if column in header.columns),
                 implicit_unit=header.implicit_unit,
                 status=TABLE_HEADER_AMBIGUOUS if header.ambiguous else TABLE_PARSED,
-                row_count=len(collector.rows) - rows_before,
+                row_count=read,
             )
+            collector.tables.append(record)
+            collector.records[ordinal] = record
+    else:
+        record = collector.records.get(ordinal)
+        if record is not None:
+            record.row_count += read
+            record.continued_on.append(page)
+    return index, _open_after(collector, header, ordinal, page, lines, index, ended, resume, read)
+
+
+def _open_after(
+    collector: _Collector,
+    header: _Header,
+    ordinal: int,
+    page: int,
+    lines: Sequence[str],
+    index: int,
+    ended: str,
+    resume: _OpenTable | None,
+    read: int,
+) -> _OpenTable | None:
+    """The table a following page may continue, or ``None`` when this one ended for good.
+
+    A table is open only when it ran to the end of its page -- to the page's last line, or to
+    the stamp with nothing after it that reads as one of the table's own rows -- and has at
+    least one row (a header-ambiguous table reads none, so it is never open). "Reads as one of
+    its own rows" is asked only of a table with a position or a unit column: in a table with
+    neither, any title-block line ending in a number (``Разработал Иванов 01.26``) would read as
+    a row, so there the next page's «Продолжение» line is the only evidence (:func:`_continues`).
+    """
+    if ended not in (_END_PAGE, _END_STAMP):
+        return None
+    if (
+        ended == _END_STAMP
+        and header.columns & {"position", "unit"}
+        and any(
+            _parse_row(text.split(), header)[0] is not None
+            for text in lines[index + 1 :]
+            if text.split()
         )
-    return index
+    ):
+        return None
+    if read:
+        last = collector.rows[-1].position
+    elif resume is not None:
+        last = resume.last_position
+    else:
+        return None
+    return _OpenTable(header=header, ordinal=ordinal, page=page, last_position=last)
 
 
 def extract_specification(*, version_uid: str, pages: Mapping[int, str]) -> SpecificationExtraction:
     """Every specification row of the pages, in page and line order."""
     collector = _Collector(version_uid)
+    carried: _OpenTable | None = None
     for page in sorted(pages):
         lines = pages[page].split("\n")
         sheet = _sheet_label(lines)
         index = 0
+        open_table: _OpenTable | None = None
+        if (
+            carried is not None
+            and carried.page + 1 == page
+            and _continuation_start(lines, carried) is not None
+        ):
+            index, open_table = _read_table(
+                collector, page, sheet, lines, carried.header, 0, 0, resume=carried
+            )
         while index < len(lines):
             found = _find_header(lines, index)
             if found is None:
                 index += 1
                 continue
             header, body_start = found
-            index = _read_table(collector, page, sheet, lines, header, index, body_start)
+            index, open_table = _read_table(collector, page, sheet, lines, header, index, body_start)
+        carried = open_table
     return SpecificationExtraction(
         algorithm=EXTRACTION_ALGORITHM,
         version_uid=version_uid,
         page_count=len(pages),
         rows=tuple(collector.rows),
-        tables=tuple(collector.tables),
+        tables=tuple(record.freeze() for record in collector.tables),
         table_count=collector.table_count,
         skipped=tuple(collector.skipped),
         skipped_by_reason={

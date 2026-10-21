@@ -89,6 +89,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -250,16 +251,37 @@ def handles_named_by_write_step(step: dict) -> set[str]:
     selectors: list[str] = []
     texts: list[str] = []
     for action in step.get("actions") or ():
-        selectors.append(action["selector"])
+        if action.get("selector") is not None:
+            selectors.append(action["selector"])
         if action.get("text") is not None:
             texts.append(action["text"])
-    capture = step.get("capture") or {}
-    if capture.get("selector") is not None:
-        selectors.append(capture["selector"])
-    if capture.get("attribute") is not None:
-        selectors.append(f"[{capture['attribute']}]")
+        # `BETA-LIVE-JOURNEY-01`: a field or a select is named by the words of its label, and
+        # a `wait_for` by the words it waits for. Both are the application's own words.
+        if action.get("label") is not None:
+            texts.append(action["label"])
+        if (
+            action.get("do") == "wait_for"
+            and action.get("text_contains") is not None
+            and not action.get("text_is_data")
+        ):
+            texts.append(action["text_contains"])
+    for capture in [step.get("capture") or {}, *(step.get("captures") or ())]:
+        if capture.get("selector") is not None:
+            selectors.append(capture["selector"])
+        if capture.get("attribute") is not None:
+            selectors.append(f"[{capture['attribute']}]")
     for selector in step.get("forbids_rendered") or ():
         selectors.append(selector)
+    for present in step.get("expects_present") or ():
+        selectors.append(present["selector"])
+        # Words that come from DATA (a designation the seed wrote, a vendor the step typed) are
+        # not the application's and are declared `text_is_data`; every other word must be.
+        if present.get("text_contains") is not None and not present.get("text_is_data"):
+            texts.append(present["text_contains"])
+    for absent in step.get("expects_absent") or ():
+        selectors.append(absent["selector"])
+        if absent.get("text") is not None:
+            texts.append(absent["text"])
     await_terminal = step.get("await_terminal") or {}
     for key in ("outcome_selector", "activity_selector"):
         if await_terminal.get(key) is not None:
@@ -495,7 +517,12 @@ def test_the_journey_consumes_the_declared_sample_only_for_route_address() -> No
     assert "const value = captured[name] ?? samples[name]" in source, (
         "a captured real user identity must take precedence over the placeholder sample"
     )
-    assert "concreteApi(expectation, captured)" in source, (
+    assert "concreteApi(e, captured, route.constants ?? {})" in source, (
+        "API expectations must not use the placeholder sample; they take captured identities "
+        "and the route's own declared enumeration constants (`BETA-LIVE-JOURNEY-01`)"
+    )
+    assert "sample_identifiers" not in source[source.index("function concreteApi"):
+                                              source.index("function shapeOf")], (
         "API expectations must not use the placeholder sample"
     )
 
@@ -596,13 +623,16 @@ def test_every_write_step_stands_on_a_screen_the_read_walk_also_covers(
             f"write step '{step['name']}' names page module {step['page_module']}, "
             "which does not exist"
         )
+        # `BETA-LIVE-JOURNEY-01`: a step's address may carry a query (`/norms?view=catalogue`),
+        # which is no part of the route. `route` names the route when `at` is not it.
+        route = step.get("route", step["at"].split("?")[0])
         derived = route_path_of_page_module(step["page_module"])
-        assert derived == step["at"], (
-            f"write step '{step['name']}' says it acts at {step['at']} but its page "
+        assert derived == route, (
+            f"write step '{step['name']}' says it acts at {route} but its page "
             f"module sits at {derived}"
         )
-        assert step["at"] in walked, (
-            f"write step '{step['name']}' acts at {step['at']}, which the read walk does "
+        assert route in walked, (
+            f"write step '{step['name']}' acts at {route}, which the read walk does "
             "not cover. Every screen the journey writes on must also be a screen it reads."
         )
         control = REPOSITORY_ROOT / step["control_module"]
@@ -2388,3 +2418,796 @@ def test_control_a_relabelled_upload_control_is_detected(manifest: dict) -> None
 def test_control_a_refusal_drive_that_lost_its_session_is_detected() -> None:
     source = (JOURNEY_DIR / "refusals.mjs").read_text(encoding="utf-8")
     assert "openSession" not in source.replace("openSession", "someOtherThing")
+
+
+# --------------------------------------------------------------------------------------
+# `BETA-LIVE-JOURNEY-01`. The night window's screens, in the write half.
+#
+# The first four write steps (project, upload, classify, run) were the whole of the half
+# until the night window of 2026-10-20 added the screens `docs/program/BETA-MATRIX-01.md`
+# section B12 lists as never walked live. The steps after them carry a `screen` (which
+# screen they belong to) and a `case` (`action`, or `refused` -- the role, the input or the
+# second submit the screen must refuse), a session (`as`), a `bind` that renames what a
+# template variable means inside the step, and a few expectations the first four did not
+# need. The checks below read all of that against the contract and the application's source
+# and against each other, with no browser and no stack.
+#
+# What they cannot see is the same residue the module's header states: a handle that exists
+# is not a handle that works. Only `npm --prefix web run e2e:pc01 -- --phase all` against a
+# stack shows that, and the report of this task quotes the run.
+# --------------------------------------------------------------------------------------
+
+ACTION_KINDS = frozenset({"fill", "click", "select", "attach_file", "goto", "wait_for"})
+CAPTURE_KINDS = frozenset({"attribute", "location", "response", "text"})
+FIRST_FOUR = ("create-project", "upload-document", "classify-version", "start-run")
+#: What the first four steps capture, which every later step may use.
+FIRST_FOUR_PRODUCE = frozenset({"project_uid", "version_uid", "document_uid", "run_id"})
+
+#: The screens the night window added (BETA-MATRIX-01 section B12), each of which the write
+#: half must perform an action on AND refuse something on. The names are the steps' own
+#: `screen` values. A screen that cannot be refused anything says so in `no_negative_case`.
+NIGHT_SCREENS = (
+    "version-upload",
+    "version-classification",
+    "version-comparison",
+    "stage-comparison",
+    "analysis-settings",
+    "dispatcher",
+    "my-tasks",
+    "price-lists",
+    "vendor-lists",
+    "specification-prices",
+    "optimisation-passes",
+    "optimisation-proposals",
+    "section-form7",
+    "dashboard-sections",
+    "norms-designation",
+    "norms-search",
+    "norms-catalogue",
+    "run-exports",
+    "queue",
+    "workers",
+    "account-profile",
+    "account-password",
+    "user-management",
+    "release-history",
+    "sign-out",
+)
+
+#: Operations the write half must perform at least once, because each is a thing the matrix
+#: says was never done live.
+NIGHT_OPERATIONS = (
+    "classifyDocumentVersion",
+    "uploadDocumentVersion",
+    "compareDocumentVersions",
+    "carryOverDecision",
+    "createAssignment",
+    "transitionAssignment",
+    "uploadPriceList",
+    "setGlobalVendorList",
+    "setProjectVendorList",
+    "getSpecificationPrices",
+    "startOptimisationPass",
+    "decideOptimisationProposal",
+    "exportOptimisationProposalsCsv",
+    "getSectionSpecification",
+    "getDashboardSummary",
+    "listAnalysisProfiles",
+    "listNormDocuments",
+    "searchNorms",
+    "setCurrentNormSnapshot",
+    "exportRunCsv",
+    "exportRunXlsx",
+    "setExecutionPaused",
+    "setJobPriority",
+    "cancelRun",
+    "reauditRun",
+    "listWorkers",
+    "setWorkerIntake",
+    "updateMyProfile",
+    "resetUserPassword",
+    "archiveUser",
+    "restoreUser",
+    "listReleases",
+)
+
+_TEMPLATE = re.compile(r"\{([a-z_]+)\}")
+
+
+def _templates(value: object) -> list[str]:
+    return _TEMPLATE.findall(value) if isinstance(value, str) else []
+
+
+def night_steps(manifest: dict) -> list[dict]:
+    """Every write step after the first four, in order."""
+    return [step for step in write_steps(manifest) if step["name"] not in FIRST_FOUR]
+
+
+def roster_names(manifest: dict) -> list[str]:
+    return [entry["name"] for entry in (manifest.get("accounts") or {}).get("roster") or ()]
+
+
+def _step_templates(step: dict) -> list[tuple[str, dict | None]]:
+    """Every `{name}` a step mentions, with the call-level `bind` that governs it (or `None`)."""
+    found: list[tuple[str, dict | None]] = []
+    for name in _templates(step.get("at")):
+        found.append((name, None))
+    for key in ("expects_api", "expects_api_after_terminal", "expects_not_called", "expects_bff"):
+        for call in step.get(key) or ():
+            for name in _templates(call.get("path")):
+                found.append((name, call.get("bind")))
+    for action in step.get("actions") or ():
+        for key in ("selector", "value", "text", "to", "option_text", "option_value", "label"):
+            for name in _templates(action.get(key)):
+                found.append((name, None))
+    for present in step.get("expects_present") or ():
+        for name in (
+            _templates(present.get("selector"))
+            + _templates(present.get("text_contains"))
+            + _templates(present.get("text_matches"))
+        ):
+            found.append((name, None))
+    for selector in step.get("forbids_rendered") or ():
+        for name in _templates(selector):
+            found.append((name, None))
+    for absent in step.get("expects_absent") or ():
+        for name in _templates(absent.get("selector")) + _templates(absent.get("text")):
+            found.append((name, None))
+    return found
+
+
+def _path_parameter_enum(openapi: dict, step: dict, parameter_name: str) -> list | None:
+    """The enumeration the contract publishes for a path parameter this step addresses."""
+    paths = {call["path"] for call in step.get("expects_api") or ()}
+    paths |= {call["path"] for call in step.get("expects_not_called") or ()}
+    for path in sorted(paths):
+        item = openapi["paths"].get(path) or {}
+        candidates = list(item.get("parameters") or ())
+        for method, operation in item.items():
+            if method.lower() in _HTTP_METHODS:
+                candidates += list(operation.get("parameters") or ())
+        for parameter in candidates:
+            if parameter.get("name") != parameter_name or parameter.get("in") != "path":
+                continue
+            schema = parameter.get("schema") or {}
+            if "$ref" in schema:
+                schema = openapi["components"]["schemas"][schema["$ref"].split("/")[-1]]
+            if "enum" in schema:
+                return list(schema["enum"])
+    return None
+
+
+def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
+    """Everything checkable about the night-window steps without a browser or the web tree."""
+    findings: list[str] = []
+    steps = write_steps(manifest)
+    names = [step["name"] for step in steps]
+    for name in sorted({n for n in names if names.count(n) > 1}):
+        findings.append(f"two write steps are named '{name}'")
+    roster = set(roster_names(manifest))
+    contract_ops = operations_in_contract(openapi)
+    contract_by_id = {operation_id: (method, path) for method, path, operation_id in contract_ops}
+    contract_paths = {(method, path) for method, path, _ in contract_ops}
+
+    secrets_provided = {f"{name}_password" for name in roster} | set(
+        (manifest.get("accounts") or {}).get("generated_secrets") or ()
+    )
+    produced: set[str] = set(FIRST_FOUR_PRODUCE) | {f"{name}_user_uid" for name in roster}
+    for index, step in enumerate(steps):
+        label = step["name"]
+        late = label not in FIRST_FOUR
+        if late:
+            for required in ("screen", "case"):
+                if required not in step:
+                    findings.append(f"{label}: no `{required}`")
+            if step.get("case") not in ("action", "refused"):
+                findings.append(f"{label}: `case` is {step.get('case')!r}, not action or refused")
+        session = step.get("as", "admin")
+        if session != "admin" and session not in roster:
+            findings.append(f"{label}: runs as '{session}', which the accounts roster does not name")
+        operations_here = {call["operationId"] for call in step.get("expects_api") or ()}
+
+        # ---- the vocabulary -------------------------------------------------------
+        for action in step.get("actions") or ():
+            kind = action.get("do")
+            if kind not in ACTION_KINDS:
+                findings.append(f"{label}: unknown action '{kind}'")
+                continue
+            if kind == "fill" and ("value" in action) == ("secret" in action):
+                findings.append(f"{label}: a fill names exactly one of value and secret")
+            if kind == "fill" and "secret" in action and action["secret"] not in secrets_provided:
+                findings.append(f"{label}: a fill names the secret {action['secret']!r}, which no account or generated secret provides")
+            if kind in ("fill", "click", "select", "attach_file", "wait_for") and "selector" not in action:
+                findings.append(f"{label}: a {kind} with no selector")
+            if kind == "click" and action.get("times", 1) not in (1, 2, 3):
+                findings.append(f"{label}: click.times must be 1, 2 or 3")
+            if kind == "select" and ("option_text" in action) == ("option_value" in action):
+                findings.append(f"{label}: a select names exactly one of option_text and option_value")
+            if kind == "attach_file":
+                fixture = action.get("fixture")
+                if fixture is not True and not (
+                    isinstance(fixture, str) and (REPOSITORY_ROOT / fixture).is_file()
+                ):
+                    findings.append(f"{label}: attach_file names a fixture that is not on disk: {fixture!r}")
+            if kind == "goto" and "to" not in action:
+                findings.append(f"{label}: a goto with no address")
+            if kind == "wait_for":
+                bound = action.get("bound_ms")
+                if not (isinstance(bound, int) and not isinstance(bound, bool) and bound > 0):
+                    findings.append(f"{label}: a wait_for with bound_ms={bound!r}")
+        captures = [c for c in [step.get("capture"), *(step.get("captures") or ())] if c]
+        for capture in captures:
+            if capture.get("kind") not in CAPTURE_KINDS:
+                findings.append(f"{label}: unknown capture kind {capture.get('kind')!r}")
+            bound = capture.get("bound_ms")
+            if not (isinstance(bound, int) and not isinstance(bound, bool) and bound > 0):
+                findings.append(f"{label}: a capture with bound_ms={bound!r}")
+            if capture.get("when") not in (None, "before_actions"):
+                findings.append(f"{label}: capture.when is {capture.get('when')!r}")
+            if capture.get("kind") == "response" and capture.get("of") not in operations_here:
+                findings.append(f"{label}: captures a response of {capture.get('of')!r}, which the step does not declare")
+        for present in step.get("expects_present") or ():
+            bound = present.get("bound_ms", 1)
+            if not (isinstance(bound, int) and not isinstance(bound, bool) and bound > 0):
+                findings.append(f"{label}: expects_present with bound_ms={bound!r}")
+            if present.get("min_count", 1) < 1:
+                findings.append(f"{label}: expects_present with min_count < 1")
+        for key in ("expects_request", "expects_response", "expects_download"):
+            for check in step.get(key) or ():
+                if check.get("of") not in operations_here:
+                    findings.append(f"{label}: {key} names '{check.get('of')}', which the step does not declare")
+
+        # ---- the calls ------------------------------------------------------------
+        for call in step.get("expects_api") or ():
+            status = call.get("expect_status")
+            if call.get("refusal") is True:
+                if not (isinstance(status, int) and status >= 400):
+                    findings.append(f"{label}: refusal {call['operationId']} declares status {status!r}")
+                if not call.get("expect_error_code"):
+                    findings.append(f"{label}: refusal {call['operationId']} names no error code")
+                codes = {
+                    c for c in (openapi["components"]["schemas"].get("ErrorCode") or {}).get("enum", [])
+                }
+                if codes and call.get("expect_error_code") not in codes:
+                    findings.append(
+                        f"{label}: refusal {call['operationId']} expects error code "
+                        f"{call.get('expect_error_code')!r}, which the contract does not publish"
+                    )
+            for key in ("count", "max_count"):
+                if key in call and not (isinstance(call[key], int) and call[key] >= 1):
+                    findings.append(f"{label}: {call['operationId']} {key}={call[key]!r}")
+        for absent in step.get("expects_not_called") or ():
+            if (absent["method"].upper(), absent["path"]) not in contract_paths:
+                findings.append(
+                    f"{label}: expects {absent['method']} {absent['path']} NOT to be called, "
+                    "but that is no operation of the contract"
+                )
+
+        # ---- a step that says it only reads must do nothing else ----------------------
+        if step.get("reads_only") is True:
+            writes = [
+                call["operationId"] for call in step.get("expects_api") or ()
+                if call["method"].upper() != "GET"
+            ]
+            if step.get("actions") or writes:
+                findings.append(
+                    f"{label}: says it only reads, and presses {len(step.get('actions') or [])} control(s) / "
+                    f"declares writes {writes}; the spend guard lets a read-only step run first"
+                )
+
+        # ---- the web tier's own doors and where a step ends -------------------------
+        for door in step.get("expects_bff") or ():
+            if (door["method"].upper(), door["path"]) in contract_paths:
+                findings.append(
+                    f"{label}: {door['method']} {door['path']} is declared a door of the web tier but it is an "
+                    "operation of the contract; declare it in expects_api"
+                )
+            if not (isinstance(door.get("expect_status"), int) and 200 <= door["expect_status"] < 400):
+                findings.append(f"{label}: a door of the web tier answers a redirect or success, not {door.get('expect_status')!r}")
+        if "expects_location" in step and not str(step["expects_location"]).startswith("/"):
+            findings.append(f"{label}: expects_location must be an address starting with /")
+
+        # ---- constants, bind and the flow of identifiers ---------------------------
+        constants = step.get("constants") or {}
+        for name, value in constants.items():
+            enum = _path_parameter_enum(openapi, step, name)
+            if enum is None or value not in enum:
+                findings.append(
+                    f"{label}: constant {name}={value!r} is not a member of an enumeration "
+                    "the contract publishes for that path parameter"
+                )
+        bind = step.get("bind") or {}
+        used = {name for name, _local in _step_templates(step)}
+        produced_here = {n for c in captures for n in c.get("as") or ()}
+        for name, target in bind.items():
+            # A bind for a variable the step never mentions is shared, not wrong.
+            if name in used and target not in produced and target not in produced_here:
+                findings.append(f"{label}: binds {name} to '{target}', which no earlier step produces")
+        for name, local in _step_templates(step):
+            wanted = (local or {}).get(name, bind.get(name, name))
+            if wanted in constants or wanted in produced:
+                continue
+            if any(wanted == capture_name for capture in captures for capture_name in capture.get("as") or ()):
+                continue
+            findings.append(
+                f"{label}: needs {{{name}}}"
+                + (f" (bound to '{wanted}')" if wanted != name else "")
+                + ", which no earlier step produces"
+            )
+        for capture in captures:
+            produced.update(capture.get("as") or ())
+
+        # ---- a refused case must refuse something ----------------------------------
+        if late and step.get("case") == "refused":
+            refuses = (
+                any(c.get("refusal") is True for c in step.get("expects_api") or ())
+                or bool(step.get("expects_not_called"))
+                or bool(step.get("expects_absent"))
+                or bool(step.get("forbids_rendered"))
+                or session != "admin"
+            )
+            if not refuses:
+                findings.append(
+                    f"{label}: is a refused case but declares no refusal, no absent call, no absent "
+                    "control, no forbidden marker and runs as the journey's own account"
+                )
+
+    # ---- coverage: every night screen is acted on and refused ------------------------
+    by_screen: dict[str, list[dict]] = {}
+    for step in night_steps(manifest):
+        by_screen.setdefault(step.get("screen", ""), []).append(step)
+    for screen in NIGHT_SCREENS:
+        members = by_screen.get(screen, [])
+        if not any(s.get("case") == "action" for s in members):
+            findings.append(f"screen '{screen}': no step performs its action")
+        refused = any(s.get("case") == "refused" for s in members)
+        exempt = any(len(str(s.get("no_negative_case", ""))) >= 30 for s in members)
+        if not refused and not exempt:
+            findings.append(f"screen '{screen}': no step refuses anything, and none says why it cannot")
+    declared = {
+        call["operationId"]
+        for step in steps
+        for call in step.get("expects_api") or ()
+    }
+    for operation in NIGHT_OPERATIONS:
+        if operation not in declared:
+            findings.append(f"operation {operation}: no write step performs it")
+    return findings
+
+
+def account_findings(manifest: dict, source: str, repo: Path) -> list[str]:
+    """The accounts roster and the screens that make them: addressed, existing, contract-bound."""
+    findings: list[str] = []
+    accounts = manifest.get("accounts")
+    if not isinstance(accounts, dict):
+        return ["the manifest declares no `accounts`, so no refusal by role can be driven"]
+    roster = accounts.get("roster") or []
+    names = [entry.get("name") for entry in roster]
+    if len(set(names)) != len(names) or not names:
+        findings.append("the accounts roster is empty or repeats a name")
+    for entry in roster:
+        roles = entry.get("roles")
+        if not roles or not set(roles) <= {"expert", "admin"}:
+            findings.append(f"account {entry.get('name')}: roles {roles!r}")
+        if any(key in entry for key in ("password", "login", "secret")):
+            findings.append(f"account {entry.get('name')}: carries a credential")
+    if not {("expert",), ("admin",)} <= {tuple(sorted(e.get("roles") or ())) for e in roster}:
+        findings.append("the roster must hold an expert without admin and an admin without expert")
+    for part in ("register", "decide"):
+        spec = accounts.get(part) or {}
+        for key in ("page_module", "control_module"):
+            if not (repo / spec.get(key, "no-such-file")).is_file():
+                findings.append(f"accounts.{part}.{key} {spec.get(key)!r} does not exist")
+    register = accounts.get("register") or {}
+    decide = accounts.get("decide") or {}
+    handles = set()
+    selectors = list((register.get("fields") or {}).values())
+    selectors.append((register.get("submit") or {}).get("selector", ""))
+    selectors += [decide.get("queue_marker", ""), decide.get("row", ""), decide.get("request_id_from", "")]
+    for selector in selectors:
+        for ident in _ID_SELECTOR.findall(selector):
+            handles.add(f'id="{ident}"')
+        handles.update(_DATA_ATTRIBUTE.findall(selector))
+    handles.add((register.get("submit") or {}).get("text", ""))
+    handles.add((decide.get("approve") or {}).get("text", ""))
+    handles.add((decide.get("pager_next") or {}).get("text", ""))
+    handles.update((decide.get("role_labels") or {}).values())
+    handles.discard("")
+    for handle in sorted(handles):
+        if handle not in source:
+            findings.append(f"accounts: the handle {handle!r} no longer appears in web/src")
+    return findings
+
+
+def test_the_night_window_steps_agree_with_the_contract_and_with_each_other(
+    manifest: dict, openapi: dict
+) -> None:
+    findings = night_window_findings(manifest, openapi)
+    assert not findings, "the night-window half of the journey is incoherent:\n  " + "\n  ".join(findings)
+
+
+def test_the_accounts_a_refusal_by_role_needs_are_made_through_screens_that_exist(
+    manifest: dict,
+) -> None:
+    _require(WEB_SRC)
+    findings = account_findings(manifest, application_source(WEB_SRC), REPOSITORY_ROOT)
+    assert not findings, "\n  ".join(findings)
+
+
+def test_the_accounts_screens_walk_and_operations_are_in_the_contract(
+    manifest: dict, openapi: dict
+) -> None:
+    published = operations_in_contract(openapi)
+    accounts = manifest["accounts"]
+    claimed = {
+        (accounts["register"]["operation"]["method"], accounts["register"]["operation"]["path"],
+         accounts["register"]["operation"]["operationId"]),
+        (accounts["decide"]["approve"]["operation"]["method"], accounts["decide"]["approve"]["operation"]["path"],
+         accounts["decide"]["approve"]["operation"]["operationId"]),
+    }
+    assert claimed <= published, f"accounts claim operations the contract lacks: {sorted(claimed - published)}"
+    walked = set(screens_in_manifest(manifest))
+    assert accounts["register"]["at"] in walked and accounts["decide"]["at"] in walked
+
+
+def test_every_hand_off_the_night_window_makes_to_the_dispatcher_selects_by_value(
+    manifest: dict,
+) -> None:
+    """A name is not an identity: earlier runs left projects and accounts with the same names."""
+    for step in night_steps(manifest):
+        for action in step.get("actions") or ():
+            if action.get("do") == "select" and "%STAMP%" in str(action.get("option_text", "")):
+                raise AssertionError(
+                    f"{step['name']}: selects an option by a name carrying the run's stamp; "
+                    "use the identity the journey captured"
+                )
+
+
+def test_the_journey_driver_reads_the_vocabulary_the_manifest_uses() -> None:
+    """The manifest's words are only worth what `write.mjs` does with them."""
+    source = _require(JOURNEY_DIR / "write.mjs").read_text(encoding="utf-8")
+    for word in (
+        "expects_present", "expects_absent", "expects_not_called", "expects_download",
+        "same_response_at", "max_count", "refusal", "bind", "constants", "before_actions",
+        "'wait_for'", "'select'", "'goto'", "csv_no_formula_cells", "continue_if_captured",
+    ):
+        assert word in source, f"write.mjs no longer reads '{word}', which the manifest uses"
+    accounts = _require(JOURNEY_DIR / "accounts.mjs").read_text(encoding="utf-8")
+    assert "randomBytes" in accounts and "redact" in accounts, (
+        "accounts.mjs must generate each password at random and redact it from every message"
+    )
+    journey = _require(JOURNEY).read_text(encoding="utf-8")
+    assert "provisionAccounts" in journey and "process.exit(3)" in journey, (
+        "journey.mjs must make the accounts and must never call a partial run a pass"
+    )
+
+
+def test_a_manifest_with_fixtures_for_the_price_list_has_them_on_disk(manifest: dict) -> None:
+    for step in night_steps(manifest):
+        for action in step.get("actions") or ():
+            if action.get("do") == "attach_file" and isinstance(action.get("fixture"), str):
+                path = REPOSITORY_ROOT / action["fixture"]
+                assert path.is_file(), f"{step['name']}: {action['fixture']} is not on disk"
+
+
+# ---- the negative controls: each check above shown failing on synthetic data ---------
+
+
+def _night_manifest(*extra_steps: dict, roster: list[dict] | None = None) -> dict:
+    """The smallest manifest `night_window_findings` accepts, plus the steps given."""
+    base_steps = [
+        {"name": name, "at": "/projects", "expects_api": [], "actions": []} for name in FIRST_FOUR
+    ]
+    return {
+        "accounts": {"roster": roster if roster is not None else [
+            {"name": "expert_only", "roles": ["expert"]},
+            {"name": "admin_only", "roles": ["admin"]},
+        ]},
+        "write": {"steps": [*base_steps, *extra_steps]},
+    }
+
+
+_NIGHT_CONTRACT = {
+    "paths": {
+        "/assignments": {"post": {"operationId": "createAssignment", "responses": {"200": {}, "403": {}}}},
+        "/sections/{section_code}/specification": {
+            "get": {
+                "operationId": "getSectionSpecification",
+                "parameters": [{"name": "section_code", "in": "path", "schema": {"enum": ["AR", "KJ"]}}],
+                "responses": {"200": {}},
+            }
+        },
+    },
+    "components": {"schemas": {"ErrorCode": {"enum": ["permission_denied", "conflict"]}}},
+}
+
+
+def _night_step(**overrides: object) -> dict:
+    step: dict = {
+        "name": "assign-work", "screen": "dispatcher", "case": "action",
+        "at": "/dispatcher", "actions": [], "expects_api": [],
+    }
+    step.update(overrides)
+    return step
+
+
+def _only_step_findings(step: dict, **kwargs: object) -> list[str]:
+    found = night_window_findings(_night_manifest(step, **kwargs), _NIGHT_CONTRACT)
+    return [f for f in found if f.startswith(f"{step['name']}:") or step["name"] in f.split(":")[0]]
+
+
+def test_control_an_unknown_session_is_detected() -> None:
+    assert any("roster does not name" in f for f in _only_step_findings(_night_step(**{"as": "ghost"})))
+    assert not any("roster does not name" in f for f in _only_step_findings(_night_step(**{"as": "expert_only"})))
+
+
+def test_control_an_identifier_no_earlier_step_produced_is_detected() -> None:
+    step = _night_step(at="/projects/{assignment_uid}")
+    assert any("assignment_uid" in f for f in _only_step_findings(step))
+    producer = _night_step(name="make", at="/dispatcher", captures=[
+        {"kind": "attribute", "selector": "[data-x]", "attribute": "data-x",
+         "as": ["assignment_uid"], "bound_ms": 1000}])
+    manifest = _night_manifest(producer, _night_step(name="use", at="/projects/{assignment_uid}"))
+    assert not any("use: needs" in f for f in night_window_findings(manifest, _NIGHT_CONTRACT))
+
+
+def test_control_a_bind_to_nothing_is_detected() -> None:
+    step = _night_step(bind={"version_uid": "second_version_uid"}, at="/x/{version_uid}")
+    found = _only_step_findings(step)
+    assert any("binds version_uid to 'second_version_uid'" in f for f in found)
+
+
+def test_control_a_constant_that_is_not_in_the_contract_enumeration_is_detected() -> None:
+    call = {"method": "GET", "path": "/sections/{section_code}/specification",
+            "operationId": "getSectionSpecification", "expect_status": 200}
+    good = _night_step(constants={"section_code": "AR"}, expects_api=[call])
+    bad = _night_step(constants={"section_code": "XX"}, expects_api=[call])
+    assert not any("constant" in f for f in _only_step_findings(good))
+    assert any("constant section_code='XX'" in f for f in _only_step_findings(bad))
+
+
+def test_control_a_refusal_without_a_status_or_a_known_code_is_detected() -> None:
+    call = {"method": "POST", "path": "/assignments", "operationId": "createAssignment",
+            "expect_status": 200, "refusal": True, "expect_error_code": "permission_denied"}
+    assert any("declares status 200" in f for f in _only_step_findings(_night_step(expects_api=[call])))
+    no_code = dict(call, expect_status=403)
+    no_code.pop("expect_error_code")
+    assert any("names no error code" in f for f in _only_step_findings(_night_step(expects_api=[no_code])))
+    wrong = dict(call, expect_status=403, expect_error_code="teapot")
+    assert any("'teapot'" in f for f in _only_step_findings(_night_step(expects_api=[wrong])))
+    right = dict(call, expect_status=403)
+    assert not any("refusal" in f for f in _only_step_findings(_night_step(expects_api=[right])))
+
+
+def test_control_a_call_that_is_not_in_the_contract_cannot_be_declared_absent() -> None:
+    step = _night_step(expects_not_called=[{"method": "POST", "path": "/nowhere"}])
+    assert any("NOT to be called" in f for f in _only_step_findings(step))
+    ok = _night_step(expects_not_called=[{"method": "POST", "path": "/assignments"}])
+    assert not any("NOT to be called" in f for f in _only_step_findings(ok))
+
+
+def test_control_an_unknown_action_and_an_unbounded_wait_are_detected() -> None:
+    found = _only_step_findings(_night_step(actions=[{"do": "teleport", "selector": "x"}]))
+    assert any("unknown action 'teleport'" in f for f in found)
+    found = _only_step_findings(_night_step(actions=[{"do": "wait_for", "selector": "x"}]))
+    assert any("wait_for with bound_ms=None" in f for f in found)
+    found = _only_step_findings(_night_step(actions=[{"do": "select", "selector": "x"}]))
+    assert any("exactly one of option_text and option_value" in f for f in found)
+    found = _only_step_findings(_night_step(actions=[{"do": "click", "selector": "x", "times": 9}]))
+    assert any("click.times" in f for f in found)
+
+
+def test_control_a_missing_fixture_is_detected() -> None:
+    step = _night_step(actions=[{"do": "attach_file", "selector": "#f", "fixture": "tests/no/such.csv"}])
+    assert any("not on disk" in f for f in _only_step_findings(step))
+
+
+def test_control_a_refused_case_that_refuses_nothing_is_detected() -> None:
+    nothing = _night_step(case="refused")
+    assert any("refuses" in f or "refusal" in f for f in _only_step_findings(nothing))
+    by_role = _night_step(case="refused", **{"as": "admin_only"})
+    assert not any("is a refused case" in f for f in _only_step_findings(by_role))
+    absent = _night_step(case="refused", forbids_rendered=["[data-create-assignment]"])
+    assert not any("is a refused case" in f for f in _only_step_findings(absent))
+
+
+def test_control_a_screen_without_an_action_or_without_a_refusal_is_detected() -> None:
+    action_only = _night_manifest(_night_step())
+    found = night_window_findings(action_only, _NIGHT_CONTRACT)
+    assert "screen 'dispatcher': no step refuses anything, and none says why it cannot" in found
+    refused_only = _night_manifest(_night_step(case="refused", **{"as": "admin_only"}))
+    assert "screen 'dispatcher': no step performs its action" in night_window_findings(
+        refused_only, _NIGHT_CONTRACT
+    )
+    exempt = _night_manifest(_night_step(no_negative_case="a read-only panel with nothing to refuse"))
+    assert "screen 'dispatcher': no step refuses anything, and none says why it cannot" not in (
+        night_window_findings(exempt, _NIGHT_CONTRACT)
+    )
+    missing_screen = night_window_findings(_night_manifest(), _NIGHT_CONTRACT)
+    assert "screen 'norms-search': no step performs its action" in missing_screen
+    assert "operation setCurrentNormSnapshot: no write step performs it" in missing_screen
+
+
+def test_control_a_duplicate_step_name_is_detected() -> None:
+    twice = _night_manifest(_night_step(), _night_step())
+    assert "two write steps are named 'assign-work'" in night_window_findings(twice, _NIGHT_CONTRACT)
+
+
+def test_control_a_credential_in_the_roster_is_detected() -> None:
+    roster = [{"name": "expert_only", "roles": ["expert"], "password": "x"},
+              {"name": "admin_only", "roles": ["admin"]}]
+    manifest = {"accounts": {"roster": roster, "register": {}, "decide": {}}}
+    found = account_findings(manifest, "", REPOSITORY_ROOT)
+    assert any("carries a credential" in f for f in found)
+    both = {"accounts": {"roster": [{"name": "a", "roles": ["expert", "admin"]}], "register": {}, "decide": {}}}
+    assert any("an expert without admin and an admin without expert" in f
+               for f in account_findings(both, "", REPOSITORY_ROOT))
+    assert account_findings({}, "", REPOSITORY_ROOT) == [
+        "the manifest declares no `accounts`, so no refusal by role can be driven"
+    ]
+
+
+def test_control_a_handle_the_accounts_press_that_left_the_source_is_detected(manifest: dict) -> None:
+    findings = account_findings(manifest, "no handle appears in this text", REPOSITORY_ROOT)
+    assert any("no longer appears in web/src" in f for f in findings)
+
+
+def test_control_the_new_handles_are_read_from_the_new_keys() -> None:
+    step = {
+        "actions": [{"do": "select", "selector": "form[data-create-assignment]", "label": "Эксперт"}],
+        "expects_present": [
+            {"selector": "[data-create-assignment-done]", "text_contains": "Назначение создано."},
+            {"selector": "tr[data-norm-document]", "text_contains": "СП 54.13330.2022", "text_is_data": True},
+        ],
+        "expects_absent": [{"selector": "li button", "text": "Сделать текущим"}],
+        "captures": [{"kind": "attribute", "selector": "tr[data-norm-document]",
+                      "attribute": "data-norm-document", "as": ["x"], "bound_ms": 1}],
+    }
+    handles = handles_named_by_write_step(step)
+    assert {"data-create-assignment", "data-create-assignment-done", "data-norm-document",
+            "Эксперт", "Назначение создано.", "Сделать текущим"} <= handles
+    assert "СП 54.13330.2022" not in handles, "words that come from data are not the application's"
+
+
+def test_the_read_walk_s_constants_are_members_of_a_contract_enumeration(
+    manifest: dict, openapi: dict
+) -> None:
+    """A route's `constants` stand in for a path value that is not an identity, and only for one
+    the contract enumerates (`section_code: "AR"`). An identifier is captured from a link the
+    application rendered, never declared."""
+    wrong = []
+    for route in manifest["routes"]:
+        for name, value in (route.get("constants") or {}).items():
+            enum = _path_parameter_enum(openapi, route, name)
+            if enum is None or value not in enum:
+                wrong.append(f"{route['name']}: {name}={value!r}")
+    assert not wrong, f"read-walk constants outside a contract enumeration: {wrong}"
+
+
+def test_control_a_route_constant_outside_its_enumeration_is_detected(openapi: dict) -> None:
+    route = {
+        "expects_api": [
+            {"method": "GET", "path": "/sections/{section_code}/specification",
+             "operationId": "getSectionSpecification"}
+        ]
+    }
+    assert "AR" in _path_parameter_enum(openapi, route, "section_code")
+    assert "ZZ" not in _path_parameter_enum(openapi, route, "section_code")
+    assert _path_parameter_enum(openapi, route, "project_uid") is None
+
+
+# ---- the stack preparations the night-window steps need (BETA-LIVE-JOURNEY-01) -----------
+
+
+def _run_tool(*argv: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    environment = {**os.environ, "PYTHONPATH": str(REPOSITORY_ROOT / "src"), **(env or {})}
+    return subprocess.run(
+        [sys.executable, *argv], cwd=REPOSITORY_ROOT, env=environment,
+        capture_output=True, text=True, timeout=300,
+    )
+
+
+def test_the_specification_bundle_is_what_its_builder_builds() -> None:
+    """The committed bundle holds the table the price steps price, and the builder reproduces it.
+
+    `--check` builds the bundle again, compares it byte for byte with the committed one, and
+    computes the request checksum its recording is filed under -- after reproducing the
+    baseline's own checksum as a control, so a moved prompt is a red here and not a run that
+    quietly cannot replay.
+    """
+    tool = JOURNEY_DIR / "build_specification_bundle.py"
+    answer = _run_tool(str(_require(tool)), "--check")
+    assert answer.returncode == 0, answer.stdout + answer.stderr
+    assert "specification bundle OK" in answer.stdout
+
+
+def test_the_specification_bundle_check_can_fail(tmp_path: Path) -> None:
+    """A bundle that is not what the builder builds is refused, so `--check` is not a smile."""
+    tool = _require(JOURNEY_DIR / "build_specification_bundle.py")
+    bundle = JOURNEY_DIR / "fixtures" / "optimisation" / "ar_specification.zip"
+    original = bundle.read_bytes()
+    try:
+        bundle.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
+        answer = _run_tool(str(tool), "--check")
+    finally:
+        bundle.write_bytes(original)
+    assert answer.returncode == 1 and "differs" in answer.stderr
+    assert bundle.read_bytes() == original
+
+
+def test_the_specification_text_is_a_table_the_matcher_prices_and_the_prices_hold_an_analog() -> None:
+    """The three rows the bundle declares are read, and МЩ-1 has a cheaper analog in the list."""
+    sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
+    from auditmanager.optimisation.specification import extract_specification
+
+    sys.path.insert(0, str(JOURNEY_DIR))
+    import build_specification_bundle as builder
+
+    page = "\n".join(text for text, _ in builder.SPEC_LINES)
+    rows = extract_specification(
+        version_uid="ver_01M2545JSD15ETSNNV904XA001", pages={9: page}
+    ).rows
+    assert [(r.position, r.name, r.unit, r.quantity_text) for r in rows] == [
+        ("1", "Металлический щит МЩ-1", "шт", "2"),
+        ("2", "Дверь стальная ДС-1", "шт", "1"),
+        ("3", "Утеплитель минераловатный", "м3", "12,5"),
+    ]
+    prices = (JOURNEY_DIR / "fixtures" / "optimisation" / "prices.csv").read_text(encoding="utf-8")
+    cells = [line.split(";") for line in prices.splitlines()[1:]]
+    by_name = {c[0]: float(c[2].replace(",", ".")) for c in cells if c[2]}
+    assert by_name["Металлический щит МЩ-2"] < by_name["Металлический щит МЩ-1"]
+    # The analog's vendor is the one the project's vendor list is given, and it is ONE cell:
+    # a `;` inside it would split the row, which is how the first version of this fixture
+    # silently lost its analog.
+    vendor_row = next(c for c in cells if c[0] == "Металлический щит МЩ-2")
+    assert len(vendor_row) == len(prices.splitlines()[0].split(";"))
+    assert vendor_row[4].startswith("=")
+
+
+def test_the_norms_seed_refuses_a_database_that_is_not_a_lanes() -> None:
+    tool = _require(JOURNEY_DIR / "seed_norms.py")
+    refused = _run_tool(
+        str(tool), env={"DATABASE_URL": "postgresql+psycopg://u:p@127.0.0.1:1/auditmanager_alpha"}
+    )
+    assert refused.returncode == 1 and "refusing to write" in refused.stderr
+    # The control: a lane-shaped name gets past the refusal and fails only for want of a server.
+    lane = _run_tool(
+        str(tool), "--check",
+        env={"DATABASE_URL": "postgresql+psycopg://u:p@127.0.0.1:1/auditmanager_beta_live_journey"},
+    )
+    assert "refusing to write" not in lane.stderr and lane.returncode != 0
+
+
+def test_the_journey_will_not_spend_or_change_an_origin_it_was_not_told_it_may() -> None:
+    """`--phase all` makes accounts, pauses dispatch and starts further runs: only where it is free.
+
+    The pure rule is tested by `write.test.mjs` (`node --test`), run here so that a gate which
+    cannot run a browser still runs it; the wiring is read in the two files that carry it.
+    """
+    node = shutil.which("node")
+    assert node is not None, "node is required: the journey is a node program"
+    ran = subprocess.run(
+        [node, "--test", str(JOURNEY_DIR / "write.test.mjs")],
+        cwd=REPOSITORY_ROOT, capture_output=True, text=True, timeout=120,
+    )
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    write = _require(JOURNEY_DIR / "write.mjs").read_text(encoding="utf-8")
+    assert "nightWindowMayRun({ providerMode, allowSpend })" in write
+    assert "if (step.screen !== undefined && step.reads_only !== true) {" in write
+    journey = _require(JOURNEY).read_text(encoding="utf-8")
+    assert "'--allow-spend'" in journey and "E2E_PC01_ALLOW_SPEND" in journey
+    assert "step.screen === undefined" in journey, "--phase core must be the steps without a screen"
+    verify = _require(JOURNEY_DIR / "verify-acceptance.mjs").read_text(encoding="utf-8")
+    assert "step.screen === undefined" in verify, (
+        "the stand's acceptance verdict must count what a core walk declares"
+    )
+
+
+def test_control_a_step_that_claims_to_only_read_but_presses_a_control_is_detected() -> None:
+    reading = _night_step(reads_only=True)
+    assert not any("only reads" in f for f in _only_step_findings(reading))
+    pressing = _night_step(reads_only=True, actions=[{"do": "click", "selector": "button"}])
+    assert any("only reads" in f for f in _only_step_findings(pressing))
+    writing = _night_step(reads_only=True, expects_api=[
+        {"method": "PUT", "path": "/assignments", "operationId": "createAssignment", "expect_status": 200}])
+    assert any("only reads" in f for f in _only_step_findings(writing))

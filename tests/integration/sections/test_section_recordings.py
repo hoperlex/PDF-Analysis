@@ -115,7 +115,10 @@ def test_the_served_adapter_answers_ar_exactly_as_the_canonical_directory() -> N
     served = RecordedAdapter()
     assert served.recording_dir == CANONICAL
     assert served.recording_dirs == (
-        CANONICAL, *(SECTIONS / name for name in sorted(code.lower() for code in RECORDED_SECTIONS)),
+        CANONICAL,
+        # `ar_specification` is the recorded AR reply for the Form-7 specification bundle
+        # (`SPEC-TABLE-RECORDING-01`); it is searched like a section directory but is not a section.
+        *(SECTIONS / name for name in sorted([code.lower() for code in RECORDED_SECTIONS] + ["ar_specification"])),
     )
     request = _request("AR")
     assert served.complete(request) == RecordedAdapter(CANONICAL).complete(request)

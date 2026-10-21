@@ -1,0 +1,254 @@
+{
+  "schema": "ar-specification-expected/1",
+  "synthetic": true,
+  "notice": "Synthetic. Every figure is computed by tools/fixtures/build_ar_specification.py from the authored numbers, not read from the product. The vendors are fictional; no customer, production or real project bytes (owner decision OD-17).",
+  "generated_by": "tools/fixtures/build_ar_specification.py",
+  "regenerate": "python3 tools/fixtures/build_ar_specification.py",
+  "verify": "python3 tools/fixtures/build_ar_specification.py --check",
+  "files": {
+    "pdf": {
+      "path": "fixtures/synthetic/ar_specification/ar_specification.pdf",
+      "sha256": "67fc9af878c7fa44a2c54e2f1a46be5f2b1337e6ad2db943e24e2c46a70a1f40",
+      "bytes": 48400
+    },
+    "bundle": {
+      "path": "fixtures/synthetic/ar_specification/ar_specification.zip",
+      "sha256": "7ec8d5262f273f2f7adb4076bca551d318781c55e25f31306c244f43e0a0076c",
+      "bytes": 65104
+    },
+    "price_list": {
+      "path": "fixtures/synthetic/ar_specification/ar_specification_prices.csv",
+      "sha256": "06d28a4a37a498bad747c28edf4902ad9e044a2ac2e4bc4251c6b47f59c02d8e",
+      "bytes": 1008
+    }
+  },
+  "journey": {
+    "classification": {
+      "project_stage": "P",
+      "section_code": "AR"
+    },
+    "price_list_default_currency": "RUB",
+    "project_vendor_list": [
+      {
+        "vendor": "Завод Север"
+      }
+    ],
+    "recorded_response": "fixtures/recorded/sections/ar_specification/"
+  },
+  "price_list_positions": 10,
+  "specification": {
+    "algorithm": "specification-text-v1",
+    "pages": [
+      3,
+      4
+    ],
+    "table_count": 1,
+    "continued_on": [
+      4
+    ],
+    "row_count": 7,
+    "rows": [
+      {
+        "position": "1",
+        "page": 3,
+        "sheet_label": "3",
+        "name": "Дверь противопожарная ДПМ-01/60 EI60 ООО «Промет»",
+        "unit": "шт",
+        "quantity_text": "4",
+        "quantity": "4",
+        "manufacturer": "ООО «Промет»",
+        "status": "matched",
+        "reason": null,
+        "basis": "mark",
+        "unit_price": "25000",
+        "amount": "100000",
+        "excluded_reason": null
+      },
+      {
+        "position": "2",
+        "page": 3,
+        "sheet_label": "3",
+        "name": "Окно ПВХ двухкамерное ОП В2 1460х1460",
+        "unit": "шт",
+        "quantity_text": "12",
+        "quantity": "12",
+        "manufacturer": null,
+        "status": "matched",
+        "reason": null,
+        "basis": "name",
+        "unit_price": "18500",
+        "amount": "222000",
+        "excluded_reason": null
+      },
+      {
+        "position": "3",
+        "page": 3,
+        "sheet_label": "3",
+        "name": "Анкер химический ООО «Промет»",
+        "unit": "шт",
+        "quantity_text": "200",
+        "quantity": "200",
+        "manufacturer": "ООО «Промет»",
+        "status": "matched",
+        "reason": null,
+        "basis": "name",
+        "unit_price": "12.75",
+        "amount": "2550",
+        "excluded_reason": null
+      },
+      {
+        "position": "4",
+        "page": 4,
+        "sheet_label": "4",
+        "name": "Профиль направляющий ПН 50х40",
+        "unit": "п.м",
+        "quantity_text": "120",
+        "quantity": "120",
+        "manufacturer": null,
+        "status": "unmatched",
+        "reason": "unit_mismatch",
+        "basis": null,
+        "unit_price": null,
+        "amount": null,
+        "excluded_reason": "unit_mismatch"
+      },
+      {
+        "position": "5",
+        "page": 4,
+        "sheet_label": "4",
+        "name": "Решётка вентиляционная РВ-200",
+        "unit": "шт",
+        "quantity_text": "6",
+        "quantity": "6",
+        "manufacturer": null,
+        "status": "unmatched",
+        "reason": "no_position",
+        "basis": null,
+        "unit_price": null,
+        "amount": null,
+        "excluded_reason": "no_position"
+      },
+      {
+        "position": "6",
+        "page": 4,
+        "sheet_label": "4",
+        "name": "Монтажная пена",
+        "unit": "компл",
+        "quantity_text": "-",
+        "quantity": null,
+        "manufacturer": null,
+        "status": "matched",
+        "reason": null,
+        "basis": "name",
+        "unit_price": "450",
+        "amount": null,
+        "excluded_reason": "quantity_not_numeric"
+      },
+      {
+        "position": "7",
+        "page": 4,
+        "sheet_label": "4",
+        "name": "Гидроизоляционная мембрана Техноэласт ЭПП",
+        "unit": "м2",
+        "quantity_text": "340,8",
+        "quantity": "340.8",
+        "manufacturer": null,
+        "status": "matched",
+        "reason": null,
+        "basis": "name",
+        "unit_price": "410",
+        "amount": "139728",
+        "excluded_reason": null
+      }
+    ]
+  },
+  "matching": {
+    "algorithm": "price-match-v1",
+    "counts": {
+      "matched": 5,
+      "ambiguous": 0,
+      "unmatched": 2
+    },
+    "totals": [
+      {
+        "currency": "RUB",
+        "amount": "464278",
+        "row_count": 4
+      }
+    ],
+    "excluded": {
+      "no_position": 1,
+      "unit_mismatch": 1,
+      "row_unit_missing": 0,
+      "ambiguous": 0,
+      "quantity_not_numeric": 1
+    }
+  },
+  "proposals": {
+    "generator": "cheaper-analog-v1",
+    "count": 4,
+    "items": [
+      {
+        "ordinal": 1,
+        "row_position": "1",
+        "proposal_type": "cheaper_analog",
+        "analog_basis": "code_family",
+        "proposed_vendor": "Завод Север",
+        "unit": "шт",
+        "currency": "RUB",
+        "quantity": "4",
+        "current_unit_price": "25000",
+        "proposed_unit_price": "21000",
+        "saving": "16000"
+      },
+      {
+        "ordinal": 2,
+        "row_position": "2",
+        "proposal_type": "cheaper_analog",
+        "analog_basis": "name_similarity",
+        "proposed_vendor": "Завод Север",
+        "unit": "шт",
+        "currency": "RUB",
+        "quantity": "12",
+        "current_unit_price": "18500",
+        "proposed_unit_price": "17200",
+        "saving": "15600"
+      },
+      {
+        "ordinal": 3,
+        "row_position": "3",
+        "proposal_type": "cheaper_analog",
+        "analog_basis": "name_similarity",
+        "proposed_vendor": "Завод Север",
+        "unit": "шт",
+        "currency": "RUB",
+        "quantity": "200",
+        "current_unit_price": "12.75",
+        "proposed_unit_price": "9.5",
+        "saving": "650"
+      },
+      {
+        "ordinal": 4,
+        "row_position": "6",
+        "proposal_type": "cheaper_analog",
+        "analog_basis": "name_similarity",
+        "proposed_vendor": "Завод Север",
+        "unit": "компл",
+        "currency": "RUB",
+        "quantity": null,
+        "current_unit_price": "450",
+        "proposed_unit_price": "300",
+        "saving": null
+      }
+    ],
+    "total_saving": {
+      "currency": "RUB",
+      "amount": "32250"
+    }
+  },
+  "seeded_observation": {
+    "page": 2,
+    "quote": "1.3. Тип светопрозрачного заполнения — уточнить.",
+    "category": "explicit_placeholder"
+  }
+}

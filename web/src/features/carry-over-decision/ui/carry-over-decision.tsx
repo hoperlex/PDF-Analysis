@@ -52,6 +52,29 @@ function SourceDecision({ candidate }: { readonly candidate: CarryoverCandidate 
   );
 }
 
+/**
+ * What a completed carry says: carried now, or already carried earlier. A component of its
+ * own because the comparison, read again after the carry, stops listing the row as a
+ * candidate -- the newer finding now HAS a decision -- and the row's offer, with the answer it
+ * was holding, goes with it. The widget keeps the answer and shows this in its place
+ * (`BETA-LIVE-JOURNEY-01`: the live journey carried a decision and the only trace on the
+ * screen was a «—» where the button had been).
+ */
+export function CarriedDecisionNote({ result }: { readonly result: CarryOverDecisionResponse }) {
+  return (
+    <p
+      className="am-note"
+      role="status"
+      data-carryover-state={result.replayed ? 'replayed' : 'carried'}
+      data-carried-decision={result.event.decision_id}
+    >
+      {result.replayed
+        ? 'Это решение уже было перенесено ранее; повторный перенос ничего не изменил.'
+        : `Решение перенесено: замечание более поздней версии — ${VERDICT_LABELS[result.current_verdict]}.`}
+    </p>
+  );
+}
+
 export function CarryOverDecisionView({
   candidate,
   target,
@@ -63,20 +86,7 @@ export function CarryOverDecisionView({
   onConfirm,
   onCancel,
 }: CarryOverDecisionViewProps) {
-  if (result !== null) {
-    return (
-      <p
-        className="am-note"
-        role="status"
-        data-carryover-state={result.replayed ? 'replayed' : 'carried'}
-        data-carried-decision={result.event.decision_id}
-      >
-        {result.replayed
-          ? 'Это решение уже было перенесено ранее; повторный перенос ничего не изменил.'
-          : `Решение перенесено: замечание более поздней версии — ${VERDICT_LABELS[result.current_verdict]}.`}
-      </p>
-    );
-  }
+  if (result !== null) return <CarriedDecisionNote result={result} />;
   if (!confirming) {
     return (
       <div data-carryover-state="offered">
@@ -124,9 +134,11 @@ export function CarryOverDecisionView({
 export interface CarryOverDecisionProps {
   readonly command: CarryOverDecisionCommand;
   readonly target: FindingRef;
+  /** Told the answer of a completed carry, so the screen can keep it after the next read. */
+  readonly onCarried?: ((result: CarryOverDecisionResponse) => void) | undefined;
 }
 
-export function CarryOverDecision({ command, target }: CarryOverDecisionProps) {
+export function CarryOverDecision({ command, target, onCarried }: CarryOverDecisionProps) {
   const [confirming, setConfirming] = useState(false);
   const mutation = useCarryOverDecision();
   return (
@@ -143,7 +155,10 @@ export function CarryOverDecision({ command, target }: CarryOverDecisionProps) {
       }}
       onConfirm={() => {
         if (mutation.isPending) return;
-        mutation.mutate(command, { onSettled: () => setConfirming(false) });
+        mutation.mutate(command, {
+          onSuccess: (answer) => onCarried?.(answer),
+          onSettled: () => setConfirming(false),
+        });
       }}
       onCancel={() => setConfirming(false)}
     />

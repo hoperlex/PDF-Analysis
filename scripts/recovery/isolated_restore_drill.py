@@ -23,6 +23,11 @@ from scripts.recovery.offline_restore_audit import (
     collect_offline_restore_evidence,
 )
 from scripts.recovery.offline_restore_preflight import verify_offline_restore_inputs
+from scripts.recovery.schema_coverage import (
+    FINGERPRINTED_TABLES,
+    RestoredSchemaAudit,
+    audit_restored_schema,
+)
 from scripts.recovery.target_blob_readback import TargetBlobReadback, audit_target_blob_readback
 from scripts.recovery.target_object_restore import (
     TargetObjectClient,
@@ -46,6 +51,7 @@ class IsolatedRestoreDrillEvidence:
     record_sha256: str
     dump_sha256: str
     source_counts: tuple[tuple[str, int], ...]
+    schema: RestoredSchemaAudit
     target_objects: TargetObjectRestore
     target_blobs: TargetBlobReadback
 
@@ -66,11 +72,18 @@ def run_isolated_restore_drill(
     verify_offline_restore_inputs(copy_dir, objects_root)
     metadata = _read_copy_metadata(copy_dir)
     record_data, inventory_data, sealed_data = metadata
-    expected_fingerprint = json.loads(record_data)["fingerprint"]["sha256"]
+    record = json.loads(record_data)
+    expected_fingerprint = record["fingerprint"]["sha256"]
+    # The fingerprint SQL counts every table but the listed exemptions. A record whose table
+    # set is not exactly the declared one was taken at another schema (or with another SQL):
+    # refuse before any restore rather than compare digests of an unknown table set.
+    if set(record["fingerprint"]["tables"]) != FINGERPRINTED_TABLES:
+        raise IsolatedRestoreDrillRefused("copy record fingerprint tables differ from the declared schema")
     with restore_database(copy_dir / "db.dump") as restored:
         if type(restored) is not RestoredDatabase \
                 or restored.fingerprint_sha256 != expected_fingerprint:
             raise IsolatedRestoreDrillRefused("restored DB fingerprint differs from copy record")
+        schema = audit_restored_schema(restored.session)
         evidence = collect_offline_restore_evidence(restored.session, copy_dir, objects_root)
         if _read_copy_metadata(copy_dir) != metadata:
             raise IsolatedRestoreDrillRefused("copy metadata changed before target restore")
@@ -84,8 +97,8 @@ def run_isolated_restore_drill(
             raise IsolatedRestoreDrillRefused("copy metadata changed during target readback")
         return IsolatedRestoreDrillEvidence(
             record_sha256=hashlib.sha256(record_data).hexdigest(),
-            dump_sha256=json.loads(record_data)["dump"]["sha256"],
-            source_counts=evidence.blob_references.source_counts,
+            dump_sha256=record["dump"]["sha256"],
+            source_counts=evidence.blob_references.source_counts, schema=schema,
             target_objects=objects, target_blobs=blobs,
         )
 

@@ -199,8 +199,13 @@ if (declaredRoutes === null) {
 // The write steps a complete write phase checks, read the same way. `W59-SECTION-UI-01` added
 // `classify-version` before `start-run`, and a literal `3` here would have failed the stand's
 // acceptance over a journey that did everything its manifest says.
+// `BETA-LIVE-JOURNEY-01`: `--phase core` is the journey before the night window (the steps
+// without a `screen`), `--phase all` is every step. A stand that bills per run is walked with
+// `core`, and its verdict counts what that phase declares.
+const writeStepsOf = (phase) =>
+  (manifestRead.value?.write?.steps ?? []).filter((step) => phase !== 'core' || step.screen === undefined);
 const declaredWriteSteps = Array.isArray(manifestRead.value?.write?.steps)
-  ? manifestRead.value.write.steps.length
+  ? writeStepsOf(journey?.phase).length
   : null;
 if (declaredWriteSteps === null) {
   findings.push(`journey manifest is unavailable: ${manifestRead.error ?? 'it declares no write steps'}`);
@@ -247,7 +252,10 @@ const failedTextAnalysis = currentRunReadings.some(({ body }) =>
 );
 
 if (journey !== null) {
-  expect(journey.phase === 'all', `journey phase is ${JSON.stringify(journey.phase)}, expected "all"`);
+  expect(
+    journey.phase === 'all' || journey.phase === 'core',
+    `journey phase is ${JSON.stringify(journey.phase)}, expected "all" or "core"`,
+  );
   expect(journey.session?.opened === true, 'sign-in did not open a session');
   expect(journey.viewport?.width === 780, 'journey viewport width is not 780px');
   expect(journey.viewport?.height === 900, 'journey viewport height is not 900px');

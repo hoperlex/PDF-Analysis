@@ -1,0 +1,23 @@
+{
+  "latency_ms": 7800,
+  "model_id": "claude-opus-5",
+  "note": "Synthetic AR reply over the AR specification set's text layer, authored by hand: the one seeded placeholder, nothing else. Token counts and latency are authored, not measured.",
+  "origin": {
+    "analysis_profile_id": "ap_01M25P3TH08VVTTGJRXYBZZ7RP",
+    "kind": "synthetic",
+    "prompt_bundle_id": "pb_01M25P3TH0PDQYVKTRQFEM0CYS",
+    "prompt_bundle_sha256": "934705c04a7189f18161ea34e9b4922374dff9fec3c6bb48224398a5a468d0ba",
+    "section_code": "AR",
+    "source_pdf": "fixtures/synthetic/ar_specification/ar_specification.pdf",
+    "statement": "Synthetic: authored by hand for SPEC-TABLE-RECORDING-01 so that the AR specification set runs end to end in recorded mode. No model produced this reply and no provider call was made. Not field evidence for any profile.",
+    "task_id": "SPEC-TABLE-RECORDING-01"
+  },
+  "output_text": "{\"observations\": [{\"category\": \"explicit_placeholder\", \"finding_text\": \"Синтетический ответ (АР, спецификация), не результат вызова модели: тип светопрозрачного заполнения не определён, в общих данных оставлено указание «уточнить».\", \"recommendation_text\": \"Определить тип светопрозрачного заполнения и согласовать его с позицией 2 спецификации (окно ПВХ двухкамерное).\", \"evidence\": [{\"page_number\": 2, \"quote\": \"1.3. Тип светопрозрачного заполнения — уточнить.\"}]}]}",
+  "recording_version": "1.0.0",
+  "request_sha256": "19fa19530edb2f0a6f0139a2e156ea1128662e52b668ea6a701bb6e946f9e584",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2640,
+    "output_tokens": 310
+  }
+}

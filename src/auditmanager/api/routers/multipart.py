@@ -296,8 +296,21 @@ class BodyCapMiddleware:
         media_type = b""
         token: str | None = None
         declared: int | None = None
+        # `D-176`. A header that arrives twice is read as **Starlette reads it: the first**
+        # (``Headers.__getitem__`` returns the first match, and both the bearer scheme of the
+        # seam and the form parser ask it). This loop used to keep the last, so a request
+        # carrying two ``Authorization`` or two ``Content-Type`` headers was judged here on
+        # one credential or one media type and then served by the seam and the parser on the
+        # other: a forged first credential behind a signed last one took an upload slot and
+        # had its body read before the seam refused it, and a valid first credential behind a
+        # bad last one was refused here for a header nothing else read.
+        seen: set[bytes] = set()
         for name, value in scope.get("headers", ()):
             lowered = name.lower()
+            if lowered in (b"content-type", b"authorization"):
+                if lowered in seen:
+                    continue
+                seen.add(lowered)
             if lowered == b"content-type":
                 is_upload = b"multipart/form-data" in value.lower()
                 has_boundary = b"boundary=" in value.lower()

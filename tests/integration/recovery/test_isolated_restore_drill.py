@@ -18,17 +18,25 @@ from scripts.recovery.blob_reference_audit import BlobFact, BlobReferenceAudit, 
 from scripts.recovery.object_copy import build_manifest, manifest_bytes
 from scripts.recovery.offline_restore_audit import OfflineRestoreEvidence
 from scripts.recovery.offline_restore_preflight import RecoveryPreflightRefused
+from scripts.recovery.schema_coverage import (
+    FINGERPRINTED_TABLES,
+    HEAD,
+    RestoredSchemaAudit,
+    RestoredSchemaRefused,
+)
 
 _STAMP = "20261016T120000Z"
 _PAYLOADS = (b"retrieval set payload", b"catalogue payload")
 _FINGERPRINT = "c" * 64
+_SCHEMA = RestoredSchemaAudit(55, 4, 72, 31, ())
 
 
 def _sha(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-def _copy(tmp_path: Path) -> tuple[Path, Path, OfflineRestoreEvidence]:
+def _copy(tmp_path: Path, *, tables: frozenset[str] = FINGERPRINTED_TABLES,
+          ) -> tuple[Path, Path, OfflineRestoreEvidence]:
     copy_dir, mirror = tmp_path / _STAMP, tmp_path / "mirror"
     copy_dir.mkdir(mode=0o700)
     mirror.mkdir(mode=0o700)
@@ -54,12 +62,12 @@ def _copy(tmp_path: Path) -> tuple[Path, Path, OfflineRestoreEvidence]:
     record = {
         "record_version": 1, "kind": "copy", "stamp": _STAMP, "state": "open",
         "purpose": "import", "target_sha": None, "instance": "isolated-fixture",
-        "deployed_tree": "a" * 40, "migration_head": "0023_norm_citations",
+        "deployed_tree": "a" * 40, "migration_head": HEAD,
         "opened_at": "2026-10-16T12:00:00Z", "quiesced_at": "2026-10-16T12:00:01Z",
         "writers_present": ["api", "worker"], "writers_stopped": ["api", "worker"],
         "dump": {"file": "db.dump", "size_bytes": len(dump), "sha256": _sha(dump)},
         "fingerprint": {"algorithm": "stand-fingerprint-v1", "sha256": _FINGERPRINT,
-                        "tables": {"project": {"rows": 1, "sha256": "d" * 64}}},
+                        "tables": {name: {"rows": 1, "sha256": "d" * 64} for name in sorted(tables)}},
         "rejected_blob_count": 0,
         "inventory": {"file": "inventory.tsv", "count": 2, "bytes": sum(map(len, _PAYLOADS)),
                       "sha256": _sha(inventory)},
@@ -135,6 +143,7 @@ def _run(copy_dir: Path, mirror: Path, evidence: OfflineRestoreEvidence,
          monkeypatch: pytest.MonkeyPatch, *, fingerprint: str = _FINGERPRINT,
          missing_blob_index: int | None = None,
          collector: Callable[[object, Path, Path], OfflineRestoreEvidence] | None = None,
+         schema_audit: Callable[[object], RestoredSchemaAudit] | None = None,
          object_client: _Objects | None = None,
          events_sink: list[str] | None = None,
          ) -> tuple[drill.IsolatedRestoreDrillEvidence, _Objects, list[str]]:
@@ -157,7 +166,13 @@ def _run(copy_dir: Path, mirror: Path, evidence: OfflineRestoreEvidence,
         assert actual_session is session and (actual_copy, actual_mirror) == (copy_dir, mirror)
         return evidence
 
+    def audit_schema(actual_session: object) -> RestoredSchemaAudit:
+        events.append("schema_audit")
+        assert actual_session is session
+        return _SCHEMA
+
     monkeypatch.setattr(drill, "collect_offline_restore_evidence", collector or collect)
+    monkeypatch.setattr(drill, "audit_restored_schema", schema_audit or audit_schema)
     result = drill.run_isolated_restore_drill(
         copy_dir=copy_dir, objects_root=mirror, restore_database=restore_database,
         target_bucket="isolated-bucket", object_client=objects,
@@ -175,7 +190,9 @@ def test_coordinator_restores_db_before_target_write_then_reads_all_target_bytes
 ) -> None:
     copy_dir, mirror, evidence = _copy(tmp_path)
     result, objects, events = _run(copy_dir, mirror, evidence, monkeypatch)
-    assert events.index("db_restore") < events.index("db_audit") < events.index("put")
+    assert events.index("db_restore") < events.index("schema_audit") < events.index("db_audit")
+    assert events.index("db_audit") < events.index("put")
+    assert result.schema == _SCHEMA
     assert events.index("put") < events.index("blob_read") < events.index("db_close")
     assert result.dump_sha256 == _sha((copy_dir / "db.dump").read_bytes())
     assert result.target_objects.count == result.target_blobs.count == 2
@@ -218,7 +235,7 @@ def test_db_audit_failure_prevents_target_write(
     events: list[str] = []
     with pytest.raises(BlobReferenceAuditRefused, match="catalogue"):
         _run(copy_dir, mirror, evidence, monkeypatch, collector=refuse, events_sink=events)
-    assert events == ["db_restore", "db_close"]
+    assert events == ["db_restore", "schema_audit", "db_close"]
 
 
 @pytest.mark.parametrize("missing_index", (0, 1))
@@ -241,4 +258,34 @@ def test_metadata_drift_after_db_read_prevents_target_write(
     events: list[str] = []
     with pytest.raises(drill.IsolatedRestoreDrillRefused, match="before target"):
         _run(copy_dir, mirror, evidence, monkeypatch, collector=drift, events_sink=events)
+    assert events == ["db_restore", "schema_audit", "db_close"]
+
+
+@pytest.mark.parametrize("tables", (
+    FINGERPRINTED_TABLES - {"price_list_revision"},
+    FINGERPRINTED_TABLES | {"price_list_revision_extra"},
+), ids=("table-missing", "table-unknown"))
+def test_a_record_with_another_table_set_stops_before_database_restore(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tables: frozenset[str],
+) -> None:
+    """A copy whose fingerprint omits (or adds) a table was taken at another schema."""
+    copy_dir, mirror, evidence = _copy(tmp_path, tables=frozenset(tables))
+    events: list[str] = []
+    with pytest.raises(drill.IsolatedRestoreDrillRefused, match="declared schema"):
+        _run(copy_dir, mirror, evidence, monkeypatch, events_sink=events)
+    assert events == []
+
+
+def test_schema_audit_failure_prevents_blob_audit_and_target_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    copy_dir, mirror, evidence = _copy(tmp_path)
+
+    def refuse(_: object) -> RestoredSchemaAudit:
+        raise RestoredSchemaRefused("triggers differ")
+
+    events: list[str] = []
+    with pytest.raises(RestoredSchemaRefused, match="triggers"):
+        _run(copy_dir, mirror, evidence, monkeypatch, schema_audit=refuse,
+             collector=lambda *_: pytest.fail("Blob audit reached"), events_sink=events)
     assert events == ["db_restore", "db_close"]

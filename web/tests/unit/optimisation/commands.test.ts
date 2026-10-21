@@ -75,6 +75,30 @@ describe('the price-list upload', () => {
     });
   });
 
+  it('sends ONE request when the same intent is pressed twice before the first answer (BETA-LIVE-JOURNEY-01)', async () => {
+    // The live journey measured two POSTs under one key; the second met the first still
+    // executing and was answered 409 idempotency_key_in_progress, which the form showed as a
+    // failed upload over a stored revision. Both presses must get the first press's answer.
+    let settle: (value: unknown) => void = () => undefined;
+    vi.mocked(uploadPriceList).mockImplementation(
+      () => new Promise((resolve) => { settle = resolve; }) as never,
+    );
+    const hook = useUploadPriceList() as unknown as Captured<UploadPriceListCommand, PriceListRevision>;
+    const command = { projectUid: OPT_PROJECT_UID, file: file(), defaultCurrency: 'RUB', idempotencyKey: 'twice-1' };
+    const first = hook.mutationFn(command);
+    const second = hook.mutationFn(command);
+    expect(vi.mocked(uploadPriceList)).toHaveBeenCalledTimes(1);
+    const stored = revision();
+    settle({ data: stored });
+    await expect(first).resolves.toBe(stored);
+    await expect(second).resolves.toBe(stored);
+    // Settled: the key is free again, and another intent is never joined to this one.
+    vi.mocked(uploadPriceList).mockResolvedValue({ data: stored } as never);
+    await hook.mutationFn(command);
+    await hook.mutationFn({ ...command, idempotencyKey: 'other-intent' });
+    expect(vi.mocked(uploadPriceList)).toHaveBeenCalledTimes(3);
+  });
+
   it('omits the currency part entirely when none was chosen', async () => {
     vi.mocked(uploadPriceList).mockResolvedValue({ data: revision() } as never);
     const hook = useUploadPriceList() as unknown as Captured<UploadPriceListCommand, PriceListRevision>;
