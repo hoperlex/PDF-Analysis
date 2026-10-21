@@ -391,3 +391,32 @@ def test_an_equal_price_group_of_two_thousand_analogs_builds_no_more_candidates_
         f"{built['count']} candidates were built from one equal-price group for a row that keeps "
         f"{MAX_PROPOSALS_PER_ROW}"
     )
+
+
+def test_a_group_whose_analogs_arrive_in_rising_similarity_keeps_only_the_places_it_can_fill(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Four analogs of one price meeting a row in ascending similarity (1/2, 5/7, 6/7, 1): each beats
+    the last kept one, so a group that is not cut to its places would hold four and judge four."""
+    built = {"count": 0}
+    original = generator._Candidate
+
+    def counting(*arguments, **keywords):
+        built["count"] += 1
+        return original(*arguments, **keywords)
+
+    monkeypatch.setattr(generator, "_Candidate", counting)
+    positions = (
+        _position(0, "Профиль альфа бета гамма дельта эпсилон", "5"),
+        _position(1, "Профиль альфа бета гамма ипсилон дзета", "1"),  # 4 shared of 8
+        _position(2, "Профиль альфа бета гамма дельта ипсилон", "1"),  # 5 shared of 7
+        _position(3, "Профиль альфа бета гамма дельта эпсилон ипсилон", "1"),  # 6 shared of 7
+        _position(4, "Профиль бета альфа гамма дельта эпсилон", "1"),  # the same words, another order
+    )
+    matches = match_specification([_row("Профиль альфа бета гамма дельта эпсилон", 1)], positions).matches
+
+    outcome = generate_cheaper_analogs(matches, positions, LISTED)
+
+    assert [draft.proposed.row_number for draft in outcome.proposals] == [5, 4, 3]
+    assert built["count"] <= MAX_PROPOSALS_PER_ROW, built
+    assert _compare(positions, [_row("Профиль альфа бета гамма дельта эпсилон", 1)], LISTED) == 3

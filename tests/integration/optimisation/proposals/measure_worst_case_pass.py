@@ -35,6 +35,9 @@ cost is a function of the shape, so four shapes are built (``D185_SCENARIO``):
 ``rich``
     Every field present and long (code, mark, a 300-character name): what the 10 MiB file cap
     allows at 20 000 rows, and the heaviest index the matcher builds.
+``flat_price``
+    Contrived: half the list at one price, all names alike, and the rows are the other half, so
+    every row has one equal-price group of ten thousand analogs to order.
 ``overlap_dissimilar``
     Contrived: every name draws six words from slots of twenty, so nearly every pair shares a word
     and almost none reaches the threshold, and the rows are the dearest positions, whose cheaper
@@ -112,6 +115,10 @@ def _names(scenario: str) -> tuple[list[str], list[str | None], list[str], list[
         codes = [f"АБВ {20000 + i}" for i in range(POSITIONS)]
         marks: list[str | None] = [f"МК-{i}" for i in range(POSITIONS)]
         return names, codes, [names[(2 * k) % POSITIONS] for k in range(ROWS)], marks
+    if scenario == "flat_price":
+        names = [f"Профиль вариант {i}" for i in range(POSITIONS)]
+        half = POSITIONS // 2
+        return names, nothing, [names[half + (k % half)] for k in range(ROWS)], nothing
     if scenario == "overlap_dissimilar":
         rnd = random.Random(7)
         names = [
@@ -129,6 +136,8 @@ def _price_list(scenario: str) -> bytes:
     for index in range(POSITIONS):
         if scenario == "overlap_dissimilar":  # the dearest positions are the rows': the longest prefixes
             price = f"{index + 1}"
+        elif scenario == "flat_price":  # half the list at one price; the rows are the other half
+            price = "1" if index < POSITIONS // 2 else str(2 + index)
         else:
             price = f"{rnd.randint(1000, 900000) / 100:.2f}".replace(".", ",")
         lines.append(
