@@ -15,7 +15,11 @@ Matching, per row, deterministic and exact on normalised text -- never fuzzy:
    not a bare standard reference (``ГОСТ``, ``ТУ``, ``СП``…), which many products share.
 2. **Name**, only when step 1 finds nothing: the row's description equals, after
    normalisation, the position's name -- or its name followed by its mark, code and vendor
-   in the Form-7 order (each combination of the ones present).
+   in the Form-7 order (each combination of the ones present). Only when that finds nothing
+   either, a vendor's **legal form** is optional on one side: a row whose manufacturer (the
+   extractor's ``manufacturer``) opens with ``ООО``/``АО``… is compared without it against
+   the positions whose vendor has none, and a row without one against the positions whose
+   vendor has one dropped. Two different legal forms (``ООО`` and ``ЗАО``) are never equal.
 3. Of the candidates, those **in the row's unit**: exactly one → ``matched``; two or more
    → ``ambiguous``; none → ``unmatched`` (``unit_mismatch``). A row without a unit is
    ``unmatched`` (``row_unit_missing``); no candidate at all is ``no_position``.
@@ -38,7 +42,7 @@ from itertools import combinations
 from typing import Final
 
 from .repository import PriceListPositionRecord
-from .specification import SpecificationRow, canonical_unit
+from .specification import SpecificationRow, canonical_unit, strip_legal_form
 
 __all__ = [
     "BASIS_CODE",
@@ -260,6 +264,8 @@ class _PriceIndex:
     def __init__(self, positions: Sequence[PriceListPositionRecord]) -> None:
         self.codes: dict[str, list[_Keyed]] = {}
         self.names: dict[str, list[PriceListPositionRecord]] = {}
+        #: Name keys with the vendor's legal form dropped, for positions whose vendor has one.
+        self.loose_names: dict[str, list[PriceListPositionRecord]] = {}
         for position in sorted(positions, key=lambda item: item.row_number):
             for basis, value in ((BASIS_CODE, position.code), (BASIS_MARK, position.mark)):
                 tokens = _specific_code(value)
@@ -267,6 +273,10 @@ class _PriceIndex:
                     self.codes.setdefault(tokens[0], []).append(_Keyed(tokens, position, basis))
             for key in _name_keys(position):
                 bucket = self.names.setdefault(key, [])
+                if not bucket or bucket[-1] is not position:
+                    bucket.append(position)
+            for key in _loose_name_keys(position):
+                bucket = self.loose_names.setdefault(key, [])
                 if not bucket or bucket[-1] is not position:
                     bucket.append(position)
 
@@ -282,9 +292,18 @@ class _PriceIndex:
                     found[identity] = (keyed.position, keyed.basis)
         return sorted(found.values(), key=lambda pair: pair[0].row_number)
 
-    def by_name(self, text: str) -> list[PriceListPositionRecord]:
-        key = name_key(text)
-        return list(self.names.get(key, ())) if key else []
+    def by_name(self, row: SpecificationRow) -> list[PriceListPositionRecord]:
+        key = name_key(row.name)
+        if not key:
+            return []
+        exact = list(self.names.get(key, ()))
+        if exact:
+            return exact
+        # Nothing equal as written: a legal form is optional on one side (module note).
+        if row.manufacturer is not None and strip_legal_form(row.manufacturer) != row.manufacturer:
+            dropped = name_key(row.name.replace(row.manufacturer, strip_legal_form(row.manufacturer), 1))
+            return list(self.names.get(dropped, ())) if dropped else []
+        return list(self.loose_names.get(key, ()))
 
 
 def _name_keys(position: PriceListPositionRecord) -> list[str]:
@@ -294,6 +313,21 @@ def _name_keys(position: PriceListPositionRecord) -> list[str]:
     for size in range(len(extras) + 1):
         for chosen in combinations(extras, size):
             key = name_key(" ".join((position.name, *chosen)))
+            if key and key not in keys:
+                keys.append(key)
+    return keys
+
+
+def _loose_name_keys(position: PriceListPositionRecord) -> list[str]:
+    """The name keys that name the vendor without its legal form (none: it has no legal form)."""
+    if not position.vendor or strip_legal_form(position.vendor) == position.vendor:
+        return []
+    others = [value for value in (position.mark, position.code) if value]
+    vendor = strip_legal_form(position.vendor)
+    keys: list[str] = []
+    for size in range(len(others) + 1):
+        for chosen in combinations(others, size):
+            key = name_key(" ".join((position.name, *chosen, vendor)))
             if key and key not in keys:
                 keys.append(key)
     return keys
@@ -324,7 +358,7 @@ def _match_row(row: SpecificationRow, index: _PriceIndex) -> RowMatch:
         candidates = [position for position, _ in coded]
         bases = {position.price_list_position_id: basis for position, basis in coded}
     else:
-        candidates = index.by_name(row.name)
+        candidates = index.by_name(row)
         bases = {position.price_list_position_id: BASIS_NAME for position in candidates}
     if not candidates:
         return RowMatch(row, STATUS_UNMATCHED, REASON_NO_POSITION, None, None, (), 0, None,

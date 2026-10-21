@@ -37,6 +37,15 @@ explicitly and nothing calls a provider.
 - no `provider_mode` field (the adapter's class constant stamps `recorded`);
 - authored, not measured, `usage` and `latency_ms`.
 
+## Not a section: `ar_specification/`
+
+`ar_specification/` (`SPEC-TABLE-RECORDING-01`) holds the synthetic **AR** reply for the
+specification set `fixtures/synthetic/ar_specification/` -- the canonical AR profile's request
+over that set's PDF, not a section profile's. It lives here only because `RecordedAdapter()`
+searches the canonical directory and every directory below this one, and
+`fixtures/recorded/text_analysis/` is closed to new recordings (its tests count its files). It is
+rebuilt by its own `ar_specification/build_fixtures.py`, not by the one below.
+
 ## Refreshing
 
 ```
