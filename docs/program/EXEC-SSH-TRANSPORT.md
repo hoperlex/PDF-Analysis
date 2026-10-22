@@ -1,4 +1,4 @@
-STATUS: 2/5 claude_output.py written (12:05 +05)
+STATUS: 3/5 Dockerfile.api gets openssh-client (12:05 +05)
 
 # EXEC-SSH-TRANSPORT - progress and report
 
