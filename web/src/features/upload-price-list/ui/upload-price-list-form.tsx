@@ -17,8 +17,8 @@ import type { PriceListRevision, ProjectUid } from '@/shared/api';
 import { ErrorState, LoadingState } from '@/shared/ui';
 import { useIntentKey } from '@/shared/lib';
 import type { FailureMessage } from '@/shared/api/failure-message';
-import { uploadFailureMessage } from '@/entities/price-list';
 
+import { priceListUploadFailure } from '../model/upload-failure';
 import { useUploadPriceList } from '../model/use-upload-price-list';
 
 /** The largest file the API accepts, 10 MiB. */
@@ -169,7 +169,7 @@ export function UploadPriceListForm({ projectUid }: UploadPriceListFormProps) {
       failure={
         mutation.error === null || mutation.error === undefined
           ? null
-          : uploadFailureMessage(mutation.error)
+          : priceListUploadFailure(mutation.error)
       }
       stored={mutation.data ?? null}
       onChoose={(chosen) => {

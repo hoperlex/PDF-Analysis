@@ -249,8 +249,16 @@ const OUTCOME_UNKNOWN_SENTENCE =
  *   command: the one place the retry-safety sentence is true.
  *
  * Every other status, and a failure with none, keeps the generic transport state.
+ *
+ * `limitLabel` is the product's size limit for the upload being classified. The document
+ * upload's is the envelope's (250 MiB); another upload that shares this reading -- the price
+ * list's is 10 MiB (`WEB-FOLLOWUPS-02`) -- passes its own, because naming one upload's limit
+ * under another's refusal is a sentence that is wrong in a way the user can act on.
  */
-function webServerAnswer(status: number | null): Pick<UploadFailure, 'kind' | 'title' | 'detail'> | null {
+function webServerAnswer(
+  status: number | null,
+  limitLabel: string,
+): Pick<UploadFailure, 'kind' | 'title' | 'detail'> | null {
   switch (status) {
     case 413:
       return {
@@ -259,7 +267,7 @@ function webServerAnswer(status: number | null): Pick<UploadFailure, 'kind' | 't
         detail:
           'Сервер отклонил файл как слишком большой ещё до API (ограничение веб-сервера). ' +
           'Ничего не сохранено. ' +
-          `Лимит продукта — ${PC01_UPLOAD_ENVELOPE.maxBytesLabel}; обратитесь к администратору стенда.`,
+          `Лимит продукта — ${limitLabel}; обратитесь к администратору стенда.`,
       };
     case 502:
       return {
@@ -284,6 +292,15 @@ function webServerAnswer(status: number | null): Pick<UploadFailure, 'kind' | 't
   }
 }
 
+/** What a caller that is not the document upload says about its own upload. */
+export interface UploadFailureOptions {
+  /**
+   * The product's size limit for this upload, as the user reads it («10 MiB»). Used by the
+   * sentence for a web server's own 413. Defaults to the document upload's envelope limit.
+   */
+  readonly limitLabel?: string;
+}
+
 /**
  * Classify anything thrown by `uploadDocument`.
  *
@@ -291,7 +308,10 @@ function webServerAnswer(status: number | null): Pick<UploadFailure, 'kind' | 't
  * recognise is an explicit `unknown` state with no retry, because a retry of something
  * nobody classified is how a second command gets issued.
  */
-export function classifyUploadFailure(error: unknown): UploadFailure {
+export function classifyUploadFailure(
+  error: unknown,
+  options: UploadFailureOptions = {},
+): UploadFailure {
   if (error instanceof ApiError) return fromApiError(error);
 
   if (error instanceof UnrecognizedApiError) {
@@ -309,7 +329,7 @@ export function classifyUploadFailure(error: unknown): UploadFailure {
   }
 
   if (error instanceof TransportError) {
-    const web = webServerAnswer(error.status);
+    const web = webServerAnswer(error.status, options.limitLabel ?? PC01_UPLOAD_ENVELOPE.maxBytesLabel);
     if (web !== null) {
       return {
         ...web,

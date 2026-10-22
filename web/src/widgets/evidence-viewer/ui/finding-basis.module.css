@@ -1,0 +1,65 @@
+/*
+ * What a v2 finding rests on (`REVIEW-V2-UI-01`).
+ *
+ * Layout only. Ink, tint and border come from the global rules this markup already meets
+ * (`h3`, `dl`, `.am-note`, `.am-badge`), so the contrast census measures them where it
+ * already measures those elements.
+ */
+
+.basis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap);
+  margin-top: var(--am-gap-lg);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.block {
+  min-width: 0;
+}
+
+.heading {
+  margin: 0 0 var(--am-gap-sm);
+  font-size: var(--am-text-lg);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  margin: 0 0 var(--am-gap-xs);
+}
+
+.quote {
+  /* The quotation is printed as served: line breaks and runs of spaces stay. */
+  white-space: pre-wrap;
+}
+
+.meta {
+  margin: var(--am-gap-xs) 0 0;
+  font-size: var(--am-text-sm);
+}
+
+.quotes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  margin: var(--am-gap-xs) 0 0;
+  padding: 0;
+  list-style: none;
+}

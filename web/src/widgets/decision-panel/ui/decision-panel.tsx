@@ -17,16 +17,31 @@
  *
  * The current verdict is the **server's** projection, passed in. This panel never derives
  * one from the buttons the user pressed.
+ *
+ * On a finding that carries a proposed severity (`REVIEW-V2-UI-01`), the accept action gets a
+ * severity choice. The proposal is shown as the MODEL's and is not copied into the choice:
+ * the select starts empty, and an accept with nothing chosen is refused by the feature and
+ * said on the screen (`severityRefusal`, rendered on presence like the comment refusal). A
+ * finding without a proposal gets exactly the panel it always had.
  */
 
 import { useState } from 'react';
 
-import type { FindingObservationId, Verdict } from '@/shared/api';
+import type { FindingObservationId, Severity, Verdict } from '@/shared/api';
+import { SEVERITY_VALUES } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState } from '@/shared/ui';
 import type { CommentRefusal } from '@/features/append-comment';
 import { commentRefusalMessage } from '@/features/append-comment';
+import type { VerdictRefusal } from '@/features/record-verdict';
+import { verdictRefusalMessage } from '@/features/record-verdict';
 import { VerdictBadge } from '@/entities/expert-decision';
+import { SEVERITY_LABELS, SeverityBadge } from '@/entities/finding';
+
+import { chosenSeverity, draftFromControl } from '../model/severity-draft';
+import type { SeverityDraft } from '../model/severity-draft';
+
+import styles from './decision-panel.module.css';
 
 /** Which intent is in flight, so only that control shows as busy. */
 export type DecisionIntent = 'accept' | 'reject' | 'comment';
@@ -34,7 +49,11 @@ export type DecisionIntent = 'accept' | 'reject' | 'comment';
 export interface DecisionPanelProps {
   readonly currentVerdict: Verdict;
   readonly observationId: FindingObservationId;
-  readonly onAccept: (observationId: FindingObservationId) => void;
+  /** `severity` is the expert's choice, or nothing; it is only ever offered with a proposal. */
+  readonly onAccept: (
+    observationId: FindingObservationId,
+    severity: Severity | undefined,
+  ) => void;
   readonly onReject: (observationId: FindingObservationId) => void;
   readonly onComment: (text: string, observationId: FindingObservationId) => void;
   readonly pendingIntent?: DecisionIntent | null | undefined;
@@ -51,6 +70,12 @@ export interface DecisionPanelProps {
    * instead of by somebody remembering this line.
    */
   readonly refusal?: CommentRefusal | null | undefined;
+  /** The model's proposed severity of the canonical observation, when it has one. */
+  readonly proposedSeverity?: Severity | undefined;
+  /** The severity the expert decided, as the server's projection serves it. */
+  readonly decidedSeverity?: Severity | undefined;
+  /** Set when the browser refused to send an accept; rendered on presence. */
+  readonly severityRefusal?: VerdictRefusal | null | undefined;
 }
 
 export function DecisionPanel({
@@ -62,8 +87,13 @@ export function DecisionPanel({
   pendingIntent,
   error,
   refusal,
+  proposedSeverity,
+  decidedSeverity,
+  severityRefusal,
 }: DecisionPanelProps) {
   const [draft, setDraft] = useState('');
+  const [severityDraft, setSeverityDraft] = useState<SeverityDraft | null>(null);
+  const chosen = chosenSeverity(severityDraft, observationId);
   const busy = pendingIntent !== undefined && pendingIntent !== null;
 
   return (
@@ -72,8 +102,53 @@ export function DecisionPanel({
         <h3>Решение</h3>
         <span className="am-decision__current">
           текущий вердикт <VerdictBadge verdict={currentVerdict} />
+          {decidedSeverity === undefined ? null : (
+            <span className={styles.decided} data-decided-severity={decidedSeverity}>
+              важность <SeverityBadge severity={decidedSeverity} title="Важность, решённая экспертом" />
+            </span>
+          )}
         </span>
       </header>
+
+      {proposedSeverity === undefined ? null : (
+        <div className={styles.severity} data-severity-control="accept">
+          <p
+            className={`am-decision__current ${styles.proposal}`}
+            data-proposed-severity={proposedSeverity}
+          >
+            Предложение модели:{' '}
+            <SeverityBadge severity={proposedSeverity} title="Важность, предложенная моделью" />
+          </p>
+          <label htmlFor="decision-severity">
+            Важность при принятии
+          </label>
+          <select
+            id="decision-severity"
+            className={styles.select}
+            value={chosen ?? ''}
+            disabled={busy}
+            onChange={(event) => {
+              setSeverityDraft(draftFromControl(event.target.value, observationId));
+            }}
+          >
+            <option value="">Выберите важность</option>
+            {SEVERITY_VALUES.map((value) => (
+              <option key={value} value={value}>
+                {SEVERITY_LABELS[value]}
+              </option>
+            ))}
+          </select>
+          <p className="am-decision__note">
+            Предложение модели не становится решением само: важность записывается только
+            при принятии и только та, что выбрана здесь. При отклонении она не записывается.
+          </p>
+          {severityRefusal === null || severityRefusal === undefined ? null : (
+            <p className="am-decision__refusal" role="alert" data-severity-refusal={severityRefusal}>
+              {verdictRefusalMessage(severityRefusal)}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="am-decision__verdicts">
         <button
@@ -82,7 +157,7 @@ export function DecisionPanel({
           data-intent="accept"
           disabled={busy}
           onClick={() => {
-            onAccept(observationId);
+            onAccept(observationId, chosen);
           }}
         >
           {pendingIntent === 'accept' ? 'Принимаю…' : 'Принять'}
