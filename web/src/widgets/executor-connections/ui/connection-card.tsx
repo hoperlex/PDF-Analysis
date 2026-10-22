@@ -76,22 +76,22 @@ function RevisionSummary({ revision }: { readonly revision: ExecutorRevision }) 
         <code>{revision.created_by}</code>
       </dd>
       {revision.base_url !== undefined ? (<><dt>Адрес</dt><dd><code>{revision.base_url}</code></dd></>) : null}
-      {revision.api_flavour !== undefined ? (<><dt>Формат запросов</dt><dd>{FLAVOUR_LABELS[revision.api_flavour]}</dd></>) : null}
-      {revision.transport !== undefined ? (<><dt>Способ связи</dt><dd>{TRANSPORT_LABELS[revision.transport]}</dd></>) : null}
+      {revision.api_flavour !== undefined ? (<><dt>Формат запросов</dt><dd data-executor-flavour={revision.api_flavour}>{FLAVOUR_LABELS[revision.api_flavour]}</dd></>) : null}
+      {revision.transport !== undefined ? (<><dt>Способ связи</dt><dd data-executor-transport={revision.transport}>{TRANSPORT_LABELS[revision.transport]}</dd></>) : null}
       {revision.ssh_host !== undefined ? (
         <>
           <dt>Узел SSH</dt>
           <dd><code>{revision.ssh_user !== undefined ? `${revision.ssh_user}@` : ''}{revision.ssh_host}:{revision.ssh_port}</code></dd>
         </>
       ) : null}
-      {revision.ssh_profile !== undefined ? (<><dt>Профиль команды</dt><dd>{SSH_PROFILE_LABELS[revision.ssh_profile]}</dd></>) : null}
+      {revision.ssh_profile !== undefined ? (<><dt>Профиль команды</dt><dd data-executor-ssh-profile={revision.ssh_profile}>{SSH_PROFILE_LABELS[revision.ssh_profile]}</dd></>) : null}
       {revision.ssh_host !== undefined ? (
         <>
           <dt>Отпечаток узла</dt>
           <dd>{revision.host_key_fingerprint !== undefined ? <code>{revision.host_key_fingerprint}</code> : 'не закреплён'}</dd>
         </>
       ) : null}
-      {revision.pull_client !== undefined ? (<><dt>Клиент</dt><dd>{PULL_CLIENT_LABELS[revision.pull_client]}</dd></>) : null}
+      {revision.pull_client !== undefined ? (<><dt>Клиент</dt><dd data-executor-pull-client={revision.pull_client}>{PULL_CLIENT_LABELS[revision.pull_client]}</dd></>) : null}
       {revision.answer_deadline_seconds !== undefined ? (<><dt>Срок ответа</dt><dd>{revision.answer_deadline_seconds} с</dd></>) : null}
       {revision.max_claimed_tasks !== undefined ? (<><dt>Заданий в работе</dt><dd>{revision.max_claimed_tasks}</dd></>) : null}
       <dt>Модель</dt>
@@ -99,7 +99,7 @@ function RevisionSummary({ revision }: { readonly revision: ExecutorRevision }) 
         <code>{revision.pin_id}</code>; на шлюзе <code>{revision.gateway_model}</code>
       </dd>
       <dt>Тарификация</dt>
-      <dd>{BILLING_LABELS[revision.billing]}</dd>
+      <dd data-executor-billing={revision.billing}>{BILLING_LABELS[revision.billing]}</dd>
       <dt>Ожидание ответа</dt>
       <dd>{revision.timeout_seconds} с{revision.max_parallel_calls !== undefined ? `; параллельных вызовов ${revision.max_parallel_calls}` : ''}</dd>
       <dt>Документы заказчика</dt>
@@ -168,11 +168,16 @@ function ProbeSummary({
         <span className={`am-badge am-badge--${passed ? 'ok' : 'failed'}`}>{probeOutcomeSentence(probe.outcome)}</span>
         {probe.finished_at !== undefined ? <> проверено <Moment at={probe.finished_at} /></> : null}
       </p>
-      {passed ? (
+      {probe.reported_model !== undefined || probe.latency_ms !== undefined || probe.rate_check !== undefined ? (
         <p>
-          {probe.reported_model !== undefined ? <>Модель в ответе: <code>{probe.reported_model}</code>{probe.identity_basis !== undefined ? ` (${IDENTITY_BASIS_LABELS[probe.identity_basis]})` : ''}. </> : null}
+          {probe.reported_model !== undefined ? (
+            <>
+              Модель в ответе: <code>{probe.reported_model}</code>
+              {probe.identity_basis !== undefined ? <> (<span data-executor-identity-basis={probe.identity_basis}>{IDENTITY_BASIS_LABELS[probe.identity_basis]}</span>)</> : null}.{' '}
+            </>
+          ) : null}
           {probe.latency_ms !== undefined ? `Ответ за ${probe.latency_ms} мс. ` : null}
-          {probe.rate_check !== undefined ? `${RATE_CHECK_LABELS[probe.rate_check].charAt(0).toUpperCase()}${RATE_CHECK_LABELS[probe.rate_check].slice(1)}.` : null}
+          {probe.rate_check !== undefined ? <>Сверка стоимости: <span data-executor-rate-check={probe.rate_check}>{RATE_CHECK_LABELS[probe.rate_check]}</span>.</> : null}
         </p>
       ) : null}
       {hint !== undefined ? <p className="am-form__hint">{hint}</p> : null}

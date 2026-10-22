@@ -32,9 +32,10 @@ import { requireScreen } from '../bff/session/screen-lock';
 
 export const dynamic = 'force-dynamic';
 
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
+// An expression body, not a block: `screen-guard.guard.test.ts` reads the file for the first
+// `return` and wants the `requireScreen` await before it.
+const first = (value: string | string[] | undefined): string | undefined =>
+  Array.isArray(value) ? value[0] : value;
 
 export default async function WorkersRoute({ params, searchParams }: ScreenRouteProps) {
   await requireScreen('/workers', { params, searchParams });

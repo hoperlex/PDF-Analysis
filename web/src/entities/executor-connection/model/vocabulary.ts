@@ -87,9 +87,9 @@ export const IDENTITY_BASIS_LABELS: Readonly<Record<ExecutorIdentityBasis, strin
 
 export const RATE_CHECK_LABELS: Readonly<Record<ExecutorRateCheck, string>> = {
   checked: 'стоимость в ответе сверена с тарифом',
-  not_reported: 'шлюз не сообщил стоимость',
+  not_reported: 'шлюз не сообщил стоимость, сверять нечего',
   mismatch: 'стоимость в ответе расходится с тарифом',
-  not_metered: 'подключение не тарифицируется',
+  not_metered: 'не требуется: подключение не тарифицируется',
 };
 
 /**

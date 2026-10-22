@@ -103,7 +103,12 @@ export function connectionRefusalSentence(error: ApiError): string | null {
  */
 export function connectionFailure(error: unknown, write: boolean): ExecutionFailure {
   const base = executionFailure(error, write);
-  if (!(error instanceof ApiError) || base.kind === 'unknown_outcome') return base;
+  if (!(error instanceof ApiError)) return base;
   const sentence = connectionRefusalSentence(error);
-  return sentence === null ? base : { ...base, detail: sentence };
+  if (sentence === null) return base;
+  // A 503 on a write is an unknown outcome in general (the shared rule), but a missing
+  // dependency the server names before it writes anything is a definite refusal: nothing was
+  // done, and saying "outcome unknown" would send the person to repeat a command that cannot work.
+  if (base.kind === 'unknown_outcome' && error.errorCode !== 'dependency_unavailable') return base;
+  return { ...base, kind: base.kind === 'unknown_outcome' ? 'refusal' : base.kind, detail: sentence };
 }
