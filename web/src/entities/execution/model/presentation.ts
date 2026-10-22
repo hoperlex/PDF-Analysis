@@ -2,11 +2,11 @@ import type { ExecutionJournalEntry, ExecutionQueueItem, Role, RunState } from '
 import { ERROR_CODE_VALUES, RUN_STATE_VALUES } from '@/shared/api';
 import { STATE_LABELS } from '@/shared/ui';
 
-export type ExecutionAction = 'cancel' | 'reaudit' | 'priority' | 'pause' | 'intake';
+export type ExecutionAction = 'cancel' | 'reaudit' | 'priority' | 'pause' | 'intake' | 'connections';
 
 /** A visible control is only a hint; the server still checks every write. */
 export function canExecute(roles: readonly Role[], action: ExecutionAction): boolean {
-  return action === 'priority' || action === 'pause' || action === 'intake'
+  return action === 'priority' || action === 'pause' || action === 'intake' || action === 'connections'
     ? roles.includes('admin')
     : roles.includes('admin') || roles.includes('expert');
 }

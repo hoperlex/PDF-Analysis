@@ -29,11 +29,29 @@ export function useExecutorConnections() {
   return useQuery<ExecutorConnectionList>(connectionsQueryOptions());
 }
 
+/** How often a connection is read again while one of its probes is still open. */
+export const PROBE_POLL_MS = 3000;
+
+/**
+ * A probe is open from the moment it is requested until a worker finishes it, or the server
+ * ends it as `no_worker` after 120 seconds. While one is open the detail is read again every
+ * few seconds, so the outcome appears without the person asking for it.
+ */
+export function hasOpenProbe(detail: ExecutorConnectionDetail | undefined): boolean {
+  if (detail === undefined) return false;
+  return (
+    detail.probes.some((probe) => probe.state !== 'finished') ||
+    detail.revisions.some((revision) => revision.latest_probe !== undefined && revision.latest_probe.state !== 'finished')
+  );
+}
+
 export function connectionDetailQueryOptions(connectionId: ExecutorConnectionId, enabled = true) {
   return {
     queryKey: queryKeys.execution.connection(connectionId),
     queryFn: async () => (await getExecutorConnection({ path: { connection_id: connectionId } })).data,
     refetchOnWindowFocus: 'always',
+    refetchInterval: (query: { state: { data: ExecutorConnectionDetail | undefined } }) =>
+      hasOpenProbe(query.state.data) ? PROBE_POLL_MS : false,
     staleTime: 0,
     enabled,
   } as const;

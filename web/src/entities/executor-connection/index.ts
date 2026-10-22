@@ -8,7 +8,7 @@
  */
 
 export {
-  connectionDetailQueryOptions, connectionsQueryOptions, routesQueryOptions,
+  PROBE_POLL_MS, connectionDetailQueryOptions, connectionsQueryOptions, hasOpenProbe, routesQueryOptions,
   useExecutorConnectionDetail, useExecutorConnectionDetails, useExecutorConnections,
   useExecutorRoutes,
 } from './api/use-executor-connections';

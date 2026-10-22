@@ -1,25 +1,51 @@
 'use client';
 
 /**
- * `/workers` — «Исполнители» (`W54-WORKERS-WEB`, plan §3.7).
+ * `/workers` — «Исполнители» (`W54-WORKERS-WEB`, plan §3.7; the tabs `EXEC-HTTP-01`).
  *
- * Graduated from the W43 placeholder: since `W54-WORKER-01` runs execute in a separate
- * worker service and `listWorkers` answers its registry. Any account holding a role reads
- * it (`R-80`); an administrator may stop a worker taking new runs, or allow it again, after
- * a confirmation step whose idempotency key is minted once per intent and reused on an
- * explicit repeat. Refreshed on tab return, after a command, and by «Обновить».
+ * Three tabs. «Процессы» is the screen as `W54-WORKERS-WEB` graduated it from the W43
+ * placeholder: since `W54-WORKER-01` runs execute in a separate worker service and
+ * `listWorkers` answers its registry. Any account holding a role reads it (`R-80`); an
+ * administrator may stop a worker taking new runs, or allow it again, after a confirmation
+ * step whose idempotency key is minted once per intent and reused on an explicit repeat.
+ * «Подключения» lists where the stand sends model work and lets an administrator manage it;
+ * «Назначения» names the connection that serves each kind of model work.
+ *
+ * The screen opens on «Процессы», as it always has, unless the address names a tab (`?tab=`):
+ * the redirect from the key form names «Подключения». Refreshed on tab return, after a command,
+ * and by «Обновить», which reads again whatever the open tab shows.
+ *
+ * The key form arrives as a prop: it is a server component rendered by the route, so the key
+ * never becomes a JavaScript value (`features/set-executor-secret`).
  */
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import type { ExecutionWorker } from '@/shared/api';
-import { newIdempotencyKey } from '@/shared/api';
+import { newIdempotencyKey, queryKeys } from '@/shared/api';
 import { useMe } from '@/entities/account';
 import { executionFailure, useWorkers } from '@/entities/execution';
 import type { ExecutionFailure } from '@/entities/execution';
 import { useSetWorkerIntake } from '@/features/set-worker-intake';
+import { ExecutorConnections } from '@/widgets/executor-connections';
+import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { WorkerList } from '@/widgets/worker-list';
 import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
+
+import { DEFAULT_WORKERS_TAB, WORKERS_TAB_PARAM } from '../model/tabs';
+import type { WorkersTab } from '../model/tabs';
+import { WorkersTabs } from './workers-tabs';
+
+export interface WorkersPageProps {
+  /** The tab the address named; the screen opens on «Процессы» when it names none. */
+  readonly initialTab?: WorkersTab | undefined;
+  /** The connection the key form was opened for, from the address. */
+  readonly secretConnectionId?: string | null | undefined;
+  /** The server-rendered key form for `secretConnectionId`. */
+  readonly secretForm?: ReactNode | undefined;
+}
 
 export interface IntakeIntent {
   readonly worker: ExecutionWorker;
@@ -43,7 +69,8 @@ function refused(failure: ExecutionFailure): boolean {
   return ['permission', 'transition', 'conflict', 'refusal'].includes(failure.kind);
 }
 
-export function WorkersPage() {
+export function WorkersPage({ initialTab, secretConnectionId = null, secretForm }: WorkersPageProps = {}) {
+  const [tab, setTab] = useState<WorkersTab>(initialTab ?? DEFAULT_WORKERS_TAB);
   const [cursors, setCursors] = useState<string[]>([]);
   const [intent, setIntent] = useState<IntakeIntent | null>(noIntakeIntent);
   const [commandFailure, setCommandFailure] = useState<ExecutionFailure | null>(null);
@@ -52,6 +79,7 @@ export function WorkersPage() {
   const cursor = cursors.at(-1);
   const workers = useWorkers(cursor);
   const account = useMe();
+  const client = useQueryClient();
   const intake = useSetWorkerIntake();
   const busy = intake.isPending;
   const roles = account.data?.roles ?? [];
@@ -64,6 +92,16 @@ export function WorkersPage() {
     setIntent({ worker, enabled, key: newIdempotencyKey() });
     setCommandFailure(null);
     setCompleted(false);
+  }
+
+  /** A tab is a place in the address, so a reload or a shared link comes back to it. */
+  function openTab(next: WorkersTab) {
+    setTab(next);
+    try {
+      window.history.replaceState(null, '', `?${WORKERS_TAB_PARAM}=${next}`);
+    } catch {
+      // No history to write (a preview, a sandboxed frame): the tab still changes.
+    }
   }
 
   async function execute(chosen: IntakeIntent) {
@@ -86,9 +124,15 @@ export function WorkersPage() {
   return (
     <PageShell
       title="Исполнители"
-      subtitle="Процессы, которые выполняют прогоны. Данные обновляются при возврате на вкладку, после команды и по запросу."
-      actions={<button className="am-button am-button--quiet" type="button" onClick={() => void workers.refetch()}>Обновить</button>}
+      subtitle="Подключения к моделям, процессы, которые выполняют прогоны, и назначения. Данные обновляются при возврате на вкладку, после команды и по запросу."
+      actions={<button className="am-button am-button--quiet" type="button" onClick={() => void client.invalidateQueries({ queryKey: queryKeys.execution.all() })}>Обновить</button>}
     >
+      <WorkersTabs active={tab} onSelect={openTab}>
+      {tab === 'connections' ? (
+        <ExecutorConnections roles={roles} secretConnectionId={secretConnectionId} secretForm={secretForm} />
+      ) : null}
+      {tab === 'routes' ? <ExecutorRoutes roles={roles} /> : null}
+      {tab === 'processes' ? (<>
       {account.isPending ? <LoadingState what="права на управление исполнителями" /> : null}
       {accountFailure !== null ? (
         <div data-workers-account-failure={accountFailure.kind}>
@@ -140,6 +184,8 @@ export function WorkersPage() {
         </div>
       ) : null}
       {completed ? <p role="status" className="am-note">Команда исполнителю выполнена.</p> : null}
+      </>) : null}
+      </WorkersTabs>
     </PageShell>
   );
 }
