@@ -3693,3 +3693,186 @@ def test_the_norms_seed_writes_no_row_it_cannot_back_with_an_object() -> None:
     )
     assert ran.returncode == 2, ran.stdout + ran.stderr
     assert "object store" in ran.stderr and "refusing to write" not in ran.stderr
+
+
+# --------------------------------------------------------------------------------------
+# The identity continuation (`identity.mjs`). It is not a step of the manifest's write half and is
+# not run by `--phase all`: it consumes that run's envelope. Its operations are declared in the
+# manifest (`identity.operations`) and its handles are written in the runner itself, which no
+# earlier check read -- so a renamed control would have turned it red only for whoever ran it.
+# --------------------------------------------------------------------------------------
+
+IDENTITY_RUNNER = JOURNEY_DIR / "identity.mjs"
+
+#: The four operations `BETA-MATRIX-02` section B12 names as reached only through this continuation.
+IDENTITY_OPERATIONS = ("approveRegistration", "rejectRegistration", "updateUser", "purgeUser")
+
+_JS_COMMENT = re.compile(r"/\*[\s\S]*?\*/|(?<![:'\"`])//[^\n]*")
+_JS_LITERAL = re.compile(r"'([^'\n]*)'|`([^`\n]*)`")
+_RUNNER_TEXT_ARGUMENTS = (
+    re.compile(r"text:\s*'([^'\n]+)'"),
+    re.compile(r"describe\('button',\s*'([^'\n]+)'"),
+    re.compile(r"includes\('([^'\n]+)'\)"),
+)
+
+
+def identity_runner_handles(source: str) -> set[str]:
+    """The ids, markers and words the runner presses or reads, as `web/src` must still carry them.
+
+    Ids and `data-*` markers come from any selector literal; words come only from the places the
+    runner names a control or a sentence by its text (`{ text: '…' }`, `describe('button', '…')`,
+    `.includes('…')`), so what the runner TYPES (a surname, a reason) is not mistaken for a handle.
+    An id built from a variable (`#reject-${id}`) is a prefix; the prefix is the handle.
+    """
+    code = _JS_COMMENT.sub(" ", source)
+    handles: set[str] = set()
+    for first, second in _JS_LITERAL.findall(code):
+        literal = first or second
+        for ident in _ID_SELECTOR.findall(literal):
+            handles.add(f'id="{ident}"' if not ident.endswith("-") else f"{ident}")
+        handles.update(_DATA_ATTRIBUTE.findall(literal))
+        for match in re.findall(r'\[id\^="([^"]+)"\]', literal):
+            handles.add(match)
+    for pattern in _RUNNER_TEXT_ARGUMENTS:
+        handles.update(pattern.findall(code))
+    return handles
+
+
+def test_the_identity_continuation_walks_the_four_operations_the_matrix_names(
+    manifest: dict, openapi: dict
+) -> None:
+    declared = {call["operationId"] for call in (manifest.get("identity") or {}).get("operations") or ()}
+    assert set(IDENTITY_OPERATIONS) <= declared, sorted(set(IDENTITY_OPERATIONS) - declared)
+    contract = {operation_id for _method, _path, operation_id in operations_in_contract(openapi)}
+    assert set(IDENTITY_OPERATIONS) <= contract
+
+
+def test_every_control_the_identity_continuation_presses_still_exists_in_the_application() -> None:
+    _require(WEB_SRC)
+    handles = identity_runner_handles(_require(IDENTITY_RUNNER).read_text(encoding="utf-8"))
+    assert len(handles) >= 20, f"the scan found only {sorted(handles)}: it no longer reads the runner"
+    source = application_source(WEB_SRC)
+    missing = sorted(handle for handle in handles if handle not in source)
+    assert not missing, (
+        f"the identity continuation names {len(missing)} handle(s) that no longer appear anywhere in "
+        f"web/src: {missing}. It would still sign in and reach the screens, and could press nothing."
+    )
+
+
+def test_control_a_renamed_identity_control_is_detected() -> None:
+    real = _require(IDENTITY_RUNNER).read_text(encoding="utf-8")
+    source = application_source(WEB_SRC)
+    assert all(handle in source for handle in identity_runner_handles(real))
+    for old, new, expected in (
+        ("#register-last", "#register-surname", 'id="register-surname"'),
+        ("data-pending-total", "data-pending-count", "data-pending-count"),
+        ("text: 'Одобрить заявку'", "text: 'Принять заявку'", "Принять заявку"),
+        ("[data-user-failure]", "[data-user-fault]", "data-user-fault"),
+        ("textarea[id^=\"reject-\"]", "textarea[id^=\"refuse-\"]", "refuse-"),
+    ):
+        assert old in real, old
+        mutated = identity_runner_handles(real.replace(old, new))
+        assert expected in mutated and expected not in source, (old, expected)
+
+
+# --------------------------------------------------------------------------------------
+# A step or a route that disappears. Everything above reads the manifest AS IT IS: delete a step and
+# every check that walked it simply has one step fewer to walk, and the journey reports OK over a
+# smaller product. These pin what the journey walked when `PC01-JOURNEY-GAPS-01` began (95 write steps,
+# 29 read routes, the figures `BETA-LIVE-JOURNEY-01` measured) by NAME; the steps the slice added are
+# pinned in `GAP_STEPS`. Adding a step needs no edit here; removing or renaming one does.
+# --------------------------------------------------------------------------------------
+
+#: The 95 write steps of the journey before this slice, in order.
+PINNED_WRITE_STEPS = (
+    "queue-dispatch-is-open", "create-project", "upload-document", "classify-version",
+    "start-run", "record-decision", "refuse-version-upload", "upload-next-version",
+    "refuse-classification-for-admin-only", "refuse-classification-incomplete",
+    "classify-second-version", "start-second-run", "compare-versions-read-only",
+    "carry-over-decision", "carry-over-is-not-offered-again", "upload-third-version",
+    "classify-third-version", "start-third-run", "compare-stages-refused-without-the-switch",
+    "compare-stages-p-to-r", "analysis-settings-lists-the-profiles",
+    "analysis-settings-for-an-expert", "assign-work", "dispatcher-admin-cannot-take-the-work",
+    "dispatcher-expert-sees-only-the-own-work", "my-tasks-return-needs-a-reason",
+    "my-tasks-take-the-work", "my-tasks-complete-the-work",
+    "dispatcher-shows-the-finished-work", "upload-specification-set",
+    "classify-specification-set", "start-specification-run", "price-list-is-an-experts-act",
+    "price-list-empty-file-refused", "price-list-without-columns-refused",
+    "specification-needs-a-price-list", "optimisation-pass-needs-a-price-list",
+    "price-list-upload", "specification-and-prices",
+    "vendor-list-global-is-an-administrators-act", "vendor-list-entry-needs-a-vendor",
+    "vendor-list-global", "vendor-list-project", "optimisation-pass-is-an-experts-act",
+    "optimisation-pass", "optimisation-pass-over-a-set-without-a-table",
+    "proposals-csv-of-an-empty-pass", "proposal-revise-needs-a-comment", "proposal-accept",
+    "proposal-change-of-mind", "proposal-revise", "proposal-filter-by-decision",
+    "proposal-decision-is-an-experts-act", "proposals-csv", "price-list-hostile-revision",
+    "vendor-list-project-adds-the-formula-vendor", "optimisation-second-pass",
+    "proposals-csv-with-a-formula-vendor", "norms-snapshots-offer-only-what-qualifies",
+    "norms-designation-is-an-administrators-act", "norms-designate-the-current-snapshot",
+    "norms-search", "norms-search-needs-a-query", "norms-catalogue", "norms-catalogue-filter",
+    "run-export-is-an-experts-act", "run-exports", "section-form7",
+    "section-form7-without-members", "dashboard-sections-panel", "queue-pause-dispatch",
+    "queue-start-a-run-while-paused", "queue-lists-the-waiting-run",
+    "queue-priority-out-of-range-refused", "queue-change-priority",
+    "queue-cancel-the-waiting-run", "queue-reaudit-the-cancelled-run", "queue-resume-dispatch",
+    "workers-list-the-worker", "worker-intake-is-an-administrators-act",
+    "worker-stops-taking-new-work", "worker-takes-new-work-again", "profile-needs-a-surname",
+    "profile-update", "password-confirmation-must-match", "password-current-must-be-right",
+    "password-change", "old-pass-is-refused-after-the-password-change",
+    "user-password-reset-must-match", "user-archive", "user-restore", "user-password-reset",
+    "release-history-panel", "sign-out", "signed-out-session-is-gone",
+)
+
+#: The 29 read routes of the journey before this slice, in order.
+PINNED_ROUTES = (
+    "root", "projects", "project", "document", "version", "comparison", "run", "review",
+    "sign-in", "knowledge-base", "change-password", "blocks", "optimisation", "logs", "workers",
+    "dashboard", "forbidden", "account", "section-optimisation", "norms", "norm-document",
+    "analysis-settings", "queue", "dispatcher", "register", "register-submitted", "admin-users",
+    "admin-user", "admin-registrations",
+)
+
+
+def pinned_journey_findings(manifest: dict) -> list[str]:
+    steps = [step["name"] for step in write_steps(manifest)]
+    routes = [route["name"] for route in manifest["routes"]]
+    findings = [f"the write step '{name}' is gone or renamed" for name in PINNED_WRITE_STEPS if name not in steps]
+    findings += [f"the read route '{name}' is gone or renamed" for name in PINNED_ROUTES if name not in routes]
+    # Order is part of the walk: a step needs what an earlier one captured.
+    kept = [name for name in steps if name in PINNED_WRITE_STEPS]
+    if not findings and kept != list(PINNED_WRITE_STEPS):
+        findings.append("the write steps that existed before this slice are no longer in their order")
+    floor = len(PINNED_WRITE_STEPS) + len(GAP_STEPS)
+    if len(steps) < floor:
+        findings.append(f"the journey declares {len(steps)} write steps, fewer than the {floor} it had at the slice's end")
+    if len(routes) < len(PINNED_ROUTES):
+        findings.append(f"the journey declares {len(routes)} read routes, fewer than the {len(PINNED_ROUTES)} it walked")
+    return findings
+
+
+def test_no_step_or_route_the_journey_walked_has_disappeared(manifest: dict) -> None:
+    findings = pinned_journey_findings(manifest)
+    assert not findings, "the journey walks less than it did:\n  " + "\n  ".join(findings)
+
+
+def test_control_a_step_or_a_route_that_disappears_is_detected(manifest: dict) -> None:
+    assert pinned_journey_findings(manifest) == []
+    assert len(PINNED_WRITE_STEPS) == 95 and len(PINNED_ROUTES) == 29
+    for name in PINNED_WRITE_STEPS:
+        gone = _without_step(manifest, name)
+        assert any(f"'{name}' is gone or renamed" in f for f in pinned_journey_findings(gone)), name
+    for name in PINNED_ROUTES:
+        copy = json.loads(json.dumps(manifest))
+        copy["routes"] = [r for r in copy["routes"] if r["name"] != name]
+        assert any(f"'{name}' is gone or renamed" in f for f in pinned_journey_findings(copy)), name
+    renamed = json.loads(json.dumps(manifest))
+    _step_of(renamed, "queue-resume-dispatch")["name"] = "queue-resume"
+    assert any("'queue-resume-dispatch' is gone or renamed" in f for f in pinned_journey_findings(renamed))
+    reordered = json.loads(json.dumps(manifest))
+    reordered["write"]["steps"].reverse()
+    assert any("no longer in their order" in f for f in pinned_journey_findings(reordered))
+    # a replaced step keeps the count but not the name, and a deleted one that is replaced by an
+    # unnamed addition leaves the floor intact -- the name is what is pinned.
+    swapped = json.loads(json.dumps(manifest))
+    _step_of(swapped, "sign-out")["name"] = "sign-out-again"
+    assert any("'sign-out' is gone or renamed" in f for f in pinned_journey_findings(swapped))

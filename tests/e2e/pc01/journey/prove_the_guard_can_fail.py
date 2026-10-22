@@ -440,6 +440,19 @@ mutations = [
   ("rename the operation that reads a norm document",
    lambda m: step(m, 'norms-document-text-and-pdf')['expects_api'][0].__setitem__('operationId', 'readNormDocument'),
    "test_every_api_call_the_journey_declares_is_in_the_contract"),
+  # --- `PC01-JOURNEY-GAPS-01`. A step or a route that disappears.
+  ("remove a write step the journey walked before the slice",
+   lambda m: without_steps(m, lambda x: x['name'] == 'queue-resume-dispatch'),
+   "test_no_step_or_route_the_journey_walked_has_disappeared"),
+  ("rename a write step the journey walked before the slice",
+   lambda m: step(m, 'sign-out').__setitem__('name', 'sign-out-again'),
+   "test_no_step_or_route_the_journey_walked_has_disappeared"),
+  ("remove a read route the journey walked before the slice",
+   lambda m: m.__setitem__('routes', [r for r in m['routes'] if r['name'] != 'logs']),
+   "test_no_step_or_route_the_journey_walked_has_disappeared"),
+  ("walk the steps in another order",
+   lambda m: m['write']['steps'].reverse(),
+   "test_no_step_or_route_the_journey_walked_has_disappeared"),
 ]
 
 
