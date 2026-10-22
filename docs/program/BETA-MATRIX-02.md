@@ -5,7 +5,8 @@
 2026-10-21), which stays as written, as the record of that day. **Asked for by:** `CODE-FIRST-TO-BETA.md` §3.
 **Rulings:** `R-135`, `R-141c`, `R-141e`, `R-142`, `R-144d`, and the owner's standing order of 2026-10-22 «гони до беты без вопросов».
 Documentation only. No stand, container, build or test suite was run. The commands that executed anything are quoted with their
-results in §1: `git` reads, `ls`/`grep`/`sed`/`wc`, and read-only parses of JSON files with `python3 -I`; the one test command is
+results in §1: `git` reads (including `git ls-remote`, a read-only network call), `ls`/`grep`/`sed`/`wc`/`md5sum`, and read-only parses
+of JSON files with `python3 -I`; the one test command is
 `python3 -m pytest -q tests/contract/program` (result under "Hotspots and limits"). Every path and test name below was checked with `ls`/`grep`
 on `d087c101`; anything not seen there is marked UNVERIFIED.
 
@@ -284,7 +285,7 @@ Menu source: `web/src/shared/config/screen-registry.ts` (`inMenu: true`, 14 dest
 `account-menu.tsx` (four account actions). Manifest: `tests/e2e/pc01/journey/manifest.json`, 29 read routes (cold load, declared GETs
 asserted), 95 write steps (all but the first five carry `screen` and `case`, `action` or `refused`), the identity continuation (§B1). No menu item renders
 a stub (§1). **Where the 95 steps ran:** on a recorded local stack, directly and through the production `nginx.conf`: exit `0`, 95/95,
-29/29, 5 min 14 s (`BETA-LIVE-JOURNEY-01.md`, tested tree `93ff8900`; the envelope sits in an untracked `.local` and was deleted). On
+29/29, 5 min 14 s (`BETA-LIVE-JOURNEY-01.md`, tested tree `93ff8900`; the envelope sits in an untracked `.local` of that lane's worktree and was not read here). On
 a stand, `scripts/manual-alpha-check.sh` runs `--phase core`: the four original write steps (`create-project`, `upload-document`,
 `classify-version`, `start-run`) and the 29 routes. The other 91 steps make accounts, pause dispatch, designate a snapshot and start
 further runs, and `--phase all` refuses a non-recorded origin without `--allow-spend` (`D-186`).
@@ -387,5 +388,6 @@ Copied from `BETA-MATRIX-01` §"What stands between it and acceptance" and updat
 
 This slice changes `docs/program/BETA-MATRIX-02.md` only (`git diff --name-only d087c101..HEAD`). No `contracts/**`, migration,
 lock file, composition root, global style, `CURRENT_STATE.md`, `DEBT_REGISTER.md`, ref, tag or stand was touched. Nothing was pushed.
-Limits: no suite was run, so a row that says "tests exist" says the name is on the tree and nothing about its result; figures quoted
+Required checks (the tests do not read this file; both ran with its text as committed except for this paragraph): `git diff --check` exit 0; `nice -n 10 python3 -m pytest -q tests/contract/program`
+exit 0, 28 passed in 1.02 s (output in the executor's scratchpad). Limits: no other suite was run, so a row that says "tests exist" says the name is on the tree and nothing about its result; figures quoted
 from reports (`BETA-LIVE-JOURNEY-01.md`, `RECOVERY-REBASE-01.md`, `BETA-CONTRACT-SEAL-01.md`) are theirs, on the trees they name.
