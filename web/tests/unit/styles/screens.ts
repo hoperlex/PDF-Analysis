@@ -68,6 +68,7 @@ import type {
   ErrorCode,
   ErrorEnvelope,
   Finding,
+  NormCitation,
   RunState,
   RunStatus,
 } from '@/shared/api';
@@ -281,6 +282,64 @@ const RECORDS: readonly DecisionRecord[] = (
   current_verdict: verdict,
   decision_event_count: index + 1,
 }));
+
+/**
+ * `WEB-REVIEW-FOLLOWUPS-01`: a v2 finding -- proposed severity, required and stated values, two
+ * norm citations (one verified, one rebound) and a merged sibling -- and its decided severity.
+ * Every string is Cyrillic, as the rest of this file seeds, so the language guards reading these
+ * screens see only what the application wrote.
+ */
+const V2_CITATION = (over: Partial<NormCitation> = {}): NormCitation => ({
+  clause_number: '7.1.4',
+  designation: 'СП 1.13130.2020',
+  norm_document_id: 'ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  norm_paragraph_id: 'npar_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  norms_snapshot_id: 'ns_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  page_label: 12,
+  quote: 'Ширина эвакуационного выхода должна быть не менее 0,8 м.',
+  source_attribution: 'consultant_plus',
+  state: 'verified',
+  title: 'Системы противопожарной защиты. Эвакуационные пути и выходы',
+  ...over,
+});
+
+const V2_OBSERVATION = observation({
+  finding_text: 'Ширина выхода указана как 0,7 м.',
+  recommendation_text: 'Привести ширину выхода в соответствие с нормой.',
+  evidence: [evidence({ quote: 'Ширина выхода — 0,7 м', page_number: 3 })],
+  proposed_severity: 'critical',
+  required_value: 'не менее 0,8 м',
+  stated_value: '0,7 м',
+  norm_citations: [V2_CITATION(), V2_CITATION({ state: 'rebound', clause_number: '7.1.5' })],
+});
+
+const V2_SIBLING = observation({
+  finding_observation_id: 'fobs_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z',
+  finding_text: 'Ширина эвакуационного выхода на плане — 0,7 м.',
+  recommendation_text: 'Привести ширину выхода в соответствие с нормой.',
+  evidence: [evidence({ quote: 'Выход шириной 0,7 м', page_number: 5 })],
+  proposed_severity: 'economic',
+});
+
+/** One event per severity the contract publishes, an accept each, plus a comment that has none. */
+const SEVERITY_EVENTS: readonly DecisionEvent[] = [
+  ...(['critical', 'economic', 'operational', 'recommendation', 'check_adjacent'] as const).map(
+    (severity, index) =>
+      decisionEvent({
+        decision_id: `${decisionEvent().decision_id.slice(0, -1)}${'ABCDE'[index] ?? 'A'}`,
+        verdict: 'accepted',
+        severity,
+        recorded_at: `2026-09-10T09:0${index}:00.000Z`,
+      }),
+  ),
+  decisionEvent({
+    decision_id: `${decisionEvent().decision_id.slice(0, -1)}F`,
+    event_type: 'comment',
+    verdict: null,
+    comment: 'Замечание проверяющего.',
+    recorded_at: '2026-09-10T09:09:00.000Z',
+  }),
+];
 
 /** The frame's sessions (`W50-SHELL-FRAME`): the whole subject the layout hands it. */
 const FRAME_EXPERT = {
@@ -1137,6 +1196,70 @@ export function screens(): Screen[] {
       ),
     );
   }
+
+  /*
+   * `WEB-REVIEW-FOLLOWUPS-01`, item 6: the review screen WITH A v2 FINDING.
+   *
+   * `REVIEW-V2-UI-01` could not add this (the file is outside its paths), so its severity
+   * select, proposal line, decided-severity badges, basis block and merged observations were
+   * measured only through the global rules the markup happens to meet. This screen puts them
+   * in the census: the finding row with its decided severity, the evidence viewer's basis and
+   * merged observations, the panel with its proposal and select, and a history whose accept
+   * carries a severity.
+   */
+  {
+    const client = populatedClient();
+    const page = { next_cursor: null } as { next_cursor: null };
+    const detail = findingDetail({
+      finding_uid: FINDING_UID,
+      observation: V2_OBSERVATION,
+      current_verdict: 'accepted',
+      decided_severity: 'economic',
+      decision_event_count: 2,
+      merged_observations: [V2_OBSERVATION, V2_SIBLING],
+    });
+    client.setQueryData(queryKeys.runs.findings(RUN_ID), { data: { items: [detail], page } });
+    client.setQueryData(queryKeys.findings.detail(FINDING_UID), { data: detail });
+    client.setQueryData(queryKeys.findings.decisions(FINDING_UID), {
+      data: { items: [SEVERITY_EVENTS[1] as DecisionEvent, SEVERITY_EVENTS[5] as DecisionEvent], page },
+    });
+    add(
+      'ReviewPage loaded, v2 finding',
+      renderScreen(
+        client,
+        createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
+      ),
+    );
+  }
+
+  // The decision panel on a v2 finding after an accept was refused for want of a severity.
+  add(
+    'DecisionPanel, v2 finding, severity refused',
+    render(
+      createElement(DecisionPanel, {
+        currentVerdict: 'accepted',
+        observationId: OBSERVATION_ID,
+        onAccept: noop, onReject: noop, onComment: noop,
+        proposedSeverity: 'critical',
+        decidedSeverity: 'economic',
+        severityRefusal: 'severity_required',
+      }),
+    ),
+  );
+
+  // The history and the knowledge base with a decided severity on each accept, in all five tones.
+  add('DecisionHistory with severities', render(createElement(DecisionHistory, { events: SEVERITY_EVENTS })));
+  add(
+    'KnowledgeBase with severities',
+    render(
+      createElement(KnowledgeBase, {
+        records: RECORDS.map((record, index) => {
+          const severity = (['critical', 'economic', 'operational', 'recommendation'] as const)[index];
+          return severity === undefined ? record : { ...record, severity };
+        }),
+      }),
+    ),
+  );
 
   // The evidence viewer with no quotation on the page a reader is looking at.
   add(
