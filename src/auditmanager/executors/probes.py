@@ -255,4 +255,3 @@ def _probe_anthropic(
         "the answer names no usable model" if reported is None
         else "the answer names another model than the revision's")
     return ProbeResult(outcome, detail, reported, "reported", latency_ms, 200, rate)
-
