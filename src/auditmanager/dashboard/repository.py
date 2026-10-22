@@ -144,6 +144,37 @@ def _filled(
     return [(member, counted.get(member, 0)) for member in vocabulary]
 
 
+def spend_record(
+    calls: Any, cost_micros: Any, unmetered: Any, unmeasured: Any
+) -> RunActivitySpendRecord | None:
+    """The aggregate spend from the four figures ``_SPEND`` computes, or ``None`` for no call.
+
+    `F-1` (`docs/program/reviews/W46-JUDGE-A.md` section 3): the branch the lift from
+    `runs.repository.RunCost` dropped. `RunCost.calls == 0` answers `None`, never
+    `RunCost(0, 0, "measured")` -- those are different facts, and reporting the first as the
+    second is the same invented measurement `D-3` forbids. No `model_call` row anywhere in the
+    deployment means there is nothing to report, not a zero labelled `measured` over a `FILTER`
+    that is trivially satisfied by an empty table.
+
+    **The run-level cost rule** (`EXEC-HTTP-01`): every call unmetered -> cost `0`, basis
+    `unmetered`; unmetered and metered mixed -> the metered sum, `estimated`; otherwise
+    `measured` only when no metered call is unmeasured. A function of its four arguments so the
+    rule is testable per run, with the same SQL restricted to it.
+    """
+    calls, unmetered = int(calls), int(unmetered)
+    if calls == 0:
+        return None
+    return RunActivitySpendRecord(
+        model_call_count=calls,
+        cost_micros=0 if unmetered == calls else int(cost_micros),
+        basis=(
+            "unmetered" if unmetered == calls
+            else "measured" if unmetered == 0 and int(unmeasured) == 0
+            else "estimated"
+        ),
+    )
+
+
 class DashboardRepository:
     """One method, one read, four panels. No filter parameter exists to add to it.
 
@@ -186,29 +217,7 @@ class DashboardRepository:
             for state, count in _filled(state_rows, RUN_STATES)
         )
 
-        spend_row: Any = session.execute(_SPEND).one()
-        calls, cost_micros, unmetered, unmeasured = tuple(spend_row)
-        calls, unmetered = int(calls), int(unmetered)
-        # `F-1` (`docs/program/reviews/W46-JUDGE-A.md` section 3): the branch the lift
-        # from `runs.repository.RunCost` dropped. `RunCost.calls == 0` answers `None`,
-        # never `RunCost(0, 0, "measured")` -- those are different facts, and reporting
-        # the first as the second is the same invented measurement `D-3` forbids. This
-        # aggregate now keeps the branch it claims to lift: no `model_call` row anywhere
-        # in the deployment means there is nothing to report, not a zero labelled
-        # `measured` over a `FILTER` that is trivially satisfied by an empty table.
-        spend = (
-            None
-            if calls == 0
-            else RunActivitySpendRecord(
-                model_call_count=calls,
-                cost_micros=0 if unmetered == calls else int(cost_micros),
-                basis=(
-                    "unmetered" if unmetered == calls
-                    else "measured" if unmetered == 0 and int(unmeasured) == 0
-                    else "estimated"
-                ),
-            )
-        )
+        spend = spend_record(*tuple(session.execute(_SPEND).one()))
 
         section_rows: dict[str | None, int] = {
             row[0]: int(row[1])

@@ -56,6 +56,9 @@ def serve(environ: Mapping[str, str]) -> int:
         version=runtime.version,
         slots=runtime.slots,
         state_dir=runtime.state_dir,
+        # `EXEC-HTTP-01`: «Проверить» runs on this process's network path; only a worker that
+        # holds the private ring can open a connection's key, so only that one takes probes.
+        probe_runner=runtime.probe_runner,
     )
     stop = threading.Event()
 

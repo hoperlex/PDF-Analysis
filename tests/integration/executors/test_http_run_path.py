@@ -158,7 +158,7 @@ def test_an_unmetered_connection_reports_cost_zero_basis_unmetered_and_the_call_
 def test_the_run_level_cost_rule_in_sql_covers_unmetered_mixed_and_measured(
     session, seeded, blob_store, new_key  # type: ignore[no-untyped-def]
 ) -> None:
-    from auditmanager.dashboard.repository import DashboardRepository
+    from auditmanager.dashboard.repository import _SPEND, DashboardRepository, spend_record
 
     rings = support.make_rings()
     fake = gateway_for(None)
@@ -169,30 +169,36 @@ def test_the_run_level_cost_rule_in_sql_covers_unmetered_mixed_and_measured(
         _execute(session, blob_store, run_id, providers)
     finally:
         fake.stop()
-    before = DashboardRepository().summary(session).run_spend
-
     def add(basis: str, micros: int | None) -> None:
         session.execute(text(
             "INSERT INTO model_call (model_call_id, run_id, stage_id, provider, model_identity, "
             "provider_mode, parameters, request_sha256, response_sha256, input_tokens, "
             "output_tokens, latency_ms, cost_micros, cost_basis, status) VALUES (:id, :r, "
             "'text_analysis', 'openai_chat', 'm', 'live', '{}'::jsonb, repeat('a', 64), repeat('b', 64), 1, 1, 1, :c, :b, "
-            "'succeeded')"), {"id": f"mc_{support.unique()[2:28].upper().replace('-', '0')[:26]}",
-                              "r": run_id, "c": micros, "b": basis})
+            "'succeeded')"), {"id": str(ModelCallId.new()), "r": run_id, "c": micros, "b": basis})
 
-    # Only unmetered: zero, unmetered, the count.
+    def dashboard_spend() -> Any:
+        """The dashboard's own SQL and rule, restricted to this run."""
+        row = session.execute(text(str(_SPEND) + " WHERE run_id = :r"), {"r": run_id}).one()
+        return spend_record(*tuple(row))
+
+    # Only unmetered: zero, unmetered, the count -- on the run and on the aggregate alike.
     only = RunRepository().cost(session, run_id)
     assert (only.model_call_count, only.cost_micros, only.basis) == (1, 0, "unmetered")
+    spend = dashboard_spend()
+    assert (spend.model_call_count, spend.cost_micros, spend.basis) == (1, 0, "unmetered")
     # A metered call beside it: the metered sum, estimated -- a total that leaves calls out
     # is not a measurement of the run.
     add("measured", 123_000)
     mixed = RunRepository().cost(session, run_id)
     assert (mixed.model_call_count, mixed.cost_micros, mixed.basis) == (2, 123_000, "estimated")
-    after = DashboardRepository().summary(session).run_spend
-    assert after is not None
-    assert after.model_call_count == (0 if before is None else before.model_call_count) + 1
-    assert after.cost_micros == (0 if before is None else before.cost_micros) + 123_000
-    assert after.basis != "measured"
+    spend = dashboard_spend()
+    assert (spend.model_call_count, spend.cost_micros, spend.basis) == (2, 123_000, "estimated")
+    # The deployment-wide query answers without error and is never 'measured' while this
+    # run's unmetered call is in it.
+    overall = DashboardRepository().summary(session).run_spend
+    assert overall is not None and overall.basis != "measured"
+    assert spend_record(0, 0, 0, 0) is None, "no call at all is nothing to report, not a zero"
 
 
 def test_with_no_usable_route_the_start_is_refused_and_nothing_is_written(
@@ -371,6 +377,48 @@ def test_a_reaudit_freezes_todays_route(
     finally:
         fake.stop()
     assert frozen == second.revision_id != first.revision_id
+
+
+def test_a_new_kind_plugs_in_by_registering_a_factory_and_is_handed_the_attempt_context(
+    session, seeded, blob_store, new_key  # type: ignore[no-untyped-def]
+) -> None:
+    """`EXEC-PULL-01` and `EXEC-SSH-01` change nothing in the run path: they register a factory
+    for their kind, and it receives the revision, the opened key and the Attempt's context (the
+    run, the Attempt, the call being served, when the watchdog started counting and how long it
+    allows). The seam is shown with the ``http_api`` kind wrapped by a recording factory."""
+    from auditmanager.executors.kinds import adapter_for, register_adapter_factory
+    from auditmanager.jobs.public import ATTEMPT_WATCHDOG_SECONDS
+
+    rings = support.make_rings()
+    fake = gateway_for(None)
+    original = adapter_for("http_api")
+    assert original is not None
+    seen: list[Any] = []
+
+    def recording(revision: Any, api_key: str, policy: Any, context: Any) -> Any:
+        seen.append((revision, api_key, context))
+        return original.factory(revision, api_key, policy, context)
+
+    register_adapter_factory("http_api", recording, purpose=original.purpose,
+                             serves=original.serves, provider_label=original.provider_label)
+    try:
+        connection = support.seed_connection(session, rings, fake.base_url())
+        providers = _providers(rings, fake)
+        started = _start(session, seeded, new_key, "plug-in", providers)
+        _execute(session, blob_store, started.run_id, providers)
+        call_id = session.execute(text(
+            "SELECT model_call_id FROM model_call WHERE run_id = :r"), {"r": started.run_id}).scalar_one()
+        attempt_id = session.execute(text(
+            "SELECT attempt_id FROM provider_call_effect WHERE run_id = :r"), {"r": started.run_id}).scalar_one()
+    finally:
+        register_adapter_factory("http_api", original.factory, purpose=original.purpose,
+                                 serves=original.serves, provider_label=original.provider_label)
+        fake.stop()
+    (revision, key, context), = seen
+    assert revision.revision_id == connection.revision_id and key == support.KEY
+    assert (context.run_id, context.attempt_id) == (started.run_id, attempt_id)
+    assert context.call_id == call_id, "the journal names the call being served"
+    assert context.watchdog_seconds == ATTEMPT_WATCHDOG_SECONDS and context.started_monotonic > 0
 
 
 def test_the_environment_source_is_unchanged_and_records_no_revision(

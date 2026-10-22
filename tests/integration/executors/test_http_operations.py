@@ -133,6 +133,24 @@ def test_kinds_and_transports_this_release_does_not_serve_are_refused_at_route_t
         "constraint"] == "kind_not_served"
 
 
+def test_a_key_opens_only_for_the_destination_of_the_revision_it_is_bound_for(
+    session, fake  # type: ignore[no-untyped-def]
+) -> None:
+    """The caller recomputes the destination from the revision it is about to call: a revision on
+    another host cannot open the key, one on the same origin can, and so does the old one."""
+    from auditmanager.executors.public import SecretUnreadableError
+
+    rings = support.make_rings()
+    connection = support.seed_connection(session, rings, fake.base_url())
+    same_origin = support.revise(session, connection.connection_id, fake.base_url("/v2"))
+    moved = support.revise(session, connection.connection_id,
+                           fake.base_url().replace("gateway.example.test", "other.example.test"))
+    for revision_id in (connection.revision_id, same_origin):
+        bind_connection(session, revision_id, ring=rings.private, policy=fake.policy(), context=None)
+    with pytest.raises(SecretUnreadableError):
+        bind_connection(session, moved, ring=rings.private, policy=fake.policy(), context=None)
+
+
 # -- import-env ----------------------------------------------------------------------------------
 
 
