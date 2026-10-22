@@ -46,6 +46,18 @@ pytestmark = pytest.mark.usefixtures("quiet_queue")
 
 _TERMINALS = {"published", "partial", "failed", "cancelled"}
 
+#: How long a worker may take to claim a run its notification woke it for (`GATE-REPAIR-03`).
+CLAIM_SECONDS = 45.0
+
+#: How long a whole run may take, from its claim to its terminal, or to the provider call. A run
+#: is about 10 s in a small process; behind the eight large directories of the complete battery
+#: it was 55 to 58 s (the full `gc.collect()` per page of `analysis/stages/extraction.py`
+#: holds the GIL for as long as the whole process heap takes to walk, `D-200`), and the waits
+#: below were 60 s. Behind a heap that costs 3 s per collection every run is 63 to 70 s. This
+#: bound is not what a test is about, only how long it waits before saying the run did not
+#: finish; nothing is slower when the run does.
+RUN_SECONDS = 180.0
+
 
 class GatedAdapter:
     """The recorded adapter with a barrier in front of its one call (see the composition
@@ -63,11 +75,11 @@ class GatedAdapter:
 
     def complete(self, request: Any) -> Any:
         self.entered.set()
-        assert self.release.wait(timeout=90), "the test never released the provider"
+        assert self.release.wait(timeout=RUN_SECONDS), "the test never released the provider"
         return self._delegate.complete(request)
 
 
-def _wait_for(predicate: Callable[[], Any], *, timeout: float = 60.0, what: str) -> Any:
+def _wait_for(predicate: Callable[[], Any], *, timeout: float = RUN_SECONDS, what: str) -> Any:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         value = predicate()
@@ -110,6 +122,12 @@ def _row(sessions: sessionmaker[Session], run_id: str) -> dict[str, Any]:
 
 def _run_state(sessions: sessionmaker[Session], run_id: str) -> str:
     return str(_row(sessions, run_id)["run_state"])
+
+
+def _claimed(sessions: sessionmaker[Session], run_id: str) -> bool:
+    """A claim was made: the Job left ``queued`` and an Attempt exists (a queued Job has none)."""
+    row = _row(sessions, run_id)
+    return bool(row["attempts"] >= 1 and row["job_state"] != "queued")
 
 
 def _leases(sessions: sessionmaker[Session], run_id: str) -> list[dict[str, Any]]:
@@ -163,7 +181,7 @@ def start_worker(
         yield start
     finally:
         for service in started:
-            service.drain(timeout=30)
+            service.drain(timeout=RUN_SECONDS)
             service.stop()
 
 
@@ -217,14 +235,26 @@ def test_a_notification_wakes_the_worker_before_its_poll(
     sessions, blob_store, helpers, recorded_adapter, start_worker,
 ) -> None:
     """The poll is 120 s; the run is claimed within seconds, so the `NOTIFY` of the
-    accepting commit is what woke the worker."""
+    accepting commit is what woke the worker.
+
+    What the notification explains is the **claim**, so that is what the 45 s window
+    observes (`GATE-REPAIR-03`): the Job leaves ``queued`` and an Attempt exists. Only the
+    notification can do that inside the window, because the one immediate poll is already
+    past and the next is 120 s away. How long the claimed run then takes is a property of the
+    process (about 10 s alone, 55 s behind the complete battery's heap), not of the
+    notification, so the run is given the same generous bound as every sibling and the worker
+    is left with nothing running when the test ends.
+    """
     worker = start_worker(recorded_adapter, poll_seconds=120.0, reclaim_seconds=120.0)
     _wait_for(lambda: worker.wakeup.listening, timeout=15, what="the LISTEN connection")
     time.sleep(0.5)  # past the loop's first, immediate poll
     run_id = _queue_run(sessions, blob_store, helpers)
-    _wait_for(lambda: _run_state(sessions, run_id) in _TERMINALS, timeout=45,
-              what="a run claimed on notification")
+    _wait_for(lambda: _claimed(sessions, run_id), timeout=CLAIM_SECONDS,
+              what="the claim on notification")
+    _wait_for(lambda: _run_state(sessions, run_id) in _TERMINALS, timeout=RUN_SECONDS,
+              what="the claimed run to finish")
     assert _run_state(sessions, run_id) == "published"
+    assert [lease["worker_id"] for lease in _leases(sessions, run_id)] == [worker.worker_id]
 
 
 # --- lost LISTEN is logged, and the poll carries on ----------------------------------------
@@ -267,12 +297,12 @@ def test_drain_finishes_the_run_in_flight_and_claims_no_more(
     gated = GatedAdapter(recorded_adapter)
     worker = start_worker(gated)
     first = _queue_run(sessions, blob_store, helpers)
-    assert gated.entered.wait(timeout=60), "the worker never reached the provider"
+    assert gated.entered.wait(timeout=RUN_SECONDS), "the worker never reached the provider"
     second = _queue_run(sessions, blob_store, helpers)
     try:
         assert worker.drain(timeout=0.2) is False, "drain returned with a run in flight"
         gated.release.set()
-        assert worker.drain(timeout=90) is True
+        assert worker.drain(timeout=RUN_SECONDS) is True
         assert _run_state(sessions, first) == "published"
         time.sleep(1.5)  # several polls: a draining worker must take nothing
         assert _row(sessions, second)["attempts"] == 0
@@ -319,7 +349,7 @@ def test_an_api_restart_leaves_the_workers_run_alone(
     worker = start_worker(gated)
     run_id = _queue_run(sessions, blob_store, helpers)
     try:
-        assert gated.entered.wait(timeout=60)
+        assert gated.entered.wait(timeout=RUN_SECONDS)
         # What an API process does when it (re)starts under EXECUTION_ROLE=api: the
         # startup reconciliation, then its reclaim-only carrier.
         reconcile_at_startup(sessions)
