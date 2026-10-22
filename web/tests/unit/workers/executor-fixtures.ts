@@ -24,7 +24,7 @@ import type {
 } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 
-import { newClient } from '../screens/harness';
+import type { newClient } from '../screens/harness';
 
 type Client = ReturnType<typeof newClient>;
 
