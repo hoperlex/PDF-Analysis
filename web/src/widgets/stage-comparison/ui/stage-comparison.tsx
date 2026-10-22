@@ -169,9 +169,9 @@ function FactCell({
     );
   }
   if (factId === 'cost_basis') {
-    const basis: 'absent' | 'measured' | 'estimated' | 'unrecognized' = value === null
+    const basis: 'absent' | 'measured' | 'estimated' | 'unmetered' | 'unrecognized' = value === null
       ? 'absent'
-      : value === 'measured' || value === 'estimated'
+      : value === 'measured' || value === 'estimated' || value === 'unmetered'
         ? value
         : 'unrecognized';
     const label = basis === 'absent'

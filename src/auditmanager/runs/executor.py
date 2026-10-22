@@ -124,11 +124,13 @@ from auditmanager.findings.public import (
 )
 from auditmanager.jobs.public import (
     AttemptAuthority,
+    AttemptContext,
     JobRepository,
     start_attempt_lease_heartbeat,
     stop_attempt_lease_heartbeat,
 )
 from auditmanager.runs.crop_budget import CropByteBudget
+from auditmanager.runs.provider import ProviderBinding, ProviderResolver
 from auditmanager.runs.repository import (
     INITIAL_STATE,
     PC01_STAGES,
@@ -327,7 +329,7 @@ class _ResponseEvidence(Protocol):
 class _DurableCallJournal(ModelCallJournal):
     """Commit every provider boundary under the current Attempt authority."""
 
-    __slots__ = ("_session", "_jobs", "_authority", "_checkpoint")
+    __slots__ = ("_session", "_jobs", "_authority", "_checkpoint", "_call", "_context")
 
     def __init__(
         self,
@@ -335,26 +337,37 @@ class _DurableCallJournal(ModelCallJournal):
         jobs: JobRepository,
         authority: AttemptAuthority,
         checkpoint: EffectCheckpoint | None = None,
+        call: Any = None,
+        context: AttemptContext | None = None,
     ) -> None:
         self._session = session
         self._jobs = jobs
         self._authority = authority
         self._checkpoint = checkpoint
+        # `EXEC-HTTP-01`: the call binding of the connection serving this run (a
+        # ``CallBinding``), or ``None`` for the environment source, whose rows are unchanged.
+        self._call = call
+        self._context = context
 
     def _committed(self, boundary: str) -> None:
         if self._checkpoint is not None:
             self._checkpoint(boundary)
 
     def prepare(self, request: ModelRequest, *, mode: ProviderMode) -> ModelCallId:
+        call = self._call
         model_call_id = self._jobs.prepare_provider_call(
             self._session,
             self._authority,
-            provider="anthropic",
+            provider="anthropic" if call is None else call.provider_label,
             model_identity=request.model_id,
             provider_mode=mode.value,
             parameters=request.parameters,
             request_sha256=request.request_sha256,
+            connection_revision_id=None if call is None else call.connection_revision_id,
+            identity_basis=None if call is None else call.identity_basis,
         )
+        if self._context is not None:
+            self._context.bind_call(str(model_call_id))
         self._session.commit()
         self._committed("provider_intent_committed")
         return model_call_id
@@ -524,6 +537,7 @@ def _run_text_analysis_stage(
     clock: Clock,
     call_journal: ModelCallJournal,
     profile: Any = AR_TEXT_PROFILE,
+    call: Any = None,
 ) -> tuple[StageResult, Mapping[str, Any] | None, AttemptSummary]:
     """Run ``text_analysis``, retrying transport failures, and publish its artifact.
 
@@ -604,6 +618,7 @@ def _run_text_analysis_stage(
             # OD-03 that a retry must not be able to buy.
             meter=cost_meter,
             call_journal=call_journal,
+            call=call,
         )
 
         # Complete responses were committed by ``call_journal`` before parsing reached
@@ -746,6 +761,26 @@ def _pinned_text_profile(run: RunRow, resolve: TextProfileResolver) -> Any:
         ) from None
 
 
+def _bind_provider(
+    session: Session, run: RunRow, context: AttemptContext,
+    providers: ProviderResolver | None, adapter: ModelAdapter, config: ProviderConfig,
+) -> ProviderBinding:
+    """The adapter, configuration and call binding this Attempt's model stage runs with."""
+    if providers is None:
+        return ProviderBinding(adapter=adapter, config=config, call=None)
+    binding = providers(session, run, context)
+    mode = getattr(getattr(binding.adapter, "provider_mode", None), "value", None)
+    if mode is not None and str(mode) != str(run.provider_mode):
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message=(
+                "the run declares a provider mode the resolved adapter does not "
+                "provide; a recorded run is never presented as a live one"
+            ),
+        )
+    return binding
+
+
 def _execute_run_body(
     session: Session,
     run_id: str,
@@ -766,8 +801,17 @@ def _execute_run_body(
     recorded_fixture_model_id: str | None = None,
     recorded_generation_settings: RecordedGenerationSettings | None = None,
     text_profiles: TextProfileResolver | None = None,
+    providers: ProviderResolver | None = None,
 ) -> ExecutionResult:
     """Drive one run from ``created`` to a terminal state.
+
+    ``providers`` (`EXEC-HTTP-01`) is the composition root's resolver. Called once per Attempt,
+    just before the model stage, with the run row and the Attempt's context, it returns the
+    :class:`~auditmanager.runs.provider.ProviderBinding` the stage runs with: for the
+    ``database`` source the adapter of the connection revision the run froze at start, built with
+    the connection's current key; for ``environment`` the adapter built at start-up. A refusal is
+    a ``DomainError`` and fails the text stage with that code, calling nothing. ``None`` keeps the
+    in-process harness's behaviour: ``adapter`` and ``provider_config`` serve every run.
 
     ``text_profiles`` (`W59-SECTION-SEAL-01`) resolves the run's **pinned**
     ``(analysis_profile_id, prompt_bundle_id)`` to the text profile the ``text_analysis``
@@ -805,10 +849,15 @@ def _execute_run_body(
         call_count=0 if prior_cost is None else prior_cost.model_call_count,
     )
     if cost_meter is None and prior_cost is not None:
-        # A persisted opening balance cannot be re-priced by this Attempt. Even a
-        # zero-cost earlier call may have been estimated, so a resumed meter must
-        # never re-label that historical contribution as measured.
-        meter.unpriced_contributions = max(meter.unpriced_contributions, 1)
+        if prior_cost.basis == "unmetered":
+            # Earlier calls went through a connection with no per-call cost: they are counted,
+            # and they are not a priced contribution the balance could mislabel.
+            meter.unmetered_calls = prior_cost.model_call_count
+        else:
+            # A persisted opening balance cannot be re-priced by this Attempt. Even a
+            # zero-cost earlier call may have been estimated, so a resumed meter must
+            # never re-label that historical contribution as measured.
+            meter.unpriced_contributions = max(meter.unpriced_contributions, 1)
 
     run = run_repo.get(session, run_id)
     recorded_v2 = (
@@ -932,7 +981,7 @@ def _execute_run_body(
     # running Run plus Job/Attempt/Lease authority durable before the first S3 or provider
     # effect on every caller path, including direct integration invocations.
     session.commit()
-    start_attempt_lease_heartbeat(session, authority)
+    attempt_context = start_attempt_lease_heartbeat(session, authority)
     if checkpoint is not None:
         checkpoint()
 
@@ -1079,22 +1128,41 @@ def _execute_run_body(
             stage_id="text_analysis",
             checkpoint=effect_checkpoint,
         )
-        text_result, observations_document, attempts = _run_text_analysis_stage(
-            run_id=run_id,
-            version_uid=run.version_uid,
-            outputs=outputs,
-            blob_store=text_store,
-            adapter=adapter,
-            provider_config=config,
-            cost_meter=meter,
-            policy=policy,
-            sleep=sleep,
-            clock=clock,
-            call_journal=_DurableCallJournal(
-                session, job_repo, authority, effect_checkpoint
-            ),
-            profile=text_profile,
-        )
+        try:
+            binding = _bind_provider(
+                session, run, attempt_context, providers, adapter, config
+            )
+        except DomainError as refusal:
+            # The connection cannot serve this Attempt (its key cannot be opened for its
+            # address, its route is gone): the stage fails with that code and nothing is called.
+            started_at = clock()
+            attempts = not_attempted(policy)
+            observations_document = None
+            text_result = _text_stage_result(
+                TextAnalysisOutcome(
+                    status="failed", artifact=None, model_calls=(), error=refusal
+                ),
+                artifact_ref=None, attempts=attempts, started=started_at, finished=clock(),
+            )
+        else:
+            text_result, observations_document, attempts = _run_text_analysis_stage(
+                run_id=run_id,
+                version_uid=run.version_uid,
+                outputs=outputs,
+                blob_store=text_store,
+                adapter=binding.adapter,
+                provider_config=binding.config,
+                cost_meter=meter,
+                policy=policy,
+                sleep=sleep,
+                clock=clock,
+                call_journal=_DurableCallJournal(
+                    session, job_repo, authority, effect_checkpoint,
+                    call=binding.call, context=attempt_context,
+                ),
+                profile=text_profile,
+                call=binding.call,
+            )
         _persist_and_bind(
             session,
             runs=run_repo,

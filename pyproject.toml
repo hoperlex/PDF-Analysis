@@ -66,6 +66,11 @@ dependencies = [
     "uvicorn==0.53.0",        # BSD-3-Clause — the ASGI server
     "click==8.5.0",           # BSD-3-Clause — uvicorn's only unmet requirement
     "python-multipart==0.0.32",  # Apache-2.0 — FastAPI's multipart parser for uploadDocument
+    # `EXEC-SEAL-01` (R-143b). Sealed executor secrets: X25519, HKDF-SHA256 and AES-256-GCM,
+    # and the ed25519 key `generateExecutorSshKey` makes. It was only transitive, through
+    # pdfminer.six; the executors context imports it directly, so a parent's upgrade can no
+    # longer move it silently. Pinned at the version the lock already held. Apache-2.0 OR BSD-3-Clause.
+    "cryptography==50.0.1",
 ]
 
 [dependency-groups]

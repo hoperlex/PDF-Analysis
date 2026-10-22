@@ -1,4 +1,4 @@
-"""The eighty-three operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The ninety-three operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the twenty-two router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -45,6 +45,7 @@ from auditmanager.api.routers.errors import (
 )
 from auditmanager.api.routers.export import build_export_routes
 from auditmanager.api.routers.execution import build_execution_routes
+from auditmanager.api.routers.executors import build_executor_routes
 from auditmanager.api.routers.findings import build_finding_routes
 from auditmanager.api.routers.handlers import (
     FailureEnvelopeMiddleware,
@@ -84,6 +85,7 @@ from auditmanager.api.routers.ports import (
     DecisionPort,
     DocumentPort,
     ExecutionPort,
+    ExecutorPort,
     FindingPort,
     NormContentPort,
     NormsSearchPort,
@@ -148,6 +150,7 @@ __all__ = [
     "DecisionPort",
     "DocumentPort",
     "ExecutionPort",
+    "ExecutorPort",
     "FailureEnvelopeMiddleware",
     "FindingPort",
     "NormContentPort",
@@ -220,8 +223,9 @@ def build_router(
     specification_prices: SpecificationPricesPort | None = None,
     optimisation_proposals: OptimisationProposalPort | None = None,
     section_specifications: SectionSpecificationPort | None = None,
+    executors: ExecutorPort | None = None,
 ) -> Router:
-    """Assemble the eighty-three operations, from the twenty-three router modules -- ``me``,
+    """Assemble the ninety-three operations, from the twenty-three router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
@@ -314,6 +318,9 @@ def build_router(
     # `W63-SECTION-FORM7-01`. A section's combined Form-7 specification across projects,
     # read-only. Optional with a default, for the reason `blocks` gives above.
     build_section_specification_routes(router, section_specifications)  # type: ignore[arg-type]
+    # `EXEC-SEAL-01`. The executor connections, secrets, probes and routes (`R-143`). Optional
+    # with a default, for the reason `blocks` gives above.
+    build_executor_routes(router, executors)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

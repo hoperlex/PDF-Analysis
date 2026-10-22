@@ -146,6 +146,7 @@ from auditmanager.analysis.text.source_bytes import (
 )
 from auditmanager.analysis.text.chunk_preflight import ChunkPreflightError
 from auditmanager.analysis.text.proxy import ProxyDispatchError
+from auditmanager.analysis.text.lock import ModelPin, pinned_models
 from auditmanager.analysis.text.recorded import RecordedAdapter
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
 from auditmanager.analysis.text.anchors import BlockIndex, ResolvedAnchor
@@ -190,11 +191,13 @@ __all__ = [
     "CostMeter",
     "FinishedV2Response",
     "ModelAdapter",
+    "ModelPin",
     "ModelCallJournal",
     "ModelCallRecord",
     "ModelRequest",
     "ModelResponse",
     "MergePreparation",
+    "pinned_models",
     "MERGE_ARTIFACT_ROLE",
     "MERGE_ARTIFACT_VERSION",
     "MERGE_RULE_VERSION",

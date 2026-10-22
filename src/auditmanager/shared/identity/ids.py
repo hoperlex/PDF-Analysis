@@ -350,6 +350,32 @@ class AssignmentUid(OpaqueId, prefix="asg", entity="WorkAssignment"):
     """
 
 
+class ExecutorConnectionId(OpaqueId, prefix="exc", entity="ExecutorConnection"):
+    """Identity of one executor connection (`EXEC-SEAL-01`, migration ``0030``).
+
+    Minted by ``auditmanager.executors``; never derived from the address, the display name or
+    the model, all of which can change in a new revision while the connection stays.
+    """
+
+
+class ExecutorConnectionRevisionId(
+    OpaqueId, prefix="excr", entity="ExecutorConnectionRevision"
+):
+    """Identity of one immutable revision of a connection's non-secret settings."""
+
+
+class ExecutorSecretId(OpaqueId, prefix="exs", entity="ExecutorSecret"):
+    """Identity of one sealed secret. It is part of the associated data of its ciphertext."""
+
+
+class ExecutorProbeId(OpaqueId, prefix="epb", entity="ExecutorProbe"):
+    """Identity of one probe of a connection revision."""
+
+
+class ExecutorRouteEventId(OpaqueId, prefix="ert", entity="ExecutorRouteEvent"):
+    """Identity of one appended change of the route for a kind of model work."""
+
+
 #: Every concrete identity type, keyed by contract entity name.
 IDENTITY_TYPES_BY_ENTITY: Final[dict[str, type[OpaqueId]]] = {
     identity.entity: identity for identity in _REGISTRY.values()

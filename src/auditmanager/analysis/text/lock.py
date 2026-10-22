@@ -128,3 +128,13 @@ def load_provider_lock(lock_path: Path | None = None) -> ProviderLock:
 def provider_lock() -> ProviderLock:
     """The repository's lock, read once per process."""
     return load_provider_lock()
+
+
+def pinned_models() -> tuple[ModelPin, ...]:
+    """Every model the lock pins, with its rates, in the lock's order.
+
+    Export-only (`EXEC-SEAL-01`, `R-143`): the executor connections read it to offer the pins
+    and to validate a revision against the same list, so the choice in the UI and the refusal
+    cannot disagree. It adds no pin and decides nothing; a pin stays a change to the lock.
+    """
+    return tuple(provider_lock().models.values())

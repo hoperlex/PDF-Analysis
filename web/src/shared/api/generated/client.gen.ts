@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0 (OpenAPI 3.1.0)
- *   sha256 741f29f9b0c9341cdf0631f0f65e462c7788945dd21002aa33afc54af7076eb8
+ *   sha256 0c1d1af2e441ff58e1dde3c3fff5605d332b9ce6bac77d3f012e3db1a262ef6a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -22,6 +22,8 @@ import type {
   AppendDecisionResult,
   ApproveRegistrationInput,
   ApproveRegistrationResult,
+  ArchiveExecutorConnectionInput,
+  ArchiveExecutorConnectionResult,
   ArchiveUserInput,
   ArchiveUserResult,
   CancelRunInput,
@@ -38,6 +40,8 @@ import type {
   CorrectVersionClassificationResult,
   CreateAssignmentInput,
   CreateAssignmentResult,
+  CreateExecutorConnectionInput,
+  CreateExecutorConnectionResult,
   CreateProjectInput,
   CreateProjectResult,
   DecideOptimisationProposalInput,
@@ -48,6 +52,8 @@ import type {
   ExportRunCsvResult,
   ExportRunXlsxInput,
   ExportRunXlsxResult,
+  GenerateExecutorSshKeyInput,
+  GenerateExecutorSshKeyResult,
   GetAssignmentInput,
   GetAssignmentResult,
   GetDashboardSummaryInput,
@@ -56,6 +62,8 @@ import type {
   GetDocumentVersionResult,
   GetEffectiveVendorListsInput,
   GetEffectiveVendorListsResult,
+  GetExecutorConnectionInput,
+  GetExecutorConnectionResult,
   GetFindingInput,
   GetFindingResult,
   GetMeInput,
@@ -96,6 +104,10 @@ import type {
   ListExecutionJournalResult,
   ListExecutionQueueInput,
   ListExecutionQueueResult,
+  ListExecutorConnectionsInput,
+  ListExecutorConnectionsResult,
+  ListExecutorRoutesInput,
+  ListExecutorRoutesResult,
   ListNormDocumentsInput,
   ListNormDocumentsResult,
   ListNormParagraphsInput,
@@ -142,16 +154,24 @@ import type {
   ReauditRunResult,
   RejectRegistrationInput,
   RejectRegistrationResult,
+  RequestExecutorProbeInput,
+  RequestExecutorProbeResult,
   ResetUserPasswordInput,
   ResetUserPasswordResult,
   RestoreUserInput,
   RestoreUserResult,
+  ReviseExecutorConnectionInput,
+  ReviseExecutorConnectionResult,
   SearchNormsInput,
   SearchNormsResult,
   SetCurrentNormSnapshotInput,
   SetCurrentNormSnapshotResult,
   SetExecutionPausedInput,
   SetExecutionPausedResult,
+  SetExecutorRouteInput,
+  SetExecutorRouteResult,
+  SetExecutorSecretInput,
+  SetExecutorSecretResult,
   SetGlobalVendorListInput,
   SetGlobalVendorListResult,
   SetJobPriorityInput,
@@ -209,6 +229,18 @@ export function approveRegistration(
   options?: RequestOptions,
 ): Promise<ApiResponse<ApproveRegistrationResult>> {
   return request<ApproveRegistrationResult>(OPERATIONS.approveRegistration, input, options);
+}
+
+/**
+ * Archive Executor Connection
+ *
+ * `POST /executor-connections/{connection_id}/archive` - a write; carries a required Idempotency-Key.
+ */
+export function archiveExecutorConnection(
+  input: ArchiveExecutorConnectionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ArchiveExecutorConnectionResult>> {
+  return request<ArchiveExecutorConnectionResult>(OPERATIONS.archiveExecutorConnection, input, options);
 }
 
 /**
@@ -308,6 +340,18 @@ export function createAssignment(
 }
 
 /**
+ * Create Executor Connection
+ *
+ * `POST /executor-connections` - a write; carries a required Idempotency-Key.
+ */
+export function createExecutorConnection(
+  input: CreateExecutorConnectionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateExecutorConnectionResult>> {
+  return request<CreateExecutorConnectionResult>(OPERATIONS.createExecutorConnection, input, options);
+}
+
+/**
  * Create a project.
  *
  * `POST /projects` - a write; carries a required Idempotency-Key.
@@ -368,6 +412,18 @@ export function exportRunXlsx(
 }
 
 /**
+ * Generate Executor Ssh Key
+ *
+ * `POST /executor-connections/{connection_id}/ssh-key` - a write; carries a required Idempotency-Key.
+ */
+export function generateExecutorSshKey(
+  input: GenerateExecutorSshKeyInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GenerateExecutorSshKeyResult>> {
+  return request<GenerateExecutorSshKeyResult>(OPERATIONS.generateExecutorSshKey, input, options);
+}
+
+/**
  * Read one assignment with its history.
  *
  * `GET /assignments/{assignment_uid}`.
@@ -413,6 +469,18 @@ export function getEffectiveVendorLists(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetEffectiveVendorListsResult>> {
   return request<GetEffectiveVendorListsResult>(OPERATIONS.getEffectiveVendorLists, input, options);
+}
+
+/**
+ * Get Executor Connection
+ *
+ * `GET /executor-connections/{connection_id}`.
+ */
+export function getExecutorConnection(
+  input: GetExecutorConnectionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetExecutorConnectionResult>> {
+  return request<GetExecutorConnectionResult>(OPERATIONS.getExecutorConnection, input, options);
 }
 
 /**
@@ -653,6 +721,30 @@ export function listExecutionQueue(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListExecutionQueueResult>> {
   return request<ListExecutionQueueResult>(OPERATIONS.listExecutionQueue, input, options);
+}
+
+/**
+ * List Executor Connections
+ *
+ * `GET /executor-connections`.
+ */
+export function listExecutorConnections(
+  input: ListExecutorConnectionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListExecutorConnectionsResult>> {
+  return request<ListExecutorConnectionsResult>(OPERATIONS.listExecutorConnections, input, options);
+}
+
+/**
+ * List Executor Routes
+ *
+ * `GET /executor-routes`.
+ */
+export function listExecutorRoutes(
+  input: ListExecutorRoutesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListExecutorRoutesResult>> {
+  return request<ListExecutorRoutesResult>(OPERATIONS.listExecutorRoutes, input, options);
 }
 
 /**
@@ -932,6 +1024,18 @@ export function rejectRegistration(
 }
 
 /**
+ * Request Executor Probe
+ *
+ * `POST /executor-connections/{connection_id}/probes` - a write; carries a required Idempotency-Key.
+ */
+export function requestExecutorProbe(
+  input: RequestExecutorProbeInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RequestExecutorProbeResult>> {
+  return request<RequestExecutorProbeResult>(OPERATIONS.requestExecutorProbe, input, options);
+}
+
+/**
  * Set a temporary password for an account.
  *
  * `POST /users/{user_uid}/password`.
@@ -953,6 +1057,18 @@ export function restoreUser(
   options?: RequestOptions,
 ): Promise<ApiResponse<RestoreUserResult>> {
   return request<RestoreUserResult>(OPERATIONS.restoreUser, input, options);
+}
+
+/**
+ * Revise Executor Connection
+ *
+ * `POST /executor-connections/{connection_id}/revisions` - a write; carries a required Idempotency-Key.
+ */
+export function reviseExecutorConnection(
+  input: ReviseExecutorConnectionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ReviseExecutorConnectionResult>> {
+  return request<ReviseExecutorConnectionResult>(OPERATIONS.reviseExecutorConnection, input, options);
 }
 
 /**
@@ -989,6 +1105,30 @@ export function setExecutionPaused(
   options?: RequestOptions,
 ): Promise<ApiResponse<SetExecutionPausedResult>> {
   return request<SetExecutionPausedResult>(OPERATIONS.setExecutionPaused, input, options);
+}
+
+/**
+ * Set Executor Route
+ *
+ * `PUT /executor-routes` - a write; carries a required Idempotency-Key.
+ */
+export function setExecutorRoute(
+  input: SetExecutorRouteInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetExecutorRouteResult>> {
+  return request<SetExecutorRouteResult>(OPERATIONS.setExecutorRoute, input, options);
+}
+
+/**
+ * Set Executor Secret
+ *
+ * `POST /executor-connections/{connection_id}/secrets` - a write; carries a required Idempotency-Key.
+ */
+export function setExecutorSecret(
+  input: SetExecutorSecretInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetExecutorSecretResult>> {
+  return request<SetExecutorSecretResult>(OPERATIONS.setExecutorSecret, input, options);
 }
 
 /**
@@ -1190,6 +1330,7 @@ export function uploadPriceList(
 export const apiClient = {
   appendDecision,
   approveRegistration,
+  archiveExecutorConnection,
   archiveUser,
   cancelRun,
   carryOverDecision,
@@ -1198,15 +1339,18 @@ export const apiClient = {
   compareDocumentVersions,
   correctVersionClassification,
   createAssignment,
+  createExecutorConnection,
   createProject,
   decideOptimisationProposal,
   exportOptimisationProposalsCsv,
   exportRunCsv,
   exportRunXlsx,
+  generateExecutorSshKey,
   getAssignment,
   getDashboardSummary,
   getDocumentVersion,
   getEffectiveVendorLists,
+  getExecutorConnection,
   getFinding,
   getMe,
   getNormDocument,
@@ -1227,6 +1371,8 @@ export const apiClient = {
   listDocuments,
   listExecutionJournal,
   listExecutionQueue,
+  listExecutorConnections,
+  listExecutorRoutes,
   listNormDocuments,
   listNormParagraphs,
   listNormSnapshotEvents,
@@ -1250,11 +1396,15 @@ export const apiClient = {
   readRegistrationStatus,
   reauditRun,
   rejectRegistration,
+  requestExecutorProbe,
   resetUserPassword,
   restoreUser,
+  reviseExecutorConnection,
   searchNorms,
   setCurrentNormSnapshot,
   setExecutionPaused,
+  setExecutorRoute,
+  setExecutorSecret,
   setGlobalVendorList,
   setJobPriority,
   setProjectVendorList,

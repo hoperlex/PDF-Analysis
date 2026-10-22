@@ -20,7 +20,7 @@
 # EACH CHECK MUST BE SHOWN ABLE TO FAIL, ON A CONFIGURATION BUILT TO FAIL IT -- a command
 # that is green on every input is the thing this programme has already paid to learn about
 # (`W46-GUARD`, `X-1`/`X-2`). `tests/integration/composition/test_readiness_command.py`
-# drives every one of the six checks below to both a clean answer and a finding, and for the
+# drives every one of the seven checks below to both a clean answer and a finding, and for the
 # five that do not need a running stack, deletes the check's own marked block and shows the
 # finding disappears -- the same mutation discipline `deploy.sh`'s guards are held to.
 #
@@ -73,7 +73,7 @@ usage: readiness.sh [--env-file <path>] [--provider-env-file <path>] [--tls-dir 
   --provider-env-file <path>  default: infra/deploy/env/provider.env
   --tls-dir <path>            default: infra/deploy/proxy/tls
 
-Reports on six publication-readiness questions and registers each finding. Refuses nothing
+Reports on seven publication-readiness questions and registers each finding. Refuses nothing
 and blocks no deploy (R-46). Exit 0: every check answered clean. Exit 1: at least one
 finding. Exit 2: at least one check could not be answered (missing tooling, missing file --
 never read as clean).
@@ -222,12 +222,14 @@ QUOTE_CHARS = (chr(34), chr(39))
 NAMES = (
     "DATABASE_URL", "S3_ENDPOINT_URL", "S3_REGION", "S3_ACCESS_KEY_ID",
     "S3_SECRET_ACCESS_KEY", "S3_BUCKET", "AUDITMANAGER_API_TOKEN",
-    "AUDITMANAGER_PROVIDER_MODE",
+    "AUDITMANAGER_PROVIDER_MODE", "AUDITMANAGER_PROVIDER_SOURCE",
+    "AUDITMANAGER_SECRETS_PUBLIC_KEYS", "AUDITMANAGER_SECRETS_ACTIVE_KID",
 )
 PROVIDER_NAMES = (
     "AUDITMANAGER_RUN_COST_CEILING_USD", "AUDITMANAGER_MODEL_ID", "ANTHROPIC_API_KEY",
-    "PROXY_LLM_BASE_URL", "PROXY_LLM_TOKEN", "PROXY_LLM_MODEL",
+    "PROXY_LLM_BASE_URL", "PROXY_LLM_TOKEN", "PROXY_LLM_MODEL", "AUDITMANAGER_SECRETS_KEYS",
 )
+STUBS = ("", "proxy", "default", "auto")
 
 
 def read(path, wanted):
@@ -258,6 +260,27 @@ except ConfigurationError as exc:
     sys.exit(1)
 print("MODE=%s" % settings.provider_mode)
 print("CEILING=%s" % settings.run_cost_ceiling_usd)
+# `EXEC-HTTP-01` (R-143): the provider source, the key ring and the public keys, read the way the
+# application reads them -- the ring is never printed, only whether the pieces agree.
+print("SOURCE=%s" % settings.provider_source)
+private = settings.secrets_private_ring
+public = settings.secrets_public_ring
+if settings.provider_source == "database":
+    if private is None:
+        print("EXECUTOR-FINDING: the source is database but the worker holds no private ring (AUDITMANAGER_SECRETS_KEYS in provider.env); no key can be opened")
+    if public is None:
+        print("EXECUTOR-FINDING: the source is database but the api holds no public key (AUDITMANAGER_SECRETS_PUBLIC_KEYS and AUDITMANAGER_SECRETS_ACTIVE_KID in alpha.env); no key can be set")
+    if private is not None and public is not None:
+        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+        for kid, key in public.keys.items():
+            mine = private.keys.get(kid)
+            same = mine is not None and mine.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw) == key.public_bytes(Encoding.Raw, PublicFormat.Raw)
+            if not same:
+                print("EXECUTOR-FINDING: public key %s has no matching private key in the worker ring; keys sealed to it cannot be opened" % kid)
+        if public.active_kid not in private.keys:
+            print("EXECUTOR-FINDING: the active key id %s is not in the worker ring" % public.active_kid)
+elif settings.provider_mode == "proxy" and env.get("PROXY_LLM_MODEL", "").strip().lower() in STUBS:
+    print("EXECUTOR-FINDING: PROXY_LLM_MODEL is unset or a gateway stub; since EXEC-HTTP-01 every run fails closed (R-133) until the explicit model name the gateway reports is set")
 '
     # `PYTHONPATH` carries the repository ROOT's `src/`, absolute -- not the relative "src"
     # `check.py`'s own docstring uses, which only resolves from the repository root.
@@ -314,6 +337,30 @@ fi
 echo
 # <<< check: cost-ceiling
 
+# >>> check: executor-source
+# `EXEC-HTTP-01` (R-143): where a run's model adapter comes from, and whether the key ring that
+# seals a connection's key is whole. Reuses `AppSettings.load()` like the two checks above. Under
+# `environment` it asks the one thing that changed for the stand: `PROXY_LLM_MODEL` must name the
+# model the gateway reports (R-133), or every run fails closed. Under `database` it asks that the
+# api holds a public key, the worker holds the private ring and the two agree.
+if [ -n "$PROVIDER_UNREADABLE" ]; then
+    unknown executor-source "$PROVIDER_UNREADABLE"
+elif printf '%s\n' "$PROVIDER_OUTPUT" | grep -q '^CONFIG-ERROR:.*\(AUDITMANAGER_PROVIDER_SOURCE\|AUDITMANAGER_SECRETS\)'; then
+    finding executor-source "$(printf '%s\n' "$PROVIDER_OUTPUT" | grep '^CONFIG-ERROR:' | head -1 | sed 's/^CONFIG-ERROR: //')"
+elif printf '%s\n' "$PROVIDER_OUTPUT" | grep -q '^EXECUTOR-FINDING:'; then
+    finding executor-source "$(printf '%s\n' "$PROVIDER_OUTPUT" | grep '^EXECUTOR-FINDING:' | head -1 | sed 's/^EXECUTOR-FINDING: //')"
+elif printf '%s\n' "$PROVIDER_OUTPUT" | grep -q '^SOURCE='; then
+    SOURCE="$(printf '%s\n' "$PROVIDER_OUTPUT" | sed -n 's/^SOURCE=//p')"
+    ok executor-source "AUDITMANAGER_PROVIDER_SOURCE is '$SOURCE' and the settings loader accepted the key ring it needs."
+elif printf '%s\n' "$PROVIDER_OUTPUT" | grep -q '^CONFIG-ERROR:'; then
+    unknown executor-source "the settings loader refused to start for an unrelated reason before the provider source could be confirmed: $(printf '%s\n' "$PROVIDER_OUTPUT" | grep '^CONFIG-ERROR:' | head -1)"
+else
+    unknown executor-source "the settings loader's output matched neither SOURCE= nor a CONFIG-ERROR; raw output:"
+    printf '%s\n' "$PROVIDER_OUTPUT" | sed 's/^/    /'
+fi
+echo
+# <<< check: executor-source
+
 # >>> check: off-host-backup
 # Step 8's off-host half. `infra/deploy/reset.sh` dumps and verifies the dump before it
 # drops anything, but the dump lands under `$ALPHA_DUMP_ROOT` on THIS host's own disk.
@@ -327,7 +374,7 @@ finding off-host-backup "no destination exists in this repository. reset.sh's du
 echo
 # <<< check: off-host-backup
 
-echo "readiness.sh: $FINDINGS finding(s), $UNKNOWNS unknown, 6 checks."
+echo "readiness.sh: $FINDINGS finding(s), $UNKNOWNS unknown, 7 checks."
 echo "readiness.sh: this is a report, not a gate (R-46). Each finding is a register row for the owner's ruling."
 
 if [ "$UNKNOWNS" -gt 0 ]; then

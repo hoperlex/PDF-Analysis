@@ -162,6 +162,41 @@ describe('an unstated cost basis is not a measured one (M-10)', () => {
   });
 });
 
+/**
+ * `EXEC-SEAL-01` (`R-143f`). A run on a connection that has no per-call cost is `unmetered`: its
+ * own reading kind, neither a reported figure, nor an unrecognised basis, nor an absent cost.
+ */
+describe('an unmetered run is its own kind and never a zero (EXEC-SEAL-01)', () => {
+  it('maps the basis to its own kind, carrying the count and no figure', () => {
+    const reading = runCost({ cost_micros: 0, cost_basis: 'unmetered', model_call_count: 3 });
+    expect(reading).toEqual({ kind: 'unmetered', callCount: 3 });
+    expect('micros' in reading).toBe(false);
+  });
+
+  it('does not need a figure to be an unmetered run, and keeps it apart from absent', () => {
+    expect(runCost({ cost_basis: 'unmetered' })).toEqual({ kind: 'unmetered', callCount: null });
+    expect(runCost({ cost_basis: 'unmetered' }).kind).not.toBe(runCost({}).kind);
+  });
+
+  it('is not the reading of a reported zero, an estimate or an unrecognised basis', () => {
+    const kinds = [
+      runCost({ cost_micros: 0, cost_basis: 'unmetered', model_call_count: 1 }).kind,
+      runCost({ cost_micros: 0, cost_basis: 'measured', model_call_count: 1 }).kind,
+      runCost({ cost_micros: 0, cost_basis: 'unmetered-ish', model_call_count: 1 }).kind,
+    ];
+    expect(kinds).toEqual(['unmetered', 'reported', 'reported']);
+    expect(runCost({ cost_micros: 0, cost_basis: 'unmetered-ish', model_call_count: 1 })).toMatchObject({
+      basis: 'unrecognized',
+    });
+  });
+
+  it('says it is not tarified and that this is not a zero', () => {
+    const caption = costBasisCaption('unmetered');
+    expect(caption).toContain('не тарифицируется');
+    expect(caption).toContain('не нулевая стоимость');
+  });
+});
+
 /** M-8. A count that was not reported is not a count of zero. */
 describe('a diagnostic count that was not reported is not zero (M-8)', () => {
   it('answers null when the field is absent', () => {

@@ -559,14 +559,38 @@
       "$comment": [
         "Исполнители (W54-WORKERS-WEB) reads the worker registry and the signed-in account's",
         "roles on a cold route. The intake switch requires explicit administrator intent and",
-        "a confirmation, and is not emitted by this read journey."
+        "a confirmation, and is not emitted by this read journey.",
+        "",
+        "EXEC-HTTP-01 gave the screen three tabs: «Подключения», «Процессы», «Назначения». The cold",
+        "route opens «Процессы» -- the worker list above, unchanged -- and a closed tab mounts",
+        "nothing, so `expects_api` is as it was. The two other tabs are opened by a click or by",
+        "`?tab=`, which this walk does not carry, and read `listExecutorConnections`,",
+        "`getExecutorConnection` (one per listed connection) and `listExecutorRoutes`; they are",
+        "declared `optional_api` so the claim names every read the screen can make without",
+        "asserting a tab the walk never opens.",
+        "",
+        "The administrator's writes -- `createExecutorConnection`, `reviseExecutorConnection`,",
+        "`archiveExecutorConnection`, `requestExecutorProbe`, `generateExecutorSshKey` and",
+        "`setExecutorRoute` -- require explicit intent and are not emitted by this read journey,",
+        "like the intake switch. The API key is not an API call of the browser at all: the key form",
+        "is a server-rendered native `<form method=\"post\">` that posts to the web tier's own",
+        "reserved door `POST /bff/v1/executor-secret/<connection_id>` (answer: 303 to",
+        "`/workers?tab=connections&connection=<id>&secret=<outcome>`), which forwards to",
+        "`setExecutorSecret` server-side. The door is the web tier's own, like `/bff/v1/session`,",
+        "carries the key in no header, body or address of its answer, and is not pressed by any",
+        "step here, because a step would need a live stack and a real key; it is held by",
+        "`web/tests/unit/workers/executor-secret-door.test.ts` and named here so the journey's",
+        "written claim knows the door exists. See web/src/app/bff/v1/[...path]/route.ts."
       ],
       "expects_api": [
         {"method": "GET", "path": "/execution/workers", "operationId": "listWorkers"},
         {"method": "GET", "path": "/me", "operationId": "getMe"}
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/executor-connections", "operationId": "listExecutorConnections", "$why_optional": "read only on the «Подключения» and «Назначения» tabs (EXEC-HTTP-01); the cold route opens «Процессы» and a closed tab mounts nothing"},
+        {"method": "GET", "path": "/executor-connections/{connection_id}", "operationId": "getExecutorConnection", "$why_optional": "read once per listed connection on the «Подключения» and «Назначения» tabs, and polled every 3 s while a probe is open (EXEC-HTTP-01)"},
+        {"method": "GET", "path": "/executor-routes", "operationId": "listExecutorRoutes", "$why_optional": "read only on the «Подключения» and «Назначения» tabs (EXEC-HTTP-01)"}
       ],
       "follow": null
     },

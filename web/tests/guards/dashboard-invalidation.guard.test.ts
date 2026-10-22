@@ -205,6 +205,12 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   // dashboard reads; both invalidate the `assignments` root instead.
   'src/features/create-assignment/model/use-create-assignment.ts': false,
   'src/features/transition-assignment/model/use-transition-assignment.ts': false,
+  // `EXEC-HTTP-01`: a connection, a revision, a probe, a generated SSH key and a route change no
+  // number the dashboard reads; each invalidates the `execution` root instead, which the
+  // connection and route reads live under. The key itself has no hook at all: it is typed into
+  // a server-rendered form (`features/set-executor-secret`).
+  'src/features/manage-executor-connection/model/use-manage-executor-connection.ts': false,
+  'src/features/manage-executor-connection/model/use-set-executor-route.ts': false,
 };
 
 /** A feature model source with an executable mutation call, independent of its filename. */

@@ -45,7 +45,7 @@ def _changed(engines: list[Engine], *statements: str) -> list[str]:
 def test_two_clones_of_one_migrated_schema_are_equal(two_clones: list[Engine]) -> None:
     first, second = database_profile(two_clones[0]), database_profile(two_clones[1])
     assert differences(first, second) == []
-    assert len(first["tables"]) == 55 and len(first["views"]) == 4
+    assert len(first["tables"]) == 60 and len(first["views"]) == 5  # `EXEC-SEAL-01`: +5 tables, +1 view
     assert set(first["shape"]) == {
         "columns", "constraints", "indexes", "triggers", "functions", "views", "sequences", "extensions",
     }

@@ -67,6 +67,7 @@ __all__ = [
     "ReleasesPort",
     "RunPort",
     "ExecutionPort",
+    "ExecutorPort",
     "SectionPort",
     "ComparisonPort",
     "AnalysisProfilePort",
@@ -106,6 +107,42 @@ class ExecutionPort(Protocol):
     def set_worker_intake(
         self, *, worker_id: str, enabled: bool, user_uid: str, idempotency_key: str
     ) -> models.ExecutionWorker: ...
+
+
+class ExecutorPort(Protocol):
+    """The executor connections (`EXEC-SEAL-01`, `R-143`). Reads are for any role; every
+    write re-checks the administrator role in its own transaction. No method returns a secret:
+    ``set_secret`` and ``generate_ssh_key`` answer metadata and the public half only."""
+
+    def list_connections(self, *, user_uid: str) -> models.ExecutorConnectionList: ...
+    def get_connection(
+        self, *, connection_id: str, user_uid: str
+    ) -> models.ExecutorConnectionDetail: ...
+    def list_routes(self, *, user_uid: str) -> models.ExecutorRouteList: ...
+    def create_connection(
+        self, *, kind: str, display_name: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorConnection: ...
+    def revise_connection(
+        self, *, connection_id: str, settings: models.ReviseExecutorConnectionRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ExecutorRevision: ...
+    def archive_connection(
+        self, *, connection_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorConnection: ...
+    def set_secret(
+        self, *, connection_id: str, purpose: str, value: str, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ExecutorSecretMetadata: ...
+    def generate_ssh_key(
+        self, *, connection_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorSshKey: ...
+    def request_probe(
+        self, *, connection_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorProbe: ...
+    def set_route(
+        self, *, work_kind: str, primary_connection_id: str,
+        standby_connection_id: str | None, user_uid: str, idempotency_key: str,
+    ) -> models.ExecutorRoute: ...
 
 
 class UploadedDocument(Protocol):

@@ -97,11 +97,17 @@ _RUNS_BY_STATE = text("SELECT state, count(*) FROM audit_run GROUP BY state")
 #: values ``runs.repository._COST_SUMMARY`` computes for one run, computed here with no
 #: ``WHERE run_id = ...`` at all. See ``RunActivitySpendRecord`` for the conservative
 #: basis rule.
+#:
+#: **The run-level cost rule** (`EXEC-HTTP-01`), the same as ``runs.repository._COST_SUMMARY``
+#: states for one run: a call through an unmetered connection has no figure of its own but still
+#: counts as a call. When every call in the deployment is unmetered the aggregate is ``0`` with
+#: basis ``unmetered``; when unmetered and metered calls mix it is the metered sum, ``estimated``.
 _SPEND = text(
     "SELECT count(*) AS calls, "
-    "       coalesce(sum(cost_micros), 0) AS cost_micros, "
-    "       count(*) FILTER (WHERE cost_micros IS NULL OR cost_basis <> 'measured') "
-    "         AS unmeasured "
+    "       coalesce(sum(cost_micros) FILTER (WHERE cost_basis <> 'unmetered'), 0) AS cost_micros, "
+    "       count(*) FILTER (WHERE cost_basis = 'unmetered') AS unmetered, "
+    "       count(*) FILTER (WHERE cost_basis <> 'unmetered' "
+    "         AND (cost_micros IS NULL OR cost_basis <> 'measured')) AS unmeasured "
     "FROM model_call"
 )
 
@@ -136,6 +142,37 @@ def _filled(
     the true count of zero.
     """
     return [(member, counted.get(member, 0)) for member in vocabulary]
+
+
+def spend_record(
+    calls: Any, cost_micros: Any, unmetered: Any, unmeasured: Any
+) -> RunActivitySpendRecord | None:
+    """The aggregate spend from the four figures ``_SPEND`` computes, or ``None`` for no call.
+
+    `F-1` (`docs/program/reviews/W46-JUDGE-A.md` section 3): the branch the lift from
+    `runs.repository.RunCost` dropped. `RunCost.calls == 0` answers `None`, never
+    `RunCost(0, 0, "measured")` -- those are different facts, and reporting the first as the
+    second is the same invented measurement `D-3` forbids. No `model_call` row anywhere in the
+    deployment means there is nothing to report, not a zero labelled `measured` over a `FILTER`
+    that is trivially satisfied by an empty table.
+
+    **The run-level cost rule** (`EXEC-HTTP-01`): every call unmetered -> cost `0`, basis
+    `unmetered`; unmetered and metered mixed -> the metered sum, `estimated`; otherwise
+    `measured` only when no metered call is unmeasured. A function of its four arguments so the
+    rule is testable per run, with the same SQL restricted to it.
+    """
+    calls, unmetered = int(calls), int(unmetered)
+    if calls == 0:
+        return None
+    return RunActivitySpendRecord(
+        model_call_count=calls,
+        cost_micros=0 if unmetered == calls else int(cost_micros),
+        basis=(
+            "unmetered" if unmetered == calls
+            else "measured" if unmetered == 0 and int(unmeasured) == 0
+            else "estimated"
+        ),
+    )
 
 
 class DashboardRepository:
@@ -180,25 +217,7 @@ class DashboardRepository:
             for state, count in _filled(state_rows, RUN_STATES)
         )
 
-        spend_row: Any = session.execute(_SPEND).one()
-        calls, cost_micros, unmeasured = tuple(spend_row)
-        calls = int(calls)
-        # `F-1` (`docs/program/reviews/W46-JUDGE-A.md` section 3): the branch the lift
-        # from `runs.repository.RunCost` dropped. `RunCost.calls == 0` answers `None`,
-        # never `RunCost(0, 0, "measured")` -- those are different facts, and reporting
-        # the first as the second is the same invented measurement `D-3` forbids. This
-        # aggregate now keeps the branch it claims to lift: no `model_call` row anywhere
-        # in the deployment means there is nothing to report, not a zero labelled
-        # `measured` over a `FILTER` that is trivially satisfied by an empty table.
-        spend = (
-            None
-            if calls == 0
-            else RunActivitySpendRecord(
-                model_call_count=calls,
-                cost_micros=int(cost_micros),
-                basis="measured" if int(unmeasured) == 0 else "estimated",
-            )
-        )
+        spend = spend_record(*tuple(session.execute(_SPEND).one()))
 
         section_rows: dict[str | None, int] = {
             row[0]: int(row[1])

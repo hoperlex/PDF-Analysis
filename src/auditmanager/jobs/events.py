@@ -19,6 +19,13 @@ _SAFE_KEYS = frozenset({
     "stage_id", "error_code", "dispatch_class", "priority", "paused", "actor_uid",
     # `W54-WORKER-01`: the worker registry's intake switch (R-105).
     "worker_id", "intake_enabled",
+    # `EXEC-SEAL-01`: the executor connections' journal. Identities and controlled classifiers
+    # only; a setting's value, an address and a secret are never in a payload.
+    "connection_id", "connection_kind", "revision_id", "revision_no", "secret_id", "purpose",
+    "probe_id", "work_kind", "primary_connection_id", "standby_connection_id",
+    # `EXEC-HTTP-01`: why a run started on the standby (``primary_archived``,
+    # ``primary_not_probed``, ``primary_kind_not_served``): a controlled classifier.
+    "reason",
 })
 _INSERT = text(
     "INSERT INTO audit_event (audit_event_id, event_type, aggregate_type, "

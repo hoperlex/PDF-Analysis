@@ -52,7 +52,7 @@
  */
 
 import { createElement } from 'react';
-import type { ReactElement } from 'react';
+import type { ComponentType, ReactElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { ApiError, TransportError, queryKeys } from '@/shared/api';
@@ -133,6 +133,17 @@ import { DecisionHistory } from '@/widgets/decision-history';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
+import { WorkersPage } from '@/_pages/workers';
+import type { WorkersPageProps } from '@/_pages/workers';
+import {
+  CommandFailure, CreateConnectionForm, HostKeyControl, ReviseConnectionForm, SettingsFields,
+  SshKeyControl,
+} from '@/features/manage-executor-connection';
+import { EXECUTOR_SECRET_OUTCOMES, SetExecutorSecretForm } from '@/features/set-executor-secret';
+import {
+  ALL_CASES as EXECUTOR_CASES, PINNED as EXECUTOR_PINNED, READY as EXECUTOR_READY,
+  OUTCOME_CASES as EXECUTOR_OUTCOME_CASES, seedExecutors,
+} from '../unit/workers/executor-fixtures';
 import { RunWorkerLine, WORKER_PAGE_LIMIT } from '@/entities/execution';
 import type { ExecutionWorker } from '@/shared/api';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
@@ -173,6 +184,10 @@ import {
   NO_ROLES,
   UNKNOWN_ROLE,
 } from '../unit/shell/subjects';
+import { yieldToRunnerAfterEachTest } from './lib/yield-to-runner';
+
+// This file computes for ~40-65 s without awaiting I/O; see the helper for why that aborts a run.
+yieldToRunnerAfterEachTest();
 
 // ===================================================================== the vocabulary
 
@@ -307,6 +322,20 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
   { word: 'SHA', why: 'The digest algorithm family, shown as SHA-256 beside a version. FIPS 180-4 fixes the spelling; no contract here does.' },
   { word: 'UTF', why: 'The character encoding family, shown as utf-8 in the export description. The IANA charset registry fixes the spelling; matched case-insensitively for that one entry alone.' },
   { word: 'UTC', why: 'The time-scale designator printed after a timestamp. Where a timestamp precedes it the ISO pattern already consumes it; this entry covers the case where it stands alone.' },
+  // ------------------------------------------------------------------------------------
+  // `EXEC-HTTP-01`: names of protocols, products and files in «Подключения». None is English
+  // prose, none is a contract value (the contract publishes `http_api`, `vpn`, `ssh_tunnel`
+  // in lower case with underscores, and those are translated, so they are not permitted bare),
+  // and none is translated in Russian technical writing.
+  // ------------------------------------------------------------------------------------
+  { word: 'IP', why: 'The abbreviation in «IP стенда не допущен», the probe outcome the owner worded: the address of the stand that a gateway\'s allow-list refuses. Universal in Russian technical writing; no contract here defines the word.' },
+  { word: 'HTTP', why: 'The protocol name in «HTTP API», the kind of connection that calls a model at a web address. A standard name (RFC 9110) that Russian technical writing does not translate; no contract here defines the word.' },
+  { word: 'OpenRouter', why: 'The name of the model gateway service a connection can be pointed at, in the label of the request format. A product name, not translated for the reason AuditManager is not; no contract here defines it.' },
+  { word: 'VPN', why: 'The abbreviation in «Через VPN», one of the three ways a connection reaches its address. Universal in Russian technical writing; the contract publishes the transport as `vpn`, which is translated and so is not permitted as visible text.' },
+  { word: 'SSH', why: 'The protocol name in «Команда по SSH», «Через SSH-туннель», «Узел SSH» and «Ключ SSH». A standard name (RFC 4251) that Russian technical writing does not translate; no contract here defines the word.' },
+  { word: 'Claude Code', why: 'The product name of the command-line tool a remote machine runs, in «Claude Code без интерфейса» and «Сеанс Claude Code». A product name, not translated; listed before `Claude` so the pair is consumed whole.' },
+  { word: 'Claude', why: 'The model family name in «Формат сообщений Claude». A product name, not translated for the reason AuditManager is not; no contract here defines it.' },
+  { word: 'authorized_keys', why: 'The file OpenSSH reads on the remote machine, named where the generated public key is shown so the person knows where to add it. The spelling is fixed by OpenSSH; no contract here defines it, and it is not a filename the extension pattern matches.' },
   {
     word: 'MiB',
     why:
@@ -1069,6 +1098,10 @@ const KEYS = {
   executionJournal: queryKeys.execution.journal(),
   // `W54-WORKERS-WEB`: the «Исполнители» screen's first page.
   workers: queryKeys.execution.workers(undefined, WORKER_PAGE_LIMIT),
+  // `EXEC-HTTP-01`: the list of «Подключения» and the routes of «Назначения». Each connection's
+  // detail is seeded beside them by `seedExecutors`, under keys that depend on the connection.
+  executorConnections: queryKeys.execution.connections(),
+  executorRoutes: queryKeys.execution.routes(),
   // `W59-ANALYSIS-SETTINGS-01`: «Настройки анализа», the registry's fifteen rows.
   analysisProfiles: queryKeys.analysis.profiles(),
   dashboardSummary: queryKeys.dashboard.summary(),
@@ -1200,6 +1233,8 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   });
   // One worker per state, so every row shape and the collapsed offline group render.
   client.setQueryData(KEYS.workers, { items: WORKERS, page });
+  // Every shape of connection and probe, and a route with a standby.
+  seedExecutors(client);
   client.setQueryData(KEYS.analysisProfiles, { items: ANALYSIS_PROFILES });
   // A current snapshot and the three ways another one can stand; two designations; two hits;
   // a document with a heading, a body paragraph and an unreliable table row.
@@ -1274,6 +1309,9 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.executionQueue, { items: [], page, paused: false });
   client.setQueryData(KEYS.executionJournal, { items: [], page });
   client.setQueryData(KEYS.workers, { items: [], page });
+  // No connection, no route: the empty branches of both new tabs.
+  client.setQueryData(KEYS.executorConnections, { items: [], pinned_models: [...EXECUTOR_PINNED] });
+  client.setQueryData(KEYS.executorRoutes, { items: [] });
   // No snapshot loaded, so none is current: «Нормы» renders its refusal, not an empty list.
   client.setQueryData(KEYS.normSnapshots, { items: [], page });
   client.setQueryData(KEYS.normEvents, { items: [], page });
@@ -2105,6 +2143,107 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     ),
   },
   /*
+   * `EXEC-HTTP-01`. «Исполнители» on its other two tabs, as an administrator and as an expert,
+   * with the key form opened for a connection; every outcome of the key post (the form is a
+   * server component, so its eight sentences are rendered here on their own); a refused
+   * command; and the forms and controls a tab reaches only after a press or a choice, rendered
+   * through the views the cards draw.
+   */
+  {
+    name: 'workers-connections',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'connections' }),
+  },
+  {
+    name: 'workers-connections-key',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, {
+      initialTab: 'connections',
+      secretConnectionId: EXECUTOR_READY.connection.connection_id,
+      secretForm: createElement(SetExecutorSecretForm, { connectionId: EXECUTOR_READY.connection.connection_id, outcome: 'saved' }),
+    }),
+  },
+  {
+    name: 'workers-connections-expert',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'connections' }),
+    seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
+  },
+  {
+    name: 'workers-routes',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+  },
+  {
+    name: 'workers-routes-expert',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
+  },
+  {
+    // A route with no standby configured: the editor shows the unticked choice only.
+    name: 'workers-routes-no-standby',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, [{
+      work_kind: 'text_analysis', primary_connection_id: EXECUTOR_READY.connection.connection_id,
+      set_at: '2026-10-21T10:00:00Z', set_by: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+    }]),
+  },
+  {
+    // No route at all: a run would be refused, and the screen says so.
+    name: 'workers-routes-unassigned',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, []),
+  },
+  ...EXECUTOR_SECRET_OUTCOMES.map((outcome) => ({
+    name: `executor-secret-form-${outcome}`,
+    make: () => createElement(SetExecutorSecretForm, { connectionId: EXECUTOR_READY.connection.connection_id, outcome }),
+  })),
+  {
+    name: 'executor-secret-form-fresh',
+    make: () => createElement(SetExecutorSecretForm, { connectionId: EXECUTOR_READY.connection.connection_id }),
+  },
+  {
+    name: 'executor-command-failure',
+    make: () => createElement(CommandFailure, {
+      failure: { kind: 'refusal', detail: 'Модель: эта модель не закреплена в замке провайдера, выберите модель из списка.', correlationId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301' },
+    }),
+  },
+  {
+    name: 'executor-create-form',
+    make: () => createElement(CreateConnectionForm, { pinnedModels: EXECUTOR_PINNED }),
+  },
+  ...(['http_api', 'ssh_command', 'pull'] as const).map((kind) => ({
+    name: `executor-settings-fields-${kind}`,
+    make: () => createElement('form', null, createElement(SettingsFields, { kind, pinnedModels: EXECUTOR_PINNED, idPrefix: `lang-${kind}` })),
+  })),
+  {
+    // A tunnelled HTTP API connection and a revision of it: the SSH endpoint fields appear.
+    name: 'executor-settings-fields-tunnel',
+    make: () => {
+      const tunnel = EXECUTOR_CASES.find((one) => one.detail.revisions[0]?.transport === 'ssh_tunnel');
+      return createElement('form', null, createElement(SettingsFields, {
+        kind: 'http_api', pinnedModels: EXECUTOR_PINNED, initial: tunnel?.detail.revisions[0], idPrefix: 'lang-tunnel',
+      }));
+    },
+  },
+  {
+    name: 'executor-revise-form',
+    make: () => createElement(ReviseConnectionForm, {
+      connection: EXECUTOR_READY.connection, revision: EXECUTOR_READY.detail.revisions[0],
+      pinnedModels: EXECUTOR_PINNED, holdsKey: true, onClose: () => {},
+    }),
+  },
+  ...([false, true] as const).map((changed) => ({
+    name: `executor-host-key-control-${changed ? 'changed' : 'unpinned'}`,
+    make: () => {
+      const ssh = EXECUTOR_OUTCOME_CASES.find(([outcome]) => outcome === 'host_key_unpinned')![1];
+      return createElement(HostKeyControl, {
+        connectionId: ssh.connection.connection_id, revision: ssh.detail.revisions[0]!,
+        observedHostKey: 'наблюдаемый-отпечаток-узла', changed,
+      });
+    },
+  })),
+  ...([false, true] as const).map((hasKey) => ({
+    name: `executor-ssh-key-control-${hasKey ? 'replace' : 'first'}`,
+    make: () => createElement(SshKeyControl, { connectionId: EXECUTOR_READY.connection.connection_id, hasKey }),
+  })),
+  /*
    * `W55A-WEB-NORMS`. The «Нормы» branches a cache state does not select: the three ways a
    * search is refused by the server, the empty first and later pages of each list, and the
    * PDF panel's other shapes (no binding, a page past the end, no page asked for, open).
@@ -2758,6 +2897,11 @@ export const CACHE_STATES: readonly {
     run: { provider_mode: 'live', cost_basis: 'estimated' },
   },
   /*
+   * `EXEC-SEAL-01` (`R-143f`): the third cost basis. A run on a connection that has no per-call
+   * cost is `unmetered`; the run screen prints the caption «не тарифицируется» and no figure.
+   */
+  { state: 'unmetered-run', run: { cost_basis: 'unmetered' } },
+  /*
    * A version with TWO runs of it, added 2026-09-24 by `W43-COMPARE`. See `twoRunClient`
    * for why one run is not enough and for which verdict each fact of the pair reaches.
    *
@@ -2963,6 +3107,22 @@ const TRANSLATED_SCHEMAS = [
   // the contract value in `data-severity` only. Left out, `critical` printed in its place would
   // have been read as contract vocabulary and permitted.
   'Severity',
+  // `EXEC-HTTP-01`: «Подключения» says every kind, format, transport, billing, profile, client,
+  // key purpose, probe state, probe outcome, identity basis, rate check and kind of work in
+  // Russian, with the contract value in a `data-` attribute. Several are plain English words
+  // (`direct`, `pull`, `timeout`, `mismatch`, `agent`), which must not be permitted bare.
+  'ExecutorKind',
+  'ExecutorApiFlavour',
+  'ExecutorTransport',
+  'ExecutorBilling',
+  'ExecutorSshProfile',
+  'ExecutorPullClient',
+  'ExecutorSecretPurpose',
+  'ExecutorProbeState',
+  'ExecutorProbeOutcome',
+  'ExecutorIdentityBasis',
+  'ExecutorRateCheck',
+  'ExecutorWorkKind',
 ] as const;
 
 function translatedVocabulary(): ReadonlySet<string> {
@@ -3028,7 +3188,7 @@ describe('the guard reads a contract rather than a list of words', () => {
   });
 
   it('keeps the hand-written residue small, and every entry reasoned', () => {
-    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(12);
+    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(20);
     for (const { word, why } of NOT_DERIVABLE) {
       expect(why.length, `${word} has no reason`).toBeGreaterThan(60);
     }
@@ -3372,6 +3532,66 @@ const SCHEMA_MARKERS: readonly {
     schema: 'PortalGeometryState',
     attribute: 'data-portal-geometry',
     why: "`widgets/portal-blocks/ui/portal-block-card.tsx`, one per block; a mismatch page's sentence is said beside it.",
+  },
+  {
+    schema: 'ExecutorKind',
+    attribute: 'data-executor-kind',
+    why: '`widgets/executor-connections/ui/connection-card.tsx`, one card per connection, its kind said as HTTP API / Команда по SSH / Клиент забирает задания.',
+  },
+  {
+    schema: 'ExecutorApiFlavour',
+    attribute: 'data-executor-flavour',
+    why: "`widgets/executor-connections/ui/connection-card.tsx`, the revision's request format of an HTTP API connection.",
+  },
+  {
+    schema: 'ExecutorTransport',
+    attribute: 'data-executor-transport',
+    why: "`widgets/executor-connections/ui/connection-card.tsx`, the revision's way of reaching its address: directly, over VPN or through an SSH tunnel.",
+  },
+  {
+    schema: 'ExecutorBilling',
+    attribute: 'data-executor-billing',
+    why: "`widgets/executor-connections/ui/connection-card.tsx`, the revision's billing: at the pinned rates, or not billed.",
+  },
+  {
+    schema: 'ExecutorSshProfile',
+    attribute: 'data-executor-ssh-profile',
+    why: "`widgets/executor-connections/ui/connection-card.tsx`, the command profile of an SSH connection's current revision.",
+  },
+  {
+    schema: 'ExecutorPullClient',
+    attribute: 'data-executor-pull-client',
+    why: "`widgets/executor-connections/ui/connection-card.tsx`, the client of a connection a remote runner pulls tasks through.",
+  },
+  {
+    schema: 'ExecutorSecretPurpose',
+    attribute: 'data-executor-secret',
+    why: '`widgets/executor-connections/ui/connection-card.tsx`, one line per key a connection holds or still needs, said as the key to the model or the SSH key.',
+  },
+  {
+    schema: 'ExecutorProbeState',
+    attribute: 'data-executor-probe-state',
+    why: "`widgets/executor-connections/ui/connection-card.tsx`, the latest probe of the current revision: requested, running or finished.",
+  },
+  {
+    schema: 'ExecutorProbeOutcome',
+    attribute: 'data-executor-probe-outcome',
+    why: "`widgets/executor-connections/ui/connection-card.tsx`, a finished probe's outcome said as a Russian sentence in a badge.",
+  },
+  {
+    schema: 'ExecutorIdentityBasis',
+    attribute: 'data-executor-identity-basis',
+    why: "`widgets/executor-connections/ui/connection-card.tsx`, whether the model of a probe was reported by the answer or declared by the executor.",
+  },
+  {
+    schema: 'ExecutorRateCheck',
+    attribute: 'data-executor-rate-check',
+    why: "`widgets/executor-connections/ui/connection-card.tsx`, the comparison of a probe's reported cost with the pinned rates.",
+  },
+  {
+    schema: 'ExecutorWorkKind',
+    attribute: 'data-executor-route',
+    why: "`widgets/executor-routes/ui/executor-routes.tsx`, the summary of the route for one kind of model work, «Анализ текста».",
   },
 ];
 

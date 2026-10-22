@@ -231,21 +231,55 @@ describe('this slice adds no second polling loop', () => {
     expect(sources.length).toBeGreaterThan(15);
   });
 
+  // The one named exception to the rule below. It is not a run poll: it re-reads an executor
+  // connection (`GET /executors/connections/{id}`) and only while a «Проверить» probe on that
+  // connection is open, so the outcome shows without the administrator pressing «Обновить».
+  // It is bounded three ways, and the assertion further down holds each of them to the source:
+  // the interval is `PROBE_POLL_MS` (3000 ms) and nothing else; it is `false` unless
+  // `hasOpenProbe(data)`, which is false once every probe is `finished` (a terminal outcome,
+  // `no_worker` included - the server ends an unclaimed probe after 120 s); and the only other
+  // timer-shaped token, `setInterval` / `refetchIntervalInBackground`, stays forbidden in it.
+  // It never reaches the run endpoint, which the sibling assertion below still polices.
+  const ALLOWED_BOUNDED_PROBE_POLL = [
+    join('entities', 'executor-connection', 'api', 'use-executor-connections.ts'),
+  ];
+  const code = ({ text }: { text: string }) =>
+    text.replace(/\/\/.*$/gm, '').replace(/^\s*\*.*$/gm, '');
+  const isAllowedProbePoll = ({ path }: { path: string }) =>
+    ALLOWED_BOUNDED_PROBE_POLL.some((allowed) => path.endsWith(allowed));
+
   it('schedules no interval and no timer of its own', () => {
-    const offenders = sources.filter(({ text }) =>
-      /setInterval\s*\(|refetchInterval|refetchIntervalInBackground/.test(
-        text.replace(/\/\/.*$/gm, '').replace(/^\s*\*.*$/gm, ''),
-      ),
+    const offenders = sources.filter(
+      (file) =>
+        /setInterval\s*\(|refetchInterval|refetchIntervalInBackground/.test(code(file)) &&
+        !isAllowedProbePoll(file),
     );
     expect(offenders.map((o) => o.path)).toEqual([]);
+  });
+
+  it('lets the named probe poll schedule only its bounded 3 s refetch, and nothing else', () => {
+    const named = sources.filter(isAllowedProbePoll);
+    // The allowlist must not rot into a path that no longer exists or no longer polls.
+    expect(named.map((f) => f.path)).toHaveLength(ALLOWED_BOUNDED_PROBE_POLL.length);
+
+    for (const file of named) {
+      const text = code(file);
+      expect(text).not.toMatch(/setInterval\s*\(|setTimeout\s*\(|refetchIntervalInBackground/);
+      expect(text).toMatch(/export const PROBE_POLL_MS = 3000;/);
+      // Exactly one use of `refetchInterval`, and it is the guarded form.
+      expect(text.match(/refetchInterval/g)).toHaveLength(1);
+      expect(text).toMatch(
+        /refetchInterval:\s*\(query[^)]*\)\s*=>\s*hasOpenProbe\(query\.state\.data\)\s*\?\s*PROBE_POLL_MS\s*:\s*false/,
+      );
+      // The condition that ends the poll: every probe `finished`, on the detail and on each revision.
+      expect(text).toMatch(/probe\.state !== 'finished'/);
+      expect(text).toMatch(/revision\.latest_probe\.state !== 'finished'/);
+    }
   });
 
   it('reaches the run endpoint only through the shared loop', () => {
     // Comments are stripped before matching: a doc comment that names the loop is a
     // reference to it, not a second call site.
-    const code = ({ text }: { text: string }) =>
-      text.replace(/\/\/.*$/gm, '').replace(/^\s*\*.*$/gm, '');
-
     const pollers = sources.filter((file) => /\bpollRunStatus\s*\(/.test(code(file)));
     // Exactly one module drives the loop: the audit-run entity's hook.
     expect(pollers.map((p) => p.path)).toHaveLength(1);

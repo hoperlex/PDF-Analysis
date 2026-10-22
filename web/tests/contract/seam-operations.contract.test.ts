@@ -84,7 +84,7 @@ describe('the seam operations', () => {
     expect(OPERATIONS.issueToken.requiresIdempotencyKey).toBe(false);
   });
 
-  it('requires an idempotency key on exactly the fifteen keyed writes', () => {
+  it('requires an idempotency key on exactly the keyed writes', () => {
     const writes = Object.values(OPERATIONS)
       .filter((op) => op.requiresIdempotencyKey)
       .map((op) => op.operationId)
@@ -94,14 +94,24 @@ describe('the seam operations', () => {
     expect(writes).toEqual([
       'appendDecision',
       'approveRegistration',
+      // EXEC candidate 1 (additive executor operations): the executor connection writes below are keyed like
+      // every other create or command on this surface; the descriptor table is generated from
+      // the contract, so this list follows it and does not lead it.
+      'archiveExecutorConnection',
       'cancelRun',
       // `W59-DECISION-CARRYOVER-01`: the carryover appends a decision, keyed like `appendDecision`.
       'carryOverDecision',
+      'createExecutorConnection',
       'createProject',
       // `W60-OPT-PROPOSALS-01`: a decision on a proposal is appended, keyed like `appendDecision`.
       'decideOptimisationProposal',
+      'generateExecutorSshKey',
       'reauditRun',
+      'requestExecutorProbe',
+      'reviseExecutorConnection',
       'setExecutionPaused',
+      'setExecutorRoute',
+      'setExecutorSecret',
       'setJobPriority',
       // `W54-SEAL-01`: the worker intake switch is keyed like the other execution controls.
       'setWorkerIntake',

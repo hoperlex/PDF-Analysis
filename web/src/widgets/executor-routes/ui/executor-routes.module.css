@@ -1,0 +1,13 @@
+/*
+ * «Назначения» (`EXEC-HTTP-01`). Layout only; no colour is declared here.
+ */
+
+.panel {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.reasons {
+  margin: var(--am-gap-sm) 0 0;
+  padding-left: var(--am-gap-lg);
+}

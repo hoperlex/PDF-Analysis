@@ -207,6 +207,15 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is unset.}
       S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is unset.}
       AUDITMANAGER_PROVIDER_MODE: ${AUDITMANAGER_PROVIDER_MODE:?AUDITMANAGER_PROVIDER_MODE is unset.}
+      # `EXEC-HTTP-01` (R-143). Where a run's model adapter comes from: `environment` (today's
+      # `PROXY_LLM_*` / `ANTHROPIC_API_KEY`, the default) or `database` (the connections an
+      # administrator manages in the UI). The switch back is the rollback.
+      AUDITMANAGER_PROVIDER_SOURCE: ${AUDITMANAGER_PROVIDER_SOURCE:-environment}
+      # The PUBLIC half of the key ring that seals a connection's key, and the key id new keys
+      # are sealed to. Public, so they live in alpha.env and reach both services; the private
+      # ring (`AUDITMANAGER_SECRETS_KEYS`) is in provider.env and only the worker reads it.
+      AUDITMANAGER_SECRETS_PUBLIC_KEYS: ${AUDITMANAGER_SECRETS_PUBLIC_KEYS:-}
+      AUDITMANAGER_SECRETS_ACTIVE_KID: ${AUDITMANAGER_SECRETS_ACTIVE_KID:-}
       # `T-6`. Required at construction since `W14-PKG`: a container started without it
       # exits non-zero instead of serving `authentication_required` to everything.
       AUDITMANAGER_API_TOKEN: ${AUDITMANAGER_API_TOKEN:?AUDITMANAGER_API_TOKEN is unset. The seam is fail-closed; see infra/deploy/env/alpha.env.example.}
@@ -215,12 +224,11 @@ services:
       # `deploy.sh` refuses a compose file in which `api` or `worker` lacks this line.
       # Rollback (W54-PLAN 3.10): `all` here and no `worker` service is W53's behaviour.
       EXECUTION_ROLE: api
-    # The provider credential, and only it. A separate file the owner writes on the host,
-    # never passed to --env-file, so it stays out of compose substitution and therefore out
-    # of `docker compose config` output.
-    env_file:
-      - path: env/provider.env
-        required: false
+    # `EXEC-HTTP-01` (R-143, plan section 4.1): the `api` no longer loads provider.env. It makes
+    # no model call when the separate worker runs, so it holds neither the provider credential
+    # nor the private key ring; it seals a connection's key to the PUBLIC keys above and can
+    # never open one. A stolen admin session or a compromised api can therefore replace a key
+    # but not read one. (The worker below still reads the file.)
     # No `ports:`. The proxy reaches 8000 and 8001 over the compose network.
     healthcheck:
       # `T-3`'s liveness plane on the SECOND port, which needs no credential. Polling
@@ -264,11 +272,24 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is unset.}
       S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is unset.}
       AUDITMANAGER_PROVIDER_MODE: ${AUDITMANAGER_PROVIDER_MODE:?AUDITMANAGER_PROVIDER_MODE is unset.}
+      # `EXEC-HTTP-01` (R-143). Where a run's model adapter comes from: `environment` (today's
+      # `PROXY_LLM_*` / `ANTHROPIC_API_KEY`, the default) or `database` (the connections an
+      # administrator manages in the UI). The switch back is the rollback.
+      AUDITMANAGER_PROVIDER_SOURCE: ${AUDITMANAGER_PROVIDER_SOURCE:-environment}
+      # The PUBLIC half of the key ring that seals a connection's key, and the key id new keys
+      # are sealed to. Public, so they live in alpha.env and reach both services; the private
+      # ring (`AUDITMANAGER_SECRETS_KEYS`) is in provider.env and only the worker reads it.
+      AUDITMANAGER_SECRETS_PUBLIC_KEYS: ${AUDITMANAGER_SECRETS_PUBLIC_KEYS:-}
+      AUDITMANAGER_SECRETS_ACTIVE_KID: ${AUDITMANAGER_SECRETS_ACTIVE_KID:-}
       # A literal, like the API's. See the API service above.
       EXECUTION_ROLE: worker
       # The identity and heartbeat files the health check reads. On the tmpfs below, so a
       # restarted container registers as a new worker and leaves no stale identity.
       AUDITMANAGER_WORKER_STATE_DIR: /run/auditmanager
+    # The provider credential, the private key ring and the optional destination allowlist
+    # (`AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS`): a separate file the owner writes on the host,
+    # never passed to --env-file, so it stays out of compose substitution and therefore out
+    # of `docker compose config` output. The worker is the only service that reads it.
     env_file:
       - path: env/provider.env
         required: false
