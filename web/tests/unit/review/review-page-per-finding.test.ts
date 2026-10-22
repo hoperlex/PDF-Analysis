@@ -19,21 +19,19 @@
  */
 
 import { createElement } from 'react';
+import type * as Query from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MutationModel } from '../decisions/mutation-model';
 
 const world = vi.hoisted(() => ({
-  actual: null as null | Pick<
-    typeof import('@tanstack/react-query'),
-    'MutationObserver' | 'QueryClient'
-  >,
+  actual: null as null | Pick<typeof Query, 'MutationObserver' | 'QueryClient'>,
   model: null as null | MutationModel,
   panelProps: null as null | Record<string, unknown>,
 }));
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tanstack/react-query')>();
+  const actual = await importOriginal<typeof Query>();
   world.actual = actual;
   return {
     ...actual,

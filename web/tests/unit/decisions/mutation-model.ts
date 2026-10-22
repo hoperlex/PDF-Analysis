@@ -22,9 +22,8 @@
  * thrown value).
  */
 
+import type * as Query from '@tanstack/react-query';
 import type { MutationObserver, QueryClient } from '@tanstack/react-query';
-
-type Query = typeof import('@tanstack/react-query');
 
 export interface MutationModel {
   readonly client: QueryClient;
@@ -34,7 +33,7 @@ export interface MutationModel {
 }
 
 export function createMutationModel(
-  actual: Pick<Query, 'MutationObserver' | 'QueryClient'>,
+  actual: Pick<typeof Query, 'MutationObserver' | 'QueryClient'>,
 ): MutationModel {
   const client = new actual.QueryClient();
   const observers: MutationObserver<unknown, unknown, unknown, unknown>[] = [];

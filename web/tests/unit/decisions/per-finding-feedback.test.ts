@@ -22,15 +22,13 @@
  * Each case goes red under a quoted mutation (`docs/program/WEB-HOOKS-PER-FINDING-01.md`).
  */
 
+import type * as Query from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MutationModel } from './mutation-model';
 
 const world = vi.hoisted(() => ({
-  actual: null as null | Pick<
-    typeof import('@tanstack/react-query'),
-    'MutationObserver' | 'QueryClient'
-  >,
+  actual: null as null | Pick<typeof Query, 'MutationObserver' | 'QueryClient'>,
   model: null as null | MutationModel,
   refs: [] as { current: unknown }[],
   refIndex: 0,
@@ -39,7 +37,7 @@ const world = vi.hoisted(() => ({
 }));
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tanstack/react-query')>();
+  const actual = await importOriginal<typeof Query>();
   world.actual = actual;
   return {
     ...actual,
