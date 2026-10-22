@@ -1,4 +1,4 @@
-STATUS: items 2-3 probe runner, resolver seam, source switch, cost rule, import-env committed; infra and DB tests next (13:05 +05)
+STATUS: items 2-3 probe runner, resolver seam, source switch, cost rule, import-env committed; infra and DB tests next (12:31 +05)
 
 # EXEC-HTTP-01 report, backend half (in progress)
 
