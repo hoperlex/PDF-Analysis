@@ -94,7 +94,7 @@ describe('the seam operations', () => {
     expect(writes).toEqual([
       'appendDecision',
       'approveRegistration',
-      // EXEC candidate 1 (contract 1.1.0): the executor connection writes below are keyed like
+      // EXEC candidate 1 (additive executor operations): the executor connection writes below are keyed like
       // every other create or command on this surface; the descriptor table is generated from
       // the contract, so this list follows it and does not lead it.
       'archiveExecutorConnection',
