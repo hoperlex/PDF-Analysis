@@ -353,3 +353,49 @@ On `adacbd1a` (dispatcher, `nice -n 19 ionice -c3`, before the gate owner's STOP
   a real EXEC-SEAL-01 defect (the five executor identifiers were in identifiers.json but not
   in the schema's two name enums). Fixed in `67b18d4d`; its rerun waits for the gate
   completion's quiet window to end.
+
+
+## Web suite repair (EXEC web-test fixer, 2026-10-22, tree `ebcdecee` plus this doc)
+
+Two reds from the integrator's report, plus a third that the first whole-suite run exposed.
+Every run: `nice -n 10`, one at a time, `free -m` available >= 3200 MiB before each.
+
+| # | Command | rc | Result |
+|---|---------|----|--------|
+| 1 | `npm --prefix web test -- --run --no-cache tests/unit/run` (before) | 1 | `polling.test.ts` "schedules no interval and no timer of its own": offender `entities/executor-connection/api/use-executor-connections.ts` (`refetchInterval`) |
+| 2 | same command after `604c6718` | 0 | 11 files, 144 tests |
+| 3 | `npm --prefix web test -- --run --no-cache` after `92c26e12` (`web-suite-run1.log`) | 1 | no `onTaskUpdate` abort; 168 files passed, 1 failed; 2555 passed, 1 failed (`seam-operations`: 22 keyed writes, 15 pinned) |
+| 4 | `npm --prefix web test -- --run --no-cache` after `ebcdecee` (`web-suite.log`) | **0** | **169 files passed (169), 2556 tests passed (2556)**, 295 s under host load |
+| 5 | `npm --prefix web run typecheck` | 0 | tsc --noEmit clean |
+| 6 | `npm --prefix web run lint -- --quiet` | 0 | eslint clean |
+
+Problem 1 (`604c6718`). The guard has no per-line exemption, but it already names the
+exceptions it accepts (`ALLOWED_ONE_SHOT`). The probe poll is kept: `connectionDetailQueryOptions`
+re-reads a connection every `PROBE_POLL_MS` = 3000 ms only while `hasOpenProbe`, which is false
+once every probe is `finished` (`no_worker` after 120 s included). The guard now has a one-file
+allowlist `ALLOWED_BOUNDED_PROBE_POLL` with that reason beside it, and a sibling assertion holds
+the file to the guarded form (exactly one `refetchInterval`, `hasOpenProbe(...) ? PROBE_POLL_MS :
+false`, `PROBE_POLL_MS = 3000`, no `setInterval`/`setTimeout`/`refetchIntervalInBackground`, the
+two `finished` tests present) and fails if the file stops matching. Proof it can fail: replacing
+the guarded expression by a bare `PROBE_POLL_MS` made `polling.test.ts` red (1 failed); restored.
+
+Problem 2 (`92c26e12`). Not a slow assertion and not a per-test timeout (`testTimeout` is already
+120 s). Both heavy files are synchronous CPU work with no I/O between tests, so under
+`singleFork` the worker's loop never reached its poll phase for the whole file: measured alone,
+`contrast.test.ts` 54 s (tests of 6-13 s each) and `rendered-language.guard.test.ts` 39 s of
+tests; in the whole suite the contrast file passed the 60 s default birpc timeout, and the timer
+fired before the runner's `onTaskUpdate` reply was read. Fix: `tests/guards/lib/yield-to-runner.ts`
+adds one `setTimeout(0)` after each test, called once in each of the two files. No assertion,
+fixture or timeout changed, no retry.
+
+Third red (`ebcdecee`). `tests/contract/seam-operations.contract.test.ts` pinned 15 keyed
+writes; the generated descriptor table has 22. Added the seven executor writes
+(`archiveExecutorConnection`, `createExecutorConnection`, `generateExecutorSshKey`,
+`requestExecutorProbe`, `reviseExecutorConnection`, `setExecutorRoute`, `setExecutorSecret`) and
+dropped the count from the test title. The commit message of `ebcdecee` says "contract 1.1.0"; the
+candidate keeps `1.0.0` (label parked, see the dispatcher addendum) - the operations are
+additive, the label is not moved. One comment in that test was corrected to say so after the
+run (comment only; the file reran green, 118 tests).
+
+Known limit: the yield bounds the stretch between tests, not inside one. The longest single test
+is `rendered-language` "finds none at all" at about 22 s; a test near 60 s would still need splitting.
