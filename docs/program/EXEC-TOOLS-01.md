@@ -1,4 +1,4 @@
-STATUS: 5/7 ssh-forced-command.sh done (bash -n, shellcheck, 29 tests green) (11:54 +05)
+STATUS: 6/7 README.md + readme/client tests done (full unit run pending) (11:55 +05)
 
 # EXEC-TOOLS-01 - executor runner client tools (progress file, becomes the final report)
 
