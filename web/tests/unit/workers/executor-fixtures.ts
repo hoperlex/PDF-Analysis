@@ -111,7 +111,7 @@ const HTTP = {
   api_flavour: 'openai_chat', base_url: 'https://шлюз.example/api/v1', transport: 'direct', max_parallel_calls: 2,
 } as const;
 const SSH = {
-  ssh_host: 'узел.example', ssh_port: 22, ssh_user: 'исполнитель', ssh_profile: 'claude_code_headless',
+  ssh_host: 'узел.пример', ssh_port: 22, ssh_user: 'исполнитель', ssh_profile: 'claude_code_headless',
 } as const;
 const PULL = { pull_client: 'claude_code_session', answer_deadline_seconds: 600, max_claimed_tasks: 1 } as const;
 
@@ -166,7 +166,7 @@ export const READY = executorCase({
 
 /** A second routable connection, for the standby. */
 export const SPARE = executorCase({
-  n: 2, name: 'Запасной шлюз', secrets: [{}], probe: { ...OK, rate_check: 'not_reported' },
+  n: 2, name: 'Запасной шлюз', secrets: [{}], probe: { ...OK, rate_check: 'not_metered' },
   revision: { api_flavour: 'anthropic_messages', billing: 'not_metered', allow_client_documents: true },
 });
 
@@ -209,12 +209,12 @@ export const SHAPE_CASES: readonly ExecutorCase[] = [
   executorCase({ n: 33, name: 'Шлюз без ключа', probe: null }),
   executorCase({
     n: 34, name: 'Модель за туннелем', secrets: [{}, { purpose: 'ssh_private_key', last4: '', public_key: 'открытый-ключ-туннеля' }],
-    revision: { transport: 'ssh_tunnel', ssh_host: 'туннель.example', ssh_port: 22, ssh_user: 'исполнитель' },
+    revision: { transport: 'ssh_tunnel', ssh_host: 'туннель.пример', ssh_port: 22, ssh_user: 'исполнитель' },
     probe: OK,
   }),
   executorCase({ n: 35, name: 'Подключение в архиве', secrets: [{}], probe: OK, archived: true }),
   executorCase({ n: 36, name: 'Подключение без настроек', revision: null }),
-  executorCase({ n: 37, name: 'Старое подключение', secrets: [{}], probe: OK, createdAt: ago(40 * DAY) }),
+  executorCase({ n: 37, name: 'Старое подключение', secrets: [{}], probe: { ...OK, rate_check: 'not_reported' }, createdAt: ago(40 * DAY) }),
 ];
 
 export const ALL_CASES: readonly ExecutorCase[] = [
