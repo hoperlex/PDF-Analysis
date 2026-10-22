@@ -26,7 +26,7 @@ export {
 } from './model/readiness';
 export type { RouteBlocker } from './model/readiness';
 export {
-  RUNNER_ONLINE_WINDOW_MS, RUNNER_POLL_MS, RUNNER_TOKEN_STATE_LABELS, connectionRunnerIsOnline,
+  RUNNER_ONLINE_WINDOW_MS, RUNNER_TOKEN_STATE_LABELS, connectionRunnerIsOnline,
   hasLiveRunnerToken, runnerTokenIsLive, runnerTokenIsOnline, runnerTokenState, sortedRunnerTokens,
 } from './model/runner-tokens';
 export type { RunnerTokenState } from './model/runner-tokens';

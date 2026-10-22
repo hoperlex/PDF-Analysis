@@ -11,15 +11,16 @@
  * connection (a claim, or the extend and answer that follow one) less than sixty seconds ago.
  * The waiting claim lasts at most twenty-five seconds and a new one follows at once, so an idle
  * runner stays under the limit and a stopped one leaves it within a minute.
+ *
+ * The screen reads this when the page opens, when the tab is returned to, after a command and by
+ * «Обновить». It schedules no poll of its own: the only timer the connection reads may have is the
+ * bounded probe poll that `tests/unit/run/polling.test.ts` names.
  */
 
 import type { ExecutorConnectionDetail, RunnerTokenMetadata } from '@/shared/api';
 
 /** How recent the last call of a runner must be for the connection to be called «на связи». */
 export const RUNNER_ONLINE_WINDOW_MS = 60_000;
-
-/** How often the detail of a connection with a live token is read again, so «на связи» moves. */
-export const RUNNER_POLL_MS = 10_000;
 
 export type RunnerTokenState = 'active' | 'revoked' | 'expired';
 
@@ -76,7 +77,7 @@ export function sortedRunnerTokens(tokens: readonly RunnerTokenMetadata[]): read
   return [...tokens].sort((left, right) => (left.created_at < right.created_at ? 1 : left.created_at > right.created_at ? -1 : 0));
 }
 
-/** The detail is of a `pull` connection that holds a live token: worth reading again soon. */
+/** The detail is of a `pull` connection that holds a live token. */
 export function hasLiveRunnerToken(detail: ExecutorConnectionDetail | undefined, nowMs: number): boolean {
   return (detail?.runner_tokens ?? []).some((token) => runnerTokenIsLive(token, nowMs));
 }
