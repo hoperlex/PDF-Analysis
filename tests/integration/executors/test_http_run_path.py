@@ -421,6 +421,101 @@ def test_a_new_kind_plugs_in_by_registering_a_factory_and_is_handed_the_attempt_
     assert context.watchdog_seconds == ATTEMPT_WATCHDOG_SECONDS and context.started_monotonic > 0
 
 
+@pytest.mark.parametrize("flavour,behaviour", [
+    ("openai_chat", "wrong_model"), ("openai_chat", "no_model"), ("openai_chat", "stub_model"),
+    ("anthropic_messages", "wrong_model"), ("anthropic_messages", "stub_model"),
+])
+def test_a_reply_from_another_model_fails_the_run_closed_and_publishes_nothing(
+    session, seeded, blob_store, new_key, flavour, behaviour  # type: ignore[no-untyped-def]
+) -> None:
+    """`R-133`, now enforced on the run path for both flavours: the reply is held to the revision's
+    gateway name. The answer was received and may have been paid for, so the call is not retried,
+    its usage is journaled, no call row is completed and no finding is published."""
+    from auditmanager.findings import published_finding_count
+
+    rings = support.make_rings()
+    fake = gateway_for(None, behaviour=behaviour)
+    try:
+        base = fake.base_url("" if flavour == "anthropic_messages" else "/agent/v1")
+        support.seed_connection(session, rings, base, api_flavour=flavour)
+        providers = _providers(rings, fake)
+        started = _start(session, seeded, new_key, f"mismatch-{flavour}-{behaviour}", providers)
+        result = _execute(session, blob_store, started.run_id, providers)
+        rows = _rows(session, started.run_id)
+    finally:
+        fake.stop()
+    assert result.terminal_state == "failed"
+    assert rows["stage"]["error"]["code"] == "model_identity_mismatch"
+    assert published_finding_count(session, started.run_id) == 0
+    assert rows["calls"] == [], "no call row is completed for an answer that is not published"
+    (effect,) = rows["effects"]
+    assert effect["state"] == "response_received" and effect["connection_revision_id"]
+    assert len(fake.requests) == 1, "an answer that may have been paid for is never retried"
+
+
+def test_the_anthropic_flavour_runs_through_the_sdk_and_records_the_connection(
+    session, seeded, blob_store, new_key  # type: ignore[no-untyped-def]
+) -> None:
+    """The control for the mismatch cases: the same flavour, the reply naming the gateway model,
+    publishes -- so a failing mismatch run is the identity check and not a broken flavour."""
+    rings = support.make_rings()
+    fake = gateway_for(None)
+    try:
+        connection = support.seed_connection(
+            session, rings, fake.base_url(""), api_flavour="anthropic_messages",
+            billing="not_metered")
+        providers = _providers(rings, fake)
+        started = _start(session, seeded, new_key, "anthropic-ok", providers)
+        result = _execute(session, blob_store, started.run_id, providers)
+        rows = _rows(session, started.run_id)
+    finally:
+        fake.stop()
+    assert result.terminal_state == "published" and result.published_finding_count > 0
+    (call,) = rows["calls"]
+    assert (call["provider"], call["connection_revision_id"], call["identity_basis"]) == (
+        "anthropic_messages", connection.revision_id, "reported")
+    assert fake.requests[0]["path"] == "/v1/messages" and fake.requests[0]["x_api_key"] == support.KEY
+    assert fake.requests[0]["body"]["model"] == support.GATEWAY_MODEL
+
+
+def test_under_the_environment_source_a_stub_model_fails_closed_and_an_explicit_one_runs(
+    session, seeded, blob_store, new_key  # type: ignore[no-untyped-def]
+) -> None:
+    from auditmanager.analysis.text import CallBinding, ProxyAdapter, ProxySettings
+    from auditmanager.findings import published_finding_count
+
+    outcomes = {}
+    for model in ("proxy", support.GATEWAY_MODEL):
+        fake = gateway_for(None)
+        try:
+            adapter = ProxyAdapter(ProxySettings(
+                base_url=f"http://127.0.0.1:{fake.port}/agent/v1", token="tok", model=model))
+            source = EnvironmentProviders(
+                adapter, LIVE, CallBinding(expected_model=model, check_identity=True))
+            started = start_audit_run(
+                session, version_uid=seeded.version_uid,
+                analysis_profile_id=seeded.analysis_profile_id,
+                prompt_bundle_id=seeded.prompt_bundle_id, provider_mode="live",
+                idempotency_key=new_key(f"env-{model}"),
+            )
+            result = execute_run(
+                session, started.run_id, blob_store=blob_store, adapter=adapter,
+                provider_config=LIVE, providers=source.resolve,
+            )
+            outcomes[model] = (result.terminal_state, _rows(session, started.run_id),
+                               published_finding_count(session, started.run_id))
+        finally:
+            fake.stop()
+    state, rows, findings = outcomes["proxy"]
+    assert state == "failed" and findings == 0
+    assert rows["stage"]["error"]["code"] == "model_identity_mismatch"
+    assert "model_not_selected" in rows["stage"]["error"]["message"]
+    state, rows, findings = outcomes[support.GATEWAY_MODEL]
+    assert state == "published" and findings > 0
+    assert rows["run"]["connection_revision_id"] is None
+    assert rows["calls"][0]["provider"] == "anthropic", "the environment source's rows are unchanged"
+
+
 def test_the_environment_source_is_unchanged_and_records_no_revision(
     session, seeded, blob_store, recorded_adapter, provider_config, new_key  # type: ignore[no-untyped-def]
 ) -> None:

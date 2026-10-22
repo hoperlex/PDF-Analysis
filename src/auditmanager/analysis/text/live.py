@@ -14,6 +14,7 @@ than the SDK client.
 
 from __future__ import annotations
 
+import dataclasses
 import time
 from typing import Any, Final
 
@@ -85,7 +86,7 @@ class LiveAdapter:
             block.text for block in message.content if getattr(block, "type", "") == "text"
         )
         usage = message.usage
-        return ModelResponse(
+        response = ModelResponse(
             output_text=text,
             stop_reason=str(message.stop_reason or ""),
             # The lock declares one input rate and no cache rate, so cache tokens are
@@ -96,6 +97,13 @@ class LiveAdapter:
             output_tokens=int(getattr(usage, "output_tokens", 0) or 0),
             latency_ms=latency_ms,
         )
+        # `R-133` (`EXEC-HTTP-01`): the model the SDK's reply carries, for the stage's identity
+        # comparison. Attached where `ModelResponse` has the field (`MODEL-IDENTITY-CHECK-01`).
+        reported = getattr(message, "model", None)
+        if "model" in {field.name for field in dataclasses.fields(response)}:
+            response = dataclasses.replace(
+                response, model=reported if isinstance(reported, str) else None)  # type: ignore[call-arg]
+        return response
 
     @staticmethod
     def _map_provider_failure(exc: Exception) -> DomainError:
