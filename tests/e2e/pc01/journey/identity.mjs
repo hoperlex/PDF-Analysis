@@ -75,7 +75,16 @@ function sessionRow(path, id) {
 
 async function wait(page, expression, what) {
   const result = await page.waitFor(expression, { boundMs: 30000, what });
-  requireThat(result.ok, `${what}: no matching rendered state in ${result.boundMs} ms`);
+  if (!result.ok) {
+    // A wait that fails says where the browser was and what the screen and the seam had said, so the
+    // finding is a reading and not only a timeout.
+    const where = await page.location().catch(() => '(unknown)');
+    const words = await page.evaluate(`(document.body?.innerText ?? '').replace(/\\s+/g, ' ').slice(0, 300)`).catch(() => '');
+    const calls = page.exchanges().filter((item) => String(item.url).includes('/bff/v1/'))
+      .map((item) => `${item.method} ${new URL(item.url).pathname} -> ${item.status}`).slice(0, 8);
+    throw new Error(`${what}: no matching rendered state in ${result.boundMs} ms; the browser was at ${where}, ` +
+      `it showed ${JSON.stringify(words)}, the seam answered [${calls.join(' | ')}]`);
+  }
   return result.value;
 }
 
@@ -143,6 +152,9 @@ async function decide(origin, manifest, adminCookies, applicant, kind, record) {
     } else {
       await page.fill(`#reject-${requestId}`, 'Синтетическая проверка отказа');
       await page.click(`${rowSelector} button[type="submit"]`, { text: 'Отклонить заявку' });
+      // A rejection is final, so it asks first (`C-24`): nothing is sent until the confirmation is pressed.
+      await page.settle();
+      await page.click(`${rowSelector} button`, { text: 'Подтвердить отклонение' });
     }
     await page.settle();
     const spec = stageSpec(manifest, kind);
@@ -159,9 +171,14 @@ async function assertProfile(origin, manifest, cookies, applicant, record) {
     await page.goto(`${origin}/account`);
     await wait(page, `document.querySelector('[data-account-profile-complete]')?.getAttribute('data-account-profile-complete') === 'true' ? true : null`,
       'completed profile');
+    // The profile prints the account's display label (`Фамилия И. О.`) and its roles as words, and
+    // keeps the names it was submitted with in the edit form's fields, which `innerText` does not hold.
     const text = await page.evaluate('document.body.innerText');
-    requireThat(text.includes(applicant.last) && text.includes(applicant.first) && text.includes('Эксперт'),
-      'approved profile did not render the submitted name and expert role');
+    const fields = await page.evaluate(
+      `Array.from(document.querySelectorAll('form input, form textarea')).map((el) => el.value)`);
+    requireThat(text.includes(manifest.identity.expected_author_label) && text.includes('Эксперт')
+      && fields.includes(applicant.last) && fields.includes(applicant.first),
+    'approved profile did not render the submitted name and expert role');
     checkedExchange(page, stageSpec(manifest, 'profile'), '/me', record);
     record.checks.push('approved profile came from request and survived a cold load');
   }, { cookies });
@@ -185,7 +202,37 @@ async function decision(origin, manifest, cookies, reviewPath, stage, record) {
     await page.settle();
     checkedExchange(page, stageSpec(manifest, stage), `/findings/${findingUid}/decisions`, record);
     record.checks.push(stage === 'verdict' ? 'verdict persisted with derived author label' : 'new mutation denied after sign-in');
-    return findingUid;
+    const sent = matchingExchange(page, 'POST', `/bff/v1/findings/${findingUid}/decisions`);
+    let observationId = null;
+    try { observationId = JSON.parse(sent?.requestBody ?? '').finding_observation_id ?? null; } catch { /* none */ }
+    return { findingUid, observationId };
+  }, { cookies });
+}
+
+/**
+ * A mutation after the role is gone. Since `R-80` an account with no role is suspended and the review
+ * screen is not offered to it: its guard sends the browser to `/403`, so the control the old continuation
+ * pressed is never drawn. The refusal is therefore walked in two places: the screen turns the account
+ * away, and the API -- asked directly from the same browser, with the same cookie -- answers the
+ * decision `403 permission_denied`, which is the refusal the screen only anticipates.
+ */
+async function deniedMutation(origin, manifest, cookies, reviewPath, verdict, record) {
+  await withColdBrowser(async (page) => {
+    await page.goto(origin + reviewPath);
+    await wait(page, `document.location.pathname === '/403' ? true : null`, 'role-less account turned away at /403');
+    requireThat(verdict.observationId, 'the verdict stage recorded no observation to decide against');
+    const spec = stageSpec(manifest, 'denied_mutation');
+    const asked = await page.evaluate(`fetch('/bff/v1/findings/${verdict.findingUid}/decisions', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json', 'idempotency-key': 'identity-denied-${Date.now().toString(36)}-${verdict.findingUid.slice(-12)}' },
+      body: JSON.stringify({ event_type: 'accept', finding_observation_id: ${JSON.stringify(verdict.observationId)} }),
+    }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }))`);
+    record.operations.push({ stage: spec.stage, method: spec.method, path: `/findings/${verdict.findingUid}/decisions`,
+      status: asked.status, error_code: asked.body?.error_code ?? null, conflict_reason: null });
+    requireThat(asked.status === spec.status && asked.body?.error_code === spec.error_code,
+      `denied_mutation: POST decisions answered ${asked.status} ${asked.body?.error_code ?? '(no error code)'}, ` +
+      `expected ${spec.status} ${spec.error_code}`);
+    record.checks.push('role-less account turned away at /403 and its decision refused 403 permission_denied');
   }, { cookies });
 }
 
@@ -199,6 +246,9 @@ async function userAction(origin, manifest, adminCookies, userUid, stage, record
       await wait(page, `document.querySelector('[role="status"]') ? true : null`, 'role change success');
     } else if (stage === 'archive') {
       await page.click('button', { text: 'Архивировать учётную запись' });
+      await page.settle();
+      // Archiving asks for a confirmation first (the group the journey's `user-archive` step presses).
+      await page.click('[role="group"][aria-label="Подтверждение архивирования"] button:first-of-type');
       await wait(page, `document.querySelector('[data-user-state="archived"]') ? true : null`, 'archived account');
     } else if (stage === 'purge_refused') {
       await page.click('button', { text: 'Удалить навсегда' });
@@ -217,19 +267,29 @@ async function revokedSession(origin, manifest, cookies, registerPath, record) {
   const id = cookies.find((cookie) => cookie.name === manifest.session.cookie)?.value;
   requireThat(id && sessionRow(registerPath, id), 'expert session row was absent before role revocation');
   await withColdBrowser(async (page) => {
+    // The role was removed, which revokes the credential the web tier holds for this session. The
+    // screen's own guard reads the account on the server, the API answers 401, the tier closes the
+    // session's row and the browser is sent to sign in -- all inside this one navigation, so the
+    // 401 itself is not the browser's to see (it used to be: a client-side read rendered an alert).
     await page.goto(`${origin}/account`);
-    await wait(page, `document.querySelector('[role="alert"]') ? true : null`, 'revoked-session state');
+    await wait(page, `document.location.pathname === '/login' ? true : null`, 'revoked-session redirect to sign-in');
     await page.settle();
-    checkedExchange(page, stageSpec(manifest, 'revoked_request'), '/me', record);
-    requireThat(!sessionRow(registerPath, id), 'revoked session row remains in the BFF register after 401');
-    const signedOutLink = await page.evaluate(`document.querySelector('a[href^="/login"]') !== null`);
-    requireThat(signedOutLink, 'the 401 screen has no sign-in link in its signed-out state');
+    requireThat(!sessionRow(registerPath, id), 'revoked session row remains in the BFF register after the redirect');
+    // What the browser can see of the refusal: asked once more, with whatever cookie it still holds,
+    // the seam answers 401 `authentication_required`.
+    const asked = await page.evaluate(`fetch('/bff/v1/me', { credentials: 'same-origin' })
+      .then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }))`);
+    const spec = stageSpec(manifest, 'revoked_request');
+    record.operations.push({ stage: spec.stage, method: spec.method, path: '/me', status: asked.status,
+      error_code: asked.body?.error_code ?? null, conflict_reason: null });
+    requireThat(asked.status === spec.status && asked.body?.error_code === spec.error_code,
+      `revoked_request: GET /bff/v1/me answered ${asked.status} ${asked.body?.error_code ?? '(no error code)'}, ` +
+      `expected ${spec.status} ${spec.error_code}`);
+    const signIn = await page.evaluate(`document.querySelector('#sign-in-login') !== null`);
+    requireThat(signIn, 'the signed-out screen offers no sign-in control');
     await page.goto(`${origin}/account`);
-    requireThat((await page.location()) === '/login', 'revoked browser did not reach the sign-in screen');
-    const signIn = await page.evaluate(`document.querySelector('a[href="/login"]') !== null ||
-      document.querySelector('#sign-in-login') !== null`);
-    requireThat(signIn, 'signed-out screen offers no sign-in control or link');
-    record.checks.push('next BFF call returned 401, row vanished, signed-out screen offers sign-in');
+    requireThat((await page.location()).startsWith('/login'), 'revoked browser did not reach the sign-in screen');
+    record.checks.push('role removal closed the session: the row vanished, the seam answers 401, the browser is sent to sign in');
   }, { cookies });
 }
 
@@ -248,6 +308,8 @@ async function selfArchiveRefusal(origin, manifest, adminCookies, record) {
     await wait(page, `document.querySelector('[data-user-state="active"]') ? true : null`,
       'administrator card');
     await page.click('button', { text: 'Архивировать учётную запись' });
+    await page.settle();
+    await page.click('[role="group"][aria-label="Подтверждение архивирования"] button:first-of-type');
     await wait(page, `document.querySelector('[data-user-failure]') ? true : null`,
       'self-archive refusal');
     await page.settle();
@@ -294,13 +356,13 @@ async function main() {
       credentials: { login: applicant.login, password } });
     requireThat(expert.ok, `approved expert sign-in failed: ${expert.failures.join('; ')}`);
     await assertProfile(origin, manifest, expert.cookies, applicant, record);
-    await decision(origin, manifest, expert.cookies, reviewPath, 'verdict', record);
+    const verdict = await decision(origin, manifest, expert.cookies, reviewPath, 'verdict', record);
     await userAction(origin, manifest, admin.cookies, approved.userUid, 'remove_expert', record);
     await revokedSession(origin, manifest, expert.cookies, registerPath, record);
     const roleless = await openSession({ origin, manifest,
       credentials: { login: applicant.login, password } });
     requireThat(roleless.ok, `roleless sign-in failed: ${roleless.failures.join('; ')}`);
-    await decision(origin, manifest, roleless.cookies, reviewPath, 'denied_mutation', record);
+    await deniedMutation(origin, manifest, roleless.cookies, reviewPath, verdict, record);
     await userAction(origin, manifest, admin.cookies, approved.userUid, 'archive', record);
     const archivedText = await refusedSignIn(origin, manifest, applicant, 'credentials', record);
     await userAction(origin, manifest, admin.cookies, approved.userUid, 'purge_refused', record);

@@ -491,7 +491,11 @@
         "for a version with no bundle). It is written here for a reader and checked by nothing in this file:",
         "a route entry carries no sentence key and the cold walk never chooses a version. It is",
         "pinned by `web/tests/unit/blocks/portal-states.test.ts` and rendered by the language",
-        "guard's `BLOCKS_SHAPES`."
+        "guard's `BLOCKS_SHAPES`.",
+        "",
+        "`PC01-JOURNEY-GAPS-01`: the cold walk still chooses nothing, but the WRITE half does -- the steps",
+        "`blocks-*` choose a project and a version through the chooser, read the portal blocks, one crop and the",
+        "text lines of a version a run has read, and the sentence of a version no run has reached."
       ],
       "expects_api": [
         {
@@ -692,7 +696,11 @@
         "nothing. `expects_api` is EMPTY and that is the claim. The document read",
         "(`getNormDocument`, `listNormParagraphs`, and `streamNormDocumentContent` for a page)",
         "is held by `web/tests/unit/norms` and checked by hand in the window after a current",
-        "snapshot exists."
+        "snapshot exists.",
+        "",
+        "`PC01-JOURNEY-GAPS-01`: the cold walk still chooses no document. The WRITE half opens one -- the steps",
+        "`norms-document-*` read the document, its paragraphs and its PDF from the catalogue's first document,",
+        "and a page the document does not have."
       ],
       "expects_api": [],
       "optional_api": [
@@ -2048,8 +2056,11 @@
             "min_count": 1
           },
           {
-            "selector": "tr[data-profile=\"none\"]",
-            "min_count": 1
+            "selector": "tr[data-section=\"AR\"][data-profile=\"builtin\"]"
+          },
+          {
+            "selector": "tr[data-profile=\"draft\"]",
+            "text_contains": "черновик, требует экспертной проверки"
           }
         ],
         "forbids_rendered": [
@@ -2469,6 +2480,427 @@
         ],
         "screen": "dispatcher",
         "case": "action"
+      },
+      {
+        "name": "assign-work-to-be-given-back",
+        "at": "/dispatcher",
+        "page_module": "web/src/app/dispatcher/page.tsx",
+        "control_module": "web/src/features/create-assignment/ui/create-assignment-form.tsx",
+        "$comment": [
+          "PC01-JOURNEY-GAPS-01. A second assignment of the same document to the same expert (the first is done, so",
+          "nothing is open): the work the expert will take and then give back. Pressed once."
+        ],
+        "actions": [
+          {
+            "do": "select",
+            "selector": "form[data-create-assignment]",
+            "label": "Проект",
+            "option_value": "{project_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "form[data-create-assignment] option[value=\"{document_uid}\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "form[data-create-assignment]",
+            "label": "Документ (необязательно)",
+            "option_value": "{document_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "form[data-create-assignment] option[value=\"{expert_only_user_uid}\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "form[data-create-assignment]",
+            "label": "Эксперт",
+            "option_value": "{expert_only_user_uid}"
+          },
+          {
+            "do": "fill",
+            "selector": "form[data-create-assignment]",
+            "value": "Раздел АР: работа, которую вернут %STAMP%",
+            "label": "Комментарий (необязательно)",
+            "tag": "textarea"
+          },
+          {
+            "do": "click",
+            "selector": "[data-create-assignment-submit]",
+            "text": "Назначить"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/assignments",
+            "operationId": "createAssignment",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "createAssignment",
+            "json_path": "assignment_uid",
+            "matches": "^asg_%ID%$"
+          },
+          {
+            "of": "createAssignment",
+            "json_path": "status",
+            "equals": "assigned"
+          }
+        ],
+        "captures": [
+          {
+            "kind": "response",
+            "of": "createAssignment",
+            "json_path": "assignment_uid",
+            "as": [
+              "given_back_assignment_uid"
+            ],
+            "matches": "^(asg_%ID%)$",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-create-assignment-done]",
+            "text_contains": "Назначение создано."
+          }
+        ],
+        "forbids_rendered": [
+          "[data-create-assignment-failure]"
+        ],
+        "screen": "dispatcher",
+        "case": "action"
+      },
+      {
+        "name": "my-tasks-take-the-work-to-give-it-back",
+        "as": "expert_only",
+        "at": "/",
+        "page_module": "web/src/app/page.tsx",
+        "control_module": "web/src/widgets/my-tasks/ui/my-tasks.tsx",
+        "$comment": [
+          "The assignee takes the second piece of work from «Мои задачи» (the take-the-work step of a return): it is in",
+          "progress, and offers both to be completed and to be given back."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-my-task=\"{assignment_uid}\"] [data-assignment-move=\"started\"]"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/assignments/{assignment_uid}/transitions",
+            "operationId": "transitionAssignment",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "transitionAssignment",
+            "json_path": "status",
+            "equals": "in_progress"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-my-task=\"{assignment_uid}\"]",
+            "text_contains": "В работе"
+          },
+          {
+            "selector": "[data-my-task=\"{assignment_uid}\"] [data-assignment-move=\"completed\"]"
+          },
+          {
+            "selector": "[data-my-task=\"{assignment_uid}\"] [data-assignment-move=\"returned\"]",
+            "text_contains": "Вернуть"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-assignment-move-failure]"
+        ],
+        "screen": "my-tasks",
+        "case": "action",
+        "bind": {
+          "assignment_uid": "given_back_assignment_uid"
+        }
+      },
+      {
+        "name": "my-tasks-give-the-work-back",
+        "as": "expert_only",
+        "at": "/",
+        "page_module": "web/src/app/page.tsx",
+        "control_module": "web/src/widgets/my-tasks/ui/my-tasks.tsx",
+        "bind": {
+          "assignment_uid": "given_back_assignment_uid"
+        },
+        "$comment": [
+          "A successful «Вернуть». The assignee opens the return form, gives the reason it requires and presses «Вернуть»:",
+          "one transition `returned`, carrying the reason. The work stays in «Мои задачи» as a line that waits for an",
+          "administrator, with no move left on it for this account (an expert alone cannot reassign or cancel)."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-my-task=\"{assignment_uid}\"] [data-assignment-move=\"returned\"]",
+            "settle": true
+          },
+          {
+            "do": "fill",
+            "selector": "[data-assignment-draft=\"returned\"]",
+            "label": "Причина возврата",
+            "tag": "textarea",
+            "value": "Раздел не относится к моей специальности %STAMP%"
+          },
+          {
+            "do": "click",
+            "selector": "[data-assignment-draft=\"returned\"] button[type=\"submit\"]",
+            "text": "Вернуть"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/assignments/{assignment_uid}/transitions",
+            "operationId": "transitionAssignment",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "transitionAssignment",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"kind\":\"returned\"",
+              "Раздел не относится к моей специальности"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "transitionAssignment",
+            "json_path": "status",
+            "equals": "returned"
+          },
+          {
+            "of": "transitionAssignment",
+            "json_path": "status_reason",
+            "matches": "^Раздел не относится к моей специальности "
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-my-task=\"{assignment_uid}\"]",
+            "text_contains": "Возвращено вами; ждёт решения администратора."
+          }
+        ],
+        "forbids_rendered": [
+          "[data-assignment-move-failure]",
+          "[data-assignment-draft]",
+          "[data-my-task=\"{assignment_uid}\"] [data-assignment-move]"
+        ],
+        "screen": "my-tasks",
+        "case": "action"
+      },
+      {
+        "name": "dispatcher-shows-the-work-given-back",
+        "at": "/dispatcher",
+        "page_module": "web/src/app/dispatcher/page.tsx",
+        "control_module": "web/src/widgets/assignment-board/ui/assignment-board.tsx",
+        "bind": {
+          "assignment_uid": "given_back_assignment_uid"
+        },
+        "$comment": [
+          "The administrator sees the work given back with the reason the expert wrote, and is offered what only an",
+          "administrator may do with it: give it to someone again or cancel it. The expert's own moves are not offered."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/assignments",
+            "operationId": "listAssignments",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"]",
+            "text_contains": "Возвращено"
+          },
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"]",
+            "text_contains": "Причина:"
+          },
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"reassigned\"]"
+          },
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"cancelled\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"started\"]",
+          "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"returned\"]",
+          "[data-assignment-board-failure]"
+        ],
+        "screen": "dispatcher",
+        "case": "action"
+      },
+      {
+        "name": "blocks-upload-a-document-no-run-has-read",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
+        "$comment": [
+          "PC01-JOURNEY-GAPS-01. A document in the project that no run will read: the precondition of the «Блоки» refusal",
+          "that follows. It is a new DOCUMENT and not a fourth version of the baseline, and it comes BEFORE the specification",
+          "set, on purpose. `listDocuments` answers the current version of each document, newest first, and the read walk",
+          "follows the first document it lists and then the first run of that document's newest version: a document nobody",
+          "has run that stayed the newest -- or a newest version without a run -- would end the walk at a version screen with",
+          "no run to follow. The specification set, uploaded after this, is the newest document and has a run."
+        ],
+        "actions": [
+          {
+            "do": "attach_file",
+            "selector": "#upload-file",
+            "fixture": true
+          },
+          {
+            "do": "fill",
+            "selector": "#upload-title",
+            "value": "Блоки: версия без прогона %STAMP%"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Загрузить"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "uploadDocument",
+            "expect_status": 201
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "uploadDocument",
+            "json_path": "version_uid",
+            "matches": "^ver_%ID%$"
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "pattern": "^/projects/(prj_%ID%)/versions/(ver_%ID%)$",
+          "as": [
+            "project_uid",
+            "unrun_version_uid"
+          ],
+          "bound_ms": 30000
+        },
+        "forbids_rendered": [
+          "[data-upload-failure]",
+          "[data-precheck-problem]"
+        ],
+        "screen": "version-upload",
+        "case": "action"
+      },
+      {
+        "name": "blocks-a-version-no-run-has-read-says-so",
+        "at": "/blocks",
+        "page_module": "web/src/app/blocks/page.tsx",
+        "control_module": "web/src/_pages/blocks/ui/blocks-page.tsx",
+        "bind": {
+          "version_uid": "unrun_version_uid"
+        },
+        "$comment": [
+          "The case the screen must refuse to turn into an answer. A version no run has reached has no blocks YET, which",
+          "is not the same as having none: the API says `not_produced`, and the tab says that blocks appear after the",
+          "first run that reaches the page layout. It draws no list, no count and no picture, and asks for no crop."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "W22-E2E write half %STAMP%"
+            },
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "li",
+            "text_contains": "{version_uid}",
+            "text_is_data": true,
+            "bound_ms": 30000
+          },
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "{version_uid}"
+            },
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-block-panel=\"portal\"]",
+            "text_contains": "Блоки портала появятся после первого запуска анализа этой версии",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects",
+            "operationId": "listProjects",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "listDocuments",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/versions/{version_uid}/portal-blocks",
+            "operationId": "listVersionPortalBlocks",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "listVersionPortalBlocks",
+            "json_path": "status",
+            "equals": "not_produced"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-block-panel=\"portal\"]",
+            "text_contains": "Блоки портала появятся после первого запуска анализа этой версии, который дойдёт до разметки страниц."
+          }
+        ],
+        "forbids_rendered": [
+          "[data-portal-blocks-loaded]",
+          "[data-portal-block-type]",
+          "[data-portal-crop]",
+          "[role=\"alert\"]"
+        ],
+        "screen": "blocks",
+        "case": "refused"
       },
       {
         "name": "upload-specification-set",
@@ -4875,6 +5307,131 @@
         "case": "refused"
       },
       {
+        "name": "norms-document-text-and-pdf",
+        "at": "/norms/document?id={norm_document_id}&page=1",
+        "route": "/norms/document",
+        "page_module": "web/src/app/norms/document/page.tsx",
+        "control_module": "web/src/widgets/norm-document/ui/norm-document.tsx",
+        "$comment": [
+          "PC01-JOURNEY-GAPS-01. The norm document view, opened the way a reader gets there: a document of the catalogue",
+          "(the identity the catalogue step captured) at its first page. The screen reads the document (`getNormDocument`),",
+          "its paragraphs in order (`listNormParagraphs`) and, because a page was asked for and the document has a",
+          "confirmed source binding, the PDF itself (`streamNormDocumentContent`), which it hands to the browser's viewer.",
+          "`seed_norms.py` puts the bound bytes into the lane's object store, so the read has an object to serve; before",
+          "that the journey could not walk this view."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/norm-documents/{norm_document_id}",
+            "operationId": "getNormDocument",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/norm-documents/{norm_document_id}/paragraphs",
+            "operationId": "listNormParagraphs",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/norm-documents/{norm_document_id}/content",
+            "operationId": "streamNormDocumentContent",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "getNormDocument",
+            "json_path": "content_available",
+            "equals": true
+          },
+          {
+            "of": "getNormDocument",
+            "json_path": "pdf_page_count",
+            "at_least": 1
+          },
+          {
+            "of": "getNormDocument",
+            "json_path": "paragraph_count",
+            "at_least": 1
+          },
+          {
+            "of": "listNormParagraphs",
+            "json_path": "items",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-norm-document=\"{norm_document_id}\"]",
+            "text_contains": "Страниц в PDF:"
+          },
+          {
+            "selector": "[data-norm-paragraphs] [data-norm-paragraph]"
+          },
+          {
+            "selector": "[data-norm-pdf-page=\"1\"] object[data-viewer-src]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-norm-document-failure]",
+          "[data-norm-paragraphs-failure]",
+          "[role=\"alert\"]"
+        ],
+        "screen": "norms-document",
+        "case": "action"
+      },
+      {
+        "name": "norms-document-page-past-the-end",
+        "at": "/norms/document?id={norm_document_id}&page=9999",
+        "route": "/norms/document",
+        "page_module": "web/src/app/norms/document/page.tsx",
+        "control_module": "web/src/widgets/norm-document/ui/norm-document.tsx",
+        "$comment": [
+          "A page the document does not have. The address is well formed, so the screen reads the document and its text,",
+          "and says that the PDF has no such page; it asks the store for nothing -- no content is requested for a page",
+          "that cannot be shown."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/norm-documents/{norm_document_id}",
+            "operationId": "getNormDocument",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/norm-documents/{norm_document_id}/paragraphs",
+            "operationId": "listNormParagraphs",
+            "expect_status": 200
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "GET",
+            "path": "/norm-documents/{norm_document_id}/content",
+            "why": "a page the document does not have asks nothing of the store"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-norm-pdf-page=\"9999\"]",
+            "text_contains": "Такой страницы в документе нет"
+          },
+          {
+            "selector": "[data-norm-paragraphs] [data-norm-paragraph]"
+          }
+        ],
+        "forbids_rendered": [
+          "object[data-viewer-src]",
+          "[data-norm-document-failure]",
+          "[role=\"alert\"]"
+        ],
+        "screen": "norms-document",
+        "case": "refused"
+      },
+      {
         "name": "run-export-is-an-experts-act",
         "as": "admin_only",
         "at": "/projects/{project_uid}/runs/{run_id}/review",
@@ -5074,6 +5631,475 @@
         "screen": "dashboard-sections",
         "case": "action",
         "no_negative_case": "a read-only panel: it takes no input and offers no control, and every role that can open the dashboard reads the same counts; its refusal (an incomplete breakdown) is `data-panel-fault`, forbidden above"
+      },
+      {
+        "name": "blocks-portal-blocks-of-a-version-with-a-run",
+        "at": "/blocks",
+        "page_module": "web/src/app/blocks/page.tsx",
+        "control_module": "web/src/_pages/blocks/ui/blocks-page.tsx",
+        "bind": {
+          "version_uid": "third_version_uid"
+        },
+        "$comment": [
+          "PC01-JOURNEY-GAPS-01. «Блоки»: choose the project, then the document, whose current version is the third",
+          "version of the baseline set (its run has published, so a run reached the page geometry). The rows of the",
+          "chooser carry no handle, so each choice is the button of the row whose words name the project (the name the",
+          "journey gave it) and then the version (its identity is printed in the row).",
+          "",
+          "«Блоки портала» is the tab it opens on: the committed bundle holds twelve blocks (eight text, two stamp, two",
+          "image), the API lists them, and each image block carries a crop the application cut from the PDF. The crop is",
+          "loaded lazily by the browser, so the step scrolls the first image into view by pressing it (a press on a",
+          "picture does nothing) and reads the crop's address from the picture itself."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "W22-E2E write half %STAMP%"
+            },
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "li",
+            "text_contains": "{version_uid}",
+            "text_is_data": true,
+            "bound_ms": 30000
+          },
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "{version_uid}"
+            },
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-portal-blocks-loaded]",
+            "bound_ms": 30000
+          },
+          {
+            "do": "click",
+            "selector": "[data-portal-block-type=\"image\"] img",
+            "settle": true
+          }
+        ],
+        "captures": [
+          {
+            "kind": "attribute",
+            "selector": "[data-portal-block-type=\"image\"] img",
+            "attribute": "src",
+            "as": [
+              "portal_block_id"
+            ],
+            "matches": "portal-blocks/(blk_[0-9a-f]{32})/crop$",
+            "bound_ms": 30000,
+            "$why": "the crop's address names the block; the crop call is declared with it"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects",
+            "operationId": "listProjects",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "listDocuments",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/versions/{version_uid}/portal-blocks",
+            "operationId": "listVersionPortalBlocks",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop",
+            "operationId": "streamVersionPortalBlockCrop",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "listVersionPortalBlocks",
+            "json_path": "status",
+            "equals": "produced"
+          },
+          {
+            "of": "listVersionPortalBlocks",
+            "json_path": "block_count",
+            "at_least": 1
+          },
+          {
+            "of": "listVersionPortalBlocks",
+            "json_path": "items",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-block-panel=\"portal\"] [data-portal-blocks-loaded]",
+            "text_contains": "Блоков в комплекте:"
+          },
+          {
+            "selector": "[data-portal-block-type=\"text\"]"
+          },
+          {
+            "selector": "[data-portal-block-type=\"image\"] [data-portal-crop=\"shown\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[role=\"alert\"]",
+          "[data-portal-crop=\"failed\"]"
+        ],
+        "screen": "blocks",
+        "case": "action"
+      },
+      {
+        "name": "blocks-text-lines-of-the-same-version",
+        "at": "/blocks",
+        "page_module": "web/src/app/blocks/page.tsx",
+        "control_module": "web/src/_pages/blocks/ui/blocks-page.tsx",
+        "bind": {
+          "version_uid": "third_version_uid"
+        },
+        "$comment": [
+          "The second tab, «Строки текста»: the text-line index of the same version (`getVersionBlocks`). Each line is",
+          "listed with its page, its bounds in points and its character span; nothing is computed by the screen."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "W22-E2E write half %STAMP%"
+            },
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "li",
+            "text_contains": "{version_uid}",
+            "text_is_data": true,
+            "bound_ms": 30000
+          },
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "{version_uid}"
+            },
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-portal-blocks-loaded]",
+            "bound_ms": 30000
+          },
+          {
+            "do": "click",
+            "selector": "[data-block-tab=\"lines\"]",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-block-panel=\"lines\"] [data-bbox-unit]",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects",
+            "operationId": "listProjects",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "listDocuments",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/versions/{version_uid}/blocks",
+            "operationId": "getVersionBlocks",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "getVersionBlocks",
+            "json_path": "status",
+            "equals": "produced"
+          },
+          {
+            "of": "getVersionBlocks",
+            "json_path": "block_count",
+            "at_least": 1
+          },
+          {
+            "of": "getVersionBlocks",
+            "json_path": "blocks",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-block-panel=\"lines\"] [data-bbox-unit]",
+            "text_contains": "левый край"
+          }
+        ],
+        "forbids_rendered": [
+          "[role=\"alert\"]",
+          "[data-block-panel=\"portal\"] [data-portal-blocks-loaded]"
+        ],
+        "screen": "blocks",
+        "case": "action"
+      },
+      {
+        "name": "classification-correction-is-an-experts-act",
+        "as": "admin_only",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/widgets/version-classification/ui/version-classification.tsx",
+        "$comment": [
+          "PC01-JOURNEY-GAPS-01. A role the screen refuses. The first version's classification is confirmed (stage П,",
+          "section АР). An administrator without `expert` reads it and its history and is offered no «Исправить»: the API",
+          "refuses a correction to `admin` alone, and the panel draws no control for it."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review",
+            "operationId": "getVersionSectionReview",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-classification-state=\"confirmed\"]"
+          },
+          {
+            "selector": "[data-classification-history=\"1\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-classification-correct]",
+          "[data-classification-correction-form]"
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections",
+            "why": "an administrator without `expert` is offered no correction"
+          }
+        ],
+        "screen": "version-classification",
+        "case": "refused"
+      },
+      {
+        "name": "classification-correction-needs-a-change",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/correct-version-classification/ui/correct-version-classification-form.tsx",
+        "$comment": [
+          "An input the form refuses: a reason with nothing changed. The form opens on the current stage and section, so",
+          "a good reason beside the same pair is still no correction -- the form says the pair matches the current one and",
+          "holds the button. Nothing is sent."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-classification-correct]",
+            "settle": true
+          },
+          {
+            "do": "fill",
+            "selector": "#classification-correction-reason",
+            "value": "Причина есть, но стадия и раздел те же"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-correction-unchanged]",
+            "text_contains": "Стадия и раздел совпадают с текущими."
+          },
+          {
+            "selector": "button[data-correction-submit][disabled]",
+            "text_contains": "Сохранить исправление"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections",
+            "why": "a pair equal to the current one is no correction"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-correction-failure]"
+        ],
+        "screen": "version-classification",
+        "case": "refused"
+      },
+      {
+        "name": "classification-correction-needs-a-reason",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/correct-version-classification/ui/correct-version-classification-form.tsx",
+        "$comment": [
+          "An input the form refuses: a changed stage with no reason in words. Punctuation alone has no letter or digit,",
+          "so the form says a reason is needed and holds the button; nothing is sent."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-classification-correct]",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "input[data-correction-stage=\"R\"]"
+          },
+          {
+            "do": "fill",
+            "selector": "#classification-correction-reason",
+            "value": "..."
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-correction-reason-problem=\"required\"]",
+            "text_contains": "Укажите причину исправления"
+          },
+          {
+            "selector": "button[data-correction-submit][disabled]",
+            "text_contains": "Сохранить исправление"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections",
+            "why": "a reason with no letter or digit is no reason"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-correction-failure]",
+          "[data-correction-unchanged]"
+        ],
+        "screen": "version-classification",
+        "case": "refused"
+      },
+      {
+        "name": "classification-correction",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/correct-version-classification/ui/correct-version-classification-form.tsx",
+        "$comment": [
+          "`correctVersionClassification`. The expert corrects the first version's stage from П to Р, keeping the section",
+          "АР, with a reason, pressing the button twice: one request, based on revision 1, and revision 2 is stored. The",
+          "panel closes the form and says the classification was corrected, and the history keeps the original",
+          "confirmation beside the correction with its reason.",
+          "",
+          "Only the stage changes, and only on the first version: a change of section would move the project out of the",
+          "АР figures the steps before it counted, and a later version's stage is what the comparisons read."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-classification-correct]",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "input[data-correction-stage=\"R\"]"
+          },
+          {
+            "do": "fill",
+            "selector": "#classification-correction-reason",
+            "value": "Стадия выпуска уточнена: рабочая документация %STAMP%"
+          },
+          {
+            "do": "click",
+            "selector": "button[data-correction-submit]",
+            "times": 2
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections",
+            "operationId": "correctVersionClassification",
+            "expect_status": 201,
+            "count": 1
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "correctVersionClassification",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"project_stage\":\"R\"",
+              "\"section_code\":\"AR\"",
+              "\"expected_revision\":1",
+              "Стадия выпуска уточнена"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "correctVersionClassification",
+            "json_path": "revision",
+            "equals": 2
+          },
+          {
+            "of": "correctVersionClassification",
+            "json_path": "project_stage",
+            "equals": "R"
+          },
+          {
+            "of": "correctVersionClassification",
+            "json_path": "section_code",
+            "equals": "AR"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-classification-state=\"confirmed\"]"
+          },
+          {
+            "selector": "[data-classification-revision-line=\"2\"]",
+            "text_contains": "Исправлено экспертом"
+          },
+          {
+            "selector": "[data-classification-history=\"2\"]"
+          },
+          {
+            "selector": "li[data-classification-revision=\"1\"][data-revision-kind=\"confirmation\"]"
+          },
+          {
+            "selector": "li[data-classification-revision=\"2\"][data-revision-kind=\"correction\"] [data-revision-reason]",
+            "text_contains": "Причина:"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-correction-failure]",
+          "[data-classification-correction-form]"
+        ],
+        "screen": "version-classification",
+        "case": "action"
       },
       {
         "name": "queue-pause-dispatch",
