@@ -1,4 +1,4 @@
-STATUS: 1/7 RUNNER_API.md written (wire spec) (11:40 +05)
+STATUS: 2/7 mcp_bridge.py + runner_client.py done, 19 bridge tests green (11:46 +05)
 
 # EXEC-TOOLS-01 - executor runner client tools (progress file, becomes the final report)
 
