@@ -26,7 +26,7 @@ The session is your own interactive session under your own login (`R-143f`). It 
 ### 1. On the stand
 
 In «Исполнители → Подключения» create a `pull` connection with client `claude_code_session`
-and the pinned model, issue a runner token (it is shown once) and route «Анализ текста» to the
+and the pinned model, issue a runner token with «Выпустить токен» (it is shown once, with a copy button) and route «Анализ текста» to the
 connection.
 
 ### 2. Make the workspace a folder of its own
@@ -121,7 +121,7 @@ and watch the probe task be claimed and answered; the connection shows «на с
   result over 50 000 characters is saved to a file, which this workspace cannot read. A task
   that large cannot be served by a session: the stand should keep `text_analysis` payloads
   smaller, or use the agent.
-- **Revoke:** press «Отозвать токен» on the connection (the runner then gets 401 and stops),
+- **Revoke:** press «Отозвать» beside the token on the connection's card and confirm (the runner then gets 401 and stops),
   then `cd ~/pdf-analysis-runner-workspace && claude mcp remove pdf-analysis-runner`, which also
   deletes the token from `~/.claude.json` (verify with `grep -c PDF_ANALYSIS_RUNNER_TOKEN
   ~/.claude.json`, which must print 0).
@@ -156,7 +156,7 @@ The token lives only in that file; the config refuses a key named `token`, `secr
   normal stop, 2 configuration error, 3 token rejected (401: revoked or expired, the unit does
   not restart-loop on 2 or 3). `journalctl -u pdf-analysis-agent` shows the log; it holds task
   ids and timings, never the token or the payload.
-- Revoke: the same «Отозвать токен» button; the agent exits 3 at its next call.
+- Revoke: the same «Отозвать» button; the agent exits 3 at its next call.
 
 ## C. SSH profile `claude_code_headless`
 
