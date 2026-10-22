@@ -372,6 +372,11 @@ mutations = [
   ("turn the refusal of «Блоки» into an action",
    lambda m: step(m, 'blocks-a-version-no-run-has-read-says-so').__setitem__('case', 'action'),
    "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("upload the document nobody runs after the specification set, where the read walk would find it newest",
+   lambda m: m['write']['steps'].insert(
+       next(i for i, x in enumerate(m['write']['steps']) if x['name'] == 'sign-out'),
+       m['write']['steps'].pop(next(i for i, x in enumerate(m['write']['steps']) if x['name'] == 'blocks-upload-a-document-no-run-has-read'))),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
   # --- `PC01-JOURNEY-GAPS-01`. `correctVersionClassification`.
   ("remove the step that corrects a classification",
    lambda m: without_steps(m, lambda x: x['name'] == 'classification-correction'),

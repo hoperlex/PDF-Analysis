@@ -2751,6 +2751,148 @@
         "case": "action"
       },
       {
+        "name": "blocks-upload-a-document-no-run-has-read",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
+        "$comment": [
+          "PC01-JOURNEY-GAPS-01. A document in the project that no run will read: the precondition of the «Блоки» refusal",
+          "that follows. It is a new DOCUMENT and not a fourth version of the baseline, and it comes BEFORE the specification",
+          "set, on purpose. `listDocuments` answers the current version of each document, newest first, and the read walk",
+          "follows the first document it lists and then the first run of that document's newest version: a document nobody",
+          "has run that stayed the newest -- or a newest version without a run -- would end the walk at a version screen with",
+          "no run to follow. The specification set, uploaded after this, is the newest document and has a run."
+        ],
+        "actions": [
+          {
+            "do": "attach_file",
+            "selector": "#upload-file",
+            "fixture": true
+          },
+          {
+            "do": "fill",
+            "selector": "#upload-title",
+            "value": "Блоки: версия без прогона %STAMP%"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Загрузить"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "uploadDocument",
+            "expect_status": 201
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "uploadDocument",
+            "json_path": "version_uid",
+            "matches": "^ver_%ID%$"
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "pattern": "^/projects/(prj_%ID%)/versions/(ver_%ID%)$",
+          "as": [
+            "project_uid",
+            "unrun_version_uid"
+          ],
+          "bound_ms": 30000
+        },
+        "forbids_rendered": [
+          "[data-upload-failure]",
+          "[data-precheck-problem]"
+        ],
+        "screen": "version-upload",
+        "case": "action"
+      },
+      {
+        "name": "blocks-a-version-no-run-has-read-says-so",
+        "at": "/blocks",
+        "page_module": "web/src/app/blocks/page.tsx",
+        "control_module": "web/src/_pages/blocks/ui/blocks-page.tsx",
+        "bind": {
+          "version_uid": "unrun_version_uid"
+        },
+        "$comment": [
+          "The case the screen must refuse to turn into an answer. A version no run has reached has no blocks YET, which",
+          "is not the same as having none: the API says `not_produced`, and the tab says that blocks appear after the",
+          "first run that reaches the page layout. It draws no list, no count and no picture, and asks for no crop."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "W22-E2E write half %STAMP%"
+            },
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "{version_uid}"
+            },
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-block-panel=\"portal\"]",
+            "text_contains": "Блоки портала появятся после первого запуска анализа этой версии",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects",
+            "operationId": "listProjects",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "listDocuments",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/versions/{version_uid}/portal-blocks",
+            "operationId": "listVersionPortalBlocks",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "listVersionPortalBlocks",
+            "json_path": "status",
+            "equals": "not_produced"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-block-panel=\"portal\"]",
+            "text_contains": "Блоки портала появятся после первого запуска анализа этой версии, который дойдёт до разметки страниц."
+          }
+        ],
+        "forbids_rendered": [
+          "[data-portal-blocks-loaded]",
+          "[data-portal-block-type]",
+          "[data-portal-crop]",
+          "[role=\"alert\"]"
+        ],
+        "screen": "blocks",
+        "case": "refused"
+      },
+      {
         "name": "upload-specification-set",
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
@@ -6954,148 +7096,6 @@
         "screen": "release-history",
         "case": "action",
         "no_negative_case": "the history is read by every complete account whose password is not the shipped one; an account that is not complete cannot be made without leaving it for good, and the API answers the read for any role"
-      },
-      {
-        "name": "blocks-upload-a-document-no-run-has-read",
-        "at": "/projects/{project_uid}",
-        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
-        "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
-        "$comment": [
-          "PC01-JOURNEY-GAPS-01. A third document in the project, which no run will read: the precondition of the",
-          "«Блоки» refusal below. It is a new DOCUMENT and not a fourth version of the baseline, on purpose: the chooser",
-          "lists the current version of each document, and the read walk follows the first version the document page",
-          "lists (the newest) to find a run -- a newest version without a run would end the walk at the version screen.",
-          "Documents list oldest first, so the baseline stays the one the walk follows. It comes last in the half, after",
-          "every step that counts the project's confirmed sets."
-        ],
-        "actions": [
-          {
-            "do": "attach_file",
-            "selector": "#upload-file",
-            "fixture": true
-          },
-          {
-            "do": "fill",
-            "selector": "#upload-title",
-            "value": "Блоки: версия без прогона %STAMP%"
-          },
-          {
-            "do": "click",
-            "selector": "form button[type=\"submit\"]",
-            "text": "Загрузить"
-          }
-        ],
-        "expects_api": [
-          {
-            "method": "POST",
-            "path": "/projects/{project_uid}/documents",
-            "operationId": "uploadDocument",
-            "expect_status": 201
-          }
-        ],
-        "expects_response": [
-          {
-            "of": "uploadDocument",
-            "json_path": "version_uid",
-            "matches": "^ver_%ID%$"
-          }
-        ],
-        "capture": {
-          "kind": "location",
-          "pattern": "^/projects/(prj_%ID%)/versions/(ver_%ID%)$",
-          "as": [
-            "project_uid",
-            "unrun_version_uid"
-          ],
-          "bound_ms": 30000
-        },
-        "forbids_rendered": [
-          "[data-upload-failure]",
-          "[data-precheck-problem]"
-        ],
-        "screen": "version-upload",
-        "case": "action"
-      },
-      {
-        "name": "blocks-a-version-no-run-has-read-says-so",
-        "at": "/blocks",
-        "page_module": "web/src/app/blocks/page.tsx",
-        "control_module": "web/src/_pages/blocks/ui/blocks-page.tsx",
-        "bind": {
-          "version_uid": "unrun_version_uid"
-        },
-        "$comment": [
-          "The case the screen must refuse to turn into an answer. A version no run has reached has no blocks YET, which",
-          "is not the same as having none: the API says `not_produced`, and the tab says that blocks appear after the",
-          "first run that reaches the page layout. It draws no list, no count and no picture, and asks for no crop."
-        ],
-        "actions": [
-          {
-            "do": "click",
-            "selector": "li button",
-            "within": {
-              "selector": "li",
-              "text_contains": "W22-E2E write half %STAMP%"
-            },
-            "settle": true
-          },
-          {
-            "do": "click",
-            "selector": "li button",
-            "within": {
-              "selector": "li",
-              "text_contains": "{version_uid}"
-            },
-            "settle": true
-          },
-          {
-            "do": "wait_for",
-            "selector": "[data-block-panel=\"portal\"]",
-            "text_contains": "Блоки портала появятся после первого запуска анализа этой версии",
-            "bound_ms": 30000
-          }
-        ],
-        "expects_api": [
-          {
-            "method": "GET",
-            "path": "/projects",
-            "operationId": "listProjects",
-            "expect_status": 200
-          },
-          {
-            "method": "GET",
-            "path": "/projects/{project_uid}/documents",
-            "operationId": "listDocuments",
-            "expect_status": 200
-          },
-          {
-            "method": "GET",
-            "path": "/versions/{version_uid}/portal-blocks",
-            "operationId": "listVersionPortalBlocks",
-            "expect_status": 200
-          }
-        ],
-        "expects_response": [
-          {
-            "of": "listVersionPortalBlocks",
-            "json_path": "status",
-            "equals": "not_produced"
-          }
-        ],
-        "expects_present": [
-          {
-            "selector": "[data-block-panel=\"portal\"]",
-            "text_contains": "Блоки портала появятся после первого запуска анализа этой версии, который дойдёт до разметки страниц."
-          }
-        ],
-        "forbids_rendered": [
-          "[data-portal-blocks-loaded]",
-          "[data-portal-block-type]",
-          "[data-portal-crop]",
-          "[role=\"alert\"]"
-        ],
-        "screen": "blocks",
-        "case": "refused"
       },
       {
         "name": "sign-out",

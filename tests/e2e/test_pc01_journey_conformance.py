@@ -3553,6 +3553,16 @@ def gap_content_findings(manifest: dict) -> list[str]:
     ):
         findings.append("norms-document-page-past-the-end: does not declare that no PDF is requested")
 
+    # `listDocuments` answers the newest current version first and the read walk follows the first document
+    # and then that document's newest version to find a run: the document nobody runs must not be the newest.
+    unrun_at = order.index("blocks-upload-a-document-no-run-has-read") if "blocks-upload-a-document-no-run-has-read" in order else -1
+    newest_at = order.index("upload-specification-set") if "upload-specification-set" in order else -1
+    if unrun_at >= 0 and newest_at >= 0 and unrun_at > newest_at:
+        findings.append(
+            "blocks-upload-a-document-no-run-has-read: comes after the specification set, so the document "
+            "nobody runs is the newest and the read walk, which follows the newest document, finds no run"
+        )
+
     if "produced" not in _answers("blocks-portal-blocks-of-a-version-with-a-run", "status"):
         findings.append("blocks-portal-blocks-of-a-version-with-a-run: does not require status `produced`")
     if "not_produced" not in _answers("blocks-a-version-no-run-has-read-says-so", "status"):
@@ -3610,6 +3620,13 @@ def test_control_a_return_that_is_not_a_return_is_detected(manifest: dict) -> No
     i, j = names.index("my-tasks-take-the-work-to-give-it-back"), names.index("my-tasks-give-the-work-back")
     steps[i], steps[j] = steps[j], steps[i]
     assert any("comes before" in f for f in gap_content_findings(swapped))
+    # the document nobody runs uploaded after the specification set
+    late = json.loads(json.dumps(manifest))
+    steps_late = late["write"]["steps"]
+    moved = next(s for s in steps_late if s["name"] == "blocks-upload-a-document-no-run-has-read")
+    steps_late.remove(moved)
+    steps_late.insert([s["name"] for s in steps_late].index("sign-out"), moved)
+    assert any("comes after the specification set" in f for f in gap_content_findings(late))
     # «Блоки»: the refusal that stops being a refusal of a list
     blocks = json.loads(json.dumps(manifest))
     _step_of(blocks, "blocks-a-version-no-run-has-read-says-so")["expects_response"][0]["equals"] = "produced"
