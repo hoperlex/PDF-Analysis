@@ -1591,15 +1591,23 @@ li.am-state .am-state__detail {
   }
 }
 
+/* A long list scrolls inside its own column, so its last findings stay reachable while it
+   is pinned. The export panel lives outside `.am-review`, so the pinned list cannot slide
+   over it. */
 .am-review__list {
   min-width: 0;
   position: sticky;
   top: 86px;
+  max-height: calc(100vh - 86px - var(--am-gap-lg));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @media (max-width: 900px) {
   .am-review__list {
     position: static;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 
@@ -1656,18 +1664,11 @@ li.am-state .am-state__detail {
   font-size: var(--am-text-sm);
 }
 
-/* The export panel spans the grid: it is about the run, not about the finding. */
+/* The export panel follows the review grid: it is about the run, not about the finding. */
 .am-review__export {
-  grid-column: 1 / -1;
   margin-top: var(--am-gap-lg);
   padding-top: var(--am-gap);
   border-top: 1px solid var(--am-line);
-}
-
-@media (max-width: 900px) {
-  .am-review__export {
-    grid-column: auto;
-  }
 }
 
 /* ---- the identifier line on a screen header -------------------------------------- */
@@ -1860,17 +1861,13 @@ li.am-state .am-state__detail {
   color: var(--am-ink-muted);
 }
 
+/* One column: beside the quotations the page got half the detail column and could not be
+   read. The page takes the full width and its quotations follow it. */
 .am-evidence__panes {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--am-gap);
   align-items: start;
-}
-
-@media (max-width: 760px) {
-  .am-evidence__panes {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 .am-evidence__page {

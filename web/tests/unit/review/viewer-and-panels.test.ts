@@ -186,7 +186,7 @@ describe('the PDF island is pointed at the declared page', () => {
     const markup = viewer(anchored({ quote: 'on page eleven', page_number: 11 }), 11);
     // `data=` is what the browser follows. `data-viewer-src` is a test affordance, so
     // asserting the fragment appears "somewhere in the markup" is not the same claim.
-    expect(markup).toContain(`data="${OBJECT_URL}#page=11"`);
+    expect(markup).toContain(`data="${OBJECT_URL}#page=11&amp;zoom=85&amp;navpanes=0"`);
   });
 
   it('never points the object at the bare blob URL', () => {

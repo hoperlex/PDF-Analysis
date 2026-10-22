@@ -274,24 +274,29 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             </>
           )}
         </div>
+      </div>
 
-        <div className="am-review__export">
-          {run === null ? (
-            <LoadingState what="прогон" />
-          ) : (
-            <ExportPanel
-              runId={runId}
-              runState={run.state}
-              providerMode={run.provider_mode}
-              onExport={exporter.download}
-              isPending={exporter.isPending}
-              lastFileName={exporter.lastFileName}
-              error={presentFailureOrNull(exporter.error, {
-                title: 'В выгрузке отказано',
-              })}
-            />
-          )}
-        </div>
+      {/*
+        Outside `.am-review` on purpose: the list is `position: sticky`, and a sticky box is
+        bounded by its parent, not by its grid row. While the export sat in the same grid,
+        the list slid down over it on scroll.
+      */}
+      <div className="am-review__export">
+        {run === null ? (
+          <LoadingState what="прогон" />
+        ) : (
+          <ExportPanel
+            runId={runId}
+            runState={run.state}
+            providerMode={run.provider_mode}
+            onExport={exporter.download}
+            isPending={exporter.isPending}
+            lastFileName={exporter.lastFileName}
+            error={presentFailureOrNull(exporter.error, {
+              title: 'В выгрузке отказано',
+            })}
+          />
+        )}
       </div>
     </PageShell>
   );

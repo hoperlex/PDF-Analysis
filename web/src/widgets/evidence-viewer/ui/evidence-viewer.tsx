@@ -53,6 +53,16 @@ export interface EvidenceViewerProps {
   readonly error?: ErrorStateProps | null | undefined;
 }
 
+/**
+ * The declared page at a fixed zoom with the thumbnail pane closed. Left to itself, Chrome
+ * fits the whole document to its widest sheet, so in a volume with wide drawing sheets an A4
+ * page came out a few dozen pixels wide; it ignores `view=Fit` and `view=FitH`. 85 % fits an
+ * A4 page across the full-width pane.
+ */
+function viewerUrl(documentUrl: string, page: number): string {
+  return `${pdfPageUrl(documentUrl, page)}&zoom=85&navpanes=0`;
+}
+
 function QuotationCard({ item }: { item: Evidence }) {
   const consistent = anchorMatchesQuotation(item);
   return (
@@ -150,12 +160,17 @@ export function EvidenceViewer({
                 }
               />
             ) : (
+              /*
+                `key` makes a page change mount a fresh element. Chrome's viewer ignores a
+                change of the fragment alone on a live `<object>` and leaves a blank pane.
+              */
               <object
+                key={page}
                 className="am-evidence__object"
-                data={pdfPageUrl(documentUrl, page)}
+                data={viewerUrl(documentUrl, page)}
                 type="application/pdf"
                 aria-label={`Страница ${page} проверяемого документа`}
-                data-viewer-src={pdfPageUrl(documentUrl, page)}
+                data-viewer-src={viewerUrl(documentUrl, page)}
               >
                 <p>
                   Этот браузер не умеет показывать PDF внутри страницы. Свидетельство —
