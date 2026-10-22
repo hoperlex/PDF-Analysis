@@ -44,7 +44,7 @@ vi.mock('@/shared/api', async (importOriginal) => {
   return { ...actual, correctVersionClassification: vi.fn() };
 });
 
-import type { VersionClassification, VersionClassificationRevision } from '@/shared/api';
+import type { SectionReview, VersionClassification, VersionClassificationRevision } from '@/shared/api';
 import { correctVersionClassification, queryKeys } from '@/shared/api';
 import {
   CORRECTION_NOT_CLASSIFIED_DETAIL,
@@ -120,6 +120,22 @@ function panel(props: Partial<Parameters<typeof VersionClassificationView>[0]> =
       ...props,
     }),
   );
+}
+
+/**
+ * `PB-PROFILE-01`. ПБ has a draft profile now, so the API marks all fifteen options executable.
+ * "A section without a profile" is what a server whose registry lacks one would answer; the state
+ * is built for any section a test names (ГП here) instead of being ПБ, and `null` is the API's
+ * present answer. (The shared `review()` fixture still defaults ПБ to non-executable.)
+ */
+function reviewWithoutProfile(
+  code: SectionReview['options'][number]['section_code'] | null,
+): SectionReview {
+  const base = review({ classification: CORRECTED, revisions: HISTORY });
+  return {
+    ...base,
+    options: base.options.map((option) => ({ ...option, executable: option.section_code !== code })),
+  };
 }
 
 function form(props: Partial<Parameters<typeof CorrectVersionClassificationFormView>[0]> = {}): string {
@@ -278,8 +294,19 @@ describe('the correction form', () => {
   });
 
   it('marks the sections without a profile and keeps them choosable', () => {
-    const markup = form();
-    expect(markup).toMatch(/<option value="PB"[^>]*>[^<]*профиль анализа недоступен/);
+    const markup = form({ review: reviewWithoutProfile('GP') });
+    expect(markup).toMatch(/<option value="GP"[^>]*>[^<]*профиль анализа недоступен/);
+    expect(markup).not.toMatch(/<option value="GP"[^>]*disabled/);
+    // Only that one: ПБ has a profile.
+    expect(markup).toMatch(/<option value="PB"[^>]*>/);
+    expect(markup).not.toMatch(/<option value="PB"[^>]*>[^<]*профиль анализа недоступен/);
+    expect((markup.match(/профиль анализа недоступен/g) ?? []).length).toBe(1);
+  });
+
+  it('marks nothing when every section has a profile, ПБ included', () => {
+    const markup = form({ review: reviewWithoutProfile(null) });
+    expect(markup).toMatch(/<option value="PB"[^>]*>/);
+    expect(markup).not.toContain('профиль анализа недоступен');
   });
 });
 
