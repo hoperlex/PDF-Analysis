@@ -25,13 +25,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hold = vi.hoisted(() => ({
-  config: null as null | { mutationFn: (request: unknown) => Promise<unknown> },
+  config: null as null | { mutationFn: (press: unknown) => Promise<unknown> },
   mutate: null as null | ((request: unknown) => void),
   state: { value: undefined as unknown, set: false },
 }));
 
 vi.mock('@tanstack/react-query', () => ({
-  useMutation: (configuration: { mutationFn: (request: unknown) => Promise<unknown> }) => {
+  useMutation: (configuration: { mutationFn: (press: unknown) => Promise<unknown> }) => {
     hold.config = configuration;
     return {
       mutate: (request: unknown) => hold.mutate?.(request),
@@ -89,8 +89,9 @@ const sent: unknown[] = [];
 beforeEach(() => {
   sent.length = 0;
   hold.config = null;
-  hold.mutate = (request) => {
-    sent.push(request);
+  // The mutation's variables are the press: the finding and the request (`WEB-HOOKS-PER-FINDING-01`).
+  hold.mutate = (press) => {
+    sent.push((press as { request: unknown }).request);
   };
   hold.state.value = undefined;
   hold.state.set = false;
@@ -293,7 +294,7 @@ describe('the request the hook’s mutation puts on the wire', () => {
     vi.mocked(appendDecision).mockRejectedValueOnce(new Error('connection closed'));
     vi.mocked(appendDecision).mockResolvedValue({ data: { current_verdict: 'accepted' } } as never);
     hook();
-    const mutationFn = (hold.config as { mutationFn: (request: unknown) => Promise<unknown> })
+    const mutationFn = (hold.config as { mutationFn: (press: unknown) => Promise<unknown> })
       .mutationFn;
     const accept = {
       event_type: 'accept',
@@ -301,9 +302,11 @@ describe('the request the hook’s mutation puts on the wire', () => {
       severity: 'critical',
     };
 
-    await expect(mutationFn(accept)).rejects.toThrow('connection closed');
-    await mutationFn(accept);
-    await mutationFn({ ...accept, severity: 'economic' });
+    const press = (request: unknown) => ({ findingUid: FINDING_UID, request });
+
+    await expect(mutationFn(press(accept))).rejects.toThrow('connection closed');
+    await mutationFn(press(accept));
+    await mutationFn(press({ ...accept, severity: 'economic' }));
 
     const calls = vi.mocked(appendDecision).mock.calls as unknown as [
       { body: AppendDecisionRequest; idempotencyKey: string },

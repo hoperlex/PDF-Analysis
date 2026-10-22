@@ -83,6 +83,18 @@ function request(eventType: AppendDecisionRequest['event_type']): AppendDecision
   return { event_type: eventType, finding_observation_id: OBSERVATION_ID };
 }
 
+/**
+ * What the mutation holds as its variables: the press, the finding it was raised for and the
+ * request together (`WEB-HOOKS-PER-FINDING-01`; `per-finding-feedback.test.ts` runs the real
+ * observer, this file sets the state the hook reads).
+ */
+function press(
+  eventType: AppendDecisionRequest['event_type'],
+  findingUid: string = FINDING_UID,
+): unknown {
+  return { findingUid, request: request(eventType) };
+}
+
 function answer(findingUid: string, current: AppendDecisionResponse['current_verdict']): AppendDecisionResponse {
   return {
     current_verdict: current,
@@ -105,19 +117,19 @@ beforeEach(() => {
 describe('the intent in flight is read from the pending request', () => {
   it('is «reject» while a reject is pending', () => {
     hold.mutation.isPending = true;
-    hold.mutation.variables = request('reject');
+    hold.mutation.variables = press('reject');
     expect(hook().pendingIntent).toBe('reject');
   });
 
   it('is «accept» while an accept is pending', () => {
     hold.mutation.isPending = true;
-    hold.mutation.variables = request('accept');
+    hold.mutation.variables = press('accept');
     expect(hook().pendingIntent).toBe('accept');
   });
 
   it('is nothing once the mutation has settled, though its variables are still held', () => {
     hold.mutation.isPending = false;
-    hold.mutation.variables = request('reject');
+    hold.mutation.variables = press('reject');
     expect(hook().pendingIntent).toBeNull();
     expect(hook().isPending).toBe(false);
   });
@@ -128,7 +140,7 @@ describe('the intent in flight is read from the pending request', () => {
 
   it('still says a verdict is pending through isPending, whatever the intent', () => {
     hold.mutation.isPending = true;
-    hold.mutation.variables = request('reject');
+    hold.mutation.variables = press('reject');
     expect(hook().isPending).toBe(true);
   });
 });
@@ -196,6 +208,7 @@ describe('the refusal goes when the expert picks a severity', () => {
   it('sends nothing, and does not touch the mutation or its error', () => {
     refuse();
     hold.mutate.mockClear();
+    hold.mutation.variables = press('accept');
     hold.mutation.error = new Error('сервер отказал');
     hook().clearRefusal();
     expect(hold.mutate).not.toHaveBeenCalled();
