@@ -15,6 +15,13 @@ vi.mock('@tanstack/react-query', () => ({
   }),
 }));
 
+// The hook keeps the request in flight in a ref (`WEB-FOLLOWUPS-02`); outside a render there is
+// no instance, so a plain holder stands in, as in the other command suites.
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, useRef: (value: unknown) => ({ current: value }) };
+});
+
 vi.mock('@/shared/api', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return { ...actual, setCurrentNormSnapshot: vi.fn() };
