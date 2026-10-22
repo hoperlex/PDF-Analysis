@@ -27,18 +27,18 @@ const seen = vi.hoisted(() => ({
 }));
 
 vi.mock('@/widgets/decision-panel', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/widgets/decision-panel')>();
+  const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
     DecisionPanel: (props: Record<string, unknown>) => {
       seen.panelProps = props;
-      return createElement(actual.DecisionPanel, props as never);
+      return createElement(actual.DecisionPanel as never, props);
     },
   };
 });
 
 vi.mock('@/features/record-verdict', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/features/record-verdict')>();
+  const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
     useRecordVerdict: () => ({
@@ -56,7 +56,7 @@ vi.mock('@/features/record-verdict', async (importOriginal) => {
 });
 
 vi.mock('@/features/append-comment', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/features/append-comment')>();
+  const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
     useAppendComment: () => ({

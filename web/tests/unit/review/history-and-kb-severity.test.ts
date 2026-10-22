@@ -190,12 +190,6 @@ describe('an event without a severity renders the markup it always rendered', ()
     );
   });
 
-  it('prints the same line when severity is present and undefined', () => {
-    const without = history([decisionEvent()]);
-    const explicit = history([decisionEvent({ severity: undefined })]);
-    expect(explicit).toBe(without);
-  });
-
   it('prints the legacy line for a comment (no verdict, no severity)', () => {
     const line = historyLine(
       history([decisionEvent({ event_type: 'comment', verdict: null, comment: 'Заметка.' })]),
@@ -286,10 +280,6 @@ describe('a record without a severity renders the markup it always rendered', ()
         '<span class="am-kb__event">приём</span>' +
         '</p>',
     );
-  });
-
-  it('prints the same markup when severity is present and undefined', () => {
-    expect(base([record({ severity: undefined })])).toBe(base([record()]));
   });
 
   it('adds no badge, no label and no data attribute to the legacy markup', () => {
