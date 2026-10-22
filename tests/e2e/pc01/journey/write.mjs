@@ -119,7 +119,7 @@ export function namesNeededBy(step) {
     for (const call of step[key] ?? []) take(call.path, call.bind);
   }
   for (const action of step.actions ?? []) {
-    for (const key of ['selector', 'value', 'text', 'to', 'option_text', 'option_value', 'label']) {
+    for (const key of ['selector', 'value', 'text', 'to', 'option_text', 'option_value', 'label', 'text_contains']) {
       take(action[key]);
     }
     take(action.within?.text_contains);

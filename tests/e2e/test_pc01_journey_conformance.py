@@ -2553,7 +2553,7 @@ def _step_templates(step: dict) -> list[tuple[str, dict | None]]:
             for name in _templates(call.get("path")):
                 found.append((name, call.get("bind")))
     for action in step.get("actions") or ():
-        for key in ("selector", "value", "text", "to", "option_text", "option_value", "label"):
+        for key in ("selector", "value", "text", "to", "option_text", "option_value", "label", "text_contains"):
             for name in _templates(action.get(key)):
                 found.append((name, None))
         if isinstance(action.get("within"), dict):

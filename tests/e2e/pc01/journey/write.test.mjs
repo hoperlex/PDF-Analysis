@@ -88,6 +88,11 @@ test('a control is found in the row whose words name it, and never in the first 
   assert.equal(labelled.closest('li').innerText.startsWith('W22-E2E'), true, 'text and row together');
 });
 
+test('the words a wait is for count among what a step needs', () => {
+  const step = { at: '/blocks', actions: [{ do: 'wait_for', selector: 'li', text_contains: '{version_uid}', bound_ms: 1 }] };
+  assert.deepEqual(namesNeededBy(step), ['version_uid']);
+});
+
 test('the words that name a row count among what a step needs', () => {
   const step = {
     at: '/blocks',

@@ -2835,6 +2835,13 @@
             "settle": true
           },
           {
+            "do": "wait_for",
+            "selector": "li",
+            "text_contains": "{version_uid}",
+            "text_is_data": true,
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "li button",
             "within": {
@@ -5652,6 +5659,13 @@
             "settle": true
           },
           {
+            "do": "wait_for",
+            "selector": "li",
+            "text_contains": "{version_uid}",
+            "text_is_data": true,
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "li button",
             "within": {
@@ -5767,6 +5781,13 @@
               "text_contains": "W22-E2E write half %STAMP%"
             },
             "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "li",
+            "text_contains": "{version_uid}",
+            "text_is_data": true,
+            "bound_ms": 30000
           },
           {
             "do": "click",
