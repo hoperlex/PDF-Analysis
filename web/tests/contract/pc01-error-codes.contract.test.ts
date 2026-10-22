@@ -169,6 +169,13 @@ function reachableCodes(): Set<string> {
 
 const sorted = (codes: Iterable<string>): string[] => [...codes].sort();
 
+const RUNNER_OPERATIONS: readonly string[] = [
+  'claimExecutorTask',
+  'extendExecutorTaskClaim',
+  'failExecutorTask',
+  'submitExecutorTaskAnswer',
+];
+
 describe('the derivation reads the document and is not vacuous', () => {
   it('finds a component-backed failure response on every operation', () => {
     const declared = declaredFailureResponses();
@@ -194,6 +201,12 @@ describe('the derivation reads the document and is not vacuous', () => {
         continue;
       }
       expect(statuses, `${operationId} declares no 401`).toContain('401');
+      // `EXEC-PULL-01`: a runner's token is a principal that holds no role, so the four runner
+      // operations declare the 401 and no 403 -- pinned by name, as the open set is.
+      if (RUNNER_OPERATIONS.includes(operationId)) {
+        expect(statuses, `${operationId} is a runner's: the token holds no role to deny`).not.toContain('403');
+        continue;
+      }
       if (requiresCredential(operationId)) {
         expect(statuses, `${operationId} declares no 403`).toContain('403');
       } else {
