@@ -64,7 +64,7 @@ _RUN_COLUMNS = (
     "norms_snapshot_id, provider_mode, frozen_input_digest, command_id, terminal_reason, "
     "terminal_detail, "
     "interrupted_reason, degradation_set, terminal_at, created_at, reaudit_of_run_id, "
-    "connection_revision_id"
+    "connection_revision_id, norm_retrieval_set_id"
 )
 
 _INSERT_RUN = text(
@@ -72,11 +72,11 @@ _INSERT_RUN = text(
     INSERT INTO audit_run (
         run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id,
         norms_snapshot_id, provider_mode, frozen_input_digest, command_id,
-        reaudit_of_run_id, connection_revision_id
+        reaudit_of_run_id, connection_revision_id, norm_retrieval_set_id
     ) VALUES (
         :run_id, :project_uid, :version_uid, :state, :analysis_profile_id,
         :prompt_bundle_id, :norms_snapshot_id, :provider_mode, :frozen_input_digest, :command_id,
-        :reaudit_of_run_id, :connection_revision_id
+        :reaudit_of_run_id, :connection_revision_id, :norm_retrieval_set_id
     )
     """
 )
@@ -260,6 +260,8 @@ class RunRow:
     #: `EXEC-HTTP-01`: the executor connection revision the run froze at start, or ``None`` for
     #: a run of the ``environment`` source. Written once by ``create`` and frozen by the database.
     connection_revision_id: str | None = None
+    #: The 0023 immutable verified set pin, present only for future v3 runs.
+    norm_retrieval_set_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -320,6 +322,7 @@ def _run_row(row: Any) -> RunRow:
         created_at,
         reaudit_of_run_id,
         connection_revision_id,
+        norm_retrieval_set_id,
     ) = tuple(row)
     return RunRow(
         run_id=run_id,
@@ -340,6 +343,7 @@ def _run_row(row: Any) -> RunRow:
         created_at=created_at,
         reaudit_of_run_id=reaudit_of_run_id,
         connection_revision_id=connection_revision_id,
+        norm_retrieval_set_id=norm_retrieval_set_id,
     )
 
 
@@ -374,6 +378,7 @@ class RunRepository:
         reaudit_of_run_id: str | None = None,
         norms_snapshot_id: str | None = None,
         connection_revision_id: str | None = None,
+        norm_retrieval_set_id: str | None = None,
     ) -> RunRow:
         """Insert the run in ``created``. The frozen set is written once, here.
 
@@ -382,7 +387,14 @@ class RunRepository:
         the same transaction and pass it, NULL while none is current. This method
         consults nothing; it writes what it is given, and the default NULL is only for
         callers that build rows outside those two commands.
+
+        The optional 0023 set pin is written at INSERT time only. The database
+        requires its row to be verified under the same snapshot. The served
+        commands do not supply it until a later v3 runtime integration owns that
+        selection and the associated frozen-input digest.
         """
+        if norm_retrieval_set_id is not None and norms_snapshot_id is None:
+            raise ValueError("a retrieval set pin requires a snapshot pin")
         assert_initial(self.topology(session), RUN_MACHINE, INITIAL_STATE)
         try:
             session.execute(
@@ -400,6 +412,7 @@ class RunRepository:
                     "reaudit_of_run_id": reaudit_of_run_id,
                     "norms_snapshot_id": norms_snapshot_id,
                     "connection_revision_id": connection_revision_id,
+                    "norm_retrieval_set_id": norm_retrieval_set_id,
                 },
             )
         except DBAPIError as exc:

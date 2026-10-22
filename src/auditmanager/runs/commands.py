@@ -226,6 +226,7 @@ def frozen_input_digest(
     analysis_profile_id: str,
     prompt_bundle_id: str,
     norms_snapshot_id: str | None,
+    norm_retrieval_set_sha256: str | None = None,
 ) -> str:
     """The stored ``frozen_input_digest``: the input basis plus the pinned snapshot.
 
@@ -233,7 +234,9 @@ def frozen_input_digest(
     added when a snapshot is pinned. With none pinned the key is absent rather than null,
     so a NULL run's stored digest is **byte-identical** to its basis -- and to what the
     same run would have stored before W55. ``norms_snapshot_id`` has no default: a caller
-    that forgot the pin would silently store a digest that claims none.
+    that forgot the pin would silently store a digest that claims none. A
+    future v3 caller may also pass the verified retrieval-set digest; existing
+    v1/v2 calls leave it absent and retain their exact stored bytes.
     """
     document = _frozen_document(
         version_uid=version_uid,
@@ -243,6 +246,14 @@ def frozen_input_digest(
     )
     if norms_snapshot_id is not None:
         document["norms_snapshot_id"] = norms_snapshot_id
+    if norm_retrieval_set_sha256 is not None:
+        if norms_snapshot_id is None:
+            raise ValueError("a retrieval set digest requires a snapshot pin")
+        if not isinstance(norm_retrieval_set_sha256, str) or len(norm_retrieval_set_sha256) != 64 or any(
+            character not in "0123456789abcdef" for character in norm_retrieval_set_sha256
+        ):
+            raise ValueError("retrieval set digest must be lowercase SHA-256")
+        document["norm_retrieval_set_sha256"] = norm_retrieval_set_sha256
     return _sha256_of(document)
 
 
