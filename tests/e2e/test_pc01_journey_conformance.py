@@ -2520,6 +2520,7 @@ NIGHT_OPERATIONS = (
     "listVersionPortalBlocks",
     "streamVersionPortalBlockCrop",
     "getVersionBlocks",
+    "correctVersionClassification",
 )
 
 _TEMPLATE = re.compile(r"\{([a-z_]+)\}")
@@ -3414,6 +3415,15 @@ GAP_STEPS: dict[str, tuple[str, str, frozenset[str]]] = {
     "my-tasks-take-the-work-to-give-it-back": ("my-tasks", "action", frozenset({"transitionAssignment"})),
     "my-tasks-give-the-work-back": ("my-tasks", "action", frozenset({"transitionAssignment"})),
     "dispatcher-shows-the-work-given-back": ("dispatcher", "action", frozenset({"listAssignments"})),
+    # `correctVersionClassification`: the expert corrects a confirmed classification (revision 2, the original
+    # kept in the history); an administrator without `expert` is offered nothing; a pair that matches the
+    # current one and a reason with no word in it are refused by the form.
+    "classification-correction-is-an-experts-act": (
+        "version-classification", "refused", frozenset({"getVersionSectionReview"})),
+    "classification-correction-needs-a-change": ("version-classification", "refused", frozenset()),
+    "classification-correction-needs-a-reason": ("version-classification", "refused", frozenset()),
+    "classification-correction": (
+        "version-classification", "action", frozenset({"correctVersionClassification"})),
 }
 
 
@@ -3481,6 +3491,41 @@ def gap_content_findings(manifest: dict) -> list[str]:
             if check.get("json_path") == path
         ]
 
+    # A correction is a POST to the corrections address, based on the revision shown, that stores revision 2.
+    correction = steps.get("classification-correction") or {}
+    based_on = [
+        needle
+        for check in correction.get("expects_request") or ()
+        if check.get("of") == "correctVersionClassification"
+        for needle in check.get("body_contains") or ()
+    ]
+    if '"expected_revision":1' not in based_on:
+        findings.append("classification-correction: does not require the request to be based on revision 1")
+    stored = [
+        (check.get("json_path"), check.get("equals"))
+        for check in correction.get("expects_response") or ()
+        if check.get("of") == "correctVersionClassification"
+    ]
+    if ("revision", 2) not in stored:
+        findings.append("classification-correction: does not require the answer to be revision 2")
+    if not any(
+        call.get("operationId") == "correctVersionClassification" and call.get("count") == 1
+        for call in correction.get("expects_api") or ()
+    ):
+        findings.append("classification-correction: does not require exactly one request for two presses")
+    # The refusals send nothing: each declares the correction as a call that must not be made.
+    for refusal in (
+        "classification-correction-is-an-experts-act",
+        "classification-correction-needs-a-change",
+        "classification-correction-needs-a-reason",
+    ):
+        refused = steps.get(refusal) or {}
+        if not any(
+            call.get("method") == "POST" and call.get("path", "").endswith("/classification/corrections")
+            for call in refused.get("expects_not_called") or ()
+        ):
+            findings.append(f"{refusal}: does not declare that no correction is sent")
+
     if "produced" not in _answers("blocks-portal-blocks-of-a-version-with-a-run", "status"):
         findings.append("blocks-portal-blocks-of-a-version-with-a-run: does not require status `produced`")
     if "not_produced" not in _answers("blocks-a-version-no-run-has-read-says-so", "status"):
@@ -3542,3 +3587,23 @@ def test_control_a_return_that_is_not_a_return_is_detected(manifest: dict) -> No
     blocks = json.loads(json.dumps(manifest))
     _step_of(blocks, "blocks-a-version-no-run-has-read-says-so")["expects_response"][0]["equals"] = "produced"
     assert any("not_produced" in f for f in gap_content_findings(blocks))
+
+
+def test_control_a_correction_that_is_not_one_is_detected(manifest: dict) -> None:
+    for mutate, expected in (
+        (lambda s: s["expects_request"][0]["body_contains"].remove('"expected_revision":1'), "based on revision 1"),
+        (lambda s: s["expects_response"].pop(0), "revision 2"),
+        (lambda s: s["actions"].__setitem__(3, {**s["actions"][3], "times": 1}) or s["expects_api"][0].pop("count"),
+         "exactly one request"),
+    ):
+        copy = json.loads(json.dumps(manifest))
+        mutate(_step_of(copy, "classification-correction"))
+        assert any(expected in f for f in gap_content_findings(copy)), expected
+    for refusal in (
+        "classification-correction-is-an-experts-act",
+        "classification-correction-needs-a-change",
+        "classification-correction-needs-a-reason",
+    ):
+        copy = json.loads(json.dumps(manifest))
+        _step_of(copy, refusal)["expects_not_called"] = []
+        assert any(f"{refusal}: does not declare that no correction is sent" in f for f in gap_content_findings(copy)), refusal

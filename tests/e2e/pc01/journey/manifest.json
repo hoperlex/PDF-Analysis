@@ -5573,6 +5573,240 @@
         "case": "action"
       },
       {
+        "name": "classification-correction-is-an-experts-act",
+        "as": "admin_only",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/widgets/version-classification/ui/version-classification.tsx",
+        "$comment": [
+          "PC01-JOURNEY-GAPS-01. A role the screen refuses. The first version's classification is confirmed (stage П,",
+          "section АР). An administrator without `expert` reads it and its history and is offered no «Исправить»: the API",
+          "refuses a correction to `admin` alone, and the panel draws no control for it."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review",
+            "operationId": "getVersionSectionReview",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-classification-state=\"confirmed\"]"
+          },
+          {
+            "selector": "[data-classification-history=\"1\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-classification-correct]",
+          "[data-classification-correction-form]"
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections",
+            "why": "an administrator without `expert` is offered no correction"
+          }
+        ],
+        "screen": "version-classification",
+        "case": "refused"
+      },
+      {
+        "name": "classification-correction-needs-a-change",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/correct-version-classification/ui/correct-version-classification-form.tsx",
+        "$comment": [
+          "An input the form refuses: a reason with nothing changed. The form opens on the current stage and section, so",
+          "a good reason beside the same pair is still no correction -- the form says the pair matches the current one and",
+          "holds the button. Nothing is sent."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-classification-correct]",
+            "settle": true
+          },
+          {
+            "do": "fill",
+            "selector": "#classification-correction-reason",
+            "value": "Причина есть, но стадия и раздел те же"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-correction-unchanged]",
+            "text_contains": "Стадия и раздел совпадают с текущими."
+          },
+          {
+            "selector": "button[data-correction-submit][disabled]",
+            "text_contains": "Сохранить исправление"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections",
+            "why": "a pair equal to the current one is no correction"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-correction-failure]"
+        ],
+        "screen": "version-classification",
+        "case": "refused"
+      },
+      {
+        "name": "classification-correction-needs-a-reason",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/correct-version-classification/ui/correct-version-classification-form.tsx",
+        "$comment": [
+          "An input the form refuses: a changed stage with no reason in words. Punctuation alone has no letter or digit,",
+          "so the form says a reason is needed and holds the button; nothing is sent."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-classification-correct]",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "input[data-correction-stage=\"R\"]"
+          },
+          {
+            "do": "fill",
+            "selector": "#classification-correction-reason",
+            "value": "..."
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-correction-reason-problem=\"required\"]",
+            "text_contains": "Укажите причину исправления"
+          },
+          {
+            "selector": "button[data-correction-submit][disabled]",
+            "text_contains": "Сохранить исправление"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections",
+            "why": "a reason with no letter or digit is no reason"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-correction-failure]",
+          "[data-correction-unchanged]"
+        ],
+        "screen": "version-classification",
+        "case": "refused"
+      },
+      {
+        "name": "classification-correction",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/correct-version-classification/ui/correct-version-classification-form.tsx",
+        "$comment": [
+          "`correctVersionClassification`. The expert corrects the first version's stage from П to Р, keeping the section",
+          "АР, with a reason, pressing the button twice: one request, based on revision 1, and revision 2 is stored. The",
+          "panel closes the form and says the classification was corrected, and the history keeps the original",
+          "confirmation beside the correction with its reason.",
+          "",
+          "Only the stage changes, and only on the first version: a change of section would move the project out of the",
+          "АР figures the steps before it counted, and a later version's stage is what the comparisons read."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-classification-correct]",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "input[data-correction-stage=\"R\"]"
+          },
+          {
+            "do": "fill",
+            "selector": "#classification-correction-reason",
+            "value": "Стадия выпуска уточнена: рабочая документация %STAMP%"
+          },
+          {
+            "do": "click",
+            "selector": "button[data-correction-submit]",
+            "times": 2
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections",
+            "operationId": "correctVersionClassification",
+            "expect_status": 201,
+            "count": 1
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "correctVersionClassification",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"project_stage\":\"R\"",
+              "\"section_code\":\"AR\"",
+              "\"expected_revision\":1",
+              "Стадия выпуска уточнена"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "correctVersionClassification",
+            "json_path": "revision",
+            "equals": 2
+          },
+          {
+            "of": "correctVersionClassification",
+            "json_path": "project_stage",
+            "equals": "R"
+          },
+          {
+            "of": "correctVersionClassification",
+            "json_path": "section_code",
+            "equals": "AR"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-classification-state=\"confirmed\"]"
+          },
+          {
+            "selector": "[data-classification-revision-line=\"2\"]",
+            "text_contains": "Исправлено экспертом"
+          },
+          {
+            "selector": "[data-classification-history=\"2\"]"
+          },
+          {
+            "selector": "li[data-classification-revision=\"1\"][data-revision-kind=\"confirmation\"]"
+          },
+          {
+            "selector": "li[data-classification-revision=\"2\"][data-revision-kind=\"correction\"] [data-revision-reason]",
+            "text_contains": "Причина:"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-correction-failure]",
+          "[data-classification-correction-form]"
+        ],
+        "screen": "version-classification",
+        "case": "action"
+      },
+      {
         "name": "queue-pause-dispatch",
         "at": "/queue",
         "page_module": "web/src/app/queue/page.tsx",
