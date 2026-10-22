@@ -147,8 +147,9 @@ Applied to the committed file, the named tests run, the file restored (`git diff
 | run freezes its revision | `connection_revision_id=None if frozen is None else ...` -> `None` | same |
 | probe stores no body, no key | the 401 detail extended with the body head: **alone it survives**, because `ProbeRunner` scrubs the key; with the scrub also removed the sentinel test fails. Two independent layers, each shown; the pair is the guard | `test_the_sentinel_never_leaves_the_probe_and_the_call...` |
 
-`R-133` mutations are on the R-133 branch below. The loopback rule (`if address.is_loopback:` -> `if False:`) was
-run in the first batch but its line was cut from the saved output; it is re-run when tests resume.
+| loopback is refused | `if address.is_loopback:` -> `if False:` | `test_names_and_literals_that_cannot_leave_the_host_are_refused[127.0.0.1-loopback]` |
+
+`R-133` mutations are on the R-133 branch below.
 
 ## R-133 stage-level: ready, waiting for `MODEL-IDENTITY-CHECK-01` in `origin/dev`
 
