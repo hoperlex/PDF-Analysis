@@ -49,7 +49,10 @@ const post = vi.mocked(startOptimisationPass);
 
 /** A request that stays open until the test settles it. */
 function holdOpen(): { settle: (value: unknown) => void; fail: (error: unknown) => void } {
-  const handle = { settle: (_value: unknown) => {}, fail: (_error: unknown) => {} };
+  const handle: { settle: (value: unknown) => void; fail: (error: unknown) => void } = {
+    settle: () => undefined,
+    fail: () => undefined,
+  };
   post.mockImplementation(
     () =>
       new Promise((resolve, reject) => {

@@ -59,7 +59,7 @@ function refusal(code: ErrorCode, details: Record<string, string | number | bool
     retryable: false,
     details,
   };
-  return new ApiError(422, body);
+  return new ApiError(422, body, 'corr-price-list-1');
 }
 
 describe('a 413 from the web server in front of the API', () => {

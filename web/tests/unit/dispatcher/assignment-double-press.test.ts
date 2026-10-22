@@ -54,7 +54,10 @@ const create = vi.mocked(createAssignment);
 const move = vi.mocked(transitionAssignment);
 
 function holdOpen(mock: typeof create | typeof move) {
-  const handle = { settle: (_value: unknown) => {}, fail: (_error: unknown) => {} };
+  const handle: { settle: (value: unknown) => void; fail: (error: unknown) => void } = {
+    settle: () => undefined,
+    fail: () => undefined,
+  };
   mock.mockImplementation(
     () =>
       new Promise((resolve, reject) => {

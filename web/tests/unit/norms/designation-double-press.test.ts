@@ -47,7 +47,10 @@ const DESIGNATE: SetCurrentSnapshotCommand = {
 const post = vi.mocked(setCurrentNormSnapshot);
 
 function holdOpen() {
-  const handle = { settle: (_value: unknown) => {}, fail: (_error: unknown) => {} };
+  const handle: { settle: (value: unknown) => void; fail: (error: unknown) => void } = {
+    settle: () => undefined,
+    fail: () => undefined,
+  };
   post.mockImplementation(
     () =>
       new Promise((resolve, reject) => {
