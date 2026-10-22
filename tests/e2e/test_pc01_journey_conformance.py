@@ -2479,6 +2479,7 @@ NIGHT_SCREENS = (
     "sign-out",
     # `PC01-JOURNEY-GAPS-01`
     "blocks",
+    "norms-document",
 )
 
 #: Operations the write half must perform at least once, because each is a thing the matrix
@@ -2521,6 +2522,9 @@ NIGHT_OPERATIONS = (
     "streamVersionPortalBlockCrop",
     "getVersionBlocks",
     "correctVersionClassification",
+    "getNormDocument",
+    "listNormParagraphs",
+    "streamNormDocumentContent",
 )
 
 _TEMPLATE = re.compile(r"\{([a-z_]+)\}")
@@ -3424,6 +3428,12 @@ GAP_STEPS: dict[str, tuple[str, str, frozenset[str]]] = {
     "classification-correction-needs-a-reason": ("version-classification", "refused", frozenset()),
     "classification-correction": (
         "version-classification", "action", frozenset({"correctVersionClassification"})),
+    # The norm document view: the document, its paragraphs and its PDF; a page it does not have.
+    "norms-document-text-and-pdf": (
+        "norms-document", "action",
+        frozenset({"getNormDocument", "listNormParagraphs", "streamNormDocumentContent"})),
+    "norms-document-page-past-the-end": (
+        "norms-document", "refused", frozenset({"getNormDocument", "listNormParagraphs"})),
 }
 
 
@@ -3526,6 +3536,23 @@ def gap_content_findings(manifest: dict) -> list[str]:
         ):
             findings.append(f"{refusal}: does not declare that no correction is sent")
 
+    # The norm document is read from a document the catalogue step captured, and the page past its end
+    # sends no request for the PDF.
+    opened = steps.get("norms-document-text-and-pdf") or {}
+    if "{norm_document_id}" not in opened.get("at", ""):
+        findings.append("norms-document-text-and-pdf: is not opened at the document the catalogue captured")
+    if not any(
+        c.get("of") == "getNormDocument" and c.get("json_path") == "content_available" and c.get("equals") is True
+        for c in opened.get("expects_response") or ()
+    ):
+        findings.append("norms-document-text-and-pdf: does not require the document to offer its PDF")
+    past = steps.get("norms-document-page-past-the-end") or {}
+    if not any(
+        call.get("method") == "GET" and call.get("path", "").endswith("/content")
+        for call in past.get("expects_not_called") or ()
+    ):
+        findings.append("norms-document-page-past-the-end: does not declare that no PDF is requested")
+
     if "produced" not in _answers("blocks-portal-blocks-of-a-version-with-a-run", "status"):
         findings.append("blocks-portal-blocks-of-a-version-with-a-run: does not require status `produced`")
     if "not_produced" not in _answers("blocks-a-version-no-run-has-read-says-so", "status"):
@@ -3607,3 +3634,62 @@ def test_control_a_correction_that_is_not_one_is_detected(manifest: dict) -> Non
         copy = json.loads(json.dumps(manifest))
         _step_of(copy, refusal)["expects_not_called"] = []
         assert any(f"{refusal}: does not declare that no correction is sent" in f for f in gap_content_findings(copy)), refusal
+
+
+def test_control_a_norm_document_step_that_stops_reading_the_pdf_is_detected(manifest: dict) -> None:
+    for mutate, step_name, expected in (
+        (lambda s: s.__setitem__("at", "/norms/document?id=ndoc_00000000000000000000000000&page=1"),
+         "norms-document-text-and-pdf", "not opened at the document the catalogue captured"),
+        (lambda s: s["expects_response"].pop(0), "norms-document-text-and-pdf", "offer its PDF"),
+        (lambda s: s.pop("expects_not_called"), "norms-document-page-past-the-end", "no PDF is requested"),
+    ):
+        copy = json.loads(json.dumps(manifest))
+        mutate(_step_of(copy, step_name))
+        assert any(expected in f for f in gap_content_findings(copy)), expected
+
+
+SEED_NORMS = JOURNEY_DIR / "seed_norms.py"
+
+
+def seed_order_findings(source: str) -> list[str]:
+    """The seed puts the bytes into the store before it writes a row that claims them."""
+    stored, claimed = source.find("store.put_blob("), source.find("repository.record_verified(")
+    if stored < 0 or claimed < 0:
+        return ["the seed no longer stores the bound bytes, or no longer records their metadata"]
+    if stored > claimed:
+        return ["the seed claims an object (rows) before it has put the bytes into the store"]
+    return []
+
+
+def test_the_norms_seed_stores_the_bytes_before_the_rows_that_claim_them() -> None:
+    """A binding with no object is what the document view used to meet: a store error, not a screen."""
+    source = _require(SEED_NORMS).read_text(encoding="utf-8")
+    assert seed_order_findings(source) == []
+    assert "return 2" in source and "S3_BUCKET" in source
+
+
+def test_control_a_seed_that_claims_before_it_stores_is_detected() -> None:
+    source = _require(SEED_NORMS).read_text(encoding="utf-8")
+    swapped = source.replace("store.put_blob(", "XX", 1).replace("repository.record_verified(", "store.put_blob(", 1)
+    swapped = swapped.replace("XX", "repository.record_verified(", 1)
+    assert seed_order_findings(swapped) == ["the seed claims an object (rows) before it has put the bytes into the store"]
+    assert seed_order_findings("def main(): pass") == [
+        "the seed no longer stores the bound bytes, or no longer records their metadata"
+    ]
+
+
+def test_the_norms_seed_writes_no_row_it_cannot_back_with_an_object() -> None:
+    tool = _require(SEED_NORMS)
+    ran = _run_tool(
+        str(tool),
+        env={
+            "DATABASE_URL": "postgresql+psycopg://u:p@127.0.0.1:1/auditmanager_beta_live_journey",
+            "S3_ENDPOINT_URL": "http://127.0.0.1:1",
+            "S3_REGION": "us-east-1",
+            "S3_ACCESS_KEY_ID": "journey-test",
+            "S3_SECRET_ACCESS_KEY": "journey-test",
+            "S3_BUCKET": "journey-test",
+        },
+    )
+    assert ran.returncode == 2, ran.stdout + ran.stderr
+    assert "object store" in ran.stderr and "refusing to write" not in ran.stderr

@@ -13,7 +13,11 @@ writes them for the search suites, so the seed shares no code with what it feeds
 
 * snapshot A, three documents with a few paragraphs each, the chunk and embedding completion
   rows and a confirmed PDF binding for every document: **qualified**, not yet current, so the
-  administrator can designate it from the screen;
+  administrator can designate it from the screen. `PC01-JOURNEY-GAPS-01`: the bound bytes are also
+  put into the lane's own object store (the `S3_*` names of its `.env`), so the document view's
+  `streamNormDocumentContent` has an object to serve and the journey can open the PDF at a page. The
+  bytes are a stand-in, not a PDF: the endpoint serves what the binding names, and the viewer inside
+  the browser is not what the journey asserts;
 * snapshot B, one document and nothing else: **not qualified**, so the screen must say why
   and offer no button.
 
@@ -26,7 +30,9 @@ name must contain `journey` or `lane`), and it prints the database it wrote to. 
 synthetic text is Russian prose about fire-safety and architectural clauses, invented for the
 journey; none of it is from a real norm.
 
-Exit status: 0 written (or checked), 1 refused, 2 a usage or environment error.
+Exit status: 0 written (or checked), 1 refused, 2 a usage or environment error (a database, or an
+object store, the environment does not name -- the seed never falls back to writing rows without
+the objects they claim).
 """
 
 from __future__ import annotations
@@ -64,22 +70,41 @@ PARAGRAPHS = {
 }
 
 
+#: The names the seed needs from the lane's environment: the database, and the object store
+#: the bound PDFs are put into.
+ENVIRONMENT_NAMES = (
+    "DATABASE_URL",
+    "S3_ENDPOINT_URL",
+    "S3_REGION",
+    "S3_ACCESS_KEY_ID",
+    "S3_SECRET_ACCESS_KEY",
+    "S3_BUCKET",
+)
+
+
 def load_environment() -> None:
-    """Fill DATABASE_URL from the lane's `.env` when the environment lacks it; never override."""
-    if os.environ.get("DATABASE_URL"):
+    """Fill the lane's names from its `.env` when the environment lacks them; never override.
+
+    A missing `DATABASE_URL` ends the run here. A missing `S3_*` name ends it in `main`, with the
+    object store's own typed error naming the variable.
+    """
+    missing = [name for name in ENVIRONMENT_NAMES if not os.environ.get(name)]
+    if not missing:
         return
     dotenv = REPOSITORY_ROOT / ".env"
-    if not dotenv.is_file():
-        raise SystemExit("no DATABASE_URL and no .env: run from a lane worktree")
-    for raw in dotenv.read_text(encoding="utf-8").splitlines():
-        line = raw.strip().removeprefix("export ").strip()
-        if line.startswith("DATABASE_URL="):
-            value = line.partition("=")[2].strip()
+    if dotenv.is_file():
+        for raw in dotenv.read_text(encoding="utf-8").splitlines():
+            line = raw.strip().removeprefix("export ").strip()
+            name, _, value = line.partition("=")
+            name = name.strip()
+            if name not in missing:
+                continue
+            value = value.strip()
             if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
                 value = value[1:-1]
-            os.environ["DATABASE_URL"] = value
-            return
-    raise SystemExit("DATABASE_URL is not in .env")
+            os.environ[name] = value
+    if not os.environ.get("DATABASE_URL"):
+        raise SystemExit("no DATABASE_URL in the environment and none in .env: run from a lane worktree")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -96,7 +121,11 @@ def main(argv: list[str] | None = None) -> int:
     from auditmanager.storage import derive_blob_id
     from auditmanager.storage.public import (
         BlobMetadataRepository,
+        S3BlobStore,
+        S3StorageSettings,
+        StorageError,
         VerifiedBlob,
+        parse_blob_id,
         parse_blob_role,
     )
 
@@ -111,6 +140,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     engine = create_database_engine(settings)
     session_factory = create_session_factory(engine)
+    try:
+        store = S3BlobStore(S3StorageSettings.from_env())
+        store.check_access()
+    except StorageError as error:
+        print(
+            f"seed_norms: the object store the bound PDFs are put into cannot be used ({error!r}). "
+            "Set the S3_* names of the lane's .env; the seed writes no row that claims an object it "
+            "did not store.",
+            file=sys.stderr,
+        )
+        return 2
 
     if args.check:
         with engine.connect() as connection:
@@ -122,7 +162,20 @@ def main(argv: list[str] | None = None) -> int:
             )).all()
         for row in rows:
             print(f"snapshot {row[0]} documents={row[1]} built={row[2]} current={row[3]}")
-        print(f"seed_norms: {len(rows)} snapshot(s) in {database}")
+        with engine.connect() as connection:
+            bound = [
+                row[0]
+                for row in connection.execute(text(
+                    "SELECT DISTINCT blob_id FROM norm_custody_binding WHERE role = 'norm_source'"
+                ))
+            ]
+        absent = 0
+        for blob_id in bound:
+            try:
+                store.inspect(parse_blob_id(blob_id))
+            except StorageError:
+                absent += 1
+        print(f"seed_norms: {len(rows)} snapshot(s) in {database}; {len(bound)} bound PDF(s), {absent} without an object")
         return 0
 
     def run(sql: str, **parameters) -> None:
@@ -187,6 +240,17 @@ def main(argv: list[str] | None = None) -> int:
         data = f"%PDF-1.7 synthetic journey norm {document_id}".encode()
         sha256 = hashlib.sha256(data).hexdigest()
         blob_id = derive_blob_id(sha256=sha256, size=len(data))
+        # The object first, then the rows that claim it: a binding with no object is the state the
+        # document view used to meet (a store error), and the one this seed must not leave.
+        published = store.put_blob(
+            data,
+            declared_sha256=sha256,
+            declared_size=len(data),
+            role=parse_blob_role("norm_source"),
+            media_type="application/pdf",
+        )
+        if str(published.blob_id) != str(blob_id):
+            raise SystemExit(f"seed_norms: the store published {published.blob_id}, the seed derived {blob_id}")
         repository = BlobMetadataRepository()
         with session_factory() as session:
             repository.record_verified(
@@ -240,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
     document(unqualified, SP_104)
 
     print(f"seed_norms: wrote to {database}")
-    print(f"  qualified snapshot   {qualified} ({len(PARAGRAPHS)} documents, built, PDFs bound)")
+    print(f"  qualified snapshot   {qualified} ({len(PARAGRAPHS)} documents, built, PDFs bound and stored)")
     print(f"  unqualified snapshot {unqualified} (1 document, no build)")
     return 0
 

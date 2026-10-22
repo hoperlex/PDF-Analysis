@@ -696,7 +696,11 @@
         "nothing. `expects_api` is EMPTY and that is the claim. The document read",
         "(`getNormDocument`, `listNormParagraphs`, and `streamNormDocumentContent` for a page)",
         "is held by `web/tests/unit/norms` and checked by hand in the window after a current",
-        "snapshot exists."
+        "snapshot exists.",
+        "",
+        "`PC01-JOURNEY-GAPS-01`: the cold walk still chooses no document. The WRITE half opens one -- the steps",
+        "`norms-document-*` read the document, its paragraphs and its PDF from the catalogue's first document,",
+        "and a page the document does not have."
       ],
       "expects_api": [],
       "optional_api": [
@@ -5148,6 +5152,131 @@
           }
         ],
         "screen": "norms-catalogue",
+        "case": "refused"
+      },
+      {
+        "name": "norms-document-text-and-pdf",
+        "at": "/norms/document?id={norm_document_id}&page=1",
+        "route": "/norms/document",
+        "page_module": "web/src/app/norms/document/page.tsx",
+        "control_module": "web/src/widgets/norm-document/ui/norm-document.tsx",
+        "$comment": [
+          "PC01-JOURNEY-GAPS-01. The norm document view, opened the way a reader gets there: a document of the catalogue",
+          "(the identity the catalogue step captured) at its first page. The screen reads the document (`getNormDocument`),",
+          "its paragraphs in order (`listNormParagraphs`) and, because a page was asked for and the document has a",
+          "confirmed source binding, the PDF itself (`streamNormDocumentContent`), which it hands to the browser's viewer.",
+          "`seed_norms.py` puts the bound bytes into the lane's object store, so the read has an object to serve; before",
+          "that the journey could not walk this view."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/norm-documents/{norm_document_id}",
+            "operationId": "getNormDocument",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/norm-documents/{norm_document_id}/paragraphs",
+            "operationId": "listNormParagraphs",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/norm-documents/{norm_document_id}/content",
+            "operationId": "streamNormDocumentContent",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "getNormDocument",
+            "json_path": "content_available",
+            "equals": true
+          },
+          {
+            "of": "getNormDocument",
+            "json_path": "pdf_page_count",
+            "at_least": 1
+          },
+          {
+            "of": "getNormDocument",
+            "json_path": "paragraph_count",
+            "at_least": 1
+          },
+          {
+            "of": "listNormParagraphs",
+            "json_path": "items",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-norm-document=\"{norm_document_id}\"]",
+            "text_contains": "Страниц в PDF:"
+          },
+          {
+            "selector": "[data-norm-paragraphs] [data-norm-paragraph]"
+          },
+          {
+            "selector": "[data-norm-pdf-page=\"1\"] object[data-viewer-src]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-norm-document-failure]",
+          "[data-norm-paragraphs-failure]",
+          "[role=\"alert\"]"
+        ],
+        "screen": "norms-document",
+        "case": "action"
+      },
+      {
+        "name": "norms-document-page-past-the-end",
+        "at": "/norms/document?id={norm_document_id}&page=9999",
+        "route": "/norms/document",
+        "page_module": "web/src/app/norms/document/page.tsx",
+        "control_module": "web/src/widgets/norm-document/ui/norm-document.tsx",
+        "$comment": [
+          "A page the document does not have. The address is well formed, so the screen reads the document and its text,",
+          "and says that the PDF has no such page; it asks the store for nothing -- no content is requested for a page",
+          "that cannot be shown."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/norm-documents/{norm_document_id}",
+            "operationId": "getNormDocument",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/norm-documents/{norm_document_id}/paragraphs",
+            "operationId": "listNormParagraphs",
+            "expect_status": 200
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "GET",
+            "path": "/norm-documents/{norm_document_id}/content",
+            "why": "a page the document does not have asks nothing of the store"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-norm-pdf-page=\"9999\"]",
+            "text_contains": "Такой страницы в документе нет"
+          },
+          {
+            "selector": "[data-norm-paragraphs] [data-norm-paragraph]"
+          }
+        ],
+        "forbids_rendered": [
+          "object[data-viewer-src]",
+          "[data-norm-document-failure]",
+          "[role=\"alert\"]"
+        ],
+        "screen": "norms-document",
         "case": "refused"
       },
       {
