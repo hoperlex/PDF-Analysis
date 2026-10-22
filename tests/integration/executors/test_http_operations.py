@@ -221,8 +221,10 @@ def test_rewrap_reseals_to_the_active_key_keeps_the_destination_and_the_call_sti
     store = ExecutorRepository()
     before = store.current_secrets(session, [connection.connection_id])[connection.connection_id][0]
     assert before.kid == "k1"
+    # (The lane database may hold secrets other suites committed under rings this one does not
+    # have: `rewrap` is database-wide, so the claims below are about this connection's secret.)
     report = rewrap(_factory(session), ring=both)
-    assert (report.rewrapped, report.unreadable) == (1, ())
+    assert report.rewrapped >= 1 and before.secret_id not in report.unreadable
     after = store.current_secrets(session, [connection.connection_id])[connection.connection_id][0]
     assert after.kid == "k2" and after.secret_id != before.secret_id
     assert after.destination == before.destination and after.last4 == before.last4
@@ -238,8 +240,10 @@ def test_rewrap_reseals_to_the_active_key_keeps_the_destination_and_the_call_sti
     record = store.get_connection(session, connection.connection_id)
     revision = store.current_revisions(session, [connection.connection_id])[connection.connection_id]
     assert is_probed_ok(session, store, record, revision)
-    # A second run has nothing left to do.
+    # A second run has nothing left to do for it.
     assert rewrap(_factory(session), ring=both).rewrapped == 0
+    assert store.current_secrets(session, [connection.connection_id])[
+        connection.connection_id][0].secret_id == after.secret_id
 
 
 def test_rewrap_names_a_secret_whose_key_id_is_not_in_the_ring_and_never_skips_it_silently(
@@ -248,10 +252,9 @@ def test_rewrap_names_a_secret_whose_key_id_is_not_in_the_ring_and_never_skips_i
     lost, active = support.make_rings("k0"), support.make_rings("k2")
     connection = support.seed_connection(session, lost, fake.base_url())
     report = rewrap(_factory(session), ring=load_private_ring(f"k2:{active.private_text}", "k2"))
-    assert report.rewrapped == 0 and len(report.unreadable) == 1
     secret = ExecutorRepository().current_secrets(
         session, [connection.connection_id])[connection.connection_id][0]
-    assert report.unreadable == (secret.secret_id,) and secret.kid == "k0"
+    assert secret.secret_id in report.unreadable and secret.kid == "k0", "named, never skipped"
 
 
 # -- reach ---------------------------------------------------------------------------------------
