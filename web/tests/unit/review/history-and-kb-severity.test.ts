@@ -54,6 +54,16 @@ function rawSeverityWords(markup: string): string[] {
   return SEVERITY_VALUES.filter((value) => new RegExp(`(?<![A-Za-z_])${value}(?![A-Za-z_])`).test(text));
 }
 
+/**
+ * Latin words in the visible text. The data below is Cyrillic, so any is chrome the application
+ * wrote. `UTC` is the one `formatInstant` has always printed after a time, which the language
+ * guard permits; it is not what this slice adds.
+ */
+function latinWords(markup: string): string[] {
+  const words = visibleText(markup).join(' ').match(/[A-Za-z][A-Za-z'’]*/g) ?? [];
+  return [...new Set(words)].filter((word) => word !== 'UTC');
+}
+
 // ------------------------------------------------------------------ fixtures
 
 const ULID = '01M2545JSD15ETSNNV904X991F';
@@ -163,6 +173,13 @@ describe('the decision history shows the severity beside the verdict', () => {
     }
   });
 
+  it('is Russian throughout: no Latin word is read on a line that carries a severity', () => {
+    for (const severity of SEVERITY_VALUES) {
+      const markup = history([decisionEvent({ severity, author_label: 'проверяющий' })]);
+      expect(latinWords(markup), severity).toEqual([]);
+    }
+  });
+
   it('shows a value outside the closed set as the badge’s fault, not as a blank or as a word', () => {
     const markup = history([
       decisionEvent({ severity: 'urgent' as Severity }),
@@ -258,6 +275,12 @@ describe('the knowledge base shows the severity beside the verdict', () => {
   it('never prints a raw contract value as a word, for any severity', () => {
     for (const severity of SEVERITY_VALUES) {
       expect(rawSeverityWords(base([record({ severity })]))).toEqual([]);
+    }
+  });
+
+  it('is Russian throughout: no Latin word is read on a row that carries a severity', () => {
+    for (const severity of SEVERITY_VALUES) {
+      expect(latinWords(base([record({ severity })])), severity).toEqual([]);
     }
   });
 
