@@ -68,7 +68,9 @@ class FakeGateway:
                 status, ctype, payload = gateway.answer(self.path, body)
                 self.send_response(status)
                 if gateway.behaviour == "redirect":
-                    self.send_header("Location", "http://127.0.0.1:1/elsewhere")
+                    # Back at this very server through the public-looking name, so a client that
+                    # followed it would be seen doing so.
+                    self.send_header("Location", f"http://{HOST}:{gateway.port}/elsewhere")
                 self.send_header("Content-Type", ctype)
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()

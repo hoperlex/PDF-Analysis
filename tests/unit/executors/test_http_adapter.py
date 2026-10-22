@@ -92,7 +92,8 @@ def test_a_redirect_is_not_followed(gateway_factory: Any) -> None:
     gateway = gateway_factory(behaviour="redirect")
     with pytest.raises(DomainError):
         _adapter(gateway).complete(REQUEST)
-    assert len(gateway.requests) == 1, "the redirect target was never contacted"
+    assert [seen["path"] for seen in gateway.requests] == ["/agent/v1/chat/completions"], \
+        "the redirect target was never contacted"
 
 
 def test_a_call_with_no_watchdog_time_left_is_refused_before_it_is_sent(gateway_factory: Any) -> None:
