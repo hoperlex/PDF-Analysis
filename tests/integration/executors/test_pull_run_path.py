@@ -277,8 +277,8 @@ def test_a_run_nobody_serves_ends_no_executor_online_with_nothing_charged_and_no
     assert error["code"] == "dependency_unavailable"
     assert error["details"]["dependency"] == "no_executor_online"
     assert rows["calls"] == [] or all(call["cost_micros"] in (None, 0) for call in rows["calls"])
-    cost = RunRepository().cost(session, started.run_id)
-    assert cost.cost_micros == 0
+    # Nothing was charged: no call row is a call, so the run has no cost to report (not a zero).
+    assert RunRepository().cost(session, started.run_id) is None
     (task,) = rows["tasks"]
     assert (task["state"], task["claim_count"]) == ("expired", 0)
     # It never moved to another connection: the only task is this connection's.
