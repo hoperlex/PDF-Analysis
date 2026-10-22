@@ -15,7 +15,7 @@ uploaded anyway, stop and use `DEPLOYMENT_RUNBOOK.md` §13 "with real client dat
 | digests | `SHA256SUMS` `7792e307…5245` (re-read 2026-10-21, equals the name's tail); `manifest.json` `cc0f5ee8…21cf` |
 | content | snapshot `ns_01M59N8QNBVN91ACA2HCE6VE74`: 674 documents, 350,194 paragraphs (0 unreliable), 55,855 chunks, 61,573 windows (build `e7fac64c…c5df`), 28,920 objects (5,055,102,708 bytes) |
 | size | `du -sb` 5,641,048,705 bytes in 28,979 files; the tar is a few tens of MB more (exact count: step 1.2) |
-| schema | needs the database at the image's head and at least `0018_norm_custody`; the 0.7.0 stand is at `0027_optimisation_proposals` |
+| schema | needs the database at the image's head and at least `0018_norm_custody`; the tree's head is `0029_routing_refusal_codes` (`tests/support/expected_facts.json` `migration_head`; this runbook first named `0027`, the head of the cancelled `59a1be91` publication) |
 
 ## Do NOT
 
@@ -50,9 +50,10 @@ API=https://audit.135.106.164.147.sslip.io/api/v1   # the alpha address in MAIN_
 
 ## 0. Preconditions (read-only; stop on any miss)
 
-1. **0.7.0 is deployed after the wipe** (`R-141b`, then `R-141a`: main `59a1be91e0886393e90d2181c2a7f8728fca2ed7`). In
-   `/srv/auditmanager`: `infra/deploy/verify-deployed.sh` exits 0, `git rev-parse HEAD` is that SHA, and `docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml exec -T postgres
-   psql -U <POSTGRES_USER> -d <POSTGRES_DB> -tAc 'select version_num from alembic_version'` prints `0027_optimisation_proposals`.
+1. **The release the owner designated is deployed after the wipe** (`R-141b`; `R-141e` cancelled the `59a1be91` publication, and the owner's own pull
+   requests moved `origin/main` instead: `44962e8d` at head 0029, then `a5b83f64` on 2026-10-22; take the SHA from the owner's message, not from this
+   line). In `/srv/auditmanager`: `infra/deploy/verify-deployed.sh` exits 0, `git rev-parse HEAD` is that SHA, and `docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml exec -T postgres
+   psql -U <POSTGRES_USER> -d <POSTGRES_DB> -tAc 'select version_num from alembic_version'` prints the tree's head, `0029_routing_refusal_codes` at the time of writing (read it from `tests/support/expected_facts.json` `migration_head`).
 2. No publication in flight or planned in the window; no run executing (pause «Очередь» and wait: the worker drains for up to 300 s).
 3. **Keys answer and run the published scripts.** `inbound status`: `import_lock: free`, no `bundle: $KEY`. `copy status`:
    `record: none` (or `state: closed`), `real_data_marker: absent`, `import_lock: free`, `deployed_tree` = release SHA. Each
@@ -181,7 +182,7 @@ owner's `reset.sh` (dump first, then wipe) and a fresh import from `B`.
   `flock`/`setsid`, and `docker compose ps --quiet` on a restarting container (`W54-TRANSPORT-01` §4, `W54-STAND-COPY-01` §5). No
   document records `receive`, `import`, `report` or `attest --test-data` on a deployed or disposable stand; the tests stub `docker` and
   `ssh`. Treat sections 1-4 as first runs.
-- The bundle at head `0027` (rehearsal `0023_norm_citations`); `mc ls --json` fields behind `capacity`'s bucket figures (non-blocking);
+- The bundle at the current head (first written for `0027`; rehearsal `0023_norm_citations`); `mc ls --json` fields behind `capacity`'s bucket figures (non-blocking);
   ranged PDF and search through nginx; `listNormDocuments`; the stand's import time.
 
 ## 10. Open questions for the owner
@@ -189,5 +190,5 @@ owner's `reset.sh` (dump first, then wipe) and a fresh import from `B`.
 1. Transfer: may the integrator push from the development host through the inbound key (key pair, host key, `from=`), or will the owner
    move the bytes another way? Is the copy key installed?
 2. Window: date and length. Proposal: 2 h of stand-down (about 40 min expected), transfer done beforehand.
-3. Order and clock: wipe, push of `59a1be91`, `verify-deployed.sh`, then this window the same day or the next?
+3. Order and clock: wipe, the owner's push of the designated release (`R-141e` cancelled `59a1be91`), `verify-deployed.sh`, then this window the same day or the next?
 4. Who designates: the owner as the seeded `admin`, or an account the owner registers and approves first?
