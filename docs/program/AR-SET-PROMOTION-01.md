@@ -22,14 +22,15 @@ This is persistence groundwork, not a v3 runtime activation. It accepts a caller
 ## Checks
 
 - `pytest -c pyproject.toml --rootdir=. -q tests/contract/api_v1/test_w57a_citation_contract.py tests/integration/norms/retrieval tests/integration/runs/test_retrieval_set_persistence.py tests/contract/program`: **136 passed** (offline).
-- `pytest -c pyproject.toml --rootdir=. --collect-only -q tests/integration/norms/custody/test_retrieval_set_promotion.py`: **1 collected**; actual DB/Blob execution pending assigned lane.
+- `make up` for the assigned instance: all three services healthy; `make check-services`: literal **`FOUNDATION-CHECK OK check-services`**, including private bucket and authenticated object round-trip.
+- `.venv/bin/python -m pytest -c pyproject.toml --rootdir=. -q tests/integration/norms/custody/test_retrieval_set_promotion.py`: **1 passed in 1.50s** against real PostgreSQL 17.11 and private S3. The test checks a rejected row before any Blob, two admitted/dispatched JSON objects, exact saved bytes, verified row with both bindings, replay and exact identity selection.
 - `python -m compileall -q` for changed Python: passed.
 - `git diff --check`: passed.
-- Whole `make gate`: integrator owns it under `R-135`; not run in this branch.
+- Whole `make gate`: integrator owns it under `R-135`; not run in this branch. The baseline gate on its separate SHA completed with six failures outside this task; it is not evidence for this candidate.
 
 ## DB/Blob lane
 
-Assigned only to this task: instance `auditmanager-ar-set-promotion-01`, PostgreSQL `57741`, S3 API `61542`, S3 console `61543`, database `auditmanager_ar_set_promotion_01`, bucket `auditmanager-ar-set-promotion-01`. The test uses one synthetic document/chunk/window and two tiny JSON objects; the 674-document import is excluded. Before any start on 2026-10-22, `df -B1 .` showed 5,974,142,976 bytes free, below the 6144 MiB gate margin. The lane remains stopped until the integrator completes the gate and approves capacity. A temporary ignored `.env` and `.venv` symlink belong solely to this worktree and must be removed after the test. Only task-owned volumes may be removed, after recording evidence; no other lane may be touched.
+Assigned only to this task: instance `auditmanager-ar-set-promotion-01`, PostgreSQL `57741`, S3 API `61542`, S3 console `61543`, database `auditmanager_ar_set_promotion_01`, bucket `auditmanager-ar-set-promotion-01`. The test used one synthetic document/chunk/window and two tiny JSON objects; the 674-document import was excluded. Before start, `df -B1 .` showed 3,865,694,208 bytes free; all three exact image tags were cached, neither named volume/container existed, available RAM was 5.10 GB with 7.63 GB free swap, and projected new data was under 1 GB. The integrator explicitly released the tiny lane after its baseline gate; observed free space after `make up` was 3,731,099,648 bytes, 134,594,560 bytes lower during concurrent integration activity. After recording the passing test and health check, `make down` removed only this instance's containers/network. `docker volume inspect` confirmed both task-owned volumes' Compose project label, then exact-name `docker volume rm` removed only `auditmanager-ar-set-promotion-01-postgres-data` and `auditmanager-ar-set-promotion-01-s3-data`; a filtered volume list was empty. The temporary ignored `.env` and `.venv` symlink were also removed with identity checks. No other lane was used or cleaned.
 
 ## Contracts and limitations
 
@@ -41,7 +42,7 @@ Assigned only to this task: instance `auditmanager-ar-set-promotion-01`, Postgre
 
 ## Integration and rollback
 
-Cherry-pick the final candidate commit into the integration branch, run the real DB/Blob acceptance and full gate before any publication. Do not activate v3 runtime until the scope-bound contract and reviewed map are owned. Roll back by reverting this additive code commit; existing immutable `0023` rows remain as evidence. The temporary lane can be stopped and its exact named volumes removed after checks; keep all other lane resources intact.
+Cherry-pick the final candidate commit chain into the integration branch and run its full gate before any publication. Do not activate v3 runtime until the scope-bound contract and reviewed map are owned. Roll back by reverting the additive code commits; existing immutable `0023` rows remain as evidence. The temporary lane has been stopped and its exact named volumes removed; all other lane resources remained intact.
 
 ## Hotspot audit
 
