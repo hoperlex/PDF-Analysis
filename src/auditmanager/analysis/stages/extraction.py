@@ -322,10 +322,9 @@ def _release(page: Any) -> None:
       generations does not free it, because the parser is old by the end of any page that
       allocated enough (measured, ``docs/program/EXTRACTION-GC-01.md``: ``gc.collect(1)`` per
       page left the peak 16 to 32 MiB above a full collection's over six pages whose streams
-      decode to 16 MiB each). So
-      the collection stays a full one and runs under :func:`_document_heap`, which makes it cost
-      what the document built rather than what the process holds. It runs in a ``finally``, so a
-      page that failed midway is freed too.
+      decode to 16 MiB each). So the collection stays a full one and runs under
+      :func:`_document_heap`, which makes it cost what the document built rather than what the
+      process holds. It runs in a ``finally``, so a page that failed midway is freed too.
 
     Measured on the owner's export (30 pages, read by this function in a process of its own,
     on a loaded host): the peak resident set fell from 794 MiB to 220 MiB, and the time rose
