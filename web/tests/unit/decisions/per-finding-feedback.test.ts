@@ -321,6 +321,39 @@ describe('the idempotency key follows the intent, whatever else is pressed meanw
     expect(calls[2]?.idempotencyKey).toBe(calls[0]?.idempotencyKey);
   });
 
+  it('keeps the key of A’s retry after B was pressed and failed in between', async () => {
+    render(A).verdict.record('accept', OBS_A);
+    await flush();
+    calls[0]?.settle(REFUSED);
+    await flush();
+
+    render(B).verdict.record('reject', OBS_B);
+    await flush();
+    calls[1]?.settle(REFUSED);
+    await flush();
+
+    render(A).verdict.record('accept', OBS_A);
+    await flush();
+    expect(calls).toHaveLength(3);
+    expect(calls[2]?.idempotencyKey).toBe(calls[0]?.idempotencyKey);
+  });
+
+  it('keeps the key of a comment’s retry after another finding’s comment failed in between', async () => {
+    render(A).comment.append('Срок согласован.', OBS_A);
+    await flush();
+    calls[0]?.settle(REFUSED);
+    await flush();
+
+    render(B).comment.append('Другой срок.', OBS_B);
+    await flush();
+    calls[1]?.settle(REFUSED);
+    await flush();
+
+    render(A).comment.append('Срок согласован.', OBS_A);
+    await flush();
+    expect(calls[2]?.idempotencyKey).toBe(calls[0]?.idempotencyKey);
+  });
+
   it('keeps B’s key when A’s success arrives while B is in flight', async () => {
     render(A).verdict.record('accept', OBS_A);
     await flush();
