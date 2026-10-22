@@ -36,6 +36,7 @@ from __future__ import annotations
 import gc
 import io
 import os
+import threading
 import unicodedata
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -205,13 +206,14 @@ def extract_document(source: PdfSource) -> ExtractedDocument:
 
     pages: list[ExtractedPage] = []
     try:
-        with pdfplumber.open(opened) as pdf:
+        with _document_heap(), pdfplumber.open(opened) as pdf:
             # `W55B-FIX` (X-2): pdfminer keeps every object it resolves -- a page's decoded
             # content streams included -- for the life of the document unless told not to,
             # so a document of large per-page streams would hold all of them at once.
             # ``caching`` is the document's own switch (pdfminer's ``--disable-caching``);
             # fonts are still cached by the resource manager. See :func:`_release` for
-            # what this and the per-page release cost and save.
+            # what this and the per-page release cost and save, and :func:`_document_heap`
+            # for why the collection it runs does not scan the process's heap.
             pdf.doc.caching = False
             if len(pdf.pages) != declared_pages:
                 raise DomainError(
@@ -239,6 +241,63 @@ def extract_document(source: PdfSource) -> ExtractedDocument:
     return ExtractedDocument(pages=tuple(pages))
 
 
+#: The heap freeze of :func:`_document_heap`: how many documents are being read in this
+#: process right now, and whether the freeze in force is ours to lift. Process-wide because
+#: ``gc.freeze()`` is. A bare CPython 3.12 here already reports 375 frozen objects, so "some
+#: other code froze the heap" is "more is frozen than when this module was imported", never
+#: "anything is frozen".
+_HEAP_LOCK: Final = threading.Lock()
+_FROZEN_AT_IMPORT: Final[int] = gc.get_freeze_count()
+_heap_readers = 0
+_heap_freeze_is_ours = False
+
+
+@contextmanager
+def _document_heap() -> Iterator[None]:
+    """Make the per-page collection of :func:`_release` cost what the document built (`D-200`).
+
+    A full ``gc.collect()`` walks every object the process tracks, so after every page it cost
+    the *process's* heap, not the page's, and held the GIL for that long: 0.08 s in a worker, 0.32 s
+    on 2.1 M objects, 2.5 to 3.6 s in the complete test battery's process, while the lease
+    heartbeat thread waited for the interpreter (``tests/integration/analysis/
+    test_extraction_gc_scope.py`` reproduces it). ``gc.freeze()`` moves every object tracked
+    when it is called into the permanent generation, which no collection walks, and is a list
+    splice, not a walk. Frozen for the read of one document, a full collection walks only what
+    was created since: this document's pdfminer objects, its cycles and its own result so far, and
+    whatever other threads allocate meanwhile. The collection still frees every cycle the page
+    made -- the content parser's own and any a Form XObject's parser made, which the stage cannot
+    reach from outside to break -- so what ``W55B-FIX`` bounded is bounded as before.
+
+    Three rules keep the freeze from outliving, or undoing, anyone else's:
+
+    * it is counted: the first document read in the process freezes and the last one to finish
+      unfreezes, so two documents read at once never lift each other's freeze;
+    * a heap somebody else froze (more objects frozen on entry than when this module was
+      imported) is left as it is; the collection is then already cheap and the unfreeze is not
+      ours to make. A freeze made before this module was imported is not told from the
+      interpreter's own and is lifted with ours, a loss of that code's sharing, not of memory;
+    * the unfreeze is in a ``finally``: a document that fails mid-page unfreezes too.
+
+    What it costs: an object that dies as an unreachable cycle among those frozen is reclaimed
+    when the freeze is lifted, at the end of the document, not during it.
+    """
+    global _heap_readers, _heap_freeze_is_ours
+    with _HEAP_LOCK:
+        if _heap_readers == 0:
+            _heap_freeze_is_ours = gc.get_freeze_count() <= _FROZEN_AT_IMPORT
+            if _heap_freeze_is_ours:
+                gc.freeze()
+        _heap_readers += 1
+    try:
+        yield
+    finally:
+        with _HEAP_LOCK:
+            _heap_readers -= 1
+            if _heap_readers == 0 and _heap_freeze_is_ours:
+                gc.unfreeze()
+                _heap_freeze_is_ours = False
+
+
 def _release(page: Any) -> None:
     """Free what reading one page built, before the next page is read (`W55B-FIX`, X-2).
 
@@ -254,9 +313,19 @@ def _release(page: Any) -> None:
       created and decodes them in place when it is read; the list is the page's public
       attribute and nothing reads it after this page, so it is emptied and the decoded bytes
       go with it;
-    * ``gc.collect()`` -- pdfminer's content parser holds a bound method of itself, so each
-      page leaves one reference cycle that owns the decoded stream; a collection per page
-      frees it now rather than whenever the collector next runs.
+    * ``gc.collect()`` -- pdfminer's content parser holds a bound method of itself
+      (``PSBaseParser.reset`` sets ``self._parse1 = self._parse_main``), and
+      ``PDFPageInterpreter.execute`` keeps the parser in a local, so each page -- and each Form
+      XObject it draws, which runs ``execute`` again -- leaves one reference cycle whose parser
+      owns the page's decoded streams. Nothing outside ``execute`` holds the parser, so the
+      stage cannot drop the reference that closes the cycle; and a collection of only the young
+      generations does not free it, because the parser is old by the end of any page that
+      allocated enough (measured, ``docs/program/EXTRACTION-GC-01.md``: ``gc.collect(1)`` per
+      page left the peak 16 to 32 MiB above a full collection's over six pages whose streams
+      decode to 16 MiB each). So
+      the collection stays a full one and runs under :func:`_document_heap`, which makes it cost
+      what the document built rather than what the process holds. It runs in a ``finally``, so a
+      page that failed midway is freed too.
 
     Measured on the owner's export (30 pages, read by this function in a process of its own,
     on a loaded host): the peak resident set fell from 794 MiB to 220 MiB, and the time rose
