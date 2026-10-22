@@ -75,6 +75,10 @@ import type { Occurrence, Rule, Theme, TokenName } from './contrast';
 import { screens } from './screens';
 import { derivedScreens, malformedVariants } from '../screens/route-screens';
 import { DOCUMENT_UID, PROJECT_UID, RUN_ID, VERSION_UID } from '../review/fixtures';
+import { yieldToRunnerAfterEachTest } from '../../guards/lib/yield-to-runner';
+
+// This file computes for ~55-65 s without awaiting I/O; see the helper for why that aborts a run.
+yieldToRunnerAfterEachTest();
 
 /** The identities the census seeds, in the shape `route-screens.ts` asks for. */
 const IDENTITIES = {

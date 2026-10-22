@@ -184,6 +184,10 @@ import {
   NO_ROLES,
   UNKNOWN_ROLE,
 } from '../unit/shell/subjects';
+import { yieldToRunnerAfterEachTest } from './lib/yield-to-runner';
+
+// This file computes for ~40-65 s without awaiting I/O; see the helper for why that aborts a run.
+yieldToRunnerAfterEachTest();
 
 // ===================================================================== the vocabulary
 
