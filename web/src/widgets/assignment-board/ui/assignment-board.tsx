@@ -62,7 +62,7 @@ export function AssignmentRows({ items, roles, viewerUid, experts }: AssignmentR
         <thead>
           <tr>
             <th scope="col">Работа</th>
-            <th scope="col">Исполнитель</th>
+            <th scope="col">Ответственный</th>
             <th scope="col">Состояние</th>
             <th scope="col">Обновлено</th>
             <th scope="col">Действия</th>

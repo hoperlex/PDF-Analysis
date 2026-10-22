@@ -90,7 +90,7 @@ export function AssignmentActions({ assignment, moves, experts = [] }: Assignmen
         >
           {draft.kind === 'reassigned' ? (
             <label className={styles.field}>
-              Новый исполнитель
+              Новый ответственный
               <select
                 value={draft.assignee}
                 required
