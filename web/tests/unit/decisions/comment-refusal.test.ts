@@ -26,14 +26,17 @@ const world = vi.hoisted(() => ({
   cellIndex: 0,
   /** Renders asked for by a state setter since the last render. */
   scheduled: 0,
-  mutate: null as null | ((request: unknown) => void),
+  mutate: null as null | ((press: unknown) => void),
+  /** What the mutation holds as its variables: the press (finding and request). */
+  variables: undefined as unknown,
   resets: 0,
 }));
 
 vi.mock('@tanstack/react-query', () => ({
   useMutation: () => ({
-    mutate: (request: unknown) => world.mutate?.(request),
+    mutate: (press: unknown) => world.mutate?.(press),
     isPending: false,
+    variables: world.variables,
     error: null,
     data: undefined,
     reset: () => {
@@ -92,9 +95,11 @@ beforeEach(() => {
   world.cellIndex = 0;
   world.scheduled = 0;
   world.resets = 0;
+  world.variables = undefined;
   sent.length = 0;
-  world.mutate = (request) => {
-    sent.push(request);
+  world.mutate = (press) => {
+    // The press is the finding and the request (`WEB-HOOKS-PER-FINDING-01`).
+    sent.push((press as { request: unknown }).request);
   };
 });
 
@@ -164,6 +169,8 @@ describe('reset forgets the refusal', () => {
     render().append('', OBSERVATION_ID);
     expect(render().refusal).toBe('empty');
 
+    // The mutation holds a press raised for this finding, so this finding's reset reaches it.
+    world.variables = { findingUid: FINDING_UID, request: {} };
     render().reset();
     expect(world.resets).toBe(1);
     expect(render().refusal).toBeNull();

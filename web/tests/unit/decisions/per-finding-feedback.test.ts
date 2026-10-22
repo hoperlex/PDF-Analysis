@@ -369,10 +369,51 @@ describe('the idempotency key follows the intent, whatever else is pressed meanw
     expect(calls[2]?.idempotencyKey).toBe(calls[0]?.idempotencyKey);
   });
 
-  it('sends to the finding it was pressed on, not to the one the hook is bound to by then', async () => {
+  it('keeps the key of the intent that is still out when an earlier intent of the same finding completes', async () => {
     render(A).verdict.record('accept', OBS_A);
     await flush();
+    render(A).verdict.record('reject', OBS_A);
+    await flush();
+    expect(calls).toHaveLength(2);
+
+    calls[0]?.settle('ok');
+    await flush();
+    calls[1]?.settle(REFUSED);
+    await flush();
+
+    render(A).verdict.record('reject', OBS_A);
+    await flush();
+    expect(calls).toHaveLength(3);
+    expect(calls[2]?.idempotencyKey).toBe(calls[1]?.idempotencyKey);
+  });
+
+  it('keeps a comment’s key when an earlier comment of the same finding completes', async () => {
+    render(A).comment.append('Первый.', OBS_A);
+    await flush();
+    render(A).comment.append('Второй.', OBS_A);
+    await flush();
+
+    calls[0]?.settle('ok');
+    await flush();
+    calls[1]?.settle(REFUSED);
+    await flush();
+
+    render(A).comment.append('Второй.', OBS_A);
+    await flush();
+    expect(calls[2]?.idempotencyKey).toBe(calls[1]?.idempotencyKey);
+  });
+
+  it('sends a verdict to the finding it was pressed on, not to the one the hook is bound to by then', async () => {
+    render(A).verdict.record('accept', OBS_A);
     render(B);
+    await flush();
+    expect(calls[0]?.findingUid).toBe(A);
+  });
+
+  it('sends a comment to the finding it was written on, not to the one the hook is bound to by then', async () => {
+    render(A).comment.append('Срок согласован.', OBS_A);
+    render(B);
+    await flush();
     expect(calls[0]?.findingUid).toBe(A);
   });
 });
