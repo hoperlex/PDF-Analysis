@@ -136,13 +136,14 @@ import { WorkerList } from '@/widgets/worker-list';
 import { WorkersPage } from '@/_pages/workers';
 import type { WorkersPageProps } from '@/_pages/workers';
 import {
-  CommandFailure, CreateConnectionForm, HostKeyControl, ReviseConnectionForm, SettingsFields,
-  SshKeyControl,
+  CommandFailure, CreateConnectionForm, HostKeyControl, IssuedTokenView, ReviseConnectionForm,
+  SettingsFields, SshKeyControl,
 } from '@/features/manage-executor-connection';
 import { EXECUTOR_SECRET_OUTCOMES, SetExecutorSecretForm } from '@/features/set-executor-secret';
 import {
   ALL_CASES as EXECUTOR_CASES, PINNED as EXECUTOR_PINNED, READY as EXECUTOR_READY,
-  OUTCOME_CASES as EXECUTOR_OUTCOME_CASES, seedExecutors,
+  OUTCOME_CASES as EXECUTOR_OUTCOME_CASES, PULL_ONLINE as EXECUTOR_PULL_ONLINE, runnerToken, seedExecutors,
+  tokenId as executorTokenId,
 } from '../unit/workers/executor-fixtures';
 import { RunWorkerLine, WORKER_PAGE_LIMIT } from '@/entities/execution';
 import type { ExecutionWorker } from '@/shared/api';
@@ -2213,6 +2214,20 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       });
     },
   })),
+  {
+    // `EXEC-PULL-01`: the box a freshly issued runner token appears in, which a press reaches.
+    name: 'executor-runner-token-shown',
+    make: () => createElement(IssuedTokenView, {
+      issued: {
+        token: 'токен-значение-для-показа',
+        runner_token: runnerToken({
+          token_id: executorTokenId(9), connection_id: EXECUTOR_PULL_ONLINE.connection.connection_id,
+          token_prefix: 'токен-НОВ9',
+        }),
+      },
+      onClose: () => {},
+    }),
+  },
   ...([false, true] as const).map((hasKey) => ({
     name: `executor-ssh-key-control-${hasKey ? 'replace' : 'first'}`,
     make: () => createElement(SshKeyControl, { connectionId: EXECUTOR_READY.connection.connection_id, hasKey }),

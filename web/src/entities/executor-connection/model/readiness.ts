@@ -68,9 +68,12 @@ export const ROUTE_BLOCKER_SENTENCES: Readonly<Record<RouteBlocker, string>> = {
   probe_failed: 'последняя проверка не прошла',
 };
 
-/** Kinds whose probe and route the stand serves in this release. */
+/**
+ * Kinds whose probe and route the stand serves in this release: the HTTP API (`EXEC-HTTP-01`)
+ * and the client that pulls tasks (`EXEC-PULL-01`, wired by `EXEC-CANDIDATE-2`).
+ */
 export function kindIsServed(kind: ExecutorConnection['kind']): boolean {
-  return kind === 'http_api';
+  return kind === 'http_api' || kind === 'pull';
 }
 
 /**

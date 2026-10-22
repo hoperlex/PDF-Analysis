@@ -7,6 +7,9 @@
  * and its last four characters; a key entered for another address than the current settings'
  * says so in words. The probe is shown with a Russian sentence for every outcome the contract
  * has, and with the model the answer named and how long it took when it passed.
+ *
+ * A `pull` connection (`EXEC-PULL-01`) has no key and no address: its card carries the panel of
+ * runner tokens instead, with «на связи» and the number of open tasks.
  */
 
 import { useState } from 'react';
@@ -34,6 +37,7 @@ import {
   SSH_PROFILE_LABELS,
   TRANSPORT_LABELS,
   WORK_KIND_LABELS,
+  connectionRunnerIsOnline,
   currentRevision,
   probeIsOnCurrentSecret,
   probeOutcomeSentence,
@@ -47,6 +51,7 @@ import {
   HostKeyControl,
   ProbeButton,
   ReviseConnectionForm,
+  RunnerTokenPanel,
   SshKeyControl,
 } from '@/features/manage-executor-connection';
 import { executorSecretScreenUrl } from '@/features/set-executor-secret';
@@ -61,6 +66,8 @@ export interface ConnectionCardProps {
   readonly pinnedModels: readonly ExecutorPinnedModel[];
   /** An administrator: the controls are drawn. The server still checks every write. */
   readonly canManage: boolean;
+  /** The instant «на связи» is judged against; the page's clock, injectable for a test. */
+  readonly nowMs?: number | undefined;
 }
 
 function Moment({ at }: { readonly at: string }) {
@@ -189,7 +196,7 @@ function ProbeSummary({
   );
 }
 
-export function ConnectionCard({ connection, detail, detailFailed, pinnedModels, canManage }: ConnectionCardProps) {
+export function ConnectionCard({ connection, detail, detailFailed, pinnedModels, canManage, nowMs }: ConnectionCardProps) {
   const [editing, setEditing] = useState(false);
   const archived = connection.archived_at !== undefined;
   const revisions = detail?.revisions ?? [];
@@ -203,6 +210,8 @@ export function ConnectionCard({ connection, detail, detailFailed, pinnedModels,
   const holdsKey = connection.secrets.length > 0;
   const needsSshKey = requiredPurposes(connection, revision).includes('ssh_private_key');
   const takesApiKey = connection.kind === 'http_api';
+  const pulls = connection.kind === 'pull';
+  const runnerOnline = pulls && connectionRunnerIsOnline(detail, nowMs ?? Date.now());
 
   return (
     <li
@@ -214,6 +223,9 @@ export function ConnectionCard({ connection, detail, detailFailed, pinnedModels,
       <div className={styles.heading}>
         <strong>{connection.display_name}</strong>
         <span>{KIND_LABELS[connection.kind]}</span>
+        {runnerOnline && !archived ? (
+          <span className="am-badge am-badge--ok" data-executor-heading-online="yes">на связи</span>
+        ) : null}
         {archived ? (
           <span className="am-badge am-badge--inert">в архиве</span>
         ) : blocker === null ? (
@@ -239,6 +251,7 @@ export function ConnectionCard({ connection, detail, detailFailed, pinnedModels,
 
       <SecretsSummary connection={connection} revision={revision} />
       {revision !== undefined ? <ProbeSummary probe={probe} connection={connection} revision={revision} /> : null}
+      {pulls && !archived ? <RunnerTokenPanel connection={connection} detail={detail} canManage={canManage} nowMs={nowMs} /> : null}
 
       {canManage && !archived ? (
         <>

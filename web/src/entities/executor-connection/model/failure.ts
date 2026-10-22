@@ -35,6 +35,7 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   purpose: 'Назначение ключа',
   value: 'Ключ',
   work_kind: 'Вид работы',
+  expires_in_days: 'Срок действия токена',
   primary_connection_id: 'Основное подключение',
   standby_connection_id: 'Резервное подключение',
 };
@@ -56,12 +57,16 @@ const CONSTRAINT_SENTENCES: Readonly<Record<string, string>> = {
   min: 'значение меньше допустимого.',
   max: 'значение больше допустимого.',
   required: 'поле нужно заполнить.',
+  range: 'значение вне допустимого диапазона: от 1 до 365 дней.',
+  kind_not_pull: 'токены выпускаются только для подключений вида «Клиент забирает задания».',
 };
 
 const CONFLICT_SENTENCES: Readonly<Record<string, string>> = {
   connection_archived: 'Подключение в архиве, команда не выполнена.',
   no_revision: 'У подключения ещё нет настроек: сначала сохраните их.',
   connection_routed: 'Подключение назначено на работу. Сначала уберите его из назначений.',
+  token_shown_once:
+    'Значение токена показывается один раз и повторно показано быть не может. Если вы его не увидели, отзовите этот токен и выпустите новый.',
 };
 
 const DEPENDENCY_SENTENCES: Readonly<Record<string, string>> = {

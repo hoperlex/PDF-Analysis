@@ -36,7 +36,7 @@ export const KIND_DESCRIPTIONS: Readonly<Record<ExecutorKind, string>> = {
   ssh_command:
     'Стенд запускает команду на удалённой машине по SSH. Ключ создаёт приложение, вам остаётся добавить его на машину.',
   pull:
-    'Клиент сам приходит за заданиями на стенд. Этот вид можно завести, но проверить и назначить его пока нельзя.',
+    'Клиент сам приходит за заданиями на стенд: сеанс Claude Code или агент на другой машине. Стенд к нему не обращается, поэтому адрес и ключ модели не нужны: вы выпускаете токен, клиент предъявляет его при каждом обращении.',
 };
 
 export const FLAVOUR_LABELS: Readonly<Record<ExecutorApiFlavour, string>> = {
@@ -128,6 +128,8 @@ export const PROBE_OUTCOME_HINTS: Readonly<Partial<Record<ExecutorProbeOutcome, 
   destination_refused:
     'Служебные адреса стенда, петля и частные сети закрыты. Частная сеть допускается только через VPN или SSH-туннель.',
   kind_not_served: 'Проверка и назначение для этого вида подключения появятся позже.',
+  no_runner_online:
+    'Клиент не взял проверочное задание за 120 секунд. Запустите сеанс или агента с токеном этого подключения и нажмите «Проверить» ещё раз.',
 };
 
 export function probeOutcomeSentence(outcome: ExecutorProbeOutcome): string {
