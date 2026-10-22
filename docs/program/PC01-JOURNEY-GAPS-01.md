@@ -101,7 +101,31 @@ meets, and each repair is in `identity.mjs`:
 
 ## Checks (light acceptance, `AGENTS.md` §8; the complete gate was not run, `R-135`)
 
-CHECKS-TABLE
+Run on the lane's tree after the host's completion gate ended (`COMPLETION.END`), container-free, one process at a time under `nice -n 10`, on tip `a8beaf4e`
+(the report's own commit follows it and changes no code). Logs: `/tmp/claude-0/-root-projects-PDF-Analysis/6a52aa20-dabb-4884-8d9e-6e1cb9466c97/scratchpad/{node-final,conf-final,prove-final}.log`.
+
+| command | exit | result |
+|---|---|---|
+| `node --check` of `cdp.mjs`, `write.mjs`, `write.test.mjs`, `identity.mjs`, `journey.mjs`, `session.mjs`, `accounts.mjs`, `navigation-retry.mjs` | 0 each | (the first four are changed) |
+| `python3 -m py_compile` of `seed_norms.py`, `prove_the_guard_can_fail.py` | 0 | |
+| `node --test tests/e2e/pc01/journey/write.test.mjs tests/e2e/pc01/journey/navigation-retry.test.mjs` | 0 | 12 tests, 12 passed (was 9; added: the row locator against a minimal DOM, the words of a row and of a wait) |
+| `.venv/bin/python -m pytest -c pyproject.toml --rootdir=. -q -p no:cacheprovider tests/e2e/test_pc01_journey_conformance.py` | 0 | **135 passed** (was 118) |
+| `JOURNEY_PROOF_PYTHON=… python3 tests/e2e/pc01/journey/prove_the_guard_can_fail.py` | 0 | **127 mutations of the real `manifest.json`, 127 red, 0 green**, manifest restored, 135 passed after (was 80/80) |
+| `git diff --check` (the lane's commits) | 0 | |
+| `pytest tests/contract/test_alpha_acceptance_command.py` (the one contract file that reads this manifest; run once on the tip before the merge) | 0 | 33 passed |
+| live `npm --prefix web run e2e:pc01 -- --phase all` on the full beta tree | 0 | 109/109 write steps, 29/29 routes (run 2 above); identity continuation exit 0 |
+
+Not run, stated: the complete `make gate` (`R-135`), `tests/contract` as a whole, `npm --prefix web test` (the web tier's language guard reads this manifest's click `text`s — none of the new
+clicks carries one that is not already rendered; the integrator's light acceptance runs it), the Python integration suites (no `src/` file changed), any live provider call.
+
+**Mutations (every new guard shown failing).** 47 of the 127 are this slice's, quoted by label in `prove_the_guard_can_fail.py`; among them: remove every step that refuses (or acts on) «Блоки»; relabel the
+tab, the picture's marker, the correction form's controls; name a row by a marker the application does not draw, by no words, by a version no step captured; remove the step that gives the work back, the one that
+takes it first, the request's `"kind":"returned"`; require the answer to a return to say `done`; remove the correction, its refusal for an administrator, the revision it is based on, the revision 2 it stores;
+open the norm document at an identity of the journey's own making; stop declaring that no PDF is requested for a missing page; move the unrun document after the specification set; remove, rename or reorder a step or a
+route the journey walked before (`queue-resume-dispatch`, `sign-out`, the `logs` route, the whole order). `write.test.mjs`: the row filter ignored, and a missing row falling back to the first control — both red.
+In `test_pc01_journey_conformance.py`: a removed gap step, a changed case/screen/operation, a return that is not a return, a correction that is not one, a norm document step that stops reading the PDF, a seed that claims
+before it stores or states no paragraph count, a renamed identity control or confirmation label — each has a `test_control_*` that is red on the mutated copy. **One mutation was GREEN when first written** (a template no
+step captured inside a `wait_for`); that was a hole in the check, not in the mutation, and it is closed (decision 9).
 
 ## Not walked, and why
 
@@ -132,6 +156,20 @@ CHECKS-TABLE
 
 ## Containment
 
-`git diff --name-only ddcef5b2..HEAD` (the merge brings the beta tree's own files, which are the integrator's; the lane's own changes are the first block):
+```text
+docs/program/PC01-JOURNEY-GAPS-01.md
+tests/e2e/pc01/journey/README.md
+tests/e2e/pc01/journey/cdp.mjs
+tests/e2e/pc01/journey/identity.mjs
+tests/e2e/pc01/journey/manifest.json
+tests/e2e/pc01/journey/prove_the_guard_can_fail.py
+tests/e2e/pc01/journey/seed_norms.py
+tests/e2e/pc01/journey/write.mjs
+tests/e2e/pc01/journey/write.test.mjs
+tests/e2e/test_pc01_journey_conformance.py
+```
 
-CONTAINMENT
+That is `git diff --name-only dd562bcf..HEAD` (the lane's own changes on top of `integration/beta-main`): 10 files, none outside the task's allowed paths, none under `src/**`, `web/src/**`, `contracts/**`,
+`db/migrations/**`, `infra/**`, `Makefile`, dependency or lock files, `tests/support/**`, `conftest.py`, `CURRENT_STATE.md` or `DEBT_REGISTER.md`. `git diff --name-only ddcef5b2..HEAD` lists 103 files: these 10 and the
+93 of the integrator's merge of `integration/beta-main`, of which none is under `tests/e2e`. No ref, tag or remote was touched by this lane; the lane's stack (containers `auditmanager-lane-g-*`, the API, worker and
+web processes) is down.
