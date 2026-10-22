@@ -1,4 +1,4 @@
-STATUS: 5/5 unit tests green (148), sshd integration written, container run pending gate END (12:15 +05)
+STATUS: 5/5 done except the sshd container run, pending gate END (12:19 +05)
 
 # EXEC-SSH-TRANSPORT - progress and report
 
@@ -50,4 +50,37 @@ No `executors/__init__.py` was created (the module is importable as a namespace 
 
 ## Commands and results
 
-(see the end of the file; filled in as they were run)
+| Command | Result |
+| --- | --- |
+| `nice -n 19 python3 -m pytest -q -p no:cacheprovider tests/unit/executors/test_ssh_transport.py tests/unit/executors/test_claude_output.py tests/integration/executors/test_ssh_sshd.py` | exit 0, **148 passed, 15 skipped** in 5 s (the 15 are `test_ssh_sshd.py`, skipped: `EXEC_SSHD_PORT` unset) |
+| Mutation checks (seven edits of `ssh_transport.py`, each restored): key mode 0644, `StrictHostKeyChecking=no`, no stderr redaction, no tunnel terminate, 255-gate removed, `sent=False` on timeout, key directory not removed | each made at least one test fail; restored byte-for-byte |
+| Real `ssh` client, no server (scratch run): closed port, unresolvable name, blackhole address with a 4 s deadline | `unreachable`/`False`, `unreachable`/`False`, `timeout`/`False` (nothing sent) |
+| `ssh-keygen -F` on the lines we write; `ssh-keygen -lf` against `host_key_fingerprint` | port 2222 `[host]:2222` found; port 22 bare host found, `[host]:22` NOT found; fingerprint equal |
+
+**Not run (pending gate END, dispatcher instruction):** building the fixture image, starting the
+`exec-ssh-sshd` container, and `tests/integration/executors/test_ssh_sshd.py` against it. The
+fixture files and the forced command are syntax-checked with `sh -n` only (`jq` is not on this
+host, so `forced-command.sh` has never been executed); expect a first-run fix or two there.
+Also not run: `docker build` of `Dockerfile.api` (so the image-size delta is not measured; Debian
+bookworm `openssh-client` is a few MB installed), `make`, `npm`, the full suite.
+
+**To run later:** `eval "$(tests/fixtures/sshd/up.sh)"`, then
+`python3 -m pytest -q -p no:cacheprovider tests/integration/executors/test_ssh_sshd.py`, then
+`tests/fixtures/sshd/down.sh`.
+
+## Open points
+
+1. **Key format.** OpenSSH 9.6 cannot read an ed25519 key in PKCS#8 form (`BEGIN PRIVATE KEY`):
+   `ssh-keygen -y` says `invalid format`. The key `generateExecutorSshKey` seals must be in
+   OpenSSH form (`cryptography`: `PrivateFormat.OpenSSH`, header `BEGIN OPENSSH PRIVATE KEY`).
+2. **Pin of another key type.** A server that presents a different key *type* than the pinned one
+   makes ssh print "No <TYPE> host key is known ... Host key verification failed", which is
+   classified `host_key_unpinned` (refused either way; `host_key_changed` is only the "HAS CHANGED"
+   banner).
+3. **Work 0 is open.** The `modelUsage` key of `claude -p --output-format json` was not captured
+   (no `claude` binary on this host); `claude_output.py` documents what to confirm and where to
+   change it.
+4. **Tunnel readiness** connects once to the remote target and closes; harmless for HTTP.
+5. **`known_hosts_line` for port 22** is the bare host, not `[host]:22` (see above).
+6. **OpenSSH version.** The option `KbdInteractiveAuthentication` needs OpenSSH 8.7+ (bookworm has
+   9.2); an older client fails loudly with exit 255 (`protocol_error`).
