@@ -277,6 +277,16 @@ export const queryKeys = {
      */
     workers: (cursor?: string, limit?: number) =>
       ['execution', 'workers', { cursor, limit }] as const,
+    /**
+     * «Подключения» and «Назначения» of the «Исполнители» screen (`EXEC-HTTP-01`). The three
+     * reads stay under `execution`: every command on a connection or a route changes what
+     * more than one of them answers (the list's summary, the detail's revisions and probes,
+     * the route's choices), so each command invalidates `execution.all()` like the intake
+     * switch does.
+     */
+    connections: () => ['execution', 'connections'] as const,
+    connection: (connectionId: string) => ['execution', 'connection', connectionId] as const,
+    routes: () => ['execution', 'routes'] as const,
   },
   releases: {
     all: () => ['releases'] as const,
