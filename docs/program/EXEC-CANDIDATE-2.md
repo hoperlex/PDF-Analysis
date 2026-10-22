@@ -1,4 +1,4 @@
-STATUS: step 6 report written, checks in the table below (16:15 +05)
+STATUS: done, stack down; pending the manual check with a real Claude Code session, `next build` (disk below 2500 MiB) (16:46 +05)
 
 # EXEC-CANDIDATE-2 - the pull channel wired end to end (R-144b basic acceptance)
 
@@ -69,13 +69,14 @@ model and no network beyond loopback:
 | # | Command | Exit | Result |
 |---|---|---|---|
 | 1 | `git diff --check origin/dev...HEAD` | 0 | clean |
-| 2 | `python3 -m pytest -q -p no:cacheprovider tests/unit/executors tests/unit/executor_runner` | 0 | 484 passed, 68 s |
+| 2 | `python3 -m pytest -q -p no:cacheprovider tests/unit/executors tests/unit/executor_runner` | 0 | 484 passed, 68 s (twice). A third run at host load 24 to 28 failed two wall-clock assertions in the unchanged `agent.py` tests (`test_two_tasks_run_at_once_with_concurrency_two`: 2.65 s against 2.4 s; `test_a_command_over_its_time_budget...`); the second passed alone again, the first still fails above load 20 |
 | 3 | `python3 -m pytest -q -p no:cacheprovider tests/contract --ignore=tests/contract/test_cp00_candidate.py --ignore=tests/contract/test_cp00_final_state.py --ignore=tests/contract/test_validate_bootstrap.py tests/e2e/test_pc01_journey_conformance.py` | 0 | 1111 passed, 19283 subtests, 86 s. Earlier on the same tree it showed two reds, both mended: the clean-tree test (uncommitted `CURRENT_STATE.md`) and `test_process_acceleration` (the live entry was **122 lines on candidate 1's tree**, the budget is 120; it is 120 now) |
 | 4 | `npm --prefix web run typecheck` / `lint -- --quiet` | 0 / 0 | clean |
 | 5 | `npm --prefix web test -- --run tests/unit/workers` | 0 | 9 files, 143 tests |
 | 6 | `npm --prefix web test -- --run tests/guards` | 0 | 21 files, 288 tests, 105 s (before the candidate 1 merge) |
 | 7 | `npm --prefix web test -- --run tests/unit/styles`, `tests/contract`, `tests/unit/api` | 0 | 57, 184 and 130 tests |
-| 8 | whole web suite `nice -n 10 npm --prefix web test -- --run --no-cache` | see "Whole web suite" | |
+| 8 | whole web suite `nice -n 10 npm --prefix web test -- --run --no-cache` | 1 (first run), 1 (second) | First run aborted by vitest's `onTaskUpdate` RPC timeout at host load 18 (8 files done). Second run, load 5 to 11: **170 files, 2580 passed, 1 failed**: `authorization-state.test.ts` (every operation declares a 403; the four runner operations declare none). Mended in `bd303bbb`; `tests/unit/api` rerun: 130 passed. Not repeated whole: the host load stayed at 15 to 28 |
+| 8b | `npm --prefix web run build` | not run | disk available fell to 2112 MiB (< 2500) and stayed; the waiting wrapper was stopped by its PID. Candidate 1's build (`7`, same Next version) was green; this candidate adds client components only |
 | 9 | lane stack, `tests/integration/executors/test_pull_run_path.py` | 0 | 5 passed, 52 s |
 | 10 | `tests/integration/executors/test_agent_e2e.py` | 0 | 3 passed, 55 s |
 | 11 | `test_http_run_path.py`, `test_http_operations.py`, `test_http_probe_worker.py` | 0 | 27 passed |
