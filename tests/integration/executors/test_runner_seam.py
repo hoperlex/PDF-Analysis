@@ -54,23 +54,25 @@ class StubRunner:
     def issue_token(self, **_):  # pragma: no cover - not reached here
         raise AssertionError
 
-    revoke_token = issue_token
+    def revoke_token(self, **_):  # pragma: no cover - not reached here
+        raise AssertionError
 
 
 @pytest.fixture
-def stub() -> StubRunner:
-    return StubRunner()
+def stub(surface) -> StubRunner:
+    """The stand-in the surface was built with (the router carries its runner port)."""
+    return surface.router.runner_tokens
 
 
 @pytest.fixture
-def surface(stub: StubRunner):
+def surface():
     return driver.Surface(build_router(
         projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
         exports=None,  # type: ignore[arg-type]
         credentials=driver.SuiteCredentialAdapter(roles=frozenset({"admin"})),
         accounts=driver.SuiteAccountAdapter(),
         registrations=driver.SuiteRegistrationAdapter(),
-        runner=stub,  # type: ignore[arg-type]
+        runner=StubRunner(),  # type: ignore[arg-type]
     ))
 
 

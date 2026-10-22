@@ -1,4 +1,4 @@
-STATUS: items 1-4 and 6 written and committed; container-free checks green; DB tests wait for the lane stack (13:13 +05)
+STATUS: stack down, paused for gate completion; server half committed, DB checks mostly green, API role tests and the port guard still to re-run (14:14 +05)
 
 # EXEC-PULL-01 report, server half (in progress)
 
@@ -67,3 +67,50 @@ lane) and Work 5 (`agent/exec-tools-01`, the bridge, the skill, the workspace).
 * `CURRENT_STATE.md` still states head `0029` and 73/83/242: two guards in
   `tests/contract/api_v1/test_doc_prose_facts.py` stay red until the integrator updates it. They
   were already red on the base (head `0030`, 81/93/272).
+
+## Checks and results
+
+Commands run under `nice -n 19 ionice -c3`, one process at a time; `free -m` >= 2500 before each
+DB run. The lane stack (`auditmanager-exec-line`, 57660/61460/61461) was brought up for the DB
+checks and the migration was applied to a database of its own, `auditmanager_exec_pull`, so the
+HTTP lane's `auditmanager_exec_line` stayed at its head. That extra database is left in the
+stack's volume (drop with `DROP DATABASE auditmanager_exec_pull`).
+
+| Check | Result |
+|---|---|
+| `tests/unit/executors/test_runner_answers.py`, `test_runner_tokens.py` | 60 passed |
+| `tests/unit/executors/test_pull_adapter.py` | 19 passed |
+| `tests/integration/executors/test_runner_seam.py` (stand-in port, real seam and envelope) | passed |
+| `tests/integration/executors/test_runner_client_wire.py` (the shipped `runner_client.py` over HTTP) | 3 passed |
+| `tests/contract/test_proxy_rate_limits.py` (maps run against the contract's paths, 13 new mutations) | 57 passed |
+| `tests/contract/api_v1`, `domain_p02`, `test_domain_identifiers_schema.py`, `program` | passed, except two guards in `test_doc_prose_facts.py` that read `CURRENT_STATE.md` (integrator-owned, red on the base too) |
+| `tests/integration/executors/test_runner_channel.py` (lane stack) | 26 passed |
+| `tests/integration/executors/test_runner_bridge_e2e.py` (MCP client -> bridge process -> uvicorn -> real rows) | 2 passed |
+| `tests/integration/executors/test_executor_surface.py`, `test_secret_never_leaves.py`, `test_executor_commands.py` | passed |
+| `tests/integration/db/test_executor_pull_migration.py` (upgrade, refused downgrade, empty downgrade, every guard) | 18 passed |
+| `tests/integration/db/test_executor_connections_migration.py`, `test_downgrade_chain_round_trip.py`, `test_schema_shape.py`, `test_migration_lifecycle.py` | 17, 15, 7, 10 passed |
+| `tests/integration/db/test_schema_invariant_inventory.py` | resealed to the measured inventory (717 columns, 74 relations, 783 constraints, 179 indexes, 83 triggers), then 2 passed |
+| `tests/integration/recovery/test_schema_coverage.py` | 30 passed |
+| `tests/integration/recovery/test_product_purge.py` | one partition count fixed (30 PRODUCT / 29 KEEP), then passed |
+| `tests/integration/runs/test_w53c_exec_closure.py` | 5 passed |
+| nine mutations of the new unit guards (validator, token shape, revoked token, constant-time compare, claimed vs unclaimed, margin, withdraw, probe window) | each went red; the probe-window one by hanging, killed by PID |
+
+**Scripted nginx run.** A throwaway nginx (the host binary, loopback port, a stub upstream) loaded
+the two maps and zones from `nginx.conf`: token A got 31 of 40 calls before `429`, token B had its
+own bucket, a call to another path with the same token was never counted, and 200 calls with no
+token left 121 served on the address zone. A replay of a scripted runner against the bucket
+model: one idle claim loop 2.4 requests a minute; 8 loops under 4 tasks a minute offered, 11 a
+minute, worst bucket fill 7 of 30; 16 loops under 8 tasks a minute, 22 a minute, worst fill 15 of
+30, none refused; an unpaced `wait_seconds` 0 loop at 20 requests a second is refused 92 %, and
+the documented paced poll (sleep 5 s) is never refused.
+
+## Not run
+
+* `tests/integration/api` (role register, authorization, served document): needs S3, and was
+  stopped by the dispatcher's pause. The edits are in place (`RUNNER_OPERATIONS` handled in all
+  three files).
+* The composition port guard failed once because its port map did not know `executors` (EXEC-SEAL-01)
+  or `runner`; both are added and `test_runner_seam.py` now builds its stand-in in the call, but the
+  file was not re-run. `tests/integration/composition` as a directory was not run.
+* `tests/integration/executors/test_ssh_sshd.py` needs the sshd container (EXEC-SSH-01's).
+* The manual check with a real Claude Code session is the planning session's or the owner's.
