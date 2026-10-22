@@ -25,12 +25,14 @@ guard, and never writes the tree at all -- the two files it would have to mutate
 """
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 M = ROOT / 'tests' / 'e2e' / 'pc01' / 'journey' / 'manifest.json'
-PYTHON = ROOT / '.venv' / 'bin' / 'python'
+# A lane worktree has no interpreter of its own: `JOURNEY_PROOF_PYTHON` names the shared one.
+PYTHON = Path(os.environ.get('JOURNEY_PROOF_PYTHON') or ROOT / '.venv' / 'bin' / 'python')
 orig = M.read_text()
 
 
@@ -311,6 +313,154 @@ mutations = [
   ("make a read-walk route's constant an identifier the contract has no enumeration for",
    lambda m: [r.__setitem__('constants', {'section_code': 'ZZ'}) for r in m['routes'] if r['name'] == 'section-optimisation'],
    "test_the_read_walk_s_constants_are_members_of_a_contract_enumeration"),
+  # --- `PC01-JOURNEY-GAPS-01`. «Блоки» (the chooser's rows have no handle, so a click names its row).
+  ("remove every step that refuses something on «Блоки»",
+   lambda m: without_steps(m, lambda x: x.get('screen') == 'blocks' and x.get('case') == 'refused'),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("remove every step that acts on «Блоки»",
+   lambda m: without_steps(m, lambda x: x.get('screen') == 'blocks' and x.get('case') == 'action'),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("never read the text lines of a version",
+   lambda m: without_steps(m, lambda x: x['name'] == 'blocks-text-lines-of-the-same-version'),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("rename the tab marker «Строки текста» is pressed by",
+   lambda m: next(a for a in step(m, 'blocks-text-lines-of-the-same-version')['actions'] if a.get('selector') == '[data-block-tab="lines"]').__setitem__('selector', '[data-block-tabs="lines"]'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("rename the marker the picture's block is found by",
+   lambda m: next(a for a in step(m, 'blocks-portal-blocks-of-a-version-with-a-run')['actions'] if a.get('selector') == '[data-portal-block-type="image"] img').__setitem__('selector', '[data-portal-block-kind="image"] img'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("name the row of a click by a marker the application does not draw",
+   lambda m: step(m, 'blocks-portal-blocks-of-a-version-with-a-run')['actions'][0]['within'].__setitem__('selector', 'li[data-project-row]'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("name the row of a click with no words",
+   lambda m: step(m, 'blocks-portal-blocks-of-a-version-with-a-run')['actions'][0]['within'].pop('text_contains'),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("name the row of a click by a version no step captured",
+   lambda m: next(a for a in step(m, 'blocks-text-lines-of-the-same-version')['actions'] if a.get('do') == 'click' and a['within']['text_contains'] == '{version_uid}')['within'].__setitem__('text_contains', '{fourth_version_uid}'),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("make a row-scoped wait out of a type for it",
+   lambda m: next(a for a in step(m, 'blocks-text-lines-of-the-same-version')['actions'] if a.get('do') == 'wait_for').__setitem__('within', {'selector': 'li', 'text_contains': 'x'}),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("wait for a row by a version no step captured",
+   lambda m: next(a for a in step(m, 'blocks-portal-blocks-of-a-version-with-a-run')['actions'] if a.get('do') == 'wait_for' and a['selector'] == 'li').__setitem__('text_contains', '{fifth_version_uid}'),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("read the crop of a block no step captured",
+   lambda m: step(m, 'blocks-portal-blocks-of-a-version-with-a-run')['captures'][0].__setitem__('as', ['crop_block']),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("declare a status the portal-blocks list does not publish",
+   lambda m: step(m, 'blocks-portal-blocks-of-a-version-with-a-run')['expects_api'][2].__setitem__('expect_status', 201),
+   "test_every_status_the_write_half_declares_is_one_the_contract_publishes"),
+  # --- `PC01-JOURNEY-GAPS-01`. A successful «Вернуть»: assigned, taken, then given back with a reason.
+  ("remove the step that gives the work back",
+   lambda m: without_steps(m, lambda x: x['name'] == 'my-tasks-give-the-work-back'),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("remove the step that takes the work before it is given back",
+   lambda m: without_steps(m, lambda x: x['name'] == 'my-tasks-take-the-work-to-give-it-back'),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("give the work back without requiring the request to be a return",
+   lambda m: step(m, 'my-tasks-give-the-work-back').pop('expects_request'),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("require the answer to a return to say `done`",
+   lambda m: step(m, 'my-tasks-give-the-work-back')['expects_response'][0].__setitem__('equals', 'done'),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("rename the return form's marker",
+   lambda m: step(m, 'my-tasks-give-the-work-back')['actions'][1].__setitem__('selector', '[data-assignment-drafts="returned"]'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("relabel the field the reason is typed in",
+   lambda m: step(m, 'my-tasks-give-the-work-back')['actions'][1].__setitem__('label', 'Причина возврата работы'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("give the work back before the dispatcher assigned it",
+   lambda m: m['write']['steps'].insert(0, m['write']['steps'].pop(next(i for i, x in enumerate(m['write']['steps']) if x['name'] == 'my-tasks-give-the-work-back'))),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("turn the refusal of «Блоки» into an action",
+   lambda m: step(m, 'blocks-a-version-no-run-has-read-says-so').__setitem__('case', 'action'),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("upload the document nobody runs after the specification set, where the read walk would find it newest",
+   lambda m: m['write']['steps'].insert(
+       next(i for i, x in enumerate(m['write']['steps']) if x['name'] == 'sign-out'),
+       m['write']['steps'].pop(next(i for i, x in enumerate(m['write']['steps']) if x['name'] == 'blocks-upload-a-document-no-run-has-read'))),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  # --- `PC01-JOURNEY-GAPS-01`. `correctVersionClassification`.
+  ("remove the step that corrects a classification",
+   lambda m: without_steps(m, lambda x: x['name'] == 'classification-correction'),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("remove the step that refuses a correction to an administrator",
+   lambda m: without_steps(m, lambda x: x['name'] == 'classification-correction-is-an-experts-act'),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("correct a classification without basing the request on the revision shown",
+   lambda m: step(m, 'classification-correction')['expects_request'][0]['body_contains'].remove('"expected_revision":1'),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("stop requiring that a correction stores revision 2",
+   lambda m: step(m, 'classification-correction')['expects_response'].pop(0),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("let the refusal of a changeless correction stop declaring that nothing is sent",
+   lambda m: step(m, 'classification-correction-needs-a-change').pop('expects_not_called'),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("rename the control that opens the correction",
+   lambda m: step(m, 'classification-correction')['actions'][0].__setitem__('selector', '[data-classification-fix]'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("rename the stage choice of the correction form",
+   lambda m: step(m, 'classification-correction')['actions'][1].__setitem__('selector', 'input[data-correction-stages="R"]'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("rename the reason field of the correction form",
+   lambda m: step(m, 'classification-correction')['actions'][2].__setitem__('selector', '#correction-reason-box'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("expect a marker the correction's history no longer draws",
+   lambda m: step(m, 'classification-correction')['expects_present'][3].__setitem__('selector', 'li[data-classification-revision="1"][data-revision-type="confirmation"]'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("declare that a correction answers 200",
+   lambda m: step(m, 'classification-correction')['expects_api'][0].__setitem__('expect_status', 200),
+   "test_every_status_the_write_half_declares_is_one_the_contract_publishes"),
+  ("rename the operation that corrects a classification",
+   lambda m: step(m, 'classification-correction')['expects_api'][0].__setitem__('operationId', 'correctClassification'),
+   "test_every_api_call_the_journey_declares_is_in_the_contract"),
+  # --- `PC01-JOURNEY-GAPS-01`. The norm document view.
+  ("never open a norm document",
+   lambda m: without_steps(m, lambda x: x['name'] == 'norms-document-text-and-pdf'),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("never ask for a page the document does not have",
+   lambda m: without_steps(m, lambda x: x['name'] == 'norms-document-page-past-the-end'),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("open the norm document at an identity of the journey's own making",
+   lambda m: step(m, 'norms-document-text-and-pdf').__setitem__('at', '/norms/document?id=ndoc_00000000000000000000000000&page=1'),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("stop requiring that the document offers its PDF",
+   lambda m: step(m, 'norms-document-text-and-pdf')['expects_response'].pop(0),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("let the page past the end stop declaring that no PDF is requested",
+   lambda m: step(m, 'norms-document-page-past-the-end').pop('expects_not_called'),
+   "test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay"),
+  ("declare a PDF request that is no operation of the contract",
+   lambda m: step(m, 'norms-document-page-past-the-end')['expects_not_called'][0].__setitem__('path', '/norm-documents/{norm_document_id}/pdf'),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("rename the marker the viewer's address is read from",
+   lambda m: step(m, 'norms-document-text-and-pdf')['expects_present'][2].__setitem__('selector', '[data-norm-pdf-page="1"] object[data-viewer-url]'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("rename the marker of the page the PDF is opened at",
+   lambda m: step(m, 'norms-document-page-past-the-end')['expects_present'][0].__setitem__('selector', '[data-norm-pdf-pages="9999"]'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("reword the sentence a missing page is told",
+   lambda m: step(m, 'norms-document-page-past-the-end')['expects_present'][0].__setitem__('text_contains', 'Страницы в документе нет'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("declare that the PDF stream answers 201",
+   lambda m: step(m, 'norms-document-text-and-pdf')['expects_api'][2].__setitem__('expect_status', 201),
+   "test_every_status_the_write_half_declares_is_one_the_contract_publishes"),
+  ("rename the operation that reads a norm document",
+   lambda m: step(m, 'norms-document-text-and-pdf')['expects_api'][0].__setitem__('operationId', 'readNormDocument'),
+   "test_every_api_call_the_journey_declares_is_in_the_contract"),
+  # --- `PC01-JOURNEY-GAPS-01`. A step or a route that disappears.
+  ("remove a write step the journey walked before the slice",
+   lambda m: without_steps(m, lambda x: x['name'] == 'queue-resume-dispatch'),
+   "test_no_step_or_route_the_journey_walked_has_disappeared"),
+  ("rename a write step the journey walked before the slice",
+   lambda m: step(m, 'sign-out').__setitem__('name', 'sign-out-again'),
+   "test_no_step_or_route_the_journey_walked_has_disappeared"),
+  ("remove a read route the journey walked before the slice",
+   lambda m: m.__setitem__('routes', [r for r in m['routes'] if r['name'] != 'logs']),
+   "test_no_step_or_route_the_journey_walked_has_disappeared"),
+  ("walk the steps in another order",
+   lambda m: m['write']['steps'].reverse(),
+   "test_no_step_or_route_the_journey_walked_has_disappeared"),
 ]
 
 
@@ -322,8 +472,11 @@ for label, mutate, test in mutations:
     m = json.loads(orig)
     mutate(m)
     M.write_text(json.dumps(m, indent=2) + "\n")
-    code, out = run(test)
-    M.write_text(orig)
+    try:
+        code, out = run(test)
+    finally:
+        # Whatever the run did -- even if it could not start -- the manifest goes back.
+        M.write_text(orig)
     verdict = "RED (control works)" if code != 0 else "GREEN -- THE CHECK IS VACUOUS"
     if code == 0: ok = False
     print(f"{verdict:34} {label}  [{test}]")

@@ -29,13 +29,13 @@ checks exist and the missing evidence is a run, an expert, real documents, a pol
 | B3 | full AR pipeline, grounded, quality | DEFERRED-BY-OWNER | same | — |
 | B4 | durable execution, retry, resume, journal | READY-TO-ACCEPT-ON-STAND | same | no stand observation; a provider failure cannot be induced live |
 | B5 | real AR documents end to end | DEFERRED-BY-OWNER | same | — |
-| B6 | backup and restore drill (local) | READY-TO-ACCEPT-ON-STAND | same | the real drill now ran at head `0028` with 23 Blobs; not repeated at `0029`; owner judges whether synthetic data is a B6 drill |
+| B6 | backup and restore drill (local) | READY-TO-ACCEPT-ON-STAND | same | the real drill ran at head `0028` with 23 Blobs and again at head `0029` (`RECOVERY-DRILL-0029-01`: 23 of 23 objects and Blobs, 55 tables, 4 views, 72 triggers equal, independent compare no differences; recovery suite 308 passed); owner judges whether synthetic data is a B6 drill |
 | B7 | deploy bound to gate, version, release history | READY-TO-ACCEPT-ON-STAND | same | main carries `0.7.0` at `44962e8d` but the ledger row names `48c8e34c`; host verifier pending; no `v0.7.0` tag; no literal `GATE OK`; `0.5.1` row unruled |
 | B8 | exposure review | READY-TO-ACCEPT-ON-STAND | same | E-1, E-2, E-6 are owner decisions; E-3 needs an operator setting; E-4, E-5, E-8 are fixed in code and not re-probed on a stand |
 | B9 | contract `1.0.0` and error catalogue frozen | READY-TO-ACCEPT-ON-STAND | NEEDS-CODE | sealed on dev and main; missing: `contract_version` read from a deployed stand and one complete gate (`R-135`) |
 | B10 | expert smoke sessions | DEFERRED-BY-OWNER | same | — |
 | B11 | retained-data policy | DEFERRED-BY-OWNER | same | — |
-| B12 | every menu destination acts, result, live acceptance | NEEDS-CODE (integrator, 2026-10-22: stricter reading) | NEEDS-CODE, narrowed | 10 of 14 menu destinations and all four account-menu actions have walked write steps, on a recorded local stack only; «Заявки» acts only in the identity continuation, «База знаний» and «Журнал выполнения» are read-only, «Блоки» has a cold load and no action step; the stand's acceptance script runs the `core` phase only |
+| B12 | every menu destination acts, result, live acceptance | READY-TO-ACCEPT-ON-STAND (integrator, 2026-10-22, after `PC01-JOURNEY-GAPS-01`) | NEEDS-CODE | 10 of 14 menu destinations and all four account-menu actions have walked write steps, on a recorded local stack only; «Заявки» acts only in the identity continuation, «База знаний» and «Журнал выполнения» are read-only, «Блоки» has a cold load and no action step; the stand's acceptance script runs the `core` phase only |
 
 ## 1. Measured on the tree
 
@@ -192,9 +192,12 @@ Each stale claim, with the old and the new value, and the command that shows the
   independent compare with no differences. Its limits (§8 there): one server with two databases, not two stacks; the `norm*` tables
   are empty; roles are not restored; not an attested stand copy; not W54-scale (28,920 objects). The older run
   (`W58-INT-RELATIONS-PLACEHOLDER-FIX-01.md`, head `0023`, one Blob) is superseded as the latest evidence.
-- **Missing:** the drill at `0029`. Migration `0029` widened four `CHECK`s only; the commit message reports 55 tables, 4 views, 72
-  triggers and 153 indexes equal to the declaration at `0029`, but no drill was driven there. And the owner's judgement whether 23
-  synthetic objects are a B6 drill or a larger source is wanted. `D-123` (stand MinIO never inventoried) stays outside a local drill.
+- **Drill at `0029` (2026-10-22, `RECOVERY-DRILL-0029-01.md`, tree `c8a11c60`, lane stack, recorded provider):** exit 0 at every step, 23 of 23
+  objects and 23 of 23 Blobs (271,413 bytes), 55 of 55 tables and 4 of 4 views equal (227 rows), 72 of 72 triggers equal, an independent compare with
+  `differences: []`, 40 of 40 update/delete attempts refused on the 20 populated guarded tables, the four `CHECK`s that `0029` widened present on both
+  sides; `tests/integration/recovery` 308 passed in 133 s; two negatives (an added and a dropped table) refused by the schema audit. Not claimed: a real stand
+  backup, the stand's Blob store, `U-04`, a second compose stack, `norm*` data, roles, W54 scale.
+- **Missing:** the owner's judgement whether 23 synthetic objects are a B6 drill or a larger source is wanted. `D-123` (stand MinIO never inventoried) stays outside a local drill.
 - **Command:** `RECOVERY-REBASE-01.md` §9 (`make up check-services migrate check-db`, `synthetic_drill_seed`, `pg_dump`,
   `synthetic_drill_fixture --source-env`, `offline_restore_preflight`, `synthetic_drill_runner --pg17-bin /usr/lib/postgresql/17/bin`,
   `synthetic_drill_compare --probe-target-guards`); pick free ports with `ss -ltn`.
@@ -342,7 +345,7 @@ UNVERIFIED.
 
 1. **B9 is READY-TO-ACCEPT-ON-STAND.** Its text is "contract `1.0.0` and error catalogue frozen", which the tree satisfies on dev and
    on main; the evidence that remains is a live read and a complete gate, neither of which is code.
-2. **B12 stays NEEDS-CODE, narrowed (decision of the integrator, 2026-10-22, taking the stricter reading that the author of this matrix offered).** By the literal class of `BETA-MATRIX-01` ("a named gap") the missing «Блоки» step and the other walk gaps are test code, so the criterion is not claimed ready. No menu destination lacks a coded action and result (no stub remains), and 10 of 14 destinations plus all four account actions have walked write steps; what is missing is the journey code for: «Блоки» (choose a version, read its portal blocks, crops and text lines), the norms document view (`getNormDocument`, `listNormParagraphs`, `streamNormDocumentContent`), a successful «Вернуть», `correctVersionClassification`, and a recorded run of the identity continuation (`approveRegistration`, `rejectRegistration`, `updateUser`, `purgeUser`). The slice that closes it is a journey-extension slice (`tests/e2e/pc01/journey/**`), needing a recorded stack to prove; until it merges B12 is not READY.
+2. **B12 is READY-TO-ACCEPT-ON-STAND (integrator, 2026-10-22), reached in two steps.** The first draft of this matrix kept it NEEDS-CODE on the literal reading of `BETA-MATRIX-01`, because «Блоки», the norms document view, a successful «Вернуть», `correctVersionClassification` and the identity continuation had no journey step. `PC01-JOURNEY-GAPS-01` (lane G, merged) added them: the journey declares **109 write steps and 29 routes**; the live run on the recorded local stack of the full beta tree (`integration/beta-main` at `7a238a52`) exited `0`, 109/109 steps and 29/29 routes, 345 s (the first run had two findings, both test-side and fixed: a stale expectation after the PB profile and a norms seed with `paragraph_count` 0); the identity continuation passed (12 operations, 18 checks, exit `0`). Remaining un-walked, written out in `PC01-JOURNEY-GAPS-01.md`: a successful `purgeUser` (only its refusal `409 account_referenced`), what the browser's PDF viewer draws, a missing norm document (`404`), and everything on the published stand (a recorded local stack only; `manual-alpha-check.sh` runs `--phase core` on a stand, `--phase all` needs `--allow-spend`). The acceptance on the stand stays the owner's.
 3. **B7 stays READY-TO-ACCEPT-ON-STAND although main carries `0.7.0` without a tag or a recorded host verification:** every item left
    is a run or an owner decision (`verify-deployed.sh`, the tag, the `0.5.1` ruling), and the ledger row is the integrator's to correct.
 4. **Evidence of `RECOVERY-REBASE-01` is accepted as the latest B6 run, but only at head `0028`.** The `0029` pin move is code

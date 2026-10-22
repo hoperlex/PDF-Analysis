@@ -1,0 +1,11 @@
+/* The verdict and the decided severity of one finding row (`REVIEW-V2-UI-01`). Tokens only. */
+
+.badges {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-self: start;
+  gap: var(--am-gap-xs);
+}

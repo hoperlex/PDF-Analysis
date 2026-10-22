@@ -25,6 +25,14 @@ included), does not match its directory name, or reuses another entry's profile 
 identity refuses the **whole** load with :class:`TextProfileLoadError`; the composition root
 turns that into a start-up failure rather than serving a partial registry. ``draft`` and
 ``reviewed`` are both executable: a draft profile's status is recorded, not hidden.
+
+**Authored packages** (`PB-PROFILE-01`). A section with no legacy repository behind it has no
+``source`` to declare. :data:`AUTHORED_SECTIONS` names those sections, and only for them is
+``"source": null`` accepted, and required: the same key set, an explicit declaration, never an
+absent key. An authored package carries a third file, ``open_questions.md``, the expert's open
+questions for it, because nothing ported from a reviewed legacy prompt stands behind its
+wording. A legacy section with ``source: null``, an authored section with a source, an authored
+package without questions and a legacy package with them each refuse the whole load.
 """
 
 from __future__ import annotations
@@ -50,6 +58,7 @@ from auditmanager.analysis.text.prompt import (
 from auditmanager.shared.identity import AnalysisProfileId, IdentityError, PromptBundleId
 
 __all__ = [
+    "AUTHORED_SECTIONS",
     "PACKAGE_FORMAT",
     "PACKAGES_ROOT",
     "PROJECT_STRUCTURE_ORDER",
@@ -86,6 +95,12 @@ PROJECT_STRUCTURE_ORDER: Final[tuple[str, ...]] = (
 if len(PROJECT_STRUCTURE_ORDER) != len(SECTION_CODES) or set(PROJECT_STRUCTURE_ORDER) != SECTION_CODES:
     raise ValueError("project_structure_order_invalid")  # pragma: no cover - a literal
 
+#: The sections whose profile is authored for this product because no legacy prompt material
+#: exists for them (`PB-PROFILE-01`). ``PB`` is the one: the legacy registry has fourteen
+#: disciplines and fire safety as a section of its own is not among them. A section joins this
+#: set by a code change that a reviewer sees, never by a package declaring itself authored.
+AUTHORED_SECTIONS: Final[frozenset[str]] = frozenset({"PB"})
+
 _PROFILE_KEYS: Final[frozenset[str]] = frozenset(
     {
         "format",
@@ -105,6 +120,9 @@ _SEMVER = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 #: The files a package directory holds, and nothing else.
 _PACKAGE_FILES: Final[frozenset[str]] = frozenset({"profile.json", "system_prompt.md"})
+#: The extra file an authored package carries, and only an authored one.
+_QUESTIONS_FILE: Final[str] = "open_questions.md"
+_AUTHORED_PACKAGE_FILES: Final[frozenset[str]] = _PACKAGE_FILES | {_QUESTIONS_FILE}
 
 
 class TextProfileLoadError(ValueError):
@@ -240,7 +258,7 @@ def load_text_profile_registry(root: Path = PACKAGES_ROOT) -> TextProfileRegistr
 def _load_package(directory: Path, root: Path) -> RegisteredTextProfile:
     name = directory.name
     present = {item.name for item in directory.iterdir() if not item.name.startswith(".")}
-    if present != _PACKAGE_FILES:
+    if present not in (_PACKAGE_FILES, _AUTHORED_PACKAGE_FILES):
         raise TextProfileLoadError(f"package_files_invalid: {name}: {sorted(present)}")
     try:
         data: Any = json.loads((directory / "profile.json").read_text(encoding="utf-8"))
@@ -256,6 +274,11 @@ def _load_package(directory: Path, root: Path) -> RegisteredTextProfile:
         raise TextProfileLoadError(f"section_code_unknown: {name}")
     if name != code.lower():
         raise TextProfileLoadError(f"package_directory_mismatch: {name} holds {code}")
+    authored = code in AUTHORED_SECTIONS
+    if not authored and _QUESTIONS_FILE in present:
+        raise TextProfileLoadError(f"package_files_invalid: {name}: {sorted(present)}")
+    if authored and _QUESTIONS_FILE not in present:
+        raise TextProfileLoadError(f"open_questions_missing: {name}")
     try:
         profile_id = AnalysisProfileId.parse(data["analysis_profile_id"])
         bundle_id = PromptBundleId.parse(data["prompt_bundle_id"])
@@ -270,7 +293,19 @@ def _load_package(directory: Path, root: Path) -> RegisteredTextProfile:
     title = data["title_ru"]
     if not isinstance(title, str) or not title.strip():
         raise TextProfileLoadError(f"title_invalid: {name}")
-    source = _check_source(data["source"], name)
+    source: TextProfileSource | None
+    if authored:
+        if data["source"] is not None:
+            raise TextProfileLoadError(f"source_declared_for_authored_section: {name}")
+        source = None
+        try:
+            questions = (directory / _QUESTIONS_FILE).read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise TextProfileLoadError(f"package_unreadable: {name}") from exc
+        if not questions.strip():
+            raise TextProfileLoadError(f"open_questions_empty: {name}")
+    else:
+        source = _check_source(data["source"], name)
     # Exactly one trailing newline is the file's, not the prompt's (see the module note).
     text = prompt[:-1] if prompt.endswith("\n") else prompt
     if not text.strip():

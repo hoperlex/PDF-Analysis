@@ -348,6 +348,37 @@ function pick(headers, names) {
 }
 
 /**
+ * The script that finds one control: a CSS selector, optionally narrowed by the control's own
+ * visible text (exact, trimmed) and by the ROW it sits in.
+ *
+ * `within` is `{ selector, text_contains }`: the control must lie inside the nearest ancestor
+ * matching `selector` whose words contain `text_contains`. It exists for the lists this
+ * application draws without a handle of their own on a row (`«Блоки»` offers one identical
+ * «Выбрать проект» button per project, and the only thing that tells the rows apart is the
+ * words in them): "the button of the row that says <this project>". Without it the journey
+ * could only press the first row, which on a stand that other journeys have written to is
+ * somebody else's. A row that is not there, or whose words do not contain the text, matches
+ * nothing -- never the first row instead.
+ */
+export function locatorExpression(selector, text = null, within = null) {
+  const sel = JSON.stringify(selector);
+  const txt = text === null ? 'null' : JSON.stringify(text);
+  const row = within === null ? 'null' : JSON.stringify({ selector: within.selector, text: within.text_contains });
+  return `(() => {
+      const row = ${row};
+      const inside = (e) => {
+        if (row === null) return true;
+        const owner = e.closest(row.selector);
+        return owner !== null && (owner.innerText ?? '').includes(row.text);
+      };
+      const all = Array.from(document.querySelectorAll(${sel})).filter(inside);
+      const wanted = ${txt};
+      if (wanted === null) return all.length === 0 ? null : all[0];
+      return all.find((e) => (e.innerText ?? e.value ?? '').trim() === wanted) ?? null;
+    })()`;
+}
+
+/**
  * An expression that evaluates to the control a `<label>` names, or `null`.
  *
  * `scope` is a CSS selector for the region that holds the label (a form, a table row);
@@ -665,15 +696,8 @@ class Page {
    * class. Exact match on trimmed text, never a substring: "Start run" and "Start run
    * anyway" are different controls.
    */
-  static locator(selector, text = null) {
-    const sel = JSON.stringify(selector);
-    const txt = text === null ? 'null' : JSON.stringify(text);
-    return `(() => {
-      const all = Array.from(document.querySelectorAll(${sel}));
-      const wanted = ${txt};
-      if (wanted === null) return all.length === 0 ? null : all[0];
-      return all.find((e) => (e.innerText ?? e.value ?? '').trim() === wanted) ?? null;
-    })()`;
+  static locator(selector, text = null, within = null) {
+    return locatorExpression(selector, text, within);
   }
 
   /** The element behind a locator, as a remote object id, for the node-taking domains. */
@@ -692,9 +716,9 @@ class Page {
   }
 
   /** What the page can say about a control without acting on it. */
-  async describe(selector, text = null) {
+  async describe(selector, text = null, within = null) {
     return await this.evaluate(`(() => {
-      const el = ${Page.locator(selector, text)};
+      const el = ${Page.locator(selector, text, within)};
       if (el === null) return null;
       el.scrollIntoView({ block: 'center', inline: 'center' });
       const r = el.getBoundingClientRect();
@@ -719,12 +743,14 @@ class Page {
    * run` are both disabled while their mutation is pending, and pressing one in that state
    * and recording a pass is how a journey certifies nothing.
    */
-  async click(selector, { text = null, times = 1 } = {}) {
-    const what = `click ${selector}${text === null ? '' : ` [text=${JSON.stringify(text)}]`}`;
+  async click(selector, { text = null, times = 1, within = null } = {}) {
+    const what =
+      `click ${selector}${text === null ? '' : ` [text=${JSON.stringify(text)}]`}` +
+      (within === null ? '' : ` [within ${within.selector} containing ${JSON.stringify(within.text_contains)}]`);
     if (!Number.isInteger(times) || times < 1 || times > 3) {
       throw new Error(`${what}: times must be 1, 2 or 3; got ${times}`);
     }
-    const found = await this.describe(selector, text);
+    const found = await this.describe(selector, text, within);
     if (found === null) throw new Error(`${what}: no element matches it`);
     if (found.disabled) {
       throw new Error(`${what}: the control is disabled, so pressing it would do nothing`);

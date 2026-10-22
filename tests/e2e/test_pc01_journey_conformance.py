@@ -261,6 +261,9 @@ def handles_named_by_write_step(step: dict) -> set[str]:
         # a `wait_for` by the words it waits for. Both are the application's own words.
         if action.get("label") is not None:
             texts.append(action["label"])
+        # `PC01-JOURNEY-GAPS-01`: the row a click is made in is named by a selector (its words are data).
+        if isinstance(action.get("within"), dict) and action["within"].get("selector") is not None:
+            selectors.append(action["within"]["selector"])
         if (
             action.get("do") == "wait_for"
             and action.get("text_contains") is not None
@@ -2474,6 +2477,9 @@ NIGHT_SCREENS = (
     "user-management",
     "release-history",
     "sign-out",
+    # `PC01-JOURNEY-GAPS-01`
+    "blocks",
+    "norms-document",
 )
 
 #: Operations the write half must perform at least once, because each is a thing the matrix
@@ -2511,6 +2517,14 @@ NIGHT_OPERATIONS = (
     "archiveUser",
     "restoreUser",
     "listReleases",
+    # `PC01-JOURNEY-GAPS-01`
+    "listVersionPortalBlocks",
+    "streamVersionPortalBlockCrop",
+    "getVersionBlocks",
+    "correctVersionClassification",
+    "getNormDocument",
+    "listNormParagraphs",
+    "streamNormDocumentContent",
 )
 
 _TEMPLATE = re.compile(r"\{([a-z_]+)\}")
@@ -2539,8 +2553,11 @@ def _step_templates(step: dict) -> list[tuple[str, dict | None]]:
             for name in _templates(call.get("path")):
                 found.append((name, call.get("bind")))
     for action in step.get("actions") or ():
-        for key in ("selector", "value", "text", "to", "option_text", "option_value", "label"):
+        for key in ("selector", "value", "text", "to", "option_text", "option_value", "label", "text_contains"):
             for name in _templates(action.get(key)):
+                found.append((name, None))
+        if isinstance(action.get("within"), dict):
+            for name in _templates(action["within"].get("text_contains")):
                 found.append((name, None))
     for present in step.get("expects_present") or ():
         for name in (
@@ -2623,6 +2640,21 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
                 findings.append(f"{label}: a {kind} with no selector")
             if kind == "click" and action.get("times", 1) not in (1, 2, 3):
                 findings.append(f"{label}: click.times must be 1, 2 or 3")
+            if "within" in action:
+                row = action["within"]
+                if kind != "click":
+                    findings.append(f"{label}: only a click is made within a row, not a {kind}")
+                if not (
+                    isinstance(row, dict)
+                    and set(row) == {"selector", "text_contains"}
+                    and isinstance(row["selector"], str)
+                    and row["selector"]
+                    and isinstance(row["text_contains"], str)
+                    and row["text_contains"]
+                ):
+                    findings.append(
+                        f"{label}: `within` is {{selector, text_contains}}, both non-empty text; got {row!r}"
+                    )
             if kind == "select" and ("option_text" in action) == ("option_value" in action):
                 findings.append(f"{label}: a select names exactly one of option_text and option_value")
             if kind == "attach_file":
@@ -3365,3 +3397,531 @@ def test_control_a_step_that_claims_to_only_read_but_presses_a_control_is_detect
     writing = _night_step(reads_only=True, expects_api=[
         {"method": "PUT", "path": "/assignments", "operationId": "createAssignment", "expect_status": 200}])
     assert any("only reads" in f for f in _only_step_findings(writing))
+
+
+# --------------------------------------------------------------------------------------
+# `PC01-JOURNEY-GAPS-01`. The steps that close what `BETA-MATRIX-02` section B12 named as
+# unwalked, each pinned by NAME, so that a step which disappears -- or which quietly becomes
+# another kind of step -- is a red test and not a shrinking journey that still reports OK.
+# --------------------------------------------------------------------------------------
+
+#: step name -> (screen, case, the operations the step must declare).
+GAP_STEPS: dict[str, tuple[str, str, frozenset[str]]] = {
+    # «Блоки»: choose a version, read its portal blocks, one crop and its text lines; a version
+    # no run has reached is told it has nothing YET.
+    "blocks-portal-blocks-of-a-version-with-a-run": (
+        "blocks", "action", frozenset({"listVersionPortalBlocks", "streamVersionPortalBlockCrop"})),
+    "blocks-text-lines-of-the-same-version": ("blocks", "action", frozenset({"getVersionBlocks"})),
+    "blocks-upload-a-document-no-run-has-read": ("version-upload", "action", frozenset({"uploadDocument"})),
+    "blocks-a-version-no-run-has-read-says-so": ("blocks", "refused", frozenset({"listVersionPortalBlocks"})),
+    # A successful «Вернуть»: the work is assigned, taken, then given back with its reason.
+    "assign-work-to-be-given-back": ("dispatcher", "action", frozenset({"createAssignment"})),
+    "my-tasks-take-the-work-to-give-it-back": ("my-tasks", "action", frozenset({"transitionAssignment"})),
+    "my-tasks-give-the-work-back": ("my-tasks", "action", frozenset({"transitionAssignment"})),
+    "dispatcher-shows-the-work-given-back": ("dispatcher", "action", frozenset({"listAssignments"})),
+    # `correctVersionClassification`: the expert corrects a confirmed classification (revision 2, the original
+    # kept in the history); an administrator without `expert` is offered nothing; a pair that matches the
+    # current one and a reason with no word in it are refused by the form.
+    "classification-correction-is-an-experts-act": (
+        "version-classification", "refused", frozenset({"getVersionSectionReview"})),
+    "classification-correction-needs-a-change": ("version-classification", "refused", frozenset()),
+    "classification-correction-needs-a-reason": ("version-classification", "refused", frozenset()),
+    "classification-correction": (
+        "version-classification", "action", frozenset({"correctVersionClassification"})),
+    # The norm document view: the document, its paragraphs and its PDF; a page it does not have.
+    "norms-document-text-and-pdf": (
+        "norms-document", "action",
+        frozenset({"getNormDocument", "listNormParagraphs", "streamNormDocumentContent"})),
+    "norms-document-page-past-the-end": (
+        "norms-document", "refused", frozenset({"getNormDocument", "listNormParagraphs"})),
+}
+
+
+def _declared_operations(step: dict) -> set[str]:
+    return {call["operationId"] for call in step.get("expects_api") or ()}
+
+
+def gap_step_findings(manifest: dict) -> list[str]:
+    """Every pinned gap step is there, on its screen, in its case, declaring its operations."""
+    by_name = {step["name"]: step for step in write_steps(manifest)}
+    findings: list[str] = []
+    for name, (screen, case, operations) in GAP_STEPS.items():
+        step = by_name.get(name)
+        if step is None:
+            findings.append(f"the gap step '{name}' is gone from the manifest")
+            continue
+        if step.get("screen") != screen:
+            findings.append(f"{name}: belongs to screen {step.get('screen')!r}, not {screen!r}")
+        if step.get("case") != case:
+            findings.append(f"{name}: is a {step.get('case')!r} case, not {case!r}")
+        missing = sorted(operations - _declared_operations(step))
+        if missing:
+            findings.append(f"{name}: no longer declares {missing}")
+    return findings
+
+
+def gap_content_findings(manifest: dict) -> list[str]:
+    """What the pinned steps must SAY, which a step's name and operations cannot show."""
+    findings: list[str] = []
+    steps = {step["name"]: step for step in write_steps(manifest)}
+
+    # A successful «Вернуть» is a transition `returned` that carries its reason and ends in `returned`.
+    give_back = steps.get("my-tasks-give-the-work-back") or {}
+    sent = [
+        needle
+        for check in give_back.get("expects_request") or ()
+        if check.get("of") == "transitionAssignment"
+        for needle in check.get("body_contains") or ()
+    ]
+    if '"kind":"returned"' not in sent:
+        findings.append("my-tasks-give-the-work-back: does not require the request to be the transition `returned`")
+    answered = [
+        (check.get("json_path"), check.get("equals"))
+        for check in give_back.get("expects_response") or ()
+        if check.get("of") == "transitionAssignment"
+    ]
+    if ("status", "returned") not in answered:
+        findings.append("my-tasks-give-the-work-back: does not require the answer to say the status is `returned`")
+    if not any(
+        a.get("do") == "click" and a.get("text") == "Вернуть" for a in give_back.get("actions") or ()
+    ):
+        findings.append("my-tasks-give-the-work-back: never presses «Вернуть»")
+
+    # The work is taken before it is given back: the take step precedes the return step.
+    order = [step["name"] for step in write_steps(manifest)]
+    taken, returned = "my-tasks-take-the-work-to-give-it-back", "my-tasks-give-the-work-back"
+    if taken in order and returned in order and order.index(taken) > order.index(returned):
+        findings.append(f"{returned}: comes before {taken}, the step that takes the work it gives back")
+
+    # «Блоки»: the refusal is the API's `not_produced`, and the happy path is `produced`.
+    def _answers(step_name: str, path: str) -> list[object]:
+        return [
+            check.get("equals")
+            for check in (steps.get(step_name) or {}).get("expects_response") or ()
+            if check.get("json_path") == path
+        ]
+
+    # A correction is a POST to the corrections address, based on the revision shown, that stores revision 2.
+    correction = steps.get("classification-correction") or {}
+    based_on = [
+        needle
+        for check in correction.get("expects_request") or ()
+        if check.get("of") == "correctVersionClassification"
+        for needle in check.get("body_contains") or ()
+    ]
+    if '"expected_revision":1' not in based_on:
+        findings.append("classification-correction: does not require the request to be based on revision 1")
+    stored = [
+        (check.get("json_path"), check.get("equals"))
+        for check in correction.get("expects_response") or ()
+        if check.get("of") == "correctVersionClassification"
+    ]
+    if ("revision", 2) not in stored:
+        findings.append("classification-correction: does not require the answer to be revision 2")
+    if not any(
+        call.get("operationId") == "correctVersionClassification" and call.get("count") == 1
+        for call in correction.get("expects_api") or ()
+    ):
+        findings.append("classification-correction: does not require exactly one request for two presses")
+    # The refusals send nothing: each declares the correction as a call that must not be made.
+    for refusal in (
+        "classification-correction-is-an-experts-act",
+        "classification-correction-needs-a-change",
+        "classification-correction-needs-a-reason",
+    ):
+        refused = steps.get(refusal) or {}
+        if not any(
+            call.get("method") == "POST" and call.get("path", "").endswith("/classification/corrections")
+            for call in refused.get("expects_not_called") or ()
+        ):
+            findings.append(f"{refusal}: does not declare that no correction is sent")
+
+    # The norm document is read from a document the catalogue step captured, and the page past its end
+    # sends no request for the PDF.
+    opened = steps.get("norms-document-text-and-pdf") or {}
+    if "{norm_document_id}" not in opened.get("at", ""):
+        findings.append("norms-document-text-and-pdf: is not opened at the document the catalogue captured")
+    if not any(
+        c.get("of") == "getNormDocument" and c.get("json_path") == "content_available" and c.get("equals") is True
+        for c in opened.get("expects_response") or ()
+    ):
+        findings.append("norms-document-text-and-pdf: does not require the document to offer its PDF")
+    past = steps.get("norms-document-page-past-the-end") or {}
+    if not any(
+        call.get("method") == "GET" and call.get("path", "").endswith("/content")
+        for call in past.get("expects_not_called") or ()
+    ):
+        findings.append("norms-document-page-past-the-end: does not declare that no PDF is requested")
+
+    # `listDocuments` answers the newest current version first and the read walk follows the first document
+    # and then that document's newest version to find a run: the document nobody runs must not be the newest.
+    unrun_at = order.index("blocks-upload-a-document-no-run-has-read") if "blocks-upload-a-document-no-run-has-read" in order else -1
+    newest_at = order.index("upload-specification-set") if "upload-specification-set" in order else -1
+    if unrun_at >= 0 and newest_at >= 0 and unrun_at > newest_at:
+        findings.append(
+            "blocks-upload-a-document-no-run-has-read: comes after the specification set, so the document "
+            "nobody runs is the newest and the read walk, which follows the newest document, finds no run"
+        )
+
+    if "produced" not in _answers("blocks-portal-blocks-of-a-version-with-a-run", "status"):
+        findings.append("blocks-portal-blocks-of-a-version-with-a-run: does not require status `produced`")
+    if "not_produced" not in _answers("blocks-a-version-no-run-has-read-says-so", "status"):
+        findings.append("blocks-a-version-no-run-has-read-says-so: does not require status `not_produced`")
+    return findings
+
+
+def test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay(manifest: dict) -> None:
+    findings = gap_step_findings(manifest) + gap_content_findings(manifest)
+    assert not findings, "a step PC01-JOURNEY-GAPS-01 added has gone or changed:\n  " + "\n  ".join(findings)
+
+
+def _without_step(manifest: dict, name: str) -> dict:
+    copy = json.loads(json.dumps(manifest))
+    copy["write"]["steps"] = [s for s in copy["write"]["steps"] if s["name"] != name]
+    return copy
+
+
+def _step_of(manifest: dict, name: str) -> dict:
+    return next(s for s in manifest["write"]["steps"] if s["name"] == name)
+
+
+def test_control_a_removed_gap_step_is_detected(manifest: dict) -> None:
+    assert gap_step_findings(manifest) == [] and gap_content_findings(manifest) == []
+    for name in GAP_STEPS:
+        gone = _without_step(manifest, name)
+        assert any(f"'{name}' is gone" in f for f in gap_step_findings(gone)), name
+
+
+def test_control_a_gap_step_that_changes_its_case_screen_or_operation_is_detected(manifest: dict) -> None:
+    renamed = json.loads(json.dumps(manifest))
+    _step_of(renamed, "blocks-a-version-no-run-has-read-says-so")["case"] = "action"
+    assert any("is a 'action' case" in f for f in gap_step_findings(renamed))
+    moved = json.loads(json.dumps(manifest))
+    _step_of(moved, "blocks-text-lines-of-the-same-version")["screen"] = "norms-search"
+    assert any("belongs to screen 'norms-search'" in f for f in gap_step_findings(moved))
+    stripped = json.loads(json.dumps(manifest))
+    _step_of(stripped, "blocks-text-lines-of-the-same-version")["expects_api"] = []
+    assert any("no longer declares ['getVersionBlocks']" in f for f in gap_step_findings(stripped))
+
+
+def test_control_a_return_that_is_not_a_return_is_detected(manifest: dict) -> None:
+    for mutate, expected in (
+        (lambda s: s.pop("expects_request"), "transition `returned`"),
+        (lambda s: s["expects_response"].pop(0), "status is `returned`"),
+        (lambda s: s["actions"].pop(), "never presses «Вернуть»"),
+    ):
+        copy = json.loads(json.dumps(manifest))
+        mutate(_step_of(copy, "my-tasks-give-the-work-back"))
+        assert any(expected in f for f in gap_content_findings(copy)), expected
+    # the take comes first
+    swapped = json.loads(json.dumps(manifest))
+    steps = swapped["write"]["steps"]
+    names = [s["name"] for s in steps]
+    i, j = names.index("my-tasks-take-the-work-to-give-it-back"), names.index("my-tasks-give-the-work-back")
+    steps[i], steps[j] = steps[j], steps[i]
+    assert any("comes before" in f for f in gap_content_findings(swapped))
+    # the document nobody runs uploaded after the specification set
+    late = json.loads(json.dumps(manifest))
+    steps_late = late["write"]["steps"]
+    moved = next(s for s in steps_late if s["name"] == "blocks-upload-a-document-no-run-has-read")
+    steps_late.remove(moved)
+    steps_late.insert([s["name"] for s in steps_late].index("sign-out"), moved)
+    assert any("comes after the specification set" in f for f in gap_content_findings(late))
+    # «Блоки»: the refusal that stops being a refusal of a list
+    blocks = json.loads(json.dumps(manifest))
+    _step_of(blocks, "blocks-a-version-no-run-has-read-says-so")["expects_response"][0]["equals"] = "produced"
+    assert any("not_produced" in f for f in gap_content_findings(blocks))
+
+
+def test_control_a_correction_that_is_not_one_is_detected(manifest: dict) -> None:
+    for mutate, expected in (
+        (lambda s: s["expects_request"][0]["body_contains"].remove('"expected_revision":1'), "based on revision 1"),
+        (lambda s: s["expects_response"].pop(0), "revision 2"),
+        (lambda s: s["actions"].__setitem__(3, {**s["actions"][3], "times": 1}) or s["expects_api"][0].pop("count"),
+         "exactly one request"),
+    ):
+        copy = json.loads(json.dumps(manifest))
+        mutate(_step_of(copy, "classification-correction"))
+        assert any(expected in f for f in gap_content_findings(copy)), expected
+    for refusal in (
+        "classification-correction-is-an-experts-act",
+        "classification-correction-needs-a-change",
+        "classification-correction-needs-a-reason",
+    ):
+        copy = json.loads(json.dumps(manifest))
+        _step_of(copy, refusal)["expects_not_called"] = []
+        assert any(f"{refusal}: does not declare that no correction is sent" in f for f in gap_content_findings(copy)), refusal
+
+
+def test_control_a_norm_document_step_that_stops_reading_the_pdf_is_detected(manifest: dict) -> None:
+    for mutate, step_name, expected in (
+        (lambda s: s.__setitem__("at", "/norms/document?id=ndoc_00000000000000000000000000&page=1"),
+         "norms-document-text-and-pdf", "not opened at the document the catalogue captured"),
+        (lambda s: s["expects_response"].pop(0), "norms-document-text-and-pdf", "offer its PDF"),
+        (lambda s: s.pop("expects_not_called"), "norms-document-page-past-the-end", "no PDF is requested"),
+    ):
+        copy = json.loads(json.dumps(manifest))
+        mutate(_step_of(copy, step_name))
+        assert any(expected in f for f in gap_content_findings(copy)), expected
+
+
+SEED_NORMS = JOURNEY_DIR / "seed_norms.py"
+
+
+def seed_order_findings(source: str) -> list[str]:
+    """The seed puts the bytes into the store before it writes a row that claims them."""
+    stored, claimed = source.find("store.put_blob("), source.find("repository.record_verified(")
+    if stored < 0 or claimed < 0:
+        return ["the seed no longer stores the bound bytes, or no longer records their metadata"]
+    if stored > claimed:
+        return ["the seed claims an object (rows) before it has put the bytes into the store"]
+    return []
+
+
+def test_the_norms_seed_stores_the_bytes_before_the_rows_that_claim_them() -> None:
+    """A binding with no object is what the document view used to meet: a store error, not a screen."""
+    source = _require(SEED_NORMS).read_text(encoding="utf-8")
+    assert seed_order_findings(source) == []
+    assert "return 2" in source and "S3_BUCKET" in source
+
+
+def test_control_a_seed_that_claims_before_it_stores_is_detected() -> None:
+    source = _require(SEED_NORMS).read_text(encoding="utf-8")
+    swapped = source.replace("store.put_blob(", "XX", 1).replace("repository.record_verified(", "store.put_blob(", 1)
+    swapped = swapped.replace("XX", "repository.record_verified(", 1)
+    assert seed_order_findings(swapped) == ["the seed claims an object (rows) before it has put the bytes into the store"]
+    assert seed_order_findings("def main(): pass") == [
+        "the seed no longer stores the bound bytes, or no longer records their metadata"
+    ]
+
+
+def test_the_norms_seed_writes_no_row_it_cannot_back_with_an_object() -> None:
+    tool = _require(SEED_NORMS)
+    ran = _run_tool(
+        str(tool),
+        env={
+            "DATABASE_URL": "postgresql+psycopg://u:p@127.0.0.1:1/auditmanager_beta_live_journey",
+            "S3_ENDPOINT_URL": "http://127.0.0.1:1",
+            "S3_REGION": "us-east-1",
+            "S3_ACCESS_KEY_ID": "journey-test",
+            "S3_SECRET_ACCESS_KEY": "journey-test",
+            "S3_BUCKET": "journey-test",
+        },
+    )
+    assert ran.returncode == 2, ran.stdout + ran.stderr
+    assert "object store" in ran.stderr and "refusing to write" not in ran.stderr
+
+
+# --------------------------------------------------------------------------------------
+# The identity continuation (`identity.mjs`). It is not a step of the manifest's write half and is
+# not run by `--phase all`: it consumes that run's envelope. Its operations are declared in the
+# manifest (`identity.operations`) and its handles are written in the runner itself, which no
+# earlier check read -- so a renamed control would have turned it red only for whoever ran it.
+# --------------------------------------------------------------------------------------
+
+IDENTITY_RUNNER = JOURNEY_DIR / "identity.mjs"
+
+#: The four operations `BETA-MATRIX-02` section B12 names as reached only through this continuation.
+IDENTITY_OPERATIONS = ("approveRegistration", "rejectRegistration", "updateUser", "purgeUser")
+
+_JS_COMMENT = re.compile(r"/\*[\s\S]*?\*/|(?<![:'\"`])//[^\n]*")
+_JS_LITERAL = re.compile(r"'([^'\n]*)'|`([^`\n]*)`")
+_RUNNER_TEXT_ARGUMENTS = (
+    re.compile(r"text:\s*'([^'\n]+)'"),
+    re.compile(r"describe\('button',\s*'([^'\n]+)'"),
+    re.compile(r"includes\('([^'\n]+)'\)"),
+)
+
+
+def identity_runner_handles(source: str) -> set[str]:
+    """The ids, markers and words the runner presses or reads, as `web/src` must still carry them.
+
+    Ids and `data-*` markers come from any selector literal; words come only from the places the
+    runner names a control or a sentence by its text (`{ text: '…' }`, `describe('button', '…')`,
+    `.includes('…')`), so what the runner TYPES (a surname, a reason) is not mistaken for a handle.
+    An id built from a variable (`#reject-${id}`) is a prefix; the prefix is the handle.
+    """
+    code = _JS_COMMENT.sub(" ", source)
+    handles: set[str] = set()
+    for first, second in _JS_LITERAL.findall(code):
+        literal = first or second
+        for ident in _ID_SELECTOR.findall(literal):
+            handles.add(f'id="{ident}"' if not ident.endswith("-") else f"{ident}")
+        handles.update(_DATA_ATTRIBUTE.findall(literal))
+        for match in re.findall(r'\[id\^="([^"]+)"\]', literal):
+            handles.add(match)
+        # A group named by its accessible label (the confirmation an archive asks for).
+        handles.update(re.findall(r'aria-label="([^"]+)"', literal))
+    for pattern in _RUNNER_TEXT_ARGUMENTS:
+        handles.update(pattern.findall(code))
+    return handles
+
+
+def test_the_identity_continuation_walks_the_four_operations_the_matrix_names(
+    manifest: dict, openapi: dict
+) -> None:
+    declared = {call["operationId"] for call in (manifest.get("identity") or {}).get("operations") or ()}
+    assert set(IDENTITY_OPERATIONS) <= declared, sorted(set(IDENTITY_OPERATIONS) - declared)
+    contract = {operation_id for _method, _path, operation_id in operations_in_contract(openapi)}
+    assert set(IDENTITY_OPERATIONS) <= contract
+
+
+def test_every_control_the_identity_continuation_presses_still_exists_in_the_application() -> None:
+    _require(WEB_SRC)
+    handles = identity_runner_handles(_require(IDENTITY_RUNNER).read_text(encoding="utf-8"))
+    assert len(handles) >= 20, f"the scan found only {sorted(handles)}: it no longer reads the runner"
+    source = application_source(WEB_SRC)
+    missing = sorted(handle for handle in handles if handle not in source)
+    assert not missing, (
+        f"the identity continuation names {len(missing)} handle(s) that no longer appear anywhere in "
+        f"web/src: {missing}. It would still sign in and reach the screens, and could press nothing."
+    )
+
+
+def test_control_a_renamed_identity_confirmation_is_detected() -> None:
+    real = _require(IDENTITY_RUNNER).read_text(encoding="utf-8")
+    source = application_source(WEB_SRC)
+    handles = identity_runner_handles(real)
+    assert "Подтверждение архивирования" in handles and "Подтвердить отклонение" in handles
+    mutated = identity_runner_handles(real.replace("Подтверждение архивирования", "Подтверждение удаления записи"))
+    assert "Подтверждение удаления записи" in mutated and "Подтверждение удаления записи" not in source
+
+
+def test_control_a_renamed_identity_control_is_detected() -> None:
+    real = _require(IDENTITY_RUNNER).read_text(encoding="utf-8")
+    source = application_source(WEB_SRC)
+    assert all(handle in source for handle in identity_runner_handles(real))
+    for old, new, expected in (
+        ("#register-last", "#register-surname", 'id="register-surname"'),
+        ("data-pending-total", "data-pending-count", "data-pending-count"),
+        ("text: 'Одобрить заявку'", "text: 'Принять заявку'", "Принять заявку"),
+        ("[data-user-failure]", "[data-user-fault]", "data-user-fault"),
+        ("textarea[id^=\"reject-\"]", "textarea[id^=\"refuse-\"]", "refuse-"),
+    ):
+        assert old in real, old
+        mutated = identity_runner_handles(real.replace(old, new))
+        assert expected in mutated and expected not in source, (old, expected)
+
+
+# --------------------------------------------------------------------------------------
+# A step or a route that disappears. Everything above reads the manifest AS IT IS: delete a step and
+# every check that walked it simply has one step fewer to walk, and the journey reports OK over a
+# smaller product. These pin what the journey walked when `PC01-JOURNEY-GAPS-01` began (95 write steps,
+# 29 read routes, the figures `BETA-LIVE-JOURNEY-01` measured) by NAME; the steps the slice added are
+# pinned in `GAP_STEPS`. Adding a step needs no edit here; removing or renaming one does.
+# --------------------------------------------------------------------------------------
+
+#: The 95 write steps of the journey before this slice, in order.
+PINNED_WRITE_STEPS = (
+    "queue-dispatch-is-open", "create-project", "upload-document", "classify-version",
+    "start-run", "record-decision", "refuse-version-upload", "upload-next-version",
+    "refuse-classification-for-admin-only", "refuse-classification-incomplete",
+    "classify-second-version", "start-second-run", "compare-versions-read-only",
+    "carry-over-decision", "carry-over-is-not-offered-again", "upload-third-version",
+    "classify-third-version", "start-third-run", "compare-stages-refused-without-the-switch",
+    "compare-stages-p-to-r", "analysis-settings-lists-the-profiles",
+    "analysis-settings-for-an-expert", "assign-work", "dispatcher-admin-cannot-take-the-work",
+    "dispatcher-expert-sees-only-the-own-work", "my-tasks-return-needs-a-reason",
+    "my-tasks-take-the-work", "my-tasks-complete-the-work",
+    "dispatcher-shows-the-finished-work", "upload-specification-set",
+    "classify-specification-set", "start-specification-run", "price-list-is-an-experts-act",
+    "price-list-empty-file-refused", "price-list-without-columns-refused",
+    "specification-needs-a-price-list", "optimisation-pass-needs-a-price-list",
+    "price-list-upload", "specification-and-prices",
+    "vendor-list-global-is-an-administrators-act", "vendor-list-entry-needs-a-vendor",
+    "vendor-list-global", "vendor-list-project", "optimisation-pass-is-an-experts-act",
+    "optimisation-pass", "optimisation-pass-over-a-set-without-a-table",
+    "proposals-csv-of-an-empty-pass", "proposal-revise-needs-a-comment", "proposal-accept",
+    "proposal-change-of-mind", "proposal-revise", "proposal-filter-by-decision",
+    "proposal-decision-is-an-experts-act", "proposals-csv", "price-list-hostile-revision",
+    "vendor-list-project-adds-the-formula-vendor", "optimisation-second-pass",
+    "proposals-csv-with-a-formula-vendor", "norms-snapshots-offer-only-what-qualifies",
+    "norms-designation-is-an-administrators-act", "norms-designate-the-current-snapshot",
+    "norms-search", "norms-search-needs-a-query", "norms-catalogue", "norms-catalogue-filter",
+    "run-export-is-an-experts-act", "run-exports", "section-form7",
+    "section-form7-without-members", "dashboard-sections-panel", "queue-pause-dispatch",
+    "queue-start-a-run-while-paused", "queue-lists-the-waiting-run",
+    "queue-priority-out-of-range-refused", "queue-change-priority",
+    "queue-cancel-the-waiting-run", "queue-reaudit-the-cancelled-run", "queue-resume-dispatch",
+    "workers-list-the-worker", "worker-intake-is-an-administrators-act",
+    "worker-stops-taking-new-work", "worker-takes-new-work-again", "profile-needs-a-surname",
+    "profile-update", "password-confirmation-must-match", "password-current-must-be-right",
+    "password-change", "old-pass-is-refused-after-the-password-change",
+    "user-password-reset-must-match", "user-archive", "user-restore", "user-password-reset",
+    "release-history-panel", "sign-out", "signed-out-session-is-gone",
+)
+
+#: The 29 read routes of the journey before this slice, in order.
+PINNED_ROUTES = (
+    "root", "projects", "project", "document", "version", "comparison", "run", "review",
+    "sign-in", "knowledge-base", "change-password", "blocks", "optimisation", "logs", "workers",
+    "dashboard", "forbidden", "account", "section-optimisation", "norms", "norm-document",
+    "analysis-settings", "queue", "dispatcher", "register", "register-submitted", "admin-users",
+    "admin-user", "admin-registrations",
+)
+
+
+def pinned_journey_findings(manifest: dict) -> list[str]:
+    steps = [step["name"] for step in write_steps(manifest)]
+    routes = [route["name"] for route in manifest["routes"]]
+    findings = [f"the write step '{name}' is gone or renamed" for name in PINNED_WRITE_STEPS if name not in steps]
+    findings += [f"the read route '{name}' is gone or renamed" for name in PINNED_ROUTES if name not in routes]
+    # Order is part of the walk: a step needs what an earlier one captured.
+    kept = [name for name in steps if name in PINNED_WRITE_STEPS]
+    if not findings and kept != list(PINNED_WRITE_STEPS):
+        findings.append("the write steps that existed before this slice are no longer in their order")
+    floor = len(PINNED_WRITE_STEPS) + len(GAP_STEPS)
+    if len(steps) < floor:
+        findings.append(f"the journey declares {len(steps)} write steps, fewer than the {floor} it had at the slice's end")
+    if len(routes) < len(PINNED_ROUTES):
+        findings.append(f"the journey declares {len(routes)} read routes, fewer than the {len(PINNED_ROUTES)} it walked")
+    return findings
+
+
+def test_no_step_or_route_the_journey_walked_has_disappeared(manifest: dict) -> None:
+    findings = pinned_journey_findings(manifest)
+    assert not findings, "the journey walks less than it did:\n  " + "\n  ".join(findings)
+
+
+def test_control_a_step_or_a_route_that_disappears_is_detected(manifest: dict) -> None:
+    assert pinned_journey_findings(manifest) == []
+    assert len(PINNED_WRITE_STEPS) == 95 and len(PINNED_ROUTES) == 29
+    for name in PINNED_WRITE_STEPS:
+        gone = _without_step(manifest, name)
+        assert any(f"'{name}' is gone or renamed" in f for f in pinned_journey_findings(gone)), name
+    for name in PINNED_ROUTES:
+        copy = json.loads(json.dumps(manifest))
+        copy["routes"] = [r for r in copy["routes"] if r["name"] != name]
+        assert any(f"'{name}' is gone or renamed" in f for f in pinned_journey_findings(copy)), name
+    renamed = json.loads(json.dumps(manifest))
+    _step_of(renamed, "queue-resume-dispatch")["name"] = "queue-resume"
+    assert any("'queue-resume-dispatch' is gone or renamed" in f for f in pinned_journey_findings(renamed))
+    reordered = json.loads(json.dumps(manifest))
+    reordered["write"]["steps"].reverse()
+    assert any("no longer in their order" in f for f in pinned_journey_findings(reordered))
+    # a replaced step keeps the count but not the name, and a deleted one that is replaced by an
+    # unnamed addition leaves the floor intact -- the name is what is pinned.
+    swapped = json.loads(json.dumps(manifest))
+    _step_of(swapped, "sign-out")["name"] = "sign-out-again"
+    assert any("'sign-out' is gone or renamed" in f for f in pinned_journey_findings(swapped))
+
+
+def seed_paragraph_count_findings(source: str) -> list[str]:
+    """The seeded documents state how many paragraphs they hold: `getNormDocument` serves the column."""
+    findings = []
+    if ":slug, :title, :doc_type, 'consultant_plus', 12, 1, 0, 10, :paragraphs)" not in source:
+        findings.append("the seed no longer writes the document's paragraph_count from the paragraphs it inserts")
+    if "document(qualified, slug, paragraphs=len(entries))" not in source:
+        findings.append("the seed does not hand each document the number of paragraphs it writes for it")
+    return findings
+
+
+def test_the_norms_seed_states_how_many_paragraphs_each_document_holds() -> None:
+    """The first live run read `paragraph_count = 0` from `getNormDocument` over documents that had paragraphs."""
+    assert seed_paragraph_count_findings(_require(SEED_NORMS).read_text(encoding="utf-8")) == []
+
+
+def test_control_a_seed_that_states_no_paragraph_count_is_detected() -> None:
+    source = _require(SEED_NORMS).read_text(encoding="utf-8")
+    assert seed_paragraph_count_findings(source.replace(":paragraphs)", "0)", 1))
+    assert seed_paragraph_count_findings(source.replace("paragraphs=len(entries)", "paragraphs=0", 1))

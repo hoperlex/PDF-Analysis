@@ -17,6 +17,7 @@ VERSION = "ver_01M25P3TH08VVTTGJRXYBZZ7RP"
 OTHER_VERSION = "ver_01M25P3TH08VVTTGJRXYBZZ7RQ"
 AR_PROFILE = "ap_01M25P3TH08VVTTGJRXYBZZ7RP"
 PS_PROFILE = "ap_01M25P3TH08VVTTGJRXYBZZ7RQ"
+PB_PROFILE = "ap_01M25P3TH08VVTTGJRXYBZZ7RR"
 
 
 def test_filename_suggestion_cannot_route_without_a_confirmed_section() -> None:
@@ -49,12 +50,33 @@ def test_unknown_code_never_uses_ar_profile(code: str) -> None:
 
 
 def test_valid_but_unavailable_pb_does_not_use_ps_or_ar() -> None:
+    """The router's own refusal, on a table built without PB (`PB-PROFILE-01`).
+
+    PB now has a registered profile, so the seam for "a section with no profile" is the table
+    handed to the router, not the section: the refusal itself is unchanged.
+    """
     with pytest.raises(SectionRouteUnavailable, match="section_profile_unavailable"):
         route_confirmed_section(
             VERSION,
             ConfirmedSection(VERSION, "PB"),
             {"AR": AR_PROFILE, "PS": PS_PROFILE},
         )
+
+
+def test_pb_routes_to_its_own_profile_when_one_is_registered() -> None:
+    profiles = {"AR": AR_PROFILE, "PS": PS_PROFILE, "PB": PB_PROFILE}
+    assert route_confirmed_section(
+        VERSION, ConfirmedSection(VERSION, "PB"), profiles
+    ) == SectionRoute("PB", PB_PROFILE)
+
+
+@pytest.mark.parametrize("code", ["AR", "PS"])
+def test_another_section_never_runs_under_the_pb_profile(code: str) -> None:
+    profiles = {"AR": AR_PROFILE, "PS": PS_PROFILE, "PB": PB_PROFILE}
+    route = route_confirmed_section(VERSION, ConfirmedSection(VERSION, code), profiles)
+    assert route.analysis_profile_id == profiles[code] != PB_PROFILE
+    with pytest.raises(SectionRouteUnavailable, match="section_profile_unavailable"):
+        route_confirmed_section(VERSION, ConfirmedSection(VERSION, code), {"PB": PB_PROFILE})
 
 
 def test_invalid_profile_identity_is_refused() -> None:

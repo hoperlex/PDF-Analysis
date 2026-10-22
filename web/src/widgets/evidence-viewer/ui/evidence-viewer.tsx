@@ -21,6 +21,10 @@
  *
  * Navigation is restricted to the observation's declared pages. Offering the other pages of
  * the document invites a reviewer to decide against text this finding never cited.
+ *
+ * Under the two panes, a finding that carries v2 fields shows what it rests on
+ * (`FindingBasis`, `REVIEW-V2-UI-01`): the required and stated values, the norm citations and
+ * the merged observations. A finding without them shows nothing more than it ever did.
  */
 
 import type { Evidence, FindingObservation } from '@/shared/api';
@@ -35,14 +39,28 @@ import {
   observationProviderMode,
 } from '@/entities/finding-observation';
 
+import { FindingBasis } from './finding-basis';
+
 export interface EvidenceViewerProps {
   readonly observation: FindingObservation;
+  /** `FindingDetail.merged_observations`; shown only when the server sent it (`REVIEW-V2-UI-01`). */
+  readonly mergedObservations?: readonly FindingObservation[] | undefined;
   readonly activePage: number;
   readonly onPageChange: (page: number) => void;
   /** `blob:` URL of the fetched version content, or null while it is unavailable. */
   readonly documentUrl: string | null;
   readonly isLoading?: boolean | undefined;
   readonly error?: ErrorStateProps | null | undefined;
+}
+
+/**
+ * The declared page at a fixed zoom with the thumbnail pane closed. Left to itself, Chrome
+ * fits the whole document to its widest sheet, so in a volume with wide drawing sheets an A4
+ * page came out a few dozen pixels wide; it ignores `view=Fit` and `view=FitH`. 85 % fits an
+ * A4 page across the full-width pane.
+ */
+function viewerUrl(documentUrl: string, page: number): string {
+  return `${pdfPageUrl(documentUrl, page)}&zoom=85&navpanes=0`;
 }
 
 function QuotationCard({ item }: { item: Evidence }) {
@@ -77,6 +95,7 @@ function QuotationCard({ item }: { item: Evidence }) {
 
 export function EvidenceViewer({
   observation,
+  mergedObservations,
   activePage,
   onPageChange,
   documentUrl,
@@ -141,12 +160,17 @@ export function EvidenceViewer({
                 }
               />
             ) : (
+              /*
+                `key` makes a page change mount a fresh element. Chrome's viewer ignores a
+                change of the fragment alone on a live `<object>` and leaves a blank pane.
+              */
               <object
+                key={page}
                 className="am-evidence__object"
-                data={pdfPageUrl(documentUrl, page)}
+                data={viewerUrl(documentUrl, page)}
                 type="application/pdf"
                 aria-label={`Страница ${page} проверяемого документа`}
-                data-viewer-src={pdfPageUrl(documentUrl, page)}
+                data-viewer-src={viewerUrl(documentUrl, page)}
               >
                 <p>
                   Этот браузер не умеет показывать PDF внутри страницы. Свидетельство —
@@ -192,6 +216,8 @@ export function EvidenceViewer({
           </p>
         </div>
       </div>
+
+      <FindingBasis observation={observation} mergedObservations={mergedObservations} />
     </div>
   );
 }
