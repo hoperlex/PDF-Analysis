@@ -88,6 +88,7 @@ describe('a double press of «Назначить»', () => {
     const hook = useCreateAssignment() as unknown as Create;
     const first = hook.mutationFn(NEW);
     const second = hook.mutationFn(NEW);
+    expect(create).toHaveBeenCalledTimes(1);
     const refusal = new Error('assignment_open');
     open.fail(refusal);
     await expect(first).rejects.toBe(refusal);
@@ -153,6 +154,7 @@ describe('a double press of an assignment move', () => {
     const hook = useTransitionAssignment() as unknown as Move;
     const first = hook.mutationFn(MOVE);
     const second = hook.mutationFn(MOVE);
+    expect(move).toHaveBeenCalledTimes(1);
     const refusal = new Error('state_transition_not_allowed');
     open.fail(refusal);
     await expect(first).rejects.toBe(refusal);

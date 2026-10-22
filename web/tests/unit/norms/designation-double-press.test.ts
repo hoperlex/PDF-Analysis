@@ -81,6 +81,7 @@ describe('a double press of «Назначить текущим»', () => {
     const hook = useSetCurrentSnapshot() as unknown as Captured;
     const first = hook.mutationFn(DESIGNATE);
     const second = hook.mutationFn(DESIGNATE);
+    expect(post).toHaveBeenCalledTimes(1);
     const refusal = new Error('stale_current_snapshot');
     open.fail(refusal);
     await expect(first).rejects.toBe(refusal);

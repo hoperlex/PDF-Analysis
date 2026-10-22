@@ -83,6 +83,7 @@ describe('a double press of «Запустить проход»', () => {
     const hook = useStartOptimisationPass() as unknown as Captured;
     const first = hook.mutationFn(SET);
     const second = hook.mutationFn(SET);
+    expect(post).toHaveBeenCalledTimes(1);
     const refusal = new Error('conflict');
     open.fail(refusal);
     await expect(first).rejects.toBe(refusal);
