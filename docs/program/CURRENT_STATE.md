@@ -16,10 +16,8 @@ those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 
 The development API surface is **81 paths / 93 operations / 272 schemas**, the error
 catalogue has **27** codes, the migration head is **`0030_executor_connections`**,
-`VERSION` is `0.7.0`, and the contract and catalogue are sealed at `1.0.0` on dev; the
-executor connections of `R-143` (`EXEC-SEAL-01`, `EXEC-HTTP-01`, see
-`EXEC-CANDIDATE-1.md`) were added to it additively under `R-144`, and the `1.1.0` label is a
-separate reseal (`agent/exec-label-110`). `origin/main` carries `0.7.0` since the owner's merge of pull request
+`VERSION` is `0.7.0`, the contract is sealed at `1.0.0` with the `R-143` executor connections
+added under `R-144` (`EXEC-CANDIDATE-1.md`; the `1.1.0` label is a separate reseal). `origin/main` carries `0.7.0` since the owner's merge of pull request
 #3 (`48c8e34c`, no gate; `RELEASES.md` has the row and the record); host verification and the
 `v0.7.0` tag are owed, the last tag is `v0.6.0`. Run `infra/deploy/verify-deployed.sh` for the
 current deployment; this document is no substitute for that probe.
