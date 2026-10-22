@@ -41,6 +41,7 @@ class FakeGateway:
         self.output_tokens = output_tokens
         self.delay = delay
         self.requests: list[dict[str, Any]] = []
+        self.last_authorization = ""
         gateway = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -56,6 +57,7 @@ class FakeGateway:
                     body = json.loads(raw or b"{}")
                 except ValueError:
                     body = {}
+                gateway.last_authorization = self.headers.get("Authorization") or self.headers.get("x-api-key") or ""
                 gateway.requests.append({
                     "path": self.path, "authorization": self.headers.get("Authorization"),
                     "x_api_key": self.headers.get("x-api-key"), "body": body,
@@ -80,6 +82,11 @@ class FakeGateway:
         behaviour = self.behaviour
         if behaviour == "html403":
             return 403, "text/html", b"<html><head><title>403 Forbidden</title></head></html>"
+        if behaviour == "echo401":
+            # The worst provider: its error body repeats the key it was sent.
+            token = self.last_authorization.removeprefix("Bearer ")
+            return 401, "application/json", json.dumps(
+                {"error": {"message": f"Incorrect API key provided: {token}"}}).encode()
         if behaviour == "json401":
             return 401, "application/json", b'{"error": {"code": "invalid_api_key"}}'
         if behaviour == "json403":
