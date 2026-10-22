@@ -268,6 +268,13 @@ describe('pressing Accept and Reject through the hook', () => {
     expect(hook().refusal).toBeNull();
   });
 
+  it('forgets the refusal when the reviewer dismisses it', () => {
+    hook().record('accept', OBSERVATION_ID as never, { proposed: 'critical' });
+    expect(hook().refusal).toBe('severity_required');
+    hook().reset();
+    expect(hook().refusal).toBeNull();
+  });
+
   it('sends the legacy request on an accept of a finding with no proposal', () => {
     hook().record('accept', OBSERVATION_ID as never);
     expect(sent).toEqual([{ event_type: 'accept', finding_observation_id: OBSERVATION_ID }]);

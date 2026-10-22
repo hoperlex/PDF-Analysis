@@ -26,7 +26,7 @@ import type {
   NormCitation,
   Severity,
 } from '@/shared/api';
-import { SEVERITY_VALUES, queryKeys } from '@/shared/api';
+import { NORM_CITATION_STATE_VALUES, SEVERITY_VALUES, queryKeys } from '@/shared/api';
 import {
   NORM_CITATION_STATE_LABELS,
   SEVERITY_LABELS,
@@ -184,6 +184,19 @@ describe('the five severities have Russian labels and render as them', () => {
     });
   }
 
+  it('gives each severity its own tone, so the list can be read at a glance', () => {
+    const tones: Record<Severity, string> = {
+      critical: 'am-badge--failed',
+      economic: 'am-badge--degraded',
+      operational: 'am-badge--active',
+      recommendation: 'am-badge--inert',
+      check_adjacent: 'am-badge--inert',
+    };
+    for (const severity of SEVERITY_VALUES) {
+      expect(render(createElement(SeverityBadge, { severity }))).toContain(`class="am-badge ${tones[severity]}"`);
+    }
+  });
+
   it('shows a value outside the closed set as a fault, not as a blank and not as itself', () => {
     const markup = render(createElement(SeverityBadge, { severity: 'urgent' as Severity }));
     expect(markup).toContain('data-closed-vocabulary-fault="severity"');
@@ -332,6 +345,17 @@ describe('a finding row shows the decided severity beside the verdict', () => {
     expect(latinWords(markup)).toEqual([]);
   });
 
+  it('shows the decided severity and not the proposed one when the two differ', () => {
+    const markup = list([
+      cyrillicFinding(
+        { current_verdict: 'accepted', decided_severity: 'recommendation' },
+        { proposed_severity: 'critical' },
+      ),
+    ]);
+    expect(markup).toContain('data-severity="recommendation"');
+    expect(markup).not.toContain('data-severity="critical"');
+  });
+
   it('shows the model’s proposal nowhere in the list: the row is the expert’s decision', () => {
     const markup = list([cyrillicFinding({ current_verdict: 'pending' }, { proposed_severity: 'critical' })]);
     expect(markup).not.toContain('data-severity=');
@@ -387,6 +411,17 @@ describe('the required and stated values are printed as served', () => {
   });
 });
 
+describe('the citation states have Russian words, one per state', () => {
+  it('labels exactly the contract’s closed set, each once, in Cyrillic with no Latin', () => {
+    expect(Object.keys(NORM_CITATION_STATE_LABELS).sort()).toEqual([...NORM_CITATION_STATE_VALUES].sort());
+    expect(new Set(Object.values(NORM_CITATION_STATE_LABELS)).size).toBe(NORM_CITATION_STATE_VALUES.length);
+    for (const state of NORM_CITATION_STATE_VALUES) {
+      expect(NORM_CITATION_STATE_LABELS[state]).toMatch(/^[А-Яа-яЁё ]+$/);
+      expect(normCitationStateLabel(state)).toBe(NORM_CITATION_STATE_LABELS[state]);
+    }
+  });
+});
+
 describe('the norm citations keep their three states apart', () => {
   it('absent: says nothing, and in particular not «0»', () => {
     const markup = viewer(cyrillic());
@@ -409,7 +444,8 @@ describe('the norm citations keep their three states apart', () => {
     expect(markup).toContain('п. 7.1.4');
     expect(markup).toContain('стр. 12');
     expect(markup).toContain('Ширина эвакуационного выхода должна быть не менее 0,8 м.');
-    expect(markup).toContain(NORM_CITATION_STATE_LABELS.verified);
+    expect(markup).toContain('подтверждена');
+    expect(markup).toContain('am-badge--ok');
     expect(markup).toContain('Источник текста: КонсультантПлюс');
     expect(markup).toContain(`href="/norms/document?id=${NORM_DOC}&amp;page=12"`);
     expect(latinWords(markup)).toEqual([]);
@@ -420,7 +456,10 @@ describe('the norm citations keep their three states apart', () => {
       cyrillic({ norm_citations: [citation({ state: 'rebound', clause_number: null })] }),
     );
     expect(markup).toContain('data-norm-citation-state="rebound"');
-    expect(markup).toContain(NORM_CITATION_STATE_LABELS.rebound);
+    expect(markup).toContain('перепривязана');
+    // A rebound citation is a confirmed one, told apart from a verified one by tone alone.
+    expect(markup).toContain('am-badge--active');
+    expect(markup).not.toContain('am-badge--ok');
     expect(markup).not.toContain('п. ');
   });
 
@@ -490,7 +529,17 @@ describe('the merged observations are listed as served', () => {
       finding_observation_id: 'fobs_01J9ZQ8K7NHVXW3T2R5M6P4Q8D',
       finding_text: 'Ширина выхода указана без единицы.',
     });
-    expect(viewer(canonical, [plain])).not.toContain('data-proposed-severity');
+    const markup = viewer(canonical, [plain]);
+    expect(markup).not.toContain('data-proposed-severity');
+    expect(markup).not.toContain('Предложение модели');
+    expect(markup).not.toContain('Неизвестная важность');
+  });
+
+  it('shows no merged block at all when there is nothing merged, even beside other fields', () => {
+    const markup = viewer(cyrillic({ required_value: 'не менее 0,8 м' }), []);
+    expect(markup).toContain('data-finding-values');
+    expect(markup).not.toContain('data-merged-observations');
+    expect(markup).not.toContain('Объединённые наблюдения');
   });
 
   it('is Russian throughout', () => {
