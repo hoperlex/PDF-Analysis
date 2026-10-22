@@ -4295,3 +4295,264 @@ def _optimisation_proposal_view(record: Any, labels: "_Labels") -> models.Optimi
         if record.current_decision is None
         else _proposal_decision_view(record.current_decision, labels),
     )
+
+
+class ExecutorAdapter(_SessionHolder):
+    """The executor connections (`EXEC-SEAL-01`, `R-143`): thin, like every adapter here.
+
+    The rules, the sealing and the commands live in ``auditmanager.executors``; this opens the
+    session, reads the actor's role set inside it and maps the records into the frozen shapes.
+    ``ring`` is the **public** ring the ``api`` seals to (``None`` without a configured key,
+    which makes ``setExecutorSecret`` a typed refusal). The ``api`` holds no private key, so no
+    method here can open a secret, and no body built here carries one.
+    """
+
+    def __init__(self, session_factory: sessionmaker[Session], *, ring: Any = None) -> None:
+        super().__init__(session_factory)
+        self._ring = ring
+
+    @staticmethod
+    def _roles(session: Session, user_uid: str) -> Any:
+        from auditmanager.access.public import AccountRepository
+
+        return AccountRepository().roles_of(session, user_uid)
+
+    def list_connections(self, *, user_uid: str) -> models.ExecutorConnectionList:
+        from auditmanager.executors.public import list_connection_summaries, pinned_models
+
+        def work(session: Session) -> models.ExecutorConnectionList:
+            return models.ExecutorConnectionList.model_validate({
+                "items": [_executor_connection_view(item)
+                          for item in list_connection_summaries(session)],
+                "pinned_models": [
+                    {"pin_id": pin.model_id, "input_per_mtok_usd": pin.input_per_mtok_usd,
+                     "output_per_mtok_usd": pin.output_per_mtok_usd}
+                    for pin in pinned_models()
+                ],
+            })
+        return self._read(work)
+
+    def get_connection(
+        self, *, connection_id: str, user_uid: str
+    ) -> models.ExecutorConnectionDetail:
+        from auditmanager.executors.public import connection_detail
+
+        def work(session: Session) -> models.ExecutorConnectionDetail:
+            # A write transaction: the read path ends the probes nobody can still be running.
+            detail = connection_detail(session, connection_id)
+            return models.ExecutorConnectionDetail.model_validate({
+                "connection": _executor_connection_view(detail.summary),
+                "revisions": [
+                    _executor_revision_view(
+                        revision, detail.latest_probe_by_revision.get(revision.revision_id))
+                    for revision in detail.revisions
+                ],
+                "probes": [_executor_probe_view(probe) for probe in detail.probes],
+            })
+        return self._write(work)
+
+    def list_routes(self, *, user_uid: str) -> models.ExecutorRouteList:
+        from auditmanager.executors.public import list_routes
+
+        def work(session: Session) -> models.ExecutorRouteList:
+            return models.ExecutorRouteList.model_validate(
+                {"items": [_executor_route_view(route) for route in list_routes(session)]})
+        return self._read(work)
+
+    def create_connection(
+        self, *, kind: str, display_name: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorConnection:
+        from auditmanager.executors.public import create_connection
+
+        def work(session: Session) -> models.ExecutorConnection:
+            record = create_connection(
+                session, kind=kind, display_name=display_name,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            return self._summary_view(session, record.connection_id)
+        return self._write(work)
+
+    def revise_connection(
+        self, *, connection_id: str, settings: models.ReviseExecutorConnectionRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ExecutorRevision:
+        from auditmanager.executors.public import (
+            RevisionSettings, pinned_models, revise_connection,
+        )
+
+        def work(session: Session) -> models.ExecutorRevision:
+            values = {name: getattr(settings, name) for name in RevisionSettings.__slots__}
+            record = revise_connection(
+                session, connection_id=connection_id,
+                settings=RevisionSettings(**{
+                    name: (value.value if hasattr(value, "value") else value)
+                    for name, value in values.items()
+                }),
+                pinned_model_ids={pin.model_id for pin in pinned_models()},
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            return models.ExecutorRevision.model_validate(_executor_revision_view(record, None))
+        return self._write(work)
+
+    def archive_connection(
+        self, *, connection_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorConnection:
+        from auditmanager.executors.public import archive_connection
+
+        def work(session: Session) -> models.ExecutorConnection:
+            archive_connection(
+                session, connection_id=connection_id, roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+            )
+            return self._summary_view(session, connection_id)
+        return self._write(work)
+
+    def set_secret(
+        self, *, connection_id: str, purpose: str, value: str, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ExecutorSecretMetadata:
+        from auditmanager.executors.public import set_secret
+
+        def work(session: Session) -> models.ExecutorSecretMetadata:
+            record = set_secret(
+                session, connection_id=connection_id, purpose=purpose, value=value,
+                ring=self._ring, roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+            )
+            return self._secret_view(session, record)
+        return self._write(work)
+
+    def generate_ssh_key(
+        self, *, connection_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorSshKey:
+        from auditmanager.executors.public import generate_ssh_key
+
+        def work(session: Session) -> models.ExecutorSshKey:
+            generated = generate_ssh_key(
+                session, connection_id=connection_id, ring=self._ring,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            return models.ExecutorSshKey.model_validate({
+                "sealed_private_key": self._secret_view(session, generated.secret).model_dump(
+                    mode="json", exclude_unset=True),
+                "public_key": generated.public_key,
+                "authorized_keys_line": generated.authorized_keys_line,
+            })
+        return self._write(work)
+
+    def request_probe(
+        self, *, connection_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorProbe:
+        from auditmanager.executors.public import request_probe
+
+        def work(session: Session) -> models.ExecutorProbe:
+            probe = request_probe(
+                session, connection_id=connection_id, roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+            )
+            return models.ExecutorProbe.model_validate(_executor_probe_view(probe))
+        return self._write(work)
+
+    def set_route(
+        self, *, work_kind: str, primary_connection_id: str,
+        standby_connection_id: str | None, user_uid: str, idempotency_key: str,
+    ) -> models.ExecutorRoute:
+        from auditmanager.executors.public import set_route
+
+        def work(session: Session) -> models.ExecutorRoute:
+            route = set_route(
+                session, work_kind=work_kind, primary_connection_id=primary_connection_id,
+                standby_connection_id=standby_connection_id,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            return models.ExecutorRoute.model_validate(_executor_route_view(route))
+        return self._write(work)
+
+    def _summary_view(self, session: Session, connection_id: str) -> models.ExecutorConnection:
+        from auditmanager.executors.public import connection_detail
+
+        detail = connection_detail(session, connection_id)
+        return models.ExecutorConnection.model_validate(_executor_connection_view(detail.summary))
+
+    def _secret_view(self, session: Session, secret: Any) -> models.ExecutorSecretMetadata:
+        from auditmanager.executors.public import connection_detail
+
+        summary = connection_detail(session, secret.connection_id).summary
+        return models.ExecutorSecretMetadata.model_validate(
+            _executor_secret_view(secret, summary.connection.kind, summary.current_revision))
+
+
+def _present(**fields: Any) -> dict[str, Any]:
+    """Optional properties are absent when they have no value, never ``null``."""
+    return {name: value for name, value in fields.items() if value is not None}
+
+
+def _executor_secret_view(secret: Any, kind: str, revision: Any) -> dict[str, Any]:
+    """What the API ever says about a secret. The ciphertext is not a field of the record."""
+    from auditmanager.executors.public import destination_for
+
+    bound = False
+    if revision is not None:
+        try:
+            bound = destination_for(kind, revision.settings, secret.purpose) == secret.destination
+        except DomainError:
+            bound = False
+    return _present(
+        secret_id=secret.secret_id, connection_id=secret.connection_id, purpose=secret.purpose,
+        last4=secret.last4, kid=secret.kid, bound_to_current_revision=bound,
+        set_at=secret.set_at, set_by=secret.set_by, public_key=secret.public_material,
+    )
+
+
+def _executor_probe_view(probe: Any) -> dict[str, Any]:
+    return _present(
+        probe_id=probe.probe_id, connection_id=probe.connection_id,
+        revision_id=probe.revision_id, state=probe.state, requested_at=probe.requested_at,
+        requested_by=probe.requested_by, secret_id=probe.secret_id, outcome=probe.outcome,
+        reported_model=probe.reported_model, identity_basis=probe.identity_basis,
+        latency_ms=probe.latency_ms, http_status=probe.http_status, rate_check=probe.rate_check,
+        observed_host_key=probe.observed_host_key, detail=probe.detail,
+        started_at=probe.started_at, finished_at=probe.finished_at,
+    )
+
+
+def _executor_revision_view(revision: Any, latest_probe: Any) -> dict[str, Any]:
+    from auditmanager.executors.public import host_key_fingerprint
+
+    settings = revision.settings
+    fingerprint = None if settings.host_key is None else host_key_fingerprint(settings.host_key)
+    return _present(
+        revision_id=revision.revision_id, connection_id=revision.connection_id,
+        revision_no=revision.revision_no, created_at=revision.created_at,
+        created_by=revision.created_by, host_key_fingerprint=fingerprint,
+        latest_probe=None if latest_probe is None else _executor_probe_view(latest_probe),
+        **{name: getattr(settings, name) for name in settings.__slots__},
+    )
+
+
+def _executor_connection_view(summary: Any) -> dict[str, Any]:
+    connection = summary.connection
+    revision = summary.current_revision
+    return _present(
+        connection_id=connection.connection_id, kind=connection.kind,
+        display_name=connection.display_name, created_at=connection.created_at,
+        created_by=connection.created_by,
+        secrets=[_executor_secret_view(secret, connection.kind, revision)
+                 for secret in summary.secrets],
+        routed_work_kinds=list(summary.routed_work_kinds),
+        archived_at=connection.archived_at,
+        current_revision_id=None if revision is None else revision.revision_id,
+        current_revision_no=None if revision is None else revision.revision_no,
+    )
+
+
+def _executor_route_view(route: Any) -> dict[str, Any]:
+    return _present(
+        work_kind=route.work_kind, primary_connection_id=route.primary_connection_id,
+        set_at=route.set_at, set_by=route.set_by,
+        standby_connection_id=route.standby_connection_id,
+    )

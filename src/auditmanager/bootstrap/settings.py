@@ -19,9 +19,14 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 from auditmanager.analysis.public import REFERENCE_DOCUMENT_CHARACTERS, input_budget_characters
+from auditmanager.executors.public import (
+    SealingConfigurationError,
+    load_private_ring,
+    load_public_ring,
+)
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 #: The application-layer names, distinct from the fifteen FF-01 freezes for the services.
@@ -85,6 +90,15 @@ DEFAULT_NORMS_SEARCH_TIMEOUT_MS: Final[int] = 3000
 #: Ten minutes: anything longer is not a search a person waits for.
 MAX_NORMS_SEARCH_TIMEOUT_MS: Final[int] = 600_000
 
+#: `EXEC-SEAL-01` (`R-143b`). The key ring that seals executor secrets. The ``api`` and the
+#: worker read the public keys (``kid:base64``, comma-separated) and the key id new secrets are
+#: sealed to; **only the worker reads the private ring**, and the ``api`` refuses to start with
+#: it. All three live in the host-owned ``provider.env``, never in PostgreSQL or S3, so a
+#: database dump carries ciphertext and nothing that opens it.
+SECRETS_PUBLIC_KEYS_ENV: Final[str] = "AUDITMANAGER_SECRETS_PUBLIC_KEYS"
+SECRETS_ACTIVE_KID_ENV: Final[str] = "AUDITMANAGER_SECRETS_ACTIVE_KID"
+SECRETS_KEYS_ENV: Final[str] = "AUDITMANAGER_SECRETS_KEYS"
+
 PROXY_BASE_URL_ENV: Final[str] = "PROXY_LLM_BASE_URL"
 PROXY_TOKEN_ENV: Final[str] = "PROXY_LLM_TOKEN"
 PROXY_MODEL_ENV: Final[str] = "PROXY_LLM_MODEL"
@@ -133,6 +147,12 @@ class AppSettings:
     worker_state_dir: str | None = None
     #: :data:`NORMS_SEARCH_TIMEOUT_ENV`, validated; milliseconds.
     norms_search_timeout_ms: int = DEFAULT_NORMS_SEARCH_TIMEOUT_MS
+    #: `EXEC-SEAL-01`. The ring the ``api`` seals executor secrets to (public keys only), or
+    #: ``None`` when none is configured. Both rings print only their key ids.
+    secrets_public_ring: Any = None
+    #: The worker's private ring (:data:`SECRETS_KEYS_ENV`); ``None`` unless set, and refused
+    #: for ``EXECUTION_ROLE=api``.
+    secrets_private_ring: Any = None
 
     @property
     def requires_credential(self) -> bool:
@@ -221,6 +241,28 @@ def _norms_search_timeout_ms(environ: dict[str, str]) -> int:
     return value
 
 
+def _secret_rings(role: str, env: dict[str, str]) -> tuple[Any, Any]:
+    """The public ring and the private ring, parsed at start so a malformed variable refuses
+    the start instead of the first secret. The ``api`` holds public keys only: the private ring
+    present on that role is refused, not ignored. A refusal names the variable, never a key."""
+    private = env.get(SECRETS_KEYS_ENV, "").strip() or None
+    if role == "api" and private is not None:
+        raise ConfigurationError(
+            f"{SECRETS_KEYS_ENV} is set but {EXECUTION_ROLE_ENV} is api; the api seals to "
+            f"public keys ({SECRETS_PUBLIC_KEYS_ENV}) and holds no private key"
+        )
+    active = env.get(SECRETS_ACTIVE_KID_ENV, "").strip() or None
+    try:
+        public_ring = load_public_ring(
+            env.get(SECRETS_PUBLIC_KEYS_ENV, "").strip() or None, active,
+            public_variable=SECRETS_PUBLIC_KEYS_ENV, active_variable=SECRETS_ACTIVE_KID_ENV,
+        )
+        private_ring = load_private_ring(private, active, variable=SECRETS_KEYS_ENV)
+    except SealingConfigurationError as exc:
+        raise ConfigurationError(str(exc)) from None
+    return public_ring, private_ring
+
+
 def load(environ: dict[str, str] | None = None) -> AppSettings:
     """Read and validate. Raises :class:`ConfigurationError` on anything missing."""
     env = dict(os.environ if environ is None else environ)
@@ -280,7 +322,10 @@ def load(environ: dict[str, str] | None = None) -> AppSettings:
     model_id = env.get(MODEL_ID_ENV, "").strip() or "claude-opus-5"
     budget = _input_budget(model_id, ceiling)
 
+    public_ring, private_ring = _secret_rings(role, env)
     return AppSettings(
+        secrets_public_ring=public_ring,
+        secrets_private_ring=private_ring,
         database_url=_require("DATABASE_URL", env),
         s3_endpoint_url=_require("S3_ENDPOINT_URL", env),
         s3_region=_require("S3_REGION", env),

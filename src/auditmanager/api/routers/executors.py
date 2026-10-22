@@ -5,6 +5,9 @@ The executor operations share one port. Reads are open to any role; writes are a
 ``setExecutorSecret`` takes a write-only value and answers metadata only, and
 ``generateExecutorSshKey`` returns the public half of a key whose private half is sealed. A
 refusal reuses an existing catalogue code with its existing detail keys.
+
+Optional properties are absent, never null: every body is dumped with ``exclude_unset``, so the
+adapter builds a body from the fields that have a value and nothing else.
 """
 
 from __future__ import annotations
@@ -35,7 +38,7 @@ def build_executor_routes(router: APIRouter, executors: ExecutorPort) -> None:
     )
     def list_executor_connections(subject: CurrentSubject) -> WireResponse:
         answer = executors.list_connections(user_uid=subject.user_uid)
-        return json_response(200, encode_json(answer.model_dump(mode="json")))
+        return json_response(200, encode_json(answer.model_dump(mode="json", exclude_unset=True)))
 
     @router.post(
         "/executor-connections", operation_id="createExecutorConnection", tags=_TAGS,
@@ -52,7 +55,7 @@ def build_executor_routes(router: APIRouter, executors: ExecutorPort) -> None:
             kind=body.kind.value, display_name=body.display_name,
             user_uid=subject.user_uid, idempotency_key=idempotency_key,
         )
-        return json_response(201, encode_json(view.model_dump(mode="json")))
+        return json_response(201, encode_json(view.model_dump(mode="json", exclude_unset=True)))
 
     @router.get(
         "/executor-connections/{connection_id}", operation_id="getExecutorConnection",
@@ -67,7 +70,7 @@ def build_executor_routes(router: APIRouter, executors: ExecutorPort) -> None:
         view = executors.get_connection(
             connection_id=connection_id, user_uid=subject.user_uid
         )
-        return json_response(200, encode_json(view.model_dump(mode="json")))
+        return json_response(200, encode_json(view.model_dump(mode="json", exclude_unset=True)))
 
     @router.post(
         "/executor-connections/{connection_id}/revisions",
@@ -85,7 +88,7 @@ def build_executor_routes(router: APIRouter, executors: ExecutorPort) -> None:
             connection_id=connection_id, settings=body,
             user_uid=subject.user_uid, idempotency_key=idempotency_key,
         )
-        return json_response(201, encode_json(view.model_dump(mode="json")))
+        return json_response(201, encode_json(view.model_dump(mode="json", exclude_unset=True)))
 
     @router.post(
         "/executor-connections/{connection_id}/archive",
@@ -103,7 +106,7 @@ def build_executor_routes(router: APIRouter, executors: ExecutorPort) -> None:
             connection_id=connection_id, user_uid=subject.user_uid,
             idempotency_key=idempotency_key,
         )
-        return json_response(200, encode_json(view.model_dump(mode="json")))
+        return json_response(200, encode_json(view.model_dump(mode="json", exclude_unset=True)))
 
     @router.post(
         "/executor-connections/{connection_id}/secrets",
@@ -121,7 +124,7 @@ def build_executor_routes(router: APIRouter, executors: ExecutorPort) -> None:
             connection_id=connection_id, purpose=body.purpose.value, value=body.value,
             user_uid=subject.user_uid, idempotency_key=idempotency_key,
         )
-        return json_response(201, encode_json(view.model_dump(mode="json")))
+        return json_response(201, encode_json(view.model_dump(mode="json", exclude_unset=True)))
 
     @router.post(
         "/executor-connections/{connection_id}/ssh-key",
@@ -140,7 +143,7 @@ def build_executor_routes(router: APIRouter, executors: ExecutorPort) -> None:
             connection_id=connection_id, user_uid=subject.user_uid,
             idempotency_key=idempotency_key,
         )
-        return json_response(201, encode_json(view.model_dump(mode="json")))
+        return json_response(201, encode_json(view.model_dump(mode="json", exclude_unset=True)))
 
     @router.post(
         "/executor-connections/{connection_id}/probes",
@@ -158,7 +161,7 @@ def build_executor_routes(router: APIRouter, executors: ExecutorPort) -> None:
             connection_id=connection_id, user_uid=subject.user_uid,
             idempotency_key=idempotency_key,
         )
-        return json_response(202, encode_json(view.model_dump(mode="json")))
+        return json_response(202, encode_json(view.model_dump(mode="json", exclude_unset=True)))
 
     @router.get(
         "/executor-routes", operation_id="listExecutorRoutes", tags=_TAGS,
@@ -169,7 +172,7 @@ def build_executor_routes(router: APIRouter, executors: ExecutorPort) -> None:
     )
     def list_executor_routes(subject: CurrentSubject) -> WireResponse:
         answer = executors.list_routes(user_uid=subject.user_uid)
-        return json_response(200, encode_json(answer.model_dump(mode="json")))
+        return json_response(200, encode_json(answer.model_dump(mode="json", exclude_unset=True)))
 
     @router.put(
         "/executor-routes", operation_id="setExecutorRoute", tags=_TAGS,
@@ -187,4 +190,4 @@ def build_executor_routes(router: APIRouter, executors: ExecutorPort) -> None:
             standby_connection_id=body.standby_connection_id,
             user_uid=subject.user_uid, idempotency_key=idempotency_key,
         )
-        return json_response(200, encode_json(view.model_dump(mode="json")))
+        return json_response(200, encode_json(view.model_dump(mode="json", exclude_unset=True)))
