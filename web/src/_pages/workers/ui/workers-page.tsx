@@ -128,63 +128,63 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void client.invalidateQueries({ queryKey: queryKeys.execution.all() })}>Обновить</button>}
     >
       <WorkersTabs active={tab} onSelect={openTab}>
-      {tab === 'connections' ? (
-        <ExecutorConnections roles={roles} secretConnectionId={secretConnectionId} secretForm={secretForm} />
-      ) : null}
-      {tab === 'routes' ? <ExecutorRoutes roles={roles} /> : null}
-      {tab === 'processes' ? (<>
-      {account.isPending ? <LoadingState what="права на управление исполнителями" /> : null}
-      {accountFailure !== null ? (
-        <div data-workers-account-failure={accountFailure.kind}>
-          <p role="status" className="am-note" data-workers-controls-withheld>Исполнители показаны без команд: права не прочитаны.</p>
-          <ErrorState title="Права на управление исполнителями не прочитаны" detail={accountFailure.detail} correlationId={accountFailure.correlationId} onRetry={() => void account.refetch()} />
-        </div>
-      ) : null}
-      {workers.isPending ? <LoadingState what="исполнителей" /> : null}
-      {readFailure !== null ? (
-        <div data-workers-read-failure={readFailure.kind}>
-          <ErrorState title="Исполнители не прочитаны" detail={readFailure.detail} correlationId={readFailure.correlationId} onRetry={() => void workers.refetch()} />
-        </div>
-      ) : null}
-      {/*
-        * As on the queue (`C-27`): the rows do not wait for `getMe`. Until the roles are
-        * read, or when that read fails, `roles` is empty and no switch is drawn.
-        */}
-      {workers.data !== undefined && readFailure === null ? (
-        <WorkerList
-          items={workers.data.items}
-          roles={roles}
-          busy={busy}
-          onIntake={select}
-          onPrevious={cursors.length === 0 ? null : () => setCursors((current) => current.slice(0, -1))}
-          onNext={next === null ? null : () => setCursors((current) => [...current, next])}
-        />
-      ) : null}
-      {intent !== null ? (
-        <section role="group" aria-label="Подтверждение команды исполнителю" data-workers-intent={intent.enabled ? 'allow' : 'stop'}>
-          <p>{intakeIntentLabel(intent)}</p>
-          <button type="button" className="am-button" disabled={busy || (commandFailure !== null && commandFailure.kind !== 'unknown_outcome')} onClick={() => void execute(intent)}>
-            {commandFailure?.kind === 'unknown_outcome' ? 'Повторить с тем же ключом' : 'Подтвердить'}
-          </button>{' '}
-          <button type="button" className="am-button am-button--quiet" disabled={busy} onClick={() => { sequence.current += 1; setIntent(null); setCommandFailure(null); }}>Отмена</button>
-        </section>
-      ) : null}
-      {commandFailure !== null ? (
-        <div data-workers-action-failure={commandFailure.kind}>
-          {refused(commandFailure) ? (
-            <>
-              <UnsupportedState title="Команда исполнителю отклонена" detail={commandFailure.detail} />
-              {commandFailure.correlationId !== null
-                ? <p>Идентификатор корреляции <code>{commandFailure.correlationId}</code></p>
-                : null}
-            </>
-          ) : (
-            <ErrorState title={commandFailure.kind === 'unknown_outcome' ? 'Исход команды исполнителю неизвестен' : 'Команда исполнителю не выполнена'} detail={commandFailure.detail} correlationId={commandFailure.correlationId} />
-          )}
-        </div>
-      ) : null}
-      {completed ? <p role="status" className="am-note">Команда исполнителю выполнена.</p> : null}
-      </>) : null}
+        {tab === 'connections' ? (
+          <ExecutorConnections roles={roles} secretConnectionId={secretConnectionId} secretForm={secretForm} />
+        ) : null}
+        {tab === 'routes' ? <ExecutorRoutes roles={roles} /> : null}
+        {tab === 'processes' ? (<>
+        {account.isPending ? <LoadingState what="права на управление исполнителями" /> : null}
+        {accountFailure !== null ? (
+          <div data-workers-account-failure={accountFailure.kind}>
+            <p role="status" className="am-note" data-workers-controls-withheld>Исполнители показаны без команд: права не прочитаны.</p>
+            <ErrorState title="Права на управление исполнителями не прочитаны" detail={accountFailure.detail} correlationId={accountFailure.correlationId} onRetry={() => void account.refetch()} />
+          </div>
+        ) : null}
+        {workers.isPending ? <LoadingState what="исполнителей" /> : null}
+        {readFailure !== null ? (
+          <div data-workers-read-failure={readFailure.kind}>
+            <ErrorState title="Исполнители не прочитаны" detail={readFailure.detail} correlationId={readFailure.correlationId} onRetry={() => void workers.refetch()} />
+          </div>
+        ) : null}
+        {/*
+          * As on the queue (`C-27`): the rows do not wait for `getMe`. Until the roles are
+          * read, or when that read fails, `roles` is empty and no switch is drawn.
+          */}
+        {workers.data !== undefined && readFailure === null ? (
+          <WorkerList
+            items={workers.data.items}
+            roles={roles}
+            busy={busy}
+            onIntake={select}
+            onPrevious={cursors.length === 0 ? null : () => setCursors((current) => current.slice(0, -1))}
+            onNext={next === null ? null : () => setCursors((current) => [...current, next])}
+          />
+        ) : null}
+        {intent !== null ? (
+          <section role="group" aria-label="Подтверждение команды исполнителю" data-workers-intent={intent.enabled ? 'allow' : 'stop'}>
+            <p>{intakeIntentLabel(intent)}</p>
+            <button type="button" className="am-button" disabled={busy || (commandFailure !== null && commandFailure.kind !== 'unknown_outcome')} onClick={() => void execute(intent)}>
+              {commandFailure?.kind === 'unknown_outcome' ? 'Повторить с тем же ключом' : 'Подтвердить'}
+            </button>{' '}
+            <button type="button" className="am-button am-button--quiet" disabled={busy} onClick={() => { sequence.current += 1; setIntent(null); setCommandFailure(null); }}>Отмена</button>
+          </section>
+        ) : null}
+        {commandFailure !== null ? (
+          <div data-workers-action-failure={commandFailure.kind}>
+            {refused(commandFailure) ? (
+              <>
+                <UnsupportedState title="Команда исполнителю отклонена" detail={commandFailure.detail} />
+                {commandFailure.correlationId !== null
+                  ? <p>Идентификатор корреляции <code>{commandFailure.correlationId}</code></p>
+                  : null}
+              </>
+            ) : (
+              <ErrorState title={commandFailure.kind === 'unknown_outcome' ? 'Исход команды исполнителю неизвестен' : 'Команда исполнителю не выполнена'} detail={commandFailure.detail} correlationId={commandFailure.correlationId} />
+            )}
+          </div>
+        ) : null}
+        {completed ? <p role="status" className="am-note">Команда исполнителю выполнена.</p> : null}
+        </>) : null}
       </WorkersTabs>
     </PageShell>
   );
