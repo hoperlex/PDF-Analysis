@@ -138,7 +138,7 @@ def test_a_session_through_the_bridge_answers_a_runs_model_call(stand, session) 
             "task_id": claimed["task_id"], "model": claimed["model"], "output_text": GOOD,
             "input_tokens": 120, "output_tokens": 30}))
         assert accepted["status"] == "accepted" and accepted["state"] == "answered"
-        assert token not in mcp.stderr()
+        assert token not in mcp.stderr
 
     worker.join(timeout=30)
     assert not worker.is_alive() and "error" not in outcome, outcome
