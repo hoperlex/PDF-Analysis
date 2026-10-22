@@ -76,6 +76,9 @@ class FakeGateway:
                 self.end_headers()
                 self.wfile.write(payload)
 
+            # A client that followed a redirect re-asks with GET; it is recorded the same way.
+            do_GET = do_POST  # noqa: N815
+
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
 
