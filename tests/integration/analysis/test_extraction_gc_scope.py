@@ -30,16 +30,20 @@ longest beat gap of 1.0 s (6 beats in 4 s); the bounds are 3 ``t_full`` and ``0.
 
 from __future__ import annotations
 
+import gc
 import io
 import json
 import subprocess
 import sys
+import threading
 import zlib
 from pathlib import Path
 
 import pytest
 
 import auditmanager
+from auditmanager.analysis.stages import extraction
+from auditmanager.shared.errors import DomainError, ErrorCode
 
 SOURCE_ROOT = Path(auditmanager.__file__).resolve().parents[1]
 
@@ -212,3 +216,96 @@ def test_a_heartbeat_thread_keeps_its_pace_while_the_pages_are_released(measured
         f"process's heap takes {t_full:.3f} s and holds the GIL): the page release starves "
         f"the thread that keeps the lease"
     )
+
+
+# --- The freeze that makes the collection cheap is scoped, counted and given back ------------------
+
+
+def test_the_heap_is_frozen_while_the_pages_are_read_and_given_back_after(monkeypatch) -> None:
+    frozen_at_each_page: list[int] = []
+    read_page = extraction._extract_page
+
+    def watch(page, number):
+        frozen_at_each_page.append(gc.get_freeze_count())
+        return read_page(page, number)
+
+    monkeypatch.setattr(extraction, "_extract_page", watch)
+    before = gc.get_freeze_count()
+
+    document = extraction.extract_document(_text_pages(3))
+
+    assert document.page_count == 3
+    assert len(frozen_at_each_page) == 3
+    assert all(count > before for count in frozen_at_each_page), (before, frozen_at_each_page)
+    assert gc.get_freeze_count() <= before, "the heap was not given back when the document ended"
+
+
+def test_a_page_that_fails_midway_is_still_released_and_the_heap_is_given_back(monkeypatch) -> None:
+    released: list[int] = []
+    release_page = extraction._release
+    read_page = extraction._extract_page
+
+    def watch_release(page):
+        released.append(page.page_number)
+        release_page(page)
+
+    def fail_on_the_second(page, number):
+        if number == 2:
+            raise ValueError("a page that cannot be read")
+        return read_page(page, number)
+
+    monkeypatch.setattr(extraction, "_release", watch_release)
+    monkeypatch.setattr(extraction, "_extract_page", fail_on_the_second)
+    before = gc.get_freeze_count()
+
+    with pytest.raises(DomainError) as refused:
+        extraction.extract_document(_text_pages(4))
+
+    assert refused.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert refused.value.detail_fields["reason"] == "source_unreadable"
+    assert released == [1, 2], "the failing page must be released, and no page after it read"
+    assert gc.get_freeze_count() <= before, "a failed document left the heap frozen"
+
+
+def test_two_documents_read_at_once_keep_one_freeze_until_the_last_one_ends(monkeypatch) -> None:
+    first_is_inside = threading.Event()
+    let_the_first_go = threading.Event()
+    first: list[threading.Thread] = []
+    read_page = extraction._extract_page
+
+    def hold_the_first(page, number):
+        if threading.current_thread() is first[0] and number == 1:
+            first_is_inside.set()
+            assert let_the_first_go.wait(60)
+        return read_page(page, number)
+
+    monkeypatch.setattr(extraction, "_extract_page", hold_the_first)
+    before = gc.get_freeze_count()
+    reader = threading.Thread(target=lambda: extraction.extract_document(_text_pages(2)))
+    first.append(reader)
+    reader.start()
+    try:
+        assert first_is_inside.wait(60)
+        extraction.extract_document(_text_pages(2))  # a whole second document, start to end
+        assert gc.get_freeze_count() > before, (
+            "the second document to end lifted the freeze the first one is still reading under"
+        )
+    finally:
+        let_the_first_go.set()
+        reader.join(60)
+
+    assert not reader.is_alive()
+    assert gc.get_freeze_count() <= before, "the last document to end did not give the heap back"
+
+
+def test_a_freeze_made_by_other_code_is_left_in_force() -> None:
+    gc.freeze()
+    try:
+        frozen = gc.get_freeze_count()
+        extraction.extract_document(_text_pages(2))
+        assert gc.get_freeze_count() > 0.9 * frozen, (
+            f"{frozen} objects were frozen by the caller and {gc.get_freeze_count()} are left: "
+            "the stage lifted a freeze that was not its own"
+        )
+    finally:
+        gc.unfreeze()
